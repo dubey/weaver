@@ -63,6 +63,8 @@ cdef extern from "eos.h":
     void eos_client_destroy(eos_client* client)
 
     uint64_t eos_create_event(eos_client* client)
+    int eos_acquire_references(eos_client* client, uint64_t* events, size_t events_sz)
+    int eos_release_references(eos_client* client, uint64_t* events, size_t events_sz)
     int eos_query_order(eos_client* client, eos_pair* pairs, size_t pairs_sz)
     int eos_assign_order(eos_client* client, eos_pair* pairs, size_t pairs_sz)
 
@@ -90,6 +92,36 @@ cdef class Client:
         if event > 0:
             return event
         return None # XXX Exception
+
+    def acquire_references(self, events):
+        cdef uint64_t* _events
+        _events = <uint64_t*> malloc(sizeof(uint64_t) * len(events))
+        if _events == NULL:
+            raise MemoryError()
+        try:
+            for i, e in enumerate(events):
+                _events[i] = e
+            ret = eos_release_references(self._client, _events, len(events))
+            if ret < 0:
+                raise RuntimeError("it failed")
+            if ret > 0:
+                raise RuntimeError("it failed to acquire reference to %i".format(_events[ret - 1]))
+        finally:
+            free(_events)
+
+    def release_references(self, events):
+        cdef uint64_t* _events
+        _events = <uint64_t*> malloc(sizeof(uint64_t) * len(events))
+        if _events == NULL:
+            raise MemoryError()
+        try:
+            for i, e in enumerate(events):
+                _events[i] = e
+            ret = eos_release_references(self._client, _events, len(events))
+            if ret != 0:
+                raise RuntimeError("it failed")
+        finally:
+            free(_events)
 
     def query_order(self, events):
         cdef eos_pair* pairs

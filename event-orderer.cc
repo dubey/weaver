@@ -107,18 +107,23 @@ class event_orderer
     private:
         void incref(vertex v);
         void decref(vertex v);
+        void add_mapping(uint64_t id, vertex v);
+        void remove_mapping(uint64_t id);
+        void remove_mapping(vertex v);
         int compute_order(vertex lhs, vertex rhs);
 
     private:
         uint64_t m_nextid;
         graph m_graph;
-        std::map<uint64_t, vertex> m_ids;
+        std::map<uint64_t, vertex> m_ids_forward;
+        std::map<vertex, uint64_t> m_ids_backward;
 };
 
 event_orderer :: event_orderer()
     : m_nextid(1)
     , m_graph()
-    , m_ids()
+    , m_ids_forward()
+    , m_ids_backward()
 {
 }
 
@@ -133,7 +138,7 @@ event_orderer :: create_event()
     vertex v = boost::add_vertex(m_graph);
     boost::put(boost::vertex_name, m_graph, v, 1);
     boost::put(boost::vertex_index, m_graph, v, event_id); 
-    m_ids[event_id] = v;
+    add_mapping(event_id, v);
     ++m_nextid;
     return event_id;
 }
@@ -146,9 +151,9 @@ event_orderer :: acquire_references(uint64_t* events, size_t events_sz)
     // Increment reference counts
     for (i = 0; i < events_sz; ++i)
     {
-        std::map<uint64_t, vertex>::iterator viter = m_ids.find(events[i]);
+        std::map<uint64_t, vertex>::iterator viter = m_ids_forward.find(events[i]);
 
-        if (viter == m_ids.end())
+        if (viter == m_ids_forward.end())
         {
             break;
         }
@@ -165,8 +170,8 @@ event_orderer :: acquire_references(uint64_t* events, size_t events_sz)
     // Decrement reference counts we incremented in error
     for (size_t j = 0; j < i; ++j)
     {
-        std::map<uint64_t, vertex>::iterator viter = m_ids.find(events[j]);
-        assert(viter != m_ids.end());
+        std::map<uint64_t, vertex>::iterator viter = m_ids_forward.find(events[j]);
+        assert(viter != m_ids_forward.end());
         decref(viter->second);
     }
 
@@ -178,9 +183,9 @@ event_orderer :: release_references(uint64_t* events, size_t events_sz)
 {
     for (size_t i = 0; i < events_sz; ++i)
     {
-        std::map<uint64_t, vertex>::iterator viter = m_ids.find(events[i]);
+        std::map<uint64_t, vertex>::iterator viter = m_ids_forward.find(events[i]);
 
-        if (viter == m_ids.end())
+        if (viter == m_ids_forward.end())
         {
             continue;
         }
@@ -196,10 +201,10 @@ event_orderer :: query_order(eos_pair* pairs, size_t pairs_sz)
 {
     for (size_t i = 0; i < pairs_sz; ++i)
     {
-        std::map<uint64_t, vertex>::iterator lhsiter = m_ids.find(pairs[i].lhs);
-        std::map<uint64_t, vertex>::iterator rhsiter = m_ids.find(pairs[i].rhs);
+        std::map<uint64_t, vertex>::iterator lhsiter = m_ids_forward.find(pairs[i].lhs);
+        std::map<uint64_t, vertex>::iterator rhsiter = m_ids_forward.find(pairs[i].rhs);
 
-        if (lhsiter == m_ids.end() || rhsiter == m_ids.end())
+        if (lhsiter == m_ids_forward.end() || rhsiter == m_ids_forward.end())
         {
             pairs[i].order = EOS_NOEXIST;
             continue;
@@ -227,15 +232,17 @@ event_orderer :: query_order(eos_pair* pairs, size_t pairs_sz)
 size_t
 event_orderer :: assign_order(eos_pair* pairs, size_t pairs_sz)
 {
+    typedef std::map<uint64_t, vertex>::iterator vertex_with_id_t;
+
     std::vector<std::pair<vertex, vertex> > created_edges;
     size_t i;
 
     for (i = 0; i < pairs_sz; ++i)
     {
-        std::map<uint64_t, vertex>::iterator lhsiter = m_ids.find(pairs[i].lhs);
-        std::map<uint64_t, vertex>::iterator rhsiter = m_ids.find(pairs[i].rhs);
+        std::map<uint64_t, vertex>::iterator lhsiter = m_ids_forward.find(pairs[i].lhs);
+        std::map<uint64_t, vertex>::iterator rhsiter = m_ids_forward.find(pairs[i].rhs);
 
-        if (lhsiter == m_ids.end() || rhsiter == m_ids.end())
+        if (lhsiter == m_ids_forward.end() || rhsiter == m_ids_forward.end())
         {
             break;
         }
@@ -302,8 +309,8 @@ event_orderer :: assign_order(eos_pair* pairs, size_t pairs_sz)
 
     for (size_t j = 0; j < created_edges.size(); ++j)
     {
-        boost::remove_edge(created_edges[j].first, created_edges[j].first, m_graph);
-        decref(created_edges[j].first);
+        boost::remove_edge(created_edges[j].first, created_edges[j].second, m_graph);
+        decref(created_edges[j].second);
     }
 
     return i;
@@ -343,12 +350,45 @@ event_orderer :: decref(vertex seed)
             vertex u = boost::target(*os, m_graph);
             toremove.push(u);
         }
+
+        remove_mapping(v);
+        boost::remove_vertex(v, m_graph);
     }
+}
+
+void
+event_orderer :: add_mapping(uint64_t id, vertex v)
+{
+    m_ids_forward[id] = v;
+    m_ids_backward[v] = id;
+}
+
+void
+event_orderer :: remove_mapping(uint64_t id)
+{
+    assert(m_ids_forward.find(id) != m_ids_forward.end());
+    vertex v = m_ids_forward[id];
+    m_ids_forward.erase(id);
+    m_ids_backward.erase(v);
+}
+
+void
+event_orderer :: remove_mapping(vertex v)
+{
+    assert(m_ids_backward.find(v) != m_ids_backward.end());
+    uint64_t id = m_ids_backward[v];
+    m_ids_forward.erase(id);
+    m_ids_backward.erase(v);
 }
 
 int
 event_orderer :: compute_order(vertex lhs, vertex rhs)
 {
+    if (lhs == rhs)
+    {
+        return 0;
+    }
+
     boost::property_map<graph, boost::vertex_color_t>::type colorslhs;
     colorslhs = boost::get(boost::vertex_color, m_graph);
     breadth_first_search(m_graph, lhs, color_map(colorslhs));
@@ -386,6 +426,7 @@ class channel
         std::auto_ptr<e::buffer> outbuffer;
         e::slice outprogress;
         std::auto_ptr<e::buffer> inbuffer;
+        std::vector<uint64_t> references;
 
     private:
         channel(const channel&);
@@ -400,6 +441,7 @@ channel :: channel()
     , outbuffer()
     , outprogress()
     , inbuffer()
+    , references()
 {
 }
 
@@ -423,6 +465,7 @@ channel :: reset()
     outbuffer.reset();
     outprogress = e::slice();
     inbuffer.reset();
+    references.clear();
 }
 
 void
@@ -607,13 +650,126 @@ process_events(int epfd, po6::net::socket* listenfd, channel* channels, int* msg
 }
 
 static std::auto_ptr<e::buffer>
-eosnc_create_event(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
+eosnc_create_event(channel* chan, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
 {
     const size_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t) + sizeof(uint64_t); 
+    chan->references.reserve(chan->references.size() + 1);
     uint64_t event = eo->create_event();
+    chan->references.push_back(event);
     msg.reset(e::buffer::create(SEND_MSG_SIZE));
     e::buffer::packer pa = msg->pack();
     pa = pa << static_cast<uint32_t>(SEND_MSG_SIZE) << nonce << event;
+    assert(!pa.error());
+    return msg;
+}
+
+static std::auto_ptr<e::buffer>
+eosnc_acquire_ref(channel* chan, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
+{
+    const size_t NUM_EVENTS = (msg->size() - (sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)))
+                            / sizeof(uint64_t);
+    const size_t RESP_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t) + sizeof(uint64_t);
+
+    std::vector<uint64_t> events;
+    events.reserve(NUM_EVENTS);
+    std::vector<uint64_t> events_offset;
+    events_offset.reserve(NUM_EVENTS);
+    e::buffer::unpacker up = msg->unpack_from(sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t));
+
+    for (size_t i = 0; i < NUM_EVENTS; ++i)
+    {
+        uint64_t event = 0;
+        up = up >> event;
+
+        if (std::find(chan->references.begin(), chan->references.end(), event)
+            == chan->references.end())
+        {
+            events.push_back(event);
+            events_offset.push_back(i);
+        }
+    }
+
+    assert(!up.error());
+    size_t success_to = eo->acquire_references(&events.front(), events.size());
+
+    msg->resize(0);
+    e::buffer::packer pa = msg->pack();
+    pa = pa << static_cast<uint32_t>(RESP_MSG_SIZE) << nonce;
+
+    if (success_to == events.size())
+    {
+        pa = pa << NUM_EVENTS;
+
+        for (size_t i = 0; i < events.size(); ++i)
+        {
+            chan->references.push_back(events[i]);
+        }
+    }
+    else
+    {
+        pa = pa << events_offset[success_to];
+    }
+
+    assert(!pa.error());
+    return msg;
+}
+
+static std::auto_ptr<e::buffer>
+eosnc_release_ref(channel* chan, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
+{
+    const size_t NUM_EVENTS = (msg->size() - (sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)))
+                            / sizeof(uint64_t);
+    const size_t RESP_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t) + sizeof(uint64_t);
+
+    std::vector<uint64_t> events;
+    events.reserve(NUM_EVENTS);
+    std::vector<uint64_t> events_offset;
+    events_offset.reserve(NUM_EVENTS);
+    e::buffer::unpacker up = msg->unpack_from(sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t));
+
+    for (size_t i = 0; i < NUM_EVENTS; ++i)
+    {
+        uint64_t event = 0;
+        up = up >> event;
+
+        if (std::find(chan->references.begin(), chan->references.end(), event)
+            != chan->references.end())
+        {
+            events.push_back(event);
+            events_offset.push_back(i);
+        }
+    }
+
+    assert(!up.error());
+    size_t success_to = eo->release_references(&events.front(), events.size());
+    size_t i = 0;
+
+    while (i < chan->references.size())
+    {
+        if (std::find(events.begin(), events.end(), chan->references[i]) != events.end())
+        {
+            std::swap(chan->references[i], chan->references.back());
+            chan->references.pop_back();
+        }
+        else
+        {
+            ++i;
+        }
+    }
+
+    msg->resize(0);
+    e::buffer::packer pa = msg->pack();
+    pa = pa << static_cast<uint32_t>(RESP_MSG_SIZE) << nonce;
+
+    if (success_to == events.size())
+    {
+        pa = pa << NUM_EVENTS;
+    }
+    else
+    {
+        pa = pa << events_offset[success_to];
+    }
+
     assert(!pa.error());
     return msg;
 }
@@ -692,6 +848,14 @@ eosnc_assign_order(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t non
     return msg;
 }
 
+static void
+close_channel(channel* chan, event_orderer* eo)
+{
+    ERRORMSG1("closing connection [%i]", chan->sock.get()); // say which
+    eo->release_references(&chan->references.front(), chan->references.size());
+    chan->reset();
+}
+
 int
 eos_daemon(po6::net::location loc)
 {
@@ -730,6 +894,12 @@ eos_daemon(po6::net::location loc)
                 case EOSNC_CREATE_EVENT:
                     msg = eosnc_create_event(channels + fd, msg, nonce, &eo);
                     break;
+                case EOSNC_ACQUIRE_REF:
+                    msg = eosnc_acquire_ref(channels + fd, msg, nonce, &eo);
+                    break;
+                case EOSNC_RELEASE_REF:
+                    msg = eosnc_release_ref(channels + fd, msg, nonce, &eo);
+                    break;
                 case EOSNC_QUERY_ORDER:
                     msg = eosnc_query_order(channels + fd, msg, nonce, &eo);
                     break;
@@ -750,15 +920,13 @@ eos_daemon(po6::net::location loc)
 
                 if (epoll_ctl(epollfd.get(), EPOLL_CTL_MOD, fd, &ee) < 0)
                 {
-                    ERRORMSG1("closing connection [%i]", fd); // say which
-                    channels[fd].reset();
+                    close_channel(channels + fd, &eo);
                 }
             }
         }
         else
         {
-            ERRORMSG1("closing connection [%i]", fd); // say which
-            channels[fd].reset();
+            close_channel(channels + fd, &eo);
         }
     }
 

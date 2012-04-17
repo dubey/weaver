@@ -141,6 +141,119 @@ eos_create_event(struct eos_client* client)
 }
 
 int
+eos_acquire_references(struct eos_client* client, uint64_t* events, size_t events_sz)
+{
+    const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)
+                                + sizeof(uint64_t) * events_sz;
+    const ssize_t RECV_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t) + sizeof(uint64_t);
+    std::vector<uint8_t> buffer(SEND_MSG_SIZE);
+    uint8_t* ptmp = &buffer.front();
+    ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
+    ptmp = e::pack16be(static_cast<uint16_t>(EOSNC_ACQUIRE_REF), ptmp);
+    ptmp = e::pack64be(client->nonce, ptmp);
+    ++client->nonce;
+
+    for (size_t i = 0; i < events_sz; ++i)
+    {
+        ptmp = e::pack64be(events[i], ptmp);
+    }
+
+    ssize_t ret;
+    ret = client->sock.send(&buffer.front(), SEND_MSG_SIZE, MSG_WAITALL);
+
+    if (ret != SEND_MSG_SIZE)
+    {
+        return -1;
+    }
+
+    ret = client->sock.recv(&buffer.front(), RECV_MSG_SIZE, MSG_WAITALL);
+
+    if (ret != RECV_MSG_SIZE)
+    {
+        return -1;
+    }
+
+    uint32_t size = 0;
+    uint64_t nonce = 0;
+    uint64_t num = 0;
+    const uint8_t* utmp = &buffer.front();
+    utmp = e::unpack32be(utmp, &size);
+    utmp = e::unpack64be(utmp, &nonce);
+    utmp = e::unpack64be(utmp, &num);
+
+    if (size != RECV_MSG_SIZE)
+    {
+        return -1;
+    }
+
+    if (nonce + 1 != client->nonce)
+    {
+        return -1;
+    }
+
+    if (num != events_sz)
+    {
+        return num + 1;
+    }
+
+    return 0;
+}
+
+int
+eos_release_references(struct eos_client* client, uint64_t* events, size_t events_sz)
+{
+    const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)
+                                + sizeof(uint64_t) * events_sz;
+    const ssize_t RECV_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t) + sizeof(uint64_t);
+    std::vector<uint8_t> buffer(SEND_MSG_SIZE);
+    uint8_t* ptmp = &buffer.front();
+    ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
+    ptmp = e::pack16be(static_cast<uint16_t>(EOSNC_RELEASE_REF), ptmp);
+    ptmp = e::pack64be(client->nonce, ptmp);
+    ++client->nonce;
+
+    for (size_t i = 0; i < events_sz; ++i)
+    {
+        ptmp = e::pack64be(events[i], ptmp);
+    }
+
+    ssize_t ret;
+    ret = client->sock.send(&buffer.front(), SEND_MSG_SIZE, MSG_WAITALL);
+
+    if (ret != SEND_MSG_SIZE)
+    {
+        return -1;
+    }
+
+    ret = client->sock.recv(&buffer.front(), RECV_MSG_SIZE, MSG_WAITALL);
+
+    if (ret != RECV_MSG_SIZE)
+    {
+        return -1;
+    }
+
+    uint32_t size = 0;
+    uint64_t nonce = 0;
+    uint64_t num = 0;
+    const uint8_t* utmp = &buffer.front();
+    utmp = e::unpack32be(utmp, &size);
+    utmp = e::unpack64be(utmp, &nonce);
+    utmp = e::unpack64be(utmp, &num);
+
+    if (size != RECV_MSG_SIZE)
+    {
+        return -1;
+    }
+
+    if (nonce + 1 != client->nonce)
+    {
+        return -1;
+    }
+
+    return 0;
+}
+
+int
 eos_query_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs_sz)
 {
     const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)
