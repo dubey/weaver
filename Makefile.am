@@ -29,9 +29,10 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 AM_CPPFLAGS = $(E_CFLAGS)
 AM_CXXFLAGS = $(COVERAGE_CXXFLAGS)
 
-EXTRA_DIST = LICENSE
+EXTRA_DIST = LICENSE eos.pyx
 
 include_HEADERS = eos.h
+noinst_HEADERS = eos_cmp_encode.h network_constants.h
 
 bin_PROGRAMS = event-orderer
 lib_LTLIBRARIES = libeos.la
