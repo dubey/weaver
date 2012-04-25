@@ -43,27 +43,7 @@
 #include "eos_cmp_encode.h"
 #include "network_constants.h"
 
-class eos_client
-{
-    public:
-        eos_client(po6::net::location where);
-        ~eos_client() throw ();
-
-    public:
-        po6::net::socket sock;
-        uint64_t nonce;
-};
-
-eos_client :: eos_client(po6::net::location where)
-    : sock(where.address.family(), SOCK_STREAM, IPPROTO_TCP)
-    , nonce(1)
-{
-    sock.connect(where);
-}
-
-eos_client :: ~eos_client() throw ()
-{
-}
+////////////////////////////////// C Wrappers //////////////////////////////////
 
 extern "C"
 {
@@ -73,13 +53,15 @@ eos_client_create(const char* host, uint16_t port)
 {
     try
     {
-        po6::net::location loc(host, port);
-        std::auto_ptr<eos_client> c(new eos_client(loc));
-        return c.release();
+        return new eos_client(host, port);
     }
     catch (po6::error& e)
     {
         errno = e;
+        return NULL;
+    }
+    catch (...)
+    {
         return NULL;
     }
 }
@@ -87,14 +69,126 @@ eos_client_create(const char* host, uint16_t port)
 void
 eos_client_destroy(eos_client* client)
 {
-    if (client)
+    try
     {
-        delete client;
+        if (client)
+        {
+            delete client;
+        }
+    }
+    catch (...)
+    {
     }
 }
 
 uint64_t
 eos_create_event(struct eos_client* client)
+{
+    try
+    {
+        return client->create_event();
+    }
+    catch (po6::error& e)
+    {
+        errno = e;
+        return 0;
+    }
+    catch (...)
+    {
+        return 0;
+    }
+}
+
+int
+eos_acquire_references(struct eos_client* client, uint64_t* events, size_t events_sz)
+{
+    try
+    {
+        return client->acquire_references(events, events_sz);
+    }
+    catch (po6::error& e)
+    {
+        errno = e;
+        return -1;
+    }
+    catch (...)
+    {
+        return -1;
+    }
+}
+
+int
+eos_release_references(struct eos_client* client, uint64_t* events, size_t events_sz)
+{
+    try
+    {
+        return client->release_references(events, events_sz);
+    }
+    catch (po6::error& e)
+    {
+        errno = e;
+        return -1;
+    }
+    catch (...)
+    {
+        return -1;
+    }
+}
+
+int
+eos_query_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs_sz)
+{
+    try
+    {
+        return client->query_order(pairs, pairs_sz);
+    }
+    catch (po6::error& e)
+    {
+        errno = e;
+        return -1;
+    }
+    catch (...)
+    {
+        return -1;
+    }
+}
+
+int
+eos_assign_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs_sz)
+{
+    try
+    {
+        return client->assign_order(pairs, pairs_sz);
+    }
+    catch (po6::error& e)
+    {
+        errno = e;
+        return -1;
+    }
+    catch (...)
+    {
+        return -1;
+    }
+}
+
+} // extern "C"
+
+///////////////////////////////// Public Class /////////////////////////////////
+
+eos_client :: eos_client(const char* host, uint16_t port)
+    : m_where(host, port)
+    , m_sock(m_where.address.family(), SOCK_STREAM, IPPROTO_TCP)
+    , m_nonce(1)
+{
+    m_sock.connect(m_where);
+}
+
+eos_client :: ~eos_client() throw ()
+{
+}
+
+uint64_t
+eos_client :: create_event()
 {
     const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t);
     const ssize_t RECV_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t) + sizeof(uint64_t);
@@ -102,17 +196,17 @@ eos_create_event(struct eos_client* client)
     uint8_t* ptmp = buffer;
     ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
     ptmp = e::pack16be(static_cast<uint16_t>(EOSNC_CREATE_EVENT), ptmp);
-    ptmp = e::pack64be(client->nonce, ptmp);
-    ++client->nonce;
+    ptmp = e::pack64be(m_nonce, ptmp);
+    ++m_nonce;
     ssize_t ret;
-    ret = client->sock.send(buffer, SEND_MSG_SIZE, MSG_WAITALL);
+    ret = m_sock.send(buffer, SEND_MSG_SIZE, MSG_WAITALL);
 
     if (ret != SEND_MSG_SIZE)
     {
         return 0;
     }
 
-    ret = client->sock.recv(buffer, RECV_MSG_SIZE, MSG_WAITALL);
+    ret = m_sock.recv(buffer, RECV_MSG_SIZE, MSG_WAITALL);
 
     if (ret != RECV_MSG_SIZE)
     {
@@ -132,7 +226,7 @@ eos_create_event(struct eos_client* client)
         return 0;
     }
 
-    if (nonce + 1 != client->nonce)
+    if (nonce + 1 != m_nonce)
     {
         return 0;
     }
@@ -141,7 +235,7 @@ eos_create_event(struct eos_client* client)
 }
 
 int
-eos_acquire_references(struct eos_client* client, uint64_t* events, size_t events_sz)
+eos_client :: acquire_references(uint64_t* events, size_t events_sz)
 {
     const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)
                                 + sizeof(uint64_t) * events_sz;
@@ -150,8 +244,8 @@ eos_acquire_references(struct eos_client* client, uint64_t* events, size_t event
     uint8_t* ptmp = &buffer.front();
     ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
     ptmp = e::pack16be(static_cast<uint16_t>(EOSNC_ACQUIRE_REF), ptmp);
-    ptmp = e::pack64be(client->nonce, ptmp);
-    ++client->nonce;
+    ptmp = e::pack64be(m_nonce, ptmp);
+    ++m_nonce;
 
     for (size_t i = 0; i < events_sz; ++i)
     {
@@ -159,14 +253,14 @@ eos_acquire_references(struct eos_client* client, uint64_t* events, size_t event
     }
 
     ssize_t ret;
-    ret = client->sock.send(&buffer.front(), SEND_MSG_SIZE, MSG_WAITALL);
+    ret = m_sock.send(&buffer.front(), SEND_MSG_SIZE, MSG_WAITALL);
 
     if (ret != SEND_MSG_SIZE)
     {
         return -1;
     }
 
-    ret = client->sock.recv(&buffer.front(), RECV_MSG_SIZE, MSG_WAITALL);
+    ret = m_sock.recv(&buffer.front(), RECV_MSG_SIZE, MSG_WAITALL);
 
     if (ret != RECV_MSG_SIZE)
     {
@@ -186,7 +280,7 @@ eos_acquire_references(struct eos_client* client, uint64_t* events, size_t event
         return -1;
     }
 
-    if (nonce + 1 != client->nonce)
+    if (nonce + 1 != m_nonce)
     {
         return -1;
     }
@@ -200,7 +294,7 @@ eos_acquire_references(struct eos_client* client, uint64_t* events, size_t event
 }
 
 int
-eos_release_references(struct eos_client* client, uint64_t* events, size_t events_sz)
+eos_client :: release_references(uint64_t* events, size_t events_sz)
 {
     const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)
                                 + sizeof(uint64_t) * events_sz;
@@ -209,8 +303,8 @@ eos_release_references(struct eos_client* client, uint64_t* events, size_t event
     uint8_t* ptmp = &buffer.front();
     ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
     ptmp = e::pack16be(static_cast<uint16_t>(EOSNC_RELEASE_REF), ptmp);
-    ptmp = e::pack64be(client->nonce, ptmp);
-    ++client->nonce;
+    ptmp = e::pack64be(m_nonce, ptmp);
+    ++m_nonce;
 
     for (size_t i = 0; i < events_sz; ++i)
     {
@@ -218,14 +312,14 @@ eos_release_references(struct eos_client* client, uint64_t* events, size_t event
     }
 
     ssize_t ret;
-    ret = client->sock.send(&buffer.front(), SEND_MSG_SIZE, MSG_WAITALL);
+    ret = m_sock.send(&buffer.front(), SEND_MSG_SIZE, MSG_WAITALL);
 
     if (ret != SEND_MSG_SIZE)
     {
         return -1;
     }
 
-    ret = client->sock.recv(&buffer.front(), RECV_MSG_SIZE, MSG_WAITALL);
+    ret = m_sock.recv(&buffer.front(), RECV_MSG_SIZE, MSG_WAITALL);
 
     if (ret != RECV_MSG_SIZE)
     {
@@ -245,7 +339,7 @@ eos_release_references(struct eos_client* client, uint64_t* events, size_t event
         return -1;
     }
 
-    if (nonce + 1 != client->nonce)
+    if (nonce + 1 != m_nonce)
     {
         return -1;
     }
@@ -254,7 +348,7 @@ eos_release_references(struct eos_client* client, uint64_t* events, size_t event
 }
 
 int
-eos_query_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs_sz)
+eos_client :: query_order(eos_pair* pairs, size_t pairs_sz)
 {
     const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)
                                 + (sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint32_t)) * pairs_sz;
@@ -264,8 +358,8 @@ eos_query_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs_
     uint8_t* ptmp = &buffer.front();
     ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
     ptmp = e::pack16be(static_cast<uint16_t>(EOSNC_QUERY_ORDER), ptmp);
-    ptmp = e::pack64be(client->nonce, ptmp);
-    ++client->nonce;
+    ptmp = e::pack64be(m_nonce, ptmp);
+    ++m_nonce;
 
     for (size_t i = 0; i < pairs_sz; ++i)
     {
@@ -275,14 +369,14 @@ eos_query_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs_
     }
 
     ssize_t ret;
-    ret = client->sock.send(&buffer.front(), SEND_MSG_SIZE, MSG_WAITALL);
+    ret = m_sock.send(&buffer.front(), SEND_MSG_SIZE, MSG_WAITALL);
 
     if (ret != SEND_MSG_SIZE)
     {
         return -1;
     }
 
-    ret = client->sock.recv(&buffer.front(), RECV_MSG_SIZE, MSG_WAITALL);
+    ret = m_sock.recv(&buffer.front(), RECV_MSG_SIZE, MSG_WAITALL);
 
     if (ret != RECV_MSG_SIZE)
     {
@@ -300,7 +394,7 @@ eos_query_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs_
         return -1;
     }
 
-    if (nonce + 1 != client->nonce)
+    if (nonce + 1 != m_nonce)
     {
         return -1;
     }
@@ -314,7 +408,7 @@ eos_query_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs_
 }
 
 int
-eos_assign_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs_sz)
+eos_client :: assign_order(eos_pair* pairs, size_t pairs_sz)
 {
     const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)
                                 + (sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint32_t) + sizeof(uint8_t)) * pairs_sz;
@@ -324,8 +418,8 @@ eos_assign_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs
     uint8_t* ptmp = &buffer.front();
     ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
     ptmp = e::pack16be(static_cast<uint16_t>(EOSNC_ASSIGN_ORDER), ptmp);
-    ptmp = e::pack64be(client->nonce, ptmp);
-    ++client->nonce;
+    ptmp = e::pack64be(m_nonce, ptmp);
+    ++m_nonce;
 
     for (size_t i = 0; i < pairs_sz; ++i)
     {
@@ -337,14 +431,14 @@ eos_assign_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs
     }
 
     ssize_t ret;
-    ret = client->sock.send(&buffer.front(), SEND_MSG_SIZE, MSG_WAITALL);
+    ret = m_sock.send(&buffer.front(), SEND_MSG_SIZE, MSG_WAITALL);
 
     if (ret != SEND_MSG_SIZE)
     {
         return -1;
     }
 
-    ret = client->sock.recv(&buffer.front(), RECV_MSG_SIZE, MSG_WAITALL);
+    ret = m_sock.recv(&buffer.front(), RECV_MSG_SIZE, MSG_WAITALL);
 
     if (ret != RECV_MSG_SIZE)
     {
@@ -362,7 +456,7 @@ eos_assign_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs
         return -1;
     }
 
-    if (nonce + 1 != client->nonce)
+    if (nonce + 1 != m_nonce)
     {
         return -1;
     }
@@ -378,6 +472,4 @@ eos_assign_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs
     }
 
     return 0;
-}
-
 }

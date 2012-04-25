@@ -29,13 +29,18 @@
 #ifndef eos_h_
 #define eos_h_
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 /* C */
 #include <stdlib.h>
 #include <stdint.h>
+
+#ifdef __cplusplus
+
+// po6
+#include <po6/net/location.h>
+#include <po6/net/socket.h>
+
+extern "C" {
+#endif
 
 struct eos_client;
 
@@ -57,9 +62,16 @@ struct eos_pair
 
 #define EOS_SOFT_FAIL 1
 
+/* Create a new client.
+ *
+ * This will establish a connection to the specified host and server, and
+ * maintain state necessary for the eos_client.
+ */
 struct eos_client*
 eos_client_create(const char* host, uint16_t port);
 
+/* Destroy an existing client instance.
+ */
 void
 eos_client_destroy(struct eos_client* client);
 
@@ -140,6 +152,27 @@ eos_assign_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs
 
 #ifdef __cplusplus
 } // extern "C"
-#endif
+
+// Each of these public methods corresponds to a C call above.
+class eos_client
+{
+    public:
+        eos_client(const char* host, uint16_t port);
+        ~eos_client() throw ();
+
+    public:
+        uint64_t create_event();
+        int acquire_references(uint64_t* events, size_t events_sz);
+        int release_references(uint64_t* events, size_t events_sz);
+        int query_order(eos_pair* pairs, size_t pairs_sz);
+        int assign_order(eos_pair* pairs, size_t pairs_sz);
+
+    private:
+        po6::net::location m_where;
+        po6::net::socket m_sock;
+        uint64_t m_nonce;
+};
+
+#endif // __cplusplus
 
 #endif // eos_h_

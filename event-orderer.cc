@@ -455,6 +455,13 @@ channel :: reset()
     try
     {
         sock.shutdown(SHUT_RDWR);
+    }
+    catch (...)
+    {
+    }
+
+    try
+    {
         sock.close();
     }
     catch (...)
