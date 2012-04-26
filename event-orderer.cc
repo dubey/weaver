@@ -35,13 +35,10 @@
 #include <sys/epoll.h>
 
 // STL
+#include <algorithm>
+#include <memory>
 #include <queue>
 #include <vector>
-
-// Boost
-#include <boost/graph/adjacency_list.hpp>
-#include <boost/graph/dag_shortest_paths.hpp>
-#include <boost/graph/two_bit_color_map.hpp>
 
 // po6
 #include <po6/net/location.h>
@@ -54,6 +51,7 @@
 // eos
 #include "eos.h"
 #include "eos_cmp_encode.h"
+#include "event_dependency_graph.h"
 #include "network_constants.h"
 
 #define xtostr(X) #X
@@ -62,25 +60,6 @@
 #define ERRORMSG1(X, Y) fprintf(stderr, "%s:%i:  " X "\n", __FILE__, __LINE__, Y)
 #define ERRORMSG2(X, Y1, Y2) fprintf(stderr, "%s:%i:  " X "\n", __FILE__, __LINE__, Y1, Y2)
 #define ERRNOMSG(CALL) ERRORMSG2(tostr(CALL) " failed:  %s  [ERRNO=%i]", strerror(errno), errno)
-
-template <typename TM>
-class dfs_seen_visitor : public boost::default_dfs_visitor
-{
-    public:
-        dfs_seen_visitor(TM seenmap)
-            : m_seenmap(seenmap)
-        {
-        }
-        
-        template <typename V, typename G>
-        void discover_vertex(V u, const G& g) const
-        {
-            boost::put(m_seenmap, u, 1);
-        }
-
-    private:
-        TM m_seenmap;
-};
 
 class event_orderer
 {
@@ -96,34 +75,16 @@ class event_orderer
         size_t assign_order(eos_pair* pairs, size_t pairs_sz);
 
     private:
-        typedef boost::adjacency_list<boost::setS, boost::listS, boost::directedS,
-                                      boost::property<boost::vertex_name_t, uint64_t,
-                                      boost::property<boost::vertex_index_t, uint64_t,
-                                      boost::property<boost::vertex_color_t, uint64_t> > >,
-                                      boost::property<boost::edge_weight_t, int> > graph;
-        typedef boost::graph_traits<graph>::vertex_descriptor vertex;
-        typedef boost::graph_traits<graph>::edge_descriptor edge;
-
-    private:
-        void incref(vertex v);
-        void decref(vertex v);
-        void add_mapping(uint64_t id, vertex v);
-        void remove_mapping(uint64_t id);
-        void remove_mapping(vertex v);
-        int compute_order(vertex lhs, vertex rhs);
-
-    private:
-        uint64_t m_nextid;
-        graph m_graph;
-        std::map<uint64_t, vertex> m_ids_forward;
-        std::map<vertex, uint64_t> m_ids_backward;
+        event_dependency_graph m_graph;
+        uint64_t m_count_create;
+        uint64_t m_count_acquire;
+        uint64_t m_count_release;
+        uint64_t m_count_query;
+        uint64_t m_count_assign;
 };
 
 event_orderer :: event_orderer()
-    : m_nextid(1)
-    , m_graph()
-    , m_ids_forward()
-    , m_ids_backward()
+    : m_graph()
 {
 }
 
@@ -134,13 +95,7 @@ event_orderer :: ~event_orderer() throw ()
 uint64_t
 event_orderer :: create_event()
 {
-    uint64_t event_id = m_nextid;
-    vertex v = boost::add_vertex(m_graph);
-    boost::put(boost::vertex_name, m_graph, v, 1);
-    boost::put(boost::vertex_index, m_graph, v, event_id); 
-    add_mapping(event_id, v);
-    ++m_nextid;
-    return event_id;
+    return m_graph.add_vertex();
 }
 
 size_t
@@ -151,14 +106,10 @@ event_orderer :: acquire_references(uint64_t* events, size_t events_sz)
     // Increment reference counts
     for (i = 0; i < events_sz; ++i)
     {
-        std::map<uint64_t, vertex>::iterator viter = m_ids_forward.find(events[i]);
-
-        if (viter == m_ids_forward.end())
+        if (!m_graph.incref(events[i]))
         {
             break;
         }
-
-        incref(viter->second);
     }
 
     // Inside this conditional lies the normal exit point.
@@ -170,9 +121,8 @@ event_orderer :: acquire_references(uint64_t* events, size_t events_sz)
     // Decrement reference counts we incremented in error
     for (size_t j = 0; j < i; ++j)
     {
-        std::map<uint64_t, vertex>::iterator viter = m_ids_forward.find(events[j]);
-        assert(viter != m_ids_forward.end());
-        decref(viter->second);
+        bool decr = m_graph.decref(events[i]);
+        assert(decr);
     }
 
     return i;
@@ -183,14 +133,7 @@ event_orderer :: release_references(uint64_t* events, size_t events_sz)
 {
     for (size_t i = 0; i < events_sz; ++i)
     {
-        std::map<uint64_t, vertex>::iterator viter = m_ids_forward.find(events[i]);
-
-        if (viter == m_ids_forward.end())
-        {
-            continue;
-        }
-
-        decref(viter->second);
+        m_graph.decref(events[i]);
     }
 
     return events_sz;
@@ -201,16 +144,14 @@ event_orderer :: query_order(eos_pair* pairs, size_t pairs_sz)
 {
     for (size_t i = 0; i < pairs_sz; ++i)
     {
-        std::map<uint64_t, vertex>::iterator lhsiter = m_ids_forward.find(pairs[i].lhs);
-        std::map<uint64_t, vertex>::iterator rhsiter = m_ids_forward.find(pairs[i].rhs);
-
-        if (lhsiter == m_ids_forward.end() || rhsiter == m_ids_forward.end())
+        if (!m_graph.exists(pairs[i].lhs) ||
+            !m_graph.exists(pairs[i].rhs))
         {
             pairs[i].order = EOS_NOEXIST;
             continue;
         }
 
-        int resolve = compute_order(lhsiter->second, rhsiter->second);
+        int resolve = m_graph.compute_order(pairs[i].lhs, pairs[i].rhs);
 
         if (resolve < 0)
         {
@@ -232,24 +173,19 @@ event_orderer :: query_order(eos_pair* pairs, size_t pairs_sz)
 size_t
 event_orderer :: assign_order(eos_pair* pairs, size_t pairs_sz)
 {
-    typedef std::map<uint64_t, vertex>::iterator vertex_with_id_t;
-
-    std::vector<std::pair<vertex, vertex> > created_edges;
+    std::vector<std::pair<uint64_t, uint64_t> > created_edges;
+    created_edges.reserve(pairs_sz);
     size_t i;
 
     for (i = 0; i < pairs_sz; ++i)
     {
-        std::map<uint64_t, vertex>::iterator lhsiter = m_ids_forward.find(pairs[i].lhs);
-        std::map<uint64_t, vertex>::iterator rhsiter = m_ids_forward.find(pairs[i].rhs);
-
-        if (lhsiter == m_ids_forward.end() || rhsiter == m_ids_forward.end())
+        if (!m_graph.exists(pairs[i].lhs) ||
+            !m_graph.exists(pairs[i].rhs))
         {
             break;
         }
 
-        vertex lhs = lhsiter->second;
-        vertex rhs = rhsiter->second;
-        int resolve = compute_order(lhsiter->second, rhsiter->second);
+        int resolve = m_graph.compute_order(pairs[i].lhs, pairs[i].rhs);
 
         if (resolve < 0)
         {
@@ -284,14 +220,10 @@ event_orderer :: assign_order(eos_pair* pairs, size_t pairs_sz)
             switch (pairs[i].order)
             {
                 case EOS_HAPPENS_BEFORE:
-                    boost::add_edge(lhs, rhs, m_graph);
-                    created_edges.push_back(std::make_pair(lhs, rhs));
-                    incref(rhs);
+                    created_edges.push_back(std::make_pair(pairs[i].lhs, pairs[i].rhs));
                     break;
                 case EOS_HAPPENS_AFTER:
-                    boost::add_edge(rhs, lhs, m_graph);
-                    created_edges.push_back(std::make_pair(rhs, lhs));
-                    incref(lhs);
+                    created_edges.push_back(std::make_pair(pairs[i].rhs, pairs[i].lhs));
                     break;
                 case EOS_CONCURRENT:
                 case EOS_NOEXIST:
@@ -301,113 +233,17 @@ event_orderer :: assign_order(eos_pair* pairs, size_t pairs_sz)
         }
     }
 
-    // Inside this conditional lies the normal exit point.
-    if (i == pairs_sz)
+    if (i != pairs_sz)
     {
-        return pairs_sz;
+        return i;
     }
 
     for (size_t j = 0; j < created_edges.size(); ++j)
     {
-        boost::remove_edge(created_edges[j].first, created_edges[j].second, m_graph);
-        decref(created_edges[j].second);
+        m_graph.add_edge(created_edges[j].first, created_edges[j].second);
     }
 
-    return i;
-}
-
-void
-event_orderer :: incref(vertex v)
-{
-    uint64_t count = boost::get(boost::vertex_name, m_graph, v);
-    boost::put(boost::vertex_name, m_graph, v, count + 1);
-}
-
-void
-event_orderer :: decref(vertex seed)
-{
-    std::queue<vertex> toremove;
-    toremove.push(seed);
-
-    while (!toremove.empty())
-    {
-        vertex v = toremove.front();
-        toremove.pop();
-
-        uint64_t count = boost::get(boost::vertex_name, m_graph, v);
-        boost::put(boost::vertex_name, m_graph, v, count - 1);
-
-        if (count > 1)
-        {
-            continue;
-        }
-
-        boost::graph_traits<graph>::out_edge_iterator os;
-        boost::graph_traits<graph>::out_edge_iterator oe;
-
-        for (boost::tie(os, oe) = boost::out_edges(v, m_graph); os != oe; ++os)
-        {
-            vertex u = boost::target(*os, m_graph);
-            toremove.push(u);
-        }
-
-        remove_mapping(v);
-        boost::remove_vertex(v, m_graph);
-    }
-}
-
-void
-event_orderer :: add_mapping(uint64_t id, vertex v)
-{
-    m_ids_forward[id] = v;
-    m_ids_backward[v] = id;
-}
-
-void
-event_orderer :: remove_mapping(uint64_t id)
-{
-    assert(m_ids_forward.find(id) != m_ids_forward.end());
-    vertex v = m_ids_forward[id];
-    m_ids_forward.erase(id);
-    m_ids_backward.erase(v);
-}
-
-void
-event_orderer :: remove_mapping(vertex v)
-{
-    assert(m_ids_backward.find(v) != m_ids_backward.end());
-    uint64_t id = m_ids_backward[v];
-    m_ids_forward.erase(id);
-    m_ids_backward.erase(v);
-}
-
-int
-event_orderer :: compute_order(vertex lhs, vertex rhs)
-{
-    if (lhs == rhs)
-    {
-        return 0;
-    }
-
-    boost::property_map<graph, boost::vertex_color_t>::type colorslhs;
-    colorslhs = boost::get(boost::vertex_color, m_graph);
-    breadth_first_search(m_graph, lhs, color_map(colorslhs));
-
-    if (colorslhs[rhs] != 0)
-    {
-        return -1;
-    }
-
-    boost::property_map<graph, boost::vertex_color_t>::type colorsrhs;
-    colorsrhs = boost::get(boost::vertex_color, m_graph);
-    breadth_first_search(m_graph, rhs, color_map(colorsrhs));
-
-    if (colorsrhs[lhs] != 0)
-    {
-        return 1;
-    }
-
-    return 0;
+    return pairs_sz;
 }
 
 class channel
