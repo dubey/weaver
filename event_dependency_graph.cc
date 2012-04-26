@@ -56,6 +56,7 @@ class event_dependency_graph::vertex
     public:
         uint64_t event;
         uint64_t sparse;
+        uint64_t bfsnext;
 
     public:
         uint64_t m_refcount;
@@ -85,7 +86,12 @@ event_dependency_graph :: add_vertex()
     if (m_free_inner_ids.empty())
     {
         m_vertices.push_back(vertex());
-        m_dense.reserve(m_vertices.capacity());
+
+        if (m_dense.size() < m_vertices.capacity())
+        {
+            m_dense.resize(m_vertices.capacity());
+        }
+
         inner_id = m_vertices.size() - 1;
     }
     else
@@ -220,15 +226,14 @@ bool
 event_dependency_graph :: bfs(uint64_t start, uint64_t end)
 {
     m_dense.clear();
-    std::queue<uint64_t> pending;
-    pending.push(start);
+    uint64_t bfshead = start;
+    uint64_t bfstail = start;
+    m_vertices[start].bfsnext = UINT64_MAX;
 
-    while (!pending.empty())
+    while (bfshead != UINT64_MAX)
     {
-        uint64_t v = pending.front();
-        pending.pop();
-        std::vector<uint64_t>::const_iterator edge = m_vertices[v].edges().begin();
-        std::vector<uint64_t>::const_iterator edge_end = m_vertices[v].edges().end();
+        std::vector<uint64_t>::const_iterator edge = m_vertices[bfshead].edges().begin();
+        std::vector<uint64_t>::const_iterator edge_end = m_vertices[bfshead].edges().end();
 
         for (; edge != edge_end; ++edge)
         {
@@ -248,8 +253,15 @@ event_dependency_graph :: bfs(uint64_t start, uint64_t end)
             // Add it to the set and pending queue
             m_vertices[*edge].sparse = m_dense.size();
             m_dense.push_back(*edge);
-            pending.push(*edge);
+
+            // Add it to the end of the bfs queue
+            m_vertices[bfstail].bfsnext = *edge;
+            bfstail = *edge;
+            m_vertices[*edge].bfsnext = UINT64_MAX;
         }
+
+        // Advance
+        bfshead = m_vertices[bfshead].bfsnext;
     }
 
     return false;
@@ -258,6 +270,7 @@ event_dependency_graph :: bfs(uint64_t start, uint64_t end)
 event_dependency_graph :: vertex :: vertex()
     : event(0)
     , sparse(0)
+    , bfsnext(0)
     , m_refcount(0)
     , m_edges()
 {
@@ -268,6 +281,7 @@ event_dependency_graph :: vertex :: clear()
 {
     event = 0;
     sparse = 0;
+    bfsnext = 0;
     m_refcount = 0;
     m_edges.clear();
 }

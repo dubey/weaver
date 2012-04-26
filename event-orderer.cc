@@ -76,11 +76,6 @@ class event_orderer
 
     private:
         event_dependency_graph m_graph;
-        uint64_t m_count_create;
-        uint64_t m_count_acquire;
-        uint64_t m_count_release;
-        uint64_t m_count_query;
-        uint64_t m_count_assign;
 };
 
 event_orderer :: event_orderer()
