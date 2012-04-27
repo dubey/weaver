@@ -41,7 +41,7 @@ class event_dependency_graph::vertex
 {
     public:
         vertex();
-        ~vertex() throw () {}
+        ~vertex() throw ();
 
     public:
         void clear();
@@ -273,6 +273,10 @@ event_dependency_graph :: vertex :: vertex()
     , bfsnext(0)
     , m_refcount(0)
     , m_edges()
+{
+}
+
+event_dependency_graph :: vertex :: ~vertex() throw ()
 {
 }
 
