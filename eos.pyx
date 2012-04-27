@@ -62,11 +62,11 @@ cdef extern from "eos.h":
     eos_client* eos_client_create(char* host, uint16_t port)
     void eos_client_destroy(eos_client* client)
 
-    uint64_t eos_create_event(eos_client* client)
-    int eos_acquire_references(eos_client* client, uint64_t* events, size_t events_sz)
-    int eos_release_references(eos_client* client, uint64_t* events, size_t events_sz)
-    int eos_query_order(eos_client* client, eos_pair* pairs, size_t pairs_sz)
-    int eos_assign_order(eos_client* client, eos_pair* pairs, size_t pairs_sz)
+    uint64_t eos_create_event(eos_client* client) nogil
+    int eos_acquire_references(eos_client* client, uint64_t* events, size_t events_sz) nogil
+    int eos_release_references(eos_client* client, uint64_t* events, size_t events_sz) nogil
+    int eos_query_order(eos_client* client, eos_pair* pairs, size_t pairs_sz) nogil
+    int eos_assign_order(eos_client* client, eos_pair* pairs, size_t pairs_sz) nogil
 
 cdef __enumtosymb(eos_cmp c):
     return {EOS_HAPPENS_BEFORE: '<',
