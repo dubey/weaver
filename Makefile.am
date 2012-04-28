@@ -32,7 +32,7 @@ AM_CXXFLAGS = $(COVERAGE_CXXFLAGS)
 EXTRA_DIST = LICENSE eos.pyx
 
 include_HEADERS = eos.h
-noinst_HEADERS = eos_cmp_encode.h network_constants.h
+noinst_HEADERS = eos_cmp_encode.h eos_stats_encode.h event_dependency_graph.h network_constants.h
 
 bin_PROGRAMS = event-orderer
 lib_LTLIBRARIES = libeos.la
