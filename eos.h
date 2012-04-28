@@ -60,6 +60,20 @@ struct eos_pair
     enum eos_cmp order;
 };
 
+struct eos_stats
+{
+    uint64_t time;
+    uint64_t utime;
+    uint64_t stime;
+    uint32_t maxrss;
+    uint64_t events;
+    uint64_t count_create_event;
+    uint64_t count_acquire_references;
+    uint64_t count_release_references;
+    uint64_t count_query_order;
+    uint64_t count_assign_order;
+};
+
 #define EOS_SOFT_FAIL 1
 
 /* Create a new client.
@@ -150,6 +164,47 @@ eos_query_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs_
 int
 eos_assign_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs_sz);
 
+/* Get statistics from the server.
+ *
+ * The eos_stats instance will be filled in.  The fields have the following
+ * meaning:
+ *
+ * time:
+ *     The wall-clock time on the server.
+ *
+ * utime:
+ *     The amount of time spent in userspace according to getrusage.
+ *
+ * stime:
+ *     The amount of time spent in kernel according to getrusage.
+ *
+ * maxrss:
+ *     The maximum resident set size according to getrusage.
+ *
+ * events:
+ *     The number of events in the event dependency graph.
+ *
+ * count_create_event:
+ *     The number of calls to "create_event".
+ *
+ * count_acquire_references:
+ *     The number of calls to "acquire_references".
+ *
+ * count_release_references:
+ *     The number of calls to "release_references".
+ *
+ * count_query_order:
+ *     The number of calls to "query_order".
+ *
+ * count_assign_order:
+ *     The number of calls to "assign_order".
+ *
+ * Return:  0 on success, -1 on error.
+ * Error:   errno will indicate the error.
+ */
+int
+eos_get_stats(struct eos_client* client, struct eos_stats* st);
+
 #ifdef __cplusplus
 } // extern "C"
 
@@ -166,6 +221,7 @@ class eos_client
         int release_references(uint64_t* events, size_t events_sz);
         int query_order(eos_pair* pairs, size_t pairs_sz);
         int assign_order(eos_pair* pairs, size_t pairs_sz);
+        int get_stats(eos_stats* st);
 
     private:
         po6::net::location m_where;

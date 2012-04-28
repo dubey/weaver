@@ -38,8 +38,8 @@ bin_PROGRAMS = event-orderer
 lib_LTLIBRARIES = libeos.la
 pyexec_LTLIBRARIES = eos.la
 
-event_orderer_SOURCES = eos_cmp_encode.cc event_dependency_graph.cc event-orderer.cc
-event_orderer_LDADD = $(E_LIBS)
+event_orderer_SOURCES = eos_cmp_encode.cc eos_stats_encode.cc event_dependency_graph.cc event-orderer.cc
+event_orderer_LDADD = $(E_LIBS) -lrt
 # This NOP seems useless.  See:
 # http://www.gnu.org/software/automake/manual/html_node/Objects-created-both-with-libtool-and-without.html
 event_orderer_CXXFLAGS = $(AM_CXXFLAGS)

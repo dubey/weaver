@@ -34,7 +34,8 @@ enum network_constant
     EOSNC_ACQUIRE_REF,
     EOSNC_RELEASE_REF,
     EOSNC_QUERY_ORDER,
-    EOSNC_ASSIGN_ORDER
+    EOSNC_ASSIGN_ORDER,
+    EOSNC_GET_STATS
 };
 
 #endif // network_constants_h_

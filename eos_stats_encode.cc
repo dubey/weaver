@@ -25,47 +25,23 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef event_dependency_graph_h_
-#define event_dependency_graph_h_
+// eos
+#include "eos_stats_encode.h"
 
-// C
-#include <stdint.h>
-
-// STL
-#include <tr1/unordered_map>
-#include <vector>
-
-class event_dependency_graph
+e::buffer::packer
+operator << (e::buffer::packer lhs, const eos_stats& rhs)
 {
-    public:
-        event_dependency_graph();
-        ~event_dependency_graph() throw ();
+    return lhs << rhs.time << rhs.utime << rhs.stime << rhs.maxrss << rhs.events
+        << rhs.count_create_event << rhs.count_acquire_references
+        << rhs.count_release_references << rhs.count_query_order
+        << rhs.count_assign_order;
+}
 
-    public:
-        uint64_t add_vertex();
-        void add_edge(uint64_t src_event_id, uint64_t dst_event_id);
-        int compute_order(uint64_t lhs_event_id, uint64_t rhs_event_id);
-        bool exists(uint64_t event_id);
-        uint64_t num_vertices();
-        bool incref(uint64_t event_id);
-        bool decref(uint64_t event_id);
-
-    private:
-        class vertex;
-        typedef std::tr1::unordered_map<uint64_t, uint64_t> event_map_t;
-
-    private:
-        bool map(uint64_t event, uint64_t* inner);
-        bool bfs(uint64_t start, uint64_t end);
-
-    private:
-        uint64_t m_nextid;
-        std::vector<vertex> m_vertices;
-        event_map_t m_event_to_inner;
-        std::vector<uint64_t> m_free_inner_ids;
-        // See: http://research.swtch.com/sparse
-        // We allocate here to avoid repeated allocations
-        std::vector<uint64_t> m_dense;
-};
-
-#endif // event_dependency_graph_h_
+e::buffer::unpacker
+operator >> (e::buffer::unpacker lhs, eos_stats& rhs)
+{
+    return lhs >> rhs.time >> rhs.utime >> rhs.stime >> rhs.maxrss >> rhs.events
+        >> rhs.count_create_event >> rhs.count_acquire_references
+        >> rhs.count_release_references >> rhs.count_query_order
+        >> rhs.count_assign_order;
+}

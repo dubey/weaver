@@ -155,6 +155,13 @@ event_dependency_graph :: exists(uint64_t event_id)
     return map(event_id, &inner);
 }
 
+uint64_t
+event_dependency_graph :: num_vertices()
+{
+    assert(m_vertices.size() - m_free_inner_ids.size() == m_event_to_inner.size());
+    return m_event_to_inner.size();
+}
+
 bool
 event_dependency_graph :: incref(uint64_t event_id)
 {

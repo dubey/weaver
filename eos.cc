@@ -171,6 +171,24 @@ eos_assign_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs
     }
 }
 
+int
+eos_get_stats(struct eos_client* client, struct eos_stats* st)
+{
+    try
+    {
+        return client->get_stats(st);
+    }
+    catch (po6::error& e)
+    {
+        errno = e;
+        return -1;
+    }
+    catch (...)
+    {
+        return -1;
+    }
+}
+
 } // extern "C"
 
 ///////////////////////////////// Public Class /////////////////////////////////
@@ -469,6 +487,62 @@ eos_client :: assign_order(eos_pair* pairs, size_t pairs_sz)
         {
             return i + 1;
         }
+    }
+
+    return 0;
+}
+
+int
+eos_client :: get_stats(eos_stats* st)
+{
+    const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t);
+    const ssize_t RECV_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t)
+                                + sizeof(uint32_t) + sizeof(uint64_t) * 9;
+    uint8_t buffer[RECV_MSG_SIZE]; // need to use the larger of the two
+    uint8_t* ptmp = buffer;
+    ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
+    ptmp = e::pack16be(static_cast<uint16_t>(EOSNC_GET_STATS), ptmp);
+    ptmp = e::pack64be(m_nonce, ptmp);
+    ++m_nonce;
+    ssize_t ret;
+    ret = m_sock.send(buffer, SEND_MSG_SIZE, MSG_WAITALL);
+
+    if (ret != SEND_MSG_SIZE)
+    {
+        return -1;
+    }
+
+    ret = m_sock.recv(buffer, RECV_MSG_SIZE, MSG_WAITALL);
+
+    if (ret != RECV_MSG_SIZE)
+    {
+        return -1;
+    }
+
+    uint32_t size = 0;
+    uint64_t nonce = 0;
+    const uint8_t* utmp = buffer;
+    utmp = e::unpack32be(utmp, &size);
+    utmp = e::unpack64be(utmp, &nonce);
+    utmp = e::unpack64be(utmp, &st->time);
+    utmp = e::unpack64be(utmp, &st->utime);
+    utmp = e::unpack64be(utmp, &st->stime);
+    utmp = e::unpack32be(utmp, &st->maxrss);
+    utmp = e::unpack64be(utmp, &st->events);
+    utmp = e::unpack64be(utmp, &st->count_create_event);
+    utmp = e::unpack64be(utmp, &st->count_acquire_references);
+    utmp = e::unpack64be(utmp, &st->count_release_references);
+    utmp = e::unpack64be(utmp, &st->count_query_order);
+    utmp = e::unpack64be(utmp, &st->count_assign_order);
+
+    if (size != RECV_MSG_SIZE)
+    {
+        return -1;
+    }
+
+    if (nonce + 1 != m_nonce)
+    {
+        return -1;
     }
 
     return 0;

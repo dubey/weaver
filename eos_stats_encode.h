@@ -25,47 +25,22 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef event_dependency_graph_h_
-#define event_dependency_graph_h_
+#ifndef eos_stats_encode_h_
+#define eos_stats_encode_h_
 
 // C
 #include <stdint.h>
 
-// STL
-#include <tr1/unordered_map>
-#include <vector>
+// e
+#include <e/buffer.h>
 
-class event_dependency_graph
-{
-    public:
-        event_dependency_graph();
-        ~event_dependency_graph() throw ();
+// eos
+#include <eos.h>
 
-    public:
-        uint64_t add_vertex();
-        void add_edge(uint64_t src_event_id, uint64_t dst_event_id);
-        int compute_order(uint64_t lhs_event_id, uint64_t rhs_event_id);
-        bool exists(uint64_t event_id);
-        uint64_t num_vertices();
-        bool incref(uint64_t event_id);
-        bool decref(uint64_t event_id);
+e::buffer::packer
+operator << (e::buffer::packer lhs, const eos_stats& rhs);
 
-    private:
-        class vertex;
-        typedef std::tr1::unordered_map<uint64_t, uint64_t> event_map_t;
+e::buffer::unpacker
+operator >> (e::buffer::unpacker lhs, eos_stats& rhs);
 
-    private:
-        bool map(uint64_t event, uint64_t* inner);
-        bool bfs(uint64_t start, uint64_t end);
-
-    private:
-        uint64_t m_nextid;
-        std::vector<vertex> m_vertices;
-        event_map_t m_event_to_inner;
-        std::vector<uint64_t> m_free_inner_ids;
-        // See: http://research.swtch.com/sparse
-        // We allocate here to avoid repeated allocations
-        std::vector<uint64_t> m_dense;
-};
-
-#endif // event_dependency_graph_h_
+#endif // eos_stats_encode_h_

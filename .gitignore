@@ -19,6 +19,7 @@ eos.lo
 eos.o
 event-orderer
 event_orderer-eos_cmp_encode.o
+event_orderer-eos_stats_encode.o
 event_orderer-event_dependency_graph.o
 event_orderer-event-orderer.o
 event-orderer.o

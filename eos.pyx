@@ -59,6 +59,18 @@ cdef extern from "eos.h":
         uint32_t flags
         eos_cmp order
 
+    cdef struct eos_stats:
+        uint64_t time
+        uint64_t utime
+        uint64_t stime
+        uint32_t maxrss
+        uint64_t events
+        uint64_t count_create_event
+        uint64_t count_acquire_references
+        uint64_t count_release_references
+        uint64_t count_query_order
+        uint64_t count_assign_order
+
     eos_client* eos_client_create(char* host, uint16_t port)
     void eos_client_destroy(eos_client* client)
 
@@ -67,6 +79,7 @@ cdef extern from "eos.h":
     int eos_release_references(eos_client* client, uint64_t* events, size_t events_sz) nogil
     int eos_query_order(eos_client* client, eos_pair* pairs, size_t pairs_sz) nogil
     int eos_assign_order(eos_client* client, eos_pair* pairs, size_t pairs_sz) nogil
+    int eos_get_stats(eos_client* client, eos_stats* st) nogil
 
 cdef __enumtosymb(eos_cmp c):
     return {EOS_HAPPENS_BEFORE: '<',
@@ -175,3 +188,19 @@ cdef class Client:
             return [(pairs[i].lhs, pairs[i].rhs, __enumtosymb(pairs[i].order)) for i in range(len(events))]
         finally:
             free(pairs)
+
+    def get_stats(self):
+        cdef eos_stats st
+        ret = eos_get_stats(self._client, &st)
+        if ret != 0:
+            raise RuntimeError("it failed")
+        return {'time': st.time,
+                'utime': st.utime,
+                'stime': st.stime,
+                'maxrss': st.maxrss,
+                'events': st.events,
+                'count_create_event': st.count_create_event,
+                'count_acquire_references': st.count_acquire_references,
+                'count_release_references': st.count_release_references,
+                'count_query_order': st.count_query_order,
+                'count_assign_order': st.count_assign_order}

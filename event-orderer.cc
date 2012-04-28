@@ -31,6 +31,10 @@
 #include <cstdio>
 #include <stdint.h>
 
+// POSIX
+#include <sys/resource.h>
+#include <sys/time.h>
+
 // Linux
 #include <sys/epoll.h>
 
@@ -53,6 +57,7 @@
 #include "eos_cmp_encode.h"
 #include "event_dependency_graph.h"
 #include "network_constants.h"
+#include "eos_stats_encode.h"
 
 #define xtostr(X) #X
 #define tostr(X) xtostr(X)
@@ -73,13 +78,24 @@ class event_orderer
         size_t release_references(uint64_t* events, size_t events_sz);
         size_t query_order(eos_pair* pairs, size_t pairs_sz);
         size_t assign_order(eos_pair* pairs, size_t pairs_sz);
+        void get_stats(eos_stats* st);
 
     private:
         event_dependency_graph m_graph;
+        uint64_t m_count_create_event;
+        uint64_t m_count_acquire_references;
+        uint64_t m_count_release_references;
+        uint64_t m_count_query_order;
+        uint64_t m_count_assign_order;
 };
 
 event_orderer :: event_orderer()
     : m_graph()
+    , m_count_create_event()
+    , m_count_acquire_references()
+    , m_count_release_references()
+    , m_count_query_order()
+    , m_count_assign_order()
 {
 }
 
@@ -90,12 +106,14 @@ event_orderer :: ~event_orderer() throw ()
 uint64_t
 event_orderer :: create_event()
 {
+    ++m_count_create_event;
     return m_graph.add_vertex();
 }
 
 size_t
 event_orderer :: acquire_references(uint64_t* events, size_t events_sz)
 {
+    ++m_count_acquire_references;
     size_t i;
 
     // Increment reference counts
@@ -126,6 +144,8 @@ event_orderer :: acquire_references(uint64_t* events, size_t events_sz)
 size_t
 event_orderer :: release_references(uint64_t* events, size_t events_sz)
 {
+    ++m_count_release_references;
+
     for (size_t i = 0; i < events_sz; ++i)
     {
         m_graph.decref(events[i]);
@@ -137,6 +157,8 @@ event_orderer :: release_references(uint64_t* events, size_t events_sz)
 size_t
 event_orderer :: query_order(eos_pair* pairs, size_t pairs_sz)
 {
+    ++m_count_query_order;
+
     for (size_t i = 0; i < pairs_sz; ++i)
     {
         if (!m_graph.exists(pairs[i].lhs) ||
@@ -168,6 +190,8 @@ event_orderer :: query_order(eos_pair* pairs, size_t pairs_sz)
 size_t
 event_orderer :: assign_order(eos_pair* pairs, size_t pairs_sz)
 {
+    ++m_count_assign_order;
+
     std::vector<std::pair<uint64_t, uint64_t> > created_edges;
     created_edges.reserve(pairs_sz);
     size_t i;
@@ -239,6 +263,48 @@ event_orderer :: assign_order(eos_pair* pairs, size_t pairs_sz)
     }
 
     return pairs_sz;
+}
+
+void
+event_orderer :: get_stats(eos_stats* st)
+{
+    timespec t;
+
+    if (clock_gettime(CLOCK_REALTIME, &t) < 0)
+    {
+        ERRNOMSG(clock_gettime);
+        st->time = 0;
+    }
+    else
+    {
+        st->time = t.tv_sec * 1000000000;
+        st->time += t.tv_nsec;
+    }
+
+    rusage r;
+
+    if (getrusage(RUSAGE_SELF, &r) < 0)
+    {
+        ERRNOMSG(getrusage);
+        st->utime = 0;
+        st->stime = 0;
+        st->maxrss = 0;
+    }
+    else
+    {
+        st->utime = r.ru_utime.tv_sec * 1000000000;
+        st->utime += r.ru_utime.tv_usec * 1000;
+        st->stime = r.ru_stime.tv_sec * 1000000000;
+        st->stime += r.ru_stime.tv_usec * 1000;
+        st->maxrss = r.ru_maxrss;
+    }
+
+    st->events = m_graph.num_vertices();
+    st->count_create_event = m_count_create_event;
+    st->count_acquire_references = m_count_acquire_references;
+    st->count_release_references = m_count_release_references;
+    st->count_query_order = m_count_query_order;
+    st->count_assign_order = m_count_assign_order;
 }
 
 class channel
@@ -686,6 +752,20 @@ eosnc_assign_order(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t non
     return msg;
 }
 
+static std::auto_ptr<e::buffer>
+eosnc_get_stats(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
+{
+    const size_t RESP_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t)
+                               + sizeof(uint32_t) + sizeof(uint64_t) * 9;
+    eos_stats st;
+    eo->get_stats(&st);
+    msg.reset(e::buffer::create(RESP_MSG_SIZE));
+    e::buffer::packer pa = msg->pack();
+    pa = pa << static_cast<uint32_t>(RESP_MSG_SIZE) << nonce << st;
+    assert(!pa.error());
+    return msg;
+}
+
 static void
 close_channel(channel* chan, event_orderer* eo)
 {
@@ -743,6 +823,9 @@ eos_daemon(po6::net::location loc)
                     break;
                 case EOSNC_ASSIGN_ORDER:
                     msg = eosnc_assign_order(channels + fd, msg, nonce, &eo);
+                    break;
+                case EOSNC_GET_STATS:
+                    msg = eosnc_get_stats(channels + fd, msg, nonce, &eo);
                     break;
                 default:
                     msg.reset();
