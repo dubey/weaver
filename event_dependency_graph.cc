@@ -71,6 +71,7 @@ event_dependency_graph :: event_dependency_graph()
     , m_free_inner_ids()
     , m_dense()
 {
+    m_event_to_inner.set_deleted_key(0);
 }
 
 event_dependency_graph :: ~event_dependency_graph() throw ()

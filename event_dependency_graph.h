@@ -35,6 +35,17 @@
 #include <tr1/unordered_map>
 #include <vector>
 
+// Google SparseHash
+#include <sparsehash/sparse_hash_map>
+
+struct equint64_t
+{
+    bool operator () (uint64_t u1, uint64_t u2) const
+    {
+        return u1 == u2;
+    }
+};
+
 class event_dependency_graph
 {
     public:
@@ -52,7 +63,8 @@ class event_dependency_graph
 
     private:
         class vertex;
-        typedef std::tr1::unordered_map<uint64_t, uint64_t> event_map_t;
+        typedef google::sparse_hash_map<uint64_t, uint64_t,
+                std::tr1::hash<uint64_t>, equint64_t> event_map_t;
 
     private:
         bool map(uint64_t event, uint64_t* inner);
