@@ -52,5 +52,9 @@ chronos_la_CPPFLAGS = $(PYTHON_CPPFLAGS) $(CPPFLAGS)
 chronos_la_LIBADD = libchronos.la $(PYTHON_LDFLAGS)
 chronos_la_LDFLAGS = -module -avoid-version -export-symbols-regex initchronos
 
+nobase_python_PYTHON = \
+			chronosbench/__init__.py \
+			chronosbench/event_creation.py
+
 python-chronos.c: chronos.pyx
 	cython -o $@ chronos.pyx

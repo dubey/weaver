@@ -44,6 +44,9 @@
 #include <queue>
 #include <vector>
 
+// popt
+#include <popt.h>
+
 // po6
 #include <po6/net/location.h>
 #include <po6/net/socket.h>
@@ -51,6 +54,7 @@
 // e
 #include <e/buffer.h>
 #include <e/endian.h>
+#include <e/guard.h>
 
 // Chronos
 #include "chronos.h"
@@ -780,7 +784,7 @@ close_channel(channel* chan, event_orderer* eo)
 }
 
 int
-chronos_daemon(po6::net::location loc)
+chronos_daemon(const char* progname, bool daemonize, po6::net::location loc)
 {
     long max_fds = sysconf(_SC_OPEN_MAX);
     event_orderer eo;
@@ -859,10 +863,91 @@ chronos_daemon(po6::net::location loc)
     return 0;
 }
 
+static const char* bindto = "127.0.0.1";
+static po6::net::ipaddr local(bindto);
+static long port = 7890;
+static bool daemonize = true;
+
+extern "C"
+{
+
+static struct poptOption popts[] = {
+    POPT_AUTOHELP
+    {"daemon", 'd', POPT_ARG_NONE, NULL, 'd',
+        "run Chronos in the background",
+        '\0'},
+    {"foreground", 'f', POPT_ARG_NONE, NULL, 'f',
+        "run Chronos in the foreground",
+        '\0'},
+    {"host", 'h', POPT_ARG_STRING, &bindto, 'h',
+        "the local IP address that all sockets should bind to",
+        "IP"},
+    {"port", 'p', POPT_ARG_LONG, &port, 'p',
+        "the port to listen on for incoming connections",
+        "port"},
+    POPT_TABLEEND
+};
+
+} // extern "C"
+
 int
 main(int argc, const char* argv[])
 {
-    argc = 0;
-    argv = NULL;
-    return chronos_daemon(po6::net::location("127.0.0.1", 7890));
+    poptContext poptcon;
+    poptcon = poptGetContext(NULL, argc, argv, popts, POPT_CONTEXT_POSIXMEHARDER);
+    e::guard g = e::makeguard(poptFreeContext, poptcon);
+    g.use_variable();
+    int rc;
+
+    while ((rc = poptGetNextOpt(poptcon)) != -1)
+    {
+        switch (rc)
+        {
+            case 'd':
+                daemonize = true;
+                break;
+            case 'f':
+                daemonize = false;
+                break;
+            case 'h':
+                try
+                {
+                    local = po6::net::ipaddr(bindto);
+                }
+                catch (po6::error& e)
+                {
+                    std::cerr << "cannot parse bind-to as IP address" << std::endl;
+                    return EXIT_FAILURE;
+                }
+                catch (std::invalid_argument& e)
+                {
+                    std::cerr << "cannot parse bind-to as IP address" << std::endl;
+                    return EXIT_FAILURE;
+                }
+
+                break;
+            case 'p':
+                if (port < 0 || port >= (1 << 16))
+                {
+                    std::cerr << "port number out of range for TCP" << std::endl;
+                    return EXIT_FAILURE;
+                }
+
+                break;
+            case POPT_ERROR_NOARG:
+            case POPT_ERROR_BADOPT:
+            case POPT_ERROR_BADNUMBER:
+            case POPT_ERROR_OVERFLOW:
+                std::cerr << poptStrerror(rc) << " " << poptBadOption(poptcon, 0) << std::endl;
+                return EXIT_FAILURE;
+            case POPT_ERROR_OPTSTOODEEP:
+            case POPT_ERROR_BADQUOTE:
+            case POPT_ERROR_ERRNO:
+            default:
+                std::cerr << "logic error in argument parsing" << std::endl;
+                return EXIT_FAILURE;
+        }
+    }
+
+    return chronos_daemon(argv[0], daemonize, po6::net::location(local, port));
 }

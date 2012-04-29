@@ -19,9 +19,19 @@ AC_LANG(C++)
 
 # Checks for libraries.
 AC_PYTHON_DEVEL([>= 2.6])
+AC_CHECK_LIB([popt], [poptGetContext], [], [AC_MSG_ERROR([
+-------------------------------------------------
+Chronos relies upon the popt library.
+Please install popt to continue.
+-------------------------------------------------])])
 
 # Checks for header files.
 AC_CHECK_HEADERS([stdint.h stdlib.h])
+AC_CHECK_HEADER([popt.h],,[AC_MSG_ERROR([
+-------------------------------------------------
+Chronos relies upon the popt library.
+Please install popt to continue.
+-------------------------------------------------])])
 
 # Checks for typedefs, structures, and compiler characteristics.
 AC_TYPE_SIZE_T
