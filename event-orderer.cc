@@ -556,8 +556,13 @@ process_events(int epfd, po6::net::socket* listenfd, channel* channels, int* msg
 static std::auto_ptr<e::buffer>
 eosnc_create_event(channel* chan, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
 {
-    const size_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t) + sizeof(uint64_t); 
-    chan->references.reserve(chan->references.size() + 1);
+    const size_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t) + sizeof(uint64_t);
+
+    if (chan->references.size() == chan->references.capacity())
+    {
+        chan->references.reserve(chan->references.size() * 2);
+    }
+
     uint64_t event = eo->create_event();
     chan->references.push_back(event);
     msg.reset(e::buffer::create(SEND_MSG_SIZE));
