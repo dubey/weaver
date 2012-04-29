@@ -28,6 +28,7 @@
 '''Python scripts used to evaluate Chronos'''
 
 
+import errno
 import os
 import random
 import subprocess
@@ -64,14 +65,25 @@ class DataOut(object):
 
     def __init__(self, filename):
         self._filename = filename
+        self._file = None
 
     def __enter__(self):
         if os.path.exists(self._filename):
             return None
-        self._file = open(self._filename + '.part', 'w')
+        try:
+            tmp = os.open(self._filename + '.part', os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0600)
+            self._file = os.fdopen(tmp, 'w')
+        except OSError as e:
+            if e.errno == errno.EEXIST:
+                return None
+            raise
         return self._file
 
     def __exit__(self, exc_type, exc_value, traceback):
-        self._file.flush()
-        self._file.close()
-        os.rename(self._filename + '.part', self._filename)
+        if self._file:
+            self._file.flush()
+            self._file.close()
+            if exc_type == None:
+                os.rename(self._filename + '.part', self._filename)
+            else:
+                os.unlink(self._filename + '.part')
