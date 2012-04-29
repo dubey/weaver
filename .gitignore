@@ -1,5 +1,7 @@
 aclocal.m4
 autom4te.cache/
+chronosbench/__init__.pyc
+chronosbench/util.pyc
 chronos_cmp_encode.lo
 chronos_cmp_encode.o
 chronosd
@@ -31,5 +33,6 @@ m4/
 Makefile
 Makefile.in
 missing
+py-compile
 python-chronos.c
 stamp-h1
