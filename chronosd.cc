@@ -9,7 +9,7 @@
 //     * Redistributions in binary form must reproduce the above copyright
 //       notice, this list of conditions and the following disclaimer in the
 //       documentation and/or other materials provided with the distribution.
-//     * Neither the name of HyperDex nor the names of its contributors may be
+//     * Neither the name of Chronos nor the names of its contributors may be
 //       used to endorse or promote products derived from this software without
 //       specific prior written permission.
 //
@@ -52,12 +52,12 @@
 #include <e/buffer.h>
 #include <e/endian.h>
 
-// eos
-#include "eos.h"
-#include "eos_cmp_encode.h"
+// Chronos
+#include "chronos.h"
+#include "chronos_cmp_encode.h"
+#include "chronos_stats_encode.h"
 #include "event_dependency_graph.h"
 #include "network_constants.h"
-#include "eos_stats_encode.h"
 
 #define xtostr(X) #X
 #define tostr(X) xtostr(X)
@@ -76,9 +76,9 @@ class event_orderer
         uint64_t create_event();
         size_t acquire_references(uint64_t* events, size_t events_sz);
         size_t release_references(uint64_t* events, size_t events_sz);
-        size_t query_order(eos_pair* pairs, size_t pairs_sz);
-        size_t assign_order(eos_pair* pairs, size_t pairs_sz);
-        void get_stats(eos_stats* st);
+        size_t query_order(chronos_pair* pairs, size_t pairs_sz);
+        size_t assign_order(chronos_pair* pairs, size_t pairs_sz);
+        void get_stats(chronos_stats* st);
 
     private:
         event_dependency_graph m_graph;
@@ -155,7 +155,7 @@ event_orderer :: release_references(uint64_t* events, size_t events_sz)
 }
 
 size_t
-event_orderer :: query_order(eos_pair* pairs, size_t pairs_sz)
+event_orderer :: query_order(chronos_pair* pairs, size_t pairs_sz)
 {
     ++m_count_query_order;
 
@@ -188,7 +188,7 @@ event_orderer :: query_order(eos_pair* pairs, size_t pairs_sz)
 }
 
 size_t
-event_orderer :: assign_order(eos_pair* pairs, size_t pairs_sz)
+event_orderer :: assign_order(chronos_pair* pairs, size_t pairs_sz)
 {
     ++m_count_assign_order;
 
@@ -266,7 +266,7 @@ event_orderer :: assign_order(eos_pair* pairs, size_t pairs_sz)
 }
 
 void
-event_orderer :: get_stats(eos_stats* st)
+event_orderer :: get_stats(chronos_stats* st)
 {
     timespec t;
 
@@ -554,7 +554,7 @@ process_events(int epfd, po6::net::socket* listenfd, channel* channels, int* msg
 }
 
 static std::auto_ptr<e::buffer>
-eosnc_create_event(channel* chan, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
+chronosnc_create_event(channel* chan, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
 {
     const size_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t) + sizeof(uint64_t);
 
@@ -573,7 +573,7 @@ eosnc_create_event(channel* chan, std::auto_ptr<e::buffer> msg, uint64_t nonce, 
 }
 
 static std::auto_ptr<e::buffer>
-eosnc_acquire_ref(channel* chan, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
+chronosnc_acquire_ref(channel* chan, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
 {
     const size_t NUM_EVENTS = (msg->size() - (sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)))
                             / sizeof(uint64_t);
@@ -624,7 +624,7 @@ eosnc_acquire_ref(channel* chan, std::auto_ptr<e::buffer> msg, uint64_t nonce, e
 }
 
 static std::auto_ptr<e::buffer>
-eosnc_release_ref(channel* chan, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
+chronosnc_release_ref(channel* chan, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
 {
     const size_t NUM_EVENTS = (msg->size() - (sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)))
                             / sizeof(uint64_t);
@@ -684,13 +684,13 @@ eosnc_release_ref(channel* chan, std::auto_ptr<e::buffer> msg, uint64_t nonce, e
 }
 
 static std::auto_ptr<e::buffer>
-eosnc_query_order(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
+chronosnc_query_order(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
 {
     const size_t NUM_PAIRS = (msg->size() - (sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)))
                            / (sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint32_t));
     const size_t RESP_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t)
                                + sizeof(uint8_t) * NUM_PAIRS;
-    std::vector<eos_pair> pairs(NUM_PAIRS);
+    std::vector<chronos_pair> pairs(NUM_PAIRS);
     e::buffer::unpacker up = msg->unpack_from(sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t));
 
     for (size_t i = 0; i < NUM_PAIRS; ++i)
@@ -707,7 +707,7 @@ eosnc_query_order(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t nonc
 
     for (size_t i = 0; i < NUM_PAIRS; ++i)
     {
-        pa = pa << eos_cmp_to_byte(pairs[i].order);
+        pa = pa << chronos_cmp_to_byte(pairs[i].order);
     }
 
     assert(!pa.error());
@@ -715,20 +715,20 @@ eosnc_query_order(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t nonc
 }
 
 static std::auto_ptr<e::buffer>
-eosnc_assign_order(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
+chronosnc_assign_order(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
 {
     const size_t NUM_PAIRS = (msg->size() - (sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)))
                            / (sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint32_t) + sizeof(uint8_t));
     const size_t RESP_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t)
                                + sizeof(uint8_t) * NUM_PAIRS;
-    std::vector<eos_pair> pairs(NUM_PAIRS);
+    std::vector<chronos_pair> pairs(NUM_PAIRS);
     e::buffer::unpacker up = msg->unpack_from(sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t));
 
     for (size_t i = 0; i < NUM_PAIRS; ++i)
     {
         uint8_t order;
         up = up >> pairs[i].lhs >> pairs[i].rhs >> pairs[i].flags >> order;
-        pairs[i].order = byte_to_eos_cmp(order);
+        pairs[i].order = byte_to_chronos_cmp(order);
     }
 
     assert(!up.error());
@@ -750,7 +750,7 @@ eosnc_assign_order(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t non
 
     for (size_t i = 0; i < NUM_PAIRS; ++i)
     {
-        pa = pa << eos_cmp_to_byte(pairs[i].order);
+        pa = pa << chronos_cmp_to_byte(pairs[i].order);
     }
 
     assert(!pa.error());
@@ -758,11 +758,11 @@ eosnc_assign_order(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t non
 }
 
 static std::auto_ptr<e::buffer>
-eosnc_get_stats(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
+chronosnc_get_stats(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t nonce, event_orderer* eo)
 {
     const size_t RESP_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t)
                                + sizeof(uint32_t) + sizeof(uint64_t) * 9;
-    eos_stats st;
+    chronos_stats st;
     eo->get_stats(&st);
     msg.reset(e::buffer::create(RESP_MSG_SIZE));
     e::buffer::packer pa = msg->pack();
@@ -780,7 +780,7 @@ close_channel(channel* chan, event_orderer* eo)
 }
 
 int
-eos_daemon(po6::net::location loc)
+chronos_daemon(po6::net::location loc)
 {
     long max_fds = sysconf(_SC_OPEN_MAX);
     event_orderer eo;
@@ -815,22 +815,22 @@ eos_daemon(po6::net::location loc)
             switch (static_cast<network_constant>(msg_type))
             {
                 case EOSNC_CREATE_EVENT:
-                    msg = eosnc_create_event(channels + fd, msg, nonce, &eo);
+                    msg = chronosnc_create_event(channels + fd, msg, nonce, &eo);
                     break;
                 case EOSNC_ACQUIRE_REF:
-                    msg = eosnc_acquire_ref(channels + fd, msg, nonce, &eo);
+                    msg = chronosnc_acquire_ref(channels + fd, msg, nonce, &eo);
                     break;
                 case EOSNC_RELEASE_REF:
-                    msg = eosnc_release_ref(channels + fd, msg, nonce, &eo);
+                    msg = chronosnc_release_ref(channels + fd, msg, nonce, &eo);
                     break;
                 case EOSNC_QUERY_ORDER:
-                    msg = eosnc_query_order(channels + fd, msg, nonce, &eo);
+                    msg = chronosnc_query_order(channels + fd, msg, nonce, &eo);
                     break;
                 case EOSNC_ASSIGN_ORDER:
-                    msg = eosnc_assign_order(channels + fd, msg, nonce, &eo);
+                    msg = chronosnc_assign_order(channels + fd, msg, nonce, &eo);
                     break;
                 case EOSNC_GET_STATS:
-                    msg = eosnc_get_stats(channels + fd, msg, nonce, &eo);
+                    msg = chronosnc_get_stats(channels + fd, msg, nonce, &eo);
                     break;
                 default:
                     msg.reset();
@@ -864,5 +864,5 @@ main(int argc, const char* argv[])
 {
     argc = 0;
     argv = NULL;
-    return eos_daemon(po6::net::location("127.0.0.1", 7890));
+    return chronos_daemon(po6::net::location("127.0.0.1", 7890));
 }

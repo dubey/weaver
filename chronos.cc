@@ -9,7 +9,7 @@
 //     * Redistributions in binary form must reproduce the above copyright
 //       notice, this list of conditions and the following disclaimer in the
 //       documentation and/or other materials provided with the distribution.
-//     * Neither the name of HyperDex nor the names of its contributors may be
+//     * Neither the name of Chronos nor the names of its contributors may be
 //       used to endorse or promote products derived from this software without
 //       specific prior written permission.
 //
@@ -38,9 +38,9 @@
 // e
 #include <e/endian.h>
 
-// eos
-#include "eos.h"
-#include "eos_cmp_encode.h"
+// Chronos
+#include "chronos.h"
+#include "chronos_cmp_encode.h"
 #include "network_constants.h"
 
 ////////////////////////////////// C Wrappers //////////////////////////////////
@@ -48,12 +48,12 @@
 extern "C"
 {
 
-eos_client*
-eos_client_create(const char* host, uint16_t port)
+chronos_client*
+chronos_client_create(const char* host, uint16_t port)
 {
     try
     {
-        return new eos_client(host, port);
+        return new chronos_client(host, port);
     }
     catch (po6::error& e)
     {
@@ -67,7 +67,7 @@ eos_client_create(const char* host, uint16_t port)
 }
 
 void
-eos_client_destroy(eos_client* client)
+chronos_client_destroy(chronos_client* client)
 {
     try
     {
@@ -82,7 +82,7 @@ eos_client_destroy(eos_client* client)
 }
 
 uint64_t
-eos_create_event(struct eos_client* client)
+chronos_create_event(struct chronos_client* client)
 {
     try
     {
@@ -100,7 +100,7 @@ eos_create_event(struct eos_client* client)
 }
 
 int
-eos_acquire_references(struct eos_client* client, uint64_t* events, size_t events_sz)
+chronos_acquire_references(struct chronos_client* client, uint64_t* events, size_t events_sz)
 {
     try
     {
@@ -118,7 +118,7 @@ eos_acquire_references(struct eos_client* client, uint64_t* events, size_t event
 }
 
 int
-eos_release_references(struct eos_client* client, uint64_t* events, size_t events_sz)
+chronos_release_references(struct chronos_client* client, uint64_t* events, size_t events_sz)
 {
     try
     {
@@ -136,7 +136,7 @@ eos_release_references(struct eos_client* client, uint64_t* events, size_t event
 }
 
 int
-eos_query_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs_sz)
+chronos_query_order(struct chronos_client* client, struct chronos_pair* pairs, size_t pairs_sz)
 {
     try
     {
@@ -154,7 +154,7 @@ eos_query_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs_
 }
 
 int
-eos_assign_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs_sz)
+chronos_assign_order(struct chronos_client* client, struct chronos_pair* pairs, size_t pairs_sz)
 {
     try
     {
@@ -172,7 +172,7 @@ eos_assign_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs
 }
 
 int
-eos_get_stats(struct eos_client* client, struct eos_stats* st)
+chronos_get_stats(struct chronos_client* client, struct chronos_stats* st)
 {
     try
     {
@@ -193,7 +193,7 @@ eos_get_stats(struct eos_client* client, struct eos_stats* st)
 
 ///////////////////////////////// Public Class /////////////////////////////////
 
-eos_client :: eos_client(const char* host, uint16_t port)
+chronos_client :: chronos_client(const char* host, uint16_t port)
     : m_where(host, port)
     , m_sock(m_where.address.family(), SOCK_STREAM, IPPROTO_TCP)
     , m_nonce(1)
@@ -201,12 +201,12 @@ eos_client :: eos_client(const char* host, uint16_t port)
     m_sock.connect(m_where);
 }
 
-eos_client :: ~eos_client() throw ()
+chronos_client :: ~chronos_client() throw ()
 {
 }
 
 uint64_t
-eos_client :: create_event()
+chronos_client :: create_event()
 {
     const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t);
     const ssize_t RECV_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t) + sizeof(uint64_t);
@@ -253,7 +253,7 @@ eos_client :: create_event()
 }
 
 int
-eos_client :: acquire_references(uint64_t* events, size_t events_sz)
+chronos_client :: acquire_references(uint64_t* events, size_t events_sz)
 {
     const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)
                                 + sizeof(uint64_t) * events_sz;
@@ -312,7 +312,7 @@ eos_client :: acquire_references(uint64_t* events, size_t events_sz)
 }
 
 int
-eos_client :: release_references(uint64_t* events, size_t events_sz)
+chronos_client :: release_references(uint64_t* events, size_t events_sz)
 {
     const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)
                                 + sizeof(uint64_t) * events_sz;
@@ -366,7 +366,7 @@ eos_client :: release_references(uint64_t* events, size_t events_sz)
 }
 
 int
-eos_client :: query_order(eos_pair* pairs, size_t pairs_sz)
+chronos_client :: query_order(chronos_pair* pairs, size_t pairs_sz)
 {
     const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)
                                 + (sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint32_t)) * pairs_sz;
@@ -419,14 +419,14 @@ eos_client :: query_order(eos_pair* pairs, size_t pairs_sz)
 
     for (size_t i = 0; i < pairs_sz; ++i)
     {
-        pairs[i].order = byte_to_eos_cmp(utmp[i]);
+        pairs[i].order = byte_to_chronos_cmp(utmp[i]);
     }
 
     return 0;
 }
 
 int
-eos_client :: assign_order(eos_pair* pairs, size_t pairs_sz)
+chronos_client :: assign_order(chronos_pair* pairs, size_t pairs_sz)
 {
     const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)
                                 + (sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint32_t) + sizeof(uint8_t)) * pairs_sz;
@@ -444,7 +444,7 @@ eos_client :: assign_order(eos_pair* pairs, size_t pairs_sz)
         ptmp = e::pack64be(pairs[i].lhs, ptmp);
         ptmp = e::pack64be(pairs[i].rhs, ptmp);
         ptmp = e::pack32be(pairs[i].flags, ptmp);
-        *ptmp = eos_cmp_to_byte(pairs[i].order);
+        *ptmp = chronos_cmp_to_byte(pairs[i].order);
         ++ptmp;
     }
 
@@ -481,7 +481,7 @@ eos_client :: assign_order(eos_pair* pairs, size_t pairs_sz)
 
     for (size_t i = 0; i < pairs_sz; ++i)
     {
-        pairs[i].order = byte_to_eos_cmp(utmp[i]);
+        pairs[i].order = byte_to_chronos_cmp(utmp[i]);
 
         if (pairs[i].order == EOS_CONCURRENT || pairs[i].order == EOS_NOEXIST)
         {
@@ -493,7 +493,7 @@ eos_client :: assign_order(eos_pair* pairs, size_t pairs_sz)
 }
 
 int
-eos_client :: get_stats(eos_stats* st)
+chronos_client :: get_stats(chronos_stats* st)
 {
     const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t);
     const ssize_t RECV_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t)

@@ -4,9 +4,9 @@ import sys
 
 sys.path.append(".libs/")
 
-import eos
+import chronos
 
-c = eos.Client('127.0.0.1', 7890)
+c = chronos.Client('127.0.0.1', 7890)
 eva = c.create_event()
 evb = c.create_event()
 evc = c.create_event()

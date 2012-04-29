@@ -40,11 +40,11 @@ cdef extern from "stdlib.h":
     void* malloc(size_t size)
     void free(void* ptr)
 
-cdef extern from "eos.h":
+cdef extern from "chronos.h":
 
-    cdef struct eos_client
+    cdef struct chronos_client
 
-    cdef enum eos_cmp:
+    cdef enum chronos_cmp:
         EOS_HAPPENS_BEFORE
         EOS_HAPPENS_AFTER
         EOS_CONCURRENT
@@ -53,13 +53,13 @@ cdef extern from "eos.h":
     cdef enum:
         EOS_SOFT_FAIL = 1
 
-    cdef struct eos_pair:
+    cdef struct chronos_pair:
         uint64_t lhs
         uint64_t rhs
         uint32_t flags
-        eos_cmp order
+        chronos_cmp order
 
-    cdef struct eos_stats:
+    cdef struct chronos_stats:
         uint64_t time
         uint64_t utime
         uint64_t stime
@@ -71,37 +71,37 @@ cdef extern from "eos.h":
         uint64_t count_query_order
         uint64_t count_assign_order
 
-    eos_client* eos_client_create(char* host, uint16_t port)
-    void eos_client_destroy(eos_client* client)
+    chronos_client* chronos_client_create(char* host, uint16_t port)
+    void chronos_client_destroy(chronos_client* client)
 
-    uint64_t eos_create_event(eos_client* client) nogil
-    int eos_acquire_references(eos_client* client, uint64_t* events, size_t events_sz) nogil
-    int eos_release_references(eos_client* client, uint64_t* events, size_t events_sz) nogil
-    int eos_query_order(eos_client* client, eos_pair* pairs, size_t pairs_sz) nogil
-    int eos_assign_order(eos_client* client, eos_pair* pairs, size_t pairs_sz) nogil
-    int eos_get_stats(eos_client* client, eos_stats* st) nogil
+    uint64_t chronos_create_event(chronos_client* client) nogil
+    int chronos_acquire_references(chronos_client* client, uint64_t* events, size_t events_sz) nogil
+    int chronos_release_references(chronos_client* client, uint64_t* events, size_t events_sz) nogil
+    int chronos_query_order(chronos_client* client, chronos_pair* pairs, size_t pairs_sz) nogil
+    int chronos_assign_order(chronos_client* client, chronos_pair* pairs, size_t pairs_sz) nogil
+    int chronos_get_stats(chronos_client* client, chronos_stats* st) nogil
 
-cdef __enumtosymb(eos_cmp c):
+cdef __enumtosymb(chronos_cmp c):
     return {EOS_HAPPENS_BEFORE: '<',
             EOS_HAPPENS_AFTER: '>',
             EOS_CONCURRENT: '?',
             EOS_NOEXIST: 'X'}.get(c, 'E')
 
 cdef class Client:
-    cdef eos_client* _client
+    cdef chronos_client* _client
 
     def __cinit__(self, host, port):
-        self._client = eos_client_create(host, port)
+        self._client = chronos_client_create(host, port)
         if self._client == NULL:
             raise OSError("Could not connect")
 
     def __dealloc__(self):
         if self._client != NULL:
-            eos_client_destroy(self._client)
+            chronos_client_destroy(self._client)
 
     def create_event(self):
         cdef uint64_t event
-        event = eos_create_event(self._client);
+        event = chronos_create_event(self._client);
         if event > 0:
             return event
         return None # XXX Exception
@@ -114,7 +114,7 @@ cdef class Client:
         try:
             for i, e in enumerate(events):
                 _events[i] = e
-            ret = eos_release_references(self._client, _events, len(events))
+            ret = chronos_release_references(self._client, _events, len(events))
             if ret < 0:
                 raise RuntimeError("it failed")
             if ret > 0:
@@ -130,16 +130,16 @@ cdef class Client:
         try:
             for i, e in enumerate(events):
                 _events[i] = e
-            ret = eos_release_references(self._client, _events, len(events))
+            ret = chronos_release_references(self._client, _events, len(events))
             if ret != 0:
                 raise RuntimeError("it failed")
         finally:
             free(_events)
 
     def query_order(self, events):
-        cdef eos_pair* pairs
+        cdef chronos_pair* pairs
         cdef tuple ev
-        pairs = <eos_pair*> malloc(sizeof(eos_pair) * len(events))
+        pairs = <chronos_pair*> malloc(sizeof(chronos_pair) * len(events))
         if pairs == NULL:
             raise MemoryError()
         try:
@@ -151,7 +151,7 @@ cdef class Client:
                 pairs[i].rhs = rhs
                 pairs[i].flags = 0
                 pairs[i].order = EOS_CONCURRENT
-            ret = eos_query_order(self._client, pairs, len(events))
+            ret = chronos_query_order(self._client, pairs, len(events))
             if ret != 0:
                 raise RuntimeError("it failed")
             return [(pairs[i].lhs, pairs[i].rhs, __enumtosymb(pairs[i].order)) for i in range(len(events))]
@@ -159,12 +159,12 @@ cdef class Client:
             free(pairs)
 
     def assign_order(self, events):
-        cdef eos_pair* pairs
+        cdef chronos_pair* pairs
         cdef tuple ev
         cdef uint64_t lhs
         cdef uint64_t rhs
         cdef bytes other
-        pairs = <eos_pair*> malloc(sizeof(eos_pair) * len(events))
+        pairs = <chronos_pair*> malloc(sizeof(chronos_pair) * len(events))
         if pairs == NULL:
             raise MemoryError()
         try:
@@ -182,7 +182,7 @@ cdef class Client:
                                   '': EOS_HAPPENS_BEFORE}.get(other[:1], EOS_NOEXIST)
                 if pairs[i].order == EOS_NOEXIST:
                     raise ValueError("Order should be '<' or '>'")
-            ret = eos_assign_order(self._client, pairs, len(events))
+            ret = chronos_assign_order(self._client, pairs, len(events))
             if ret != 0:
                 raise RuntimeError("it failed")
             return [(pairs[i].lhs, pairs[i].rhs, __enumtosymb(pairs[i].order)) for i in range(len(events))]
@@ -190,8 +190,8 @@ cdef class Client:
             free(pairs)
 
     def get_stats(self):
-        cdef eos_stats st
-        ret = eos_get_stats(self._client, &st)
+        cdef chronos_stats st
+        ret = chronos_get_stats(self._client, &st)
         if ret != 0:
             raise RuntimeError("it failed")
         return {'time': st.time,

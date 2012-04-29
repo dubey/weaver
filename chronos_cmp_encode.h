@@ -9,7 +9,7 @@
 //     * Redistributions in binary form must reproduce the above copyright
 //       notice, this list of conditions and the following disclaimer in the
 //       documentation and/or other materials provided with the distribution.
-//     * Neither the name of HyperDex nor the names of its contributors may be
+//     * Neither the name of Chronos nor the names of its contributors may be
 //       used to endorse or promote products derived from this software without
 //       specific prior written permission.
 //
@@ -25,19 +25,19 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef eos_cmp_encode_h_
-#define eos_cmp_encode_h_
+#ifndef chronos_cmp_encode_h_
+#define chronos_cmp_encode_h_
 
 // C
 #include <stdint.h>
 
-// eos
-#include "eos.h"
+// Chronos
+#include "chronos.h"
 
 uint8_t
-eos_cmp_to_byte(eos_cmp c);
+chronos_cmp_to_byte(chronos_cmp c);
 
-eos_cmp
-byte_to_eos_cmp(uint8_t b);
+chronos_cmp
+byte_to_chronos_cmp(uint8_t b);
 
-#endif // eos_cmp_encode_h_
+#endif // chronos_cmp_encode_h_

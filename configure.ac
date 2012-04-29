@@ -2,13 +2,13 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.66])
-AC_INIT([eos], [0.1.dev], [escriva@cs.cornell.edu])
+AC_INIT([chronos], [0.1.dev], [escriva@cs.cornell.edu])
 AM_INIT_AUTOMAKE([foreign subdir-objects dist-bzip2 dist-lzma])
 AM_SILENT_RULES([yes])
 AM_PATH_PYTHON([2.6])
 LT_PREREQ([2.2])
 LT_INIT
-AC_CONFIG_SRCDIR([eos.h])
+AC_CONFIG_SRCDIR([chronos.h])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 

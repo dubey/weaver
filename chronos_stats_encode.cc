@@ -9,7 +9,7 @@
 //     * Redistributions in binary form must reproduce the above copyright
 //       notice, this list of conditions and the following disclaimer in the
 //       documentation and/or other materials provided with the distribution.
-//     * Neither the name of HyperDex nor the names of its contributors may be
+//     * Neither the name of Chronos nor the names of its contributors may be
 //       used to endorse or promote products derived from this software without
 //       specific prior written permission.
 //
@@ -25,22 +25,23 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-#ifndef eos_stats_encode_h_
-#define eos_stats_encode_h_
-
-// C
-#include <stdint.h>
-
-// e
-#include <e/buffer.h>
-
-// eos
-#include <eos.h>
+// Chronos
+#include "chronos_stats_encode.h"
 
 e::buffer::packer
-operator << (e::buffer::packer lhs, const eos_stats& rhs);
+operator << (e::buffer::packer lhs, const chronos_stats& rhs)
+{
+    return lhs << rhs.time << rhs.utime << rhs.stime << rhs.maxrss << rhs.events
+        << rhs.count_create_event << rhs.count_acquire_references
+        << rhs.count_release_references << rhs.count_query_order
+        << rhs.count_assign_order;
+}
 
 e::buffer::unpacker
-operator >> (e::buffer::unpacker lhs, eos_stats& rhs);
-
-#endif // eos_stats_encode_h_
+operator >> (e::buffer::unpacker lhs, chronos_stats& rhs)
+{
+    return lhs >> rhs.time >> rhs.utime >> rhs.stime >> rhs.maxrss >> rhs.events
+        >> rhs.count_create_event >> rhs.count_acquire_references
+        >> rhs.count_release_references >> rhs.count_query_order
+        >> rhs.count_assign_order;
+}

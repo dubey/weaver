@@ -9,7 +9,7 @@
  *     * Redistributions in binary form must reproduce the above copyright
  *       notice, this list of conditions and the following disclaimer in the
  *       documentation and/or other materials provided with the distribution.
- *     * Neither the name of HyperDex nor the names of its contributors may be
+ *     * Neither the name of Chronos nor the names of its contributors may be
  *       used to endorse or promote products derived from this software without
  *       specific prior written permission.
  *
@@ -26,8 +26,8 @@
  * POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef eos_h_
-#define eos_h_
+#ifndef chronos_h_
+#define chronos_h_
 
 /* C */
 #include <stdlib.h>
@@ -42,9 +42,9 @@
 extern "C" {
 #endif
 
-struct eos_client;
+struct chronos_client;
 
-enum eos_cmp
+enum chronos_cmp
 {
     EOS_HAPPENS_BEFORE,
     EOS_HAPPENS_AFTER,
@@ -52,15 +52,15 @@ enum eos_cmp
     EOS_NOEXIST
 };
 
-struct eos_pair
+struct chronos_pair
 {
     uint64_t lhs;
     uint64_t rhs;
     uint32_t flags;
-    enum eos_cmp order;
+    enum chronos_cmp order;
 };
 
-struct eos_stats
+struct chronos_stats
 {
     uint64_t time;
     uint64_t utime;
@@ -79,15 +79,15 @@ struct eos_stats
 /* Create a new client.
  *
  * This will establish a connection to the specified host and server, and
- * maintain state necessary for the eos_client.
+ * maintain state necessary for the chronos_client.
  */
-struct eos_client*
-eos_client_create(const char* host, uint16_t port);
+struct chronos_client*
+chronos_client_create(const char* host, uint16_t port);
 
 /* Destroy an existing client instance.
  */
 void
-eos_client_destroy(struct eos_client* client);
+chronos_client_destroy(struct chronos_client* client);
 
 /* Create a new event.
  *
@@ -97,13 +97,13 @@ eos_client_destroy(struct eos_client* client);
  * Error:   errno will indicate the error.
  */
 uint64_t
-eos_create_event(struct eos_client* client);
+chronos_create_event(struct chronos_client* client);
 
 /* Acquire references to all events pointed to by "events".
  *
  * References on events last for the system-configured timeout value (default
- * 1h).  If the client calls "eos_acquire_references" again before the timeout,
- * the timeout will be reset.
+ * 1h).  If the client calls "chronos_acquire_references" again before the
+ * timeout, the timeout will be reset.
  *
  * If any events do not exist, the call will fail, and no leases will be
  * acquired.
@@ -112,7 +112,7 @@ eos_create_event(struct eos_client* client);
  * Error:   errno will indicate the error.
  */
 int
-eos_acquire_references(struct eos_client* client, uint64_t* events, size_t events_sz);
+chronos_acquire_references(struct chronos_client* client, uint64_t* events, size_t events_sz);
 
 /* Release references to all events pointed to by "events".
  *
@@ -126,25 +126,25 @@ eos_acquire_references(struct eos_client* client, uint64_t* events, size_t event
  * Error:   errno will indicate the error.
  */
 int
-eos_release_references(struct eos_client* client, uint64_t* events, size_t events_sz);
+chronos_release_references(struct chronos_client* client, uint64_t* events, size_t events_sz);
 
-/* For each eos_pair, compute the relationship between the two events.
+/* For each chronos_pair, compute the relationship between the two events.
  *
  * In the normal case, pairs[x].order will be set to EOS_HAPPENS_BEFORE if
  * pairs[x].lhs happens before pairs[x].rhs.  Similarly, EOS_HAPPENS_AFTER
  * indicates that pairs[x].lhs happens after pairs[x].rhs.  If there is no order
  * between the events, then pairs[x].order will be EOS_CONCURRENT.  If either
  * event does not exist, pairs[x].order will be EOS_NOEXIST.  Note that
- * EOS_NOEXIST will not cause an error return.  The field eos_pair.flags is
+ * EOS_NOEXIST will not cause an error return.  The field chronos_pair.flags is
  * ignored.
  *
  * Return:  0 on success, -1 on error.
  * Error:   errno will indicate the error.
  */
 int
-eos_query_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs_sz);
+chronos_query_order(struct chronos_client* client, struct chronos_pair* pairs, size_t pairs_sz);
 
-/* For each eos_pair, create a relationship between the two events.
+/* For each chronos_pair, create a relationship between the two events.
  *
  * If there is no happens-before relationship between pairs[x].lhs and
  * pairs[x].rhs, then a relationship between pairs[x].lhs and pairs[x].rhs will
@@ -162,11 +162,11 @@ eos_query_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs_
  * Error:   errno will indicate the error.
  */
 int
-eos_assign_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs_sz);
+chronos_assign_order(struct chronos_client* client, struct chronos_pair* pairs, size_t pairs_sz);
 
 /* Get statistics from the server.
  *
- * The eos_stats instance will be filled in.  The fields have the following
+ * The chronos_stats instance will be filled in.  The fields have the following
  * meaning:
  *
  * time:
@@ -203,25 +203,25 @@ eos_assign_order(struct eos_client* client, struct eos_pair* pairs, size_t pairs
  * Error:   errno will indicate the error.
  */
 int
-eos_get_stats(struct eos_client* client, struct eos_stats* st);
+chronos_get_stats(struct chronos_client* client, struct chronos_stats* st);
 
 #ifdef __cplusplus
 } // extern "C"
 
 // Each of these public methods corresponds to a C call above.
-class eos_client
+class chronos_client
 {
     public:
-        eos_client(const char* host, uint16_t port);
-        ~eos_client() throw ();
+        chronos_client(const char* host, uint16_t port);
+        ~chronos_client() throw ();
 
     public:
         uint64_t create_event();
         int acquire_references(uint64_t* events, size_t events_sz);
         int release_references(uint64_t* events, size_t events_sz);
-        int query_order(eos_pair* pairs, size_t pairs_sz);
-        int assign_order(eos_pair* pairs, size_t pairs_sz);
-        int get_stats(eos_stats* st);
+        int query_order(chronos_pair* pairs, size_t pairs_sz);
+        int assign_order(chronos_pair* pairs, size_t pairs_sz);
+        int get_stats(chronos_stats* st);
 
     private:
         po6::net::location m_where;
@@ -231,4 +231,4 @@ class eos_client
 
 #endif // __cplusplus
 
-#endif // eos_h_
+#endif // chronos_h_

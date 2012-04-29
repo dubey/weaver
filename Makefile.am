@@ -29,28 +29,28 @@ ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 AM_CPPFLAGS = $(E_CFLAGS)
 AM_CXXFLAGS = $(COVERAGE_CXXFLAGS)
 
-EXTRA_DIST = LICENSE eos.pyx
+EXTRA_DIST = LICENSE chronos.pyx
 
-include_HEADERS = eos.h
-noinst_HEADERS = eos_cmp_encode.h eos_stats_encode.h event_dependency_graph.h network_constants.h
+include_HEADERS = chronos.h
+noinst_HEADERS = chronos_cmp_encode.h chronos_stats_encode.h event_dependency_graph.h network_constants.h
 
-bin_PROGRAMS = event-orderer
-lib_LTLIBRARIES = libeos.la
-pyexec_LTLIBRARIES = eos.la
+bin_PROGRAMS = chronosd
+lib_LTLIBRARIES = libchronos.la
+pyexec_LTLIBRARIES = chronos.la
 
-event_orderer_SOURCES = eos_cmp_encode.cc eos_stats_encode.cc event_dependency_graph.cc event-orderer.cc
-event_orderer_LDADD = $(E_LIBS) -lrt
+chronosd_SOURCES = chronos_cmp_encode.cc chronos_stats_encode.cc chronosd.cc event_dependency_graph.cc
+chronosd_LDADD = $(E_LIBS) -lrt
 # This NOP seems useless.  See:
 # http://www.gnu.org/software/automake/manual/html_node/Objects-created-both-with-libtool-and-without.html
-event_orderer_CXXFLAGS = $(AM_CXXFLAGS)
+chronosd_CXXFLAGS = $(AM_CXXFLAGS)
 
-libeos_la_SOURCES = eos.cc eos_cmp_encode.cc
-libeos_la_LIBADD = $(E_LIBS)
+libchronos_la_SOURCES = chronos.cc chronos_cmp_encode.cc
+libchronos_la_LIBADD = $(E_LIBS)
 
-eos_la_SOURCES = python-eos.c
-eos_la_CPPFLAGS = $(PYTHON_CPPFLAGS) $(CPPFLAGS)
-eos_la_LIBADD = libeos.la $(PYTHON_LDFLAGS)
-eos_la_LDFLAGS = -module -avoid-version -export-symbols-regex initeos
+chronos_la_SOURCES = python-chronos.c
+chronos_la_CPPFLAGS = $(PYTHON_CPPFLAGS) $(CPPFLAGS)
+chronos_la_LIBADD = libchronos.la $(PYTHON_LDFLAGS)
+chronos_la_LDFLAGS = -module -avoid-version -export-symbols-regex initchronos
 
-python-eos.c: eos.pyx
-	cython -o $@ eos.pyx
+python-chronos.c: chronos.pyx
+	cython -o $@ chronos.pyx

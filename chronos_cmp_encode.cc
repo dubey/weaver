@@ -9,7 +9,7 @@
 //     * Redistributions in binary form must reproduce the above copyright
 //       notice, this list of conditions and the following disclaimer in the
 //       documentation and/or other materials provided with the distribution.
-//     * Neither the name of HyperDex nor the names of its contributors may be
+//     * Neither the name of Chronos nor the names of its contributors may be
 //       used to endorse or promote products derived from this software without
 //       specific prior written permission.
 //
@@ -25,23 +25,40 @@
 // ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
 // POSSIBILITY OF SUCH DAMAGE.
 
-// eos
-#include "eos_stats_encode.h"
+// Chronos
+#include "chronos_cmp_encode.h"
 
-e::buffer::packer
-operator << (e::buffer::packer lhs, const eos_stats& rhs)
+uint8_t
+chronos_cmp_to_byte(chronos_cmp c)
 {
-    return lhs << rhs.time << rhs.utime << rhs.stime << rhs.maxrss << rhs.events
-        << rhs.count_create_event << rhs.count_acquire_references
-        << rhs.count_release_references << rhs.count_query_order
-        << rhs.count_assign_order;
+    switch (c)
+    {
+        case EOS_HAPPENS_BEFORE:
+            return '<';
+        case EOS_HAPPENS_AFTER:
+            return '>';
+        case EOS_CONCURRENT:
+            return '?';
+        case EOS_NOEXIST:
+            return 'X';
+        default:
+            return 'E';
+    }
 }
 
-e::buffer::unpacker
-operator >> (e::buffer::unpacker lhs, eos_stats& rhs)
+chronos_cmp
+byte_to_chronos_cmp(uint8_t b)
 {
-    return lhs >> rhs.time >> rhs.utime >> rhs.stime >> rhs.maxrss >> rhs.events
-        >> rhs.count_create_event >> rhs.count_acquire_references
-        >> rhs.count_release_references >> rhs.count_query_order
-        >> rhs.count_assign_order;
+    switch (b)
+    {
+        case '<':
+            return EOS_HAPPENS_BEFORE;
+        case '>':
+            return EOS_HAPPENS_AFTER;
+        case '?':
+            return EOS_CONCURRENT;
+        case 'X':
+        default:
+            return EOS_NOEXIST;
+    }
 }
