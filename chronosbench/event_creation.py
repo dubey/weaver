@@ -55,7 +55,7 @@ class EventCreation(object):
 if __name__ == '__main__':
     for i in range(16):
         with chronosbench.ChronosDaemon() as daemon:
-            ec = EventCreation(daemon, 10000, 100)
+            ec = EventCreation(daemon, 100000000, 10000)
             with chronosbench.DataOut('create-1M-events-cold-%d.result' % i) as fout:
                 if not fout:
                     continue
