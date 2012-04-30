@@ -54,7 +54,10 @@ chronos_la_LDFLAGS = -module -avoid-version -export-symbols-regex initchronos
 
 nobase_python_PYTHON = \
 			chronosbench/__init__.py \
-			chronosbench/event_creation.py
+			chronosbench/event_creation.py \
+			chronosbench/random_graph.py \
+			chronosbench/scalability.py \
+			chronosbench/util.py
 
 python-chronos.c: chronos.pyx
 	cython -o $@ chronos.pyx
