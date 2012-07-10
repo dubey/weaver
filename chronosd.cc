@@ -572,7 +572,6 @@ chronosnc_create_event(channel* chan, std::auto_ptr<e::buffer> msg, uint64_t non
     msg.reset(e::buffer::create(SEND_MSG_SIZE));
     e::buffer::packer pa = msg->pack();
     pa = pa << static_cast<uint32_t>(SEND_MSG_SIZE) << nonce << event;
-    assert(!pa.error());
     return msg;
 }
 
@@ -623,7 +622,6 @@ chronosnc_acquire_ref(channel* chan, std::auto_ptr<e::buffer> msg, uint64_t nonc
         pa = pa << events_offset[success_to];
     }
 
-    assert(!pa.error());
     return msg;
 }
 
@@ -683,7 +681,6 @@ chronosnc_release_ref(channel* chan, std::auto_ptr<e::buffer> msg, uint64_t nonc
         pa = pa << events_offset[success_to];
     }
 
-    assert(!pa.error());
     return msg;
 }
 
@@ -714,7 +711,6 @@ chronosnc_query_order(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t 
         pa = pa << chronos_cmp_to_byte(pairs[i].order);
     }
 
-    assert(!pa.error());
     return msg;
 }
 
@@ -757,7 +753,6 @@ chronosnc_assign_order(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t
         pa = pa << chronos_cmp_to_byte(pairs[i].order);
     }
 
-    assert(!pa.error());
     return msg;
 }
 
@@ -771,7 +766,6 @@ chronosnc_get_stats(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t no
     msg.reset(e::buffer::create(RESP_MSG_SIZE));
     e::buffer::packer pa = msg->pack();
     pa = pa << static_cast<uint32_t>(RESP_MSG_SIZE) << nonce << st;
-    assert(!pa.error());
     return msg;
 }
 
