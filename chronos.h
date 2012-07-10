@@ -46,10 +46,10 @@ struct chronos_client;
 
 enum chronos_cmp
 {
-    EOS_HAPPENS_BEFORE,
-    EOS_HAPPENS_AFTER,
-    EOS_CONCURRENT,
-    EOS_NOEXIST
+    CHRONOS_HAPPENS_BEFORE,
+    CHRONOS_HAPPENS_AFTER,
+    CHRONOS_CONCURRENT,
+    CHRONOS_NOEXIST
 };
 
 struct chronos_pair
@@ -74,7 +74,7 @@ struct chronos_stats
     uint64_t count_assign_order;
 };
 
-#define EOS_SOFT_FAIL 1
+#define CHRONOS_SOFT_FAIL 1
 
 /* Create a new client.
  *

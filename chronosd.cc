@@ -168,7 +168,7 @@ event_orderer :: query_order(chronos_pair* pairs, size_t pairs_sz)
         if (!m_graph.exists(pairs[i].lhs) ||
             !m_graph.exists(pairs[i].rhs))
         {
-            pairs[i].order = EOS_NOEXIST;
+            pairs[i].order = CHRONOS_NOEXIST;
             continue;
         }
 
@@ -176,15 +176,15 @@ event_orderer :: query_order(chronos_pair* pairs, size_t pairs_sz)
 
         if (resolve < 0)
         {
-            pairs[i].order = EOS_HAPPENS_BEFORE;
+            pairs[i].order = CHRONOS_HAPPENS_BEFORE;
         }
         else if (resolve > 0)
         {
-            pairs[i].order = EOS_HAPPENS_AFTER;
+            pairs[i].order = CHRONOS_HAPPENS_AFTER;
         }
         else
         {
-            pairs[i].order = EOS_CONCURRENT;
+            pairs[i].order = CHRONOS_CONCURRENT;
         }
     }
 
@@ -212,11 +212,11 @@ event_orderer :: assign_order(chronos_pair* pairs, size_t pairs_sz)
 
         if (resolve < 0)
         {
-            if (pairs[i].order != EOS_HAPPENS_BEFORE)
+            if (pairs[i].order != CHRONOS_HAPPENS_BEFORE)
             {
-                if ((pairs[i].flags & EOS_SOFT_FAIL))
+                if ((pairs[i].flags & CHRONOS_SOFT_FAIL))
                 {
-                    pairs[i].order = EOS_HAPPENS_BEFORE;
+                    pairs[i].order = CHRONOS_HAPPENS_BEFORE;
                 }
                 else
                 {
@@ -226,11 +226,11 @@ event_orderer :: assign_order(chronos_pair* pairs, size_t pairs_sz)
         }
         else if (resolve > 0)
         {
-            if (pairs[i].order != EOS_HAPPENS_AFTER)
+            if (pairs[i].order != CHRONOS_HAPPENS_AFTER)
             {
-                if ((pairs[i].flags & EOS_SOFT_FAIL))
+                if ((pairs[i].flags & CHRONOS_SOFT_FAIL))
                 {
-                    pairs[i].order = EOS_HAPPENS_AFTER;
+                    pairs[i].order = CHRONOS_HAPPENS_AFTER;
                 }
                 else
                 {
@@ -242,14 +242,14 @@ event_orderer :: assign_order(chronos_pair* pairs, size_t pairs_sz)
         {
             switch (pairs[i].order)
             {
-                case EOS_HAPPENS_BEFORE:
+                case CHRONOS_HAPPENS_BEFORE:
                     created_edges.push_back(std::make_pair(pairs[i].lhs, pairs[i].rhs));
                     break;
-                case EOS_HAPPENS_AFTER:
+                case CHRONOS_HAPPENS_AFTER:
                     created_edges.push_back(std::make_pair(pairs[i].rhs, pairs[i].lhs));
                     break;
-                case EOS_CONCURRENT:
-                case EOS_NOEXIST:
+                case CHRONOS_CONCURRENT:
+                case CHRONOS_NOEXIST:
                 default:
                     break;
             }
@@ -697,7 +697,7 @@ chronosnc_query_order(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t 
     for (size_t i = 0; i < NUM_PAIRS; ++i)
     {
         up = up >> pairs[i].lhs >> pairs[i].rhs >> pairs[i].flags;
-        pairs[i].order = EOS_CONCURRENT;
+        pairs[i].order = CHRONOS_CONCURRENT;
     }
 
     assert(!up.error());
@@ -738,10 +738,10 @@ chronosnc_assign_order(channel* /*chan*/, std::auto_ptr<e::buffer> msg, uint64_t
     {
         for (size_t i = 0; i < ret; ++i)
         {
-            pairs[i].order = EOS_HAPPENS_BEFORE;
+            pairs[i].order = CHRONOS_HAPPENS_BEFORE;
         }
 
-        pairs[ret].order = EOS_NOEXIST;
+        pairs[ret].order = CHRONOS_NOEXIST;
     }
 
     msg->resize(0);

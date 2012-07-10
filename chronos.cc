@@ -333,7 +333,7 @@ chronos_client :: assign_order(chronos_pair* pairs, size_t pairs_sz)
     {
         pairs[i].order = byte_to_chronos_cmp(utmp[i]);
 
-        if (pairs[i].order == EOS_CONCURRENT || pairs[i].order == EOS_NOEXIST)
+        if (pairs[i].order == CHRONOS_CONCURRENT || pairs[i].order == CHRONOS_NOEXIST)
         {
             return i + 1;
         }

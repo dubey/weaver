@@ -33,13 +33,13 @@ chronos_cmp_to_byte(chronos_cmp c)
 {
     switch (c)
     {
-        case EOS_HAPPENS_BEFORE:
+        case CHRONOS_HAPPENS_BEFORE:
             return '<';
-        case EOS_HAPPENS_AFTER:
+        case CHRONOS_HAPPENS_AFTER:
             return '>';
-        case EOS_CONCURRENT:
+        case CHRONOS_CONCURRENT:
             return '?';
-        case EOS_NOEXIST:
+        case CHRONOS_NOEXIST:
             return 'X';
         default:
             return 'E';
@@ -52,13 +52,13 @@ byte_to_chronos_cmp(uint8_t b)
     switch (b)
     {
         case '<':
-            return EOS_HAPPENS_BEFORE;
+            return CHRONOS_HAPPENS_BEFORE;
         case '>':
-            return EOS_HAPPENS_AFTER;
+            return CHRONOS_HAPPENS_AFTER;
         case '?':
-            return EOS_CONCURRENT;
+            return CHRONOS_CONCURRENT;
         case 'X':
         default:
-            return EOS_NOEXIST;
+            return CHRONOS_NOEXIST;
     }
 }

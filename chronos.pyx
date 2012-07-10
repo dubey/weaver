@@ -45,13 +45,13 @@ cdef extern from "chronos.h":
     cdef struct chronos_client
 
     cdef enum chronos_cmp:
-        EOS_HAPPENS_BEFORE
-        EOS_HAPPENS_AFTER
-        EOS_CONCURRENT
-        EOS_NOEXIST
+        CHRONOS_HAPPENS_BEFORE
+        CHRONOS_HAPPENS_AFTER
+        CHRONOS_CONCURRENT
+        CHRONOS_NOEXIST
 
     cdef enum:
-        EOS_SOFT_FAIL = 1
+        CHRONOS_SOFT_FAIL = 1
 
     cdef struct chronos_pair:
         uint64_t lhs
@@ -82,10 +82,10 @@ cdef extern from "chronos.h":
     int chronos_get_stats(chronos_client* client, chronos_stats* st) nogil
 
 cdef __enumtosymb(chronos_cmp c):
-    return {EOS_HAPPENS_BEFORE: '<',
-            EOS_HAPPENS_AFTER: '>',
-            EOS_CONCURRENT: '?',
-            EOS_NOEXIST: 'X'}.get(c, 'E')
+    return {CHRONOS_HAPPENS_BEFORE: '<',
+            CHRONOS_HAPPENS_AFTER: '>',
+            CHRONOS_CONCURRENT: '?',
+            CHRONOS_NOEXIST: 'X'}.get(c, 'E')
 
 cdef class Client:
     cdef chronos_client* _client
@@ -150,7 +150,7 @@ cdef class Client:
                 pairs[i].lhs = lhs
                 pairs[i].rhs = rhs
                 pairs[i].flags = 0
-                pairs[i].order = EOS_CONCURRENT
+                pairs[i].order = CHRONOS_CONCURRENT
             ret = chronos_query_order(self._client, pairs, len(events))
             if ret != 0:
                 raise RuntimeError("it failed")
@@ -176,11 +176,11 @@ cdef class Client:
                 pairs[i].rhs = rhs
                 pairs[i].flags = 0
                 if 'f' in other:
-                    pairs[i].flags |= EOS_SOFT_FAIL
-                pairs[i].order = {'<': EOS_HAPPENS_BEFORE,
-                                  '>': EOS_HAPPENS_AFTER,
-                                  '': EOS_HAPPENS_BEFORE}.get(other[:1], EOS_NOEXIST)
-                if pairs[i].order == EOS_NOEXIST:
+                    pairs[i].flags |= CHRONOS_SOFT_FAIL
+                pairs[i].order = {'<': CHRONOS_HAPPENS_BEFORE,
+                                  '>': CHRONOS_HAPPENS_AFTER,
+                                  '': CHRONOS_HAPPENS_BEFORE}.get(other[:1], CHRONOS_NOEXIST)
+                if pairs[i].order == CHRONOS_NOEXIST:
                     raise ValueError("Order should be '<' or '>'")
             ret = chronos_assign_order(self._client, pairs, len(events))
             if ret != 0:
