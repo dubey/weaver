@@ -4,6 +4,8 @@ chronosbench/__init__.pyc
 chronosbench/util.pyc
 chronos_cmp_encode.lo
 chronos_cmp_encode.o
+chronos_c_wrappers.lo
+chronos_c_wrappers.o
 chronosd
 chronosd-chronos_cmp_encode.o
 chronosd-chronosd.o

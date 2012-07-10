@@ -44,7 +44,7 @@ chronosd_LDADD = $(E_LIBS) -lrt
 # http://www.gnu.org/software/automake/manual/html_node/Objects-created-both-with-libtool-and-without.html
 chronosd_CXXFLAGS = $(AM_CXXFLAGS)
 
-libchronos_la_SOURCES = chronos.cc chronos_cmp_encode.cc
+libchronos_la_SOURCES = chronos.cc chronos_c_wrappers.cc chronos_cmp_encode.cc
 libchronos_la_LIBADD = $(E_LIBS)
 
 chronos_la_SOURCES = python-chronos.c
