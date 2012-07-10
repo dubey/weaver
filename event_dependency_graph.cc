@@ -180,22 +180,23 @@ event_dependency_graph :: incref(uint64_t event_id)
 bool
 event_dependency_graph :: decref(uint64_t event_id)
 {
-    uint64_t v;
-    bool found = map(event_id, &v);
+    uint64_t toremove;
+    bool found = map(event_id, &toremove);
 
     if (!found)
     {
         return false;
     }
 
-    std::queue<uint64_t> toremove;
-    toremove.push(v);
+    uint64_t bfshead = toremove;
+    uint64_t bfstail = toremove;
+    m_vertices[toremove].bfsnext = UINT64_MAX;
 
-    while (!toremove.empty())
+    while (bfshead != UINT64_MAX)
     {
-        v = toremove.front();
-        toremove.pop();
-        m_vertices[v].decref();
+        uint64_t v = bfshead;
+        bfshead = m_vertices[bfshead].bfsnext;
+        m_vertices[bfshead].decref();
 
         if (m_vertices[v].refcount() > 0)
         {
@@ -204,7 +205,10 @@ event_dependency_graph :: decref(uint64_t event_id)
 
         for (size_t i = 0; i < m_vertices[v].edges().size(); ++i)
         {
-            toremove.push(m_vertices[v].edges()[i]);
+            uint64_t u = m_vertices[v].edges()[i];
+            m_vertices[u].bfsnext = UINT64_MAX;
+            m_vertices[bfstail].bfsnext = u;
+            bfstail = u;
         }
 
         m_event_to_inner.erase(m_vertices[v].event);
