@@ -101,10 +101,6 @@ chronos_create_event(struct chronos_client* client);
 
 /* Acquire references to all events pointed to by "events".
  *
- * References on events last for the system-configured timeout value (default
- * 1h).  If the client calls "chronos_acquire_references" again before the
- * timeout, the timeout will be reset.
- *
  * If any events do not exist, the call will fail, and no leases will be
  * acquired.
  *
@@ -115,9 +111,6 @@ int
 chronos_acquire_references(struct chronos_client* client, uint64_t* events, size_t events_sz);
 
 /* Release references to all events pointed to by "events".
- *
- * By voluntarily relinquishing reference, the application can enable more
- * efficient behavior.
  *
  * If any events do not exist, the remaining events will have their references
  * released.
@@ -228,7 +221,6 @@ class chronos_client
         po6::net::socket m_sock;
         uint64_t m_nonce;
 };
-
 #endif // __cplusplus
 
 #endif // chronos_h_
