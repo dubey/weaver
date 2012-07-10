@@ -37,16 +37,20 @@ import time
 
 class ChronosDaemon(object):
 
-    def __init__(self, chronosd='chronosd', host='127.0.0.1', port=None):
+    def __init__(self, chronosd='chronosd', host='127.0.0.1', port=None, valgrind=True):
         if not port:
             port = random.randint(1025, 65535)
         args = [chronosd, '-h', host, '-p', str(port)]
+        if valgrind:
+            args = ['valgrind', '--tool=callgrind'] + args
         self._daemon = subprocess.Popen(args,
                            stdout=open('/dev/null', 'w'),
                            stderr=open('/dev/null', 'w'))
         self._host = host
         self._port = port
         time.sleep(0.5)
+        if valgrind:
+            time.sleep(1)
 
     def host(self):
         return self._host
@@ -58,6 +62,8 @@ class ChronosDaemon(object):
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
+        self._daemon.terminate()
+        time.sleep(1)
         self._daemon.kill()
 
 
