@@ -63,7 +63,7 @@ chronos_client :: create_event()
     uint8_t buffer[RECV_MSG_SIZE]; // need to use the larger of the two
     uint8_t* ptmp = buffer;
     ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
-    ptmp = e::pack16be(static_cast<uint16_t>(EOSNC_CREATE_EVENT), ptmp);
+    ptmp = e::pack16be(static_cast<uint16_t>(CHRONOSNC_CREATE_EVENT), ptmp);
     ptmp = e::pack64be(m_nonce, ptmp);
     ++m_nonce;
     ssize_t ret;
@@ -111,7 +111,7 @@ chronos_client :: acquire_references(uint64_t* events, size_t events_sz)
     std::vector<uint8_t> buffer(SEND_MSG_SIZE);
     uint8_t* ptmp = &buffer.front();
     ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
-    ptmp = e::pack16be(static_cast<uint16_t>(EOSNC_ACQUIRE_REF), ptmp);
+    ptmp = e::pack16be(static_cast<uint16_t>(CHRONOSNC_ACQUIRE_REF), ptmp);
     ptmp = e::pack64be(m_nonce, ptmp);
     ++m_nonce;
 
@@ -170,7 +170,7 @@ chronos_client :: release_references(uint64_t* events, size_t events_sz)
     std::vector<uint8_t> buffer(SEND_MSG_SIZE);
     uint8_t* ptmp = &buffer.front();
     ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
-    ptmp = e::pack16be(static_cast<uint16_t>(EOSNC_RELEASE_REF), ptmp);
+    ptmp = e::pack16be(static_cast<uint16_t>(CHRONOSNC_RELEASE_REF), ptmp);
     ptmp = e::pack64be(m_nonce, ptmp);
     ++m_nonce;
 
@@ -225,7 +225,7 @@ chronos_client :: query_order(chronos_pair* pairs, size_t pairs_sz)
     std::vector<uint8_t> buffer(SEND_MSG_SIZE);
     uint8_t* ptmp = &buffer.front();
     ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
-    ptmp = e::pack16be(static_cast<uint16_t>(EOSNC_QUERY_ORDER), ptmp);
+    ptmp = e::pack16be(static_cast<uint16_t>(CHRONOSNC_QUERY_ORDER), ptmp);
     ptmp = e::pack64be(m_nonce, ptmp);
     ++m_nonce;
 
@@ -285,7 +285,7 @@ chronos_client :: assign_order(chronos_pair* pairs, size_t pairs_sz)
     std::vector<uint8_t> buffer(SEND_MSG_SIZE);
     uint8_t* ptmp = &buffer.front();
     ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
-    ptmp = e::pack16be(static_cast<uint16_t>(EOSNC_ASSIGN_ORDER), ptmp);
+    ptmp = e::pack16be(static_cast<uint16_t>(CHRONOSNC_ASSIGN_ORDER), ptmp);
     ptmp = e::pack64be(m_nonce, ptmp);
     ++m_nonce;
 
@@ -351,7 +351,7 @@ chronos_client :: get_stats(chronos_stats* st)
     uint8_t buffer[RECV_MSG_SIZE]; // need to use the larger of the two
     uint8_t* ptmp = buffer;
     ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
-    ptmp = e::pack16be(static_cast<uint16_t>(EOSNC_GET_STATS), ptmp);
+    ptmp = e::pack16be(static_cast<uint16_t>(CHRONOSNC_GET_STATS), ptmp);
     ptmp = e::pack64be(m_nonce, ptmp);
     ++m_nonce;
     ssize_t ret;

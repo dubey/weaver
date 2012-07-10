@@ -812,22 +812,22 @@ chronos_daemon(const char* progname, bool daemonize, po6::net::location loc)
 
             switch (static_cast<network_constant>(msg_type))
             {
-                case EOSNC_CREATE_EVENT:
+                case CHRONOSNC_CREATE_EVENT:
                     msg = chronosnc_create_event(channels + fd, msg, nonce, &eo);
                     break;
-                case EOSNC_ACQUIRE_REF:
+                case CHRONOSNC_ACQUIRE_REF:
                     msg = chronosnc_acquire_ref(channels + fd, msg, nonce, &eo);
                     break;
-                case EOSNC_RELEASE_REF:
+                case CHRONOSNC_RELEASE_REF:
                     msg = chronosnc_release_ref(channels + fd, msg, nonce, &eo);
                     break;
-                case EOSNC_QUERY_ORDER:
+                case CHRONOSNC_QUERY_ORDER:
                     msg = chronosnc_query_order(channels + fd, msg, nonce, &eo);
                     break;
-                case EOSNC_ASSIGN_ORDER:
+                case CHRONOSNC_ASSIGN_ORDER:
                     msg = chronosnc_assign_order(channels + fd, msg, nonce, &eo);
                     break;
-                case EOSNC_GET_STATS:
+                case CHRONOSNC_GET_STATS:
                     msg = chronosnc_get_stats(channels + fd, msg, nonce, &eo);
                     break;
                 default:
