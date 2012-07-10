@@ -37,7 +37,7 @@ import time
 
 class ChronosDaemon(object):
 
-    def __init__(self, chronosd='chronosd', host='127.0.0.1', port=None, valgrind=True):
+    def __init__(self, chronosd='chronosd', host='127.0.0.1', port=None, valgrind=False):
         if not port:
             port = random.randint(1025, 65535)
         args = [chronosd, '-h', host, '-p', str(port)]
