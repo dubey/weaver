@@ -61,23 +61,35 @@ class event_dependency_graph
         bool incref(uint64_t event_id);
         bool decref(uint64_t event_id);
 
-    private:
-        class vertex;
+    public:
         typedef google::sparse_hash_map<uint64_t, uint64_t,
                 std::tr1::hash<uint64_t>, equint64_t> event_map_t;
 
     private:
+        event_dependency_graph(const event_dependency_graph&);
+
+    private:
         bool map(uint64_t event, uint64_t* inner);
         bool bfs(uint64_t start, uint64_t end);
+        void resize();
+
+    private:
+        event_dependency_graph& operator = (const event_dependency_graph&);
 
     private:
         uint64_t m_nextid;
-        std::vector<vertex> m_vertices;
+        uint64_t m_vertices_number;
+        uint64_t m_vertices_allocated;
+        uint64_t m_free_inner_id_end;
+        void* m_base;
+        uint64_t* m_free_inner_ids;
+        uint64_t* m_dense;
+        uint64_t* m_sparse;
+        uint64_t* m_bfsqueue;
+        uint64_t* m_inner_to_event;
+        uint64_t* m_refcount;
+        uint64_t** m_edges;
         event_map_t m_event_to_inner;
-        std::vector<uint64_t> m_free_inner_ids;
-        // See: http://research.swtch.com/sparse
-        // We allocate here to avoid repeated allocations
-        std::vector<uint64_t> m_dense;
 };
 
 #endif // event_dependency_graph_h_

@@ -30,6 +30,9 @@
 // C
 #include <cassert>
 
+// POSIX
+#include <sys/mman.h>
+
 // STL
 #include <algorithm>
 #include <queue>
@@ -37,45 +40,30 @@
 // Chronos
 #include "event_dependency_graph.h"
 
-class event_dependency_graph::vertex
-{
-    public:
-        vertex();
-        ~vertex() throw ();
-
-    public:
-        void clear();
-
-        void add_edge(uint64_t inner);
-        const std::vector<uint64_t>& edges() { return m_edges; }
-
-        void incref() { assert(m_refcount < UINT64_MAX); ++m_refcount; }
-        void decref() { assert(m_refcount > 0); --m_refcount; }
-        uint64_t refcount() { return m_refcount; }
-
-    public:
-        uint64_t event;
-        uint64_t sparse;
-        uint64_t bfsnext;
-
-    public:
-        uint64_t m_refcount;
-        // The other half to avoid uninitialized memory
-        std::vector<uint64_t> m_edges;
-};
-
 event_dependency_graph :: event_dependency_graph()
     : m_nextid(1)
-    , m_vertices()
+    , m_vertices_number(0)
+    , m_vertices_allocated(0)
+    , m_free_inner_id_end(0)
+    , m_base(NULL)
+    , m_free_inner_ids(NULL)
+    , m_dense(NULL)
+    , m_sparse(NULL)
+    , m_bfsqueue(NULL)
+    , m_inner_to_event(NULL)
+    , m_refcount(NULL)
+    , m_edges(NULL)
     , m_event_to_inner()
-    , m_free_inner_ids()
-    , m_dense()
 {
     m_event_to_inner.set_deleted_key(0);
 }
 
 event_dependency_graph :: ~event_dependency_graph() throw ()
 {
+    if (m_base)
+    {
+        munmap(m_free_inner_ids, m_vertices_allocated * 7 * sizeof(uint64_t));
+    }
 }
 
 uint64_t
@@ -84,26 +72,26 @@ event_dependency_graph :: add_vertex()
     uint64_t event_id = m_nextid;
     uint64_t inner_id = 0;
 
-    if (m_free_inner_ids.empty())
+    if (m_free_inner_id_end == 0)
     {
-        m_vertices.push_back(vertex());
-
-        if (m_dense.size() < m_vertices.capacity())
+        if (m_vertices_number >= m_vertices_allocated)
         {
-            m_dense.resize(m_vertices.capacity());
+            resize();
         }
 
-        inner_id = m_vertices.size() - 1;
+        assert(m_vertices_number < m_vertices_allocated);
+        inner_id = m_vertices_number - 1;
+        m_edges[inner_id] = NULL;
     }
     else
     {
-        m_vertices[m_free_inner_ids.back()].clear();
-        inner_id = m_free_inner_ids.back();
-        m_free_inner_ids.pop_back();
+        inner_id = m_free_inner_ids[m_free_inner_id_end - 1];
+        --m_free_inner_id_end;
+        // don't touch m_edges;
     }
 
-    m_vertices[inner_id].event = event_id;
-    m_vertices[inner_id].incref();
+    m_inner_to_event[inner_id] = event_id;
+    m_refcount[inner_id] = 1;
     m_event_to_inner.insert(std::make_pair(event_id, inner_id));
     ++m_nextid;
     return event_id;
@@ -120,8 +108,48 @@ event_dependency_graph :: add_edge(uint64_t src_event_id, uint64_t dst_event_id)
     assert(found);
     found = map(dst_event_id, &inner_dst);
     assert(found);
-    m_vertices[inner_src].add_edge(inner_dst);
-    m_vertices[inner_dst].incref();
+
+    uint64_t insert = inner_dst;
+    uint64_t* edges = m_edges[inner_src];
+
+    if (!edges)
+    {
+        m_edges[inner_src] = edges = new uint64_t[2];
+        edges[0] = 0;
+        edges[1] = UINT64_MAX;
+    }
+
+    while (*edges != 0 && *edges != UINT64_MAX)
+    {
+        if (insert < *edges)
+        {
+            std::swap(insert, *edges);
+        }
+
+        ++edges;
+    }
+
+    if (*edges == UINT64_MAX)
+    {
+        size_t sz = edges - m_edges[inner_src];
+        uint64_t* new_edges = new uint64_t[(sz + 1) * 2];
+        memmove(new_edges, edges, sz * sizeof(uint64_t));
+        new_edges[2 * sz + 1] = UINT64_MAX;
+        delete[] m_edges[inner_src];
+        m_edges[inner_src] = new_edges;
+        edges = new_edges + sz;
+    }
+
+    *edges = inner_dst;
+    ++edges;
+
+    if (*edges != UINT64_MAX)
+    {
+        *edges = 0;
+    }
+
+    assert(m_refcount[inner_dst] < UINT64_MAX);
+    ++m_refcount[inner_dst];
 }
 
 int
@@ -159,8 +187,7 @@ event_dependency_graph :: exists(uint64_t event_id)
 uint64_t
 event_dependency_graph :: num_vertices()
 {
-    assert(m_vertices.size() - m_free_inner_ids.size() == m_event_to_inner.size());
-    return m_event_to_inner.size();
+    return m_vertices_number - m_free_inner_id_end;
 }
 
 bool
@@ -171,12 +198,20 @@ event_dependency_graph :: incref(uint64_t event_id)
     
     if (found)
     {
-        m_vertices[inner].incref();
+        assert(m_refcount[inner] < UINT64_MAX);
+        ++m_refcount[inner];
     }
 
     return found;
 }
 
+bool
+event_dependency_graph :: decref(uint64_t event_id)
+{
+    return false;
+}
+
+#if 0
 bool
 event_dependency_graph :: decref(uint64_t event_id)
 {
@@ -217,6 +252,7 @@ event_dependency_graph :: decref(uint64_t event_id)
 
     return true;
 }
+#endif
 
 bool
 event_dependency_graph :: map(uint64_t event, uint64_t* inner)
@@ -237,76 +273,102 @@ event_dependency_graph :: map(uint64_t event, uint64_t* inner)
 bool
 event_dependency_graph :: bfs(uint64_t start, uint64_t end)
 {
-    m_dense.clear();
-    uint64_t bfshead = start;
-    uint64_t bfstail = start;
-    m_vertices[start].bfsnext = UINT64_MAX;
+    assert(m_bfsqueue);
+    uint64_t dense_sz = 0;
+    uint64_t bfshead = 0;
+    uint64_t bfstail = 1;
+    m_bfsqueue[bfshead] = start;
+    m_bfsqueue[bfstail] = UINT64_MAX;
 
-    while (bfshead != UINT64_MAX)
+    while (m_bfsqueue[bfshead] != UINT64_MAX)
     {
-        std::vector<uint64_t>::const_iterator edge = m_vertices[bfshead].edges().begin();
-        std::vector<uint64_t>::const_iterator edge_end = m_vertices[bfshead].edges().end();
+        uint64_t* edges = m_edges[m_bfsqueue[bfshead]];
 
-        for (; edge != edge_end; ++edge)
+        while (*edges != 0 && *edges != UINT64_MAX)
         {
-            // If it's in the set
-            if (m_vertices[*edge].sparse < m_dense.size() &&
-                m_dense[m_vertices[*edge].sparse] == *edge)
-            {
-                continue;
-            }
+            uint64_t e = *edges;
 
             // Check if this is the final edge in the path
-            if (*edge == end)
+            if (e == end)
             {
                 return true;
             }
 
-            // Add it to the set and pending queue
-            m_vertices[*edge].sparse = m_dense.size();
-            m_dense.push_back(*edge);
+            // If it's in the set
+            if (m_sparse[e] < dense_sz && m_dense[m_sparse[e]] == e)
+            {
+                continue;
+            }
 
-            // Add it to the end of the bfs queue
-            m_vertices[bfstail].bfsnext = *edge;
-            bfstail = *edge;
-            m_vertices[*edge].bfsnext = UINT64_MAX;
+            // Add it to the set
+            m_sparse[e] = dense_sz;
+            m_dense[dense_sz] = e;
+            ++dense_sz;
+
+            m_bfsqueue[bfstail] = e;
+            ++bfstail;
+            m_bfsqueue[bfstail] = UINT64_MAX;
         }
 
-        // Advance
-        bfshead = m_vertices[bfshead].bfsnext;
+        ++bfshead;
     }
 
     return false;
 }
 
-event_dependency_graph :: vertex :: vertex()
-    : event(0)
-    , sparse(0)
-    , bfsnext(0)
-    , m_refcount(0)
-    , m_edges()
-{
-}
-
-event_dependency_graph :: vertex :: ~vertex() throw ()
-{
-}
-
 void
-event_dependency_graph :: vertex :: clear()
+event_dependency_graph :: resize()
 {
-    event = 0;
-    sparse = 0;
-    bfsnext = 0;
-    m_refcount = 0;
-    m_edges.clear();
-}
+    uint64_t next_step = 0;
 
-void
-event_dependency_graph :: vertex :: add_edge(uint64_t inner)
-{
-    if (std::find(m_edges.begin(), m_edges.end(), inner) == m_edges.end())
+    if (m_vertices_allocated == 0)
     {
-        m_edges.push_back(inner);
+        next_step = 2;
     }
+    else
+    {
+        next_step = m_vertices_allocated;
+    }
+
+    next_step *= 1.3;
+    uint64_t allocate = 7 * next_step * sizeof(uint64_t);
+
+    void* new_base = mmap(NULL, allocate, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_POPULATE, -1, 0);
+
+    if (new_base == MAP_FAILED)
+    {
+        throw std::bad_alloc();
+    }
+
+    uint64_t* tmp = reinterpret_cast<uint64_t*>(new_base);
+    // Copy the free inner ids
+    memmove(tmp, m_free_inner_ids, m_free_inner_id_end);
+    m_free_inner_ids = tmp;
+    tmp += next_step;
+    // Do nothing for "dense"
+    m_dense = tmp;
+    tmp += next_step;
+    // Do nothing for "sparse"
+    m_sparse = tmp;
+    tmp += next_step;
+    // Do nothing for "bfsqueue"
+    m_bfsqueue = tmp;
+    tmp += next_step;
+    // Copy inner->event mapping
+    memmove(tmp, m_inner_to_event, m_vertices_allocated);
+    m_inner_to_event = tmp;
+    tmp += next_step;
+    // Copy refcounts
+    memmove(tmp, m_refcount, m_vertices_allocated);
+    m_refcount = tmp;
+    tmp += next_step;
+    // Copy edge pointers
+    memmove(tmp, m_edges, m_vertices_allocated);
+    m_edges = reinterpret_cast<uint64_t**>(tmp);
+    // Give back what ye taketh
+    munmap(m_base, 7 * sizeof(uint64_t) * m_vertices_allocated);
+    // Save the current memory
+    m_base = new_base;
+    // Update allocation size;
+    m_vertices_allocated = next_step;
 }
