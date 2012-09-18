@@ -35,20 +35,35 @@
 
 #ifdef __cplusplus
 
+// STL
+#include <map>
+#include <memory>
+
 // po6
 #include <po6/net/location.h>
 #include <po6/net/socket.h>
+
+// e
+#include <e/intrusive_ptr.h>
 
 extern "C" {
 #endif
 
 struct chronos_client;
 
+enum chronos_returncode
+{
+    CHRONOS_SUCCESS,
+    CHRONOS_ERROR,
+    CHRONOS_GARBAGE
+};
+
 enum chronos_cmp
 {
     CHRONOS_HAPPENS_BEFORE,
     CHRONOS_HAPPENS_AFTER,
     CHRONOS_CONCURRENT,
+    CHRONOS_WOULDLOOP,
     CHRONOS_NOEXIST
 };
 
@@ -96,8 +111,10 @@ chronos_client_destroy(struct chronos_client* client);
  * Returns: A unique, non-zero identifier for the event, or 0 on error.
  * Error:   errno will indicate the error.
  */
-uint64_t
-chronos_create_event(struct chronos_client* client);
+int64_t
+chronos_create_event(struct chronos_client* client,
+                     enum chronos_returncode* status,
+                     uint64_t* event);
 
 /* Acquire references to all events pointed to by "events".
  *
@@ -107,8 +124,10 @@ chronos_create_event(struct chronos_client* client);
  * Returns: 0 on success, -1 on error, or index of non-existent event + 1.
  * Error:   errno will indicate the error.
  */
-int
-chronos_acquire_references(struct chronos_client* client, uint64_t* events, size_t events_sz);
+int64_t
+chronos_acquire_references(struct chronos_client* client,
+                           uint64_t* events, size_t events_sz,
+                           enum chronos_returncode* status, ssize_t* ret);
 
 /* Release references to all events pointed to by "events".
  *
@@ -118,8 +137,10 @@ chronos_acquire_references(struct chronos_client* client, uint64_t* events, size
  * Returns: 0 on success, -1 on error.
  * Error:   errno will indicate the error.
  */
-int
-chronos_release_references(struct chronos_client* client, uint64_t* events, size_t events_sz);
+int64_t
+chronos_release_references(struct chronos_client* client,
+                           uint64_t* events, size_t events_sz,
+                           enum chronos_returncode* status, ssize_t* ret);
 
 /* For each chronos_pair, compute the relationship between the two events.
  *
@@ -134,8 +155,9 @@ chronos_release_references(struct chronos_client* client, uint64_t* events, size
  * Return:  0 on success, -1 on error.
  * Error:   errno will indicate the error.
  */
-int
-chronos_query_order(struct chronos_client* client, struct chronos_pair* pairs, size_t pairs_sz);
+int64_t
+chronos_query_order(struct chronos_client* client, struct chronos_pair* pairs, size_t pairs_sz,
+                    enum chronos_returncode* status, ssize_t* ret);
 
 /* For each chronos_pair, create a relationship between the two events.
  *
@@ -154,8 +176,9 @@ chronos_query_order(struct chronos_client* client, struct chronos_pair* pairs, s
  * Returns: 0 on success, -1 on error, or index of non-existent event + 1.
  * Error:   errno will indicate the error.
  */
-int
-chronos_assign_order(struct chronos_client* client, struct chronos_pair* pairs, size_t pairs_sz);
+int64_t
+chronos_assign_order(struct chronos_client* client, struct chronos_pair* pairs, size_t pairs_sz,
+                     enum chronos_returncode* status, ssize_t* ret);
 
 /* Get statistics from the server.
  *
@@ -195,8 +218,14 @@ chronos_assign_order(struct chronos_client* client, struct chronos_pair* pairs, 
  * Return:  0 on success, -1 on error.
  * Error:   errno will indicate the error.
  */
-int
-chronos_get_stats(struct chronos_client* client, struct chronos_stats* st);
+int64_t
+chronos_get_stats(struct chronos_client* client, enum chronos_returncode* status, struct chronos_stats* st, ssize_t* ret);
+
+int64_t
+chronos_loop(struct chronos_client* client, int timeout, enum chronos_returncode* status);
+
+int64_t
+chronos_wait(struct chronos_client* client, int64_t id, int timeout, enum chronos_returncode* status);
 
 #ifdef __cplusplus
 } // extern "C"
@@ -209,17 +238,34 @@ class chronos_client
         ~chronos_client() throw ();
 
     public:
-        uint64_t create_event();
-        int acquire_references(uint64_t* events, size_t events_sz);
-        int release_references(uint64_t* events, size_t events_sz);
-        int query_order(chronos_pair* pairs, size_t pairs_sz);
-        int assign_order(chronos_pair* pairs, size_t pairs_sz);
-        int get_stats(chronos_stats* st);
+        int64_t create_event(chronos_returncode* status, uint64_t* event);
+        int64_t acquire_references(uint64_t* events, size_t events_sz,
+                                   chronos_returncode* status, ssize_t* ret);
+        int64_t release_references(uint64_t* events, size_t events_sz,
+                                   chronos_returncode* status, ssize_t* ret);
+        int64_t query_order(chronos_pair* pairs, size_t pairs_sz,
+                            chronos_returncode* status, ssize_t* ret);
+        int64_t assign_order(chronos_pair* pairs, size_t pairs_sz,
+                             chronos_returncode* status, ssize_t* ret);
+        int64_t get_stats(chronos_returncode* status, chronos_stats* st, ssize_t* ret);
+        int64_t loop(int timeout, chronos_returncode* status);
+        int64_t wait(int64_t id, int timeout, chronos_returncode* status);
 
     private:
-        po6::net::location m_where;
-        po6::net::socket m_sock;
-        uint64_t m_nonce;
+        class pending;
+        class pending_create_event;
+        class pending_references;
+        class pending_order;
+        class pending_get_stats;
+        typedef std::map<uint64_t, e::intrusive_ptr<pending> > pending_map;
+
+    private:
+        int64_t send(e::intrusive_ptr<pending> pend, chronos_returncode* status,
+                     const char* func, const char* data, size_t data_sz);
+
+    private:
+        std::auto_ptr<class replicant> m_replicant;
+        pending_map m_pending;
 };
 #endif // __cplusplus
 

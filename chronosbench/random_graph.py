@@ -105,7 +105,7 @@ if __name__ == '__main__':
     import sys
     graphname = sys.argv[1]
     with chronosbench.ChronosDaemon() as daemon:
-        rg = RandomGraph(daemon, graphname, 100000, 1000)
+        rg = RandomGraph(daemon, graphname, 100000, 600)
         with chronosbench.DataOut(graphname + '.result') as fout:
             if not fout:
                 sys.exit(0)

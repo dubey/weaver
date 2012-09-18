@@ -6,7 +6,7 @@ sys.path.append(".libs/")
 
 import chronos
 
-c = chronos.Client('127.0.0.1', 7890)
+c = chronos.Client('127.0.0.1', 1982)
 eva = c.create_event()
 evb = c.create_event()
 evc = c.create_event()

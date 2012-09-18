@@ -38,362 +38,452 @@
 // e
 #include <e/endian.h>
 
+// Replicant
+#include <replicant.h>
+
 // Chronos
 #include "chronos.h"
 #include "chronos_cmp_encode.h"
 #include "network_constants.h"
 
-chronos_client :: chronos_client(const char* host, uint16_t port)
-    : m_where(host, port)
-    , m_sock(m_where.address.family(), SOCK_STREAM, IPPROTO_TCP)
-    , m_nonce(1)
+class chronos_client::pending
 {
-    m_sock.connect(m_where);
+    public:
+        pending(chronos_returncode* status);
+        virtual ~pending() throw ();
+
+    public:
+        virtual void parse() = 0;
+
+    public:
+        replicant_returncode repl_status;
+        const char* repl_output;
+        size_t repl_output_sz;
+        chronos_returncode* status;
+
+    private:
+        friend class e::intrusive_ptr<pending>;
+
+    private:
+        pending(const pending&);
+
+    private:
+        void inc() { ++m_ref; }
+        void dec() { if (--m_ref == 0) delete this; }
+
+    private:
+        pending& operator = (const pending&);
+
+    private:
+        size_t m_ref;
+};
+
+class chronos_client::pending_create_event : public pending
+{
+    public:
+        pending_create_event(chronos_returncode* status, uint64_t* event);
+        virtual ~pending_create_event() throw ();
+
+    public:
+        virtual void parse();
+
+    private:
+        pending_create_event(const pending_create_event&);
+
+    private:
+        pending_create_event& operator = (const pending_create_event&);
+
+    private:
+        uint64_t* m_event;
+};
+
+class chronos_client::pending_references : public pending
+{
+    public:
+        pending_references(chronos_returncode* status, ssize_t* ret);
+        virtual ~pending_references() throw ();
+
+    public:
+        virtual void parse();
+
+    private:
+        pending_references(const pending_references&);
+
+    private:
+        pending_references& operator = (const pending_references&);
+
+    private:
+        ssize_t* m_ret;
+};
+
+class chronos_client::pending_order : public pending
+{
+    public:
+        pending_order(chronos_returncode* status, chronos_pair* pairs, size_t sz, ssize_t* ret);
+        virtual ~pending_order() throw ();
+
+    public:
+        virtual void parse();
+
+    private:
+        pending_order(const pending_order&);
+
+    private:
+        pending_order& operator = (const pending_order&);
+
+    private:
+        chronos_pair* m_pairs;
+        size_t m_pairs_sz;
+        ssize_t* m_ret;
+};
+
+class chronos_client::pending_get_stats : public pending
+{
+    public:
+        pending_get_stats(chronos_returncode* status, chronos_stats* st, ssize_t* ret);
+        virtual ~pending_get_stats() throw ();
+
+    public:
+        virtual void parse();
+
+    private:
+        pending_get_stats(const pending_get_stats&);
+
+    private:
+        pending_get_stats& operator = (const pending_get_stats&);
+
+    private:
+        chronos_stats* m_st;
+        ssize_t* m_ret;
+};
+
+chronos_client :: chronos_client(const char* host, uint16_t port)
+    : m_replicant(new replicant(host, port))
+    , m_pending()
+{
 }
 
 chronos_client :: ~chronos_client() throw ()
 {
 }
 
-uint64_t
-chronos_client :: create_event()
+int64_t
+chronos_client :: create_event(chronos_returncode* status, uint64_t* event)
 {
-    const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t);
-    const ssize_t RECV_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t) + sizeof(uint64_t);
-    uint8_t buffer[RECV_MSG_SIZE]; // need to use the larger of the two
-    uint8_t* ptmp = buffer;
-    ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
-    ptmp = e::pack16be(static_cast<uint16_t>(CHRONOSNC_CREATE_EVENT), ptmp);
-    ptmp = e::pack64be(m_nonce, ptmp);
-    ++m_nonce;
-    ssize_t ret;
-    ret = m_sock.send(buffer, SEND_MSG_SIZE, MSG_WAITALL);
-
-    if (ret != SEND_MSG_SIZE)
-    {
-        return 0;
-    }
-
-    ret = m_sock.recv(buffer, RECV_MSG_SIZE, MSG_WAITALL);
-
-    if (ret != RECV_MSG_SIZE)
-    {
-        return 0;
-    }
-
-    uint32_t size = 0;
-    uint64_t nonce = 0;
-    uint64_t event = 0;
-    const uint8_t* utmp = buffer;
-    utmp = e::unpack32be(utmp, &size);
-    utmp = e::unpack64be(utmp, &nonce);
-    utmp = e::unpack64be(utmp, &event);
-
-    if (size != RECV_MSG_SIZE)
-    {
-        return 0;
-    }
-
-    if (nonce + 1 != m_nonce)
-    {
-        return 0;
-    }
-
-    return event;
+    e::intrusive_ptr<pending> pend(new pending_create_event(status, event));
+    return send(pend, status, "create_event", "", 0);
 }
 
-int
-chronos_client :: acquire_references(uint64_t* events, size_t events_sz)
+int64_t
+chronos_client :: acquire_references(uint64_t* events, size_t events_sz,
+                                     chronos_returncode* status, ssize_t* ret)
 {
-    const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)
-                                + sizeof(uint64_t) * events_sz;
-    const ssize_t RECV_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t) + sizeof(uint64_t);
-    std::vector<uint8_t> buffer(SEND_MSG_SIZE);
-    uint8_t* ptmp = &buffer.front();
-    ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
-    ptmp = e::pack16be(static_cast<uint16_t>(CHRONOSNC_ACQUIRE_REF), ptmp);
-    ptmp = e::pack64be(m_nonce, ptmp);
-    ++m_nonce;
+    std::vector<char> buffer(events_sz * sizeof(uint64_t));
+    char* p = &buffer.front();
 
     for (size_t i = 0; i < events_sz; ++i)
     {
-        ptmp = e::pack64be(events[i], ptmp);
+        p = e::pack64le(events[i], p);
     }
 
-    ssize_t ret;
-    ret = m_sock.send(&buffer.front(), SEND_MSG_SIZE, MSG_WAITALL);
-
-    if (ret != SEND_MSG_SIZE)
-    {
-        return -1;
-    }
-
-    ret = m_sock.recv(&buffer.front(), RECV_MSG_SIZE, MSG_WAITALL);
-
-    if (ret != RECV_MSG_SIZE)
-    {
-        return -1;
-    }
-
-    uint32_t size = 0;
-    uint64_t nonce = 0;
-    uint64_t num = 0;
-    const uint8_t* utmp = &buffer.front();
-    utmp = e::unpack32be(utmp, &size);
-    utmp = e::unpack64be(utmp, &nonce);
-    utmp = e::unpack64be(utmp, &num);
-
-    if (size != RECV_MSG_SIZE)
-    {
-        return -1;
-    }
-
-    if (nonce + 1 != m_nonce)
-    {
-        return -1;
-    }
-
-    if (num != events_sz)
-    {
-        return num + 1;
-    }
-
-    return 0;
+    // We do this assignment so we can pass events_sz to the "parse" function
+    *ret = events_sz;
+    e::intrusive_ptr<pending> pend(new pending_references(status, ret));
+    return send(pend, status, "acquire_references", &buffer.front(), buffer.size());
 }
 
-int
-chronos_client :: release_references(uint64_t* events, size_t events_sz)
+int64_t
+chronos_client :: release_references(uint64_t* events, size_t events_sz,
+                                     chronos_returncode* status, ssize_t* ret)
 {
-    const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)
-                                + sizeof(uint64_t) * events_sz;
-    const ssize_t RECV_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t) + sizeof(uint64_t);
-    std::vector<uint8_t> buffer(SEND_MSG_SIZE);
-    uint8_t* ptmp = &buffer.front();
-    ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
-    ptmp = e::pack16be(static_cast<uint16_t>(CHRONOSNC_RELEASE_REF), ptmp);
-    ptmp = e::pack64be(m_nonce, ptmp);
-    ++m_nonce;
+    std::vector<char> buffer(events_sz * sizeof(uint64_t));
+    char* p = &buffer.front();
 
     for (size_t i = 0; i < events_sz; ++i)
     {
-        ptmp = e::pack64be(events[i], ptmp);
+        p = e::pack64le(events[i], p);
     }
 
-    ssize_t ret;
-    ret = m_sock.send(&buffer.front(), SEND_MSG_SIZE, MSG_WAITALL);
-
-    if (ret != SEND_MSG_SIZE)
-    {
-        return -1;
-    }
-
-    ret = m_sock.recv(&buffer.front(), RECV_MSG_SIZE, MSG_WAITALL);
-
-    if (ret != RECV_MSG_SIZE)
-    {
-        return -1;
-    }
-
-    uint32_t size = 0;
-    uint64_t nonce = 0;
-    uint64_t num = 0;
-    const uint8_t* utmp = &buffer.front();
-    utmp = e::unpack32be(utmp, &size);
-    utmp = e::unpack64be(utmp, &nonce);
-    utmp = e::unpack64be(utmp, &num);
-
-    if (size != RECV_MSG_SIZE)
-    {
-        return -1;
-    }
-
-    if (nonce + 1 != m_nonce)
-    {
-        return -1;
-    }
-
-    return 0;
+    e::intrusive_ptr<pending> pend(new pending_references(status, ret));
+    return send(pend, status, "release_references", &buffer.front(), buffer.size());
 }
 
-int
-chronos_client :: query_order(chronos_pair* pairs, size_t pairs_sz)
+int64_t
+chronos_client :: query_order(chronos_pair* pairs, size_t pairs_sz,
+                              chronos_returncode* status, ssize_t* ret)
 {
-    const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)
-                                + (sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint32_t)) * pairs_sz;
-    const ssize_t RECV_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t)
-                                + sizeof(uint8_t) * pairs_sz;
-    std::vector<uint8_t> buffer(SEND_MSG_SIZE);
-    uint8_t* ptmp = &buffer.front();
-    ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
-    ptmp = e::pack16be(static_cast<uint16_t>(CHRONOSNC_QUERY_ORDER), ptmp);
-    ptmp = e::pack64be(m_nonce, ptmp);
-    ++m_nonce;
+    std::vector<char> buffer(pairs_sz * (sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint32_t)));
+    char* p = &buffer.front();
 
     for (size_t i = 0; i < pairs_sz; ++i)
     {
-        ptmp = e::pack64be(pairs[i].lhs, ptmp);
-        ptmp = e::pack64be(pairs[i].rhs, ptmp);
-        ptmp = e::pack32be(pairs[i].flags, ptmp);
+        p = e::pack64le(pairs[i].lhs, p);
+        p = e::pack64le(pairs[i].rhs, p);
+        p = e::pack32le(pairs[i].flags, p);
     }
 
-    ssize_t ret;
-    ret = m_sock.send(&buffer.front(), SEND_MSG_SIZE, MSG_WAITALL);
-
-    if (ret != SEND_MSG_SIZE)
-    {
-        return -1;
-    }
-
-    ret = m_sock.recv(&buffer.front(), RECV_MSG_SIZE, MSG_WAITALL);
-
-    if (ret != RECV_MSG_SIZE)
-    {
-        return -1;
-    }
-
-    uint32_t size = 0;
-    uint64_t nonce = 0;
-    const uint8_t* utmp = &buffer.front();
-    utmp = e::unpack32be(utmp, &size);
-    utmp = e::unpack64be(utmp, &nonce);
-
-    if (size != RECV_MSG_SIZE)
-    {
-        return -1;
-    }
-
-    if (nonce + 1 != m_nonce)
-    {
-        return -1;
-    }
-
-    for (size_t i = 0; i < pairs_sz; ++i)
-    {
-        pairs[i].order = byte_to_chronos_cmp(utmp[i]);
-    }
-
-    return 0;
+    e::intrusive_ptr<pending> pend(new pending_order(status, pairs, pairs_sz, ret));
+    return send(pend, status, "query_order", &buffer.front(), buffer.size());
 }
 
-int
-chronos_client :: assign_order(chronos_pair* pairs, size_t pairs_sz)
+int64_t
+chronos_client :: assign_order(chronos_pair* pairs, size_t pairs_sz,
+                               chronos_returncode* status, ssize_t* ret)
 {
-    const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t)
-                                + (sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint32_t) + sizeof(uint8_t)) * pairs_sz;
-    const ssize_t RECV_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t)
-                                + sizeof(uint8_t) * pairs_sz;
-    std::vector<uint8_t> buffer(SEND_MSG_SIZE);
-    uint8_t* ptmp = &buffer.front();
-    ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
-    ptmp = e::pack16be(static_cast<uint16_t>(CHRONOSNC_ASSIGN_ORDER), ptmp);
-    ptmp = e::pack64be(m_nonce, ptmp);
-    ++m_nonce;
+    std::vector<char> buffer(pairs_sz * (sizeof(uint64_t) + sizeof(uint64_t) + sizeof(uint32_t) + sizeof(uint8_t)));
+    char* p = &buffer.front();
 
     for (size_t i = 0; i < pairs_sz; ++i)
     {
-        ptmp = e::pack64be(pairs[i].lhs, ptmp);
-        ptmp = e::pack64be(pairs[i].rhs, ptmp);
-        ptmp = e::pack32be(pairs[i].flags, ptmp);
-        *ptmp = chronos_cmp_to_byte(pairs[i].order);
-        ++ptmp;
+        p = e::pack64le(pairs[i].lhs, p);
+        p = e::pack64le(pairs[i].rhs, p);
+        p = e::pack32le(pairs[i].flags, p);
+        *p = chronos_cmp_to_byte(pairs[i].order);
+        ++p;
     }
 
-    ssize_t ret;
-    ret = m_sock.send(&buffer.front(), SEND_MSG_SIZE, MSG_WAITALL);
+    e::intrusive_ptr<pending> pend(new pending_order(status, pairs, pairs_sz, ret));
+    return send(pend, status, "assign_order", &buffer.front(), buffer.size());
+}
 
-    if (ret != SEND_MSG_SIZE)
+int64_t
+chronos_client :: get_stats(chronos_returncode* status, chronos_stats* st, ssize_t* ret)
+{
+    e::intrusive_ptr<pending> pend(new pending_get_stats(status, st, ret));
+    return send(pend, status, "get_stats", "", 0);
+}
+
+int64_t
+chronos_client :: loop(int timeout, chronos_returncode* status)
+{
+    replicant_returncode rc;
+    int64_t ret = m_replicant->loop(timeout, &rc);
+
+    if (ret < 0)
     {
+        *status = CHRONOS_ERROR;
         return -1;
     }
-
-    ret = m_sock.recv(&buffer.front(), RECV_MSG_SIZE, MSG_WAITALL);
-
-    if (ret != RECV_MSG_SIZE)
+    else
     {
-        return -1;
-    }
+        pending_map::iterator it = m_pending.find(ret); 
 
-    uint32_t size = 0;
-    uint64_t nonce = 0;
-    const uint8_t* utmp = &buffer.front();
-    utmp = e::unpack32be(utmp, &size);
-    utmp = e::unpack64be(utmp, &nonce);
-
-    if (size != RECV_MSG_SIZE)
-    {
-        return -1;
-    }
-
-    if (nonce + 1 != m_nonce)
-    {
-        return -1;
-    }
-
-    for (size_t i = 0; i < pairs_sz; ++i)
-    {
-        pairs[i].order = byte_to_chronos_cmp(utmp[i]);
-
-        if (pairs[i].order == CHRONOS_CONCURRENT || pairs[i].order == CHRONOS_NOEXIST)
+        if (it == m_pending.end())
         {
-            return i + 1;
+            *status = CHRONOS_ERROR;
+            return -1;
+        }
+
+        *status = CHRONOS_SUCCESS;
+        e::intrusive_ptr<pending> pend = it->second;
+        m_pending.erase(it);
+        pend->parse();
+        return ret;
+    }
+}
+
+int64_t
+chronos_client :: wait(int64_t id, int timeout, chronos_returncode* status)
+{
+    replicant_returncode rc;
+    int64_t ret = m_replicant->loop(id, timeout, &rc);
+
+    if (ret < 0)
+    {
+        *status = CHRONOS_ERROR;
+        return -1;
+    }
+    else
+    {
+        pending_map::iterator it = m_pending.find(ret); 
+
+        if (it == m_pending.end())
+        {
+            *status = CHRONOS_ERROR;
+            return -1;
+        }
+
+        *status = CHRONOS_SUCCESS;
+        e::intrusive_ptr<pending> pend = it->second;
+        m_pending.erase(it);
+        pend->parse();
+        return ret;
+    }
+}
+
+int64_t
+chronos_client :: send(e::intrusive_ptr<pending> pend, chronos_returncode* status,
+                       const char* func, const char* data, size_t data_sz)
+{
+    int64_t ret = m_replicant->send("chronosd", 8,
+                                    func, data, data_sz,
+                                    &pend->repl_status,
+                                    &pend->repl_output,
+                                    &pend->repl_output_sz);
+
+    if (ret > 0)
+    {
+        m_pending[ret] = pend;
+        return ret;
+    }
+    else
+    {
+std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
+std::cerr << __FILE__ << ":" << __LINE__ << " " << m_replicant->last_error_desc();
+std::cerr << __FILE__ << ":" << __LINE__ << " " << m_replicant->last_error_file();
+std::cerr << __FILE__ << ":" << __LINE__ << " " << m_replicant->last_error_line();
+        *status = CHRONOS_ERROR;
+        return ret;
+    }
+}
+
+//////////////////////////////////// pending ///////////////////////////////////
+
+chronos_client :: pending :: pending(chronos_returncode* s)
+    : repl_status()
+    , repl_output(NULL)
+    , repl_output_sz(0)
+    , status(s)
+    , m_ref(0)
+{
+}
+
+chronos_client :: pending :: ~pending() throw ()
+{
+    if (repl_output)
+    {
+        replicant_destroy_output(repl_output, repl_output_sz);
+    }
+}
+
+///////////////////////////// pending_create_event /////////////////////////////
+
+chronos_client :: pending_create_event :: pending_create_event(chronos_returncode* s, uint64_t* event)
+    : pending(s)
+    , m_event(event)
+{
+}
+
+chronos_client :: pending_create_event :: ~pending_create_event() throw ()
+{
+}
+
+void
+chronos_client :: pending_create_event :: parse()
+{
+    if (repl_status != REPLICANT_SUCCESS ||
+        repl_output_sz != sizeof(uint64_t))
+    {
+        *status = CHRONOS_ERROR;
+    }
+    else
+    {
+        *status = CHRONOS_SUCCESS;
+        e::unpack64le(repl_output, m_event);
+    }
+}
+
+////////////////////////////// pending_references //////////////////////////////
+
+chronos_client :: pending_references :: pending_references(chronos_returncode* s, ssize_t* ret)
+    : pending(s)
+    , m_ret(ret)
+{
+}
+
+chronos_client :: pending_references :: ~pending_references() throw ()
+{
+}
+
+void
+chronos_client :: pending_references :: parse()
+{
+    if (repl_status != REPLICANT_SUCCESS ||
+        repl_output_sz != sizeof(uint64_t))
+    {
+        *status = CHRONOS_ERROR;
+        *m_ret = -1;
+    }
+    else
+    {
+        *status = CHRONOS_SUCCESS;
+        uint64_t num;
+        e::unpack64le(repl_output, &num);
+        *m_ret = num;
+    }
+}
+
+////////////////////////////// pending_order /////////////////////////////
+
+chronos_client :: pending_order :: pending_order(chronos_returncode* s, chronos_pair* pairs, size_t sz, ssize_t* ret)
+    : pending(s)
+    , m_pairs(pairs)
+    , m_pairs_sz(sz)
+    , m_ret(ret)
+{
+}
+
+chronos_client :: pending_order :: ~pending_order() throw ()
+{
+}
+
+void
+chronos_client :: pending_order :: parse()
+{
+    if (repl_status != REPLICANT_SUCCESS ||
+        repl_output_sz != m_pairs_sz)
+    {
+        *status = CHRONOS_ERROR;
+        *m_ret = -1;
+    }
+    else
+    {
+        *status = CHRONOS_SUCCESS;
+        *m_ret = repl_output_sz;
+
+        for (size_t i = 0; i < m_pairs_sz; ++i)
+        {
+            m_pairs[i].order = byte_to_chronos_cmp(repl_output[i]);
         }
     }
-
-    return 0;
 }
 
-int
-chronos_client :: get_stats(chronos_stats* st)
+/////////////////////////////// pending_get_stats //////////////////////////////
+
+chronos_client :: pending_get_stats :: pending_get_stats(chronos_returncode* s, chronos_stats* st, ssize_t* ret)
+    : pending(s)
+    , m_st(st)
+    , m_ret(ret)
 {
-    const ssize_t SEND_MSG_SIZE = sizeof(uint32_t) + sizeof(uint16_t) + sizeof(uint64_t);
-    const ssize_t RECV_MSG_SIZE = sizeof(uint32_t) + sizeof(uint64_t)
-                                + sizeof(uint32_t) + sizeof(uint64_t) * 9;
-    uint8_t buffer[RECV_MSG_SIZE]; // need to use the larger of the two
-    uint8_t* ptmp = buffer;
-    ptmp = e::pack32be(SEND_MSG_SIZE, ptmp);
-    ptmp = e::pack16be(static_cast<uint16_t>(CHRONOSNC_GET_STATS), ptmp);
-    ptmp = e::pack64be(m_nonce, ptmp);
-    ++m_nonce;
-    ssize_t ret;
-    ret = m_sock.send(buffer, SEND_MSG_SIZE, MSG_WAITALL);
+}
 
-    if (ret != SEND_MSG_SIZE)
+chronos_client :: pending_get_stats :: ~pending_get_stats() throw ()
+{
+}
+
+void
+chronos_client :: pending_get_stats :: parse()
+{
+    if (repl_status != REPLICANT_SUCCESS ||
+        repl_output_sz != sizeof(uint64_t) * 9 + sizeof(uint32_t))
     {
-        return -1;
+        *status = CHRONOS_ERROR;
+        *m_ret = -1;
     }
-
-    ret = m_sock.recv(buffer, RECV_MSG_SIZE, MSG_WAITALL);
-
-    if (ret != RECV_MSG_SIZE)
+    else
     {
-        return -1;
+        *status = CHRONOS_SUCCESS;
+        *m_ret = 0;
+        const char* c = repl_output;
+        c = e::unpack64le(c, &m_st->time);
+        c = e::unpack64le(c, &m_st->utime);
+        c = e::unpack64le(c, &m_st->stime);
+        c = e::unpack32le(c, &m_st->maxrss);
+        c = e::unpack64le(c, &m_st->events);
+        c = e::unpack64le(c, &m_st->count_create_event);
+        c = e::unpack64le(c, &m_st->count_acquire_references);
+        c = e::unpack64le(c, &m_st->count_release_references);
+        c = e::unpack64le(c, &m_st->count_query_order);
+        c = e::unpack64le(c, &m_st->count_assign_order);
     }
-
-    uint32_t size = 0;
-    uint64_t nonce = 0;
-    const uint8_t* utmp = buffer;
-    utmp = e::unpack32be(utmp, &size);
-    utmp = e::unpack64be(utmp, &nonce);
-    utmp = e::unpack64be(utmp, &st->time);
-    utmp = e::unpack64be(utmp, &st->utime);
-    utmp = e::unpack64be(utmp, &st->stime);
-    utmp = e::unpack32be(utmp, &st->maxrss);
-    utmp = e::unpack64be(utmp, &st->events);
-    utmp = e::unpack64be(utmp, &st->count_create_event);
-    utmp = e::unpack64be(utmp, &st->count_acquire_references);
-    utmp = e::unpack64be(utmp, &st->count_release_references);
-    utmp = e::unpack64be(utmp, &st->count_query_order);
-    utmp = e::unpack64be(utmp, &st->count_assign_order);
-
-    if (size != RECV_MSG_SIZE)
-    {
-        return -1;
-    }
-
-    if (nonce + 1 != m_nonce)
-    {
-        return -1;
-    }
-
-    return 0;
 }

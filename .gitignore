@@ -11,11 +11,15 @@ chronosd-chronos_cmp_encode.o
 chronosd-chronosd.o
 chronosd-chronos_stats_encode.o
 chronosd-event_dependency_graph.o
+chronosd.lo
+chronosd.o
 chronos.la
 chronos_la-python-chronos.lo
 chronos_la-python-chronos.o
 chronos.lo
 chronos.o
+chronos_stats_encode.lo
+chronos_stats_encode.o
 config.guess
 config.h
 config.h.in
@@ -26,7 +30,11 @@ config.sub
 configure
 depcomp
 .deps/
+event_dependency_graph.lo
+event_dependency_graph.o
 install-sh
+libchronosd.la
+libchronosd.so
 libchronos.la
 .libs/
 libtool
@@ -37,4 +45,6 @@ Makefile.in
 missing
 py-compile
 python-chronos.c
+replicant-shim.lo
+replicant-shim.o
 stamp-h1

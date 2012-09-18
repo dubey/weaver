@@ -4,7 +4,7 @@ sys.path.append(".libs/")
 
 import chronos
 
-c = chronos.Client('127.0.0.1', 7890)
+c = chronos.Client('127.0.0.1', 1982)
 w = c.create_event()
 x = c.create_event()
 y = c.create_event()

@@ -40,7 +40,7 @@ class ChronosDaemon(object):
     def __init__(self, chronosd='chronosd', host='127.0.0.1', port=None, valgrind=False):
         if not port:
             port = random.randint(1025, 65535)
-        args = [chronosd, '-h', host, '-p', str(port)]
+        args = [chronosd, host, str(port)]
         if valgrind:
             args = ['valgrind', '--tool=callgrind'] + args
         self._daemon = subprocess.Popen(args,
@@ -48,9 +48,7 @@ class ChronosDaemon(object):
                            stderr=open('/dev/null', 'w'))
         self._host = host
         self._port = port
-        time.sleep(0.5)
-        if valgrind:
-            time.sleep(1)
+        time.sleep(5)
 
     def host(self):
         return self._host

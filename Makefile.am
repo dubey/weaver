@@ -34,18 +34,14 @@ EXTRA_DIST = LICENSE chronos.pyx
 include_HEADERS = chronos.h
 noinst_HEADERS = chronos_cmp_encode.h chronos_stats_encode.h event_dependency_graph.h network_constants.h
 
-bin_PROGRAMS = chronosd
-lib_LTLIBRARIES = libchronos.la
+lib_LTLIBRARIES = libchronos.la libchronosd.la
 pyexec_LTLIBRARIES = chronos.la
 
-chronosd_SOURCES = chronos_cmp_encode.cc chronos_stats_encode.cc chronosd.cc event_dependency_graph.cc
-chronosd_LDADD = $(E_LIBS) -lrt
-# This NOP seems useless.  See:
-# http://www.gnu.org/software/automake/manual/html_node/Objects-created-both-with-libtool-and-without.html
-chronosd_CXXFLAGS = $(AM_CXXFLAGS)
+libchronosd_la_SOURCES = chronos_cmp_encode.cc chronos_stats_encode.cc chronosd.cc event_dependency_graph.cc replicant-shim.c
+libchronosd_la_LIBADD = $(E_LIBS) -lrt
 
 libchronos_la_SOURCES = chronos.cc chronos_c_wrappers.cc chronos_cmp_encode.cc
-libchronos_la_LIBADD = $(E_LIBS)
+libchronos_la_LIBADD = $(E_LIBS) -lreplicant
 
 chronos_la_SOURCES = python-chronos.c
 chronos_la_CPPFLAGS = $(PYTHON_CPPFLAGS) $(CPPFLAGS)

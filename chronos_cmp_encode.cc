@@ -39,6 +39,8 @@ chronos_cmp_to_byte(chronos_cmp c)
             return '>';
         case CHRONOS_CONCURRENT:
             return '?';
+        case CHRONOS_WOULDLOOP:
+            return 'O';
         case CHRONOS_NOEXIST:
             return 'X';
         default:
@@ -57,6 +59,8 @@ byte_to_chronos_cmp(uint8_t b)
             return CHRONOS_HAPPENS_AFTER;
         case '?':
             return CHRONOS_CONCURRENT;
+        case 'O':
+            return CHRONOS_WOULDLOOP;
         case 'X':
         default:
             return CHRONOS_NOEXIST;

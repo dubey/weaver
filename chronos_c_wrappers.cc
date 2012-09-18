@@ -64,110 +64,173 @@ chronos_client_destroy(chronos_client* client)
     }
 }
 
-uint64_t
-chronos_create_event(struct chronos_client* client)
+int64_t
+chronos_create_event(chronos_client* client,
+                     chronos_returncode* status,
+                     uint64_t* event)
 {
     try
     {
-        return client->create_event();
+        return client->create_event(status, event);
     }
     catch (po6::error& e)
     {
+        *status = CHRONOS_ERROR;
         errno = e;
         return 0;
     }
     catch (...)
     {
+        *status = CHRONOS_ERROR;
         return 0;
     }
 }
 
-int
-chronos_acquire_references(struct chronos_client* client, uint64_t* events, size_t events_sz)
+int64_t
+chronos_acquire_references(chronos_client* client,
+                           uint64_t* events, size_t events_sz,
+                           chronos_returncode* status, ssize_t* ret)
 {
     try
     {
-        return client->acquire_references(events, events_sz);
+        return client->acquire_references(events, events_sz, status, ret);
     }
     catch (po6::error& e)
     {
+        *status = CHRONOS_ERROR;
         errno = e;
         return -1;
     }
     catch (...)
     {
+        *status = CHRONOS_ERROR;
         return -1;
     }
 }
 
-int
-chronos_release_references(struct chronos_client* client, uint64_t* events, size_t events_sz)
+int64_t
+chronos_release_references(chronos_client* client,
+                           uint64_t* events, size_t events_sz,
+                           chronos_returncode* status, ssize_t* ret)
 {
     try
     {
-        return client->release_references(events, events_sz);
+        return client->release_references(events, events_sz, status, ret);
     }
     catch (po6::error& e)
     {
+        *status = CHRONOS_ERROR;
         errno = e;
         return -1;
     }
     catch (...)
     {
+        *status = CHRONOS_ERROR;
         return -1;
     }
 }
 
-int
-chronos_query_order(struct chronos_client* client, struct chronos_pair* pairs, size_t pairs_sz)
+int64_t
+chronos_query_order(struct chronos_client* client, struct chronos_pair* pairs, size_t pairs_sz,
+                    enum chronos_returncode* status, ssize_t* ret)
 {
     try
     {
-        return client->query_order(pairs, pairs_sz);
+        return client->query_order(pairs, pairs_sz, status, ret);
     }
     catch (po6::error& e)
     {
+        *status = CHRONOS_ERROR;
         errno = e;
         return -1;
     }
     catch (...)
     {
+        *status = CHRONOS_ERROR;
         return -1;
     }
 }
 
-int
-chronos_assign_order(struct chronos_client* client, struct chronos_pair* pairs, size_t pairs_sz)
+int64_t
+chronos_assign_order(struct chronos_client* client, struct chronos_pair* pairs, size_t pairs_sz,
+                    enum chronos_returncode* status, ssize_t* ret)
 {
     try
     {
-        return client->assign_order(pairs, pairs_sz);
+        return client->assign_order(pairs, pairs_sz, status, ret);
     }
     catch (po6::error& e)
     {
+        *status = CHRONOS_ERROR;
         errno = e;
         return -1;
     }
     catch (...)
     {
+        *status = CHRONOS_ERROR;
         return -1;
     }
 }
 
-int
-chronos_get_stats(struct chronos_client* client, struct chronos_stats* st)
+int64_t
+chronos_get_stats(struct chronos_client* client,
+                  enum chronos_returncode* status,
+                  struct chronos_stats* st,
+                  ssize_t* ret)
 {
     try
     {
-        return client->get_stats(st);
+        return client->get_stats(status, st, ret);
     }
     catch (po6::error& e)
     {
+        *status = CHRONOS_ERROR;
         errno = e;
         return -1;
     }
     catch (...)
     {
+        *status = CHRONOS_ERROR;
+        return -1;
+    }
+}
+
+int64_t
+chronos_loop(struct chronos_client* client, int timeout, enum chronos_returncode* status)
+{
+    try
+    {
+        return client->loop(timeout, status);
+    }
+    catch (po6::error& e)
+    {
+        *status = CHRONOS_ERROR;
+        errno = e;
+        return -1;
+    }
+    catch (...)
+    {
+        *status = CHRONOS_ERROR;
+        return -1;
+    }
+}
+
+int64_t
+chronos_wait(struct chronos_client* client, int64_t id, int timeout, enum chronos_returncode* status)
+{
+    try
+    {
+        return client->wait(id, timeout, status);
+    }
+    catch (po6::error& e)
+    {
+        *status = CHRONOS_ERROR;
+        errno = e;
+        return -1;
+    }
+    catch (...)
+    {
+        *status = CHRONOS_ERROR;
         return -1;
     }
 }

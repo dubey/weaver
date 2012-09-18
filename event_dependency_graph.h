@@ -55,6 +55,7 @@ class event_dependency_graph
     public:
         uint64_t add_vertex();
         void add_edge(uint64_t src_event_id, uint64_t dst_event_id);
+        void remove_edge(uint64_t src_event_id, uint64_t dst_event_id);
         int compute_order(uint64_t lhs_event_id, uint64_t rhs_event_id);
         bool exists(uint64_t event_id);
         uint64_t num_vertices();
@@ -70,8 +71,12 @@ class event_dependency_graph
 
     private:
         bool map(uint64_t event, uint64_t* inner);
-        bool bfs(uint64_t start, uint64_t end);
+        bool bfs(uint64_t start, uint64_t end, uint64_t* dense_sz);
+        void inner_decref(uint64_t inner);
         void resize();
+        // Cache that shit
+        bool check_cache(uint64_t outer_src, uint64_t inner_dst);
+        void poke_cache(uint64_t outer_src, uint64_t inner_dst);
 
     private:
         event_dependency_graph& operator = (const event_dependency_graph&);
@@ -81,6 +86,7 @@ class event_dependency_graph
         uint64_t m_vertices_number;
         uint64_t m_vertices_allocated;
         uint64_t m_free_inner_id_end;
+        uint64_t* m_cache;
         void* m_base;
         uint64_t* m_free_inner_ids;
         uint64_t* m_dense;
