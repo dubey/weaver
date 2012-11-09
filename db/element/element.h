@@ -19,6 +19,10 @@
 #ifndef __ELEMENT__
 #define __ELEMENT__
 
+//C
+#include <limits.h>
+#include <stdint.h>
+
 //STL
 #include <vector>
 #include <algorithm>
@@ -26,6 +30,7 @@
 
 //GraphDB
 #include "property.h"
+#include "meta_element.h"
 
 namespace db
 {
@@ -34,16 +39,21 @@ namespace element
 	class element
 	{
 		public:
-			element ();
+			element (po6::net::location server, uint32_t time, void* mem_addr);
 			
 		protected:
 			std::vector<property> properties;
+			po6::net::location myloc;
+			uint32_t t_u;
+			uint32_t t_d;
+			void* elem_addr;
 
 		public:
 			void add_property (property prop);
 			void remove_property (property prop);
-			int get_prop_value (char *_key, char **_value);
+			int get_prop_value (char* _key, char** _value);
 			bool has_property (property prop);
+			meta_element get_meta_element ();
 			
 		public:
 			//Testing functions
@@ -51,8 +61,12 @@ namespace element
 	};
 
 	inline
-	element :: element ()
+	element :: element (po6::net::location server, uint32_t time, void* mem_addr)
 		: properties(0)
+		, myloc (server)
+		, t_u (time)
+		, t_d (UINT_MAX)
+		, elem_addr (mem_addr)
 	{
 	}
 
@@ -71,7 +85,7 @@ namespace element
 	}
 
 	int
-	element :: get_prop_value (char *_key, char **_value)
+	element :: get_prop_value (char* _key, char** _value)
 	{
 		std::vector<property>::iterator iter;
 		for (iter = properties.begin(); iter < properties.end(); iter++)
@@ -92,8 +106,7 @@ namespace element
 		std::vector<property>::iterator iter;
 		for (iter = properties.begin(); iter<properties.end(); iter++)
 		{
-			if ((strcmp (iter->key, prop.key) == 0) && 
-				(strcmp (iter->value, prop.value) == 0))
+			if (prop == *iter) 
 			{
 				return true;
 			}
@@ -105,6 +118,12 @@ namespace element
 	element :: num_properties ()
 	{
 		return properties.size();
+	}
+
+	inline meta_element
+	element :: get_meta_element ()
+	{
+		return meta_element (myloc, t_u, t_d, elem_addr);
 	}
 }
 }

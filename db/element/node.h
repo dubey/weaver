@@ -19,8 +19,14 @@
 #ifndef __NODE__
 #define __NODE__
 
+//C
+#include <stdint.h>
+
 //STL
 #include <vector>
+
+//po6
+#include <po6/net/location.h>
 
 //GraphDB
 #include "element.h"
@@ -34,16 +40,16 @@ namespace element
 	class node : public element
 	{
 		public:
-			node ();
+			node (po6::net::location server, uint32_t time, void* mem_addr);
 		
 		public:
-			std::vector<edge *> out_edges;
-			std::vector<edge *> in_edges;	
+			std::vector<meta_element> out_edges;
+			std::vector<meta_element> in_edges;
 	};
 
 	inline
-	node :: node()
-		: element()
+	node :: node (po6::net::location server, uint32_t time, void* mem_addr)
+		: element (server, time, (void*) this)
 	{
 	}
 }

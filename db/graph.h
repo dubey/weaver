@@ -3,7 +3,7 @@
  *
  *       Filename:  graph.h
  *
- *    Description:  Instance of a graph
+ *    Description:  The part of a graph stored on a particular server
  *
  *        Version:  1.0
  *        Created:  Tuesday 16 October 2012 11:00:03  EDT
@@ -15,6 +15,10 @@
  *
  * =====================================================================================
  */
+
+#ifndef __GRAPH__
+#define __GRAPH__
+
 //Testing
 #include <iostream>
 
@@ -24,8 +28,15 @@
 //STL
 #include <vector>
 
+//po6
+#include <po6/net/location.h>
+
+//Busybee
+#include <busybee_sta.h>
+
 //GraphDB
 #include "element/property.h"
+#include "element/meta_element.h"
 #include "element/node.h"
 #include "element/edge.h"
 
@@ -34,110 +45,67 @@ namespace db
 	class graph
 	{
 		public:
-			graph ();
+			graph (const char* ip_addr, in_port_t port);
 
 		private:
 			std::vector<element::node *> V;
 			std::vector<element::edge *> E;
 
 		public:
-			int add_node (element::node *n);
-			bool find_node (element::node *n);
-			element::edge *add_edge (element::node *n1, element::node *n2);
-			bool find_edge (element::edge *e);
-			bool detect_cycle (element::node *start);
-			std::vector<element::node *> transclosure (element::node *start);
-	};
+			po6::net::location myloc;
+			busybee_sta bb;
+			element::node* create_node (uint32_t time);
+			element::edge* create_edge (element::meta_element* n1,
+				element::meta_element* n2, uint32_t direction, uint32_t time);
+			//void delete_node (element::node 
+			//bool find_node (element::node **n);
+			//bool find_edge (element::edge **e);
+			//std::vector<element::node *> transclosure (element::node *start);
+	
+	}; //class graph
 
 	inline
-	graph :: graph ()
-		: V(0)
-		, E(0)
+	graph :: graph (const char* ip_addr, in_port_t port)
+		: myloc (ip_addr, port)
+		, bb (myloc.address, myloc.port, 0)
 	{
 	}
 
-	inline int
-	graph :: add_node (element::node *n)
+	inline element::node*
+	graph :: create_node (uint32_t time)
 	{
-		V.push_back (n);
-		return 0;
+		element::node* new_node = new element::node (myloc, time, NULL);
+		V.push_back (new_node);
+		
+		std::cout << "Creating node, addr = " << (void*) new_node << std::endl;
+		return new_node;
 	}
 
-	inline bool
-	graph :: find_node (element::node *n)
+	inline element::edge*
+	graph :: create_edge (element::meta_element* n1, element::meta_element* n2,
+		uint32_t direction, uint32_t time)
 	{
-		return (std::find (V.begin(), V.end(), n) != V.end());
-	}
-	
-	inline bool
-	graph :: find_edge (element::edge *e)
-	{
-		return (std::find (E.begin(), E.end(), e) != E.end());
-	}
-
-	inline element::edge *
-	graph :: add_edge (element::node *n1, element::node *n2)
-	{
-		element::edge *e = new element::edge (n1, n2);
-		n1->out_edges.push_back (e);
-		n2->in_edges.push_back (e);
-		E.push_back (e);
-		return e;
-	}
-
-	
-	bool
-	graph :: detect_cycle (element::node *start)
-	{
-		//TODO
-		return false;
-	}
-
-	std::vector<element::node *> 
-	graph :: transclosure (element::node *start)
-	{
-		/*  A unique identifier for every call to
-	 	 *  the transclosure function, used to add
-	 	 *  visited property */
-		static int uid = 0;
-		std::vector<element::node *> reachable;
-		std::vector<element::node *> to_visit;
-		element::node *cur;
-		char *prop_value = (char *) malloc (2);
-		prop_value[0] = 'v';
-		prop_value[1] = '\0';
-		std::stringstream ss;
-		ss << (uid++);
-		char *prop_key = (char *) malloc (ss.str().size()+1);
-		prop_key[ss.str().size()] = 0;
-		strncpy (prop_key, ss.str().c_str(), ss.str().size());
-		element::property visited (prop_key, prop_value);
-
-		//Starting the graph search process
-		to_visit.push_back (start);
-		while (to_visit.size() > 0)
+		element::node *local_node = (element::node *) n1->get_addr();
+		element::edge *new_edge;
+		if (direction == 0) 
 		{
-			cur = to_visit.front();
-			to_visit.erase (to_visit.begin());
-			std::vector<element::edge *>::iterator iter;
-			for (iter = cur->out_edges.begin(); iter<cur->out_edges.end(); iter++)
-			{
-				if (!((*iter)->to->has_property (visited))) 
-				{
-					to_visit.push_back ((*iter)->to);
-				}
-			}
-			cur->add_property (visited);
-			reachable.push_back (cur);
-		}
-
-		//Done with graph search, deleting transient visited property
-		std::vector<element::node *>::iterator iter;
-		for (iter = reachable.begin(); iter < reachable.end(); iter++)
+			new_edge = new element::edge (myloc, time, NULL, *n1, *n2);
+			local_node->out_edges.push_back (new_edge->get_meta_element());
+		} else if (direction == 1)
 		{
-			(*iter)->remove_property (visited);
+			new_edge = new element::edge (myloc, time, NULL, *n2, *n1);
+			local_node->in_edges.push_back (new_edge->get_meta_element());
+		} else
+		{
+			std::cerr << "edge direction error: " << direction << std::endl;
+			return NULL;
 		}
+		E.push_back (new_edge);
 
-		return reachable;
-}
-}
+		std::cout << "Creating edge, addr = " << (void *) new_edge << std::endl;
+		return new_edge;
+	}
+
+} //namespace db
+
+#endif //__GRAPH__

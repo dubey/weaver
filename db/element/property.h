@@ -31,11 +31,11 @@ namespace element
 	{
 		public:
 			property ();
-			property (char *_key, char *_value);
+			property (char* _key, char* _value);
 		
 		public:
-			char *key;
-			char *value;
+			char* key;
+			char* value;
 			bool operator==(property p2) const;
 	};
 
@@ -45,11 +45,11 @@ namespace element
 	}
 
 	inline
-	property :: property (char *_key, char *_value)
+	property :: property (char* _key, char* _value)
 	{
-		key = (char *) malloc (strlen(_key));
+		key = (char*) malloc (strlen(_key));
 		strncpy (key, _key, strlen(_key));
-		value = (char *) malloc (strlen(_value));
+		value = (char*) malloc (strlen(_value));
 		strncpy (value, _value, strlen(_value));
 	}
 
