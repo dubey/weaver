@@ -43,9 +43,10 @@ namespace element
 			//The memory address of the element on the physical server
 			void *elem_addr;
 		
-		public: //Testing
+		public:
 			uint32_t get_t_u ();
-			void* get_addr (); 
+			void* get_addr ();
+			uint16_t get_port ();
 	};
 
 	inline
@@ -68,6 +69,12 @@ namespace element
 	meta_element :: get_addr ()
 	{
 		return elem_addr;
+	}
+
+	inline uint16_t
+	meta_element :: get_port ()
+	{
+		return myloc.port;
 	}
 }
 }

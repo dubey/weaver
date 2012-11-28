@@ -24,6 +24,7 @@
 
 //C++
 #include <sstream>
+#include <stdlib.h>
 
 //STL
 #include <vector>
@@ -57,6 +58,7 @@ namespace db
 			element::node* create_node (uint32_t time);
 			element::edge* create_edge (element::meta_element* n1,
 				element::meta_element* n2, uint32_t direction, uint32_t time);
+			bool mark_visited (element::node *n, uint32_t req_counter);
 			//void delete_node (element::node 
 			//bool find_node (element::node **n);
 			//bool find_edge (element::edge **e);
@@ -104,6 +106,23 @@ namespace db
 
 		std::cout << "Creating edge, addr = " << (void *) new_edge << std::endl;
 		return new_edge;
+	}
+
+	inline bool
+	graph :: mark_visited (element::node *n, uint32_t req_counter)
+	{
+		char key[] = "v";
+		char *value = (char *) malloc (10);
+		std::stringstream out;
+		out << req_counter;
+		strncpy (value, out.str().c_str(), out.str().length());
+		element::property p (key, value);
+		if (n->has_property (p)) {
+			return false;
+		} else {
+			n->add_property (p);
+			return true;
+		}
 	}
 
 } //namespace db

@@ -21,6 +21,7 @@
 
 //C++
 #include <memory>
+#include <string.h>
 
 //e
 #include <e/buffer.h>
@@ -30,6 +31,9 @@
 
 //Busybee
 #include <busybee_constants.h>
+
+//Weaver
+#include "../db/element/property.h"
 
 namespace message
 {
@@ -73,12 +77,21 @@ namespace message
 				po6::net::location remote_server, enum edge_direction dir);
 			int unpack_edge_create (void **local_node, void **remote_node, 
 				po6::net::location **server, uint32_t *dir);
+			int prep_node_update (db::element::property p);
+			int unpack_node_update (db::element::property **p);
+			int prep_reachable_req (size_t from_node, size_t to_node, uint16_t
+				to_port, uint32_t req_counter);
+			int unpack_reachable_req (void **from_node, void **to_node, uint16_t
+				*to_port, uint32_t *req_counter);
 			//TODO: Add update and reachability functions
 			//Other servers to central server
 			int prep_node_create_ack (size_t mem_addr);
 			int prep_edge_create_ack (size_t mem_addr);
 			int prep_create_ack (size_t mem_addr);
 			int unpack_create_ack (void **mem_addr);
+			int prep_reachable_rep (uint32_t req_counter, bool is_reachable);
+			int unpack_reachable_rep (uint32_t *req_counter, bool
+				*is_reachable);
 			//TODO: Add update and reachability functions
 			int prep_error ();
 	};
@@ -117,6 +130,7 @@ namespace message
 	{
 		uint32_t index = BUSYBEE_HEADER_SIZE;
 		e::buffer *b;
+		uint32_t port32;
 		
 		if (type != EDGE_CREATE_REQ) {
 			return -1;
@@ -124,15 +138,16 @@ namespace message
 		b = e::buffer::create (BUSYBEE_HEADER_SIZE +
 			2 * sizeof (size_t) +
 			sizeof (enum msg_type) +
-			sizeof (remote_server.address.get()) +
-			sizeof (remote_server.port) +
+			//sizeof (remote_server.address.get()) +
+			sizeof (uint32_t) +
 			sizeof (enum edge_direction));
 		buf.reset (b);
 		
 		buf->pack_at (index) << type;
 		index += sizeof (enum msg_type);
+		port32 = (uint32_t) remote_server.port;
 		buf->pack_at (index) << local_node << remote_node
-			<< remote_server.address.get() << remote_server.port << dir;
+			<< /*remote_server.address.get() <<*/ port32 << dir;
 		return 0;
 	}
 
@@ -143,7 +158,7 @@ namespace message
 		uint32_t index = BUSYBEE_HEADER_SIZE;
 		uint32_t _type;
 		uint32_t ip_addr, direction;
-		uint16_t port;
+		uint32_t port;
 		size_t mem_addr1, mem_addr2;
 		in_addr_t inaddr;
 		po6::net::ipaddr *addr;
@@ -157,7 +172,7 @@ namespace message
 		
 		index += sizeof (enum msg_type);
 		buf->unpack_from (index) >> mem_addr1 >> mem_addr2
-			>> ip_addr >> port >> direction;
+			>> /*ip_addr >>*/ port >> direction;
 		inaddr = (in_addr_t) ip_addr;
 		addr = new po6::net::ipaddr (ip_addr);
 
@@ -165,6 +180,167 @@ namespace message
 		*remote_node = (void *) mem_addr2;
 		*server = new po6::net::location (*addr, port);
 		*dir = direction;
+		return 0;
+	}
+
+	inline int
+	message :: prep_node_update (db::element::property p)
+	{
+		uint32_t index = BUSYBEE_HEADER_SIZE;
+		e::buffer *b;
+		size_t ctr, len_key, len_value;
+
+		if (type != NODE_UPDATE_REQ) {
+			return -1;
+		}
+		len_key = strlen (p.key);
+		len_value = strlen (p.value);
+		b = e::buffer::create (BUSYBEE_HEADER_SIZE +
+			sizeof (enum msg_type) +
+			2 * sizeof (size_t) +
+			len_key +
+			len_value);
+		buf.reset (b);
+
+		buf->pack_at (index) << type;
+		index += sizeof (enum msg_type);
+		buf->pack_at (index) << len_key << len_value;
+		index += 2 * sizeof (size_t);
+		for (ctr = 0; ctr < len_key; ctr++, index++)
+		{
+			buf->pack_at (index) << p.key[ctr];
+		}
+		for (ctr = 0; ctr < len_value; ctr++, index++)
+		{
+			buf->pack_at (index) << p.value[ctr];
+		}
+		return 0;
+	}
+
+	inline int
+	message :: prep_reachable_req (size_t from_node, size_t to_node, uint16_t
+		to_port, uint32_t req_counter)
+	{
+		uint32_t index = BUSYBEE_HEADER_SIZE;
+		e::buffer *b;
+
+		if (type != REACHABLE_REQ)
+		{
+			return -1;
+		}
+		b = e::buffer::create (BUSYBEE_HEADER_SIZE +
+			sizeof (enum msg_type) +
+			2 * sizeof (size_t) +
+			sizeof (uint16_t) +
+			sizeof (uint32_t));
+		buf.reset (b);
+
+		buf->pack_at (index) << type;
+		index += sizeof (enum msg_type);
+		buf->pack_at (index) << from_node << to_node;
+		index += 2 * sizeof (size_t);
+		buf->pack_at (index) << to_port << req_counter;
+		return 0;
+	}
+
+	inline int
+	message :: prep_reachable_rep (uint32_t req_counter, bool is_reachable)
+	{
+		uint32_t index = BUSYBEE_HEADER_SIZE;
+		e::buffer *b;
+		uint32_t temp = (uint32_t) is_reachable;
+
+		if (type != REACHABLE_REPLY) {
+			return -1;
+		}
+		b = e::buffer::create (BUSYBEE_HEADER_SIZE +
+			sizeof (enum msg_type) +
+			sizeof (uint32_t) +
+			sizeof (uint32_t));
+		buf.reset (b);
+
+		buf->pack_at (index) << type;
+		index += sizeof (enum msg_type);
+		buf->pack_at (index) << req_counter << temp;
+		return 0;
+	}
+
+	inline int
+	message :: unpack_node_update (db::element::property **p)
+	{
+		uint32_t index = BUSYBEE_HEADER_SIZE;
+		uint32_t _type;
+		char *key, *value;
+		size_t ctr, len_key, len_value;
+
+		buf->unpack_from (index) >> _type;
+		if (_type != NODE_UPDATE_REQ)
+		{
+			return -1;
+		}
+		type = NODE_UPDATE_REQ;
+
+		index += sizeof (enum msg_type);
+		buf->unpack_from (index) >> len_key >> len_value;
+		index += 2 * sizeof (size_t);
+		key = (char *) malloc (len_key);
+		value = (char *) malloc (len_value);
+		for (ctr = 0; ctr < len_key; ctr++, index++)
+		{
+			buf->unpack_from (index) >> key[ctr];
+		}
+		for (ctr = 0; ctr < len_value; ctr++, index++)
+		{
+			buf->unpack_from (index) >> value[ctr];
+		}
+		*p = new db::element::property (key, value);
+		return 0;
+	}
+
+	inline int
+	message :: unpack_reachable_req (void **from_node, void **to_node, uint16_t
+		*to_port, uint32_t *req_counter)
+	{
+		uint32_t index = BUSYBEE_HEADER_SIZE;
+		uint32_t _type;
+		size_t f_node, t_node;
+		uint16_t t_port;
+		uint32_t req_cnt;
+
+		buf->unpack_from (index) >> _type;
+		if (_type != REACHABLE_REQ)
+		{
+			return -1;
+		}
+		type = REACHABLE_REQ;
+
+		index += sizeof (enum msg_type);
+		buf->unpack_from (index) >> f_node >> t_node >> t_port >> req_cnt;
+		*from_node = (void *) f_node;
+		*to_node = (void *) t_node;
+		*to_port = t_port;
+		*req_counter = req_cnt;
+		return 0;
+	}
+
+	inline int
+	message :: unpack_reachable_rep (uint32_t *req_counter, bool *is_reachable)
+	{
+		uint32_t index = BUSYBEE_HEADER_SIZE;
+		uint32_t _type;
+		uint32_t r_count;
+		uint32_t reachable;
+
+		buf->unpack_from (index) >> _type;
+		if (_type != REACHABLE_REPLY) {
+			return -1;
+		}
+		type = REACHABLE_REPLY;
+
+		index += sizeof (enum msg_type);
+		buf->unpack_from (index) >> r_count >> reachable;
+		*req_counter = r_count;
+		*is_reachable = (bool) reachable;
 		return 0;
 	}
 

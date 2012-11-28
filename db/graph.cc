@@ -49,6 +49,7 @@ runner (db::graph* G)
 	busybee_returncode ret;
 	int sent = 0;
 	po6::net::location central (IP_ADDR, PORT_BASE);
+	po6::net::location sender (IP_ADDR, PORT_BASE);
 	message::message msg (message::ERROR);
 
 	db::element::node *n;
@@ -57,6 +58,11 @@ runner (db::graph* G)
 	void *mem_addr1, *mem_addr2;
 	po6::net::location *local, *remote;
 	uint32_t direction;
+	uint16_t to_port;
+	uint32_t req_counter;
+
+	po6::net::location reach_requests[100];
+	uint32_t local_req_counter = 0;
 
 	uint32_t code;
 	enum message::msg_type mtype;
@@ -64,8 +70,8 @@ runner (db::graph* G)
 	uint32_t loop_count = 0;
 	while (1)
 	{
-		std::cout << "While loop " << (++loop_count) << std::endl;
-		if ((ret = G->bb.recv (&central, &msg.buf)) != BUSYBEE_SUCCESS)
+		//std::cout << "While loop " << (++loop_count) << std::endl;
+		if ((ret = G->bb.recv (&sender, &msg.buf)) != BUSYBEE_SUCCESS)
 		{
 			std::cerr << "msg recv error: " << ret << std::endl;
 			continue;
@@ -111,6 +117,49 @@ runner (db::graph* G)
 					continue;
 				}
 				break;
+
+			case message::REACHABLE_REQ:
+				if (msg.unpack_reachable_req (&mem_addr1, &mem_addr2, &to_port, 
+					&req_counter) != 0) {
+					continue;
+				}
+				//no error checking needed here
+				n = (db::element::node *) mem_addr1;
+				if (G->mark_visited (n, req_counter))
+				{
+					std::vector<db::element::meta_element>::iterator iter;
+					bool reached = false;
+					for (iter = n->out_edges.begin(); iter < n->out_edges.end();
+						iter++)
+					{
+						db::element::edge *nbr = (db::element::edge *)
+							iter->get_addr();
+						if (nbr->to.get_addr() == mem_addr2 &&
+							nbr->to.get_port() == to_port)
+						{ //Done! Send msg back to central server
+							msg.change_type (message::REACHABLE_REPLY);
+							msg.prep_reachable_rep (req_counter, true);
+							remote = &central;
+							reached = true;
+						} else
+						{ //Continue propagating reachability request
+							msg.prep_reachable_req ((size_t)nbr->to.get_addr(),
+								(size_t) mem_addr2, to_port, req_counter);
+							remote = new po6::net::location (IP_ADDR,
+								nbr->to.get_port());
+						}
+
+						if ((ret = G->bb.send (*remote, msg.buf)) !=
+								BUSYBEE_SUCCESS) {
+							std::cerr << "msg send error: " << ret << std::endl;
+						} else {
+							if (reached) {
+								break;
+							}
+						}
+					}
+				} //else TODO
+				break;
 				
 			default:
 				std::cerr << "unexpected msg type " << code << std::endl;
@@ -130,7 +179,7 @@ main (int argc, char* argv[])
 		return -1;
 	}
 
-	std::cout << "Testing GraphDB" << std::endl;
+	std::cout << "Testing Weaver" << std::endl;
 	
 	order = atoi (argv[1]);
 	port = PORT_BASE + order;
