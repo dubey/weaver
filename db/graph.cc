@@ -24,6 +24,7 @@
 
 //STL
 #include <vector>
+#include <unordered_map>
 
 //po6
 #include <po6/net/location.h>
@@ -60,6 +61,12 @@ runner (db::graph* G)
 	uint32_t direction;
 	uint16_t to_port;
 	uint32_t req_counter;
+
+	std::unordered_map<po6::net::location*, std::vector<size_t>> msg_batch;
+	std::vector<size_t> src_nodes;
+	std::vector<size_t>::iterator src_iter;
+	bool reached = false;
+	bool send_msg = false;
 
 	po6::net::location reach_requests[100];
 	uint32_t local_req_counter = 0;
@@ -118,49 +125,78 @@ runner (db::graph* G)
 				}
 				break;
 
-			case message::REACHABLE_REQ:
-				if (msg.unpack_reachable_req (&mem_addr1, &mem_addr2, &to_port, 
-					&req_counter) != 0) {
-					continue;
-				}
+			
+			case message::REACHABLE_PROP:
+				reached = false;
+				send_msg = false;
+				src_nodes = msg.unpack_reachable_prop (&mem_addr2, &to_port,
+					&req_counter);
+				msg_batch.clear();
+				for (src_iter = src_nodes.begin(); src_iter < src_nodes.end();
+					src_iter++)
+				{
 				//no error checking needed here
-				n = (db::element::node *) mem_addr1;
+				n = (db::element::node *) (*src_iter);
 				if (G->mark_visited (n, req_counter))
 				{
 					std::vector<db::element::meta_element>::iterator iter;
-					bool reached = false;
 					for (iter = n->out_edges.begin(); iter < n->out_edges.end();
 						iter++)
 					{
+						send_msg = true;
 						db::element::edge *nbr = (db::element::edge *)
 							iter->get_addr();
 						if (nbr->to.get_addr() == mem_addr2 &&
 							nbr->to.get_port() == to_port)
 						{ //Done! Send msg back to central server
-							msg.change_type (message::REACHABLE_REPLY);
-							msg.prep_reachable_rep (req_counter, true);
-							remote = &central;
 							reached = true;
+							break;
 						} else
 						{ //Continue propagating reachability request
-							msg.prep_reachable_req ((size_t)nbr->to.get_addr(),
-								(size_t) mem_addr2, to_port, req_counter);
 							remote = new po6::net::location (IP_ADDR,
 								nbr->to.get_port());
-						}
-
-						if ((ret = G->bb.send (*remote, msg.buf)) !=
-								BUSYBEE_SUCCESS) {
-							std::cerr << "msg send error: " << ret << std::endl;
-						} else {
-							if (reached) {
-								break;
-							}
+							//TODO continue from here
+							msg_batch[remote].push_back
+								((size_t)nbr->to.get_addr());
 						}
 					}
-				} //else TODO
-				break;
+				} //end if visited
+				if (reached)
+				{
+					break;
+				}
+				} //end src_nodes loop
 				
+				//send messages
+				if (reached)
+				{
+					msg.change_type (message::REACHABLE_REPLY);
+					msg.prep_reachable_rep (req_counter, true);
+					if ((ret = G->bb.send (central, msg.buf)) != BUSYBEE_SUCCESS)
+					{
+						std::cerr << "msg send error: " << ret << std::endl;
+					}
+				} else if (send_msg)
+				{ //need to send batched msges onwards
+					std::unordered_map<po6::net::location*,
+						std::vector<size_t>>::iterator loc_iter;
+					for (loc_iter = msg_batch.begin(); loc_iter !=
+						msg_batch.end(); loc_iter++)
+					{
+						remote = loc_iter->first;
+						msg.change_type (message::REACHABLE_PROP);
+						msg.prep_reachable_prop (loc_iter->second,
+							(size_t)mem_addr2, to_port, req_counter);
+						if ((ret = G->bb.send (*remote, msg.buf)) !=
+							BUSYBEE_SUCCESS)
+						{
+							std::cerr << "msg send error: " << ret <<
+							std::endl;
+						}
+					}	
+				}
+				break;
+
 			default:
 				std::cerr << "unexpected msg type " << code << std::endl;
 		

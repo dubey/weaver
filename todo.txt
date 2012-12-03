@@ -1,0 +1,6 @@
+Ripple back ack or nack for reachability request
+Batch messages in propagating reachability requests
+Add update functions
+Make new threads for handling each new message
+
+Cache reachability results

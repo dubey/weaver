@@ -30,16 +30,20 @@ main (int argc, char *argv[])
 	message::message msg (message::EDGE_CREATE_REQ);
 	message::message msg2 (message::REACHABLE_REQ);
 	message::message msg3 (message::REACHABLE_REPLY);
+	message::message msg4 (message::REACHABLE_PROP);
 	uint32_t temp;
 	uint32_t r_count = 84;
 	bool reachable;
+	std::vector<size_t> src_nodes, srces;
+	src_nodes.push_back ((size_t)first); src_nodes.push_back ((size_t)second);
 	std::cout << "sizeof bool = " << sizeof (bool) << std::endl;
 	int ret = msg.prep_edge_create ((size_t) first, (size_t) second, random,
 		message::FIRST_TO_SECOND);
 	int ret2 = msg2.prep_reachable_req ((size_t) first, (size_t) second, port,
 		r_count);
 	int ret3 = msg3.prep_reachable_rep (r_count, true);
-	
+	int ret4 = msg4.prep_reachable_prop (src_nodes, (size_t)second, port,
+		r_count);
 	std::cout << "Got " << ret << "  " << ret2 << " " << ret3 << std::endl;
 	std::cout << "Sent ipaddr " << random.address.get() << std::endl;
 
@@ -63,4 +67,13 @@ main (int argc, char *argv[])
 	temp = (uint32_t) reachable;
 	std::cout << "\ntesting false bools " << reachable << " as uint " << temp <<
 	'\n';
+
+	srces = msg4.unpack_reachable_prop (&second, &port, &r_count);
+	std::cout << "\nUnpacking msg 4, got srces len " << srces.size() <<
+		" second " << second << " port " << port << " r_count " << r_count <<
+		'\n';
+	for (temp = 0; temp < srces.size(); temp++)
+	{
+		std::cout << temp << " src is " << (void *) srces[temp] << std::endl;
+	}
 }

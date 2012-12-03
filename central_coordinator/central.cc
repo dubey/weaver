@@ -80,7 +80,7 @@ create_edge (void *mem_addr1, void *mem_addr2,
 			
 	std::cout << "Edge id is " << (void *) elem << std::endl;
 	return (void *) elem;
-}
+} //end create edge
 
 void*
 create_node (central_coordinator::central *server)
@@ -122,13 +122,14 @@ create_node (central_coordinator::central *server)
 	std::cout << "Node id is " << (void *) elem << " at port " << 
 		elem->loc1.port << " " << elem->loc2.port << std::endl;
 	return (void *) elem;
-}
+} //end create node
 
 void
 reachability_request (void *mem_addr1, void *mem_addr2,
 	central_coordinator::central *server)
 {
 	static uint32_t req_counter = 0;
+
 	uint32_t rec_counter;
 	bool is_reachable;
 	po6::net::location rec_loc (LOCAL_IPADDR, CENTRAL_PORT);
@@ -136,9 +137,16 @@ reachability_request (void *mem_addr1, void *mem_addr2,
 		(central_coordinator::graph_elem *) mem_addr1;
 	central_coordinator::graph_elem *elem2 = 
 		(central_coordinator::graph_elem *) mem_addr2;
-	message::message msg(message::REACHABLE_REQ);
+	message::message msg(message::REACHABLE_PROP);
 	busybee_returncode ret;
-	if (msg.prep_reachable_req ((size_t) elem1->mem_addr1, (size_t) elem2->mem_addr1,
+	std::vector<size_t> src;
+
+	req_counter++;
+	src.push_back ((size_t)elem1->mem_addr1);
+	std::cout << "Reachability request number " << req_counter << " from source"
+		<< " node " << mem_addr1 << " to destination node " << mem_addr2
+		<< std::endl;
+	if (msg.prep_reachable_prop (src, (size_t) elem2->mem_addr1,
 		elem2->loc1.port, req_counter) != 0) {
 		std::cerr << "invalid msg packing" << std::endl;
 		return;
@@ -156,7 +164,7 @@ reachability_request (void *mem_addr1, void *mem_addr2,
 	msg.unpack_reachable_rep (&rec_counter, &is_reachable);
 	std::cout << "Reachable reply is " << is_reachable << " for " << 
 		"request " << rec_counter << std::endl;
-}
+} //end reachability request
 
 int
 main (int argc, char* argv[])
@@ -186,82 +194,10 @@ main (int argc, char* argv[])
 			std::cin >> mem_addr1;
 			std::cout << "Enter node 2" << std::endl;
 			std::cin >> mem_addr2;
-			/*
-			elem1 = (central_coordinator::graph_elem *) mem_addr1;
-			elem2 = (central_coordinator::graph_elem *) mem_addr2;
-			
-			dir = message::FIRST_TO_SECOND;
-			msg.change_type (message::EDGE_CREATE_REQ);
-			msg.prep_edge_create ((size_t) elem1->mem_addr1, (size_t) elem2->mem_addr1,
-				elem2->loc1, dir);
-			if ((ret = server.bb.send (elem1->loc1, msg.buf)) != BUSYBEE_SUCCESS)
-			{
-				std::cerr << "msg send error: " << ret << std::endl;
-				continue;
-			}
-			if ((ret = server.bb.recv (&elem1->loc1, &msg.buf)) != BUSYBEE_SUCCESS) 
-			{
-				std::cerr << "msg recv error: " << ret << std::endl;
-				continue;
-			}
-			msg.unpack_create_ack (&mem_addr1);
-
-			dir = message::SECOND_TO_FIRST;
-			msg.change_type (message::EDGE_CREATE_REQ);
-			msg.prep_edge_create ((size_t) elem2->mem_addr1, (size_t) elem1->mem_addr1, 
-				elem1->loc1, dir);
-			if ((ret = server.bb.send (elem2->loc1, msg.buf)) != BUSYBEE_SUCCESS) 
-			{
-				std::cerr << "msg send error: " << ret << std::endl;
-				continue;
-			}
-			if ((ret = server.bb.recv (&elem2->loc1, &msg.buf)) != BUSYBEE_SUCCESS) 
-			{
-				std::cerr << "msg recv error: " << ret << std::endl;
-				continue;
-			}
-			msg.unpack_create_ack (&mem_addr2);
-
-			elem = new central_coordinator::graph_elem (elem1->loc1, elem2->loc1, 
-				mem_addr1, mem_addr2);
-			server.elements.push_back (elem);
-			
-			std::cout << "Edge id is " << (void *) elem << std::endl;
-			*/
 			create_edge (mem_addr1, mem_addr2, &server);
 			break;
 
 		case 2:
-			/*
-			server.port_ctr = (server.port_ctr + 1) % (MAX_PORT+1);
-			if (server.port_ctr == 0) 
-			{
-				server.port_ctr = CENTRAL_PORT;
-			}
-	
-			temp_loc = new po6::net::location (LOCAL_IPADDR, server.port_ctr);
-			msg.change_type (message::NODE_CREATE_REQ);
-			msg.prep_node_create();
-			ret = server.bb.send (*temp_loc, msg.buf);
-			if (ret != BUSYBEE_SUCCESS) 
-			{
-				//error occurred
-				std::cerr << "msg send error: " << ret << std::endl;
-				continue;
-			}
-			if ((ret = server.bb.recv (temp_loc, &msg.buf)) != BUSYBEE_SUCCESS)
-			{
-				//error occurred
-				std::cerr << "msg recv error: " << ret << std::endl;
-				continue;
-			}
-			msg.unpack_create_ack (&mem_addr1);
-			elem = new central_coordinator::graph_elem (*temp_loc, *temp_loc, mem_addr1,
-				mem_addr1);
-			server.elements.push_back (elem);
-
-			std::cout << "Node id is " << (void *) elem << std::endl;
-			*/
 			create_node (&server);
 			break;
 
@@ -270,33 +206,9 @@ main (int argc, char* argv[])
 			std::cin >> mem_addr1;
 			std::cout << "Enter node 2" << std::endl;
 			std::cin >> mem_addr2;
-			/*
-			elem1 = (central_coordinator::graph_elem *) mem_addr1;
-			elem2 = (central_coordinator::graph_elem *) mem_addr2;
-			
-			msg.change_type (message::REACHABLE_REQ);
-			if (msg.prep_reachable_req ((size_t) elem1->mem_addr1, (size_t) elem2->mem_addr1,
-				elem2->loc1.port, req_counter) != 0) {
-				std::cerr << "invalid msg packing" << std::endl;
-				continue;
-			}
-			if ((ret = server.bb.send (elem1->loc1, msg.buf)) != BUSYBEE_SUCCESS)
-			{
-				std::cerr << "msg send error: " << ret << std::endl;
-				continue;
-			}
-			if ((ret = server.bb.recv (&rec_loc, &msg.buf)) != BUSYBEE_SUCCESS) 
-			{
-				std::cerr << "msg recv error: " << ret << std::endl;
-				continue;
-			}
-			msg.unpack_reachable_rep (&rec_counter, &is_reachable);
-			std::cout << "Reachable reply is " << is_reachable << " for " << 
-				" request " << rec_counter << std::endl;
-			*/
 			reachability_request (mem_addr1, mem_addr2, &server);
 			break;
 
 	} //end switch
 	} //end while
-}
+} //end main

@@ -51,7 +51,9 @@ namespace message
 		NODE_UPDATE_ACK,
 		EDGE_UPDATE_ACK,
 		ERROR,
-		REACHABLE_REPLY
+		REACHABLE_REPLY,
+		//Between other servers
+		REACHABLE_PROP
 	};
 
 	enum edge_direction
@@ -93,6 +95,10 @@ namespace message
 			int unpack_reachable_rep (uint32_t *req_counter, bool
 				*is_reachable);
 			//TODO: Add update and reachability functions
+			int prep_reachable_prop (std::vector<size_t> src_nodes,
+				size_t to_node, uint16_t to_port, uint32_t req_counter);
+			std::vector<size_t> unpack_reachable_prop (void **to_node, 
+				uint16_t *to_port, uint32_t *req_counter);
 			int prep_error ();
 	};
 
@@ -382,6 +388,75 @@ namespace message
 		buf->unpack_from (index) >> addr;
 		*mem_addr = (void *) addr;
 		return 0;
+	}
+
+	inline int 
+	message :: prep_reachable_prop (std::vector<size_t> src_nodes,
+		size_t to_node, uint16_t to_port, uint32_t req_counter)
+	{
+		uint32_t index = BUSYBEE_HEADER_SIZE;
+		e::buffer *b;
+		size_t num_nodes = src_nodes.size();
+		size_t i;
+
+		if (type != REACHABLE_PROP)
+		{
+			return -1;
+		}
+		b = e::buffer::create (BUSYBEE_HEADER_SIZE +
+			sizeof (enum msg_type) +
+			sizeof (size_t) + //num_nodes
+			num_nodes * sizeof (size_t) + //src_nodes
+			sizeof (size_t) + //to_node
+			sizeof (uint16_t) + //to_port
+			sizeof (uint32_t) //req_counter
+			);
+		buf.reset (b);
+
+		buf->pack_at (index) << type;
+		index += sizeof (enum msg_type);
+		buf->pack_at (index) << num_nodes;
+		for (i = 0, index += sizeof (size_t); i < num_nodes; i++, 
+			index += sizeof (size_t))
+		{
+			buf->pack_at (index) << src_nodes[i];
+		}
+		buf->pack_at (index) << to_node << to_port << req_counter;
+		return 0;
+	}
+
+	inline std::vector<size_t>
+	message :: unpack_reachable_prop (void **to_node, uint16_t *to_port, 
+		uint32_t *req_counter)
+	{
+		uint32_t index = BUSYBEE_HEADER_SIZE;
+		uint32_t _type;
+		std::vector<size_t> src;
+		size_t dest, num_nodes, i, temp;
+		uint16_t port;
+		uint32_t r_count;
+
+		buf->unpack_from (index) >> _type;
+		if (_type != REACHABLE_PROP)
+		{
+			return src;
+		}
+		type = REACHABLE_PROP;
+		index += sizeof (enum msg_type);
+
+		buf->unpack_from (index) >> num_nodes;
+		for (i = 0, index += sizeof (size_t); i < num_nodes; i++, index +=
+			sizeof (size_t))
+		{
+			buf->unpack_from (index) >> temp;
+			src.push_back (temp); 
+		}
+		buf->unpack_from (index) >> dest >> port >> r_count;
+
+		*to_node = (void *) dest;
+		*to_port = port;
+		*req_counter = r_count;
+		return src;
 	}
 
 } //namespace message

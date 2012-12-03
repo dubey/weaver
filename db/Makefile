@@ -1,4 +1,4 @@
-CFLAGS=-g -O0
+CFLAGS=-g -O0 -std=c++0x
 OBJS=graph.o
 LIBS=-L/usr/local/lib
 
