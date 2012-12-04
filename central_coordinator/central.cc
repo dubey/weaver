@@ -18,6 +18,7 @@
 
 //C++
 #include <iostream>
+#include <time.h>
 
 //e
 #include "e/buffer.h"
@@ -146,8 +147,8 @@ reachability_request (void *mem_addr1, void *mem_addr2,
 	std::cout << "Reachability request number " << req_counter << " from source"
 		<< " node " << mem_addr1 << " to destination node " << mem_addr2
 		<< std::endl;
-	if (msg.prep_reachable_prop (src, (size_t) elem2->mem_addr1,
-		elem2->loc1.port, req_counter) != 0) {
+	if (msg.prep_reachable_prop (src, CENTRAL_PORT, (size_t) elem2->mem_addr1,
+		elem2->loc1.port, req_counter, req_counter) != 0) {
 		std::cerr << "invalid msg packing" << std::endl;
 		return;
 	}
@@ -171,15 +172,33 @@ main (int argc, char* argv[])
 {
 	central_coordinator::central server;
 	void *mem_addr1, *mem_addr2, *mem_addr3, *mem_addr4;
-	
-	mem_addr1 = create_node (&server);
-	mem_addr2 = create_node (&server);
-	mem_addr3 = create_node (&server);
+	int i, num_nodes = 10, num_edges = 8;
+	std::vector<void *> nodes;
+
+	for (i = 0; i < num_nodes; i++)
+	{
+		nodes.push_back (create_node (&server));
+	}
+	srand (time (NULL));
+	for (i = 0; i < num_edges; i++)
+	{
+		int first = rand() % num_nodes;
+		int second = rand() % num_nodes;
+		while (second == first) //no self-loop edges
+		{
+			second = rand() % num_nodes;
+		}
+		create_edge (nodes[first], nodes[second], &server);
+	}
+	//mem_addr1 = create_node (&server);
+	//mem_addr2 = create_node (&server);
+	//mem_addr3 = create_node (&server);
 	//mem_addr4 = create_node (&server);
-	create_edge (mem_addr1, mem_addr2, &server);
-	create_edge (mem_addr2, mem_addr3, &server);
+	//create_edge (mem_addr1, mem_addr2, &server);
+	//create_edge (mem_addr2, mem_addr3, &server);
 	//create_edge (mem_addr3, mem_addr4, &server);
-	reachability_request (mem_addr1, mem_addr3, &server);
+	for (i = 0; i < 10; i++)
+		reachability_request (nodes[rand() % num_nodes], nodes[rand() % num_nodes], &server);
 
 	while (0) {
 	uint32_t choice;

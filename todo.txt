@@ -1,5 +1,5 @@
-Ripple back ack or nack for reachability request
-Batch messages in propagating reachability requests
+Ripple back ack or nack for reachability request (stress test pending)
+Batch messages in propagating reachability requests (stress test pending)
 Add update functions
 Make new threads for handling each new message
 

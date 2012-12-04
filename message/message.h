@@ -93,12 +93,19 @@ namespace message
 			int unpack_create_ack (void **mem_addr);
 			int prep_reachable_rep (uint32_t req_counter, bool is_reachable);
 			int unpack_reachable_rep (uint32_t *req_counter, bool
-				*is_reachable);
+									  *is_reachable);
 			//TODO: Add update and reachability functions
 			int prep_reachable_prop (std::vector<size_t> src_nodes,
-				size_t to_node, uint16_t to_port, uint32_t req_counter);
-			std::vector<size_t> unpack_reachable_prop (void **to_node, 
-				uint16_t *to_port, uint32_t *req_counter);
+									 uint16_t src_port,
+									 size_t to_node, 
+									 uint16_t to_port, 
+									 uint32_t req_counter,
+									 uint32_t prev_req_counter);
+			std::vector<size_t> unpack_reachable_prop (uint16_t *src_port,
+									 void **to_node,
+									 uint16_t *to_port, 
+									 uint32_t *req_counter,
+									 uint32_t *prev_req_counter);
 			int prep_error ();
 	};
 
@@ -120,7 +127,8 @@ namespace message
 		uint32_t index = BUSYBEE_HEADER_SIZE;
 		e::buffer *b;
 		
-		if (type != NODE_CREATE_REQ) {
+		if (type != NODE_CREATE_REQ) 
+		{
 			return -1;
 		}
 		b = e::buffer::create (BUSYBEE_HEADER_SIZE + sizeof (enum msg_type));
@@ -132,7 +140,8 @@ namespace message
 
 	inline int
 	message :: prep_edge_create (size_t local_node, size_t remote_node,
-		po6::net::location remote_server, enum edge_direction dir)
+								po6::net::location remote_server, 
+								enum edge_direction dir)
 	{
 		uint32_t index = BUSYBEE_HEADER_SIZE;
 		e::buffer *b;
@@ -142,18 +151,19 @@ namespace message
 			return -1;
 		}
 		b = e::buffer::create (BUSYBEE_HEADER_SIZE +
-			2 * sizeof (size_t) +
-			sizeof (enum msg_type) +
-			//sizeof (remote_server.address.get()) +
-			sizeof (uint32_t) +
-			sizeof (enum edge_direction));
+							   2 * sizeof (size_t) +
+							   sizeof (enum msg_type) +
+							   //sizeof (remote_server.address.get()) +
+							   sizeof (uint32_t) +
+							   sizeof (enum edge_direction));
 		buf.reset (b);
 		
 		buf->pack_at (index) << type;
 		index += sizeof (enum msg_type);
 		port32 = (uint32_t) remote_server.port;
 		buf->pack_at (index) << local_node << remote_node
-			<< /*remote_server.address.get() <<*/ port32 << dir;
+							 /*<< remote_server.address.get() <<*/ 
+							 << port32 << dir;
 		return 0;
 	}
 
@@ -392,7 +402,11 @@ namespace message
 
 	inline int 
 	message :: prep_reachable_prop (std::vector<size_t> src_nodes,
-		size_t to_node, uint16_t to_port, uint32_t req_counter)
+									uint16_t src_port,
+									size_t to_node, 
+									uint16_t to_port, 
+									uint32_t req_counter,
+									uint32_t prev_req_counter)
 	{
 		uint32_t index = BUSYBEE_HEADER_SIZE;
 		e::buffer *b;
@@ -404,13 +418,15 @@ namespace message
 			return -1;
 		}
 		b = e::buffer::create (BUSYBEE_HEADER_SIZE +
-			sizeof (enum msg_type) +
-			sizeof (size_t) + //num_nodes
-			num_nodes * sizeof (size_t) + //src_nodes
-			sizeof (size_t) + //to_node
-			sizeof (uint16_t) + //to_port
-			sizeof (uint32_t) //req_counter
-			);
+							   sizeof (enum msg_type) +
+							   sizeof (size_t) + //num_nodes
+							   num_nodes * sizeof (size_t) + //src_nodes
+							   sizeof (uint16_t) + //src_port
+							   sizeof (size_t) + //to_node
+							   sizeof (uint16_t) + //to_port
+							   sizeof (uint32_t) +//req_counter
+							   sizeof (uint32_t) //prev_req_counter
+							   );
 		buf.reset (b);
 
 		buf->pack_at (index) << type;
@@ -421,20 +437,24 @@ namespace message
 		{
 			buf->pack_at (index) << src_nodes[i];
 		}
-		buf->pack_at (index) << to_node << to_port << req_counter;
+		buf->pack_at (index) << src_port << to_node << to_port << req_counter
+							 << prev_req_counter;
 		return 0;
 	}
 
 	inline std::vector<size_t>
-	message :: unpack_reachable_prop (void **to_node, uint16_t *to_port, 
-		uint32_t *req_counter)
+	message :: unpack_reachable_prop (uint16_t *src_port, 
+									  void **to_node, 
+									  uint16_t *to_port, 
+									  uint32_t *req_counter,
+									  uint32_t *prev_req_counter)
 	{
 		uint32_t index = BUSYBEE_HEADER_SIZE;
 		uint32_t _type;
 		std::vector<size_t> src;
 		size_t dest, num_nodes, i, temp;
-		uint16_t port;
-		uint32_t r_count;
+		uint16_t from_port, dest_port;
+		uint32_t r_count, p_r_count;
 
 		buf->unpack_from (index) >> _type;
 		if (_type != REACHABLE_PROP)
@@ -446,16 +466,19 @@ namespace message
 
 		buf->unpack_from (index) >> num_nodes;
 		for (i = 0, index += sizeof (size_t); i < num_nodes; i++, index +=
-			sizeof (size_t))
+			 sizeof (size_t))
 		{
 			buf->unpack_from (index) >> temp;
 			src.push_back (temp); 
 		}
-		buf->unpack_from (index) >> dest >> port >> r_count;
+		buf->unpack_from (index) >> from_port >> dest >> dest_port 
+								 >> r_count >> p_r_count;
 
+		*src_port = from_port;
 		*to_node = (void *) dest;
-		*to_port = port;
+		*to_port = dest_port;
 		*req_counter = r_count;
+		*prev_req_counter = p_r_count;
 		return src;
 	}
 
