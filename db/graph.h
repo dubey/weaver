@@ -53,6 +53,7 @@ namespace db
 			std::vector<element::edge *> E;
 
 		public:
+			int node_count;
 			po6::net::location myloc;
 			busybee_sta bb;
 			element::node* create_node (uint32_t time);
@@ -68,7 +69,8 @@ namespace db
 
 	inline
 	graph :: graph (const char* ip_addr, in_port_t port)
-		: myloc (ip_addr, port)
+		: node_count (0)
+		, myloc (ip_addr, port)
 		, bb (myloc.address, myloc.port, 0)
 	{
 	}
@@ -79,7 +81,8 @@ namespace db
 		element::node* new_node = new element::node (myloc, time, NULL);
 		V.push_back (new_node);
 		
-		std::cout << "Creating node, addr = " << (void*) new_node << std::endl;
+		std::cout << "Creating node, addr = " << (void*) new_node 
+				  << " and node count " << (++node_count) << std::endl;
 		return new_node;
 	}
 
@@ -111,17 +114,22 @@ namespace db
 	inline bool
 	graph :: mark_visited (element::node *n, uint32_t req_counter)
 	{
-		char key[] = "v";
+		uint32_t key = 0; //visited key
+		/*char key[] = "v\0";
 		char *value = (char *) malloc (10);
+		memset (value, '\0', 10);
 		std::stringstream out;
 		out << req_counter;
 		strncpy (value, out.str().c_str(), out.str().length());
-		element::property p (key, value);
+		std::cout << "string of req counter " << key
+				  << "," << value << " " ;
+		*/
+		element::property p (key, req_counter);
 		if (n->has_property (p)) {
-			return false;
+			return true;
 		} else {
 			n->add_property (p);
-			return true;
+			return false;
 		}
 	}
 

@@ -25,7 +25,6 @@
 //STL
 #include <vector>
 #include <unordered_map>
-#include <tuple>
 
 //po6
 #include <po6/net/location.h>
@@ -49,18 +48,21 @@ class mytuple
 		uint16_t port;
 		uint32_t counter; //prev req id
 		int num; //number of requests
+		bool reachable;
 
 		mytuple ()
 		{
 			port = 0;
 			counter = 0;
 			num = 0;
+			reachable = false;
 		}
 
 		mytuple (uint16_t p, uint32_t c, int n)
 			: port(p)
 			, counter(c)
 			, num(n)
+			, reachable (false)
 		{
 		}
 
@@ -86,16 +88,18 @@ runner (db::graph* G)
 	uint16_t to_port, from_port;
 	uint32_t req_counter, prev_req_counter;
 
-	std::unordered_map<po6::net::location*, std::vector<size_t>> msg_batch;
+	std::unordered_map<uint16_t, std::vector<size_t>> msg_batch;
 	std::vector<size_t> src_nodes;
 	std::vector<size_t>::iterator src_iter;
 	bool reached = false;
 	bool send_msg = false;
 	std::unordered_map<uint32_t, mytuple> outstanding_req;
 	uint32_t local_req_counter = 0;
+	std::unordered_map<uint32_t, mytuple> pending_batch;
+	uint32_t local_batch_req_counter = 0;
 	mytuple *out_req;
 	bool reachable_reply;
-	uint32_t num_msges;
+	uint32_t num_nack, temp1;
 
 	uint32_t code;
 	enum message::msg_type mtype;
@@ -103,13 +107,11 @@ runner (db::graph* G)
 	uint32_t loop_count = 0;
 	while (1)
 	{
-		//std::cout << "While loop " << (++loop_count) << std::endl;
 		if ((ret = G->bb.recv (&sender, &msg.buf)) != BUSYBEE_SUCCESS)
 		{
 			std::cerr << "msg recv error: " << ret << std::endl;
 			continue;
 		}
-		std::cout << "msg recd port " << sender.port << std::endl;
 		msg.buf->unpack_from (BUSYBEE_HEADER_SIZE) >> code;
 		mtype = (enum message::msg_type) code;
 		switch (mtype)
@@ -156,28 +158,31 @@ runner (db::graph* G)
 			case message::REACHABLE_PROP:
 				reached = false;
 				send_msg = false;
-				num_msges = 0;
+				num_nack = 0;
 				src_nodes = msg.unpack_reachable_prop (&from_port, 
 													   &mem_addr2, 
 													   &to_port,
 													   &req_counter, 
 													   &prev_req_counter);
 				msg_batch.clear();
+				local_batch_req_counter++;
+
 				for (src_iter = src_nodes.begin(); src_iter < src_nodes.end();
-					src_iter++)
+					 src_iter++)
 				{
+				static int node_ctr = 0;
 				//no error checking needed here
 				n = (db::element::node *) (*src_iter);
 				//TODO mem leak! Remove old properties
-				if (G->mark_visited (n, req_counter))
+				if (!G->mark_visited (n, req_counter))
 				{
 					std::vector<db::element::meta_element>::iterator iter;
 					for (iter = n->out_edges.begin(); iter < n->out_edges.end();
-						iter++)
+						 iter++)
 					{
 						send_msg = true;
 						db::element::edge *nbr = (db::element::edge *)
-							iter->get_addr();
+												  iter->get_addr();
 						if (nbr->to.get_addr() == mem_addr2 &&
 							nbr->to.get_port() == to_port)
 						{ //Done! Send msg back to central server
@@ -185,11 +190,8 @@ runner (db::graph* G)
 							break;
 						} else
 						{ //Continue propagating reachability request
-							remote = new po6::net::location (IP_ADDR,
-								nbr->to.get_port());
-							msg_batch[remote].push_back
+							msg_batch[nbr->to.get_port()].push_back
 								((size_t)nbr->to.get_addr());
-								num_msges++;
 						}
 					}
 				} //end if visited
@@ -212,12 +214,18 @@ runner (db::graph* G)
 					}
 				} else if (send_msg)
 				{ //need to send batched msges onwards
-					std::unordered_map<po6::net::location*,
-						std::vector<size_t>>::iterator loc_iter;
+					outstanding_req[local_batch_req_counter].port = from_port;
+					outstanding_req[local_batch_req_counter].counter =
+						prev_req_counter;
+					outstanding_req[local_batch_req_counter].num = 0;
+					std::unordered_map<uint16_t, std::vector<size_t>>::iterator 
+						loc_iter;
 					for (loc_iter = msg_batch.begin(); loc_iter !=
 						 msg_batch.end(); loc_iter++)
 					{
-						remote = loc_iter->first;
+						static int loop = 0;
+						remote = new po6::net::location (IP_ADDR,
+								 						 loc_iter->first);
 						msg.change_type (message::REACHABLE_PROP);
 						msg.prep_reachable_prop (loc_iter->second,
 												 G->myloc.port, 
@@ -232,10 +240,13 @@ runner (db::graph* G)
 							std::endl;
 						}
 						//adding this as a pending request
-						out_req = new mytuple (from_port, prev_req_counter,
-											   loc_iter->second.size());
-						outstanding_req[local_req_counter] = *out_req;
-					}	
+						outstanding_req[local_batch_req_counter].num++;
+						pending_batch[local_req_counter].num =
+							loc_iter->second.size();
+						pending_batch[local_req_counter].counter =
+							local_batch_req_counter;
+					}
+					msg_batch.clear();	
 				} else
 				{ //need to send back nack
 					msg.change_type (message::REACHABLE_REPLY);
@@ -246,22 +257,36 @@ runner (db::graph* G)
 					{
 						std::cerr << "msg send error: " << ret << std::endl;
 					}
+					num_nack--;
 				}
 				break;
 
 			case message::REACHABLE_REPLY:
 				msg.unpack_reachable_rep (&req_counter, &reachable_reply);
-				from_port = outstanding_req[req_counter].port;
-				prev_req_counter = outstanding_req[req_counter].counter;
-				if ((--outstanding_req[req_counter].num == 0) || reachable_reply)
+				temp1 = pending_batch[req_counter].counter;
+				pending_batch.erase (req_counter);
+				--outstanding_req[temp1].num;
+				from_port = outstanding_req[temp1].port;
+				prev_req_counter = outstanding_req[temp1].counter;
+				/*
+				 * check if this is the last expected reply for this batched request
+				 * and we got all negative replies till now
+				 * or this is a positive reachable reply
+				 */
+				if (((outstanding_req[temp1].num == 0) || reachable_reply)
+					&& !outstanding_req[temp1].reachable)
 				{
-					outstanding_req.erase (req_counter);
+					outstanding_req[temp1].reachable |= reachable_reply;
 					msg.prep_reachable_rep (prev_req_counter, reachable_reply);
 					remote = new po6::net::location (IP_ADDR, from_port);
 					if ((ret = G->bb.send (*remote, msg.buf)) != BUSYBEE_SUCCESS)
 					{
 						std::cerr << "msg send error: " << ret << std::endl;
 					}
+				}
+				if (outstanding_req[temp1].num == 0)
+				{
+					outstanding_req.erase (temp1);
 				}
 				break;
 

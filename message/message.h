@@ -202,6 +202,7 @@ namespace message
 	inline int
 	message :: prep_node_update (db::element::property p)
 	{
+		/*
 		uint32_t index = BUSYBEE_HEADER_SIZE;
 		e::buffer *b;
 		size_t ctr, len_key, len_value;
@@ -231,6 +232,8 @@ namespace message
 			buf->pack_at (index) << p.value[ctr];
 		}
 		return 0;
+		*/
+		return -1;
 	}
 
 	inline int
@@ -284,6 +287,7 @@ namespace message
 	inline int
 	message :: unpack_node_update (db::element::property **p)
 	{
+		/*
 		uint32_t index = BUSYBEE_HEADER_SIZE;
 		uint32_t _type;
 		char *key, *value;
@@ -311,6 +315,8 @@ namespace message
 		}
 		*p = new db::element::property (key, value);
 		return 0;
+		*/
+		return -1;
 	}
 
 	inline int

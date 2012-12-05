@@ -16,6 +16,9 @@
  * =====================================================================================
  */
 
+//C
+#include <unistd.h>
+
 //C++
 #include <iostream>
 #include <time.h>
@@ -29,6 +32,10 @@
 //Weaver
 #include "central.h"
 #include "../message/message.h"
+
+#define NUM_NODES 1000
+#define NUM_EDGES 1500
+#define NUM_REQUESTS 100
 
 void*
 create_edge (void *mem_addr1, void *mem_addr2, 
@@ -172,33 +179,46 @@ main (int argc, char* argv[])
 {
 	central_coordinator::central server;
 	void *mem_addr1, *mem_addr2, *mem_addr3, *mem_addr4;
-	int i, num_nodes = 10, num_edges = 8;
+	int i;
 	std::vector<void *> nodes;
 
-	for (i = 0; i < num_nodes; i++)
+	
+	for (i = 0; i < NUM_NODES; i++)
 	{
 		nodes.push_back (create_node (&server));
+		usleep(1);
 	}
 	srand (time (NULL));
-	for (i = 0; i < num_edges; i++)
+	for (i = 0; i < NUM_EDGES; i++)
 	{
-		int first = rand() % num_nodes;
-		int second = rand() % num_nodes;
+		int first = rand() % NUM_NODES;
+		int second = rand() % NUM_NODES;
 		while (second == first) //no self-loop edges
 		{
-			second = rand() % num_nodes;
+			second = rand() % NUM_NODES;
 		}
 		create_edge (nodes[first], nodes[second], &server);
+		usleep(1);
 	}
-	//mem_addr1 = create_node (&server);
-	//mem_addr2 = create_node (&server);
-	//mem_addr3 = create_node (&server);
-	//mem_addr4 = create_node (&server);
-	//create_edge (mem_addr1, mem_addr2, &server);
-	//create_edge (mem_addr2, mem_addr3, &server);
-	//create_edge (mem_addr3, mem_addr4, &server);
-	for (i = 0; i < 10; i++)
-		reachability_request (nodes[rand() % num_nodes], nodes[rand() % num_nodes], &server);
+	usleep (1000);
+	for (i = 0; i < NUM_REQUESTS; i++)
+	{
+		reachability_request (nodes[rand() % NUM_NODES], nodes[rand() %
+							  NUM_NODES], &server);
+	}
+	/*
+	mem_addr1 = create_node (&server);
+	mem_addr2 = create_node (&server);
+	mem_addr3 = create_node (&server);
+	mem_addr4 = create_node (&server);
+	create_edge (mem_addr1, mem_addr2, &server);
+	create_edge (mem_addr2, mem_addr3, &server);
+	create_edge (mem_addr2, mem_addr4, &server);
+	reachability_request (mem_addr1, mem_addr4, &server);
+	*/
+	
+	
+	std::cin >> i;
 
 	while (0) {
 	uint32_t choice;

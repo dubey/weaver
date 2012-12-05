@@ -51,7 +51,7 @@ namespace element
 		public:
 			void add_property (property prop);
 			void remove_property (property prop);
-			int get_prop_value (char* _key, char** _value);
+			//int get_prop_value (char* _key, char** _value);
 			bool has_property (property prop);
 			meta_element get_meta_element ();
 			
@@ -84,6 +84,7 @@ namespace element
 		properties.erase (iter);
 	}
 
+	/*
 	int
 	element :: get_prop_value (char* _key, char** _value)
 	{
@@ -99,11 +100,13 @@ namespace element
 		}
 		return -1;
 	}
+	*/
 
 	bool
 	element :: has_property (property prop)
 	{
 		std::vector<property>::iterator iter;
+		int i = 0;
 		for (iter = properties.begin(); iter<properties.end(); iter++)
 		{
 			if (prop == *iter) 
