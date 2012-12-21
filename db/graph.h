@@ -31,6 +31,7 @@
 
 //po6
 #include <po6/net/location.h>
+#include <po6/threads/mutex.h>
 
 //Busybee
 #include <busybee_sta.h>
@@ -41,6 +42,7 @@
 #include "element/node.h"
 #include "element/edge.h"
 
+#define SEND_PORT_INCR 1000
 namespace db
 {
 	class graph
@@ -51,14 +53,19 @@ namespace db
 		private:
 			std::vector<element::node *> V;
 			std::vector<element::edge *> E;
+			po6::threads::mutex elem_lock;
 
 		public:
 			int node_count;
 			po6::net::location myloc;
 			busybee_sta bb;
+			busybee_sta bb_recv;
+			po6::threads::mutex bb_lock;
 			element::node* create_node (uint32_t time);
-			element::edge* create_edge (element::meta_element* n1,
-				element::meta_element* n2, uint32_t direction, uint32_t time);
+			element::edge* create_edge (std::unique_ptr<element::meta_element> n1,
+										std::unique_ptr<element::meta_element> n2, 
+										uint32_t direction, 
+										uint32_t time);
 			bool mark_visited (element::node *n, uint32_t req_counter);
 			//void delete_node (element::node 
 			//bool find_node (element::node **n);
@@ -71,7 +78,8 @@ namespace db
 	graph :: graph (const char* ip_addr, in_port_t port)
 		: node_count (0)
 		, myloc (ip_addr, port)
-		, bb (myloc.address, myloc.port, 0)
+		, bb (myloc.address, myloc.port + SEND_PORT_INCR, 0)
+		, bb_recv (myloc.address, myloc.port, 0)
 	{
 	}
 
@@ -79,7 +87,9 @@ namespace db
 	graph :: create_node (uint32_t time)
 	{
 		element::node* new_node = new element::node (myloc, time, NULL);
+		elem_lock.lock();
 		V.push_back (new_node);
+		elem_lock.unlock();
 		
 		std::cout << "Creating node, addr = " << (void*) new_node 
 				  << " and node count " << (++node_count) << std::endl;
@@ -87,11 +97,14 @@ namespace db
 	}
 
 	inline element::edge*
-	graph :: create_edge (element::meta_element* n1, element::meta_element* n2,
-		uint32_t direction, uint32_t time)
+	graph :: create_edge (std::unique_ptr<element::meta_element> n1,
+						  std::unique_ptr<element::meta_element> n2,
+						  uint32_t direction, 
+						  uint32_t time)
 	{
 		element::node *local_node = (element::node *) n1->get_addr();
 		element::edge *new_edge;
+		elem_lock.lock();
 		if (direction == 0) 
 		{
 			new_edge = new element::edge (myloc, time, NULL, *n1, *n2);
@@ -103,9 +116,11 @@ namespace db
 		} else
 		{
 			std::cerr << "edge direction error: " << direction << std::endl;
+			elem_lock.unlock();
 			return NULL;
 		}
 		E.push_back (new_edge);
+		elem_lock.unlock();
 
 		std::cout << "Creating edge, addr = " << (void *) new_edge << std::endl;
 		return new_edge;
@@ -125,10 +140,15 @@ namespace db
 				  << "," << value << " " ;
 		*/
 		element::property p (key, req_counter);
-		if (n->has_property (p)) {
+		elem_lock.lock();
+		if (n->has_property (p)) 
+		{
+			elem_lock.unlock();
 			return true;
-		} else {
+		} else 
+		{
 			n->add_property (p);
+			elem_lock.unlock();
 			return false;
 		}
 	}

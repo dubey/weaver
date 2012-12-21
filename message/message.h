@@ -66,6 +66,7 @@ namespace message
 	{
 		public:
 			message (enum msg_type t);
+			message (message& copy);
 
 		public:
 			enum msg_type type;
@@ -115,6 +116,13 @@ namespace message
 	{
 	}
 
+	inline 
+	message :: message (message& copy)
+		: type (copy.type)
+	{
+		buf = copy.buf;
+	}
+
 	inline void
 	message :: change_type (enum msg_type t)
 	{
@@ -147,7 +155,8 @@ namespace message
 		e::buffer *b;
 		uint32_t port32;
 		
-		if (type != EDGE_CREATE_REQ) {
+		if (type != EDGE_CREATE_REQ) 
+		{
 			return -1;
 		}
 		b = e::buffer::create (BUSYBEE_HEADER_SIZE +

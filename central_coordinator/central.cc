@@ -43,9 +43,9 @@ create_edge (void *mem_addr1, void *mem_addr2,
 {
 	central_coordinator::graph_elem *elem;
 	central_coordinator::graph_elem *elem1 = 
-		(central_coordinator::graph_elem *) mem_addr1;
+			(central_coordinator::graph_elem *) mem_addr1;
 	central_coordinator::graph_elem *elem2 = 
-		(central_coordinator::graph_elem *) mem_addr2;
+			(central_coordinator::graph_elem *) mem_addr2;
 	po6::net::location send_loc1 (elem1->loc1);
 	po6::net::location send_loc2 (elem2->loc1);
 	enum message::edge_direction dir = message::FIRST_TO_SECOND;
@@ -53,7 +53,7 @@ create_edge (void *mem_addr1, void *mem_addr2,
 	busybee_returncode ret;
 
 	msg.prep_edge_create ((size_t) elem1->mem_addr1, (size_t) elem2->mem_addr1,
-		elem2->loc1, dir);
+						  elem2->loc1, dir);
 	if ((ret = server->bb.send (send_loc1, msg.buf)) != BUSYBEE_SUCCESS)
 	{
 		std::cerr << "msg send error: " << ret << std::endl;
@@ -69,7 +69,7 @@ create_edge (void *mem_addr1, void *mem_addr2,
 	dir = message::SECOND_TO_FIRST;
 	msg.change_type (message::EDGE_CREATE_REQ);
 	msg.prep_edge_create ((size_t) elem2->mem_addr1, (size_t) elem1->mem_addr1, 
-		elem1->loc1, dir);
+						  elem1->loc1, dir);
 	if ((ret = server->bb.send (send_loc2, msg.buf)) != BUSYBEE_SUCCESS) 
 	{
 		std::cerr << "msg send error: " << ret << std::endl;
@@ -83,7 +83,7 @@ create_edge (void *mem_addr1, void *mem_addr2,
 	msg.unpack_create_ack (&mem_addr2);
 
 	elem = new central_coordinator::graph_elem (elem1->loc1, elem2->loc1, 
-		mem_addr1, mem_addr2);
+												mem_addr1, mem_addr2);
 	server->elements.push_back (elem);
 			
 	std::cout << "Edge id is " << (void *) elem << std::endl;
@@ -119,16 +119,14 @@ create_node (central_coordinator::central *server)
 		std::cerr << "msg recv error: " << ret << std::endl;
 		return NULL;
 	}
-	//std::cout << "Got back confirmation from port " << temp_loc->port <<
-	//	std::endl;
 	temp_loc = new po6::net::location (LOCAL_IPADDR, server->port_ctr);
 	msg.unpack_create_ack (&mem_addr1);
 	elem = new central_coordinator::graph_elem (*temp_loc, *temp_loc, mem_addr1,
-		mem_addr1);
+												mem_addr1);
 	server->elements.push_back (elem);
 	
-	std::cout << "Node id is " << (void *) elem << " at port " << 
-		elem->loc1.port << " " << elem->loc2.port << std::endl;
+	std::cout << "Node id is " << (void *) elem << " at port " 
+			  << elem->loc1.port << " " << elem->loc2.port << std::endl;
 	return (void *) elem;
 } //end create node
 
@@ -142,9 +140,9 @@ reachability_request (void *mem_addr1, void *mem_addr2,
 	bool is_reachable;
 	po6::net::location rec_loc (LOCAL_IPADDR, CENTRAL_PORT);
 	central_coordinator::graph_elem *elem1 = 
-		(central_coordinator::graph_elem *) mem_addr1;
+			(central_coordinator::graph_elem *) mem_addr1;
 	central_coordinator::graph_elem *elem2 = 
-		(central_coordinator::graph_elem *) mem_addr2;
+			(central_coordinator::graph_elem *) mem_addr2;
 	message::message msg(message::REACHABLE_PROP);
 	busybee_returncode ret;
 	std::vector<size_t> src;
@@ -152,10 +150,12 @@ reachability_request (void *mem_addr1, void *mem_addr2,
 	req_counter++;
 	src.push_back ((size_t)elem1->mem_addr1);
 	std::cout << "Reachability request number " << req_counter << " from source"
-		<< " node " << mem_addr1 << " to destination node " << mem_addr2
-		<< std::endl;
+			  << " node " << mem_addr1 << " to destination node " << mem_addr2
+			  << std::endl;
 	if (msg.prep_reachable_prop (src, CENTRAL_PORT, (size_t) elem2->mem_addr1,
-		elem2->loc1.port, req_counter, req_counter) != 0) {
+								 elem2->loc1.port, req_counter, req_counter) 
+		!= 0) 
+	{
 		std::cerr << "invalid msg packing" << std::endl;
 		return;
 	}
@@ -206,17 +206,6 @@ main (int argc, char* argv[])
 		reachability_request (nodes[rand() % NUM_NODES], nodes[rand() %
 							  NUM_NODES], &server);
 	}
-	/*
-	mem_addr1 = create_node (&server);
-	mem_addr2 = create_node (&server);
-	mem_addr3 = create_node (&server);
-	mem_addr4 = create_node (&server);
-	create_edge (mem_addr1, mem_addr2, &server);
-	create_edge (mem_addr2, mem_addr3, &server);
-	create_edge (mem_addr2, mem_addr4, &server);
-	reachability_request (mem_addr1, mem_addr4, &server);
-	*/
-	
 	
 	std::cin >> i;
 

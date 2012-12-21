@@ -37,7 +37,7 @@
 /* This also defines the number of physical servers
  * = MAX_PORT - CENTRAL_PORT
  */
-#define MAX_PORT 5203
+#define MAX_PORT 5201
 
 namespace central_coordinator
 {

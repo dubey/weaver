@@ -1,6 +1,11 @@
 Ripple back ack or nack for reachability request (stress test pending)
 Batch messages in propagating reachability requests (stress test pending)
-Add update functions
-Make new threads for handling each new message
 
+Add update functions
+Make new threads for handling each new reach request (done at each server,
+		pending at central server)
+Make system independent of localhost
+Do not send message if source and dest are same
+
+Check memory leaks using Valgrind
 Cache reachability results

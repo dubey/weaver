@@ -3,7 +3,7 @@ OBJS=graph.o
 LIBS=-L/usr/local/lib
 
 graph:	$(OBJS)
-	g++ -o $@ $(OBJS) $(LIBS) -lbusybee-sta -le -lrt
+	g++ -o $@ $(OBJS) $(LIBS) -lbusybee-sta -le -lrt -pthread
 
 graph.o:	graph.cc
 	g++ $(CFLAGS) -c $<
