@@ -33,8 +33,8 @@
 #include "central.h"
 #include "../message/message.h"
 
-#define NUM_NODES 1000
-#define NUM_EDGES 1500
+#define NUM_NODES 100000
+#define NUM_EDGES 150000
 #define NUM_REQUESTS 100
 
 void*
@@ -86,7 +86,7 @@ create_edge (void *mem_addr1, void *mem_addr2,
 												mem_addr1, mem_addr2);
 	server->elements.push_back (elem);
 			
-	std::cout << "Edge id is " << (void *) elem << std::endl;
+	//std::cout << "Edge id is " << (void *) elem << std::endl;
 	return (void *) elem;
 } //end create edge
 
@@ -125,8 +125,8 @@ create_node (central_coordinator::central *server)
 												mem_addr1);
 	server->elements.push_back (elem);
 	
-	std::cout << "Node id is " << (void *) elem << " at port " 
-			  << elem->loc1.port << " " << elem->loc2.port << std::endl;
+	//std::cout << "Node id is " << (void *) elem << " at port " 
+	//		  << elem->loc1.port << " " << elem->loc2.port << std::endl;
 	return (void *) elem;
 } //end create node
 
@@ -174,6 +174,20 @@ reachability_request (void *mem_addr1, void *mem_addr2,
 		"request " << rec_counter << std::endl;
 } //end reachability request
 
+timespec
+diff (timespec start, timespec end)
+{
+		timespec temp;
+		if ((end.tv_nsec-start.tv_nsec)<0) {
+			temp.tv_sec = end.tv_sec-start.tv_sec-1;
+			temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+		} else {
+			temp.tv_sec = end.tv_sec-start.tv_sec;
+			temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+		}
+		return temp;
+}
+
 int
 main (int argc, char* argv[])
 {
@@ -181,12 +195,13 @@ main (int argc, char* argv[])
 	void *mem_addr1, *mem_addr2, *mem_addr3, *mem_addr4;
 	int i;
 	std::vector<void *> nodes;
-
+	timespec start, end, time_taken;
+	uint32_t time_ms;
 	
+	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &start);	
 	for (i = 0; i < NUM_NODES; i++)
 	{
 		nodes.push_back (create_node (&server));
-		usleep(1);
 	}
 	srand (time (NULL));
 	for (i = 0; i < NUM_EDGES; i++)
@@ -198,15 +213,18 @@ main (int argc, char* argv[])
 			second = rand() % NUM_NODES;
 		}
 		create_edge (nodes[first], nodes[second], &server);
-		usleep(1);
 	}
-	usleep (1000);
 	for (i = 0; i < NUM_REQUESTS; i++)
 	{
 		reachability_request (nodes[rand() % NUM_NODES], nodes[rand() %
 							  NUM_NODES], &server);
 	}
-	
+
+	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &end);	
+	time_taken = diff (start, end);
+	time_ms = time_taken.tv_sec * 1000 + time_taken.tv_nsec/1000000;
+	std::cout << "Time = " << time_ms << std::endl;
+
 	std::cin >> i;
 
 	while (0) {

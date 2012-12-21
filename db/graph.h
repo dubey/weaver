@@ -91,8 +91,8 @@ namespace db
 		V.push_back (new_node);
 		elem_lock.unlock();
 		
-		std::cout << "Creating node, addr = " << (void*) new_node 
-				  << " and node count " << (++node_count) << std::endl;
+		//std::cout << "Creating node, addr = " << (void*) new_node 
+		//		  << " and node count " << (++node_count) << std::endl;
 		return new_node;
 	}
 
@@ -122,7 +122,7 @@ namespace db
 		E.push_back (new_edge);
 		elem_lock.unlock();
 
-		std::cout << "Creating edge, addr = " << (void *) new_edge << std::endl;
+		//std::cout << "Creating edge, addr = " << (void *) new_edge << std::endl;
 		return new_edge;
 	}
 

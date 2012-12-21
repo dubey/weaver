@@ -223,8 +223,6 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 		for (loc_iter = msg_batch.begin(); loc_iter !=
 			 msg_batch.end(); loc_iter++)
 		{
-			static int loop = 0;
-			remote.reset (new po6::net::location (IP_ADDR, loc_iter->first));
 			msg->change_type (message::REACHABLE_PROP);
 			//new batched request
 			local_req_counter_mutex.lock();
@@ -236,17 +234,33 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 									  to_port,
 									  req_counter,
 									  (my_local_req_counter));
-			G->bb_lock.lock();
-			if ((ret = G->bb.send (*remote, msg->buf)) !=
-				BUSYBEE_SUCCESS)
+			if (loc_iter->first == G->myloc.port)
+			{	//no need to send message since it is local
+				std::thread t (handle_reachable_request, G, msg);
+				t.detach();
+			} else
 			{
-				std::cerr << "msg send error: " << ret <<
-				std::endl;
+				static int loop = 0;
+				remote.reset (new po6::net::location (IP_ADDR, loc_iter->first));
+				G->bb_lock.lock();
+				if ((ret = G->bb.send (*remote, msg->buf)) !=
+					BUSYBEE_SUCCESS)
+				{
+					std::cerr << "msg send error: " << ret <<
+					std::endl;
+				}
+				G->bb_lock.unlock();
+				//adding this as a pending request
+				outstanding_req[my_batch_req_counter].num++;
+				pending_batch[my_local_req_counter] = my_batch_req_counter;
 			}
-			G->bb_lock.unlock();
 			//adding this as a pending request
 			outstanding_req[my_batch_req_counter].num++;
 			pending_batch[my_local_req_counter] = my_batch_req_counter;
+		}
+		if (outstanding_req[my_batch_req_counter].num == 0)
+		{	//all messages were local, clean this up
+			outstanding_req.erase (my_batch_req_counter);
 		}
 		msg_batch.clear();	
 	} else
