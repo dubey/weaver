@@ -198,7 +198,6 @@ main (int argc, char* argv[])
 	timespec start, end, time_taken;
 	uint32_t time_ms;
 	
-	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &start);	
 	for (i = 0; i < NUM_NODES; i++)
 	{
 		nodes.push_back (create_node (&server));
@@ -214,13 +213,16 @@ main (int argc, char* argv[])
 		}
 		create_edge (nodes[first], nodes[second], &server);
 	}
+	//clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &start);	
+	clock_gettime (CLOCK_MONOTONIC, &start);	
 	for (i = 0; i < NUM_REQUESTS; i++)
 	{
 		reachability_request (nodes[rand() % NUM_NODES], nodes[rand() %
 							  NUM_NODES], &server);
 	}
+	clock_gettime (CLOCK_MONOTONIC, &end);	
+	//clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &end);	
 
-	clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &end);	
 	time_taken = diff (start, end);
 	time_ms = time_taken.tv_sec * 1000 + time_taken.tv_nsec/1000000;
 	std::cout << "Time = " << time_ms << std::endl;
