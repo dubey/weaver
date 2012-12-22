@@ -51,6 +51,9 @@ class mytuple
 		uint32_t counter; //prev req id
 		int num; //number of requests
 		bool reachable;
+		std::vector<size_t> src_nodes;
+		void *dest_addr;
+		uint16_t dest_port;
 
 		mytuple ()
 		{
@@ -151,6 +154,7 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 			 my_batch_req_counter, //this request's number
 			 my_local_req_counter; //each forward batched req number
 	bool reached = false;
+	void *reach_node = NULL;
 	bool send_msg = false;
 	std::unordered_map<uint16_t, std::vector<size_t>> msg_batch;
 	std::vector<size_t> src_nodes;
@@ -175,22 +179,34 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 	//TODO mem leak! Remove old properties
 	if (!G->mark_visited (n, req_counter))
 	{
-		std::vector<db::element::meta_element>::iterator iter;
-		for (iter = n->out_edges.begin(); iter < n->out_edges.end();
-			 iter++)
+		if (n->cache.entry_exists (to_port, mem_addr2))
 		{
-			db::element::edge *nbr = (db::element::edge *)
-									  iter->get_addr();
-			send_msg = true;
-			if (nbr->to.get_addr() == mem_addr2 &&
-				nbr->to.get_port() == to_port)
-			{	//Done! Send msg back to central server
+			if (n->cache.get_cached_value (to_port, mem_addr2))
+			{	//got true from cached value
 				reached = true;
-				break;
-			} else
-			{ 	//Continue propagating reachability request
-				msg_batch[nbr->to.get_port()].push_back
-					((size_t)nbr->to.get_addr());
+				reach_node = (void *) n;
+			}
+			//got false from cache, nothing to do for this node
+		} else
+		{
+			std::vector<db::element::meta_element>::iterator iter;
+			for (iter = n->out_edges.begin(); iter < n->out_edges.end();
+				 iter++)
+			{
+				db::element::edge *nbr = (db::element::edge *)
+										  iter->get_addr();
+				send_msg = true;
+				if (nbr->to.get_addr() == mem_addr2 &&
+					nbr->to.get_port() == to_port)
+				{	//Done! Send msg back to central server
+					reached = true;
+					reach_node = (void *) n;
+					break;
+				} else
+				{ 	//Continue propagating reachability request
+					msg_batch[nbr->to.get_port()].push_back
+						((size_t)nbr->to.get_addr());
+				}
 			}
 		}
 	} //end if visited
@@ -204,7 +220,8 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 	if (reached)
 	{ 	//need to send back ack
 		msg->change_type (message::REACHABLE_REPLY);
-		msg->prep_reachable_rep (prev_req_counter, true);
+		msg->prep_reachable_rep (prev_req_counter, true, (size_t) reach_node,
+								 G->myloc.port);
 		remote.reset (new po6::net::location (IP_ADDR, from_port));
 		G->bb_lock.lock();
 		if ((ret = G->bb.send (*remote, msg->buf)) != BUSYBEE_SUCCESS)
@@ -220,6 +237,9 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 		outstanding_req[my_batch_req_counter].port = from_port;
 		outstanding_req[my_batch_req_counter].counter = prev_req_counter;
 		outstanding_req[my_batch_req_counter].num = 0;
+		outstanding_req[my_batch_req_counter].src_nodes = src_nodes;
+		outstanding_req[my_batch_req_counter].dest_addr = mem_addr2;
+		outstanding_req[my_batch_req_counter].dest_port = to_port;
 		for (loc_iter = msg_batch.begin(); loc_iter !=
 			 msg_batch.end(); loc_iter++)
 		{
@@ -266,7 +286,7 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 	} else
 	{ 	//need to send back nack
 		msg->change_type (message::REACHABLE_REPLY);
-		msg->prep_reachable_rep (prev_req_counter, false);
+		msg->prep_reachable_rep (prev_req_counter, false, 0, G->myloc.port);
 		remote.reset (new po6::net::location (IP_ADDR, from_port));
 		G->bb_lock.lock();
 		if ((ret = G->bb.send (*remote, msg->buf)) != BUSYBEE_SUCCESS)
@@ -284,14 +304,50 @@ handle_reachable_reply (db::graph *G, std::shared_ptr<message::message> msg)
 	uint32_t my_local_req_counter, my_batch_req_counter, prev_req_counter;
 	bool reachable_reply;
 	uint16_t from_port;
+	size_t reach_node, prev_reach_node;
+	uint16_t reach_port;
+	db::element::node *n;
 	std::unique_ptr<po6::net::location> remote;
 
-	msg->unpack_reachable_rep (&my_local_req_counter, &reachable_reply);
+	msg->unpack_reachable_rep (&my_local_req_counter, 
+							   &reachable_reply,
+							   &reach_node,
+							   &reach_port);
 	my_batch_req_counter = pending_batch[my_local_req_counter];
 	pending_batch.erase (my_local_req_counter);
 	--outstanding_req[my_batch_req_counter].num;
 	from_port = outstanding_req[my_batch_req_counter].port;
 	prev_req_counter = outstanding_req[my_batch_req_counter].counter;
+	
+	if (reachable_reply)
+	{	//caching positive result
+		std::vector<size_t>::iterator node_iter;
+		std::vector<size_t> src_nodes =
+				outstanding_req[my_batch_req_counter].src_nodes;
+		for (node_iter = src_nodes.begin(); node_iter < src_nodes.end();
+			 node_iter++)
+		{
+			std::vector<db::element::meta_element>::iterator iter;
+			n = (db::element::node *) (*node_iter);
+			for (iter = n->out_edges.begin(); iter < n->out_edges.end();
+				 iter++)
+			{
+				db::element::edge *nbr = (db::element::edge *)
+									  	  iter->get_addr();
+				if ((nbr->to.get_addr() == (void *)reach_node) &&
+					(nbr->to.get_port() == reach_port))
+				{
+					n->cache.insert_entry (
+						outstanding_req[my_batch_req_counter].dest_port,
+						outstanding_req[my_batch_req_counter].dest_addr,
+						true);
+					prev_reach_node = (size_t) n;
+					break;
+				}
+			}
+		}
+	}
+
 	/*
 	 * check if this is the last expected reply for this batched request
 	 * and we got all negative replies till now
@@ -301,7 +357,10 @@ handle_reachable_reply (db::graph *G, std::shared_ptr<message::message> msg)
 		&& !outstanding_req[my_batch_req_counter].reachable)
 	{
 		outstanding_req[my_batch_req_counter].reachable |= reachable_reply;
-		msg->prep_reachable_rep (prev_req_counter, reachable_reply);
+		msg->prep_reachable_rep (prev_req_counter, 
+								 reachable_reply,
+								 prev_reach_node,
+								 G->myloc.port);
 		remote.reset (new po6::net::location (IP_ADDR, from_port));
 		G->bb_lock.lock();
 		if ((ret = G->bb.send (*remote, msg->buf)) != BUSYBEE_SUCCESS)
@@ -310,8 +369,26 @@ handle_reachable_reply (db::graph *G, std::shared_ptr<message::message> msg)
 		}
 		G->bb_lock.unlock();
 	}
+
 	if (outstanding_req[my_batch_req_counter].num == 0)
 	{
+		if (!outstanding_req[my_batch_req_counter].reachable)
+		{	//cache negative result
+			std::vector<size_t>::iterator node_iter;
+			std::vector<size_t> src_nodes =
+					outstanding_req[my_batch_req_counter].src_nodes;
+			for (node_iter = src_nodes.begin(); 
+				 node_iter < src_nodes.end();
+				 node_iter++)
+			{
+				std::vector<db::element::meta_element>::iterator iter;
+				n = (db::element::node *) (*node_iter);
+				n->cache.insert_entry (
+					outstanding_req[my_batch_req_counter].dest_port,
+					outstanding_req[my_batch_req_counter].dest_addr,
+					false);
+			}
+		}
 		outstanding_req.erase (my_batch_req_counter);
 	}
 } //end reachable_reply

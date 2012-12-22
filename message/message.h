@@ -92,9 +92,14 @@ namespace message
 			int prep_edge_create_ack (size_t mem_addr);
 			int prep_create_ack (size_t mem_addr);
 			int unpack_create_ack (void **mem_addr);
-			int prep_reachable_rep (uint32_t req_counter, bool is_reachable);
-			int unpack_reachable_rep (uint32_t *req_counter, bool
-									  *is_reachable);
+			int prep_reachable_rep (uint32_t req_counter, 
+									bool is_reachable,
+									size_t src_node,
+									uint16_t src_port);
+			int unpack_reachable_rep (uint32_t *req_counter, 
+									  bool *is_reachable,
+									  size_t *src_node,
+									  uint16_t *src_port);
 			//TODO: Add update and reachability functions
 			int prep_reachable_prop (std::vector<size_t> src_nodes,
 									 uint16_t src_port,
@@ -272,7 +277,10 @@ namespace message
 	}
 
 	inline int
-	message :: prep_reachable_rep (uint32_t req_counter, bool is_reachable)
+	message :: prep_reachable_rep (uint32_t req_counter, 
+								   bool is_reachable,
+								   size_t src_node,
+								   uint16_t src_port)
 	{
 		uint32_t index = BUSYBEE_HEADER_SIZE;
 		e::buffer *b;
@@ -284,12 +292,14 @@ namespace message
 		b = e::buffer::create (BUSYBEE_HEADER_SIZE +
 			sizeof (enum msg_type) +
 			sizeof (uint32_t) +
-			sizeof (uint32_t));
+			sizeof (uint32_t) +
+			sizeof (size_t) +
+			sizeof (uint16_t));
 		buf.reset (b);
 
 		buf->pack_at (index) << type;
 		index += sizeof (enum msg_type);
-		buf->pack_at (index) << req_counter << temp;
+		buf->pack_at (index) << req_counter << temp << src_node << src_port;
 		return 0;
 	}
 
@@ -355,12 +365,17 @@ namespace message
 	}
 
 	inline int
-	message :: unpack_reachable_rep (uint32_t *req_counter, bool *is_reachable)
+	message :: unpack_reachable_rep (uint32_t *req_counter, 
+									 bool *is_reachable,
+									 size_t *src_node,
+									 uint16_t *src_port)
 	{
 		uint32_t index = BUSYBEE_HEADER_SIZE;
 		uint32_t _type;
 		uint32_t r_count;
 		uint32_t reachable;
+		size_t s_node;
+		uint16_t s_port;
 
 		buf->unpack_from (index) >> _type;
 		if (_type != REACHABLE_REPLY) {
@@ -369,9 +384,11 @@ namespace message
 		type = REACHABLE_REPLY;
 
 		index += sizeof (enum msg_type);
-		buf->unpack_from (index) >> r_count >> reachable;
+		buf->unpack_from (index) >> r_count >> reachable >> s_node >> s_port;
 		*req_counter = r_count;
 		*is_reachable = (bool) reachable;
+		*src_node = s_node;
+		*src_port = s_port;
 		return 0;
 	}
 

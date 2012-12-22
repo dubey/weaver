@@ -33,8 +33,8 @@
 #include "central.h"
 #include "../message/message.h"
 
-#define NUM_NODES 100000
-#define NUM_EDGES 150000
+#define NUM_NODES 1000
+#define NUM_EDGES 1500
 #define NUM_REQUESTS 100
 
 void*
@@ -146,6 +146,8 @@ reachability_request (void *mem_addr1, void *mem_addr2,
 	message::message msg(message::REACHABLE_PROP);
 	busybee_returncode ret;
 	std::vector<size_t> src;
+	size_t src_node;
+	uint16_t src_port;
 
 	req_counter++;
 	src.push_back ((size_t)elem1->mem_addr1);
@@ -169,7 +171,7 @@ reachability_request (void *mem_addr1, void *mem_addr2,
 		std::cerr << "msg recv error: " << ret << std::endl;
 		return;
 	}
-	msg.unpack_reachable_rep (&rec_counter, &is_reachable);
+	msg.unpack_reachable_rep (&rec_counter, &is_reachable, &src_node, &src_port);
 	std::cout << "Reachable reply is " << is_reachable << " for " << 
 		"request " << rec_counter << std::endl;
 } //end reachability request

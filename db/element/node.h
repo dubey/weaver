@@ -30,6 +30,7 @@
 
 //GraphDB
 #include "element.h"
+#include "../cache/cache.h"
 
 namespace db
 {
@@ -45,6 +46,7 @@ namespace element
 		public:
 			std::vector<meta_element> out_edges;
 			std::vector<meta_element> in_edges;
+			cache::reach_cache cache;
 	};
 
 	inline
