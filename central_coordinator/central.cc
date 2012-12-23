@@ -35,7 +35,7 @@
 
 #define NUM_NODES 100000
 #define NUM_EDGES 150000
-#define NUM_REQUESTS 100000
+#define NUM_REQUESTS 1000
 
 void*
 create_edge (void *mem_addr1, void *mem_addr2, 
@@ -220,8 +220,9 @@ main (int argc, char* argv[])
 	clock_gettime (CLOCK_MONOTONIC, &start);	
 	for (i = 0; i < NUM_REQUESTS; i++)
 	{
-		reachability_request (nodes[rand() % NUM_NODES], nodes[rand() %
-							  NUM_NODES], &server);
+		reachability_request (nodes[rand() % 10 + NUM_NODES/2], 
+							  nodes[rand() % 10 + NUM_NODES/2], 
+							  &server);
 	}
 	clock_gettime (CLOCK_MONOTONIC, &end);	
 	//clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &end);	

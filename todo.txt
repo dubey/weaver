@@ -1,10 +1,11 @@
 Make new threads for handling each new reach request (done at each server,
 		pending at central server)
+
 Do not send message if source and dest are same (done, but have to eliminate
 		message packing altogether)
-
 Cache reachability results (basic, no invalidation)
+
 Add update functions
 Make system independent of localhost
 
-Check memory leaks using Valgrind
+Check memory leaks using valgrind

@@ -195,10 +195,15 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 		n->cache_mutex.lock();
 		if (n->cache.entry_exists (to_port, mem_addr2))
 		{
+			std::cout << "Serving request from cache as " ;
 			if (n->cache.get_cached_value (to_port, mem_addr2))
 			{	//got true from cached value
 				reached = true;
 				reach_node = (void *) n;
+				std::cout << "true" << std::endl;
+			} else
+			{
+				std::cout << "false" << std::endl;
 			}
 			n->cache_mutex.unlock();
 			//got false from cache, nothing to do for this node
