@@ -67,6 +67,7 @@ namespace db
 										uint32_t direction, 
 										uint32_t time);
 			bool mark_visited (element::node *n, uint32_t req_counter);
+			bool remove_visited (element::node *n, uint32_t req_counter);
 			//void delete_node (element::node 
 			//bool find_node (element::node **n);
 			//bool find_edge (element::edge **e);
@@ -141,9 +142,9 @@ namespace db
 		*/
 		element::property p (key, req_counter);
 		elem_lock.lock();
-		if (n->has_property (p)) 
+		if (n->has_property(p)) 
 		{
-			elem_lock.unlock();
+			elem_lock.unlock ();
 			return true;
 		} else 
 		{
@@ -151,6 +152,16 @@ namespace db
 			elem_lock.unlock();
 			return false;
 		}
+	}
+
+	inline bool
+	graph :: remove_visited (element::node *n, uint32_t req_counter)
+	{
+		uint32_t key = 0; //visited key
+		element::property p (key, req_counter);
+		elem_lock.lock();
+		n->remove_property (p);
+		elem_lock.unlock();
 	}
 
 } //namespace db

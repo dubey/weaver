@@ -33,9 +33,9 @@
 #include "central.h"
 #include "../message/message.h"
 
-#define NUM_NODES 1000
-#define NUM_EDGES 1500
-#define NUM_REQUESTS 100
+#define NUM_NODES 100000
+#define NUM_EDGES 150000
+#define NUM_REQUESTS 100000
 
 void*
 create_edge (void *mem_addr1, void *mem_addr2, 
@@ -98,6 +98,7 @@ create_node (central_coordinator::central *server)
 	central_coordinator::graph_elem *elem;
 	void *mem_addr1;
 	message::message msg (message::NODE_CREATE_REQ);
+	static int node_cnt = 0;
 	server->port_ctr = (server->port_ctr + 1) % (MAX_PORT+1);
 	if (server->port_ctr == 0) 
 	{
@@ -126,7 +127,7 @@ create_node (central_coordinator::central *server)
 	server->elements.push_back (elem);
 	
 	//std::cout << "Node id is " << (void *) elem << " at port " 
-	//		  << elem->loc1.port << " " << elem->loc2.port << std::endl;
+	//		  << elem->loc1.port << " " << (node_cnt++) << std::endl;
 	return (void *) elem;
 } //end create node
 

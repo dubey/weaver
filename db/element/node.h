@@ -27,6 +27,7 @@
 
 //po6
 #include <po6/net/location.h>
+#include <po6/threads/mutex.h>
 
 //GraphDB
 #include "element.h"
@@ -47,6 +48,7 @@ namespace element
 			std::vector<meta_element> out_edges;
 			std::vector<meta_element> in_edges;
 			cache::reach_cache cache;
+			po6::threads::mutex cache_mutex;
 	};
 
 	inline

@@ -79,9 +79,10 @@ namespace element
 	inline void
 	element :: remove_property (property prop)
 	{
-		std::vector<property>::iterator iter;
-		iter = std::find (properties.begin(), properties.end(), prop);
-		properties.erase (iter);
+		std::vector<property>::iterator iter = std::remove (properties.begin(),
+															properties.end(),
+															prop);
+		properties.erase (iter, properties.end());
 	}
 
 	/*
