@@ -412,6 +412,11 @@ handle_reachable_reply (db::graph *G, std::shared_ptr<message::message> msg)
 			std::vector<db::element::meta_element>::iterator iter;
 			n = (db::element::node *) (*node_iter);
 			G->remove_visited (n, my_batch_req_counter);
+			/*
+			 * TODO:
+			 * Caching negative results is tricky, because we don't
+			 * know whether its truly a negative result or it was
+			 * because the next node was visited by someone else
 			if (!outstanding_req[my_batch_req_counter].reachable)
 			{	//cache negative result
 				n->cache_mutex.lock();
@@ -421,6 +426,7 @@ handle_reachable_reply (db::graph *G, std::shared_ptr<message::message> msg)
 					false);
 				n->cache_mutex.unlock();
 			}
+			*/
 		}
 		//delete batch request
 		outstanding_req[my_batch_req_counter].mutex.unlock();
