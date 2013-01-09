@@ -3,7 +3,7 @@
  *
  *       Filename:  threadpool.h
  *
- *    Description:  Generic thread pool
+ *    Description:  Thread pool for all servers except central.
  *
  *        Version:  1.0
  *        Created:  01/09/2013 12:00:30 PM
