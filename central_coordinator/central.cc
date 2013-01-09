@@ -35,7 +35,7 @@
 
 #define NUM_NODES 100000
 #define NUM_EDGES 150000
-#define NUM_REQUESTS 1000
+#define NUM_REQUESTS 100
 
 void*
 create_edge (void *mem_addr1, void *mem_addr2, 

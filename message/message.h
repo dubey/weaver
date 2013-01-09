@@ -86,7 +86,7 @@ namespace message
 				to_port, uint32_t req_counter);
 			int unpack_reachable_req (void **from_node, void **to_node, uint16_t
 				*to_port, uint32_t *req_counter);
-			//TODO: Add update and reachability functions
+			//TODO: Add update functions
 			//Other servers to central server
 			int prep_node_create_ack (size_t mem_addr);
 			int prep_edge_create_ack (size_t mem_addr);
@@ -100,7 +100,7 @@ namespace message
 									  bool *is_reachable,
 									  size_t *src_node,
 									  uint16_t *src_port);
-			//TODO: Add update and reachability functions
+			//TODO: Add update functions
 			int prep_reachable_prop (std::vector<size_t> src_nodes,
 									 uint16_t src_port,
 									 size_t to_node, 

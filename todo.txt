@@ -1,9 +1,9 @@
-Make new threads for handling each new reach request (done at each server,
-		pending at central server)
+Do not send message if source and dest are same (done)
+Cache reachability results (basic, no invalidation, only caching positive
+results)
 
-Do not send message if source and dest are same (done, but have to eliminate
-		message packing altogether)
-Cache reachability results (basic, no invalidation)
+Make new threads for handling each new reach request (done at each server,
+pending at central server) - need to change to thread pool (done).
 
 Add update functions
 Make system independent of localhost

@@ -40,9 +40,11 @@
 //Weaver
 #include "graph.h"
 #include "../message/message.h"
+#include "threadpool/threadpool.h"
 
 #define IP_ADDR "127.0.0.1"
 #define PORT_BASE 5200
+#define NUM_THREADS 8
 
 class batch_tuple
 {
@@ -93,7 +95,7 @@ std::unordered_map<uint32_t, batch_tuple> outstanding_req;
 std::unordered_map<uint32_t, uint32_t> pending_batch;
 
 void
-handle_create_node (db::graph *G)
+handle_create_node (db::graph *G, std::shared_ptr<message::message> m)
 {
 	db::element::node *n = G->create_node (0);
 	message::message msg (message::NODE_CREATE_ACK);
@@ -446,6 +448,8 @@ runner (db::graph *G)
 	uint32_t code;
 	enum message::msg_type mtype;
 	std::shared_ptr<message::message> rec_msg;
+	db::thread::pool thread_pool (NUM_THREADS);
+	std::unique_ptr<db::thread::unstarted_thread> thr;
 	std::unique_ptr<std::thread> t;
 
 	uint32_t loop_count = 0;
@@ -465,27 +469,47 @@ runner (db::graph *G)
 		switch (mtype)
 		{
 			case message::NODE_CREATE_REQ:
-				handle_create_node (G);
+				thr.reset (new db::thread::unstarted_thread (
+					handle_create_node,
+					G,
+					NULL));
+				thread_pool.add_request (*thr);
+				//handle_create_node (G);
 				//t.reset (new std::thread (handle_create_node, G));
 				//t->detach();
 				break;
 
 			case message::EDGE_CREATE_REQ:
-				handle_create_edge (G, rec_msg);
+				thr.reset (new db::thread::unstarted_thread (
+					handle_create_edge,
+					G,
+					rec_msg));
+				thread_pool.add_request (*thr);
+				//handle_create_edge (G, rec_msg);
 				//t.reset (new std::thread (handle_create_edge, G, rec_msg));
 				//t->detach();
 				break;
 			
 			case message::REACHABLE_PROP:
+				thr.reset (new db::thread::unstarted_thread (
+					handle_reachable_request,
+					G,
+					rec_msg));
+				thread_pool.add_request (*thr);
 				//handle_reachable_request (G, rec_msg);
-				t.reset (new std::thread (handle_reachable_request, G, rec_msg));
-				t->detach();
+				//t.reset (new std::thread (handle_reachable_request, G, rec_msg));
+				//t->detach();
 				break;
 
 			case message::REACHABLE_REPLY:
+				thr.reset (new db::thread::unstarted_thread (
+					handle_reachable_reply,
+					G,
+					rec_msg));
+				thread_pool.add_request (*thr);
 				//handle_reachable_reply (G, rec_msg);
-				t.reset (new std::thread (handle_reachable_reply, G, rec_msg));
-				t->detach();
+				//t.reset (new std::thread (handle_reachable_reply, G, rec_msg));
+				//t->detach();
 				break;
 
 			default:
