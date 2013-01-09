@@ -71,14 +71,13 @@ namespace thread
 
 		public:
 			int num_threads;
-			std::deque<unstarted_thread> queue;
+			std::deque<std::unique_ptr<unstarted_thread>> queue;
 			std::vector<std::thread> threads;
 			po6::threads::mutex queue_mutex;
 			po6::threads::cond empty_queue_cond;
-			void thread_loop1 ();
 		
 		public:
-			void add_request (unstarted_thread t);
+			void add_request (std::unique_ptr<unstarted_thread> t);
 	};
 
 	inline
@@ -95,44 +94,22 @@ namespace thread
 		}
 	}
 
-	void
-	pool :: thread_loop1 ()
-	{
-		unstarted_thread thr (NULL, NULL, NULL);
-		while (true)
-		{
-			queue_mutex.lock();
-			while (queue.empty())
-			{
-				empty_queue_cond.wait();
-			}
-			thr = queue.front();
-			queue.pop_front();
-			if (!queue.empty())
-			{
-				empty_queue_cond.signal();
-			}
-			queue_mutex.unlock();
-			(*thr.func) (thr.G, thr.msg);
-		}
-	}
-
 	inline void
-	pool :: add_request (unstarted_thread t)
+	pool :: add_request (std::unique_ptr<unstarted_thread> t)
 	{
 		queue_mutex.lock();
 		if (queue.empty())
 		{
 			empty_queue_cond.signal();
 		}
-		queue.push_back (t);
+		queue.push_back (std::move(t));
 		queue_mutex.unlock();
 	}
 
 	void
 	thread_loop (pool *tpool)
 	{
-		unstarted_thread thr (NULL, NULL, NULL);
+		std::unique_ptr<unstarted_thread> thr;
 		while (true)
 		{
 			tpool->queue_mutex.lock();
@@ -140,14 +117,14 @@ namespace thread
 			{
 				tpool->empty_queue_cond.wait();
 			}
-			thr = tpool->queue.front();
+			thr = std::move(tpool->queue.front());
 			tpool->queue.pop_front();
 			if (!tpool->queue.empty())
 			{
 				tpool->empty_queue_cond.signal();
 			}
 			tpool->queue_mutex.unlock();
-			(*thr.func) (thr.G, thr.msg);
+			(*(thr->func)) (thr->G, thr->msg);
 		}
 	}
 } //namespace thread

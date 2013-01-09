@@ -473,7 +473,7 @@ runner (db::graph *G)
 					handle_create_node,
 					G,
 					NULL));
-				thread_pool.add_request (*thr);
+				thread_pool.add_request (std::move(thr));
 				//handle_create_node (G);
 				//t.reset (new std::thread (handle_create_node, G));
 				//t->detach();
@@ -484,7 +484,7 @@ runner (db::graph *G)
 					handle_create_edge,
 					G,
 					rec_msg));
-				thread_pool.add_request (*thr);
+				thread_pool.add_request (std::move(thr));
 				//handle_create_edge (G, rec_msg);
 				//t.reset (new std::thread (handle_create_edge, G, rec_msg));
 				//t->detach();
@@ -495,7 +495,7 @@ runner (db::graph *G)
 					handle_reachable_request,
 					G,
 					rec_msg));
-				thread_pool.add_request (*thr);
+				thread_pool.add_request (std::move(thr));
 				//handle_reachable_request (G, rec_msg);
 				//t.reset (new std::thread (handle_reachable_request, G, rec_msg));
 				//t->detach();
@@ -506,7 +506,7 @@ runner (db::graph *G)
 					handle_reachable_reply,
 					G,
 					rec_msg));
-				thread_pool.add_request (*thr);
+				thread_pool.add_request (std::move(thr));
 				//handle_reachable_reply (G, rec_msg);
 				//t.reset (new std::thread (handle_reachable_reply, G, rec_msg));
 				//t->detach();
