@@ -43,6 +43,8 @@
 #include "element/edge.h"
 
 #define SEND_PORT_INCR 1000
+#define NUM_THREADS 4
+
 namespace db
 {
 	class graph
