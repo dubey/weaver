@@ -174,16 +174,12 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 	std::unordered_map<uint16_t, std::vector<size_t>> msg_batch;
 	std::vector<size_t> src_nodes;
 	std::vector<size_t>::iterator src_iter;
-
+	
 	src_nodes = msg->unpack_reachable_prop (&from_port, 
 										    &mem_addr2, 
 										    &to_port,
 										    &req_counter, 
 										    &prev_req_counter);
-	//new request received, assigning number
-	batch_req_counter_mutex.lock();
-	my_batch_req_counter = batch_req_counter++;
-	batch_req_counter_mutex.unlock();
 
 	for (src_iter = src_nodes.begin(); src_iter < src_nodes.end();
 		 src_iter++)
@@ -257,21 +253,29 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 		std::unordered_map<uint16_t, std::vector<size_t>>::iterator loc_iter;
 		//need mutex since there can be multiple replies
 		//for same outstanding req
-		outstanding_req[my_batch_req_counter].mutex.lock();
+		//TODO coarse locking for now.
+		batch_req_counter_mutex.lock();
+		my_batch_req_counter = batch_req_counter++;
+		//outstanding_req[my_batch_req_counter].mutex.lock();
+		//batch_req_counter_mutex.unlock();
 		outstanding_req[my_batch_req_counter].port = from_port;
 		outstanding_req[my_batch_req_counter].counter = prev_req_counter;
 		outstanding_req[my_batch_req_counter].num = 0;
 		outstanding_req[my_batch_req_counter].src_nodes = src_nodes;
 		outstanding_req[my_batch_req_counter].dest_addr = mem_addr2;
 		outstanding_req[my_batch_req_counter].dest_port = to_port;
+		//batch_req_counter_mutex.unlock();
 		for (loc_iter = msg_batch.begin(); loc_iter !=
 			 msg_batch.end(); loc_iter++)
 		{
-			msg->change_type (message::REACHABLE_PROP);
+			msg.reset (new message::message (message::REACHABLE_PROP));
 			//new batched request
-			local_req_counter_mutex.lock();
+			//adding this as a pending request
+			outstanding_req[my_batch_req_counter].num++;
+			//local_req_counter_mutex.lock();
 			my_local_req_counter = local_req_counter++;
-			local_req_counter_mutex.unlock();
+			pending_batch[my_local_req_counter] = my_batch_req_counter;
+			//local_req_counter_mutex.unlock();
 			msg->prep_reachable_prop (loc_iter->second,
 									  G->myloc.port, 
 									  (size_t)mem_addr2, 
@@ -286,11 +290,8 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 						G,
 						msg));
 				thread_pool.add_request (std::move(t));
-				//std::thread t (handle_reachable_request, G, msg);
-				//t.detach();
 			} else
 			{
-				static int loop = 0;
 				remote.reset (new po6::net::location (IP_ADDR, loc_iter->first));
 				G->bb_lock.lock();
 				if ((ret = G->bb.send (*remote, msg->buf)) !=
@@ -301,11 +302,9 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 				}
 				G->bb_lock.unlock();
 			}
-			//adding this as a pending request
-			outstanding_req[my_batch_req_counter].num++;
-			pending_batch[my_local_req_counter] = my_batch_req_counter;
 		}
-		outstanding_req[my_batch_req_counter].mutex.unlock();
+		//outstanding_req[my_batch_req_counter].mutex.unlock();
+		batch_req_counter_mutex.unlock();
 		msg_batch.clear();	
 	} else
 	{ 	//need to send back nack
@@ -333,15 +332,17 @@ handle_reachable_reply (db::graph *G, std::shared_ptr<message::message> msg)
 	db::element::node *n;
 	std::unique_ptr<po6::net::location> remote;
 
+	//TODO coarse locking for now.
+	batch_req_counter_mutex.lock();
 	msg->unpack_reachable_rep (&my_local_req_counter, 
 							   &reachable_reply,
 							   &reach_node,
 							   &reach_port);
+	//local_req_counter_mutex.lock();
 	my_batch_req_counter = pending_batch[my_local_req_counter];
-	local_req_counter_mutex.lock();
 	pending_batch.erase (my_local_req_counter);
-	local_req_counter_mutex.unlock();
-	outstanding_req[my_batch_req_counter].mutex.lock();
+	//local_req_counter_mutex.unlock();
+	//outstanding_req[my_batch_req_counter].mutex.lock();
 	--outstanding_req[my_batch_req_counter].num;
 	from_port = outstanding_req[my_batch_req_counter].port;
 	prev_req_counter = outstanding_req[my_batch_req_counter].counter;
@@ -440,14 +441,15 @@ handle_reachable_reply (db::graph *G, std::shared_ptr<message::message> msg)
 			*/
 		}
 		//delete batch request
-		outstanding_req[my_batch_req_counter].mutex.unlock();
-		batch_req_counter_mutex.lock();
+		//outstanding_req[my_batch_req_counter].mutex.unlock();
+		//batch_req_counter_mutex.lock();
 		outstanding_req.erase (my_batch_req_counter);
-		batch_req_counter_mutex.unlock();
+		//batch_req_counter_mutex.unlock();
 	} else
 	{
-		outstanding_req[my_batch_req_counter].mutex.unlock();
+		//outstanding_req[my_batch_req_counter].mutex.unlock();
 	}
+	batch_req_counter_mutex.unlock();
 } //end reachable_reply
 
 void
@@ -459,21 +461,17 @@ runner (db::graph *G)
 	uint32_t code;
 	enum message::msg_type mtype;
 	std::shared_ptr<message::message> rec_msg;
-	//db::thread::pool thread_pool (NUM_THREADS);
 	std::unique_ptr<db::thread::unstarted_thread> thr;
 	std::unique_ptr<std::thread> t;
 
 	uint32_t loop_count = 0;
 	while (1)
 	{
-		//G->bb_lock.lock();
 		if ((ret = G->bb_recv.recv (&sender, &msg.buf)) != BUSYBEE_SUCCESS)
 		{
 			std::cerr << "msg recv error: " << ret << std::endl;
-			//G->bb_lock.unlock();
 			continue;
 		}
-		//G->bb_lock.unlock();
 		rec_msg.reset (new message::message (msg));
 		rec_msg->buf->unpack_from (BUSYBEE_HEADER_SIZE) >> code;
 		mtype = (enum message::msg_type) code;
@@ -485,9 +483,6 @@ runner (db::graph *G)
 					G,
 					NULL));
 				thread_pool.add_request (std::move(thr));
-				//handle_create_node (G);
-				//t.reset (new std::thread (handle_create_node, G));
-				//t->detach();
 				break;
 
 			case message::EDGE_CREATE_REQ:
@@ -496,9 +491,6 @@ runner (db::graph *G)
 					G,
 					rec_msg));
 				thread_pool.add_request (std::move(thr));
-				//handle_create_edge (G, rec_msg);
-				//t.reset (new std::thread (handle_create_edge, G, rec_msg));
-				//t->detach();
 				break;
 			
 			case message::REACHABLE_PROP:
@@ -507,9 +499,6 @@ runner (db::graph *G)
 					G,
 					rec_msg));
 				thread_pool.add_request (std::move(thr));
-				//handle_reachable_request (G, rec_msg);
-				//t.reset (new std::thread (handle_reachable_request, G, rec_msg));
-				//t->detach();
 				break;
 
 			case message::REACHABLE_REPLY:
@@ -518,9 +507,6 @@ runner (db::graph *G)
 					G,
 					rec_msg));
 				thread_pool.add_request (std::move(thr));
-				//handle_reachable_reply (G, rec_msg);
-				//t.reset (new std::thread (handle_reachable_reply, G, rec_msg));
-				//t->detach();
 				break;
 
 			default:
