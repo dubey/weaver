@@ -30,52 +30,52 @@ namespace db
 {
 namespace element
 {
-	class meta_element
-	{
-		public:
-			meta_element (po6::net::location server, uint32_t t_update, 
-				uint32_t t_delete, void *mem_addr);
-		
-		protected:
-			po6::net::location myloc;
-			uint32_t t_u;
-			uint32_t t_d;
-			//The memory address of the element on the physical server
-			void *elem_addr;
-		
-		public:
-			uint32_t get_t_u ();
-			void* get_addr ();
-			uint16_t get_port ();
-	};
+    class meta_element
+    {
+        public:
+            meta_element (po6::net::location server, uint32_t t_update, 
+                uint32_t t_delete, void *mem_addr);
+        
+        protected:
+            po6::net::location myloc;
+            uint32_t t_u;
+            uint32_t t_d;
+            //The memory address of the element on the physical server
+            void *elem_addr;
+        
+        public:
+            uint32_t get_t_u ();
+            void* get_addr ();
+            uint16_t get_port ();
+    };
 
-	inline
-	meta_element :: meta_element (po6::net::location server, uint32_t t_update,
-		uint32_t t_delete, void *mem_addr)
-		: myloc (server)
-		, t_u (t_update)
-		, t_d (t_delete)
-		, elem_addr (mem_addr)
-	{
-	}
+    inline
+    meta_element :: meta_element (po6::net::location server, uint32_t t_update,
+        uint32_t t_delete, void *mem_addr)
+        : myloc (server)
+        , t_u (t_update)
+        , t_d (t_delete)
+        , elem_addr (mem_addr)
+    {
+    }
 
-	inline uint32_t
-	meta_element :: get_t_u ()
-	{
-		return t_u;
-	}
+    inline uint32_t
+    meta_element :: get_t_u ()
+    {
+        return t_u;
+    }
 
-	inline void*
-	meta_element :: get_addr ()
-	{
-		return elem_addr;
-	}
+    inline void*
+    meta_element :: get_addr ()
+    {
+        return elem_addr;
+    }
 
-	inline uint16_t
-	meta_element :: get_port ()
-	{
-		return myloc.port;
-	}
+    inline uint16_t
+    meta_element :: get_port ()
+    {
+        return myloc.port;
+    }
 }
 }
 

@@ -42,32 +42,32 @@
 
 namespace central_coordinator
 {
-	class central
-	{
-		public:
-			central ();
-		private:
-			po6::net::location myloc;
+    class central
+    {
+        public:
+            central ();
+        private:
+            po6::net::location myloc;
 
-		public:
-			busybee_sta bb;
-			busybee_sta rec_bb;
-			uint32_t time;
-			//A list of graph elements, which would probably be some server,
-			//id/address pair
-			int port_ctr;
-			std::vector<central_coordinator::graph_elem *> elements;
-	};
+        public:
+            busybee_sta bb;
+            busybee_sta rec_bb;
+            uint32_t time;
+            //A list of graph elements, which would probably be some server,
+            //id/address pair
+            int port_ctr;
+            std::vector<central_coordinator::graph_elem *> elements;
+    };
 
-	inline
-	central :: central ()
-		: myloc (LOCAL_IPADDR, CENTRAL_PORT)
-		, bb (myloc.address, myloc.port, 0)
-		, rec_bb (myloc.address, CENTRAL_REC_PORT, 0)
-	{
-		time = 0;
-		port_ctr = CENTRAL_PORT;
-	}
+    inline
+    central :: central ()
+        : myloc (LOCAL_IPADDR, CENTRAL_PORT)
+        , bb (myloc.address, myloc.port, 0)
+        , rec_bb (myloc.address, CENTRAL_REC_PORT, 0)
+    {
+        time = 0;
+        port_ctr = CENTRAL_PORT;
+    }
 
 } //namespace central_coordinator
 
