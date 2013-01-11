@@ -244,46 +244,46 @@ reachability_request (void *mem_addr1, void *mem_addr2,
 timespec
 diff (timespec start, timespec end)
 {
-        timespec temp;
-        if ((end.tv_nsec-start.tv_nsec)<0) {
-            temp.tv_sec = end.tv_sec-start.tv_sec-1;
-            temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
-        } else {
-            temp.tv_sec = end.tv_sec-start.tv_sec;
-            temp.tv_nsec = end.tv_nsec-start.tv_nsec;
-        }
-        return temp;
+    timespec temp;
+    if ((end.tv_nsec-start.tv_nsec)<0) {
+        temp.tv_sec = end.tv_sec-start.tv_sec-1;
+        temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+    } else {
+        temp.tv_sec = end.tv_sec-start.tv_sec;
+        temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+    }
+    return temp;
 }
 
 void
 msg_handler (central_coordinator::central *server)
 {
-        busybee_returncode ret;
-        po6::net::location sender (LOCAL_IPADDR, CENTRAL_PORT);
-        message::message msg (message::ERROR);
-        uint32_t code;
-        enum message::msg_type mtype;
-        std::shared_ptr<message::message> rec_msg;
-        central_coordinator::thread::pool thread_pool (NUM_THREADS);
-        std::unique_ptr<central_coordinator::thread::unstarted_thread> thr;
-        
-        while (1)
+    busybee_returncode ret;
+    po6::net::location sender (LOCAL_IPADDR, CENTRAL_PORT);
+    message::message msg (message::ERROR);
+    uint32_t code;
+    enum message::msg_type mtype;
+    std::shared_ptr<message::message> rec_msg;
+    central_coordinator::thread::pool thread_pool (NUM_THREADS);
+    std::unique_ptr<central_coordinator::thread::unstarted_thread> thr;
+    
+    while (1)
+    {
+        if ((ret = server->rec_bb.recv (&sender, &msg.buf)) != BUSYBEE_SUCCESS)
         {
-            if ((ret = server->rec_bb.recv (&sender, &msg.buf)) != BUSYBEE_SUCCESS)
-            {
-                std::cerr << "msg recv error: " << ret << std::endl;
-                continue;
-            }
-            rec_msg.reset (new message::message (msg));
-            rec_msg->buf->unpack_from (BUSYBEE_HEADER_SIZE) >> code;
-            mtype = (enum message::msg_type) code;
-            thr.reset (new central_coordinator::thread::unstarted_thread (
-                handle_pending_req,
-                server,
-                rec_msg,
-                mtype));
-            thread_pool.add_request (std::move (thr));
+            std::cerr << "msg recv error: " << ret << std::endl;
+            continue;
         }
+        rec_msg.reset (new message::message (msg));
+        rec_msg->buf->unpack_from (BUSYBEE_HEADER_SIZE) >> code;
+        mtype = (enum message::msg_type) code;
+        thr.reset (new central_coordinator::thread::unstarted_thread (
+            handle_pending_req,
+            server,
+            rec_msg,
+            mtype));
+        thread_pool.add_request (std::move (thr));
+    }
 }
 
 int
