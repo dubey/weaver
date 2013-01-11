@@ -1,19 +1,15 @@
 /*
- * =====================================================================================
+ * ===============================================================
+ *    Description:  Core graph database functionality for a shard 
+ *                  server
  *
- *       Filename:  graph.cc
- *
- *    Description:  Graph BusyBee loop for each server
- *
- *        Version:  1.0
  *        Created:  Tuesday 16 October 2012 03:03:11  EDT
- *       Revision:  none
- *       Compiler:  gcc
  *
- *         Author:  Ayush Dubey (), dubey@cs.cornell.edu
- *   Organization:  Cornell University
+ *         Author:  Ayush Dubey, dubey@cs.cornell.edu
  *
- * =====================================================================================
+ * Copyright (C) 2013, Cornell University, see the LICENSE file
+ *                     for licensing agreement
+ * ===============================================================
  */
 
 //C
@@ -43,11 +39,16 @@
 #include "threadpool/threadpool.h"
 
 #define IP_ADDR "127.0.0.1"
+#define COORD_IP_ADDR "127.0.0.1" //XXX
+#define MY_IP_ADDR "127.0.0.1" //XXX
 #define PORT_BASE 5200
 
+/*
+ * XXX what is a batch tuple? rename to "request"
+ */
 class batch_tuple
 {
-	public:
+        public:
 		uint16_t port;
 		uint32_t counter; //prev req id
 		int num; //number of requests
@@ -94,6 +95,7 @@ std::unordered_map<uint32_t, batch_tuple> outstanding_req;
 std::unordered_map<uint32_t, uint32_t> pending_batch;
 db::thread::pool thread_pool (NUM_THREADS);
 
+// create a graph node
 void
 handle_create_node (db::graph *G, std::shared_ptr<message::message> m)
 {
@@ -114,8 +116,9 @@ handle_create_node (db::graph *G, std::shared_ptr<message::message> m)
 		return;
 	}
 	G->bb_lock.unlock();
-} //end create_node
+}
 
+// create a graph edge
 void
 handle_create_edge (db::graph *G, std::shared_ptr<message::message> msg)
 {
@@ -153,15 +156,16 @@ handle_create_edge (db::graph *G, std::shared_ptr<message::message> msg)
 	G->bb_lock.unlock();
 	delete remote;
 	delete local;
-} //end create_edge
+}
 
+// XXX ??? check if node XXX can reach node XXX
 void
 handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 {
-	void *mem_addr2;
-	db::element::node *n;
+  void *mem_addr2; //XXX rename
+  db::element::node *n; // XXX?
 	busybee_returncode ret;
-	std::unique_ptr<po6::net::location> remote;
+	std::unique_ptr<po6::net::location> remote; // XXX?
 	uint16_t from_port, //previous node's port
 			 to_port; //target node's port
 	uint32_t req_counter, //central server req counter
@@ -169,12 +173,13 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 			 my_batch_req_counter, //this request's number
 			 my_local_req_counter; //each forward batched req number
 	bool reached = false;
-	void *reach_node = NULL;
-	bool send_msg = false;
+	void *reach_node = NULL; // XXX?
+	bool send_msg = false; // XXX?
 	std::unordered_map<uint16_t, std::vector<size_t>> msg_batch;
 	std::vector<size_t> src_nodes;
 	std::vector<size_t>::iterator src_iter;
-	
+        
+	// get the list of source nodes to check for reachability, as well as the single sink node
 	src_nodes = msg->unpack_reachable_prop (&from_port, 
 										    &mem_addr2, 
 										    &to_port,
@@ -185,9 +190,9 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 		 src_iter++)
 	{
 	static int node_ctr = 0;
-	//no error checking needed here
+	// because the coordinator placed the node's address in the message, we can just cast it back to a pointer
 	n = (db::element::node *) (*src_iter);
-	//old properties removed in handle_reachable_reply()
+	// XXX old properties removed in handle_reachable_reply() XXX what does this mean?
 	if (!G->mark_visited (n, req_counter))
 	{
 		n->cache_mutex.lock();
@@ -195,18 +200,18 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 		{
 			std::cout << "Serving request from cache as " ;
 			if (n->cache.get_cached_value (to_port, mem_addr2))
-			{	//got true from cached value
+			{
+			  //got true from cached value
 				reached = true;
 				reach_node = (void *) n;
 				std::cout << "true" << std::endl;
 			} else
 			{
+			  //got false from cache, nothing to do for this node
 				std::cout << "false" << std::endl;
 			}
 			n->cache_mutex.unlock();
-			//got false from cache, nothing to do for this node
-		} else
-		{
+		} else {
 			n->cache_mutex.unlock();
 			std::vector<db::element::meta_element>::iterator iter;
 			for (iter = n->out_edges.begin(); iter < n->out_edges.end();
@@ -318,8 +323,9 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 		}
 		G->bb_lock.unlock();
 	}
-} //end reachable_request
+}
 
+// XXX
 void
 handle_reachable_reply (db::graph *G, std::shared_ptr<message::message> msg)
 {
@@ -450,8 +456,9 @@ handle_reachable_reply (db::graph *G, std::shared_ptr<message::message> msg)
 		//outstanding_req[my_batch_req_counter].mutex.unlock();
 	}
 	batch_req_counter_mutex.unlock();
-} //end reachable_reply
+} 
 
+// server loop for the shard server
 void
 runner (db::graph *G)
 {
@@ -511,12 +518,11 @@ runner (db::graph *G)
 
 			default:
 				std::cerr << "unexpected msg type " << code << std::endl;
-		
-		} //end switch
+		}
 
-	} //end while
+	}
 
-}// end runner
+}
 
 int
 main (int argc, char* argv[])
