@@ -33,7 +33,7 @@
 
 //Weaver
 #include "central.h"
-#include "../message/message.h"
+#include "common/message.h"
 #include "threadpool/threadpool.h"
 
 #define NUM_NODES 100000
@@ -47,8 +47,8 @@ class pending_req
         int type; //1:edge, 2:node, 3:reach
         void *mem_addr1;
         void *mem_addr2;
-        central_coordinator::graph_elem *elem1;
-        central_coordinator::graph_elem *elem2;
+        coordinator::graph_elem *elem1;
+        coordinator::graph_elem *elem2;
         po6::net::location loc1;
         po6::net::location loc2;
         int num_edge;
@@ -58,13 +58,13 @@ std::unordered_map<uint32_t, pending_req> pending;
 po6::threads::mutex pending_mutex;
 
 void
-handle_pending_req (central_coordinator::central *server,
+handle_pending_req (coordinator::central *server,
                     std::shared_ptr<message::message> msg,
                     enum message::msg_type m_type)
 {
     uint32_t req_num;
     void *mem_addr;
-    central_coordinator::graph_elem *elem;
+    coordinator::graph_elem *elem;
     bool is_reachable;
     size_t src_node;
     uint16_t src_port;
@@ -76,7 +76,7 @@ handle_pending_req (central_coordinator::central *server,
         {
             std::cerr << "invalid msg in NODE_CREATE_ACK" << std::endl;
         }
-        elem = new central_coordinator::graph_elem (pending[req_num].loc1,
+        elem = new coordinator::graph_elem (pending[req_num].loc1,
                                                     pending[req_num].loc2,
                                                     mem_addr,
                                                     mem_addr);
@@ -101,13 +101,13 @@ handle_pending_req (central_coordinator::central *server,
 
 void*
 create_edge (void *mem_addr1, void *mem_addr2, 
-    central_coordinator::central *server)
+    coordinator::central *server)
 {
-    central_coordinator::graph_elem *elem;
-    central_coordinator::graph_elem *elem1 = 
-            (central_coordinator::graph_elem *) mem_addr1;
-    central_coordinator::graph_elem *elem2 = 
-            (central_coordinator::graph_elem *) mem_addr2;
+    coordinator::graph_elem *elem;
+    coordinator::graph_elem *elem1 = 
+            (coordinator::graph_elem *) mem_addr1;
+    coordinator::graph_elem *elem2 = 
+            (coordinator::graph_elem *) mem_addr2;
     po6::net::location send_loc1 (elem1->loc1);
     po6::net::location send_loc2 (elem2->loc1);
     enum message::edge_direction dir = message::FIRST_TO_SECOND;
@@ -144,7 +144,7 @@ create_edge (void *mem_addr1, void *mem_addr2,
     }
     msg.unpack_create_ack (&mem_addr2);
 
-    elem = new central_coordinator::graph_elem (elem1->loc1, elem2->loc1, 
+    elem = new coordinator::graph_elem (elem1->loc1, elem2->loc1, 
                                                 mem_addr1, mem_addr2);
     server->elements.push_back (elem);
             
@@ -153,11 +153,11 @@ create_edge (void *mem_addr1, void *mem_addr2,
 } //end create edge
 
 void*
-create_node (central_coordinator::central *server)
+create_node (coordinator::central *server)
 {
     po6::net::location *temp_loc;
     busybee_returncode ret;
-    central_coordinator::graph_elem *elem;
+    coordinator::graph_elem *elem;
     void *mem_addr1;
     message::message msg (message::NODE_CREATE_REQ);
     static int node_cnt = 0;
@@ -184,7 +184,7 @@ create_node (central_coordinator::central *server)
     }
     temp_loc = new po6::net::location (LOCAL_IPADDR, server->port_ctr);
     msg.unpack_create_ack (&mem_addr1);
-    elem = new central_coordinator::graph_elem (*temp_loc, *temp_loc, mem_addr1,
+    elem = new coordinator::graph_elem (*temp_loc, *temp_loc, mem_addr1,
                                                 mem_addr1);
     server->elements.push_back (elem);
     
@@ -195,17 +195,17 @@ create_node (central_coordinator::central *server)
 
 void
 reachability_request (void *mem_addr1, void *mem_addr2,
-    central_coordinator::central *server)
+    coordinator::central *server)
 {
     static uint32_t req_counter = 0;
 
     uint32_t rec_counter;
     bool is_reachable;
     po6::net::location rec_loc (LOCAL_IPADDR, CENTRAL_PORT);
-    central_coordinator::graph_elem *elem1 = 
-            (central_coordinator::graph_elem *) mem_addr1;
-    central_coordinator::graph_elem *elem2 = 
-            (central_coordinator::graph_elem *) mem_addr2;
+    coordinator::graph_elem *elem1 = 
+            (coordinator::graph_elem *) mem_addr1;
+    coordinator::graph_elem *elem2 = 
+            (coordinator::graph_elem *) mem_addr2;
     message::message msg(message::REACHABLE_PROP);
     busybee_returncode ret;
     std::vector<size_t> src;
@@ -256,7 +256,7 @@ diff (timespec start, timespec end)
 }
 
 void
-msg_handler (central_coordinator::central *server)
+msg_handler (coordinator::central *server)
 {
     busybee_returncode ret;
     po6::net::location sender (LOCAL_IPADDR, CENTRAL_PORT);
@@ -264,8 +264,8 @@ msg_handler (central_coordinator::central *server)
     uint32_t code;
     enum message::msg_type mtype;
     std::shared_ptr<message::message> rec_msg;
-    central_coordinator::thread::pool thread_pool (NUM_THREADS);
-    std::unique_ptr<central_coordinator::thread::unstarted_thread> thr;
+    coordinator::thread::pool thread_pool (NUM_THREADS);
+    std::unique_ptr<coordinator::thread::unstarted_thread> thr;
     
     while (1)
     {
@@ -277,7 +277,7 @@ msg_handler (central_coordinator::central *server)
         rec_msg.reset (new message::message (msg));
         rec_msg->buf->unpack_from (BUSYBEE_HEADER_SIZE) >> code;
         mtype = (enum message::msg_type) code;
-        thr.reset (new central_coordinator::thread::unstarted_thread (
+        thr.reset (new coordinator::thread::unstarted_thread (
             handle_pending_req,
             server,
             rec_msg,
@@ -289,7 +289,7 @@ msg_handler (central_coordinator::central *server)
 int
 main (int argc, char* argv[])
 {
-    central_coordinator::central server;
+    coordinator::central server;
     void *mem_addr1, *mem_addr2, *mem_addr3, *mem_addr4;
     int i;
     std::vector<void *> nodes;

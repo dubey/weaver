@@ -1,17 +1,14 @@
 /*
  * =====================================================================================
  *
- *       Filename:  central.h
- *
  *    Description:  Central server responsible for handling all queries
  *
- *        Version:  1.0
  *        Created:  10/27/2012 05:20:01 PM
- *       Revision:  none
- *       Compiler:  gcc
  *
- *         Author:  Ayush Dubey (), dubey@cs.cornell.edu
- *   Organization:  Cornell University
+ *         Author:  Ayush Dubey, dubey@cs.cornell.edu
+ *
+ * Copyright (C) 2013, Cornell University, see the LICENSE file
+ *                     for licensing agreement
  *
  * =====================================================================================
  */
@@ -40,7 +37,7 @@
  */
 #define MAX_PORT 5201
 
-namespace central_coordinator
+namespace coordinator
 {
     class central
     {
@@ -56,7 +53,7 @@ namespace central_coordinator
             //A list of graph elements, which would probably be some server,
             //id/address pair
             int port_ctr;
-            std::vector<central_coordinator::graph_elem *> elements;
+            std::vector<coordinator::graph_elem *> elements;
     };
 
     inline
@@ -69,6 +66,6 @@ namespace central_coordinator
         port_ctr = CENTRAL_PORT;
     }
 
-} //namespace central_coordinator
+} //namespace coordinator
 
 #endif // __CENTRAL__

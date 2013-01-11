@@ -3,8 +3,8 @@ CFLAGS=-g -O0 -std=c++0x
 LIBS_DIR=-L/usr/local/lib
 LIBS=-lbusybee-sta -le -lrt -pthread
 
-OBJS=graph.o
-TARGET=graph
+OBJS=central.o
+TARGET=coordinator
 
 $(TARGET):	$(OBJS)
 	g++ -o $@ $(OBJS) $(LIBS_DIR) $(LIBS)

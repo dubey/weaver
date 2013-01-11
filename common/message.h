@@ -1,8 +1,6 @@
 /*
  * =====================================================================================
  *
- *       Filename:  message.h
- *
  *    Description:  Inter-server message class
  *
  *        Version:  1.0

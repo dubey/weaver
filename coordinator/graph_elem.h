@@ -22,7 +22,7 @@
 //po6
 #include <po6/net/location.h>
 
-namespace central_coordinator
+namespace coordinator
 {
     class graph_elem
     {
@@ -49,6 +49,6 @@ namespace central_coordinator
     {
     }
 
-} // namespace central_coordinator
+} // namespace coordinator
 
 #endif // __GRAPH_ELEM__

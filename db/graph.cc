@@ -12,30 +12,19 @@
  * ===============================================================
  */
 
-//C
 #include <cstdlib>
-
-//C++
 #include <iostream>
 #include <thread>
-
-//STL
 #include <vector>
 #include <unordered_map>
-
-//po6
 #include <po6/net/location.h>
 #include <po6/threads/mutex.h>
-
-//e
 #include <e/buffer.h>
-
-//Busybee
 #include "busybee_constants.h"
 
 //Weaver
 #include "graph.h"
-#include "../message/message.h"
+#include "common/message.h"
 #include "threadpool/threadpool.h"
 
 #define IP_ADDR "127.0.0.1"
@@ -161,13 +150,13 @@ handle_create_edge (db::graph *G, std::shared_ptr<message::message> msg)
 void
 handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
 {
-  void *mem_addr2; //XXX rename
-  db::element::node *n; // XXX?
+    void *mem_addr2; //XXX rename
+    db::element::node *n; // XXX?
     busybee_returncode ret;
     std::unique_ptr<po6::net::location> remote; // XXX?
     uint16_t from_port, //previous node's port
              to_port; //target node's port
-    uint32_t req_counter, //central server req counter
+    uint32_t req_counter, // XXX counter -> id rename -- central server req counter
              prev_req_counter, //previous node req counter
              my_batch_req_counter, //this request's number
              my_local_req_counter; //each forward batched req number
@@ -197,42 +186,40 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
         n->cache_mutex.lock();
         if (n->cache.entry_exists (to_port, mem_addr2))
         {
+	  // we have a cached result
             std::cout << "Serving request from cache as " ;
             if (n->cache.get_cached_value (to_port, mem_addr2))
             {
-              //got true from cached value
+                // is cached and is reachable
                 reached = true;
                 reach_node = (void *) n;
                 std::cout << "true" << std::endl;
-            } else
-            {
-              //got false from cache, nothing to do for this node
+            } else {
+                // is not reachable
                 std::cout << "false" << std::endl;
             }
             n->cache_mutex.unlock();
         } else {
             n->cache_mutex.unlock();
             std::vector<db::element::meta_element>::iterator iter;
-            for (iter = n->out_edges.begin(); iter < n->out_edges.end();
-                 iter++)
+            for (iter = n->out_edges.begin(); iter < n->out_edges.end(); iter++)
             {
-                db::element::edge *nbr = (db::element::edge *)
-                                          iter->get_addr();
+                db::element::edge *nbr = (db::element::edge *) iter->get_addr();
                 send_msg = true;
                 if (nbr->to.get_addr() == mem_addr2 &&
                     nbr->to.get_port() == to_port)
-                {   //Done! Send msg back to central server
+                {
+		    // Done! Send msg back to central server
                     reached = true;
                     reach_node = (void *) n;
                     break;
-                } else
-                {   //Continue propagating reachability request
-                    msg_batch[nbr->to.get_port()].push_back
-                        ((size_t)nbr->to.get_addr());
+                } else {
+		    // Continue propagating reachability request
+                    msg_batch[nbr->to.get_port()].push_back((size_t)nbr->to.get_addr());
                 }
             }
         }
-    } //end if visited
+    }
     if (reached)
     {
         break;
@@ -253,7 +240,10 @@ handle_reachable_request (db::graph *G, std::shared_ptr<message::message> msg)
         }   
         G->bb_lock.unlock();
     } else if (send_msg)
-    {   //need to send batched msges onwards
+    { 
+        // the destination is not reachable locally in one hop from this server, so
+        // now we have to contact all the reachable neighbors and see if they can reach
+      //need to send batched msges onwards
         std::unordered_map<uint16_t, std::vector<size_t>>::iterator loc_iter;
         //need mutex since there can be multiple replies
         //for same outstanding req
