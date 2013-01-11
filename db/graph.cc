@@ -48,43 +48,42 @@
  */
 class batch_tuple
 {
-        public:
-        uint16_t port;
-        uint32_t counter; //prev req id
-        int num; //number of requests
-        bool reachable;
-        std::vector<size_t> src_nodes;
-        void *dest_addr;
-        uint16_t dest_port;
-        po6::threads::mutex mutex;
+    public:
+    uint16_t port;
+    uint32_t counter; //prev req id
+    int num; //number of requests
+    bool reachable;
+    std::vector<size_t> src_nodes;
+    void *dest_addr;
+    uint16_t dest_port;
+    po6::threads::mutex mutex;
 
-        batch_tuple ()
-        {
-            port = 0;
-            counter = 0;
-            num = 0;
-            reachable = false;
-        }
+    batch_tuple ()
+    {
+        port = 0;
+        counter = 0;
+        num = 0;
+        reachable = false;
+    }
 
-        batch_tuple (uint16_t p, uint32_t c, int n)
-            : port(p)
-            , counter(c)
-            , num(n)
-            , reachable (false)
-        {
-        }
-        
-        
-        batch_tuple (const batch_tuple &tup)
-        {
-            port = tup.port;
-            counter = tup.counter;
-            num = tup.num;
-            reachable = tup.reachable;
-            src_nodes = tup.src_nodes;
-            dest_addr = tup.dest_addr;
-            dest_port = tup.dest_port;
-        }
+    batch_tuple (uint16_t p, uint32_t c, int n)
+        : port(p)
+        , counter(c)
+        , num(n)
+        , reachable (false)
+    {
+    }
+    
+    batch_tuple (const batch_tuple &tup)
+    {
+        port = tup.port;
+        counter = tup.counter;
+        num = tup.num;
+        reachable = tup.reachable;
+        src_nodes = tup.src_nodes;
+        dest_addr = tup.dest_addr;
+        dest_port = tup.dest_port;
+    }
 
 };
 
