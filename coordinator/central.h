@@ -15,19 +15,12 @@
 #ifndef __CENTRAL__
 #define __CENTRAL__
 
-//C++
 #include <vector>
-
-//Busybee
 #include <busybee_sta.h>
-
-//po6
 #include <po6/net/location.h>
 
-//Weaver
 #include "graph_elem.h"
 
-//Constants
 #define COORD_PORT 5200
 #define COORD_REC_PORT 4200
 #define COORD_IPADDR "127.0.0.1"

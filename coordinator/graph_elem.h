@@ -15,7 +15,6 @@
 #ifndef __GRAPH_ELEM__
 #define __GRAPH_ELEM__
 
-//po6
 #include <po6/net/location.h>
 
 namespace coordinator

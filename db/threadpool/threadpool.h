@@ -14,16 +14,12 @@
 #ifndef __THREADPOOL__
 #define __THREADPOOL__
 
-//C++
 #include <vector>
 #include <deque>
 #include <thread>
-
-//po6
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
 
-//Weaver
 #include "../graph.h"
 #include "../../common/message/message.h"
 
