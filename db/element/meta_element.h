@@ -1,19 +1,15 @@
 /*
- * =====================================================================================
+ * ===============================================================
+ *    Description:  Contains 'meta-information' about every graph 
+ *                  element
  *
- *       Filename:  meta_element.h
- *
- *    Description:  Contains 'meta-information' about every graph element
- *
- *        Version:  1.0
  *        Created:  10/29/2012 10:21:58 AM
- *       Revision:  none
- *       Compiler:  gcc
  *
- *         Author:  Ayush Dubey (), dubey@cs.cornell.edu
- *   Organization:  Cornell University
- *
- * =====================================================================================
+ *         Author:  Ayush Dubey, dubey@cs.cornell.edu
+ * 
+ * Copyright (C) 2013, Cornell University, see the LICENSE file
+ *                     for licensing agreement
+ * ===============================================================
  */
 
 #ifndef __META_ELEMENT__

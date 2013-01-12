@@ -1,19 +1,15 @@
 /*
- * =====================================================================================
+ * ===============================================================
+ *    Description:  Coordinator database elements -- shard server 
+ *                  and memory address of each node and edge
  *
- *       Filename:  graph_elem.h
- *
- *    Description:  The physical server and memory address of a graph element
- *
- *        Version:  1.0
  *        Created:  11/08/2012 01:11:01 PM
- *       Revision:  none
- *       Compiler:  gcc
  *
- *         Author:  Ayush Dubey (), dubey@cs.cornell.edu
- *   Organization:  Cornell University
+ *         Author:  Ayush Dubey, dubey@cs.cornell.edu
  *
- * =====================================================================================
+ * Copyright (C) 2013, Cornell University, see the LICENSE file
+ *                     for licensing agreement
+ * ===============================================================
  */
 
 #ifndef __GRAPH_ELEM__

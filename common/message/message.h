@@ -1,17 +1,14 @@
 /*
- * =====================================================================================
+ * ================================================================
+ *    Description:  Inter-server message packing and unpacking
  *
- *    Description:  Inter-server message class
- *
- *        Version:  1.0
  *        Created:  11/07/2012 01:40:52 PM
- *       Revision:  none
- *       Compiler:  gcc
  *
- *         Author:  Ayush Dubey (), dubey@cs.cornell.edu
- *   Organization:  Cornell University
+ *         Author:  Ayush Dubey, dubey@cs.cornell.edu
  *
- * =====================================================================================
+ * Copyright (C) 2013, Cornell University, see the LICENSE file
+ *                     for licensing agreement
+ * ===============================================================
  */
 
 #ifndef __MESSAGE__

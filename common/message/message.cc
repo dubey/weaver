@@ -1,19 +1,14 @@
 /*
- * =====================================================================================
- *
- *       Filename:  message.cc
- *
+ * ===============================================================
  *    Description:  Message tester
  *
- *        Version:  1.0
  *        Created:  11/07/2012 03:49:13 PM
- *       Revision:  none
- *       Compiler:  gcc
  *
- *         Author:  Ayush Dubey (), dubey@cs.cornell.edu
- *   Organization:  Cornell University
+ *         Author:  Ayush Dubey, dubey@cs.cornell.edu
  *
- * =====================================================================================
+ * Copyright (C) 2013, Cornell University, see the LICENSE file
+ *                     for licensing agreement
+ * ===============================================================
  */
 
 #include "message.h"

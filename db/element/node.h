@@ -1,19 +1,14 @@
 /*
- * =====================================================================================
+ * ===============================================================
+ *    Description: Graph node class 
  *
- *       Filename:  node.h
- *
- *    Description:  
- *
- *        Version:  1.0
  *        Created:  Tuesday 16 October 2012 02:24:02  EDT
- *       Revision:  none
- *       Compiler:  gcc
  *
- *         Author:  Ayush Dubey (), dubey@cs.cornell.edu
- *   Organization:  Cornell University
- *
- * =====================================================================================
+ *         Author:  Ayush Dubey, dubey@cs.cornell.edu
+ * 
+ * Copyright (C) 2013, Cornell University, see the LICENSE file
+ *                     for licensing agreement
+ * ===============================================================
  */
 
 #ifndef __NODE__

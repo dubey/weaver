@@ -1,19 +1,15 @@
 /*
- * =====================================================================================
+ * ===============================================================
+ *    Description:  Each graph element (node or edge) can have
+ *                  properties, which are key-value pairs 
  *
- *       Filename:  property.h
- *
- *    Description:  
- *
- *        Version:  1.0
  *        Created:  Friday 12 October 2012 01:28:02  EDT
- *       Revision:  none
- *       Compiler:  gcc
  *
- *         Author:  Ayush Dubey (), dubey@cs.cornell.edu
- *   Organization:  Cornell University
+ *         Author:  Ayush Dubey, dubey@cs.cornell.edu
  *
- * =====================================================================================
+ * Copyright (C) 2013, Cornell University, see the LICENSE file
+ *                     for licensing agreement
+ * ===============================================================
  */
 
 #ifndef __PROPERTY__

@@ -1,19 +1,14 @@
 /*
- * =====================================================================================
+ * ===============================================================
+ *    Description:  Coordinator server loop
  *
- *       Filename:  central.cc
- *
- *    Description:  Central server test run
- *
- *        Version:  1.0
  *        Created:  11/06/2012 11:47:04 AM
- *       Revision:  none
- *       Compiler:  gcc
  *
- *         Author:  Ayush Dubey (), dubey@cs.cornell.edu
- *   Organization:  Cornell University
+ *         Author:  Ayush Dubey, dubey@cs.cornell.edu
  *
- * =====================================================================================
+ * Copyright (C) 2013, Cornell University, see the LICENSE file
+ *                     for licensing agreement
+ * ===============================================================
  */
 
 #include <unistd.h>
@@ -156,10 +151,10 @@ create_node (coordinator::central *server)
     server->port_ctr = (server->port_ctr + 1) % (MAX_PORT+1);
     if (server->port_ctr == 0) 
     {
-        server->port_ctr = CENTRAL_PORT+1;
+        server->port_ctr = COORD_PORT+1;
     }
     
-    temp_loc = new po6::net::location (LOCAL_IPADDR, server->port_ctr);
+    temp_loc = new po6::net::location (COORD_IPADDR, server->port_ctr);
     msg.prep_node_create();
     ret = server->bb.send (*temp_loc, msg.buf);
     if (ret != BUSYBEE_SUCCESS) 
@@ -174,7 +169,7 @@ create_node (coordinator::central *server)
         std::cerr << "msg recv error: " << ret << std::endl;
         return NULL;
     }
-    temp_loc = new po6::net::location (LOCAL_IPADDR, server->port_ctr);
+    temp_loc = new po6::net::location (COORD_IPADDR, server->port_ctr);
     msg.unpack_create_ack (&mem_addr1);
     elem = new coordinator::graph_elem (*temp_loc, *temp_loc, mem_addr1,
                                                 mem_addr1);
@@ -193,7 +188,7 @@ reachability_request (void *mem_addr1, void *mem_addr2,
 
     uint32_t rec_counter;
     bool is_reachable;
-    po6::net::location rec_loc (LOCAL_IPADDR, CENTRAL_PORT);
+    po6::net::location rec_loc (COORD_IPADDR, COORD_PORT);
     coordinator::graph_elem *elem1 = 
             (coordinator::graph_elem *) mem_addr1;
     coordinator::graph_elem *elem2 = 
@@ -209,7 +204,7 @@ reachability_request (void *mem_addr1, void *mem_addr2,
     std::cout << "Reachability request number " << req_counter << " from source"
               << " node " << mem_addr1 << " to destination node " << mem_addr2
               << std::endl;
-    if (msg.prep_reachable_prop (src, CENTRAL_REC_PORT, (size_t) elem2->mem_addr1,
+    if (msg.prep_reachable_prop (src, COORD_REC_PORT, (size_t) elem2->mem_addr1,
                                  elem2->loc1.port, req_counter, req_counter) 
         != 0) 
     {
@@ -251,7 +246,7 @@ void
 msg_handler (coordinator::central *server)
 {
     busybee_returncode ret;
-    po6::net::location sender (LOCAL_IPADDR, CENTRAL_PORT);
+    po6::net::location sender (COORD_IPADDR, COORD_PORT);
     message::message msg (message::ERROR);
     uint32_t code;
     enum message::msg_type mtype;

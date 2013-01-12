@@ -1,19 +1,14 @@
 /*
- * =====================================================================================
- *
- *       Filename:  cache.cc
- *
+ * ===============================================================
  *    Description:  Testing reachability cache
  *
- *        Version:  1.0
  *        Created:  12/04/2012 11:09:50 PM
- *       Revision:  none
- *       Compiler:  gcc
  *
- *         Author:  Ayush Dubey (), dubey@cs.cornell.edu
- *   Organization:  Cornell University
+ *         Author:  Ayush Dubey, dubey@cs.cornell.edu
  *
- * =====================================================================================
+ * Copyright (C) 2013, Cornell University, see the LICENSE file
+ *                     for licensing agreement
+ * ===============================================================
  */
 
 #include <iostream>

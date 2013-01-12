@@ -1,19 +1,14 @@
 /*
- * =====================================================================================
+ * ===============================================================
+ *    Description:  Thread pool for all servers except central
  *
- *       Filename:  threadpool.h
- *
- *    Description:  Thread pool for all servers except central.
- *
- *        Version:  1.0
  *        Created:  01/09/2013 12:00:30 PM
- *       Revision:  none
- *       Compiler:  gcc
  *
- *         Author:  Ayush Dubey (), dubey@cs.cornell.edu
- *   Organization:  Cornell University
+ *         Author:  Ayush Dubey, dubey@cs.cornell.edu
  *
- * =====================================================================================
+ * Copyright (C) 2013, Cornell University, see the LICENSE file
+ *                     for licensing agreement
+ * ================================================================
  */
 
 #ifndef __THREADPOOL__

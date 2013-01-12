@@ -1,19 +1,15 @@
 /*
- * =====================================================================================
+ * ===============================================================
+ *    Description:  The part of a graph stored on a particular 
+                    server
  *
- *       Filename:  graph.h
- *
- *    Description:  The part of a graph stored on a particular server
- *
- *        Version:  1.0
  *        Created:  Tuesday 16 October 2012 11:00:03  EDT
- *       Revision:  none
- *       Compiler:  gcc
  *
- *         Author:  Ayush Dubey (), dubey@cs.cornell.edu
- *   Organization:  Cornell University
+ *         Author:  Ayush Dubey, dubey@cs.cornell.edu
  *
- * =====================================================================================
+ * Copyright (C) 2013, Cornell University, see the LICENSE file
+ *                     for licensing agreement
+ * ================================================================
  */
 
 #ifndef __GRAPH__
