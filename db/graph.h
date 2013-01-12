@@ -19,24 +19,15 @@
 #ifndef __GRAPH__
 #define __GRAPH__
 
-//Testing
 #include <iostream>
 
-//C++
 #include <sstream>
 #include <stdlib.h>
-
-//STL
 #include <vector>
-
-//po6
 #include <po6/net/location.h>
 #include <po6/threads/mutex.h>
-
-//Busybee
 #include <busybee_sta.h>
 
-//GraphDB
 #include "element/property.h"
 #include "element/meta_element.h"
 #include "element/node.h"

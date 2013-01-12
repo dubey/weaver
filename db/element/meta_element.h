@@ -19,11 +19,8 @@
 #ifndef __META_ELEMENT__
 #define __META_ELEMENT__
 
-//C
 #include <stdint.h>
 #include <limits.h>
-
-//po6
 #include <po6/net/location.h>
 
 namespace db
@@ -40,8 +37,7 @@ namespace element
             po6::net::location myloc;
             uint32_t t_u;
             uint32_t t_d;
-            //The memory address of the element on the physical server
-            void *elem_addr;
+            void *elem_addr; //memory address of this element on shard server
         
         public:
             uint32_t get_t_u ();

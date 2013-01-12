@@ -19,17 +19,10 @@
 #ifndef __NODE__
 #define __NODE__
 
-//C
 #include <stdint.h>
-
-//STL
 #include <vector>
-
-//po6
-#include <po6/net/location.h>
 #include <po6/threads/mutex.h>
 
-//GraphDB
 #include "element.h"
 #include "../cache/cache.h"
 

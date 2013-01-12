@@ -30,7 +30,7 @@
 
 //Weaver
 #include "../graph.h"
-#include "../../message/message.h"
+#include "../../common/message/message.h"
 
 namespace db
 {

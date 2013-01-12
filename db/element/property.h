@@ -19,7 +19,6 @@
 #ifndef __PROPERTY__
 #define __PROPERTY__
 
-//C
 #include <stdlib.h>
 #include <string.h>
 
@@ -31,7 +30,6 @@ namespace element
     {
         public:
             property ();
-            //property (char* _key, char* _value);
             property (uint32_t, uint32_t);
         
         public:
@@ -52,27 +50,11 @@ namespace element
     {
         key = _key;
         value = _value;
-        /*
-        key = (char*) malloc (strlen(_key));
-        strncpy (key, _key, strlen(_key));
-        value = (char*) malloc (strlen(_value));
-        strncpy (value, _value, strlen(_value));
-        */
     }
 
     inline bool
     property :: operator==(property p2) const
     {
-        /*
-        if ((strcmp (key, p2.key) == 0) &&
-            (strcmp (value, p2.value) == 0))
-        {
-            return true;
-        } else
-        {
-            return false;
-        }
-        */
         return ((key == p2.key) && (value == p2.value));
     }
 }

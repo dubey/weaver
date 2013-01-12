@@ -19,20 +19,16 @@
 #ifndef __CS_THREADPOOL__
 #define __CS_THREADPOOL__
 
-//C++
 #include <vector>
 #include <deque>
 #include <thread>
-
-//po6
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
 
-//Weaver
 #include "../central.h"
-#include "../../message/message.h"
+#include "../../common/message/message.h"
 
-namespace central_coordinator
+namespace coordinator
 {
 namespace thread
 {
@@ -43,28 +39,26 @@ namespace thread
     {
         public:
             unstarted_thread (
-                void (*f) (central_coordinator::central*,
-                           std::shared_ptr<message::message>, 
-                           enum message::msg_type),
-                central_coordinator::central *s,
+                void (*f) (coordinator::central*, std::shared_ptr<message::message>, enum message::msg_type),
+                coordinator::central *s,
                 std::shared_ptr<message::message> m,
                 enum message::msg_type mtype);
 
         public:
-            void (*func) (central_coordinator::central*,
+            void (*func) (coordinator::central*,
                           std::shared_ptr<message::message>, 
                           enum message::msg_type);
-            central_coordinator::central *server;
+            coordinator::central *server;
             std::shared_ptr<message::message> msg;
             enum message::msg_type m_type;
     };
 
     inline
     unstarted_thread :: unstarted_thread ( 
-            void (*f) (central_coordinator::central*, 
+            void (*f) (coordinator::central*, 
                        std::shared_ptr<message::message>,
                        enum message::msg_type),
-            central_coordinator::central *s,
+            coordinator::central *s,
             std::shared_ptr<message::message> m,
             enum message::msg_type mtype)
         : func (f)

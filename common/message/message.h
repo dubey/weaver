@@ -17,21 +17,13 @@
 #ifndef __MESSAGE__
 #define __MESSAGE__
 
-//C++
 #include <memory>
 #include <string.h>
-
-//e
 #include <e/buffer.h>
-
-//po6
 #include <po6/net/location.h>
-
-//Busybee
 #include <busybee_constants.h>
 
-//Weaver
-#include "../db/element/property.h"
+#include "../../db/element/property.h"
 
 namespace message
 {
@@ -74,16 +66,23 @@ namespace message
             //Central server to other servers
             void change_type (enum msg_type t);
             int prep_node_create ();
-            int prep_edge_create (size_t local_node, size_t remote_node,
-                po6::net::location remote_server, enum edge_direction dir);
-            int unpack_edge_create (void **local_node, void **remote_node, 
-                po6::net::location **server, uint32_t *dir);
+            int prep_edge_create (size_t local_node, 
+                size_t remote_node, 
+                po6::net::location remote_server, 
+                enum edge_direction dir);
+            std::unique_ptr<po6::net::location> unpack_edge_create (void **local_node, 
+                void **remote_node, 
+                uint32_t *dir);
             int prep_node_update (db::element::property p);
             int unpack_node_update (db::element::property **p);
-            int prep_reachable_req (size_t from_node, size_t to_node, uint16_t
-                to_port, uint32_t req_counter);
-            int unpack_reachable_req (void **from_node, void **to_node, uint16_t
-                *to_port, uint32_t *req_counter);
+            int prep_reachable_req (size_t from_node, 
+                size_t to_node, 
+                uint16_t to_port, 
+                uint32_t req_counter);
+            int unpack_reachable_req (void **from_node, 
+                void **to_node, 
+                uint16_t *to_port, 
+                uint32_t *req_counter);
             //TODO: Add update functions
             //Other servers to central server
             int prep_node_create_ack (size_t mem_addr);
@@ -91,25 +90,25 @@ namespace message
             int prep_create_ack (size_t mem_addr);
             int unpack_create_ack (void **mem_addr);
             int prep_reachable_rep (uint32_t req_counter, 
-                                    bool is_reachable,
-                                    size_t src_node,
-                                    uint16_t src_port);
+                bool is_reachable,
+                size_t src_node,
+                uint16_t src_port);
             int unpack_reachable_rep (uint32_t *req_counter, 
-                                      bool *is_reachable,
-                                      size_t *src_node,
-                                      uint16_t *src_port);
+               bool *is_reachable,
+               size_t *src_node,
+               uint16_t *src_port);
             //TODO: Add update functions
             int prep_reachable_prop (std::vector<size_t> src_nodes,
-                                     uint16_t src_port,
-                                     size_t to_node, 
-                                     uint16_t to_port, 
-                                     uint32_t req_counter,
-                                     uint32_t prev_req_counter);
+               uint16_t src_port,
+               size_t to_node, 
+               uint16_t to_port, 
+               uint32_t req_counter,
+               uint32_t prev_req_counter);
             std::vector<size_t> unpack_reachable_prop (uint16_t *src_port,
-                                     void **to_node,
-                                     uint16_t *to_port, 
-                                     uint32_t *req_counter,
-                                     uint32_t *prev_req_counter);
+               void **to_node,
+               uint16_t *to_port, 
+               uint32_t *req_counter,
+               uint32_t *prev_req_counter);
             int prep_error ();
     };
 
@@ -150,9 +149,10 @@ namespace message
     }
 
     inline int
-    message :: prep_edge_create (size_t local_node, size_t remote_node,
-                                po6::net::location remote_server, 
-                                enum edge_direction dir)
+    message :: prep_edge_create (size_t local_node, 
+        size_t remote_node,
+        po6::net::location remote_server, 
+        enum edge_direction dir)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         e::buffer *b;
@@ -163,25 +163,24 @@ namespace message
             return -1;
         }
         b = e::buffer::create (BUSYBEE_HEADER_SIZE +
-                               2 * sizeof (size_t) +
-                               sizeof (enum msg_type) +
-                               //sizeof (remote_server.address.get()) +
-                               sizeof (uint32_t) +
-                               sizeof (enum edge_direction));
+            2 * sizeof (size_t) +
+            sizeof (enum msg_type) +
+            //sizeof (remote_server.address.get()) +
+            sizeof (uint32_t) +
+            sizeof (enum edge_direction));
         buf.reset (b);
         
         buf->pack_at (index) << type;
         index += sizeof (enum msg_type);
         port32 = (uint32_t) remote_server.port;
         buf->pack_at (index) << local_node << remote_node
-                             /*<< remote_server.address.get() <<*/ 
-                             << port32 << dir;
+            /*<< remote_server.address.get() <<*/ 
+            << port32 << dir;
         return 0;
     }
 
-    inline int
-    message :: unpack_edge_create (void **local_node, void **remote_node, 
-        po6::net::location **server, uint32_t *dir)
+    inline std::unique_ptr<po6::net::location>
+    message :: unpack_edge_create (void **local_node, void **remote_node, uint32_t *dir)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t _type;
@@ -189,12 +188,12 @@ namespace message
         uint32_t port;
         size_t mem_addr1, mem_addr2;
         in_addr_t inaddr;
-        po6::net::ipaddr *addr;
+        std::unique_ptr<po6::net::location> ret;
         
         buf->unpack_from (index) >> _type;
         if (_type != EDGE_CREATE_REQ) 
         {
-            return -1;
+            return NULL;
         }
         type = EDGE_CREATE_REQ;
         
@@ -202,13 +201,12 @@ namespace message
         buf->unpack_from (index) >> mem_addr1 >> mem_addr2
             >> /*ip_addr >>*/ port >> direction;
         inaddr = (in_addr_t) ip_addr;
-        addr = new po6::net::ipaddr (ip_addr);
 
         *local_node = (void *) mem_addr1;
         *remote_node = (void *) mem_addr2;
-        *server = new po6::net::location (*addr, port);
         *dir = direction;
-        return 0;
+        ret.reset (new po6::net::location("127.0.0.1", port));
+        return ret;
     }
 
     inline int

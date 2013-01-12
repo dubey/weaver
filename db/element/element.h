@@ -19,16 +19,12 @@
 #ifndef __ELEMENT__
 #define __ELEMENT__
 
-//C
 #include <limits.h>
 #include <stdint.h>
-
-//STL
 #include <vector>
 #include <algorithm>
 #include <string.h>
 
-//GraphDB
 #include "property.h"
 #include "meta_element.h"
 

@@ -19,12 +19,9 @@
 #ifndef __CACHE__
 #define __CACHE__
 
-//C
 #include <assert.h>
 #include <stdint.h>
 #include <cstddef>
-
-//C++
 #include <unordered_map>
 
 namespace cache
@@ -93,6 +90,6 @@ namespace cache
         assert (val != -1);
         return (val==1 ? true:false);
     }
-} //end namespace cache
+} 
 
 #endif //__CACHE__

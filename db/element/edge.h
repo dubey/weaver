@@ -19,16 +19,10 @@
 #ifndef __EDGE__
 #define __EDGE__
 
-//C
 #include <stdint.h>
-
-//STL
 #include <vector>
-
-//po6
 #include <po6/net/location.h>
 
-//GraphDB
 #include "element.h"
 
 namespace db
@@ -44,7 +38,6 @@ namespace element
     class edge : public element
     {
         public:
-            //edge (po6::net::location server, uint32_t time, void* mem_addr);
             edge (po6::net::location server, uint32_t time, void* mem_addr, 
                 meta_element _from, meta_element _to);
         
@@ -52,14 +45,6 @@ namespace element
             meta_element from;
             meta_element to;
     };
-
-    /*
-    inline
-    edge :: edge (po6::net::location server, uint32_t time, void* mem_addr)
-        : element (server, time, mem_addr)
-    {
-    }
-    */
 
     inline
     edge :: edge (po6::net::location server, uint32_t time, void* mem_addr, 

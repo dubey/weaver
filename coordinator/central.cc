@@ -16,28 +16,20 @@
  * =====================================================================================
  */
 
-//C
 #include <unistd.h>
 #include <cstdlib>
-
-//C++
 #include <iostream>
 #include <time.h>
 #include <unordered_map>
-
-//e
 #include "e/buffer.h"
-
-//Busybee
 #include "busybee_constants.h"
 
-//Weaver
 #include "central.h"
-#include "common/message.h"
+#include "common/message/message.h"
 #include "threadpool/threadpool.h"
 
-#define NUM_NODES 100000
-#define NUM_EDGES 150000
+#define NUM_NODES 1000
+#define NUM_EDGES 1500
 #define NUM_REQUESTS 100
 #define NUM_THREADS 4
 
