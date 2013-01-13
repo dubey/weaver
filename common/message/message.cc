@@ -16,14 +16,13 @@
 int
 main (int argc, char *argv[])
 {
-    po6::net::location random ("127.0.0.1", 5200);
-    po6::net::location *retloc;
+    std::unique_ptr<po6::net::location> random (new po6::net::location ("127.0.0.1", 5200));
+    std::unique_ptr<po6::net::location> random2 (new po6::net::location ("127.0.0.1", 5200));
+    std::unique_ptr<po6::net::location> random3 (new po6::net::location ("127.0.0.1", 5200));
     void *first = (void *)238947328978763;
     void *second = (void *)23948230489224;
-    uint16_t port = 42, src_port = 666;
     uint32_t dir;
     message::message msg (message::EDGE_CREATE_REQ);
-    message::message msg2 (message::REACHABLE_REQ);
     message::message msg3 (message::REACHABLE_REPLY);
     message::message msg4 (message::REACHABLE_PROP);
     uint32_t temp;
@@ -32,40 +31,22 @@ main (int argc, char *argv[])
     std::vector<size_t> src_nodes, srces;
     src_nodes.push_back ((size_t)first); src_nodes.push_back ((size_t)second);
     std::cout << "sizeof bool = " << sizeof (bool) << std::endl;
-    int ret = msg.prep_edge_create ((size_t) first, (size_t) second, random,
-        message::FIRST_TO_SECOND);
-    int ret2 = msg2.prep_reachable_req ((size_t) first, (size_t) second, port,
-        r_count);
-    int ret3 = msg3.prep_reachable_rep (r_count, true);
-    int ret4 = msg4.prep_reachable_prop (src_nodes, src_port, (size_t)second, port,
-        r_count);
-    std::cout << "Got " << ret << "  " << ret2 << " " << ret3 << std::endl;
-    //std::cout << "Sent ipaddr " << random.address.get() << std::endl;
+    
+    int ret = msg.prep_edge_create ((size_t) first, (size_t) second,
+        std::move(random), message::FIRST_TO_SECOND);
+    int ret2 = msg4.prep_reachable_prop (src_nodes, std::move(random2), (size_t)second,
+        std::move(random3), r_count, r_count);
 
-    ret = msg.unpack_edge_create (&first, &second, &retloc, &dir);
-    std::cout << "Unpacking got " << ret << " and port number " <<
-        retloc->port << " and dir " << dir << " and retloc " <<
-        retloc /*<< " and addr " << retloc->address.get() */<< std::endl;
+    random = msg.unpack_edge_create (&first, &second, &dir);
+    std::cout << "Unpacking got port number " <<
+        random->port << " and dir " << dir << " and addr " <<
+        random->get_addr() << std::endl;
     std::cout << "First = " << first << " second " << second << std::endl;
 
-    ret2 = msg2.unpack_reachable_req (&first, &second, &port, &r_count);
-    std::cout << "\nUnpacking msg 2, got " << ret2 << " first " << first <<
-        " second " << second << " port " << port << " rcnt " << r_count << std::endl;
-    
-    ret3 = msg3.unpack_reachable_rep (&temp, &reachable);
-    std::cout << "\nUnpacking msg 3, got " << ret3 << " req counter " << temp <<
-        " reachable " << reachable << std::endl; 
-    reachable = true;
-    temp = (uint32_t) reachable;
-    std::cout << "testing true bools " << reachable << " as uint " << temp;
-    reachable = false;
-    temp = (uint32_t) reachable;
-    std::cout << "\ntesting false bools " << reachable << " as uint " << temp <<
-    '\n';
-
-    srces = msg4.unpack_reachable_prop (&src_port, &second, &port, &r_count);
+    std::unique_ptr<po6::net::location> src, dest;
+    srces = msg4.unpack_reachable_prop (&src, &second, &dest, &r_count, &r_count);
     std::cout << "\nUnpacking msg 4, got srces len " << srces.size() <<
-        " second " << second << " src_port " << src_port << " to_port " << port << " r_count " << r_count <<
+        " second " << second << " src " << src->get_addr() << " " << src->port <<  " r_count " << r_count <<
         '\n';
     for (temp = 0; temp < srces.size(); temp++)
     {

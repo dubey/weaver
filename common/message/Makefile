@@ -1,4 +1,4 @@
-CFLAGS=-g -O0
+CFLAGS=-g -O0 -std=c++0x
 OBJS=message.o
 LIBS=-L/usr/local/lib
 

@@ -31,7 +31,6 @@ namespace message
         EDGE_CREATE_REQ,
         NODE_UPDATE_REQ,
         EDGE_UPDATE_REQ,
-        REACHABLE_REQ,
         //Other servers to central server
         NODE_CREATE_ACK,
         EDGE_CREATE_ACK,
@@ -65,21 +64,13 @@ namespace message
             int prep_node_create ();
             int prep_edge_create (size_t local_node, 
                 size_t remote_node, 
-                po6::net::location remote_server, 
+                std::unique_ptr<po6::net::location> remote_server, 
                 enum edge_direction dir);
             std::unique_ptr<po6::net::location> unpack_edge_create (void **local_node, 
                 void **remote_node, 
                 uint32_t *dir);
             int prep_node_update (db::element::property p);
             int unpack_node_update (db::element::property **p);
-            int prep_reachable_req (size_t from_node, 
-                size_t to_node, 
-                uint16_t to_port, 
-                uint32_t req_counter);
-            int unpack_reachable_req (void **from_node, 
-                void **to_node, 
-                uint16_t *to_port, 
-                uint32_t *req_counter);
             //TODO: Add update functions
             //Other servers to central server
             int prep_node_create_ack (size_t mem_addr);
@@ -89,21 +80,20 @@ namespace message
             int prep_reachable_rep (uint32_t req_counter, 
                 bool is_reachable,
                 size_t src_node,
-                uint16_t src_port);
-            int unpack_reachable_rep (uint32_t *req_counter, 
+                std::unique_ptr<po6::net::location> src_loc);
+            std::unique_ptr<po6::net::location> unpack_reachable_rep (uint32_t *req_counter, 
                bool *is_reachable,
-               size_t *src_node,
-               uint16_t *src_port);
+               size_t *src_node);
             //TODO: Add update functions
             int prep_reachable_prop (std::vector<size_t> src_nodes,
-               uint16_t src_port,
-               size_t to_node, 
-               uint16_t to_port, 
+               std::unique_ptr<po6::net::location> src_loc,
+               size_t dest_node,
+               std::unique_ptr<po6::net::location> dest_loc,
                uint32_t req_counter,
                uint32_t prev_req_counter);
-            std::vector<size_t> unpack_reachable_prop (uint16_t *src_port,
-               void **to_node,
-               uint16_t *to_port, 
+            std::vector<size_t> unpack_reachable_prop (std::unique_ptr<po6::net::location> *src_loc,
+               void **dest_node,
+               std::unique_ptr<po6::net::location> *dest_loc,
                uint32_t *req_counter,
                uint32_t *prev_req_counter);
             int prep_error ();
@@ -132,14 +122,12 @@ namespace message
     message :: prep_node_create ()
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
-        e::buffer *b;
         
         if (type != NODE_CREATE_REQ) 
         {
             return -1;
         }
-        b = e::buffer::create (BUSYBEE_HEADER_SIZE + sizeof (enum msg_type));
-        buf.reset (b);
+        buf.reset (e::buffer::create (BUSYBEE_HEADER_SIZE + sizeof (enum msg_type)));
         
         buf->pack_at (index) << type;
         return 0; 
@@ -148,31 +136,26 @@ namespace message
     inline int
     message :: prep_edge_create (size_t local_node, 
         size_t remote_node,
-        po6::net::location remote_server, 
+        std::unique_ptr<po6::net::location> remote_server, 
         enum edge_direction dir)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
-        e::buffer *b;
-        uint32_t port32;
         
         if (type != EDGE_CREATE_REQ) 
         {
             return -1;
         }
-        b = e::buffer::create (BUSYBEE_HEADER_SIZE +
+        buf.reset (e::buffer::create (BUSYBEE_HEADER_SIZE +
             2 * sizeof (size_t) +
             sizeof (enum msg_type) +
-            //sizeof (remote_server.address.get()) +
-            sizeof (uint32_t) +
-            sizeof (enum edge_direction));
-        buf.reset (b);
+            sizeof (uint32_t) + //ip addr
+            sizeof (uint16_t) + //port
+            sizeof (enum edge_direction)));
         
         buf->pack_at (index) << type;
         index += sizeof (enum msg_type);
-        port32 = (uint32_t) remote_server.port;
         buf->pack_at (index) << local_node << remote_node
-            /*<< remote_server.address.get() <<*/ 
-            << port32 << dir;
+            << remote_server->get_addr() << remote_server->port << dir;
         return 0;
     }
 
@@ -182,9 +165,8 @@ namespace message
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t _type;
         uint32_t ip_addr, direction;
-        uint32_t port;
+        uint16_t port;
         size_t mem_addr1, mem_addr2;
-        in_addr_t inaddr;
         std::unique_ptr<po6::net::location> ret;
         
         buf->unpack_from (index) >> _type;
@@ -196,13 +178,12 @@ namespace message
         
         index += sizeof (enum msg_type);
         buf->unpack_from (index) >> mem_addr1 >> mem_addr2
-            >> /*ip_addr >>*/ port >> direction;
-        inaddr = (in_addr_t) ip_addr;
+            >> ip_addr >> port >> direction;
 
         *local_node = (void *) mem_addr1;
         *remote_node = (void *) mem_addr2;
         *dir = direction;
-        ret.reset (new po6::net::location("127.0.0.1", port));
+        ret.reset (new po6::net::location(ip_addr, port));
         return ret;
     }
 
@@ -244,55 +225,29 @@ namespace message
     }
 
     inline int
-    message :: prep_reachable_req (size_t from_node, size_t to_node, uint16_t
-        to_port, uint32_t req_counter)
-    {
-        uint32_t index = BUSYBEE_HEADER_SIZE;
-        e::buffer *b;
-
-        if (type != REACHABLE_REQ)
-        {
-            return -1;
-        }
-        b = e::buffer::create (BUSYBEE_HEADER_SIZE +
-            sizeof (enum msg_type) +
-            2 * sizeof (size_t) +
-            sizeof (uint16_t) +
-            sizeof (uint32_t));
-        buf.reset (b);
-
-        buf->pack_at (index) << type;
-        index += sizeof (enum msg_type);
-        buf->pack_at (index) << from_node << to_node;
-        index += 2 * sizeof (size_t);
-        buf->pack_at (index) << to_port << req_counter;
-        return 0;
-    }
-
-    inline int
     message :: prep_reachable_rep (uint32_t req_counter, 
-                                   bool is_reachable,
-                                   size_t src_node,
-                                   uint16_t src_port)
+        bool is_reachable,
+        size_t src_node,
+        std::unique_ptr<po6::net::location> src_loc)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
-        e::buffer *b;
         uint32_t temp = (uint32_t) is_reachable;
 
         if (type != REACHABLE_REPLY) {
             return -1;
         }
-        b = e::buffer::create (BUSYBEE_HEADER_SIZE +
+        buf.reset (e::buffer::create (BUSYBEE_HEADER_SIZE +
             sizeof (enum msg_type) +
-            sizeof (uint32_t) +
-            sizeof (uint32_t) +
-            sizeof (size_t) +
-            sizeof (uint16_t));
-        buf.reset (b);
+            sizeof (uint32_t) + //req id
+            sizeof (uint32_t) + //is_reachable
+            sizeof (size_t) + //src_node
+            sizeof (uint16_t)+ //port
+            sizeof (uint32_t))); //ip addr
 
         buf->pack_at (index) << type;
         index += sizeof (enum msg_type);
-        buf->pack_at (index) << req_counter << temp << src_node << src_port;
+        buf->pack_at (index) << req_counter << temp << src_node 
+            << src_loc->get_addr() << src_loc->port;
         return 0;
     }
 
@@ -331,37 +286,10 @@ namespace message
         return -1;
     }
 
-    inline int
-    message :: unpack_reachable_req (void **from_node, void **to_node, uint16_t
-        *to_port, uint32_t *req_counter)
-    {
-        uint32_t index = BUSYBEE_HEADER_SIZE;
-        uint32_t _type;
-        size_t f_node, t_node;
-        uint16_t t_port;
-        uint32_t req_cnt;
-
-        buf->unpack_from (index) >> _type;
-        if (_type != REACHABLE_REQ)
-        {
-            return -1;
-        }
-        type = REACHABLE_REQ;
-
-        index += sizeof (enum msg_type);
-        buf->unpack_from (index) >> f_node >> t_node >> t_port >> req_cnt;
-        *from_node = (void *) f_node;
-        *to_node = (void *) t_node;
-        *to_port = t_port;
-        *req_counter = req_cnt;
-        return 0;
-    }
-
-    inline int
+    inline std::unique_ptr<po6::net::location>
     message :: unpack_reachable_rep (uint32_t *req_counter, 
-                                     bool *is_reachable,
-                                     size_t *src_node,
-                                     uint16_t *src_port)
+        bool *is_reachable,
+        size_t *src_node)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t _type;
@@ -369,20 +297,23 @@ namespace message
         uint32_t reachable;
         size_t s_node;
         uint16_t s_port;
+        uint32_t s_ipaddr;
+        std::unique_ptr<po6::net::location> ret;
 
         buf->unpack_from (index) >> _type;
-        if (_type != REACHABLE_REPLY) {
-            return -1;
+        if (_type != REACHABLE_REPLY) 
+        {
+            return NULL;
         }
         type = REACHABLE_REPLY;
 
         index += sizeof (enum msg_type);
-        buf->unpack_from (index) >> r_count >> reachable >> s_node >> s_port;
+        buf->unpack_from (index) >> r_count >> reachable >> s_node >> s_ipaddr >> s_port;
         *req_counter = r_count;
         *is_reachable = (bool) reachable;
         *src_node = s_node;
-        *src_port = s_port;
-        return 0;
+        ret.reset(new po6::net::location(s_ipaddr, s_port));
+        return ret;
     }
 
     inline int
@@ -427,14 +358,13 @@ namespace message
 
     inline int 
     message :: prep_reachable_prop (std::vector<size_t> src_nodes,
-                                    uint16_t src_port,
-                                    size_t to_node, 
-                                    uint16_t to_port, 
-                                    uint32_t req_counter,
-                                    uint32_t prev_req_counter)
+        std::unique_ptr<po6::net::location> src_loc,
+        size_t dest_node, 
+        std::unique_ptr<po6::net::location> dest_loc, 
+        uint32_t req_counter,
+        uint32_t prev_req_counter)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
-        e::buffer *b;
         size_t num_nodes = src_nodes.size();
         size_t i;
 
@@ -442,17 +372,16 @@ namespace message
         {
             return -1;
         }
-        b = e::buffer::create (BUSYBEE_HEADER_SIZE +
-                               sizeof (enum msg_type) +
-                               sizeof (size_t) + //num_nodes
-                               num_nodes * sizeof (size_t) + //src_nodes
-                               sizeof (uint16_t) + //src_port
-                               sizeof (size_t) + //to_node
-                               sizeof (uint16_t) + //to_port
-                               sizeof (uint32_t) +//req_counter
-                               sizeof (uint32_t) //prev_req_counter
-                               );
-        buf.reset (b);
+        buf.reset(e::buffer::create (BUSYBEE_HEADER_SIZE +
+            sizeof (enum msg_type) +
+            sizeof (size_t) + //num_nodes
+            num_nodes * sizeof (size_t) + //src_nodes
+            sizeof (uint32_t) + sizeof (uint16_t) + //src_loc
+            sizeof (size_t) + //dest_node
+            sizeof (uint32_t) + sizeof (uint16_t) + //dest_loc
+            sizeof (uint32_t) +//req_counter
+            sizeof (uint32_t) //prev_req_counter
+            ));
 
         buf->pack_at (index) << type;
         index += sizeof (enum msg_type);
@@ -462,24 +391,26 @@ namespace message
         {
             buf->pack_at (index) << src_nodes[i];
         }
-        buf->pack_at (index) << src_port << to_node << to_port << req_counter
-                             << prev_req_counter;
+        buf->pack_at (index) << src_loc->get_addr() << src_loc->port << dest_node 
+            << dest_loc->get_addr() << dest_loc->port << req_counter << prev_req_counter;
         return 0;
     }
 
     inline std::vector<size_t>
-    message :: unpack_reachable_prop (uint16_t *src_port, 
-                                      void **to_node, 
-                                      uint16_t *to_port, 
-                                      uint32_t *req_counter,
-                                      uint32_t *prev_req_counter)
+    message :: unpack_reachable_prop (std::unique_ptr<po6::net::location> *src_loc, 
+        void **dest_node, 
+        std::unique_ptr<po6::net::location> *dest_loc, 
+        uint32_t *req_counter,
+        uint32_t *prev_req_counter)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t _type;
         std::vector<size_t> src;
         size_t dest, num_nodes, i, temp;
-        uint16_t from_port, dest_port;
+        uint32_t src_ipaddr, dest_ipaddr;
+        uint16_t src_port, dest_port;
         uint32_t r_count, p_r_count;
+        std::unique_ptr<po6::net::location> _src_loc, _dest_loc;
 
         buf->unpack_from (index) >> _type;
         if (_type != REACHABLE_PROP)
@@ -496,14 +427,16 @@ namespace message
             buf->unpack_from (index) >> temp;
             src.push_back (temp); 
         }
-        buf->unpack_from (index) >> from_port >> dest >> dest_port 
-                                 >> r_count >> p_r_count;
+        buf->unpack_from (index) >> src_ipaddr >> src_port >> dest
+            >> dest_ipaddr >> dest_port >> r_count >> p_r_count;
 
-        *src_port = from_port;
-        *to_node = (void *) dest;
-        *to_port = dest_port;
+        *dest_node = (void *) dest;
         *req_counter = r_count;
         *prev_req_counter = p_r_count;
+        _src_loc.reset(new po6::net::location(src_ipaddr, src_port));
+        _dest_loc.reset(new po6::net::location(dest_ipaddr, dest_port));
+        *src_loc = std::move(_src_loc);
+        *dest_loc = std::move(_dest_loc);
         return src;
     }
 
