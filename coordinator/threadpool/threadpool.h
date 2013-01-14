@@ -28,7 +28,7 @@ namespace coordinator
 namespace thread
 {
     class pool;
-    void thread_loop (pool *tpool);
+    void thread_loop(pool *tpool);
 
     class unstarted_thread
     {
@@ -49,24 +49,24 @@ namespace thread
     };
 
     inline
-    unstarted_thread :: unstarted_thread ( 
+    unstarted_thread :: unstarted_thread( 
             void (*f) (coordinator::central*, 
                        std::shared_ptr<message::message>,
                        enum message::msg_type),
             coordinator::central *s,
             std::shared_ptr<message::message> m,
             enum message::msg_type mtype)
-        : func (f)
-        , server (s)
-        , msg (m)
-        , m_type (mtype)
+        : func(f)
+        , server(s)
+        , msg(m)
+        , m_type(mtype)
     {
     }
 
     class pool
     {
         public:
-            pool (int n_threads);
+            pool(int n_threads);
 
         public:
             int num_threads;
@@ -76,43 +76,43 @@ namespace thread
             po6::threads::cond empty_queue_cond;
         
         public:
-            void add_request (std::unique_ptr<unstarted_thread> t);
+            void add_request(std::unique_ptr<unstarted_thread> t);
     };
 
     inline
-    pool :: pool (int n_threads)
-        : num_threads (n_threads)
-        , empty_queue_cond (&queue_mutex)
+    pool :: pool(int n_threads)
+        : num_threads(n_threads)
+        , empty_queue_cond(&queue_mutex)
     {
         int i;
         std::unique_ptr<std::thread> t;
         for (i = 0; i < num_threads; i++)
         {
-            t.reset (new std::thread (thread_loop, this));
+            t.reset(new std::thread(thread_loop, this));
             t->detach();
         }
     }
 
     inline void
-    pool :: add_request (std::unique_ptr<unstarted_thread> t)
+    pool :: add_request(std::unique_ptr<unstarted_thread> t)
     {
         queue_mutex.lock();
         if (queue.empty())
         {
             empty_queue_cond.signal();
         }
-        queue.push_back (std::move(t));
+        queue.push_back(std::move(t));
         queue_mutex.unlock();
     }
 
     void
-    thread_loop (pool *tpool)
+    thread_loop(pool *tpool)
     {
         std::unique_ptr<unstarted_thread> thr;
         while (true)
         {
             tpool->queue_mutex.lock();
-            while (tpool->queue.empty())
+            while(tpool->queue.empty())
             {
                 tpool->empty_queue_cond.wait();
             }

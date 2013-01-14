@@ -27,14 +27,14 @@
 /* This also defines the number of physical servers
  * = MAX_PORT - COORD_PORT
  */
-#define MAX_PORT 5201
+#define MAX_PORT 5202
 
 namespace coordinator
 {
     class central
     {
         public:
-            central ();
+            central();
         private:
             po6::net::location myloc;
 
@@ -49,10 +49,10 @@ namespace coordinator
     };
 
     inline
-    central :: central ()
-        : myloc (COORD_IPADDR, COORD_PORT)
-        , bb (myloc.address, myloc.port, 0)
-        , rec_bb (myloc.address, COORD_REC_PORT, 0)
+    central :: central()
+        : myloc(COORD_IPADDR, COORD_PORT)
+        , bb(myloc.address, myloc.port, 0)
+        , rec_bb(myloc.address, COORD_REC_PORT, 0)
     {
         time = 0;
         port_ctr = COORD_PORT;

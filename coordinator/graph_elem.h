@@ -22,8 +22,8 @@ namespace coordinator
     class graph_elem
     {
         public:
-            graph_elem ();
-            graph_elem (po6::net::location _loc1, po6::net::location _loc2,
+            graph_elem();
+            graph_elem(po6::net::location _loc1, po6::net::location _loc2,
                 void *_mem_addr1, void *_mem_addr2);
 
         public:
@@ -35,12 +35,12 @@ namespace coordinator
     }; // class graph_elem
 
     inline
-    graph_elem :: graph_elem (po6::net::location _loc1, po6::net::location _loc2,
-                void *_mem_addr1, void *_mem_addr2)
-        : loc1 (_loc1)
-        , loc2 (_loc2)
-        , mem_addr1 (_mem_addr1)
-        , mem_addr2 (_mem_addr2)
+    graph_elem :: graph_elem(po6::net::location _loc1, po6::net::location _loc2,
+        void *_mem_addr1, void *_mem_addr2)
+        : loc1(_loc1)
+        , loc2(_loc2)
+        , mem_addr1(_mem_addr1)
+        , mem_addr2(_mem_addr2)
     {
     }
 

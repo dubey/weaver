@@ -1,12 +1,12 @@
 Do not send message if source and dest are same (done)
 Cache reachability results (basic, no invalidation, only caching positive
 results)
+Make system independent of localhost (done)
 
 Make new threads for handling each new reach request (done at each server,
 pending at central server) - need to change to thread pool (done).
 
 Make allowance for multiple reach_nodes in reachability requests.
 Add update functions
-Make system independent of localhost
 
 Check memory leaks using valgrind

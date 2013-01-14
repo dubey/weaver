@@ -33,7 +33,7 @@ namespace element
     class edge : public element
     {
         public:
-            edge (po6::net::location server, uint32_t time, void* mem_addr, 
+            edge(po6::net::location server, uint32_t time, void* mem_addr, 
                 meta_element _from, meta_element _to);
         
         public:
@@ -42,11 +42,11 @@ namespace element
     };
 
     inline
-    edge :: edge (po6::net::location server, uint32_t time, void* mem_addr, 
+    edge :: edge(po6::net::location server, uint32_t time, void* mem_addr, 
         meta_element _from, meta_element _to)
-        : element (server, time, (void*) this)
-        , from (_from)
-        , to (_to)
+        : element(server, time, (void*) this)
+        , from(_from)
+        , to(_to)
     {
     }
 }

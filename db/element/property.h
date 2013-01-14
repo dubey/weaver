@@ -25,8 +25,8 @@ namespace element
     class property
     {
         public:
-            property ();
-            property (uint32_t, uint32_t);
+            property();
+            property(uint32_t, uint32_t);
         
         public:
             char* __key;
@@ -37,12 +37,12 @@ namespace element
     };
 
     inline
-    property :: property ()
+    property :: property()
     {
     }
 
     inline
-    property :: property (uint32_t _key, uint32_t _value)
+    property :: property(uint32_t _key, uint32_t _value)
     {
         key = _key;
         value = _value;

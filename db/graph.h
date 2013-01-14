@@ -37,7 +37,7 @@ namespace db
     class graph
     {
         public:
-            graph (const char* ip_addr, in_port_t port);
+            graph(const char* ip_addr, in_port_t port);
 
         private:
             std::vector<element::node *> V;
@@ -50,13 +50,13 @@ namespace db
             busybee_sta bb;
             busybee_sta bb_recv;
             po6::threads::mutex bb_lock;
-            element::node* create_node (uint32_t time);
-            element::edge* create_edge (std::unique_ptr<element::meta_element> n1,
+            element::node* create_node(uint32_t time);
+            element::edge* create_edge(std::unique_ptr<element::meta_element> n1,
                                         std::unique_ptr<element::meta_element> n2, 
                                         uint32_t direction, 
                                         uint32_t time);
-            bool mark_visited (element::node *n, uint32_t req_counter);
-            bool remove_visited (element::node *n, uint32_t req_counter);
+            bool mark_visited(element::node *n, uint32_t req_counter);
+            bool remove_visited(element::node *n, uint32_t req_counter);
             //void delete_node (element::node 
             //bool find_node (element::node **n);
             //bool find_edge (element::edge **e);
@@ -65,20 +65,20 @@ namespace db
     }; //class graph
 
     inline
-    graph :: graph (const char* ip_addr, in_port_t port)
+    graph :: graph(const char* ip_addr, in_port_t port)
         : node_count (0)
-        , myloc (ip_addr, port)
-        , bb (myloc.address, myloc.port + SEND_PORT_INCR, 0)
-        , bb_recv (myloc.address, myloc.port, 0)
+        , myloc(ip_addr, port)
+        , bb(myloc.address, myloc.port + SEND_PORT_INCR, 0)
+        , bb_recv(myloc.address, myloc.port, 0)
     {
     }
 
     inline element::node*
-    graph :: create_node (uint32_t time)
+    graph :: create_node(uint32_t time)
     {
-        element::node* new_node = new element::node (myloc, time, NULL);
+        element::node* new_node = new element::node(myloc, time, NULL);
         elem_lock.lock();
-        V.push_back (new_node);
+        V.push_back(new_node);
         elem_lock.unlock();
         
         //std::cout << "Creating node, addr = " << (void*) new_node 
@@ -87,7 +87,7 @@ namespace db
     }
 
     inline element::edge*
-    graph :: create_edge (std::unique_ptr<element::meta_element> n1,
+    graph :: create_edge(std::unique_ptr<element::meta_element> n1,
                           std::unique_ptr<element::meta_element> n2,
                           uint32_t direction, 
                           uint32_t time)
@@ -95,21 +95,21 @@ namespace db
         element::node *local_node = (element::node *) n1->get_addr();
         element::edge *new_edge;
         elem_lock.lock();
-        if (direction == 0) 
+        if(direction == 0) 
         {
-            new_edge = new element::edge (myloc, time, NULL, *n1, *n2);
-            local_node->out_edges.push_back (new_edge->get_meta_element());
+            new_edge = new element::edge(myloc, time, NULL, *n1, *n2);
+            local_node->out_edges.push_back(new_edge->get_meta_element());
         } else if (direction == 1)
         {
-            new_edge = new element::edge (myloc, time, NULL, *n2, *n1);
-            local_node->in_edges.push_back (new_edge->get_meta_element());
+            new_edge = new element::edge(myloc, time, NULL, *n2, *n1);
+            local_node->in_edges.push_back(new_edge->get_meta_element());
         } else
         {
             std::cerr << "edge direction error: " << direction << std::endl;
             elem_lock.unlock();
             return NULL;
         }
-        E.push_back (new_edge);
+        E.push_back(new_edge);
         elem_lock.unlock();
 
         //std::cout << "Creating edge, addr = " << (void *) new_edge << std::endl;
@@ -117,7 +117,7 @@ namespace db
     }
 
     inline bool
-    graph :: mark_visited (element::node *n, uint32_t req_counter)
+    graph :: mark_visited(element::node *n, uint32_t req_counter)
     {
         uint32_t key = 0; //visited key
         /*char key[] = "v\0";
@@ -129,27 +129,27 @@ namespace db
         std::cout << "string of req counter " << key
                   << "," << value << " " ;
         */
-        element::property p (key, req_counter);
+        element::property p(key, req_counter);
         elem_lock.lock();
         if (n->has_property(p)) 
         {
-            elem_lock.unlock ();
+            elem_lock.unlock();
             return true;
         } else 
         {
-            n->add_property (p);
+            n->add_property(p);
             elem_lock.unlock();
             return false;
         }
     }
 
     inline bool
-    graph :: remove_visited (element::node *n, uint32_t req_counter)
+    graph :: remove_visited(element::node *n, uint32_t req_counter)
     {
         uint32_t key = 0; //visited key
-        element::property p (key, req_counter);
+        element::property p(key, req_counter);
         elem_lock.lock();
-        n->remove_property (p);
+        n->remove_property(p);
         elem_lock.unlock();
     }
 
