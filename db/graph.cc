@@ -26,9 +26,8 @@
 #include "common/message/message.h"
 #include "threadpool/threadpool.h"
 
-#define IP_ADDR "127.0.0.1"
-#define COORD_IP_ADDR "127.0.0.1" //XXX
-#define MY_IP_ADDR "127.0.0.1" //XXX
+#define COORD_IP_ADDR "127.0.0.1"
+#define MY_IP_ADDR "127.0.0.1"
 #define PORT_BASE 5200
 
 //Pending batched request
@@ -433,7 +432,7 @@ void
 runner(db::graph *G)
 {
     busybee_returncode ret;
-    po6::net::location sender(IP_ADDR, PORT_BASE);
+    po6::net::location sender(MY_IP_ADDR, PORT_BASE);
     message::message msg(message::ERROR);
     uint32_t code;
     enum message::msg_type mtype;
@@ -498,7 +497,7 @@ main(int argc, char* argv[])
     outgoing_req_id_counter = 0;
     incoming_req_id_counter = 0;
 
-    db::graph G(IP_ADDR, port);
+    db::graph G(MY_IP_ADDR, port);
     
     runner(&G);
 
