@@ -3,6 +3,7 @@ Cache reachability results (basic, no invalidation, only caching positive
 results)
 Make system independent of localhost (done)
 
+Change usage of batch_requests from regular pointers to shared_ptr.
 Make new threads for handling each new reach request (done at each server,
 pending at central server) - need to change to thread pool (done).
 
