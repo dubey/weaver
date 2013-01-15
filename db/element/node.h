@@ -30,7 +30,7 @@ namespace element
     class node : public element
     {
         public:
-            node(po6::net::location server, uint32_t time, void* mem_addr);
+            node(po6::net::location server, uint64_t time, void* mem_addr);
         
         public:
             std::vector<meta_element> out_edges;
@@ -40,7 +40,7 @@ namespace element
     };
 
     inline
-    node :: node(po6::net::location server, uint32_t time, void* mem_addr)
+    node :: node(po6::net::location server, uint64_t time, void* mem_addr)
         : element(server, time, (void*) this)
     {
     }

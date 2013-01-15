@@ -9,6 +9,9 @@ pending at central server) - need to change to thread pool (done).
 
 Add update functions.
 
+Make edge have only one meta_element. No need to store local information.
+Examine code for spurious copying/mallocing.
+Add error message printing on msg packing/unpacking.
 Make allowance for multiple reach_nodes in reachability requests.
 Try to get rid of PO6_NDEBUG_LEAKS.
 Check memory leaks using valgrind.

@@ -24,7 +24,7 @@ namespace coordinator
         public:
             graph_elem();
             graph_elem(po6::net::location _loc1, po6::net::location _loc2,
-                void *_mem_addr1, void *_mem_addr2);
+                void *_mem_addr1, void *_mem_addr2, uint64_t _creat_time);
 
         public:
             /* If this is a node, then only loc1, mem_addr1 are relevant
@@ -32,15 +32,17 @@ namespace coordinator
              */
             po6::net::location loc1, loc2;
             void *mem_addr1, *mem_addr2;
+            uint64_t creat_time;
     }; // class graph_elem
 
     inline
     graph_elem :: graph_elem(po6::net::location _loc1, po6::net::location _loc2,
-        void *_mem_addr1, void *_mem_addr2)
+        void *_mem_addr1, void *_mem_addr2, uint64_t _creat_time)
         : loc1(_loc1)
         , loc2(_loc2)
         , mem_addr1(_mem_addr1)
         , mem_addr2(_mem_addr2)
+        , creat_time(_creat_time)
     {
     }
 

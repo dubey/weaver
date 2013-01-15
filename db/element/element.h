@@ -30,13 +30,13 @@ namespace element
     class element
     {
         public:
-            element(po6::net::location server, uint32_t time, void* mem_addr);
+            element(po6::net::location server, uint64_t time, void* mem_addr);
             
         protected:
             std::vector<property> properties;
             po6::net::location myloc;
-            uint32_t t_u;
-            uint32_t t_d;
+            uint64_t t_u;
+            uint64_t t_d;
             void* elem_addr;
 
         public:
@@ -44,7 +44,9 @@ namespace element
             void remove_property(property prop);
             //int get_prop_value (char* _key, char** _value);
             bool has_property(property prop);
+            void update_t_d(uint64_t del_time);
             meta_element get_meta_element();
+            uint64_t get_t_u();
             
         public:
             //Testing functions
@@ -52,7 +54,7 @@ namespace element
     };
 
     inline
-    element :: element(po6::net::location server, uint32_t time, void* mem_addr)
+    element :: element(po6::net::location server, uint64_t time, void* mem_addr)
         : properties(0)
         , myloc(server)
         , t_u(time)
@@ -115,10 +117,22 @@ namespace element
         return properties.size();
     }
 
+    inline void
+    element :: update_t_d(uint64_t del_time)
+    {
+        t_d = del_time;
+    }
+
     inline meta_element
     element :: get_meta_element()
     {
         return meta_element(myloc, t_u, t_d, elem_addr);
+    }
+
+    inline uint64_t
+    element :: get_t_u()
+    {
+        return t_u;
     }
 }
 }

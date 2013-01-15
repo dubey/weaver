@@ -76,43 +76,69 @@ db::thread::pool thread_pool(NUM_THREADS);
 
 // create a graph node
 void
-handle_create_node(db::graph *G, std::unique_ptr<message::message> m)
+handle_create_node(db::graph *G, std::unique_ptr<message::message> msg)
 {
-    db::element::node *n = G->create_node (0);
-    message::message msg(message::NODE_CREATE_ACK);
+    uint64_t creat_time;
+    db::element::node *n;
     po6::net::location coord(COORD_IP_ADDR, PORT_BASE);
+    
+    if (msg->unpack_node_create(&creat_time) != 0)
+    {
+        std::cerr << "error unpacking message" << std::endl;
+        return;
+    }
+    n = G->create_node(creat_time);
 
-    if (msg.prep_create_ack((size_t) n) != 0) 
+    msg->change_type(message::NODE_CREATE_ACK);
+    if (msg->prep_create_ack((size_t)n) != 0) 
     {
         return;
     }
-    G->send(coord, msg.buf);
+    G->send(coord, msg->buf);
+}
+
+// delete a graph node
+void
+handle_delete_node(db::graph *G, std::unique_ptr<message::message> msg)
+{
+    db::element::node *n; // node to be deleted
+    void *node_addr; // temp var to hold node handle
+    uint64_t del_time; // time of deletion
+
+    if (msg->unpack_node_delete(&node_addr, &del_time) != 0)
+    {
+        std::cerr << "error unpacking message" << std::endl;
+        return;
+    }
+    n = (db::element::node *)node_addr;
+    G->delete_node(n, del_time);
+
+    //TODO send messages to all in-neighbors to mark edges as deleted.
+    //TODO need locking here. Entire deletion process should be atomic.
 }
 
 // create a graph edge
 void
 handle_create_edge(db::graph *G, std::unique_ptr<message::message> msg)
 {
-    void *node1_handle, *node2_handle;
-    std::unique_ptr<po6::net::location> remote, local;
-    uint32_t direction;
     std::unique_ptr<db::element::meta_element> n1, n2;
-    db::element::edge *e;
+    uint32_t direction;
+    uint64_t creat_time;
     po6::net::location coord(COORD_IP_ADDR, PORT_BASE);
+    std::unique_ptr<po6::net::location> local(new po6::net::location(G->myloc));
+    db::element::edge *e;
 
-    remote = msg->unpack_edge_create(&node1_handle, &node2_handle, &direction);
-    if (remote == NULL)
+    if (msg->unpack_edge_create(&n1, &n2, std::move(local), &direction, &creat_time) != 0)
     {
+        std::cerr << "error unpacking message" << std::endl;
         return;
     }
-    local.reset(new po6::net::location(MY_IP_ADDR, port));
-    n1.reset(new db::element::meta_element(*local, 0, UINT_MAX, node1_handle));
-    n2.reset(new db::element::meta_element(*remote, 0, UINT_MAX, node2_handle));
     
-    e = G->create_edge(std::move(n1), std::move(n2), (uint32_t)direction, 0);
+    e = G->create_edge(std::move(n1), std::move(n2), direction, creat_time);
     msg->change_type(message::EDGE_CREATE_ACK);
-    if (msg->prep_create_ack((size_t) e) != 0) 
+    if (msg->prep_create_ack((size_t)e) != 0) 
     {
+        std::cerr << "error unpacking message" << std::endl;
         return;
     }
     G->send(coord, msg->buf);
@@ -147,6 +173,8 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         &coord_req_id,
         &prev_req_id);
 
+    //TODO need locking here. Entire traversal process should be atomic (at
+    //least at the level of each node)
     for (src_iter = src_nodes.begin(); src_iter < src_nodes.end(); src_iter++)
     {
         static int node_ctr = 0;
@@ -391,7 +419,7 @@ runner(db::graph *G)
         switch (mtype)
         {
             case message::NODE_CREATE_REQ:
-                thr.reset(new db::thread::unstarted_thread(handle_create_node, G, NULL));
+                thr.reset(new db::thread::unstarted_thread(handle_create_node, G, std::move(rec_msg)));
                 thread_pool.add_request(std::move(thr));
                 break;
 

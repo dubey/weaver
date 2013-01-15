@@ -41,6 +41,7 @@ class pending_req
         int num_edge;
 };
 
+uint64_t cur_time;
 std::unordered_map<uint32_t, pending_req> pending;
 po6::threads::mutex pending_mutex;
 
@@ -90,8 +91,8 @@ void*
 create_edge(void *mem_addr1, void *mem_addr2, coordinator::central *server)
 {
     coordinator::graph_elem *elem; // new edge
-    coordinator::graph_elem *elem1 = (coordinator::graph_elem *) mem_addr1; //from node
-    coordinator::graph_elem *elem2 = (coordinator::graph_elem *) mem_addr2; //to node
+    coordinator::graph_elem *elem1 = (coordinator::graph_elem *)mem_addr1; //from node
+    coordinator::graph_elem *elem2 = (coordinator::graph_elem *)mem_addr2; //to node
     po6::net::location loc1(elem1->loc1); //from node's location
     po6::net::location loc2(elem2->loc2); //to node's location
     std::unique_ptr<po6::net::location> loc_ptr; //location pointer reused for msg packing
@@ -101,7 +102,7 @@ create_edge(void *mem_addr1, void *mem_addr2, coordinator::central *server)
 
     loc_ptr.reset(new po6::net::location(elem2->loc1));
     msg.prep_edge_create((size_t)elem1->mem_addr1, (size_t)elem2->mem_addr1,
-        std::move(loc_ptr), dir);
+        std::move(loc_ptr), elem1->creat_time, elem2->creat_time, dir, cur_time);
     if ((ret = server->bb.send(loc1, msg.buf)) != BUSYBEE_SUCCESS)
     {
         std::cerr << "msg send error: " << ret << std::endl;
@@ -117,8 +118,8 @@ create_edge(void *mem_addr1, void *mem_addr2, coordinator::central *server)
     dir = message::SECOND_TO_FIRST;
     msg.change_type(message::EDGE_CREATE_REQ);
     loc_ptr.reset(new po6::net::location(elem1->loc1));
-    msg.prep_edge_create((size_t)elem2->mem_addr1, (size_t)elem1->mem_addr1, 
-        std::move(loc_ptr), dir);
+    msg.prep_edge_create((size_t)elem2->mem_addr1, (size_t)elem1->mem_addr1,
+        std::move(loc_ptr), elem2->creat_time, elem1->creat_time, dir, cur_time);
     if ((ret = server->bb.send(loc2, msg.buf)) != BUSYBEE_SUCCESS) 
     {
         std::cerr << "msg send error: " << ret << std::endl;
@@ -132,7 +133,7 @@ create_edge(void *mem_addr1, void *mem_addr2, coordinator::central *server)
     msg.unpack_create_ack(&mem_addr2);
 
     elem = new coordinator::graph_elem(elem1->loc1, elem2->loc1, 
-       mem_addr1, mem_addr2);
+       mem_addr1, mem_addr2, cur_time);
     server->elements.push_back(elem);
             
     //std::cout << "Edge id is " << (void *) elem << std::endl;
@@ -154,9 +155,9 @@ create_node(coordinator::central *server)
     }
     po6::net::location shard_loc(COORD_IPADDR, server->port_ctr); //node will be placed on this shard server
     shard_loc_ptr.reset(new po6::net::location(shard_loc));
-    msg.prep_node_create();
+    msg.prep_node_create(cur_time);
     ret = server->bb.send(shard_loc, msg.buf);
-    if (ret != BUSYBEE_SUCCESS) 
+    if (ret != BUSYBEE_SUCCESS)
     {
         //error occurred
         std::cerr << "msg send error: " << ret << std::endl;
@@ -170,7 +171,7 @@ create_node(coordinator::central *server)
     }
     msg.unpack_create_ack(&node_addr);
     elem = new coordinator::graph_elem(*shard_loc_ptr, *shard_loc_ptr,
-        node_addr, node_addr);
+        node_addr, node_addr, cur_time);
     server->elements.push_back(elem);
     
     //std::cout << "Node id is " << (void *) elem << " at port " 

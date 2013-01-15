@@ -50,18 +50,15 @@ namespace db
             busybee_sta bb;
             busybee_sta bb_recv;
             po6::threads::mutex bb_lock;
-            element::node* create_node(uint32_t time);
+            element::node* create_node(uint64_t time);
             element::edge* create_edge(std::unique_ptr<element::meta_element> n1,
-                                        std::unique_ptr<element::meta_element> n2, 
-                                        uint32_t direction, 
-                                        uint32_t time);
+                std::unique_ptr<element::meta_element> n2, 
+                uint32_t direction, 
+                uint64_t time);
+            void delete_node(element::node *n, uint64_t del_time);
             bool mark_visited(element::node *n, uint32_t req_counter);
             bool remove_visited(element::node *n, uint32_t req_counter);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
-            //void delete_node (element::node 
-            //bool find_node (element::node **n);
-            //bool find_edge (element::edge **e);
-            //std::vector<element::node *> transclosure (element::node *start);
     
     }; //class graph
 
@@ -75,7 +72,7 @@ namespace db
     }
 
     inline element::node*
-    graph :: create_node(uint32_t time)
+    graph :: create_node(uint64_t time)
     {
         element::node* new_node = new element::node(myloc, time, NULL);
         elem_lock.lock();
@@ -89,9 +86,9 @@ namespace db
 
     inline element::edge*
     graph :: create_edge(std::unique_ptr<element::meta_element> n1,
-                          std::unique_ptr<element::meta_element> n2,
-                          uint32_t direction, 
-                          uint32_t time)
+        std::unique_ptr<element::meta_element> n2,
+        uint32_t direction, 
+        uint64_t time)
     {
         element::node *local_node = (element::node *) n1->get_addr();
         element::edge *new_edge;
@@ -115,6 +112,14 @@ namespace db
 
         //std::cout << "Creating edge, addr = " << (void *) new_edge << std::endl;
         return new_edge;
+    }
+
+    inline void
+    graph :: delete_node(element::node *n, uint64_t del_time)
+    {
+        elem_lock.lock();
+        n->update_t_d(del_time);
+        elem_lock.unlock();
     }
 
     inline bool
