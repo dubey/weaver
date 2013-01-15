@@ -57,6 +57,7 @@ namespace db
                                         uint32_t time);
             bool mark_visited(element::node *n, uint32_t req_counter);
             bool remove_visited(element::node *n, uint32_t req_counter);
+            busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
             //void delete_node (element::node 
             //bool find_node (element::node **n);
             //bool find_edge (element::edge **e);
@@ -151,6 +152,19 @@ namespace db
         elem_lock.lock();
         n->remove_property(p);
         elem_lock.unlock();
+    }
+
+    inline busybee_returncode
+    graph :: send(po6::net::location loc, std::auto_ptr<e::buffer> msg)
+    {
+        busybee_returncode ret;
+        bb_lock.lock();
+        if ((ret = bb.send(loc, msg)) != BUSYBEE_SUCCESS)
+        {
+            std::cerr << "msg send error: " << ret << std::endl;
+            //assert(ret == BUSYBEE_SUCCESS); //XXX
+        }
+        bb_lock.unlock();
     }
 
 } //namespace db
