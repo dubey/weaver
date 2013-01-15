@@ -56,16 +56,6 @@ class batch_request
         dest_addr = NULL;
     }
 
-    /*
-    batch_request (prev_port p, uint32_t c, int n)
-        : prev_port(p)
-        , id(c)
-        , num(n)
-        , reachable (false)
-    {
-    }
-    */
-
     batch_request(const batch_request &tup)
     {
         prev_loc = tup.prev_loc;
@@ -76,18 +66,17 @@ class batch_request
         dest_addr = tup.dest_addr;
         dest_loc = tup.dest_loc;
     }
-
 };
 
 int order, port;
 uint32_t incoming_req_id_counter, outgoing_req_id_counter;
 po6::threads::mutex incoming_req_id_counter_mutex, outgoing_req_id_counter_mutex;
-std::unordered_map<uint32_t, size_t> pending_batch;
+std::unordered_map<uint32_t, std::shared_ptr<batch_request>> pending_batch;
 db::thread::pool thread_pool(NUM_THREADS);
 
 // create a graph node
 void
-handle_create_node(db::graph *G, std::shared_ptr<message::message> m)
+handle_create_node(db::graph *G, std::unique_ptr<message::message> m)
 {
     db::element::node *n = G->create_node (0);
     message::message msg(message::NODE_CREATE_ACK);
@@ -99,9 +88,10 @@ handle_create_node(db::graph *G, std::shared_ptr<message::message> m)
     }
     G->send(coord, msg.buf);
 }
+
 // create a graph edge
 void
-handle_create_edge(db::graph *G, std::shared_ptr<message::message> msg)
+handle_create_edge(db::graph *G, std::unique_ptr<message::message> msg)
 {
     void *node1_handle, *node2_handle;
     std::unique_ptr<po6::net::location> remote, local;
@@ -130,7 +120,7 @@ handle_create_edge(db::graph *G, std::shared_ptr<message::message> msg)
 
 // reachability request starting from src_nodes to dest_node
 void
-handle_reachable_request(db::graph *G, std::shared_ptr<message::message> msg)
+handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
 {
     void *dest_node; // destination node handle
     std::unique_ptr<po6::net::location> prev_loc, //previous server's location
@@ -213,14 +203,13 @@ handle_reachable_request(db::graph *G, std::shared_ptr<message::message> msg)
     {   //need to send back ack
         my_loc.reset(new po6::net::location(G->myloc));
         msg->change_type(message::REACHABLE_REPLY);
-        msg->prep_reachable_rep(prev_req_id, true, (size_t) reach_node,
-            std::move(my_loc));
+        msg->prep_reachable_rep(prev_req_id, true, (size_t) reach_node, std::move(my_loc));
         G->send(*prev_loc, msg->buf);
     } else if (propagate_req) { 
         // the destination is not reachable locally in one hop from this server, so
         // now we have to contact all the reachable neighbors and see if they can reach
         std::unordered_map<po6::net::location, std::vector<size_t>>::iterator loc_iter;
-        batch_request *request = new batch_request();
+        std::shared_ptr<batch_request> request(new batch_request());
         //need mutex since there can be multiple replies
         //for same outstanding req
         request->mutex.lock();
@@ -234,7 +223,7 @@ handle_reachable_request(db::graph *G, std::shared_ptr<message::message> msg)
             request->num++;
             outgoing_req_id_counter_mutex.lock();
             my_outgoing_req_id = outgoing_req_id_counter++;
-            pending_batch[my_outgoing_req_id] = (size_t)request;
+            pending_batch[my_outgoing_req_id] = request;
             outgoing_req_id_counter_mutex.unlock();
             msg->prep_reachable_prop(loc_iter->second,
                 std::move(my_loc),
@@ -245,14 +234,12 @@ handle_reachable_request(db::graph *G, std::shared_ptr<message::message> msg)
             if (loc_iter->first == G->myloc)
             {   //no need to send message since it is local
                 std::unique_ptr<db::thread::unstarted_thread> t;
-                t.reset(new db::thread::unstarted_thread(handle_reachable_request, G, msg));
+                t.reset(new db::thread::unstarted_thread(handle_reachable_request, G, std::move(msg)));
                 thread_pool.add_request(std::move(t));
             } else {
                 G->send(loc_iter->first, msg->buf);
             }
         }
-        assert(prev_loc->port > 4000);
-        assert(dest_loc->port > 4000);
         request->prev_loc = *prev_loc;
         request->id = prev_req_id;
         request->src_nodes = src_nodes;
@@ -274,10 +261,10 @@ handle_reachable_request(db::graph *G, std::shared_ptr<message::message> msg)
 // server immediately;
 // otherwise wait for other replies
 void
-handle_reachable_reply(db::graph *G, std::shared_ptr<message::message> msg)
+handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
 {
     uint32_t my_outgoing_req_id, my_batch_req_id, prev_req_id;
-    batch_request *request;
+    std::shared_ptr<batch_request> request;
     bool reachable_reply;
     std::unique_ptr<po6::net::location> reach_loc, my_loc;
     po6::net::location prev_loc;
@@ -288,7 +275,7 @@ handle_reachable_reply(db::graph *G, std::shared_ptr<message::message> msg)
         &reachable_reply,
         &reach_node);
     outgoing_req_id_counter_mutex.lock();
-    request = (batch_request *)pending_batch[my_outgoing_req_id];
+    request = std::move(pending_batch[my_outgoing_req_id]);
     pending_batch.erase(my_outgoing_req_id);
     outgoing_req_id_counter_mutex.unlock();
     request->mutex.lock();
@@ -337,10 +324,9 @@ handle_reachable_reply(db::graph *G, std::shared_ptr<message::message> msg)
         { 
             //no need to send msg over network
             std::unique_ptr<db::thread::unstarted_thread> t;
-            t.reset(new db::thread::unstarted_thread(handle_reachable_reply, G, msg));
+            t.reset(new db::thread::unstarted_thread(handle_reachable_reply, G, std::move(msg)));
             thread_pool.add_request(std::move(t));
-        } else
-        {
+        } else {
             G->send(prev_loc, msg->buf);
         }
     }
@@ -372,8 +358,7 @@ handle_reachable_reply(db::graph *G, std::shared_ptr<message::message> msg)
             }
             */
         }
-        //delete batch request
-        delete request;
+        //implicitly deleting batch request
         return;
     }
     request->mutex.unlock();
@@ -388,7 +373,7 @@ runner(db::graph *G)
     message::message msg(message::ERROR);
     uint32_t code;
     enum message::msg_type mtype;
-    std::shared_ptr<message::message> rec_msg;
+    std::unique_ptr<message::message> rec_msg;
     std::unique_ptr<db::thread::unstarted_thread> thr;
     std::unique_ptr<std::thread> t;
 
@@ -411,17 +396,17 @@ runner(db::graph *G)
                 break;
 
             case message::EDGE_CREATE_REQ:
-                thr.reset(new db::thread::unstarted_thread(handle_create_edge, G, rec_msg));
+                thr.reset(new db::thread::unstarted_thread(handle_create_edge, G, std::move(rec_msg)));
                 thread_pool.add_request(std::move(thr));
                 break;
             
             case message::REACHABLE_PROP:
-                thr.reset(new db::thread::unstarted_thread(handle_reachable_request, G, rec_msg));
+                thr.reset(new db::thread::unstarted_thread(handle_reachable_request, G, std::move(rec_msg)));
                 thread_pool.add_request(std::move(thr));
                 break;
 
             case message::REACHABLE_REPLY:
-                thr.reset(new db::thread::unstarted_thread(handle_reachable_reply, G, rec_msg));
+                thr.reset(new db::thread::unstarted_thread(handle_reachable_reply, G, std::move(rec_msg)));
                 thread_pool.add_request(std::move(thr));
                 break;
 

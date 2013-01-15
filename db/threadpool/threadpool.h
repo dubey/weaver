@@ -34,24 +34,24 @@ namespace thread
     {
         public:
             unstarted_thread (
-                void (*f) (db::graph*, std::shared_ptr<message::message>),
+                void (*f) (db::graph*, std::unique_ptr<message::message>),
                 db::graph *g,
-                std::shared_ptr<message::message> m);
+                std::unique_ptr<message::message> m);
 
         public:
-            void (*func) (db::graph*, std::shared_ptr<message::message>);
+            void (*func) (db::graph*, std::unique_ptr<message::message>);
             db::graph *G;
-            std::shared_ptr<message::message> msg;
+            std::unique_ptr<message::message> msg;
     };
 
     inline
     unstarted_thread :: unstarted_thread ( 
-            void (*f) (db::graph*, std::shared_ptr<message::message>),
+            void (*f) (db::graph*, std::unique_ptr<message::message>),
             db::graph *g,
-            std::shared_ptr<message::message> m)
+            std::unique_ptr<message::message> m)
         : func (f)
         , G (g)
-        , msg (m)
+        , msg (std::move(m))
     {
     }
 
@@ -115,7 +115,7 @@ namespace thread
                 tpool->empty_queue_cond.signal();
             }
             tpool->queue_mutex.unlock();
-            (*(thr->func)) (thr->G, thr->msg);
+            (*(thr->func)) (thr->G, std::move(thr->msg));
         }
     }
 } //namespace thread
