@@ -19,15 +19,8 @@
 #include <busybee_sta.h>
 #include <po6/net/location.h>
 
+#include "../common/weaver_constants.h"
 #include "graph_elem.h"
-
-#define COORD_PORT 5200
-#define COORD_REC_PORT 4200
-#define COORD_IPADDR "127.0.0.1"
-/* This also defines the number of physical servers
- * = MAX_PORT - COORD_PORT
- */
-#define MAX_PORT 5202
 
 namespace coordinator
 {

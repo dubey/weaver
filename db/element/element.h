@@ -47,6 +47,7 @@ namespace element
             void update_t_d(uint64_t del_time);
             meta_element get_meta_element();
             uint64_t get_t_u();
+            uint64_t get_t_d();
             
         public:
             //Testing functions
@@ -133,6 +134,12 @@ namespace element
     element :: get_t_u()
     {
         return t_u;
+    }
+
+    inline uint64_t
+    element :: get_t_d()
+    {
+        return t_d;
     }
 }
 }

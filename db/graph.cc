@@ -25,13 +25,10 @@
 #include <e/buffer.h>
 #include "busybee_constants.h"
 
+#include "../common/weaver_constants.h"
 #include "graph.h"
 #include "common/message/message.h"
 #include "threadpool/threadpool.h"
-
-#define COORD_IP_ADDR "127.0.0.1"
-#define MY_IP_ADDR "127.0.0.1"
-#define PORT_BASE 5200
 
 //Pending batched request
 class batch_request
@@ -47,8 +44,8 @@ class batch_request
     po6::threads::mutex mutex;
 
     batch_request()
-        : prev_loc(MY_IP_ADDR, 42)
-        , dest_loc(MY_IP_ADDR, 42)
+        : prev_loc(SHARD_IPADDR, 42)
+        , dest_loc(SHARD_IPADDR, 42)
     {
         id = 0;
         num = 0;
@@ -80,7 +77,7 @@ handle_create_node(db::graph *G, std::unique_ptr<message::message> msg)
 {
     uint64_t creat_time;
     db::element::node *n;
-    po6::net::location coord(COORD_IP_ADDR, PORT_BASE);
+    po6::net::location coord(COORD_IPADDR, COORD_PORT);
     
     if (msg->unpack_node_create(&creat_time) != 0)
     {
@@ -112,6 +109,8 @@ handle_delete_node(db::graph *G, std::unique_ptr<message::message> msg)
     }
     n = (db::element::node *)node_addr;
     G->delete_node(n, del_time);
+    std::cout << "Set deletion time as " << del_time << " for node "
+        << node_addr << std::endl;
 
     //TODO send messages to all in-neighbors to mark edges as deleted.
     //TODO need locking here. Entire deletion process should be atomic.
@@ -124,7 +123,7 @@ handle_create_edge(db::graph *G, std::unique_ptr<message::message> msg)
     std::unique_ptr<db::element::meta_element> n1, n2;
     uint32_t direction;
     uint64_t creat_time;
-    po6::net::location coord(COORD_IP_ADDR, PORT_BASE);
+    po6::net::location coord(COORD_IPADDR, COORD_PORT);
     std::unique_ptr<po6::net::location> local(new po6::net::location(G->myloc));
     db::element::edge *e;
 
@@ -142,6 +141,12 @@ handle_create_edge(db::graph *G, std::unique_ptr<message::message> msg)
         return;
     }
     G->send(coord, msg->buf);
+}
+
+// delete a graph edge
+void
+handle_delete_edge(db::graph *G, std::unique_ptr<message::message> msg)
+{
 }
 
 // reachability request starting from src_nodes to dest_node
@@ -180,7 +185,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         static int node_ctr = 0;
         // because the coordinator placed the node's address in the message, 
         // we can just cast it back to a pointer
-        n = (db::element::node *) (*src_iter);
+        n = (db::element::node *)(*src_iter);
         if (!G->mark_visited(n, coord_req_id))
         {
             n->cache_mutex.lock();
@@ -204,16 +209,17 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
                 std::vector<db::element::meta_element>::iterator iter;
                 for (iter = n->out_edges.begin(); iter < n->out_edges.end(); iter++)
                 {
-                    db::element::edge *nbr = (db::element::edge *) iter->get_addr();
+                    db::element::edge *nbr = (db::element::edge *)iter->get_addr();
                     propagate_req = true;
-                    if (nbr->to.get_addr() == dest_node &&
-                        nbr->to.get_loc() == *dest_loc)
+                    if (nbr->to.get_addr() == dest_node && nbr->to.get_loc() == *dest_loc) //dest matches
+                        //&& nbr->get_t_u() >= coord_req_id && nbr->get_t_d() <= coord_req_id) //object not deleted
                     {
                         // Done! Send msg back to central server
                         reached = true;
                         reach_node = (void *) n;
                         break;
-                    } else {
+                    } else// if (nbr->get_t_u() >= coord_req_id && nbr->get_t_d() <= coord_req_id) //object not deleted
+                    {
                         // Continue propagating reachability request
                         msg_batch[nbr->to.get_loc()].push_back((size_t)nbr->to.get_addr());
                     }
@@ -313,7 +319,7 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
     if (reachable_reply)
     {   //caching positive result
         std::vector<size_t>::iterator node_iter;
-        std::vector<size_t> src_nodes = request->src_nodes;//outstanding_req[my_batch_req_id].src_nodes;
+        std::vector<size_t> src_nodes = request->src_nodes;
         for (node_iter = src_nodes.begin(); node_iter < src_nodes.end(); node_iter++)
         {
             std::vector<db::element::meta_element>::iterator iter;
@@ -359,12 +365,11 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
         }
     }
 
-    //if (outstanding_req[my_batch_req_id].num == 0)
     if (request->num == 0)
     {
         //delete visited property
         std::vector<size_t>::iterator node_iter;
-        std::vector<size_t> src_nodes = request->src_nodes;//outstanding_req[my_batch_req_id].src_nodes;
+        std::vector<size_t> src_nodes = request->src_nodes;
         for (node_iter = src_nodes.begin(); node_iter < src_nodes.end(); node_iter++)
         {
             std::vector<db::element::meta_element>::iterator iter;
@@ -387,6 +392,7 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
             */
         }
         //implicitly deleting batch request
+        assert(request.use_count() == 1);
         return;
     }
     request->mutex.unlock();
@@ -397,11 +403,11 @@ void
 runner(db::graph *G)
 {
     busybee_returncode ret;
-    po6::net::location sender(MY_IP_ADDR, PORT_BASE);
-    message::message msg(message::ERROR);
+    po6::net::location sender(SHARD_IPADDR, COORD_PORT);
     uint32_t code;
     enum message::msg_type mtype;
     std::unique_ptr<message::message> rec_msg;
+    message::message msg(message::ERROR);
     std::unique_ptr<db::thread::unstarted_thread> thr;
     std::unique_ptr<std::thread> t;
 
@@ -420,6 +426,11 @@ runner(db::graph *G)
         {
             case message::NODE_CREATE_REQ:
                 thr.reset(new db::thread::unstarted_thread(handle_create_node, G, std::move(rec_msg)));
+                thread_pool.add_request(std::move(thr));
+                break;
+
+            case message::NODE_DELETE_REQ:
+                thr.reset(new db::thread::unstarted_thread(handle_delete_node, G, std::move(rec_msg)));
                 thread_pool.add_request(std::move(thr));
                 break;
 
@@ -458,11 +469,11 @@ main(int argc, char* argv[])
     std::cout << "Testing Weaver" << std::endl;
     
     order = atoi(argv[1]);
-    port = PORT_BASE + order;
+    port = COORD_PORT + order;
     outgoing_req_id_counter = 0;
     incoming_req_id_counter = 0;
 
-    db::graph G(MY_IP_ADDR, port);
+    db::graph G(SHARD_IPADDR, port);
     
     runner(&G);
 

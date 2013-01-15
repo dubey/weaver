@@ -138,7 +138,7 @@ create_edge(void *mem_addr1, void *mem_addr2, coordinator::central *server)
             
     //std::cout << "Edge id is " << (void *) elem << std::endl;
     return (void *)elem;
-} //end create edge
+}
 
 void*
 create_node(coordinator::central *server)
@@ -176,7 +176,29 @@ create_node(coordinator::central *server)
     
     //std::cout << "Node id is " << (void *) elem << " at port " 
     return (void *)elem;
-} //end create node
+}
+
+void
+delete_node(void *node_handle, coordinator::central *server)
+{
+    coordinator::graph_elem *node = (coordinator::graph_elem *)node_handle;
+    message::message msg(message::NODE_DELETE_REQ);
+    busybee_returncode ret;
+    cur_time++;
+    if (msg.prep_node_delete((size_t)node->mem_addr1, cur_time) != 0)
+    {
+        std::cerr << "error packing msg" << std::endl;
+        return;
+    }
+    if ((ret = server->bb.send(node->loc1, msg.buf)) != BUSYBEE_SUCCESS)
+    {
+        std::cerr << "msg send error " << ret << std::endl;
+        return;
+    }
+
+    std::cout << "Sent message to delete node " << (void*)node_handle
+        << std::endl;
+}
 
 void
 reachability_request(void *mem_addr1, void *mem_addr2, coordinator::central *server)
@@ -290,6 +312,11 @@ main(int argc, char* argv[])
             second = rand() % NUM_NODES;
         }
         create_edge(nodes[first], nodes[second], &server);
+    }
+    for (i = 0; i < 10; i++)
+    {
+        int node_index = rand() % NUM_NODES;
+        delete_node(nodes[node_index], &server);
     }
     //clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &start); 
     //t = new std::thread (msg_handler, &server);
