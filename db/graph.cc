@@ -30,19 +30,19 @@
 #include "common/message/message.h"
 #include "threadpool/threadpool.h"
 
-//Pending batched request
+// Pending batched request
 class batch_request
 {
     public:
-    std::unique_ptr<po6::net::location> prev_loc; //prev server's port
-    uint32_t id; //prev server's req id
-    int num; //number of onward requests
+    std::unique_ptr<po6::net::location> prev_loc; // prev server's port
+    uint32_t id; // prev server's req id
+    int num; // number of onward requests
     bool reachable;
     std::unique_ptr<std::vector<size_t>> src_nodes;
-    void *dest_addr; //dest node's handle
-    po6::net::location dest_loc; //dest node's port
-    std::unique_ptr<std::vector<size_t>> del_nodes; //deleted nodes
-    std::unique_ptr<std::vector<uint64_t>> del_times; //delete times corr. to del_nodes
+    void *dest_addr; // dest node's handle
+    po6::net::location dest_loc; // dest node's port
+    std::unique_ptr<std::vector<size_t>> del_nodes; // deleted nodes
+    std::unique_ptr<std::vector<uint64_t>> del_times; // delete times corr. to del_nodes
     po6::threads::mutex mutex;
 
     batch_request()
@@ -66,14 +66,14 @@ class batch_request
     }
 };
 
-int order, port;
-uint32_t incoming_req_id_counter, outgoing_req_id_counter;
-po6::threads::mutex incoming_req_id_counter_mutex, outgoing_req_id_counter_mutex;
-std::unordered_map<uint32_t, std::shared_ptr<batch_request>> pending_batch;
-db::thread::pool thread_pool(NUM_THREADS);
-uint64_t my_clock;
-po6::threads::mutex graph_update_mutex;
-po6::threads::cond pending_update_cond(&graph_update_mutex);
+static int myid, port;
+static uint32_t incoming_req_id_counter, outgoing_req_id_counter;
+static po6::threads::mutex incoming_req_id_counter_mutex, outgoing_req_id_counter_mutex;
+static std::unordered_map<uint32_t, std::shared_ptr<batch_request>> pending_batch;
+static db::thread::pool thread_pool(NUM_THREADS);
+static uint64_t my_clock;
+static po6::threads::mutex graph_update_mutex;
+static po6::threads::cond pending_update_cond(&graph_update_mutex);
 
 // create a graph node
 void
@@ -88,12 +88,15 @@ handle_create_node(db::graph *G, std::unique_ptr<message::message> msg)
         return;
     }
     graph_update_mutex.lock();
-    n = G->create_node(creat_time);
-    assert(creat_time == (my_clock + 1));
     my_clock++;
+    assert(creat_time == my_clock); // who maintains this?
+
+    n = G->create_node(creat_time);
+
     pending_update_cond.broadcast();
     graph_update_mutex.unlock();
-    msg->change_type(message::NODE_CREATE_ACK);
+
+    msg->change_type(message::NODE_CREATE_ACK); // XXX put into prep_create_ack
     if (msg->prep_create_ack((size_t)n) != 0) 
     {
         return;
@@ -115,10 +118,12 @@ handle_delete_node(db::graph *G, std::unique_ptr<message::message> msg)
         return;
     }
     graph_update_mutex.lock();
-    n = (db::element::node *)node_addr;
-    assert(del_time == (my_clock + 1));
     my_clock++;
+    assert(del_time == my_clock);
+
+    n = (db::element::node *)node_addr;
     G->delete_node(n, del_time);
+
     pending_update_cond.broadcast();
     graph_update_mutex.unlock();
 
@@ -142,11 +147,14 @@ handle_create_edge(db::graph *G, std::unique_ptr<message::message> msg)
         return;
     }
     graph_update_mutex.lock();
-    e = G->create_edge(std::move(n1), std::move(n2), direction, creat_time);
-    assert(creat_time == (my_clock + 1));
     my_clock++;
+    assert(creat_time == my_clock);
+
+    e = G->create_edge(std::move(n1), std::move(n2), direction, creat_time);
+
     pending_update_cond.broadcast();
     graph_update_mutex.unlock();
+
     msg->change_type(message::EDGE_CREATE_ACK);
     if (msg->prep_create_ack((size_t)e) != 0) 
     {
@@ -198,7 +206,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
 
     // wait till all updates for this shard arrive
     graph_update_mutex.lock();
-    rec_clock = (*vector_clock)[order - 1];
+    rec_clock = (*vector_clock)[myid - 1];
     while (rec_clock > my_clock)
     {
         std::cout << "Going to wait now " << rec_clock << " " << my_clock <<
@@ -214,7 +222,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         // because the coordinator placed the node's address in the message, 
         // we can just cast it back to a pointer
         n = (db::element::node *)(*src_iter);
-        if (n->get_t_d() <= rec_clock)
+        if (n->get_t_d() <= rec_clock) // XXX t_d should be renamed to get_del_time()
         {
             // trying to traverse deleted node
             deleted_nodes->push_back(*src_iter);
@@ -243,10 +251,11 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
             } else {
                 n->cache_mutex.unlock();
                 std::vector<db::element::meta_element>::iterator iter;
+		// XXX check the properties of the edge
                 for (iter = n->out_edges.begin(); iter < n->out_edges.end(); iter++)
                 {
                     db::element::edge *nbr = (db::element::edge *)iter->get_addr();
-                    uint64_t nbr_clock = (*vector_clock)[nbr->to.get_loc().port - COORD_PORT - 1];
+                    uint64_t nbr_clock = (*vector_clock)[nbr->to.get_loc().port - COORD_PORT - 1]; // XXX need dst_id
                     if (nbr->get_t_u() <= nbr_clock && nbr->get_t_d() >= nbr_clock) //object within acceptable timeframe
                     {
                         propagate_req = true;
@@ -530,14 +539,14 @@ main(int argc, char* argv[])
 {
     if (argc != 2) 
     {
-        std::cerr << "Usage: " << argv[0] << " <order> " << std::endl;
+        std::cerr << "Usage: " << argv[0] << " <myid> " << std::endl;
         return -1;
     }
 
     std::cout << "Testing Weaver" << std::endl;
     
-    order = atoi(argv[1]);
-    port = COORD_PORT + order;
+    myid = atoi(argv[1]);
+    port = COORD_PORT + myid;
     outgoing_req_id_counter = 0;
     incoming_req_id_counter = 0;
 

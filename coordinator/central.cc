@@ -28,6 +28,7 @@
 #define NUM_REQUESTS 100
 #define NUM_THREADS 4
 
+// XXX what is this?
 class pending_req
 {
     public:
@@ -44,6 +45,7 @@ class pending_req
 std::unordered_map<uint32_t, pending_req> pending;
 po6::threads::mutex pending_mutex;
 
+// XXX what does this do?
 void
 handle_pending_req(coordinator::central *server,
     std::shared_ptr<message::message> msg,
