@@ -47,6 +47,7 @@ namespace db
         public:
             int node_count;
             po6::net::location myloc;
+            po6::net::location coord;
             busybee_sta bb;
             busybee_sta bb_recv;
             po6::threads::mutex bb_lock;
@@ -59,13 +60,14 @@ namespace db
             bool mark_visited(element::node *n, uint32_t req_counter);
             bool remove_visited(element::node *n, uint32_t req_counter);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
-    
+            busybee_returncode send_coord(std::auto_ptr<e::buffer> buf);
     }; //class graph
 
     inline
     graph :: graph(const char* ip_addr, in_port_t port)
         : node_count (0)
         , myloc(ip_addr, port)
+        , coord(COORD_IPADDR, COORD_PORT)
         , bb(myloc.address, myloc.port + SEND_PORT_INCR, 0)
         , bb_recv(myloc.address, myloc.port, 0)
     {
@@ -165,6 +167,19 @@ namespace db
         busybee_returncode ret;
         bb_lock.lock();
         if ((ret = bb.send(loc, msg)) != BUSYBEE_SUCCESS)
+        {
+            std::cerr << "msg send error: " << ret << std::endl;
+            //assert(ret == BUSYBEE_SUCCESS); //XXX
+        }
+        bb_lock.unlock();
+    }
+    
+    inline busybee_returncode
+    graph :: send_coord(std::auto_ptr<e::buffer> msg)
+    {
+        busybee_returncode ret;
+        bb_lock.lock();
+        if ((ret = bb.send(coord, msg)) != BUSYBEE_SUCCESS)
         {
             std::cerr << "msg send error: " << ret << std::endl;
             //assert(ret == BUSYBEE_SUCCESS); //XXX

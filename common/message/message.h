@@ -20,11 +20,11 @@
 #include <po6/net/location.h>
 #include <busybee_constants.h>
 
-#include "../weaver_constants.h"
-#include "../../db/element/property.h"
-#include "../../db/element/meta_element.h"
-#include "../../db/element/node.h"
-#include "../vclock/vclock.h"
+#include "common/weaver_constants.h"
+#include "db/element/property.h"
+#include "db/element/meta_element.h"
+#include "db/element/node.h"
+#include "common/vclock/vclock.h"
 
 namespace message
 {
@@ -84,7 +84,8 @@ namespace message
                 uint32_t req_counter,
                 uint32_t prev_req_counter,
                 std::vector<uint64_t> vector_clock);
-            std::vector<size_t> unpack_reachable_prop(std::unique_ptr<po6::net::location> *src_loc,
+            std::unique_ptr<std::vector<size_t>> unpack_reachable_prop(
+                std::unique_ptr<po6::net::location> *src_loc,
                 void **dest_node,
                 std::unique_ptr<po6::net::location> *dest_loc,
                 uint32_t *req_counter,
@@ -355,7 +356,7 @@ namespace message
         return 0;
     }
 
-    inline std::vector<size_t>
+    inline std::unique_ptr<std::vector<size_t>>
     message :: unpack_reachable_prop(std::unique_ptr<po6::net::location> *src_loc, 
         void **dest_node, 
         std::unique_ptr<po6::net::location> *dest_loc, 
@@ -365,7 +366,7 @@ namespace message
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t _type;
-        std::vector<size_t> src;
+        std::unique_ptr<std::vector<size_t>> src(new std::vector<size_t>());
         size_t dest, num_nodes, i, temp;
         uint32_t src_ipaddr, dest_ipaddr;
         uint16_t src_port, dest_port;
@@ -391,7 +392,7 @@ namespace message
         for (i = 0; i < num_nodes; i++, index += sizeof(size_t))
         {
             buf->unpack_from(index) >> temp;
-            src.push_back(temp); 
+            src->push_back(temp);
         }
         buf->unpack_from(index) >> src_ipaddr >> src_port >> dest
             >> dest_ipaddr >> dest_port >> r_count >> p_r_count;
