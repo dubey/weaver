@@ -496,17 +496,17 @@ runner(db::graph *G)
         {
             case message::NODE_CREATE_REQ:
                 thr.reset(new db::thread::unstarted_thread(handle_create_node, G, std::move(rec_msg)));
-                thread_pool.add_request(std::move(thr));
+                thread_pool.add_request(std::move(thr), true);
                 break;
 
             case message::NODE_DELETE_REQ:
                 thr.reset(new db::thread::unstarted_thread(handle_delete_node, G, std::move(rec_msg)));
-                thread_pool.add_request(std::move(thr));
+                thread_pool.add_request(std::move(thr), true);
                 break;
 
             case message::EDGE_CREATE_REQ:
                 thr.reset(new db::thread::unstarted_thread(handle_create_edge, G, std::move(rec_msg)));
-                thread_pool.add_request(std::move(thr));
+                thread_pool.add_request(std::move(thr), true);
                 break;
             
             case message::REACHABLE_PROP:

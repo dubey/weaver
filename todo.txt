@@ -9,6 +9,8 @@ pending at central server) - need to change to thread pool (done).
 
 Add update functions.
 
+Currently separate thread for graph updates removes all concurrency. Per node
+lock can make concurrent deletions possible.
 Make edge have only one meta_element. No need to store local information.
 Examine code for spurious copying/mallocing.
 Add error message printing on msg packing/unpacking.
