@@ -78,23 +78,23 @@ namespace message
             int unpack_node_delete(void **node_handle, uint64_t *del_time);
             // Reachability functions
             int prep_reachable_prop(std::vector<size_t> src_nodes,
-                std::unique_ptr<po6::net::location> src_loc,
+                std::shared_ptr<po6::net::location> src_loc,
                 size_t dest_node,
-                std::unique_ptr<po6::net::location> dest_loc,
+                std::shared_ptr<po6::net::location> dest_loc,
                 uint32_t req_counter,
                 uint32_t prev_req_counter,
                 std::vector<uint64_t> vector_clock);
             std::unique_ptr<std::vector<size_t>> unpack_reachable_prop(
                 std::unique_ptr<po6::net::location> *src_loc,
                 void **dest_node,
-                std::unique_ptr<po6::net::location> *dest_loc,
+                std::shared_ptr<po6::net::location> *dest_loc,
                 uint32_t *req_counter,
                 uint32_t *prev_req_counter,
                 std::unique_ptr<std::vector<uint64_t>> *vector_clock);
             int prep_reachable_rep(uint32_t req_counter, 
                 bool is_reachable,
                 size_t src_node,
-                std::unique_ptr<po6::net::location> src_loc,
+                std::shared_ptr<po6::net::location> src_loc,
                 std::unique_ptr<std::vector<size_t>> del_nodes,
                 std::unique_ptr<std::vector<uint64_t>> del_times);
             std::unique_ptr<po6::net::location> unpack_reachable_rep(uint32_t *req_counter, 
@@ -312,9 +312,9 @@ namespace message
 
     inline int 
     message :: prep_reachable_prop(std::vector<size_t> src_nodes,
-        std::unique_ptr<po6::net::location> src_loc,
+        std::shared_ptr<po6::net::location> src_loc,
         size_t dest_node, 
-        std::unique_ptr<po6::net::location> dest_loc, 
+        std::shared_ptr<po6::net::location> dest_loc, 
         uint32_t req_counter,
         uint32_t prev_req_counter,
         std::vector<uint64_t> vector_clock)
@@ -359,7 +359,7 @@ namespace message
     inline std::unique_ptr<std::vector<size_t>>
     message :: unpack_reachable_prop(std::unique_ptr<po6::net::location> *src_loc, 
         void **dest_node, 
-        std::unique_ptr<po6::net::location> *dest_loc, 
+        std::shared_ptr<po6::net::location> *dest_loc, 
         uint32_t *req_counter,
         uint32_t *prev_req_counter,
         std::unique_ptr<std::vector<uint64_t>> *vector_clock)
@@ -411,7 +411,7 @@ namespace message
     message :: prep_reachable_rep(uint32_t req_counter, 
         bool is_reachable,
         size_t src_node,
-        std::unique_ptr<po6::net::location> src_loc,
+        std::shared_ptr<po6::net::location> src_loc,
         std::unique_ptr<std::vector<size_t>> del_nodes,
         std::unique_ptr<std::vector<uint64_t>> del_times)
     {

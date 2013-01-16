@@ -40,13 +40,12 @@ class batch_request
     bool reachable;
     std::unique_ptr<std::vector<size_t>> src_nodes;
     void *dest_addr; // dest node's handle
-    po6::net::location dest_loc; // dest node's port
+    std::shared_ptr<po6::net::location> dest_loc; // dest node's port
     std::unique_ptr<std::vector<size_t>> del_nodes; // deleted nodes
     std::unique_ptr<std::vector<uint64_t>> del_times; // delete times corr. to del_nodes
     po6::threads::mutex mutex;
 
     batch_request()
-        : dest_loc(SHARD_IPADDR, 42)
     {
         id = 0;
         num = 0;
@@ -62,7 +61,7 @@ class batch_request
         reachable = tup.reachable;
         src_nodes.reset(new std::vector<size_t>(*tup.src_nodes));
         dest_addr = tup.dest_addr;
-        dest_loc = tup.dest_loc;
+        dest_loc.reset(new po6::net::location(*tup.dest_loc));
     }
 };
 
@@ -175,8 +174,8 @@ void
 handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
 {
     void *dest_node; // destination node handle
-    std::unique_ptr<po6::net::location> prev_loc, //previous server's location
-        dest_loc, //target node's location
+    std::unique_ptr<po6::net::location> prev_loc; //previous server's location
+    std::shared_ptr<po6::net::location> dest_loc, //target node's location
         my_loc; //this server's location
     uint32_t coord_req_id, // central coordinator req id
         prev_req_id, // previous server's req counter
@@ -185,7 +184,6 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
     std::unique_ptr<std::vector<uint64_t>> vector_clock;
     uint64_t rec_clock;
 
-    std::unique_ptr<po6::net::location> dest; // dest location reused for sending messages
     db::element::node *n; // node pointer reused for each source node
     bool reached = false; // indicates if we have reached destination node
     void *reach_node = NULL; // if reached destination, immediate preceding neighbor
@@ -271,28 +269,25 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         }
     } 
     
+    my_loc.reset(new po6::net::location(G->myloc));
     //send messages
     if (reached)
     {   //need to send back ack
-        my_loc.reset(new po6::net::location(G->myloc));
         msg->change_type(message::REACHABLE_REPLY);
         msg->prep_reachable_rep(prev_req_id, true, (size_t) reach_node,
-            std::move(my_loc), std::move(deleted_nodes), std::move(del_times));
+            my_loc, std::move(deleted_nodes), std::move(del_times));
         G->send(*prev_loc, msg->buf);
     } else if (propagate_req) {
         // the destination is not reachable locally in one hop from this server, so
         // now we have to contact all the reachable neighbors and see if they can reach
         std::unordered_map<po6::net::location, std::vector<size_t>>::iterator loc_iter;
-        std::shared_ptr<batch_request> request(new batch_request());
+        auto request = std::make_shared<batch_request>(); //c++11 auto magic
         //need mutex since there can be multiple replies
         //for same outstanding req
         request->mutex.lock();
         request->num = 0;
         for (loc_iter = msg_batch.begin(); loc_iter != msg_batch.end(); loc_iter++)
         {
-            //TODO change to shared_ptrs to avoid unneccessary malloc'ing
-            my_loc.reset(new po6::net::location(G->myloc));
-            dest.reset(new po6::net::location(*dest_loc));
             msg.reset(new message::message(message::REACHABLE_PROP));
             //adding this as a pending request
             request->num++;
@@ -303,9 +298,9 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
             pending_batch[my_outgoing_req_id] = request;
             outgoing_req_id_counter_mutex.unlock();
             msg->prep_reachable_prop(loc_iter->second,
-                std::move(my_loc),
+                my_loc,
                 (size_t)dest_node, 
-                std::move(dest),
+                dest_loc,
                 coord_req_id,
                 my_outgoing_req_id,
                 *vector_clock);
@@ -322,7 +317,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         request->id = prev_req_id;
         request->src_nodes = std::move(src_nodes);
         request->dest_addr = dest_node;
-        request->dest_loc = *dest_loc;
+        request->dest_loc = std::move(dest_loc);
         // store deleted nodes for sending back in reachable reply
         request->del_nodes = std::move(deleted_nodes);
         request->del_times = std::move(del_times);
@@ -331,9 +326,8 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         msg_batch.clear();
     } else {
         //need to send back nack
-        my_loc.reset(new po6::net::location(G->myloc));
         msg->change_type(message::REACHABLE_REPLY);
-        msg->prep_reachable_rep(prev_req_id, false, 0, std::move(my_loc),
+        msg->prep_reachable_rep(prev_req_id, false, 0, my_loc,
             std::move(deleted_nodes), std::move(del_times));
         G->send(*prev_loc, msg->buf);
     }
@@ -349,7 +343,8 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
     uint32_t my_outgoing_req_id, my_batch_req_id, prev_req_id;
     std::shared_ptr<batch_request> request;
     bool reachable_reply;
-    std::unique_ptr<po6::net::location> prev_loc, reach_loc, my_loc;
+    std::unique_ptr<po6::net::location> prev_loc, reach_loc;
+    std::shared_ptr<po6::net::location> my_loc;
     size_t reach_node, prev_reach_node;
     db::element::node *n;
     std::unique_ptr<std::vector<size_t>> del_nodes(new std::vector<size_t>());
@@ -392,7 +387,7 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
                         (nbr->to.get_loc() == *reach_loc))
                     {
                         n->cache_mutex.lock();
-                        n->cache.insert_entry(request->dest_loc, request->dest_addr, true);
+                        n->cache.insert_entry(*request->dest_loc, request->dest_addr, true);
                         n->cache_mutex.unlock();
                         prev_reach_node = (size_t)n;
                         break;

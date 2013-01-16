@@ -19,7 +19,7 @@
 #include <po6/threads/mutex.h>
 
 #include "element.h"
-#include "cache/cache.h"
+#include "db/cache/cache.h"
 
 namespace db
 {
