@@ -394,6 +394,7 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
                 // deleting edges
                 if (num_del_nodes > 0)
                 {
+                    std::cout << "updating deleted node\n";
                     for (size_t i = 0; i < num_del_nodes; i++)
                     {
                         if (nbr->to.get_addr() == (void*)del_nodes->at(i))

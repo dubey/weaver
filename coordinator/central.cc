@@ -224,8 +224,8 @@ reachability_request(void *mem_addr1, void *mem_addr2, coordinator::central *ser
     bool is_reachable; // for reply
     size_t src_node; //for reply
     size_t num_del_nodes;
-    std::unique_ptr<std::vector<size_t>> del_nodes;
-    std::unique_ptr<std::vector<uint64_t>> del_times;
+    std::unique_ptr<std::vector<size_t>> del_nodes(new std::vector<size_t>());
+    std::unique_ptr<std::vector<uint64_t>> del_times(new std::vector<uint64_t>());
     po6::net::location rec_loc(COORD_IPADDR, COORD_PORT);
 
     req_counter++;
@@ -316,6 +316,7 @@ main(int argc, char* argv[])
         nodes.push_back(create_node(&server));
     }
     srand(time(NULL));
+    /*
     for (i = 0; i < NUM_EDGES; i++)
     {
         int first = rand() % NUM_NODES;
@@ -326,20 +327,32 @@ main(int argc, char* argv[])
         }
         create_edge(nodes[first], nodes[second], &server);
     }
-    for (i = 0; i < 10; i++)
+    */
+    for (i = 0; i < NUM_NODES; i++)
     {
-        int node_index = rand() % NUM_NODES;
-        delete_node(nodes[node_index], &server);
+        //ring graph
+        create_edge(nodes[i], nodes[(i+1) % NUM_NODES], &server);
     }
     //clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &start); 
     //t = new std::thread (msg_handler, &server);
     //t->detach();
+    for (i = 0; i < 10; i++)
+    {
+        //int node_index = rand() % NUM_NODES;
+        delete_node(nodes[i*i], &server);
+    }
     clock_gettime(CLOCK_MONOTONIC, &start);    
+    /*
     for (i = 0; i < NUM_REQUESTS; i++)
     {
         reachability_request(nodes[rand() % 10 + NUM_NODES/2], 
             nodes[rand() % 10 + NUM_NODES/2], 
             &server);
+    }
+    */
+    for (i = 0; i < NUM_NODES; i++)
+    {
+        reachability_request(nodes[i], nodes[(i+1) % NUM_NODES], &server);
     }
     clock_gettime(CLOCK_MONOTONIC, &end);  
     //clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &end);   
