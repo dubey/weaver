@@ -30,14 +30,23 @@ main (int argc, char *argv[])
     std::vector<size_t> src_nodes, srces;
     std::vector<uint64_t> vc;
     std::unique_ptr<std::vector<uint64_t>> vc_ptr;
+    std::unique_ptr<std::vector<size_t>> dn1(new std::vector<size_t>());
+    std::unique_ptr<std::vector<size_t>> dn2(new std::vector<size_t>());
+    std::unique_ptr<std::vector<uint64_t>> dt1(new std::vector<uint64_t>());
+    std::unique_ptr<std::vector<uint64_t>> dt2(new std::vector<uint64_t>());
     src_nodes.push_back ((size_t)first); src_nodes.push_back ((size_t)second);
     vc.push_back(24); vc.push_back(42);
+    dn1->push_back((size_t)first); dn1->push_back((size_t)second);
+    dt1->push_back(35); dt1->push_back(45);
+    size_t rec_node;
     std::cout << "sizeof bool = " << sizeof (bool) << std::endl;
     
     //int ret = msg.prep_edge_create ((size_t) first, (size_t) second,
     //    std::move(random), message::FIRST_TO_SECOND);
     int ret2 = msg4.prep_reachable_prop (src_nodes, std::move(random2), (size_t)second,
         std::move(random3), r_count, r_count, vc);
+    msg3.prep_reachable_rep(42, true, (size_t)first, std::move(random), std::move(dn1),
+    std::move(dt1));
 
     /*
     random = msg.unpack_edge_create (&first, &second, &dir);
@@ -60,5 +69,13 @@ main (int argc, char *argv[])
     for (temp = 0; temp < NUM_SHARDS; temp++)
     {
         std::cout << temp << " vc is " << (*vc_ptr)[temp] << std::endl;
+    }
+
+    msg3.unpack_reachable_rep(&r_count, &reachable, &rec_node, &rec_node, &dn2,
+    &dt2);
+    for (temp = 0; temp < dn2->size(); temp++)
+    {
+        std::cout << "del node " << (void*)dn2->at(temp) << " del time " <<
+            dt2->at(temp) << std::endl;
     }
 }

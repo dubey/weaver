@@ -76,9 +76,11 @@ handle_pending_req(coordinator::central *server,
         break;
 
     case message::REACHABLE_REPLY:
+        /*
         msg->unpack_reachable_rep (&req_num, &is_reachable, &src_node);
         std::cout << "Reachable reply is " << is_reachable << " for "
                   << "request " << req_num << std::endl;
+        */
         break;
     
     default:
@@ -161,6 +163,7 @@ create_node(coordinator::central *server)
     po6::net::location shard_loc(COORD_IPADDR, 1 + COORD_PORT + server->port_ctr); //node will be placed on this shard server
     shard_loc_ptr.reset(new po6::net::location(shard_loc));
     creat_time = ++server->vc.clocks[server->port_ctr];
+    std::cout << "sending creat time " << creat_time << std::endl;
     msg.prep_node_create(creat_time); // incrementing vector clock
     ret = server->bb.send(shard_loc, msg.buf);
     if (ret != BUSYBEE_SUCCESS)
@@ -220,6 +223,9 @@ reachability_request(void *mem_addr1, void *mem_addr2, coordinator::central *ser
     uint32_t rec_counter; // for reply
     bool is_reachable; // for reply
     size_t src_node; //for reply
+    size_t num_del_nodes;
+    std::unique_ptr<std::vector<size_t>> del_nodes;
+    std::unique_ptr<std::vector<uint64_t>> del_times;
     po6::net::location rec_loc(COORD_IPADDR, COORD_PORT);
 
     req_counter++;
@@ -245,7 +251,8 @@ reachability_request(void *mem_addr1, void *mem_addr2, coordinator::central *ser
         std::cerr << "msg recv error: " << ret << std::endl;
         return;
     }
-    msg.unpack_reachable_rep(&rec_counter, &is_reachable, &src_node);
+    msg.unpack_reachable_rep(&rec_counter, &is_reachable, &src_node,
+        &num_del_nodes, &del_nodes, &del_times);
     std::cout << "Reachable reply is " << is_reachable << " for " << 
         "request " << rec_counter << std::endl;
     

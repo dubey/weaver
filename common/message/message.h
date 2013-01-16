@@ -78,25 +78,30 @@ namespace message
             int unpack_node_delete(void **node_handle, uint64_t *del_time);
             // Reachability functions
             int prep_reachable_prop(std::vector<size_t> src_nodes,
-               std::unique_ptr<po6::net::location> src_loc,
-               size_t dest_node,
-               std::unique_ptr<po6::net::location> dest_loc,
-               uint32_t req_counter,
-               uint32_t prev_req_counter,
-               std::vector<uint64_t> vector_clock);
+                std::unique_ptr<po6::net::location> src_loc,
+                size_t dest_node,
+                std::unique_ptr<po6::net::location> dest_loc,
+                uint32_t req_counter,
+                uint32_t prev_req_counter,
+                std::vector<uint64_t> vector_clock);
             std::vector<size_t> unpack_reachable_prop(std::unique_ptr<po6::net::location> *src_loc,
-               void **dest_node,
-               std::unique_ptr<po6::net::location> *dest_loc,
-               uint32_t *req_counter,
-               uint32_t *prev_req_counter,
-               std::unique_ptr<std::vector<uint64_t>> *vector_clock);
+                void **dest_node,
+                std::unique_ptr<po6::net::location> *dest_loc,
+                uint32_t *req_counter,
+                uint32_t *prev_req_counter,
+                std::unique_ptr<std::vector<uint64_t>> *vector_clock);
             int prep_reachable_rep(uint32_t req_counter, 
                 bool is_reachable,
                 size_t src_node,
-                std::unique_ptr<po6::net::location> src_loc);
+                std::unique_ptr<po6::net::location> src_loc,
+                std::unique_ptr<std::vector<size_t>> del_nodes,
+                std::unique_ptr<std::vector<uint64_t>> del_times);
             std::unique_ptr<po6::net::location> unpack_reachable_rep(uint32_t *req_counter, 
-               bool *is_reachable,
-               size_t *src_node);
+                bool *is_reachable,
+                size_t *src_node,
+                size_t *num_del_nodes,
+                std::unique_ptr<std::vector<size_t>> *del_nodes,
+                std::unique_ptr<std::vector<uint64_t>> *del_times);
             // Error message
             int prep_error();
     };
@@ -405,10 +410,13 @@ namespace message
     message :: prep_reachable_rep(uint32_t req_counter, 
         bool is_reachable,
         size_t src_node,
-        std::unique_ptr<po6::net::location> src_loc)
+        std::unique_ptr<po6::net::location> src_loc,
+        std::unique_ptr<std::vector<size_t>> del_nodes,
+        std::unique_ptr<std::vector<uint64_t>> del_times)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t temp = (uint32_t) is_reachable;
+        size_t i;
 
         if (type != REACHABLE_REPLY) {
             return -1;
@@ -419,10 +427,19 @@ namespace message
             sizeof(uint32_t) + //is_reachable
             sizeof(size_t) + //src_node
             sizeof(uint16_t)+ //port
-            sizeof(uint32_t))); //ip addr
+            sizeof(uint32_t) + //ip addr
+            sizeof(size_t) + //no. of deleted nodes
+            del_nodes->size() * sizeof(size_t) +
+            del_times->size() * sizeof(uint64_t)));
 
         buf->pack_at(index) << type;
         index += sizeof(enum msg_type);
+        buf->pack_at(index) << del_nodes->size();
+        index += sizeof(size_t);
+        for (i = 0; i < del_nodes->size(); i++, index += (sizeof(size_t) + sizeof(uint64_t)))
+        {
+            buf->pack_at(index) << (*del_nodes)[i] << (*del_times)[i];
+        }
         buf->pack_at(index) << req_counter << temp << src_node 
             << src_loc->get_addr() << src_loc->port;
         return 0;
@@ -431,13 +448,17 @@ namespace message
     inline std::unique_ptr<po6::net::location>
     message :: unpack_reachable_rep(uint32_t *req_counter, 
         bool *is_reachable,
-        size_t *src_node)
+        size_t *src_node,
+        size_t *num_del_nodes,
+        std::unique_ptr<std::vector<size_t>> *del_nodes,
+        std::unique_ptr<std::vector<uint64_t>> *del_times)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t _type;
         uint32_t r_count;
         uint32_t reachable;
-        size_t s_node;
+        size_t s_node, n_del_nodes, i, del_node;
+        uint64_t del_time;
         uint16_t s_port;
         uint32_t s_ipaddr;
         std::unique_ptr<po6::net::location> ret;
@@ -450,10 +471,19 @@ namespace message
         type = REACHABLE_REPLY;
 
         index += sizeof(enum msg_type);
+        buf->unpack_from(index) >> n_del_nodes;
+        index += sizeof(size_t);
+        for (i = 0; i < n_del_nodes; i++, index += (sizeof(size_t) + sizeof(uint64_t)))
+        {
+            buf->unpack_from(index) >> del_node >> del_time;
+            (**del_nodes).push_back(del_node);
+            (**del_times).push_back(del_time);
+        }
         buf->unpack_from(index) >> r_count >> reachable >> s_node >> s_ipaddr >> s_port;
         *req_counter = r_count;
         *is_reachable = (bool) reachable;
         *src_node = s_node;
+        *num_del_nodes = n_del_nodes;
         ret.reset(new po6::net::location(s_ipaddr, s_port));
         return ret;
     }
