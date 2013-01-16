@@ -41,7 +41,6 @@ class pending_req
         int num_edge;
 };
 
-uint64_t cur_time;
 std::unordered_map<uint32_t, pending_req> pending;
 po6::threads::mutex pending_mutex;
 
@@ -97,12 +96,15 @@ create_edge(void *mem_addr1, void *mem_addr2, coordinator::central *server)
     po6::net::location loc2(elem2->loc2); //to node's location
     std::unique_ptr<po6::net::location> loc_ptr; //location pointer reused for msg packing
     enum message::edge_direction dir = message::FIRST_TO_SECOND; //edge direction
+    uint64_t creat_time1, creat_time2;
     message::message msg(message::EDGE_CREATE_REQ);
     busybee_returncode ret;
+    creat_time1 = ++server->vc.clocks[elem1->loc1.port - COORD_PORT - 1];
+    creat_time2 = ++server->vc.clocks[elem2->loc1.port - COORD_PORT - 1];
 
     loc_ptr.reset(new po6::net::location(elem2->loc1));
     msg.prep_edge_create((size_t)elem1->mem_addr1, (size_t)elem2->mem_addr1,
-        std::move(loc_ptr), elem1->creat_time, elem2->creat_time, dir, cur_time);
+        std::move(loc_ptr), elem1->creat_time1, elem2->creat_time1, dir, creat_time1);
     if ((ret = server->bb.send(loc1, msg.buf)) != BUSYBEE_SUCCESS)
     {
         std::cerr << "msg send error: " << ret << std::endl;
@@ -119,7 +121,7 @@ create_edge(void *mem_addr1, void *mem_addr2, coordinator::central *server)
     msg.change_type(message::EDGE_CREATE_REQ);
     loc_ptr.reset(new po6::net::location(elem1->loc1));
     msg.prep_edge_create((size_t)elem2->mem_addr1, (size_t)elem1->mem_addr1,
-        std::move(loc_ptr), elem2->creat_time, elem1->creat_time, dir, cur_time);
+        std::move(loc_ptr), elem2->creat_time1, elem1->creat_time1, dir, creat_time2);
     if ((ret = server->bb.send(loc2, msg.buf)) != BUSYBEE_SUCCESS) 
     {
         std::cerr << "msg send error: " << ret << std::endl;
@@ -133,7 +135,7 @@ create_edge(void *mem_addr1, void *mem_addr2, coordinator::central *server)
     msg.unpack_create_ack(&mem_addr2);
 
     elem = new coordinator::graph_elem(elem1->loc1, elem2->loc1, 
-       mem_addr1, mem_addr2, cur_time);
+       mem_addr1, mem_addr2, creat_time1, creat_time2);
     server->elements.push_back(elem);
             
     //std::cout << "Edge id is " << (void *) elem << std::endl;
@@ -148,14 +150,18 @@ create_node(coordinator::central *server)
     void *node_addr; // node handle on shard server
     message::message msg(message::NODE_CREATE_REQ);
     std::unique_ptr<po6::net::location> shard_loc_ptr;
-    server->port_ctr = (server->port_ctr + 1) % (MAX_PORT+1);
+    uint64_t creat_time;
+    server->port_ctr = (server->port_ctr + 1) % NUM_SHARDS;
+    /*
     if (server->port_ctr == 0) 
     {
         server->port_ctr = COORD_PORT+1;
     }
-    po6::net::location shard_loc(COORD_IPADDR, server->port_ctr); //node will be placed on this shard server
+    */
+    po6::net::location shard_loc(COORD_IPADDR, 1 + COORD_PORT + server->port_ctr); //node will be placed on this shard server
     shard_loc_ptr.reset(new po6::net::location(shard_loc));
-    msg.prep_node_create(cur_time);
+    creat_time = ++server->vc.clocks[server->port_ctr];
+    msg.prep_node_create(creat_time); // incrementing vector clock
     ret = server->bb.send(shard_loc, msg.buf);
     if (ret != BUSYBEE_SUCCESS)
     {
@@ -171,7 +177,7 @@ create_node(coordinator::central *server)
     }
     msg.unpack_create_ack(&node_addr);
     elem = new coordinator::graph_elem(*shard_loc_ptr, *shard_loc_ptr,
-        node_addr, node_addr, cur_time);
+        node_addr, node_addr, creat_time, creat_time);
     server->elements.push_back(elem);
     
     //std::cout << "Node id is " << (void *) elem << " at port " 
@@ -183,9 +189,9 @@ delete_node(void *node_handle, coordinator::central *server)
 {
     coordinator::graph_elem *node = (coordinator::graph_elem *)node_handle;
     message::message msg(message::NODE_DELETE_REQ);
+    uint64_t del_time = ++server->vc.clocks[node->loc1.port - COORD_PORT - 1];
     busybee_returncode ret;
-    cur_time++;
-    if (msg.prep_node_delete((size_t)node->mem_addr1, cur_time) != 0)
+    if (msg.prep_node_delete((size_t)node->mem_addr1, del_time) != 0)
     {
         std::cerr << "error packing msg" << std::endl;
         return;
@@ -224,7 +230,7 @@ reachability_request(void *mem_addr1, void *mem_addr2, coordinator::central *ser
     src_loc.reset(new po6::net::location(COORD_IPADDR, COORD_REC_PORT));
     dest_loc.reset(new po6::net::location(elem2->loc1));
     if (msg.prep_reachable_prop(src, std::move(src_loc), (size_t) elem2->mem_addr1,
-        std::move(dest_loc), req_counter, req_counter) != 0)
+        std::move(dest_loc), req_counter, req_counter, server->vc.clocks) != 0)
     {
         std::cerr << "invalid msg packing" << std::endl;
         return;

@@ -22,34 +22,43 @@ main (int argc, char *argv[])
     void *first = (void *)238947328978763;
     void *second = (void *)23948230489224;
     uint32_t dir;
-    message::message msg (message::EDGE_CREATE_REQ);
     message::message msg3 (message::REACHABLE_REPLY);
     message::message msg4 (message::REACHABLE_PROP);
     uint32_t temp;
     uint32_t r_count = 84;
     bool reachable;
     std::vector<size_t> src_nodes, srces;
+    std::vector<uint64_t> vc;
+    std::unique_ptr<std::vector<uint64_t>> vc_ptr;
     src_nodes.push_back ((size_t)first); src_nodes.push_back ((size_t)second);
+    vc.push_back(24); vc.push_back(42);
     std::cout << "sizeof bool = " << sizeof (bool) << std::endl;
     
-    int ret = msg.prep_edge_create ((size_t) first, (size_t) second,
-        std::move(random), message::FIRST_TO_SECOND);
+    //int ret = msg.prep_edge_create ((size_t) first, (size_t) second,
+    //    std::move(random), message::FIRST_TO_SECOND);
     int ret2 = msg4.prep_reachable_prop (src_nodes, std::move(random2), (size_t)second,
-        std::move(random3), r_count, r_count);
+        std::move(random3), r_count, r_count, vc);
 
+    /*
     random = msg.unpack_edge_create (&first, &second, &dir);
     std::cout << "Unpacking got port number " <<
         random->port << " and dir " << dir << " and addr " <<
         random->get_addr() << std::endl;
     std::cout << "First = " << first << " second " << second << std::endl;
+    */
 
     std::unique_ptr<po6::net::location> src, dest;
-    srces = msg4.unpack_reachable_prop (&src, &second, &dest, &r_count, &r_count);
+    srces = msg4.unpack_reachable_prop (&src, &second, &dest, &r_count,
+        &r_count, &vc_ptr);
     std::cout << "\nUnpacking msg 4, got srces len " << srces.size() <<
         " second " << second << " src " << src->get_addr() << " " << src->port <<  " r_count " << r_count <<
         '\n';
     for (temp = 0; temp < srces.size(); temp++)
     {
         std::cout << temp << " src is " << (void *) srces[temp] << std::endl;
+    }
+    for (temp = 0; temp < NUM_SHARDS; temp++)
+    {
+        std::cout << temp << " vc is " << (*vc_ptr)[temp] << std::endl;
     }
 }

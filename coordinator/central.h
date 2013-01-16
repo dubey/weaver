@@ -21,6 +21,7 @@
 
 #include "../common/weaver_constants.h"
 #include "graph_elem.h"
+#include "../common/vclock/vclock.h"
 
 namespace coordinator
 {
@@ -39,6 +40,7 @@ namespace coordinator
             //id/address pair
             int port_ctr;
             std::vector<coordinator::graph_elem *> elements;
+            vclock::vector vc;
     };
 
     inline

@@ -158,9 +158,10 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         dest_loc, //target node's location
         my_loc; //this server's location
     uint32_t coord_req_id, // central coordinator req id
-             prev_req_id, // previous server's req counter
-             my_batch_req_id, // this server's request id
-             my_outgoing_req_id; // each forwarded batched req id
+        prev_req_id, // previous server's req counter
+        my_batch_req_id, // this server's request id
+        my_outgoing_req_id; // each forwarded batched req id
+    std::unique_ptr<std::vector<uint64_t>> vector_clock;
 
     std::unique_ptr<po6::net::location> dest; // dest location reused for sending messages
     db::element::node *n; // node pointer reused for each source node
@@ -176,7 +177,10 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         &dest_node,
         &dest_loc,
         &coord_req_id,
-        &prev_req_id);
+        &prev_req_id,
+        &vector_clock);
+
+    // wait till all updates for this shard arrive
 
     //TODO need locking here. Entire traversal process should be atomic (at
     //least at the level of each node)
@@ -264,7 +268,8 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
                 (size_t)dest_node, 
                 std::move(dest),
                 coord_req_id,
-                (my_outgoing_req_id));
+                (my_outgoing_req_id),
+                *vector_clock);
             if (loc_iter->first == G->myloc)
             {   //no need to send message since it is local
                 std::unique_ptr<db::thread::unstarted_thread> t;
@@ -316,6 +321,7 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
     --request->num;
     prev_loc = request->prev_loc;
     prev_req_id = request->id;
+    
     if (reachable_reply)
     {   //caching positive result
         std::vector<size_t>::iterator node_iter;

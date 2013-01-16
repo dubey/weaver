@@ -24,6 +24,7 @@
 #include "../../db/element/property.h"
 #include "../../db/element/meta_element.h"
 #include "../../db/element/node.h"
+#include "../vclock/vclock.h"
 
 namespace message
 {
@@ -81,12 +82,14 @@ namespace message
                size_t dest_node,
                std::unique_ptr<po6::net::location> dest_loc,
                uint32_t req_counter,
-               uint32_t prev_req_counter);
+               uint32_t prev_req_counter,
+               std::vector<uint64_t> vector_clock);
             std::vector<size_t> unpack_reachable_prop(std::unique_ptr<po6::net::location> *src_loc,
                void **dest_node,
                std::unique_ptr<po6::net::location> *dest_loc,
                uint32_t *req_counter,
-               uint32_t *prev_req_counter);
+               uint32_t *prev_req_counter,
+               std::unique_ptr<std::vector<uint64_t>> *vector_clock);
             int prep_reachable_rep(uint32_t req_counter, 
                 bool is_reachable,
                 size_t src_node,
@@ -307,7 +310,8 @@ namespace message
         size_t dest_node, 
         std::unique_ptr<po6::net::location> dest_loc, 
         uint32_t req_counter,
-        uint32_t prev_req_counter)
+        uint32_t prev_req_counter,
+        std::vector<uint64_t> vector_clock)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         size_t num_nodes = src_nodes.size();
@@ -325,14 +329,19 @@ namespace message
             sizeof(size_t) + //dest_node
             sizeof(uint32_t) + sizeof(uint16_t) + //dest_loc
             sizeof(uint32_t) +//req_counter
-            sizeof(uint32_t) //prev_req_counter
+            sizeof(uint32_t) +//prev_req_counter
+            NUM_SHARDS * sizeof(uint64_t) //vector clock
             ));
 
         buf->pack_at(index) << type;
         index += sizeof(enum msg_type);
+        for (i = 0; i < NUM_SHARDS; i++, index += sizeof(uint64_t))
+        {
+            buf->pack_at(index) << vector_clock[i];
+        }
         buf->pack_at(index) << num_nodes;
-        for (i = 0, index += sizeof(size_t); i < num_nodes; i++, 
-            index += sizeof(size_t))
+        index += sizeof(size_t);
+        for (i = 0; i < num_nodes; i++, index += sizeof(size_t))
         {
             buf->pack_at(index) << src_nodes[i];
         }
@@ -346,7 +355,8 @@ namespace message
         void **dest_node, 
         std::unique_ptr<po6::net::location> *dest_loc, 
         uint32_t *req_counter,
-        uint32_t *prev_req_counter)
+        uint32_t *prev_req_counter,
+        std::unique_ptr<std::vector<uint64_t>> *vector_clock)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t _type;
@@ -364,10 +374,16 @@ namespace message
         }
         type = REACHABLE_PROP;
         index += sizeof(enum msg_type);
+        
+        vector_clock->reset(new std::vector<uint64_t>(NUM_SHARDS, 0));
+        for (i = 0; i < NUM_SHARDS; i++, index += sizeof(uint64_t))
+        {
+            buf->unpack_from(index) >> (**vector_clock)[i]; //dereferencing pointer to (unique) pointer
+        }
 
         buf->unpack_from(index) >> num_nodes;
-        for (i = 0, index += sizeof(size_t); i < num_nodes; i++, index +=
-             sizeof(size_t))
+        index += sizeof(size_t);
+        for (i = 0; i < num_nodes; i++, index += sizeof(size_t))
         {
             buf->unpack_from(index) >> temp;
             src.push_back(temp); 

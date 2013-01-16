@@ -1,4 +1,4 @@
-CFLAGS=-g -O0 -std=c++0x
+CFLAGS=-g -O0 -std=c++0x -D__STDC_LIMIT_MACROS
 OBJS=message.o
 LIBS=-L/usr/local/lib
 
