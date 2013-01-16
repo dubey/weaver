@@ -25,7 +25,7 @@
 #include <e/buffer.h>
 #include "busybee_constants.h"
 
-#include "../common/weaver_constants.h"
+#include "common/weaver_constants.h"
 #include "graph.h"
 #include "common/message/message.h"
 #include "threadpool/threadpool.h"

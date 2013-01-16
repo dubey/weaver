@@ -24,7 +24,7 @@
 #include <po6/threads/mutex.h>
 #include <busybee_sta.h>
 
-#include "../common/weaver_constants.h"
+#include "common/weaver_constants.h"
 #include "element/property.h"
 #include "element/meta_element.h"
 #include "element/node.h"

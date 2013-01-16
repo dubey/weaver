@@ -20,8 +20,8 @@
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
 
-#include "../central.h"
-#include "../../common/message/message.h"
+#include "central.h"
+#include "common/message/message.h"
 
 namespace coordinator
 {
@@ -33,16 +33,16 @@ namespace thread
     class unstarted_thread
     {
         public:
-            unstarted_thread (
-                void (*f) (coordinator::central*, std::shared_ptr<message::message>, enum message::msg_type),
+            unstarted_thread(
+                void (*f)(coordinator::central*, std::shared_ptr<message::message>, enum message::msg_type),
                 coordinator::central *s,
                 std::shared_ptr<message::message> m,
                 enum message::msg_type mtype);
 
         public:
-            void (*func) (coordinator::central*,
-                          std::shared_ptr<message::message>, 
-                          enum message::msg_type);
+            void (*func)(coordinator::central*,
+                         std::shared_ptr<message::message>, 
+                         enum message::msg_type);
             coordinator::central *server;
             std::shared_ptr<message::message> msg;
             enum message::msg_type m_type;
@@ -50,9 +50,9 @@ namespace thread
 
     inline
     unstarted_thread :: unstarted_thread( 
-            void (*f) (coordinator::central*, 
-                       std::shared_ptr<message::message>,
-                       enum message::msg_type),
+            void (*f)(coordinator::central*, 
+                      std::shared_ptr<message::message>,
+                      enum message::msg_type),
             coordinator::central *s,
             std::shared_ptr<message::message> m,
             enum message::msg_type mtype)
@@ -123,7 +123,7 @@ namespace thread
                 tpool->empty_queue_cond.signal();
             }
             tpool->queue_mutex.unlock();
-            (*(thr->func)) (thr->server, thr->msg, thr->m_type);
+            (*(thr->func))(thr->server, thr->msg, thr->m_type);
         }
     }
 } //namespace thread

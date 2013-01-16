@@ -1,4 +1,4 @@
-INCLUDE_DIRS=-I..
+INCLUDE_DIRS=-I.. -I.
 CFLAGS=-g -O0 -std=c++0x
 LIBS_DIR=-L/usr/local/lib
 LIBS=-lbusybee-sta -le -lrt -pthread

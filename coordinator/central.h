@@ -19,9 +19,9 @@
 #include <busybee_sta.h>
 #include <po6/net/location.h>
 
-#include "../common/weaver_constants.h"
+#include "common/weaver_constants.h"
 #include "graph_elem.h"
-#include "../common/vclock/vclock.h"
+#include "common/vclock/vclock.h"
 
 namespace coordinator
 {
