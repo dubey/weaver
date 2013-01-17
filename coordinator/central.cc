@@ -122,7 +122,6 @@ create_edge(void *mem_addr1, void *mem_addr2, coordinator::central *server)
     msg.unpack_create_ack(&mem_addr1);
 
     dir = message::SECOND_TO_FIRST;
-    msg.change_type(message::EDGE_CREATE_REQ);
     loc_ptr.reset(new po6::net::location(elem1->loc1));
     msg.prep_edge_create((size_t)elem2->mem_addr1, (size_t)elem1->mem_addr1,
         std::move(loc_ptr), elem2->creat_time1, elem1->creat_time1, dir, creat_time2);
@@ -164,9 +163,9 @@ create_node(coordinator::central *server)
     */
     po6::net::location shard_loc(COORD_IPADDR, 1 + COORD_PORT + server->port_ctr); //node will be placed on this shard server
     shard_loc_ptr.reset(new po6::net::location(shard_loc));
-    creat_time = ++server->vc.clocks[server->port_ctr];
+    creat_time = ++server->vc.clocks[server->port_ctr]; // incrementing vector clock
     std::cout << "sending creat time " << creat_time << std::endl;
-    msg.prep_node_create(creat_time); // incrementing vector clock
+    msg.prep_node_create(creat_time); 
     ret = server->bb.send(shard_loc, msg.buf);
     if (ret != BUSYBEE_SUCCESS)
     {
@@ -196,11 +195,7 @@ delete_node(void *node_handle, coordinator::central *server)
     message::message msg(message::NODE_DELETE_REQ);
     uint64_t del_time = ++server->vc.clocks[node->loc1.port - COORD_PORT - 1];
     busybee_returncode ret;
-    if (msg.prep_node_delete((size_t)node->mem_addr1, del_time) != 0)
-    {
-        std::cerr << "error packing msg" << std::endl;
-        return;
-    }
+    msg.prep_node_delete((size_t)node->mem_addr1, del_time);
     if ((ret = server->bb.send(node->loc1, msg.buf)) != BUSYBEE_SUCCESS)
     {
         std::cerr << "msg send error " << ret << std::endl;
@@ -237,12 +232,8 @@ reachability_request(void *mem_addr1, void *mem_addr2, coordinator::central *ser
               << std::endl;
     src_loc.reset(new po6::net::location(COORD_IPADDR, COORD_REC_PORT));
     dest_loc.reset(new po6::net::location(elem2->loc1));
-    if (msg.prep_reachable_prop(src, std::move(src_loc), (size_t) elem2->mem_addr1,
-        std::move(dest_loc), req_counter, req_counter, server->vc.clocks) != 0)
-    {
-        std::cerr << "invalid msg packing" << std::endl;
-        return;
-    }
+    msg.prep_reachable_prop(src, std::move(src_loc), (size_t) elem2->mem_addr1,
+        std::move(dest_loc), req_counter, req_counter, server->vc.clocks);
     if ((ret = server->bb.send(elem1->loc1, msg.buf)) != BUSYBEE_SUCCESS)
     {
         std::cerr << "msg send error: " << ret << std::endl;
