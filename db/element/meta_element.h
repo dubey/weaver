@@ -27,34 +27,48 @@ namespace element
     {
         public:
             meta_element(po6::net::location server, uint64_t t_update, 
-                uint64_t t_delete, void *mem_addr);
+                uint64_t t_creat, void *mem_addr);
         
         protected:
             po6::net::location myloc;
-            uint64_t t_u;
-            uint64_t t_d;
+            uint64_t creat_time;
+            uint64_t del_time;
             void *elem_addr; //memory address of this element on shard server
         
         public:
-            uint64_t get_t_u();
+            uint64_t get_creat_time();
+            uint64_t get_del_time();
+            void update_del_time(uint64_t _del_time);
             void* get_addr();
             po6::net::location get_loc();
     };
 
     inline
-    meta_element :: meta_element(po6::net::location server, uint64_t t_update,
+    meta_element :: meta_element(po6::net::location server, uint64_t t_creat,
         uint64_t t_delete, void *mem_addr)
         : myloc(server)
-        , t_u(t_update)
-        , t_d(t_delete)
+        , creat_time(t_creat)
+        , del_time(t_delete)
         , elem_addr(mem_addr)
     {
     }
 
     inline uint64_t
-    meta_element :: get_t_u()
+    meta_element :: get_creat_time()
     {
-        return t_u;
+        return creat_time;
+    }
+
+    inline uint64_t
+    meta_element :: get_del_time()
+    {
+        return del_time;
+    }
+
+    inline void
+    meta_element :: update_del_time(uint64_t _del_time)
+    {
+        del_time = _del_time;
     }
 
     inline void*

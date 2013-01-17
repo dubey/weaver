@@ -104,11 +104,14 @@ create_edge(void *mem_addr1, void *mem_addr2, coordinator::central *server)
     message::message msg(message::EDGE_CREATE_REQ);
     busybee_returncode ret;
     creat_time1 = ++server->vc.clocks[elem1->loc1.port - COORD_PORT - 1];
-    creat_time2 = ++server->vc.clocks[elem2->loc1.port - COORD_PORT - 1];
+    //creat_time2 = ++server->vc.clocks[elem2->loc1.port - COORD_PORT - 1];
 
     loc_ptr.reset(new po6::net::location(elem2->loc1));
+    //TODO what is this creat_time madness?
+    // increment and send loc1's clock - for subsequest reach request consistency
+    // but also send loc2's clock - this is what should be stored on the node
     msg.prep_edge_create((size_t)elem1->mem_addr1, (size_t)elem2->mem_addr1,
-        std::move(loc_ptr), elem1->creat_time1, elem2->creat_time1, dir, creat_time1);
+        std::move(loc_ptr), elem1->creat_time1, elem2->creat_time1, creat_time1);
     if ((ret = server->bb.send(loc1, msg.buf)) != BUSYBEE_SUCCESS)
     {
         std::cerr << "msg send error: " << ret << std::endl;
@@ -121,6 +124,7 @@ create_edge(void *mem_addr1, void *mem_addr2, coordinator::central *server)
     }
     msg.unpack_create_ack(&mem_addr1);
 
+    /*
     dir = message::SECOND_TO_FIRST;
     loc_ptr.reset(new po6::net::location(elem1->loc1));
     msg.prep_edge_create((size_t)elem2->mem_addr1, (size_t)elem1->mem_addr1,
@@ -136,6 +140,7 @@ create_edge(void *mem_addr1, void *mem_addr2, coordinator::central *server)
         return NULL;
     }
     msg.unpack_create_ack(&mem_addr2);
+    */
 
     elem = new coordinator::graph_elem(elem1->loc1, elem2->loc1, 
        mem_addr1, mem_addr2, creat_time1, creat_time2);

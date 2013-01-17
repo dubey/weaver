@@ -22,6 +22,7 @@
 #include <vector>
 #include <po6/net/location.h>
 #include <po6/threads/mutex.h>
+#include <po6/threads/cond.h>
 #include <busybee_sta.h>
 
 #include "common/weaver_constants.h"
@@ -42,44 +43,50 @@ namespace db
         private:
             std::vector<element::node *> V;
             std::vector<element::edge *> E;
-            po6::threads::mutex elem_lock;
+            po6::threads::mutex update_mutex;
+            uint64_t my_clock;
+            po6::threads::cond pending_update_cond;
 
         public:
             int node_count;
-            po6::net::location myloc;
-            po6::net::location coord;
-            busybee_sta bb;
-            busybee_sta bb_recv;
+            std::shared_ptr<po6::net::location> myloc;
+            std::shared_ptr<po6::net::location> coord;
+            busybee_sta bb; // Busybee instance used for sending messages
+            busybee_sta bb_recv; // Busybee instance used for receiving messages
             po6::threads::mutex bb_lock;
             element::node* create_node(uint64_t time);
-            element::edge* create_edge(std::unique_ptr<element::meta_element> n1,
-                std::unique_ptr<element::meta_element> n2, 
-                uint32_t direction, 
-                uint64_t time);
+            element::edge* create_edge(void *n1,
+                std::unique_ptr<element::meta_element> n2, uint64_t time);
             void delete_node(element::node *n, uint64_t del_time);
             bool mark_visited(element::node *n, uint32_t req_counter);
             bool remove_visited(element::node *n, uint32_t req_counter);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send_coord(std::auto_ptr<e::buffer> buf);
-    }; //class graph
+            void wait_for_updates(uint64_t recd_clock);
+    };
 
     inline
     graph :: graph(const char* ip_addr, in_port_t port)
-        : node_count (0)
-        , myloc(ip_addr, port)
-        , coord(COORD_IPADDR, COORD_PORT)
-        , bb(myloc.address, myloc.port + SEND_PORT_INCR, 0)
-        , bb_recv(myloc.address, myloc.port, 0)
+        : my_clock(0)
+        , pending_update_cond(&update_mutex)
+        , node_count(0)
+        , myloc(new po6::net::location(ip_addr, port))
+        , coord(new po6::net::location(COORD_IPADDR, COORD_PORT))
+        , bb(myloc->address, myloc->port + SEND_PORT_INCR, 0)
+        , bb_recv(myloc->address, myloc->port, 0)
     {
     }
 
     inline element::node*
     graph :: create_node(uint64_t time)
     {
-        element::node* new_node = new element::node(myloc, time, NULL);
-        elem_lock.lock();
+        element::node* new_node = new element::node(myloc, time);
+        update_mutex.lock();
+        my_clock++;
+        assert(my_clock == time); // TODO coordinator needs to ensure this
         V.push_back(new_node);
-        elem_lock.unlock();
+        pending_update_cond.broadcast();
+        update_mutex.unlock();
         
         //std::cout << "Creating node, addr = " << (void*) new_node 
         //        << " and node count " << (++node_count) << std::endl;
@@ -87,30 +94,19 @@ namespace db
     }
 
     inline element::edge*
-    graph :: create_edge(std::unique_ptr<element::meta_element> n1,
+    graph :: create_edge(void *n1,
         std::unique_ptr<element::meta_element> n2,
-        uint32_t direction, 
         uint64_t time)
     {
-        element::node *local_node = (element::node *) n1->get_addr();
-        element::edge *new_edge;
-        elem_lock.lock();
-        if(direction == 0) 
-        {
-            new_edge = new element::edge(myloc, time, NULL, *n1, *n2);
-            local_node->out_edges.push_back(new_edge->get_meta_element());
-        } else if (direction == 1)
-        {
-            new_edge = new element::edge(myloc, time, NULL, *n2, *n1);
-            local_node->in_edges.push_back(new_edge->get_meta_element());
-        } else
-        {
-            std::cerr << "edge direction error: " << direction << std::endl;
-            elem_lock.unlock();
-            return NULL;
-        }
+        element::node *local_node = (element::node *)n1;
+        element::edge *new_edge = new element::edge(myloc, time, std::move(n2));
+        update_mutex.lock();
+        my_clock++;
+        assert(my_clock == time);
+        local_node->add_edge(new_edge);
         E.push_back(new_edge);
-        elem_lock.unlock();
+        pending_update_cond.broadcast();
+        update_mutex.unlock();
 
         //std::cout << "Creating edge, addr = " << (void *) new_edge << std::endl;
         return new_edge;
@@ -119,36 +115,20 @@ namespace db
     inline void
     graph :: delete_node(element::node *n, uint64_t del_time)
     {
-        elem_lock.lock();
-        n->update_t_d(del_time);
-        elem_lock.unlock();
+        n->update_del_time(del_time);
+        update_mutex.lock();
+        my_clock++;
+        assert(my_clock == del_time);
+        pending_update_cond.broadcast();
+        update_mutex.unlock();
     }
 
     inline bool
     graph :: mark_visited(element::node *n, uint32_t req_counter)
     {
         uint32_t key = 0; //visited key
-        /*char key[] = "v\0";
-        char *value = (char *) malloc (10);
-        memset (value, '\0', 10);
-        std::stringstream out;
-        out << req_counter;
-        strncpy (value, out.str().c_str(), out.str().length());
-        std::cout << "string of req counter " << key
-                  << "," << value << " " ;
-        */
         element::property p(key, req_counter);
-        elem_lock.lock();
-        if (n->has_property(p)) 
-        {
-            elem_lock.unlock();
-            return true;
-        } else 
-        {
-            n->add_property(p);
-            elem_lock.unlock();
-            return false;
-        }
+        n->check_and_add_property(p);
     }
 
     inline bool
@@ -156,9 +136,7 @@ namespace db
     {
         uint32_t key = 0; //visited key
         element::property p(key, req_counter);
-        elem_lock.lock();
         n->remove_property(p);
-        elem_lock.unlock();
     }
 
     inline busybee_returncode
@@ -179,12 +157,23 @@ namespace db
     {
         busybee_returncode ret;
         bb_lock.lock();
-        if ((ret = bb.send(coord, msg)) != BUSYBEE_SUCCESS)
+        if ((ret = bb.send(*coord, msg)) != BUSYBEE_SUCCESS)
         {
             std::cerr << "msg send error: " << ret << std::endl;
             //assert(ret == BUSYBEE_SUCCESS); //XXX
         }
         bb_lock.unlock();
+    }
+
+    inline void
+    graph :: wait_for_updates(uint64_t recd_clock)
+    {
+        update_mutex.lock();
+        while (recd_clock > my_clock)
+        {
+            pending_update_cond.wait();
+        }
+        update_mutex.unlock();
     }
 
 } //namespace db

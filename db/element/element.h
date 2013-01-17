@@ -19,7 +19,9 @@
 #include <vector>
 #include <algorithm>
 #include <string.h>
+#include <po6/threads/mutex.h>
 
+#include "common/weaver_constants.h"
 #include "property.h"
 #include "meta_element.h"
 
@@ -30,36 +32,34 @@ namespace element
     class element
     {
         public:
-            element(po6::net::location server, uint64_t time, void* mem_addr);
+            element(std::shared_ptr<po6::net::location> server, uint64_t time, void* mem_addr);
             
         protected:
             std::vector<property> properties;
-            po6::net::location myloc;
-            uint64_t t_u;
-            uint64_t t_d;
-            void* elem_addr;
+            std::shared_ptr<po6::net::location> myloc;
+            uint64_t creat_time;
+            uint64_t del_time;
+            void* elem_addr; // memory address of this element on shard server
 
         public:
+            po6::threads::mutex update_mutex;
             void add_property(property prop);
             void remove_property(property prop);
-            //int get_prop_value (char* _key, char** _value);
             bool has_property(property prop);
-            void update_t_d(uint64_t del_time);
+            bool check_and_add_property(property prop);
+            void update_del_time(uint64_t del_time);
             meta_element get_meta_element();
-            uint64_t get_t_u();
-            uint64_t get_t_d();
+            uint64_t get_creat_time();
+            uint64_t get_del_time();
             
-        public:
-            //Testing functions
-            int num_properties();
     };
 
     inline
-    element :: element(po6::net::location server, uint64_t time, void* mem_addr)
+    element :: element(std::shared_ptr<po6::net::location> server, uint64_t time, void* mem_addr)
         : properties(0)
         , myloc(server)
-        , t_u(time)
-        , t_d(UINT_MAX)
+        , creat_time(time)
+        , del_time(MAX_TIME)
         , elem_addr(mem_addr)
     {
     }
@@ -67,79 +67,92 @@ namespace element
     inline void
     element :: add_property(property prop)
     {
+        update_mutex.lock();
         properties.push_back(prop);
+        update_mutex.unlock();
     }
 
     inline void
     element :: remove_property(property prop)
     {
-        std::vector<property>::iterator iter = std::remove(properties.begin(),
-                                                            properties.end(),
-                                                            prop);
+        update_mutex.lock();
+        std::vector<property>::iterator iter = std::remove(properties.begin(), properties.end(), prop);
         properties.erase(iter, properties.end());
+        update_mutex.unlock();
     }
-
-    /*
-    int
-    element :: get_prop_value (char* _key, char** _value)
-    {
-        std::vector<property>::iterator iter;
-        for (iter = properties.begin(); iter < properties.end(); iter++)
-        {
-            if (strcmp (iter->key, _key) == 0)
-            {
-                *_value = (char *) malloc(strlen (iter->value));
-                strncpy (*_value, iter->value, strlen (iter->value));
-                return 0;
-            }
-        }
-        return -1;
-    }
-    */
 
     bool
     element :: has_property(property prop)
     {
+        update_mutex.lock();
         std::vector<property>::iterator iter;
         int i = 0;
         for (iter = properties.begin(); iter<properties.end(); iter++)
         {
             if (prop == *iter) 
             {
+                update_mutex.unlock();
                 return true;
             }
         }
+        update_mutex.unlock();
         return false;
     }
 
-    inline int
-    element :: num_properties()
+    bool
+    element :: check_and_add_property(property prop)
     {
-        return properties.size();
+        update_mutex.lock();
+        std::vector<property>::iterator iter;
+        int i = 0;
+        for (iter = properties.begin(); iter<properties.end(); iter++)
+        {
+            if (prop == *iter) 
+            {
+                update_mutex.unlock();
+                return true;
+            }
+        }
+        properties.push_back(prop);
+        update_mutex.unlock();
+        return false;
     }
 
     inline void
-    element :: update_t_d(uint64_t del_time)
+    element :: update_del_time(uint64_t _del_time)
     {
-        t_d = del_time;
+        update_mutex.lock();
+        del_time = _del_time;
+        update_mutex.unlock();
     }
 
     inline meta_element
     element :: get_meta_element()
     {
-        return meta_element(myloc, t_u, t_d, elem_addr);
+        update_mutex.lock();
+        meta_element *ret = new meta_element(*myloc, creat_time, del_time, elem_addr);
+        update_mutex.unlock();
+        return *ret;
     }
 
     inline uint64_t
-    element :: get_t_u()
+    element :: get_creat_time()
     {
-        return t_u;
+        uint64_t ret;
+        update_mutex.lock();
+        ret = creat_time;
+        update_mutex.unlock();
+        return ret;
     }
 
     inline uint64_t
-    element :: get_t_d()
+    element :: get_del_time()
     {
-        return t_d;
+        uint64_t ret;
+        update_mutex.lock();
+        ret = del_time;
+        update_mutex.unlock();
+        return ret;
     }
 }
 }

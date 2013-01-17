@@ -26,27 +26,21 @@ namespace element
 {
     class node;
 
-    /*
-     * An edge is an ordered relation between 2 nodes
-     * The order is always (from, to)
-     */
     class edge : public element
     {
         public:
-            edge(po6::net::location server, uint64_t time, void* mem_addr, 
-                meta_element _from, meta_element _to);
+            edge(std::shared_ptr<po6::net::location> server, uint64_t time, 
+                std::unique_ptr<meta_element> _nbr);
         
         public:
-            meta_element from;
-            meta_element to;
+            std::unique_ptr<meta_element> nbr; // out-neighbor for this edge
     };
 
     inline
-    edge :: edge(po6::net::location server, uint64_t time, void* mem_addr, 
-        meta_element _from, meta_element _to)
-        : element(server, time, (void*) this)
-        , from(_from)
-        , to(_to)
+    edge :: edge(std::shared_ptr<po6::net::location> server, uint64_t time,
+        std::unique_ptr<meta_element> _nbr)
+        : element(server, time, (void*)this)
+        , nbr(std::move(_nbr))
     {
     }
 }

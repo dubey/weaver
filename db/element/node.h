@@ -30,19 +30,27 @@ namespace element
     class node : public element
     {
         public:
-            node(po6::net::location server, uint64_t time, void* mem_addr);
+            node(std::shared_ptr<po6::net::location> server, uint64_t time);
         
         public:
-            std::vector<meta_element> out_edges;
-            std::vector<meta_element> in_edges;
+            std::vector<edge *> out_edges;
             cache::reach_cache cache;
             po6::threads::mutex cache_mutex;
+            void add_edge(edge *e);
     };
 
     inline
-    node :: node(po6::net::location server, uint64_t time, void* mem_addr)
-        : element(server, time, (void*) this)
+    node :: node(std::shared_ptr<po6::net::location> server, uint64_t time)
+        : element(server, time, (void*)this)
     {
+    }
+
+    inline void
+    node :: add_edge(edge* e)
+    {
+        update_mutex.lock();
+        out_edges.push_back(e);
+        update_mutex.unlock();
     }
 }
 }

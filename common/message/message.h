@@ -65,10 +65,10 @@ namespace message
             void prep_edge_create(size_t local_node, size_t remote_node, 
                 std::unique_ptr<po6::net::location> remote_server,
                 uint64_t local_node_creat_time, uint64_t remote_node_creat_time, 
-                enum edge_direction dir, uint64_t edge_creat_time);
-            void unpack_edge_create(std::unique_ptr<db::element::meta_element> *local_node,
+                uint64_t edge_creat_time);
+            void unpack_edge_create(void **local_node,
                 std::unique_ptr<db::element::meta_element> *remote_node,
-                std::unique_ptr<po6::net::location> local, uint32_t *dir, uint64_t *edge_creat_time);
+                uint64_t *edge_creat_time);
             std::unique_ptr<po6::net::location> unpack_edge_create(void **local_node, 
                 void **remote_node, uint32_t *dir, uint64_t *creat_time);
             void prep_node_create_ack(size_t mem_addr);
@@ -161,7 +161,6 @@ namespace message
         size_t remote_node,
         std::unique_ptr<po6::net::location> remote_server,
         uint64_t local_node_creat_time, uint64_t remote_node_creat_time,
-        enum edge_direction dir,
         uint64_t edge_creat_time)
     {
         type = EDGE_CREATE_REQ;
@@ -176,19 +175,17 @@ namespace message
         
         buf->pack_at(BUSYBEE_HEADER_SIZE) << type << local_node << remote_node
             << remote_server->get_addr() << remote_server->port
-            << local_node_creat_time << remote_node_creat_time << edge_creat_time
-            << dir;
+            << local_node_creat_time << remote_node_creat_time << edge_creat_time;
     }
 
     inline void
-    message :: unpack_edge_create(std::unique_ptr<db::element::meta_element> *local_node,
+    message :: unpack_edge_create(void **local_node,
         std::unique_ptr<db::element::meta_element> *remote_node,
-        std::unique_ptr<po6::net::location> local,
-        uint32_t *dir, uint64_t *edge_creat_time)
+        uint64_t *edge_creat_time)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t _type;
-        uint32_t ip_addr, direction;
+        uint32_t ip_addr;
         uint16_t port;
         size_t mem_addr1, mem_addr2;
         uint64_t edge_time, local_node_time, remote_node_time;
@@ -200,16 +197,14 @@ namespace message
         
         index += sizeof(enum msg_type);
         buf->unpack_from(index) >> mem_addr1 >> mem_addr2 >> ip_addr >> port 
-            >> local_node_time >> remote_node_time >> edge_time >> direction;
+            >> local_node_time >> remote_node_time >> edge_time;
 
         n = (db::element::node *)mem_addr1;
-        assert(local_node_time == n->get_t_u()); //TODO why is this here?
+        assert(local_node_time == n->get_creat_time()); //TODO why is this here?
         remote.reset(new po6::net::location(ip_addr, port));
-        local_node->reset(new db::element::meta_element(*local, local_node_time, 
-            MAX_TIME, (void*)mem_addr1));
+        *local_node = (void *)mem_addr1;
         remote_node->reset(new db::element::meta_element(*remote, remote_node_time,
             MAX_TIME, (void*)mem_addr2));
-        *dir = direction;
         *edge_creat_time = edge_time;
     }
 
