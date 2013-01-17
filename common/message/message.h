@@ -60,24 +60,25 @@ namespace message
         public:
             // Create functions
             void change_type(enum msg_type t);
-            int prep_node_create(uint64_t creat_time);
-            int unpack_node_create(uint64_t *creat_time);
-            int prep_edge_create(size_t local_node, size_t remote_node, 
+            void prep_node_create(uint64_t creat_time);
+            void unpack_node_create(uint64_t *creat_time);
+            void prep_edge_create(size_t local_node, size_t remote_node, 
                 std::unique_ptr<po6::net::location> remote_server,
                 uint64_t local_node_creat_time, uint64_t remote_node_creat_time, 
                 enum edge_direction dir, uint64_t edge_creat_time);
-            int unpack_edge_create(std::unique_ptr<db::element::meta_element> *local_node,
+            void unpack_edge_create(std::unique_ptr<db::element::meta_element> *local_node,
                 std::unique_ptr<db::element::meta_element> *remote_node,
                 std::unique_ptr<po6::net::location> local, uint32_t *dir, uint64_t *edge_creat_time);
             std::unique_ptr<po6::net::location> unpack_edge_create(void **local_node, 
                 void **remote_node, uint32_t *dir, uint64_t *creat_time);
-            int prep_create_ack(size_t mem_addr);
-            int unpack_create_ack(void **mem_addr);
+            void prep_node_create_ack(size_t mem_addr);
+            void prep_edge_create_ack(size_t mem_addr);
+            void unpack_create_ack(void **mem_addr);
             // Update functions
-            int prep_node_delete(size_t node_handle, uint64_t del_time);
-            int unpack_node_delete(void **node_handle, uint64_t *del_time);
+            void prep_node_delete(size_t node_handle, uint64_t del_time);
+            void unpack_node_delete(void **node_handle, uint64_t *del_time);
             // Reachability functions
-            int prep_reachable_prop(std::vector<size_t> src_nodes,
+            void prep_reachable_prop(std::vector<size_t> src_nodes,
                 std::shared_ptr<po6::net::location> src_loc,
                 size_t dest_node,
                 std::shared_ptr<po6::net::location> dest_loc,
@@ -91,7 +92,7 @@ namespace message
                 uint32_t *req_counter,
                 uint32_t *prev_req_counter,
                 std::unique_ptr<std::vector<uint64_t>> *vector_clock);
-            int prep_reachable_rep(uint32_t req_counter, 
+            void prep_reachable_rep(uint32_t req_counter, 
                 bool is_reachable,
                 size_t src_node,
                 std::shared_ptr<po6::net::location> src_loc,
@@ -104,7 +105,10 @@ namespace message
                 std::unique_ptr<std::vector<size_t>> *del_nodes,
                 std::unique_ptr<std::vector<uint64_t>> *del_times);
             // Error message
-            int prep_error();
+            void prep_error();
+
+        private:
+            void prep_create_ack(size_t mem_addr, bool node);
     };
 
     inline
@@ -126,44 +130,33 @@ namespace message
         type = t;
     }
 
-    inline int
+    inline void
     message :: prep_node_create(uint64_t creat_time)
     {
-        uint32_t index = BUSYBEE_HEADER_SIZE;
-        
-        if (type != NODE_CREATE_REQ) 
-        {
-            return -1;
-        }
+        type = NODE_CREATE_REQ;
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + 
             sizeof(enum msg_type) + //type
             sizeof(uint64_t))); //creat_time
         
-        buf->pack_at(index) << type << creat_time;
-        return 0; 
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << creat_time;
     }
 
-    inline int
+    inline void
     message :: unpack_node_create(uint64_t *creat_time)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t _type;
         uint64_t time;
-
         buf->unpack_from(index) >> _type;
-        if (_type != NODE_CREATE_REQ)
-        {
-            return -1;
-        }
+        assert(_type == NODE_CREATE_REQ);
         type = NODE_CREATE_REQ;
 
         index += sizeof(enum msg_type);
         buf->unpack_from(index) >> time;
         *creat_time = time;
-        return 0;
     }
 
-    inline int
+    inline void
     message :: prep_edge_create(size_t local_node, 
         size_t remote_node,
         std::unique_ptr<po6::net::location> remote_server,
@@ -171,12 +164,7 @@ namespace message
         enum edge_direction dir,
         uint64_t edge_creat_time)
     {
-        uint32_t index = BUSYBEE_HEADER_SIZE;
-        
-        if (type != EDGE_CREATE_REQ) 
-        {
-            return -1;
-        }
+        type = EDGE_CREATE_REQ;
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE +
             sizeof(enum msg_type) +
             2 * sizeof(size_t) +
@@ -186,16 +174,13 @@ namespace message
             sizeof(enum edge_direction)
             ));
         
-        buf->pack_at(index) << type;
-        index += sizeof(enum msg_type);
-        buf->pack_at(index) << local_node << remote_node
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << local_node << remote_node
             << remote_server->get_addr() << remote_server->port
             << local_node_creat_time << remote_node_creat_time << edge_creat_time
             << dir;
-        return 0;
     }
 
-    inline int
+    inline void
     message :: unpack_edge_create(std::unique_ptr<db::element::meta_element> *local_node,
         std::unique_ptr<db::element::meta_element> *remote_node,
         std::unique_ptr<po6::net::location> local,
@@ -209,12 +194,8 @@ namespace message
         uint64_t edge_time, local_node_time, remote_node_time;
         std::unique_ptr<po6::net::location> remote;
         db::element::node *n;
-        
         buf->unpack_from(index) >> _type;
-        if (_type != EDGE_CREATE_REQ) 
-        {
-            return -1;
-        }
+        assert(_type == EDGE_CREATE_REQ);
         type = EDGE_CREATE_REQ;
         
         index += sizeof(enum msg_type);
@@ -222,7 +203,7 @@ namespace message
             >> local_node_time >> remote_node_time >> edge_time >> direction;
 
         n = (db::element::node *)mem_addr1;
-        assert(local_node_time == n->get_t_u());
+        assert(local_node_time == n->get_t_u()); //TODO why is this here?
         remote.reset(new po6::net::location(ip_addr, port));
         local_node->reset(new db::element::meta_element(*local, local_node_time, 
             MAX_TIME, (void*)mem_addr1));
@@ -230,87 +211,79 @@ namespace message
             MAX_TIME, (void*)mem_addr2));
         *dir = direction;
         *edge_creat_time = edge_time;
-        return 0;
     }
 
-    inline int
-    message :: prep_create_ack(size_t mem_addr)
+    inline void
+    message :: prep_create_ack(size_t mem_addr, bool node)
     {
-        uint32_t index = BUSYBEE_HEADER_SIZE;
-
-        if ((type != NODE_CREATE_ACK) && (type != EDGE_CREATE_ACK))
-        {
-            return -1;
+        if (node) {
+            type = NODE_CREATE_ACK;
+        } else {
+            type = EDGE_CREATE_ACK;
         }
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + 
             sizeof(enum msg_type) + 
             sizeof(size_t)));
 
-        buf->pack_at(index) << type;
-        index += sizeof(enum msg_type);
-        buf->pack_at(index) << mem_addr;
-        return 0; 
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << mem_addr;
     }
 
-    inline int
+    inline void
+    message :: prep_node_create_ack(size_t mem_addr)
+    {
+        prep_create_ack(mem_addr, true);
+    }
+
+    inline void
+    message :: prep_edge_create_ack(size_t mem_addr)
+    {
+        prep_create_ack(mem_addr, false);
+    }
+
+    inline void
     message :: unpack_create_ack(void **mem_addr)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t _type;
         size_t addr;
         buf->unpack_from(index) >> _type;
-        if ((_type != NODE_CREATE_ACK) && (_type != EDGE_CREATE_ACK))
-        {
-            return -1;
-        }
+        assert((_type == NODE_CREATE_ACK) || (_type == EDGE_CREATE_ACK));
         type = (enum msg_type)_type;
         index += sizeof(uint32_t);
 
         buf->unpack_from(index) >> addr;
         *mem_addr = (void *) addr;
-        return 0;
     }
 
-    inline int
+    inline void
     message :: prep_node_delete(size_t node_handle, uint64_t del_time)
     {
-        uint32_t index = BUSYBEE_HEADER_SIZE;
-        
-        if (type != NODE_DELETE_REQ)
-        {
-            return -1;
-        }
+        type = NODE_DELETE_REQ;
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE +
             sizeof(enum msg_type) +
             sizeof(size_t) + // node handle
             sizeof(uint64_t))); // del time
 
-        buf->pack_at(index) << type << node_handle << del_time;
-        return 0;
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << node_handle << del_time;
     }
 
-    inline int
+    inline void
     message :: unpack_node_delete(void **node_handle, uint64_t *del_time)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t _type;
         size_t node_addr;
         uint64_t time;
-
         buf->unpack_from(index) >> _type;
-        if (_type != NODE_DELETE_REQ)
-        {
-            return -1;
-        }
+        assert(_type == NODE_DELETE_REQ);
         index += sizeof(enum msg_type);
         
         buf->unpack_from(index) >> node_addr >> time;
         *node_handle = (void *)node_addr;
         *del_time = time;
-        return 0;
     }
 
-    inline int 
+    inline void 
     message :: prep_reachable_prop(std::vector<size_t> src_nodes,
         std::shared_ptr<po6::net::location> src_loc,
         size_t dest_node, 
@@ -322,11 +295,7 @@ namespace message
         uint32_t index = BUSYBEE_HEADER_SIZE;
         size_t num_nodes = src_nodes.size();
         size_t i;
-
-        if (type != REACHABLE_PROP)
-        {
-            return -1;
-        }
+        type = REACHABLE_PROP;
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE +
             sizeof(enum msg_type) +
             sizeof(size_t) + //num_nodes
@@ -353,7 +322,6 @@ namespace message
         }
         buf->pack_at(index) << src_loc->get_addr() << src_loc->port << dest_node 
             << dest_loc->get_addr() << dest_loc->port << req_counter << prev_req_counter;
-        return 0;
     }
 
     inline std::unique_ptr<std::vector<size_t>>
@@ -374,10 +342,7 @@ namespace message
         std::unique_ptr<po6::net::location> _src_loc, _dest_loc;
 
         buf->unpack_from(index) >> _type;
-        if (_type != REACHABLE_PROP)
-        {
-            return src;
-        }
+        assert(_type == REACHABLE_PROP);
         type = REACHABLE_PROP;
         index += sizeof(enum msg_type);
         
@@ -407,7 +372,7 @@ namespace message
         return src;
     }
 
-    inline int
+    inline void
     message :: prep_reachable_rep(uint32_t req_counter, 
         bool is_reachable,
         size_t src_node,
@@ -418,10 +383,7 @@ namespace message
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t temp = (uint32_t) is_reachable;
         size_t i;
-
-        if (type != REACHABLE_REPLY) {
-            return -1;
-        }
+        type = REACHABLE_REPLY;
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE +
             sizeof(enum msg_type) +
             sizeof(uint32_t) + //req id
@@ -433,17 +395,14 @@ namespace message
             del_nodes->size() * sizeof(size_t) +
             del_times->size() * sizeof(uint64_t)));
 
-        buf->pack_at(index) << type;
-        index += sizeof(enum msg_type);
-        buf->pack_at(index) << del_nodes->size();
-        index += sizeof(size_t);
+        buf->pack_at(index) << type << del_nodes->size();
+        index += sizeof(enum msg_type) + sizeof(size_t);
         for (i = 0; i < del_nodes->size(); i++, index += (sizeof(size_t) + sizeof(uint64_t)))
         {
             buf->pack_at(index) << (*del_nodes)[i] << (*del_times)[i];
         }
         buf->pack_at(index) << req_counter << temp << src_node 
             << src_loc->get_addr() << src_loc->port;
-        return 0;
     }
 
     inline std::unique_ptr<po6::net::location>
@@ -463,12 +422,8 @@ namespace message
         uint16_t s_port;
         uint32_t s_ipaddr;
         std::unique_ptr<po6::net::location> ret;
-
         buf->unpack_from(index) >> _type;
-        if (_type != REACHABLE_REPLY) 
-        {
-            return NULL;
-        }
+        assert(_type == REACHABLE_REPLY);
         type = REACHABLE_REPLY;
 
         index += sizeof(enum msg_type);
