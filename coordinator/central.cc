@@ -315,7 +315,7 @@ msg_handler(coordinator::central *server)
         mtype = (enum message::msg_type)code;
         thr.reset(new coordinator::thread::unstarted_thread(handle_pending_req,
             server, std::move(rec_msg), mtype));
-        thread_pool.add_request(std::move(thr));
+        thread_pool.add_request(std::move(thr), !(mtype == message::REACHABLE_REPLY));
     }
 }
 

@@ -28,7 +28,7 @@ namespace coordinator
 namespace thread
 {
     class pool;
-    void thread_loop(pool *tpool);
+    void thread_loop(pool *tpool, bool update);
 
     class unstarted_thread
     {
@@ -70,57 +70,80 @@ namespace thread
 
         public:
             int num_threads;
-            std::deque<std::unique_ptr<unstarted_thread>> queue;
+            std::deque<std::unique_ptr<unstarted_thread>> update_queue;
+            std::deque<std::unique_ptr<unstarted_thread>> reach_req_queue;
             std::vector<std::thread> threads;
             po6::threads::mutex queue_mutex;
             po6::threads::cond empty_queue_cond;
+            po6::threads::cond update_empty_queue_cond;
         
         public:
-            void add_request(std::unique_ptr<unstarted_thread> t);
+            void add_request(std::unique_ptr<unstarted_thread> t, bool update);
     };
 
     inline
     pool :: pool(int n_threads)
         : num_threads(n_threads)
         , empty_queue_cond(&queue_mutex)
+        , update_empty_queue_cond(&queue_mutex)
     {
         int i;
         std::unique_ptr<std::thread> t;
         for (i = 0; i < num_threads; i++)
         {
-            t.reset(new std::thread(thread_loop, this));
+            t.reset(new std::thread(thread_loop, this, false));
             t->detach();
         }
+        t.reset(new std::thread(thread_loop, this, true));
+        t->detach();
     }
 
     inline void
-    pool :: add_request(std::unique_ptr<unstarted_thread> t)
+    pool :: add_request(std::unique_ptr<unstarted_thread> t, bool update)
     {
         queue_mutex.lock();
-        if (queue.empty())
+        if (update)
         {
-            empty_queue_cond.signal();
+            if (update_queue.empty())
+            {
+                update_empty_queue_cond.signal();
+            }
+            update_queue.push_back(std::move(t));
+        } else {
+            if (reach_req_queue.empty())
+            {
+                empty_queue_cond.signal();
+            }
+            reach_req_queue.push_back(std::move(t));
         }
-        queue.push_back(std::move(t));
         queue_mutex.unlock();
     }
 
     void
-    thread_loop(pool *tpool)
+    thread_loop(pool *tpool, bool update)
     {
         std::unique_ptr<unstarted_thread> thr;
         while (true)
         {
             tpool->queue_mutex.lock();
-            while(tpool->queue.empty())
-            {
-                tpool->empty_queue_cond.wait();
-            }
-            thr = std::move(tpool->queue.front());
-            tpool->queue.pop_front();
-            if (!tpool->queue.empty())
-            {
-                tpool->empty_queue_cond.signal();
+            if (update) {
+                while(tpool->update_queue.empty())
+                {
+                    tpool->update_empty_queue_cond.wait();
+                }
+                thr = std::move(tpool->update_queue.front());
+                tpool->update_queue.pop_front();
+            } else {
+                while(tpool->reach_req_queue.empty())
+                {
+                    tpool->empty_queue_cond.wait();
+                }
+                thr = std::move(tpool->reach_req_queue.front());
+                tpool->reach_req_queue.pop_front();
+                if (!tpool->reach_req_queue.empty())
+                {
+                    tpool->empty_queue_cond.signal();
+                }
             }
             tpool->queue_mutex.unlock();
             (*(thr->func))(thr->server, std::move(thr->msg), thr->m_type);

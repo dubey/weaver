@@ -1,19 +1,9 @@
-Do not send message if source and dest are same (done)
 Cache reachability results (basic, no invalidation, only caching positive
 results)
-Make system independent of localhost (done)
 
-Change usage of batch_requests from regular pointers to shared_ptr.
-Make new threads for handling each new reach request (done at each server,
-pending at central server) - need to change to thread pool (done).
-
-Add update functions.
-
-Currently separate thread for graph updates removes all concurrency. Per node
-lock can make concurrent deletions possible.
-Make edge have only one meta_element. No need to store local information.
 Examine code for spurious copying/mallocing.
-Add error message printing on msg packing/unpacking.
+Make unit tests!
+
 Make allowance for multiple reach_nodes in reachability requests.
 Try to get rid of PO6_NDEBUG_LEAKS.
 Check memory leaks using valgrind.
