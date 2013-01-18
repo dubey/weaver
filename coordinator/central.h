@@ -19,8 +19,8 @@
 #include <busybee_sta.h>
 #include <po6/net/location.h>
 
+#include "common/meta_element.h"
 #include "common/weaver_constants.h"
-#include "graph_elem.h"
 #include "common/vclock/vclock.h"
 
 namespace coordinator
@@ -39,8 +39,9 @@ namespace coordinator
             //A list of graph elements, which would probably be some server,
             //id/address pair
             int port_ctr;
-            std::vector<coordinator::graph_elem *> elements;
+            std::vector<common::meta_element *> elements;
             vclock::vector vc;
+            busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
     };
 
     inline
@@ -53,6 +54,17 @@ namespace coordinator
         port_ctr = COORD_PORT;
     }
 
-} //namespace coordinator
+    inline busybee_returncode
+    central :: send(po6::net::location loc, std::auto_ptr<e::buffer> buf)
+    {
+        busybee_returncode ret;
+        if ((ret = bb.send(loc, buf)) != BUSYBEE_SUCCESS)
+        {
+            std::cerr << "message sending error " << ret << std::endl;
+        }
+        return ret;
+    }
+
+}
 
 #endif // __CENTRAL__

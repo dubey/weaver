@@ -23,18 +23,13 @@ namespace coordinator
     {
         public:
             graph_elem();
-            graph_elem(po6::net::location _loc1, po6::net::location _loc2,
-                void *_mem_addr1, void *_mem_addr2, 
-                uint64_t _creat_time1, uint64_t _creat_time2);
+            graph_elem(po6::net::location _loc, void *_mem_addr uint64_t _creat_time);
 
         public:
-            /* If this is a node, then only loc1, mem_addr1 are relevant
-             * If this is an edge, then it is directed 1 --> 2
-             */
-            po6::net::location loc1, loc2;
-            void *mem_addr1, *mem_addr2;
-            uint64_t creat_time1, creat_time2;
-    }; // class graph_elem
+            po6::net::location loc;
+            void *mem_addr;
+            uint64_t creat_time;
+    };
 
     inline
     graph_elem :: graph_elem(po6::net::location _loc1, po6::net::location _loc2,

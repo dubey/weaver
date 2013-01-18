@@ -27,7 +27,7 @@
 
 #include "common/weaver_constants.h"
 #include "element/property.h"
-#include "element/meta_element.h"
+#include "common/meta_element.h"
 #include "element/node.h"
 #include "element/edge.h"
 
@@ -56,11 +56,11 @@ namespace db
             po6::threads::mutex bb_lock;
             element::node* create_node(uint64_t time);
             element::edge* create_edge(void *n1,
-                std::unique_ptr<element::meta_element> n2, uint64_t time);
+                std::unique_ptr<common::meta_element> n2, uint64_t time);
             void delete_node(element::node *n, uint64_t del_time);
             void delete_edge(element::node *n, element::edge *e, uint64_t del_time);
-            bool mark_visited(element::node *n, uint32_t req_counter);
-            bool remove_visited(element::node *n, uint32_t req_counter);
+            bool mark_visited(element::node *n, size_t req_counter);
+            bool remove_visited(element::node *n, size_t req_counter);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send_coord(std::auto_ptr<e::buffer> buf);
             void wait_for_updates(uint64_t recd_clock);
@@ -72,7 +72,7 @@ namespace db
         , pending_update_cond(&update_mutex)
         , node_count(0)
         , myloc(new po6::net::location(ip_addr, port))
-        , coord(new po6::net::location(COORD_IPADDR, COORD_PORT))
+        , coord(new po6::net::location(COORD_IPADDR, COORD_REC_PORT))
         , bb(myloc->address, myloc->port + SEND_PORT_INCR, 0)
         , bb_recv(myloc->address, myloc->port, 0)
     {
@@ -96,7 +96,7 @@ namespace db
 
     inline element::edge*
     graph :: create_edge(void *n1,
-        std::unique_ptr<element::meta_element> n2,
+        std::unique_ptr<common::meta_element> n2,
         uint64_t time)
     {
         element::node *local_node = (element::node *)n1;
@@ -142,7 +142,7 @@ namespace db
     }
 
     inline bool
-    graph :: mark_visited(element::node *n, uint32_t req_counter)
+    graph :: mark_visited(element::node *n, size_t req_counter)
     {
         uint32_t key = 0; //visited key
         element::property p(key, req_counter);
@@ -150,7 +150,7 @@ namespace db
     }
 
     inline bool
-    graph :: remove_visited(element::node *n, uint32_t req_counter)
+    graph :: remove_visited(element::node *n, size_t req_counter)
     {
         uint32_t key = 0; //visited key
         element::property p(key, req_counter);
@@ -168,6 +168,7 @@ namespace db
             //assert(ret == BUSYBEE_SUCCESS); //TODO what?
         }
         bb_lock.unlock();
+        return ret;
     }
     
     inline busybee_returncode
@@ -181,6 +182,7 @@ namespace db
             //assert(ret == BUSYBEE_SUCCESS); //TODO
         }
         bb_lock.unlock();
+        return ret;
     }
 
     inline void

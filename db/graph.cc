@@ -35,7 +35,7 @@ class batch_request
 {
     public:
     std::unique_ptr<po6::net::location> prev_loc; // prev server's port
-    uint32_t id; // prev server's req id
+    size_t id; // prev server's req id
     int num; // number of onward requests
     bool reachable;
     std::unique_ptr<std::vector<size_t>> src_nodes;
@@ -66,22 +66,23 @@ class batch_request
 };
 
 static int myid, port;
-static uint32_t incoming_req_id_counter, outgoing_req_id_counter;
+static size_t incoming_req_id_counter, outgoing_req_id_counter;
 static po6::threads::mutex incoming_req_id_counter_mutex, outgoing_req_id_counter_mutex;
-static std::unordered_map<uint32_t, std::shared_ptr<batch_request>> pending_batch;
+static std::unordered_map<size_t, std::shared_ptr<batch_request>> pending_batch;
 static db::thread::pool thread_pool(NUM_THREADS);
 
 // create a graph node
 void
 handle_create_node(db::graph *G, std::unique_ptr<message::message> msg)
 {
+    size_t req_id;
     uint64_t creat_time;
     db::element::node *n;
-    msg->unpack_node_create(&creat_time);
+    msg->unpack_node_create(&req_id, &creat_time);
 
     n = G->create_node(creat_time);
 
-    msg->prep_node_create_ack((size_t)n); 
+    msg->prep_node_create_ack(req_id, (size_t)n); 
     G->send_coord(msg->buf);
 }
 
@@ -89,28 +90,33 @@ handle_create_node(db::graph *G, std::unique_ptr<message::message> msg)
 void
 handle_delete_node(db::graph *G, std::unique_ptr<message::message> msg)
 {
+    size_t req_id;
     db::element::node *n; // node to be deleted
     void *node_addr; // temp var to hold node handle
     uint64_t del_time; // time of deletion
-    msg->unpack_node_delete(&node_addr, &del_time);
+    msg->unpack_node_delete(&req_id, &node_addr, &del_time);
 
     n = (db::element::node *)node_addr;
     G->delete_node(n, del_time);
+
+    msg->prep_node_delete_ack(req_id);
+    G->send_coord(msg->buf);
 }
 
 // create a graph edge
 void
 handle_create_edge(db::graph *G, std::unique_ptr<message::message> msg)
 {
+    size_t req_id;
     void *n1;
-    std::unique_ptr<db::element::meta_element> n2;
+    std::unique_ptr<common::meta_element> n2;
     uint64_t creat_time;
     db::element::edge *e;
-    msg->unpack_edge_create(&n1, &n2, &creat_time);
+    msg->unpack_edge_create(&req_id, &n1, &n2, &creat_time);
 
     e = G->create_edge(n1, std::move(n2), creat_time);
 
-    msg->prep_edge_create_ack((size_t)e);
+    msg->prep_edge_create_ack(req_id, (size_t)e);
     G->send_coord(msg->buf);
 }
 
@@ -118,15 +124,19 @@ handle_create_edge(db::graph *G, std::unique_ptr<message::message> msg)
 void
 handle_delete_edge(db::graph *G, std::unique_ptr<message::message> msg)
 {
+    size_t req_id;
     db::element::node *n; // node whose edge is being deleted
     db::element::edge *e;
     void *node_addr, *edge_addr;
     uint64_t del_time;
-    msg->unpack_edge_delete(&node_addr, &edge_addr, &del_time);
+    msg->unpack_edge_delete(&req_id, &node_addr, &edge_addr, &del_time);
 
     n = (db::element::node *)node_addr;
     e = (db::element::edge *)edge_addr;
     G->delete_edge(n, e, del_time);
+
+    msg->prep_edge_delete_ack(req_id);
+    G->send_coord(msg->buf);
 }
 
 // reachability request starting from src_nodes to dest_node
@@ -136,7 +146,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
     void *dest_node; // destination node handle
     std::unique_ptr<po6::net::location> prev_loc; //previous server's location
     std::shared_ptr<po6::net::location> dest_loc; //target node's location
-    uint32_t coord_req_id, // central coordinator req id
+    size_t coord_req_id, // central coordinator req id
         prev_req_id, // previous server's req counter
         my_batch_req_id, // this server's request id
         my_outgoing_req_id; // each forwarded batched req id
@@ -275,7 +285,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
 void
 handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
 {
-    uint32_t my_outgoing_req_id, my_batch_req_id, prev_req_id;
+    size_t my_outgoing_req_id, my_batch_req_id, prev_req_id;
     std::shared_ptr<batch_request> request;
     bool reachable_reply;
     std::unique_ptr<po6::net::location> prev_loc, reach_loc;
@@ -367,7 +377,7 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
         std::unique_ptr<std::vector<size_t>> src_nodes = std::move(request->src_nodes);
         for (node_iter = src_nodes->begin(); node_iter < src_nodes->end(); node_iter++)
         {
-            std::vector<db::element::meta_element>::iterator iter;
+            std::vector<common::meta_element>::iterator iter;
             n = (db::element::node *)(*node_iter);
             G->remove_visited(n, my_batch_req_id);
             /*

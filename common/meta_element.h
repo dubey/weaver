@@ -19,15 +19,13 @@
 #include <limits.h>
 #include <po6/net/location.h>
 
-namespace db
-{
-namespace element
+namespace common
 {
     class meta_element
     {
         public:
-            meta_element(po6::net::location server, uint64_t t_update, 
-                uint64_t t_creat, void *mem_addr);
+            meta_element(po6::net::location server, uint64_t t_creat, 
+                uint64_t t_delete, void *mem_addr);
         
         protected:
             po6::net::location myloc;
@@ -82,7 +80,6 @@ namespace element
     {
         return myloc;
     }
-}
-}
 
+}
 #endif //__META_ELEMENT__

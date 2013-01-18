@@ -22,7 +22,7 @@
 
 #include "common/weaver_constants.h"
 #include "property.h"
-#include "meta_element.h"
+#include "common/meta_element.h"
 
 namespace db
 {
@@ -46,7 +46,7 @@ namespace element
             bool has_property(property prop);
             bool check_and_add_property(property prop);
             void update_del_time(uint64_t del_time);
-            meta_element get_meta_element();
+            common::meta_element get_meta_element();
             uint64_t get_creat_time();
             uint64_t get_del_time();
             
@@ -112,10 +112,10 @@ namespace element
         del_time = _del_time;
     }
 
-    inline meta_element
+    inline common::meta_element
     element :: get_meta_element()
     {
-        meta_element ret(*myloc, creat_time, del_time, elem_addr);
+        common::meta_element ret(*myloc, creat_time, del_time, elem_addr);
         return ret;
     }
 

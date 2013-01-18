@@ -26,13 +26,13 @@ namespace element
     {
         public:
             property();
-            property(uint32_t, uint32_t);
+            property(uint32_t, size_t);
         
         public:
             char* __key;
             char* __value;
             uint32_t key;
-            uint32_t value;
+            size_t value;
             bool operator==(property p2) const;
     };
 
@@ -42,7 +42,7 @@ namespace element
     }
 
     inline
-    property :: property(uint32_t _key, uint32_t _value)
+    property :: property(uint32_t _key, size_t _value)
     {
         key = _key;
         value = _value;
