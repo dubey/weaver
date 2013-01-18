@@ -36,11 +36,13 @@ namespace coordinator
             busybee_sta bb;
             busybee_sta rec_bb;
             uint32_t time;
-            //A list of graph elements, which would probably be some server,
-            //id/address pair
             int port_ctr;
-            std::vector<common::meta_element *> elements;
+            std::vector<common::meta_element *> nodes;
+            std::vector<common::meta_element *> edges;
             vclock::vector vc;
+            po6::threads::mutex update_mutex;
+            void add_node(common::meta_element *n);
+            void add_edge(common::meta_element *e);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
     };
 
@@ -54,6 +56,22 @@ namespace coordinator
         port_ctr = COORD_PORT;
     }
 
+    inline void
+    central :: add_node(common::meta_element *n)
+    {
+        update_mutex.lock();
+        nodes.push_back(n);
+        update_mutex.unlock();
+    }
+
+    inline void
+    central :: add_edge(common::meta_element *e)
+    {
+        update_mutex.lock();
+        edges.push_back(e);
+        update_mutex.unlock();
+    }
+
     inline busybee_returncode
     central :: send(po6::net::location loc, std::auto_ptr<e::buffer> buf)
     {
@@ -64,7 +82,6 @@ namespace coordinator
         }
         return ret;
     }
-
 }
 
 #endif // __CENTRAL__
