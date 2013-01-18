@@ -16,17 +16,15 @@
 
 #include <stdint.h>
 #include <vector>
-#include <po6/threads/mutex.h>
 
 #include "element.h"
+#include "edge.h"
 #include "db/cache/cache.h"
 
 namespace db
 {
 namespace element
 {
-    class edge;
-
     class node : public element
     {
         public:
@@ -35,7 +33,7 @@ namespace element
         public:
             std::vector<edge *> out_edges;
             cache::reach_cache cache;
-            po6::threads::mutex cache_mutex;
+            po6::threads::mutex update_mutex;
             void add_edge(edge *e);
     };
 
@@ -46,12 +44,11 @@ namespace element
     }
 
     inline void
-    node :: add_edge(edge* e)
+    node :: add_edge(edge *e)
     {
-        update_mutex.lock();
         out_edges.push_back(e);
-        update_mutex.unlock();
     }
+
 }
 }
 

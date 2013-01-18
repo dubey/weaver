@@ -58,6 +58,7 @@ namespace db
             element::edge* create_edge(void *n1,
                 std::unique_ptr<element::meta_element> n2, uint64_t time);
             void delete_node(element::node *n, uint64_t del_time);
+            void delete_edge(element::node *n, element::edge *e, uint64_t del_time);
             bool mark_visited(element::node *n, uint32_t req_counter);
             bool remove_visited(element::node *n, uint32_t req_counter);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
@@ -103,7 +104,9 @@ namespace db
         update_mutex.lock();
         my_clock++;
         assert(my_clock == time);
+        local_node->update_mutex.lock();
         local_node->add_edge(new_edge);
+        local_node->update_mutex.unlock();
         E.push_back(new_edge);
         pending_update_cond.broadcast();
         update_mutex.unlock();
@@ -115,10 +118,25 @@ namespace db
     inline void
     graph :: delete_node(element::node *n, uint64_t del_time)
     {
-        n->update_del_time(del_time);
         update_mutex.lock();
         my_clock++;
         assert(my_clock == del_time);
+        n->update_mutex.lock();
+        n->update_del_time(del_time);
+        n->update_mutex.unlock();
+        pending_update_cond.broadcast();
+        update_mutex.unlock();
+    }
+
+    inline void
+    graph :: delete_edge(element::node *n, element::edge *e, uint64_t del_time)
+    {
+        update_mutex.lock();
+        my_clock++;
+        assert(my_clock == del_time);
+        n->update_mutex.lock();
+        e->update_del_time(del_time);
+        n->update_mutex.unlock();
         pending_update_cond.broadcast();
         update_mutex.unlock();
     }
@@ -147,7 +165,7 @@ namespace db
         if ((ret = bb.send(loc, msg)) != BUSYBEE_SUCCESS)
         {
             std::cerr << "msg send error: " << ret << std::endl;
-            //assert(ret == BUSYBEE_SUCCESS); //XXX
+            //assert(ret == BUSYBEE_SUCCESS); //TODO what?
         }
         bb_lock.unlock();
     }
@@ -160,7 +178,7 @@ namespace db
         if ((ret = bb.send(*coord, msg)) != BUSYBEE_SUCCESS)
         {
             std::cerr << "msg send error: " << ret << std::endl;
-            //assert(ret == BUSYBEE_SUCCESS); //XXX
+            //assert(ret == BUSYBEE_SUCCESS); //TODO
         }
         bb_lock.unlock();
     }

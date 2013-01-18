@@ -77,6 +77,8 @@ namespace message
             // Update functions
             void prep_node_delete(size_t node_handle, uint64_t del_time);
             void unpack_node_delete(void **node_handle, uint64_t *del_time);
+            void prep_edge_delete(size_t node_handle, size_t edge_handle, uint64_t del_time);
+            void unpack_edge_delete(void **node_handle, void **edge_handle, uint64_t *del_time);
             // Reachability functions
             void prep_reachable_prop(std::vector<size_t> src_nodes,
                 std::shared_ptr<po6::net::location> src_loc,
@@ -277,8 +279,38 @@ namespace message
         *node_handle = (void *)node_addr;
         *del_time = time;
     }
+    
+    inline void
+    message :: prep_edge_delete(size_t node_handle, size_t edge_handle, uint64_t del_time)
+    {
+        type = EDGE_DELETE_REQ;
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE +
+            sizeof(enum msg_type) +
+            2 * sizeof(size_t) + // handles
+            sizeof(uint64_t))); // del time
 
-    inline void 
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << node_handle << edge_handle
+            << del_time;
+    }
+
+    inline void
+    message :: unpack_edge_delete(void **node_handle, void **edge_handle, uint64_t *del_time)
+    {
+        uint32_t index = BUSYBEE_HEADER_SIZE;
+        uint32_t _type;
+        size_t node_addr, edge_addr;
+        uint64_t time;
+        buf->unpack_from(index) >> _type;
+        assert(_type == EDGE_DELETE_REQ);
+        index += sizeof(enum msg_type);
+        
+        buf->unpack_from(index) >> node_addr >> edge_addr >> time;
+        *node_handle = (void *)node_addr;
+        *edge_handle = (void *)edge_addr;
+        *del_time = time;
+    }
+
+    inline void
     message :: prep_reachable_prop(std::vector<size_t> src_nodes,
         std::shared_ptr<po6::net::location> src_loc,
         size_t dest_node, 

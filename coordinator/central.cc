@@ -146,7 +146,7 @@ create_edge(void *mem_addr1, void *mem_addr2, coordinator::central *server)
        mem_addr1, mem_addr2, creat_time1, creat_time2);
     server->elements.push_back(elem);
             
-    //std::cout << "Edge id is " << (void *) elem << std::endl;
+    //std::cout << "Edge id is " << (void *)elem << " " << mem_addr1 << std::endl;
     return (void *)elem;
 }
 
@@ -169,7 +169,6 @@ create_node(coordinator::central *server)
     po6::net::location shard_loc(COORD_IPADDR, 1 + COORD_PORT + server->port_ctr); //node will be placed on this shard server
     shard_loc_ptr.reset(new po6::net::location(shard_loc));
     creat_time = ++server->vc.clocks[server->port_ctr]; // incrementing vector clock
-    std::cout << "sending creat time " << creat_time << std::endl;
     msg.prep_node_create(creat_time); 
     ret = server->bb.send(shard_loc, msg.buf);
     if (ret != BUSYBEE_SUCCESS)
@@ -189,7 +188,7 @@ create_node(coordinator::central *server)
         node_addr, node_addr, creat_time, creat_time);
     server->elements.push_back(elem);
     
-    //std::cout << "Node id is " << (void *) elem << " at port " 
+    //std::cout << "Node id is " << (void *)elem << " " << node_addr << std::endl;
     return (void *)elem;
 }
 
@@ -207,8 +206,22 @@ delete_node(void *node_handle, coordinator::central *server)
         return;
     }
 
-    std::cout << "Sent message to delete node " << (void*)node_handle
-        << std::endl;
+}
+
+void
+delete_edge(void *node_handle, void *edge_handle, coordinator::central *server)
+{
+    coordinator::graph_elem *node = (coordinator::graph_elem *)node_handle;
+    coordinator::graph_elem *edge = (coordinator::graph_elem *)edge_handle;
+    message::message msg(message::EDGE_DELETE_REQ);
+    uint64_t del_time = ++server->vc.clocks[node->loc1.port - COORD_PORT - 1];
+    busybee_returncode ret;
+    msg.prep_edge_delete((size_t)node->mem_addr1, (size_t)edge->mem_addr1, del_time);
+    if ((ret = server->bb.send(node->loc1, msg.buf)) != BUSYBEE_SUCCESS)
+    {
+        std::cerr << "msg send error " << ret << std::endl;
+        return;
+    }
 }
 
 void
@@ -233,8 +246,8 @@ reachability_request(void *mem_addr1, void *mem_addr2, coordinator::central *ser
     req_counter++;
     src.push_back((size_t)elem1->mem_addr1);
     std::cout << "Reachability request number " << req_counter << " from source"
-              << " node " << mem_addr1 << " to destination node " << mem_addr2
-              << std::endl;
+              << " node " << mem_addr1 << " " << elem1->loc1.port << " to destination node " << mem_addr2
+              << " " << elem2->loc1.port << std::endl;
     src_loc.reset(new po6::net::location(COORD_IPADDR, COORD_REC_PORT));
     dest_loc.reset(new po6::net::location(elem2->loc1));
     msg.prep_reachable_prop(src, std::move(src_loc), (size_t) elem2->mem_addr1,
@@ -304,14 +317,15 @@ main(int argc, char* argv[])
     coordinator::central server;
     void *mem_addr1, *mem_addr2, *mem_addr3, *mem_addr4;
     int i;
-    std::vector<void *> nodes;
+    std::vector<void *> nodes, edges;
     timespec start, end, time_taken;
     uint32_t time_ms;
     std::thread *t;
     
     for (i = 0; i < NUM_NODES; i++)
     {
-        nodes.push_back(create_node(&server));
+        mem_addr1 = create_node(&server);
+        nodes.push_back(mem_addr1);
     }
     srand(time(NULL));
     /*
@@ -329,7 +343,7 @@ main(int argc, char* argv[])
     for (i = 0; i < NUM_NODES; i++)
     {
         //ring graph
-        create_edge(nodes[i], nodes[(i+1) % NUM_NODES], &server);
+        edges.push_back(create_edge(nodes[i], nodes[(i+1) % NUM_NODES], &server));
     }
     //clock_gettime (CLOCK_PROCESS_CPUTIME_ID, &start); 
     //t = new std::thread (msg_handler, &server);
@@ -338,6 +352,11 @@ main(int argc, char* argv[])
     {
         //int node_index = rand() % NUM_NODES;
         delete_node(nodes[i*i], &server);
+    }
+    for (i = 900; i < NUM_NODES - 4; i++)
+    {
+        delete_edge(nodes[i], edges[i], &server);
+        //sleep(1);
     }
     clock_gettime(CLOCK_MONOTONIC, &start);    
     /*

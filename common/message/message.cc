@@ -18,6 +18,8 @@ main (int argc, char *argv[])
 {
     void *first = (void *)238947328978763;
     void *second = (void *)23948230489224;
+    void *first1 = (void *)238947328978763;
+    void *second1 = (void *)23948230489224;
     uint64_t time = 42;
     uint64_t time2 = time;
     uint64_t time3 = time;
@@ -55,10 +57,16 @@ main (int argc, char *argv[])
     assert(time2 == time);
 
     // edge create
-    msg.prep_edge_create((size_t)first, (size_t)second, std::move(random), time,
-        time, (enum message::edge_direction)dir, time);
-    msg.unpack_edge_create(&node1, &node2, std::move(random2), &dir, &time2);
-    assert(dir == 1);
+    //msg.prep_edge_create((size_t)first, (size_t)second, std::move(random), time,
+    //    time, time);
+    //msg.unpack_edge_create(&first1, &node2, &time2);
+    //assert(time2 == time);
+
+    // edge delete
+    msg.prep_edge_delete((size_t)first, (size_t)second, time);
+    msg.unpack_edge_delete(&first1, &second1, &time2);
+    assert(first == first1);
+    assert(second == second1);
     assert(time2 == time);
 
     // reachable prop

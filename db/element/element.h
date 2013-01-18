@@ -19,7 +19,6 @@
 #include <vector>
 #include <algorithm>
 #include <string.h>
-#include <po6/threads/mutex.h>
 
 #include "common/weaver_constants.h"
 #include "property.h"
@@ -42,7 +41,6 @@ namespace element
             void* elem_addr; // memory address of this element on shard server
 
         public:
-            po6::threads::mutex update_mutex;
             void add_property(property prop);
             void remove_property(property prop);
             bool has_property(property prop);
@@ -67,92 +65,70 @@ namespace element
     inline void
     element :: add_property(property prop)
     {
-        update_mutex.lock();
         properties.push_back(prop);
-        update_mutex.unlock();
     }
 
     inline void
     element :: remove_property(property prop)
     {
-        update_mutex.lock();
         std::vector<property>::iterator iter = std::remove(properties.begin(), properties.end(), prop);
         properties.erase(iter, properties.end());
-        update_mutex.unlock();
     }
 
     bool
     element :: has_property(property prop)
     {
-        update_mutex.lock();
         std::vector<property>::iterator iter;
         int i = 0;
         for (iter = properties.begin(); iter<properties.end(); iter++)
         {
             if (prop == *iter) 
             {
-                update_mutex.unlock();
                 return true;
             }
         }
-        update_mutex.unlock();
         return false;
     }
 
     bool
     element :: check_and_add_property(property prop)
     {
-        update_mutex.lock();
         std::vector<property>::iterator iter;
         int i = 0;
         for (iter = properties.begin(); iter<properties.end(); iter++)
         {
             if (prop == *iter) 
             {
-                update_mutex.unlock();
                 return true;
             }
         }
         properties.push_back(prop);
-        update_mutex.unlock();
         return false;
     }
 
     inline void
     element :: update_del_time(uint64_t _del_time)
     {
-        update_mutex.lock();
         del_time = _del_time;
-        update_mutex.unlock();
     }
 
     inline meta_element
     element :: get_meta_element()
     {
-        update_mutex.lock();
-        meta_element *ret = new meta_element(*myloc, creat_time, del_time, elem_addr);
-        update_mutex.unlock();
-        return *ret;
+        meta_element ret(*myloc, creat_time, del_time, elem_addr);
+        return ret;
     }
 
     inline uint64_t
     element :: get_creat_time()
     {
-        uint64_t ret;
-        update_mutex.lock();
-        ret = creat_time;
-        update_mutex.unlock();
-        return ret;
+        return creat_time;
     }
 
     inline uint64_t
     element :: get_del_time()
     {
-        uint64_t ret;
-        update_mutex.lock();
-        ret = del_time;
-        update_mutex.unlock();
-        return ret;
+        return del_time;
     }
 }
 }

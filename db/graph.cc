@@ -70,9 +70,6 @@ static uint32_t incoming_req_id_counter, outgoing_req_id_counter;
 static po6::threads::mutex incoming_req_id_counter_mutex, outgoing_req_id_counter_mutex;
 static std::unordered_map<uint32_t, std::shared_ptr<batch_request>> pending_batch;
 static db::thread::pool thread_pool(NUM_THREADS);
-//static uint64_t my_clock;
-//static po6::threads::mutex graph_update_mutex;
-//static po6::threads::cond pending_update_cond(&graph_update_mutex);
 
 // create a graph node
 void
@@ -121,6 +118,15 @@ handle_create_edge(db::graph *G, std::unique_ptr<message::message> msg)
 void
 handle_delete_edge(db::graph *G, std::unique_ptr<message::message> msg)
 {
+    db::element::node *n; // node whose edge is being deleted
+    db::element::edge *e;
+    void *node_addr, *edge_addr;
+    uint64_t del_time;
+    msg->unpack_edge_delete(&node_addr, &edge_addr, &del_time);
+
+    n = (db::element::node *)node_addr;
+    e = (db::element::edge *)edge_addr;
+    G->delete_edge(n, e, del_time);
 }
 
 // reachability request starting from src_nodes to dest_node
@@ -152,7 +158,8 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         &coord_req_id, &prev_req_id, &vector_clock);
 
     // wait till all updates for this shard arrive
-    G->wait_for_updates(vector_clock->at(myid - 1));
+    myclock_recd = vector_clock->at(myid-1);
+    G->wait_for_updates(myclock_recd);
 
     // iterating over src_nodes
     for (src_iter = src_nodes->begin(); src_iter < src_nodes->end(); src_iter++)
@@ -161,43 +168,32 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         // because the coordinator placed the node's address in the message, 
         // we can just cast it back to a pointer
         n = (db::element::node *)(*src_iter);
-        // all subsequest updates do not affect this request
-        // so it is okay if the node is updated while we are examining it
+        n->update_mutex.lock();
         if (n->get_del_time() <= myclock_recd)
         {
             // trying to traverse deleted node
             deleted_nodes->push_back(*src_iter);
             del_times->push_back(n->get_del_time());
-        } else if (n == dest_node) {
+        } else if (n == dest_node && G->myloc->port == dest_loc->port) {
             reached = true;
-            reach_node = n;
-            break;
+            reach_node = (void *)n;
         } else if (!G->mark_visited(n, coord_req_id)) {
-            n->cache_mutex.lock();
             if (n->cache.entry_exists(*dest_loc, dest_node))
             {
                 // we have a cached result
-                std::cout << "Serving request from cache as " ;
                 if (n->cache.get_cached_value(*dest_loc, dest_node))
                 {
                     // is cached and is reachable
                     reached = true;
                     reach_node = (void *)n;
-                    std::cout << "true" << std::endl;
-                } else {
-                    // is not reachable
-                    std::cout << "false" << std::endl;
-                }
-                n->cache_mutex.unlock();
+                } 
             } else {
-                n->cache_mutex.unlock();
                 std::vector<db::element::edge *>::iterator iter;
 		        // check the properties of each out-edge
-                n->update_mutex.lock();
                 for (iter = n->out_edges.begin(); iter < n->out_edges.end(); iter++)
                 {
                     db::element::edge *e = *iter;
-                    uint64_t nbrclock_recd = (*vector_clock)[e->nbr->get_loc().port - COORD_PORT - 1]; // XXX need dst_id
+                    uint64_t nbrclock_recd =  vector_clock->at(e->nbr->get_loc().port - COORD_PORT - 1); // XXX need dst_id
                     if (e->get_creat_time() <= myclock_recd && 
                         e->get_del_time() >= myclock_recd // edge created and deleted in acceptable timeframe
                         && e->nbr->get_del_time() >= nbrclock_recd) // nbr not deleted
@@ -207,9 +203,9 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
                         msg_batch[e->nbr->get_loc()].push_back((size_t)e->nbr->get_addr());
                     }
                 }
-                n->update_mutex.unlock();
             }
         }
+        n->update_mutex.unlock();
         if (reached)
         {
             break;
@@ -307,7 +303,6 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
         // caching positive result
         // also deleting edges for nodes that have been deleted
         std::vector<size_t>::iterator node_iter;
-        //graph_update_mutex.lock();
         for (node_iter = request->src_nodes->begin(); node_iter < request->src_nodes->end(); node_iter++)
         {
             std::vector<db::element::edge *>::iterator iter;
@@ -316,23 +311,9 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
             for (iter = n->out_edges.begin(); iter < n->out_edges.end(); iter++)
             {
                 db::element::edge *e = *iter;
-                // caching
-                if (reachable_reply)
-                {
-                    if ((e->nbr->get_addr() == (void *)reach_node) &&
-                        (e->nbr->get_loc() == *reach_loc))
-                    {
-                        n->cache_mutex.lock();
-                        n->cache.insert_entry(*request->dest_loc, request->dest_addr, true);
-                        n->cache_mutex.unlock();
-                        prev_reach_node = (size_t)n;
-                        break;
-                    }
-                }
                 // deleting edges
                 if (num_del_nodes > 0)
                 {
-                    std::cout << "updating deleted node\n";
                     for (size_t i = 0; i < num_del_nodes; i++)
                     {
                         if (e->nbr->get_addr() == (void*)del_nodes->at(i))
@@ -341,10 +322,20 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
                         }
                     }
                 }
+                // caching
+                if (reachable_reply)
+                {
+                    if ((e->nbr->get_addr() == (void *)reach_node) &&
+                        (e->nbr->get_loc() == *reach_loc))
+                    {
+                        n->cache.insert_entry(*request->dest_loc, request->dest_addr, true);
+                        prev_reach_node = (size_t)n;
+                        break;
+                    }
+                }
             }
             n->update_mutex.unlock();
         }
-        //graph_update_mutex.unlock();
     }
 
     /*
@@ -443,6 +434,11 @@ runner(db::graph *G)
                 thread_pool.add_request(std::move(thr), true);
                 break;
             
+            case message::EDGE_DELETE_REQ:
+                thr.reset(new db::thread::unstarted_thread(handle_delete_edge, G, std::move(rec_msg)));
+                thread_pool.add_request(std::move(thr), true);
+                break;
+
             case message::REACHABLE_PROP:
                 thr.reset(new db::thread::unstarted_thread(handle_reachable_request, G, std::move(rec_msg)));
                 thread_pool.add_request(std::move(thr));

@@ -24,8 +24,6 @@ namespace db
 {
 namespace element
 {
-    class node;
-
     class edge : public element
     {
         public:
