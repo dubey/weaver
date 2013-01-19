@@ -24,8 +24,8 @@
 #include "common/message/message.h"
 #include "threadpool/threadpool.h"
 
-#define NUM_NODES 1000
-#define NUM_EDGES 1500
+#define NUM_NODES 100000
+#define NUM_EDGES 150000
 #define NUM_REQUESTS 100
 #define NUM_THREADS 4
 
@@ -47,15 +47,15 @@ class pending_req
     }
 };
 
-std::unordered_map<uint32_t, pending_req> pending;
-po6::threads::mutex pending_mutex;
+std::unordered_map<size_t, pending_req *> pending;
+size_t request_id;
 
 // wake up thread waiting on the received message
 void
 handle_pending_req(coordinator::central *server, std::unique_ptr<message::message> msg,
     enum message::msg_type m_type)
 {
-    size_t req_addr;
+    size_t req_id;
     pending_req *request;
     void *mem_addr;
     uint32_t rec_counter; // for reply
@@ -69,8 +69,10 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     {
         case message::NODE_CREATE_ACK:
         case message::EDGE_CREATE_ACK:
-            msg->unpack_create_ack(&req_addr, &mem_addr);
-            request = (pending_req *)req_addr;
+            msg->unpack_create_ack(&req_id, &mem_addr);
+            server->update_mutex.lock();
+            request = pending[req_id];
+            server->update_mutex.unlock();
             request->mutex.lock();
             request->addr = mem_addr;
             request->waiting = false;
@@ -80,8 +82,10 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
 
         case message::NODE_DELETE_ACK:
         case message::EDGE_DELETE_ACK:
-            msg->unpack_delete_ack(&req_addr);
-            request = (pending_req *)req_addr;
+            msg->unpack_delete_ack(&req_id);
+            server->update_mutex.lock();
+            request = pending[req_id];
+            server->update_mutex.unlock();
             request->mutex.lock();
             request->waiting = false;
             request->reply.signal();
@@ -89,9 +93,11 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             break;
 
         case message::REACHABLE_REPLY:
-            msg->unpack_reachable_rep(&req_addr, &is_reachable, &src_node,
+            msg->unpack_reachable_rep(&req_id, &is_reachable, &src_node,
                 &num_del_nodes, &del_nodes, &del_times);
-            request = (pending_req*)req_addr;
+            server->update_mutex.lock();
+            request = pending[req_id];
+            server->update_mutex.unlock();
             request->mutex.lock();
             request->reachable = is_reachable;
             request->waiting = false;
@@ -116,12 +122,15 @@ create_node(coordinator::central *server)
     message::message msg(message::NODE_CREATE_REQ);
     server->port_ctr = (server->port_ctr + 1) % NUM_SHARDS;
     shard_loc_ptr = server->shards[server->port_ctr]; // node will be placed on this shard server
+    size_t req_id;
 
     server->update_mutex.lock();
     creat_time = ++server->vc.clocks->at(server->port_ctr); // incrementing vector clock
     request = new pending_req();
     request->mutex.lock();
-    msg.prep_node_create((size_t)request, creat_time);
+    req_id = ++request_id;
+    pending[req_id] = request;
+    msg.prep_node_create(req_id, creat_time);
     server->send(shard_loc_ptr, msg.buf);
     server->update_mutex.unlock();
     
@@ -133,8 +142,12 @@ create_node(coordinator::central *server)
     new_node = new common::meta_element(shard_loc_ptr, creat_time, MAX_TIME, request->addr);
     request->mutex.unlock();
     delete request;
+    server->update_mutex.lock();
+    pending.erase(req_id);
+    server->update_mutex.unlock();
     server->add_node(new_node);
-    //std::cout << "Node id is " << (void *)elem << " " << node_addr << std::endl;
+    //std::cout << "Node id is " << (void *)new_node << " " <<
+    //    new_node->get_addr() << std::endl;
     return (void *)new_node;
 }
 
@@ -147,13 +160,16 @@ create_edge(common::meta_element *node1, common::meta_element *node2, coordinato
     uint64_t creat_time;
     void *edge_addr;
     message::message msg(message::EDGE_CREATE_REQ);
+    size_t req_id;
 
     //TODO need checks for given node_handles
     server->update_mutex.lock();
     creat_time = ++server->vc.clocks->at(node1->get_shard_id());
     request = new pending_req();
     request->mutex.lock();
-    msg.prep_edge_create((size_t)request, (size_t)node1->get_addr(), (size_t)node2->get_addr(),
+    req_id = ++request_id;
+    pending[req_id] = request;
+    msg.prep_edge_create(req_id, (size_t)node1->get_addr(), (size_t)node2->get_addr(),
         node2->get_loc_ptr(), node2->get_creat_time(), creat_time);
     server->send(node1->get_loc_ptr(), msg.buf);
     server->update_mutex.unlock();
@@ -165,8 +181,12 @@ create_edge(common::meta_element *node1, common::meta_element *node2, coordinato
     new_edge = new common::meta_element(node1->get_loc_ptr(), creat_time, MAX_TIME, request->addr);
     request->mutex.unlock();
     delete request;
+    server->update_mutex.lock();
+    pending.erase(req_id);
+    server->update_mutex.unlock();
     server->add_edge(new_edge);
-    //std::cout << "Edge id is " << (void *)elem << " " << mem_addr1 << std::endl;
+    //std::cout << "Edge id is " << (void *)new_edge << " " <<
+    //    new_edge->get_addr() << std::endl;
     return (void *)new_edge;
 }
 
@@ -177,6 +197,7 @@ delete_node(common::meta_element *node, coordinator::central *server)
     pending_req *request;
     uint64_t del_time;
     message::message msg(message::NODE_DELETE_REQ);
+    size_t req_id;
 
     server->update_mutex.lock();
     if (node->get_del_time() < MAX_TIME)
@@ -189,7 +210,9 @@ delete_node(common::meta_element *node, coordinator::central *server)
     node->update_del_time(del_time);
     request = new pending_req();
     request->mutex.lock();
-    msg.prep_node_delete((size_t)request, (size_t)node->get_addr(), del_time);
+    req_id = ++request_id;
+    pending[req_id] = request;
+    msg.prep_node_delete(req_id, (size_t)node->get_addr(), del_time);
     server->send(node->get_loc_ptr(), msg.buf);
     server->update_mutex.unlock();
 
@@ -200,6 +223,9 @@ delete_node(common::meta_element *node, coordinator::central *server)
     }
     request->mutex.unlock();
     delete request;
+    server->update_mutex.lock();
+    pending.erase(req_id);
+    server->update_mutex.unlock();
 }
 
 // delete an edge
@@ -209,6 +235,7 @@ delete_edge(common::meta_element *node, common::meta_element *edge, coordinator:
     pending_req *request;
     uint64_t del_time;
     message::message msg(message::EDGE_DELETE_REQ);
+    size_t req_id;
 
     server->update_mutex.lock();
     if (edge->get_del_time() < MAX_TIME)
@@ -221,7 +248,9 @@ delete_edge(common::meta_element *node, common::meta_element *edge, coordinator:
     edge->update_del_time(del_time);
     request = new pending_req();
     request->mutex.lock();
-    msg.prep_edge_delete((size_t)request, (size_t)node->get_addr(), (size_t)edge->get_addr(), del_time);
+    req_id = ++request_id;
+    pending[req_id] = request;
+    msg.prep_edge_delete(req_id, (size_t)node->get_addr(), (size_t)edge->get_addr(), del_time);
     server->send(node->get_loc_ptr(), msg.buf);
     server->update_mutex.unlock();
     
@@ -231,6 +260,9 @@ delete_edge(common::meta_element *node, common::meta_element *edge, coordinator:
     }
     request->mutex.unlock();
     delete request;
+    server->update_mutex.lock();
+    pending.erase(req_id);
+    server->update_mutex.unlock();
 }
 
 // is node1 reachable from node2?
@@ -241,6 +273,7 @@ reachability_request(common::meta_element *node1, common::meta_element *node2, c
     message::message msg(message::REACHABLE_PROP);
     std::vector<size_t> src; // vector to hold src node
     src.push_back((size_t)node1->get_addr());
+    size_t req_id;
     
     server->update_mutex.lock();
     if (node1->get_del_time() < MAX_TIME || node2->get_del_time() < MAX_TIME)
@@ -251,13 +284,14 @@ reachability_request(common::meta_element *node1, common::meta_element *node2, c
         return;
     }
     request = new pending_req();
-    std::cout << "Reachability request number " << (void*)request << " from source"
+    req_id = ++request_id;
+    pending[req_id] = request;
+    std::cout << "Reachability request number " << req_id << " from source"
               << " node " << node1->get_addr() << " " << node1->get_loc_ptr()->port << " to destination node "
               << node2->get_addr()<< " " << node2->get_loc_ptr()->port << std::endl;
     request->mutex.lock();
     msg.prep_reachable_prop(&src, server->myrecloc, (size_t)node2->get_addr(),
-        node2->get_loc_ptr(), (size_t)request, (size_t)request,
-        server->vc.clocks);
+        node2->get_loc_ptr(), req_id, req_id, server->vc.clocks);
     server->send(node1->get_loc_ptr(), msg.buf);
     server->update_mutex.unlock();
     
@@ -266,9 +300,12 @@ reachability_request(common::meta_element *node1, common::meta_element *node2, c
         request->reply.wait();
     }
     std::cout << "Reachable reply is " << request->reachable << " for " << 
-        "request " << (void*)request << std::endl;
+        "request " << req_id << std::endl;
     request->mutex.unlock();
     delete request;
+    server->update_mutex.lock();
+    pending.erase(req_id);
+    server->update_mutex.unlock();
 }
 
 timespec
@@ -324,7 +361,7 @@ main(int argc, char* argv[])
     uint32_t time_ms;
     std::thread *t;
     
-
+    request_id = 0;
     // initialize array of shard server locations
     for (i = 1; i <= NUM_SHARDS; i++)
     {
@@ -343,6 +380,19 @@ main(int argc, char* argv[])
         nodes.push_back(mem_addr1);
     }
     srand(time(NULL));
+    for (i = 0; i < NUM_EDGES; i++)
+    {
+        int first = rand() % NUM_NODES;
+        int second = rand() % NUM_NODES;
+        while (second == first) //no self-loop edges
+        {
+             second = rand() % NUM_NODES;
+        }
+        create_edge((common::meta_element *)nodes[first], 
+            (common::meta_element *)nodes[second], &server);
+    }
+    
+    /*
     for (i = 0; i < NUM_NODES; i++)
     {
         //ring graph
@@ -357,11 +407,26 @@ main(int argc, char* argv[])
     {
         delete_edge((common::meta_element *)nodes[i], (common::meta_element *)edges[i], &server);
     }
+    */
+    
     clock_gettime(CLOCK_MONOTONIC, &start);    
+    /*
     for (i = 0; i < NUM_NODES; i++)
     {
         reachability_request((common::meta_element *)nodes[i],
-            (common::meta_element *)nodes[(i+1) % NUM_NODES], &server);
+        (common::meta_element *)nodes[(i+1)%NUM_NODES], &server);
+    }
+    */
+    for (i = 0; i < NUM_REQUESTS; i++)
+    {
+        int first = rand() % NUM_NODES;
+        int second = rand() % NUM_NODES;
+        while (second == first) //no self-loop edges
+        {
+             second = rand() % NUM_NODES;
+        }
+        reachability_request((common::meta_element *)nodes[first],
+            (common::meta_element *)nodes[second], &server);
     }
     clock_gettime(CLOCK_MONOTONIC, &end);  
 

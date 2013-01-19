@@ -1,7 +1,7 @@
 Cache reachability results (basic, no invalidation, only caching positive
 results)
+Examine code for spurious copying/mallocing (done).
 
-Examine code for spurious copying/mallocing.
 Make unit tests!
 
 Make allowance for multiple reach_nodes in reachability requests.

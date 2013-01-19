@@ -214,7 +214,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
                     }
                 }
             }
-        }
+        } 
         n->update_mutex.unlock();
         if (reached)
         {
@@ -474,7 +474,7 @@ main(int argc, char* argv[])
         return -1;
     }
 
-    std::cout << "Testing Weaver" << std::endl;
+    std::cout << "Weaver: shard instance " << myid << std::endl;
     
     myid = atoi(argv[1]);
     port = COORD_PORT + myid;
