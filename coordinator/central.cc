@@ -104,60 +104,25 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     }
 }
 
-// create an edge
-void*
-create_edge(common::meta_element *node1, common::meta_element *node2, coordinator::central *server)
-{
-    pending_req *request;
-    common::meta_element *new_edge;
-    std::unique_ptr<po6::net::location> loc_ptr; //location pointer used for msg packing
-    uint64_t creat_time;
-    void *edge_addr;
-    message::message msg(message::EDGE_CREATE_REQ);
-    loc_ptr.reset(new po6::net::location(node2->get_loc()));
-
-    //TODO need checks for given node_handles
-    server->update_mutex.lock();
-    creat_time = ++server->vc.clocks[node1->get_loc().port - COORD_PORT - 1];
-    request = new pending_req();
-    request->mutex.lock();
-    msg.prep_edge_create((size_t)request, (size_t)node1->get_addr(), (size_t)node2->get_addr(),
-        std::move(loc_ptr), node2->get_creat_time(), creat_time);
-    server->send(node1->get_loc(), msg.buf);
-    server->update_mutex.unlock();
-    
-    while (request->waiting)
-    {
-        request->reply.wait();
-    }
-    new_edge = new common::meta_element(node1->get_loc(), creat_time, MAX_TIME, request->addr);
-    request->mutex.unlock();
-    delete request;
-    server->add_edge(new_edge);
-    //std::cout << "Edge id is " << (void *)elem << " " << mem_addr1 << std::endl;
-    return (void *)new_edge;
-}
-
 // create a node
 void*
 create_node(coordinator::central *server)
 {
     pending_req *request; 
     common::meta_element *new_node;
-    std::unique_ptr<po6::net::location> shard_loc_ptr;
+    std::shared_ptr<po6::net::location> shard_loc_ptr;
     uint64_t creat_time;
     void *node_addr; // node handle on shard server
     message::message msg(message::NODE_CREATE_REQ);
     server->port_ctr = (server->port_ctr + 1) % NUM_SHARDS;
-    shard_loc_ptr.reset(new po6::net::location(COORD_IPADDR, 
-        1 + COORD_PORT + server->port_ctr)); // node will be placed on this shard server
+    shard_loc_ptr = server->shards[server->port_ctr]; // node will be placed on this shard server
 
     server->update_mutex.lock();
-    creat_time = ++server->vc.clocks[server->port_ctr]; // incrementing vector clock
+    creat_time = ++server->vc.clocks->at(server->port_ctr); // incrementing vector clock
     request = new pending_req();
     request->mutex.lock();
     msg.prep_node_create((size_t)request, creat_time);
-    server->send(*shard_loc_ptr, msg.buf);
+    server->send(shard_loc_ptr, msg.buf);
     server->update_mutex.unlock();
     
     // waiting for reply from shard
@@ -165,12 +130,44 @@ create_node(coordinator::central *server)
     {
         request->reply.wait();
     }
-    new_node = new common::meta_element(*shard_loc_ptr, creat_time, MAX_TIME, request->addr);
+    new_node = new common::meta_element(shard_loc_ptr, creat_time, MAX_TIME, request->addr);
     request->mutex.unlock();
     delete request;
     server->add_node(new_node);
     //std::cout << "Node id is " << (void *)elem << " " << node_addr << std::endl;
     return (void *)new_node;
+}
+
+// create an edge
+void*
+create_edge(common::meta_element *node1, common::meta_element *node2, coordinator::central *server)
+{
+    pending_req *request;
+    common::meta_element *new_edge;
+    uint64_t creat_time;
+    void *edge_addr;
+    message::message msg(message::EDGE_CREATE_REQ);
+
+    //TODO need checks for given node_handles
+    server->update_mutex.lock();
+    creat_time = ++server->vc.clocks->at(node1->get_shard_id());
+    request = new pending_req();
+    request->mutex.lock();
+    msg.prep_edge_create((size_t)request, (size_t)node1->get_addr(), (size_t)node2->get_addr(),
+        node2->get_loc_ptr(), node2->get_creat_time(), creat_time);
+    server->send(node1->get_loc_ptr(), msg.buf);
+    server->update_mutex.unlock();
+    
+    while (request->waiting)
+    {
+        request->reply.wait();
+    }
+    new_edge = new common::meta_element(node1->get_loc_ptr(), creat_time, MAX_TIME, request->addr);
+    request->mutex.unlock();
+    delete request;
+    server->add_edge(new_edge);
+    //std::cout << "Edge id is " << (void *)elem << " " << mem_addr1 << std::endl;
+    return (void *)new_edge;
 }
 
 // delete a node
@@ -188,12 +185,12 @@ delete_node(common::meta_element *node, coordinator::central *server)
         server->update_mutex.unlock();
         return;
     }
-    del_time = ++server->vc.clocks[node->get_loc().port - COORD_PORT - 1];
+    del_time = ++server->vc.clocks->at(node->get_shard_id());
     node->update_del_time(del_time);
     request = new pending_req();
     request->mutex.lock();
     msg.prep_node_delete((size_t)request, (size_t)node->get_addr(), del_time);
-    server->send(node->get_loc(), msg.buf);
+    server->send(node->get_loc_ptr(), msg.buf);
     server->update_mutex.unlock();
 
     // waiting for reply from shard
@@ -211,6 +208,7 @@ delete_edge(common::meta_element *node, common::meta_element *edge, coordinator:
 {
     pending_req *request;
     uint64_t del_time;
+    message::message msg(message::EDGE_DELETE_REQ);
 
     server->update_mutex.lock();
     if (edge->get_del_time() < MAX_TIME)
@@ -219,13 +217,12 @@ delete_edge(common::meta_element *node, common::meta_element *edge, coordinator:
         server->update_mutex.unlock();
         return;
     }
-    del_time = ++server->vc.clocks[node->get_loc().port - COORD_PORT - 1];
+    del_time = ++server->vc.clocks->at(node->get_shard_id());
     edge->update_del_time(del_time);
     request = new pending_req();
     request->mutex.lock();
-    message::message msg(message::EDGE_DELETE_REQ);
     msg.prep_edge_delete((size_t)request, (size_t)node->get_addr(), (size_t)edge->get_addr(), del_time);
-    server->send(node->get_loc(), msg.buf);
+    server->send(node->get_loc_ptr(), msg.buf);
     server->update_mutex.unlock();
     
     while (request->waiting)
@@ -241,13 +238,9 @@ void
 reachability_request(common::meta_element *node1, common::meta_element *node2, coordinator::central *server)
 {
     pending_req *request;
-    std::unique_ptr<po6::net::location> src_loc, dest_loc;
     message::message msg(message::REACHABLE_PROP);
     std::vector<size_t> src; // vector to hold src node
-    po6::net::location rec_loc(COORD_IPADDR, COORD_PORT);
     src.push_back((size_t)node1->get_addr());
-    src_loc.reset(new po6::net::location(COORD_IPADDR, COORD_REC_PORT));
-    dest_loc.reset(new po6::net::location(node2->get_loc()));
     
     server->update_mutex.lock();
     if (node1->get_del_time() < MAX_TIME || node2->get_del_time() < MAX_TIME)
@@ -259,12 +252,13 @@ reachability_request(common::meta_element *node1, common::meta_element *node2, c
     }
     request = new pending_req();
     std::cout << "Reachability request number " << (void*)request << " from source"
-              << " node " << node1->get_addr() << " " << node1->get_loc().port << " to destination node "
-              << node2->get_addr()<< " " << node2->get_loc().port << std::endl;
+              << " node " << node1->get_addr() << " " << node1->get_loc_ptr()->port << " to destination node "
+              << node2->get_addr()<< " " << node2->get_loc_ptr()->port << std::endl;
     request->mutex.lock();
-    msg.prep_reachable_prop(src, std::move(src_loc), (size_t)node2->get_addr(),
-        std::move(dest_loc), (size_t)request, (size_t)request, server->vc.clocks);
-    server->send(node1->get_loc(), msg.buf);
+    msg.prep_reachable_prop(&src, server->myrecloc, (size_t)node2->get_addr(),
+        node2->get_loc_ptr(), (size_t)request, (size_t)request,
+        server->vc.clocks);
+    server->send(node1->get_loc_ptr(), msg.buf);
     server->update_mutex.unlock();
     
     while (request->waiting)
@@ -330,8 +324,19 @@ main(int argc, char* argv[])
     uint32_t time_ms;
     std::thread *t;
     
+
+    // initialize array of shard server locations
+    for (i = 1; i <= NUM_SHARDS; i++)
+    {
+        auto new_shard = std::make_shared<po6::net::location>(SHARD_IPADDR, COORD_PORT + i);
+        server.shards.push_back(new_shard);
+    }
+
+    // initialize msg receiving thread
     t = new std::thread(msg_handler, &server);
     t->detach();
+
+    // build the graph
     for (i = 0; i < NUM_NODES; i++)
     {
         mem_addr1 = create_node(&server);

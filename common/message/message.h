@@ -64,7 +64,7 @@ namespace message
             void prep_node_create(size_t req_id, uint64_t creat_time);
             void unpack_node_create(size_t *req_id, uint64_t *creat_time);
             void prep_edge_create(size_t req_id, size_t local_node, size_t remote_node, 
-                std::unique_ptr<po6::net::location> remote_server,
+                std::shared_ptr<po6::net::location> remote_server,
                 uint64_t remote_node_creat_time, uint64_t edge_creat_time);
             void unpack_edge_create(size_t *req_id, void **local_node,
                 std::unique_ptr<common::meta_element> *remote_node,
@@ -81,20 +81,20 @@ namespace message
             void prep_edge_delete_ack(size_t req_id);
             void unpack_delete_ack(size_t *req_id);
             // Reachability functions
-            void prep_reachable_prop(std::vector<size_t> src_nodes,
+            void prep_reachable_prop(std::vector<size_t> *src_nodes,
                 std::shared_ptr<po6::net::location> src_loc,
                 size_t dest_node,
                 std::shared_ptr<po6::net::location> dest_loc,
                 size_t req_id,
                 size_t prev_req_id,
-                std::vector<uint64_t> vector_clock);
+                std::shared_ptr<std::vector<uint64_t>> vector_clock);
             std::unique_ptr<std::vector<size_t>> unpack_reachable_prop(
                 std::unique_ptr<po6::net::location> *src_loc,
                 void **dest_node,
                 std::shared_ptr<po6::net::location> *dest_loc,
                 size_t *req_id,
                 size_t *prev_req_id,
-                std::unique_ptr<std::vector<uint64_t>> *vector_clock);
+                std::shared_ptr<std::vector<uint64_t>> *vector_clock);
             void prep_reachable_rep(size_t req_id, 
                 bool is_reachable,
                 size_t src_node,
@@ -165,7 +165,7 @@ namespace message
 
     inline void
     message :: prep_edge_create(size_t req_id, size_t local_node, size_t remote_node, 
-        std::unique_ptr<po6::net::location> remote_server, uint64_t remote_node_creat_time,
+        std::shared_ptr<po6::net::location> remote_server, uint64_t remote_node_creat_time,
         uint64_t edge_creat_time)
     {
         type = EDGE_CREATE_REQ;
@@ -194,7 +194,7 @@ namespace message
         uint16_t port;
         size_t mem_addr1, mem_addr2, id;
         uint64_t edge_time, remote_node_time;
-        std::unique_ptr<po6::net::location> remote;
+        std::shared_ptr<po6::net::location> remote;
         buf->unpack_from(index) >> _type;
         assert(_type == EDGE_CREATE_REQ);
         type = EDGE_CREATE_REQ;
@@ -206,7 +206,7 @@ namespace message
         *req_id = id;
         remote.reset(new po6::net::location(ip_addr, port));
         *local_node = (void *)mem_addr1;
-        remote_node->reset(new common::meta_element(*remote, remote_node_time,
+        remote_node->reset(new common::meta_element(remote, remote_node_time,
             MAX_TIME, (void*)mem_addr2));
         *edge_creat_time = edge_time;
     }
@@ -361,16 +361,16 @@ namespace message
     }
 
     inline void
-    message :: prep_reachable_prop(std::vector<size_t> src_nodes,
+    message :: prep_reachable_prop(std::vector<size_t> *src_nodes,
         std::shared_ptr<po6::net::location> src_loc,
         size_t dest_node, 
         std::shared_ptr<po6::net::location> dest_loc, 
         size_t req_id,
         size_t prev_req_id,
-        std::vector<uint64_t> vector_clock)
+        std::shared_ptr<std::vector<uint64_t>> vector_clock)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
-        size_t num_nodes = src_nodes.size();
+        size_t num_nodes = src_nodes->size();
         size_t i;
         type = REACHABLE_PROP;
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE +
@@ -389,13 +389,13 @@ namespace message
         index += sizeof(enum msg_type);
         for (i = 0; i < NUM_SHARDS; i++, index += sizeof(uint64_t))
         {
-            buf->pack_at(index) << vector_clock[i];
+            buf->pack_at(index) << vector_clock->at(i);
         }
         buf->pack_at(index) << num_nodes;
         index += sizeof(size_t);
         for (i = 0; i < num_nodes; i++, index += sizeof(size_t))
         {
-            buf->pack_at(index) << src_nodes[i];
+            buf->pack_at(index) << src_nodes->at(i);
         }
         buf->pack_at(index) << src_loc->get_addr() << src_loc->port << dest_node 
             << dest_loc->get_addr() << dest_loc->port << req_id << prev_req_id;
@@ -407,7 +407,7 @@ namespace message
         std::shared_ptr<po6::net::location> *dest_loc, 
         size_t *req_id,
         size_t *prev_req_id,
-        std::unique_ptr<std::vector<uint64_t>> *vector_clock)
+        std::shared_ptr<std::vector<uint64_t>> *vector_clock)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t _type;
@@ -416,7 +416,8 @@ namespace message
         uint32_t src_ipaddr, dest_ipaddr;
         uint16_t src_port, dest_port;
         size_t r_count, p_r_count;
-        std::unique_ptr<po6::net::location> _src_loc, _dest_loc;
+        std::unique_ptr<po6::net::location> _src_loc;
+        std::shared_ptr<po6::net::location> _dest_loc;
 
         buf->unpack_from(index) >> _type;
         assert(_type == REACHABLE_PROP);
@@ -426,7 +427,7 @@ namespace message
         vector_clock->reset(new std::vector<uint64_t>(NUM_SHARDS, 0));
         for (i = 0; i < NUM_SHARDS; i++, index += sizeof(uint64_t))
         {
-            buf->unpack_from(index) >> (**vector_clock)[i]; //dereferencing pointer to (unique) pointer
+            buf->unpack_from(index) >> (**vector_clock)[i]; //dereferencing pointer to pointer
         }
 
         buf->unpack_from(index) >> num_nodes;

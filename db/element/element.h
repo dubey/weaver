@@ -115,7 +115,7 @@ namespace element
     inline common::meta_element
     element :: get_meta_element()
     {
-        common::meta_element ret(*myloc, creat_time, del_time, elem_addr);
+        common::meta_element ret(myloc, creat_time, del_time, elem_addr);
         return ret;
     }
 

@@ -62,6 +62,7 @@ namespace db
             bool mark_visited(element::node *n, size_t req_counter);
             bool remove_visited(element::node *n, size_t req_counter);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
+            busybee_returncode send(std::unique_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send_coord(std::auto_ptr<e::buffer> buf);
             void wait_for_updates(uint64_t recd_clock);
     };
@@ -171,6 +172,20 @@ namespace db
         return ret;
     }
     
+    inline busybee_returncode
+    graph :: send(std::unique_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> msg)
+    {
+        busybee_returncode ret;
+        bb_lock.lock();
+        if ((ret = bb.send(*loc, msg)) != BUSYBEE_SUCCESS)
+        {
+            std::cerr << "msg send error: " << ret << std::endl;
+            //assert(ret == BUSYBEE_SUCCESS); //TODO what?
+        }
+        bb_lock.unlock();
+        return ret;
+    }
+
     inline busybee_returncode
     graph :: send_coord(std::auto_ptr<e::buffer> msg)
     {

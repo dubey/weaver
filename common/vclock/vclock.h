@@ -28,12 +28,12 @@ namespace vclock
             vector();
 
         public:
-            std::vector<uint64_t> clocks;
+            std::shared_ptr<std::vector<uint64_t>> clocks;
     };
 
     inline
     vector :: vector()
-        : clocks(NUM_SHARDS, 0)
+        : clocks(new std::vector<uint64_t>(NUM_SHARDS, 0))
     {
     }
 }

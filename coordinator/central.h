@@ -29,31 +29,35 @@ namespace coordinator
     {
         public:
             central();
-        private:
-            po6::net::location myloc;
 
         public:
+            std::shared_ptr<po6::net::location> myloc;
+            std::shared_ptr<po6::net::location> myrecloc;
             busybee_sta bb;
             busybee_sta rec_bb;
-            uint32_t time;
             int port_ctr;
+            std::vector<std::shared_ptr<po6::net::location>> shards;
             std::vector<common::meta_element *> nodes;
             std::vector<common::meta_element *> edges;
             vclock::vector vc;
             po6::threads::mutex update_mutex;
+
+        public:
             void add_node(common::meta_element *n);
             void add_edge(common::meta_element *e);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
+            busybee_returncode send(std::shared_ptr<po6::net::location> loc,
+                std::auto_ptr<e::buffer> buf);
     };
 
     inline
     central :: central()
-        : myloc(COORD_IPADDR, COORD_PORT)
-        , bb(myloc.address, myloc.port, 0)
-        , rec_bb(myloc.address, COORD_REC_PORT, 0)
+        : myloc(new po6::net::location(COORD_IPADDR, COORD_PORT))
+        , myrecloc(new po6::net::location(COORD_IPADDR, COORD_REC_PORT))
+        , bb(myloc->address, myloc->port, 0)
+        , rec_bb(myrecloc->address, myrecloc->port, 0)
+        , port_ctr(0)
     {
-        time = 0;
-        port_ctr = COORD_PORT;
     }
 
     inline void
@@ -77,6 +81,17 @@ namespace coordinator
     {
         busybee_returncode ret;
         if ((ret = bb.send(loc, buf)) != BUSYBEE_SUCCESS)
+        {
+            std::cerr << "message sending error " << ret << std::endl;
+        }
+        return ret;
+    }
+
+    inline busybee_returncode
+    central :: send(std::shared_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> buf)
+    {
+        busybee_returncode ret;
+        if ((ret = bb.send(*loc, buf)) != BUSYBEE_SUCCESS)
         {
             std::cerr << "message sending error " << ret << std::endl;
         }
