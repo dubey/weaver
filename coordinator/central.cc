@@ -21,7 +21,7 @@
 
 #include "central.h"
 #include "common/meta_element.h"
-#include "common/message/message.h"
+#include "common/message.h"
 #include "threadpool/threadpool.h"
 
 #define NUM_NODES 100000

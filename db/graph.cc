@@ -27,7 +27,7 @@
 
 #include "common/weaver_constants.h"
 #include "graph.h"
-#include "common/message/message.h"
+#include "common/message.h"
 #include "threadpool/threadpool.h"
 
 // Pending batched request

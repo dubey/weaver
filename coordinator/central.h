@@ -21,7 +21,7 @@
 
 #include "common/meta_element.h"
 #include "common/weaver_constants.h"
-#include "common/vclock/vclock.h"
+#include "common/vclock.h"
 
 namespace coordinator
 {

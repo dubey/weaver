@@ -21,7 +21,7 @@
 #include <po6/threads/cond.h>
 
 #include "central.h"
-#include "common/message/message.h"
+#include "common/message.h"
 
 namespace coordinator
 {

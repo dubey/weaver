@@ -18,7 +18,7 @@
 
 #include <vector>
 
-#include "../weaver_constants.h"
+#include "common/weaver_constants.h"
 
 namespace vclock
 {

@@ -21,7 +21,7 @@
 #include <po6/threads/cond.h>
 
 #include "graph.h"
-#include "common/message/message.h"
+#include "common/message.h"
 
 namespace db
 {

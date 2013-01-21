@@ -23,7 +23,7 @@
 #include "common/weaver_constants.h"
 #include "db/element/property.h"
 #include "common/meta_element.h"
-#include "common/vclock/vclock.h"
+#include "common/vclock.h"
 
 namespace message
 {

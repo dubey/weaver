@@ -12,21 +12,20 @@
  */
 
 #include <iostream>
-#include "cache.h"
+#include "db/cache/cache.h"
 
-int
-main()
+void
+cache_test()
 {
     cache::reach_cache c;
-    po6::net::location loc1 ("127.0.0.1", 42);
-    po6::net::location loc2 ("10.10.1.1", 84);
+    po6::net::location loc1("127.0.0.1", 42);
+    po6::net::location loc2("10.10.1.1", 84);
     c.insert_entry(loc1, (void*)0xdeadbeef, true);
     c.insert_entry(loc2, (void*)0xcafebabe, false);
 
-    std::cout << "Entry exists " << c.entry_exists(loc1, (void*)0xdeadbeef)
-              << " " << c.entry_exists(loc2, (void*)0xdeadbeef);
-    std::cout << "\nValues " << c.get_cached_value(loc2, (void*)0xcafebabe)
-              << " " << c.get_cached_value(loc1, (void*)0xdeadbeef)
-              << std::endl;
-    return 0;
+    assert(c.entry_exists(loc1, (void*)0xdeadbeef));
+    assert(c.entry_exists(loc2, (void*)0xcafebabe));
+    assert(!c.entry_exists(loc2, (void*)0xdeadbeef));
+    assert(!c.get_cached_value(loc2, (void*)0xcafebabe));  
+    assert(c.get_cached_value(loc1, (void*)0xdeadbeef));  
 }
