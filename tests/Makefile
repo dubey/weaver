@@ -6,7 +6,7 @@ LIBS=-lbusybee-sta -le -lrt -pthread
 OBJS=run.o
 TARGET=tests
 
-all:	$(OBJS)
+tests:	$(OBJS)
 	g++ -o $@ $(OBJS) $(LIBS_DIR) $(LIBS)
 
 %.o:	%.cc

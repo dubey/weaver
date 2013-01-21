@@ -40,6 +40,8 @@ message_test()
     std::unique_ptr<std::vector<size_t>> dn2(new std::vector<size_t>());
     std::unique_ptr<std::vector<uint64_t>> dt1(new std::vector<uint64_t>());
     std::unique_ptr<std::vector<uint64_t>> dt2(new std::vector<uint64_t>());
+    std::vector<size_t> dn;
+    std::vector<uint64_t> dt;
     uint32_t temp;
     size_t r_count = 84;
     bool reachable;
@@ -54,7 +56,9 @@ message_test()
         vc->push_back(42+temp);
     }
     dn1->push_back((size_t)first); dn1->push_back((size_t)second);
+    dn = *dn1;
     dt1->push_back(35); dt1->push_back(45);
+    dt = *dt1;
     
     // node create
     message::message msg(message::ERROR);
@@ -102,9 +106,6 @@ message_test()
     assert(reachable);
     assert(rec_node == (size_t)first);
     assert(num_del_nodes == dn2->size());
-    for (temp = 0; temp < dn2->size(); temp++)
-    {
-        std::cout << "del node " << (void*)dn2->at(temp) << " del time " <<
-            dt2->at(temp) << std::endl;
-    }
+    assert(*dn2 == dn);
+    assert(*dt2 == dt);
 }
