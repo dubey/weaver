@@ -16,6 +16,7 @@
 #define __CENTRAL__
 
 #include <vector>
+#include <random> // XXX for testing
 #include <busybee_sta.h>
 #include <po6/net/location.h>
 
@@ -35,12 +36,15 @@ namespace coordinator
             std::shared_ptr<po6::net::location> myrecloc;
             busybee_sta bb;
             busybee_sta rec_bb;
+            po6::threads::mutex bb_mutex;
             int port_ctr;
             std::vector<std::shared_ptr<po6::net::location>> shards;
             std::vector<common::meta_element *> nodes;
             std::vector<common::meta_element *> edges;
             vclock::vector vc;
             po6::threads::mutex update_mutex;
+            std::default_random_engine generator;
+            std::uniform_real_distribution<double> dist;
 
         public:
             void add_node(common::meta_element *n);
@@ -48,6 +52,8 @@ namespace coordinator
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(std::shared_ptr<po6::net::location> loc,
                 std::auto_ptr<e::buffer> buf);
+            busybee_returncode flaky_send(std::shared_ptr<po6::net::location> loc,
+                std::auto_ptr<e::buffer> buf, bool delay);
     };
 
     inline
@@ -57,6 +63,8 @@ namespace coordinator
         , bb(myloc->address, myloc->port, 0)
         , rec_bb(myrecloc->address, myrecloc->port, 0)
         , port_ctr(0)
+        , generator((unsigned)42) // fixed seed for deterministic random numbers
+        , dist(0.0, 1.0)
     {
     }
 
@@ -80,10 +88,12 @@ namespace coordinator
     central :: send(po6::net::location loc, std::auto_ptr<e::buffer> buf)
     {
         busybee_returncode ret;
+        bb_mutex.lock();
         if ((ret = bb.send(loc, buf)) != BUSYBEE_SUCCESS)
         {
             std::cerr << "message sending error " << ret << std::endl;
         }
+        bb_mutex.unlock();
         return ret;
     }
 
@@ -91,10 +101,30 @@ namespace coordinator
     central :: send(std::shared_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> buf)
     {
         busybee_returncode ret;
+        bb_mutex.lock();
         if ((ret = bb.send(*loc, buf)) != BUSYBEE_SUCCESS)
         {
             std::cerr << "message sending error " << ret << std::endl;
         }
+        bb_mutex.unlock();
+        return ret;
+    }
+    
+    inline busybee_returncode
+    central :: flaky_send(std::shared_ptr<po6::net::location> loc,
+        std::auto_ptr<e::buffer> buf, bool delay)
+    {
+        busybee_returncode ret;
+        if (dist(generator) < 0.1 && delay) // 10% messages delayed
+        {
+            sleep(10);
+        }
+        bb_mutex.lock();
+        if ((ret = bb.send(*loc, buf)) != BUSYBEE_SUCCESS)
+        {
+            std::cerr << "message sending error " << ret << std::endl;
+        }
+        bb_mutex.unlock();
         return ret;
     }
 }
