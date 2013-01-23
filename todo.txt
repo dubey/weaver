@@ -1,10 +1,10 @@
 Cache reachability results (basic, no invalidation, only caching positive
 results)
 Examine code for spurious copying/mallocing (done).
-
-Make unit tests!
+Make unit tests! (done simple, reach. stress test pending)
 
 Make allowance for multiple reach_nodes in reachability requests.
 Try to get rid of PO6_NDEBUG_LEAKS.
 Check memory leaks using valgrind.
 Do code profiling to identify bottleneck functions.
+Fault tolerant (chain replicated) coordinator and shards!

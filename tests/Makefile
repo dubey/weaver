@@ -18,5 +18,5 @@ clean:
 clobber:	clean
 	rm -f $(TARGET)
 
-check:
+check:	tests
 	./tests

@@ -27,7 +27,13 @@ basic_client_test()
     edges[0] = c.create_edge(nodes[0], nodes[1]);
     edges[1] = c.create_edge(nodes[1], nodes[2]);
     assert(c.reachability_request(nodes[0], nodes[2]));
-    c.delete_edge(nodes[1],edges[1]);
+    c.delete_edge(nodes[0], edges[0]);
+    c.delete_edge(nodes[1], edges[1]);
     //std::cout << "starting req2\n";
     assert(!c.reachability_request(nodes[0], nodes[2]));
+    edges[0] = c.create_edge(nodes[0], nodes[2]);
+    edges[1] = c.create_edge(nodes[1], nodes[3]);
+    assert(c.reachability_request(nodes[0], nodes[2]));
+    assert(c.reachability_request(nodes[1], nodes[3]));
+    assert(!c.reachability_request(nodes[3], nodes[1]));
 }
