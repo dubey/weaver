@@ -139,8 +139,6 @@ namespace db
         e->update_del_time(del_time);
         n->update_mutex.unlock();
         pending_update_cond.broadcast();
-        std::cout << "deleted edge " << (void*)e << " at time " << del_time <<
-            std::endl;
         update_mutex.unlock();
     }
 

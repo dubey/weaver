@@ -34,7 +34,6 @@ namespace message
         CLIENT_NODE_DELETE_REQ,
         CLIENT_EDGE_DELETE_REQ,
         CLIENT_REACHABLE_REQ,
-        CLIENT_REQUEST,
         CLIENT_REPLY,
         NODE_CREATE_REQ,
         EDGE_CREATE_REQ,
@@ -66,8 +65,16 @@ namespace message
             std::auto_ptr<e::buffer> buf;
 
         public:
-            // Create functions
             void change_type(enum msg_type t);
+            // Client to coordinator
+            void prep_client0();
+            void prep_client1(size_t elem);
+            void unpack_client1(size_t *elem);
+            void prep_client2(size_t elem1, size_t elem2);
+            void unpack_client2(size_t *elem1, size_t *elem2);
+            void prep_client_rr_reply(bool reachable);
+            void unpack_client_rr_reply(bool *reachable);
+            // Create functions, coordinator to shards
             void prep_node_create(size_t req_id, uint64_t creat_time);
             void unpack_node_create(size_t *req_id, uint64_t *creat_time);
             void prep_edge_create(size_t req_id, size_t local_node, size_t remote_node, 
@@ -139,6 +146,68 @@ namespace message
     message :: change_type(enum msg_type t)
     {
         type = t;
+    }
+
+    inline void
+    message :: prep_client0()
+    {
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + sizeof(enum msg_type)));
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type;
+    }
+
+    inline void
+    message :: prep_client1(size_t elem)
+    {
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + 
+            sizeof(enum msg_type) + // type
+            sizeof(size_t))); // elem
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << elem;
+    }
+
+    inline void
+    message :: unpack_client1(size_t *elem)
+    {
+        size_t temp;
+        buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(enum msg_type)) >> temp;
+        *elem = temp;
+    }
+
+    inline void
+    message :: prep_client2(size_t elem1, size_t elem2)
+    {
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + 
+            sizeof(enum msg_type) + // type
+            2 * sizeof(size_t))); // elems
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << elem1 << elem2;
+    }
+
+    inline void
+    message :: unpack_client2(size_t *elem1, size_t *elem2)
+    {
+        size_t temp1, temp2;
+        buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(enum msg_type)) >> temp1
+            >> temp2;
+        *elem1 = temp1;
+        *elem2 = temp2;
+    }
+
+    inline void
+    message :: prep_client_rr_reply(bool reachable)
+    {
+        uint32_t temp = (uint32_t)reachable;
+        assert(type == CLIENT_REPLY);
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + 
+            sizeof(enum msg_type) + // type
+            sizeof(uint32_t))); // reachable
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << temp;
+    }
+    
+    inline void
+    message :: unpack_client_rr_reply(bool *reachable)
+    {
+        uint32_t temp;
+        buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(enum msg_type)) >> temp;
+        *reachable = (bool)temp;
     }
 
     inline void

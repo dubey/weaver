@@ -22,7 +22,6 @@
 #include "central.h"
 #include "common/meta_element.h"
 #include "common/message.h"
-#include "threadpool/threadpool.h"
 
 #define NUM_NODES 1000
 #define NUM_EDGES 1500
@@ -47,54 +46,12 @@ class pending_req
     }
 };
 
-std::unordered_map<size_t, pending_req *> pending;
-size_t request_id;
-
-// call appropriate function based on msg from client
-void
-handle_client_req(coordinator::central *server, std::unique_ptr<message::message> msg,
-    enum message::msg_type m_type)
-{
-    uint32_t mtype;
-    size_t elem1, elem2;
-    void *new_elem;
-    bool reachable;
-    msg->buf.unpack_from(BUSYBEE_HEADER_SIZE) >> mtype;
-    switch (mtype)
-    {
-        case 0: // node create
-            new_elem = create_node(server);
-            break;
-
-        case 1: // edge create
-            msg->buf.unpack_from(BUSYBEE_HEADER_SIZE + sizeof(uint32_t)) >> elem1 >> elem2;
-            new_elem = create_edge((common::meta_element *)elem1,
-                (common::meta_element *)elem2, server);
-            break;
-
-        case 2: // node delete
-            msg->buf.unpack_from(BUSYBEE_HEADER_SIZE + sizeof(uint32_t)) >> elem1;
-            node_delete((common::meta_element *)elem1, server);
-            break;
-
-        case 3: // edge delete
-            msg->buf.unpack_from(BUSYBEE_HEADER_SIZE + sizeof(uint32_t)) >> elem1 >> elem2;
-            delete_edge((common::meta_element *)elem1,
-                (common::meta_element *)elem2, server);
-            break;
-
-        case 4: // reach req
-            msg->buf.unpack_from(BUSYBEE_HEADER_SIZE + sizeof(uint32_t)) >> elem1 >> elem2;
-            reachable = reachability_request((common::meta_element *)elem1,
-                (common::meta_element *)elem2, server);
-            break;
-    }
-}
+static std::unordered_map<size_t, pending_req *> pending;
 
 // wake up thread waiting on the received message
 void
 handle_pending_req(coordinator::central *server, std::unique_ptr<message::message> msg,
-    enum message::msg_type m_type)
+    enum message::msg_type m_type, std::unique_ptr<po6::net::location> dummy)
 {
     size_t req_id;
     pending_req *request;
@@ -169,7 +126,7 @@ create_node(coordinator::central *server)
     creat_time = ++server->vc.clocks->at(server->port_ctr); // incrementing vector clock
     request = new pending_req();
     request->mutex.lock();
-    req_id = ++request_id;
+    req_id = ++server->request_id;
     pending[req_id] = request;
     msg.prep_node_create(req_id, creat_time);
     server->update_mutex.unlock();
@@ -208,7 +165,7 @@ create_edge(common::meta_element *node1, common::meta_element *node2, coordinato
     creat_time = ++server->vc.clocks->at(node1->get_shard_id());
     request = new pending_req();
     request->mutex.lock();
-    req_id = ++request_id;
+    req_id = ++server->request_id;
     pending[req_id] = request;
     msg.prep_edge_create(req_id, (size_t)node1->get_addr(), (size_t)node2->get_addr(),
         node2->get_loc_ptr(), node2->get_creat_time(), creat_time);
@@ -251,7 +208,7 @@ delete_node(common::meta_element *node, coordinator::central *server)
     node->update_del_time(del_time);
     request = new pending_req();
     request->mutex.lock();
-    req_id = ++request_id;
+    req_id = ++server->request_id;
     pending[req_id] = request;
     msg.prep_node_delete(req_id, (size_t)node->get_addr(), del_time);
     server->update_mutex.unlock();
@@ -289,11 +246,10 @@ delete_edge(common::meta_element *node, common::meta_element *edge, coordinator:
     edge->update_del_time(del_time);
     request = new pending_req();
     request->mutex.lock();
-    req_id = ++request_id;
+    req_id = ++server->request_id;
     pending[req_id] = request;
     msg.prep_edge_delete(req_id, (size_t)node->get_addr(), (size_t)edge->get_addr(), del_time);
     server->update_mutex.unlock();
-    std::cout << "unlocked in del edge\n";
     server->flaky_send(node->get_loc_ptr(), msg.buf, true);
     
     while (request->waiting)
@@ -316,18 +272,18 @@ reachability_request(common::meta_element *node1, common::meta_element *node2, c
     std::vector<size_t> src; // vector to hold src node
     src.push_back((size_t)node1->get_addr());
     size_t req_id;
+    bool ret;
     
     server->update_mutex.lock();
-    std::cout << "locked in rr\n";
     if (node1->get_del_time() < MAX_TIME || node2->get_del_time() < MAX_TIME)
     {
         std::cerr << "one of the nodes has been deleted, cannot perform request"
             << std::endl;
         server->update_mutex.unlock();
-        return;
+        return false;
     }
     request = new pending_req();
-    req_id = ++request_id;
+    req_id = ++server->request_id;
     pending[req_id] = request;
     std::cout << "Reachability request number " << req_id << " from source"
               << " node " << node1->get_addr() << " " << node1->get_loc_ptr()->port << " to destination node "
@@ -342,14 +298,14 @@ reachability_request(common::meta_element *node1, common::meta_element *node2, c
     {
         request->reply.wait();
     }
-    std::cout << "Reachable reply is " << request->reachable << " for " << 
-        "request " << req_id << std::endl;
+    ret = request->reachable;
+    std::cout << "Reachable reply is " << ret << " for " << "request " << req_id << std::endl;
     request->mutex.unlock();
     delete request;
     server->update_mutex.lock();
     pending.erase(req_id);
     server->update_mutex.unlock();
-    return request->reachable;
+    return ret;
 }
 
 timespec
@@ -375,7 +331,6 @@ msg_handler(coordinator::central *server)
     uint32_t code;
     enum message::msg_type mtype;
     std::unique_ptr<message::message> rec_msg;
-    coordinator::thread::pool thread_pool(NUM_THREADS);
     std::unique_ptr<coordinator::thread::unstarted_thread> thr;
     
     while (1)
@@ -389,8 +344,53 @@ msg_handler(coordinator::central *server)
         rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
         mtype = (enum message::msg_type)code;
         thr.reset(new coordinator::thread::unstarted_thread(handle_pending_req,
-            server, std::move(rec_msg), mtype));
-        thread_pool.add_request(std::move(thr), true);// XXX!(mtype == message::REACHABLE_REPLY));
+            server, std::move(rec_msg), mtype, NULL));
+        server->thread_pool.add_request(std::move(thr), true);// XXX!(mtype == message::REACHABLE_REPLY));
+    }
+}
+
+// call appropriate function based on msg from client
+void
+handle_client_req(coordinator::central *server, std::unique_ptr<message::message> msg,
+    enum message::msg_type m_type, std::unique_ptr<po6::net::location> client_loc)
+{
+    size_t elem1, elem2;
+    size_t new_elem;
+    bool reachable;
+    switch (m_type)
+    {
+        case message::CLIENT_NODE_CREATE_REQ: 
+            new_elem = (size_t)create_node(server);
+            msg->change_type(message::CLIENT_REPLY);
+            msg->prep_client1(new_elem);
+            server->client_send(*client_loc, msg->buf);
+            break;
+
+        case message::CLIENT_EDGE_CREATE_REQ: 
+            msg->unpack_client2(&elem1, &elem2);
+            new_elem = (size_t)create_edge((common::meta_element *)elem1, (common::meta_element *)elem2, server);
+            msg->change_type(message::CLIENT_REPLY);
+            msg->prep_client1(new_elem);
+            server->client_send(*client_loc, msg->buf);
+            break;
+
+        case message::CLIENT_NODE_DELETE_REQ:
+            msg->unpack_client1(&elem1);
+            delete_node((common::meta_element *)elem1, server);
+            break;
+
+        case message::CLIENT_EDGE_DELETE_REQ: 
+            msg->unpack_client2(&elem1, &elem2);
+            delete_edge((common::meta_element *)elem1, (common::meta_element *)elem2, server);
+            break;
+
+        case message::CLIENT_REACHABLE_REQ: 
+            msg->unpack_client2(&elem1, &elem2);
+            reachable = reachability_request((common::meta_element *)elem1, (common::meta_element *)elem2, server);
+            msg->change_type(message::CLIENT_REPLY);
+            msg->prep_client_rr_reply(reachable);
+            server->client_send(*client_loc, msg->buf);
+            break;
     }
 }
 
@@ -401,7 +401,10 @@ client_handler(coordinator::central *server)
     busybee_returncode ret;
     po6::net::location sender(COORD_IPADDR, COORD_PORT);
     message::message msg(message::ERROR);
+    uint32_t code;
+    enum message::msg_type mtype;
     std::unique_ptr<message::message> rec_msg;
+    std::unique_ptr<po6::net::location> client_loc;
     std::unique_ptr<coordinator::thread::unstarted_thread> thr;
 
     while (1)
@@ -412,8 +415,11 @@ client_handler(coordinator::central *server)
             continue;
         }
         rec_msg.reset(new message::message(msg));
+        rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
+        mtype = (enum message::msg_type)code;
+        client_loc.reset(new po6::net::location(CLIENT_IPADDR, CLIENT_PORT));
         thr.reset(new coordinator::thread::unstarted_thread(handle_client_req,
-            server, std::move(rec_msg), message::CLIENT_REQUEST));
+            server, std::move(rec_msg), mtype, std::move(client_loc)));
         server->thread_pool.add_request(std::move(thr), false); // XXX
     }
 }
@@ -422,30 +428,31 @@ int
 main(int argc, char* argv[])
 {
     coordinator::central server;
-    void *mem_addr1, *mem_addr2, *mem_addr3, *mem_addr4;
-    int i;
-    std::vector<void *> nodes, edges;
-    timespec start, end, time_taken;
-    uint32_t time_ms;
     std::thread *t;
-    
-    request_id = 0;
 
     // initialize shard msg receiving thread
     t = new std::thread(msg_handler, &server);
     t->detach();
 
     //initialize client handler thread
-    t = new std::thread(client_handler, &server);
-    t->detach();
+    client_handler(&server);
 
     // build the graph
+    /*
+    void *mem_addr1, *mem_addr2, *mem_addr3, *mem_addr4;
+    int i;
+    std::vector<void *> nodes, edges;
+    timespec start, end, time_taken;
+    uint32_t time_ms;
+    
+
     for (i = 0; i < NUM_NODES; i++)
     {
         mem_addr1 = create_node(&server);
         nodes.push_back(mem_addr1);
     }
     srand(time(NULL));
+    */
     /*
     for (i = 0; i < NUM_EDGES; i++)
     {
@@ -477,7 +484,7 @@ main(int argc, char* argv[])
     }
     */
     
-    clock_gettime(CLOCK_MONOTONIC, &start);    
+    //clock_gettime(CLOCK_MONOTONIC, &start);    
     /*
     for (i = 0; i < NUM_NODES; i++)
     {
@@ -497,6 +504,7 @@ main(int argc, char* argv[])
             (common::meta_element *)nodes[second], &server);
     }
     */
+    /*
     edges.push_back(
     create_edge((common::meta_element *)nodes[0], (common::meta_element
         *)nodes[1], &server));
@@ -522,5 +530,6 @@ main(int argc, char* argv[])
     std::cout << "Time = " << time_ms << std::endl;
 
     std::cin >> i;
+    */
 
-} //end main
+} 

@@ -17,3 +17,6 @@ clean:
 
 clobber:	clean
 	rm -f $(TARGET)
+
+check:
+	./tests

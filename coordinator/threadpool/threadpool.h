@@ -17,14 +17,19 @@
 #include <vector>
 #include <deque>
 #include <thread>
+#include <po6/net/location.h>
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
 
-#include "central.h"
 #include "common/message.h"
+#include "common/weaver_constants.h"
+
 
 namespace coordinator
 {
+
+class central;
+
 namespace thread
 {
     class pool;
@@ -34,32 +39,38 @@ namespace thread
     {
         public:
             unstarted_thread(
-                void (*f)(coordinator::central*, std::unique_ptr<message::message>, enum message::msg_type),
+                void (*f)(coordinator::central*, std::unique_ptr<message::message>, enum message::msg_type, std::unique_ptr<po6::net::location>),
                 coordinator::central *s,
                 std::unique_ptr<message::message> m,
-                enum message::msg_type mtype);
+                enum message::msg_type mtype,
+                std::unique_ptr<po6::net::location> l);
 
         public:
             void (*func)(coordinator::central*,
                          std::unique_ptr<message::message>, 
-                         enum message::msg_type);
+                         enum message::msg_type,
+                         std::unique_ptr<po6::net::location>);
             coordinator::central *server;
             std::unique_ptr<message::message> msg;
             enum message::msg_type m_type;
+            std::unique_ptr<po6::net::location> loc;
     };
 
     inline
     unstarted_thread :: unstarted_thread( 
             void (*f)(coordinator::central*, 
                       std::unique_ptr<message::message>,
-                      enum message::msg_type),
+                      enum message::msg_type,
+                      std::unique_ptr<po6::net::location>),
             coordinator::central *s,
             std::unique_ptr<message::message> m,
-            enum message::msg_type mtype)
+            enum message::msg_type mtype,
+            std::unique_ptr<po6::net::location> l)
         : func(f)
         , server(s)
         , msg(std::move(m))
         , m_type(mtype)
+        , loc(std::move(l))
     {
     }
 
@@ -146,10 +157,10 @@ namespace thread
                 }
             }
             tpool->queue_mutex.unlock();
-            (*(thr->func))(thr->server, std::move(thr->msg), thr->m_type);
+            (*(thr->func))(thr->server, std::move(thr->msg), thr->m_type, std::move(thr->loc));
         }
     }
-} //namespace thread
-} //namespace db
+} 
+} 
 
 #endif //__CS_THREADPOOL__

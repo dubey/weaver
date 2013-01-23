@@ -204,9 +204,6 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
                 {
                     db::element::edge *e = *iter;
                     uint64_t nbrclock_recd = vector_clock->at(e->nbr->get_shard_id());
-                    std::cout << "my clock recd " << myclock_recd << " e creat "
-                    << e->get_creat_time() << " e del " << e->get_del_time() <<
-                    std::endl;
                     if (e->get_creat_time() <= myclock_recd && 
                         e->get_del_time() > myclock_recd // edge created and deleted in acceptable timeframe
                         && e->nbr->get_del_time() > nbrclock_recd) // nbr not deleted

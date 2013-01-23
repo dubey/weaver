@@ -25,6 +25,7 @@
 #include "common/meta_element.h"
 #include "common/weaver_constants.h"
 #include "common/vclock.h"
+#include "threadpool/threadpool.h"
 
 namespace coordinator
 {
@@ -34,9 +35,11 @@ namespace coordinator
             central();
 
         public:
+            size_t request_id;
+            thread::pool thread_pool;
             std::shared_ptr<po6::net::location> myloc;
             std::shared_ptr<po6::net::location> myrecloc;
-            std::shared_ptr<po6::net::location> clientloc;
+            std::shared_ptr<po6::net::location> client_send_loc, client_rec_loc;
             busybee_sta bb;
             busybee_sta rec_bb;
             busybee_sta client_send_bb;
@@ -58,7 +61,7 @@ namespace coordinator
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(std::shared_ptr<po6::net::location> loc,
                 std::auto_ptr<e::buffer> buf);
-            busybee_returncode client_send(std::shared_ptr<po6::net::location> loc,
+            busybee_returncode client_send(po6::net::location loc,
                 std::auto_ptr<e::buffer> buf);
             busybee_returncode flaky_send(std::shared_ptr<po6::net::location> loc,
                 std::auto_ptr<e::buffer> buf, bool delay);
@@ -66,7 +69,9 @@ namespace coordinator
 
     inline
     central :: central()
-        : myloc(new po6::net::location(COORD_IPADDR, COORD_PORT))
+        : request_id(0)
+        , thread_pool(NUM_THREADS)
+        , myloc(new po6::net::location(COORD_IPADDR, COORD_PORT))
         , myrecloc(new po6::net::location(COORD_IPADDR, COORD_REC_PORT))
         , client_send_loc(new po6::net::location(COORD_IPADDR, COORD_CLIENT_SEND_PORT))
         , client_rec_loc(new po6::net::location(COORD_IPADDR, COORD_CLIENT_REC_PORT))
@@ -130,11 +135,11 @@ namespace coordinator
     }
     
     inline busybee_returncode
-    central :: client_send(std::shared_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> buf)
+    central :: client_send(po6::net::location loc, std::auto_ptr<e::buffer> buf)
     {
         busybee_returncode ret;
         client_bb_mutex.lock();
-        if ((ret = bb.send(*loc, buf)) != BUSYBEE_SUCCESS)
+        if ((ret = bb.send(loc, buf)) != BUSYBEE_SUCCESS)
         {
             std::cerr << "message sending error " << ret << std::endl;
         }
