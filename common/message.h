@@ -29,6 +29,13 @@ namespace message
 {
     enum msg_type
     {
+        CLIENT_NODE_CREATE_REQ = 0,
+        CLIENT_EDGE_CREATE_REQ,
+        CLIENT_NODE_DELETE_REQ,
+        CLIENT_EDGE_DELETE_REQ,
+        CLIENT_REACHABLE_REQ,
+        CLIENT_REQUEST,
+        CLIENT_REPLY,
         NODE_CREATE_REQ,
         EDGE_CREATE_REQ,
         NODE_CREATE_ACK,
