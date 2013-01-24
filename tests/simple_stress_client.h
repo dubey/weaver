@@ -12,7 +12,7 @@
  */
 
 #include "client/client.h"
-#define NUM_NODES 100000
+#define NUM_NODES 1000
 #define NUM_EDGES (2*NUM_NODES)
 #define NUM_REQUESTS 100
 

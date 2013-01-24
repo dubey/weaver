@@ -152,9 +152,9 @@ namespace coordinator
         std::auto_ptr<e::buffer> buf, bool delay)
     {
         busybee_returncode ret;
-        if (dist(generator) <= 1.0 && delay) // 100% messages delayed
+        if (dist(generator) <= 0.5 && delay) // 50% messages delayed
         {
-            std::chrono::seconds duration(10);
+            std::chrono::seconds duration(1);
             std::this_thread::sleep_for(duration);
         }
         bb_mutex.lock();

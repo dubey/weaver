@@ -12,16 +12,40 @@
  * ===============================================================
  */
 
+#include <thread>
+#include <po6/threads/mutex.h>
+
 #include "client/client.h"
+
+#define NUM_NODES 1000
+#define NUM_EDGES (2*NUM_NODES)
+#define NUM_REQUESTS 100
+#define NUM_EDGE_DEL (NUM_NODES/20)
+
+static size_t nodes[NUM_NODES];
+static size_t edges[NUM_EDGES];
+static size_t edge_leading_nodes[NUM_EDGES];
+static po6::threads::mutex big_lock;
+
+void
+delete_random_edges()
+{
+    int i;
+    client c(CLIENT_PORT+1);
+    for (i = 0; i < NUM_EDGE_DEL; i++)
+    {
+        std::cout << "Deleting edge " << (i*19) << std::endl;
+        c.delete_edge(edge_leading_nodes[i*19], edges[i*19]);
+    }
+    while(true);
+}
 
 void
 multiple_stress_client()
 {
-    client c;
-    size_t nodes[NUM_NODES];
-    size_t edges[NUM_EDGES];
-    size_t edge_leading_nodes[NUM_EDGES];
+    client c(CLIENT_PORT);
     int i;
+    std::thread *t;
     srand(42); // magic seed
     for (i = 0; i < NUM_NODES; i++)
     {
@@ -38,6 +62,8 @@ multiple_stress_client()
         edges[i] = c.create_edge(nodes[first], nodes[second]);
         edge_leading_nodes[i] = nodes[first];
     }
+    t = new std::thread(delete_random_edges);
+    t->detach();
     for (i = 0; i < NUM_REQUESTS; i++)
     {
         int first = rand() % NUM_NODES;
