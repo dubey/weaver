@@ -309,7 +309,7 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
     outgoing_req_id_counter_mutex.unlock();
     request->mutex.lock();
     --request->num;
-    prev_loc = std::move(request->prev_loc);
+    prev_loc.reset(new po6::net::location(*request->prev_loc));
     prev_req_id = request->id;
     
     if (reachable_reply || num_del_nodes > 0)

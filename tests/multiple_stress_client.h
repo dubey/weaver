@@ -75,4 +75,5 @@ multiple_stress_client()
         std::cout << "Req " << i << " result "
             << c.reachability_request(nodes[first], nodes[second]) << std::endl;
     }
+    while(true);
 }
