@@ -26,7 +26,7 @@
 #include <busybee_sta.h>
 
 #include "common/weaver_constants.h"
-#include "element/property.h"
+#include "common/property.h"
 #include "common/meta_element.h"
 #include "element/node.h"
 #include "element/edge.h"
@@ -60,7 +60,7 @@ namespace db
             void delete_node(element::node *n, uint64_t del_time);
             void delete_edge(element::node *n, element::edge *e, uint64_t del_time);
             void add_edge_property(element::node *n, element::edge *e,
-                std::unique_ptr<db::element::property> prop, uint64_t time);
+                std::unique_ptr<common::property> prop, uint64_t time);
             void delete_all_edge_property(element::node *n, element::edge *e, uint32_t key, uint64_t time);
             bool mark_visited(element::node *n, size_t req_counter);
             bool remove_visited(element::node *n, size_t req_counter);
@@ -147,7 +147,7 @@ namespace db
 
     inline void
     graph :: add_edge_property(element::node *n, element::edge *e,
-        std::unique_ptr<db::element::property> prop, uint64_t time)
+        std::unique_ptr<common::property> prop, uint64_t time)
     {
         update_mutex.lock();
         my_clock++;
@@ -176,7 +176,7 @@ namespace db
     graph :: mark_visited(element::node *n, size_t req_counter)
     {
         uint32_t key = 0; //visited key
-        element::property p(key, req_counter, 0);
+        common::property p(key, req_counter, 0);
         n->check_and_add_property(p);
     }
 
@@ -184,7 +184,7 @@ namespace db
     graph :: remove_visited(element::node *n, size_t req_counter)
     {
         uint32_t key = 0; //visited key
-        element::property p(key, req_counter, 0);
+        common::property p(key, req_counter, 0);
         n->remove_property(p);
     }
 

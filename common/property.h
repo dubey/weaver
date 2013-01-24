@@ -20,9 +20,7 @@
 
 #include "common/weaver_constants.h"
 
-namespace db 
-{
-namespace element
+namespace common 
 {
     class property
     {
@@ -88,7 +86,6 @@ namespace element
     {
         del_time = t_del;
     }
-}
 }
 
 #endif //__PROPERTY__

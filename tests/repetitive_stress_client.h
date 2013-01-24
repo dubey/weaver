@@ -12,6 +12,7 @@
  * ===============================================================
  */
 
+#include <thread>
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
 
@@ -23,6 +24,7 @@ static bool check_reachable = false;
 static bool end_program = false;
 static po6::threads::mutex synch_mutex;
 static po6::threads::cond synch_cond(&synch_mutex);
+static auto edge_props = std::make_shared<std::vector<common::property>>();
 static int n1,n2,n3,n4;
 
 void
@@ -47,7 +49,8 @@ check_reachability()
                 if (i==j) {
                     continue;
                 }
-                bool reach = c.reachability_request(repetitive_nodes[i], repetitive_nodes[j]);
+                bool reach = c.reachability_request(repetitive_nodes[i],
+                    repetitive_nodes[j], edge_props);
                 if ((i==n1 && j==n2) || (i==n3 && j==n4)) {
                     assert(reach);
                 } else {

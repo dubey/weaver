@@ -19,6 +19,7 @@
 
 #include "common/weaver_constants.h"
 #include "common/message.h"
+#include "common/property.h"
 
 class client
 {
@@ -36,7 +37,8 @@ class client
         void delete_edge(size_t node, size_t edge);
         void add_edge_prop(size_t node, size_t edge, uint32_t key, size_t value);
         void del_edge_prop(size_t node, size_t edge, uint32_t key);
-        bool reachability_request(size_t node1, size_t node2);
+        bool reachability_request(size_t node1, size_t node2,
+            std::shared_ptr<std::vector<common::property>> edge_props);
 
     private:
         void send_coord(std::auto_ptr<e::buffer> buf);
@@ -120,12 +122,13 @@ client :: del_edge_prop(size_t node, size_t edge, uint32_t key)
 }
 
 inline bool
-client :: reachability_request(size_t node1, size_t node2)
+client :: reachability_request(size_t node1, size_t node2,
+    std::shared_ptr<std::vector<common::property>> edge_props)
 {
     busybee_returncode ret;
     bool reachable;
     message::message msg(message::CLIENT_REACHABLE_REQ);
-    msg.prep_client2(myloc.port, node1, node2);
+    msg.prep_client_rr_req(myloc.port, node1, node2, edge_props);
     send_coord(msg.buf);
     if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS)
     {

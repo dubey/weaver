@@ -151,7 +151,7 @@ handle_add_edge_property(db::graph *G, std::unique_ptr<message::message> msg)
     db::element::node *n;
     db::element::edge *e;
     void *node_addr, *edge_addr;
-    std::unique_ptr<db::element::property> new_prop;
+    std::unique_ptr<common::property> new_prop;
     uint64_t prop_add_time;
     msg->unpack_add_prop(&req_id, &node_addr, &edge_addr, &new_prop, &prop_add_time);
 
@@ -190,6 +190,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         prev_req_id, // previous server's req counter
         my_batch_req_id, // this server's request id
         my_outgoing_req_id; // each forwarded batched req id
+    auto edge_props = std::make_shared<std::vector<common::property>>();
     auto vector_clock = std::make_shared<std::vector<uint64_t>>();
     uint64_t myclock_recd;
 
@@ -205,7 +206,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         
     // get the list of source nodes to check for reachability, as well as the single sink node
     src_nodes = msg->unpack_reachable_prop(&prev_loc, &dest_node, &dest_loc,
-        &coord_req_id, &prev_req_id, &vector_clock);
+        &coord_req_id, &prev_req_id, &edge_props, &vector_clock);
 
     // wait till all updates for this shard arrive
     myclock_recd = vector_clock->at(myid-1);
@@ -244,9 +245,18 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
                 {
                     db::element::edge *e = *iter;
                     uint64_t nbrclock_recd = vector_clock->at(e->nbr->get_shard_id());
-                    if (e->get_creat_time() <= myclock_recd && 
-                        e->get_del_time() > myclock_recd // edge created and deleted in acceptable timeframe
-                        && e->nbr->get_del_time() > nbrclock_recd) // nbr not deleted
+                    bool traverse_edge = e->get_creat_time() <= myclock_recd  
+                        && e->get_del_time() > myclock_recd // edge created and deleted in acceptable timeframe
+                        && e->nbr->get_del_time() > nbrclock_recd; // nbr not deleted
+                    int i;
+                    for (i = 0; i < edge_props->size() && traverse_edge; i++) // checking edge properties
+                    {
+                        if (!e->has_property(edge_props->at(i))) {
+                            traverse_edge = false;
+                            break;
+                        }
+                    }
+                    if (traverse_edge)
                     {
                         propagate_req = true;
                         // Continue propagating reachability request
@@ -289,7 +299,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
             pending_batch[my_outgoing_req_id] = request;
             outgoing_req_id_counter_mutex.unlock();
             msg->prep_reachable_prop(&loc_iter->second, G->myloc, (size_t)dest_node, 
-                dest_loc, coord_req_id, my_outgoing_req_id, vector_clock);
+                dest_loc, coord_req_id, my_outgoing_req_id, edge_props, vector_clock);
             if (loc_iter->first == *G->myloc)
             {   //no need to send message since it is local
                 std::unique_ptr<db::thread::unstarted_thread> t;

@@ -247,9 +247,11 @@ delete_edge_property(common::meta_element *node, common::meta_element *edge,
     server->send(node->get_loc_ptr(), msg.buf);
 }
 
-// is node1 reachable from node2?
+// is node1 reachable from node2 by only traversing edges with properties given
+// by edge_props?
 bool
-reachability_request(common::meta_element *node1, common::meta_element *node2, coordinator::central *server)
+reachability_request(common::meta_element *node1, common::meta_element *node2, 
+    std::shared_ptr<std::vector<common::property>> edge_props, coordinator::central *server)
 {
     pending_req *request;
     message::message msg(message::REACHABLE_PROP);
@@ -274,7 +276,7 @@ reachability_request(common::meta_element *node1, common::meta_element *node2, c
               << node2->get_addr()<< " " << node2->get_loc_ptr()->port << std::endl;
     request->mutex.lock();
     msg.prep_reachable_prop(&src, server->myrecloc, (size_t)node2->get_addr(),
-        node2->get_loc_ptr(), req_id, req_id, server->vc.clocks);
+        node2->get_loc_ptr(), req_id, req_id, edge_props, server->vc.clocks);
     server->update_mutex.unlock();
     server->send(node1->get_loc_ptr(), msg.buf);
     
@@ -403,6 +405,7 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
     uint32_t key;
     size_t new_elem;
     bool reachable;
+    auto edge_props = std::make_shared<std::vector<common::property>>();
     switch (m_type)
     {
         case message::CLIENT_NODE_CREATE_REQ:
@@ -434,9 +437,10 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
             break;
 
         case message::CLIENT_REACHABLE_REQ: 
-            msg->unpack_client2(&client_port, &elem1, &elem2);
+            msg->unpack_client_rr_req(&client_port, &elem1, &elem2, &edge_props);
             client_loc->port = client_port;
-            reachable = reachability_request((common::meta_element *)elem1, (common::meta_element *)elem2, server);
+            reachable = reachability_request((common::meta_element *)elem1,
+                (common::meta_element *)elem2, edge_props, server);
             msg->change_type(message::CLIENT_REPLY);
             msg->prep_client_rr_reply(reachable);
             server->client_send(*client_loc, msg->buf);

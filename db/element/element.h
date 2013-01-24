@@ -21,7 +21,7 @@
 #include <string.h>
 
 #include "common/weaver_constants.h"
-#include "property.h"
+#include "common/property.h"
 #include "common/meta_element.h"
 
 namespace db
@@ -34,18 +34,18 @@ namespace element
             element(std::shared_ptr<po6::net::location> server, uint64_t time, void* mem_addr);
             
         protected:
-            std::vector<property> properties;
+            std::vector<common::property> properties;
             std::shared_ptr<po6::net::location> myloc;
             uint64_t creat_time;
             uint64_t del_time;
             void* elem_addr; // memory address of this element on shard server
 
         public:
-            void add_property(property prop);
+            void add_property(common::property prop);
             void delete_property(uint32_t key, uint64_t del_time);
-            void remove_property(property prop);
-            bool has_property(property prop);
-            bool check_and_add_property(property prop);
+            void remove_property(common::property prop);
+            bool has_property(common::property prop);
+            bool check_and_add_property(common::property prop);
             void update_del_time(uint64_t del_time);
             common::meta_element get_meta_element();
             uint64_t get_creat_time();
@@ -64,7 +64,7 @@ namespace element
     }
 
     inline void
-    element :: add_property(property prop)
+    element :: add_property(common::property prop)
     {
         properties.push_back(prop);
     }
@@ -72,7 +72,7 @@ namespace element
     inline void
     element :: delete_property(uint32_t key, uint64_t del_time)
     {
-        std::vector<property>::iterator iter;
+        std::vector<common::property>::iterator iter;
         for (iter = properties.begin(); iter<properties.end(); iter++)
         {
             if (iter->key == key) 
@@ -83,16 +83,16 @@ namespace element
     }
 
     inline void
-    element :: remove_property(property prop)
+    element :: remove_property(common::property prop)
     {
-        std::vector<property>::iterator iter = std::remove(properties.begin(), properties.end(), prop);
+        std::vector<common::property>::iterator iter = std::remove(properties.begin(), properties.end(), prop);
         properties.erase(iter, properties.end());
     }
 
     bool
-    element :: has_property(property prop)
+    element :: has_property(common::property prop)
     {
-        std::vector<property>::iterator iter;
+        std::vector<common::property>::iterator iter;
         for (iter = properties.begin(); iter<properties.end(); iter++)
         {
             if (prop == *iter) 
@@ -104,9 +104,9 @@ namespace element
     }
 
     bool
-    element :: check_and_add_property(property prop)
+    element :: check_and_add_property(common::property prop)
     {
-        std::vector<property>::iterator iter;
+        std::vector<common::property>::iterator iter;
         int i = 0;
         for (iter = properties.begin(); iter<properties.end(); iter++)
         {
