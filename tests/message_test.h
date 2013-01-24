@@ -42,6 +42,8 @@ message_test()
     std::unique_ptr<std::vector<uint64_t>> dt2(new std::vector<uint64_t>());
     std::vector<size_t> dn;
     std::vector<uint64_t> dt;
+    auto edge_props = std::make_shared<std::vector<common::property>>();
+    auto edge_props_rec = std::make_shared<std::vector<common::property>>();
     uint32_t temp;
     size_t r_count = 84;
     bool reachable;
@@ -87,15 +89,18 @@ message_test()
     assert(time2 == time);
 
     // reachable prop
+    common::property prop(42, 84, 1007);
+    edge_props->push_back(prop);
     msg.prep_reachable_prop(&src_nodes, random3, (size_t)second,
-        random4, r_count, r_count, vc);
+        random4, r_count, r_count, edge_props, vc);
     srces = msg.unpack_reachable_prop(&src, &second1, &dest, &r_count,
-        &r_count, &vc_ptr);
+        &r_count, &edge_props_rec, &vc_ptr, 1);
     assert(src_nodes == *srces);
     assert(second == second1);
     assert(*src == *random3);
     assert(*dest == *random4);
     assert(*vc_ptr == *vc);
+    assert(*edge_props == *edge_props_rec);
     
     // reachable rep
     msg.prep_reachable_rep(42, true, (size_t)first, random5, std::move(dn1),

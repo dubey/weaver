@@ -20,6 +20,7 @@ void
 stress_client_test()
 {
     client c(CLIENT_PORT);
+    auto edge_props = std::make_shared<std::vector<common::property>>();
     size_t nodes[NUM_NODES];
     size_t edges[NUM_EDGES];
     size_t edge_leading_nodes[NUM_EDGES];
@@ -49,6 +50,6 @@ stress_client_test()
             second = rand() % NUM_NODES;
         }
         std::cout << "Req " << i << " result "
-            << c.reachability_request(nodes[first], nodes[second]) << std::endl;
+            << c.reachability_request(nodes[first], nodes[second], edge_props) << std::endl;
     }
 }

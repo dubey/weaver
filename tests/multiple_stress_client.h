@@ -43,6 +43,7 @@ void
 multiple_stress_client()
 {
     client c(CLIENT_PORT);
+    auto edge_props = std::make_shared<std::vector<common::property>>();
     int i;
     std::thread *t;
     srand(42); // magic seed
@@ -72,6 +73,6 @@ multiple_stress_client()
             second = rand() % NUM_NODES;
         }
         std::cout << "Req " << i << " result "
-            << c.reachability_request(nodes[first], nodes[second]) << std::endl;
+            << c.reachability_request(nodes[first], nodes[second], edge_props) << std::endl;
     }
 }
