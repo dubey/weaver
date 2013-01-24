@@ -37,7 +37,6 @@ delete_random_edges()
         std::cout << "Deleting edge " << (i*19) << std::endl;
         c.delete_edge(edge_leading_nodes[i*19], edges[i*19]);
     }
-    while(true);
 }
 
 void
@@ -75,5 +74,4 @@ multiple_stress_client()
         std::cout << "Req " << i << " result "
             << c.reachability_request(nodes[first], nodes[second]) << std::endl;
     }
-    while(true);
 }
