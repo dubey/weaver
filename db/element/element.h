@@ -95,10 +95,11 @@ namespace element
         std::vector<common::property>::iterator iter;
         for (iter = properties.begin(); iter<properties.end(); iter++)
         {
-            if (prop == *iter) 
+            if (prop == *iter && prop.get_creat_time() >= iter->get_creat_time()
+                && prop.get_creat_time() < iter->get_del_time()) 
             {
                 return true;
-            }
+            } 
         }
         return false;
     }

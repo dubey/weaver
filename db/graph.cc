@@ -206,7 +206,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         
     // get the list of source nodes to check for reachability, as well as the single sink node
     src_nodes = msg->unpack_reachable_prop(&prev_loc, &dest_node, &dest_loc,
-        &coord_req_id, &prev_req_id, &edge_props, &vector_clock);
+        &coord_req_id, &prev_req_id, &edge_props, &vector_clock, myid);
 
     // wait till all updates for this shard arrive
     myclock_recd = vector_clock->at(myid-1);

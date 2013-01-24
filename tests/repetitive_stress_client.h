@@ -107,12 +107,18 @@ repetitive_stress_client()
     t = new std::thread(check_reachability);
     t->detach();
 
-    for (i = 0; i < 1; i++)
+    for (i = 0; i < 100; i++)
     {
         create_edges(&c,0,1,2,3);
-        c.add_edge_prop(repetitive_nodes[0], repetitive_edges[0], 42, 84);
+        common::property prop(42, 84, 0);
+        c.add_edge_prop(repetitive_nodes[0], repetitive_edges[0], prop.key, prop.value);
+        c.add_edge_prop(repetitive_nodes[2], repetitive_edges[1], prop.key, prop.value);
+        edge_props->push_back(prop);
         signal_reachable(0,1,2,3);
-        c.del_edge_prop(repetitive_nodes[0], repetitive_edges[0], 42);
+        c.del_edge_prop(repetitive_nodes[0], repetitive_edges[0], prop.key);
+        signal_reachable(2,3,-1,-1);
+        edge_props->clear();
+        signal_reachable(0,1,2,3);
         delete_edges(&c,0,2);
         signal_reachable(-1,-1,-1,-1); // nothing reachable
         create_edges(&c,0,3,2,1);

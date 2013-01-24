@@ -84,7 +84,7 @@ namespace message
             void prep_client_rr_req(uint16_t port, size_t elem1, size_t elem2,
                 std::shared_ptr<std::vector<common::property>> edge_props);
             void unpack_client_rr_req(uint16_t *port, size_t *elem1, size_t *elem2,
-                std::shared_ptr<std::vector<common::property>> *edge_props);
+                std::shared_ptr<std::vector<common::property>> edge_props);
             void prep_client_rr_reply(bool reachable);
             void unpack_client_rr_reply(bool *reachable);
             // Create functions, coordinator to shards
@@ -131,7 +131,8 @@ namespace message
                 size_t *req_id,
                 size_t *prev_req_id,
                 std::shared_ptr<std::vector<common::property>> *edge_props,
-                std::shared_ptr<std::vector<uint64_t>> *vector_clock);
+                std::shared_ptr<std::vector<uint64_t>> *vector_clock,
+                int myid);
             void prep_reachable_rep(size_t req_id, 
                 bool is_reachable,
                 size_t src_node,
@@ -304,7 +305,7 @@ namespace message
 
     inline void
     message :: unpack_client_rr_req(uint16_t *port, size_t *elem1, size_t *elem2,
-        std::shared_ptr<std::vector<common::property>> *edge_props)
+        std::shared_ptr<std::vector<common::property>> edge_props)
     {
         size_t temp1, temp2, num_props;
         uint16_t temp3;
@@ -315,9 +316,15 @@ namespace message
         buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(enum msg_type)) >> temp3
             >> temp1 >> temp2 >> num_props;
         index = BUSYBEE_HEADER_SIZE+sizeof(enum msg_type)+sizeof(uint16_t)+3*sizeof(size_t);
+        common::property prop(0,0,0);
         for (i = 0; i < num_props; i++, index += (sizeof(uint32_t)+sizeof(size_t)))
         {
-            buf->unpack_from(index) >> (**edge_props)[i].key >> (**edge_props)[i].value;
+            uint32_t key;
+            size_t val;
+            buf->unpack_from(index) >> key >> val;
+            prop.key = key;
+            prop.value = val;
+            edge_props->push_back(prop);
         }
         *port = temp3;
         *elem1 = temp1;
@@ -701,7 +708,8 @@ namespace message
         size_t *req_id,
         size_t *prev_req_id,
         std::shared_ptr<std::vector<common::property>> *edge_props,
-        std::shared_ptr<std::vector<uint64_t>> *vector_clock)
+        std::shared_ptr<std::vector<uint64_t>> *vector_clock,
+        int myid)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t _type;
@@ -712,6 +720,7 @@ namespace message
         size_t r_count, p_r_count;
         std::unique_ptr<po6::net::location> _src_loc;
         std::shared_ptr<po6::net::location> _dest_loc;
+        uint64_t myclock;
 
         buf->unpack_from(index) >> _type;
         assert(_type == REACHABLE_PROP);
@@ -722,12 +731,21 @@ namespace message
         for (i = 0; i < NUM_SHARDS; i++, index += sizeof(uint64_t))
         {
             buf->unpack_from(index) >> (**vector_clock)[i]; //dereferencing pointer to pointer
+            if (i == myid) {
+                myclock = (**vector_clock)[i];
+            }
         }
         buf->unpack_from(index) >> num_props;
         index += sizeof(size_t);
+        common::property prop(0,0,myclock);
         for (i = 0; i < num_props; i++, index += (sizeof(uint32_t) + sizeof(size_t)))
         {
-            buf->unpack_from(index) >> (**edge_props)[i].key >> (**edge_props)[i].value;
+            uint32_t key;
+            size_t val;
+            buf->unpack_from(index) >> key >> val;
+            prop.key = key;
+            prop.value = val;
+            (*edge_props)->push_back(prop);
         }
         buf->unpack_from(index) >> num_nodes;
         index += sizeof(size_t);
