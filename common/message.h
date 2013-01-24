@@ -67,11 +67,12 @@ namespace message
         public:
             void change_type(enum msg_type t);
             // Client to coordinator
-            void prep_client0();
-            void prep_client1(size_t elem);
-            void unpack_client1(size_t *elem);
-            void prep_client2(size_t elem1, size_t elem2);
-            void unpack_client2(size_t *elem1, size_t *elem2);
+            void prep_client0(uint16_t port);
+            void unpack_client0(uint16_t *port);
+            void prep_client1(uint16_t port, size_t elem);
+            void unpack_client1(uint16_t *port, size_t *elem);
+            void prep_client2(uint16_t port, size_t elem1, size_t elem2);
+            void unpack_client2(uint16_t *port, size_t *elem1, size_t *elem2);
             void prep_client_rr_reply(bool reachable);
             void unpack_client_rr_reply(bool *reachable);
             // Create functions, coordinator to shards
@@ -149,44 +150,61 @@ namespace message
     }
 
     inline void
-    message :: prep_client0()
-    {
-        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + sizeof(enum msg_type)));
-        buf->pack_at(BUSYBEE_HEADER_SIZE) << type;
-    }
-
-    inline void
-    message :: prep_client1(size_t elem)
+    message :: prep_client0(uint16_t port)
     {
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + 
             sizeof(enum msg_type) + // type
-            sizeof(size_t))); // elem
-        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << elem;
+            sizeof(uint16_t))); // port
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << port;
     }
 
     inline void
-    message :: unpack_client1(size_t *elem)
+    message :: unpack_client0(uint16_t *port)
     {
-        size_t temp;
+        uint16_t temp;
         buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(enum msg_type)) >> temp;
-        *elem = temp;
+        *port = temp;
     }
 
     inline void
-    message :: prep_client2(size_t elem1, size_t elem2)
+    message :: prep_client1(uint16_t port, size_t elem)
     {
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + 
             sizeof(enum msg_type) + // type
-            2 * sizeof(size_t))); // elems
-        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << elem1 << elem2;
+            sizeof(uint16_t) + // port
+            sizeof(size_t))); // elem
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << port << elem;
     }
 
     inline void
-    message :: unpack_client2(size_t *elem1, size_t *elem2)
+    message :: unpack_client1(uint16_t *port, size_t *elem)
     {
-        size_t temp1, temp2;
+        size_t temp2;
+        uint16_t temp1;
         buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(enum msg_type)) >> temp1
             >> temp2;
+        *port = temp1;
+        *elem = temp2;
+    }
+
+    inline void
+    message :: prep_client2(uint16_t port, size_t elem1, size_t elem2)
+    {
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + 
+            sizeof(enum msg_type) + // type
+            sizeof(uint16_t) + // port
+            2 * sizeof(size_t))); // elems
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << port << elem1 << elem2;
+    }
+
+    inline void
+    message :: unpack_client2(uint16_t *port, size_t *elem1, size_t *elem2)
+    {
+        size_t temp1, temp2;
+        uint16_t temp3;
+        buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(enum msg_type)) >> temp3
+            >> temp1 >> temp2;
+        *port = temp3;
         *elem1 = temp1;
         *elem2 = temp2;
     }

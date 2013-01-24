@@ -16,7 +16,7 @@
 void
 basic_client_test()
 {
-    client c;
+    client c(CLIENT_PORT);
     size_t nodes[10];
     size_t edges[10];
     int i;

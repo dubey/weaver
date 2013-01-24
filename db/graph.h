@@ -85,7 +85,7 @@ namespace db
         element::node* new_node = new element::node(myloc, time);
         update_mutex.lock();
         my_clock++;
-        assert(my_clock == time); // TODO coordinator needs to ensure this
+        assert(my_clock == time);
         V.push_back(new_node);
         pending_update_cond.broadcast();
         update_mutex.unlock();

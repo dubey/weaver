@@ -80,6 +80,7 @@ handle_create_node(db::graph *G, std::unique_ptr<message::message> msg)
     db::element::node *n;
     msg->unpack_node_create(&req_id, &creat_time);
 
+    G->wait_for_updates(creat_time - 1);
     n = G->create_node(creat_time);
 
     msg->prep_node_create_ack(req_id, (size_t)n); 
@@ -97,6 +98,7 @@ handle_delete_node(db::graph *G, std::unique_ptr<message::message> msg)
     msg->unpack_node_delete(&req_id, &node_addr, &del_time);
 
     n = (db::element::node *)node_addr;
+    G->wait_for_updates(del_time - 1);
     G->delete_node(n, del_time);
 
     msg->prep_node_delete_ack(req_id);
@@ -114,6 +116,7 @@ handle_create_edge(db::graph *G, std::unique_ptr<message::message> msg)
     db::element::edge *e;
     msg->unpack_edge_create(&req_id, &n1, &n2, &creat_time);
 
+    G->wait_for_updates(creat_time - 1);
     e = G->create_edge(n1, std::move(n2), creat_time);
 
     msg->prep_edge_create_ack(req_id, (size_t)e);
@@ -133,6 +136,7 @@ handle_delete_edge(db::graph *G, std::unique_ptr<message::message> msg)
 
     n = (db::element::node *)node_addr;
     e = (db::element::edge *)edge_addr;
+    G->wait_for_updates(del_time - 1);
     G->delete_edge(n, e, del_time);
 
     msg->prep_edge_delete_ack(req_id);

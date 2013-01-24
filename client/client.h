@@ -11,6 +11,9 @@
  * ===============================================================
  */
 
+#ifndef __CLIENT__
+#define __CLIENT__
+
 #include <po6/net/location.h>
 #include <busybee_sta.h>
 
@@ -20,7 +23,7 @@
 class client
 {
     public:
-        client();
+        client(uint16_t myport);
 
     private:
         po6::net::location myloc, myrecloc, coord_loc;
@@ -38,9 +41,9 @@ class client
 };
 
 inline
-client :: client()
-    : myloc(CLIENT_IPADDR, CLIENT_PORT)
-    , myrecloc(CLIENT_IPADDR, CLIENT_PORT)
+client :: client(uint16_t myport)
+    : myloc(CLIENT_IPADDR, myport)
+    , myrecloc(CLIENT_IPADDR, myport)
     , coord_loc(COORD_IPADDR, COORD_CLIENT_REC_PORT)
     , client_bb(myloc.address, myloc.port, 0)
 {
@@ -51,15 +54,16 @@ client :: create_node()
 {
     busybee_returncode ret;
     size_t new_node;
+    uint16_t dummy;
     message::message msg(message::CLIENT_NODE_CREATE_REQ);
-    msg.prep_client0();
+    msg.prep_client0(myloc.port);
     send_coord(msg.buf);
     if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS)
     {
         std::cerr << "msg recv error: " << ret << std::endl;
         return 0;
     }
-    msg.unpack_client1(&new_node);
+    msg.unpack_client1(&dummy, &new_node);
     return new_node;
 }
 
@@ -68,15 +72,16 @@ client :: create_edge(size_t node1, size_t node2)
 {
     busybee_returncode ret;
     size_t new_edge;
+    uint16_t dummy;
     message::message msg(message::CLIENT_EDGE_CREATE_REQ);
-    msg.prep_client2(node1, node2);
+    msg.prep_client2(myloc.port, node1, node2);
     send_coord(msg.buf);
     if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS)
     {
         std::cerr << "msg recv error: " << ret << std::endl;
         return 0;
     }
-    msg.unpack_client1(&new_edge);
+    msg.unpack_client1(&dummy, &new_edge);
     return new_edge;
 }
 
@@ -85,7 +90,7 @@ client :: delete_node(size_t node)
 {
     busybee_returncode ret;
     message::message msg(message::CLIENT_NODE_DELETE_REQ);
-    msg.prep_client1(node);
+    msg.prep_client1(myloc.port, node);
     send_coord(msg.buf);
 }
 
@@ -94,7 +99,7 @@ client :: delete_edge(size_t node, size_t edge)
 {
     busybee_returncode ret;
     message::message msg(message::CLIENT_EDGE_DELETE_REQ);
-    msg.prep_client2(node, edge);
+    msg.prep_client2(myloc.port, node, edge);
     send_coord(msg.buf);
 }
 
@@ -104,7 +109,7 @@ client :: reachability_request(size_t node1, size_t node2)
     busybee_returncode ret;
     bool reachable;
     message::message msg(message::CLIENT_REACHABLE_REQ);
-    msg.prep_client2(node1, node2);
+    msg.prep_client2(myloc.port, node1, node2);
     send_coord(msg.buf);
     if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS)
     {
@@ -125,3 +130,5 @@ client :: send_coord(std::auto_ptr<e::buffer> buf)
         return;
     }
 }
+
+#endif // __CLIENT__

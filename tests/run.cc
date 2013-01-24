@@ -14,6 +14,7 @@
 #include "message_test.h"
 #include "cache_test.h"
 #include "basic_client.h"
+#include "simple_stress_client.h"
 
 int
 main(int argc, char *argv[])
@@ -23,7 +24,9 @@ main(int argc, char *argv[])
     std::cout << "Message packing/unpacking ok." << std::endl;
     cache_test();
     std::cout << "Shard cache ok." << std::endl;
-    basic_client_test();
-    std::cout << "Basic client ok." << std::endl;
+    //basic_client_test();
+    //std::cout << "Basic client ok." << std::endl;
+    stress_client_test();
+    std::cout << "Stress client ok." << std::endl;
     return 0;
 }

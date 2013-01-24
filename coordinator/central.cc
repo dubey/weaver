@@ -23,11 +23,6 @@
 #include "common/meta_element.h"
 #include "common/message.h"
 
-#define NUM_NODES 1000
-#define NUM_EDGES 1500
-#define NUM_REQUESTS 100
-#define NUM_THREADS 4
-
 // used to wait on pending update/reachability requests
 class pending_req
 {
@@ -47,66 +42,6 @@ class pending_req
 };
 
 static std::unordered_map<size_t, pending_req *> pending;
-
-// wake up thread waiting on the received message
-void
-handle_pending_req(coordinator::central *server, std::unique_ptr<message::message> msg,
-    enum message::msg_type m_type, std::unique_ptr<po6::net::location> dummy)
-{
-    size_t req_id;
-    pending_req *request;
-    void *mem_addr;
-    uint32_t rec_counter; // for reply
-    bool is_reachable; // for reply
-    size_t src_node; //for reply
-    size_t num_del_nodes; //for reply
-    std::unique_ptr<std::vector<size_t>> del_nodes(new std::vector<size_t>()); //for reply
-    std::unique_ptr<std::vector<uint64_t>> del_times(new std::vector<uint64_t>()); //for reply
-    
-    switch(m_type)
-    {
-        case message::NODE_CREATE_ACK:
-        case message::EDGE_CREATE_ACK:
-            msg->unpack_create_ack(&req_id, &mem_addr);
-            server->update_mutex.lock();
-            request = pending[req_id];
-            server->update_mutex.unlock();
-            request->mutex.lock();
-            request->addr = mem_addr;
-            request->waiting = false;
-            request->reply.signal();
-            request->mutex.unlock();
-            break;
-
-        case message::NODE_DELETE_ACK:
-        case message::EDGE_DELETE_ACK:
-            msg->unpack_delete_ack(&req_id);
-            server->update_mutex.lock();
-            request = pending[req_id];
-            server->update_mutex.unlock();
-            request->mutex.lock();
-            request->waiting = false;
-            request->reply.signal();
-            request->mutex.unlock();
-            break;
-
-        case message::REACHABLE_REPLY:
-            msg->unpack_reachable_rep(&req_id, &is_reachable, &src_node,
-                &num_del_nodes, &del_nodes, &del_times);
-            server->update_mutex.lock();
-            request = pending[req_id];
-            server->update_mutex.unlock();
-            request->mutex.lock();
-            request->reachable = is_reachable;
-            request->waiting = false;
-            request->reply.signal();
-            request->mutex.unlock();
-            break;
-        
-        default:
-            std::cerr << "unexpected msg type " << m_type << std::endl;
-    }
-}
 
 // create a node
 void*
@@ -322,6 +257,66 @@ diff(timespec start, timespec end)
     return temp;
 }
 
+// wake up thread waiting on the received message
+void
+handle_pending_req(coordinator::central *server, std::unique_ptr<message::message> msg,
+    enum message::msg_type m_type, std::unique_ptr<po6::net::location> dummy)
+{
+    size_t req_id;
+    pending_req *request;
+    void *mem_addr;
+    uint32_t rec_counter; // for reply
+    bool is_reachable; // for reply
+    size_t src_node; //for reply
+    size_t num_del_nodes; //for reply
+    std::unique_ptr<std::vector<size_t>> del_nodes(new std::vector<size_t>()); //for reply
+    std::unique_ptr<std::vector<uint64_t>> del_times(new std::vector<uint64_t>()); //for reply
+    
+    switch(m_type)
+    {
+        case message::NODE_CREATE_ACK:
+        case message::EDGE_CREATE_ACK:
+            msg->unpack_create_ack(&req_id, &mem_addr);
+            server->update_mutex.lock();
+            request = pending[req_id];
+            server->update_mutex.unlock();
+            request->mutex.lock();
+            request->addr = mem_addr;
+            request->waiting = false;
+            request->reply.signal();
+            request->mutex.unlock();
+            break;
+
+        case message::NODE_DELETE_ACK:
+        case message::EDGE_DELETE_ACK:
+            msg->unpack_delete_ack(&req_id);
+            server->update_mutex.lock();
+            request = pending[req_id];
+            server->update_mutex.unlock();
+            request->mutex.lock();
+            request->waiting = false;
+            request->reply.signal();
+            request->mutex.unlock();
+            break;
+
+        case message::REACHABLE_REPLY:
+            msg->unpack_reachable_rep(&req_id, &is_reachable, &src_node,
+                &num_del_nodes, &del_nodes, &del_times);
+            server->update_mutex.lock();
+            request = pending[req_id];
+            server->update_mutex.unlock();
+            request->mutex.lock();
+            request->reachable = is_reachable;
+            request->waiting = false;
+            request->reply.signal();
+            request->mutex.unlock();
+            break;
+        
+        default:
+            std::cerr << "unexpected msg type " << m_type << std::endl;
+    }
+}
+
 void
 msg_handler(coordinator::central *server)
 {
@@ -354,38 +349,45 @@ void
 handle_client_req(coordinator::central *server, std::unique_ptr<message::message> msg,
     enum message::msg_type m_type, std::unique_ptr<po6::net::location> client_loc)
 {
+    uint16_t client_port;
     size_t elem1, elem2;
     size_t new_elem;
     bool reachable;
     switch (m_type)
     {
-        case message::CLIENT_NODE_CREATE_REQ: 
+        case message::CLIENT_NODE_CREATE_REQ:
+            msg->unpack_client0(&client_port);
+            client_loc.reset(new po6::net::location(client_loc->address, client_port));
             new_elem = (size_t)create_node(server);
             msg->change_type(message::CLIENT_REPLY);
-            msg->prep_client1(new_elem);
+            msg->prep_client1(0, new_elem);
             server->client_send(*client_loc, msg->buf);
             break;
 
         case message::CLIENT_EDGE_CREATE_REQ: 
-            msg->unpack_client2(&elem1, &elem2);
+            msg->unpack_client2(&client_port, &elem1, &elem2);
+            client_loc.reset(new po6::net::location(client_loc->address, client_port));
+            //client_loc->port = client_port;
             new_elem = (size_t)create_edge((common::meta_element *)elem1, (common::meta_element *)elem2, server);
             msg->change_type(message::CLIENT_REPLY);
-            msg->prep_client1(new_elem);
+            msg->prep_client1(0, new_elem);
             server->client_send(*client_loc, msg->buf);
             break;
 
         case message::CLIENT_NODE_DELETE_REQ:
-            msg->unpack_client1(&elem1);
+            msg->unpack_client1(&client_port, &elem1);
             delete_node((common::meta_element *)elem1, server);
             break;
 
         case message::CLIENT_EDGE_DELETE_REQ: 
-            msg->unpack_client2(&elem1, &elem2);
+            msg->unpack_client2(&client_port, &elem1, &elem2);
             delete_edge((common::meta_element *)elem1, (common::meta_element *)elem2, server);
             break;
 
         case message::CLIENT_REACHABLE_REQ: 
-            msg->unpack_client2(&elem1, &elem2);
+            msg->unpack_client2(&client_port, &elem1, &elem2);
+            client_loc.reset(new po6::net::location(client_loc->address, client_port));
+            //client_loc->port = client_port;
             reachable = reachability_request((common::meta_element *)elem1, (common::meta_element *)elem2, server);
             msg->change_type(message::CLIENT_REPLY);
             msg->prep_client_rr_reply(reachable);
@@ -417,7 +419,7 @@ client_handler(coordinator::central *server)
         rec_msg.reset(new message::message(msg));
         rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
         mtype = (enum message::msg_type)code;
-        client_loc.reset(new po6::net::location(CLIENT_IPADDR, CLIENT_PORT));
+        client_loc.reset(new po6::net::location(sender));
         thr.reset(new coordinator::thread::unstarted_thread(handle_client_req,
             server, std::move(rec_msg), mtype, std::move(client_loc)));
         server->thread_pool.add_request(std::move(thr), false); // XXX
@@ -429,107 +431,12 @@ main(int argc, char* argv[])
 {
     coordinator::central server;
     std::thread *t;
-
+    
+    std::cout << "Weaver: coordinator" << std::endl;
     // initialize shard msg receiving thread
     t = new std::thread(msg_handler, &server);
     t->detach();
 
     //initialize client handler thread
     client_handler(&server);
-
-    // build the graph
-    /*
-    void *mem_addr1, *mem_addr2, *mem_addr3, *mem_addr4;
-    int i;
-    std::vector<void *> nodes, edges;
-    timespec start, end, time_taken;
-    uint32_t time_ms;
-    
-
-    for (i = 0; i < NUM_NODES; i++)
-    {
-        mem_addr1 = create_node(&server);
-        nodes.push_back(mem_addr1);
-    }
-    srand(time(NULL));
-    */
-    /*
-    for (i = 0; i < NUM_EDGES; i++)
-    {
-        int first = rand() % NUM_NODES;
-        int second = rand() % NUM_NODES;
-        while (second == first) //no self-loop edges
-        {
-             second = rand() % NUM_NODES;
-        }
-        create_edge((common::meta_element *)nodes[first], 
-            (common::meta_element *)nodes[second], &server);
-    }
-    */
-    
-    /*
-    for (i = 0; i < NUM_NODES; i++)
-    {
-        //ring graph
-        edges.push_back(create_edge((common::meta_element *)nodes[i],
-            (common::meta_element *)nodes[(i+1) % NUM_NODES], &server));
-    }
-    for (i = 0; i < 10; i++)
-    {
-        delete_node((common::meta_element *)nodes[i*i], &server);
-    }
-    for (i = 900; i < NUM_NODES - 4; i++)
-    {
-        delete_edge((common::meta_element *)nodes[i], (common::meta_element *)edges[i], &server);
-    }
-    */
-    
-    //clock_gettime(CLOCK_MONOTONIC, &start);    
-    /*
-    for (i = 0; i < NUM_NODES; i++)
-    {
-        reachability_request((common::meta_element *)nodes[i],
-        (common::meta_element *)nodes[(i+1)%NUM_NODES], &server);
-    }
-    *
-    for (i = 0; i < NUM_REQUESTS; i++)
-    {
-        int first = rand() % NUM_NODES;
-        int second = rand() % NUM_NODES;
-        while (second == first) //no self-loop edges
-        {
-             second = rand() % NUM_NODES;
-        }
-        reachability_request((common::meta_element *)nodes[first],
-            (common::meta_element *)nodes[second], &server);
-    }
-    */
-    /*
-    edges.push_back(
-    create_edge((common::meta_element *)nodes[0], (common::meta_element
-        *)nodes[1], &server));
-    edges.push_back(
-    create_edge((common::meta_element *)nodes[2], (common::meta_element
-        *)nodes[3], &server));
-    reachability_request((common::meta_element *)nodes[0], (common::meta_element
-        *)nodes[1], &server);
-    reachability_request((common::meta_element *)nodes[2], (common::meta_element
-        *)nodes[3], &server);
-    reachability_request((common::meta_element *)nodes[1], (common::meta_element
-        *)nodes[0], &server);
-    reachability_request((common::meta_element *)nodes[1], (common::meta_element
-        *)nodes[2], &server);
-    delete_edge((common::meta_element *)nodes[0], (common::meta_element *)edges[0],
-        &server);
-    reachability_request((common::meta_element *)nodes[0], (common::meta_element
-        *)nodes[1], &server);
-    clock_gettime(CLOCK_MONOTONIC, &end);  
-
-    time_taken = diff(start, end);
-    time_ms = time_taken.tv_sec * 1000 + time_taken.tv_nsec/1000000;
-    std::cout << "Time = " << time_ms << std::endl;
-
-    std::cin >> i;
-    */
-
 } 
