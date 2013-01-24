@@ -34,6 +34,8 @@ class client
         size_t create_edge(size_t node1, size_t node2);
         void delete_node(size_t node); 
         void delete_edge(size_t node, size_t edge);
+        void add_edge_prop(size_t node, size_t edge, uint32_t key, size_t value);
+        void del_edge_prop(size_t node, size_t edge, uint32_t key);
         bool reachability_request(size_t node1, size_t node2);
 
     private:
@@ -88,7 +90,6 @@ client :: create_edge(size_t node1, size_t node2)
 inline void
 client :: delete_node(size_t node)
 {
-    busybee_returncode ret;
     message::message msg(message::CLIENT_NODE_DELETE_REQ);
     msg.prep_client1(myloc.port, node);
     send_coord(msg.buf);
@@ -97,9 +98,24 @@ client :: delete_node(size_t node)
 inline void
 client :: delete_edge(size_t node, size_t edge)
 {
-    busybee_returncode ret;
     message::message msg(message::CLIENT_EDGE_DELETE_REQ);
     msg.prep_client2(myloc.port, node, edge);
+    send_coord(msg.buf);
+}
+
+inline void
+client :: add_edge_prop(size_t node, size_t edge, uint32_t key, size_t value)
+{
+    message::message msg(message::CLIENT_ADD_EDGE_PROP);
+    msg.prep_client_add_prop(node, edge, key, value);
+    send_coord(msg.buf);
+}
+
+inline void
+client :: del_edge_prop(size_t node, size_t edge, uint32_t key)
+{
+    message::message msg(message::CLIENT_DEL_EDGE_PROP);
+    msg.prep_client_del_prop(node, edge, key);
     send_coord(msg.buf);
 }
 

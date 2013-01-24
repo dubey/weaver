@@ -18,6 +18,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "common/weaver_constants.h"
+
 namespace db 
 {
 namespace element
@@ -26,32 +28,65 @@ namespace element
     {
         public:
             property();
-            property(uint32_t, size_t);
+            property(uint32_t, size_t, uint64_t);
         
         public:
             char* __key;
             char* __value;
             uint32_t key;
             size_t value;
+            uint64_t creat_time;
+            uint64_t del_time;
+
+        public:
             bool operator==(property p2) const;
+
+        public:
+            uint64_t get_creat_time();
+            uint64_t get_del_time();
+            void update_del_time(uint64_t);
     };
 
     inline
     property :: property()
+        : key(0)
+        , value(0)
+        , creat_time(0)
+        , del_time(0)
     {
     }
 
     inline
-    property :: property(uint32_t _key, size_t _value)
+    property :: property(uint32_t _key, size_t _value, uint64_t t_creat)
+        : key(_key)
+        , value(_value)
+        , creat_time(t_creat)
+        , del_time(MAX_TIME)
     {
-        key = _key;
-        value = _value;
     }
 
     inline bool
     property :: operator==(property p2) const
     {
         return ((key == p2.key) && (value == p2.value));
+    }
+
+    inline uint64_t
+    property :: get_creat_time()
+    {
+        return creat_time;
+    }
+
+    inline uint64_t
+    property :: get_del_time()
+    {
+        return del_time;
+    }
+
+    inline void
+    property :: update_del_time(uint64_t t_del)
+    {
+        del_time = t_del;
     }
 }
 }

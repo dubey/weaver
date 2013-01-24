@@ -143,6 +143,42 @@ handle_delete_edge(db::graph *G, std::unique_ptr<message::message> msg)
     G->send_coord(msg->buf);
 }
 
+// add edge property
+void
+handle_add_edge_property(db::graph *G, std::unique_ptr<message::message> msg)
+{
+    size_t req_id;
+    db::element::node *n;
+    db::element::edge *e;
+    void *node_addr, *edge_addr;
+    std::unique_ptr<db::element::property> new_prop;
+    uint64_t prop_add_time;
+    msg->unpack_add_prop(&req_id, &node_addr, &edge_addr, &new_prop, &prop_add_time);
+
+    n = (db::element::node *)node_addr;
+    e = (db::element::edge *)edge_addr;
+    G->wait_for_updates(prop_add_time - 1);
+    G->add_edge_property(n, e, std::move(new_prop), prop_add_time);
+}
+
+// delete all edge properties with the given key
+void
+handle_delete_edge_property(db::graph *G, std::unique_ptr<message::message> msg)
+{
+    size_t req_id;
+    db::element::node *n;
+    db::element::edge *e;
+    void *node_addr, *edge_addr;
+    uint32_t key;
+    uint64_t prop_del_time;
+    msg->unpack_del_prop(&req_id, &node_addr, &edge_addr, &key, &prop_del_time);
+
+    n = (db::element::node *)node_addr;
+    e = (db::element::edge *)edge_addr;
+    G->wait_for_updates(prop_del_time - 1);
+    G->delete_all_edge_property(n, e, key, prop_del_time);
+}
+
 // reachability request starting from src_nodes to dest_node
 void
 handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
@@ -453,6 +489,16 @@ runner(db::graph *G)
             
             case message::EDGE_DELETE_REQ:
                 thr.reset(new db::thread::unstarted_thread(handle_delete_edge, G, std::move(rec_msg)));
+                thread_pool.add_request(std::move(thr), true);
+                break;
+
+            case message::EDGE_ADD_PROP:
+                thr.reset(new db::thread::unstarted_thread(handle_add_edge_property, G, std::move(rec_msg)));
+                thread_pool.add_request(std::move(thr), true);
+                break;
+
+            case message::EDGE_DELETE_PROP:
+                thr.reset(new db::thread::unstarted_thread(handle_delete_edge_property, G, std::move(rec_msg)));
                 thread_pool.add_request(std::move(thr), true);
                 break;
 

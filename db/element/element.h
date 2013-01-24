@@ -42,6 +42,7 @@ namespace element
 
         public:
             void add_property(property prop);
+            void delete_property(uint32_t key, uint64_t del_time);
             void remove_property(property prop);
             bool has_property(property prop);
             bool check_and_add_property(property prop);
@@ -69,6 +70,19 @@ namespace element
     }
 
     inline void
+    element :: delete_property(uint32_t key, uint64_t del_time)
+    {
+        std::vector<property>::iterator iter;
+        for (iter = properties.begin(); iter<properties.end(); iter++)
+        {
+            if (iter->key == key) 
+            {
+                iter->update_del_time(del_time);
+            }
+        }
+    }
+
+    inline void
     element :: remove_property(property prop)
     {
         std::vector<property>::iterator iter = std::remove(properties.begin(), properties.end(), prop);
@@ -79,7 +93,6 @@ namespace element
     element :: has_property(property prop)
     {
         std::vector<property>::iterator iter;
-        int i = 0;
         for (iter = properties.begin(); iter<properties.end(); iter++)
         {
             if (prop == *iter) 

@@ -101,25 +101,30 @@ repetitive_stress_client()
     {
         repetitive_nodes[i] = c.create_node();
     }
-    create_edges(&c,0,1,2,3);
     t = new std::thread(check_reachability);
     t->detach();
 
-    signal_reachable(0,1,2,3);
-    delete_edges(&c,0,2);
-    signal_reachable(-1,-1,-1,-1); // nothing reachable
-    create_edges(&c,0,3,2,1);
-    signal_reachable(0,3,2,1);
-    delete_edges(&c,0,2);
-    create_edges(&c,0,3,2,1);
-    signal_reachable(0,3,2,1);
-    delete_edges(&c,0,2);
-    create_edges(&c,0,3,2,1);
-    delete_edges(&c,0,2);
-    create_edges(&c,0,1,2,3);
-    signal_reachable(0,1,2,3);
-    delete_edges(&c,0,2);
-    signal_reachable(-1,-1,-1,-1); // nothing reachable
+    for (i = 0; i < 1; i++)
+    {
+        create_edges(&c,0,1,2,3);
+        c.add_edge_prop(repetitive_nodes[0], repetitive_edges[0], 42, 84);
+        signal_reachable(0,1,2,3);
+        c.del_edge_prop(repetitive_nodes[0], repetitive_edges[0], 42);
+        delete_edges(&c,0,2);
+        signal_reachable(-1,-1,-1,-1); // nothing reachable
+        create_edges(&c,0,3,2,1);
+        signal_reachable(0,3,2,1);
+        delete_edges(&c,0,2);
+        create_edges(&c,0,3,2,1);
+        signal_reachable(0,3,2,1);
+        delete_edges(&c,0,2);
+        create_edges(&c,0,3,2,1);
+        delete_edges(&c,0,2);
+        create_edges(&c,0,1,2,3);
+        signal_reachable(0,1,2,3);
+        delete_edges(&c,0,2);
+        signal_reachable(-1,-1,-1,-1); // nothing reachable
+    }
 
     // releasing locks, killing all threads
     end_program = true;

@@ -171,9 +171,9 @@ delete_edge(common::meta_element *node, common::meta_element *edge, coordinator:
     size_t req_id;
 
     server->update_mutex.lock();
-    if (edge->get_del_time() < MAX_TIME)
+    if (edge->get_del_time() < MAX_TIME || node->get_del_time() < MAX_TIME)
     {
-        std::cerr << "cannot delete edge twice" << std::endl;
+        std::cerr << "cannot delete edge/node twice" << std::endl;
         server->update_mutex.unlock();
         return;
     }
@@ -196,6 +196,55 @@ delete_edge(common::meta_element *node, common::meta_element *edge, coordinator:
     server->update_mutex.lock();
     pending.erase(req_id);
     server->update_mutex.unlock();
+}
+
+// add a property, i.e. a key-value pair to an edge
+void 
+add_edge_property(common::meta_element *node, common::meta_element *edge, 
+    uint32_t key, size_t value, coordinator::central *server)
+{
+    uint64_t time;
+    message::message msg(message::EDGE_ADD_PROP);
+    size_t req_id;
+
+    server->update_mutex.lock();
+    if (edge->get_del_time() < MAX_TIME || node->get_del_time() < MAX_TIME)
+    {
+        std::cerr << "cannot add property to deleted edge/node" << std::endl;
+        server->update_mutex.unlock();
+        return;
+    }
+    time = ++server->vc.clocks->at(node->get_shard_id());
+    req_id = ++server->request_id;
+    msg.prep_add_prop(req_id, (size_t)node->get_addr(), (size_t)edge->get_addr(),
+        key, value, time);
+    server->update_mutex.unlock();
+    std::cout << "adding edge property\n";
+    server->send(node->get_loc_ptr(), msg.buf);
+}
+
+void
+delete_edge_property(common::meta_element *node, common::meta_element *edge, 
+    uint32_t key, coordinator::central *server)
+{
+    uint64_t time;
+    message::message msg(message::EDGE_DELETE_PROP);
+    size_t req_id;
+
+    server->update_mutex.lock();
+    if (edge->get_del_time() < MAX_TIME || node->get_del_time() < MAX_TIME)
+    {
+        std::cerr << "cannot delete property of deleted edge/node" << std::endl;
+        server->update_mutex.unlock();
+        return;
+    }
+    time = ++server->vc.clocks->at(node->get_shard_id());
+    req_id = ++server->request_id;
+    msg.prep_del_prop(req_id, (size_t)node->get_addr(), (size_t)edge->get_addr(),
+        key, time);
+    server->update_mutex.unlock();
+    std::cout << "deleting edge property\n";
+    server->send(node->get_loc_ptr(), msg.buf);
 }
 
 // is node1 reachable from node2?
@@ -350,14 +399,15 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
     enum message::msg_type m_type, std::unique_ptr<po6::net::location> client_loc)
 {
     uint16_t client_port;
-    size_t elem1, elem2;
+    size_t elem1, elem2, value;
+    uint32_t key;
     size_t new_elem;
     bool reachable;
     switch (m_type)
     {
         case message::CLIENT_NODE_CREATE_REQ:
             msg->unpack_client0(&client_port);
-            client_loc.reset(new po6::net::location(client_loc->address, client_port));
+            client_loc->port = client_port;
             new_elem = (size_t)create_node(server);
             msg->change_type(message::CLIENT_REPLY);
             msg->prep_client1(0, new_elem);
@@ -366,8 +416,7 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
 
         case message::CLIENT_EDGE_CREATE_REQ: 
             msg->unpack_client2(&client_port, &elem1, &elem2);
-            client_loc.reset(new po6::net::location(client_loc->address, client_port));
-            //client_loc->port = client_port;
+            client_loc->port = client_port;
             new_elem = (size_t)create_edge((common::meta_element *)elem1, (common::meta_element *)elem2, server);
             msg->change_type(message::CLIENT_REPLY);
             msg->prep_client1(0, new_elem);
@@ -386,13 +435,25 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
 
         case message::CLIENT_REACHABLE_REQ: 
             msg->unpack_client2(&client_port, &elem1, &elem2);
-            client_loc.reset(new po6::net::location(client_loc->address, client_port));
-            //client_loc->port = client_port;
+            client_loc->port = client_port;
             reachable = reachability_request((common::meta_element *)elem1, (common::meta_element *)elem2, server);
             msg->change_type(message::CLIENT_REPLY);
             msg->prep_client_rr_reply(reachable);
             server->client_send(*client_loc, msg->buf);
             break;
+
+        case message::CLIENT_ADD_EDGE_PROP:
+            msg->unpack_client_add_prop(&elem1, &elem2, &key, &value);
+            add_edge_property((common::meta_element *)elem1, (common::meta_element *)elem2, key, value, server);
+            break;
+
+        case message::CLIENT_DEL_EDGE_PROP:
+            msg->unpack_client_del_prop(&elem1, &elem2, &key);
+            delete_edge_property((common::meta_element *)elem1, (common::meta_element *)elem2, key, server);
+            break;
+
+        default:
+            std::cerr << "invalid client msg code" << m_type << std::endl;
     }
 }
 

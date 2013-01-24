@@ -33,6 +33,8 @@ namespace message
         CLIENT_EDGE_CREATE_REQ,
         CLIENT_NODE_DELETE_REQ,
         CLIENT_EDGE_DELETE_REQ,
+        CLIENT_ADD_EDGE_PROP,
+        CLIENT_DEL_EDGE_PROP,
         CLIENT_REACHABLE_REQ,
         CLIENT_REPLY,
         NODE_CREATE_REQ,
@@ -43,6 +45,8 @@ namespace message
         EDGE_DELETE_REQ,
         NODE_DELETE_ACK,
         EDGE_DELETE_ACK,
+        EDGE_ADD_PROP,
+        EDGE_DELETE_PROP,
         REACHABLE_REPLY,
         REACHABLE_PROP,
         ERROR
@@ -73,6 +77,10 @@ namespace message
             void unpack_client1(uint16_t *port, size_t *elem);
             void prep_client2(uint16_t port, size_t elem1, size_t elem2);
             void unpack_client2(uint16_t *port, size_t *elem1, size_t *elem2);
+            void prep_client_add_prop(size_t elem1, size_t elem2, uint32_t key, size_t value);
+            void unpack_client_add_prop(size_t *elem1, size_t *elem2, uint32_t *key, size_t *value);
+            void prep_client_del_prop(size_t elem1, size_t elem2, uint32_t key);
+            void unpack_client_del_prop(size_t *elem1, size_t *elem2, uint32_t *key);
             void prep_client_rr_reply(bool reachable);
             void unpack_client_rr_reply(bool *reachable);
             // Create functions, coordinator to shards
@@ -95,6 +103,14 @@ namespace message
             void prep_node_delete_ack(size_t req_id);
             void prep_edge_delete_ack(size_t req_id);
             void unpack_delete_ack(size_t *req_id);
+            void prep_add_prop(size_t req_id, size_t node_handle, size_t edge_handle, 
+                uint32_t key, size_t value, uint64_t time);
+            void unpack_add_prop(size_t *req_id, void **node_handle, void **edge_handle,
+                std::unique_ptr<db::element::property> *new_prop, uint64_t *time);
+            void prep_del_prop(size_t req_id, size_t node_handle, size_t edge_handle,
+                uint32_t key, uint64_t time);
+            void unpack_del_prop(size_t *req_id, void **node_handle, void **edge_handle,
+                uint32_t *key, uint64_t *time);
             // Reachability functions
             void prep_reachable_prop(std::vector<size_t> *src_nodes,
                 std::shared_ptr<po6::net::location> src_loc,
@@ -207,6 +223,57 @@ namespace message
         *port = temp3;
         *elem1 = temp1;
         *elem2 = temp2;
+    }
+    
+    inline void 
+    message :: prep_client_add_prop(size_t elem1, size_t elem2, uint32_t key, size_t value)
+    {
+        type = CLIENT_ADD_EDGE_PROP;
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + 
+            sizeof(enum msg_type) + // type
+            2 * sizeof(size_t) + // elems
+            sizeof(uint32_t) + // key
+            sizeof(size_t))); // value
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << elem1 << elem2 << key << value;
+    }
+    
+    inline void
+    message :: unpack_client_add_prop(size_t *elem1, size_t *elem2, uint32_t *key, size_t *value)
+    {
+        size_t temp1, temp2, val;
+        uint32_t k, code;
+        buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
+        assert((enum msg_type)code == CLIENT_ADD_EDGE_PROP);
+        buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(uint32_t)) >> temp1 >> temp2
+            >> k >> val;
+        *elem1 = temp1;
+        *elem2 = temp2;
+        *key = k;
+        *value = val;
+    }
+
+    inline void 
+    message :: prep_client_del_prop(size_t elem1, size_t elem2, uint32_t key)
+    {
+        type = CLIENT_DEL_EDGE_PROP;
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + 
+            sizeof(enum msg_type) + // type
+            2 * sizeof(size_t) + // elems
+            sizeof(uint32_t))); // key
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << elem1 << elem2 << key;
+    }
+    
+    inline void 
+    message :: unpack_client_del_prop(size_t *elem1, size_t *elem2, uint32_t *key)
+    {
+        size_t temp1, temp2;
+        uint32_t k, code;
+        buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
+        assert((enum msg_type)code == CLIENT_DEL_EDGE_PROP);
+        buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(uint32_t)) >> temp1 >> temp2 >> k;
+        *elem1 = temp1;
+        *elem2 = temp2;
+        *key = k;
     }
 
     inline void
@@ -453,6 +520,81 @@ namespace message
         buf->unpack_from(index) >> id;
         *req_id = id;
     }
+    
+    inline void 
+    message :: prep_add_prop(size_t req_id, size_t node_handle, size_t edge_handle, 
+        uint32_t key, size_t value, uint64_t time)
+    {
+        type = EDGE_ADD_PROP;
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE +
+            sizeof(enum msg_type) +
+            sizeof(size_t) + // request id
+            2 * sizeof(size_t) + // handles
+            sizeof(uint32_t) + // key
+            sizeof(size_t) + // value
+            sizeof(uint64_t))); // del time
+
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << req_id
+            << node_handle << edge_handle << key << value << time;
+    }
+    
+    inline void 
+    message :: unpack_add_prop(size_t *req_id, void **node_handle, void **edge_handle,
+        std::unique_ptr<db::element::property> *new_prop, uint64_t *time)
+    {
+        uint32_t index = BUSYBEE_HEADER_SIZE;
+        uint32_t _type, key;
+        size_t node_addr, edge_addr, id, value;
+        uint64_t _time;
+        buf->unpack_from(index) >> _type;
+        assert(_type == EDGE_ADD_PROP);
+        index += sizeof(enum msg_type);
+        
+        buf->unpack_from(index) >> id >> node_addr >> edge_addr
+            >> key >> value >> _time;
+        *req_id = id;
+        *node_handle = (void *)node_addr;
+        *edge_handle = (void *)edge_addr;
+        new_prop->reset(new db::element::property(key, value, _time));
+        *time = _time;
+    }
+    
+    inline void 
+    message :: prep_del_prop(size_t req_id, size_t node_handle, size_t edge_handle,
+        uint32_t key, uint64_t time)
+    {
+        type = EDGE_DELETE_PROP;
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE +
+            sizeof(enum msg_type) +
+            sizeof(size_t) + // request id
+            2 * sizeof(size_t) + // handles
+            sizeof(uint32_t) + // key
+            sizeof(uint64_t))); // del time
+
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << req_id
+            << node_handle << edge_handle << key << time;
+    }
+    
+    inline void 
+    message :: unpack_del_prop(size_t *req_id, void **node_handle, void **edge_handle,
+        uint32_t *key, uint64_t *time)
+    {
+        uint32_t index = BUSYBEE_HEADER_SIZE;
+        uint32_t _type, _key;
+        size_t node_addr, edge_addr, id;
+        uint64_t _time;
+        buf->unpack_from(index) >> _type;
+        assert(_type == EDGE_DELETE_PROP);
+        index += sizeof(enum msg_type);
+        
+        buf->unpack_from(index) >> id >> node_addr >> edge_addr
+            >> _key >> _time;
+        *req_id = id;
+        *node_handle = (void *)node_addr;
+        *edge_handle = (void *)edge_addr;
+        *key = _key;
+        *time = _time;
+    }
 
     inline void
     message :: prep_reachable_prop(std::vector<size_t> *src_nodes,
@@ -476,8 +618,7 @@ namespace message
             sizeof(uint32_t) + sizeof(uint16_t) + //dest_loc
             sizeof(size_t) +//req_id
             sizeof(size_t) +//prev_req_id
-            NUM_SHARDS * sizeof(uint64_t) //vector clock
-            ));
+            NUM_SHARDS * sizeof(uint64_t))); //vector clock
 
         buf->pack_at(index) << type;
         index += sizeof(enum msg_type);
