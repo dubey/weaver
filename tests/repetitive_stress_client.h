@@ -20,6 +20,7 @@
 static size_t repetitive_nodes[10];
 static size_t repetitive_edges[10];
 static bool check_reachable = false;
+static bool end_program = false;
 static po6::threads::mutex synch_mutex;
 static po6::threads::cond synch_cond(&synch_mutex);
 static int n1,n2,n3,n4;
@@ -32,8 +33,12 @@ check_reachability()
     while (true)
     {
         synch_mutex.lock();
-        while (!check_reachable) {
+        while (!check_reachable && !end_program) {
             synch_cond.wait();
+        }
+        if (end_program) {
+            synch_mutex.unlock();
+            return;
         }
         for (i = 0; i < 4; i++)
         {
@@ -43,7 +48,6 @@ check_reachability()
                     continue;
                 }
                 bool reach = c.reachability_request(repetitive_nodes[i], repetitive_nodes[j]);
-                std::cout << "i " << i << " j " << j << std::endl;
                 if ((i==n1 && j==n2) || (i==n3 && j==n4)) {
                     assert(reach);
                 } else {
@@ -67,10 +71,24 @@ signal_reachable(int num1, int num2, int num3, int num4)
     n4 = num4;
     check_reachable = true;
     synch_cond.signal();
-    while (check_reachable) {
+    while (check_reachable && !end_program) {
         synch_cond.wait();
     }
     synch_mutex.unlock();
+}
+
+void 
+delete_edges(client *c, int num1, int num2)
+{
+    c->delete_edge(repetitive_nodes[num1], repetitive_edges[0]);
+    c->delete_edge(repetitive_nodes[num2], repetitive_edges[1]);
+}
+
+void
+create_edges(client *c, int num1, int num2, int num3, int num4)
+{
+    repetitive_edges[0] = c->create_edge(repetitive_nodes[num1], repetitive_nodes[num2]);
+    repetitive_edges[1] = c->create_edge(repetitive_nodes[num3], repetitive_nodes[num4]);
 }
 
 void
@@ -83,18 +101,27 @@ repetitive_stress_client()
     {
         repetitive_nodes[i] = c.create_node();
     }
-    repetitive_edges[0] = c.create_edge(repetitive_nodes[0], repetitive_nodes[1]);
-    repetitive_edges[1] = c.create_edge(repetitive_nodes[2], repetitive_nodes[3]);
+    create_edges(&c,0,1,2,3);
     t = new std::thread(check_reachability);
     t->detach();
+
     signal_reachable(0,1,2,3);
-    c.delete_edge(repetitive_nodes[0], repetitive_edges[0]);
-    c.delete_edge(repetitive_nodes[2], repetitive_edges[1]);
+    delete_edges(&c,0,2);
     signal_reachable(-1,-1,-1,-1); // nothing reachable
-    repetitive_edges[0] = c.create_edge(repetitive_nodes[0], repetitive_nodes[3]);
-    repetitive_edges[1] = c.create_edge(repetitive_nodes[2], repetitive_nodes[1]);
+    create_edges(&c,0,3,2,1);
     signal_reachable(0,3,2,1);
-    c.delete_edge(repetitive_nodes[0], repetitive_edges[0]);
-    c.delete_edge(repetitive_nodes[2], repetitive_edges[1]);
+    delete_edges(&c,0,2);
+    create_edges(&c,0,3,2,1);
+    signal_reachable(0,3,2,1);
+    delete_edges(&c,0,2);
+    create_edges(&c,0,3,2,1);
+    delete_edges(&c,0,2);
+    create_edges(&c,0,1,2,3);
+    signal_reachable(0,1,2,3);
+    delete_edges(&c,0,2);
     signal_reachable(-1,-1,-1,-1); // nothing reachable
+
+    // releasing locks, killing all threads
+    end_program = true;
+    synch_cond.broadcast();
 }
