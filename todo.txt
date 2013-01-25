@@ -1,7 +1,8 @@
 Cache reachability results (basic, no invalidation, only caching positive
 results)
 Examine code for spurious copying/mallocing (done).
-Make unit tests! (done simple, reach. stress test pending)
+Make unit tests! (done) 
+Better locking in shard servers needed (done, stress test pending).
 
 Make allowance for multiple reach_nodes in reachability requests.
 Try to get rid of PO6_NDEBUG_LEAKS.

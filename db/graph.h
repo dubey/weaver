@@ -89,7 +89,7 @@ namespace db
         update_mutex.lock();
         my_clock++;
         assert(my_clock == time);
-        V.push_back(new_node);
+        //V.push_back(new_node);
         pending_update_cond.broadcast();
         update_mutex.unlock();
         
@@ -105,13 +105,13 @@ namespace db
     {
         element::node *local_node = (element::node *)n1;
         element::edge *new_edge = new element::edge(myloc, time, std::move(n2));
-        update_mutex.lock();
-        my_clock++;
-        assert(my_clock == time);
         local_node->update_mutex.lock();
         local_node->add_edge(new_edge);
         local_node->update_mutex.unlock();
-        E.push_back(new_edge);
+        update_mutex.lock();
+        my_clock++;
+        assert(my_clock == time);
+        //E.push_back(new_edge);
         pending_update_cond.broadcast();
         update_mutex.unlock();
 
@@ -122,12 +122,12 @@ namespace db
     inline void
     graph :: delete_node(element::node *n, uint64_t del_time)
     {
-        update_mutex.lock();
-        my_clock++;
-        assert(my_clock == del_time);
         n->update_mutex.lock();
         n->update_del_time(del_time);
         n->update_mutex.unlock();
+        update_mutex.lock();
+        my_clock++;
+        assert(my_clock == del_time);
         pending_update_cond.broadcast();
         update_mutex.unlock();
     }
@@ -135,12 +135,12 @@ namespace db
     inline void
     graph :: delete_edge(element::node *n, element::edge *e, uint64_t del_time)
     {
-        update_mutex.lock();
-        my_clock++;
-        assert(my_clock == del_time);
         n->update_mutex.lock();
         e->update_del_time(del_time);
         n->update_mutex.unlock();
+        update_mutex.lock();
+        my_clock++;
+        assert(my_clock == del_time);
         pending_update_cond.broadcast();
         update_mutex.unlock();
     }
@@ -149,12 +149,12 @@ namespace db
     graph :: add_edge_property(element::node *n, element::edge *e,
         std::unique_ptr<common::property> prop, uint64_t time)
     {
-        update_mutex.lock();
-        my_clock++;
-        assert(my_clock == time);
         n->update_mutex.lock();
         e->add_property(*prop);
         n->update_mutex.unlock();
+        update_mutex.lock();
+        my_clock++;
+        assert(my_clock == time);
         pending_update_cond.broadcast();
         update_mutex.unlock();
     }
@@ -162,12 +162,12 @@ namespace db
     inline void
     graph :: delete_all_edge_property(element::node *n, element::edge *e, uint32_t key, uint64_t time)
     {
-        update_mutex.lock();
-        my_clock++;
-        assert(my_clock == time);
         n->update_mutex.lock();
         e->delete_property(key, time);
         n->update_mutex.unlock();
+        update_mutex.lock();
+        my_clock++;
+        assert(my_clock == time);
         pending_update_cond.broadcast();
         update_mutex.unlock();
     }
