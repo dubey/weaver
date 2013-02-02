@@ -292,7 +292,6 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
             msg.reset(new message::message(message::REACHABLE_PROP));
             //adding this as a pending request
             request->num++;
-            //TODO remove pending_batch altogether, pack in pointer to batch
             //request in the message
             outgoing_req_id_counter_mutex.lock();
             my_outgoing_req_id = outgoing_req_id_counter++;
