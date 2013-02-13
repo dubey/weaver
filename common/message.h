@@ -49,6 +49,7 @@ namespace message
         EDGE_DELETE_PROP,
         REACHABLE_REPLY,
         REACHABLE_PROP,
+        CLUSTERING_PROP,
         ERROR
     };
 
@@ -145,6 +146,18 @@ namespace message
                 size_t *num_del_nodes,
                 std::unique_ptr<std::vector<size_t>> *del_nodes,
                 std::unique_ptr<std::vector<uint64_t>> *del_times);
+            void prep_clustering_prop(
+                void * request,
+                std::vector<size_t> *nbr_nodes,
+                std::shared_ptr<po6::net::location> src_loc,
+                std::shared_ptr<std::vector<common::property>> edge_props,
+                std::shared_ptr<std::vector<uint64_t>> vector_clock);
+            void unpack_clustering_req(
+                void **node,
+                size_t *req_id,
+                std::shared_ptr<std::vector<common::property>> *edge_props,
+                std::shared_ptr<std::vector<uint64_t>> *vector_clock,
+                int myid);
             // Error message
             void prep_error();
 
@@ -839,6 +852,25 @@ namespace message
         return ret;
     }
 
+    inline void prep_clustering_prop(
+            void * request,
+            std::vector<size_t> *nbr_nodes,
+            std::shared_ptr<po6::net::location> src_loc,
+            std::shared_ptr<std::vector<common::property>> edge_props,
+            std::shared_ptr<std::vector<uint64_t>> vector_clock)
+    {
+        return;
+    }
+
+    inline void unpack_clustering_req(void **node,
+            size_t *req_id,
+            std::shared_ptr<std::vector<common::property>> *edge_props,
+            std::shared_ptr<std::vector<uint64_t>> *vector_clock,
+            int myid)
+    {
+        return;
+
+    }
 } //namespace message
 
 #endif //__MESSAGE__

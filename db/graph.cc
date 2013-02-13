@@ -65,6 +65,25 @@ class batch_request
     }
 };
 
+// Pending clustering request
+class clustering_request
+{
+    public:
+    std::vector<size_t> *nbrs;
+    size_t existing_edges; // numerator in calculation
+    size_t possible_edges; // denominator in calculation
+    size_t responses_left;
+    po6::threads::mutex mutex;
+
+    clustering_request(std::vector<size_t> *neighbors)
+    {
+        existing_edges = 0;
+        nbrs = neighbors;
+        responses_left = nbrs->size();
+        possible_edges = responses_left * (responses_left-1);
+    }
+};
+
 static int myid, port;
 static size_t incoming_req_id_counter, outgoing_req_id_counter;
 static po6::threads::mutex incoming_req_id_counter_mutex, outgoing_req_id_counter_mutex;
@@ -454,6 +473,92 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
     }
     request->mutex.unlock();
 } 
+
+void
+compute_clustering_coeff(db::graph *G, db::element::node *n, std::shared_ptr<clustering_request> request)
+{
+    return;
+}
+
+void
+handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
+{
+    db::element::node *main_node; // pointer to node to calc clustering coefficient for
+
+    size_t coord_req_id; // central coordinator req id
+    auto edge_props = std::make_shared<std::vector<common::property>>();
+    auto vector_clock = std::make_shared<std::vector<uint64_t>>();
+    uint64_t myclock_recd;
+    std::vector<size_t> useable_neighbors;
+
+    std::unordered_map<po6::net::location, std::vector<size_t>> msg_batch; // batched messages to propagate
+/*
+    std::unordered_map<po6::net::location, std::vector<size_t>> msg_batch; // batched messages to propagate
+    std::unique_ptr<std::vector<size_t>> src_nodes;
+    std::vector<size_t>::iterator src_iter;
+    std::unique_ptr<std::vector<size_t>> deleted_nodes(new std::vector<size_t>());
+    std::unique_ptr<std::vector<uint64_t>> del_times(new std::vector<uint64_t>());
+ */       
+    // get the list of source nodes to check for reachability, as well as the single sink node
+    msg->unpack_clustering_req((void **) &main_node, &coord_req_id, &edge_props, &vector_clock, myid);
+
+    // wait till all updates for this shard arrive
+    myclock_recd = vector_clock->at(myid-1);
+    G->wait_for_updates(myclock_recd);
+
+    if (main_node->get_del_time() <= myclock_recd)
+    {
+        // this node doesn't exist in graph anymore
+    }
+    std::vector<db::element::edge *>::iterator iter;
+    // check the properties of each out-edge
+    for (iter = main_node->out_edges.begin(); iter < main_node->out_edges.end(); iter++)
+    {
+        db::element::edge *e = *iter;
+        uint64_t nbrclock_recd = vector_clock->at(e->nbr->get_shard_id());
+        bool use_edge = e->get_creat_time() <= myclock_recd  
+            && e->get_del_time() > myclock_recd // edge created and deleted in acceptable timeframe
+            && e->nbr->get_del_time() > nbrclock_recd; // nbr not deleted
+        int i;
+        for (i = 0; i < edge_props->size() && use_edge; i++) // checking edge properties
+        {
+            if (!e->has_property(edge_props->at(i))) {
+                use_edge = false;
+                break;
+            }
+        }
+        if (use_edge)
+        {
+            size_t nbr_addr = (size_t) e->nbr->get_addr();
+            useable_neighbors.push_back(nbr_addr);
+            msg_batch[*e->nbr->get_loc_ptr()].push_back(nbr_addr);
+        }
+    }
+    std::shared_ptr<clustering_request> request = std::make_shared<clustering_request>(&useable_neighbors);
+    std::vector<size_t> *local_nbrs;
+    //todo: check it got made properly
+    std::unordered_map<po6::net::location, std::vector<size_t>>::iterator loc_iter;
+    for (loc_iter = msg_batch.begin(); loc_iter != msg_batch.end(); loc_iter++)
+    {
+        if (loc_iter->first == *G->myloc)
+        {   //neighbors on local machine
+            local_nbrs = &loc_iter->second;
+        } else {
+            msg.reset(new message::message(message::CLUSTERING_PROP));
+            msg->prep_clustering_prop((void *) request, &loc_iter->second, G->myloc, edge_props, vector_clock);
+            G->send(loc_iter->first, msg->buf);
+        }
+    }
+    // after we have sent batches to other shards who need to compute,
+    // sequentially compute for local neighbors
+    if (local_nbrs != NULL){
+        std::vector<size_t>::iterator nbr_iter;
+        for (nbr_iter = local_nbrs->begin(); nbr_iter < local_nbrs->end(); nbr_iter++)
+        {
+            compute_clustering_coeff(G, (db::element::node *) &nbr_iter, request); //can we pass a shared pointer like this?
+        }
+    }
+}
 
 // server loop for the shard server
 void
