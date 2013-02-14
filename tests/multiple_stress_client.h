@@ -64,15 +64,21 @@ multiple_stress_client()
     }
     t = new std::thread(delete_random_edges);
     t->detach();
-    for (i = 0; i < NUM_REQUESTS; i++)
+    long seed;
+    for (seed = 0; seed < 10000; seed += 100)
     {
-        int first = rand() % NUM_NODES;
-        int second = rand() % NUM_NODES;
-        while (second == first)
+        std::cout << "Seed " << seed << std::endl;
+        srand(seed);
+        for (i = 0; i < NUM_REQUESTS; i++)
         {
-            second = rand() % NUM_NODES;
+            int first = rand() % NUM_NODES;
+            int second = rand() % NUM_NODES;
+            while (second == first)
+            {
+                second = rand() % NUM_NODES;
+            }
+            std::cout << "Req " << i << " result "
+                << c.reachability_request(nodes[first], nodes[second], edge_props) << std::endl;
         }
-        std::cout << "Req " << i << " result "
-            << c.reachability_request(nodes[first], nodes[second], edge_props) << std::endl;
     }
 }

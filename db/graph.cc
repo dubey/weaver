@@ -422,7 +422,7 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
         }
     }
 
-    if (request->num == 0)
+    if (request.use_count() == 1)
     {
         //delete visited property
         std::vector<size_t>::iterator node_iter;
@@ -431,7 +431,9 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
         {
             std::vector<common::meta_element>::iterator iter;
             n = (db::element::node *)(*node_iter);
+            n->update_mutex.lock();
             G->remove_visited(n, my_batch_req_id);
+            n->update_mutex.unlock();
             /*
              * TODO:
              * Caching negative results is tricky, because we don't
@@ -449,7 +451,6 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
             */
         }
         //implicitly deleting batch request
-        assert(request.use_count() == 1);
         return;
     }
     request->mutex.unlock();
