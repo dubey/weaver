@@ -147,13 +147,13 @@ namespace message
                 std::unique_ptr<std::vector<size_t>> *del_nodes,
                 std::unique_ptr<std::vector<uint64_t>> *del_times);
             void prep_clustering_prop(
-                void * request,
+                size_t request_id,
                 std::vector<size_t> *nbr_nodes,
                 std::shared_ptr<po6::net::location> src_loc,
                 std::shared_ptr<std::vector<common::property>> edge_props,
                 std::shared_ptr<std::vector<uint64_t>> vector_clock);
             void unpack_clustering_req(
-                void **node,
+                size_t *node,
                 size_t *req_id,
                 std::shared_ptr<std::vector<common::property>> *edge_props,
                 std::shared_ptr<std::vector<uint64_t>> *vector_clock,
@@ -852,23 +852,24 @@ namespace message
         return ret;
     }
 
-    inline void prep_clustering_prop(
-            void * request,
+    inline 
+    void message :: prep_clustering_prop(
+            size_t request_id,
             std::vector<size_t> *nbr_nodes,
             std::shared_ptr<po6::net::location> src_loc,
             std::shared_ptr<std::vector<common::property>> edge_props,
             std::shared_ptr<std::vector<uint64_t>> vector_clock)
     {
-        return;
+
     }
 
-    inline void unpack_clustering_req(void **node,
+    inline 
+    void message :: unpack_clustering_req(size_t *node,
             size_t *req_id,
             std::shared_ptr<std::vector<common::property>> *edge_props,
             std::shared_ptr<std::vector<uint64_t>> *vector_clock,
             int myid)
     {
-        return;
 
     }
 } //namespace message
