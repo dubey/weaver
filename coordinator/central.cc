@@ -315,7 +315,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
 {
     size_t req_id;
     pending_req *request;
-    void *mem_addr;
+    size_t mem_addr;
     uint32_t rec_counter; // for reply
     bool is_reachable; // for reply
     size_t src_node; //for reply
@@ -332,7 +332,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             request = pending[req_id];
             server->update_mutex.unlock();
             request->mutex.lock();
-            request->addr = mem_addr;
+            request->addr = (void *)mem_addr;
             request->waiting = false;
             request->reply.signal();
             request->mutex.unlock();

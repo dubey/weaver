@@ -3,9 +3,9 @@ results)
 Examine code for spurious copying/mallocing (done).
 Make unit tests! (done) 
 Better locking in shard servers needed (done, stress test pending).
+Special handling of local traversals - remove msg packing! (done)
+Unnecessary copying in message unpacking - first into lvars, then into ret vars. (done)
 
-Special handling of local traversals - remove msg packing!
-Unnecessary copying in message unpacking - first into lvars, then into ret vars.
 Make allowance for multiple reach_nodes in reachability requests.
 Try to get rid of PO6_NDEBUG_LEAKS.
 Check memory leaks using valgrind.

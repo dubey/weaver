@@ -70,10 +70,11 @@ message_test()
     assert(time == time2);
 
     // edge create
+    size_t s_first1;
     msg.prep_edge_create(rec_id, (size_t)first, (size_t)second, random2, time, time);
-    msg.unpack_edge_create(&rec_id, &first1, &node2, &time2);
+    msg.unpack_edge_create(&rec_id, &s_first1, &node2, &time2);
     assert(rec_id == req_id);
-    assert(first == first1);
+    assert(first == (void *)s_first1);
     assert(time2 == time);
     assert(*random == *node2->get_loc_ptr());
 
