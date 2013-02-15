@@ -30,15 +30,50 @@
 #include "common/meta_element.h"
 #include "element/node.h"
 #include "element/edge.h"
-
-#define NUM_THREADS 4
+#include "threadpool/threadpool.h"
 
 namespace db
 {
+    // Pending batched request
+    class batch_request
+    {
+        public:
+        std::unique_ptr<po6::net::location> prev_loc; // prev server's port
+        size_t coord_id; // coordinator's req id
+        size_t prev_id; // prev server's req id
+        int num; // number of onward requests
+        bool reachable;
+        std::unique_ptr<std::vector<size_t>> src_nodes;
+        void *dest_addr; // dest node's handle
+        std::shared_ptr<po6::net::location> dest_loc; // dest node's port
+        std::unique_ptr<std::vector<size_t>> del_nodes; // deleted nodes
+        std::unique_ptr<std::vector<uint64_t>> del_times; // delete times corr. to del_nodes
+        po6::threads::mutex mutex;
+
+        batch_request()
+        {
+            prev_id = 0;
+            num = 0;
+            reachable = false;
+            dest_addr = NULL;
+        }
+
+        batch_request(const batch_request &tup)
+        {
+            prev_loc.reset(new po6::net::location(*tup.prev_loc));
+            prev_id = tup.prev_id;
+            num = tup.num;
+            reachable = tup.reachable;
+            src_nodes.reset(new std::vector<size_t>(*tup.src_nodes));
+            dest_addr = tup.dest_addr;
+            dest_loc.reset(new po6::net::location(*tup.dest_loc));
+        }
+    };
+
     class graph
     {
         public:
-            graph(const char* ip_addr, in_port_t port);
+            graph(int my_id, const char* ip_addr, in_port_t port);
 
         private:
             po6::threads::mutex update_mutex;
@@ -52,6 +87,13 @@ namespace db
             busybee_sta bb; // Busybee instance used for sending messages
             busybee_sta bb_recv; // Busybee instance used for receiving messages
             po6::threads::mutex bb_lock;
+            int myid;
+            size_t outgoing_req_id_counter;
+            po6::threads::mutex outgoing_req_id_counter_mutex;
+            std::unordered_map<size_t, std::shared_ptr<batch_request>> pending_batch;
+            db::thread::pool thread_pool;
+            
+        public:
             element::node* create_node(uint64_t time);
             element::edge* create_edge(void *n1,
                 std::unique_ptr<common::meta_element> n2, uint64_t time);
@@ -69,7 +111,7 @@ namespace db
     };
 
     inline
-    graph :: graph(const char* ip_addr, in_port_t port)
+    graph :: graph(int my_id, const char* ip_addr, in_port_t port)
         : my_clock(0)
         , pending_update_cond(&update_mutex)
         , node_count(0)
@@ -77,6 +119,9 @@ namespace db
         , coord(new po6::net::location(COORD_IPADDR, COORD_REC_PORT))
         , bb(myloc->address, myloc->port + SEND_PORT_INCR, 0)
         , bb_recv(myloc->address, myloc->port, 0)
+        , myid(my_id)
+        , outgoing_req_id_counter(0)
+        , thread_pool(NUM_THREADS)
     {
     }
 

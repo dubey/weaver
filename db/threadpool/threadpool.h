@@ -25,6 +25,8 @@
 
 namespace db
 {
+class graph;
+
 namespace thread
 {
     class pool;
@@ -58,9 +60,6 @@ namespace thread
     class pool
     {
         public:
-            pool(int n_threads);
-
-        public:
             int num_threads;
             std::deque<std::unique_ptr<unstarted_thread>> reach_req_queue;
             std::deque<std::unique_ptr<unstarted_thread>> update_queue;
@@ -68,9 +67,12 @@ namespace thread
             po6::threads::cond empty_queue_cond;
             po6::threads::cond graph_update_queue_cond;
             int num_free_update, num_free_reach;
-        
+       
         public:
             void add_request(std::unique_ptr<unstarted_thread>, bool);
+        
+        public:
+            pool(int n_threads);
     };
 
     inline
