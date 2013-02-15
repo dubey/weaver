@@ -216,7 +216,7 @@ namespace db
     inline bool
     graph :: mark_visited(element::node *n, size_t req_counter)
     {
-        n->check_and_add_seen(req_counter);
+        return n->check_and_add_seen(req_counter);
     }
 
     inline bool

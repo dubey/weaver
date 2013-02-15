@@ -16,6 +16,7 @@
 
 #include <stdint.h>
 #include <vector>
+#include <unordered_map>
 
 #include "element.h"
 #include "edge.h"
@@ -25,6 +26,15 @@ namespace db
 {
 namespace element
 {
+    class bool_wrapper
+    {
+        public:
+            bool bval;
+            bool_wrapper() {
+                bval = false;
+            }
+    };
+
     class node : public element
     {
         public:
@@ -34,7 +44,7 @@ namespace element
             std::vector<edge *> out_edges;
             cache::reach_cache cache;
             po6::threads::mutex update_mutex;
-            std::vector<size_t> seen; // requests which have been seen
+            std::unordered_map<size_t, bool_wrapper> seen; // requests which have been seen
             void add_edge(edge *e);
             bool check_and_add_seen(size_t id);
             void remove_seen(size_t id);
@@ -55,29 +65,18 @@ namespace element
     inline bool
     node :: check_and_add_seen(size_t id)
     {
-        std::vector<size_t>::iterator iter;
-        for (iter = seen.begin(); iter < seen.end(); iter++)
-        {
-            if (id == *iter) {
-                return true;
-            }
+        if (seen[id].bval == true) {
+            return true;
+        } else {
+            seen[id].bval = true;
+            return false;
         }
-        seen.push_back(id);
     }
 
     inline void
     node :: remove_seen(size_t id)
     {
-        size_t pos = 0;
-        for (; pos < seen.size(); pos++)
-        {
-            if (seen[pos] == id) {
-                break;
-            }
-        }
-        if (pos < seen.size()) {
-            seen.erase(seen.begin() + pos);
-        }
+        seen.erase(id);
     }
 
 }
