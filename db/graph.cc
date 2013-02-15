@@ -339,8 +339,8 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         request->mutex.unlock();
         msg_batch.clear();
     } else {
-        std::vector<db::element::node *>::iterator node_iter;
         //need to send back nack
+        std::vector<db::element::node *>::iterator node_iter;
         msg->prep_reachable_rep(prev_req_id, false, 0, G->myloc,
             std::move(deleted_nodes), std::move(del_times));
         G->send(std::move(prev_loc), msg->buf);
