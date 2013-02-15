@@ -4,6 +4,7 @@ echo -n "Enter branch name - "
 read branch
 echo -n "Enter commit message - "
 read msg
+git checkout $branch
 git commit -am "$(echo "$msg")"
 git checkout master
 git merge $branch
