@@ -49,6 +49,7 @@ namespace message
         EDGE_DELETE_PROP,
         REACHABLE_REPLY,
         REACHABLE_PROP,
+        REACHABLE_DONE,
         ERROR
     };
 
@@ -145,6 +146,8 @@ namespace message
                 size_t *num_del_nodes,
                 std::unique_ptr<std::vector<size_t>> *del_nodes,
                 std::unique_ptr<std::vector<uint64_t>> *del_times);
+            void prep_done_request(size_t id);
+            void unpack_done_request(size_t *id);
             // Error message
             void prep_error();
 
@@ -767,6 +770,21 @@ namespace message
         *is_reachable = (bool)reachable;
         ret.reset(new po6::net::location(s_ipaddr, s_port));
         return ret;
+    }
+
+    inline void
+    message :: prep_done_request(size_t id)
+    {
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + 
+            sizeof(enum msg_type) + // type
+            sizeof(size_t))); // id
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << id;
+    }
+
+    inline void
+    message :: unpack_done_request(size_t *id)
+    {
+        buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(enum msg_type)) >> (*id);
     }
 
 } //namespace message

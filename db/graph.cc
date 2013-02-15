@@ -152,9 +152,9 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
     uint64_t myclock_recd;
 
     db::element::node *n; // node pointer reused for each source node
-    bool reached = false; // indicates if we have reached destination node
+    bool reached = false, // indicates if we have reached destination node
+        propagate_req = false; // need to propagate request onward
     void *reach_node = NULL; // if reached destination, immediate preceding neighbor
-    bool propagate_req = false; // need to propagate request onward
     std::unordered_map<po6::net::location, std::vector<size_t>> msg_batch; // batched messages to propagate
     std::unique_ptr<std::vector<size_t>> src_nodes;
     std::vector<db::element::node *> visited_nodes; // nodes which are visited by this request, in case we need to unmark them
@@ -165,7 +165,9 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
     // get the list of source nodes to check for reachability, as well as the single sink node
     src_nodes = msg->unpack_reachable_prop(&prev_loc, &dest_node, &dest_loc,
         &coord_req_id, &prev_req_id, &edge_props, &vector_clock, G->myid);
-
+    
+    if (!G->check_request(coord_req_id)) // checking if the request has been handled
+    {
     // wait till all updates for this shard arrive
     myclock_recd = vector_clock->at(G->myid - 1);
     G->wait_for_updates(myclock_recd);
@@ -241,6 +243,9 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         }
         src_end = src_nodes->size();
     }
+    } else {
+        std::cout << "Request " << coord_req_id << " killed\n";
+    }
     
     //send messages
     if (reached)
@@ -250,6 +255,9 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         msg->prep_reachable_rep(prev_req_id, true, (size_t) reach_node,
             G->myloc, std::move(deleted_nodes), std::move(del_times));
         G->send(std::move(prev_loc), msg->buf);
+        // telling everyone this request is done
+        G->add_done_request(coord_req_id);
+        G->broadcast_done_request(coord_req_id);
         // unmark just visited nodes
         for (node_iter = visited_nodes.begin(); node_iter < visited_nodes.end(); node_iter++)
         {
@@ -454,6 +462,7 @@ runner(db::graph *G)
     message::message msg(message::ERROR);
     std::unique_ptr<db::thread::unstarted_thread> thr;
     std::unique_ptr<std::thread> t;
+    size_t done_id;
 
     uint32_t loop_count = 0;
     while (1)
@@ -508,6 +517,11 @@ runner(db::graph *G)
                 G->thread_pool.add_request(std::move(thr));
                 break;
 
+            case message::REACHABLE_DONE:
+                rec_msg->unpack_done_request(&done_id);
+                G->add_done_request(done_id);
+                break;
+
             default:
                 std::cerr << "unexpected msg type " << code << std::endl;
         }
@@ -517,12 +531,12 @@ runner(db::graph *G)
 int
 main(int argc, char* argv[])
 {
-    if (argc != 2) 
+    if (argc != 3) 
     {
-        std::cerr << "Usage: " << argv[0] << " <myid> " << std::endl;
+        std::cerr << "Usage: " << argv[0] << " <myid> <num_shards> " << std::endl;
         return -1;
     }
-    db::graph G(atoi(argv[1]), SHARD_IPADDR, COORD_PORT + atoi(argv[1]));
+    db::graph G(atoi(argv[1]), SHARD_IPADDR, atoi(argv[2]));
     std::cout << "Weaver: shard instance " << G.myid << std::endl;
     runner(&G);
 

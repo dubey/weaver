@@ -20,6 +20,7 @@
 #include <sstream>
 #include <stdlib.h>
 #include <vector>
+#include <unordered_map>
 #include <po6/net/location.h>
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
@@ -34,6 +35,15 @@
 
 namespace db
 {
+    class bool_wrapper
+    {
+        public:
+            bool bval;
+            bool_wrapper() {
+                bval = false;
+            }
+    };
+
     // Pending batched request
     class batch_request
     {
@@ -73,10 +83,10 @@ namespace db
     class graph
     {
         public:
-            graph(int my_id, const char* ip_addr, in_port_t port);
+            graph(int my_id, const char* ip_addr, int num_shards);
 
         private:
-            po6::threads::mutex update_mutex;
+            po6::threads::mutex update_mutex, request_mutex;
             uint64_t my_clock;
             po6::threads::cond pending_update_cond;
 
@@ -84,6 +94,8 @@ namespace db
             int node_count;
             std::shared_ptr<po6::net::location> myloc;
             std::shared_ptr<po6::net::location> coord;
+            int num_shards;
+            po6::net::location **shard_locs;
             busybee_sta bb; // Busybee instance used for sending messages
             busybee_sta bb_recv; // Busybee instance used for receiving messages
             po6::threads::mutex bb_lock;
@@ -91,6 +103,8 @@ namespace db
             size_t outgoing_req_id_counter;
             po6::threads::mutex outgoing_req_id_counter_mutex;
             std::unordered_map<size_t, std::shared_ptr<batch_request>> pending_batch;
+            // TODO need clean up of old done requests
+            std::unordered_map<size_t, bool_wrapper> done_requests; // requests which need to be killed
             db::thread::pool thread_pool;
             
         public:
@@ -102,20 +116,25 @@ namespace db
             void add_edge_property(element::node *n, element::edge *e,
                 std::unique_ptr<common::property> prop, uint64_t time);
             void delete_all_edge_property(element::node *n, element::edge *e, uint32_t key, uint64_t time);
+            bool check_request(size_t req_id);
+            void add_done_request(size_t req_id);
+            void broadcast_done_request(size_t req_id); 
             bool mark_visited(element::node *n, size_t req_counter);
             bool remove_visited(element::node *n, size_t req_counter);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(std::unique_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> buf);
+            busybee_returncode send(po6::net::location *loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send_coord(std::auto_ptr<e::buffer> buf);
             void wait_for_updates(uint64_t recd_clock);
     };
 
     inline
-    graph :: graph(int my_id, const char* ip_addr, in_port_t port)
+    graph :: graph(int my_id, const char* ip_addr, int _num_shards)
         : my_clock(0)
         , pending_update_cond(&update_mutex)
         , node_count(0)
-        , myloc(new po6::net::location(ip_addr, port))
+        , num_shards(_num_shards)
+        , myloc(new po6::net::location(ip_addr, COORD_PORT + my_id))
         , coord(new po6::net::location(COORD_IPADDR, COORD_REC_PORT))
         , bb(myloc->address, myloc->port + SEND_PORT_INCR, 0)
         , bb_recv(myloc->address, myloc->port, 0)
@@ -123,6 +142,14 @@ namespace db
         , outgoing_req_id_counter(0)
         , thread_pool(NUM_THREADS)
     {
+        int i;
+        po6::net::location *temp_loc;
+        shard_locs = (po6::net::location **)malloc(sizeof(po6::net::location *) * num_shards);
+        for (i = 0; i < num_shards; i++)
+        {
+            temp_loc = new po6::net::location(ip_addr, COORD_PORT+i);
+            shard_locs[i] = temp_loc;
+        }
     }
 
     inline element::node*
@@ -214,6 +241,44 @@ namespace db
     }
 
     inline bool
+    graph :: check_request(size_t req_id)
+    {
+        bool ret;
+        request_mutex.lock();
+        if (done_requests[req_id].bval) {
+            ret = true;
+        } else {
+            done_requests.erase(req_id);
+            ret = false;
+        }
+        request_mutex.unlock();
+        return ret;
+    }
+
+    inline void
+    graph :: add_done_request(size_t req_id)
+    {
+        request_mutex.lock();
+        done_requests[req_id].bval = true;
+        request_mutex.unlock();
+    }
+
+    inline void
+    graph :: broadcast_done_request(size_t req_id)
+    {
+        int i;
+        message::message msg(message::REACHABLE_DONE);
+        for (i = 0; i < num_shards; i++)
+        {
+            msg.prep_done_request(req_id);
+            if (i == myid) {
+                continue;
+            }
+            send(shard_locs[i], msg.buf);
+        }
+    }
+
+    inline bool
     graph :: mark_visited(element::node *n, size_t req_counter)
     {
         return n->check_and_add_seen(req_counter);
@@ -241,6 +306,20 @@ namespace db
     
     inline busybee_returncode
     graph :: send(std::unique_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> msg)
+    {
+        busybee_returncode ret;
+        bb_lock.lock();
+        if ((ret = bb.send(*loc, msg)) != BUSYBEE_SUCCESS)
+        {
+            std::cerr << "msg send error: " << ret << std::endl;
+            //assert(ret == BUSYBEE_SUCCESS); //TODO what?
+        }
+        bb_lock.unlock();
+        return ret;
+    }
+    
+    inline busybee_returncode
+    graph :: send(po6::net::location *loc, std::auto_ptr<e::buffer> msg)
     {
         busybee_returncode ret;
         bb_lock.lock();
