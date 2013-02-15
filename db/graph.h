@@ -41,8 +41,6 @@ namespace db
             graph(const char* ip_addr, in_port_t port);
 
         private:
-            std::vector<element::node *> V;
-            std::vector<element::edge *> E;
             po6::threads::mutex update_mutex;
             uint64_t my_clock;
             po6::threads::cond pending_update_cond;
@@ -89,7 +87,6 @@ namespace db
         update_mutex.lock();
         my_clock++;
         assert(my_clock == time);
-        //V.push_back(new_node);
         pending_update_cond.broadcast();
         update_mutex.unlock();
         
@@ -111,7 +108,6 @@ namespace db
         update_mutex.lock();
         my_clock++;
         assert(my_clock == time);
-        //E.push_back(new_edge);
         pending_update_cond.broadcast();
         update_mutex.unlock();
 
@@ -175,17 +171,13 @@ namespace db
     inline bool
     graph :: mark_visited(element::node *n, size_t req_counter)
     {
-        uint32_t key = 0; //visited key
-        common::property p(key, req_counter, 0);
-        n->check_and_add_property(p);
+        n->check_and_add_seen(req_counter);
     }
 
     inline bool
     graph :: remove_visited(element::node *n, size_t req_counter)
     {
-        uint32_t key = 0; //visited key
-        common::property p(key, req_counter, 0);
-        n->remove_property(p);
+        n->remove_seen(req_counter);
     }
 
     inline busybee_returncode

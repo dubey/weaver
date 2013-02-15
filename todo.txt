@@ -11,3 +11,10 @@ Try to get rid of PO6_NDEBUG_LEAKS.
 Check memory leaks using valgrind.
 Do code profiling to identify bottleneck functions.
 Fault tolerant (chain replicated) coordinator and shards!
+
+--
+
+Expanding the API:
+1. Pagerank
+2. K shortest paths - topic graph
+3. Single source shortest paths

@@ -201,6 +201,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
     bool propagate_req = false; // need to propagate request onward
     std::unordered_map<po6::net::location, std::vector<size_t>> msg_batch; // batched messages to propagate
     std::unique_ptr<std::vector<size_t>> src_nodes;
+    std::vector<db::element::node *> visited_nodes; // nodes which are visited by this request, in case we need to unmark them
     size_t src_iter, src_end;
     std::unique_ptr<std::vector<size_t>> deleted_nodes(new std::vector<size_t>()); // to send back to requesting shard
     std::unique_ptr<std::vector<uint64_t>> del_times(new std::vector<uint64_t>()); // corresponding to deleted_nodes
@@ -234,6 +235,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
                 reached = true;
                 reach_node = (void *)n;
             } else if (!G->mark_visited(n, coord_req_id)) {
+                visited_nodes.push_back(n);
                 if (n->cache.entry_exists(*dest_loc, dest_node))
                 {
                     // we have a cached result
@@ -286,10 +288,20 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
     
     //send messages
     if (reached)
-    {   //need to send back ack
+    {   
+        std::vector<db::element::node *>::iterator node_iter;
+        // need to send back ack
         msg->prep_reachable_rep(prev_req_id, true, (size_t) reach_node,
             G->myloc, std::move(deleted_nodes), std::move(del_times));
         G->send(std::move(prev_loc), msg->buf);
+        // unmark just visited nodes
+        for (node_iter = visited_nodes.begin(); node_iter < visited_nodes.end(); node_iter++)
+        {
+            n = *node_iter;
+            n->update_mutex.lock();
+            G->remove_visited(n, coord_req_id);
+            n->update_mutex.unlock();
+        }
     } else if (propagate_req) {
         // the destination is not reachable locally in one hop from this server, so
         // now we have to contact all the reachable neighbors and see if they can reach
@@ -311,14 +323,8 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
             outgoing_req_id_counter_mutex.unlock();
             msg->prep_reachable_prop(&loc_iter->second, G->myloc, (size_t)dest_node, 
                 dest_loc, coord_req_id, my_outgoing_req_id, edge_props, vector_clock);
-            if (loc_iter->first == *G->myloc)
-            {   //no need to send message since it is local
-                std::unique_ptr<db::thread::unstarted_thread> t;
-                t.reset(new db::thread::unstarted_thread(handle_reachable_request, G, std::move(msg)));
-                thread_pool.add_request(std::move(t));
-            } else {
-                G->send(loc_iter->first, msg->buf);
-            }
+            // no local messages possible, so have to send via network
+            G->send(loc_iter->first, msg->buf);
         }
         request->coord_id = coord_req_id;
         request->prev_loc = std::move(prev_loc);
@@ -333,10 +339,19 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         request->mutex.unlock();
         msg_batch.clear();
     } else {
+        std::vector<db::element::node *>::iterator node_iter;
         //need to send back nack
         msg->prep_reachable_rep(prev_req_id, false, 0, G->myloc,
             std::move(deleted_nodes), std::move(del_times));
         G->send(std::move(prev_loc), msg->buf);
+        // unmark just visited nodes
+        for (node_iter = visited_nodes.begin(); node_iter < visited_nodes.end(); node_iter++)
+        {
+            n = *node_iter;
+            n->update_mutex.lock();
+            G->remove_visited(n, coord_req_id);
+            n->update_mutex.unlock();
+        }
     }
 }
 
@@ -435,7 +450,7 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
         }
     }
 
-    if (request.use_count() == 1)
+    if (request->num == 0)
     {
         //delete visited property
         std::vector<size_t>::iterator node_iter;
@@ -463,7 +478,7 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
             }
             */
         }
-        //implicitly deleting batch request
+        //implicitly deleting batch request as shared_ptr refcnt drops to 0
         return;
     }
     request->mutex.unlock();

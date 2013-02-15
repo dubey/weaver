@@ -34,7 +34,10 @@ namespace element
             std::vector<edge *> out_edges;
             cache::reach_cache cache;
             po6::threads::mutex update_mutex;
+            std::vector<size_t> seen; // requests which have been seen
             void add_edge(edge *e);
+            bool check_and_add_seen(size_t id);
+            void remove_seen(size_t id);
     };
 
     inline
@@ -47,6 +50,34 @@ namespace element
     node :: add_edge(edge *e)
     {
         out_edges.push_back(e);
+    }
+
+    inline bool
+    node :: check_and_add_seen(size_t id)
+    {
+        std::vector<size_t>::iterator iter;
+        for (iter = seen.begin(); iter < seen.end(); iter++)
+        {
+            if (id == *iter) {
+                return true;
+            }
+        }
+        seen.push_back(id);
+    }
+
+    inline void
+    node :: remove_seen(size_t id)
+    {
+        size_t pos = 0;
+        for (; pos < seen.size(); pos++)
+        {
+            if (seen[pos] == id) {
+                break;
+            }
+        }
+        if (pos < seen.size()) {
+            seen.erase(seen.begin() + pos);
+        }
     }
 
 }
