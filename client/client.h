@@ -149,14 +149,14 @@ local_clustering_coeffient(size_t node,
     busybee_returncode ret;
     double coeff;
     message::message msg(message::CLIENT_CLUSTERING_REQ);
-    msg.prep_client_rr_req(myloc.port, node1, node2, edge_props);
+    msg.prep_client_clustering_req(myloc.port, node, edge_props);
     send_coord(msg.buf);
     if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS)
     {
         std::cerr << "msg recv error: " << ret << std::endl;
         return false;
     }
-    msg.unpack_client_rr_reply(&reachable);
+    msg.unpack_client_clustering_reply(&coeff);
     return reachable;
 
 

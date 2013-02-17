@@ -362,6 +362,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     void *mem_addr;
     uint32_t rec_counter; // for reply
     bool is_reachable; // for reply
+    double coeff; // for reply
     size_t src_node; //for reply
     size_t num_del_nodes; //for reply
     std::unique_ptr<std::vector<size_t>> del_nodes(new std::vector<size_t>()); //for reply
@@ -402,6 +403,18 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             server->update_mutex.unlock();
             request->mutex.lock();
             request->reachable = is_reachable;
+            request->waiting = false;
+            request->reply.signal();
+            request->mutex.unlock();
+            break;
+
+        case message::CLUSTERING_REPLY:
+            msg->unpack_clustering_reply(&req_id, &coeff);
+            server->update_mutex.lock();
+            request = pending[req_id];
+            server->update_mutex.unlock();
+            request->mutex.lock();
+            request->clustering_coeff = coeff;
             request->waiting = false;
             request->reply.signal();
             request->mutex.unlock();
