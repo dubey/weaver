@@ -29,6 +29,7 @@ class pending_req
     public:
         void *addr;
         bool reachable;
+        double clustering_coeff;
         po6::threads::mutex mutex;
         bool waiting;
         po6::threads::cond reply;
@@ -294,6 +295,49 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
     return ret;
 }
 
+// compute the local clustering coefficient for a node
+double
+clustering_request(common::meta_element *node,
+    std::shared_ptr<std::vector<common::property>> edge_props, coordinator::central *server)
+{
+    pending_req *request;
+    message::message msg(message::CLUSTERING_REQ);
+    size_t req_id;
+    double ret;
+    
+    server->update_mutex.lock();
+    if (node->get_del_time() < MAX_TIME)
+    {
+        std::cerr << "node has been deleted, cannot perform request"
+            << std::endl;
+        server->update_mutex.unlock();
+        return 0; // or NaN?
+    }
+    request = new pending_req();
+    req_id = ++server->request_id;
+    pending[req_id] = request;
+    std::cout << "Clustering request number " << req_id << " for node "
+              << node1->get_addr() << " " << node1->get_loc_ptr()->port << std::endl;
+    request->mutex.lock();
+    msg.prep_clustering_prop((size_t) node->get_addr(), server->myrecloc, 
+            req_id, edge_props, server->vc.clocks);
+    server->update_mutex.unlock();
+    server->send(node->get_loc_ptr(), msg.buf);
+    
+    while (request->waiting)
+    {
+        request->reply.wait();
+    }
+    ret = request->coeff;
+    std::cout << "Clustering reply is " << ret << " for " << "request " << req_id << std::endl;
+    request->mutex.unlock();
+    delete request;
+    server->update_mutex.lock();
+    pending.erase(req_id);
+    server->update_mutex.unlock();
+    return ret;
+}
+
 timespec
 diff(timespec start, timespec end)
 {
@@ -405,6 +449,7 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
     uint32_t key;
     size_t new_elem;
     bool reachable;
+    double coefficient;
     auto edge_props = std::make_shared<std::vector<common::property>>();
     switch (m_type)
     {
@@ -443,6 +488,16 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
                 (common::meta_element *)elem2, edge_props, server);
             msg->change_type(message::CLIENT_REPLY);
             msg->prep_client_rr_reply(reachable);
+            server->client_send(*client_loc, msg->buf);
+            break;
+
+        case message::CLIENT_CLUSTERING_REQ: 
+            msg->unpack_client_clustering_req(&client_port, &elem1, edge_props);
+            client_loc->port = client_port;
+            coefficient = clustering_request((common::meta_element *)elem1,
+                    edge_props, server);
+            msg->change_type(message::CLIENT_REPLY);
+            msg->prep_client_clustering_reply(reachable);
             server->client_send(*client_loc, msg->buf);
             break;
 

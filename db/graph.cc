@@ -70,7 +70,7 @@ class batch_request
 class clustering_request
 {
     public:
-    std::unique_ptr<po6::net::location> prev_loc; // prev server's port
+    std::unique_ptr<po6::net::location> coordinator_loc;
     size_t id; // coordinator's req id
     std::unordered_map<po6::net::location, std::unordered_set<size_t>> nbrs;
     size_t edges; // numerator in calculation
@@ -80,7 +80,7 @@ class clustering_request
     clustering_request(std::unique_ptr<po6::net::location> reply_to, size_t req_id)
     {
         edges = 0;
-        prev_loc = std::move(reply_to);
+        coordinator_loc = std::move(reply_to);
         id = req_id;
     }
 };
@@ -476,8 +476,30 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
 } 
 
 inline void
-handle_clustering_response(clustering_request *request)
+add_clustering_response(db::graph *G, clustering_request *request, size_t to_add, std::unique_ptr<message::message> msg)
 {
+    request->mutex.unlock();
+    request->edges += to_add;
+    request->responses_left--;
+
+    if (request->responses_left == 0)
+    {
+        request->mutex.unlock();
+        // count num neighbors
+        size_t num_neighbors = 0;
+        for (auto pair : request->nbrs)
+        {
+            num_neighbors += pair.second.size();
+        }
+        double clustering_coeff = request->edges/ (num_neighbors*(num_neighbors-1));
+        msg.reset(new message::message(message::CLUSTERING_REPLY));
+        msg->prep_clustering_reply(request->id, clustering_coeff);
+        G->send(std::move(request->coordinator_loc), msg->buf);
+    }
+    else
+    {
+        request->mutex.unlock();
+    }
 
 }
 
@@ -586,16 +608,7 @@ handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
             nbr_count += find_num_valid_neighbors(G, (db::element::node *) node_ptr,
             &request->nbrs, edge_props, myclock_recd, vector_clock);
         }
-        request->mutex.unlock();
-        request->edges += nbr_count;
-        request->responses_left--;
-        if (request->responses_left == 0){
-            request->mutex.unlock();
-            handle_clustering_response(request);
-        }
-        else{
-            request->mutex.unlock();
-        }
+        add_clustering_response(G, request, nbr_count, std::move(msg));
     }
 }
 
@@ -625,6 +638,16 @@ handle_clustering_prop(db::graph *G, std::unique_ptr<message::message> msg){
     msg.reset(new message::message(message::CLUSTERING_PROP_REPLY));
     msg->prep_clustering_prop_reply(return_req_ptr, nbr_count);
     G->send(std::move(reply_loc), msg->buf);
+}
+
+void
+handle_clustering_prop_reply(db::graph *G, std::unique_ptr<message::message> msg){
+    clustering_request *req;
+    size_t to_add;
+
+    msg->unpack_clustering_prop_reply((size_t *) req, &to_add);
+
+    add_clustering_response(G, req, to_add, std::move(msg));
 }
 
 // server loop for the shard server

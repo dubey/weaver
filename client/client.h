@@ -39,6 +39,9 @@ class client
         void del_edge_prop(size_t node, size_t edge, uint32_t key);
         bool reachability_request(size_t node1, size_t node2,
             std::shared_ptr<std::vector<common::property>> edge_props);
+        double local_clustering_coeffient(size_t node,
+            std::shared_ptr<std::vector<common::property>> edge_props);
+ 
 
     private:
         void send_coord(std::auto_ptr<e::buffer> buf);
@@ -137,6 +140,26 @@ client :: reachability_request(size_t node1, size_t node2,
     }
     msg.unpack_client_rr_reply(&reachable);
     return reachable;
+}
+
+inline double
+local_clustering_coeffient(size_t node,
+            std::shared_ptr<std::vector<common::property>> edge_props)
+{
+    busybee_returncode ret;
+    double coeff;
+    message::message msg(message::CLIENT_CLUSTERING_REQ);
+    msg.prep_client_rr_req(myloc.port, node1, node2, edge_props);
+    send_coord(msg.buf);
+    if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS)
+    {
+        std::cerr << "msg recv error: " << ret << std::endl;
+        return false;
+    }
+    msg.unpack_client_rr_reply(&reachable);
+    return reachable;
+
+
 }
 
 inline void

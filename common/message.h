@@ -38,6 +38,7 @@ namespace message
         CLIENT_EDGE_DELETE_REQ,
         CLIENT_ADD_EDGE_PROP,
         CLIENT_DEL_EDGE_PROP,
+        CLIENT_CLUSTERING_REQ,
         CLIENT_REACHABLE_REQ,
         CLIENT_REPLY,
         NODE_CREATE_REQ,
@@ -92,8 +93,17 @@ namespace message
                 std::shared_ptr<std::vector<common::property>> edge_props);
             void unpack_client_rr_req(uint16_t *port, size_t *elem1, size_t *elem2,
                 std::shared_ptr<std::vector<common::property>> edge_props);
+
+            void prep_client_clustering_req(uint16_t port, size_t elem,
+                std::shared_ptr<std::vector<common::property>> edge_props);
+            void unpack_client_clustering_req(uint16_t *port, size_t *elem1, 
+                std::shared_ptr<std::vector<common::property>> edge_props);
+
             void prep_client_rr_reply(bool reachable);
             void unpack_client_rr_reply(bool *reachable);
+
+            void prep_client_clustering_reply(double coeff);
+            void unpack_client_clustering_reply(double *coeff);
             // Create functions, coordinator to shards
             void prep_node_create(size_t req_id, uint64_t creat_time);
             void unpack_node_create(size_t *req_id, uint64_t *creat_time);
@@ -167,13 +177,27 @@ namespace message
                 std::shared_ptr<std::vector<uint64_t>> *vector_clock,
                 int myid);
 
+            void prep_clustering_reply(
+                size_t request_id,
+                double coefficient);
+            void unpack_clustering_reply(
+                size_t *request_id,
+                double *coefficient);
+
             void prep_clustering_prop_reply(
                 size_t request_ptr,
                 size_t num_nbrs);
-            void prep_clustering_prop_reply(
+            void unpack_clustering_prop_reply(
                 size_t *request_ptr,
                 size_t *num_nbrs);
 
+            void prep_clustering_req(
+                size_t node,
+                std::unique_ptr<po6::net::location> reply_to,
+                size_t req_id,
+                std::shared_ptr<std::vector<common::property>> edge_props,
+                std::shared_ptr<std::vector<uint64_t>> vector_clock,
+                int myid);
             void unpack_clustering_req(
                 size_t *node,
                 std::unique_ptr<po6::net::location> *reply_to,
@@ -897,6 +921,22 @@ namespace message
     {
 
     }
+
+    inline
+    void message :: prep_clustering_reply(
+            size_t request_id,
+            double coefficient)
+    {
+
+    }
+
+    inline
+    void message :: unpack_clustering_reply(
+            size_t *request_id,
+            double *coefficient)
+    {
+
+    }
     
     inline
     void message :: prep_clustering_prop_reply(
@@ -906,7 +946,7 @@ namespace message
     }
 
     inline 
-    void message :: prep_clustering_prop_reply(
+    void message :: unpack_clustering_prop_reply(
                 size_t *request_ptr, size_t *num_nbrs)
     {
 
