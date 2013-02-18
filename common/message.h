@@ -165,13 +165,13 @@ namespace message
 
             void prep_clustering_prop(
                 size_t request_id,
-                std::unordered_set<size_t> *nbr_nodes,
+                std::unique_ptr<std::unordered_map<po6::net::location, std::unordered_set<size_t>>> nbr_nodes,
                 std::shared_ptr<po6::net::location> src_loc,
                 std::shared_ptr<std::vector<common::property>> edge_props,
                 std::shared_ptr<std::vector<uint64_t>> vector_clock);
             void unpack_clustering_prop(
                 size_t *request_id,
-                std::unordered_map<po6::net::location, std::unordered_set<size_t>> *nbr_nodes,
+                std::unique_ptr<std::unordered_map<po6::net::location, std::unordered_set<size_t>>> &nbr_nodes,
                 std::unique_ptr<po6::net::location> *src_loc,
                 std::shared_ptr<std::vector<common::property>> *edge_props,
                 std::shared_ptr<std::vector<uint64_t>> *vector_clock,
@@ -408,6 +408,72 @@ namespace message
         uint32_t temp;
         buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(enum msg_type)) >> temp;
         *reachable = (bool)temp;
+    }
+
+    inline void
+    message :: prep_client_clustering_req(uint16_t port, size_t elem,
+        std::shared_ptr<std::vector<common::property>> edge_props)
+    {
+        size_t num_props = edge_props->size();
+        int index, i;
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + 
+            sizeof(enum msg_type) + // type
+            sizeof(uint16_t) + // port
+            sizeof(size_t) + // node
+            sizeof(size_t) + // num props
+            edge_props->size() * (sizeof(uint32_t) + sizeof(size_t)))); // edge props
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << port << elem << num_props;
+        index = BUSYBEE_HEADER_SIZE+sizeof(enum msg_type)+sizeof(uint16_t)+2*sizeof(size_t);
+        for (i = 0; i < num_props; i++, index += (sizeof(uint32_t)+sizeof(size_t)))
+        {
+            buf->pack_at(index) << edge_props->at(i).key << edge_props->at(i).value;
+        }
+    }
+    
+    inline void
+    message :: unpack_client_clustering_req(uint16_t *port, size_t *elem1, 
+        std::shared_ptr<std::vector<common::property>> edge_props)
+    {
+        size_t temp1, num_props;
+        uint16_t temp3;
+        int index, i;
+        uint32_t code;
+        buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
+        assert((enum msg_type)code == CLIENT_CLUSTERING_REQ);
+        buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(enum msg_type)) >> temp3
+            >> temp1 >> num_props;
+        index = BUSYBEE_HEADER_SIZE+sizeof(enum msg_type)+sizeof(uint16_t)+2*sizeof(size_t);
+        common::property prop(0,0,0);
+        for (i = 0; i < num_props; i++, index += (sizeof(uint32_t)+sizeof(size_t)))
+        {
+            uint32_t key;
+            size_t val;
+            buf->unpack_from(index) >> key >> val;
+            prop.key = key;
+            prop.value = val;
+            edge_props->push_back(prop);
+        }
+        *port = temp3;
+        *elem1 = temp1;
+    }
+
+    inline void
+    message :: prep_client_clustering_reply(double coeff)
+    {
+        uint64_t temp = (uint64_t)coeff;
+        assert(type == CLIENT_REPLY);
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + 
+            sizeof(enum msg_type) + // type
+            sizeof(uint64_t))); // reachable
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << temp;
+    }
+
+    inline void
+    message :: unpack_client_clustering_reply(double *coeff)
+    {
+        uint64_t temp;
+        buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(enum msg_type)) >> temp;
+        *coeff = (double)temp;
     }
 
     inline void
@@ -902,24 +968,132 @@ namespace message
     inline 
     void message :: prep_clustering_prop(
             size_t request_id,
-            std::unordered_set<size_t> *nbr_nodes,
+            std::unique_ptr<std::unordered_map<po6::net::location, std::unordered_set<size_t>>> nbr_nodes,
             std::shared_ptr<po6::net::location> src_loc,
             std::shared_ptr<std::vector<common::property>> edge_props,
             std::shared_ptr<std::vector<uint64_t>> vector_clock)
     {
+        uint32_t index = BUSYBEE_HEADER_SIZE;
+        size_t num_keys = nbr_nodes->size();
+        size_t num_nbrs = 0;
+        for (auto pair : *nbr_nodes)
+        {
+            num_nbrs += pair.second.size();
 
+        }
+        size_t num_props = edge_props->size();
+        size_t i;
+        type = CLUSTERING_PROP;
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE +
+                    sizeof(enum msg_type) +
+                    sizeof(size_t) + //map size (num keys)
+                    num_keys * sizeof(size_t) + //set_size
+                    sizeof(uint32_t) + sizeof(uint16_t) + //return_loc
+                    sizeof(size_t) +//req_id
+                    sizeof(size_t) + // num props
+                    edge_props->size() * (sizeof(uint32_t) + sizeof(size_t)) + // edge props
+                    NUM_SHARDS * sizeof(uint64_t))); //vector clock
+
+        buf->pack_at(index) << type;
+        index += sizeof(enum msg_type);
+        for (i = 0; i < NUM_SHARDS; i++, index += sizeof(uint64_t))
+        {
+            buf->pack_at(index) << vector_clock->at(i);
+        }
+        buf->pack_at(index) << num_props;
+        index += sizeof(size_t);
+        for (i = 0; i < num_props; i++, index += (sizeof(uint32_t) + sizeof(size_t)))
+        {
+            buf->pack_at(index) << edge_props->at(i).key << edge_props->at(i).value;
+        }
+        buf->pack_at(index) << num_keys;
+        index += sizeof(size_t);
+        for (std::pair<po6::net::location, std::unordered_set<size_t>> pair : *nbr_nodes)
+        {
+            buf->pack_at(index) << pair.first.get_addr() << pair.first.port << pair.second.size(); //address and num nbrs at that address
+            index += +sizeof(uint32_t) + sizeof(uint16_t) + sizeof(size_t);
+            for (size_t nbr : pair.second){
+                buf->pack_at(index) << nbr;
+                index += sizeof(size_t);
+            }
+        }
+        buf->pack_at(index) << src_loc->get_addr() << src_loc->port << request_id; 
     }
 
     inline
     void message :: unpack_clustering_prop(
                 size_t *request_id,
-                std::unordered_map<po6::net::location, std::unordered_set<size_t>> *nbr_nodes,
+                std::unique_ptr<std::unordered_map<po6::net::location, std::unordered_set<size_t>>> &nbr_nodes,
                 std::unique_ptr<po6::net::location> *src_loc,
                 std::shared_ptr<std::vector<common::property>> *edge_props,
                 std::shared_ptr<std::vector<uint64_t>> *vector_clock,
                 int myid)
     {
+        assert(nbr_nodes->size()==0);
+        uint32_t index = BUSYBEE_HEADER_SIZE;
+        uint32_t _type;
+        std::unique_ptr<std::vector<size_t>> src(new std::vector<size_t>());
+        size_t dest, num_keys, num_props, i, temp;
+        uint32_t src_ipaddr;
+        uint16_t src_port;
+        size_t req_id;
+        std::unique_ptr<po6::net::location> _src_loc;
+        uint64_t myclock;
 
+        buf->unpack_from(index) >> _type;
+        assert(_type == CLUSTERING_PROP);
+        type = CLUSTERING_PROP;
+        index += sizeof(enum msg_type);
+        
+        vector_clock->reset(new std::vector<uint64_t>(NUM_SHARDS, 0));
+        for (i = 0; i < NUM_SHARDS; i++, index += sizeof(uint64_t))
+        {
+            buf->unpack_from(index) >> (**vector_clock)[i]; //dereferencing pointer to pointer
+            if (i == myid) {
+                myclock = (**vector_clock)[i];
+            }
+        }
+
+        buf->unpack_from(index) >> num_props;
+        index += sizeof(size_t);
+        common::property prop(0,0,myclock);
+        for (i = 0; i < num_props; i++, index += (sizeof(uint32_t) + sizeof(size_t)))
+        {
+            uint32_t key;
+            size_t val;
+            buf->unpack_from(index) >> key >> val;
+            prop.key = key;
+            prop.value = val;
+            (*edge_props)->push_back(prop);
+        }
+
+        buf->unpack_from(index) >> num_keys;
+        index += sizeof(size_t);
+        nbr_nodes.reset(new
+                std::unordered_map<po6::net::location,std::unordered_set<size_t>>); // can we set size Here xxx
+        for (i = 0; i < num_keys; i++)
+        {
+            uint32_t temp_addr;
+            uint16_t temp_port;
+            size_t set_size;
+            buf->unpack_from(index) >> temp_addr >> temp_port >> set_size; //address and num nbrs at that address
+            po6::net::location *temp_loc = new po6::net::location(temp_addr, temp_port);
+            index += +sizeof(uint32_t) + sizeof(uint16_t) + sizeof(size_t);
+            for (int j = 0; j < set_size; j++)
+            {
+                size_t nbr_addr;
+                buf->unpack_from(index) >> nbr_addr;
+                index += sizeof(size_t);
+                (*nbr_nodes)[*temp_loc].insert(nbr_addr);
+            }
+            //delete temp_loc;//xxx
+        }
+
+        buf->unpack_from(index) >> src_ipaddr >> src_port >> req_id;
+
+        *request_id = req_id;
+        _src_loc.reset(new po6::net::location(src_ipaddr, src_port));
+        *src_loc = std::move(_src_loc);
     }
 
     inline
@@ -927,7 +1101,14 @@ namespace message
             size_t request_id,
             double coefficient)
     {
+        uint32_t index = BUSYBEE_HEADER_SIZE;
+        type = CLUSTERING_REPLY;
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE +
+            sizeof(enum msg_type) +
+            sizeof(size_t) + //req id
+            sizeof(uint64_t))); //is_reachable
 
+        buf->pack_at(index) << type << request_id << (uint64_t) coefficient;
     }
 
     inline
@@ -935,21 +1116,47 @@ namespace message
             size_t *request_id,
             double *coefficient)
     {
+        uint32_t index = BUSYBEE_HEADER_SIZE;
+        uint32_t _type;
+        size_t id;
+        uint64_t coeff;
+        buf->unpack_from(index) >> _type;
+        assert(_type == CLUSTERING_REPLY);
+        index += sizeof(enum msg_type);
+        
+        buf->unpack_from(index) >> id >> coeff;
 
+        *request_id = id;
+        *coefficient = (double) coeff;
     }
     
     inline
     void message :: prep_clustering_prop_reply(
                 size_t request_ptr, size_t num_nbrs)
     {
+        uint32_t index = BUSYBEE_HEADER_SIZE;
+        type = CLUSTERING_PROP_REPLY;
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE +
+            sizeof(enum msg_type) + sizeof(size_t) + sizeof(size_t)));
 
+        buf->pack_at(index) << type << request_ptr << num_nbrs;
     }
 
     inline 
     void message :: unpack_clustering_prop_reply(
                 size_t *request_ptr, size_t *num_nbrs)
     {
+        uint32_t index = BUSYBEE_HEADER_SIZE;
+        uint32_t _type;
+        size_t req_ptr, nbrs;
+        buf->unpack_from(index) >> _type;
+        assert(_type == CLUSTERING_PROP_REPLY);
+        index += sizeof(enum msg_type);
+        
+        buf->unpack_from(index) >> req_ptr >> nbrs;
 
+        *request_ptr = req_ptr;
+        *num_nbrs = nbrs;
     }
 
     inline 

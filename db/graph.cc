@@ -72,7 +72,8 @@ class clustering_request
     public:
     std::unique_ptr<po6::net::location> coordinator_loc;
     size_t id; // coordinator's req id
-    std::unordered_map<po6::net::location, std::unordered_set<size_t>> nbrs;
+    std::unique_ptr<std::unordered_map<po6::net::location,
+        std::unordered_set<size_t>>> nbrs;
     size_t edges; // numerator in calculation
     size_t responses_left;
     po6::threads::mutex mutex;
@@ -487,7 +488,7 @@ add_clustering_response(db::graph *G, clustering_request *request, size_t to_add
         request->mutex.unlock();
         // count num neighbors
         size_t num_neighbors = 0;
-        for (auto pair : request->nbrs)
+        for (auto pair : *request->nbrs)
         {
             num_neighbors += pair.second.size();
         }
@@ -505,7 +506,7 @@ add_clustering_response(db::graph *G, clustering_request *request, size_t to_add
 
 inline size_t
 find_num_valid_neighbors(db::graph *G, db::element::node *n,
-std::unordered_map<po6::net::location, std::unordered_set<size_t>> *nbrs,
+std::unordered_map<po6::net::location, std::unordered_set<size_t>> &nbrs,
 std::shared_ptr<std::vector<common::property>> edge_props, uint64_t myclock_recd,
 std::shared_ptr<std::vector<uint64_t>> vector_clock)
 {
@@ -513,11 +514,11 @@ std::shared_ptr<std::vector<uint64_t>> vector_clock)
     for(db::element::edge *e : n->out_edges)
     {
         po6::net::location loc = e->nbr->get_loc();
-        if (nbrs->count(loc) < 1)
+        if (nbrs.count(loc) < 1)
             break;
 
         size_t node_ptr = (size_t) e->nbr->get_addr();
-        if ((*nbrs)[loc].count(node_ptr) > 0){
+        if (nbrs[loc].count(node_ptr) > 0){
             uint64_t nbrclock_recd = vector_clock->at(e->nbr->get_shard_id());
             bool use_edge = e->get_creat_time() <= myclock_recd  
                 && e->get_del_time() > myclock_recd // edge created and deleted in acceptable timeframe
@@ -581,20 +582,20 @@ handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
         }
         if (use_edge)
         {
-            request->nbrs[e->nbr->get_loc()].insert((size_t) e->nbr->get_addr());
+            (*request->nbrs)[e->nbr->get_loc()].insert((size_t) e->nbr->get_addr());
         }
     }
 
     std::unordered_set<size_t> *local_nbrs;
 
-    for (std::pair<po6::net::location,std::unordered_set<size_t>> p : request->nbrs)
+    for (std::pair<po6::net::location,std::unordered_set<size_t>> p : *request->nbrs)
     {
         if (p.first == *G->myloc)
         {   //neighbors on local machine
             local_nbrs = &p.second;
         } else {
             msg.reset(new message::message(message::CLUSTERING_PROP));
-            msg->prep_clustering_prop(coord_req_id, &p.second, G->myloc,
+            msg->prep_clustering_prop(coord_req_id, std::move(request->nbrs), G->myloc,
             edge_props, vector_clock);
             G->send(p.first, msg->buf);
         }
@@ -606,7 +607,7 @@ handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
         for (size_t node_ptr : *local_nbrs)
         {
             nbr_count += find_num_valid_neighbors(G, (db::element::node *) node_ptr,
-            &request->nbrs, edge_props, myclock_recd, vector_clock);
+            *request->nbrs, edge_props, myclock_recd, vector_clock);
         }
         add_clustering_response(G, request, nbr_count, std::move(msg));
     }
@@ -615,24 +616,25 @@ handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
 void
 handle_clustering_prop(db::graph *G, std::unique_ptr<message::message> msg){
     size_t return_req_ptr;
-    std::unordered_map<po6::net::location, std::unordered_set<size_t>> nbrs;
+    std::unique_ptr<std::unordered_map<po6::net::location,
+        std::unordered_set<size_t>>> nbrs;
     std::unique_ptr<po6::net::location> reply_loc;
     auto edge_props = std::make_shared<std::vector<common::property>>();
     auto vector_clock = std::make_shared<std::vector<uint64_t>>();
     uint64_t myclock_recd;
     int myid;
 
-    msg->unpack_clustering_prop(&return_req_ptr, &nbrs, &reply_loc, &edge_props,
+    msg->unpack_clustering_prop(&return_req_ptr, nbrs, &reply_loc, &edge_props,
     &vector_clock, myid);
 
     myclock_recd = vector_clock->at(myid-1);
 
     size_t nbr_count = 0;
-    std::unordered_set<size_t> temp = nbrs[*G->myloc];
+    std::unordered_set<size_t> temp = (*nbrs)[*G->myloc];
     for (size_t node_ptr : temp)
     {
         nbr_count += find_num_valid_neighbors(G, (db::element::node *) node_ptr,
-                &nbrs, edge_props, myclock_recd, vector_clock);
+                *nbrs, edge_props, myclock_recd, vector_clock);
     }
 
     msg.reset(new message::message(message::CLUSTERING_PROP_REPLY));
