@@ -26,6 +26,9 @@
 #include "common/vclock.h"
 #include "unordered_set"
 #include "unordered_map"
+#include "db/cache/cache.h" //so we get std::hash override for location
+
+
 
 
 namespace message

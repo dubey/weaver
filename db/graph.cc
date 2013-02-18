@@ -30,6 +30,8 @@
 #include "graph.h"
 #include "common/message.h"
 #include "threadpool/threadpool.h"
+#include "db/cache/cache.h" //so we have std::hash override for location
+
 
 // Pending batched request
 class batch_request
@@ -715,6 +717,24 @@ runner(db::graph *G)
 
             case message::REACHABLE_REPLY:
                 thr.reset(new db::thread::unstarted_thread(handle_reachable_reply, G, std::move(rec_msg)));
+                thread_pool.add_request(std::move(thr));
+                break;
+
+            case message::CLUSTERING_REQ:
+                thr.reset(new
+                db::thread::unstarted_thread(handle_clustering_request, G, std::move(rec_msg)));
+                thread_pool.add_request(std::move(thr));
+                break;
+
+            case message::CLUSTERING_PROP:
+                thr.reset(new
+                db::thread::unstarted_thread(handle_clustering_prop, G, std::move(rec_msg)));
+                thread_pool.add_request(std::move(thr));
+                break;
+
+            case message::CLUSTERING_PROP_REPLY:
+                thr.reset(new
+                db::thread::unstarted_thread(handle_clustering_prop_reply, G, std::move(rec_msg)));
                 thread_pool.add_request(std::move(thr));
                 break;
 

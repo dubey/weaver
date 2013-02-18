@@ -143,7 +143,7 @@ client :: reachability_request(size_t node1, size_t node2,
 }
 
 inline double
-local_clustering_coeffient(size_t node,
+client :: local_clustering_coeffient(size_t node,
             std::shared_ptr<std::vector<common::property>> edge_props)
 {
     busybee_returncode ret;
@@ -157,9 +157,7 @@ local_clustering_coeffient(size_t node,
         return false;
     }
     msg.unpack_client_clustering_reply(&coeff);
-    return reachable;
-
-
+    return coeff;
 }
 
 inline void
