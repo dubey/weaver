@@ -317,24 +317,26 @@ clustering_request(common::meta_element *node,
     req_id = ++server->request_id;
     pending[req_id] = request;
     std::cout << "Clustering request number " << req_id << " for node "
-              << node1->get_addr() << " " << node1->get_loc_ptr()->port << std::endl;
+              << node->get_addr() << " " << node->get_loc_ptr()->port;
     request->mutex.lock();
-    msg.prep_clustering_prop((size_t) node->get_addr(), server->myrecloc, 
+    msg.prep_clustering_req((size_t) node->get_addr(), server->myrecloc, 
             req_id, edge_props, server->vc.clocks);
     server->update_mutex.unlock();
     server->send(node->get_loc_ptr(), msg.buf);
     
+    std::cout << "... sent, now waiting";
     while (request->waiting)
     {
         request->reply.wait();
     }
-    ret = request->coeff;
+    ret = request->clustering_coeff;
     std::cout << "Clustering reply is " << ret << " for " << "request " << req_id << std::endl;
     request->mutex.unlock();
     delete request;
     server->update_mutex.lock();
     pending.erase(req_id);
     server->update_mutex.unlock();
+    std::cout << "reply is now" << ret << " for " << "request " << req_id << std::endl;
     return ret;
 }
 
@@ -510,7 +512,7 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
             coefficient = clustering_request((common::meta_element *)elem1,
                     edge_props, server);
             msg->change_type(message::CLIENT_REPLY);
-            msg->prep_client_clustering_reply(reachable);
+            msg->prep_client_clustering_reply(coefficient);
             server->client_send(*client_loc, msg->buf);
             break;
 

@@ -196,15 +196,14 @@ namespace message
 
             void prep_clustering_req(
                 size_t node,
-                std::unique_ptr<po6::net::location> reply_to,
+                std::shared_ptr<po6::net::location> reply_to,
                 size_t req_id,
                 std::shared_ptr<std::vector<common::property>> edge_props,
-                std::shared_ptr<std::vector<uint64_t>> vector_clock,
-                int myid);
+                std::shared_ptr<std::vector<uint64_t>> vector_clock);
             void unpack_clustering_req(
-                size_t *node,
+                size_t **node,
                 std::unique_ptr<po6::net::location> *reply_to,
-                size_t *req_id,
+                size_t *request_id,
                 std::shared_ptr<std::vector<common::property>> *edge_props,
                 std::shared_ptr<std::vector<uint64_t>> *vector_clock,
                 int myid);
@@ -463,11 +462,12 @@ namespace message
     inline void
     message :: prep_client_clustering_reply(double coeff)
     {
-        uint64_t temp = (uint64_t)coeff;
+        uint64_t temp;
         assert(type == CLIENT_REPLY);
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + 
             sizeof(enum msg_type) + // type
             sizeof(uint64_t))); // reachable
+        memcpy(&temp, &coeff, sizeof(double));
         buf->pack_at(BUSYBEE_HEADER_SIZE) << type << temp;
     }
 
@@ -476,7 +476,7 @@ namespace message
     {
         uint64_t temp;
         buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(enum msg_type)) >> temp;
-        *coeff = (double)temp;
+        memcpy(coeff, &temp, sizeof(double));
     }
 
     inline void
@@ -1032,7 +1032,6 @@ namespace message
                 std::shared_ptr<std::vector<uint64_t>> *vector_clock,
                 int myid)
     {
-        assert(nbr_nodes->size()==0);
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t _type;
         std::unique_ptr<std::vector<size_t>> src(new std::vector<size_t>());
@@ -1109,9 +1108,11 @@ namespace message
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE +
             sizeof(enum msg_type) +
             sizeof(size_t) + //req id
-            sizeof(uint64_t))); //is_reachable
+            sizeof(uint64_t))); //coeff
+        uint64_t coeff2;
+        memcpy(&coeff2, &coefficient, sizeof(double)); //to avoid casting issues
 
-        buf->pack_at(index) << type << request_id << (uint64_t) coefficient;
+        buf->pack_at(index) << type << request_id << coeff2;
     }
 
     inline
@@ -1130,7 +1131,7 @@ namespace message
         buf->unpack_from(index) >> id >> coeff;
 
         *request_id = id;
-        *coefficient = (double) coeff;
+        memcpy(coefficient, &coeff, sizeof(double)); //to avoid casting issues
     }
     
     inline
@@ -1163,14 +1164,97 @@ namespace message
     }
 
     inline 
-    void message :: unpack_clustering_req(size_t *node,
+    void message :: prep_clustering_req(
+                size_t node,
+                std::shared_ptr<po6::net::location> reply_to,
+                size_t req_id,
+                std::shared_ptr<std::vector<common::property>> edge_props,
+                std::shared_ptr<std::vector<uint64_t>> vector_clock)
+    {
+        uint32_t index = BUSYBEE_HEADER_SIZE;
+
+        size_t num_props = edge_props->size();
+        size_t i;
+        type = CLUSTERING_REQ;
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE +
+                    sizeof(enum msg_type) +
+                    sizeof(uint32_t) + sizeof(uint16_t) + //return_loc
+                    sizeof(size_t) +//node
+                    sizeof(size_t) +//req_id
+                    sizeof(size_t) + // num props
+                    edge_props->size() * (sizeof(uint32_t) + sizeof(size_t)) + // edge props
+                    NUM_SHARDS * sizeof(uint64_t))); //vector clock
+
+        buf->pack_at(index) << type;
+        index += sizeof(enum msg_type);
+        for (i = 0; i < NUM_SHARDS; i++, index += sizeof(uint64_t))
+        {
+            buf->pack_at(index) << vector_clock->at(i);
+        }
+        buf->pack_at(index) << num_props;
+        index += sizeof(size_t);
+        for (i = 0; i < num_props; i++, index += (sizeof(uint32_t) + sizeof(size_t)))
+        {
+            buf->pack_at(index) << edge_props->at(i).key << edge_props->at(i).value;
+        }
+
+        buf->pack_at(index) << reply_to->get_addr() << reply_to->port << req_id
+            << node; 
+    }
+
+    inline 
+    void message :: unpack_clustering_req(size_t **node,
             std::unique_ptr<po6::net::location> *reply_to,
-            size_t *req_id,
+            size_t *request_id,
             std::shared_ptr<std::vector<common::property>> *edge_props,
             std::shared_ptr<std::vector<uint64_t>> *vector_clock,
             int myid)
     {
+        uint32_t index = BUSYBEE_HEADER_SIZE;
+        uint32_t _type;
+        std::unique_ptr<std::vector<size_t>> src(new std::vector<size_t>());
+        size_t num_props, i, temp;
+        uint32_t reply_ipaddr;
+        uint16_t reply_port;
+        size_t req_id;
+        std::unique_ptr<po6::net::location> _reply_loc;
+        uint64_t myclock;
+        size_t temp_node;
 
+        buf->unpack_from(index) >> _type;
+        assert(_type == CLUSTERING_REQ);
+        type = CLUSTERING_REQ;
+        index += sizeof(enum msg_type);
+        
+        vector_clock->reset(new std::vector<uint64_t>(NUM_SHARDS, 0));
+        for (i = 0; i < NUM_SHARDS; i++, index += sizeof(uint64_t))
+        {
+            buf->unpack_from(index) >> (**vector_clock)[i]; //dereferencing pointer to pointer
+            if (i == myid) {
+                myclock = (**vector_clock)[i];
+            }
+        }
+
+        buf->unpack_from(index) >> num_props;
+        index += sizeof(size_t);
+        common::property prop(0,0,myclock);
+        for (i = 0; i < num_props; i++, index += (sizeof(uint32_t) + sizeof(size_t)))
+        {
+            uint32_t key;
+            size_t val;
+            buf->unpack_from(index) >> key >> val;
+            prop.key = key;
+            prop.value = val;
+            (*edge_props)->push_back(prop);
+        }
+
+        buf->unpack_from(index) >> reply_ipaddr >> reply_port >> req_id >>
+            temp_node;
+
+        *node = (size_t *) temp_node;
+        *request_id = req_id;
+        _reply_loc.reset(new po6::net::location(reply_ipaddr, reply_port));
+        *reply_to = std::move(_reply_loc);
     }
 } //namespace message
 

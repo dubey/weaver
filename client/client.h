@@ -39,7 +39,7 @@ class client
         void del_edge_prop(size_t node, size_t edge, uint32_t key);
         bool reachability_request(size_t node1, size_t node2,
             std::shared_ptr<std::vector<common::property>> edge_props);
-        double local_clustering_coeffient(size_t node,
+        double local_clustering_coefficient(size_t node,
             std::shared_ptr<std::vector<common::property>> edge_props);
  
 
@@ -143,7 +143,7 @@ client :: reachability_request(size_t node1, size_t node2,
 }
 
 inline double
-client :: local_clustering_coeffient(size_t node,
+client :: local_clustering_coefficient(size_t node,
             std::shared_ptr<std::vector<common::property>> edge_props)
 {
     busybee_returncode ret;
