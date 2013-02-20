@@ -26,11 +26,10 @@ namespace common
     class meta_element
     {
         public:
-            meta_element(std::shared_ptr<po6::net::location> server, 
-                uint64_t t_creat, uint64_t t_delete, void *mem_addr);
+            meta_element(int loc, uint64_t t_creat, uint64_t t_delete, void *mem_addr);
         
         protected:
-            std::shared_ptr<po6::net::location> myloc;
+            int myloc;
             uint64_t creat_time;
             uint64_t del_time;
             void *elem_addr; //memory address of this element on shard server
@@ -40,15 +39,12 @@ namespace common
             uint64_t get_del_time();
             void update_del_time(uint64_t _del_time);
             void* get_addr();
-            po6::net::location get_loc();
-            std::shared_ptr<po6::net::location> get_loc_ptr();
-            int get_shard_id();
+            int get_loc();
     };
 
     inline
-    meta_element :: meta_element(std::shared_ptr<po6::net::location> server, 
-        uint64_t t_creat, uint64_t t_delete, void *mem_addr)
-        : myloc(server)
+    meta_element :: meta_element(int loc, uint64_t t_creat, uint64_t t_delete, void *mem_addr)
+        : myloc(loc)
         , creat_time(t_creat)
         , del_time(t_delete)
         , elem_addr(mem_addr)
@@ -79,24 +75,10 @@ namespace common
         return elem_addr;
     }
 
-    inline po6::net::location
+    inline int
     meta_element :: get_loc()
     {
-        return *myloc;
-    }
-
-    inline std::shared_ptr<po6::net::location>
-    meta_element :: get_loc_ptr()
-    {
         return myloc;
-    }
-
-    // TODO this is a hack, until the system is running on a single maching
-    // id is decided by which port the shard is running on
-    inline int
-    meta_element :: get_shard_id()
-    {
-        return (myloc->port - COORD_PORT - 1);
     }
 }
 #endif //__META_ELEMENT__

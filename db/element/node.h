@@ -20,7 +20,6 @@
 
 #include "element.h"
 #include "edge.h"
-#include "db/cache/cache.h"
 
 namespace db
 {
@@ -42,7 +41,6 @@ namespace element
         
         public:
             std::vector<edge *> out_edges;
-            cache::reach_cache cache;
             po6::threads::mutex update_mutex;
             std::unordered_map<size_t, bool_wrapper> seen; // requests which have been seen
             void add_edge(edge *e);

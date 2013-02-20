@@ -1,6 +1,6 @@
 CC=g++-4.7
 INCLUDE_DIRS=-I.. -I.
-CFLAGS=-g -O0 -std=c++0x
+CFLAGS=-g -O0 -std=c++0x -Wall
 LIBS_DIR=-L/usr/local/lib
 LIBS=-lbusybee-sta -le -lrt -pthread
 

@@ -29,4 +29,5 @@
 #define MAX_PORT (COORD_PORT + NUM_SHARDS)
 #define SEND_PORT_INCR 1000 // outgoing port increment for shard servers
 #define NUM_THREADS 4
+#define SHARDS_DESC_FILE "../common/shards"
 #endif

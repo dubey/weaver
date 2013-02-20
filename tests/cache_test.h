@@ -18,14 +18,14 @@ void
 cache_test()
 {
     cache::reach_cache c;
-    po6::net::location loc1("127.0.0.1", 42);
-    po6::net::location loc2("10.10.1.1", 84);
-    c.insert_entry(loc1, (void*)0xdeadbeef, true);
-    c.insert_entry(loc2, (void*)0xcafebabe, false);
+    c.insert_entry(42, 84, 21);
+    c.insert_entry(20, 40, 60);
+    assert(c.entry_exists(42, 84));
+    assert(c.entry_exists(20, 40));
+    assert(!c.entry_exists(30, 60));
 
-    assert(c.entry_exists(loc1, (void*)0xdeadbeef));
-    assert(c.entry_exists(loc2, (void*)0xcafebabe));
-    assert(!c.entry_exists(loc2, (void*)0xdeadbeef));
-    assert(!c.get_cached_value(loc2, (void*)0xcafebabe));  
-    assert(c.get_cached_value(loc1, (void*)0xdeadbeef));  
+    c.remove_entry(21);
+    assert(!c.entry_exists(42, 84));
+    assert(c.entry_exists(20, 40));
+    assert(!c.entry_exists(30, 60));
 }

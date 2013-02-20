@@ -15,11 +15,10 @@
 #ifndef __GRAPH__
 #define __GRAPH__
 
-#include <iostream>
-
-#include <sstream>
 #include <stdlib.h>
 #include <vector>
+#include <fstream>
+#include <iostream>
 #include <unordered_map>
 #include <po6/net/location.h>
 #include <po6/threads/mutex.h>
@@ -31,6 +30,7 @@
 #include "common/meta_element.h"
 #include "element/node.h"
 #include "element/edge.h"
+#include "cache/cache.h"
 #include "threadpool/threadpool.h"
 
 namespace db
@@ -48,14 +48,14 @@ namespace db
     class batch_request
     {
         public:
-        std::unique_ptr<po6::net::location> prev_loc; // prev server's port
+        int prev_loc; // prev server's id
         size_t coord_id; // coordinator's req id
         size_t prev_id; // prev server's req id
         int num; // number of onward requests
         bool reachable;
         std::unique_ptr<std::vector<size_t>> src_nodes;
         void *dest_addr; // dest node's handle
-        std::shared_ptr<po6::net::location> dest_loc; // dest node's port
+        int dest_loc; // dest node's server id
         std::unique_ptr<std::vector<size_t>> del_nodes; // deleted nodes
         std::unique_ptr<std::vector<uint64_t>> del_times; // delete times corr. to del_nodes
         po6::threads::mutex mutex;
@@ -70,20 +70,20 @@ namespace db
 
         batch_request(const batch_request &tup)
         {
-            prev_loc.reset(new po6::net::location(*tup.prev_loc));
+            prev_loc = tup.prev_loc;
             prev_id = tup.prev_id;
             num = tup.num;
             reachable = tup.reachable;
             src_nodes.reset(new std::vector<size_t>(*tup.src_nodes));
             dest_addr = tup.dest_addr;
-            dest_loc.reset(new po6::net::location(*tup.dest_loc));
+            dest_loc = tup.dest_loc;
         }
     };
 
     class graph
     {
         public:
-            graph(int my_id, const char* ip_addr, int num_shards);
+            graph(int my_id, const char* ip_addr, int port);
 
         private:
             po6::threads::mutex update_mutex, request_mutex;
@@ -95,11 +95,13 @@ namespace db
             std::shared_ptr<po6::net::location> myloc;
             std::shared_ptr<po6::net::location> coord;
             int num_shards;
-            po6::net::location **shard_locs;
+            po6::net::location **shard_locs; // po6 locations for each shard
+            cache::reach_cache **caches; // caches corresponding to each shard
             busybee_sta bb; // Busybee instance used for sending messages
             busybee_sta bb_recv; // Busybee instance used for receiving messages
-            po6::threads::mutex bb_lock;
+            po6::threads::mutex bb_lock; // Busybee lock
             int myid;
+            // For reachability requests
             size_t outgoing_req_id_counter;
             po6::threads::mutex outgoing_req_id_counter_mutex;
             std::unordered_map<size_t, std::shared_ptr<batch_request>> pending_batch;
@@ -124,17 +126,18 @@ namespace db
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(std::unique_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(po6::net::location *loc, std::auto_ptr<e::buffer> buf);
+            busybee_returncode send(int loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send_coord(std::auto_ptr<e::buffer> buf);
             void wait_for_updates(uint64_t recd_clock);
     };
 
     inline
-    graph :: graph(int my_id, const char* ip_addr, int _num_shards)
+    graph :: graph(int my_id, const char* ip_addr, int port)
         : my_clock(0)
         , pending_update_cond(&update_mutex)
         , node_count(0)
-        , num_shards(_num_shards)
-        , myloc(new po6::net::location(ip_addr, COORD_PORT + my_id))
+        , num_shards(NUM_SHARDS)
+        , myloc(new po6::net::location(ip_addr, port))
         , coord(new po6::net::location(COORD_IPADDR, COORD_REC_PORT))
         , bb(myloc->address, myloc->port + SEND_PORT_INCR, 0)
         , bb_recv(myloc->address, myloc->port, 0)
@@ -142,14 +145,23 @@ namespace db
         , outgoing_req_id_counter(0)
         , thread_pool(NUM_THREADS)
     {
-        int i;
+        int i, inport;
         po6::net::location *temp_loc;
+        cache::reach_cache *temp_cache;
+        std::string ipaddr;
+        std::ifstream file(SHARDS_DESC_FILE);
         shard_locs = (po6::net::location **)malloc(sizeof(po6::net::location *) * num_shards);
-        for (i = 0; i < num_shards; i++)
+        caches = (cache::reach_cache **)malloc(sizeof(cache::reach_cache *) * num_shards);
+        i = 0;
+        while (file >> ipaddr >> inport)
         {
-            temp_loc = new po6::net::location(ip_addr, COORD_PORT+i);
+            temp_loc = new po6::net::location(ipaddr.c_str(), inport);
             shard_locs[i] = temp_loc;
+            temp_cache = new cache::reach_cache();
+            caches[i] = temp_cache;
+            ++i;
         }
+        file.close();
     }
 
     inline element::node*
@@ -274,7 +286,7 @@ namespace db
             if (i == myid) {
                 continue;
             }
-            send(shard_locs[i], msg.buf);
+            send(i, msg.buf);
         }
     }
 
@@ -327,6 +339,22 @@ namespace db
         {
             std::cerr << "msg send error: " << ret << std::endl;
             //assert(ret == BUSYBEE_SUCCESS); //TODO what?
+        }
+        bb_lock.unlock();
+        return ret;
+    }
+
+    inline busybee_returncode
+    graph :: send(int loc, std::auto_ptr<e::buffer> msg)
+    {
+        if (loc == -1) {
+            return send_coord(msg);
+        }
+        busybee_returncode ret;
+        bb_lock.lock();
+        if ((ret = bb.send(*shard_locs[loc], msg)) != BUSYBEE_SUCCESS)
+        {
+            std::cerr << "msg send error: " << ret << std::endl;
         }
         bb_lock.unlock();
         return ret;

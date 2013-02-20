@@ -49,30 +49,29 @@ create_node(coordinator::central *server)
 {
     pending_req *request; 
     common::meta_element *new_node;
-    std::shared_ptr<po6::net::location> shard_loc_ptr;
     uint64_t creat_time;
-    void *node_addr; // node handle on shard server
     message::message msg(message::NODE_CREATE_REQ);
-    server->port_ctr = (server->port_ctr + 1) % NUM_SHARDS;
-    shard_loc_ptr = server->shards[server->port_ctr]; // node will be placed on this shard server
+    int shard_id;
     size_t req_id;
 
     server->update_mutex.lock();
-    creat_time = ++server->vc.clocks->at(server->port_ctr); // incrementing vector clock
+    server->port_ctr = (server->port_ctr + 1) % NUM_SHARDS;
+    shard_id = server->port_ctr; // node will be placed on this shard server
+    creat_time = ++server->vc.clocks->at(shard_id); // incrementing vector clock
     request = new pending_req();
     request->mutex.lock();
     req_id = ++server->request_id;
     pending[req_id] = request;
     msg.prep_node_create(req_id, creat_time);
     server->update_mutex.unlock();
-    server->send(shard_loc_ptr, msg.buf);
+    server->send(shard_id, msg.buf);
     
     // waiting for reply from shard
     while (request->waiting)
     {
         request->reply.wait();
     }
-    new_node = new common::meta_element(shard_loc_ptr, creat_time, MAX_TIME, request->addr);
+    new_node = new common::meta_element(shard_id, creat_time, MAX_TIME, request->addr);
     request->mutex.unlock();
     delete request;
     server->update_mutex.lock();
@@ -80,7 +79,7 @@ create_node(coordinator::central *server)
     server->update_mutex.unlock();
     server->add_node(new_node);
     //std::cout << "Node id is " << (void *)new_node << " " <<
-    //    new_node->get_addr() << std::endl;
+    //    new_node->get_addr() << " " << new_node->get_loc() << std::endl;
     return (void *)new_node;
 }
 
@@ -91,27 +90,26 @@ create_edge(common::meta_element *node1, common::meta_element *node2, coordinato
     pending_req *request;
     common::meta_element *new_edge;
     uint64_t creat_time;
-    void *edge_addr;
     message::message msg(message::EDGE_CREATE_REQ);
     size_t req_id;
 
     //TODO need checks for given node_handles
     server->update_mutex.lock();
-    creat_time = ++server->vc.clocks->at(node1->get_shard_id());
+    creat_time = ++server->vc.clocks->at(node1->get_loc());
     request = new pending_req();
     request->mutex.lock();
     req_id = ++server->request_id;
     pending[req_id] = request;
     msg.prep_edge_create(req_id, (size_t)node1->get_addr(), (size_t)node2->get_addr(),
-        node2->get_loc_ptr(), node2->get_creat_time(), creat_time);
+        node2->get_loc(), node2->get_creat_time(), creat_time);
     server->update_mutex.unlock();
-    server->send(node1->get_loc_ptr(), msg.buf);
+    server->send(node1->get_loc(), msg.buf);
     
     while (request->waiting)
     {
         request->reply.wait();
     }
-    new_edge = new common::meta_element(node1->get_loc_ptr(), creat_time, MAX_TIME, request->addr);
+    new_edge = new common::meta_element(node1->get_loc(), creat_time, MAX_TIME, request->addr);
     request->mutex.unlock();
     delete request;
     server->update_mutex.lock();
@@ -139,7 +137,7 @@ delete_node(common::meta_element *node, coordinator::central *server)
         server->update_mutex.unlock();
         return;
     }
-    del_time = ++server->vc.clocks->at(node->get_shard_id());
+    del_time = ++server->vc.clocks->at(node->get_loc());
     node->update_del_time(del_time);
     request = new pending_req();
     request->mutex.lock();
@@ -147,7 +145,7 @@ delete_node(common::meta_element *node, coordinator::central *server)
     pending[req_id] = request;
     msg.prep_node_delete(req_id, (size_t)node->get_addr(), del_time);
     server->update_mutex.unlock();
-    server->flaky_send(node->get_loc_ptr(), msg.buf, true);
+    server->flaky_send(node->get_loc(), msg.buf, true);
 
     // waiting for reply from shard
     while (request->waiting)
@@ -177,7 +175,7 @@ delete_edge(common::meta_element *node, common::meta_element *edge, coordinator:
         server->update_mutex.unlock();
         return;
     }
-    del_time = ++server->vc.clocks->at(node->get_shard_id());
+    del_time = ++server->vc.clocks->at(node->get_loc());
     edge->update_del_time(del_time);
     request = new pending_req();
     request->mutex.lock();
@@ -185,7 +183,7 @@ delete_edge(common::meta_element *node, common::meta_element *edge, coordinator:
     pending[req_id] = request;
     msg.prep_edge_delete(req_id, (size_t)node->get_addr(), (size_t)edge->get_addr(), del_time);
     server->update_mutex.unlock();
-    server->flaky_send(node->get_loc_ptr(), msg.buf, true);
+    server->flaky_send(node->get_loc(), msg.buf, true);
     
     while (request->waiting)
     {
@@ -214,13 +212,13 @@ add_edge_property(common::meta_element *node, common::meta_element *edge,
         server->update_mutex.unlock();
         return;
     }
-    time = ++server->vc.clocks->at(node->get_shard_id());
+    time = ++server->vc.clocks->at(node->get_loc());
     req_id = ++server->request_id;
     msg.prep_add_prop(req_id, (size_t)node->get_addr(), (size_t)edge->get_addr(),
         key, value, time);
     server->update_mutex.unlock();
     std::cout << "adding edge property\n";
-    server->send(node->get_loc_ptr(), msg.buf);
+    server->send(node->get_loc(), msg.buf);
 }
 
 void
@@ -238,13 +236,13 @@ delete_edge_property(common::meta_element *node, common::meta_element *edge,
         server->update_mutex.unlock();
         return;
     }
-    time = ++server->vc.clocks->at(node->get_shard_id());
+    time = ++server->vc.clocks->at(node->get_loc());
     req_id = ++server->request_id;
     msg.prep_del_prop(req_id, (size_t)node->get_addr(), (size_t)edge->get_addr(),
         key, time);
     server->update_mutex.unlock();
     std::cout << "deleting edge property\n";
-    server->send(node->get_loc_ptr(), msg.buf);
+    server->send(node->get_loc(), msg.buf);
 }
 
 // is node1 reachable from node2 by only traversing edges with properties given
@@ -272,13 +270,13 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
     req_id = ++server->request_id;
     pending[req_id] = request;
     std::cout << "Reachability request number " << req_id << " from source"
-              << " node " << node1->get_addr() << " " << node1->get_loc_ptr()->port << " to destination node "
-              << node2->get_addr()<< " " << node2->get_loc_ptr()->port << std::endl;
+              << " node " << node1->get_addr() << " " << node1->get_loc() << " to destination node "
+              << node2->get_addr() << std::endl;
     request->mutex.lock();
-    msg.prep_reachable_prop(&src, server->myrecloc, (size_t)node2->get_addr(),
-        node2->get_loc_ptr(), req_id, req_id, edge_props, server->vc.clocks);
+    msg.prep_reachable_prop(&src, -1, (size_t)node2->get_addr(),
+        node2->get_loc(), req_id, req_id, edge_props, server->vc.clocks);
     server->update_mutex.unlock();
-    server->send(node1->get_loc_ptr(), msg.buf);
+    server->send(node1->get_loc(), msg.buf);
     
     while (request->waiting)
     {
@@ -316,9 +314,9 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     size_t req_id;
     pending_req *request;
     size_t mem_addr;
-    uint32_t rec_counter; // for reply
     bool is_reachable; // for reply
     size_t src_node; //for reply
+    int src_loc; // for reply
     size_t num_del_nodes; //for reply
     std::unique_ptr<std::vector<size_t>> del_nodes(new std::vector<size_t>()); //for reply
     std::unique_ptr<std::vector<uint64_t>> del_times(new std::vector<uint64_t>()); //for reply
@@ -351,7 +349,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             break;
 
         case message::REACHABLE_REPLY:
-            msg->unpack_reachable_rep(&req_id, &is_reachable, &src_node,
+            msg->unpack_reachable_rep(&req_id, &is_reachable, &src_node, &src_loc,
                 &num_del_nodes, &del_nodes, &del_times);
             server->update_mutex.lock();
             request = pending[req_id];

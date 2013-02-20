@@ -47,7 +47,7 @@ namespace element
             bool has_property(common::property prop);
             bool check_and_add_property(common::property prop);
             void update_del_time(uint64_t del_time);
-            common::meta_element get_meta_element();
+            //common::meta_element get_meta_element();
             uint64_t get_creat_time();
             uint64_t get_del_time();
             
@@ -126,12 +126,14 @@ namespace element
         del_time = _del_time;
     }
 
+    /*
     inline common::meta_element
     element :: get_meta_element()
     {
         common::meta_element ret(myloc, creat_time, del_time, elem_addr);
         return ret;
     }
+    */
 
     inline uint64_t
     element :: get_creat_time()

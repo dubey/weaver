@@ -77,7 +77,8 @@ multiple_stress_client()
             {
                 second = rand() % NUM_NODES;
             }
-            std::cout << "Req " << i << " result "
+            std::cout << "Starting... ";
+            std::cout << "Done! Req " << i << " result "
                 << c.reachability_request(nodes[first], nodes[second], edge_props) << std::endl;
         }
     }

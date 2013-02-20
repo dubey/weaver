@@ -16,6 +16,7 @@
 #define __CENTRAL__
 
 #include <vector>
+#include <fstream>
 #include <random> // XXX for testing
 #include <chrono>
 #include <thread>
@@ -61,10 +62,10 @@ namespace coordinator
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(std::shared_ptr<po6::net::location> loc,
                 std::auto_ptr<e::buffer> buf);
+            busybee_returncode send(int shard_id, std::auto_ptr<e::buffer> buf);
             busybee_returncode client_send(po6::net::location loc,
                 std::auto_ptr<e::buffer> buf);
-            busybee_returncode flaky_send(std::shared_ptr<po6::net::location> loc,
-                std::auto_ptr<e::buffer> buf, bool delay);
+            busybee_returncode flaky_send(int loc, std::auto_ptr<e::buffer> buf, bool delay);
     };
 
     inline
@@ -83,13 +84,20 @@ namespace coordinator
         , generator((unsigned)42) // fixed seed for deterministic random numbers
         , dist(0.0, 1.0)
     {
-        int i;
         // initialize array of shard server locations
-        for (i = 1; i <= NUM_SHARDS; i++)
-        {
-            auto new_shard = std::make_shared<po6::net::location>(SHARD_IPADDR, COORD_PORT + i);
-            shards.push_back(new_shard);
+        std::ifstream file(SHARDS_DESC_FILE);
+        std::string ipaddr;
+        int port;
+        if (file != NULL) {
+            while (file >> ipaddr >> port)
+            {
+                auto new_shard = std::make_shared<po6::net::location>(ipaddr.c_str(), port);
+                shards.push_back(new_shard);
+            }
+        } else {
+            std::cerr << "File " << SHARDS_DESC_FILE << " not found.\n";
         }
+        file.close();
     }
 
     inline void
@@ -115,7 +123,7 @@ namespace coordinator
         bb_mutex.lock();
         if ((ret = bb.send(loc, buf)) != BUSYBEE_SUCCESS)
         {
-            std::cerr << "message sending error " << ret << std::endl;
+            std::cerr << "message sending error: " << ret << std::endl;
         }
         bb_mutex.unlock();
         return ret;
@@ -128,7 +136,20 @@ namespace coordinator
         bb_mutex.lock();
         if ((ret = bb.send(*loc, buf)) != BUSYBEE_SUCCESS)
         {
-            std::cerr << "message sending error " << ret << std::endl;
+            std::cerr << "message sending error: " << ret << std::endl;
+        }
+        bb_mutex.unlock();
+        return ret;
+    }
+
+    inline busybee_returncode
+    central :: send(int shard_id, std::auto_ptr<e::buffer> buf)
+    {
+        busybee_returncode ret;
+        bb_mutex.lock();
+        if ((ret = bb.send(*shards[shard_id], buf)) != BUSYBEE_SUCCESS)
+        {
+            std::cerr << "message sending error: " << ret << std::endl;
         }
         bb_mutex.unlock();
         return ret;
@@ -148,8 +169,7 @@ namespace coordinator
     }
     
     inline busybee_returncode
-    central :: flaky_send(std::shared_ptr<po6::net::location> loc,
-        std::auto_ptr<e::buffer> buf, bool delay)
+    central :: flaky_send(int loc, std::auto_ptr<e::buffer> buf, bool delay)
     {
         busybee_returncode ret;
         if (dist(generator) <= 0.5 && delay) // 50% messages delayed
@@ -158,7 +178,7 @@ namespace coordinator
             std::this_thread::sleep_for(duration);
         }
         bb_mutex.lock();
-        if ((ret = bb.send(*loc, buf)) != BUSYBEE_SUCCESS)
+        if ((ret = bb.send(*shards[loc], buf)) != BUSYBEE_SUCCESS)
         {
             std::cerr << "message sending error " << ret << std::endl;
         }
