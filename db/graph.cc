@@ -629,7 +629,6 @@ handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
     {
         for (size_t node_ptr : request->nbrs->at(*G->myloc))
         {
-            std::cout << "\ncouting for local neighbors\n";
             nbr_count += find_num_valid_neighbors(G, (db::element::node *) node_ptr,
             *request->nbrs, edge_props, myclock_recd, vector_clock);
         }

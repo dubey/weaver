@@ -982,18 +982,21 @@ namespace message
         for (auto pair : *nbr_nodes)
         {
             num_nbrs += pair.second.size();
-
         }
         size_t num_props = edge_props->size();
         size_t i;
         type = CLUSTERING_PROP;
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE +
                     sizeof(enum msg_type) +
-                    sizeof(size_t) + //map size (num keys)
-                    num_keys * sizeof(size_t) + //set_size
+                    sizeof(size_t) + //map size prefix (num keys)
+                    num_keys * sizeof(size_t) + //set size prefix
+                    num_keys * (sizeof(uint32_t)+sizeof(uint16_t)) + //map keys ip + port
+                    num_nbrs * sizeof(size_t) + //set contents
                     sizeof(uint32_t) + sizeof(uint16_t) + //return_loc
                     sizeof(size_t) +//req_id
                     sizeof(size_t) + // num props
+                    sizeof(uint32_t) + //src ip addr
+                    sizeof(uint16_t) + //src port
                     edge_props->size() * (sizeof(uint32_t) + sizeof(size_t)) + // edge props
                     NUM_SHARDS * sizeof(uint64_t))); //vector clock
 
