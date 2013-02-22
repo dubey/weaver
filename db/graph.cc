@@ -755,14 +755,12 @@ runner(db::graph *G)
                 break;
 
             case message::CLUSTERING_REQ:
-                std::cerr << "got clustering req";
                 thr.reset(new
                 db::thread::unstarted_thread(handle_clustering_request, G, std::move(rec_msg)));
                 thread_pool.add_request(std::move(thr));
                 break;
 
             case message::CLUSTERING_PROP:
-                std::cerr << "got clustering prop?";
                 thr.reset(new
                 db::thread::unstarted_thread(handle_clustering_prop, G, std::move(rec_msg)));
                 thread_pool.add_request(std::move(thr));
@@ -791,10 +789,6 @@ main(int argc, char* argv[])
     }
 
     std::cout << "Weaver: shard instance " << myid << std::endl;
-/*    std::cout << "Greg size is: " << prepare_message(*(new
-    message::message(message::CLUSTERING_PROP)), message::CLUSTERING_PROP,
-    (int) 333, (double) 8.) << std::endl;
-    */
     
     myid = atoi(argv[1]);
     port = COORD_PORT + myid;

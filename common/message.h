@@ -1404,7 +1404,6 @@ namespace message
     template <typename T, typename... Args>
     inline void pack_buffer(e::buffer &buf, uint32_t index, const T& t, const Args&... args)
     {
-        std::cout << "\n got ere2\n";
         pack_buffer(buf, index, t);
         pack_buffer(buf, index+size(t), args...);
     }
@@ -1413,11 +1412,9 @@ namespace message
     inline void
     prepare_message(message &m, const enum msg_type given_type, const Args&... args)
     {
-        std::cout << "\n got ere\n";
         uint32_t index = BUSYBEE_HEADER_SIZE;
         size_t bytes_to_pack = size(args...);
         m.type = given_type;
-        std::cout << bytes_to_pack << "realz\n";
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack+ 4));
 
         m.buf->pack_at(index) << given_type;
@@ -1467,7 +1464,6 @@ namespace message
         assert(t.size() == 0);
         size_t elements_left;
         buf.unpack_from(index) >> elements_left;
-        std::cout << elements_left << "is da dealz\n";
 
         t.reserve(elements_left);
 
