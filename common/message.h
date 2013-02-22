@@ -168,7 +168,7 @@ namespace message
 
             void prep_clustering_prop(
                 size_t request_id,
-                std::unique_ptr<std::unordered_map<po6::net::location, std::unordered_set<size_t>>> nbr_nodes,
+                std::unordered_map<po6::net::location, std::unordered_set<size_t>> &nbr_nodes,
                 std::shared_ptr<po6::net::location> src_loc,
                 std::shared_ptr<std::vector<common::property>> edge_props,
                 std::shared_ptr<std::vector<uint64_t>> vector_clock);
@@ -971,15 +971,15 @@ namespace message
     inline 
     void message :: prep_clustering_prop(
             size_t request_id,
-            std::unique_ptr<std::unordered_map<po6::net::location, std::unordered_set<size_t>>> nbr_nodes,
+            std::unordered_map<po6::net::location, std::unordered_set<size_t>> &nbr_nodes,
             std::shared_ptr<po6::net::location> src_loc,
             std::shared_ptr<std::vector<common::property>> edge_props,
             std::shared_ptr<std::vector<uint64_t>> vector_clock)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
-        size_t num_keys = nbr_nodes->size();
+        size_t num_keys = nbr_nodes.size();
         size_t num_nbrs = 0;
-        for (auto pair : *nbr_nodes)
+        for (auto pair : nbr_nodes)
         {
             num_nbrs += pair.second.size();
         }
@@ -1014,7 +1014,7 @@ namespace message
         }
         buf->pack_at(index) << num_keys;
         index += sizeof(size_t);
-        for (std::pair<po6::net::location, std::unordered_set<size_t>> pair : *nbr_nodes)
+        for (std::pair<po6::net::location, std::unordered_set<size_t>> pair : nbr_nodes)
         {
             buf->pack_at(index) << pair.first.get_addr() << pair.first.port << pair.second.size(); //address and num nbrs at that address
             index += +sizeof(uint32_t) + sizeof(uint16_t) + sizeof(size_t);
@@ -1258,6 +1258,206 @@ namespace message
         *request_id = req_id;
         _reply_loc.reset(new po6::net::location(reply_ipaddr, reply_port));
         *reply_to = std::move(_reply_loc);
+    }
+
+
+    template <typename T> 
+    inline size_t size(const T& t)
+    {
+        return sizeof(T);
+    }
+    template <>  
+    inline size_t size<float>(const float& t)
+    {
+        return (size_t) t+222;
+    }
+    template <>  
+    inline size_t size<int>(const int& t)
+    {
+        return (size_t) t+22;
+    }
+    template <>  
+    inline size_t size<po6::net::location>(const po6::net::location& t)
+    {
+        return sizeof(uint32_t) + sizeof(uint16_t);
+    }
+
+    template <typename T>
+    inline size_t size(const std::unordered_set<T> &t)
+    {
+        // O(n) size operation can handle elements of differing sizes
+        size_t total_size = 0;
+        for(T &elem : t)
+        {
+            total_size += size(elem);
+        }
+        return sizeof(size_t)+total_size;
+    }
+
+    template <typename T1, typename T2>
+    inline size_t size(const std::unordered_map<T1, T2>& t)
+    {
+        size_t total_size = 0;
+        // O(n) size operation can handle keys and values of differing sizes
+        for (std::pair<T1,T2> &pair : t)
+        {
+            total_size += size(pair.first) + size(pair.second);
+        }
+        return sizeof(size_t)+total_size;
+    }
+
+    template <typename T>
+    inline size_t size(const std::vector<T> &t)
+    {
+        // first size_t to record size of vector, assumes constant size elements
+        if (t.size()>0){
+            return sizeof(size_t) + (t.size()*size(t[0]));
+        }
+        else
+        {
+            return sizeof(size_t);
+        }
+
+    }
+
+/*
+    template <>
+    inline size_t size<std::vector<uint64_t>>(const std::vector<uint64_t>& t)
+
+    {
+        // first size_t to record size of vector
+        return sizeof(size_t) + (t.size()*sizeof(uint64_t));
+    }
+
+    template <>
+    inline size_t size<std::vector<common::property>>(const std::vector<common::property>& t)
+
+    {
+        // first size_t to record size of vector
+        return sizeof(size_t) + (t.size()*(sizeof(uint32_t)+sizeof(size_t)));
+    }
+*/
+    template <typename T, typename... Args>
+    inline size_t size(const T& t, const Args&... args)
+    {
+        return size(t) + size(args...);
+    }
+
+    template <typename T> 
+    inline void pack_buffer(e::buffer &buf, uint32_t index, const T& t)
+    {
+        buf.pack_at(index) << t;
+    }
+
+    template <> 
+    inline void pack_buffer<double>(e::buffer &buf, uint32_t index, const double& t)
+    {
+        uint64_t dbl;
+        memcpy(&dbl, &t, sizeof(double)); //to avoid casting issues, probably could avoid copy
+        buf.pack_at(index) << dbl;
+    }
+
+    template <> 
+    inline void pack_buffer<po6::net::location>(e::buffer &buf,
+            uint32_t index, const po6::net::location& t)
+    {
+        buf.pack_at(index) << const_cast<po6::net::location&>(t).get_addr() <<
+        t.port; //watch out
+    }
+
+/*
+    template <> 
+    inline void pack_buffer<std::vector<uint64_t>>(e::buffer &buf,
+            uint32_t index, const std::vector<uint64_t>& t)
+    {
+        size_t num_props = t.size();
+        buf.pack_at(index) << num_props;
+        index += sizeof(size_t);
+        for (uint64_t num : t)
+        {
+            buf.pack_at(index) << num;
+            index += sizeof(uint64_t);
+        }
+    }
+
+    template <> 
+    inline void pack_buffer<std::vector<common::property>>(e::buffer &buf,
+            uint32_t index, const std::vector<common::property>& t)
+    {
+        size_t num_props = t.size();
+        buf.pack_at(index) << num_props;
+        index += sizeof(size_t);
+        for (common::property p : t)
+        {
+            buf.pack_at(index) << p.key << p.value;
+            index += (sizeof(uint32_t) + sizeof(size_t));
+        }
+    }
+*/
+    template <typename T> 
+    inline void pack_buffer(e::buffer &buf,
+            uint32_t index, const std::vector<T>& t)
+    {
+        size_t num_props = t.size();
+        buf.pack_at(index) << num_props;
+        index += sizeof(size_t);
+        for (T &elem : t)
+        {
+            pack_buffer(buf, index, elem);
+            index += size(elem);
+        }
+    }
+
+    template <typename T1, typename T2>
+    inline void pack_buffer(e::buffer &buf,
+            uint32_t index, const std::unordered_map<T1, T2>& t)
+    {
+        size_t num_keys = t.size();
+        buf.pack_at(index) << num_keys;
+        index += sizeof(size_t);
+        for (std::pair<T1,T2> &pair : t)
+        {
+            pack_buffer(buf, index, pair.first);
+            index += size(pair.first);
+            pack_buffer(buf, index, pair.second);
+            index += size(pair.second);
+        }
+    }
+
+    template <typename T>
+    inline void pack_buffer(e::buffer &buf,
+            uint32_t index, const std::unordered_set<T>& t)
+    {
+        size_t num_keys = t.size();
+        buf.pack_at(index) << num_keys;
+        index += sizeof(size_t);
+        for (T &elem : t)
+        {
+            pack_buffer(buf, index, elem);
+            index += size(elem);
+        }
+    }
+
+    template <typename T, typename... Args>
+    inline void pack_buffer(e::buffer &buf, uint32_t index, const T& t, const Args&... args)
+    {
+        pack_buffer(buf, index, t);
+        pack_buffer(buf, index+size(t), args...);
+    }
+
+    template <typename... Args>
+    inline size_t
+    prepare_message(message &m, enum msg_type given_type, const Args&... args)
+    {
+        uint32_t index = BUSYBEE_HEADER_SIZE;
+        size_t bytes_to_pack = size(args...);
+        m.type = given_type;
+        m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
+
+        m.buf->pack_at(index) << given_type;
+        pack_buffer(*m.buf, index + sizeof(enum msg_type), args...);
+
+        return bytes_to_pack;
     }
 } //namespace message
 
