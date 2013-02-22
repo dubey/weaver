@@ -91,6 +91,15 @@ class clustering_request
     }
 };
 
+inline void
+change_property_times(std::vector<common::property> &props, uint64_t creat_time)
+{
+    for (auto p : props)
+    {
+        p.creat_time = creat_time;
+    }
+}
+
 static int myid, port;
 static size_t incoming_req_id_counter, outgoing_req_id_counter;
 static po6::threads::mutex incoming_req_id_counter_mutex, outgoing_req_id_counter_mutex;
@@ -513,8 +522,8 @@ add_clustering_response(db::graph *G, clustering_request *request, size_t to_add
 inline size_t
 find_num_valid_neighbors(db::graph *G, db::element::node *n,
 std::unordered_map<po6::net::location, std::unordered_set<size_t>> &nbrs,
-std::shared_ptr<std::vector<common::property>> edge_props, uint64_t myclock_recd,
-std::shared_ptr<std::vector<uint64_t>> vector_clock)
+std::vector<common::property> &edge_props, uint64_t myclock_recd,
+std::vector<uint64_t> &vector_clock)
 {
     size_t num_valid_nbrs = 0;
     for(db::element::edge *e : n->out_edges)
@@ -525,21 +534,21 @@ std::shared_ptr<std::vector<uint64_t>> vector_clock)
 
         size_t node_ptr = (size_t) e->nbr->get_addr();
         if (nbrs[loc].count(node_ptr) > 0){
-            uint64_t nbrclock_recd = vector_clock->at(e->nbr->get_shard_id());
+            uint64_t nbrclock_recd = vector_clock[e->nbr->get_shard_id()];
             bool use_edge = e->get_creat_time() <= myclock_recd  
                 && e->get_del_time() > myclock_recd // edge created and deleted in acceptable timeframe
                 && e->nbr->get_del_time() > nbrclock_recd; // nbr not deleted
-            int i;
-            for (i = 0; i < edge_props->size() && use_edge; i++) // checking edge properties
-            {
-                if (!e->has_property(edge_props->at(i))) {
-                    use_edge = false;
-                    break;
+            if (use_edge){
+                for (common::property &prop : edge_props){
+                    if (!e->has_property(prop)){
+                        use_edge = false;
+                        break;
+                    }
                 }
-            }
-            if (use_edge)
-            {
-                num_valid_nbrs++;
+                if (use_edge)
+                {
+                    num_valid_nbrs++;
+                }
             }
         }
     }
@@ -611,13 +620,16 @@ handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
 
     for (std::pair<po6::net::location,std::unordered_set<size_t>> p : *request->nbrs)
     {
+        uint32_t ipaddr = p.first.get_addr();
+
         if (p.first == *G->myloc)
         {   //neighbors on local machine
           //  local_nbrs = &p.second;
         } else {
             msg.reset(new message::message(message::CLUSTERING_PROP));
-            msg->prep_clustering_prop(coord_req_id, std::move(request->nbrs), G->myloc,
-            edge_props, vector_clock);
+            message::prepare_message(*msg, message::CLUSTERING_PROP,
+            coord_req_id, *edge_props, *vector_clock);
+                //    coord_req_id,  G->myloc, *edge_props, *vector_clock);//*request->nbrs,
             G->send(p.first, msg->buf);
         }
     }
@@ -630,7 +642,7 @@ handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
         for (size_t node_ptr : request->nbrs->at(*G->myloc))
         {
             nbr_count += find_num_valid_neighbors(G, (db::element::node *) node_ptr,
-            *request->nbrs, edge_props, myclock_recd, vector_clock);
+            *request->nbrs, *edge_props, myclock_recd, *vector_clock);
         }
         add_clustering_response(G, request, nbr_count, std::move(msg));
     }
@@ -639,25 +651,23 @@ handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
 void
 handle_clustering_prop(db::graph *G, std::unique_ptr<message::message> msg){
     size_t return_req_ptr;
-    std::unique_ptr<std::unordered_map<po6::net::location,
-        std::unordered_set<size_t>>> nbrs;
-    std::unique_ptr<po6::net::location> reply_loc;
-    auto edge_props = std::make_shared<std::vector<common::property>>();
-    auto vector_clock = std::make_shared<std::vector<uint64_t>>();
-    uint64_t myclock_recd;
-    int myid;
 
-    msg->unpack_clustering_prop(&return_req_ptr, nbrs, &reply_loc, &edge_props,
-    &vector_clock, myid);
+    std::unordered_map<po6::net::location, std::unordered_set<size_t>> nbrs;
+    std::vector<uint64_t> vector_clock;
+    std::vector<common::property> edge_props;
+    po6::net::location reply_loc;
 
-    myclock_recd = vector_clock->at(myid-1);
+    message::unpack_message(*msg, message::CLUSTERING_PROP, return_req_ptr, nbrs, reply_loc, edge_props, vector_clock);
+    uint64_t myclock_recd = vector_clock[myid];
+    //myclock_recd = vector_clock->at(myid-1);
+    change_property_times(edge_props, myclock_recd);
+
 
     size_t nbr_count = 0;
-    std::unordered_set<size_t> temp = (*nbrs)[*G->myloc];
-    for (size_t node_ptr : temp)
+    for (size_t node_ptr : nbrs[*G->myloc])
     {
         nbr_count += find_num_valid_neighbors(G, (db::element::node *) node_ptr,
-                *nbrs, edge_props, myclock_recd, vector_clock);
+                nbrs, edge_props, myclock_recd, vector_clock);
     }
 
     msg.reset(new message::message(message::CLUSTERING_PROP_REPLY));
@@ -778,6 +788,9 @@ main(int argc, char* argv[])
     }
 
     std::cout << "Weaver: shard instance " << myid << std::endl;
+    std::cout << "Greg size is: " << prepare_message(*(new
+    message::message(message::CLUSTERING_PROP)), message::CLUSTERING_PROP,
+    (int) 333, (double) 8.) << std::endl;
     
     myid = atoi(argv[1]);
     port = COORD_PORT + myid;
