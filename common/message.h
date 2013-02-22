@@ -1260,7 +1260,7 @@ namespace message
         *reply_to = std::move(_reply_loc);
     }
 
-
+// size templates
     template <typename T> 
     inline size_t size(const T& t)
     {
@@ -1316,29 +1316,12 @@ namespace message
     {
         return sizeof(uint32_t)+sizeof(size_t);
     }
-/*
-    template <>
-    inline size_t size<std::vector<uint64_t>>(const std::vector<uint64_t>& t)
-
-    {
-        // first size_t to record size of vector
-        return sizeof(size_t) + (t.size()*sizeof(uint64_t));
-    }
-
-    template <>
-    inline size_t size<std::vector<common::property>>(const std::vector<common::property>& t)
-
-    {
-        // first size_t to record size of vector
-        return sizeof(size_t) + (t.size()*(sizeof(uint32_t)+sizeof(size_t)));
-    }
-*/
     template <typename T, typename... Args>
     inline size_t size(const T& t, const Args&... args)
     {
         return size(t) + size(args...);
     }
-
+// packing templates
     template <typename T> 
     inline void pack_buffer(e::buffer &buf, uint32_t index, const T& t)
     {
@@ -1367,35 +1350,6 @@ namespace message
     {
         buf.pack_at(index) << t.key << t.value;
     }
-/*
-    template <> 
-    inline void pack_buffer<std::vector<uint64_t>>(e::buffer &buf,
-            uint32_t index, const std::vector<uint64_t>& t)
-    {
-        size_t num_props = t.size();
-        buf.pack_at(index) << num_props;
-        index += sizeof(size_t);
-        for (uint64_t num : t)
-        {
-            buf.pack_at(index) << num;
-            index += sizeof(uint64_t);
-        }
-    }
-
-    template <> 
-    inline void pack_buffer<std::vector<common::property>>(e::buffer &buf,
-            uint32_t index, const std::vector<common::property>& t)
-    {
-        size_t num_props = t.size();
-        buf.pack_at(index) << num_props;
-        index += sizeof(size_t);
-        for (common::property p : t)
-        {
-            buf.pack_at(index) << p.key << p.value;
-            index += (sizeof(uint32_t) + sizeof(size_t));
-        }
-    }
-*/
 
     template <typename T> 
     inline void pack_buffer(e::buffer &buf,
@@ -1469,7 +1423,7 @@ namespace message
         m.buf->pack_at(index) << given_type;
         pack_buffer(*m.buf, index + sizeof(enum msg_type), args...);
     }
-
+// unpacking templates
     template <typename T> 
     inline void unpack_buffer(e::buffer &buf, uint32_t index, T& t)
     {
@@ -1578,7 +1532,7 @@ namespace message
 
 
     template <typename T, typename... Args>
-    inline void unpack_buffer(e::buffer &buf, const uint32_t index, T& t, Args&... args)
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, T& t, Args&... args)
     {
         unpack_buffer(buf, index, t);
         unpack_buffer(buf, index+size(t), args...);

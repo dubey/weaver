@@ -627,8 +627,9 @@ handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
           //  local_nbrs = &p.second;
         } else {
             msg.reset(new message::message(message::CLUSTERING_PROP));
-            message::prepare_message(*msg, message::CLUSTERING_PROP,
-            coord_req_id, *G->myloc, *edge_props, *vector_clock, *request->nbrs);
+            message::prepare_message(*msg, message::CLUSTERING_PROP, (size_t)
+            request
+            , *G->myloc, *edge_props, *vector_clock, *request->nbrs);
             G->send(p.first, msg->buf);
         }
     }
@@ -658,7 +659,7 @@ handle_clustering_prop(db::graph *G, std::unique_ptr<message::message> msg){
 
     message::unpack_message(*msg, message::CLUSTERING_PROP, return_req_ptr,
     reply_loc, edge_props, vector_clock, nbrs);
-    uint64_t myclock_recd = vector_clock[myid];
+    uint64_t myclock_recd = vector_clock[myid-1];
     //myclock_recd = vector_clock->at(myid-1);
     change_property_times(edge_props, myclock_recd);
 
@@ -671,17 +672,19 @@ handle_clustering_prop(db::graph *G, std::unique_ptr<message::message> msg){
     }
 
     msg.reset(new message::message(message::CLUSTERING_PROP_REPLY));
-    msg->prep_clustering_prop_reply(return_req_ptr, nbr_count);
+    message::prepare_message(*msg, message::CLUSTERING_PROP_REPLY, return_req_ptr, nbr_count);
     G->send(std::move(reply_loc), msg->buf);
 }
 
 void
 handle_clustering_prop_reply(db::graph *G, std::unique_ptr<message::message> msg){
     clustering_request *req;
+    size_t req_ptr;
     size_t to_add;
 
-    msg->unpack_clustering_prop_reply((size_t *) req, &to_add);
-
+    message::unpack_message(*msg, message::CLUSTERING_PROP_REPLY, req_ptr,
+    to_add);    
+    req = (clustering_request *) req_ptr;
     add_clustering_response(G, req, to_add, std::move(msg));
 }
 
