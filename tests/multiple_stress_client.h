@@ -62,8 +62,6 @@ multiple_stress_client()
         edges[i] = c.create_edge(nodes[first], nodes[second]);
         edge_leading_nodes[i] = nodes[first];
     }
-    t = new std::thread(delete_random_edges);
-    t->detach();
     long seed;
     for (seed = 0; seed < 10000; seed += 100)
     {
@@ -80,6 +78,11 @@ multiple_stress_client()
             std::cout << "Starting... ";
             std::cout << "Done! Req " << i << " result "
                 << c.reachability_request(nodes[first], nodes[second], edge_props) << std::endl;
+        }
+        if (seed == 2000)
+        {
+            t = new std::thread(delete_random_edges);
+            t->detach();
         }
     }
 }

@@ -70,7 +70,7 @@ namespace coordinator
 
     inline
     central :: central()
-        : request_id(0)
+        : request_id(1)
         , thread_pool(NUM_THREADS)
         , myloc(new po6::net::location(COORD_IPADDR, COORD_PORT))
         , myrecloc(new po6::net::location(COORD_IPADDR, COORD_REC_PORT))

@@ -108,7 +108,6 @@ namespace element
     element :: check_and_add_property(common::property prop)
     {
         std::vector<common::property>::iterator iter;
-        int i = 0;
         for (iter = properties.begin(); iter<properties.end(); iter++)
         {
             if (prop == *iter) 

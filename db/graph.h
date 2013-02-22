@@ -54,7 +54,7 @@ namespace db
         int num; // number of onward requests
         bool reachable;
         std::unique_ptr<std::vector<size_t>> src_nodes;
-        void *dest_addr; // dest node's handle
+        size_t dest_addr; // dest node's handle
         int dest_loc; // dest node's server id
         std::unique_ptr<std::vector<size_t>> del_nodes; // deleted nodes
         std::unique_ptr<std::vector<uint64_t>> del_times; // delete times corr. to del_nodes
@@ -65,7 +65,7 @@ namespace db
             prev_id = 0;
             num = 0;
             reachable = false;
-            dest_addr = NULL;
+            dest_addr = 0;
         }
 
         batch_request(const batch_request &tup)
@@ -92,9 +92,9 @@ namespace db
 
         public:
             int node_count;
+            int num_shards;
             std::shared_ptr<po6::net::location> myloc;
             std::shared_ptr<po6::net::location> coord;
-            int num_shards;
             po6::net::location **shard_locs; // po6 locations for each shard
             cache::reach_cache **caches; // caches corresponding to each shard
             busybee_sta bb; // Busybee instance used for sending messages
@@ -113,8 +113,8 @@ namespace db
             element::node* create_node(uint64_t time);
             element::edge* create_edge(void *n1,
                 std::unique_ptr<common::meta_element> n2, uint64_t time);
-            void delete_node(element::node *n, uint64_t del_time);
-            void delete_edge(element::node *n, element::edge *e, uint64_t del_time);
+            std::unique_ptr<std::vector<size_t>> delete_node(element::node *n, uint64_t del_time);
+            std::unique_ptr<std::vector<size_t>> delete_edge(element::node *n, element::edge *e, uint64_t del_time);
             void add_edge_property(element::node *n, element::edge *e,
                 std::unique_ptr<common::property> prop, uint64_t time);
             void delete_all_edge_property(element::node *n, element::edge *e, uint32_t key, uint64_t time);
@@ -122,7 +122,9 @@ namespace db
             void add_done_request(size_t req_id);
             void broadcast_done_request(size_t req_id); 
             bool mark_visited(element::node *n, size_t req_counter);
-            bool remove_visited(element::node *n, size_t req_counter);
+            void remove_visited(element::node *n, size_t req_counter);
+            size_t get_cache(size_t local_node, size_t dest_loc, size_t dest_node);
+            void add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(std::unique_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(po6::net::location *loc, std::auto_ptr<e::buffer> buf);
@@ -199,30 +201,36 @@ namespace db
         return new_edge;
     }
 
-    inline void
+    inline std::unique_ptr<std::vector<size_t>>
     graph :: delete_node(element::node *n, uint64_t del_time)
     {
+        std::unique_ptr<std::vector<size_t>> cached_req_ids;
         n->update_mutex.lock();
         n->update_del_time(del_time);
+        cached_req_ids = std::move(n->purge_cache());
         n->update_mutex.unlock();
         update_mutex.lock();
         my_clock++;
         assert(my_clock == del_time);
         pending_update_cond.broadcast();
         update_mutex.unlock();
+        return cached_req_ids;
     }
 
-    inline void
+    inline std::unique_ptr<std::vector<size_t>>
     graph :: delete_edge(element::node *n, element::edge *e, uint64_t del_time)
     {
+        std::unique_ptr<std::vector<size_t>> cached_req_ids;
         n->update_mutex.lock();
         e->update_del_time(del_time);
+        cached_req_ids = std::move(n->purge_cache());
         n->update_mutex.unlock();
         update_mutex.lock();
         my_clock++;
         assert(my_clock == del_time);
         pending_update_cond.broadcast();
         update_mutex.unlock();
+        return cached_req_ids;
     }
 
     inline void
@@ -296,10 +304,25 @@ namespace db
         return n->check_and_add_seen(req_counter);
     }
 
-    inline bool
+    inline void
     graph :: remove_visited(element::node *n, size_t req_counter)
     {
         n->remove_seen(req_counter);
+    }
+
+    inline size_t 
+    graph :: get_cache(size_t local_node, size_t dest_loc, size_t dest_node)
+    {
+        return caches[dest_loc]->get_req_id(dest_node, local_node);
+    }
+
+    inline void 
+    graph :: add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id)
+    {
+        element::node *n = (element::node *)local_node;
+        if (caches[dest_loc]->insert_entry(dest_node, local_node, req_id)) {
+            n->add_cached_req(req_id);
+        }
     }
 
     inline busybee_returncode

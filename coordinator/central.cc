@@ -311,7 +311,7 @@ void
 handle_pending_req(coordinator::central *server, std::unique_ptr<message::message> msg,
     enum message::msg_type m_type, std::unique_ptr<po6::net::location> dummy)
 {
-    size_t req_id;
+    size_t req_id, cached_req_id;
     pending_req *request;
     size_t mem_addr;
     bool is_reachable; // for reply
@@ -320,6 +320,8 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     size_t num_del_nodes; //for reply
     std::unique_ptr<std::vector<size_t>> del_nodes(new std::vector<size_t>()); //for reply
     std::unique_ptr<std::vector<uint64_t>> del_times(new std::vector<uint64_t>()); //for reply
+    std::unique_ptr<std::vector<size_t>> cached_req_ids; // for reply
+    size_t i;
     
     switch(m_type)
     {
@@ -338,7 +340,8 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
 
         case message::NODE_DELETE_ACK:
         case message::EDGE_DELETE_ACK:
-            msg->unpack_delete_ack(&req_id);
+            cached_req_ids.reset(new std::vector<size_t>());
+            msg->unpack_delete_ack(&req_id, &cached_req_ids);
             server->update_mutex.lock();
             request = pending[req_id];
             server->update_mutex.unlock();
@@ -350,7 +353,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
 
         case message::REACHABLE_REPLY:
             msg->unpack_reachable_rep(&req_id, &is_reachable, &src_node, &src_loc,
-                &num_del_nodes, &del_nodes, &del_times);
+                &num_del_nodes, &del_nodes, &del_times, &cached_req_id);
             server->update_mutex.lock();
             request = pending[req_id];
             server->update_mutex.unlock();
@@ -490,7 +493,7 @@ client_handler(coordinator::central *server)
 }
 
 int
-main(int argc, char* argv[])
+main()
 {
     coordinator::central server;
     std::thread *t;

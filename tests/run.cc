@@ -12,7 +12,7 @@
  */
 
 //#include "message_test.h"
-#include "cache_test.h"
+//#include "cache_test.h"
 #include "basic_client.h"
 #include "simple_stress_client.h"
 #include "multiple_stress_client.h"
@@ -24,8 +24,8 @@ main(int argc, char *argv[])
     std::cout << "Starting tests." << std::endl;
     //message_test();
     //std::cout << "Message packing/unpacking ok." << std::endl;
-    cache_test();
-    std::cout << "Shard cache ok." << std::endl;
+    //cache_test();
+    //std::cout << "Shard cache ok." << std::endl;
     //basic_client_test();
     //std::cout << "Basic client ok." << std::endl;
     //stress_client_test();

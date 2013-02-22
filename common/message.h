@@ -104,9 +104,9 @@ namespace message
             void unpack_node_delete(size_t *req_id, size_t *node_handle, uint64_t *del_time);
             void prep_edge_delete(size_t req_id, size_t node_handle, size_t edge_handle, uint64_t del_time);
             void unpack_edge_delete(size_t *req_id, size_t *node_handle, size_t *edge_handle, uint64_t *del_time);
-            void prep_node_delete_ack(size_t req_id);
-            void prep_edge_delete_ack(size_t req_id);
-            void unpack_delete_ack(size_t *req_id);
+            void prep_node_delete_ack(size_t req_id, std::unique_ptr<std::vector<size_t>> cached_req_ids);
+            void prep_edge_delete_ack(size_t req_id, std::unique_ptr<std::vector<size_t>> cached_req_ids);
+            void unpack_delete_ack(size_t *req_id, std::unique_ptr<std::vector<size_t>> *cached_req_ids);
             void prep_add_prop(size_t req_id, size_t node_handle, size_t edge_handle, 
                 uint32_t key, size_t value, uint64_t time);
             void unpack_add_prop(size_t *req_id, size_t *node_handle, size_t *edge_handle,
@@ -138,14 +138,16 @@ namespace message
                 size_t src_node,
                 int src_loc,
                 std::unique_ptr<std::vector<size_t>> del_nodes,
-                std::unique_ptr<std::vector<uint64_t>> del_times);
+                std::unique_ptr<std::vector<uint64_t>> del_times,
+                size_t cache_req_id);
             void unpack_reachable_rep(size_t *req_id, 
                 bool *is_reachable,
                 size_t *src_node,
                 int *src_loc,
                 size_t *num_del_nodes,
                 std::unique_ptr<std::vector<size_t>> *del_nodes,
-                std::unique_ptr<std::vector<uint64_t>> *del_times);
+                std::unique_ptr<std::vector<uint64_t>> *del_times,
+                size_t *cache_req_id);
             void prep_done_request(size_t id);
             void unpack_done_request(size_t *id);
             // Error message
@@ -153,7 +155,7 @@ namespace message
 
         private:
             void prep_create_ack(size_t req_id, size_t mem_addr, bool node);
-            void prep_delete_ack(size_t req_id, bool node);
+            void prep_delete_ack(size_t req_id, std::unique_ptr<std::vector<size_t>> cached_req_ids, bool node);
     };
 
     inline
@@ -486,8 +488,11 @@ namespace message
     }
 
     inline void
-    message :: prep_delete_ack(size_t req_id, bool node)
+    message :: prep_delete_ack(size_t req_id, std::unique_ptr<std::vector<size_t>> cached_req_ids, bool node)
     {
+        int index;
+        size_t i;
+        size_t len = cached_req_ids->size();
         if (node) {
             type = NODE_DELETE_ACK;
         } else {
@@ -495,35 +500,50 @@ namespace message
         }
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + 
             sizeof(enum msg_type) + 
-            sizeof(size_t)));
-
-        buf->pack_at(BUSYBEE_HEADER_SIZE) << type << req_id;
+            sizeof(size_t) + // req_id
+            sizeof(size_t) + // len of cached_req_ids
+            len * sizeof(size_t))); // cached_req_ids
+        
+        index = BUSYBEE_HEADER_SIZE; 
+        buf->pack_at(index) << type << req_id << len;
+        index += (sizeof(enum msg_type) + 2*sizeof(size_t));
+        for (i = 0; i < len; i++, index += sizeof(size_t))
+        {
+            buf->pack_at(index) << (*cached_req_ids)[i];
+        }
     }
 
 
     inline void
-    message :: prep_node_delete_ack(size_t req_id)
+    message :: prep_node_delete_ack(size_t req_id, std::unique_ptr<std::vector<size_t>> cached_req_ids)
     {
-        prep_delete_ack(req_id, true);
+        prep_delete_ack(req_id, std::move(cached_req_ids), true);
     }
 
     inline void
-    message :: prep_edge_delete_ack(size_t req_id)
+    message :: prep_edge_delete_ack(size_t req_id, std::unique_ptr<std::vector<size_t>> cached_req_ids)
     {
-        prep_delete_ack(req_id, false);
+        prep_delete_ack(req_id, std::move(cached_req_ids), false);
     }
 
     inline void
-    message :: unpack_delete_ack(size_t *req_id)
+    message :: unpack_delete_ack(size_t *req_id, std::unique_ptr<std::vector<size_t>> *cached_req_ids)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t _type;
+        size_t i, len, cri;
         buf->unpack_from(index) >> _type;
         assert((_type == NODE_DELETE_ACK) || (_type == EDGE_DELETE_ACK));
         type = (enum msg_type)_type;
         index += sizeof(uint32_t);
 
-        buf->unpack_from(index) >> (*req_id);
+        buf->unpack_from(index) >> (*req_id) >> len;
+        index += (2*sizeof(size_t));
+        for (i = 0; i < len; i++, index += sizeof(size_t))
+        {
+            buf->unpack_from(index) >> cri;
+            (*cached_req_ids)->push_back(cri);
+        }
     }
     
     inline void 
@@ -697,7 +717,8 @@ namespace message
         size_t src_node,
         int src_loc,
         std::unique_ptr<std::vector<size_t>> del_nodes,
-        std::unique_ptr<std::vector<uint64_t>> del_times)
+        std::unique_ptr<std::vector<uint64_t>> del_times,
+        size_t cache_req_id)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t temp = (uint32_t) is_reachable;
@@ -711,7 +732,8 @@ namespace message
             sizeof(int) + // src_loc
             sizeof(size_t) + //no. of deleted nodes
             del_nodes->size() * sizeof(size_t) +
-            del_times->size() * sizeof(uint64_t)));
+            del_times->size() * sizeof(uint64_t) +
+            sizeof(size_t))); // cache_req_id
 
         buf->pack_at(index) << type << del_nodes->size();
         index += sizeof(enum msg_type) + sizeof(size_t);
@@ -719,7 +741,7 @@ namespace message
         {
             buf->pack_at(index) << (*del_nodes)[i] << (*del_times)[i];
         }
-        buf->pack_at(index) << req_id << temp << src_node << src_loc;
+        buf->pack_at(index) << req_id << temp << src_node << src_loc << cache_req_id;
     }
 
     inline void
@@ -729,7 +751,8 @@ namespace message
         int *src_loc,
         size_t *num_del_nodes,
         std::unique_ptr<std::vector<size_t>> *del_nodes,
-        std::unique_ptr<std::vector<uint64_t>> *del_times)
+        std::unique_ptr<std::vector<uint64_t>> *del_times,
+        size_t *cache_req_id)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t _type;
@@ -749,7 +772,7 @@ namespace message
             (**del_nodes).push_back(del_node);
             (**del_times).push_back(del_time);
         }
-        buf->unpack_from(index) >> (*req_id) >> reachable >> (*src_node) >> (*src_loc);
+        buf->unpack_from(index) >> (*req_id) >> reachable >> (*src_node) >> (*src_loc) >> (*cache_req_id);
         *is_reachable = (bool)reachable;
     }
 

@@ -43,14 +43,18 @@ namespace element
             std::vector<edge *> out_edges;
             po6::threads::mutex update_mutex;
             std::unordered_map<size_t, bool_wrapper> seen; // requests which have been seen
+            std::unique_ptr<std::vector<size_t>> cached_req_ids; // requests which have been cached
             void add_edge(edge *e);
             bool check_and_add_seen(size_t id);
             void remove_seen(size_t id);
+            void add_cached_req(size_t req_id);
+            std::unique_ptr<std::vector<size_t>> purge_cache();
     };
 
     inline
     node :: node(std::shared_ptr<po6::net::location> server, uint64_t time)
         : element(server, time, (void*)this)
+        , cached_req_ids(new std::vector<size_t>())
     {
     }
 
@@ -75,6 +79,20 @@ namespace element
     node :: remove_seen(size_t id)
     {
         seen.erase(id);
+    }
+
+    inline void
+    node :: add_cached_req(size_t req_id)
+    {
+        cached_req_ids->push_back(req_id);
+    }
+
+    inline std::unique_ptr<std::vector<size_t>>
+    node :: purge_cache()
+    {
+        std::unique_ptr<std::vector<size_t>> ret = std::move(cached_req_ids);
+        cached_req_ids.reset(new std::vector<size_t>());
+        return ret;
     }
 
 }

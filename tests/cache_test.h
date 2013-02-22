@@ -23,9 +23,14 @@ cache_test()
     assert(c.entry_exists(42, 84));
     assert(c.entry_exists(20, 40));
     assert(!c.entry_exists(30, 60));
+    assert(c.get_req_id(42, 84) == 21);
+    assert(c.get_req_id(20, 40) == 60);
+    assert(c.get_req_id(30, 60) == 0);
 
     c.remove_entry(21);
     assert(!c.entry_exists(42, 84));
     assert(c.entry_exists(20, 40));
     assert(!c.entry_exists(30, 60));
+    assert(c.get_req_id(42, 84) == 0);
+    assert(c.get_req_id(20, 40) == 60);
 }
