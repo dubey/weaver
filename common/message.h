@@ -1266,16 +1266,7 @@ namespace message
     {
         return sizeof(T);
     }
-    template <>  
-    inline size_t size<float>(const float& t)
-    {
-        return (size_t) t+222;
-    }
-    template <>  
-    inline size_t size<int>(const int& t)
-    {
-        return (size_t) t+22;
-    }
+
     template <>  
     inline size_t size<po6::net::location>(const po6::net::location& t)
     {
@@ -1405,6 +1396,7 @@ namespace message
         }
     }
 */
+
     template <typename T> 
     inline void pack_buffer(e::buffer &buf,
             uint32_t index, const std::vector<T>& t)
@@ -1458,29 +1450,41 @@ namespace message
     template <typename T, typename... Args>
     inline void pack_buffer(e::buffer &buf, uint32_t index, const T& t, const Args&... args)
     {
+        std::cout << "\n got ere2\n";
         pack_buffer(buf, index, t);
         pack_buffer(buf, index+size(t), args...);
     }
 
     template <typename... Args>
-    inline size_t
+    inline void
     prepare_message(message &m, const enum msg_type given_type, const Args&... args)
     {
+        std::cout << "\n got ere\n";
         uint32_t index = BUSYBEE_HEADER_SIZE;
         size_t bytes_to_pack = size(args...);
         m.type = given_type;
-        m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
+        std::cout << bytes_to_pack << "realz\n";
+        m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack+ 4));
 
         m.buf->pack_at(index) << given_type;
         pack_buffer(*m.buf, index + sizeof(enum msg_type), args...);
-
-        return bytes_to_pack;
     }
 
     template <typename T> 
     inline void unpack_buffer(e::buffer &buf, uint32_t index, T& t)
     {
         buf.unpack_from(index) >> t;
+    }
+
+    template <> 
+    inline void unpack_buffer<common::property>(e::buffer &buf,
+            uint32_t index, common::property& t)
+    {
+        uint32_t key;
+        size_t val;
+        buf.unpack_from(index) >> key >> val;
+        t.key = key;
+        t.value = val;
     }
 
     template <> 
@@ -1509,6 +1513,7 @@ namespace message
         assert(t.size() == 0);
         size_t elements_left;
         buf.unpack_from(index) >> elements_left;
+        std::cout << elements_left << "is da dealz\n";
 
         t.reserve(elements_left);
 
@@ -1517,6 +1522,27 @@ namespace message
             T to_add;
             unpack_buffer(buf, index, to_add);
             t.push_back(to_add);
+            index += size(to_add);
+            elements_left--;
+        }
+    }
+
+    template <typename T>
+    inline void unpack_buffer(e::buffer &buf,
+            uint32_t index, std::unordered_set<T>& t)
+    {
+        assert(t.size() == 0);
+        size_t elements_left;
+        buf.unpack_from(index) >> elements_left;
+
+        t.rehash(elements_left*1.25); // set number of buckets to 1.25*elements it will contain
+
+        index += sizeof(size_t);
+
+        while (elements_left > 0){
+            T to_add;
+            unpack_buffer(buf, index, to_add);
+            t.insert(to_add);
             index += size(to_add);
             elements_left--;
         }
@@ -1550,32 +1576,12 @@ namespace message
         }
     }
 
-    template <typename T>
-    inline void unpack_buffer(e::buffer &buf,
-            uint32_t index, std::unordered_set<T>& t)
-    {
-        assert(t.size() == 0);
-        size_t elements_left;
-        buf.unpack_from(index) >> elements_left;
-
-        t.rehash(elements_left*1.25); // set number of buckets to 1.25*elements it will contain
-
-        index += sizeof(size_t);
-
-        while (elements_left > 0){
-            T to_add;
-            unpack_buffer(buf, index, to_add);
-            t.insert(to_add);
-            index += size(to_add);
-            elements_left--;
-        }
-    }
 
     template <typename T, typename... Args>
     inline void unpack_buffer(e::buffer &buf, const uint32_t index, T& t, Args&... args)
     {
         unpack_buffer(buf, index, t);
-        //unpack_buffer(buf, index+size(t), args...); //XXX
+        unpack_buffer(buf, index+size(t), args...);
     }
 
     template <typename... Args>

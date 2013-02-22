@@ -627,8 +627,8 @@ handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
           //  local_nbrs = &p.second;
         } else {
             msg.reset(new message::message(message::CLUSTERING_PROP));
-            message::prepare_message(*msg, message::CLUSTERING_PROP, coord_req_id,
-                    *request->nbrs, *G->myloc, *edge_props, *vector_clock, *G->myloc);
+            message::prepare_message(*msg, message::CLUSTERING_PROP,
+            coord_req_id, *G->myloc, *edge_props, *vector_clock, *request->nbrs);
             G->send(p.first, msg->buf);
         }
     }
@@ -656,7 +656,8 @@ handle_clustering_prop(db::graph *G, std::unique_ptr<message::message> msg){
     std::vector<common::property> edge_props;
     po6::net::location reply_loc;
 
-    message::unpack_message(*msg, message::CLUSTERING_PROP, return_req_ptr, nbrs, reply_loc, edge_props, vector_clock);
+    message::unpack_message(*msg, message::CLUSTERING_PROP, return_req_ptr,
+    reply_loc, edge_props, vector_clock, nbrs);
     uint64_t myclock_recd = vector_clock[myid];
     //myclock_recd = vector_clock->at(myid-1);
     change_property_times(edge_props, myclock_recd);
@@ -787,9 +788,10 @@ main(int argc, char* argv[])
     }
 
     std::cout << "Weaver: shard instance " << myid << std::endl;
-    std::cout << "Greg size is: " << prepare_message(*(new
+/*    std::cout << "Greg size is: " << prepare_message(*(new
     message::message(message::CLUSTERING_PROP)), message::CLUSTERING_PROP,
     (int) 333, (double) 8.) << std::endl;
+    */
     
     myid = atoi(argv[1]);
     port = COORD_PORT + myid;
