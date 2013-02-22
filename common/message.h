@@ -1424,6 +1424,20 @@ namespace message
         }
     }
 
+    template <typename T>
+    inline void pack_buffer(e::buffer &buf,
+            uint32_t index, const std::unordered_set<T>& t)
+    {
+        size_t num_keys = t.size();
+        buf.pack_at(index) << num_keys;
+        index += sizeof(size_t);
+        for (const T &elem : t)
+        {
+            pack_buffer(buf, index, elem);
+            index += size(elem);
+        }
+    }
+
     template <typename T1, typename T2>
     inline void pack_buffer(e::buffer &buf,
             uint32_t index, const std::unordered_map<T1, T2>& t)
@@ -1440,19 +1454,6 @@ namespace message
         }
     }
 
-    template <typename T>
-    inline void pack_buffer(e::buffer &buf,
-            uint32_t index, const std::unordered_set<T>& t)
-    {
-        size_t num_keys = t.size();
-        buf.pack_at(index) << num_keys;
-        index += sizeof(size_t);
-        for (T &elem : t)
-        {
-            pack_buffer(buf, index, elem);
-            index += size(elem);
-        }
-    }
 
     template <typename T, typename... Args>
     inline void pack_buffer(e::buffer &buf, uint32_t index, const T& t, const Args&... args)

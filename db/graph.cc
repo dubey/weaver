@@ -627,9 +627,8 @@ handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
           //  local_nbrs = &p.second;
         } else {
             msg.reset(new message::message(message::CLUSTERING_PROP));
-            message::prepare_message(*msg, message::CLUSTERING_PROP,
-            coord_req_id, *edge_props, *vector_clock);
-                //    coord_req_id,  G->myloc, *edge_props, *vector_clock);//*request->nbrs,
+            message::prepare_message(*msg, message::CLUSTERING_PROP, coord_req_id,
+                    *request->nbrs, *G->myloc, *edge_props, *vector_clock, *G->myloc);
             G->send(p.first, msg->buf);
         }
     }
