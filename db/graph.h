@@ -96,7 +96,7 @@ namespace db
             std::shared_ptr<po6::net::location> myloc;
             std::shared_ptr<po6::net::location> coord;
             po6::net::location **shard_locs; // po6 locations for each shard
-            cache::reach_cache **caches; // caches corresponding to each shard
+            cache::reach_cache cache; // reachability cache
             busybee_sta bb; // Busybee instance used for sending messages
             busybee_sta bb_recv; // Busybee instance used for receiving messages
             po6::threads::mutex bb_lock; // Busybee lock
@@ -125,6 +125,7 @@ namespace db
             void remove_visited(element::node *n, size_t req_counter);
             size_t get_cache(size_t local_node, size_t dest_loc, size_t dest_node);
             void add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id);
+            void remove_cache(size_t req_id);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(std::unique_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(po6::net::location *loc, std::auto_ptr<e::buffer> buf);
@@ -141,6 +142,7 @@ namespace db
         , num_shards(NUM_SHARDS)
         , myloc(new po6::net::location(ip_addr, port))
         , coord(new po6::net::location(COORD_IPADDR, COORD_REC_PORT))
+        , cache(NUM_SHARDS)
         , bb(myloc->address, myloc->port + SEND_PORT_INCR, 0)
         , bb_recv(myloc->address, myloc->port, 0)
         , myid(my_id)
@@ -149,18 +151,14 @@ namespace db
     {
         int i, inport;
         po6::net::location *temp_loc;
-        cache::reach_cache *temp_cache;
         std::string ipaddr;
         std::ifstream file(SHARDS_DESC_FILE);
         shard_locs = (po6::net::location **)malloc(sizeof(po6::net::location *) * num_shards);
-        caches = (cache::reach_cache **)malloc(sizeof(cache::reach_cache *) * num_shards);
         i = 0;
         while (file >> ipaddr >> inport)
         {
             temp_loc = new po6::net::location(ipaddr.c_str(), inport);
             shard_locs[i] = temp_loc;
-            temp_cache = new cache::reach_cache();
-            caches[i] = temp_cache;
             ++i;
         }
         file.close();
@@ -313,15 +311,28 @@ namespace db
     inline size_t 
     graph :: get_cache(size_t local_node, size_t dest_loc, size_t dest_node)
     {
-        return caches[dest_loc]->get_req_id(dest_node, local_node);
+        return cache.get_req_id(dest_loc, dest_node, local_node);
     }
 
     inline void 
     graph :: add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id)
     {
         element::node *n = (element::node *)local_node;
-        if (caches[dest_loc]->insert_entry(dest_node, local_node, req_id)) {
+        if (cache.insert_entry(dest_loc, dest_node, local_node, req_id)) {
             n->add_cached_req(req_id);
+        }
+    }
+
+    inline void
+    graph :: remove_cache(size_t req_id)
+    {
+        std::unique_ptr<std::unordered_set<size_t>> caching_nodes = std::move(cache.remove_entry(req_id));
+        for (auto iter = caching_nodes->begin(); iter != caching_nodes->end(); iter++)
+        {
+            element::node *n = (element::node *)(*iter);
+            n->update_mutex.lock();
+            n->remove_cached_req(req_id);
+            n->update_mutex.unlock();
         }
     }
 

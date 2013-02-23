@@ -48,6 +48,7 @@ namespace element
             bool check_and_add_seen(size_t id);
             void remove_seen(size_t id);
             void add_cached_req(size_t req_id);
+            void remove_cached_req(size_t req_id);
             std::unique_ptr<std::vector<size_t>> purge_cache();
     };
 
@@ -85,6 +86,12 @@ namespace element
     node :: add_cached_req(size_t req_id)
     {
         cached_req_ids->push_back(req_id);
+    }
+
+    inline void
+    node :: remove_cached_req(size_t req_id)
+    {
+        cached_req_ids->erase(std::remove(cached_req_ids->begin(), cached_req_ids->end(), req_id), cached_req_ids->end());
     }
 
     inline std::unique_ptr<std::vector<size_t>>
