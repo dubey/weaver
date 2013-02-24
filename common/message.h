@@ -50,6 +50,8 @@ namespace message
         REACHABLE_REPLY,
         REACHABLE_PROP,
         REACHABLE_DONE,
+        CACHE_UPDATE,
+        CACHE_UPDATE_ACK,
         ERROR
     };
 
@@ -152,6 +154,9 @@ namespace message
                 size_t *cache_req_id);
             void prep_done_request(size_t id);
             void unpack_done_request(size_t *id);
+            void prep_cache_update(std::vector<size_t> good, std::vector<size_t> bad);
+            void unpack_cache_update(std::vector<size_t> *good, std::vector<size_t> *bad);
+            void prep_done_cache();
             // Error message
             void prep_error();
 
@@ -809,6 +814,54 @@ namespace message
     message :: unpack_done_request(size_t *id)
     {
         buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(enum msg_type)) >> (*id);
+    }
+
+    inline void
+    message :: prep_cache_update(std::vector<size_t> good, std::vector<size_t> bad)
+    {
+        size_t gsize = good.size();
+        size_t bsize = bad.size();
+        uint32_t index = BUSYBEE_HEADER_SIZE;
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE +
+            2 * sizeof(size_t) + // sizes of vectors
+            (gsize + bsize) * sizeof(size_t))); // vectors
+        buf->pack_at(index) << gsize << bsize;
+        index += (2*sizeof(size_t));
+        for (size_t i = 0; i < gsize; i++, index += sizeof(size_t))
+        {
+            buf->pack_at(index) << good[i];
+        }
+        for (size_t i = 0; i < bsize; i++, index += sizeof(size_t))
+        {
+            buf->pack_at(index) << bad[i];
+        }
+    }
+
+    inline void
+    message :: unpack_cache_update(std::vector<size_t> *good, std::vector<size_t> *bad)
+    {
+        uint32_t index = BUSYBEE_HEADER_SIZE;
+        size_t gsize, bsize, temp;
+        buf->unpack_from(index) >> gsize >> bsize;
+        index += (2*sizeof(size_t));
+        for (size_t i = 0; i < gsize; i++, index += sizeof(size_t))
+        {
+            buf->unpack_from(index) >> temp;
+            good->push_back(temp);
+        }
+        for (size_t i = 0; i < bsize; i++, index += sizeof(size_t))
+        {
+            buf->unpack_from(index) >> temp;
+            bad->push_back(temp);
+        }
+    }
+
+    inline void
+    message :: prep_done_cache()
+    {
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + 
+            sizeof(enum msg_type))); // type
+        buf->pack_at(BUSYBEE_HEADER_SIZE) << type;
     }
 
 } //namespace message

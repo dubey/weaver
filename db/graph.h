@@ -125,7 +125,9 @@ namespace db
             void remove_visited(element::node *n, size_t req_counter);
             size_t get_cache(size_t local_node, size_t dest_loc, size_t dest_node);
             void add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id);
+            void transient_add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id);
             void remove_cache(size_t req_id);
+            void commit_cache(size_t req_id);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(std::unique_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(po6::net::location *loc, std::auto_ptr<e::buffer> buf);
@@ -324,12 +326,29 @@ namespace db
     }
 
     inline void
+    graph :: transient_add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id)
+    {
+        element::node *n = (element::node *)local_node;
+        if (cache.transient_insert_entry(dest_loc, dest_node, local_node, req_id)) {
+            n->add_cached_req(req_id);
+        }
+    }
+
+    inline void
     graph :: remove_cache(size_t req_id)
     {
-        std::unique_ptr<std::unordered_set<size_t>> caching_nodes = std::move(cache.remove_entry(req_id));
-        if (caching_nodes)
-        {
-            for (auto iter = caching_nodes->begin(); iter != caching_nodes->end(); iter++)
+        std::unique_ptr<std::unordered_set<size_t>> caching_nodes1 = std::move(cache.remove_entry(req_id));
+        std::unique_ptr<std::unordered_set<size_t>> caching_nodes2 = std::move(cache.remove_transient_entry(req_id));
+        if (caching_nodes1) {
+            for (auto iter = caching_nodes1->begin(); iter != caching_nodes1->end(); iter++)
+            {
+                element::node *n = (element::node *)(*iter);
+                n->update_mutex.lock();
+                n->remove_cached_req(req_id);
+                n->update_mutex.unlock();
+            }
+        } else if (caching_nodes2) {
+            for (auto iter = caching_nodes2->begin(); iter != caching_nodes2->end(); iter++)
             {
                 element::node *n = (element::node *)(*iter);
                 n->update_mutex.lock();
@@ -337,6 +356,12 @@ namespace db
                 n->update_mutex.unlock();
             }
         }
+    }
+
+    inline void
+    graph :: commit_cache(size_t req_id)
+    {
+        cache.commit(req_id);
     }
 
     inline busybee_returncode

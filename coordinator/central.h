@@ -53,8 +53,8 @@ namespace coordinator
             , waiting(true)
             , reply(&mutex)
             , del_reply(mtx)
-            , deleted(false)
             , cached_req_id(0)
+            , deleted(false)
         {
         }
     };
@@ -78,14 +78,19 @@ namespace coordinator
             po6::threads::mutex client_bb_mutex;
             int port_ctr;
             std::vector<std::shared_ptr<po6::net::location>> shards;
+            int num_shards;
             std::vector<common::meta_element *> nodes;
             std::vector<common::meta_element *> edges;
             vclock::vector vc;
             po6::threads::mutex update_mutex;
             std::vector<std::pair<size_t, std::vector<size_t>>> pending_delete_requests;
             // TODO clean-up of old deleted cache ids
-            std::unordered_set<size_t> deleted_cache;
             std::unordered_map<size_t, pending_req *> pending;
+            std::unique_ptr<std::unordered_set<size_t>> bad_cache_ids;
+            std::unique_ptr<std::unordered_set<size_t>> good_cache_ids;
+            std::unique_ptr<std::unordered_set<size_t>> transient_bad_cache_ids;
+            int cache_acks;
+            po6::threads::cond cache_cond;
             std::default_random_engine generator;
             std::uniform_real_distribution<double> dist;
 
@@ -98,6 +103,8 @@ namespace coordinator
             bool still_pending_del_req(size_t req_id);
             void add_deleted_cache(size_t req_ids, std::unique_ptr<std::vector<size_t>> cached_ids);
             bool is_deleted_cache_id(size_t id);
+            void add_good_cache_id(size_t id);
+            void add_bad_cache_id(size_t id);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(std::shared_ptr<po6::net::location> loc,
                 std::auto_ptr<e::buffer> buf);
@@ -120,6 +127,11 @@ namespace coordinator
         , client_send_bb(client_send_loc->address, client_send_loc->port, 0)
         , client_rec_bb(client_rec_loc->address, client_rec_loc->port, 0)
         , port_ctr(0)
+        , bad_cache_ids(new std::unordered_set<size_t>())
+        , good_cache_ids(new std::unordered_set<size_t>())
+        , transient_bad_cache_ids(new std::unordered_set<size_t>())
+        , cache_acks(0)
+        , cache_cond(&update_mutex)
         , generator((unsigned)42) // fixed seed for deterministic random numbers
         , dist(0.0, 1.0)
     {
@@ -137,6 +149,7 @@ namespace coordinator
             std::cerr << "File " << SHARDS_DESC_FILE << " not found.\n";
         }
         file.close();
+        num_shards = shards.size();
     }
 
     inline void
@@ -213,7 +226,7 @@ namespace coordinator
         std::vector<std::pair<size_t, std::vector<size_t>>>::iterator pend_iter;
         for (del_iter = cached_ids->begin(); del_iter != cached_ids->end(); del_iter++)
         {
-            deleted_cache.insert(*del_iter);
+            bad_cache_ids->insert(*del_iter);
         }
         for (pend_iter = pending_delete_requests.begin(); pend_iter != pending_delete_requests.end(); pend_iter++)
         {
@@ -237,7 +250,24 @@ namespace coordinator
     inline bool
     central :: is_deleted_cache_id(size_t id)
     {
-        return (deleted_cache.find(id) != deleted_cache.end());
+        return ((bad_cache_ids->find(id) != bad_cache_ids->end()) &&
+            (transient_bad_cache_ids->find(id) != transient_bad_cache_ids->end()));
+    }
+
+    inline void
+    central :: add_good_cache_id(size_t id)
+    {
+        if (bad_cache_ids->find(id) != bad_cache_ids->end())
+        {
+            good_cache_ids->insert(id);
+        }
+    }
+
+    inline void
+    central :: add_bad_cache_id(size_t id)
+    {
+        bad_cache_ids->insert(id);
+        good_cache_ids->erase(id);
     }
 
     inline busybee_returncode

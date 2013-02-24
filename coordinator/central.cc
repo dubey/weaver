@@ -15,6 +15,8 @@
 #include <cstdlib>
 #include <iostream>
 #include <time.h>
+#include <chrono>
+#include <thread>
 #include "e/buffer.h"
 #include "busybee_constants.h"
 
@@ -289,10 +291,12 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
         } else {
             if (!server->is_deleted_cache_id(request->cached_req_id)) {
                 done_loop = true;
+                server->add_good_cache_id(request->cached_req_id);
             } else {
                 // request was served based on cache value that should be
                 // invalidated; restarting request
                 ignore_cache.push_back(request->cached_req_id);
+                server->add_bad_cache_id(request->cached_req_id);
                 std::cout << "Bad cache id " << request->cached_req_id << std::endl;
                 delete request;
                 request = new coordinator::pending_req(&server->update_mutex);
@@ -379,6 +383,12 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             request->cached_req_id = cached_req_id;
             request->reply.signal();
             request->mutex.unlock();
+            break;
+
+        case message::CACHE_UPDATE_ACK:
+            if ((++server->cache_acks) == server->num_shards) {
+                server->cache_cond.signal();
+            }
             break;
         
         default:
@@ -510,6 +520,38 @@ client_msg_handler(coordinator::central *server)
     }
 }
 
+// periodically update cache at all shards
+void
+cache_updater(coordinator::central *server)
+{
+    std::vector<size_t> good, bad;
+    message::message msg(message::CACHE_UPDATE);
+    while (true)
+    {
+        std::chrono::seconds duration(5); // execute every 5 seconds
+        std::this_thread::sleep_for(duration);
+        server->update_mutex.lock();
+        std::copy(server->good_cache_ids->begin(), server->good_cache_ids->end(), std::back_inserter(good));
+        std::copy(server->bad_cache_ids->begin(), server->bad_cache_ids->end(), std::back_inserter(bad));
+        if ((good.size() != 0) || (bad.size() != 0)) {
+            for (int i = 0; i < server->num_shards; i++)
+            {
+                msg.prep_cache_update(good, bad);
+                server->send(i, msg.buf);
+            }
+            server->transient_bad_cache_ids = std::move(server->bad_cache_ids);
+            server->bad_cache_ids.reset(new std::unordered_set<size_t>());
+            server->good_cache_ids.reset(new std::unordered_set<size_t>());
+        }
+        while (server->cache_acks < server->num_shards)
+        {
+            server->cache_cond.wait();
+        }
+        server->cache_acks = 0;
+        server->update_mutex.unlock();
+    }
+}
+
 int
 main()
 {
@@ -522,5 +564,9 @@ main()
     t->detach();
 
     // initialize client msg receiving thread
-    client_msg_handler(&server);
-} 
+    t = new std::thread(client_msg_handler, &server);
+    t->detach();
+
+    // call periodic cache update function
+    cache_updater(&server);
+}

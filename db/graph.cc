@@ -389,7 +389,11 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
                     if ((e->nbr->get_addr() == (void *)reach_node) &&
                         (e->nbr->get_loc() == reach_loc))
                     {
-                        G->add_cache((size_t)n, request->dest_loc, request->dest_addr, cached_req_id);
+                        if (cached_req_id == request->coord_id) {
+                            G->add_cache((size_t)n, request->dest_loc, request->dest_addr, cached_req_id);
+                        } else {
+                            G->transient_add_cache((size_t)n, request->dest_loc, request->dest_addr, cached_req_id);
+                        }
                         prev_reach_node = (size_t)n;
                         break;
                     }
@@ -446,7 +450,28 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
         return;
     }
     request->mutex.unlock();
-} 
+}
+
+// update cache based on confirmations for transient cached values
+// and invalidations for stale entries
+void
+handle_cache_update(db::graph *G, std::unique_ptr<message::message> msg)
+{
+    std::vector<size_t> good, bad;
+    msg->unpack_cache_update(&good, &bad);
+    
+    // invalidations
+    for (size_t i = 0; i < bad.size(); i++)
+    {
+        G->remove_cache(bad[i]);
+    }
+
+    // confirmations
+    for (size_t i = 0; i < good.size(); i++)
+    {
+        G->commit_cache(good[i]);
+    }
+}
 
 // server loop for the shard server
 void
@@ -517,6 +542,11 @@ runner(db::graph *G)
             case message::REACHABLE_DONE:
                 rec_msg->unpack_done_request(&done_id);
                 G->add_done_request(done_id);
+                break;
+
+            case message::CACHE_UPDATE:
+                thr.reset(new db::thread::unstarted_thread(handle_cache_update, G, std::move(rec_msg)));
+                G->thread_pool.add_request(std::move(thr));
                 break;
 
             default:
