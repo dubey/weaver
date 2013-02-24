@@ -213,7 +213,6 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
                     reached = true;
                     reach_node = (void *)n;
                     cached_req_id = temp_cache;
-                    std::cout << "Serving request from cache\n";
                 } else {
                     std::vector<db::element::edge *>::iterator iter;
                     // check the properties of each out-edge
@@ -458,6 +457,7 @@ void
 handle_cache_update(db::graph *G, std::unique_ptr<message::message> msg)
 {
     std::vector<size_t> good, bad;
+    message::message sendmsg(message::CACHE_UPDATE_ACK);
     msg->unpack_cache_update(&good, &bad);
     
     // invalidations
@@ -471,6 +471,9 @@ handle_cache_update(db::graph *G, std::unique_ptr<message::message> msg)
     {
         G->commit_cache(good[i]);
     }
+    
+    sendmsg.prep_done_cache();
+    G->send_coord(sendmsg.buf);
 }
 
 // server loop for the shard server

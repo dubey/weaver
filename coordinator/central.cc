@@ -201,7 +201,6 @@ add_edge_property(common::meta_element *node, common::meta_element *edge, uint32
     msg.prep_add_prop(req_id, (size_t)node->get_addr(), (size_t)edge->get_addr(),
         key, value, time);
     server->update_mutex.unlock();
-    std::cout << "adding edge property\n";
     server->send(node->get_loc(), msg.buf);
 }
 
@@ -226,7 +225,6 @@ delete_edge_property(common::meta_element *node, common::meta_element *edge,
     server->add_pending_del_req(req_id);
     // TODO treat delete edge property same as any other deletion!
     server->update_mutex.unlock();
-    std::cout << "deleting edge property\n";
     server->send(node->get_loc(), msg.buf);
 }
 
@@ -263,9 +261,9 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
     {
         req_id = ++server->request_id;
         server->pending[req_id] = request;
-        std::cout << "Reachability request number " << req_id << " from source"
-                  << " node " << node1->get_addr() << " " << node1->get_loc() << " to destination node "
-                  << node2->get_addr() << std::endl;
+        //std::cout << "Reachability request number " << req_id << " from source"
+        //          << " node " << node1->get_addr() << " " << node1->get_loc() << " to destination node "
+        //          << node2->get_addr() << std::endl;
         request->mutex.lock();
         msg.prep_reachable_prop(&src, -1, (size_t)node2->get_addr(),
             node2->get_loc(), req_id, req_id, edge_props, vector_clock, ignore_cache);
@@ -297,7 +295,6 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
                 // invalidated; restarting request
                 ignore_cache.push_back(request->cached_req_id);
                 server->add_bad_cache_id(request->cached_req_id);
-                std::cout << "Bad cache id " << request->cached_req_id << std::endl;
                 delete request;
                 request = new coordinator::pending_req(&server->update_mutex);
             }
@@ -307,7 +304,7 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
 
     server->update_mutex.unlock();
     ret = request->reachable;
-    std::cout << "Reachable reply is " << ret << " for " << "request " << req_id << std::endl;
+    //std::cout << "Reachable reply is " << ret << " for " << "request " << req_id << std::endl;
     delete request;
     return ret;
 }
@@ -386,9 +383,11 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             break;
 
         case message::CACHE_UPDATE_ACK:
+            server->update_mutex.lock();
             if ((++server->cache_acks) == server->num_shards) {
                 server->cache_cond.signal();
             }
+            server->update_mutex.unlock();
             break;
         
         default:
@@ -542,12 +541,12 @@ cache_updater(coordinator::central *server)
             server->transient_bad_cache_ids = std::move(server->bad_cache_ids);
             server->bad_cache_ids.reset(new std::unordered_set<size_t>());
             server->good_cache_ids.reset(new std::unordered_set<size_t>());
+            while (server->cache_acks < server->num_shards)
+            {
+                server->cache_cond.wait();
+            }
+            server->cache_acks = 0;
         }
-        while (server->cache_acks < server->num_shards)
-        {
-            server->cache_cond.wait();
-        }
-        server->cache_acks = 0;
         server->update_mutex.unlock();
     }
 }

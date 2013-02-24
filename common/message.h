@@ -825,7 +825,7 @@ namespace message
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE +
             2 * sizeof(size_t) + // sizes of vectors
             (gsize + bsize) * sizeof(size_t))); // vectors
-        buf->pack_at(index) << gsize << bsize;
+        buf->pack_at(index) << type << gsize << bsize;
         index += (2*sizeof(size_t));
         for (size_t i = 0; i < gsize; i++, index += sizeof(size_t))
         {
@@ -840,7 +840,7 @@ namespace message
     inline void
     message :: unpack_cache_update(std::vector<size_t> *good, std::vector<size_t> *bad)
     {
-        uint32_t index = BUSYBEE_HEADER_SIZE;
+        uint32_t index = BUSYBEE_HEADER_SIZE + sizeof(enum msg_type);
         size_t gsize, bsize, temp;
         buf->unpack_from(index) >> gsize >> bsize;
         index += (2*sizeof(size_t));
