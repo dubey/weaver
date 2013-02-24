@@ -33,7 +33,7 @@ class central;
 namespace thread
 {
     class pool;
-    void thread_loop(pool *tpool, bool update);
+    void thread_loop(pool *tpool, bool client);
 
     class unstarted_thread
     {
@@ -80,23 +80,24 @@ namespace thread
             pool(int n_threads);
 
         public:
-            int num_threads;
-            std::deque<std::unique_ptr<unstarted_thread>> update_queue;
-            std::deque<std::unique_ptr<unstarted_thread>> reach_req_queue;
+            int num_threads, num_free_client;
+            std::deque<std::unique_ptr<unstarted_thread>> client_req_queue;
+            std::deque<std::unique_ptr<unstarted_thread>> shard_response_queue;
             std::vector<std::thread> threads;
             po6::threads::mutex queue_mutex;
-            po6::threads::cond empty_queue_cond;
-            po6::threads::cond update_empty_queue_cond;
+            po6::threads::cond shard_queue_cond;
+            po6::threads::cond client_queue_cond;
         
         public:
-            void add_request(std::unique_ptr<unstarted_thread> t, bool update);
+            void add_request(std::unique_ptr<unstarted_thread> t, bool client);
     };
 
     inline
     pool :: pool(int n_threads)
         : num_threads(n_threads)
-        , empty_queue_cond(&queue_mutex)
-        , update_empty_queue_cond(&queue_mutex)
+        , num_free_client(0)
+        , shard_queue_cond(&queue_mutex)
+        , client_queue_cond(&queue_mutex)
     {
         int i;
         std::unique_ptr<std::thread> t;
@@ -105,55 +106,72 @@ namespace thread
             t.reset(new std::thread(thread_loop, this, false));
             t->detach();
         }
-        t.reset(new std::thread(thread_loop, this, true));
-        t->detach();
+        for (i = 0; i < num_threads; i++)
+        {
+            t.reset(new std::thread(thread_loop, this, true));
+            t->detach();
+        }
     }
 
     inline void
-    pool :: add_request(std::unique_ptr<unstarted_thread> t, bool update)
+    pool :: add_request(std::unique_ptr<unstarted_thread> t, bool client)
     {
+        std::unique_ptr<std::thread> thr;
         queue_mutex.lock();
-        if (update)
+        if (client)
         {
-            if (update_queue.empty())
-            {
-                update_empty_queue_cond.signal();
+            if (num_free_client == 0) {
+                // need to create a new thread
+                // all other threads may be blocked, waiting for an update
+                thr.reset(new std::thread(t->func, t->server, std::move(t->msg), t->m_type, std::move(t->loc)));
+                thr->detach();
+            } else {
+                if (client_req_queue.empty())
+                {
+                    client_queue_cond.signal();
+                }
+                client_req_queue.push_back(std::move(t));
             }
-            update_queue.push_back(std::move(t));
         } else {
-            if (reach_req_queue.empty())
+            if (shard_response_queue.empty())
             {
-                empty_queue_cond.signal();
+                shard_queue_cond.signal();
             }
-            reach_req_queue.push_back(std::move(t));
+            shard_response_queue.push_back(std::move(t));
         }
         queue_mutex.unlock();
     }
 
     void
-    thread_loop(pool *tpool, bool update)
+    thread_loop(pool *tpool, bool client)
     {
         std::unique_ptr<unstarted_thread> thr;
         while (true)
         {
             tpool->queue_mutex.lock();
-            if (update) {
-                while(tpool->update_queue.empty())
+            if (client) {
+                tpool->num_free_client++;
+                while(tpool->client_req_queue.empty())
                 {
-                    tpool->update_empty_queue_cond.wait();
+                    tpool->client_queue_cond.wait();
                 }
-                thr = std::move(tpool->update_queue.front());
-                tpool->update_queue.pop_front();
+                tpool->num_free_client--;
+                thr = std::move(tpool->client_req_queue.front());
+                tpool->client_req_queue.pop_front();
+                if (!tpool->client_req_queue.empty())
+                {
+                    tpool->client_queue_cond.signal();
+                }
             } else {
-                while(tpool->reach_req_queue.empty())
+                while(tpool->shard_response_queue.empty())
                 {
-                    tpool->empty_queue_cond.wait();
+                    tpool->shard_queue_cond.wait();
                 }
-                thr = std::move(tpool->reach_req_queue.front());
-                tpool->reach_req_queue.pop_front();
-                if (!tpool->reach_req_queue.empty())
+                thr = std::move(tpool->shard_response_queue.front());
+                tpool->shard_response_queue.pop_front();
+                if (!tpool->shard_response_queue.empty())
                 {
-                    tpool->empty_queue_cond.signal();
+                    tpool->shard_queue_cond.signal();
                 }
             }
             tpool->queue_mutex.unlock();

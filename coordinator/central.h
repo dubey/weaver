@@ -16,12 +16,16 @@
 #define __CENTRAL__
 
 #include <vector>
+#include <unordered_map>
+#include <unordered_set>
+#include <algorithm>
 #include <fstream>
 #include <random> // XXX for testing
 #include <chrono>
 #include <thread>
 #include <busybee_sta.h>
 #include <po6/net/location.h>
+#include <po6/threads/cond.h>
 
 #include "common/meta_element.h"
 #include "common/weaver_constants.h"
@@ -30,6 +34,31 @@
 
 namespace coordinator
 {
+    // used to wait on pending update/reachability requests
+    class pending_req
+    {
+        public:
+            void *addr;
+            bool reachable;
+            po6::threads::mutex mutex;
+            bool waiting;
+            po6::threads::cond reply;
+            po6::threads::cond del_reply;
+            size_t cached_req_id;
+            std::unique_ptr<std::vector<size_t>> cached_req_ids;
+            bool deleted;
+            
+        pending_req(po6::threads::mutex *mtx)
+            : addr(NULL)
+            , waiting(true)
+            , reply(&mutex)
+            , del_reply(mtx)
+            , deleted(false)
+            , cached_req_id(0)
+        {
+        }
+    };
+
     class central
     {
         public:
@@ -53,12 +82,22 @@ namespace coordinator
             std::vector<common::meta_element *> edges;
             vclock::vector vc;
             po6::threads::mutex update_mutex;
+            std::vector<std::pair<size_t, std::vector<size_t>>> pending_delete_requests;
+            // TODO clean-up of old deleted cache ids
+            std::unordered_set<size_t> deleted_cache;
+            std::unordered_map<size_t, pending_req *> pending;
             std::default_random_engine generator;
             std::uniform_real_distribution<double> dist;
 
         public:
             void add_node(common::meta_element *n);
             void add_edge(common::meta_element *e);
+            void add_pending_del_req(size_t req_id);
+            size_t get_last_del_req(size_t wait_req_id);
+            //bool insert_del_wait(size_t del_req_id, size_t wait_req_id);
+            bool still_pending_del_req(size_t req_id);
+            void add_deleted_cache(size_t req_ids, std::unique_ptr<std::vector<size_t>> cached_ids);
+            bool is_deleted_cache_id(size_t id);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(std::shared_ptr<po6::net::location> loc,
                 std::auto_ptr<e::buffer> buf);
@@ -103,17 +142,102 @@ namespace coordinator
     inline void
     central :: add_node(common::meta_element *n)
     {
-        update_mutex.lock();
         nodes.push_back(n);
-        update_mutex.unlock();
     }
 
     inline void
     central :: add_edge(common::meta_element *e)
     {
-        update_mutex.lock();
         edges.push_back(e);
-        update_mutex.unlock();
+    }
+
+    inline void
+    central :: add_pending_del_req(size_t req_id)
+    {
+        std::vector<size_t> empty;
+        pending_delete_requests.push_back(std::make_pair(req_id, empty));
+    }
+
+    inline size_t
+    central :: get_last_del_req(size_t wait_req_id)
+    {
+        if (pending_delete_requests.empty()) {
+            return 0;
+        } else {
+            pending_delete_requests[pending_delete_requests.size()-1].second.push_back(wait_req_id);
+            return pending_delete_requests[pending_delete_requests.size()-1].first;
+        }
+    }
+
+    /*
+    inline bool
+    central :: insert_del_wait(size_t del_req_id, size_t wait_req_id)
+    {
+        for(std::vector<T>::reverse_iterator it = pending_delete_requests.rbegin(); 
+            it != pending_delete_requests.rend(); ++it) 
+        {
+            if (it->first == del_req_id) {
+                it->second.push_back(wait_req_id);
+                return true;
+            }
+        }
+        return false;
+    }
+    */
+
+    inline bool
+    central :: still_pending_del_req(size_t req_id)
+    {
+        std::vector<std::pair<size_t, std::vector<size_t>>>::iterator iter;
+        if (req_id == 0) {
+            return false;
+        }
+        for (iter = pending_delete_requests.begin(); iter != pending_delete_requests.end(); iter++)
+        {
+            if (iter->first > req_id) {
+                return false;
+            } else if (iter->first == req_id) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // record all the invalid cached req ids
+    // also update pending_delete_requests
+    inline void
+    central :: add_deleted_cache(size_t req_id, std::unique_ptr<std::vector<size_t>> cached_ids)
+    {
+        std::vector<size_t>::iterator del_iter;
+        pending_req *request;
+        std::vector<std::pair<size_t, std::vector<size_t>>>::iterator pend_iter;
+        for (del_iter = cached_ids->begin(); del_iter != cached_ids->end(); del_iter++)
+        {
+            deleted_cache.insert(*del_iter);
+        }
+        for (pend_iter = pending_delete_requests.begin(); pend_iter != pending_delete_requests.end(); pend_iter++)
+        {
+            if (pend_iter->first == req_id) {
+                break;
+            }
+        }
+        assert(pend_iter != pending_delete_requests.end());
+        for (del_iter = pend_iter->second.begin(); del_iter != pend_iter->second.end(); del_iter++)
+        {
+            request = (pending_req *)(*del_iter);
+            if (request->deleted) {
+                delete request;
+            } else {
+                request->del_reply.signal();
+            }
+        }
+        pending_delete_requests.erase(pend_iter);
+    }
+
+    inline bool
+    central :: is_deleted_cache_id(size_t id)
+    {
+        return (deleted_cache.find(id) != deleted_cache.end());
     }
 
     inline busybee_returncode

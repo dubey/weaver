@@ -163,11 +163,18 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
     size_t src_iter, src_end;
     std::unique_ptr<std::vector<size_t>> deleted_nodes(new std::vector<size_t>()); // to send back to requesting shard
     std::unique_ptr<std::vector<uint64_t>> del_times(new std::vector<uint64_t>()); // corresponding to deleted_nodes
+    std::vector<size_t> ignore_cache; // invalid cached ids
     
     // get the list of source nodes to check for reachability, as well as the single sink node
     src_nodes = msg->unpack_reachable_prop(&prev_loc, &dest_node, &dest_loc,
-        &coord_req_id, &prev_req_id, &edge_props, &vector_clock, G->myid);
+        &coord_req_id, &prev_req_id, &edge_props, &vector_clock, &ignore_cache, G->myid);
     cached_req_id = coord_req_id;
+
+    // invalidating stale cache entries
+    for (size_t i = 0; i < ignore_cache.size(); i++)
+    {
+        G->remove_cache(ignore_cache[i]);
+    }
     
     if (!G->check_request(coord_req_id)) // checking if the request has been handled
     {
@@ -197,7 +204,11 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
             } else if (!G->mark_visited(n, coord_req_id)) {
                 size_t temp_cache = G->get_cache((size_t)n, dest_loc, dest_node);
                 visited_nodes.push_back(n);
-                if (temp_cache != 0) {
+                // need to check whether the cached_req_id is for a request
+                // which is BEFORE this request, so as to ensure we are not
+                // using parts of the graph that are not yet created
+                // deleted graph elements are handled at the coordinator
+                if (temp_cache < coord_req_id && temp_cache > 0) {
                     // cached +ve result
                     reached = true;
                     reach_node = (void *)n;
@@ -286,7 +297,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
             G->pending_batch[my_outgoing_req_id] = request;
             G->outgoing_req_id_counter_mutex.unlock();
             msg->prep_reachable_prop(&loc_iter->second, G->myid, dest_node, 
-                dest_loc, coord_req_id, my_outgoing_req_id, edge_props, vector_clock);
+                dest_loc, coord_req_id, my_outgoing_req_id, edge_props, vector_clock, ignore_cache);
             // no local messages possible, so have to send via network
             G->send(loc_iter->first, msg->buf);
         }

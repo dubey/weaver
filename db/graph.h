@@ -327,12 +327,15 @@ namespace db
     graph :: remove_cache(size_t req_id)
     {
         std::unique_ptr<std::unordered_set<size_t>> caching_nodes = std::move(cache.remove_entry(req_id));
-        for (auto iter = caching_nodes->begin(); iter != caching_nodes->end(); iter++)
+        if (caching_nodes)
         {
-            element::node *n = (element::node *)(*iter);
-            n->update_mutex.lock();
-            n->remove_cached_req(req_id);
-            n->update_mutex.unlock();
+            for (auto iter = caching_nodes->begin(); iter != caching_nodes->end(); iter++)
+            {
+                element::node *n = (element::node *)(*iter);
+                n->update_mutex.lock();
+                n->remove_cached_req(req_id);
+                n->update_mutex.unlock();
+            }
         }
     }
 

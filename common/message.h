@@ -123,7 +123,8 @@ namespace message
                 size_t req_id,
                 size_t prev_req_id,
                 std::shared_ptr<std::vector<common::property>> edge_props,
-                std::shared_ptr<std::vector<uint64_t>> vector_clock);
+                std::shared_ptr<std::vector<uint64_t>> vector_clock,
+                std::vector<size_t> ignore_cache);
             std::unique_ptr<std::vector<size_t>> unpack_reachable_prop(
                 int *src_loc,
                 size_t *dest_node,
@@ -132,6 +133,7 @@ namespace message
                 size_t *prev_req_id,
                 std::shared_ptr<std::vector<common::property>> *edge_props,
                 std::shared_ptr<std::vector<uint64_t>> *vector_clock,
+                std::vector<size_t> *ignore_cache,
                 int myid);
             void prep_reachable_rep(size_t req_id, 
                 bool is_reachable,
@@ -617,11 +619,13 @@ namespace message
         size_t req_id,
         size_t prev_req_id,
         std::shared_ptr<std::vector<common::property>> edge_props,
-        std::shared_ptr<std::vector<uint64_t>> vector_clock)
+        std::shared_ptr<std::vector<uint64_t>> vector_clock,
+        std::vector<size_t> ignore_cache)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         size_t num_nodes = src_nodes->size();
         size_t num_props = edge_props->size();
+        size_t num_ignore = ignore_cache.size();
         size_t i;
         type = REACHABLE_PROP;
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE +
@@ -635,7 +639,9 @@ namespace message
             sizeof(size_t) +//prev_req_id
             sizeof(size_t) + // num props
             edge_props->size() * (sizeof(uint32_t) + sizeof(size_t)) + // edge props
-            NUM_SHARDS * sizeof(uint64_t))); //vector clock
+            NUM_SHARDS * sizeof(uint64_t) + //vector clock
+            sizeof(size_t) + // num_ignore
+            ignore_cache.size() * sizeof(size_t))); // ignore cached ids
 
         buf->pack_at(index) << type;
         index += sizeof(enum msg_type);
@@ -655,6 +661,12 @@ namespace message
         {
             buf->pack_at(index) << src_nodes->at(i);
         }
+        buf->pack_at(index) << num_ignore;
+        index += sizeof(size_t);
+        for (i = 0; i < num_ignore; i++, index += sizeof(size_t))
+        {
+            buf->pack_at(index) << ignore_cache[i];
+        }
         buf->pack_at(index) << src_loc << dest_node << dest_loc << req_id << prev_req_id;
     }
 
@@ -666,12 +678,13 @@ namespace message
         size_t *prev_req_id,
         std::shared_ptr<std::vector<common::property>> *edge_props,
         std::shared_ptr<std::vector<uint64_t>> *vector_clock,
+        std::vector<size_t> *ignore_cache,
         int myid)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
         uint32_t _type;
         std::unique_ptr<std::vector<size_t>> src(new std::vector<size_t>());
-        size_t num_nodes, num_props, i, temp;
+        size_t num_nodes, num_props, num_ignore, i, temp;
         uint64_t myclock;
 
         buf->unpack_from(index) >> _type;
@@ -683,7 +696,7 @@ namespace message
         for (i = 0; i < NUM_SHARDS; i++, index += sizeof(uint64_t))
         {
             buf->unpack_from(index) >> (**vector_clock)[i]; //dereferencing pointer to pointer
-            if (i == myid) {
+            if (i == (size_t)myid) {
                 myclock = (**vector_clock)[i];
             }
         }
@@ -705,6 +718,13 @@ namespace message
         {
             buf->unpack_from(index) >> temp;
             src->push_back(temp);
+        }
+        buf->unpack_from(index) >> num_ignore;
+        index += sizeof(size_t);
+        for (i = 0; i < num_ignore; i++, index += sizeof(size_t))
+        {
+            buf->unpack_from(index) >> temp;
+            ignore_cache->push_back(temp);
         }
         buf->unpack_from(index) >> (*src_loc) >> (*dest_node)
             >> (*dest_loc) >> (*req_id) >> (*prev_req_id);

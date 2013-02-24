@@ -15,7 +15,6 @@
 #include <cstdlib>
 #include <iostream>
 #include <time.h>
-#include <unordered_map>
 #include "e/buffer.h"
 #include "busybee_constants.h"
 
@@ -23,31 +22,11 @@
 #include "common/meta_element.h"
 #include "common/message.h"
 
-// used to wait on pending update/reachability requests
-class pending_req
-{
-    public:
-        void *addr;
-        bool reachable;
-        po6::threads::mutex mutex;
-        bool waiting;
-        po6::threads::cond reply;
-        
-    pending_req()
-        : addr(NULL)
-        , waiting(true)
-        , reply(&mutex)
-    {
-    }
-};
-
-static std::unordered_map<size_t, pending_req *> pending;
-
 // create a node
 void*
 create_node(coordinator::central *server)
 {
-    pending_req *request; 
+    coordinator::pending_req *request; 
     common::meta_element *new_node;
     uint64_t creat_time;
     message::message msg(message::NODE_CREATE_REQ);
@@ -58,10 +37,10 @@ create_node(coordinator::central *server)
     server->port_ctr = (server->port_ctr + 1) % NUM_SHARDS;
     shard_id = server->port_ctr; // node will be placed on this shard server
     creat_time = ++server->vc.clocks->at(shard_id); // incrementing vector clock
-    request = new pending_req();
+    request = new coordinator::pending_req(&server->update_mutex);
     request->mutex.lock();
     req_id = ++server->request_id;
-    pending[req_id] = request;
+    server->pending[req_id] = request;
     msg.prep_node_create(req_id, creat_time);
     server->update_mutex.unlock();
     server->send(shard_id, msg.buf);
@@ -75,9 +54,9 @@ create_node(coordinator::central *server)
     request->mutex.unlock();
     delete request;
     server->update_mutex.lock();
-    pending.erase(req_id);
-    server->update_mutex.unlock();
+    server->pending.erase(req_id);
     server->add_node(new_node);
+    server->update_mutex.unlock();
     //std::cout << "Node id is " << (void *)new_node << " " <<
     //    new_node->get_addr() << " " << new_node->get_loc() << std::endl;
     return (void *)new_node;
@@ -87,7 +66,7 @@ create_node(coordinator::central *server)
 void*
 create_edge(common::meta_element *node1, common::meta_element *node2, coordinator::central *server)
 {
-    pending_req *request;
+    coordinator::pending_req *request;
     common::meta_element *new_edge;
     uint64_t creat_time;
     message::message msg(message::EDGE_CREATE_REQ);
@@ -96,10 +75,10 @@ create_edge(common::meta_element *node1, common::meta_element *node2, coordinato
     //TODO need checks for given node_handles
     server->update_mutex.lock();
     creat_time = ++server->vc.clocks->at(node1->get_loc());
-    request = new pending_req();
+    request = new coordinator::pending_req(&server->update_mutex);
     request->mutex.lock();
     req_id = ++server->request_id;
-    pending[req_id] = request;
+    server->pending[req_id] = request;
     msg.prep_edge_create(req_id, (size_t)node1->get_addr(), (size_t)node2->get_addr(),
         node2->get_loc(), node2->get_creat_time(), creat_time);
     server->update_mutex.unlock();
@@ -113,9 +92,9 @@ create_edge(common::meta_element *node1, common::meta_element *node2, coordinato
     request->mutex.unlock();
     delete request;
     server->update_mutex.lock();
-    pending.erase(req_id);
-    server->update_mutex.unlock();
+    server->pending.erase(req_id);
     server->add_edge(new_edge);
+    server->update_mutex.unlock();
     //std::cout << "Edge id is " << (void *)new_edge << " " <<
     //    new_edge->get_addr() << std::endl;
     return (void *)new_edge;
@@ -125,7 +104,7 @@ create_edge(common::meta_element *node1, common::meta_element *node2, coordinato
 void
 delete_node(common::meta_element *node, coordinator::central *server)
 {
-    pending_req *request;
+    coordinator::pending_req *request;
     uint64_t del_time;
     message::message msg(message::NODE_DELETE_REQ);
     size_t req_id;
@@ -139,23 +118,25 @@ delete_node(common::meta_element *node, coordinator::central *server)
     }
     del_time = ++server->vc.clocks->at(node->get_loc());
     node->update_del_time(del_time);
-    request = new pending_req();
+    request = new coordinator::pending_req(&server->update_mutex);
     request->mutex.lock();
     req_id = ++server->request_id;
-    pending[req_id] = request;
+    server->pending[req_id] = request;
     msg.prep_node_delete(req_id, (size_t)node->get_addr(), del_time);
+    server->add_pending_del_req(req_id);
     server->update_mutex.unlock();
-    server->flaky_send(node->get_loc(), msg.buf, true);
+    server->send(node->get_loc(), msg.buf);
 
     // waiting for reply from shard
     while (request->waiting)
     {
         request->reply.wait();
     }
-    request->mutex.unlock();
-    delete request;
+    request->mutex.unlock(); // okay because no more concurrency for this request
     server->update_mutex.lock();
-    pending.erase(req_id);
+    server->add_deleted_cache(req_id, std::move(request->cached_req_ids));
+    delete request;
+    server->pending.erase(req_id);
     server->update_mutex.unlock();
 }
 
@@ -163,7 +144,7 @@ delete_node(common::meta_element *node, coordinator::central *server)
 void
 delete_edge(common::meta_element *node, common::meta_element *edge, coordinator::central *server)
 {
-    pending_req *request;
+    coordinator::pending_req *request;
     uint64_t del_time;
     message::message msg(message::EDGE_DELETE_REQ);
     size_t req_id;
@@ -177,29 +158,30 @@ delete_edge(common::meta_element *node, common::meta_element *edge, coordinator:
     }
     del_time = ++server->vc.clocks->at(node->get_loc());
     edge->update_del_time(del_time);
-    request = new pending_req();
+    request = new coordinator::pending_req(&server->update_mutex);
     request->mutex.lock();
     req_id = ++server->request_id;
-    pending[req_id] = request;
+    server->pending[req_id] = request;
     msg.prep_edge_delete(req_id, (size_t)node->get_addr(), (size_t)edge->get_addr(), del_time);
+    server->add_pending_del_req(req_id);
     server->update_mutex.unlock();
-    server->flaky_send(node->get_loc(), msg.buf, true);
+    server->send(node->get_loc(), msg.buf);
     
     while (request->waiting)
     {
         request->reply.wait();
     }
-    request->mutex.unlock();
-    delete request;
+    request->mutex.unlock(); // okay because no more concurrency for this request
     server->update_mutex.lock();
-    pending.erase(req_id);
+    server->add_deleted_cache(req_id, std::move(request->cached_req_ids));
+    delete request;
+    server->pending.erase(req_id);
     server->update_mutex.unlock();
 }
 
 // add a property, i.e. a key-value pair to an edge
 void 
-add_edge_property(common::meta_element *node, common::meta_element *edge, 
-    uint32_t key, size_t value, coordinator::central *server)
+add_edge_property(common::meta_element *node, common::meta_element *edge, uint32_t key, size_t value, coordinator::central *server)
 {
     uint64_t time;
     message::message msg(message::EDGE_ADD_PROP);
@@ -238,8 +220,9 @@ delete_edge_property(common::meta_element *node, common::meta_element *edge,
     }
     time = ++server->vc.clocks->at(node->get_loc());
     req_id = ++server->request_id;
-    msg.prep_del_prop(req_id, (size_t)node->get_addr(), (size_t)edge->get_addr(),
-        key, time);
+    msg.prep_del_prop(req_id, (size_t)node->get_addr(), (size_t)edge->get_addr(), key, time);
+    server->add_pending_del_req(req_id);
+    // TODO treat delete edge property same as any other deletion!
     server->update_mutex.unlock();
     std::cout << "deleting edge property\n";
     server->send(node->get_loc(), msg.buf);
@@ -251,12 +234,16 @@ bool
 reachability_request(common::meta_element *node1, common::meta_element *node2, 
     std::shared_ptr<std::vector<common::property>> edge_props, coordinator::central *server)
 {
-    pending_req *request;
+    coordinator::pending_req *request;
     message::message msg(message::REACHABLE_PROP);
     std::vector<size_t> src; // vector to hold src node
     src.push_back((size_t)node1->get_addr());
     size_t req_id;
     bool ret;
+    std::shared_ptr<std::vector<uint64_t>> vector_clock;
+    size_t last_del_req;
+    bool done_loop = false;
+    std::vector<size_t> ignore_cache;
     
     server->update_mutex.lock();
     if (node1->get_del_time() < MAX_TIME || node2->get_del_time() < MAX_TIME)
@@ -266,29 +253,58 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
         server->update_mutex.unlock();
         return false;
     }
-    request = new pending_req();
-    req_id = ++server->request_id;
-    pending[req_id] = request;
-    std::cout << "Reachability request number " << req_id << " from source"
-              << " node " << node1->get_addr() << " " << node1->get_loc() << " to destination node "
-              << node2->get_addr() << std::endl;
-    request->mutex.lock();
-    msg.prep_reachable_prop(&src, -1, (size_t)node2->get_addr(),
-        node2->get_loc(), req_id, req_id, edge_props, server->vc.clocks);
-    server->update_mutex.unlock();
-    server->send(node1->get_loc(), msg.buf);
-    
-    while (request->waiting)
+    vector_clock.reset(new std::vector<uint64_t>(*server->vc.clocks));
+    request = new coordinator::pending_req(&server->update_mutex);
+    last_del_req = server->get_last_del_req((size_t)request);
+
+    while (!done_loop)
     {
-        request->reply.wait();
+        req_id = ++server->request_id;
+        server->pending[req_id] = request;
+        std::cout << "Reachability request number " << req_id << " from source"
+                  << " node " << node1->get_addr() << " " << node1->get_loc() << " to destination node "
+                  << node2->get_addr() << std::endl;
+        request->mutex.lock();
+        msg.prep_reachable_prop(&src, -1, (size_t)node2->get_addr(),
+            node2->get_loc(), req_id, req_id, edge_props, vector_clock, ignore_cache);
+        server->update_mutex.unlock();
+        server->send(node1->get_loc(), msg.buf);
+        
+        while (request->waiting)
+        {
+            request->reply.wait();
+        }
+        request->mutex.unlock(); // no more concurrency for this request
+        server->update_mutex.lock();
+        if (last_del_req != 0)
+        {
+            while (server->still_pending_del_req(last_del_req))
+            {
+                request->del_reply.wait();
+            }
+            last_del_req = 0; // no need to check for future iterations
+        }
+        if (request->cached_req_id == req_id) {
+            done_loop = true;
+        } else {
+            if (!server->is_deleted_cache_id(request->cached_req_id)) {
+                done_loop = true;
+            } else {
+                // request was served based on cache value that should be
+                // invalidated; restarting request
+                ignore_cache.push_back(request->cached_req_id);
+                std::cout << "Bad cache id " << request->cached_req_id << std::endl;
+                delete request;
+                request = new coordinator::pending_req(&server->update_mutex);
+            }
+        }
+        server->pending.erase(req_id);
     }
+
+    server->update_mutex.unlock();
     ret = request->reachable;
     std::cout << "Reachable reply is " << ret << " for " << "request " << req_id << std::endl;
-    request->mutex.unlock();
     delete request;
-    server->update_mutex.lock();
-    pending.erase(req_id);
-    server->update_mutex.unlock();
     return ret;
 }
 
@@ -312,16 +328,15 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     enum message::msg_type m_type, std::unique_ptr<po6::net::location> dummy)
 {
     size_t req_id, cached_req_id;
-    pending_req *request;
+    coordinator::pending_req *request;
     size_t mem_addr;
     bool is_reachable; // for reply
-    size_t src_node; //for reply
+    size_t src_node; // for reply
     int src_loc; // for reply
-    size_t num_del_nodes; //for reply
-    std::unique_ptr<std::vector<size_t>> del_nodes(new std::vector<size_t>()); //for reply
-    std::unique_ptr<std::vector<uint64_t>> del_times(new std::vector<uint64_t>()); //for reply
+    size_t num_del_nodes; // for reply
+    std::unique_ptr<std::vector<size_t>> del_nodes(new std::vector<size_t>()); // for reply
+    std::unique_ptr<std::vector<uint64_t>> del_times(new std::vector<uint64_t>()); // for reply
     std::unique_ptr<std::vector<size_t>> cached_req_ids; // for reply
-    size_t i;
     
     switch(m_type)
     {
@@ -329,7 +344,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
         case message::EDGE_CREATE_ACK:
             msg->unpack_create_ack(&req_id, &mem_addr);
             server->update_mutex.lock();
-            request = pending[req_id];
+            request = server->pending[req_id];
             server->update_mutex.unlock();
             request->mutex.lock();
             request->addr = (void *)mem_addr;
@@ -343,10 +358,11 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             cached_req_ids.reset(new std::vector<size_t>());
             msg->unpack_delete_ack(&req_id, &cached_req_ids);
             server->update_mutex.lock();
-            request = pending[req_id];
+            request = server->pending[req_id];
             server->update_mutex.unlock();
             request->mutex.lock();
             request->waiting = false;
+            request->cached_req_ids = std::move(cached_req_ids);
             request->reply.signal();
             request->mutex.unlock();
             break;
@@ -355,11 +371,12 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             msg->unpack_reachable_rep(&req_id, &is_reachable, &src_node, &src_loc,
                 &num_del_nodes, &del_nodes, &del_times, &cached_req_id);
             server->update_mutex.lock();
-            request = pending[req_id];
+            request = server->pending[req_id];
             server->update_mutex.unlock();
             request->mutex.lock();
             request->reachable = is_reachable;
             request->waiting = false;
+            request->cached_req_id = cached_req_id;
             request->reply.signal();
             request->mutex.unlock();
             break;
@@ -369,8 +386,9 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     }
 }
 
+// handle responses from shards
 void
-msg_handler(coordinator::central *server)
+shard_msg_handler(coordinator::central *server)
 {
     busybee_returncode ret;
     po6::net::location sender(COORD_IPADDR, COORD_PORT);
@@ -392,7 +410,7 @@ msg_handler(coordinator::central *server)
         mtype = (enum message::msg_type)code;
         thr.reset(new coordinator::thread::unstarted_thread(handle_pending_req,
             server, std::move(rec_msg), mtype, NULL));
-        server->thread_pool.add_request(std::move(thr), true);// XXX!(mtype == message::REACHABLE_REPLY));
+        server->thread_pool.add_request(std::move(thr), false);
     }
 }
 
@@ -462,9 +480,9 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
     }
 }
 
-// handle messages from client
+// handle requests from client
 void
-client_handler(coordinator::central *server)
+client_msg_handler(coordinator::central *server)
 {
     busybee_returncode ret;
     po6::net::location sender(COORD_IPADDR, COORD_PORT);
@@ -488,7 +506,7 @@ client_handler(coordinator::central *server)
         client_loc.reset(new po6::net::location(sender));
         thr.reset(new coordinator::thread::unstarted_thread(handle_client_req,
             server, std::move(rec_msg), mtype, std::move(client_loc)));
-        server->thread_pool.add_request(std::move(thr), false); // XXX
+        server->thread_pool.add_request(std::move(thr), true);
     }
 }
 
@@ -500,9 +518,9 @@ main()
     
     std::cout << "Weaver: coordinator" << std::endl;
     // initialize shard msg receiving thread
-    t = new std::thread(msg_handler, &server);
+    t = new std::thread(shard_msg_handler, &server);
     t->detach();
 
-    //initialize client handler thread
-    client_handler(&server);
+    // initialize client msg receiving thread
+    client_msg_handler(&server);
 } 
