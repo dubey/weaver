@@ -23,6 +23,7 @@
 #include <unordered_set>
 #include <po6/net/location.h>
 #include <po6/threads/mutex.h>
+#include <po6/threads/cond.h>
 #include <e/buffer.h>
 #include "busybee_constants.h"
 
@@ -83,6 +84,44 @@ class clustering_request
     clustering_request()
     {
         edges = 0;
+    }
+};
+
+// Pending refresh request
+class refresh_request
+{
+    public:
+    db::element::node *node;
+    size_t responses_left;
+    bool finished;
+    po6::threads::mutex finished_lock;
+    po6::threads::cond finished_cond;
+
+    refresh_request(size_t num_shards, db::element::node * n) :
+    finished_cond(&finsihed_lock)
+    {
+        node = n;
+        responses_left = num_shards;
+        finished = false;
+    }
+    void add_response(std::vector<std::pair<size_t, uint64_t>> &deleted_nodes,
+            po6::net::location from_loc)
+    {
+        node->update_mutex.lock();
+        for (std::pair<size_t,uint64_t> &p : deleted_nodes){
+            for (common::meta_element &nbr : *n->out_edges){
+                if (from_loc = nbr.get_loc() && p.first == nbr.get_addr())
+                    nbr.update_del_time(p.second);
+            }
+        }
+        node->update_mutex.unlock()
+        finished_lock.lock()
+        responses_left--;
+        if (responses_left == 0){
+            finsihed = true;
+            finsished_cond.nofifyall();
+        }
+        finished_lock.unlock();
     }
 };
 
@@ -488,23 +527,15 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
 inline void
 add_clustering_response(db::graph *G, clustering_request *request, size_t to_add, std::unique_ptr<message::message> msg)
 {
-    request->mutex.unlock();
+    request->mutex.lock();
     request->edges += to_add;
     request->responses_left--;
 
     if (request->responses_left == 0)
     {
         request->mutex.unlock();
-        double clustering_coeff;
-        if (request->possible_edges == 0){ //divide by zero
-            clustering_coeff = 0;
-        }
-        else{
-            clustering_coeff = ((double) request->edges)/((double) request->possible_edges);
-        }
-
         message::prepare_message(*msg, message::CLUSTERING_REPLY, request->id,
-                clustering_coeff);
+                request->edges, request->possible_edges);
         G->send(std::move(request->coordinator_loc), msg->buf);
         delete request;
     }
@@ -569,7 +600,6 @@ handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
     change_property_times(edge_props, myclock_recd);
 
     // wait till all updates for this shard arrive
-    myclock_recd = vector_clock[myid-1];
     G->wait_for_updates(myclock_recd);
 
     if (main_node->get_del_time() <= myclock_recd)
@@ -617,8 +647,6 @@ handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
 
     for (std::pair<po6::net::location,std::unordered_set<size_t>> p : request->nbrs)
     {
-        uint32_t ipaddr = p.first.get_addr();
-
         if (p.first == *G->myloc)
         {   //neighbors on local machine
           //  local_nbrs = &p.second;
@@ -684,6 +712,65 @@ handle_clustering_prop_reply(db::graph *G, std::unique_ptr<message::message> msg
     add_clustering_response(G, req, to_add, std::move(msg));
 }
 
+void
+refresh_edges(db::graph *G, db::element::node *n, std::vector<uint64_t> &vclock)
+{
+    uint64_t myclock_recd = vector_clock[myid-1];
+    std::unordered_map<po6::net::location, std::vector<size_t>> nbrs;
+    G->wait_for_updates(myclock_recd);
+    for (db::element::edge &e : n->out_edges){
+        bool check_edge = e.get_del_time == MAX_TIME; //need to check more than this?
+        if (check_edge){
+            nbrs[*e.nbr->get_loc_ptr()].push_back((size_t)e.nbr->get_addr());
+            }
+    }
+    int responses_left = nbrs.size();
+    refresh_request req = refresh_request(responses_left, n);
+    for (std::pair<const po6::net::location, std::vector<size_t>> &p : nbrs)
+    {
+        if (p.first == *G->myloc)
+        {   //neighbors on local machine
+            std::vector<std::pair<size_t, uint64_t>> blank;
+            req.add_response(blank, *G->myloc);
+        } else {
+            message::message msg(message::NODE_REFRESH_REQ);
+            message::prepare_message(msg, message::NODE_REFRESH_REQ, 
+                    (size_t) &req, *G->myloc, vector_clock, p.second);
+            G->send(p.first, msg.buf);
+        }
+    }
+    req.finished_lock.lock();
+    while (!req.finished){
+        req.finished_cond.wait();
+    }
+    //we are finished now
+    req.finished_lock.unlock(); //might not be needed
+}
+
+void
+handle_refresh_request(db::graph *G, std::unique_ptr<message::message> msg){
+    size_t return_req_ptr;
+    std::vector<size_t> nodes_to_check;
+    std::vector<uint64_t> vector_clock;
+    po6::net::location reply_loc;
+    message::unpack_message(*msg, messsage::NODE_REFRESH_REQ, return_req_ptr,
+        reply_loc, vector_clock, nodes_to_check);
+    uint64_t myclock_recd = vector_clock[myid-1];
+
+    // wait till all updates for this shard arrive
+    G->wait_for_updates(myclock_recd);
+
+    std::vector<std::pair<size_t,uint64_t>> deleted_nodes;
+    db::element::node *node;
+    for (size_t node_ptr : nodes_to_check){
+        node = (db::element::node *) node_ptr;
+        if (node->get_del_time() < MAX_TIME){
+            deleted_nodes.push_back((node_ptr, node->get_del_time()));
+        }
+    }
+    message::prepare_message(*msg, message::NODE_REFRESH_REPLY, return_req_ptr,
+        deleted_nodes);
+}
 // server loop for the shard server
 void
 runner(db::graph *G)

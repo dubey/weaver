@@ -29,7 +29,8 @@ class pending_req
     public:
         void *addr;
         bool reachable;
-        double clustering_coeff;
+        size_t clustering_numerator;
+        size_t clustering_denominator;
         po6::threads::mutex mutex;
         bool waiting;
         po6::threads::cond reply;
@@ -298,7 +299,8 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
 // compute the local clustering coefficient for a node
 double
 clustering_request(common::meta_element *node,
-    std::shared_ptr<std::vector<common::property>> edge_props, coordinator::central *server)
+    std::shared_ptr<std::vector<common::property>> edge_props,
+    coordinator::central *server, size_t &numerator, size_t &denominator)
 {
     pending_req *request;
     message::message msg(message::CLUSTERING_REQ);
@@ -329,14 +331,16 @@ clustering_request(common::meta_element *node,
     {
         request->reply.wait();
     }
-    ret = request->clustering_coeff;
-    std::cout << "Clustering reply is " << ret << " for " << "request " << req_id << std::endl;
+    numerator = request->clustering_numerator;
+    denominator = request->clustering_denominator;
+    std::cout << "Clustering reply is " << numerator << " over " << denominator
+        << " for request " << req_id << std::endl;
     request->mutex.unlock();
     delete request;
     server->update_mutex.lock();
     pending.erase(req_id);
     server->update_mutex.unlock();
-    std::cout << "reply is now" << ret << " for " << "request " << req_id << std::endl;
+    std::cout << "reply is now" << numerator << " over " << denominator << "for request " << req_id << std::endl;
     return ret;
 }
 
@@ -366,6 +370,8 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     bool is_reachable; // for reply
     double coeff; // for reply
     size_t src_node; //for reply
+    size_t clustering_numerator; //for reply
+    size_t clustering_denominator; //for reply
     size_t num_del_nodes; //for reply
     std::unique_ptr<std::vector<size_t>> del_nodes(new std::vector<size_t>()); //for reply
     std::unique_ptr<std::vector<uint64_t>> del_times(new std::vector<uint64_t>()); //for reply
@@ -411,12 +417,14 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             break;
 
         case message::CLUSTERING_REPLY:
-            message::unpack_message(*msg, message::CLUSTERING_REPLY, req_id, coeff);
+            message::unpack_message(*msg, message::CLUSTERING_REPLY, req_id,
+            clustering_numerator, clustering_denominator);
             server->update_mutex.lock();
             request = pending[req_id];
             server->update_mutex.unlock();
             request->mutex.lock();
-            request->clustering_coeff = coeff;
+            request->clustering_numerator = clustering_numerator;
+            request->clustering_denominator = clustering_denominator;
             request->waiting = false;
             request->reply.signal();
             request->mutex.unlock();
@@ -464,7 +472,8 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
     uint32_t key;
     size_t new_elem;
     bool reachable;
-    double coefficient;
+    size_t clustering_numerator;
+    size_t clustering_denominator;
     auto edge_props = std::make_shared<std::vector<common::property>>();
     switch (m_type)
     {
@@ -510,9 +519,10 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
             message::unpack_message(*msg, message::CLIENT_CLUSTERING_REQ, client_port,
                     elem1, *edge_props);
             client_loc->port = client_port;
-            coefficient = clustering_request((common::meta_element *)elem1,
-                    edge_props, server);
-            message::prepare_message(*msg, message::CLIENT_REPLY, coefficient);
+            clustering_request((common::meta_element *)elem1, edge_props,
+                    server, clustering_numerator, clustering_denominator);
+            message::prepare_message(*msg, message::CLIENT_CLUSTERING_REPLY,
+                    clustering_numerator, clustering_denominator);
             server->client_send(*client_loc, msg->buf);
             break;
 

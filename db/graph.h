@@ -59,6 +59,7 @@ namespace db
                 std::unique_ptr<common::meta_element> n2, uint64_t time);
             void delete_node(element::node *n, uint64_t del_time);
             void delete_edge(element::node *n, element::edge *e, uint64_t del_time);
+            void refresh_edge(element::node *n, element::edge *e, uint64_t del_time);
             void add_edge_property(element::node *n, element::edge *e,
                 std::unique_ptr<common::property> prop, uint64_t time);
             void delete_all_edge_property(element::node *n, element::edge *e, uint32_t key, uint64_t time);
@@ -143,6 +144,14 @@ namespace db
         assert(my_clock == del_time);
         pending_update_cond.broadcast();
         update_mutex.unlock();
+    }
+
+    inline void
+    graph :: refresh_edge(element::node *n, element::edge *e, uint64_t del_time)
+    {
+        n->update_mutex.lock();
+        e->update_del_time(del_time);
+        n->update_mutex.unlock();
     }
 
     inline void

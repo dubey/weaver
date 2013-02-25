@@ -147,17 +147,27 @@ client :: local_clustering_coefficient(size_t node,
             std::shared_ptr<std::vector<common::property>> edge_props)
 {
     busybee_returncode ret;
-    double coeff;
+    size_t numerator;
+    size_t denominator;
     message::message msg(message::CLIENT_CLUSTERING_REQ);
-    msg.prep_client_clustering_req(myloc.port, node, edge_props);
+    message::prepare_message(msg, message::CLIENT_CLUSTERING_REQ, myloc.port,
+            node, *edge_props);
     send_coord(msg.buf);
     if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS)
     {
         std::cerr << "msg recv error: " << ret << std::endl;
         return false;
     }
-    msg.unpack_client_clustering_reply(&coeff);
-    return coeff;
+    message::unpack_message(msg, message::CLIENT_CLUSTERING_REPLY,
+            numerator, denominator);
+    if (denominator == 0){
+        std::cerr << "not possible to compute clustering coefficient: less than two valid neighbors" << std::endl;
+        return 0;
+    }
+    else{
+        std::cerr << "Client got " << numerator << " over " << denominator << std::endl;
+        return  (double) numerator/ denominator;
+    }
 }
 
 inline void
