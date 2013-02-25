@@ -861,16 +861,34 @@ namespace message
 
 
 // size templates
-    template <typename T> 
-    inline size_t size(const T& t)
+    inline size_t size(const uint16_t &t)
     {
-        return sizeof(T);
+        return sizeof(uint16_t);
     }
-
-    template <>  
-    inline size_t size<po6::net::location>(const po6::net::location& t)
+    inline size_t size(const uint32_t &t)
+    {
+        return sizeof(uint32_t);
+    }
+    inline size_t size(const size_t &t)
+    {
+        return sizeof(size_t);
+    }
+    inline size_t size(const po6::net::location& t)
     {
         return sizeof(uint32_t) + sizeof(uint16_t);
+    }
+
+    inline size_t size(const common::property& t)
+
+    {
+        return sizeof(uint32_t)+sizeof(size_t);
+
+    }
+
+    template <typename T1, typename T2>
+    inline size_t size(const std::pair<T1, T2>& t)
+    {
+        return size(t.first) + size(t.second);
     }
 
     template <typename T>
@@ -890,7 +908,7 @@ namespace message
     {
         size_t total_size = 0;
         // O(n) size operation can handle keys and values of differing sizes
-        for (const std::pair<T1,T2> pair : t) //XXX change to reference
+        for (const std::pair<T1,T2> &pair : t) //XXX change to reference
         {
             total_size += size(pair.first) + size(pair.second);
         }
@@ -910,45 +928,52 @@ namespace message
         }
     }
 
-    template <>
-    inline size_t size<common::property>(const common::property& t)
-
-    {
-        return sizeof(uint32_t)+sizeof(size_t);
-    }
     template <typename T, typename... Args>
     inline size_t size(const T& t, const Args&... args)
     {
         return size(t) + size(args...);
     }
 // packing templates
-    template <typename T> 
-    inline void pack_buffer(e::buffer &buf, uint32_t index, const T& t)
+    inline void pack_buffer(e::buffer &buf, uint32_t index, const uint16_t &t)
+    {
+        buf.pack_at(index) << t;
+    }
+    inline void pack_buffer(e::buffer &buf, uint32_t index, const uint32_t &t)
+    {
+        buf.pack_at(index) << t;
+    }
+    inline void pack_buffer(e::buffer &buf, uint32_t index, const size_t &t)
     {
         buf.pack_at(index) << t;
     }
 
-    template <> 
-    inline void pack_buffer<double>(e::buffer &buf, uint32_t index, const double& t)
+    inline void pack_buffer(e::buffer &buf, uint32_t index, const double& t)
     {
         uint64_t dbl;
         memcpy(&dbl, &t, sizeof(double)); //to avoid casting issues, probably could avoid copy
         buf.pack_at(index) << dbl;
     }
 
-    template <> 
-    inline void pack_buffer<po6::net::location>(e::buffer &buf,
+    inline void pack_buffer(e::buffer &buf,
             uint32_t index, const po6::net::location& t)
     {
         uint32_t addr = (const_cast<po6::net::location&>(t).get_addr()); //watch out
         buf.pack_at(index) << addr << t.port;
     }
 
-    template <> 
-    inline void pack_buffer<common::property>(e::buffer &buf,
+    inline void pack_buffer(e::buffer &buf,
             uint32_t index, const common::property& t)
     {
         buf.pack_at(index) << t.key << t.value;
+    }
+
+    template <typename T1, typename T2>
+    inline void pack_buffer(e::buffer &buf,
+            uint32_t index, const std::pair<T1, T2>& t)
+    {
+        // assumes constant size
+        pack_buffer(buf, index, t.first);
+        pack_buffer(buf, index + size(t.first), t.second);
     }
 
     template <typename T> 
@@ -1021,14 +1046,20 @@ namespace message
         pack_buffer(*m.buf, index + sizeof(enum msg_type), args...);
     }
 // unpacking templates
-    template <typename T> 
-    inline void unpack_buffer(e::buffer &buf, uint32_t index, T& t)
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, uint16_t t)
+    {
+        buf.unpack_from(index) >> t;
+    }
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, uint32_t t)
+    {
+        buf.unpack_from(index) >> t;
+    }
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, size_t t)
     {
         buf.unpack_from(index) >> t;
     }
 
-    template <> 
-    inline void unpack_buffer<common::property>(e::buffer &buf,
+    inline void unpack_buffer(e::buffer &buf,
             uint32_t index, common::property& t)
     {
         uint32_t key;
@@ -1038,16 +1069,14 @@ namespace message
         t.value = val;
     }
 
-    template <> 
-    inline void unpack_buffer<double>(e::buffer &buf, uint32_t index, double& t)
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, double& t)
     {
         uint64_t dbl;
         buf.unpack_from(index) >> dbl;
         memcpy(&t, &dbl, sizeof(double)); //to avoid casting issues, probably could avoid copy
     }
 
-    template <> 
-    inline void unpack_buffer<po6::net::location>(e::buffer &buf,
+    inline void unpack_buffer(e::buffer &buf,
             uint32_t index, po6::net::location& t)
     {
         uint32_t ipaddr;
@@ -1055,6 +1084,15 @@ namespace message
         buf.unpack_from(index) >> ipaddr >> port;
         
         t = po6::net::location(ipaddr, port);
+    }
+
+    template <typename T1, typename T2>
+    inline void unpack_buffer(e::buffer &buf,
+            uint32_t index, std::pair<T1, T2>& t)
+    {
+        //assumes constant size
+        unpack_buffer(buf, index, t.first);
+        unpack_buffer(buf, index+size(t.first), t.second);
     }
 
     template <typename T> 
