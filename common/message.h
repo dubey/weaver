@@ -869,9 +869,9 @@ namespace message
     {
         return sizeof(uint32_t);
     }
-    inline size_t size(const size_t &t)
+    inline size_t size(const uint64_t &t)
     {
-        return sizeof(size_t);
+        return sizeof(uint64_t);
     }
     inline size_t size(const po6::net::location& t)
     {
@@ -942,7 +942,7 @@ namespace message
     {
         buf.pack_at(index) << t;
     }
-    inline void pack_buffer(e::buffer &buf, uint32_t index, const size_t &t)
+    inline void pack_buffer(e::buffer &buf, uint32_t index, const uint64_t &t)
     {
         buf.pack_at(index) << t;
     }
@@ -1046,15 +1046,15 @@ namespace message
         pack_buffer(*m.buf, index + sizeof(enum msg_type), args...);
     }
 // unpacking templates
-    inline void unpack_buffer(e::buffer &buf, uint32_t index, uint16_t t)
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, uint16_t &t)
     {
         buf.unpack_from(index) >> t;
     }
-    inline void unpack_buffer(e::buffer &buf, uint32_t index, uint32_t t)
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, uint32_t &t)
     {
         buf.unpack_from(index) >> t;
     }
-    inline void unpack_buffer(e::buffer &buf, uint32_t index, size_t t)
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, uint64_t &t)
     {
         buf.unpack_from(index) >> t;
     }
