@@ -104,7 +104,6 @@ class refresh_request
     void wait_on_responses(){
         finished_lock.lock();
         while (finished != true){
-            std::cout << "sleepin on clustering_response ";
             finished_cond.wait();
         }
 
@@ -225,7 +224,7 @@ handle_refresh_response(db::graph *G, std::unique_ptr<message::message> msg){
 inline void
 change_property_times(std::vector<common::property> &props, uint64_t creat_time)
 {
-    for (auto p : props)
+    for (auto &p : props)
     {
         p.creat_time = creat_time;
     }
@@ -239,12 +238,12 @@ handle_create_node(db::graph *G, std::unique_ptr<message::message> msg)
     size_t req_id;
     uint64_t creat_time;
     db::element::node *n;
-    msg->unpack_node_create(&req_id, &creat_time);
+    message::unpack_message(*msg, message::NODE_CREATE_REQ, req_id, creat_time);
 
     G->wait_for_updates(creat_time - 1);
     n = G->create_node(creat_time);
 
-    msg->prep_node_create_ack(req_id, (size_t)n); 
+    message::prepare_message(*msg, message::NODE_CREATE_ACK, req_id, (size_t) n);
     G->send_coord(msg->buf);
 }
 
@@ -254,15 +253,17 @@ handle_delete_node(db::graph *G, std::unique_ptr<message::message> msg)
 {
     size_t req_id;
     db::element::node *n; // node to be deleted
-    void *node_addr; // temp var to hold node handle
+    size_t node_addr; // temp var to hold node handle
     uint64_t del_time; // time of deletion
-    msg->unpack_node_delete(&req_id, &node_addr, &del_time);
+    std::cout << "deleting node start..";
+    message::unpack_message(*msg, message::NODE_DELETE_REQ, req_id, node_addr, del_time);
 
     n = (db::element::node *)node_addr;
     G->wait_for_updates(del_time - 1);
     G->delete_node(n, del_time);
 
-    msg->prep_node_delete_ack(req_id);
+    message::prepare_message(*msg, message::NODE_DELETE_ACK, req_id);
+    std::cout << "acked deleting node\n";
     G->send_coord(msg->buf);
 }
 
@@ -274,13 +275,14 @@ handle_create_edge(db::graph *G, std::unique_ptr<message::message> msg)
     void *n1;
     std::unique_ptr<common::meta_element> n2;
     uint64_t creat_time;
-    db::element::edge *e;
+    size_t e;
     msg->unpack_edge_create(&req_id, &n1, &n2, &creat_time);
 
     G->wait_for_updates(creat_time - 1);
-    e = G->create_edge(n1, std::move(n2), creat_time);
+    e = (size_t) G->create_edge(n1, std::move(n2),
+            creat_time);
 
-    msg->prep_edge_create_ack(req_id, (size_t)e);
+    message::prepare_message(*msg, message::EDGE_CREATE_ACK, req_id, e);
     G->send_coord(msg->buf);
 }
 
@@ -291,16 +293,19 @@ handle_delete_edge(db::graph *G, std::unique_ptr<message::message> msg)
     size_t req_id;
     db::element::node *n; // node whose edge is being deleted
     db::element::edge *e;
-    void *node_addr, *edge_addr;
+    size_t node_addr, edge_addr;
     uint64_t del_time;
-    msg->unpack_edge_delete(&req_id, &node_addr, &edge_addr, &del_time);
+    std::cout << "deleting edge start..";
+    message::unpack_message(*msg, message::EDGE_DELETE_REQ, req_id, node_addr,
+            edge_addr, del_time);
 
     n = (db::element::node *)node_addr;
     e = (db::element::edge *)edge_addr;
     G->wait_for_updates(del_time - 1);
     G->delete_edge(n, e, del_time);
 
-    msg->prep_edge_delete_ack(req_id);
+    message::prepare_message(*msg, message::EDGE_DELETE_ACK, req_id);
+    std::cout << "acked deleting edge\n";
     G->send_coord(msg->buf);
 }
 
@@ -329,10 +334,11 @@ handle_delete_edge_property(db::graph *G, std::unique_ptr<message::message> msg)
     size_t req_id;
     db::element::node *n;
     db::element::edge *e;
-    void *node_addr, *edge_addr;
+    size_t node_addr, edge_addr;
     uint32_t key;
     uint64_t prop_del_time;
-    msg->unpack_del_prop(&req_id, &node_addr, &edge_addr, &key, &prop_del_time);
+    message::unpack_message(*msg, message::EDGE_DELETE_PROP, req_id, node_addr,
+            edge_addr, prop_del_time);
 
     n = (db::element::node *)node_addr;
     e = (db::element::edge *)edge_addr;
@@ -619,22 +625,23 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
 inline void
 add_clustering_response(db::graph *G, clustering_request *request, size_t to_add, std::unique_ptr<message::message> msg)
 {
+    std::cout << "start add clustering response... ";
     request->mutex.lock();
     request->edges += to_add;
     request->responses_left--;
 
-    if (request->responses_left == 0)
+    bool kill = (request->responses_left == 0);
+    request->mutex.unlock();
+    if (kill)
     {
-        request->mutex.unlock();
         message::prepare_message(*msg, message::CLUSTERING_REPLY, request->id,
                 request->edges, request->possible_edges);
         G->send(std::move(request->coordinator_loc), msg->buf);
+        std::cout << "sent back clustering response\n";
         delete request;
     }
     else
-    {
-        request->mutex.unlock();
-    }
+        std::cout << "done adding clustering response\n";
 }
 
 inline size_t
@@ -676,6 +683,7 @@ std::vector<uint64_t> &vector_clock)
 void
 handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
 {
+    std::cout << "top of handle clustering request!\n";
     size_t node_ptr;
     db::element::node *main_node; // pointer to node to calc clustering coefficient for
     clustering_request *request = new clustering_request();
@@ -684,16 +692,21 @@ handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
     std::vector<uint64_t> vector_clock;
     int total_nbrs = 0;
 
+    std::cout << "about to unpack request!\n";
     message::unpack_message(*msg, message::CLUSTERING_REQ, node_ptr,
             request->coordinator_loc, request->id, edge_props, vector_clock);
     main_node = (db::element::node *) node_ptr;
     uint64_t myclock_recd = vector_clock[myid-1];
     //myclock_recd = vector_clock->at(myid-1);
+    std::cout << "about to update property times!\n";
     change_property_times(edge_props, myclock_recd);
 
+    std::cout << "about to wait for updates!\n";
     // wait till all updates for this shard arrive
     G->wait_for_updates(myclock_recd);
+    std::cout << "about to refresh neighbors...";
     refresh_node_neighbors(G, main_node, vector_clock);
+    std::cout << "done refreshing\n";
 
     if (main_node->get_del_time() <= myclock_recd)
     {
@@ -872,6 +885,7 @@ runner(db::graph *G)
                 break;
 
             case message::CLUSTERING_REQ:
+                std::cout << "got a new clustering request!\n";
                 thr.reset(new
                 db::thread::unstarted_thread(handle_clustering_request, G, std::move(rec_msg)));
                 thread_pool.add_request(std::move(thr));

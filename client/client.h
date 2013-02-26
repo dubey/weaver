@@ -61,16 +61,15 @@ client :: create_node()
 {
     busybee_returncode ret;
     size_t new_node;
-    uint16_t dummy;
     message::message msg(message::CLIENT_NODE_CREATE_REQ);
-    msg.prep_client0(myloc.port);
+    message::prepare_message(msg, message::CLIENT_NODE_CREATE_REQ, myloc.port);
     send_coord(msg.buf);
     if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS)
     {
         std::cerr << "msg recv error: " << ret << std::endl;
         return 0;
     }
-    msg.unpack_client1(&dummy, &new_node);
+    message::unpack_message(msg, message::CLIENT_REPLY, new_node);
     return new_node;
 }
 
@@ -79,16 +78,16 @@ client :: create_edge(size_t node1, size_t node2)
 {
     busybee_returncode ret;
     size_t new_edge;
-    uint16_t dummy;
     message::message msg(message::CLIENT_EDGE_CREATE_REQ);
-    msg.prep_client2(myloc.port, node1, node2);
+    message::prepare_message(msg, message::CLIENT_EDGE_CREATE_REQ, myloc.port,
+            node1, node2);
     send_coord(msg.buf);
     if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS)
     {
         std::cerr << "msg recv error: " << ret << std::endl;
         return 0;
     }
-    msg.unpack_client1(&dummy, &new_edge);
+    message::unpack_message(msg, message::CLIENT_REPLY, new_edge);
     return new_edge;
 }
 
@@ -96,7 +95,7 @@ inline void
 client :: delete_node(size_t node)
 {
     message::message msg(message::CLIENT_NODE_DELETE_REQ);
-    msg.prep_client1(myloc.port, node);
+    message::prepare_message(msg, message::CLIENT_NODE_DELETE_REQ, myloc.port, node);
     send_coord(msg.buf);
 }
 
@@ -104,7 +103,8 @@ inline void
 client :: delete_edge(size_t node, size_t edge)
 {
     message::message msg(message::CLIENT_EDGE_DELETE_REQ);
-    msg.prep_client2(myloc.port, node, edge);
+    message::prepare_message(msg, message::CLIENT_EDGE_DELETE_REQ, myloc.port,
+            node, edge);
     send_coord(msg.buf);
 }
 
@@ -112,7 +112,8 @@ inline void
 client :: add_edge_prop(size_t node, size_t edge, uint32_t key, size_t value)
 {
     message::message msg(message::CLIENT_ADD_EDGE_PROP);
-    msg.prep_client_add_prop(node, edge, key, value);
+    message::prepare_message(msg, message::CLIENT_ADD_EDGE_PROP, node, edge,
+            key, value);
     send_coord(msg.buf);
 }
 
@@ -120,7 +121,7 @@ inline void
 client :: del_edge_prop(size_t node, size_t edge, uint32_t key)
 {
     message::message msg(message::CLIENT_DEL_EDGE_PROP);
-    msg.prep_client_del_prop(node, edge, key);
+    message::prepare_message(msg, message::CLIENT_DEL_EDGE_PROP, node, edge, key);
     send_coord(msg.buf);
 }
 
@@ -131,14 +132,15 @@ client :: reachability_request(size_t node1, size_t node2,
     busybee_returncode ret;
     bool reachable;
     message::message msg(message::CLIENT_REACHABLE_REQ);
-    msg.prep_client_rr_req(myloc.port, node1, node2, edge_props);
+    message::prepare_message(msg, message::CLIENT_REACHABLE_REQ, myloc.port,
+            node1, node2, *edge_props);
     send_coord(msg.buf);
     if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS)
     {
         std::cerr << "msg recv error: " << ret << std::endl;
         return false;
     }
-    msg.unpack_client_rr_reply(&reachable);
+    message::unpack_message(msg, message::CLIENT_REPLY, reachable);
     return reachable;
 }
 

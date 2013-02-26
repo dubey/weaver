@@ -65,7 +65,7 @@ create_node(coordinator::central *server)
     request->mutex.lock();
     req_id = ++server->request_id;
     pending[req_id] = request;
-    msg.prep_node_create(req_id, creat_time);
+    message::prepare_message(msg, message::NODE_CREATE_REQ, req_id, creat_time);
     server->update_mutex.unlock();
     server->send(shard_loc_ptr, msg.buf);
     
@@ -104,8 +104,11 @@ create_edge(common::meta_element *node1, common::meta_element *node2, coordinato
     request->mutex.lock();
     req_id = ++server->request_id;
     pending[req_id] = request;
-    msg.prep_edge_create(req_id, (size_t)node1->get_addr(), (size_t)node2->get_addr(),
-        node2->get_loc_ptr(), node2->get_creat_time(), creat_time);
+    size_t node1_addr = (size_t)node1->get_addr();
+    size_t node2_addr = (size_t)node2->get_addr();
+    message::prepare_message(msg, message::EDGE_CREATE_REQ, req_id,
+            node1_addr, node2_addr, *node2->get_loc_ptr(),
+            node2->get_creat_time(), creat_time);
     server->update_mutex.unlock();
     server->send(node1->get_loc_ptr(), msg.buf);
     
@@ -147,7 +150,9 @@ delete_node(common::meta_element *node, coordinator::central *server)
     request->mutex.lock();
     req_id = ++server->request_id;
     pending[req_id] = request;
-    msg.prep_node_delete(req_id, (size_t)node->get_addr(), del_time);
+    size_t node_addr = (size_t)node->get_addr();
+    message::prepare_message(msg, message::NODE_DELETE_REQ, req_id,
+            node_addr, del_time);
     server->update_mutex.unlock();
     server->flaky_send(node->get_loc_ptr(), msg.buf, true);
 
@@ -185,7 +190,10 @@ delete_edge(common::meta_element *node, common::meta_element *edge, coordinator:
     request->mutex.lock();
     req_id = ++server->request_id;
     pending[req_id] = request;
-    msg.prep_edge_delete(req_id, (size_t)node->get_addr(), (size_t)edge->get_addr(), del_time);
+    size_t node_addr = (size_t)node->get_addr();
+    size_t edge_addr = (size_t)edge->get_addr();
+    message::prepare_message(msg, message::EDGE_DELETE_REQ, req_id, node_addr,
+            edge_addr, del_time);
     server->update_mutex.unlock();
     server->flaky_send(node->get_loc_ptr(), msg.buf, true);
     
@@ -218,8 +226,10 @@ add_edge_property(common::meta_element *node, common::meta_element *edge,
     }
     time = ++server->vc.clocks->at(node->get_shard_id());
     req_id = ++server->request_id;
-    msg.prep_add_prop(req_id, (size_t)node->get_addr(), (size_t)edge->get_addr(),
-        key, value, time);
+    size_t node_addr = (size_t)node->get_addr();
+    size_t edge_addr = (size_t)edge->get_addr();
+    message::prepare_message(msg, message::EDGE_ADD_PROP, req_id, node_addr,
+            edge_addr, key, value, time);
     server->update_mutex.unlock();
     std::cout << "adding edge property\n";
     server->send(node->get_loc_ptr(), msg.buf);
@@ -242,8 +252,10 @@ delete_edge_property(common::meta_element *node, common::meta_element *edge,
     }
     time = ++server->vc.clocks->at(node->get_shard_id());
     req_id = ++server->request_id;
-    msg.prep_del_prop(req_id, (size_t)node->get_addr(), (size_t)edge->get_addr(),
-        key, time);
+    size_t node_addr = (size_t)node->get_addr();
+    size_t edge_addr = (size_t)edge->get_addr();
+    message::prepare_message(msg, message::EDGE_DELETE_PROP, req_id, node_addr,
+            edge_addr, key, time);
     server->update_mutex.unlock();
     std::cout << "deleting edge property\n";
     server->send(node->get_loc_ptr(), msg.buf);
@@ -365,7 +377,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
 {
     size_t req_id;
     pending_req *request;
-    void *mem_addr;
+    size_t mem_addr;
     uint32_t rec_counter; // for reply
     bool is_reachable; // for reply
     double coeff; // for reply
@@ -379,21 +391,40 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     switch(m_type)
     {
         case message::NODE_CREATE_ACK:
-        case message::EDGE_CREATE_ACK:
-            msg->unpack_create_ack(&req_id, &mem_addr);
+            message::unpack_message(*msg, message::NODE_CREATE_ACK, req_id, mem_addr);
             server->update_mutex.lock();
             request = pending[req_id];
             server->update_mutex.unlock();
             request->mutex.lock();
-            request->addr = mem_addr;
+            request->addr = (void *) mem_addr;
+            request->waiting = false;
+            request->reply.signal();
+            request->mutex.unlock();
+            break;
+        case message::EDGE_CREATE_ACK:
+            message::unpack_message(*msg, message::EDGE_CREATE_ACK, req_id, mem_addr);
+            server->update_mutex.lock();
+            request = pending[req_id];
+            server->update_mutex.unlock();
+            request->mutex.lock();
+            request->addr = (void *) mem_addr;
             request->waiting = false;
             request->reply.signal();
             request->mutex.unlock();
             break;
 
         case message::NODE_DELETE_ACK:
+            message::unpack_message(*msg, message::NODE_DELETE_ACK, req_id);
+            server->update_mutex.lock();
+            request = pending[req_id];
+            server->update_mutex.unlock();
+            request->mutex.lock();
+            request->waiting = false;
+            request->reply.signal();
+            request->mutex.unlock();
+            break;
         case message::EDGE_DELETE_ACK:
-            msg->unpack_delete_ack(&req_id);
+            message::unpack_message(*msg, message::EDGE_DELETE_ACK, req_id);
             server->update_mutex.lock();
             request = pending[req_id];
             server->update_mutex.unlock();
@@ -478,40 +509,42 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
     switch (m_type)
     {
         case message::CLIENT_NODE_CREATE_REQ:
-            msg->unpack_client0(&client_port);
+            message::unpack_message(*msg, message::CLIENT_NODE_CREATE_REQ, client_port);
             client_loc->port = client_port;
             new_elem = (size_t)create_node(server);
-            msg->change_type(message::CLIENT_REPLY);
-            msg->prep_client1(0, new_elem);
+            message::prepare_message(*msg, message::CLIENT_REPLY, new_elem);
             server->client_send(*client_loc, msg->buf);
             break;
 
         case message::CLIENT_EDGE_CREATE_REQ: 
-            msg->unpack_client2(&client_port, &elem1, &elem2);
+            message::unpack_message(*msg, message::CLIENT_EDGE_CREATE_REQ,
+                    client_port, elem1, elem2);
             client_loc->port = client_port;
             new_elem = (size_t)create_edge((common::meta_element *)elem1, (common::meta_element *)elem2, server);
-            msg->change_type(message::CLIENT_REPLY);
-            msg->prep_client1(0, new_elem);
+            message::prepare_message(*msg, message::CLIENT_REPLY, new_elem);
             server->client_send(*client_loc, msg->buf);
             break;
 
         case message::CLIENT_NODE_DELETE_REQ:
-            msg->unpack_client1(&client_port, &elem1);
+            message::unpack_message(*msg, message::CLIENT_NODE_DELETE_REQ,
+                    client_port, elem1);
             delete_node((common::meta_element *)elem1, server);
             break;
 
         case message::CLIENT_EDGE_DELETE_REQ: 
-            msg->unpack_client2(&client_port, &elem1, &elem2);
+            message::unpack_message(*msg, message::CLIENT_EDGE_DELETE_REQ,
+                    client_port, elem1, elem2);
             delete_edge((common::meta_element *)elem1, (common::meta_element *)elem2, server);
             break;
 
         case message::CLIENT_REACHABLE_REQ: 
-            msg->unpack_client_rr_req(&client_port, &elem1, &elem2, edge_props);
+            message::unpack_message(*msg, message::CLIENT_REACHABLE_REQ,
+                    client_port, elem1, elem2, *edge_props);
             client_loc->port = client_port;
             reachable = reachability_request((common::meta_element *)elem1,
                 (common::meta_element *)elem2, edge_props, server);
             msg->change_type(message::CLIENT_REPLY);
-            msg->prep_client_rr_reply(reachable);
+            message::prepare_message(*msg, message::CLIENT_REPLY, reachable);
             server->client_send(*client_loc, msg->buf);
             break;
 
@@ -527,12 +560,14 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
             break;
 
         case message::CLIENT_ADD_EDGE_PROP:
-            msg->unpack_client_add_prop(&elem1, &elem2, &key, &value);
+            message::unpack_message(*msg, message::CLIENT_ADD_EDGE_PROP,
+                    elem1, elem2, key, value);
             add_edge_property((common::meta_element *)elem1, (common::meta_element *)elem2, key, value, server);
             break;
 
         case message::CLIENT_DEL_EDGE_PROP:
-            msg->unpack_client_del_prop(&elem1, &elem2, &key);
+            message::unpack_message(*msg, message::CLIENT_DEL_EDGE_PROP,
+                    elem1, elem2, key);
             delete_edge_property((common::meta_element *)elem1, (common::meta_element *)elem2, key, server);
             break;
 
