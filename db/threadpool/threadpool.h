@@ -102,7 +102,7 @@ namespace thread
         queue_mutex.lock();
         if (update_req)
         {
-            if (num_free_update == num_threads)
+            if (num_free_update == 0)
             {
                 // need to create a new thread
                 // since all other threads may be waiting for an update

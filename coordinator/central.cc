@@ -154,7 +154,7 @@ delete_node(common::meta_element *node, coordinator::central *server)
     message::prepare_message(msg, message::NODE_DELETE_REQ, req_id,
             node_addr, del_time);
     server->update_mutex.unlock();
-    server->flaky_send(node->get_loc_ptr(), msg.buf, true);
+    server->send(node->get_loc_ptr(), msg.buf);
 
     // waiting for reply from shard
     while (request->waiting)
@@ -195,7 +195,7 @@ delete_edge(common::meta_element *node, common::meta_element *edge, coordinator:
     message::prepare_message(msg, message::EDGE_DELETE_REQ, req_id, node_addr,
             edge_addr, del_time);
     server->update_mutex.unlock();
-    server->flaky_send(node->get_loc_ptr(), msg.buf, true);
+    server->send(node->get_loc_ptr(), msg.buf);
     
     while (request->waiting)
     {

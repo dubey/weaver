@@ -20,10 +20,10 @@ clustering_test()
     auto edge_props = std::make_shared<std::vector<common::property>>();
     int i;
     size_t central_node = c.create_node();
-    size_t num_nodes = 30;
+    size_t num_nodes = 100;
     size_t star_nodes[num_nodes];
     size_t star_edges[num_nodes*2];
-    size_t edges_per_node = 10;
+    size_t edges_per_node = 6;
     size_t ring_edges[num_nodes*edges_per_node];
     for (i = 0; i < num_nodes; i++)
     {
