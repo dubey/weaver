@@ -103,11 +103,13 @@ namespace db
             int myid;
             // For reachability requests
             size_t outgoing_req_id_counter;
-            po6::threads::mutex outgoing_req_id_counter_mutex;
+            po6::threads::mutex outgoing_req_id_counter_mutex, visited_mutex;
             std::unordered_map<size_t, std::shared_ptr<batch_request>> pending_batch;
             // TODO need clean up of old done requests
             std::unordered_map<size_t, bool_wrapper> done_requests; // requests which need to be killed
             db::thread::pool thread_pool;
+            std::unordered_map<size_t, std::vector<size_t>> visit_map_odd, visit_map_even; // visited ids -> nodes
+            bool visit_map;
             std::unordered_map<size_t, uint64_t> req_count; //XXX testing
             
         public:
@@ -124,6 +126,7 @@ namespace db
             void broadcast_done_request(size_t req_id); 
             bool mark_visited(element::node *n, size_t req_counter);
             void remove_visited(element::node *n, size_t req_counter);
+            void record_visited(size_t coord_req_id, const std::vector<size_t>& nodes);
             size_t get_cache(size_t local_node, size_t dest_loc, size_t dest_node);
             void add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id);
             void transient_add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id);
@@ -155,6 +158,7 @@ namespace db
         , myid(my_id)
         , outgoing_req_id_counter(0)
         , thread_pool(NUM_THREADS)
+        , visit_map(true)
     {
         int i, inport;
         po6::net::location *temp_loc;
@@ -315,6 +319,18 @@ namespace db
         n->remove_seen(req_counter);
     }
 
+    inline void 
+    graph :: record_visited(size_t coord_req_id, const std::vector<size_t>& nodes)
+    {
+        visited_mutex.lock();
+        if (visit_map) {
+            visit_map_even[coord_req_id].insert(visit_map_even[coord_req_id].end(), nodes.begin(), nodes.end());
+        } else {
+            visit_map_odd[coord_req_id].insert(visit_map_odd[coord_req_id].end(), nodes.begin(), nodes.end());
+        }
+        visited_mutex.unlock();
+    }
+    
     inline size_t 
     graph :: get_cache(size_t local_node, size_t dest_loc, size_t dest_node)
     {
