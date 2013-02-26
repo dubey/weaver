@@ -638,16 +638,14 @@ handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
     main_node = (db::element::node *)node_ptr;
     uint64_t myclock_recd = vector_clock[G->myid];
     //myclock_recd = vector_clock->at(myid-1);
+    // TODO pass clock into has_property
     change_property_times(edge_props, myclock_recd);
 
     // wait till all updates for this shard arrive
     G->wait_for_updates(myclock_recd);
     refresh_node_neighbors(G, main_node, vector_clock);
 
-    if (main_node->get_del_time() <= myclock_recd)
-    {
-        // this node doesn't exist in graph anymore
-    }
+    assert(main_node->get_del_time() > myclock_recd);
     std::vector<db::element::edge *>::iterator iter;
     // check the properties of each out-edge
     for (iter = main_node->out_edges.begin(); iter < main_node->out_edges.end(); iter++)

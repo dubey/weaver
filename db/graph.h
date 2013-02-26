@@ -116,7 +116,7 @@ namespace db
         void wait_on_responses()
         {
             finished_lock.lock();
-            while (finished != true)
+            while (!finished)
             {
                 finished_cond.wait();
             }
