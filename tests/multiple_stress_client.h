@@ -17,10 +17,11 @@
 
 #include "client/client.h"
 
-#define NUM_NODES 1000
+#define NUM_NODES 200000
 #define NUM_EDGES (2*NUM_NODES)
 #define NUM_REQUESTS 100
 #define NUM_EDGE_DEL (NUM_NODES/20)
+#define MAX_SEED 100
 
 static size_t nodes[NUM_NODES];
 static size_t edges[NUM_EDGES];
@@ -63,7 +64,8 @@ multiple_stress_client()
         edge_leading_nodes[i] = nodes[first];
     }
     long seed;
-    for (seed = 0; seed < 10000; seed += 100)
+    std::cout << "Starting requests\n";
+    for (seed = 0; seed < MAX_SEED; seed += 100)
     {
         std::cout << "Seed " << seed << std::endl;
         srand(seed);
@@ -75,9 +77,11 @@ multiple_stress_client()
             {
                 second = rand() % NUM_NODES;
             }
-            std::cout << "Starting... ";
-            std::cout << "Done! Req " << i << " result "
-                << c.reachability_request(nodes[first], nodes[second], edge_props) << std::endl;
+            c.reachability_request(nodes[first], nodes[second], edge_props);
+            
+            //std::cout << "Starting... ";
+            //std::cout << "Done! Req " << i << " result "
+            //    << c.reachability_request(nodes[first], nodes[second], edge_props) << std::endl;
         }
         if (seed == 2000)
         {

@@ -261,9 +261,9 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
     {
         req_id = ++server->request_id;
         server->pending[req_id] = request;
-        //std::cout << "Reachability request number " << req_id << " from source"
-        //          << " node " << node1->get_addr() << " " << node1->get_loc() << " to destination node "
-        //          << node2->get_addr() << std::endl;
+        std::cout << "Reachability request number " << req_id << " from source"
+                  << " node " << node1->get_addr() << " " << node1->get_loc() << " to destination node "
+                  << node2->get_addr() << std::endl;
         request->mutex.lock();
         msg.prep_reachable_prop(&src, -1, (size_t)node2->get_addr(),
             node2->get_loc(), req_id, req_id, edge_props, vector_clock, ignore_cache);
@@ -304,7 +304,7 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
 
     server->update_mutex.unlock();
     ret = request->reachable;
-    //std::cout << "Reachable reply is " << ret << " for " << "request " << req_id << std::endl;
+    std::cout << "Reachable reply is " << ret << " for " << "request " << req_id << std::endl;
     delete request;
     return ret;
 }
@@ -563,9 +563,10 @@ main()
     t->detach();
 
     // initialize client msg receiving thread
-    t = new std::thread(client_msg_handler, &server);
-    t->detach();
+    //t = new std::thread(client_msg_handler, &server);
+    //t->detach();
+    client_msg_handler(&server);
 
     // call periodic cache update function
-    cache_updater(&server);
+    //cache_updater(&server);
 }

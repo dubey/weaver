@@ -1,7 +1,7 @@
 CC=g++-4.7
 INCLUDE_DIRS=-I..
 CFLAGS=-g -O0 -std=c++0x -D__STDC_LIMIT_MACROS
-LIBS_DIR=-L/usr/local/lib
+#LIBS_DIR=-L/usr/local/lib
 LIBS=-lbusybee-sta -le -lrt -pthread
 
 OBJS=run.o

@@ -108,6 +108,7 @@ namespace db
             // TODO need clean up of old done requests
             std::unordered_map<size_t, bool_wrapper> done_requests; // requests which need to be killed
             db::thread::pool thread_pool;
+            std::unordered_map<size_t, uint64_t> req_count; //XXX testing
             
         public:
             element::node* create_node(uint64_t time);
@@ -134,6 +135,10 @@ namespace db
             busybee_returncode send(int loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send_coord(std::auto_ptr<e::buffer> buf);
             void wait_for_updates(uint64_t recd_clock);
+            void propagate_request(std::vector<size_t> *nodes, std::shared_ptr<batch_request> request, 
+                int prop_loc, size_t dest_node, int dest_loc, size_t coord_req_id, 
+                std::shared_ptr<std::vector<common::property>> edge_props,
+                std::shared_ptr<std::vector<uint64_t>> vector_clock, const std::vector<size_t>& ignore_cache);
     };
 
     inline
@@ -445,6 +450,28 @@ namespace db
             pending_update_cond.wait();
         }
         update_mutex.unlock();
+    }
+    
+    // caution: assuming we hold the request->mutex
+    inline void 
+    graph :: propagate_request(std::vector<size_t> *nodes, std::shared_ptr<batch_request> request, 
+        int prop_loc, size_t dest_node, int dest_loc, size_t coord_req_id, 
+        std::shared_ptr<std::vector<common::property>> edge_props,
+        std::shared_ptr<std::vector<uint64_t>> vector_clock, const std::vector<size_t>& ignore_cache)
+    {
+        message::message msg(message::REACHABLE_PROP);
+        size_t my_outgoing_req_id;
+        //adding this as a pending request
+        request->num++;
+        //request in the message
+        outgoing_req_id_counter_mutex.lock();
+        my_outgoing_req_id = outgoing_req_id_counter++;
+        pending_batch[my_outgoing_req_id] = request;
+        outgoing_req_id_counter_mutex.unlock();
+        msg.prep_reachable_prop(nodes, myid, dest_node, dest_loc, 
+            coord_req_id, my_outgoing_req_id, edge_props, vector_clock, ignore_cache);
+        // no local messages possible, so have to send via network
+        send(prop_loc, msg.buf);
     }
 
 } //namespace db

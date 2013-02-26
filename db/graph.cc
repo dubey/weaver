@@ -155,7 +155,8 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
 
     db::element::node *n; // node pointer reused for each source node
     bool reached = false, // indicates if we have reached destination node
-        propagate_req = false; // need to propagate request onward
+        propagate_req = false, // need to propagate request onward
+        sent_msg = false;
     void *reach_node = NULL; // if reached destination, immediate preceding neighbor
     std::unordered_map<int, std::vector<size_t>> msg_batch; // batched messages to propagate
     std::unique_ptr<std::vector<size_t>> src_nodes;
@@ -175,6 +176,11 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
     {
         G->remove_cache(ignore_cache[i]);
     }
+    
+    auto request = std::make_shared<db::batch_request>(); //c++11 auto magic
+    //need mutex since there can be multiple replies
+    //for same outstanding req
+    request->mutex.lock();
     
     if (!G->check_request(coord_req_id)) // checking if the request has been handled
     {
@@ -202,6 +208,8 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
                 reached = true;
                 reach_node = (void *)n;
             } else if (!G->mark_visited(n, coord_req_id)) {
+                G->req_count[coord_req_id]++;
+                //std::cout << "Num vis " << n->seen.size() << std::endl;
                 size_t temp_cache = G->get_cache((size_t)n, dest_loc, dest_node);
                 visited_nodes.push_back(n);
                 // need to check whether the cached_req_id is for a request
@@ -238,8 +246,20 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
                             if (e->nbr->get_loc() == G->myid) {
                                 src_nodes->push_back((size_t)e->nbr->get_addr());
                             } else {
+                                std::vector<size_t> *loc_nodes = &(msg_batch[e->nbr->get_loc()]);
                                 propagate_req = true;
-                                msg_batch[e->nbr->get_loc()].push_back((size_t)e->nbr->get_addr());
+                                loc_nodes->push_back((size_t)e->nbr->get_addr());
+                                
+                                if (loc_nodes->size() > 500) {
+                                    // propagating request because
+                                    // 1. increase parallelism
+                                    // 2. Busybee cannot handle extremely large messages
+                                    G->propagate_request(loc_nodes, request, e->nbr->get_loc(),
+                                        dest_node, dest_loc, coord_req_id, edge_props, vector_clock, ignore_cache);
+                                    loc_nodes->clear();
+                                    sent_msg = true;
+                                }
+                               
                             }
                         }
                     }
@@ -254,12 +274,16 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         src_end = src_nodes->size();
     }
     } else {
-        std::cout << "Request " << coord_req_id << " killed\n";
+        // Request killed because dest already reached
+        // send back bogus reply
     }
-    
+   
+    // TODO think of a better way to remove visited properties
+    // probably periodic job
+    // also confirm correctness in view of multiple threads 
     //send messages
     if (reached)
-    {   
+    {
         std::vector<db::element::node *>::iterator node_iter;
         // need to send back ack
         msg->prep_reachable_rep(prev_req_id, true, (size_t)reach_node,
@@ -271,35 +295,71 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         // unmark just visited nodes
         for (node_iter = visited_nodes.begin(); node_iter < visited_nodes.end(); node_iter++)
         {
-            n = *node_iter;
-            n->update_mutex.lock();
-            G->remove_visited(n, coord_req_id);
-            n->update_mutex.unlock();
+            //n = *node_iter;
+            //n->update_mutex.lock();
+            //G->remove_visited(n, coord_req_id);
+            //n->update_mutex.unlock();
         }
+        request->reachable = true; // TODO need better clean up. Case when only few of outgone requests reply back
+        deleted_nodes.reset(new std::vector<size_t>());
+        del_times.reset(new std::vector<uint64_t>());
     } else if (propagate_req) {
         // the destination is not reachable locally in one hop from this server, so
         // now we have to contact all the reachable neighbors and see if they can reach
         std::unordered_map<int, std::vector<size_t>>::iterator loc_iter;
-        auto request = std::make_shared<db::batch_request>(); //c++11 auto magic
-        //need mutex since there can be multiple replies
-        //for same outstanding req
-        request->mutex.lock();
-        request->num = 0;
+        std::vector<size_t> to_pack;
+        //size_t node_arr_pos = 0;
+        //size_t node_arr_max_pos = 0;
+        // caution: Busybee cannot send very large messages. If either the
+        // vector of src nodes or the vector of cache ignores becomes very
+        // large, the msg will be dropped with no error printed.
+        std::cout << "Count for request " << coord_req_id << " is " << G->req_count[coord_req_id] << std::endl;
         for (loc_iter = msg_batch.begin(); loc_iter != msg_batch.end(); loc_iter++)
         {
-            msg.reset(new message::message(message::REACHABLE_PROP));
+            if (loc_iter->second.size() != 0) {
+                G->propagate_request(&loc_iter->second, request, loc_iter->first,
+                    dest_node, dest_loc, coord_req_id, edge_props, vector_clock, ignore_cache);
+            }
+            /*
+            std::cout << "Starting send loop " << loc_iter->second.size() << std::endl;
+            int lc = 0;
+            while (node_arr_max_pos < loc_iter->second.size())
+            {
+                std::cout << "lc = " << (lc++) << std::endl;
+                to_pack.clear();
+                node_arr_max_pos = (loc_iter->second.size() - node_arr_pos) > 500? (node_arr_pos + 500) : loc_iter->second.size();
+                for (; node_arr_pos < node_arr_max_pos; node_arr_pos++)
+                {
+                    to_pack.push_back(loc_iter->second[node_arr_pos]);
+                }
+                msg.reset(new message::message(message::REACHABLE_PROP));
+                //adding this as a pending request
+                request->num++;
+                G->outgoing_req_id_counter_mutex.lock();
+                my_outgoing_req_id = G->outgoing_req_id_counter++;
+                G->pending_batch[my_outgoing_req_id] = request;
+                G->outgoing_req_id_counter_mutex.unlock();
+                msg->prep_reachable_prop(&to_pack, G->myid, dest_node, 
+                dest_loc, coord_req_id, my_outgoing_req_id, edge_props, vector_clock, ignore_cache);
+                // no local messages possible, so have to send via network
+                G->send(loc_iter->first, msg->buf);
+            }
+            std::cout << "Ended send loop\n";
+            */
+            /*
             //adding this as a pending request
             request->num++;
-            //request in the message
             G->outgoing_req_id_counter_mutex.lock();
             my_outgoing_req_id = G->outgoing_req_id_counter++;
             G->pending_batch[my_outgoing_req_id] = request;
             G->outgoing_req_id_counter_mutex.unlock();
             msg->prep_reachable_prop(&loc_iter->second, G->myid, dest_node, 
-                dest_loc, coord_req_id, my_outgoing_req_id, edge_props, vector_clock, ignore_cache);
+            dest_loc, coord_req_id, my_outgoing_req_id, edge_props, vector_clock, ignore_cache);
             // no local messages possible, so have to send via network
             G->send(loc_iter->first, msg->buf);
+            */
         }
+        /*
         request->coord_id = coord_req_id;
         request->prev_loc = prev_loc;
         request->prev_id = prev_req_id;
@@ -310,7 +370,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         request->del_nodes = std::move(deleted_nodes);
         request->del_times = std::move(del_times);
         assert(request->del_nodes->size() == request->del_times->size());
-        request->mutex.unlock();
+        */
         msg_batch.clear();
     } else {
         //need to send back nack
@@ -327,6 +387,19 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
             n->update_mutex.unlock();
         }
     }
+    if (deleted_nodes) {
+        request->coord_id = coord_req_id;
+        request->prev_loc = prev_loc;
+        request->prev_id = prev_req_id;
+        request->src_nodes = std::move(src_nodes);
+        request->dest_addr = dest_node;
+        request->dest_loc = dest_loc;
+        // store deleted nodes for sending back in reachable reply
+        request->del_nodes = std::move(deleted_nodes);
+        request->del_times = std::move(del_times);
+        assert(request->del_nodes->size() == request->del_times->size());
+    }
+    request->mutex.unlock();
 }
 
 // handle reply for a previously forwarded reachability request
@@ -357,6 +430,10 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
     --request->num;
     prev_loc = request->prev_loc;
     prev_req_id = request->prev_id;
+
+    if (!request->src_nodes) {
+        return;
+    }
     
     if (reachable_reply || num_del_nodes > 0)
     {   
@@ -424,11 +501,11 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
         std::unique_ptr<std::vector<size_t>> src_nodes = std::move(request->src_nodes);
         for (node_iter = src_nodes->begin(); node_iter < src_nodes->end(); node_iter++)
         {
-            std::vector<common::meta_element>::iterator iter;
-            n = (db::element::node *)(*node_iter);
-            n->update_mutex.lock();
-            G->remove_visited(n, request->coord_id);
-            n->update_mutex.unlock();
+            //std::vector<common::meta_element>::iterator iter;
+            //n = (db::element::node *)(*node_iter);
+            //n->update_mutex.lock();
+            //G->remove_visited(n, request->coord_id);
+            //n->update_mutex.unlock();
             /*
              * TODO:
              * Caching negative results is tricky, because we don't
