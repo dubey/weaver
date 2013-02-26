@@ -331,14 +331,14 @@ clustering_request(common::meta_element *node,
     req_id = ++server->request_id;
     pending[req_id] = request;
     std::cout << "Clustering request number " << req_id << " for node "
-              << node->get_addr() << " " << node->get_loc_ptr()->port;
+              << node->get_addr() << " " << node->get_loc_ptr()->port <<
+              std::endl;
     request->mutex.lock();
     message::prepare_message(msg, message::CLUSTERING_REQ, (size_t) node->get_addr(),
             *server->myrecloc, req_id, *edge_props, *(server->vc.clocks));
     server->update_mutex.unlock();
     server->send(node->get_loc_ptr(), msg.buf);
     
-    std::cout << "... sent, now waiting";
     while (request->waiting)
     {
         request->reply.wait();
@@ -352,7 +352,6 @@ clustering_request(common::meta_element *node,
     server->update_mutex.lock();
     pending.erase(req_id);
     server->update_mutex.unlock();
-    std::cout << "reply is now" << numerator << " over " << denominator << "for request " << req_id << std::endl;
     return ret;
 }
 
