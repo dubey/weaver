@@ -104,8 +104,6 @@ namespace message
             void prep_client_rr_reply(bool reachable);
             void unpack_client_rr_reply(bool *reachable);
 
-            void prep_client_clustering_reply(double coeff);
-            void unpack_client_clustering_reply(double *coeff);
             // Create functions, coordinator to shards
             void prep_node_create(size_t req_id, uint64_t creat_time);
             void unpack_node_create(size_t *req_id, uint64_t *creat_time);
@@ -984,7 +982,7 @@ namespace message
         size_t num_elems = t.size();
         buf.pack_at(index) << num_elems;
         index += sizeof(size_t);
-        if (num_props > 0){
+        if (num_elems > 0){
             size_t element_size = size(t[0]);
             for (const T &elem : t)
             {

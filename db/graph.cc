@@ -104,6 +104,7 @@ class refresh_request
     void wait_on_responses(){
         finished_lock.lock();
         while (finished != true){
+            std::cout << "sleepin on clustering_response ";
             finished_cond.wait();
         }
 
@@ -160,7 +161,7 @@ refresh_node_neighbors(db::graph *G, db::element::node *n, std::vector<uint64_t>
     }
     size_t responses_left = nbrs.size();
     refresh_request req(responses_left, n);
-    for (std::pair<po6::net::location, std::vector<size_t>> &p : nbrs)
+    for (std::pair<const po6::net::location, std::vector<size_t>> &p : nbrs)
     {
         if (p.first == *G->myloc)
         {   //neighbors on local machine
