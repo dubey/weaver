@@ -981,8 +981,8 @@ namespace message
             uint32_t index, const std::vector<T>& t)
     {
         // !assumes constant element size
-        size_t num_props = t.size();
-        buf.pack_at(index) << num_props;
+        size_t num_elems = t.size();
+        buf.pack_at(index) << num_elems;
         index += sizeof(size_t);
         if (num_props > 0){
             size_t element_size = size(t[0]);

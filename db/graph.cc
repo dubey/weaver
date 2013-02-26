@@ -160,7 +160,7 @@ refresh_node_neighbors(db::graph *G, db::element::node *n, std::vector<uint64_t>
     }
     size_t responses_left = nbrs.size();
     refresh_request req(responses_left, n);
-    for (std::pair<const po6::net::location, std::vector<size_t>> &p : nbrs)
+    for (std::pair<po6::net::location, std::vector<size_t>> &p : nbrs)
     {
         if (p.first == *G->myloc)
         {   //neighbors on local machine
@@ -206,6 +206,7 @@ handle_refresh_request(db::graph *G, std::unique_ptr<message::message> msg){
     }
     message::prepare_message(*msg, message::NODE_REFRESH_REPLY, return_req_ptr,
         deleted_nodes, *G->myloc);
+    G->send(reply_loc, msg->buf);
 }
 
 void
