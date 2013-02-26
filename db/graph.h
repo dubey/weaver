@@ -80,6 +80,81 @@ namespace db
         }
     };
 
+    // Pending clustering request
+    class clustering_request
+    {
+        public:
+            int coordinator_loc;
+            size_t id; // coordinator's req id
+            std::unordered_map<int, std::unordered_set<size_t>> nbrs;
+            size_t edges; // numerator in calculation
+            size_t possible_edges;
+            size_t responses_left;
+            po6::threads::mutex mutex;
+
+        clustering_request()
+        {
+            edges = 0;
+        }
+    };
+
+
+    // Pending refresh request
+    class refresh_request
+    {
+        public:
+            refresh_request(size_t num_shards, db::element::node *n);
+        private:
+            po6::threads::mutex finished_lock;
+            po6::threads::cond finished_cond;
+        public:
+            db::element::node *node;
+            size_t responses_left;
+            bool finished;
+
+
+        void wait_on_responses()
+        {
+            finished_lock.lock();
+            while (finished != true)
+            {
+                finished_cond.wait();
+            }
+
+            finished_lock.unlock();
+        }
+
+        void add_response(std::vector<std::pair<size_t, uint64_t>> &deleted_nodes, int from_loc)
+        {
+            node->update_mutex.lock();
+            for (std::pair<size_t,uint64_t> &p : deleted_nodes)
+            {
+                for (db::element::edge *e : node->out_edges)
+                {
+                    if (from_loc == e->nbr->get_loc() && p.first == (size_t) e->nbr->get_addr()) {
+                        e->nbr->update_del_time(p.second);
+                    }
+                }
+            }
+            node->update_mutex.unlock();
+            finished_lock.lock();
+            responses_left--;
+            if (responses_left == 0) {
+                finished =  true;
+                finished_cond.broadcast();
+            }
+            finished_lock.unlock();
+        }
+    };
+
+    refresh_request :: refresh_request(size_t num_shards, db::element::node * n)
+        : finished_cond(&finished_lock)
+        , node(n)
+        , responses_left(num_shards)
+        , finished(false)
+    {
+    }
+
     class graph
     {
         public:
@@ -114,10 +189,10 @@ namespace db
             
         public:
             element::node* create_node(uint64_t time);
-            element::edge* create_edge(void *n1,
-                std::unique_ptr<common::meta_element> n2, uint64_t time);
+            element::edge* create_edge(size_t n1, std::unique_ptr<common::meta_element> n2, uint64_t time);
             std::unique_ptr<std::vector<size_t>> delete_node(element::node *n, uint64_t del_time);
             std::unique_ptr<std::vector<size_t>> delete_edge(element::node *n, element::edge *e, uint64_t del_time);
+            void refresh_edge(element::node *n, element::edge *e, uint64_t del_time);
             void add_edge_property(element::node *n, element::edge *e,
                 std::unique_ptr<common::property> prop, uint64_t time);
             void delete_all_edge_property(element::node *n, element::edge *e, uint32_t key, uint64_t time);
@@ -191,9 +266,7 @@ namespace db
     }
 
     inline element::edge*
-    graph :: create_edge(void *n1,
-        std::unique_ptr<common::meta_element> n2,
-        uint64_t time)
+    graph :: create_edge(size_t n1, std::unique_ptr<common::meta_element> n2, uint64_t time)
     {
         element::node *local_node = (element::node *)n1;
         element::edge *new_edge = new element::edge(myloc, time, std::move(n2));
@@ -240,6 +313,15 @@ namespace db
         pending_update_cond.broadcast();
         update_mutex.unlock();
         return cached_req_ids;
+    }
+
+    inline void
+    graph :: refresh_edge(element::node *n, element::edge *e, uint64_t del_time)
+    {
+        // TODO caching and edge refreshes
+        n->update_mutex.lock();
+        e->update_del_time(del_time);
+        n->update_mutex.unlock();
     }
 
     inline void

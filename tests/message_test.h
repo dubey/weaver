@@ -16,6 +16,7 @@
 void
 message_test()
 {
+    /*
     void *first = (void *)238947328978763;
     void *second = (void *)23948230489224;
     void *first1 = (void *)238947328978763;
@@ -114,4 +115,5 @@ message_test()
     assert(num_del_nodes == dn2->size());
     assert(*dn2 == dn);
     assert(*dt2 == dt);
+    */
 }

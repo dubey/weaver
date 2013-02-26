@@ -41,6 +41,8 @@ namespace coordinator
             void *addr;
             bool reachable;
             po6::threads::mutex mutex;
+            size_t clustering_numerator;
+            size_t clustering_denominator;
             bool waiting;
             po6::threads::cond reply;
             po6::threads::cond del_reply;
@@ -101,7 +103,7 @@ namespace coordinator
             size_t get_last_del_req(size_t wait_req_id);
             //bool insert_del_wait(size_t del_req_id, size_t wait_req_id);
             bool still_pending_del_req(size_t req_id);
-            void add_deleted_cache(size_t req_ids, std::unique_ptr<std::vector<size_t>> cached_ids);
+            void add_deleted_cache(size_t req_ids, std::vector<size_t> &cached_ids);
             bool is_deleted_cache_id(size_t id);
             void add_good_cache_id(size_t id);
             void add_bad_cache_id(size_t id);
@@ -219,12 +221,12 @@ namespace coordinator
     // record all the invalid cached req ids
     // also update pending_delete_requests
     inline void
-    central :: add_deleted_cache(size_t req_id, std::unique_ptr<std::vector<size_t>> cached_ids)
+    central :: add_deleted_cache(size_t req_id, std::vector<size_t> &cached_ids)
     {
         std::vector<size_t>::iterator del_iter;
         pending_req *request;
         std::vector<std::pair<size_t, std::vector<size_t>>>::iterator pend_iter;
-        for (del_iter = cached_ids->begin(); del_iter != cached_ids->end(); del_iter++)
+        for (del_iter = cached_ids.begin(); del_iter != cached_ids.end(); del_iter++)
         {
             bad_cache_ids->insert(*del_iter);
         }
