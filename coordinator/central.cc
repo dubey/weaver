@@ -538,8 +538,7 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
             break;
 
         case message::CLIENT_REACHABLE_REQ: 
-            message::unpack_message(*msg, message::CLIENT_REACHABLE_REQ,
-                    client_port, elem1, elem2, *edge_props);
+            msg->unpack_client_rr_req(&client_port, &elem1, &elem2, edge_props);
             client_loc->port = client_port;
             reachable = reachability_request((common::meta_element *)elem1,
                 (common::meta_element *)elem2, edge_props, server);

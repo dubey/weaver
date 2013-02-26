@@ -132,8 +132,7 @@ client :: reachability_request(size_t node1, size_t node2,
     busybee_returncode ret;
     bool reachable;
     message::message msg(message::CLIENT_REACHABLE_REQ);
-    message::prepare_message(msg, message::CLIENT_REACHABLE_REQ, myloc.port,
-            node1, node2, *edge_props);
+    msg.prep_client_rr_req(myloc.port, node1, node2, edge_props);
     send_coord(msg.buf);
     if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS)
     {

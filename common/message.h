@@ -92,6 +92,13 @@ namespace message
                     std::unique_ptr<common::property> *new_prop,
                     uint64_t *time);
             // Reachability functions
+            void prep_client_rr_req(uint16_t port, size_t elem1, size_t elem2,
+                    std::shared_ptr<std::vector<common::property>>
+                    edge_props);
+            void unpack_client_rr_req(uint16_t *port, size_t *elem1,
+                    size_t *elem2,
+                    std::shared_ptr<std::vector<common::property>>
+                    edge_props);
             void prep_reachable_prop(std::vector<size_t> *src_nodes,
                 std::shared_ptr<po6::net::location> src_loc,
                 size_t dest_node,
@@ -197,7 +204,6 @@ namespace message
             *edge_creat_time = edge_time;
         }
 
-/*  j
     inline void
     message :: prep_client_rr_req(uint16_t port, size_t elem1, size_t elem2,
         std::shared_ptr<std::vector<common::property>> edge_props)
@@ -245,7 +251,6 @@ namespace message
         *elem1 = temp1;
         *elem2 = temp2;
     }
-    */
 
     inline void
     message :: prep_reachable_prop(std::vector<size_t> *src_nodes,
@@ -516,10 +521,8 @@ namespace message
 // packing templates
     inline void pack_buffer(e::buffer &buf, uint32_t index, const bool &t)
     {
-        if (t)
-            pack_buffer(buf, index, (uint16_t) 1);
-        else
-            pack_buffer(buf, index, (uint16_t) 0);
+        uint16_t to_pack = t ? 1 : 0;
+        buf.pack_at(index) << to_pack;
     }
     inline void pack_buffer(e::buffer &buf, uint32_t index, const uint16_t &t)
     {
