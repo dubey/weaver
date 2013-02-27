@@ -343,7 +343,7 @@ clustering_request(common::meta_element *node,
               << node->get_addr() << " " << node->get_loc() << std::endl;
     request->mutex.lock();
     message::prepare_message(msg, message::CLUSTERING_REQ, (size_t) node->get_addr(),
-            -1, req_id, *edge_props, *(server->vc.clocks));
+            req_id, *edge_props, *(server->vc.clocks));
     server->update_mutex.unlock();
     server->send(node->get_loc(), msg.buf);
     

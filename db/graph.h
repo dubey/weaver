@@ -86,10 +86,11 @@ namespace db
         public:
             int coordinator_loc;
             size_t id; // coordinator's req id
-            std::unordered_map<int, std::unordered_set<size_t>> nbrs;
+            // key is shard, value is set of neighbors on that shard
+            std::unordered_map<int, std::unordered_set<size_t>> nbrs; 
             size_t edges; // numerator in calculation
-            size_t possible_edges;
-            size_t responses_left;
+            size_t possible_edges; // denominator in calculation
+            size_t responses_left; // 1 response per shard with neighbor
             po6::threads::mutex mutex;
 
         clustering_request()
@@ -109,7 +110,7 @@ namespace db
             po6::threads::cond finished_cond;
         public:
             db::element::node *node;
-            size_t responses_left;
+            size_t responses_left; // 1 response per shard with neighbor
             bool finished;
 
 
@@ -124,6 +125,7 @@ namespace db
             finished_lock.unlock();
         }
 
+        // updates the delete times for a node's neighbors based on a refresh response
         void add_response(std::vector<std::pair<size_t, uint64_t>> &deleted_nodes, int from_loc)
         {
             node->update_mutex.lock();

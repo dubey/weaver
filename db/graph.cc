@@ -29,47 +29,53 @@
 #include "graph.h"
 #include "common/message.h"
 
-// XXX ?
+// Ensures that the nodes pointed to in the edge list of n have not been deleted since the edge was made.
 void
 refresh_node_neighbors(db::graph *G, db::element::node *n, std::vector<uint64_t> &vector_clock)
 {
     uint64_t myclock_recd = vector_clock[G->myid];
     std::unordered_map<int, std::vector<size_t>> nbrs;
+
     G->wait_for_updates(myclock_recd);
+
+    // Build list of non-deleted nodes to check for each shard
     for (db::element::edge *e : n->out_edges)
     {
-        bool check_edge = e->get_del_time() == MAX_TIME; // need to check more than this?
-        if (check_edge) {
+        if (e->get_del_time() == MAX_TIME) { // need to check more than this? {
             nbrs[e->nbr->get_loc()].push_back((size_t)e->nbr->get_addr());
         } 
     }
     size_t responses_left = nbrs.size();
     db::refresh_request req(responses_left, n);
+
+    std::vector<size_t> *local_nodes = NULL;
     for (std::pair<const int, std::vector<size_t>> &p : nbrs)
     {
-        if (p.first == G->myid)
-        {   
-            // neighbors on local machine
-            // later move this to after sending all reqs out
-            std::vector<std::pair<size_t,uint64_t>> local_deleted_nodes;
-            for (size_t node_ptr : p.second){
-                db::element::node *node = (db::element::node *) node_ptr;
-                if (node->get_del_time() < MAX_TIME){
-                    local_deleted_nodes.push_back(std::make_pair(node_ptr, node->get_del_time()));
-                }
-            }
-            req.add_response(local_deleted_nodes, G->myid);
+        if (p.first == G->myid) {
+            // neightbors on local machine, check these after all messages to neighbors sent
+            local_nodes = &p.second;
         } else {
             message::message msg(message::NODE_REFRESH_REQ);
-            message::prepare_message(msg, message::NODE_REFRESH_REQ, 
-                    (size_t) &req, G->myid, vector_clock, p.second);
+            message::prepare_message(msg, message::NODE_REFRESH_REQ, (size_t) &req, G->myid, vector_clock, p.second);
             G->send(p.first, msg.buf);
         }
     }
+
+    if (local_nodes != NULL) {
+        std::vector<std::pair<size_t,uint64_t>> local_deleted_nodes;
+        for (size_t node_ptr : *local_nodes){
+            db::element::node * node = (db::element::node *) node_ptr;
+            if (node->get_del_time() < MAX_TIME){
+                local_deleted_nodes.push_back(std::make_pair(node_ptr, node->get_del_time()));
+            }
+        }
+        req.add_response(local_deleted_nodes, G->myid);
+    }
+    // Wait on condition variable until all responses have been added
     req.wait_on_responses();
 }
 
-// XXX?
+// Given a list of nodes stored on a shard, returns a list of nodes that have been deleted and their delete times.
 void
 handle_refresh_request(db::graph *G, std::unique_ptr<message::message> msg)
 {
@@ -77,39 +83,37 @@ handle_refresh_request(db::graph *G, std::unique_ptr<message::message> msg)
     std::vector<size_t> nodes_to_check;
     std::vector<uint64_t> vector_clock;
     int reply_loc;
-    message::unpack_message(*msg, message::NODE_REFRESH_REQ, return_req_ptr,
-        reply_loc, vector_clock, nodes_to_check);
+
+    message::unpack_message(*msg, message::NODE_REFRESH_REQ, return_req_ptr, reply_loc, vector_clock, nodes_to_check);
     uint64_t myclock_recd = vector_clock[G->myid];
 
-    // wait till all updates for this shard arrive
     G->wait_for_updates(myclock_recd);
 
     std::vector<std::pair<size_t,uint64_t>> deleted_nodes;
-    db::element::node *node;
     for (size_t node_ptr : nodes_to_check){
-        node = (db::element::node *)node_ptr;
-        if (node->get_del_time() < MAX_TIME){
-            deleted_nodes.push_back(std::make_pair(node_ptr, node->get_del_time()));
+        uint64_t del_time = ((db::element::node *) node_ptr)->get_del_time();
+        if (del_time < MAX_TIME){
+            deleted_nodes.push_back(std::make_pair(node_ptr, del_time));
         }
     }
-    message::prepare_message(*msg, message::NODE_REFRESH_REPLY, return_req_ptr,
-        deleted_nodes, G->myid);
+    message::prepare_message(*msg, message::NODE_REFRESH_REPLY, return_req_ptr, deleted_nodes, G->myid);
     G->send(reply_loc, msg->buf);
 }
 
-// XXX
+// Given a list of nodes that have been deleted and the delete times, give that information to the outstanding refresh request.
 void
 handle_refresh_response(db::graph *G, std::unique_ptr<message::message> msg){
     size_t refresh_req_ptr;
     int from;
     std::vector<std::pair<size_t,uint64_t>> deleted_nodes;
-    message::unpack_message(*msg, message::NODE_REFRESH_REPLY, refresh_req_ptr,
-            deleted_nodes, from);
+
+    message::unpack_message(*msg, message::NODE_REFRESH_REPLY, refresh_req_ptr, deleted_nodes, from);
 
     db::refresh_request *req = (db::refresh_request *)refresh_req_ptr;
     req->add_response(deleted_nodes, from);
 }
 
+// Updates the create time for a list of properties
 inline void
 change_property_times(std::vector<common::property> &props, uint64_t creat_time)
 {
@@ -568,6 +572,7 @@ handle_cache_update(db::graph *G, std::unique_ptr<message::message> msg)
     G->send_coord(sendmsg.buf);
 }
 
+// Adds to numerator of a clustering coefficent and replies to coordinator and frees request if all responses have been recieved
 inline void
 add_clustering_response(db::graph *G, db::clustering_request *request, size_t to_add, std::unique_ptr<message::message> msg)
 {
@@ -577,30 +582,25 @@ add_clustering_response(db::graph *G, db::clustering_request *request, size_t to
 
     bool kill = (request->responses_left == 0);
     request->mutex.unlock();
+
+    // clustering request finished
     if (kill)
     {
-        message::prepare_message(*msg, message::CLUSTERING_REPLY, request->id,
-                request->edges, request->possible_edges);
-        G->send(std::move(request->coordinator_loc), msg->buf);
+        message::prepare_message(*msg, message::CLUSTERING_REPLY, request->id, request->edges, request->possible_edges);
+        G->send_coord(msg->buf);
         delete request;
     }
 }
 
+// Used in a clustering request, finds cardinality of  intersection of the neighbors of n with a given map (of shard id to nodes on that shard) of nodes to check
 inline size_t
-find_num_valid_neighbors(db::graph *G, db::element::node *n,
-std::unordered_map<int, std::unordered_set<size_t>> &nbrs,
-std::vector<common::property> &edge_props, uint64_t myclock_recd,
-std::vector<uint64_t> &vector_clock)
+find_num_valid_neighbors(db::element::node *n, std::unordered_map<int, std::unordered_set<size_t>> &nbrs,
+        std::vector<common::property> &edge_props, uint64_t myclock_recd, std::vector<uint64_t> &vector_clock)
 {
     size_t num_valid_nbrs = 0;
     for(db::element::edge *e : n->out_edges)
     {
-        int loc = e->nbr->get_loc();
-        if (nbrs.count(loc) < 1)
-            break;
-
-        size_t node_ptr = (size_t) e->nbr->get_addr();
-        if (nbrs[loc].count(node_ptr) > 0){
+        if (nbrs.count(e->nbr->get_loc()) > 0 && nbrs[e->nbr->get_loc()].count((size_t) e->nbr->get_addr()) > 0){
             uint64_t nbrclock_recd = vector_clock[e->nbr->get_loc()];
             bool use_edge = e->get_creat_time() <= myclock_recd  
                 && e->get_del_time() > myclock_recd // edge created and deleted in acceptable timeframe
@@ -622,27 +622,27 @@ std::vector<uint64_t> &vector_clock)
     return num_valid_nbrs;
 }
 
+// Calculates the local clustering coefficient for a given node
 void
 handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
 {
     size_t node_ptr;
     db::element::node *main_node; // pointer to node to calc clustering coefficient for
-    db::clustering_request *request = new db::clustering_request();
-
+    db::clustering_request *request = new db::clustering_request(); // will be deleted by add_clustering_response once all replies are recieved
     std::vector<common::property> edge_props;
     std::vector<uint64_t> vector_clock;
     int total_nbrs = 0;
 
-    message::unpack_message(*msg, message::CLUSTERING_REQ, node_ptr,
-            request->coordinator_loc, request->id, edge_props, vector_clock);
+    message::unpack_message(*msg, message::CLUSTERING_REQ, node_ptr, request->id, edge_props, vector_clock);
     main_node = (db::element::node *)node_ptr;
+
     uint64_t myclock_recd = vector_clock[G->myid];
-    //myclock_recd = vector_clock->at(myid-1);
     // TODO pass clock into has_property
     change_property_times(edge_props, myclock_recd);
 
     // wait till all updates for this shard arrive
     G->wait_for_updates(myclock_recd);
+    // made sure neighbors have not been deleted
     refresh_node_neighbors(G, main_node, vector_clock);
 
     assert(main_node->get_del_time() > myclock_recd);
@@ -662,71 +662,62 @@ handle_clustering_request(db::graph *G, std::unique_ptr<message::message> msg)
                 break;
             }
         }
-        if (use_edge)
-        {
+        if (use_edge) {
             total_nbrs++;
             (request->nbrs)[e->nbr->get_loc()].insert((size_t)e->nbr->get_addr());
         }
     }
 
-    request->possible_edges = total_nbrs*(total_nbrs-1);
-    if (total_nbrs <= 1) // cant compute coeff
-    {
+    request->possible_edges = total_nbrs*(total_nbrs-1); // denominator of coefficient
+
+    if (total_nbrs <= 1) { // cant compute coeff for this few neighbors
         request->responses_left = 1;
         add_clustering_response(G, request, 0, std::move(msg));
         return;
-    }
-    else 
-    {
+    } else {
         request->responses_left = request->nbrs.size();
     }
-    //std::unordered_set<size_t> *local_nbrs;
 
     for (std::pair<const int, std::unordered_set<size_t>> &p : request->nbrs)
     {
-        if (p.first == G->myid)
-            // XXX indent
-        {   //neighbors on local machine
-          //  local_nbrs = &p.second;
+        if (p.first == G->myid) {   
+            // calculation for neighbors on local machine below
         } else {
             msg.reset(new message::message(message::CLUSTERING_PROP));
             message::prepare_message(*msg, message::CLUSTERING_PROP, (size_t)request, G->myid, edge_props, vector_clock, request->nbrs);
             G->send(p.first, msg->buf);
         }
     }
-    // after we have sent batches to other shards who need to compute,
-    // sequentially compute for local neighbors
-    size_t nbr_count = 0;
-    if (request->nbrs.count(G->myid) > 0)
-    {
+    // compute for local neighbors after we have sent batches to other shards
+    if (request->nbrs.count(G->myid) > 0) {
+        size_t nbr_count = 0;
         for (size_t node_ptr : request->nbrs[G->myid])
         {
-            nbr_count += find_num_valid_neighbors(G, (db::element::node *)node_ptr,
-                request->nbrs, edge_props, myclock_recd, vector_clock);
+            nbr_count += find_num_valid_neighbors((db::element::node *) node_ptr, request->nbrs, edge_props, myclock_recd, vector_clock);
         }
         add_clustering_response(G, request, nbr_count, std::move(msg));
     }
 }
 
+// Given a map with neighbors of the node of a clustering request, 
+// calculate for each neighbor on this machine the number of other neighbors it is connected to
 void
 handle_clustering_prop(db::graph *G, std::unique_ptr<message::message> msg){
     size_t return_req_ptr;
-
     std::unordered_map<int, std::unordered_set<size_t>> nbrs;
     std::vector<uint64_t> vector_clock;
     std::vector<common::property> edge_props;
     int reply_loc;
 
-    message::unpack_message(*msg, message::CLUSTERING_PROP, return_req_ptr,
-            reply_loc, edge_props, vector_clock, nbrs);
+    message::unpack_message(*msg, message::CLUSTERING_PROP, return_req_ptr, reply_loc, edge_props, vector_clock, nbrs);
+
     uint64_t myclock_recd = vector_clock[G->myid];
     change_property_times(edge_props, myclock_recd);
 
     size_t nbr_count = 0;
     for (size_t node_ptr : nbrs[G->myid])
     {
-        nbr_count += find_num_valid_neighbors(G, (db::element::node *)node_ptr,
-                nbrs, edge_props, myclock_recd, vector_clock);
+        nbr_count += find_num_valid_neighbors((db::element::node *) node_ptr, nbrs, edge_props, myclock_recd, vector_clock);
     }
 
     msg.reset(new message::message(message::CLUSTERING_PROP_REPLY));
@@ -734,6 +725,7 @@ handle_clustering_prop(db::graph *G, std::unique_ptr<message::message> msg){
     G->send(reply_loc, msg->buf);
 }
 
+// Add a response to a clustering prop to the associated request
 void
 handle_clustering_prop_reply(db::graph *G, std::unique_ptr<message::message> msg){
     db::clustering_request *req;
@@ -741,6 +733,7 @@ handle_clustering_prop_reply(db::graph *G, std::unique_ptr<message::message> msg
     size_t to_add;
 
     message::unpack_message(*msg, message::CLUSTERING_PROP_REPLY, req_ptr, to_add);    
+
     req = (db::clustering_request *)req_ptr;
     add_clustering_response(G, req, to_add, std::move(msg));
 }
