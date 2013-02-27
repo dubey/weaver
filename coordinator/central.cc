@@ -613,7 +613,7 @@ client_msg_handler(coordinator::central *server)
 
 // periodically update cache at all shards
 void
-cache_updater(coordinator::central *server)
+coord_daemon(coordinator::central *server)
 {
     std::vector<size_t> good, bad;
     message::message msg(message::CACHE_UPDATE);
@@ -655,10 +655,10 @@ main()
     t->detach();
 
     // initialize client msg receiving thread
-    //t = new std::thread(client_msg_handler, &server);
-    //t->detach();
-    client_msg_handler(&server);
+    t = new std::thread(client_msg_handler, &server);
+    t->detach();
+    //client_msg_handler(&server);
 
     // call periodic cache update function
-    //cache_updater(&server);
+    coord_daemon(&server);
 }

@@ -35,15 +35,6 @@
 
 namespace db
 {
-    class bool_wrapper
-    {
-        public:
-            bool bval;
-            bool_wrapper() {
-                bval = false;
-            }
-    };
-
     // Pending batched request
     class batch_request
     {
@@ -183,7 +174,7 @@ namespace db
             po6::threads::mutex outgoing_req_id_counter_mutex, visited_mutex;
             std::unordered_map<size_t, std::shared_ptr<batch_request>> pending_batch;
             // TODO need clean up of old done requests
-            std::unordered_map<size_t, bool_wrapper> done_requests; // requests which need to be killed
+            std::unordered_set<size_t> done_requests; // requests which need to be killed
             db::thread::pool thread_pool;
             std::unordered_map<size_t, std::vector<size_t>> visit_map_odd, visit_map_even; // visited ids -> nodes
             bool visit_map;
@@ -358,12 +349,7 @@ namespace db
     {
         bool ret;
         request_mutex.lock();
-        if (done_requests[req_id].bval) {
-            ret = true;
-        } else {
-            done_requests.erase(req_id);
-            ret = false;
-        }
+        ret = (done_requests.find(req_id) != done_requests.end());
         request_mutex.unlock();
         return ret;
     }
@@ -372,7 +358,7 @@ namespace db
     graph :: add_done_request(size_t req_id)
     {
         request_mutex.lock();
-        done_requests[req_id].bval = true;
+        done_requests.insert(req_id);
         request_mutex.unlock();
     }
 

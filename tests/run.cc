@@ -35,8 +35,8 @@ main(int argc, char *argv[])
     std::cout << "Multiple stress client ok." << std::endl;
     //repetitive_stress_client();
     //std::cout << "Repetitive stress client ok." << std::endl;
-    clustering_test();
-    std::cout <<"Clustering ok.\n";
+    //clustering_test();
+    //std::cout <<"Clustering ok.\n";
 
     return 0;
 }
