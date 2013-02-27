@@ -178,7 +178,7 @@ namespace db
             db::thread::pool thread_pool;
             std::unordered_map<size_t, std::vector<size_t>> visit_map_odd, visit_map_even; // visited ids -> nodes
             bool visit_map;
-            std::unordered_map<size_t, uint64_t> req_count; //XXX testing
+            std::unordered_map<size_t, uint64_t> req_count; // testing
             
         public:
             element::node* create_node(uint64_t time);
@@ -188,7 +188,7 @@ namespace db
             void refresh_edge(element::node *n, element::edge *e, uint64_t del_time);
             void add_edge_property(element::node *n, element::edge *e,
                 std::unique_ptr<common::property> prop, uint64_t time);
-            void delete_all_edge_property(element::node *n, element::edge *e, uint32_t key, uint64_t time);
+            std::unique_ptr<std::vector<size_t>> delete_all_edge_property(element::node *n, element::edge *e, uint32_t key, uint64_t time);
             bool check_request(size_t req_id);
             void add_done_request(size_t req_id);
             void broadcast_done_request(size_t req_id); 
@@ -252,9 +252,10 @@ namespace db
         assert(my_clock == time);
         pending_update_cond.broadcast();
         update_mutex.unlock();
-        
-        //std::cout << "Creating node, addr = " << (void*) new_node 
-        //        << " and node count " << (++node_count) << std::endl;
+#ifdef DEBUG
+        std::cout << "Creating node, addr = " << (void*) new_node 
+                << " and node count " << (++node_count) << std::endl;
+#endif
         return new_node;
     }
 
@@ -271,8 +272,9 @@ namespace db
         assert(my_clock == time);
         pending_update_cond.broadcast();
         update_mutex.unlock();
-
-        //std::cout << "Creating edge, addr = " << (void *) new_edge << std::endl;
+#ifdef DEBUG
+        std::cout << "Creating edge, addr = " << (void *) new_edge << std::endl;
+#endif
         return new_edge;
     }
 
@@ -331,17 +333,20 @@ namespace db
         update_mutex.unlock();
     }
 
-    inline void
+    inline std::unique_ptr<std::vector<size_t>>
     graph :: delete_all_edge_property(element::node *n, element::edge *e, uint32_t key, uint64_t time)
     {
+        std::unique_ptr<std::vector<size_t>> cached_req_ids;
         n->update_mutex.lock();
         e->delete_property(key, time);
+        cached_req_ids = std::move(n->purge_cache());
         n->update_mutex.unlock();
         update_mutex.lock();
         my_clock++;
         assert(my_clock == time);
         pending_update_cond.broadcast();
         update_mutex.unlock();
+        return cached_req_ids;
     }
 
     inline bool

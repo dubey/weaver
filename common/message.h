@@ -57,6 +57,7 @@ namespace message
         EDGE_DELETE_ACK,
         EDGE_ADD_PROP,
         EDGE_DELETE_PROP,
+        EDGE_DELETE_PROP_ACK,
         REACHABLE_REPLY,
         REACHABLE_PROP,
         REACHABLE_DONE,

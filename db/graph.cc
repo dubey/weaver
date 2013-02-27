@@ -217,7 +217,6 @@ handle_add_edge_property(db::graph *G, std::unique_ptr<message::message> msg)
 }
 
 // delete all edge properties with the given key
-// TODO cached req ids!
 void
 handle_delete_edge_property(db::graph *G, std::unique_ptr<message::message> msg)
 {
@@ -227,13 +226,17 @@ handle_delete_edge_property(db::graph *G, std::unique_ptr<message::message> msg)
     size_t node_addr, edge_addr;
     uint32_t key;
     uint64_t prop_del_time;
+    std::unique_ptr<std::vector<size_t>> cached_req_ids;
     message::unpack_message(*msg, message::EDGE_DELETE_PROP, req_id, node_addr,
             edge_addr, key, prop_del_time);
 
     n = (db::element::node *)node_addr;
     e = (db::element::edge *)edge_addr;
     G->wait_for_updates(prop_del_time - 1);
-    G->delete_all_edge_property(n, e, key, prop_del_time);
+    cached_req_ids = G->delete_all_edge_property(n, e, key, prop_del_time);
+
+    message::prepare_message(*msg, message::EDGE_DELETE_PROP_ACK, req_id, *cached_req_ids);
+    G->send_coord(msg->buf);
 }
 
 // reachability request starting from src_nodes to dest_node
@@ -304,7 +307,9 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
                 reached = true;
                 reach_node = (void *)n;
             } else if (!G->mark_visited(n, coord_req_id)) {
+#ifdef DEBUG
                 G->req_count[coord_req_id]++;
+#endif
                 size_t temp_cache = G->get_cache((size_t)n, dest_loc, dest_node);
                 visited_nodes.push_back((size_t)n);
                 // need to check whether the cached_req_id is for a request
@@ -396,7 +401,9 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         // caution: Busybee cannot send very large messages. If either the
         // vector of src nodes or the vector of cache ignores becomes very
         // large, the msg will be dropped with no error printed.
+#ifdef DEBUG
         std::cout << "Count for request " << coord_req_id << " is " << G->req_count[coord_req_id] << std::endl;
+#endif
         for (loc_iter = msg_batch.begin(); loc_iter != msg_batch.end(); loc_iter++)
         {
             if (loc_iter->second.size() != 0) {
