@@ -77,6 +77,7 @@ create_edge(common::meta_element *node1, common::meta_element *node2, coordinato
     size_t req_id;
 
     //TODO need checks for given node_handles
+    //TODO need to increment clock on both shards?
     server->update_mutex.lock();
     creat_time = ++server->vc.clocks->at(node1->get_loc());
     request = new coordinator::pending_req(&server->update_mutex);
@@ -405,6 +406,9 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     std::unique_ptr<std::vector<size_t>> cached_req_ids; // for reply
     size_t clustering_numerator; //for reply
     size_t clustering_denominator; //for reply
+    common::meta_element *lnode; // for migration
+    int new_loc, from_loc; // for migration
+    uint64_t clock; // for migration
     
     switch(m_type)
     {
@@ -491,8 +495,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             break;
 
         case message::CLUSTERING_REPLY:
-            message::unpack_message(*msg, message::CLUSTERING_REPLY, req_id,
-            clustering_numerator, clustering_denominator);
+            message::unpack_message(*msg, message::CLUSTERING_REPLY, req_id, clustering_numerator, clustering_denominator);
             server->update_mutex.lock();
             request = server->pending[req_id];
             server->update_mutex.unlock();
@@ -502,6 +505,18 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             request->waiting = false;
             request->reply.signal();
             request->mutex.unlock();
+            break;
+
+        case message::COORD_NODE_MIGRATE:
+            message::unpack_message(*msg, message::COORD_NODE_MIGRATE, coord_handle, new_loc, node_handle, from_loc, req_id);
+            server->update_mutex.lock();
+            lnode = (common::meta_element *)coord_handle;
+            lnode->update_loc(new_loc);
+            lnode->update_addr((void*)node_handle);
+            clock = ++server->vc.clocks->at(new_loc);
+            message::prepare_message(*msg, message::COORD_NODE_MIGRATE_ACK, req_id, clock, server->vc.clocks->at(from_loc));
+            server->update_mutex.unlock();
+            server->send(from_loc, msg->buf);
             break;
         
         default:

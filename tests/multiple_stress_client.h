@@ -17,7 +17,7 @@
 
 #include "client/client.h"
 
-#define NUM_NODES 20000
+#define NUM_NODES 2000
 #define NUM_EDGES (2*NUM_NODES)
 #define NUM_REQUESTS 100
 #define NUM_EDGE_DEL (NUM_NODES/20)

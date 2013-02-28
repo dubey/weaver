@@ -155,8 +155,9 @@ namespace db
 
         private:
             po6::threads::mutex update_mutex, request_mutex;
-            uint64_t my_clock;
+            uint64_t my_clock, my_arrived_clock;
             po6::threads::cond pending_update_cond;
+            po6::threads::cond pending_update_arrival_cond;
 
         public:
             int node_count;
@@ -181,8 +182,9 @@ namespace db
             std::unordered_map<size_t, uint64_t> req_count; // testing
             
         public:
-            element::node* create_node(uint64_t time);
+            element::node* create_node(uint64_t time, bool migrate);
             element::edge* create_edge(size_t n1, std::unique_ptr<common::meta_element> n2, uint64_t time);
+            void create_reverse_edge(size_t local_node, size_t remote_node, int remote_loc);
             std::unique_ptr<std::vector<size_t>> delete_node(element::node *n, uint64_t del_time);
             std::unique_ptr<std::vector<size_t>> delete_edge(element::node *n, element::edge *e, uint64_t del_time);
             void refresh_edge(element::node *n, element::edge *e, uint64_t del_time);
@@ -206,6 +208,8 @@ namespace db
             busybee_returncode send(int loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send_coord(std::auto_ptr<e::buffer> buf);
             void wait_for_updates(uint64_t recd_clock);
+            void wait_for_arrived_updates(uint64_t recd_clock);
+            void sync_clocks();
             void propagate_request(std::vector<size_t> *nodes, std::shared_ptr<batch_request> request, 
                 int prop_loc, size_t dest_node, int dest_loc, size_t coord_req_id, 
                 std::shared_ptr<std::vector<common::property>> edge_props,
@@ -216,6 +220,7 @@ namespace db
     graph :: graph(int my_id, const char* ip_addr, int port)
         : my_clock(0)
         , pending_update_cond(&update_mutex)
+        , pending_update_arrival_cond(&update_mutex)
         , node_count(0)
         , num_shards(NUM_SHARDS)
         , myloc(new po6::net::location(ip_addr, port))
@@ -244,14 +249,18 @@ namespace db
     }
 
     inline element::node*
-    graph :: create_node(uint64_t time)
+    graph :: create_node(uint64_t time, bool migrate = false)
     {
         element::node* new_node = new element::node(myloc, time);
-        update_mutex.lock();
-        my_clock++;
-        assert(my_clock == time);
-        pending_update_cond.broadcast();
-        update_mutex.unlock();
+        if (!migrate) {
+            update_mutex.lock();
+            my_clock++;
+            my_arrived_clock++;
+            assert(my_clock == time);
+            pending_update_cond.broadcast();
+            pending_update_arrival_cond.broadcast();
+            update_mutex.unlock();
+        }
 #ifdef DEBUG
         std::cout << "Creating node, addr = " << (void*) new_node 
                 << " and node count " << (++node_count) << std::endl;
@@ -262,20 +271,41 @@ namespace db
     inline element::edge*
     graph :: create_edge(size_t n1, std::unique_ptr<common::meta_element> n2, uint64_t time)
     {
+        size_t remote_node = (size_t)n2->get_addr();
+        int remote_loc = n2->get_loc();
         element::node *local_node = (element::node *)n1;
+        //XXX Can we make new edge pointer rather than reuse metaelement, and avoid duplication of time?
+        // Also does element need to store location?
         element::edge *new_edge = new element::edge(myloc, time, std::move(n2));
         local_node->update_mutex.lock();
-        local_node->add_edge(new_edge);
+        local_node->add_edge(new_edge, true);
         local_node->update_mutex.unlock();
         update_mutex.lock();
-        my_clock++;
+        my_clock++; // TODO check first if the node is in transit
+        my_arrived_clock++;
         assert(my_clock == time);
         pending_update_cond.broadcast();
         update_mutex.unlock();
+        //XXX is this ok? What invariant?
+        message::message msg(message::REVERSE_EDGE_CREATE);
+        message::prepare_message(msg, message::REVERSE_EDGE_CREATE, n1, myid, remote_node);
+        send(remote_loc, msg.buf);
 #ifdef DEBUG
         std::cout << "Creating edge, addr = " << (void *) new_edge << std::endl;
 #endif
         return new_edge;
+    }
+
+    inline void
+    graph :: create_reverse_edge(size_t local_node, size_t remote_node, int remote_loc)
+    {
+        std::unique_ptr<common::meta_element> remote;
+        element::node *n = (element::node *)local_node;
+        remote.reset(new common::meta_element(remote_loc, 0, 0, (void*)remote_node));
+        element::edge *new_edge = new element::edge(myloc, my_clock, std::move(remote));
+        n->update_mutex.lock();
+        n->add_edge(new_edge, false);
+        n->update_mutex.unlock();
     }
 
     inline std::unique_ptr<std::vector<size_t>>
@@ -540,6 +570,26 @@ namespace db
         {
             pending_update_cond.wait();
         }
+        update_mutex.unlock();
+    }
+
+    inline void
+    graph :: wait_for_arrived_updates(uint64_t recd_clock)
+    {
+        update_mutex.lock();
+        while (recd_clock > my_arrived_clock)
+        {
+            pending_update_arrival_cond.wait();
+        }
+        update_mutex.unlock();
+    }
+
+    inline void
+    graph :: sync_clocks()
+    {
+        update_mutex.lock();
+        my_clock = my_arrived_clock;
+        pending_update_cond.broadcast();
         update_mutex.unlock();
     }
     

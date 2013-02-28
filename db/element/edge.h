@@ -28,6 +28,7 @@ namespace element
     class edge : public element
     {
         public:
+            edge(uint64_t time, std::unique_ptr<common::meta_element> _nbr);
             edge(std::shared_ptr<po6::net::location> server, uint64_t time, 
                 std::unique_ptr<common::meta_element> _nbr);
         
@@ -39,6 +40,13 @@ namespace element
     edge :: edge(std::shared_ptr<po6::net::location> server, uint64_t time,
         std::unique_ptr<common::meta_element> _nbr)
         : element(server, time, (void*)this)
+        , nbr(std::move(_nbr))
+    {
+    }
+
+    inline
+    edge :: edge(uint64_t time, std::unique_ptr<common::meta_element> _nbr)
+        : element(time, (void*)this)
         , nbr(std::move(_nbr))
     {
     }

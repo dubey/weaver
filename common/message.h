@@ -27,7 +27,8 @@
 #include "unordered_set"
 #include "unordered_map"
 #include "db/cache/cache.h" //so we get std::hash override for location
-
+#include "db/element/node.h"
+#include "db/element/edge.h"
 
 
 
@@ -49,6 +50,7 @@ namespace message
         NODE_REFRESH_REPLY,
         NODE_CREATE_REQ,
         EDGE_CREATE_REQ,
+        REVERSE_EDGE_CREATE,
         NODE_CREATE_ACK,
         EDGE_CREATE_ACK,
         NODE_DELETE_REQ,
@@ -67,6 +69,7 @@ namespace message
         CLUSTERING_REPLY,
         CLUSTERING_PROP,
         CLUSTERING_PROP_REPLY,
+        MIGRATE_NODE,
         ERROR
     };
 
@@ -179,6 +182,55 @@ namespace message
             void prep_create_ack(size_t req_id, size_t mem_addr, bool node);
             void prep_delete_ack(size_t req_id, std::unique_ptr<std::vector<size_t>> cached_req_ids, bool node);
     };
+    inline size_t size();
+    inline size_t size(const bool &t);
+    inline size_t size(const uint16_t &t);
+    inline size_t size(const uint32_t &t);
+    inline size_t size(const uint64_t &t);
+    inline size_t size(const int &t);
+    inline size_t size(const po6::net::location &t);
+    inline size_t size(const common::property &t);
+    inline size_t size(db::element::edge* &t);
+    inline size_t size(db::element::node &t);
+    template <typename T1, typename T2> inline size_t size(const std::pair<T1, T2>& t);
+    template <typename T> inline size_t size(const std::unordered_set<T> &t);
+    template <typename T1, typename T2> inline size_t size(const std::unordered_map<T1, T2>& t);
+    template <typename T> inline size_t size(const std::vector<T> &t);
+    template <typename T, typename... Args> inline size_t size(const T& t, const Args&... args);
+    inline void pack_buffer(e::buffer &buf, uint32_t index);
+    inline void pack_buffer(e::buffer &buf, uint32_t index, const bool &t);
+    inline void pack_buffer(e::buffer &buf, uint32_t index, const uint16_t &t);
+    inline void pack_buffer(e::buffer &buf, uint32_t index, const uint32_t &t);
+    inline void pack_buffer(e::buffer &buf, uint32_t index, const uint64_t &t);
+    inline void pack_buffer(e::buffer &buf, uint32_t index, const int &t);
+    inline void pack_buffer(e::buffer &buf, uint32_t index, const double& t);
+    inline void pack_buffer(e::buffer &buf, uint32_t index, const po6::net::location& t);
+    inline void pack_buffer(e::buffer &buf, uint32_t index, const common::property& t);
+    inline void pack_buffer(e::buffer &buf, uint32_t index, db::element::edge* &t);
+    inline void pack_buffer(e::buffer &buf, uint32_t index, db::element::node &t);
+    template <typename T1, typename T2> inline void pack_buffer(e::buffer &buf, uint32_t index, const std::pair<T1, T2>& t);
+    template <typename T> inline void pack_buffer(e::buffer &buf, uint32_t index, const std::vector<T>& t);
+    template <typename T> inline void pack_buffer(e::buffer &buf, uint32_t index, const std::unordered_set<T>& t);
+    template <typename T, typename... Args> inline void pack_buffer(e::buffer &buf, uint32_t index, const T& t, const Args&... args);
+    template <typename... Args> inline void prepare_message(message &m, const enum msg_type given_type, const Args&... args);
+    inline void prepare_message(message &m, const enum msg_type type, std::vector<message> pending, int new_loc, size_t new_node);
+    inline void unpack_buffer(e::buffer &buf, uint32_t index);
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, bool &t);
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, uint16_t &t);
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, uint32_t &t);
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, uint64_t &t);
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, int &t);
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, common::property& t);
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, double& t);
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, po6::net::location& t);
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, db::element::edge *&t);
+    inline void unpack_buffer(e::buffer &buf, uint32_t index, db::element::node &t);
+    template <typename T1, typename T2> inline void unpack_buffer(e::buffer &buf, uint32_t index, std::pair<T1, T2>& t);
+    template <typename T> inline void unpack_buffer(e::buffer &buf, uint32_t index, std::vector<T>& t);
+    template <typename T> inline void unpack_buffer(e::buffer &buf, uint32_t index, std::unordered_set<T>& t);
+    template <typename T1, typename T2> inline void unpack_buffer(e::buffer &buf, uint32_t index, std::unordered_map<T1, T2> &t);
+    template <typename T, typename... Args> inline void unpack_buffer(e::buffer &buf, uint32_t index, T &t, Args&... args);
+    template <typename... Args> inline void unpack_message(const message &m, const enum msg_type expected_type, Args&... args);
 
     inline
     message :: message(enum msg_type t)
@@ -869,6 +921,11 @@ namespace message
 
 
 // size templates
+    // required for termination, in case of single argument
+    inline size_t size()
+    {
+        return 0;
+    }
     inline size_t size(const bool &t)
     {
         return sizeof(uint16_t);
@@ -889,13 +946,30 @@ namespace message
     {
         return sizeof(int);
     }
-    inline size_t size(const po6::net::location& t)
+    inline size_t size(const po6::net::location &t)
     {
         return sizeof(uint32_t) + sizeof(uint16_t);
     }
-    inline size_t size(const common::property& t)
+    inline size_t size(const common::property &t)
     {
-        return sizeof(uint32_t)+sizeof(size_t);
+        return sizeof(uint32_t)+sizeof(size_t) + 2*sizeof(uint64_t);
+    }
+    inline size_t size(db::element::edge* &t)
+    {
+        size_t sz = 2*sizeof(uint64_t) + // time stamps
+            size(*t->get_props()) + // properties
+            sizeof(size_t) + // neighbor handle
+            2*sizeof(uint64_t); // neighbor time stamps
+        return sz;
+    }
+    inline size_t size(db::element::node &t)
+    {
+        size_t sz = 2*sizeof(uint64_t) + // time stamps
+            size(*t.get_props()) + // properties
+            size(t.out_edges) +
+            size(t.in_edges) +
+            size(t.seen);
+        return sz;
     }
 
     template <typename T1, typename T2>
@@ -946,7 +1020,11 @@ namespace message
     {
         return size(t) + size(args...);
     }
-// packing templates
+
+    // packing templates
+    inline void pack_buffer(e::buffer &buf, uint32_t index)
+    {
+    }
     inline void pack_buffer(e::buffer &buf, uint32_t index, const bool &t)
     {
         uint16_t to_pack = t ? 1 : 0;
@@ -986,7 +1064,37 @@ namespace message
     inline void pack_buffer(e::buffer &buf,
             uint32_t index, const common::property& t)
     {
-        buf.pack_at(index) << t.key << t.value;
+        buf.pack_at(index) << t.key << t.value << t.creat_time << t.del_time;
+    }
+
+    inline void pack_buffer(e::buffer &buf, uint32_t index, db::element::edge* &t)
+    {
+        buf.pack_at(index) << t->get_creat_time() << t->get_del_time();
+        index += 2*sizeof(uint64_t);
+        pack_buffer(buf, index, *t->get_props());
+        index += size(*t->get_props());
+        buf.pack_at(index) << ((size_t)t->nbr->get_addr()) << t->nbr->get_creat_time() << t->nbr->get_del_time();
+    }
+
+    inline void
+    pack_buffer(e::buffer &buf, uint32_t index, db::element::node &t)
+    {
+        buf.pack_at(index) << t.get_creat_time() << t.get_del_time();
+        index += (2*sizeof(uint64_t));
+        pack_buffer(buf, index, *t.get_props());
+        index += size(*t.get_props());
+        pack_buffer(buf, index, t.out_edges);
+        index += size(t.out_edges);
+        pack_buffer(buf, index, t.in_edges);
+        index += size(t.in_edges);
+        pack_buffer(buf, index, t.seen);
+    }
+
+    template <typename T, typename... Args>
+    inline void pack_buffer(e::buffer &buf, uint32_t index, const T& t, const Args&... args)
+    {
+        pack_buffer(buf, index, t);
+        pack_buffer(buf, index+size(t), args...);
     }
 
     template <typename T1, typename T2>
@@ -1047,14 +1155,6 @@ namespace message
         }
     }
 
-
-    template <typename T, typename... Args>
-    inline void pack_buffer(e::buffer &buf, uint32_t index, const T& t, const Args&... args)
-    {
-        pack_buffer(buf, index, t);
-        pack_buffer(buf, index+size(t), args...);
-    }
-
     template <typename... Args>
     inline void
     prepare_message(message &m, const enum msg_type given_type, const Args&... args)
@@ -1067,7 +1167,11 @@ namespace message
         m.buf->pack_at(index) << given_type;
         pack_buffer(*m.buf, index + sizeof(enum msg_type), args...);
     }
-// unpacking templates
+
+    // unpacking templates
+    inline void unpack_buffer(e::buffer &buf, uint32_t index)
+    {
+    }
     inline void unpack_buffer(e::buffer &buf, uint32_t index, bool &t)
     {
         uint16_t temp;
@@ -1094,11 +1198,7 @@ namespace message
     inline void unpack_buffer(e::buffer &buf,
             uint32_t index, common::property& t)
     {
-        uint32_t key;
-        size_t val;
-        buf.unpack_from(index) >> key >> val;
-        t.key = key;
-        t.value = val;
+        buf.unpack_from(index) >> t.key >> t.val >> t.creat_time >> t.del_time;
     }
 
     inline void unpack_buffer(e::buffer &buf, uint32_t index, double& t)
@@ -1116,6 +1216,42 @@ namespace message
         buf.unpack_from(index) >> ipaddr >> port;
         
         t = po6::net::location(ipaddr, port);
+    }
+
+    inline void
+    unpack_buffer(e::buffer &buf, uint32_t index, db::element::edge *&t)
+    {
+        uint64_t tc, td, nbr_tc, nbr_td;
+        std::vector<common::property> props;
+        size_t nbr_handle;
+        buf.unpack_from(index) >> tc >> td;
+        index += 2*sizeof(uint64_t);
+        unpack_buffer(buf, index, props);
+        index += size(props);
+        buf.unpack_from(index) >> nbr_handle >> nbr_tc >> nbr_td;
+        std::unique_ptr<common::meta_element> nbr(new common::meta_element(0, nbr_tc, nbr_td, (void *)nbr_handle));
+        t = new db::element::edge(tc, std::move(nbr));
+        t->update_del_time(td);
+        t->set_properties(props);
+    }
+
+    inline void
+    unpack_buffer(e::buffer &buf, uint32_t index, db::element::node &t)
+    {
+        uint64_t tc, td;
+        std::vector<common::property> props;
+        buf.unpack_from(index) >> tc >> td;
+        index += (2*sizeof(uint64_t));
+        unpack_buffer(buf, index, props);
+        index += size(props);
+        unpack_buffer(buf, index, t.out_edges);
+        index += size(t.out_edges);
+        unpack_buffer(buf, index, t.in_edges);
+        index += size(t.in_edges);
+        unpack_buffer(buf, index, t.seen);
+        t.update_creat_time(tc);
+        t.update_del_time(td);
+        t.set_properties(props);
     }
 
     template <typename T1, typename T2>
@@ -1195,7 +1331,6 @@ namespace message
             elements_left--;
         }
     }
-
 
     template <typename T, typename... Args>
     inline void unpack_buffer(e::buffer &buf, uint32_t index, T &t, Args&... args)

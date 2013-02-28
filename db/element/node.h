@@ -28,32 +28,49 @@ namespace element
     class node : public element
     {
         public:
+            node();
             node(std::shared_ptr<po6::net::location> server, uint64_t time);
         
         public:
             std::vector<edge *> out_edges;
+            std::vector<edge *> in_edges;
             po6::threads::mutex update_mutex;
             std::unordered_set<size_t> seen; // requests which have been seen
             std::unique_ptr<std::vector<size_t>> cached_req_ids; // requests which have been cached
-            void add_edge(edge *e);
+            bool in_transit;
+
+        public:
+            void add_edge(edge *e, bool in_or_out);
             bool check_and_add_seen(size_t id);
             void remove_seen(size_t id);
+            void set_seen(std::unordered_set<size_t> &seen);
             void add_cached_req(size_t req_id);
             void remove_cached_req(size_t req_id);
             std::unique_ptr<std::vector<size_t>> purge_cache();
     };
 
     inline
+    node :: node()
+        : in_transit(false)
+    {
+    }
+
+    inline
     node :: node(std::shared_ptr<po6::net::location> server, uint64_t time)
         : element(server, time, (void*)this)
         , cached_req_ids(new std::vector<size_t>())
+        , in_transit(false)
     {
     }
 
     inline void
-    node :: add_edge(edge *e)
+    node :: add_edge(edge *e, bool in_or_out)
     {
-        out_edges.push_back(e);
+        if (in_or_out) {
+            out_edges.push_back(e);
+        } else {
+            in_edges.push_back(e);
+        }
     }
 
     inline bool
@@ -71,6 +88,12 @@ namespace element
     node :: remove_seen(size_t id)
     {
         seen.erase(id);
+    }
+
+    inline void
+    node :: set_seen(std::unordered_set<size_t> &s)
+    {
+        seen = s;
     }
 
     inline void
@@ -92,7 +115,6 @@ namespace element
         cached_req_ids.reset(new std::vector<size_t>());
         return ret;
     }
-
 }
 }
 

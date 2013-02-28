@@ -31,7 +31,9 @@ namespace element
     class element
     {
         public:
-            element(std::shared_ptr<po6::net::location> server, uint64_t time, void* mem_addr);
+            element();
+            element(uint64_t time, void *mem_addr);
+            element(std::shared_ptr<po6::net::location> server, uint64_t time, void *mem_addr);
             
         protected:
             std::vector<common::property> properties;
@@ -46,12 +48,26 @@ namespace element
             void remove_property(common::property prop);
             bool has_property(common::property prop);
             bool check_and_add_property(common::property prop);
+            void set_properties(std::vector<common::property> &props);
             void update_del_time(uint64_t del_time);
+            void update_creat_time(uint64_t creat_time);
             //common::meta_element get_meta_element();
             uint64_t get_creat_time();
             uint64_t get_del_time();
-            
+            std::vector<common::property>* get_props();
     };
+
+    inline
+    element :: element()
+    {
+    }
+
+    inline
+    element :: element(uint64_t time, void *addr)
+        : creat_time(time)
+        , elem_addr(addr)
+    {
+    }
 
     inline
     element :: element(std::shared_ptr<po6::net::location> server, uint64_t time, void* mem_addr)
@@ -120,9 +136,21 @@ namespace element
     }
 
     inline void
+    element :: set_properties(std::vector<common::property> &props)
+    {
+        properties = props;
+    }
+
+    inline void
     element :: update_del_time(uint64_t _del_time)
     {
         del_time = _del_time;
+    }
+
+    inline void
+    element :: update_creat_time(uint64_t _creat_time)
+    {
+        creat_time = _creat_time;
     }
 
     /*
@@ -144,6 +172,12 @@ namespace element
     element :: get_del_time()
     {
         return del_time;
+    }
+
+    inline std::vector<common::property> *
+    element :: get_props()
+    {
+        return &properties;
     }
 }
 }

@@ -177,6 +177,17 @@ handle_create_edge(db::graph *G, std::unique_ptr<message::message> msg)
     G->send_coord(msg->buf);
 }
 
+// create a back pointer for an edge
+void
+handle_create_reverse_edge(db::graph *G, std::unique_ptr<message::message> msg)
+{
+    size_t local_node, remote_node;
+    int remote_loc;
+    message::unpack_message(*msg, message::REVERSE_EDGE_CREATE, remote_node, remote_loc, local_node);
+
+    G->create_reverse_edge(local_node, remote_node, remote_loc);
+}
+
 // delete a graph edge
 void
 handle_delete_edge(db::graph *G, std::unique_ptr<message::message> msg)
@@ -734,7 +745,8 @@ handle_clustering_prop(db::graph *G, std::unique_ptr<message::message> msg){
 
 // Add a response to a clustering prop to the associated request
 void
-handle_clustering_prop_reply(db::graph *G, std::unique_ptr<message::message> msg){
+handle_clustering_prop_reply(db::graph *G, std::unique_ptr<message::message> msg)
+{
     db::clustering_request *req;
     size_t req_ptr;
     size_t to_add;
@@ -745,6 +757,20 @@ handle_clustering_prop_reply(db::graph *G, std::unique_ptr<message::message> msg
     add_clustering_response(G, req, to_add, std::move(msg));
 }
 
+// Receive and place a node which has been migrated to this shard
+void
+handle_node_migrate(db::graph *G, std::unique_ptr<message::message> msg)
+{
+    size_t request;
+    int from_loc;
+    // create a new node, unpack the message
+    db::element::node *n = new db::element::node();
+    // TODO change edges to that they are hash map for each node
+    // change at coordinator so that user does not have to enter node for edge
+    message::unpack_message(*msg, message::MIGRATE_NODE_SYN, *n, from_loc, request);
+    message::prepare_message(*msg, message::MIGRATE_NODE_SYNACK, ((size_t)n), request);
+    G->send(from_loc, msg->buf);
+}
 
 // server loop for the shard server
 void
@@ -758,7 +784,10 @@ runner(db::graph *G)
     message::message msg(message::ERROR);
     std::unique_ptr<db::thread::unstarted_thread> thr;
     std::unique_ptr<std::thread> t;
+    size_t migr_node, request;
+    db::migrate_request *mreq;
     size_t done_id;
+    uint64_t other_clock, my_clock;
 
     while (1)
     {
@@ -786,6 +815,10 @@ runner(db::graph *G)
                 thr.reset(new db::thread::unstarted_thread(handle_create_edge, G, std::move(rec_msg)));
                 G->thread_pool.add_request(std::move(thr), true);
                 break;
+
+            case message::REVERSE_EDGE_CREATE:
+                thr.reset(new db::thread::unstarted_thread(handle_create_reverse_edge, G, std::move(rec_msg)));
+                G->thread_pool.add_request(std::move(thr), true);
             
             case message::EDGE_DELETE_REQ:
                 thr.reset(new db::thread::unstarted_thread(handle_delete_edge, G, std::move(rec_msg)));
@@ -852,11 +885,80 @@ runner(db::graph *G)
                 G->thread_pool.add_request(std::move(thr));
                 break;
 
+            case message::MIGRATE_NODE_SYN:
+                thr.reset(new db::thread::unstarted_thread(handle_node_migrate, G, std::move(rec_msg)));
+                G->thread_pool.add_request(std::move(thr));
+                break;
+            
+            case message::MIGRATE_NODE_SYNACK:
+                message::unpack_message(*rec_msg, message::MIGRATE_NODE_SYNACK, migr_node, request);
+                mreq = (db::migrate_request *)request;
+                mreq->mutex.lock();
+                mreq->node_handle = migr_node;
+                mreq->created_node = true;
+                mreq->cond.signal();
+                mreq->mutex.unlock();
+                break;
+
+            case message::COORD_NODE_MIGRATE_ACK:
+                message::unpack_message(*rec_msg, message::COORD_NODE_MIGRATE_ACK, request, other_clock, my_clock);
+                mreq = (db::migrate_request *)request;
+                mreq->mutex.lock();
+                mreq->other_clock = other_clock;
+                mreq->my_clock = my_clock;
+                mreq->informed_coord = true;
+                mreq->cond.signal();
+                mreq->mutex.unlock(); 
+                break;
+
             default:
                 std::cerr << "unexpected msg type " << (message::CLIENT_REPLY ==
                 code) << std::endl;
         }
     }
+}
+
+// migrate node n to shard
+void
+migrate_node(db::graph *G, db::element::node *n, int shard)
+{
+    n->update_mutex.lock();
+    // pack entire node info in a ginormous message
+    message::message msg(message::MIGRATE_NODE);
+    db::migrate_request *request = new db::migrate_request();
+    request->mutex.lock();
+    n->migr_request = request;
+    //TODO check msg packing
+    message::prepare_message(msg, message::MIGRATE_NODE, *n, G->myid, ((size_t)request));
+    n->in_transit = true;
+    n->update_mutex.unlock();
+    G->send(shard, msg.buf);
+    while (!request->created_node)
+    {
+        request->cond.wait();
+    }
+    // send migration information to coord = new node and edge handles
+    message::prepare_message(msg, message::COORD_NODE_MIGRATE, n->id, shard, request->migr_node, G->myid, ((size_t)request));
+    G->send_coord(msg.buf);
+    while (!request->informed_coord)
+    {
+        request->cond.wait();
+    }
+    // coord has incremented clock at dest shard, so that the queued updates are applied first
+    // wait for updates till the received clock value
+    G->wait_for_arrived_updates(request->my_clock);
+    // increment local clock to above value
+    G->sync_clocks();
+    // forward queued update requests
+    message::prepare_message(msg, message::COORD_MIGRATE_ACK, request->pending_updates, shard, request->migr_node);
+    // and start informing other shards of migration
+    // beware of edges to nodes that may themselves be migrating - XXX simplifying assumption - only 1 shard migrates at a time?
+    // henceforth traversal requests should be refused and pointed to new loc
+    n->update_mutex.lock();
+    // ...
+
+    // XXX wait for some time for transient requests to arrive
+    // delete the node!
 }
 
 // delete old visited properties

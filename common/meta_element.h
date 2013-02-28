@@ -38,6 +38,9 @@ namespace common
             uint64_t get_creat_time();
             uint64_t get_del_time();
             void update_del_time(uint64_t _del_time);
+            void update_creat_time(uint64_t _creat_time);
+            void update_addr(void *addr);
+            void update_loc(int newloc);
             void* get_addr();
             int get_loc();
     };
@@ -67,6 +70,24 @@ namespace common
     meta_element :: update_del_time(uint64_t _del_time)
     {
         del_time = _del_time;
+    }
+
+    inline void
+    meta_element :: update_creat_time(uint64_t _creat_time)
+    {
+        creat_time = _creat_time;
+    }
+
+    inline void
+    meta_element :: update_addr(void *addr)
+    {
+        elem_addr = addr;
+    }
+
+    inline void
+    meta_element :: update_addr(int newloc)
+    {
+        loc = newloc;
     }
 
     inline void*
