@@ -84,17 +84,23 @@ create_edge(common::meta_element *node1, common::meta_element *node2, coordinato
     request->mutex.lock();
     req_id = ++server->request_id;
     server->pending[req_id] = request;
-    size_t node1_addr = (size_t)node1->get_addr();
+    request->new_node = (size_t)node1->get_addr();
+    request->new_loc = node1->get_loc();
     size_t node2_addr = (size_t)node2->get_addr();
-    message::prepare_message(msg, message::EDGE_CREATE_REQ, req_id, node1_addr, node2_addr,
-        node2->get_loc(), node2->get_creat_time(), creat_time);
+    int loc2 = node2->get_loc();
+    uint64_t tc2 = node2->get_creat_time();
     server->update_mutex.unlock();
-    server->send(node1->get_loc(), msg.buf);
-    
-    while (request->waiting)
+    do
     {
-        request->reply.wait();
-    }
+        message::prepare_message(msg, message::EDGE_CREATE_REQ, req_id, request->new_node, node2_addr,
+            loc2, tc2, creat_time);
+        server->send(request->new_loc, msg.buf);
+        
+        while (request->waiting)
+        {
+            request->reply.wait();
+        }
+    } while (!request->success);
     new_edge = new common::meta_element(node1->get_loc(), creat_time, MAX_TIME, request->addr);
     request->mutex.unlock();
     delete request;
@@ -406,6 +412,8 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     std::unique_ptr<std::vector<size_t>> cached_req_ids; // for reply
     size_t clustering_numerator; //for reply
     size_t clustering_denominator; //for reply
+    size_t new_node; // for migrated node, fail reply
+    int new_loc; // for migrated node, fail reply
     common::meta_element *lnode; // for migration
     int new_loc, from_loc; // for migration
     uint64_t clock; // for migration
@@ -413,18 +421,8 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     switch(m_type)
     {
         case message::NODE_CREATE_ACK:
-            message::unpack_message(*msg, message::NODE_CREATE_ACK, req_id, mem_addr);
-            server->update_mutex.lock();
-            request = server->pending[req_id];
-            server->update_mutex.unlock();
-            request->mutex.lock();
-            request->addr = (void *) mem_addr;
-            request->waiting = false;
-            request->reply.signal();
-            request->mutex.unlock();
-            break;
         case message::EDGE_CREATE_ACK:
-            message::unpack_message(*msg, message::EDGE_CREATE_ACK, req_id, mem_addr);
+            message::unpack_message(*msg, mtype, req_id, mem_addr);
             server->update_mutex.lock();
             request = server->pending[req_id];
             server->update_mutex.unlock();
@@ -435,38 +433,48 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             request->mutex.unlock();
             break;
 
+        case message::EDGE_CREATE_FAIL:
+            message::unpack_message(*msg, mtype, req_id, new_loc, new_node);
+            server->update_mutex.lock();
+            request = server->pending[req_id];
+            server->update_mutex.unlock();
+            request->mutex.lock();
+            request->waiting = false;
+            request->success = false;
+            request->new_loc = new_loc;
+            request->new_node = new_node;
+            request->reply.signal();
+            request->mutex.unlock();
+            break;
+
         case message::NODE_DELETE_ACK:
-            cached_req_ids.reset(new std::vector<size_t>());
-            message::unpack_message(*msg, message::NODE_DELETE_ACK, req_id, *cached_req_ids);
-            server->update_mutex.lock();
-            request = server->pending[req_id];
-            server->update_mutex.unlock();
-            request->mutex.lock();
-            request->waiting = false;
-            request->cached_req_ids = std::move(cached_req_ids);
-            request->reply.signal();
-            request->mutex.unlock();
-            break;
         case message::EDGE_DELETE_ACK:
-            cached_req_ids.reset(new std::vector<size_t>());
-            message::unpack_message(*msg, message::EDGE_DELETE_ACK, req_id, *cached_req_ids);
-            server->update_mutex.lock();
-            request = server->pending[req_id];
-            server->update_mutex.unlock();
-            request->mutex.lock();
-            request->waiting = false;
-            request->cached_req_ids = std::move(cached_req_ids);
-            request->reply.signal();
-            request->mutex.unlock();
-            break;
         case message::EDGE_DELETE_PROP_ACK:
             cached_req_ids.reset(new std::vector<size_t>());
-            message::unpack_message(*msg, message::EDGE_DELETE_PROP_ACK, req_id, *cached_req_ids);
+            message::unpack_message(*msg, mtype, req_id, *cached_req_ids);
             server->update_mutex.lock();
             request = server->pending[req_id];
             server->update_mutex.unlock();
             request->mutex.lock();
             request->waiting = false;
+            request->cached_req_ids = std::move(cached_req_ids);
+            request->reply.signal();
+            request->mutex.unlock();
+            break;
+
+        case message::NODE_DELETE_FAIL:
+        case message::EDGE_DELETE_FAIL:
+        case message::EDGE_DELETE_PROP_FAIL:
+            cached_req_ids.reset(new std::vector<size_t>());
+            message::unpack_message(*msg, mtype, req_id, new_loc, new_node, *cached_req_ids);
+            server->update_mutex.lock();
+            request = server->pending[req_id];
+            server->update_mutex.unlock();
+            request->mutex.lock();
+            request->waiting = false;
+            request->success = false;
+            request->new_loc = new_loc;
+            request->new_node = new_node;
             request->cached_req_ids = std::move(cached_req_ids);
             request->reply.signal();
             request->mutex.unlock();

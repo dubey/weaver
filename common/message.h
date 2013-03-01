@@ -213,7 +213,7 @@ namespace message
     template <typename T> inline void pack_buffer(e::buffer &buf, uint32_t index, const std::unordered_set<T>& t);
     template <typename T, typename... Args> inline void pack_buffer(e::buffer &buf, uint32_t index, const T& t, const Args&... args);
     template <typename... Args> inline void prepare_message(message &m, const enum msg_type given_type, const Args&... args);
-    inline void prepare_message(message &m, const enum msg_type type, std::vector<message> pending, int new_loc, size_t new_node);
+    //inline void prepare_message(message &m, const enum msg_type type, std::vector<message> pending, int new_loc, size_t new_node);
     inline void unpack_buffer(e::buffer &buf, uint32_t index);
     inline void unpack_buffer(e::buffer &buf, uint32_t index, bool &t);
     inline void unpack_buffer(e::buffer &buf, uint32_t index, uint16_t &t);
