@@ -26,27 +26,27 @@ namespace common
     class meta_element
     {
         public:
-            meta_element(int loc, uint64_t t_creat, uint64_t t_delete, void *mem_addr);
+            meta_element(int loc, uint64_t t_creat, uint64_t t_delete, size_t mem_addr);
         
         protected:
             int myloc;
             uint64_t creat_time;
             uint64_t del_time;
-            void *elem_addr; //memory address of this element on shard server
+            size_t elem_addr; //memory address of this element on shard server
         
         public:
             uint64_t get_creat_time();
             uint64_t get_del_time();
             void update_del_time(uint64_t _del_time);
             void update_creat_time(uint64_t _creat_time);
-            void update_addr(void *addr);
+            void update_addr(size_t addr);
             void update_loc(int newloc);
-            void* get_addr();
+            size_t get_addr();
             int get_loc();
     };
 
     inline
-    meta_element :: meta_element(int loc, uint64_t t_creat, uint64_t t_delete, void *mem_addr)
+    meta_element :: meta_element(int loc, uint64_t t_creat, uint64_t t_delete, size_t mem_addr)
         : myloc(loc)
         , creat_time(t_creat)
         , del_time(t_delete)
@@ -79,7 +79,7 @@ namespace common
     }
 
     inline void
-    meta_element :: update_addr(void *addr)
+    meta_element :: update_addr(size_t addr)
     {
         elem_addr = addr;
     }
@@ -90,7 +90,7 @@ namespace common
         loc = newloc;
     }
 
-    inline void*
+    inline size_t
     meta_element :: get_addr()
     {
         return elem_addr;

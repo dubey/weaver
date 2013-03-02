@@ -269,7 +269,7 @@ namespace db
     }
 
     inline std::pair<bool, element::edge*>
-    graph :: create_edge(size_t n1, std::unique_ptr<common::meta_element> n2, uint64_t time)
+    graph :: create_edge(size_t n1, uint64_t time, size_t n2, int loc2)
     {
         std::pair<bool, element::edge*> ret;
         element::node *local_node = (element::node *)n1;
@@ -289,15 +289,11 @@ namespace db
             update_mutex.unlock();
             ret.first = false;
         } else {
-            size_t remote_node = (size_t)n2->get_addr();
-            int remote_loc = n2->get_loc();
-            //XXX Can we make new edge pointer rather than reuse metaelement, and avoid duplication of time?
-            // Also does element need to store location?
-            element::edge *new_edge = new element::edge(myloc, time, std::move(n2));
+            element::edge *new_edge = new element::edge(time, loc2, n2);
             local_node->add_edge(new_edge, true);
             local_node->update_mutex.unlock();
             update_mutex.lock();
-            my_clock++; // TODO check first if the node is in transit
+            my_clock++;
             my_arrived_clock++;
             assert(my_clock == time);
             pending_update_cond.broadcast();
@@ -319,7 +315,6 @@ namespace db
     inline bool
     graph :: create_reverse_edge(size_t local_node, size_t remote_node, int remote_loc)
     {
-        std::unique_ptr<common::meta_element> remote;
         element::node *n = (element::node *)local_node;
         n->update_mutex.lock();
         if (n->in_transit) {
@@ -332,8 +327,7 @@ namespace db
             n->migr_request->mutex.unlock();
             n->update_mutex.unlock();
         } else {
-            remote.reset(new common::meta_element(remote_loc, 0, 0, (void*)remote_node));
-            element::edge *new_edge = new element::edge(myloc, my_clock, std::move(remote));
+            element::edge *new_edge = new element::edge(my_clock, remote_node, remote_loc);
             n->add_edge(new_edge, false);
             n->update_mutex.unlock();
         }

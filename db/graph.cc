@@ -169,14 +169,14 @@ void
 handle_create_edge(db::graph *G, std::unique_ptr<message::message> msg)
 {
     size_t req_id;
-    size_t n1;
-    std::unique_ptr<common::meta_element> n2;
+    size_t n1, n2;
     uint64_t creat_time;
+    int loc2;
     std::pair<bool, db::element::edge*> success;
-    msg->unpack_edge_create(&req_id, &n1, &n2, &creat_time);
+    message::unpack_message(*msg, message::EDGE_CREATE_REQ, req_id, n1, n2, loc2, creat_time);
 
     G->wait_for_updates(creat_time - 1);
-    success = G->create_edge(n1, std::move(n2), creat_time);
+    success = G->create_edge(n1, req_id, n2, loc2);
     if (success.first) {
         message::prepare_message(*msg, message::EDGE_CREATE_ACK, req_id, e);
         G->send_coord(msg->buf);

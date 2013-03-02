@@ -32,15 +32,12 @@ namespace element
     {
         public:
             element();
-            element(uint64_t time, void *mem_addr);
-            element(std::shared_ptr<po6::net::location> server, uint64_t time, void *mem_addr);
+            element(uint64_t time);
             
         protected:
             std::vector<common::property> properties;
-            std::shared_ptr<po6::net::location> myloc;
             uint64_t creat_time;
             uint64_t del_time;
-            void* elem_addr; // memory address of this element on shard server
 
         public:
             void add_property(common::property prop);
@@ -51,7 +48,6 @@ namespace element
             void set_properties(std::vector<common::property> &props);
             void update_del_time(uint64_t del_time);
             void update_creat_time(uint64_t creat_time);
-            //common::meta_element get_meta_element();
             uint64_t get_creat_time();
             uint64_t get_del_time();
             std::vector<common::property>* get_props();
@@ -63,19 +59,9 @@ namespace element
     }
 
     inline
-    element :: element(uint64_t time, void *addr)
-        : creat_time(time)
-        , elem_addr(addr)
-    {
-    }
-
-    inline
     element :: element(std::shared_ptr<po6::net::location> server, uint64_t time, void* mem_addr)
-        : properties(0)
-        , myloc(server)
         , creat_time(time)
         , del_time(MAX_TIME)
-        , elem_addr(mem_addr)
     {
     }
 
@@ -152,15 +138,6 @@ namespace element
     {
         creat_time = _creat_time;
     }
-
-    /*
-    inline common::meta_element
-    element :: get_meta_element()
-    {
-        common::meta_element ret(myloc, creat_time, del_time, elem_addr);
-        return ret;
-    }
-    */
 
     inline uint64_t
     element :: get_creat_time()

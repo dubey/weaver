@@ -29,7 +29,7 @@ namespace element
     {
         public:
             node();
-            node(std::shared_ptr<po6::net::location> server, uint64_t time);
+            node(uint64_t time);
         
         public:
             std::vector<edge *> out_edges;
@@ -51,13 +51,14 @@ namespace element
 
     inline
     node :: node()
-        : in_transit(false)
+        : cached_req_ids(new std::vector<size_t>)
+        , in_transit(false)
     {
     }
 
     inline
-    node :: node(std::shared_ptr<po6::net::location> server, uint64_t time)
-        : element(server, time, (void*)this)
+    node :: node(uint64_t time)
+        : element(time)
         , cached_req_ids(new std::vector<size_t>())
         , in_transit(false)
     {

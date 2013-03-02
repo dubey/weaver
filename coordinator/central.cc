@@ -24,11 +24,12 @@
 #include "common/meta_element.h"
 #include "common/message.h"
 
+// TODO convert from blocking calls to state machine
 // create a node
 void*
 create_node(coordinator::central *server)
 {
-    coordinator::pending_req *request; 
+    coordinator::pending_req *request;
     common::meta_element *new_node;
     uint64_t creat_time;
     message::message msg(message::NODE_CREATE_REQ);
@@ -88,12 +89,11 @@ create_edge(common::meta_element *node1, common::meta_element *node2, coordinato
     request->new_loc = node1->get_loc();
     size_t node2_addr = (size_t)node2->get_addr();
     int loc2 = node2->get_loc();
-    uint64_t tc2 = node2->get_creat_time();
     server->update_mutex.unlock();
     do
     {
         message::prepare_message(msg, message::EDGE_CREATE_REQ, req_id, request->new_node, node2_addr,
-            loc2, tc2, creat_time);
+            loc2, creat_time);
         server->send(request->new_loc, msg.buf);
         
         while (request->waiting)
