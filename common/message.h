@@ -889,10 +889,6 @@ namespace message
     {
         return sizeof(int);
     }
-    inline size_t size(const po6::net::location& t)
-    {
-        return sizeof(uint32_t) + sizeof(uint16_t);
-    }
     inline size_t size(const common::property& t)
     {
         return sizeof(uint32_t)+sizeof(size_t);
@@ -946,262 +942,244 @@ namespace message
     {
         return size(t) + size(args...);
     }
-// packing templates
-    inline void pack_buffer(e::buffer &buf, uint32_t index, const bool &t)
+
+    // packing templates
+
+    inline void pack_buffer(e::buffer::packer &packer, const bool &t)
     {
         uint16_t to_pack = t ? 1 : 0;
-        buf.pack_at(index) << to_pack;
+        packer = packer << to_pack;
     }
-    inline void pack_buffer(e::buffer &buf, uint32_t index, const uint16_t &t)
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const uint16_t &t)
     {
-        buf.pack_at(index) << t;
+        packer = packer << t;
     }
-    inline void pack_buffer(e::buffer &buf, uint32_t index, const uint32_t &t)
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const uint32_t &t)
     {
-        buf.pack_at(index) << t;
+        packer = packer << t;
     }
-    inline void pack_buffer(e::buffer &buf, uint32_t index, const uint64_t &t)
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const uint64_t &t)
     {
-        buf.pack_at(index) << t;
+        packer = packer << t;
     }
-    inline void pack_buffer(e::buffer &buf, uint32_t index, const int &t)
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const int &t)
     {
-        buf.pack_at(index) << t;
+        packer = packer << t;
     }
 
-    inline void pack_buffer(e::buffer &buf, uint32_t index, const double& t)
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const double& t)
     {
         uint64_t dbl;
         memcpy(&dbl, &t, sizeof(double)); //to avoid casting issues, probably could avoid copy
-        buf.pack_at(index) << dbl;
+        packer = packer << dbl;
     }
 
-    inline void pack_buffer(e::buffer &buf,
-            uint32_t index, const po6::net::location& t)
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const common::property& t)
     {
-        uint32_t addr = (const_cast<po6::net::location&>(t).get_addr()); //watch out
-        buf.pack_at(index) << addr << t.port;
-    }
-
-    inline void pack_buffer(e::buffer &buf,
-            uint32_t index, const common::property& t)
-    {
-        buf.pack_at(index) << t.key << t.value;
+        packer = packer << t.key << t.value;
     }
 
     template <typename T1, typename T2>
-    inline void pack_buffer(e::buffer &buf,
-            uint32_t index, const std::pair<T1, T2>& t)
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const std::pair<T1, T2>& t)
     {
         // assumes constant size
-        pack_buffer(buf, index, t.first);
-        pack_buffer(buf, index + size(t.first), t.second);
+        pack_buffer(packer, t.first);
+        pack_buffer(packer, t.second);
     }
 
     template <typename T> 
-    inline void pack_buffer(e::buffer &buf,
-            uint32_t index, const std::vector<T>& t)
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const std::vector<T>& t)
     {
         // !assumes constant element size
         size_t num_elems = t.size();
-        buf.pack_at(index) << num_elems;
-        index += sizeof(size_t);
+        packer = packer << num_elems;
         if (num_elems > 0){
             size_t element_size = size(t[0]);
             for (const T &elem : t)
             {
-                pack_buffer(buf, index, elem);
-                index += element_size;
+                pack_buffer(packer, elem);
                 assert(element_size == size(elem));//slow
             }
         }
     }
 
     template <typename T>
-    inline void pack_buffer(e::buffer &buf,
-            uint32_t index, const std::unordered_set<T>& t)
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const std::unordered_set<T>& t)
     {
         size_t num_keys = t.size();
-        buf.pack_at(index) << num_keys;
-        index += sizeof(size_t);
+        packer = packer << num_keys;
         for (const T &elem : t)
         {
-            pack_buffer(buf, index, elem);
-            index += size(elem);
+            pack_buffer(packer, elem);
         }
     }
 
     template <typename T1, typename T2>
-    inline void pack_buffer(e::buffer &buf,
-            uint32_t index, const std::unordered_map<T1, T2>& t)
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const std::unordered_map<T1, T2>& t)
     {
         size_t num_keys = t.size();
-        buf.pack_at(index) << num_keys;
-        index += sizeof(size_t);
+        packer = packer << num_keys;
         for (const std::pair<T1,T2> &pair : t)
         {
-            pack_buffer(buf, index, pair.first);
-            index += size(pair.first);
-            pack_buffer(buf, index, pair.second);
-            index += size(pair.second);
+            pack_buffer(packer, pair.first);
+            pack_buffer(packer, pair.second);
         }
     }
 
 
     template <typename T, typename... Args>
-    inline void pack_buffer(e::buffer &buf, uint32_t index, const T& t, const Args&... args)
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const T& t, const Args&... args)
     {
-        pack_buffer(buf, index, t);
-        pack_buffer(buf, index+size(t), args...);
+        pack_buffer(packer, t);
+        pack_buffer(packer, args...);
     }
 
     template <typename... Args>
     inline void
     prepare_message(message &m, const enum msg_type given_type, const Args&... args)
     {
-        uint32_t index = BUSYBEE_HEADER_SIZE;
-        size_t bytes_to_pack = size(args...);
+        size_t bytes_to_pack = size(args...) + sizeof(enum msg_type);
         m.type = given_type;
-        m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack+ 4));
+        m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
+        e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
 
-        m.buf->pack_at(index) << given_type;
-        pack_buffer(*m.buf, index + sizeof(enum msg_type), args...);
+        packer = packer << given_type;
+        pack_buffer(packer, args...);
     }
-// unpacking templates
-    inline void unpack_buffer(e::buffer &buf, uint32_t index, bool &t)
+
+    // unpacking templates
+    inline void
+    unpack_buffer(e::unpacker &unpacker, bool &t)
     {
         uint16_t temp;
-        buf.unpack_from(index) >> temp;
+        unpacker = unpacker >> temp;
         t = (temp != 0);
     }
-    inline void unpack_buffer(e::buffer &buf, uint32_t index, uint16_t &t)
+    inline void
+    unpack_buffer(e::unpacker &unpacker, uint16_t &t)
     {
-        buf.unpack_from(index) >> t;
+        unpacker = unpacker >> t;
     }
-    inline void unpack_buffer(e::buffer &buf, uint32_t index, uint32_t &t)
+    inline void
+    unpack_buffer(e::unpacker &unpacker, uint32_t &t)
     {
-        buf.unpack_from(index) >> t;
+        unpacker = unpacker >> t;
     }
-    inline void unpack_buffer(e::buffer &buf, uint32_t index, uint64_t &t)
+    inline void 
+    unpack_buffer(e::unpacker &unpacker, uint64_t &t)
     {
-        buf.unpack_from(index) >> t;
+        unpacker = unpacker >> t;
     }
-    inline void unpack_buffer(e::buffer &buf, uint32_t index, int &t)
+    inline void 
+    unpack_buffer(e::unpacker &unpacker, int &t)
     {
-        buf.unpack_from(index) >> t;
+        unpacker = unpacker >> t;
     }
 
-    inline void unpack_buffer(e::buffer &buf,
-            uint32_t index, common::property& t)
+    inline void 
+    unpack_buffer(e::unpacker &unpacker, common::property& t)
     {
         uint32_t key;
         size_t val;
-        buf.unpack_from(index) >> key >> val;
+        unpacker = unpacker >> key >> val;
         t.key = key;
         t.value = val;
     }
 
-    inline void unpack_buffer(e::buffer &buf, uint32_t index, double& t)
+    inline void 
+    unpack_buffer(e::unpacker &unpacker, double& t)
     {
         uint64_t dbl;
-        buf.unpack_from(index) >> dbl;
+        unpacker = unpacker >> dbl;
         memcpy(&t, &dbl, sizeof(double)); //to avoid casting issues, probably could avoid copy
     }
 
-    inline void unpack_buffer(e::buffer &buf,
-            uint32_t index, po6::net::location& t)
-    {
-        uint32_t ipaddr;
-        uint16_t port;
-        buf.unpack_from(index) >> ipaddr >> port;
-        
-        t = po6::net::location(ipaddr, port);
-    }
-
     template <typename T1, typename T2>
-    inline void unpack_buffer(e::buffer &buf,
-            uint32_t index, std::pair<T1, T2>& t)
+    inline void 
+    unpack_buffer(e::unpacker &unpacker, std::pair<T1, T2>& t)
     {
         //assumes constant size
-        unpack_buffer(buf, index, t.first);
-        unpack_buffer(buf, index+size(t.first), t.second);
+        unpack_buffer(unpacker, t.first);
+        unpack_buffer(unpacker, t.second);
     }
 
     template <typename T> 
-    inline void unpack_buffer(e::buffer &buf,
-            uint32_t index, std::vector<T>& t)
+    inline void 
+    unpack_buffer(e::unpacker &unpacker, std::vector<T>& t)
     {
         assert(t.size() == 0);
         size_t elements_left;
-        buf.unpack_from(index) >> elements_left;
+        unpacker = unpacker >> elements_left;
 
         t.reserve(elements_left);
 
-        index += sizeof(size_t);
         while (elements_left > 0){
             T to_add;
-            unpack_buffer(buf, index, to_add);
+            unpack_buffer(unpacker, to_add);
             t.push_back(to_add);
-            index += size(to_add);
             elements_left--;
         }
     }
 
     template <typename T>
-    inline void unpack_buffer(e::buffer &buf,
-            uint32_t index, std::unordered_set<T>& t)
+    inline void 
+    unpack_buffer(e::unpacker &unpacker, std::unordered_set<T>& t)
     {
         assert(t.size() == 0);
         size_t elements_left;
-        buf.unpack_from(index) >> elements_left;
+        unpacker = unpacker >> elements_left;
 
         t.rehash(elements_left*1.25); // set number of buckets to 1.25*elements it will contain
 
-        index += sizeof(size_t);
-
         while (elements_left > 0){
             T to_add;
-            unpack_buffer(buf, index, to_add);
+            unpack_buffer(unpacker, to_add);
             t.insert(to_add);
-            index += size(to_add);
             elements_left--;
         }
     }
 
     template <typename T1, typename T2>
-    inline void unpack_buffer(e::buffer &buf,
-            uint32_t index, std::unordered_map<T1, T2> &t)
+    inline void 
+    unpack_buffer(e::unpacker &unpacker, std::unordered_map<T1, T2> &t)
     {
         assert(t.size() == 0);
         size_t elements_left;
-        buf.unpack_from(index) >> elements_left;
+        unpacker = unpacker >> elements_left;
         // set number of buckets to 1.25*elements it will contain
         // did not use reserve as max_load_factor is default 1
         t.rehash(elements_left*1.25); 
-
-        index += sizeof(size_t);
 
         while (elements_left > 0){
             T1 key_to_add;
             T2 val_to_add;
 
-            unpack_buffer(buf, index, key_to_add);
-            index += size(key_to_add);
+            unpack_buffer(unpacker, key_to_add);
 
-            unpack_buffer(buf, index, val_to_add);
-            index += size(val_to_add);
+            unpack_buffer(unpacker, val_to_add);
 
             t[key_to_add] = val_to_add;
             elements_left--;
         }
     }
 
-
     template <typename T, typename... Args>
-    inline void unpack_buffer(e::buffer &buf, uint32_t index, T &t, Args&... args)
+    inline void 
+    unpack_buffer(e::unpacker &unpacker, T &t, Args&... args)
     {
-        unpack_buffer(buf, index, t);
-        unpack_buffer(buf, index+size(t), args...);
+        unpack_buffer(unpacker, t);
+        unpack_buffer(unpacker, args...);
     }
 
     template <typename... Args>
@@ -1209,10 +1187,11 @@ namespace message
     unpack_message(const message &m, const enum msg_type expected_type, Args&... args)
     {
         uint32_t _type;
-        m.buf->unpack_from(BUSYBEE_HEADER_SIZE) >> _type;
+        e::unpacker unpacker = m.buf->unpack_from(BUSYBEE_HEADER_SIZE);
+        unpacker = unpacker >> _type;
         assert((enum msg_type)_type == expected_type);
 
-        unpack_buffer(*m.buf, BUSYBEE_HEADER_SIZE + sizeof(enum msg_type), args...);
+        unpack_buffer(unpacker, args...);
     }
 } //namespace message
 
