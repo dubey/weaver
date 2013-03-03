@@ -30,17 +30,33 @@ namespace element
         public:
             node();
             node(uint64_t time);
+
+        public:
+            enum mode
+            {
+                NASCENT = 0,
+                STABLE,
+                IN_TRANSIT,
+                MOVED
+            };
         
         public:
-            std::vector<edge *> out_edges;
-            std::vector<edge *> in_edges;
+            enum mode state;
+            std::unordered_map<size_t, edge*> out_edges;
+            std::unordered_map<size_t, edge*> in_edges;
             po6::threads::mutex update_mutex;
             std::unordered_set<size_t> seen; // requests which have been seen
             std::unique_ptr<std::vector<size_t>> cached_req_ids; // requests which have been cached
+            // for migration
             bool in_transit;
+            uint32_t num_pending_updates;
+            int prev_loc, new_loc;
+
+        private:
+            uint32_t out_edge_ctr, in_edge_ctr;
 
         public:
-            void add_edge(edge *e, bool in_or_out);
+            size_t add_edge(edge *e, bool in_or_out);
             bool check_and_add_seen(size_t id);
             void remove_seen(size_t id);
             void set_seen(std::unordered_set<size_t> &seen);
@@ -51,8 +67,13 @@ namespace element
 
     inline
     node :: node()
-        : cached_req_ids(new std::vector<size_t>)
-        , in_transit(false)
+        : state(mode::NASCENT)
+        , cached_req_ids(new std::vector<size_t>)
+        , out_edge_ctr(0)
+        , in_edge_ctr(0)
+        , num_pending_updates(0)
+        , prev_loc(-1)
+        , new_loc(-1)
     {
     }
 
@@ -61,16 +82,24 @@ namespace element
         : element(time)
         , cached_req_ids(new std::vector<size_t>())
         , in_transit(false)
+        , nascent(true)
+        , out_edge_ctr(0)
+        , in_edge_ctr(0)
+        , num_pending_updates(0)
+        , prev_loc(-1)
+        , new_loc(-1)
     {
     }
 
-    inline void
+    inline size_t
     node :: add_edge(edge *e, bool in_or_out)
     {
         if (in_or_out) {
-            out_edges.push_back(e);
+            out_edges.emplace(out_edge_ctr, e);
+            return (out_edge_ctr++);
         } else {
-            in_edges.push_back(e);
+            in_edges.emplace(in_edge_ctr, e);
+            return (in_edge_ctr++);
         }
     }
 
