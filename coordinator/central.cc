@@ -58,7 +58,7 @@ create_node(coordinator::central *server)
     delete request;
     server->update_mutex.lock();
     server->pending.erase(req_id);
-    server->add_node(new_node);
+    server->add_node(new_node, req_id);
     server->update_mutex.unlock();
 #ifdef DEBUG
     std::cout << "Node id is " << (void *)new_node << " " <<
@@ -516,13 +516,13 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             break;
 
         case message::COORD_NODE_MIGRATE:
-            message::unpack_message(*msg, message::COORD_NODE_MIGRATE, coord_handle, new_loc, node_handle, from_loc, req_id);
+            message::unpack_message(*msg, message::COORD_NODE_MIGRATE, coord_handle, new_loc, node_handle, from_loc);
             server->update_mutex.lock();
             lnode = (common::meta_element *)coord_handle;
             lnode->update_loc(new_loc);
             lnode->update_addr((void*)node_handle);
-            clock = ++server->vc.clocks->at(new_loc);
-            message::prepare_message(*msg, message::COORD_NODE_MIGRATE_ACK, req_id, clock, server->vc.clocks->at(from_loc));
+            //clock = ++server->vc.clocks->at(new_loc);
+            message::prepare_message(*msg, message::COORD_NODE_MIGRATE_ACK, server->vc.clocks->at(from_loc));
             server->update_mutex.unlock();
             server->send(from_loc, msg->buf);
             break;

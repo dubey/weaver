@@ -81,7 +81,7 @@ namespace coordinator
             int port_ctr;
             std::vector<std::shared_ptr<po6::net::location>> shards;
             int num_shards;
-            std::vector<common::meta_element *> nodes;
+            std::unordered_map<size_t, common::meta_element *> nodes;
             std::vector<common::meta_element *> edges;
             vclock::vector vc;
             po6::threads::mutex update_mutex;
@@ -155,9 +155,9 @@ namespace coordinator
     }
 
     inline void
-    central :: add_node(common::meta_element *n)
+    central :: add_node(common::meta_element *n, size_t index)
     {
-        nodes.push_back(n);
+        nodes.emplace(index, n);
     }
 
     inline void
