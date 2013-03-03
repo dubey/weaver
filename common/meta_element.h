@@ -85,9 +85,9 @@ namespace common
     }
 
     inline void
-    meta_element :: update_addr(int newloc)
+    meta_element :: update_loc(int newloc)
     {
-        loc = newloc;
+        myloc = newloc;
     }
 
     inline size_t

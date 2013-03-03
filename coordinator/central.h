@@ -38,7 +38,7 @@ namespace coordinator
     class pending_req
     {
         public:
-            void *addr;
+            size_t addr;
             bool reachable;
             po6::threads::mutex mutex;
             size_t clustering_numerator;
@@ -51,7 +51,7 @@ namespace coordinator
             bool deleted;
             
         pending_req(po6::threads::mutex *mtx)
-            : addr(NULL)
+            : addr(0)
             , waiting(true)
             , reply(&mutex)
             , del_reply(mtx)
@@ -97,7 +97,7 @@ namespace coordinator
             std::uniform_real_distribution<double> dist;
 
         public:
-            void add_node(common::meta_element *n);
+            void add_node(common::meta_element *n, size_t index);
             void add_edge(common::meta_element *e);
             void add_pending_del_req(size_t req_id);
             size_t get_last_del_req(size_t wait_req_id);

@@ -69,25 +69,24 @@ namespace element
     node :: node()
         : state(mode::NASCENT)
         , cached_req_ids(new std::vector<size_t>)
-        , out_edge_ctr(0)
-        , in_edge_ctr(0)
         , num_pending_updates(0)
         , prev_loc(-1)
         , new_loc(-1)
+        , out_edge_ctr(0)
+        , in_edge_ctr(0)
     {
     }
 
     inline
     node :: node(uint64_t time)
         : element(time)
+        , state(mode::NASCENT)
         , cached_req_ids(new std::vector<size_t>())
-        , in_transit(false)
-        , nascent(true)
-        , out_edge_ctr(0)
-        , in_edge_ctr(0)
         , num_pending_updates(0)
         , prev_loc(-1)
         , new_loc(-1)
+        , out_edge_ctr(0)
+        , in_edge_ctr(0)
     {
     }
 

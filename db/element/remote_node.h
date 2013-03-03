@@ -14,6 +14,8 @@
 #ifndef __REMOTE_NODE__
 #define __REMOTE_NODE__
 
+namespace db
+{
 namespace element
 {
     class remote_node
@@ -32,6 +34,7 @@ namespace element
         , handle(h)
     {
     }
+}
 }
 
 #endif

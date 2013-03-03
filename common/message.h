@@ -50,11 +50,16 @@ namespace message
         NODE_REFRESH_REPLY,
         NODE_CREATE_REQ,
         EDGE_CREATE_REQ,
+        TRANSIT_EDGE_CREATE_REQ,
         REVERSE_EDGE_CREATE,
+        TRANSIT_REVERSE_EDGE_CREATE,
         NODE_CREATE_ACK,
         EDGE_CREATE_ACK,
+        TRANSIT_EDGE_CREATE_ACK,
         NODE_DELETE_REQ,
+        TRANSIT_NODE_DELETE_REQ,
         EDGE_DELETE_REQ,
+        TRANSIT_EDGE_DELETE_REQ,
         NODE_DELETE_ACK,
         EDGE_DELETE_ACK,
         EDGE_ADD_PROP,
@@ -69,7 +74,14 @@ namespace message
         CLUSTERING_REPLY,
         CLUSTERING_PROP,
         CLUSTERING_PROP_REPLY,
-        MIGRATE_NODE,
+        MIGRATE_NODE_STEP1,
+        MIGRATE_NODE_STEP2,
+        MIGRATE_NODE_STEP3,
+        MIGRATE_NODE_STEP4,
+        MIGRATE_NODE_STEP5,
+        COORD_NODE_MIGRATE,
+        COORD_NODE_MIGRATE_ACK,
+        MIGRATED_NBR_UPDATE,
         ERROR
     };
 
@@ -213,7 +225,7 @@ namespace message
     template <typename T> inline void pack_buffer(e::buffer &buf, uint32_t index, const std::unordered_set<T>& t);
     template <typename T, typename... Args> inline void pack_buffer(e::buffer &buf, uint32_t index, const T& t, const Args&... args);
     template <typename... Args> inline void prepare_message(message &m, const enum msg_type given_type, const Args&... args);
-    //inline void prepare_message(message &m, const enum msg_type type, std::vector<message> pending, int new_loc, size_t new_node);
+    inline void prepare_message(message &m, const enum msg_type type, std::vector<message> pending, int new_loc, size_t new_node);
     inline void unpack_buffer(e::buffer &buf, uint32_t index);
     inline void unpack_buffer(e::buffer &buf, uint32_t index, bool &t);
     inline void unpack_buffer(e::buffer &buf, uint32_t index, uint16_t &t);
@@ -435,6 +447,7 @@ namespace message
             << remote_server << remote_node_creat_time << edge_creat_time;
     }
 
+    /*
     inline void
     message :: unpack_edge_create(size_t *req_id, size_t *local_node,
         std::unique_ptr<common::meta_element> *remote_node,
@@ -456,7 +469,7 @@ namespace message
         remote_node->reset(new common::meta_element(loc, remote_node_time,
             MAX_TIME, (void*)mem_addr));
     }
-
+    */
 
     inline void
     message :: prep_create_ack(size_t req_id, size_t mem_addr, bool node)
@@ -957,9 +970,9 @@ namespace message
     inline size_t size(db::element::edge* &t)
     {
         size_t sz = 2*sizeof(uint64_t) + // time stamps
-            size(*t->get_props()) + // properties
+            //size(*t->get_props()) + // properties
             sizeof(size_t) + // neighbor handle
-            2*sizeof(uint64_t); // neighbor time stamps
+            sizeof(int); // neighbor loc
         return sz;
     }
     inline size_t size(db::element::node &t)
@@ -1069,11 +1082,9 @@ namespace message
 
     inline void pack_buffer(e::buffer &buf, uint32_t index, db::element::edge* &t)
     {
-        buf.pack_at(index) << t->get_creat_time() << t->get_del_time();
-        index += 2*sizeof(uint64_t);
+        buf.pack_at(index) << t->get_creat_time() << t->get_del_time() << t->nbr.handle << t->nbr.loc;
+        index += 2*sizeof(uint64_t) + sizeof(size_t) + sizeof(int);
         pack_buffer(buf, index, *t->get_props());
-        index += size(*t->get_props());
-        buf.pack_at(index) << ((size_t)t->nbr->get_addr()) << t->nbr->get_creat_time() << t->nbr->get_del_time();
     }
 
     inline void
@@ -1198,7 +1209,7 @@ namespace message
     inline void unpack_buffer(e::buffer &buf,
             uint32_t index, common::property& t)
     {
-        buf.unpack_from(index) >> t.key >> t.val >> t.creat_time >> t.del_time;
+        buf.unpack_from(index) >> t.key >> t.value >> t.creat_time >> t.del_time;
     }
 
     inline void unpack_buffer(e::buffer &buf, uint32_t index, double& t)
@@ -1221,16 +1232,14 @@ namespace message
     inline void
     unpack_buffer(e::buffer &buf, uint32_t index, db::element::edge *&t)
     {
-        uint64_t tc, td, nbr_tc, nbr_td;
+        uint64_t tc, td;
         std::vector<common::property> props;
         size_t nbr_handle;
-        buf.unpack_from(index) >> tc >> td;
-        index += 2*sizeof(uint64_t);
+        int nbr_loc;
+        buf.unpack_from(index) >> tc >> td >> nbr_handle >> nbr_loc;
+        index += 2*sizeof(uint64_t) + sizeof(size_t) + sizeof(int);
         unpack_buffer(buf, index, props);
-        index += size(props);
-        buf.unpack_from(index) >> nbr_handle >> nbr_tc >> nbr_td;
-        std::unique_ptr<common::meta_element> nbr(new common::meta_element(0, nbr_tc, nbr_td, (void *)nbr_handle));
-        t = new db::element::edge(tc, std::move(nbr));
+        t = new db::element::edge(tc, nbr_loc, nbr_handle);
         t->update_del_time(td);
         t->set_properties(props);
     }

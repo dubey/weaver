@@ -90,7 +90,8 @@ namespace db
             dest_loc = tup.dest_loc;
         }
     };
-
+    
+    /*
     // Pending clustering request
     class clustering_request
     {
@@ -167,6 +168,7 @@ namespace db
         , finished(false)
     {
     }
+    */
 
     class migrate_request
     {
@@ -214,18 +216,20 @@ namespace db
             bool visit_map;
             // For node migration
             migrate_request mrequest; // pending migration request object
+            element::node *migr_node; // newly migrated node
             std::unordered_map<size_t, uint64_t> req_count; // testing
             
         public:
             element::node* create_node(uint64_t time, bool migrate);
-            std::pair<bool, size_t> create_edge(size_t n1, std::unique_ptr<common::meta_element> n2, uint64_t time);
+            std::pair<bool, size_t> create_edge(size_t n1, uint64_t time, size_t n2, int loc2);
             bool create_reverse_edge(size_t local_node, size_t remote_node, int remote_loc);
             std::pair<bool, std::unique_ptr<std::vector<size_t>>> delete_node(element::node *n, uint64_t del_time);
-            std::pair<bool, std::unique_ptr<std::vector<size_t>>> delete_edge(element::node *n, element::edge *e, uint64_t del_time);
+            std::pair<bool, std::unique_ptr<std::vector<size_t>>> delete_edge(element::node *n, size_t edge_handle, uint64_t del_time);
             void refresh_edge(element::node *n, element::edge *e, uint64_t del_time);
             bool add_edge_property(element::node *n, element::edge *e,
                 std::unique_ptr<common::property> prop, uint64_t time);
             std::pair<bool, std::unique_ptr<std::vector<size_t>>> delete_all_edge_property(element::node *n, element::edge *e, uint32_t key, uint64_t time);
+            void update_migrated_nbr(size_t lnode, size_t orig_node, int orig_loc, size_t new_node, int new_loc);
             bool check_request(size_t req_id);
             void add_done_request(size_t req_id);
             void broadcast_done_request(size_t req_id); 
@@ -245,15 +249,12 @@ namespace db
             void wait_for_updates(uint64_t recd_clock);
             void wait_for_arrived_updates(uint64_t recd_clock);
             void sync_clocks();
-            void propagate_request(std::vector<size_t> *nodes, std::shared_ptr<batch_request> request, 
-                int prop_loc, size_t dest_node, int dest_loc, size_t coord_req_id, 
-                std::shared_ptr<std::vector<common::property>> edge_props,
-                std::shared_ptr<std::vector<uint64_t>> vector_clock, const std::vector<size_t>& ignore_cache);
+            void propagate_request(std::vector<size_t> *nodes, std::shared_ptr<batch_request> request, int prop_loc);
+            void queue_transit_node_update(std::unique_ptr<message::message> msg);
 
         private:
             void increment_clock(uint64_t time);
             void increment_arrived_clock();
-            void queue_transit_node_update(std::unique_ptr<message::message> msg);
     };
 
     inline
@@ -298,13 +299,13 @@ namespace db
     }
 
     inline void
-    graph :: increment_clock(time)
+    graph :: increment_clock(uint64_t time)
     {
         update_mutex.lock();
         my_arrived_clock++;
         pending_update_arrival_cond.broadcast();
         my_clock++;
-        assert(my_clock == time);
+        //assert(my_clock == time);
         pending_update_cond.broadcast();
         update_mutex.unlock();
     }
@@ -312,25 +313,23 @@ namespace db
     inline void
     graph :: queue_transit_node_update(std::unique_ptr<message::message> msg)
     {
-        mrequest.lock();
+        mrequest.mutex.lock();
         mrequest.num_pending_updates++;
         mrequest.pending_updates.push_back(std::move(msg));
-        mrequest.unlock();
+        mrequest.mutex.unlock();
     }
 
     inline element::node*
     graph :: create_node(uint64_t time, bool migrate = false)
     {
-        element::node *new_node = new element::node(myloc, time);
-        if (!migrate) {
-            new_node->state = element::node::mode::STABLE;
+        element::node *new_node = new element::node(time);
+        if (migrate) {
             update_mutex.lock();
-            my_clock++;
-            my_arrived_clock++;
-            assert(my_clock == time);
-            pending_update_cond.broadcast();
-            pending_update_arrival_cond.broadcast();
+            migr_node = new_node;
             update_mutex.unlock();
+        } else {
+            new_node->state = element::node::mode::STABLE;
+            increment_clock(time);
         }
 #ifdef DEBUG
         std::cout << "Creating node, addr = " << (void*) new_node 
@@ -345,31 +344,15 @@ namespace db
         std::pair<bool, std::unique_ptr<std::vector<size_t>>> ret;
         n->update_mutex.lock();
         if (n->state == element::node::mode::IN_TRANSIT) {
-            n->migr_request->mutex.lock();
-            while (!n->migr_request->informed_coord)
-            {
-                n->migr_request->cond.wait();
-            }
-            n->migr_request->num_pending_updates++;
             ret.second = std::move(n->purge_cache());
-            n->migr_request->mutex.unlock();
             n->update_mutex.unlock();
-            update_mutex.lock();
-            my_arrived_clock++;
-            pending_update_arrival_cond.broadcast();
-            update_mutex.unlock();
+            increment_arrived_clock();
             ret.first = false;
         } else {
             n->update_del_time(del_time);
             ret.second = std::move(n->purge_cache());
             n->update_mutex.unlock();
-            update_mutex.lock();
-            my_clock++;
-            my_arrived_clock++;
-            assert(my_clock == del_time);
-            pending_update_cond.broadcast();
-            pending_update_arrival_cond.broadcast();
-            update_mutex.unlock();
+            increment_clock(del_time);
             ret.first = true;
         }
         return ret;
@@ -378,7 +361,7 @@ namespace db
     inline std::pair<bool, size_t>
     graph :: create_edge(size_t n1, uint64_t time, size_t n2, int loc2)
     {
-        std::pair<bool, element::edge*> ret;
+        std::pair<bool, size_t> ret;
         element::node *local_node = (element::node *)n1;
         local_node->update_mutex.lock();
         if (local_node->state == element::node::mode::IN_TRANSIT) {
@@ -392,8 +375,8 @@ namespace db
             increment_clock(time);
             //XXX is this ok? What invariant?
             message::message msg(message::REVERSE_EDGE_CREATE);
-            message::prepare_message(msg, message::REVERSE_EDGE_CREATE, n1, myid, remote_node);
-            send(remote_loc, msg.buf);
+            message::prepare_message(msg, message::REVERSE_EDGE_CREATE, n1, myid, n2);
+            send(loc2, msg.buf);
 #ifdef DEBUG
             std::cout << "Creating edge, addr = " << (void *) new_edge << std::endl;
 #endif
@@ -419,7 +402,7 @@ namespace db
     }
 
     inline std::pair<bool, std::unique_ptr<std::vector<size_t>>>
-    graph :: delete_edge(element::node *n, element::edge *e, uint64_t del_time)
+    graph :: delete_edge(element::node *n, size_t edge_handle, uint64_t del_time)
     {
         std::pair<bool, std::unique_ptr<std::vector<size_t>>> ret;
         n->update_mutex.lock();
@@ -429,6 +412,7 @@ namespace db
             increment_arrived_clock();
             ret.first = false;
         } else {
+            element::edge *e = n->out_edges[edge_handle];
             e->update_del_time(del_time);
             ret.second = std::move(n->purge_cache());
             n->update_mutex.unlock();
@@ -447,6 +431,7 @@ namespace db
         n->update_mutex.unlock();
     }
 
+    /*
     inline bool
     graph :: add_edge_property(element::node *n, element::edge *e,
         std::unique_ptr<common::property> prop, uint64_t time)
@@ -511,6 +496,23 @@ namespace db
             update_mutex.unlock();
             ret.first = true;
         }
+    }
+    */
+
+    inline void
+    graph :: update_migrated_nbr(size_t lnode, size_t orig_node, int orig_loc, size_t new_node, int new_loc)
+    {
+        element::node *n = (element::node *)lnode;
+        n->update_mutex.lock();
+        for (auto &it: n->out_edges)
+        {
+            element::edge *e = it.second;
+            if (e->nbr.handle == orig_node && e->nbr.loc == orig_loc) {
+                e->nbr.handle = new_node;
+                e->nbr.loc = new_loc;
+            }
+        }
+        n->update_mutex.unlock();
     }
 
     inline bool

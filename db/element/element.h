@@ -22,7 +22,6 @@
 
 #include "common/weaver_constants.h"
 #include "common/property.h"
-#include "common/meta_element.h"
 
 namespace db
 {
@@ -59,8 +58,8 @@ namespace element
     }
 
     inline
-    element :: element(std::shared_ptr<po6::net::location> server, uint64_t time, void* mem_addr)
-        , creat_time(time)
+    element :: element(uint64_t time)
+        : creat_time(time)
         , del_time(MAX_TIME)
     {
     }

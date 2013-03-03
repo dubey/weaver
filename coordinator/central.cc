@@ -85,22 +85,19 @@ create_edge(common::meta_element *node1, common::meta_element *node2, coordinato
     request->mutex.lock();
     req_id = ++server->request_id;
     server->pending[req_id] = request;
-    request->new_node = (size_t)node1->get_addr();
-    request->new_loc = node1->get_loc();
+    size_t node1_addr = (size_t)node1->get_addr();
     size_t node2_addr = (size_t)node2->get_addr();
+    int loc1 = node1->get_loc();
     int loc2 = node2->get_loc();
     server->update_mutex.unlock();
-    do
+    message::prepare_message(msg, message::EDGE_CREATE_REQ, req_id, node1_addr, node2_addr,
+        loc2, creat_time);
+    server->send(loc1, msg.buf);
+    
+    while (request->waiting)
     {
-        message::prepare_message(msg, message::EDGE_CREATE_REQ, req_id, request->new_node, node2_addr,
-            loc2, creat_time);
-        server->send(request->new_loc, msg.buf);
-        
-        while (request->waiting)
-        {
-            request->reply.wait();
-        }
-    } while (!request->success);
+        request->reply.wait();
+    }
     new_edge = new common::meta_element(node1->get_loc(), creat_time, MAX_TIME, request->addr);
     request->mutex.unlock();
     delete request;
@@ -295,11 +292,9 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
     {
         req_id = ++server->request_id;
         server->pending[req_id] = request;
-#ifdef DEBUF
         std::cout << "Reachability request number " << req_id << " from source"
                   << " node " << node1->get_addr() << " " << node1->get_loc() << " to destination node "
                   << node2->get_addr() << std::endl;
-#endif
         request->mutex.lock();
         msg.prep_reachable_prop(&src, -1, (size_t)node2->get_addr(),
             node2->get_loc(), req_id, req_id, edge_props, vector_clock, ignore_cache);
@@ -412,9 +407,8 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     std::unique_ptr<std::vector<size_t>> cached_req_ids; // for reply
     size_t clustering_numerator; //for reply
     size_t clustering_denominator; //for reply
-    size_t new_node; // for migrated node, fail reply
-    int new_loc; // for migrated node, fail reply
     common::meta_element *lnode; // for migration
+    size_t coord_handle, node_handle; // for migration
     int new_loc, from_loc; // for migration
     uint64_t clock; // for migration
     
@@ -422,17 +416,17 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     {
         case message::NODE_CREATE_ACK:
         case message::EDGE_CREATE_ACK:
-            message::unpack_message(*msg, mtype, req_id, mem_addr);
+            message::unpack_message(*msg, m_type, req_id, mem_addr);
             server->update_mutex.lock();
             request = server->pending[req_id];
             server->update_mutex.unlock();
             request->mutex.lock();
-            request->addr = (void *)mem_addr;
+            request->addr = mem_addr;
             request->waiting = false;
             request->reply.signal();
             request->mutex.unlock();
             break;
-
+/*
         case message::EDGE_CREATE_FAIL:
             message::unpack_message(*msg, mtype, req_id, new_loc, new_node);
             server->update_mutex.lock();
@@ -446,12 +440,12 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             request->reply.signal();
             request->mutex.unlock();
             break;
-
+*/
         case message::NODE_DELETE_ACK:
         case message::EDGE_DELETE_ACK:
         case message::EDGE_DELETE_PROP_ACK:
             cached_req_ids.reset(new std::vector<size_t>());
-            message::unpack_message(*msg, mtype, req_id, *cached_req_ids);
+            message::unpack_message(*msg, m_type, req_id, *cached_req_ids);
             server->update_mutex.lock();
             request = server->pending[req_id];
             server->update_mutex.unlock();
@@ -461,7 +455,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             request->reply.signal();
             request->mutex.unlock();
             break;
-
+/*
         case message::NODE_DELETE_FAIL:
         case message::EDGE_DELETE_FAIL:
         case message::EDGE_DELETE_PROP_FAIL:
@@ -479,7 +473,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             request->reply.signal();
             request->mutex.unlock();
             break;
-
+*/
         case message::REACHABLE_REPLY:
             msg->unpack_reachable_rep(&req_id, &is_reachable, &src_node, &src_loc,
                 &num_del_nodes, &del_nodes, &del_times, &cached_req_id);
@@ -518,9 +512,9 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
         case message::COORD_NODE_MIGRATE:
             message::unpack_message(*msg, message::COORD_NODE_MIGRATE, coord_handle, new_loc, node_handle, from_loc);
             server->update_mutex.lock();
-            lnode = (common::meta_element *)coord_handle;
+            lnode = (common::meta_element *)server->nodes[coord_handle];
             lnode->update_loc(new_loc);
-            lnode->update_addr((void*)node_handle);
+            lnode->update_addr(node_handle);
             //clock = ++server->vc.clocks->at(new_loc);
             message::prepare_message(*msg, message::COORD_NODE_MIGRATE_ACK, server->vc.clocks->at(from_loc));
             server->update_mutex.unlock();

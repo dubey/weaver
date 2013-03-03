@@ -21,7 +21,7 @@
 #define NUM_EDGES (2*NUM_NODES)
 #define NUM_REQUESTS 100
 #define NUM_EDGE_DEL (NUM_NODES/20)
-#define MAX_SEED 100
+#define MAX_SEED 10000
 
 static size_t nodes[NUM_NODES];
 static size_t edges[NUM_EDGES];
