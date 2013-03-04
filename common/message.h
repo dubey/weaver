@@ -1205,19 +1205,13 @@ namespace message
         uint64_t tc, td;
         std::vector<common::property> props;
         unpacker = unpacker >> tc >> td;
-        std::cout << "node unpack 1\n";
         unpack_buffer(unpacker, props);
-        std::cout << "node unpack 2\n";
         unpack_buffer(unpacker, t.out_edges);
-        std::cout << "node unpack 3\n";
         unpack_buffer(unpacker, t.in_edges);
-        std::cout << "node unpack 4\n";
         unpack_buffer(unpacker, t.seen);
-        std::cout << "node unpack 5\n";
         t.update_creat_time(tc);
         t.update_del_time(td);
         t.set_properties(props);
-        std::cout << "node unpack 6\n";
     }
 
     template <typename T> 

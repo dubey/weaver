@@ -500,10 +500,12 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         assert(request->del_nodes->size() == request->del_times->size());
     }
     request->mutex.unlock();
+#ifdef DEBUG
     if (coord_req_id == 6500 && G->myid == 0 && !G->already_migrated) {
         migrate_node_step1(G, migr, (G->myid==0? 1:0));
         G->already_migrated = true;
     }
+#endif
 }
 
 // handle reply for a previously forwarded reachability request
