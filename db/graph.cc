@@ -138,7 +138,8 @@ handle_create_node(db::graph *G, std::unique_ptr<message::message> msg)
     G->wait_for_updates(creat_time - 1);
     n = G->create_node(req_id);
 
-    message::prepare_message(*msg, message::NODE_CREATE_ACK, req_id, (size_t) n);
+    size_t node_ptr = (size_t) n;
+    message::prepare_message(*msg, message::NODE_CREATE_ACK, req_id, node_ptr);
     G->send_coord(msg->buf);
 }
 
@@ -499,8 +500,9 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         assert(request->del_nodes->size() == request->del_times->size());
     }
     request->mutex.unlock();
-    if (coord_req_id == 7000) {
+    if (coord_req_id == 6500 && G->myid == 0 && !G->already_migrated) {
         migrate_node_step1(G, migr, (G->myid==0? 1:0));
+        G->already_migrated = true;
     }
 }
 
@@ -835,13 +837,6 @@ migrate_node_step1(db::graph *G, db::element::node *n, int shard)
     n->update_mutex.unlock();
     G->mrequest.mutex.unlock();
     G->send(shard, msg.buf);
-    // beware of edges to nodes that may themselves be migrating - XXX simplifying assumption - only 1 shard migrates at a time?
-    // henceforth traversal requests should be refused and pointed to new loc
-    n->update_mutex.lock();
-
-    // XXX wait for some time for transient requests to arrive
-    // delete the node!
-    std::cout << "Done with step1\n";
 }
 
 // Receive and place a node which has been migrated to this shard
@@ -855,9 +850,9 @@ migrate_node_step2(db::graph *G, std::unique_ptr<message::message> msg)
     // change at coordinator so that user does not have to enter node for edge
     message::unpack_message(*msg, message::MIGRATE_NODE_STEP1, *n, from_loc);
     n->prev_loc = from_loc;
-    message::prepare_message(*msg, message::MIGRATE_NODE_STEP2, ((size_t)n));
+    size_t nptr = (size_t)n;
+    message::prepare_message(*msg, message::MIGRATE_NODE_STEP2, nptr);
     G->send(from_loc, msg->buf);
-    std::cout << "Done with step2\n";
 }
 
 // send migration information to coord
@@ -869,12 +864,13 @@ migrate_node_step3(db::graph *G, std::unique_ptr<message::message> msg)
     G->mrequest.cur_node->update_mutex.lock();
     message::unpack_message(*msg, message::MIGRATE_NODE_STEP2, new_node_handle);
     G->mrequest.mutex.lock();
+    G->mrequest.migr_node = new_node_handle;
     n = G->mrequest.cur_node;
-    message::prepare_message(*msg, message::COORD_NODE_MIGRATE, n->get_creat_time(), n->new_loc, new_node_handle, G->myid);
+    uint64_t tc = n->get_creat_time();
+    message::prepare_message(*msg, message::COORD_NODE_MIGRATE, tc, n->new_loc, new_node_handle, G->myid);
     G->mrequest.cur_node->update_mutex.unlock();
     G->send_coord(msg->buf);
     G->mrequest.mutex.unlock();
-    std::cout << "Done with step3\n";
 }
 
 // wait for updates till the received clock value, which are being forwarded to new shard
@@ -895,7 +891,6 @@ migrate_node_step4(db::graph *G, std::unique_ptr<message::message> msg)
         G->send(G->mrequest.new_loc, m->buf);
     }
     G->mrequest.mutex.unlock();
-    std::cout << "Done with step4\n";
 }
 
 // receive the number of pending updates for the newly migrated node
@@ -916,7 +911,6 @@ migrate_node_step5(db::graph *G, std::unique_ptr<message::message> msg)
     message::prepare_message(*msg, message::MIGRATE_NODE_STEP5);
     G->send(n->prev_loc, msg->buf);
     n->update_mutex.unlock();
-    std::cout << "Done with step5\n";
 }
 
 // inform other shards of migration
@@ -930,12 +924,13 @@ migrate_node_step6(db::graph *G, std::unique_ptr<message::message> mesg)
     G->mrequest.cur_node->update_mutex.lock();
     G->mrequest.mutex.lock();
     n = G->mrequest.cur_node;
+    size_t nptr = (size_t)n;
     n->state = db::element::node::mode::MOVED;
     // inform all in-nbrs of new location
     for (auto &nbr: n->in_edges)
     {
         message::prepare_message(msg, message::MIGRATED_NBR_UPDATE, nbr.second->nbr.handle, 
-            (size_t)G->mrequest.cur_node, G->myid, G->mrequest.migr_node, G->mrequest.new_loc);
+            nptr, G->myid, G->mrequest.migr_node, G->mrequest.new_loc);
     }
     n->update_mutex.unlock();
     nodes.push_back(G->mrequest.migr_node);
@@ -948,7 +943,6 @@ migrate_node_step6(db::graph *G, std::unique_ptr<message::message> mesg)
     std::vector<std::unique_ptr<message::message>>().swap(G->mrequest.pending_updates);
     std::vector<std::shared_ptr<db::batch_request>>().swap(G->mrequest.pending_requests);
     G->mrequest.mutex.unlock();
-    std::cout << "Done with step6\n";
 }
 
 void

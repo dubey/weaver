@@ -510,6 +510,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             break;
 
         case message::COORD_NODE_MIGRATE:
+            std::cout << "got node migrate msg\n";
             message::unpack_message(*msg, message::COORD_NODE_MIGRATE, coord_handle, new_loc, node_handle, from_loc);
             server->update_mutex.lock();
             lnode = (common::meta_element *)server->nodes[coord_handle];
@@ -519,6 +520,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             message::prepare_message(*msg, message::COORD_NODE_MIGRATE_ACK, server->vc.clocks->at(from_loc));
             server->update_mutex.unlock();
             server->send(from_loc, msg->buf);
+            std::cout << "done node migrate\n";
             break;
         
         default:

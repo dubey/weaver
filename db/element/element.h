@@ -47,9 +47,9 @@ namespace element
             void set_properties(std::vector<common::property> &props);
             void update_del_time(uint64_t del_time);
             void update_creat_time(uint64_t creat_time);
-            uint64_t get_creat_time();
-            uint64_t get_del_time();
-            std::vector<common::property>* get_props();
+            uint64_t get_creat_time() const;
+            uint64_t get_del_time() const;
+            const std::vector<common::property>* get_props() const;
     };
 
     inline
@@ -139,19 +139,19 @@ namespace element
     }
 
     inline uint64_t
-    element :: get_creat_time()
+    element :: get_creat_time() const
     {
         return creat_time;
     }
 
     inline uint64_t
-    element :: get_del_time()
+    element :: get_del_time() const
     {
         return del_time;
     }
 
-    inline std::vector<common::property> *
-    element :: get_props()
+    inline const std::vector<common::property>*
+    element :: get_props() const
     {
         return &properties;
     }

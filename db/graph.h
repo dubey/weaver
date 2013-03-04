@@ -218,6 +218,7 @@ namespace db
             migrate_request mrequest; // pending migration request object
             element::node *migr_node; // newly migrated node
             std::unordered_map<size_t, uint64_t> req_count; // testing
+            bool already_migrated; // testing
             
         public:
             element::node* create_node(uint64_t time, bool migrate);
@@ -273,6 +274,7 @@ namespace db
         , outgoing_req_id_counter(0)
         , thread_pool(NUM_THREADS)
         , visit_map(true)
+        , already_migrated(false)
     {
         int i, inport;
         po6::net::location *temp_loc;
