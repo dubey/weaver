@@ -917,7 +917,7 @@ namespace message
     }
     inline size_t size(const common::property& t)
     {
-        return sizeof(uint32_t)+sizeof(size_t);
+        return sizeof(uint32_t)+sizeof(size_t)+2*sizeof(uint64_t);
     }
 
     inline size_t size(const db::element::edge* &t)
@@ -1026,7 +1026,7 @@ namespace message
     inline void 
     pack_buffer(e::buffer::packer &packer, const common::property& t)
     {
-        packer = packer << t.key << t.value;
+        packer = packer << t.key << t.value << t.creat_time << t.del_time;
     }
 
 
@@ -1161,11 +1161,7 @@ namespace message
     inline void 
     unpack_buffer(e::unpacker &unpacker, common::property& t)
     {
-        uint32_t key;
-        size_t val;
-        unpacker = unpacker >> key >> val;
-        t.key = key;
-        t.value = val;
+        unpacker = unpacker >> t.key >> t.value >> t.creat_time >> t.del_time;
     }
 
     inline void 
@@ -1205,13 +1201,19 @@ namespace message
         uint64_t tc, td;
         std::vector<common::property> props;
         unpacker = unpacker >> tc >> td;
+        std::cout << "node unpack 1\n";
         unpack_buffer(unpacker, props);
+        std::cout << "node unpack 2\n";
         unpack_buffer(unpacker, t.out_edges);
+        std::cout << "node unpack 3\n";
         unpack_buffer(unpacker, t.in_edges);
+        std::cout << "node unpack 4\n";
         unpack_buffer(unpacker, t.seen);
+        std::cout << "node unpack 5\n";
         t.update_creat_time(tc);
         t.update_del_time(td);
         t.set_properties(props);
+        std::cout << "node unpack 6\n";
     }
 
     template <typename T> 
@@ -1222,6 +1224,7 @@ namespace message
         size_t elements_left;
         unpacker = unpacker >> elements_left;
 
+        std::cout << "elems left " << elements_left << std::endl;
         t.reserve(elements_left);
 
         while (elements_left > 0){

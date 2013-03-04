@@ -17,6 +17,8 @@
 #include <stdint.h>
 #include <vector>
 #include <unordered_map>
+#include <po6/threads/mutex.h>
+#include <po6/threads/cond.h>
 
 #include "element.h"
 #include "edge.h"
@@ -51,6 +53,7 @@ namespace element
             bool in_transit;
             uint32_t num_pending_updates;
             int prev_loc, new_loc;
+            po6::threads::cond form_cond;
 
         private:
             uint32_t out_edge_ctr, in_edge_ctr;
@@ -72,6 +75,7 @@ namespace element
         , num_pending_updates(0)
         , prev_loc(-1)
         , new_loc(-1)
+        , form_cond(&update_mutex)
         , out_edge_ctr(0)
         , in_edge_ctr(0)
     {
@@ -85,6 +89,7 @@ namespace element
         , num_pending_updates(0)
         , prev_loc(-1)
         , new_loc(-1)
+        , form_cond(&update_mutex)
         , out_edge_ctr(0)
         , in_edge_ctr(0)
     {

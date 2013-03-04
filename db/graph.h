@@ -398,6 +398,7 @@ namespace db
         } else {
             element::edge *new_edge = new element::edge(my_clock, remote_node, remote_loc);
             n->add_edge(new_edge, false);
+            std::cout << " in edge size " << n->in_edges.size() << std::endl;
             n->update_mutex.unlock();
             return true;
         }
