@@ -39,56 +39,81 @@ namespace db
     class batch_request
     {
         public:
-        int prev_loc; // prev server's id
-        size_t dest_addr; // dest node's handle
-        int dest_loc; // dest node's server id
-        size_t coord_id; // coordinator's req id
-        size_t prev_id; // prev server's req id
-        std::shared_ptr<std::vector<common::property>> edge_props;
-        std::shared_ptr<std::vector<uint64_t>> vector_clock;
-        std::vector<size_t> ignore_cache;
-        int num; // number of onward requests
-        bool reachable;
-        std::unique_ptr<std::vector<size_t>> src_nodes;
-        std::unique_ptr<std::vector<size_t>> del_nodes; // deleted nodes
-        std::unique_ptr<std::vector<uint64_t>> del_times; // delete times corr. to del_nodes
-        po6::threads::mutex mutex;
+            int prev_loc; // prev server's id
+            size_t dest_addr; // dest node's handle
+            int dest_loc; // dest node's server id
+            size_t coord_id; // coordinator's req id
+            size_t prev_id; // prev server's req id
+            std::unique_ptr<std::vector<common::property>> edge_props;
+            std::unique_ptr<std::vector<uint64_t>> vector_clock;
+            std::unique_ptr<std::vector<size_t>> ignore_cache;
+            int num; // number of onward requests
+            bool reachable;
+            std::unique_ptr<std::vector<size_t>> src_nodes;
+            std::unique_ptr<std::vector<size_t>> del_nodes; // deleted nodes
+            std::unique_ptr<std::vector<uint64_t>> del_times; // delete times corr. to del_nodes
+            uint32_t use_cnt; // testing
 
-        batch_request()
-        {
-            prev_id = 0;
-            num = 0;
-            reachable = false;
-            dest_addr = 0;
-        }
+        private:
+            po6::threads::mutex mutex;
 
-        batch_request(int ploc, size_t daddr, int dloc, size_t cid, size_t pid,
-            std::shared_ptr<std::vector<common::property>> eprops,
-            std::shared_ptr<std::vector<uint64_t>> vclock,
-            std::vector<size_t> icache)
-            : prev_loc(ploc)
-            , dest_addr(daddr)
-            , dest_loc(dloc)
-            , coord_id(cid)
-            , prev_id(pid)
-            , edge_props(eprops)
-            , vector_clock(vclock)
-            , ignore_cache(icache)
-            , num(0)
-            , reachable(false)
-        {
-        }
+        public:
+            /*
+            batch_request()
+            {
+                prev_id = 0;
+                num = 0;
+                reachable = false;
+                dest_addr = 0;
+                use_cnt = 0;
+            }
+            */
 
-        batch_request(const batch_request &tup)
-        {
-            prev_loc = tup.prev_loc;
-            prev_id = tup.prev_id;
-            num = tup.num;
-            reachable = tup.reachable;
-            src_nodes.reset(new std::vector<size_t>(*tup.src_nodes));
-            dest_addr = tup.dest_addr;
-            dest_loc = tup.dest_loc;
-        }
+            batch_request(int ploc, size_t daddr, int dloc, size_t cid, size_t pid,
+                std::unique_ptr<std::vector<common::property>> eprops,
+                std::unique_ptr<std::vector<uint64_t>> vclock,
+                std::unique_ptr<std::vector<size_t>> icache)
+                : prev_loc(ploc)
+                , dest_addr(daddr)
+                , dest_loc(dloc)
+                , coord_id(cid)
+                , prev_id(pid)
+                , edge_props(std::move(eprops))
+                , vector_clock(std::move(vclock))
+                , ignore_cache(std::move(icache))
+                , num(0)
+                , reachable(false)
+                , use_cnt(0)
+            {
+            }
+
+            /*
+            batch_request(const batch_request &tup)
+            {
+                prev_loc = tup.prev_loc;
+                prev_id = tup.prev_id;
+                num = tup.num;
+                reachable = tup.reachable;
+                src_nodes.reset(new std::vector<size_t>(*tup.src_nodes));
+                dest_addr = tup.dest_addr;
+                dest_loc = tup.dest_loc;
+                use_cnt = tup.use_cnt;
+            }
+            */
+
+            inline void
+            lock()
+            {
+                mutex.lock();
+                use_cnt++;
+            }
+
+            inline void
+            unlock()
+            {
+                use_cnt--;
+                mutex.unlock();
+            }
     };
     
     /*
@@ -250,8 +275,9 @@ namespace db
             void wait_for_updates(uint64_t recd_clock);
             void wait_for_arrived_updates(uint64_t recd_clock);
             void sync_clocks();
-            void propagate_request(std::vector<size_t> *nodes, std::shared_ptr<batch_request> request, int prop_loc);
+            void propagate_request(std::vector<size_t> &nodes, std::shared_ptr<batch_request> request, int prop_loc);
             void queue_transit_node_update(std::unique_ptr<message::message> msg);
+            bool migrate_test(); // testing
 
         private:
             void increment_clock(uint64_t time);
@@ -396,9 +422,12 @@ namespace db
             n->update_mutex.unlock();
             return false;
         } else {
-            element::edge *new_edge = new element::edge(my_clock, remote_node, remote_loc);
+            element::edge *new_edge = new element::edge(my_clock, remote_loc, remote_node);
             n->add_edge(new_edge, false);
+#ifdef DEBUG
+            std::cout << "New rev edge: " << (void*)new_edge->nbr.handle << " " << new_edge->nbr.loc << " at lnode " << (void*)local_node << std::endl;
             std::cout << " in edge size " << n->in_edges.size() << std::endl;
+#endif
             n->update_mutex.unlock();
             return true;
         }
@@ -415,7 +444,7 @@ namespace db
             increment_arrived_clock();
             ret.first = false;
         } else {
-            element::edge *e = n->out_edges[edge_handle];
+            element::edge *e = n->out_edges.at(edge_handle);
             e->update_del_time(del_time);
             ret.second = std::move(n->purge_cache());
             n->update_mutex.unlock();
@@ -734,18 +763,36 @@ namespace db
     
     // caution: assuming we hold the request->mutex
     inline void 
-    graph :: propagate_request(std::vector<size_t> *nodes, std::shared_ptr<batch_request> request, int prop_loc)
+    graph :: propagate_request(std::vector<size_t> &nodes, std::shared_ptr<batch_request> request, int prop_loc)
     {
         message::message msg(message::REACHABLE_PROP);
         size_t my_outgoing_req_id;
         outgoing_req_id_counter_mutex.lock();
         my_outgoing_req_id = outgoing_req_id_counter++;
-        pending_batch[my_outgoing_req_id] = request;
+        std::pair<size_t, std::shared_ptr<batch_request>> new_elem(my_outgoing_req_id, request);
+        assert(pending_batch.insert(new_elem).second);
         outgoing_req_id_counter_mutex.unlock();
-        msg.prep_reachable_prop(nodes, myid, request->dest_addr, request->dest_loc, 
-            request->coord_id, my_outgoing_req_id, request->edge_props, request->vector_clock, request->ignore_cache);
+        message::prepare_message(msg, message::REACHABLE_PROP, *request->vector_clock, nodes, myid,
+            request->dest_addr, request->dest_loc, request->coord_id, my_outgoing_req_id, 
+            *request->edge_props, *request->ignore_cache);
+        //msg.prep_reachable_prop(nodes, myid, request->dest_addr, request->dest_loc, 
+        //    request->coord_id, my_outgoing_req_id, request->edge_props, request->vector_clock, request->ignore_cache);
         // no local messages possible, so have to send via network
         send(prop_loc, msg.buf);
+    }
+
+    inline bool
+    graph :: migrate_test()
+    {
+        update_mutex.lock();
+        if (!already_migrated) {
+            already_migrated = true;
+            update_mutex.unlock();
+            return true;
+        } else {
+            update_mutex.unlock();
+            return false;
+        }
     }
 
 } //namespace db

@@ -13,7 +13,7 @@
 
 //#include "message_test.h"
 //#include "cache_test.h"
-//#include "basic_client.h"
+#include "basic_client.h"
 //#include "simple_stress_client.h"
 #include "multiple_stress_client.h"
 //#include "repetitive_stress_client.h"

@@ -920,7 +920,7 @@ namespace message
         return sizeof(uint32_t)+sizeof(size_t)+2*sizeof(uint64_t);
     }
 
-    inline size_t size(const db::element::edge* &t)
+    inline size_t size(const db::element::edge* const &t)
     {
         size_t sz = 2*sizeof(uint64_t) + // time stamps
             size(*t->get_props()) + // properties
@@ -1039,7 +1039,7 @@ namespace message
         pack_buffer(packer, t.second);
     }
 
-    inline void pack_buffer(e::buffer::packer& packer, const db::element::edge* &t)
+    inline void pack_buffer(e::buffer::packer& packer, const db::element::edge* const &t)
     {
         packer = packer << t->get_creat_time() << t->get_del_time() << t->nbr.handle << t->nbr.loc;
         pack_buffer(packer, *t->get_props());
@@ -1090,7 +1090,7 @@ namespace message
     {
         size_t num_keys = t.size();
         packer = packer << num_keys;
-        for (const std::pair<T1,T2> &pair : t)
+        for (const std::pair<T1, T2> &pair : t)
         {
             pack_buffer(packer, pair.first);
             pack_buffer(packer, pair.second);
@@ -1201,19 +1201,13 @@ namespace message
         uint64_t tc, td;
         std::vector<common::property> props;
         unpacker = unpacker >> tc >> td;
-        std::cout << "node unpack 1\n";
         unpack_buffer(unpacker, props);
-        std::cout << "node unpack 2\n";
         unpack_buffer(unpacker, t.out_edges);
-        std::cout << "node unpack 3\n";
         unpack_buffer(unpacker, t.in_edges);
-        std::cout << "node unpack 4\n";
         unpack_buffer(unpacker, t.seen);
-        std::cout << "node unpack 5\n";
         t.update_creat_time(tc);
         t.update_del_time(td);
         t.set_properties(props);
-        std::cout << "node unpack 6\n";
     }
 
     template <typename T> 
@@ -1224,7 +1218,6 @@ namespace message
         size_t elements_left;
         unpacker = unpacker >> elements_left;
 
-        std::cout << "elems left " << elements_left << std::endl;
         t.reserve(elements_left);
 
         while (elements_left > 0){

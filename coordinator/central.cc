@@ -296,8 +296,10 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
                   << " node " << node1->get_addr() << " " << node1->get_loc() << " to destination node "
                   << node2->get_addr() << std::endl;
         request->mutex.lock();
-        msg.prep_reachable_prop(&src, -1, (size_t)node2->get_addr(),
-            node2->get_loc(), req_id, req_id, edge_props, vector_clock, ignore_cache);
+        message::prepare_message(msg, message::REACHABLE_PROP, *vector_clock, src, -1, node2->get_addr(), node2->get_loc(),
+            req_id, req_id, *edge_props, ignore_cache);
+        //msg.prep_reachable_prop(&src, -1, (size_t)node2->get_addr(),
+        //    node2->get_loc(), req_id, req_id, edge_props, vector_clock, ignore_cache);
         server->update_mutex.unlock();
         server->send(node1->get_loc(), msg.buf);
         
@@ -475,8 +477,8 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             break;
 */
         case message::REACHABLE_REPLY:
-            msg->unpack_reachable_rep(&req_id, &is_reachable, &src_node, &src_loc,
-                &num_del_nodes, &del_nodes, &del_times, &cached_req_id);
+            message::unpack_message(*msg, message::REACHABLE_REPLY, req_id, is_reachable,
+                src_node, src_loc, *del_nodes, *del_times, cached_req_id);
             server->update_mutex.lock();
             request = server->pending[req_id];
             server->update_mutex.unlock();
