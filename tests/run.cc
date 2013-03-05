@@ -13,11 +13,11 @@
 
 //#include "message_test.h"
 //#include "cache_test.h"
-#include "basic_client.h"
+//#include "basic_client.h"
 //#include "simple_stress_client.h"
-#include "multiple_stress_client.h"
-//#include "repetitive_stress_client.h"
-#include "clustering_test.h"
+//#include "multiple_stress_client.h"
+#include "repetitive_stress_client.h"
+//#include "clustering_test.h"
 
 int
 main(int argc, char *argv[])
@@ -31,10 +31,10 @@ main(int argc, char *argv[])
     //std::cout << "Basic client ok." << std::endl;
     //stress_client_test();
     //std::cout << "Stress client ok." << std::endl;
-    multiple_stress_client();
-    std::cout << "Multiple stress client ok." << std::endl;
-    //repetitive_stress_client();
-    //std::cout << "Repetitive stress client ok." << std::endl;
+    //multiple_stress_client();
+    //std::cout << "Multiple stress client ok." << std::endl;
+    repetitive_stress_client();
+    std::cout << "Repetitive stress client ok." << std::endl;
     //clustering_test();
     //std::cout <<"Clustering ok.\n";
 

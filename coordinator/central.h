@@ -252,7 +252,7 @@ namespace coordinator
     inline bool
     central :: is_deleted_cache_id(size_t id)
     {
-        return ((bad_cache_ids->find(id) != bad_cache_ids->end()) &&
+        return ((bad_cache_ids->find(id) != bad_cache_ids->end()) ||
             (transient_bad_cache_ids->find(id) != transient_bad_cache_ids->end()));
     }
 

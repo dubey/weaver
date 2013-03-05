@@ -549,9 +549,6 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
     }
     request->src_nodes = std::move(src_nodes);
     request->unlock();
-    if (coord_req_id == 6506 && G->myid == 0 && G->migrate_test()) {
-        migrate_node_step1(G, migr, (G->myid==0? 1:0));
-    }
 }
 
 // handle reply for a previously forwarded reachability request
