@@ -39,17 +39,23 @@ namespace db
     class batch_request
     {
         public:
+            batch_request(int ploc, size_t daddr, int dloc, size_t cid, size_t pid,
+                std::unique_ptr<std::vector<size_t>> nodes,
+                std::unique_ptr<std::vector<common::property>> eprops,
+                std::unique_ptr<std::vector<uint64_t>> vclock,
+                std::unique_ptr<std::vector<size_t>> icache);
+        public:
             int prev_loc; // prev server's id
             size_t dest_addr; // dest node's handle
             int dest_loc; // dest node's server id
             size_t coord_id; // coordinator's req id
             size_t prev_id; // prev server's req id
+            std::unique_ptr<std::vector<size_t>> src_nodes;
             std::unique_ptr<std::vector<common::property>> edge_props;
             std::unique_ptr<std::vector<uint64_t>> vector_clock;
             std::unique_ptr<std::vector<size_t>> ignore_cache;
             int num; // number of onward requests
-            bool reachable;
-            std::unique_ptr<std::vector<size_t>> src_nodes;
+            bool reachable; // request specific data
             std::unique_ptr<std::vector<size_t>> del_nodes; // deleted nodes
             std::unique_ptr<std::vector<uint64_t>> del_times; // delete times corr. to del_nodes
             uint32_t use_cnt; // testing
@@ -58,63 +64,53 @@ namespace db
             po6::threads::mutex mutex;
 
         public:
-            /*
-            batch_request()
-            {
-                prev_id = 0;
-                num = 0;
-                reachable = false;
-                dest_addr = 0;
-                use_cnt = 0;
-            }
-            */
+            bool operator<(batch_request &r);
 
-            batch_request(int ploc, size_t daddr, int dloc, size_t cid, size_t pid,
-                std::unique_ptr<std::vector<common::property>> eprops,
-                std::unique_ptr<std::vector<uint64_t>> vclock,
-                std::unique_ptr<std::vector<size_t>> icache)
-                : prev_loc(ploc)
-                , dest_addr(daddr)
-                , dest_loc(dloc)
-                , coord_id(cid)
-                , prev_id(pid)
-                , edge_props(std::move(eprops))
-                , vector_clock(std::move(vclock))
-                , ignore_cache(std::move(icache))
-                , num(0)
-                , reachable(false)
-                , use_cnt(0)
-            {
-            }
-
-            /*
-            batch_request(const batch_request &tup)
-            {
-                prev_loc = tup.prev_loc;
-                prev_id = tup.prev_id;
-                num = tup.num;
-                reachable = tup.reachable;
-                src_nodes.reset(new std::vector<size_t>(*tup.src_nodes));
-                dest_addr = tup.dest_addr;
-                dest_loc = tup.dest_loc;
-                use_cnt = tup.use_cnt;
-            }
-            */
-
-            inline void
-            lock()
-            {
-                mutex.lock();
-                use_cnt++;
-            }
-
-            inline void
-            unlock()
-            {
-                use_cnt--;
-                mutex.unlock();
-            }
+        public:
+            void lock();
+            void unlock();
     };
+
+    inline
+    batch_request :: batch_request(int ploc, size_t daddr, int dloc, size_t cid, size_t pid,
+        std::unique_ptr<std::vector<size_t>> nodes,
+        std::unique_ptr<std::vector<common::property>> eprops,
+        std::unique_ptr<std::vector<uint64_t>> vclock,
+        std::unique_ptr<std::vector<size_t>> icache)
+        : prev_loc(ploc)
+        , dest_addr(daddr)
+        , dest_loc(dloc)
+        , coord_id(cid)
+        , prev_id(pid)
+        , src_nodes(std::move(nodes))
+        , edge_props(std::move(eprops))
+        , vector_clock(std::move(vclock))
+        , ignore_cache(std::move(icache))
+        , num(0)
+        , reachable(false)
+        , use_cnt(0)
+    {
+    }
+
+    inline bool
+    batch_request :: operator<(batch_request &r)
+    {
+        return (coord_id < r.coord_id);
+    }
+
+    inline void
+    batch_request :: lock()
+    {
+        mutex.lock();
+        use_cnt++;
+    }
+
+    inline void
+    batch_request :: unlock()
+    {
+        use_cnt--;
+        mutex.unlock();
+    }
     
     /*
     // Pending clustering request

@@ -344,7 +344,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
     std::unique_ptr<std::vector<uint64_t>> vector_clock(new std::vector<uint64_t>());
     std::unique_ptr<std::vector<size_t>> ignore_cache(new std::vector<size_t>()); // invalid cached ids
 
-    db::element::node *n, *migr; // node pointer reused for each source node
+    db::element::node *n; // node pointer reused for each source node
     uint64_t myclock_recd;
     bool reached = false, // indicates if we have reached destination node
         propagate_req = false; // need to propagate request onward
@@ -363,10 +363,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         p.creat_time = vector_clock->at(G->myid);
         p.del_time = MAX_TIME;
     }
-    //src_nodes = msg->unpack_reachable_prop(&prev_loc, &dest_node, &dest_loc,
-    //    &coord_req_id, &prev_req_id, &edge_props, &vector_clock, &ignore_cache, G->myid);
     cached_req_id = coord_req_id;
-    migr = (db::element::node*)src_nodes->at(0);
 
     // invalidating stale cache entries
     for (auto &remove: *ignore_cache)
@@ -374,8 +371,8 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         G->remove_cache(remove);
     }
     myclock_recd = vector_clock->at(G->myid); 
-    auto request = std::make_shared<db::batch_request>(prev_loc, dest_node, dest_loc,
-        coord_req_id, prev_req_id, std::move(edge_props), std::move(vector_clock), std::move(ignore_cache));
+    auto request = std::make_shared<db::batch_request>(prev_loc, dest_node, dest_loc, coord_req_id, prev_req_id, 
+        std::move(src_nodes), std::move(edge_props), std::move(vector_clock), std::move(ignore_cache));
     //need mutex since there can be multiple replies
     //for same outstanding req
     request->lock();
@@ -387,14 +384,14 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
 
     // iterating over src_nodes
     src_iter = 0;
-    src_end = src_nodes->size();
+    src_end = request->src_nodes->size();
     while ((src_iter < src_end) && (!reached)) // traverse local graph as much as possible
     {
         for (; src_iter < src_end; src_iter++)
         {
             // because the coordinator placed the node's address in the message, 
             // we can just cast it back to a pointer
-            n = (db::element::node *)(src_nodes->at(src_iter));
+            n = (db::element::node *)(request->src_nodes->at(src_iter));
             n->update_mutex.lock();
             while (n->state == db::element::node::mode::NASCENT) 
             {
@@ -464,7 +461,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
                         {
                             // Continue propagating reachability request
                             if (e->nbr.loc == G->myid) {
-                                src_nodes->push_back(e->nbr.handle);
+                                request->src_nodes->push_back(e->nbr.handle);
                             } else {
                                 std::vector<size_t> &loc_nodes = msg_batch[e->nbr.loc];
                                 propagate_req = true;
@@ -491,7 +488,7 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
                 break;
             }
         }
-        src_end = src_nodes->size();
+        src_end = request->src_nodes->size();
     }
     } else {
         // Request killed because dest already reached
@@ -512,8 +509,6 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         // need to send back ack
         message::prepare_message(*msg, message::REACHABLE_REPLY, prev_req_id, true, reach_node,
             G->myid, *request->del_nodes, *request->del_times, cached_req_id);
-        //msg->prep_reachable_rep(prev_req_id, true, reach_node,
-        //    G->myid, std::move(deleted_nodes), std::move(del_times), cached_req_id);
         G->send(prev_loc, msg->buf);
         // telling everyone this request is done
         G->add_done_request(coord_req_id);
@@ -543,11 +538,8 @@ handle_reachable_request(db::graph *G, std::unique_ptr<message::message> msg)
         std::vector<db::element::node *>::iterator node_iter;
         message::prepare_message(*msg, message::REACHABLE_REPLY, prev_req_id, false, reach_node,
             G->myid, *request->del_nodes, *request->del_times, cached_req_id);
-        //msg->prep_reachable_rep(prev_req_id, false, 0, G->myid,
-        //    std::move(deleted_nodes), std::move(del_times), cached_req_id);
         G->send(prev_loc, msg->buf);
     }
-    request->src_nodes = std::move(src_nodes);
     request->unlock();
 }
 
