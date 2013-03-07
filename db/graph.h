@@ -39,7 +39,7 @@ namespace db
     class batch_request
     {
         public:
-            batch_request(int ploc, size_t daddr, int dloc, size_t cid, size_t pid,
+            batch_request(int ploc, size_t daddr, int dloc, size_t cid, size_t pid, int myid,
                 std::unique_ptr<std::vector<size_t>> nodes,
                 std::unique_ptr<std::vector<common::property>> eprops,
                 std::unique_ptr<std::vector<uint64_t>> vclock,
@@ -54,6 +54,7 @@ namespace db
             std::unique_ptr<std::vector<common::property>> edge_props;
             std::unique_ptr<std::vector<uint64_t>> vector_clock;
             std::unique_ptr<std::vector<size_t>> ignore_cache;
+            uint64_t start_time;
             int num; // number of onward requests
             bool reachable; // request specific data
             std::unique_ptr<std::vector<size_t>> del_nodes; // deleted nodes
@@ -64,7 +65,7 @@ namespace db
             po6::threads::mutex mutex;
 
         public:
-            bool operator<(batch_request &r);
+            bool operator>(batch_request &r) const;
 
         public:
             void lock();
@@ -72,7 +73,7 @@ namespace db
     };
 
     inline
-    batch_request :: batch_request(int ploc, size_t daddr, int dloc, size_t cid, size_t pid,
+    batch_request :: batch_request(int ploc, size_t daddr, int dloc, size_t cid, size_t pid, int myid,
         std::unique_ptr<std::vector<size_t>> nodes,
         std::unique_ptr<std::vector<common::property>> eprops,
         std::unique_ptr<std::vector<uint64_t>> vclock,
@@ -90,12 +91,13 @@ namespace db
         , reachable(false)
         , use_cnt(0)
     {
+        start_time = vector_clock->at(myid);
     }
 
     inline bool
-    batch_request :: operator<(batch_request &r)
+    batch_request :: operator>(batch_request &r) const
     {
-        return (coord_id < r.coord_id);
+        return (coord_id > r.coord_id);
     }
 
     inline void
@@ -111,7 +113,17 @@ namespace db
         use_cnt--;
         mutex.unlock();
     }
-    
+
+/*    // for priority_queue
+    struct batch_request_compare 
+        : std::binary_function<std::shared_ptr<batch_request>, std::shared_ptr<batch_request>, bool>
+    {
+        bool operator()(const std::shared_ptr<batch_request> &r1, const std::shared_ptr<batch_request> &r2)
+        {
+            return (*r1 > *r2);
+        }
+    };
+*/    
     /*
     // Pending clustering request
     class clustering_request
@@ -242,6 +254,7 @@ namespace db
             bool already_migrated; // testing
             
         public:
+            bool check_clock(uint64_t time);
             element::node* create_node(uint64_t time, bool migrate);
             std::pair<bool, size_t> create_edge(size_t n1, uint64_t time, size_t n2, int loc2);
             bool create_reverse_edge(size_t local_node, size_t remote_node, int remote_loc);
@@ -332,6 +345,9 @@ namespace db
         //assert(my_clock == time);
         pending_update_cond.broadcast();
         update_mutex.unlock();
+        thread_pool.queue_mutex.lock();
+        thread_pool.empty_queue_cond.broadcast();
+        thread_pool.queue_mutex.unlock();
     }
 
     inline void
@@ -341,6 +357,16 @@ namespace db
         mrequest.num_pending_updates++;
         mrequest.pending_updates.push_back(std::move(msg));
         mrequest.mutex.unlock();
+    }
+
+    inline bool
+    graph :: check_clock(uint64_t time)
+    {
+        bool ret;
+        update_mutex.lock();
+        ret = (time <= my_clock);
+        update_mutex.unlock();
+        return ret;
     }
 
     inline element::node*
@@ -788,6 +814,68 @@ namespace db
         } else {
             update_mutex.unlock();
             return false;
+        }
+    }
+
+    inline bool
+    thread :: unstarted_traversal_thread :: operator>(const unstarted_traversal_thread &t) const
+    {
+        return (*req > *t.req); 
+    }
+
+    void
+    thread :: traversal_thread_loop(thread::pool *tpool)
+    {
+        thread::unstarted_traversal_thread *thr;
+        std::priority_queue<thread::unstarted_traversal_thread*, 
+            std::vector<unstarted_traversal_thread*>, 
+            thread::traversal_req_compare> &tq = tpool->traversal_queue;
+        po6::threads::mutex &m = tpool->queue_mutex;
+        po6::threads::cond &c = tpool->empty_queue_cond;
+        bool can_start;
+        while (true)
+        {
+            m.lock();
+            if (!tq.empty()) {
+                thr = tq.top();
+                can_start = thr->G->check_clock(thr->req->start_time);
+            }
+            while (tq.empty() || !can_start)
+            {
+                c.wait();
+                if (!tq.empty()) {
+                    thr = tq.top();
+                    can_start = thr->G->check_clock(thr->req->start_time);
+                }
+            }
+            tq.pop();
+            m.unlock();
+            (*thr->func)(thr->G, thr->req);
+            delete thr;
+        }
+    }
+
+    void
+    thread :: thread_loop(thread::pool *tpool)
+    {
+        std::unique_ptr<thread::unstarted_thread> thr;
+        while (true)
+        {
+            tpool->queue_mutex.lock();
+            tpool->num_free_update++;
+            while (tpool->update_queue.empty())
+            {
+                tpool->graph_update_queue_cond.wait();
+            }
+            tpool->num_free_update--;
+            thr = std::move(tpool->update_queue.front());
+            tpool->update_queue.pop_front();
+            if (!tpool->update_queue.empty())
+            {
+                tpool->graph_update_queue_cond.signal();
+            }
+            tpool->queue_mutex.unlock();
+            (*(thr->func))(thr->G, std::move(thr->msg));
         }
     }
 

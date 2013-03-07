@@ -16,6 +16,7 @@
 
 #include <vector>
 #include <deque>
+#include <queue>
 #include <thread>
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
@@ -26,12 +27,52 @@
 namespace db
 {
 class graph;
+class batch_request;
 
 namespace thread
 {
     class pool;
-    void thread_loop(pool *tpool, bool update_thread);
+    void thread_loop(pool *tpool);
+    void traversal_thread_loop(pool *tpool);
 
+    class unstarted_traversal_thread
+    {
+        public:
+            unstarted_traversal_thread(
+                void (*f)(graph*, batch_request*),
+                graph *g,
+                batch_request *r);
+
+        public:
+            bool operator>(const unstarted_traversal_thread &t) const;
+
+        public:
+            void (*func)(graph*, batch_request*);
+            graph *G;
+            batch_request *req;
+    };
+
+    inline
+    unstarted_traversal_thread :: unstarted_traversal_thread( 
+            void (*f)(graph*, batch_request*),
+            graph *g,
+            batch_request *r)
+        : func(f)
+        , G(g)
+        , req(r)
+    {
+    }
+
+    // for priority_queue
+    struct traversal_req_compare 
+        : std::binary_function<unstarted_traversal_thread*, unstarted_traversal_thread*, bool>
+    {
+        bool operator()(const unstarted_traversal_thread* const &r1, const unstarted_traversal_thread* const&r2)
+        {
+            return (*r1 > *r2);
+        }
+    };
+    
     class unstarted_thread
     {
         public:
@@ -61,7 +102,7 @@ namespace thread
     {
         public:
             int num_threads;
-            std::deque<std::unique_ptr<unstarted_thread>> reach_req_queue;
+            std::priority_queue<unstarted_traversal_thread*, std::vector<unstarted_traversal_thread*>, traversal_req_compare> traversal_queue;
             std::deque<std::unique_ptr<unstarted_thread>> update_queue;
             po6::threads::mutex queue_mutex;
             po6::threads::cond empty_queue_cond;
@@ -69,7 +110,8 @@ namespace thread
             int num_free_update, num_free_reach;
        
         public:
-            void add_request(std::unique_ptr<unstarted_thread>, bool);
+            void add_request(std::unique_ptr<unstarted_thread>);
+            void add_traversal_request(unstarted_traversal_thread*);
         
         public:
             pool(int n_threads);
@@ -87,84 +129,48 @@ namespace thread
         std::unique_ptr<std::thread> t;
         for (i = 0; i < num_threads; i++) // reachability requests
         {
-            t.reset(new std::thread(thread_loop, this, false));
+            t.reset(new std::thread(traversal_thread_loop, this));
             t->detach();
         }
         for (i = 0; i < num_threads; i++) // graph updates
         {
-            t.reset(new std::thread(thread_loop, this, true));
+            t.reset(new std::thread(thread_loop, this));
             t->detach();
         }
     }
 
     inline void
-    pool :: add_request(std::unique_ptr<unstarted_thread> t, bool update_req = false)
+    pool :: add_request(std::unique_ptr<unstarted_thread> t)
     {
         std::unique_ptr<std::thread> thr;
         queue_mutex.lock();
-        if (update_req)
+        if (num_free_update == 0)
         {
-            if (num_free_update == 0)
-            {
-                // need to create a new thread
-                // since all other threads may be waiting for an update
-                thr.reset(new std::thread(t->func, t->G, std::move(t->msg)));
-                thr->detach();
-            } else
-            { 
-                if (update_queue.empty()) {
-                    graph_update_queue_cond.signal();
-                }
-                update_queue.push_back(std::move(t));
+            // need to create a new thread
+            // since all other threads may be waiting for an update
+            thr.reset(new std::thread(t->func, t->G, std::move(t->msg)));
+            thr->detach();
+        } else
+        { 
+            if (update_queue.empty()) {
+                graph_update_queue_cond.signal();
             }
-        } else {
-            if (reach_req_queue.empty()) {
-                empty_queue_cond.signal();
-            }
-            reach_req_queue.push_back(std::move(t));
+            update_queue.push_back(std::move(t));
         }
         queue_mutex.unlock();
     }
 
-    void
-    thread_loop(pool *tpool, bool update_thread = false)
+    inline void
+    pool :: add_traversal_request(unstarted_traversal_thread *t)
     {
-        std::unique_ptr<unstarted_thread> thr;
-        while (true)
-        {
-            tpool->queue_mutex.lock();
-            if (update_thread)
-            {
-                tpool->num_free_update++;
-                while (tpool->update_queue.empty())
-                {
-                    tpool->graph_update_queue_cond.wait();
-                }
-                tpool->num_free_update--;
-                thr = std::move(tpool->update_queue.front());
-                tpool->update_queue.pop_front();
-                if (!tpool->update_queue.empty())
-                {
-                    tpool->graph_update_queue_cond.signal();
-                }
-            } else {
-                tpool->num_free_reach++;
-                while (tpool->reach_req_queue.empty())
-                {
-                    tpool->empty_queue_cond.wait();
-                }
-                tpool->num_free_reach--;
-                thr = std::move(tpool->reach_req_queue.front());
-                tpool->reach_req_queue.pop_front();
-                if (!tpool->reach_req_queue.empty())
-                {
-                    tpool->empty_queue_cond.signal();
-                }
-            }
-            tpool->queue_mutex.unlock();
-            (*(thr->func))(thr->G, std::move(thr->msg));
+        queue_mutex.lock();
+        if (traversal_queue.empty()) {
+            empty_queue_cond.signal();
         }
+        traversal_queue.push(t);
+        queue_mutex.unlock();
     }
+
 } 
 }
 

@@ -337,9 +337,7 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
 
     server->update_mutex.unlock();
     ret = request->reachable;
-#ifdef DEBUG
     std::cout << "Reachable reply is " << ret << " for " << "request " << req_id << std::endl;
-#endif
     delete request;
     return ret;
 }
@@ -420,7 +418,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
         case message::EDGE_CREATE_ACK:
             message::unpack_message(*msg, m_type, req_id, mem_addr);
             server->update_mutex.lock();
-            request = server->pending[req_id];
+            request = server->pending.at(req_id);
             server->update_mutex.unlock();
             request->mutex.lock();
             request->addr = mem_addr;
@@ -428,28 +426,14 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             request->reply.signal();
             request->mutex.unlock();
             break;
-/*
-        case message::EDGE_CREATE_FAIL:
-            message::unpack_message(*msg, mtype, req_id, new_loc, new_node);
-            server->update_mutex.lock();
-            request = server->pending[req_id];
-            server->update_mutex.unlock();
-            request->mutex.lock();
-            request->waiting = false;
-            request->success = false;
-            request->new_loc = new_loc;
-            request->new_node = new_node;
-            request->reply.signal();
-            request->mutex.unlock();
-            break;
-*/
+        
         case message::NODE_DELETE_ACK:
         case message::EDGE_DELETE_ACK:
         case message::EDGE_DELETE_PROP_ACK:
             cached_req_ids.reset(new std::vector<size_t>());
             message::unpack_message(*msg, m_type, req_id, *cached_req_ids);
             server->update_mutex.lock();
-            request = server->pending[req_id];
+            request = server->pending.at(req_id);
             server->update_mutex.unlock();
             request->mutex.lock();
             request->waiting = false;
@@ -457,30 +441,12 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             request->reply.signal();
             request->mutex.unlock();
             break;
-/*
-        case message::NODE_DELETE_FAIL:
-        case message::EDGE_DELETE_FAIL:
-        case message::EDGE_DELETE_PROP_FAIL:
-            cached_req_ids.reset(new std::vector<size_t>());
-            message::unpack_message(*msg, mtype, req_id, new_loc, new_node, *cached_req_ids);
-            server->update_mutex.lock();
-            request = server->pending[req_id];
-            server->update_mutex.unlock();
-            request->mutex.lock();
-            request->waiting = false;
-            request->success = false;
-            request->new_loc = new_loc;
-            request->new_node = new_node;
-            request->cached_req_ids = std::move(cached_req_ids);
-            request->reply.signal();
-            request->mutex.unlock();
-            break;
-*/
+        
         case message::REACHABLE_REPLY:
             message::unpack_message(*msg, message::REACHABLE_REPLY, req_id, is_reachable,
                 src_node, src_loc, *del_nodes, *del_times, cached_req_id);
             server->update_mutex.lock();
-            request = server->pending[req_id];
+            request = server->pending.at(req_id);
             server->update_mutex.unlock();
             request->mutex.lock();
             request->reachable = is_reachable;
@@ -501,7 +467,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
         case message::CLUSTERING_REPLY:
             message::unpack_message(*msg, message::CLUSTERING_REPLY, req_id, clustering_numerator, clustering_denominator);
             server->update_mutex.lock();
-            request = server->pending[req_id];
+            request = server->pending.at(req_id);
             server->update_mutex.unlock();
             request->mutex.lock();
             request->clustering_numerator = clustering_numerator;
