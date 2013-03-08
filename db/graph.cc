@@ -31,6 +31,7 @@
 
 void handle_reachable_request(db::graph *G, db::batch_request *request);
 void migrate_node_step1(db::graph*, db::element::node*, int);
+void migrate_node_step4_1(db::graph *G);
 /*
 // Ensures that the nodes pointed to in the edge list of n have not been deleted since the edge was made.
 void
@@ -134,7 +135,8 @@ handle_create_node(db::graph *G, size_t req_id)
     db::element::node *n;
     message::message msg;
     n = G->create_node(req_id);
-    size_t node_ptr = (size_t) n;
+    size_t node_ptr = (size_t)n;
+    G->increment_clock();
     message::prepare_message(msg, message::NODE_CREATE_ACK, req_id, node_ptr);
     G->send_coord(msg.buf);
 }
@@ -156,6 +158,9 @@ handle_delete_node(db::graph *G, size_t req_id, size_t node_handle, std::unique_
         message::prepare_message(*msg, message::TRANSIT_NODE_DELETE_REQ, req_id, *success.second);
         G->queue_transit_node_update(req_id, std::move(msg));
     }
+    if (G->increment_clock()) {
+        migrate_node_step4_1(G);
+    }
 }
 
 // create a graph edge
@@ -171,6 +176,9 @@ handle_create_edge(db::graph *G, size_t req_id, size_t n1, size_t n2, int loc2)
     } else {
         message::prepare_message(*msg, message::TRANSIT_EDGE_CREATE_REQ, req_id, n2, loc2);
         G->queue_transit_node_update(req_id, std::move(msg));
+    }
+    if (G->increment_clock()) {
+        migrate_node_step4_1(G);
     }
 }
 
@@ -200,6 +208,9 @@ handle_delete_edge(db::graph *G, size_t req_id, size_t n, size_t e, std::unique_
     } else {
         message::prepare_message(*msg, message::TRANSIT_EDGE_DELETE_REQ, req_id, e, *success.second);
         G->queue_transit_node_update(req_id, std::move(msg));
+    }
+    if (G->increment_clock()) {
+        migrate_node_step4_1(G);
     }
 }
 
@@ -809,18 +820,25 @@ migrate_node_step3(db::graph *G, std::unique_ptr<message::message> msg)
 }
 
 // wait for updates till the received clock value, which are being forwarded to new shard
-// increment local clock to above value
-// forward queued update requests
 void
 migrate_node_step4(db::graph *G, std::unique_ptr<message::message> msg)
 {
     uint64_t my_clock;
     message::unpack_message(*msg, message::COORD_NODE_MIGRATE_ACK, my_clock);
-    G->wait_for_arrived_updates(my_clock);
-    G->sync_clocks();
+    if (G->set_target_clock(my_clock)) {
+        migrate_node_step4_1(G);
+    }
+}
+
+// increment local clock to above value
+// forward queued update requests
+void
+migrate_node_step4_1(db::graph *G)
+{
+    message::message msg;
     G->mrequest.mutex.lock();
-    message::prepare_message(*msg, message::MIGRATE_NODE_STEP4, G->mrequest.pending_update_ids);
-    G->send(G->mrequest.new_loc, msg->buf);
+    message::prepare_message(msg, message::MIGRATE_NODE_STEP4, G->mrequest.pending_update_ids);
+    G->send(G->mrequest.new_loc, msg.buf);
     for (auto &m: G->mrequest.pending_updates)
     {
         G->send(G->mrequest.new_loc, m->buf);

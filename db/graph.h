@@ -262,9 +262,7 @@ namespace db
 
         private:
             po6::threads::mutex update_mutex, request_mutex;
-            uint64_t my_clock, my_arrived_clock;
-            po6::threads::cond pending_update_cond;
-            po6::threads::cond pending_update_arrival_cond;
+            uint64_t my_clock;
 
         public:
             int node_count;
@@ -292,6 +290,7 @@ namespace db
             element::node *migr_node; // newly migrated node
             std::priority_queue<update_request*, std::vector<update_request*>, req_compare> pending_updates;
             std::deque<size_t> pending_update_ids;
+            uint64_t target_clock;
 
             // testing
             std::unordered_map<size_t, uint64_t> req_count;
@@ -326,23 +325,18 @@ namespace db
             busybee_returncode send(int loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send_coord(std::auto_ptr<e::buffer> buf);
             void wait_for_updates(uint64_t recd_clock);
-            void wait_for_arrived_updates(uint64_t recd_clock);
             void sync_clocks();
             void propagate_request(std::vector<size_t> &nodes, std::shared_ptr<batch_request> request, int prop_loc);
             void queue_transit_node_update(size_t req_id, std::unique_ptr<message::message> msg);
+            bool set_target_clock(uint64_t time);
             void set_update_ids(std::vector<size_t>&);
+            bool increment_clock();
             bool migrate_test(); // testing
-
-        private:
-            void increment_clock(uint64_t time);
-            void increment_arrived_clock();
     };
 
     inline
     graph :: graph(int my_id, const char* ip_addr, int port)
         : my_clock(0)
-        , pending_update_cond(&update_mutex)
-        , pending_update_arrival_cond(&update_mutex)
         , node_count(0)
         , num_shards(NUM_SHARDS)
         , myloc(new po6::net::location(ip_addr, port))
@@ -354,6 +348,7 @@ namespace db
         , outgoing_req_id_counter(0)
         , thread_pool(NUM_THREADS)
         , visit_map(true)
+        , target_clock(0)
         , already_migrated(false)
     {
         int i, inport;
@@ -371,29 +366,22 @@ namespace db
         file.close();
     }
 
-    inline void
-    graph :: increment_arrived_clock()
+    inline bool
+    graph :: increment_clock()
     {
+        bool check;
         update_mutex.lock();
-        my_arrived_clock++;
-        pending_update_arrival_cond.broadcast();
-        update_mutex.unlock();
-    }
-
-    inline void
-    graph :: increment_clock(uint64_t time)
-    {
-        update_mutex.lock();
-        my_arrived_clock++;
-        pending_update_arrival_cond.broadcast();
         my_clock++;
-        //assert(my_clock == time);
-        pending_update_cond.broadcast();
+        check = (my_clock == target_clock);
+        if (check) {
+            target_clock = 0;
+        }
         update_mutex.unlock();
         thread_pool.queue_mutex.lock();
         thread_pool.traversal_queue_cond.broadcast();
         thread_pool.update_queue_cond.broadcast();
         thread_pool.queue_mutex.unlock();
+        return check;
     }
 
     inline void
@@ -403,6 +391,21 @@ namespace db
         mrequest.pending_updates.emplace_back(std::move(msg));
         mrequest.pending_update_ids.emplace_back(req_id);
         mrequest.mutex.unlock();
+    }
+
+    inline bool
+    graph :: set_target_clock(uint64_t time)
+    {
+        bool ret;
+        update_mutex.lock();
+        if (time == my_clock) {
+            ret = true;
+        } else {
+            target_clock = time;
+            ret = false;
+        }
+        update_mutex.unlock();
+        return ret;
     }
 
     inline void
@@ -436,7 +439,7 @@ namespace db
             migration_mutex.unlock();
         } else {
             new_node->state = element::node::mode::STABLE;
-            increment_clock(time);
+            //increment_clock();
         }
 #ifdef DEBUG
         std::cout << "Creating node, addr = " << (void*) new_node 
@@ -451,17 +454,14 @@ namespace db
         std::pair<bool, std::unique_ptr<std::vector<size_t>>> ret;
         n->update_mutex.lock();
         if (n->state == element::node::mode::IN_TRANSIT) {
-            ret.second = std::move(n->purge_cache());
-            n->update_mutex.unlock();
-            increment_arrived_clock();
             ret.first = false;
         } else {
             n->update_del_time(del_time);
-            ret.second = std::move(n->purge_cache());
-            n->update_mutex.unlock();
-            increment_clock(del_time);
             ret.first = true;
         }
+        ret.second = std::move(n->purge_cache());
+        n->update_mutex.unlock();
+        //increment_clock();
         return ret;
     }
 
@@ -473,14 +473,13 @@ namespace db
         local_node->update_mutex.lock();
         if (local_node->state == element::node::mode::IN_TRANSIT) {
             local_node->update_mutex.unlock();
-            increment_arrived_clock();
             ret.first = false;
         } else {
             element::edge *new_edge = new element::edge(time, loc2, n2);
             ret.second = local_node->add_edge(new_edge, true);
             local_node->update_mutex.unlock();
-            increment_clock(time);
             //XXX is this ok? What invariant?
+            // TODO no! increment clocks at both shards for correctness
             message::message msg(message::REVERSE_EDGE_CREATE);
             message::prepare_message(msg, message::REVERSE_EDGE_CREATE, n1, myid, n2);
             send(loc2, msg.buf);
@@ -489,6 +488,7 @@ namespace db
 #endif
             ret.first = true;
         }
+        //increment_clock();
         return ret;
     }
 
@@ -518,18 +518,15 @@ namespace db
         std::pair<bool, std::unique_ptr<std::vector<size_t>>> ret;
         n->update_mutex.lock();
         if (n->state == element::node::mode::IN_TRANSIT) {
-            ret.second = std::move(n->purge_cache());
-            n->update_mutex.unlock();
-            increment_arrived_clock();
             ret.first = false;
         } else {
             element::edge *e = n->out_edges.at(edge_handle);
             e->update_del_time(del_time);
-            ret.second = std::move(n->purge_cache());
-            n->update_mutex.unlock();
-            increment_clock(del_time);
             ret.first = true;
         }
+        ret.second = std::move(n->purge_cache());
+        n->update_mutex.unlock();
+        //increment_clock();
         return ret;
     }
 
@@ -809,37 +806,6 @@ namespace db
         return ret;
     }
 
-    inline void
-    graph :: wait_for_updates(uint64_t recd_clock)
-    {
-        update_mutex.lock();
-        while (recd_clock > my_clock)
-        {
-            pending_update_cond.wait();
-        }
-        update_mutex.unlock();
-    }
-
-    inline void
-    graph :: wait_for_arrived_updates(uint64_t recd_clock)
-    {
-        update_mutex.lock();
-        while (recd_clock > my_arrived_clock)
-        {
-            pending_update_arrival_cond.wait();
-        }
-        update_mutex.unlock();
-    }
-
-    inline void
-    graph :: sync_clocks()
-    {
-        update_mutex.lock();
-        my_clock = my_arrived_clock;
-        pending_update_cond.broadcast();
-        update_mutex.unlock();
-    }
-    
     // caution: assuming we hold the request->mutex
     inline void 
     graph :: propagate_request(std::vector<size_t> &nodes, std::shared_ptr<batch_request> request, int prop_loc)
