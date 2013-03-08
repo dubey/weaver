@@ -44,7 +44,7 @@ create_node(coordinator::central *server)
     request->mutex.lock();
     req_id = ++server->request_id;
     server->pending[req_id] = request;
-    message::prepare_message(msg, message::NODE_CREATE_REQ, req_id, creat_time);
+    message::prepare_message(msg, message::NODE_CREATE_REQ, creat_time, req_id);
     server->update_mutex.unlock();
     server->send(shard_id, msg.buf);
     
@@ -90,8 +90,8 @@ create_edge(common::meta_element *node1, common::meta_element *node2, coordinato
     int loc1 = node1->get_loc();
     int loc2 = node2->get_loc();
     server->update_mutex.unlock();
-    message::prepare_message(msg, message::EDGE_CREATE_REQ, req_id, node1_addr, node2_addr,
-        loc2, creat_time);
+    message::prepare_message(msg, message::EDGE_CREATE_REQ, creat_time, req_id, node1_addr, node2_addr,
+        loc2);
     server->send(loc1, msg.buf);
     
     while (request->waiting)
@@ -135,7 +135,7 @@ delete_node(common::meta_element *node, coordinator::central *server)
     req_id = ++server->request_id;
     server->pending[req_id] = request;
     size_t node_addr = (size_t)node->get_addr();
-    message::prepare_message(msg, message::NODE_DELETE_REQ, req_id, node_addr, del_time);
+    message::prepare_message(msg, message::NODE_DELETE_REQ, del_time, req_id, node_addr);
     server->add_pending_del_req(req_id);
     server->update_mutex.unlock();
     server->send(node->get_loc(), msg.buf);
@@ -177,7 +177,7 @@ delete_edge(common::meta_element *node, common::meta_element *edge, coordinator:
     server->pending[req_id] = request;
     size_t node_addr = (size_t)node->get_addr();
     size_t edge_addr = (size_t)edge->get_addr();
-    message::prepare_message(msg, message::EDGE_DELETE_REQ, req_id, node_addr, edge_addr, del_time);
+    message::prepare_message(msg, message::EDGE_DELETE_REQ, del_time, req_id, node_addr, edge_addr);
     server->add_pending_del_req(req_id);
     server->update_mutex.unlock();
     server->send(node->get_loc(), msg.buf);
@@ -213,8 +213,8 @@ add_edge_property(common::meta_element *node, common::meta_element *edge, uint32
     req_id = ++server->request_id;
     size_t node_addr = (size_t)node->get_addr();
     size_t edge_addr = (size_t)edge->get_addr();
-    message::prepare_message(msg, message::EDGE_ADD_PROP, req_id, node_addr,
-            edge_addr, key, value, time);
+    message::prepare_message(msg, message::EDGE_ADD_PROP, time, req_id, node_addr,
+            edge_addr, key, value);
     server->update_mutex.unlock();
     server->send(node->get_loc(), msg.buf);
 }
@@ -242,7 +242,7 @@ delete_edge_property(common::meta_element *node, common::meta_element *edge,
     server->pending[req_id] = request;
     size_t node_addr = (size_t)node->get_addr();
     size_t edge_addr = (size_t)edge->get_addr();
-    message::prepare_message(msg, message::EDGE_DELETE_PROP, req_id, node_addr, edge_addr, key, time);
+    message::prepare_message(msg, message::EDGE_DELETE_PROP, time, req_id, node_addr, edge_addr, key);
     server->add_pending_del_req(req_id);
     server->update_mutex.unlock();
     server->send(node->get_loc(), msg.buf);

@@ -94,6 +94,7 @@ namespace message
     class message
     {
         public:
+            message();
             message(enum msg_type t);
             message(message& copy);
 
@@ -204,6 +205,12 @@ namespace message
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::vector<T>& t);
+
+    inline
+    message :: message()
+        : type(ERROR)
+    {
+    }
 
     inline
     message :: message(enum msg_type t)

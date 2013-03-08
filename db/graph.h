@@ -35,6 +35,44 @@
 
 namespace db
 {
+    // Pending update request
+    class update_request
+    {
+        public:
+            update_request(enum message::msg_type, uint64_t, std::unique_ptr<message::message>);
+
+        public:
+            bool operator>(const update_request &r) const;
+
+        public:
+            enum message::msg_type type;
+            uint64_t start_time;
+            std::unique_ptr<message::message> msg;
+    };
+
+    inline
+    update_request :: update_request(enum message::msg_type mt, uint64_t st, std::unique_ptr<message::message> m)
+        : type(mt)
+        , start_time(st)
+        , msg(std::move(m))
+    {
+    }
+
+    inline bool
+    update_request :: operator>(const update_request &r) const
+    {
+        return (start_time > r.start_time);
+    }
+
+    struct req_compare
+        : std::binary_function<update_request*, update_request*, bool>
+    {
+        bool operator()(const update_request* const &r1, const update_request* const&r2)
+        {
+            return (*r1 > *r2);
+        }
+    };
+
     // Pending batched request
     class batch_request
     {
@@ -65,7 +103,7 @@ namespace db
             po6::threads::mutex mutex;
 
         public:
-            bool operator>(batch_request &r) const;
+            bool operator>(const batch_request &r) const;
 
         public:
             void lock();
@@ -95,7 +133,7 @@ namespace db
     }
 
     inline bool
-    batch_request :: operator>(batch_request &r) const
+    batch_request :: operator>(const batch_request &r) const
     {
         return (coord_id > r.coord_id);
     }
@@ -211,6 +249,7 @@ namespace db
             int new_loc; // shard to which this node is being migrated
             size_t migr_node; // node handle on new shard
             std::vector<std::unique_ptr<message::message>> pending_updates; // queued updates
+            std::vector<size_t> pending_update_ids; // ids of queued updates
             uint32_t num_pending_updates;
             std::vector<std::shared_ptr<batch_request>> pending_requests; // queued requests
             uint64_t my_clock;
@@ -249,9 +288,14 @@ namespace db
             bool visit_map;
             // For node migration
             migrate_request mrequest; // pending migration request object
+            po6::threads::mutex migration_mutex;
             element::node *migr_node; // newly migrated node
-            std::unordered_map<size_t, uint64_t> req_count; // testing
-            bool already_migrated; // testing
+            std::priority_queue<update_request*, std::vector<update_request*>, req_compare> pending_updates;
+            std::deque<size_t> pending_update_ids;
+
+            // testing
+            std::unordered_map<size_t, uint64_t> req_count;
+            bool already_migrated;
             
         public:
             bool check_clock(uint64_t time);
@@ -285,7 +329,8 @@ namespace db
             void wait_for_arrived_updates(uint64_t recd_clock);
             void sync_clocks();
             void propagate_request(std::vector<size_t> &nodes, std::shared_ptr<batch_request> request, int prop_loc);
-            void queue_transit_node_update(std::unique_ptr<message::message> msg);
+            void queue_transit_node_update(size_t req_id, std::unique_ptr<message::message> msg);
+            void set_update_ids(std::vector<size_t>&);
             bool migrate_test(); // testing
 
         private:
@@ -346,17 +391,29 @@ namespace db
         pending_update_cond.broadcast();
         update_mutex.unlock();
         thread_pool.queue_mutex.lock();
-        thread_pool.empty_queue_cond.broadcast();
+        thread_pool.traversal_queue_cond.broadcast();
+        thread_pool.update_queue_cond.broadcast();
         thread_pool.queue_mutex.unlock();
     }
 
     inline void
-    graph :: queue_transit_node_update(std::unique_ptr<message::message> msg)
+    graph :: queue_transit_node_update(size_t req_id, std::unique_ptr<message::message> msg)
     {
         mrequest.mutex.lock();
-        mrequest.num_pending_updates++;
-        mrequest.pending_updates.push_back(std::move(msg));
+        mrequest.pending_updates.emplace_back(std::move(msg));
+        mrequest.pending_update_ids.emplace_back(req_id);
         mrequest.mutex.unlock();
+    }
+
+    inline void
+    graph :: set_update_ids(std::vector<size_t> &update_ids)
+    {
+        migration_mutex.lock();
+        for (size_t id: update_ids)
+        {
+            pending_update_ids.push_back(id);
+        }
+        migration_mutex.unlock();
     }
 
     inline bool
@@ -374,9 +431,9 @@ namespace db
     {
         element::node *new_node = new element::node(time);
         if (migrate) {
-            update_mutex.lock();
+            migration_mutex.lock();
             migr_node = new_node;
-            update_mutex.unlock();
+            migration_mutex.unlock();
         } else {
             new_node->state = element::node::mode::STABLE;
             increment_clock(time);
@@ -823,6 +880,12 @@ namespace db
         return (*req > *t.req); 
     }
 
+    inline bool
+    thread :: unstarted_update_thread :: operator>(const unstarted_update_thread &t) const
+    {
+        return (*req > *t.req); 
+    }
+
     void
     thread :: traversal_thread_loop(thread::pool *tpool)
     {
@@ -831,7 +894,7 @@ namespace db
             std::vector<unstarted_traversal_thread*>, 
             thread::traversal_req_compare> &tq = tpool->traversal_queue;
         po6::threads::mutex &m = tpool->queue_mutex;
-        po6::threads::cond &c = tpool->empty_queue_cond;
+        po6::threads::cond &c = tpool->traversal_queue_cond;
         bool can_start;
         while (true)
         {
@@ -849,6 +912,7 @@ namespace db
                 }
             }
             tq.pop();
+            c.broadcast();
             m.unlock();
             (*thr->func)(thr->G, thr->req);
             delete thr;
@@ -856,26 +920,35 @@ namespace db
     }
 
     void
-    thread :: thread_loop(thread::pool *tpool)
+    thread :: update_thread_loop(thread::pool *tpool)
     {
-        std::unique_ptr<thread::unstarted_thread> thr;
+        thread::unstarted_update_thread *thr;
+        std::priority_queue<thread::unstarted_update_thread*, 
+            std::vector<unstarted_update_thread*>, 
+            thread::update_req_compare> &tq = tpool->update_queue;
+        po6::threads::mutex &m = tpool->queue_mutex;
+        po6::threads::cond &c = tpool->update_queue_cond;
+        bool can_start;
         while (true)
         {
-            tpool->queue_mutex.lock();
-            tpool->num_free_update++;
-            while (tpool->update_queue.empty())
-            {
-                tpool->graph_update_queue_cond.wait();
+            m.lock();
+            if (!tq.empty()) {
+                thr = tq.top();
+                can_start = thr->G->check_clock(thr->req->start_time);
             }
-            tpool->num_free_update--;
-            thr = std::move(tpool->update_queue.front());
-            tpool->update_queue.pop_front();
-            if (!tpool->update_queue.empty())
+            while (tq.empty() || !can_start)
             {
-                tpool->graph_update_queue_cond.signal();
+                c.wait();
+                if (!tq.empty()) {
+                    thr = tq.top();
+                    can_start = thr->G->check_clock(thr->req->start_time);
+                }
             }
-            tpool->queue_mutex.unlock();
-            (*(thr->func))(thr->G, std::move(thr->msg));
+            tq.pop();
+            c.broadcast();
+            m.unlock();
+            (*thr->func)(thr->G, thr->req);
+            delete thr;
         }
     }
 

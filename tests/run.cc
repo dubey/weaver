@@ -31,6 +31,7 @@ main(int argc, char *argv[])
     //std::cout << "Basic client ok." << std::endl;
     //stress_client_test();
     //std::cout << "Stress client ok." << std::endl;
+#define DEBUG
     multiple_stress_client();
     std::cout << "Multiple stress client ok." << std::endl;
     //repetitive_stress_client();
