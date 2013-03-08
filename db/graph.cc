@@ -158,37 +158,31 @@ handle_delete_node(db::graph *G, size_t req_id, size_t node_handle, std::unique_
         message::prepare_message(*msg, message::TRANSIT_NODE_DELETE_REQ, req_id, *success.second);
         G->queue_transit_node_update(req_id, std::move(msg));
     }
-    if (G->increment_clock()) {
-        migrate_node_step4_1(G);
-    }
 }
 
 // create a graph edge
 void
-handle_create_edge(db::graph *G, size_t req_id, size_t n1, size_t n2, int loc2)
+handle_create_edge(db::graph *G, size_t req_id, size_t n1, size_t n2, int loc2, uint64_t tc2)
 {
     std::pair<bool, size_t> success;
     std::unique_ptr<message::message> msg(new message::message());
-    success = G->create_edge(n1, req_id, n2, loc2);
+    success = G->create_edge(n1, req_id, n2, loc2, tc2);
     if (success.first) {
         message::prepare_message(*msg, message::EDGE_CREATE_ACK, req_id, success.second);
         G->send_coord(msg->buf);
     } else {
-        message::prepare_message(*msg, message::TRANSIT_EDGE_CREATE_REQ, req_id, n2, loc2);
+        message::prepare_message(*msg, message::TRANSIT_EDGE_CREATE_REQ, req_id, n2, loc2, tc2);
         G->queue_transit_node_update(req_id, std::move(msg));
-    }
-    if (G->increment_clock()) {
-        migrate_node_step4_1(G);
     }
 }
 
 // create a back pointer for an edge
 void
-handle_create_reverse_edge(db::graph *G, size_t remote_node, int remote_loc, size_t local_node)
+handle_create_reverse_edge(db::graph *G, size_t req_id, size_t remote_node, int remote_loc, size_t local_node)
 {
     std::unique_ptr<message::message> msg(new message::message());
-    if (!G->create_reverse_edge(local_node, remote_node, remote_loc)) {
-        message::prepare_message(*msg, message::TRANSIT_REVERSE_EDGE_CREATE, remote_node, remote_loc);
+    if (!G->create_reverse_edge(req_id, local_node, remote_node, remote_loc)) {
+        message::prepare_message(*msg, message::TRANSIT_REVERSE_EDGE_CREATE, req_id, remote_node, remote_loc);
         G->queue_transit_node_update(0, std::move(msg));
     }
 }
@@ -208,9 +202,6 @@ handle_delete_edge(db::graph *G, size_t req_id, size_t n, size_t e, std::unique_
     } else {
         message::prepare_message(*msg, message::TRANSIT_EDGE_DELETE_REQ, req_id, e, *success.second);
         G->queue_transit_node_update(req_id, std::move(msg));
-    }
-    if (G->increment_clock()) {
-        migrate_node_step4_1(G);
     }
 }
 
@@ -912,7 +903,7 @@ void
 unpack_update_request(db::graph *G, db::update_request *request)
 {
     size_t req_id;
-    uint64_t start_time;
+    uint64_t start_time, time2;
     size_t n1, n2, edge;
     int loc;
     std::unique_ptr<std::vector<size_t>> cache;
@@ -927,22 +918,34 @@ unpack_update_request(db::graph *G, db::update_request *request)
         case message::NODE_DELETE_REQ:
             message::unpack_message(*request->msg, message::NODE_DELETE_REQ, start_time, req_id, n1);
             handle_delete_node(G, req_id, n1, std::move(cache));
+            if (G->increment_clock()) {
+                migrate_node_step4_1(G);
+            }
             break;
 
         case message::EDGE_CREATE_REQ:
             message::unpack_message(*request->msg, message::EDGE_CREATE_REQ, start_time, req_id,
-                n1, n2, loc);
-            handle_create_edge(G, req_id, n1, n2, loc);
+                n1, n2, loc, time2);
+            handle_create_edge(G, req_id, n1, n2, loc, time2);
+            if (G->increment_clock()) {
+                migrate_node_step4_1(G);
+            }
             break;
 
         case message::REVERSE_EDGE_CREATE:
-            message::unpack_message(*request->msg, message::REVERSE_EDGE_CREATE, n2, loc, n1);
-            handle_create_reverse_edge(G, n2, loc, n1);
+            message::unpack_message(*request->msg, message::REVERSE_EDGE_CREATE, start_time, req_id, n2, loc, n1);
+            handle_create_reverse_edge(G, req_id, n2, loc, n1);
+            if (G->increment_clock()) {
+                migrate_node_step4_1(G);
+            }
             break;
 
         case message::EDGE_DELETE_REQ:
             message::unpack_message(*request->msg, message::EDGE_DELETE_REQ, start_time, req_id, n1, edge);
             handle_delete_edge(G, req_id, n1, edge, std::move(cache));
+            if (G->increment_clock()) {
+                migrate_node_step4_1(G);
+            }
             break;
 
         case message::REACHABLE_PROP:
@@ -994,6 +997,7 @@ unpack_transit_update_request(db::graph *G, db::update_request *request)
     size_t req_id;
     size_t n2, edge;
     int loc;
+    uint64_t time;
     std::unique_ptr<std::vector<size_t>> cache;
 
     switch (request->type)
@@ -1005,13 +1009,13 @@ unpack_transit_update_request(db::graph *G, db::update_request *request)
             break;
 
         case message::TRANSIT_EDGE_CREATE_REQ:
-            message::unpack_message(*request->msg, message::TRANSIT_EDGE_CREATE_REQ, req_id, n2, loc);
-            handle_create_edge(G, req_id, (size_t)G->migr_node, n2, loc);
+            message::unpack_message(*request->msg, message::TRANSIT_EDGE_CREATE_REQ, req_id, n2, loc, time);
+            handle_create_edge(G, req_id, (size_t)G->migr_node, n2, loc, time);
             break;
 
         case message::TRANSIT_REVERSE_EDGE_CREATE:
-            message::unpack_message(*request->msg, message::TRANSIT_REVERSE_EDGE_CREATE, n2, loc);
-            handle_create_reverse_edge(G, n2, loc, (size_t)G->migr_node);
+            message::unpack_message(*request->msg, message::TRANSIT_REVERSE_EDGE_CREATE, req_id, n2, loc);
+            handle_create_reverse_edge(G, req_id, n2, loc, (size_t)G->migr_node);
             break;
         
         case message::TRANSIT_EDGE_DELETE_REQ:
@@ -1083,6 +1087,7 @@ runner(db::graph *G)
             case message::NODE_CREATE_REQ:
             case message::NODE_DELETE_REQ:
             case message::EDGE_CREATE_REQ:
+            case message::REVERSE_EDGE_CREATE:
             case message::EDGE_DELETE_REQ:
                 rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(mtype)) >> start_time;
                 request = new db::update_request(mtype, start_time - 1, std::move(rec_msg));
@@ -1099,12 +1104,6 @@ runner(db::graph *G)
                 G->thread_pool.add_update_request(thr);
                 break;
 
-            case message::REVERSE_EDGE_CREATE:
-                request = new db::update_request(mtype, 0, std::move(rec_msg));
-                thr = new db::thread::unstarted_update_thread(unpack_update_request, G, request);
-                G->thread_pool.add_update_request(thr);
-                break;
-            
 /*
             case message::EDGE_ADD_PROP:
                 thr.reset(new db::thread::unstarted_thread(handle_add_edge_property, G, std::move(rec_msg)));

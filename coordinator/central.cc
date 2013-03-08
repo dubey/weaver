@@ -73,14 +73,15 @@ create_edge(common::meta_element *node1, common::meta_element *node2, coordinato
 {
     coordinator::pending_req *request;
     common::meta_element *new_edge;
-    uint64_t creat_time;
+    uint64_t creat_time1, creat_time2;
     message::message msg(message::EDGE_CREATE_REQ);
     size_t req_id;
 
     //TODO need checks for given node_handles
     //TODO need to increment clock on both shards?
     server->update_mutex.lock();
-    creat_time = ++server->vc.clocks->at(node1->get_loc());
+    creat_time1 = ++server->vc.clocks->at(node1->get_loc());
+    creat_time2 = ++server->vc.clocks->at(node2->get_loc());
     request = new coordinator::pending_req(&server->update_mutex);
     request->mutex.lock();
     req_id = ++server->request_id;
@@ -90,15 +91,15 @@ create_edge(common::meta_element *node1, common::meta_element *node2, coordinato
     int loc1 = node1->get_loc();
     int loc2 = node2->get_loc();
     server->update_mutex.unlock();
-    message::prepare_message(msg, message::EDGE_CREATE_REQ, creat_time, req_id, node1_addr, node2_addr,
-        loc2);
+    message::prepare_message(msg, message::EDGE_CREATE_REQ, creat_time1, req_id, node1_addr, node2_addr,
+        loc2, creat_time2);
     server->send(loc1, msg.buf);
     
     while (request->waiting)
     {
         request->reply.wait();
     }
-    new_edge = new common::meta_element(node1->get_loc(), creat_time, MAX_TIME, request->addr);
+    new_edge = new common::meta_element(node1->get_loc(), creat_time1, MAX_TIME, request->addr);
     request->mutex.unlock();
     delete request;
     server->update_mutex.lock();

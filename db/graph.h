@@ -299,8 +299,8 @@ namespace db
         public:
             bool check_clock(uint64_t time);
             element::node* create_node(uint64_t time, bool migrate);
-            std::pair<bool, size_t> create_edge(size_t n1, uint64_t time, size_t n2, int loc2);
-            bool create_reverse_edge(size_t local_node, size_t remote_node, int remote_loc);
+            std::pair<bool, size_t> create_edge(size_t n1, uint64_t time, size_t n2, int loc2, uint64_t tc2);
+            bool create_reverse_edge(uint64_t time, size_t local_node, size_t remote_node, int remote_loc);
             std::pair<bool, std::unique_ptr<std::vector<size_t>>> delete_node(element::node *n, uint64_t del_time);
             std::pair<bool, std::unique_ptr<std::vector<size_t>>> delete_edge(element::node *n, size_t edge_handle, uint64_t del_time);
             void refresh_edge(element::node *n, element::edge *e, uint64_t del_time);
@@ -466,7 +466,7 @@ namespace db
     }
 
     inline std::pair<bool, size_t>
-    graph :: create_edge(size_t n1, uint64_t time, size_t n2, int loc2)
+    graph :: create_edge(size_t n1, uint64_t time, size_t n2, int loc2, uint64_t tc2)
     {
         std::pair<bool, size_t> ret;
         element::node *local_node = (element::node *)n1;
@@ -478,10 +478,8 @@ namespace db
             element::edge *new_edge = new element::edge(time, loc2, n2);
             ret.second = local_node->add_edge(new_edge, true);
             local_node->update_mutex.unlock();
-            //XXX is this ok? What invariant?
-            // TODO no! increment clocks at both shards for correctness
             message::message msg(message::REVERSE_EDGE_CREATE);
-            message::prepare_message(msg, message::REVERSE_EDGE_CREATE, n1, myid, n2);
+            message::prepare_message(msg, message::REVERSE_EDGE_CREATE, tc2, time, n1, myid, n2);
             send(loc2, msg.buf);
 #ifdef DEBUG
             std::cout << "Creating edge, addr = " << (void *) new_edge << std::endl;
@@ -493,7 +491,7 @@ namespace db
     }
 
     inline bool
-    graph :: create_reverse_edge(size_t local_node, size_t remote_node, int remote_loc)
+    graph :: create_reverse_edge(uint64_t time, size_t local_node, size_t remote_node, int remote_loc)
     {
         element::node *n = (element::node *)local_node;
         n->update_mutex.lock();
@@ -501,7 +499,7 @@ namespace db
             n->update_mutex.unlock();
             return false;
         } else {
-            element::edge *new_edge = new element::edge(my_clock, remote_loc, remote_node);
+            element::edge *new_edge = new element::edge(time, remote_loc, remote_node);
             n->add_edge(new_edge, false);
 #ifdef DEBUG
             std::cout << "New rev edge: " << (void*)new_edge->nbr.handle << " " << new_edge->nbr.loc << " at lnode " << (void*)local_node << std::endl;
@@ -742,7 +740,6 @@ namespace db
         if ((ret = bb.send(loc, msg)) != BUSYBEE_SUCCESS)
         {
             std::cerr << "msg send error: " << ret << std::endl;
-            //assert(ret == BUSYBEE_SUCCESS); //TODO what?
         }
         bb_lock.unlock();
         return ret;
@@ -756,7 +753,6 @@ namespace db
         if ((ret = bb.send(*loc, msg)) != BUSYBEE_SUCCESS)
         {
             std::cerr << "msg send error: " << ret << std::endl;
-            //assert(ret == BUSYBEE_SUCCESS); //TODO what?
         }
         bb_lock.unlock();
         return ret;
@@ -770,7 +766,6 @@ namespace db
         if ((ret = bb.send(*loc, msg)) != BUSYBEE_SUCCESS)
         {
             std::cerr << "msg send error: " << ret << std::endl;
-            //assert(ret == BUSYBEE_SUCCESS); //TODO what?
         }
         bb_lock.unlock();
         return ret;
@@ -800,7 +795,6 @@ namespace db
         if ((ret = bb.send(*coord, msg)) != BUSYBEE_SUCCESS)
         {
             std::cerr << "msg send error: " << ret << std::endl;
-            //assert(ret == BUSYBEE_SUCCESS); //TODO
         }
         bb_lock.unlock();
         return ret;
