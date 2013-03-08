@@ -205,55 +205,36 @@ handle_delete_edge(db::graph *G, size_t req_id, size_t n, size_t e, std::unique_
     }
 }
 
-/*
 // add edge property
 void
-handle_add_edge_property(db::graph *G, std::unique_ptr<message::message> msg)
+handle_add_edge_property(db::graph *G, size_t req_id, size_t node_addr, size_t edge_addr, common::property &prop)
 {
-    size_t req_id;
-    db::element::node *n;
-    db::element::edge *e;
-    size_t node_addr, edge_addr;
-    std::unique_ptr<common::property> new_prop;
-    uint64_t prop_add_time;
-    msg->unpack_add_prop(&req_id, &node_addr, &edge_addr, &new_prop, &prop_add_time);
-
-    n = (db::element::node *)node_addr;
-    e = (db::element::edge *)edge_addr;
-    G->wait_for_updates(prop_add_time - 1);
-    if (!G->add_edge_property(n, e, std::move(new_prop), prop_add_time)) {
-        message::prepare_message(*msg, message::EDGE_ADD_PROP_FAIL, req_id, n->migr_request->new_loc, n->migr_request->migr_node);
-        G->send_coord(msg->buf);
+    std::unique_ptr<message::message> msg(new message::message());
+    if (!G->add_edge_property(node_addr, edge_addr, prop)) {
+        message::prepare_message(*msg, message::TRANSIT_EDGE_ADD_PROP, req_id, edge_addr, prop);
+        G->queue_transit_node_update(req_id, std::move(msg));
     }
 }
 
 // delete all edge properties with the given key
 void
-handle_delete_edge_property(db::graph *G, std::unique_ptr<message::message> msg)
+handle_delete_edge_property(db::graph *G, size_t req_id, size_t node_addr, size_t edge_addr, uint32_t key,
+    std::unique_ptr<std::vector<size_t>> cache)
 {
-    size_t req_id;
-    db::element::node *n;
-    db::element::edge *e;
-    size_t node_addr, edge_addr;
-    uint32_t key;
-    uint64_t prop_del_time;
     std::pair<bool, std::unique_ptr<std::vector<size_t>>> success;
-    message::unpack_message(*msg, message::EDGE_DELETE_PROP, req_id, node_addr,
-            edge_addr, key, prop_del_time);
-
-    n = (db::element::node *)node_addr;
-    e = (db::element::edge *)edge_addr;
-    G->wait_for_updates(prop_del_time - 1);
-    success = G->delete_all_edge_property(n, e, key, prop_del_time);
+    std::unique_ptr<message::message> msg(new message::message());
+    success = G->delete_all_edge_property(node_addr, edge_addr, key, req_id);
+    if (cache) {
+        success.second = std::move(cache);
+    }
     if (success.first) {
         message::prepare_message(*msg, message::EDGE_DELETE_PROP_ACK, req_id, *success.second);
         G->send_coord(msg->buf);
     } else {
-        message::prepare_message(*msg, message::EDGE_DELETE_PROP_FAIL, req_id, n->migr_request->new_loc, n->migr_request->migr_node, *success.second);
-        G->send_coord(msg->buf);
+        message::prepare_message(*msg, message::TRANSIT_EDGE_DELETE_PROP, req_id, edge_addr, key, *success.second);
+        G->queue_transit_node_update(req_id, std::move(msg));
     }
 }
-*/
 
 // reachability request starting from src_nodes to dest_node
 void
@@ -906,6 +887,8 @@ unpack_update_request(db::graph *G, db::update_request *request)
     uint64_t start_time, time2;
     size_t n1, n2, edge;
     int loc;
+    common::property prop;
+    uint32_t key;
     std::unique_ptr<std::vector<size_t>> cache;
 
     switch (request->type)
@@ -943,6 +926,22 @@ unpack_update_request(db::graph *G, db::update_request *request)
         case message::EDGE_DELETE_REQ:
             message::unpack_message(*request->msg, message::EDGE_DELETE_REQ, start_time, req_id, n1, edge);
             handle_delete_edge(G, req_id, n1, edge, std::move(cache));
+            if (G->increment_clock()) {
+                migrate_node_step4_1(G);
+            }
+            break;
+
+        case message::EDGE_ADD_PROP:
+            message::unpack_message(*request->msg, message::EDGE_ADD_PROP, start_time, req_id, n1, edge, prop);
+            handle_add_edge_property(G, req_id, n1, edge, prop);
+            if (G->increment_clock()) {
+                migrate_node_step4_1(G);
+            }
+            break;
+
+        case message::EDGE_DELETE_PROP:
+            message::unpack_message(*request->msg, message::EDGE_DELETE_PROP, start_time, req_id, n1, edge, key);
+            handle_delete_edge_property(G, req_id, n1, edge, key, std::move(cache));
             if (G->increment_clock()) {
                 migrate_node_step4_1(G);
             }
@@ -998,6 +997,8 @@ unpack_transit_update_request(db::graph *G, db::update_request *request)
     size_t n2, edge;
     int loc;
     uint64_t time;
+    common::property prop;
+    uint32_t key;
     std::unique_ptr<std::vector<size_t>> cache;
 
     switch (request->type)
@@ -1022,6 +1023,17 @@ unpack_transit_update_request(db::graph *G, db::update_request *request)
             cache.reset(new std::vector<size_t>());
             message::unpack_message(*request->msg, message::TRANSIT_EDGE_DELETE_REQ, req_id, edge, *cache);
             handle_delete_edge(G, req_id, (size_t)G->migr_node, edge, std::move(cache));
+            break;
+
+        case message::TRANSIT_EDGE_ADD_PROP:
+            message::unpack_message(*request->msg, message::TRANSIT_EDGE_ADD_PROP, req_id, edge, prop);
+            handle_add_edge_property(G, req_id, (size_t)G->migr_node, edge, prop);
+            break;
+
+        case message::TRANSIT_EDGE_DELETE_PROP:
+            cache.reset(new std::vector<size_t>());
+            message::unpack_message(*request->msg, message::TRANSIT_EDGE_DELETE_PROP, req_id, edge, key, *cache);
+            handle_delete_edge_property(G, req_id, (size_t)G->migr_node, edge, key, std::move(cache));
             break;
 
         default:

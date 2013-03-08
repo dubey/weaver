@@ -152,16 +152,6 @@ namespace db
         mutex.unlock();
     }
 
-/*    // for priority_queue
-    struct batch_request_compare 
-        : std::binary_function<std::shared_ptr<batch_request>, std::shared_ptr<batch_request>, bool>
-    {
-        bool operator()(const std::shared_ptr<batch_request> &r1, const std::shared_ptr<batch_request> &r2)
-        {
-            return (*r1 > *r2);
-        }
-    };
-*/    
     /*
     // Pending clustering request
     class clustering_request
@@ -275,7 +265,7 @@ namespace db
             busybee_sta bb_recv; // Busybee instance used for receiving messages
             po6::threads::mutex bb_lock; // Busybee lock
             int myid;
-            // For reachability requests
+            // For traversal
             size_t outgoing_req_id_counter;
             po6::threads::mutex outgoing_req_id_counter_mutex, visited_mutex;
             std::unordered_map<size_t, std::shared_ptr<batch_request>> pending_batch;
@@ -291,7 +281,6 @@ namespace db
             std::priority_queue<update_request*, std::vector<update_request*>, req_compare> pending_updates;
             std::deque<size_t> pending_update_ids;
             uint64_t target_clock;
-
             // testing
             std::unordered_map<size_t, uint64_t> req_count;
             bool already_migrated;
@@ -304,9 +293,8 @@ namespace db
             std::pair<bool, std::unique_ptr<std::vector<size_t>>> delete_node(element::node *n, uint64_t del_time);
             std::pair<bool, std::unique_ptr<std::vector<size_t>>> delete_edge(element::node *n, size_t edge_handle, uint64_t del_time);
             void refresh_edge(element::node *n, element::edge *e, uint64_t del_time);
-            bool add_edge_property(element::node *n, element::edge *e,
-                std::unique_ptr<common::property> prop, uint64_t time);
-            std::pair<bool, std::unique_ptr<std::vector<size_t>>> delete_all_edge_property(element::node *n, element::edge *e, uint32_t key, uint64_t time);
+            bool add_edge_property(size_t n, size_t e, common::property &prop);
+            std::pair<bool, std::unique_ptr<std::vector<size_t>>> delete_all_edge_property(size_t n, size_t e, uint32_t key, uint64_t time);
             void update_migrated_nbr(size_t lnode, size_t orig_node, int orig_loc, size_t new_node, int new_loc);
             bool check_request(size_t req_id);
             void add_done_request(size_t req_id);
@@ -461,7 +449,6 @@ namespace db
         }
         ret.second = std::move(n->purge_cache());
         n->update_mutex.unlock();
-        //increment_clock();
         return ret;
     }
 
@@ -486,7 +473,6 @@ namespace db
 #endif
             ret.first = true;
         }
-        //increment_clock();
         return ret;
     }
 
@@ -524,7 +510,6 @@ namespace db
         }
         ret.second = std::move(n->purge_cache());
         n->update_mutex.unlock();
-        //increment_clock();
         return ret;
     }
 
@@ -537,73 +522,41 @@ namespace db
         n->update_mutex.unlock();
     }
 
-    /*
     inline bool
-    graph :: add_edge_property(element::node *n, element::edge *e,
-        std::unique_ptr<common::property> prop, uint64_t time)
+    graph :: add_edge_property(size_t node, size_t edge, common::property &prop)
     {
+        element::node *n = (element::node*)node;
+        element::edge *e = (element::edge*)edge;
+        bool ret;
         n->update_mutex.lock();
-        if (n->in_transit) {
-            n->migr_request->mutex.lock();
-            while (!n->migr_request->informed_coord)
-            {
-                n->migr_request->cond.wait();
-            }
-            n->migr_request->num_pending_updates++;
-            n->migr_request->mutex.unlock();
+        if (n->state == element::node::mode::IN_TRANSIT) {
+            ret = false;
+       } else {
+            e->add_property(prop);
             n->update_mutex.unlock();
-            update_mutex.lock();
-            my_arrived_clock++;
-            pending_update_arrival_cond.broadcast();
-            update_mutex.unlock();
-            return false;
-        } else {
-            e->add_property(*prop);
-            n->update_mutex.unlock();
-            update_mutex.lock();
-            my_clock++;
-            my_arrived_clock++;
-            assert(my_clock == time);
-            pending_update_cond.broadcast();
-            pending_update_arrival_cond.broadcast();
-            update_mutex.unlock();
-            return true;
+            ret = true;
         }
+        n->update_mutex.unlock();
+        return ret;
     }
 
     inline std::pair<bool, std::unique_ptr<std::vector<size_t>>>
-    graph :: delete_all_edge_property(element::node *n, element::edge *e, uint32_t key, uint64_t time)
+    graph :: delete_all_edge_property(size_t node, size_t edge, uint32_t key, uint64_t time)
     {
+        element::node *n = (element::node*)node;
+        element::edge *e = (element::edge*)edge;
         std::pair<bool, std::unique_ptr<std::vector<size_t>>> ret;
         n->update_mutex.lock();
-        if (n->in_transit) {
-            while (!n->migr_request->informed_coord)
-            {
-                n->migr_request->cond.wait();
-            }
-            n->migr_request->num_pending_updates++;
-            ret.second = std::move(n->purge_cache());
-            n->update_mutex.unlock();
-            update_mutex.lock();
-            my_arrived_clock++;
-            pending_update_arrival_cond.broadcast();
-            update_mutex.unlock();
+        if (n->state == element::node::mode::IN_TRANSIT) {
             ret.first = false;
         } else {
             e->delete_property(key, time);
-            ret.second = std::move(n->purge_cache());
-            n->update_mutex.unlock();
-            update_mutex.lock();
-            my_clock++;
-            my_arrived_clock++;
-            assert(my_clock == time);
-            pending_update_cond.broadcast();
-            pending_update_arrival_cond.broadcast();
-            update_mutex.unlock();
             ret.first = true;
         }
+        ret.second = std::move(n->purge_cache());
+        n->update_mutex.unlock();
+        return ret;
     }
-    */
 
     inline void
     graph :: update_migrated_nbr(size_t lnode, size_t orig_node, int orig_loc, size_t new_node, int new_loc)

@@ -214,8 +214,8 @@ add_edge_property(common::meta_element *node, common::meta_element *edge, uint32
     req_id = ++server->request_id;
     size_t node_addr = (size_t)node->get_addr();
     size_t edge_addr = (size_t)edge->get_addr();
-    message::prepare_message(msg, message::EDGE_ADD_PROP, time, req_id, node_addr,
-            edge_addr, key, value);
+    common::property prop(key, value, req_id);
+    message::prepare_message(msg, message::EDGE_ADD_PROP, time, req_id, node_addr, edge_addr, prop);
     server->update_mutex.unlock();
     server->send(node->get_loc(), msg.buf);
 }
