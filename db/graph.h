@@ -305,7 +305,7 @@ namespace db
             size_t get_cache(size_t local_node, size_t dest_loc, size_t dest_node);
             void add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id);
             void transient_add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id);
-            void remove_cache(size_t req_id);
+            void remove_cache(size_t req_id, element::node *);
             void commit_cache(size_t req_id);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(std::unique_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> buf);
@@ -448,6 +448,10 @@ namespace db
             ret.first = true;
         }
         ret.second = std::move(n->purge_cache());
+        for (auto rid: *ret.second)
+        {
+            remove_cache(rid, n);
+        }
         n->update_mutex.unlock();
         return ret;
     }
@@ -509,6 +513,10 @@ namespace db
             ret.first = true;
         }
         ret.second = std::move(n->purge_cache());
+        for (auto rid: *ret.second)
+        {
+            remove_cache(rid, n);
+        }
         n->update_mutex.unlock();
         return ret;
     }
@@ -526,7 +534,7 @@ namespace db
     graph :: add_edge_property(size_t node, size_t edge, common::property &prop)
     {
         element::node *n = (element::node*)node;
-        element::edge *e = (element::edge*)edge;
+        element::edge *e = n->out_edges.at(edge);
         bool ret;
         n->update_mutex.lock();
         if (n->state == element::node::mode::IN_TRANSIT) {
@@ -544,7 +552,7 @@ namespace db
     graph :: delete_all_edge_property(size_t node, size_t edge, uint32_t key, uint64_t time)
     {
         element::node *n = (element::node*)node;
-        element::edge *e = (element::edge*)edge;
+        element::edge *e = n->out_edges.at(edge);
         std::pair<bool, std::unique_ptr<std::vector<size_t>>> ret;
         n->update_mutex.lock();
         if (n->state == element::node::mode::IN_TRANSIT) {
@@ -554,6 +562,10 @@ namespace db
             ret.first = true;
         }
         ret.second = std::move(n->purge_cache());
+        for (auto rid: *ret.second)
+        {
+            remove_cache(rid, n);
+        }
         n->update_mutex.unlock();
         return ret;
     }
@@ -656,7 +668,7 @@ namespace db
     }
 
     inline void
-    graph :: remove_cache(size_t req_id)
+    graph :: remove_cache(size_t req_id, element::node *ignore_node = NULL)
     {
         std::unique_ptr<std::unordered_set<size_t>> caching_nodes1 = std::move(cache.remove_entry(req_id));
         std::unique_ptr<std::unordered_set<size_t>> caching_nodes2 = std::move(cache.remove_transient_entry(req_id));
@@ -664,17 +676,21 @@ namespace db
             for (auto iter = caching_nodes1->begin(); iter != caching_nodes1->end(); iter++)
             {
                 element::node *n = (element::node *)(*iter);
-                n->update_mutex.lock();
-                n->remove_cached_req(req_id);
-                n->update_mutex.unlock();
+                if (n != ignore_node) {
+                    n->update_mutex.lock();
+                    n->remove_cached_req(req_id);
+                    n->update_mutex.unlock();
+                }
             }
         } else if (caching_nodes2) {
             for (auto iter = caching_nodes2->begin(); iter != caching_nodes2->end(); iter++)
             {
                 element::node *n = (element::node *)(*iter);
-                n->update_mutex.lock();
-                n->remove_cached_req(req_id);
-                n->update_mutex.unlock();
+                if (n != ignore_node) {
+                    n->update_mutex.lock();
+                    n->remove_cached_req(req_id);
+                    n->update_mutex.unlock();
+                }
             }
         }
     }

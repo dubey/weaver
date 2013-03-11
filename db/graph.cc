@@ -307,6 +307,10 @@ handle_reachable_request(db::graph *G, db::batch_request *reqptr)
                         reached = true;
                         reach_node = (size_t)n;
                         cached_req_id = temp_cache;
+#ifdef DEBUG
+                        std::cout << "Serving from cache, req id " << request->coord_id << ", from this node " << (size_t)n << " " << G->myid
+                            << " to dest node " << request->dest_addr << " " << request->dest_loc << ", cached id " << temp_cache << std::endl;
+#endif
                     } else {
                         // check the properties of each out-edge
                         for (auto &iter : n->out_edges)
@@ -470,7 +474,22 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
                     if ((e->nbr.handle == reach_node) &&
                         (e->nbr.loc == reach_loc))
                     {
-                        if (cached_req_id == request->coord_id) {
+                        bool traverse_edge = e->get_creat_time() <= request->coord_id
+                            && e->get_del_time() > request->coord_id; // edge created and deleted in acceptable timeframe
+                        size_t i;
+                        for (i = 0; i < request->edge_props->size() && traverse_edge; i++) // checking edge properties
+                        {
+                            if (!e->has_property(request->edge_props->at(i)))
+                            {
+                                traverse_edge = false;
+                                break;
+                            }
+                        }
+                        if (cached_req_id == request->coord_id && traverse_edge) {
+#ifdef DEBUG
+                            std::cout << "Adding to cache, req " << request->coord_id << ", from this node " << *node_iter << " " << G->myid
+                                << " to dest " << request->dest_addr << " " << request->dest_loc << std::endl;
+#endif
                             G->add_cache((size_t)n, request->dest_loc, request->dest_addr, cached_req_id);
                         } else {
                             G->transient_add_cache((size_t)n, request->dest_loc, request->dest_addr, cached_req_id);
@@ -521,11 +540,6 @@ unpack_traversal_request(db::graph *G, std::unique_ptr<message::message> msg)
     // get the list of source nodes to check for reachability, as well as the single sink node
     message::unpack_message(*msg, message::REACHABLE_PROP, *vector_clock, *src_nodes, prev_loc, dest_node, dest_loc,
         coord_req_id, prev_req_id, *edge_props, *ignore_cache);
-    for (auto &p: *edge_props)
-    {
-        p.creat_time = vector_clock->at(G->myid);
-        p.del_time = MAX_TIME;
-    }
     // invalidating stale cache entries
     for (auto &remove: *ignore_cache)
     {
@@ -1101,6 +1115,8 @@ runner(db::graph *G)
             case message::EDGE_CREATE_REQ:
             case message::REVERSE_EDGE_CREATE:
             case message::EDGE_DELETE_REQ:
+            case message::EDGE_ADD_PROP:
+            case message::EDGE_DELETE_PROP:
                 rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(mtype)) >> start_time;
                 request = new db::update_request(mtype, start_time - 1, std::move(rec_msg));
                 thr = new db::thread::unstarted_update_thread(unpack_update_request, G, request);
@@ -1111,22 +1127,13 @@ runner(db::graph *G)
             case message::TRANSIT_EDGE_CREATE_REQ:
             case message::TRANSIT_REVERSE_EDGE_CREATE:
             case message::TRANSIT_EDGE_DELETE_REQ:
+            case message::TRANSIT_EDGE_ADD_PROP:
+            case message::TRANSIT_EDGE_DELETE_PROP:
                 request = new db::update_request(mtype, 0, std::move(rec_msg));
                 thr = new db::thread::unstarted_update_thread(process_pending_updates, G, request);
                 G->thread_pool.add_update_request(thr);
                 break;
 
-/*
-            case message::EDGE_ADD_PROP:
-                thr.reset(new db::thread::unstarted_thread(handle_add_edge_property, G, std::move(rec_msg)));
-                G->thread_pool.add_request(std::move(thr), true);
-                break;
-
-            case message::EDGE_DELETE_PROP:
-                thr.reset(new db::thread::unstarted_thread(handle_delete_edge_property, G, std::move(rec_msg)));
-                G->thread_pool.add_request(std::move(thr), true);
-                break;
-*/
             case message::REACHABLE_REPLY:
             case message::CACHE_UPDATE:
             case message::MIGRATE_NODE_STEP1:

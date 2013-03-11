@@ -48,7 +48,6 @@ namespace coordinator
             po6::threads::cond del_reply;
             size_t cached_req_id;
             std::unique_ptr<std::vector<size_t>> cached_req_ids;
-            bool deleted;
             
         pending_req(po6::threads::mutex *mtx)
             : addr(0)
@@ -56,7 +55,6 @@ namespace coordinator
             , reply(&mutex)
             , del_reply(mtx)
             , cached_req_id(0)
-            , deleted(false)
         {
         }
     };
@@ -228,6 +226,9 @@ namespace coordinator
         std::vector<std::pair<size_t, std::vector<size_t>>>::iterator pend_iter;
         for (del_iter = cached_ids.begin(); del_iter != cached_ids.end(); del_iter++)
         {
+#ifdef DEBUG
+            std::cout << "Inserting bad cache " << *del_iter << std::endl;
+#endif
             bad_cache_ids->insert(*del_iter);
         }
         for (pend_iter = pending_delete_requests.begin(); pend_iter != pending_delete_requests.end(); pend_iter++)
@@ -240,18 +241,36 @@ namespace coordinator
         for (del_iter = pend_iter->second.begin(); del_iter != pend_iter->second.end(); del_iter++)
         {
             request = (pending_req *)(*del_iter);
-            if (request->deleted) {
-                delete request;
-            } else {
-                request->del_reply.signal();
-            }
+            request->del_reply.signal();
         }
         pending_delete_requests.erase(pend_iter);
+#ifdef DEBUG
+        std::cout << "Bad cache ids:\n";
+        for (auto &it: *bad_cache_ids)
+        {
+            std::cout << it << " ";
+        }
+        std::cout << std::endl;
+#endif
     }
 
     inline bool
     central :: is_deleted_cache_id(size_t id)
     {
+#ifdef DEBUG
+        std::cout << "Bad cache ids:\n";
+        for (auto &it: *bad_cache_ids)
+        {
+            std::cout << it << " ";
+        }
+        std::cout << std::endl;
+        std::cout << "Transient Bad cache ids:\n";
+        for (auto &it: *transient_bad_cache_ids)
+        {
+            std::cout << it << " ";
+        }
+        std::cout << std::endl;
+#endif
         return ((bad_cache_ids->find(id) != bad_cache_ids->end()) ||
             (transient_bad_cache_ids->find(id) != transient_bad_cache_ids->end()));
     }

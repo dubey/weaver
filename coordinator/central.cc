@@ -270,13 +270,14 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
     message::message msg(message::REACHABLE_PROP);
     std::vector<size_t> src; // vector to hold src node
     src.push_back((size_t)node1->get_addr());
-    size_t req_id;
+    size_t req_id, cached_id;
     bool ret;
     std::shared_ptr<std::vector<uint64_t>> vector_clock;
     size_t last_del_req;
     bool done_loop = false;
     std::vector<size_t> ignore_cache;
     
+   
     server->update_mutex.lock();
     if (node1->get_del_time() < MAX_TIME || node2->get_del_time() < MAX_TIME)
     {
@@ -292,10 +293,15 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
     while (!done_loop)
     {
         req_id = ++server->request_id;
+        for (auto &p: *edge_props)
+        {
+            p.creat_time = req_id;
+            p.del_time = MAX_TIME;
+        }
         server->pending[req_id] = request;
         std::cout << "Reachability request number " << req_id << " from source"
                   << " node " << node1->get_addr() << " " << node1->get_loc() << " to destination node "
-                  << node2->get_addr() << std::endl;
+                  << node2->get_addr() << " " << node2->get_loc() << std::endl;
         request->mutex.lock();
         message::prepare_message(msg, message::REACHABLE_PROP, *vector_clock, src, -1, node2->get_addr(), node2->get_loc(),
             req_id, req_id, *edge_props, ignore_cache);
@@ -324,6 +330,7 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
             if (!server->is_deleted_cache_id(request->cached_req_id)) {
                 done_loop = true;
                 server->add_good_cache_id(request->cached_req_id);
+                cached_id = request->cached_req_id;
             } else {
                 // request was served based on cache value that should be
                 // invalidated; restarting request
@@ -338,7 +345,7 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
 
     server->update_mutex.unlock();
     ret = request->reachable;
-    std::cout << "Reachable reply is " << ret << " for " << "request " << req_id << std::endl;
+    std::cout << "Reachable reply is " << ret << " for " << "request " << req_id << ", cached id " << cached_id << std::endl;
     delete request;
     return ret;
 }
@@ -479,17 +486,14 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             break;
 
         case message::COORD_NODE_MIGRATE:
-            std::cout << "got node migrate msg\n";
             message::unpack_message(*msg, message::COORD_NODE_MIGRATE, coord_handle, new_loc, node_handle, from_loc);
             server->update_mutex.lock();
             lnode = (common::meta_element *)server->nodes[coord_handle];
             lnode->update_loc(new_loc);
             lnode->update_addr(node_handle);
-            //clock = ++server->vc.clocks->at(new_loc);
             message::prepare_message(*msg, message::COORD_NODE_MIGRATE_ACK, server->vc.clocks->at(from_loc));
             server->update_mutex.unlock();
             server->send(from_loc, msg->buf);
-            std::cout << "done node migrate\n";
             break;
         
         default:
@@ -645,7 +649,7 @@ coord_daemon(coordinator::central *server)
     message::message msg(message::CACHE_UPDATE);
     while (true)
     {
-        std::chrono::seconds duration(5); // execute every 5 seconds
+        std::chrono::seconds duration(500); // execute every 5 seconds
         std::this_thread::sleep_for(duration);
         server->update_mutex.lock();
         std::copy(server->good_cache_ids->begin(), server->good_cache_ids->end(), std::back_inserter(good));
@@ -681,9 +685,9 @@ main()
     t->detach();
 
     // initialize client msg receiving thread
-    t = new std::thread(client_msg_handler, &server);
-    t->detach();
+    //t = new std::thread(coord_daemon, &server);
+    //t->detach();
 
     // call periodic cache update function
-    coord_daemon(&server);
+    client_msg_handler(&server);
 }

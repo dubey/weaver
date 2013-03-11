@@ -49,6 +49,7 @@ check_reachability()
                 if (i==j) {
                     continue;
                 }
+                std::cout << "Test: rr from " << i << " to " << j << std::endl;
                 bool reach = c.reachability_request(repetitive_nodes[i],
                     repetitive_nodes[j], edge_props);
                 if ((i==n1 && j==n2) || (i==n3 && j==n4)) {
