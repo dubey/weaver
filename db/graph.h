@@ -483,11 +483,11 @@ namespace db
     inline bool
     graph :: create_reverse_edge(uint64_t time, size_t local_node, size_t remote_node, int remote_loc)
     {
+        bool ret;
         element::node *n = (element::node *)local_node;
         n->update_mutex.lock();
         if (n->state == element::node::mode::IN_TRANSIT) {
-            n->update_mutex.unlock();
-            return false;
+            ret = false;
         } else {
             element::edge *new_edge = new element::edge(time, remote_loc, remote_node);
             n->add_edge(new_edge, false);
@@ -495,9 +495,9 @@ namespace db
             std::cout << "New rev edge: " << (void*)new_edge->nbr.handle << " " << new_edge->nbr.loc << " at lnode " << (void*)local_node << std::endl;
             std::cout << " in edge size " << n->in_edges.size() << std::endl;
 #endif
-            n->update_mutex.unlock();
-            return true;
+            ret = true;
         }
+        n->update_mutex.unlock();
     }
 
     inline std::pair<bool, std::unique_ptr<std::vector<size_t>>>
@@ -539,9 +539,8 @@ namespace db
         n->update_mutex.lock();
         if (n->state == element::node::mode::IN_TRANSIT) {
             ret = false;
-       } else {
+        } else {
             e->add_property(prop);
-            n->update_mutex.unlock();
             ret = true;
         }
         n->update_mutex.unlock();

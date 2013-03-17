@@ -187,6 +187,7 @@ handle_create_reverse_edge(db::graph *G, size_t req_id, size_t remote_node, int 
     }
 }
 
+// delete an edge
 void
 handle_delete_edge(db::graph *G, size_t req_id, size_t n, size_t e, std::unique_ptr<std::vector<size_t>> cache)
 {
@@ -290,10 +291,10 @@ handle_reachable_request(db::graph *G, db::batch_request *reqptr)
                     G->mrequest.mutex.unlock();
                 } else if (n->state == db::element::node::mode::MOVED) {
                     std::vector<size_t> migrated_node;
-                    migrated_node.emplace_back((size_t)n);
+                    migrated_node.emplace_back((size_t)n->new_handle);
                     request->num++;
                     G->mrequest.mutex.lock();
-                    G->propagate_request(migrated_node, request, G->mrequest.new_loc);
+                    G->propagate_request(migrated_node, request, n->new_loc);
                     G->mrequest.mutex.unlock();
                 } else { 
                     size_t temp_cache = G->get_cache((size_t)n, request->dest_loc, request->dest_addr);
@@ -374,8 +375,7 @@ handle_reachable_request(db::graph *G, db::batch_request *reqptr)
         assert(request->del_nodes->size() == request->del_times->size());
     }
     //send messages
-    if (reached)
-    {
+    if (reached) {
         // need to send back ack
         message::prepare_message(msg, message::REACHABLE_REPLY, request->prev_id, true, reach_node,
             G->myid, *request->del_nodes, *request->del_times, cached_req_id);
@@ -798,6 +798,7 @@ migrate_node_step3(db::graph *G, std::unique_ptr<message::message> msg)
     n->update_mutex.lock();
     message::unpack_message(*msg, message::MIGRATE_NODE_STEP2, new_node_handle);
     G->mrequest.migr_node = new_node_handle;
+    n->new_handle = new_node_handle;
     uint64_t tc = n->get_creat_time();
     message::prepare_message(*msg, message::COORD_NODE_MIGRATE, tc, n->new_loc, new_node_handle, G->myid);
     n->update_mutex.unlock();
@@ -816,7 +817,6 @@ migrate_node_step4(db::graph *G, std::unique_ptr<message::message> msg)
     }
 }
 
-// increment local clock to above value
 // forward queued update requests
 void
 migrate_node_step4_1(db::graph *G)

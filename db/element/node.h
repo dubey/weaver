@@ -53,6 +53,7 @@ namespace element
             std::unordered_set<size_t> seen; // requests which have been seen
             std::unique_ptr<std::vector<size_t>> cached_req_ids; // requests which have been cached
             // for migration
+            size_t new_handle;
             int prev_loc, new_loc;
 
         private:
