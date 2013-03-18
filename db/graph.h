@@ -257,6 +257,7 @@ namespace db
             uint64_t my_clock;
 
         public:
+            std::vector<element::node*> nodes;
             int node_count;
             int num_shards;
             std::shared_ptr<po6::net::location> myloc;
@@ -324,7 +325,9 @@ namespace db
             bool set_target_clock(uint64_t time);
             void set_update_ids(std::vector<size_t>&);
             bool increment_clock();
-            bool migrate_test(); // testing
+            // testing
+            bool migrate_test();
+            void sort_and_print_nodes();
     };
 
     inline
@@ -434,6 +437,9 @@ namespace db
             new_node->state = element::node::mode::STABLE;
             //increment_clock();
         }
+        update_mutex.lock();
+        nodes.emplace_back(new_node);
+        update_mutex.unlock();
 #ifdef DEBUG
         std::cout << "Creating node, addr = " << (void*) new_node 
                 << " and node count " << (++node_count) << std::endl;
@@ -807,6 +813,16 @@ namespace db
         } else {
             update_mutex.unlock();
             return false;
+        }
+    }
+
+    void
+    graph :: sort_and_print_nodes()
+    {
+        std::sort(nodes.begin(), nodes.end(), element::compare_msg_cnt);
+        for (auto &n: nodes)
+        {
+            std::cout << "Node " << (void*)n;
         }
     }
 

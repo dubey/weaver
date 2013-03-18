@@ -22,6 +22,7 @@
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
 
+#include "common/weaver_constants.h"
 #include "element.h"
 #include "edge.h"
 
@@ -55,6 +56,7 @@ namespace element
             // for migration
             size_t new_handle;
             int prev_loc, new_loc;
+            std::vector<uint32_t> msg_count;
 
         private:
             uint32_t out_edge_ctr, in_edge_ctr;
@@ -75,6 +77,7 @@ namespace element
         , cached_req_ids(new std::vector<size_t>)
         , prev_loc(-1)
         , new_loc(-1)
+        , msg_count(NUM_SHARDS, 0)
         , out_edge_ctr(0)
         , in_edge_ctr(0)
     {
@@ -87,6 +90,7 @@ namespace element
         , cached_req_ids(new std::vector<size_t>())
         , prev_loc(-1)
         , new_loc(-1)
+        , msg_count(NUM_SHARDS, 0)
         , out_edge_ctr(0)
         , in_edge_ctr(0)
     {
@@ -145,6 +149,22 @@ namespace element
         std::unique_ptr<std::vector<size_t>> ret = std::move(cached_req_ids);
         cached_req_ids.reset(new std::vector<size_t>());
         return ret;
+    }
+
+    inline bool
+    compare_msg_cnt(const node *n1, const node *n2)
+    {
+        uint64_t s1 = 0;
+        uint64_t s2 = 0;
+        for (uint32_t i: n1->msg_count) 
+        {
+            s1 += (uint64_t)i;
+        }
+        for (uint32_t i: n2->msg_count) 
+        {
+            s2 += (uint64_t)i;
+        }
+        return (s1<s2);
     }
 }
 }

@@ -334,10 +334,12 @@ handle_reachable_request(db::graph *G, db::batch_request *reqptr)
                                 if (e->nbr.loc == G->myid) {
                                     request->src_nodes->emplace_back(e->nbr.handle);
                                     request->parent_nodes->emplace_back(src_iter);
+                                    n->msg_count[G->myid]++;
                                 } else {
                                     std::vector<size_t> &loc_nodes = msg_batch[e->nbr.loc];
                                     propagate_req = true;
                                     loc_nodes.push_back(e->nbr.handle);
+                                    n->msg_count[e->nbr.loc]++;
                                     
                                     if (loc_nodes.size() > MAX_NODE_PER_REQUEST) {
                                         // propagating request because
@@ -904,7 +906,6 @@ migrate_node_step6(db::graph *G)
             nptr, G->myid, G->mrequest.migr_node, G->mrequest.new_loc);
         G->send(nbr.second->nbr.loc, msg.buf);
     }
-    n->update_mutex.unlock();
     nodes.push_back(G->mrequest.migr_node);
     for (auto &r: G->mrequest.pending_requests)
     {
@@ -912,6 +913,7 @@ migrate_node_step6(db::graph *G)
         G->propagate_request(nodes, r, G->mrequest.new_loc);
         r->unlock();
     }
+    n->update_mutex.unlock();
     G->mrequest.mutex.unlock();
 }
 
