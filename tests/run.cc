@@ -18,6 +18,7 @@
 //#include "multiple_stress_client.h"
 #include "repetitive_stress_client.h"
 //#include "clustering_test.h"
+#include "dijkstra_test.h"
 
 int
 main(int argc, char *argv[])
@@ -33,10 +34,12 @@ main(int argc, char *argv[])
     //std::cout << "Stress client ok." << std::endl;
     //multiple_stress_client();
     //std::cout << "Multiple stress client ok." << std::endl;
-    repetitive_stress_client();
-    std::cout << "Repetitive stress client ok." << std::endl;
+    //repetitive_stress_client();
+    //std::cout << "Repetitive stress client ok." << std::endl;
     //clustering_test();
     //std::cout <<"Clustering ok.\n";
+    dijkstra_test();
+    std::cout <<"Dijkstra ok.\n";
 
     return 0;
 }

@@ -32,6 +32,7 @@
 #include "element/edge.h"
 #include "cache/cache.h"
 #include "threadpool/threadpool.h"
+#include "request_objects.h"
 
 namespace db
 {

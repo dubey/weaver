@@ -25,7 +25,7 @@
 #define COORD_CLIENT_REC_PORT 4202
 #define CLIENT_IPADDR "127.0.0.1"
 #define CLIENT_PORT 2200
-#define NUM_SHARDS 2
+#define NUM_SHARDS 1
 #define MAX_PORT (COORD_PORT + NUM_SHARDS)
 #define SEND_PORT_INCR 1000 // outgoing port increment for shard servers
 #define NUM_THREADS 4
