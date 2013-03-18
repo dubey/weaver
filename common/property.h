@@ -88,4 +88,18 @@ namespace common
     }
 }
 
+namespace std
+{
+    template <>
+    struct hash<common::property> 
+    {
+        public:
+            size_t operator()(common::property p) const throw() 
+            {
+                std::hash<uint32_t> int_hasher;
+                return ((int_hasher(p.key) + 0x9e3779b9 + (p.value<<6) + (p.value>>2)) ^ p.value);
+            }
+    };
+}
+
 #endif //__PROPERTY__

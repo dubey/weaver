@@ -79,7 +79,7 @@ namespace db
         public:
             batch_request(int ploc, size_t daddr, int dloc, size_t cid, size_t pid, int myid,
                 std::unique_ptr<std::vector<size_t>> nodes,
-                std::unique_ptr<std::vector<common::property>> eprops,
+                std::shared_ptr<std::vector<common::property>> eprops,
                 std::unique_ptr<std::vector<uint64_t>> vclock,
                 std::unique_ptr<std::vector<size_t>> icache);
         public:
@@ -89,7 +89,8 @@ namespace db
             size_t coord_id; // coordinator's req id
             size_t prev_id; // prev server's req id
             std::unique_ptr<std::vector<size_t>> src_nodes;
-            std::unique_ptr<std::vector<common::property>> edge_props;
+            std::unique_ptr<std::vector<size_t>> parent_nodes; // pointers to parent node in traversal
+            std::shared_ptr<std::vector<common::property>> edge_props;
             std::unique_ptr<std::vector<uint64_t>> vector_clock;
             std::unique_ptr<std::vector<size_t>> ignore_cache;
             uint64_t start_time;
@@ -113,7 +114,7 @@ namespace db
     inline
     batch_request :: batch_request(int ploc, size_t daddr, int dloc, size_t cid, size_t pid, int myid,
         std::unique_ptr<std::vector<size_t>> nodes,
-        std::unique_ptr<std::vector<common::property>> eprops,
+        std::shared_ptr<std::vector<common::property>> eprops,
         std::unique_ptr<std::vector<uint64_t>> vclock,
         std::unique_ptr<std::vector<size_t>> icache)
         : prev_loc(ploc)
@@ -122,6 +123,7 @@ namespace db
         , coord_id(cid)
         , prev_id(pid)
         , src_nodes(std::move(nodes))
+        , parent_nodes(new std::vector<size_t>(src_nodes->size(), UINT64_MAX))
         , edge_props(std::move(eprops))
         , vector_clock(std::move(vclock))
         , ignore_cache(std::move(icache))
@@ -302,9 +304,12 @@ namespace db
             bool mark_visited(element::node *n, size_t req_counter);
             void remove_visited(element::node *n, size_t req_counter);
             void record_visited(size_t coord_req_id, const std::vector<size_t>& nodes);
-            size_t get_cache(size_t local_node, size_t dest_loc, size_t dest_node);
-            void add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id);
-            void transient_add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id);
+            size_t get_cache(size_t local_node, size_t dest_loc, size_t dest_node,
+                std::shared_ptr<std::vector<common::property>> edge_props);
+            void add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_i,
+                std::shared_ptr<std::vector<common::property>> edge_props);
+            void transient_add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id,
+                std::shared_ptr<std::vector<common::property>> edge_props);
             void remove_cache(size_t req_id, element::node *);
             void commit_cache(size_t req_id);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
@@ -498,6 +503,7 @@ namespace db
             ret = true;
         }
         n->update_mutex.unlock();
+        return ret;
     }
 
     inline std::pair<bool, std::unique_ptr<std::vector<size_t>>>
@@ -607,10 +613,10 @@ namespace db
     graph :: broadcast_done_request(size_t req_id)
     {
         int i;
-        message::message msg(message::REACHABLE_DONE);
+        message::message msg;
         for (i = 0; i < num_shards; i++)
         {
-            msg.prep_done_request(req_id);
+            message::prepare_message(msg, message::REACHABLE_DONE, req_id);
             if (i == myid) {
                 continue;
             }
@@ -643,25 +649,28 @@ namespace db
     }
     
     inline size_t 
-    graph :: get_cache(size_t local_node, size_t dest_loc, size_t dest_node)
+    graph :: get_cache(size_t local_node, size_t dest_loc, size_t dest_node,
+        std::shared_ptr<std::vector<common::property>> edge_props)
     {
-        return cache.get_req_id(dest_loc, dest_node, local_node);
+        return cache.get_req_id(dest_loc, dest_node, local_node, edge_props);
     }
 
     inline void 
-    graph :: add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id)
+    graph :: add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id,
+        std::shared_ptr<std::vector<common::property>> edge_props)
     {
         element::node *n = (element::node *)local_node;
-        if (cache.insert_entry(dest_loc, dest_node, local_node, req_id)) {
+        if (cache.insert_entry(dest_loc, dest_node, local_node, req_id, edge_props)) {
             n->add_cached_req(req_id);
         }
     }
 
     inline void
-    graph :: transient_add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id)
+    graph :: transient_add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id,
+        std::shared_ptr<std::vector<common::property>> edge_props)
     {
         element::node *n = (element::node *)local_node;
-        if (cache.transient_insert_entry(dest_loc, dest_node, local_node, req_id)) {
+        if (cache.transient_insert_entry(dest_loc, dest_node, local_node, req_id, edge_props)) {
             n->add_cached_req(req_id);
         }
     }
@@ -669,22 +678,23 @@ namespace db
     inline void
     graph :: remove_cache(size_t req_id, element::node *ignore_node = NULL)
     {
-        std::unique_ptr<std::unordered_set<size_t>> caching_nodes1 = std::move(cache.remove_entry(req_id));
-        std::unique_ptr<std::unordered_set<size_t>> caching_nodes2 = std::move(cache.remove_transient_entry(req_id));
+        std::unique_ptr<std::vector<size_t>> caching_nodes1 = std::move(cache.remove_entry(req_id));
+        std::unique_ptr<std::vector<size_t>> caching_nodes2 = std::move(cache.remove_transient_entry(req_id));
         if (caching_nodes1) {
-            for (auto iter = caching_nodes1->begin(); iter != caching_nodes1->end(); iter++)
+            for (auto iter: *caching_nodes1)
             {
-                element::node *n = (element::node *)(*iter);
+                element::node *n = (element::node *)(iter);
                 if (n != ignore_node) {
                     n->update_mutex.lock();
                     n->remove_cached_req(req_id);
                     n->update_mutex.unlock();
                 }
             }
-        } else if (caching_nodes2) {
-            for (auto iter = caching_nodes2->begin(); iter != caching_nodes2->end(); iter++)
+        } 
+        if (caching_nodes2) {
+            for (auto iter: *caching_nodes2)
             {
-                element::node *n = (element::node *)(*iter);
+                element::node *n = (element::node *)(iter);
                 if (n != ignore_node) {
                     n->update_mutex.lock();
                     n->remove_cached_req(req_id);
@@ -782,8 +792,6 @@ namespace db
         message::prepare_message(msg, message::REACHABLE_PROP, *request->vector_clock, nodes, myid,
             request->dest_addr, request->dest_loc, request->coord_id, my_outgoing_req_id, 
             *request->edge_props, *request->ignore_cache);
-        //msg.prep_reachable_prop(nodes, myid, request->dest_addr, request->dest_loc, 
-        //    request->coord_id, my_outgoing_req_id, request->edge_props, request->vector_clock, request->ignore_cache);
         // no local messages possible, so have to send via network
         send(prop_loc, msg.buf);
     }

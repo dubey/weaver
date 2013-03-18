@@ -305,8 +305,6 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
         request->mutex.lock();
         message::prepare_message(msg, message::REACHABLE_PROP, *vector_clock, src, -1, node2->get_addr(), node2->get_loc(),
             req_id, req_id, *edge_props, ignore_cache);
-        //msg.prep_reachable_prop(&src, -1, (size_t)node2->get_addr(),
-        //    node2->get_loc(), req_id, req_id, edge_props, vector_clock, ignore_cache);
         server->update_mutex.unlock();
         server->send(node1->get_loc(), msg.buf);
         
@@ -327,6 +325,7 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
         if (request->cached_req_id == req_id) {
             done_loop = true;
         } else {
+            //std::cout << "cached req id " << request->cached_req_id << std::endl;
             if (!server->is_deleted_cache_id(request->cached_req_id)) {
                 done_loop = true;
                 server->add_good_cache_id(request->cached_req_id);
@@ -409,7 +408,6 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     bool is_reachable; // for reply
     size_t src_node; // for reply
     int src_loc; // for reply
-    size_t num_del_nodes; // for reply
     std::unique_ptr<std::vector<size_t>> del_nodes(new std::vector<size_t>()); // for reply
     std::unique_ptr<std::vector<uint64_t>> del_times(new std::vector<uint64_t>()); // for reply
     std::unique_ptr<std::vector<size_t>> cached_req_ids; // for reply
@@ -418,7 +416,6 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     common::meta_element *lnode; // for migration
     size_t coord_handle, node_handle; // for migration
     int new_loc, from_loc; // for migration
-    uint64_t clock; // for migration
     
     switch(m_type)
     {
@@ -573,8 +570,9 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
             delete_edge((common::meta_element *)elem1, (common::meta_element *)elem2, server);
             break;
 
-        case message::CLIENT_REACHABLE_REQ: 
-            msg->unpack_client_rr_req(&client_port, &elem1, &elem2, edge_props);
+        case message::CLIENT_REACHABLE_REQ:
+            message::unpack_message(*msg, message::CLIENT_REACHABLE_REQ, 
+                    client_port, elem1, elem2, *edge_props);
             client_loc->port = client_port;
             reachable = reachability_request((common::meta_element *)elem1,
                 (common::meta_element *)elem2, edge_props, server);
@@ -657,7 +655,7 @@ coord_daemon(coordinator::central *server)
         if ((good.size() != 0) || (bad.size() != 0)) {
             for (int i = 0; i < server->num_shards; i++)
             {
-                msg.prep_cache_update(good, bad);
+                message::prepare_message(msg, message::CACHE_UPDATE, good, bad);
                 server->send(i, msg.buf);
             }
             server->transient_bad_cache_ids = std::move(server->bad_cache_ids);
