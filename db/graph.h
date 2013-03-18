@@ -127,27 +127,6 @@ namespace db
             void unlock();
     };
 
-        /*
-    inline
-    batch_request :: batch_request(): prev_loc(0)
-        , dest_addr(0)
-        , dest_loc(0)
-        , coord_id(0)
-        , prev_id(0)
-        , src_nodes()
-        , parent_nodes()
-        , edge_props()
-        , vector_clock()
-        , ignore_cache()
-        , start_time(0)
-        , num(0)
-        , reachable(false)
-        , use_cnt(0)
-    {
-
-    }
-    */
-
     inline bool
     batch_request :: operator>(const batch_request &r) const
     {

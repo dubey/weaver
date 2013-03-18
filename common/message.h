@@ -29,6 +29,7 @@
 #include "db/cache/cache.h" //so we get std::hash override for location
 #include "db/element/node.h"
 #include "db/element/edge.h"
+#include "db/request_objects.h" // used for packing dijkstra_queue_elem
 
 namespace message
 {
@@ -43,6 +44,8 @@ namespace message
         CLIENT_CLUSTERING_REQ,
         CLIENT_REACHABLE_REQ,
         CLIENT_REPLY,
+        CLIENT_PATH_REQ,
+        CLIENT_PATH_REPLY,
         CLIENT_CLUSTERING_REPLY,
         NODE_REFRESH_REQ,
         NODE_REFRESH_REPLY,
@@ -70,6 +73,10 @@ namespace message
         REACHABLE_DONE,
         CACHE_UPDATE,
         CACHE_UPDATE_ACK,
+        PATH_REQ,
+        PATH_PROP,
+        PATH_PROP_REPLY,
+        PATH_REPLY,
         CLUSTERING_REQ,
         CLUSTERING_REPLY,
         CLUSTERING_PROP,
@@ -184,6 +191,10 @@ namespace message
         sz += size(t.seen);
         return sz;
     }
+    inline size_t size(const db::dijkstra_queue_elem& t)
+    {
+        return size(t.cost) + size(t.shard_loc) + size(t.addr);
+    }
 
     template <typename T1, typename T2>
     inline size_t size(const std::pair<T1, T2>& t)
@@ -276,6 +287,13 @@ namespace message
         packer = packer << t.key << t.value << t.creat_time << t.del_time;
     }
 
+    inline void
+    pack_buffer(e::buffer::packer &packer, const db::dijkstra_queue_elem& t)
+    {
+        pack_buffer(packer, t.cost);
+        pack_buffer(packer, t.shard_loc);
+        pack_buffer(packer, t.addr);
+    }
 
     template <typename T1, typename T2>
     inline void 
@@ -417,6 +435,14 @@ namespace message
         uint64_t dbl;
         unpacker = unpacker >> dbl;
         memcpy(&t, &dbl, sizeof(double)); //to avoid casting issues, probably could avoid copy
+    }
+
+    inline void
+    unpack_buffer(e::unpacker &unpacker, db::dijkstra_queue_elem& t)
+    {
+        unpack_buffer(unpacker, t.cost);
+        unpack_buffer(unpacker, t.shard_loc);
+        unpack_buffer(unpacker, t.addr);
     }
 
     template <typename T1, typename T2>

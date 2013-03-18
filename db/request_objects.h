@@ -21,8 +21,8 @@
 #include <unordered_map>
 //#include <po6/net/location.h>
 #include <po6/threads/mutex.h>
-#include <po6/threads/cond.h>
-#include <busybee_sta.h>
+//#include <po6/threads/cond.h>
+//#include <busybee_sta.h>
 
 #include "common/weaver_constants.h"
 #include "common/property.h"
@@ -30,124 +30,60 @@
 #include "element/node.h"
 #include "element/edge.h"
 
+namespace std
+{
+    // used if we want a hash table with a pair as the key (in our cause a pair or shard location with mem location
+    template <>
+    struct hash<std::pair<int, size_t>> 
+    {
+        public:
+            size_t operator()(std::pair<int, size_t> x) const throw() 
+            {
+                return (hash<int>()(x.first) * 6291469) + (hash<size_t>()(x.second) * 393241); // some big primes
+            }
+    };
+}
+
 namespace db
 {
-    // Pending update request
-    class update_request
-    {
+    class dijkstra_queue_elem{
         public:
-            update_request(enum message::msg_type, uint64_t, std::unique_ptr<message::message>);
+            size_t cost;
+            int shard_loc;
+            size_t addr;
+            int operator<(const dijkstra_queue_elem& other) const
+              { return cost > other.cost; }
 
-        public:
-            bool operator>(const update_request &r) const;
-
-        public:
-            enum message::msg_type type;
-            uint64_t start_time;
-            std::unique_ptr<message::message> msg;
+            dijkstra_queue_elem()
+            {
+            }
+            dijkstra_queue_elem(size_t c, int s, size_t a)
+            {
+                cost = c;
+                shard_loc = s;
+                addr = a;
+            }
     };
 
-    inline
-    update_request :: update_request(enum message::msg_type mt, uint64_t st, std::unique_ptr<message::message> m)
-        : type(mt)
-        , start_time(st)
-        , msg(std::move(m))
+    // Pending shorest or widest path request
+    class path_request
     {
-    }
+        public:
+            size_t id; // coordinator's req id
+            std::priority_queue<dijkstra_queue_elem> possible_next_nodes; 
+            std::unordered_map<std::pair<int,size_t>, size_t> visited_map;
 
-    inline bool
-    update_request :: operator>(const update_request &r) const
-    {
-        return (start_time > r.start_time);
-    }
+            size_t dest_ptr;
+            int dest_loc;
+            std::vector<common::property> edge_props;
+            std::vector<uint64_t> vector_clock;
+            uint32_t edge_weight_name; // they key of the property which holds the weight of an an edge
+            bool is_widest_path;
 
-    struct req_compare
-        : std::binary_function<update_request*, update_request*, bool>
-    {
-        bool operator()(const update_request* const &r1, const update_request* const&r2)
-        {
-            return (*r1 > *r2);
-        }
+            path_request()
+            {
+            }
     };
-
-    // Pending batched request
-    class batch_request
-    {
-        public:
-            batch_request(int ploc, size_t daddr, int dloc, size_t cid, size_t pid, int myid,
-                std::unique_ptr<std::vector<size_t>> nodes,
-                std::unique_ptr<std::vector<common::property>> eprops,
-                std::unique_ptr<std::vector<uint64_t>> vclock,
-                std::unique_ptr<std::vector<size_t>> icache);
-        public:
-            int prev_loc; // prev server's id
-            size_t dest_addr; // dest node's handle
-            int dest_loc; // dest node's server id
-            size_t coord_id; // coordinator's req id
-            size_t prev_id; // prev server's req id
-            std::unique_ptr<std::vector<size_t>> src_nodes;
-            std::unique_ptr<std::vector<common::property>> edge_props;
-            std::unique_ptr<std::vector<uint64_t>> vector_clock;
-            std::unique_ptr<std::vector<size_t>> ignore_cache;
-            uint64_t start_time;
-            int num; // number of onward requests
-            bool reachable; // request specific data
-            std::unique_ptr<std::vector<size_t>> del_nodes; // deleted nodes
-            std::unique_ptr<std::vector<uint64_t>> del_times; // delete times corr. to del_nodes
-            uint32_t use_cnt; // testing
-
-        private:
-            po6::threads::mutex mutex;
-
-        public:
-            bool operator>(const batch_request &r) const;
-
-        public:
-            void lock();
-            void unlock();
-    };
-
-    inline
-    batch_request :: batch_request(int ploc, size_t daddr, int dloc, size_t cid, size_t pid, int myid,
-        std::unique_ptr<std::vector<size_t>> nodes,
-        std::unique_ptr<std::vector<common::property>> eprops,
-        std::unique_ptr<std::vector<uint64_t>> vclock,
-        std::unique_ptr<std::vector<size_t>> icache)
-        : prev_loc(ploc)
-        , dest_addr(daddr)
-        , dest_loc(dloc)
-        , coord_id(cid)
-        , prev_id(pid)
-        , src_nodes(std::move(nodes))
-        , edge_props(std::move(eprops))
-        , vector_clock(std::move(vclock))
-        , ignore_cache(std::move(icache))
-        , num(0)
-        , reachable(false)
-        , use_cnt(0)
-    {
-        start_time = vector_clock->at(myid);
-    }
-
-    inline bool
-    batch_request :: operator>(const batch_request &r) const
-    {
-        return (coord_id > r.coord_id);
-    }
-
-    inline void
-    batch_request :: lock()
-    {
-        mutex.lock();
-        use_cnt++;
-    }
-
-    inline void
-    batch_request :: unlock()
-    {
-        use_cnt--;
-        mutex.unlock();
-    }
 
     /*
     // Pending clustering request
@@ -227,21 +163,6 @@ namespace db
     {
     }
     */
-
-    class migrate_request
-    {
-        public:
-            po6::threads::mutex mutex;
-            element::node *cur_node; // node being migrated
-            int new_loc; // shard to which this node is being migrated
-            size_t migr_node; // node handle on new shard
-            std::vector<std::unique_ptr<message::message>> pending_updates; // queued updates
-            std::vector<size_t> pending_update_ids; // ids of queued updates
-            uint32_t num_pending_updates;
-            std::vector<std::shared_ptr<batch_request>> pending_requests; // queued requests
-            uint64_t my_clock;
-    };
-
 } //namespace db
 
 #endif //__REQ_OBJS__
