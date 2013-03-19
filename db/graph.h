@@ -76,15 +76,15 @@ namespace db
     // Pending batched request
     class batch_request
     {
-        public:
         /*
+        public:
             batch_request(int ploc, size_t daddr, int dloc, size_t cid, size_t pid, int myid,
                 std::unique_ptr<std::vector<size_t>> nodes,
                 std::shared_ptr<std::vector<common::property>> eprops,
                 std::unique_ptr<std::vector<uint64_t>> vclock,
                 std::unique_ptr<std::vector<size_t>> icache);
-            */
             batch_request();
+            */
         public:
             int prev_loc; // prev server's id
             size_t dest_addr; // dest node's handle
@@ -126,33 +126,24 @@ namespace db
             void unlock();
     };
 
+        /*
     inline
-    batch_request :: batch_request()
-    {
-    }
-
-    /*
-    inline
-    batch_request :: batch_request(int ploc, size_t daddr, int dloc, size_t cid, size_t pid, int myid,
-        std::unique_ptr<std::vector<size_t>> nodes,
-        std::shared_ptr<std::vector<common::property>> eprops,
-        std::unique_ptr<std::vector<uint64_t>> vclock,
-        std::unique_ptr<std::vector<size_t>> icache)
-        : prev_loc(ploc)
-        , dest_addr(daddr)
-        , dest_loc(dloc)
-        , coord_id(cid)
-        , prev_id(pid)
-        , src_nodes(std::move(nodes))
-        , parent_nodes(new std::vector<size_t>(src_nodes->size(), UINT64_MAX))
-        , edge_props(std::move(eprops))
-        , vector_clock(std::move(vclock))
-        , ignore_cache(std::move(icache))
+    batch_request :: batch_request(): prev_loc(0)
+        , dest_addr(0)
+        , dest_loc(0)
+        , coord_id(0)
+        , prev_id(0)
+        , src_nodes()
+        , parent_nodes()
+        , edge_props()
+        , vector_clock()
+        , ignore_cache()
+        , start_time(0)
         , num(0)
         , reachable(false)
         , use_cnt(0)
     {
-        start_time = vector_clock->at(myid);
+
     }
     */
 
