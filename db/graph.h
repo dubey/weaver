@@ -107,8 +107,12 @@ namespace db
             uint64_t start_time;
             int num; // number of onward requests
             bool reachable; // request specific data
+            /*
             std::unique_ptr<std::vector<size_t>> del_nodes; // deleted nodes
             std::unique_ptr<std::vector<uint64_t>> del_times; // delete times corr. to del_nodes
+            */
+            std::vector<size_t> del_nodes; // deleted nodes
+            std::vector<uint64_t> del_times; // delete times corr. to del_nodes
             uint32_t use_cnt; // testing
 
         private:
@@ -121,6 +125,11 @@ namespace db
             void lock();
             void unlock();
     };
+
+    inline
+    batch_request :: batch_request()
+    {
+    }
 
     /*
     inline
@@ -319,11 +328,11 @@ namespace db
             void remove_visited(element::node *n, size_t req_counter);
             void record_visited(size_t coord_req_id, const std::vector<size_t>& nodes);
             size_t get_cache(size_t local_node, size_t dest_loc, size_t dest_node,
-                std::shared_ptr<std::vector<common::property>> edge_props);
+                std::vector<common::property>& edge_props);
             void add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_i,
-                std::shared_ptr<std::vector<common::property>> edge_props);
+                std::vector<common::property>&  edge_props);
             void transient_add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id,
-                std::shared_ptr<std::vector<common::property>> edge_props);
+                std::vector<common::property>& edge_props);
             void remove_cache(size_t req_id, element::node *);
             void commit_cache(size_t req_id);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
@@ -669,14 +678,14 @@ namespace db
     
     inline size_t 
     graph :: get_cache(size_t local_node, size_t dest_loc, size_t dest_node,
-        std::shared_ptr<std::vector<common::property>> edge_props)
+        std::vector<common::property>& edge_props)
     {
         return cache.get_req_id(dest_loc, dest_node, local_node, edge_props);
     }
 
     inline void 
     graph :: add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id,
-        std::shared_ptr<std::vector<common::property>> edge_props)
+        std::vector<common::property>& edge_props)
     {
         element::node *n = (element::node *)local_node;
         if (cache.insert_entry(dest_loc, dest_node, local_node, req_id, edge_props)) {
@@ -686,7 +695,7 @@ namespace db
 
     inline void
     graph :: transient_add_cache(size_t local_node, size_t dest_loc, size_t dest_node, size_t req_id,
-        std::shared_ptr<std::vector<common::property>> edge_props)
+        std::vector<common::property>& edge_props)
     {
         element::node *n = (element::node *)local_node;
         if (cache.transient_insert_entry(dest_loc, dest_node, local_node, req_id, edge_props)) {
@@ -805,12 +814,13 @@ namespace db
         size_t my_outgoing_req_id;
         outgoing_req_id_counter_mutex.lock();
         my_outgoing_req_id = outgoing_req_id_counter++;
+        // XXX what the, I don't even..
         std::pair<size_t, std::shared_ptr<batch_request>> new_elem(my_outgoing_req_id, request);
         assert(pending_batch.insert(new_elem).second);
         outgoing_req_id_counter_mutex.unlock();
-        message::prepare_message(msg, message::REACHABLE_PROP, *request->vector_clock, nodes, myid,
+        message::prepare_message(msg, message::REACHABLE_PROP, request->vector_clock, nodes, myid,
             request->dest_addr, request->dest_loc, request->coord_id, my_outgoing_req_id, 
-            *request->edge_props, *request->ignore_cache);
+            request->edge_props, request->ignore_cache);
         // no local messages possible, so have to send via network
         send(prop_loc, msg.buf);
     }

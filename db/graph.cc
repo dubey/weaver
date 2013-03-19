@@ -241,7 +241,7 @@ handle_delete_edge_property(db::graph *G, size_t req_id, size_t node_addr, size_
 void
 handle_reachable_request(db::graph *G, db::batch_request *reqptr)
 {
-    db::batch_request * request = reqptr;
+    std::shared_ptr<db::batch_request> request(reqptr); // XXX is this needed?
     size_t cached_req_id = request->coord_id;
     db::element::node *n; // node pointer reused for each source node
     bool reached = false; // indicates if we have reached destination node
@@ -265,14 +265,14 @@ handle_reachable_request(db::graph *G, db::batch_request *reqptr)
     {
     // iterating over src_nodes
     src_iter = 0;
-    src_end = request->src_nodes->size();
+    src_end = request->src_nodes.size();
     while ((src_iter < src_end) && (!reached)) // traverse local graph as much as possible
     {
         for (; src_iter < src_end; src_iter++)
         {
             // because the coordinator placed the node's address in the message, 
             // we can just cast it back to a pointer
-            n = (db::element::node *)(request->src_nodes->at(src_iter));
+            n = (db::element::node *)(request->src_nodes.at(src_iter));
             n->update_mutex.lock();
             if (n->get_del_time() <= request->coord_id)
             {
@@ -323,9 +323,9 @@ handle_reachable_request(db::graph *G, db::batch_request *reqptr)
                             bool traverse_edge = e->get_creat_time() <= request->coord_id
                                 && e->get_del_time() > request->coord_id; // edge created and deleted in acceptable timeframe
                             size_t i;
-                            for (i = 0; i < request->edge_props->size() && traverse_edge; i++) // checking edge properties
+                            for (i = 0; i < request->edge_props.size() && traverse_edge; i++) // checking edge properties
                             {
-                                if (!e->has_property(request->edge_props->at(i)))
+                                if (!e->has_property(request->edge_props.at(i)))
                                 {
                                     traverse_edge = false;
                                     break;
@@ -335,8 +335,8 @@ handle_reachable_request(db::graph *G, db::batch_request *reqptr)
                             {
                                 // Continue propagating reachability request
                                 if (e->nbr.loc == G->myid) {
-                                    request->src_nodes->emplace_back(e->nbr.handle);
-                                    request->parent_nodes->emplace_back(src_iter);
+                                    request->src_nodes.emplace_back(e->nbr.handle);
+                                    request->parent_nodes.emplace_back(src_iter);
                                     n->msg_count[G->myid]++;
                                 } else {
                                     std::vector<size_t> &loc_nodes = msg_batch[e->nbr.loc];
@@ -365,7 +365,7 @@ handle_reachable_request(db::graph *G, db::batch_request *reqptr)
                 break;
             }
         }
-        src_end = request->src_nodes->size();
+        src_end = request->src_nodes.size();
     }
     } else {
         // Request killed because dest already reached
@@ -381,7 +381,7 @@ handle_reachable_request(db::graph *G, db::batch_request *reqptr)
         request->del_nodes = std::move(deleted_nodes);
         request->del_times = std::move(del_times);
         */
-        assert(request->del_nodes->size() == request->del_times->size());
+        assert(request->del_nodes.size() == request->del_times.size());
         /*
     }
     */
@@ -390,7 +390,7 @@ handle_reachable_request(db::graph *G, db::batch_request *reqptr)
     if (reached) {
         // need to send back ack
         message::prepare_message(msg, message::REACHABLE_REPLY, request->prev_id, true, reach_node,
-            G->myid, *request->del_nodes, *request->del_times, cached_req_id);
+            G->myid, request->del_nodes, request->del_times, cached_req_id);
         G->send(request->prev_loc, msg.buf);
         // telling everyone this request is done
         G->add_done_request(request->coord_id);
@@ -418,7 +418,7 @@ handle_reachable_request(db::graph *G, db::batch_request *reqptr)
     } else {
         //need to send back nack
         message::prepare_message(msg, message::REACHABLE_REPLY, request->prev_id, false, reach_node,
-            G->myid, *request->del_nodes, *request->del_times, cached_req_id);
+            G->myid, request->del_nodes, request->del_times, cached_req_id);
         G->send(request->prev_loc, msg.buf);
     }
     request->unlock();
@@ -466,7 +466,7 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
     {   
         // caching positive result
         // also deleting edges for nodes that have been deleted
-        for (auto node_iter: *request->src_nodes)
+        for (auto node_iter: request->src_nodes)
         {
             prev_reach_node_pos++;
             n = (db::element::node *)(node_iter);
@@ -494,9 +494,9 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
                         bool traverse_edge = e->get_creat_time() <= request->coord_id
                             && e->get_del_time() > request->coord_id; // edge created and deleted in acceptable timeframe
                         size_t i;
-                        for (i = 0; i < request->edge_props->size() && traverse_edge; i++) // checking edge properties
+                        for (i = 0; i < request->edge_props.size() && traverse_edge; i++) // checking edge properties
                         {
-                            if (!e->has_property(request->edge_props->at(i)))
+                            if (!e->has_property(request->edge_props.at(i)))
                             {
                                 traverse_edge = false;
                                 break;
@@ -524,13 +524,13 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
         if (prev_reach_node != 0) {
             bool loop = true;
             db::element::node *n;
-            size_t prev_pos = request->parent_nodes->at(prev_reach_node_pos);
+            size_t prev_pos = request->parent_nodes.at(prev_reach_node_pos);
             while (loop)
             {
                 if (prev_pos == UINT64_MAX) {
                     loop = false;
                 } else {
-                    prev_reach_node = request->src_nodes->at(prev_pos);
+                    prev_reach_node = request->src_nodes.at(prev_pos);
                     n = (db::element::node*)prev_reach_node;
                     n->update_mutex.lock();
                     if (cached_req_id == request->coord_id) {
@@ -543,7 +543,7 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
                         G->transient_add_cache((size_t)n, request->dest_loc, request->dest_addr, cached_req_id, request->edge_props);
                     }
                     n->update_mutex.unlock();
-                    prev_pos = request->parent_nodes->at(prev_pos);
+                    prev_pos = request->parent_nodes.at(prev_pos);
                 }
             }
         }
@@ -556,7 +556,7 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
     {
         request->reachable |= reachable_reply;
         message::prepare_message(*msg, message::REACHABLE_REPLY, prev_req_id, reachable_reply, prev_reach_node,
-            G->myid, *request->del_nodes, *request->del_times, cached_req_id);
+            G->myid, request->del_nodes, request->del_times, cached_req_id);
         // would never have to send locally
         G->send(prev_loc, msg->buf);
     }
@@ -599,7 +599,7 @@ unpack_traversal_request(db::graph *G, std::unique_ptr<message::message> msg)
     }
 
     // leftover stuff from constructor
-    request->start_time = request->vector_clock.at(G->myid);
+    req->start_time = req->vector_clock.at(G->myid);
     // maybe something about parent nodes?
 
     db::thread::unstarted_traversal_thread *trav_req = new db::thread::unstarted_traversal_thread(handle_reachable_request, G, req);

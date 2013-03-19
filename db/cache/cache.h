@@ -72,11 +72,11 @@ namespace cache
 
         public:
             bool insert_entry(size_t dest_loc, size_t dest_node, size_t local_node, size_t req_id, 
-                std::shared_ptr<std::vector<common::property>> edge_props);
+                std::vector<common::property>& edge_props);
             bool transient_insert_entry(size_t dest_loc, size_t dest_node, size_t local_node, size_t req_id, 
-                std::shared_ptr<std::vector<common::property>> edge_props);
+                std::vector<common::property>& edge_props);
             size_t get_req_id(size_t dest_loc, size_t dest_node, size_t local_node,
-                std::shared_ptr<std::vector<common::property>> edge_props);
+                std::vector<common::property>& edge_props);
             std::unique_ptr<std::vector<size_t>> remove_entry(size_t req_id);
             std::unique_ptr<std::vector<size_t>> remove_transient_entry(size_t req_id);
             void commit(size_t id);
@@ -86,11 +86,11 @@ namespace cache
                 
         private:
             bool entry_exists(size_t dest_loc, size_t dest_node, size_t local_node,
-                std::shared_ptr<std::vector<common::property>> edge_props, ctable **table);
+                std::vector<common::property>& edge_props, ctable **table);
             bool entry_exists(size_t dest_loc, size_t dest_node, size_t local_node, ctable **table);
             bool mapping_exists(size_t dest_loc, size_t dest_node, ctable **table);
             bool insert_into_table(size_t dest_loc, size_t dest_node, size_t local_node, size_t req_id,
-                std::shared_ptr<std::vector<common::property>> edge_props, ctable **c_table, itable *i_table);
+                std::vector<common::property>& edge_props, ctable **c_table, itable *i_table);
             std::unique_ptr<std::vector<size_t>> remove_from_table(size_t req_id, ctable **c_table, itable *i_table);
     };
 
@@ -110,7 +110,7 @@ namespace cache
     // caution: not protected by mutex
     inline bool
     reach_cache :: entry_exists(size_t dest_loc, size_t dest_node, size_t local_node,
-        std::shared_ptr<std::vector<common::property>> edge_props, ctable **table)
+        std::vector<common::property>& edge_props, ctable **table)
     {
         ctable::iterator dest_iter;
         dest_iter = table[dest_loc]->find(dest_node);
@@ -125,7 +125,7 @@ namespace cache
         } else {
             size_t req_id = lnode_iter->second;
             std::unordered_set<common::property> &cached_props = cobj.edge_props.at(req_id);
-            for (auto &p: *edge_props)
+            for (auto &p: edge_props)
             {
                 if (cached_props.find(p) == cached_props.end()) {
                     return false;
@@ -167,7 +167,7 @@ namespace cache
     // otherwise return the req_id which caused it to be cached
     inline size_t
     reach_cache :: get_req_id(size_t dest_loc, size_t dest_node, size_t local_node,
-        std::shared_ptr<std::vector<common::property>> edge_props)
+        std::vector<common::property>& edge_props)
     {
         size_t ret;
         cache_mutex.lock();
@@ -183,7 +183,7 @@ namespace cache
 
     inline bool
     reach_cache :: insert_into_table(size_t dest_loc, size_t dest_node, size_t local_node, size_t req_id,
-        std::shared_ptr<std::vector<common::property>> edge_props, ctable **c_table, itable *i_table)
+        std::vector<common::property>& edge_props, ctable **c_table, itable *i_table)
     {
         cache_mutex.lock();
         if (!entry_exists(dest_loc, dest_node, local_node, c_table))
@@ -196,7 +196,7 @@ namespace cache
             cached_object &cobj = (*c_table[dest_loc])[dest_node];
             cobj.nodes[local_node] = req_id;
             if (cobj.edge_props.find(req_id) == cobj.edge_props.end()) {
-                for (auto &p: *edge_props)
+                for (auto &p: edge_props)
                 {
                     cobj.edge_props[req_id].insert(p); 
                 }
@@ -212,7 +212,7 @@ namespace cache
 
     inline bool
     reach_cache :: insert_entry(size_t dest_loc, size_t dest_node, size_t local_node, size_t req_id, 
-                std::shared_ptr<std::vector<common::property>> edge_props)
+                std::vector<common::property>& edge_props)
     {
         return insert_into_table(dest_loc, dest_node, local_node, req_id, 
             edge_props, cache_table, &invalidation_table);
@@ -220,7 +220,7 @@ namespace cache
 
     inline bool
     reach_cache :: transient_insert_entry(size_t dest_loc, size_t dest_node, size_t local_node, size_t req_id, 
-                std::shared_ptr<std::vector<common::property>> edge_props)
+                std::vector<common::property>& edge_props)
     {
         return insert_into_table(dest_loc, dest_node, local_node, req_id,
             edge_props, transient_cache_table, &transient_invalidation_table);
