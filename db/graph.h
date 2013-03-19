@@ -77,22 +77,33 @@ namespace db
     class batch_request
     {
         public:
+        /*
             batch_request(int ploc, size_t daddr, int dloc, size_t cid, size_t pid, int myid,
                 std::unique_ptr<std::vector<size_t>> nodes,
                 std::shared_ptr<std::vector<common::property>> eprops,
                 std::unique_ptr<std::vector<uint64_t>> vclock,
                 std::unique_ptr<std::vector<size_t>> icache);
+            */
+            batch_request();
         public:
             int prev_loc; // prev server's id
             size_t dest_addr; // dest node's handle
             int dest_loc; // dest node's server id
             size_t coord_id; // coordinator's req id
             size_t prev_id; // prev server's req id
+            /*
             std::unique_ptr<std::vector<size_t>> src_nodes;
             std::unique_ptr<std::vector<size_t>> parent_nodes; // pointers to parent node in traversal
             std::shared_ptr<std::vector<common::property>> edge_props;
             std::unique_ptr<std::vector<uint64_t>> vector_clock;
             std::unique_ptr<std::vector<size_t>> ignore_cache;
+            */
+            std::vector<size_t> src_nodes;
+            std::vector<size_t> parent_nodes; // pointers to parent node in traversal
+            std::vector<common::property> edge_props;
+            std::vector<uint64_t> vector_clock;
+            std::vector<size_t> ignore_cache;
+
             uint64_t start_time;
             int num; // number of onward requests
             bool reachable; // request specific data
@@ -111,6 +122,7 @@ namespace db
             void unlock();
     };
 
+    /*
     inline
     batch_request :: batch_request(int ploc, size_t daddr, int dloc, size_t cid, size_t pid, int myid,
         std::unique_ptr<std::vector<size_t>> nodes,
@@ -133,6 +145,7 @@ namespace db
     {
         start_time = vector_clock->at(myid);
     }
+    */
 
     inline bool
     batch_request :: operator>(const batch_request &r) const
