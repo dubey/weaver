@@ -29,7 +29,8 @@
 #include "graph.h"
 #include "common/message.h"
 
-void handle_reachable_request(db::graph *G, db::batch_request *request);
+void handle_reachable_request(db::graph *G, void *request);
+void handle_dijkstra_prop(db::graph *G, void * request);
 void migrate_node_step1(db::graph*, db::element::node*, int);
 void migrate_node_step4_1(db::graph *G);
 /*
@@ -116,6 +117,7 @@ handle_refresh_response(db::graph *G, std::unique_ptr<message::message> msg){
     db::refresh_request *req = (db::refresh_request *)refresh_req_ptr;
     req->add_response(deleted_nodes, from);
 }
+*/
 
 // Updates the create time for a list of properties
 inline void
@@ -126,7 +128,6 @@ change_property_times(std::vector<common::property> &props, uint64_t creat_time)
         p.creat_time = creat_time;
     }
 }
-*/
 
 // create a graph node
 void
@@ -239,9 +240,9 @@ handle_delete_edge_property(db::graph *G, size_t req_id, size_t node_addr, size_
 
 // reachability request starting from src_nodes to dest_node
 void
-handle_reachable_request(db::graph *G, db::batch_request *reqptr)
+handle_reachable_request(db::graph *G, void *reqptr)
 {
-    std::shared_ptr<db::batch_request> request(reqptr); // XXX is this needed?
+    std::shared_ptr<db::batch_request> request((db::batch_request *) reqptr); // XXX is shared needed?
     size_t cached_req_id = request->coord_id;
     db::element::node *n; // node pointer reused for each source node
     bool reached = false; // indicates if we have reached destination node
@@ -601,9 +602,9 @@ unpack_traversal_request(db::graph *G, std::unique_ptr<message::message> msg)
     // leftover stuff from constructor
     req->start_time = req->vector_clock.at(G->myid);
     req->parent_nodes.assign(req->src_nodes.size(), UINT64_MAX);
-
-    db::thread::unstarted_traversal_thread *trav_req = new db::thread::unstarted_traversal_thread(handle_reachable_request, G, req);
-    G->thread_pool.add_traversal_request(trav_req);
+std::cout << "adding a traversal reqeuest" << std::endl;
+    db::thread::unstarted_thread *trav_req = new db::thread::unstarted_thread(req->start_time,  handle_reachable_request, G, req);
+    G->thread_pool.add_request(trav_req);
 }
 
 // update cache based on confirmations for transient cached values
@@ -629,6 +630,175 @@ handle_cache_update(db::graph *G, std::unique_ptr<message::message> msg)
     message::prepare_message(*msg, message::CACHE_UPDATE_ACK); 
     G->send_coord(msg->buf);
 }
+
+/*
+template<typename Func>
+void apply_to_valid_edges(db::element::node* n, std::vector<common::property>& edge_props, uint64_t myclock_recd, Func func){
+    // check the properties of each out-edge
+    n->update_mutex.lock();
+    for (db::element::edge* e : n->out_edges)
+    {
+        //uint64_t nbrclock_recd = vector_clock[e->nbr->get_loc()];
+        bool use_edge = e->get_creat_time() <= myclock_recd  
+            && e->get_del_time() > myclock_recd; // edge created and deleted in acceptable timeframe
+           // && e->nbr->get_del_time() > nbrclock_recd; // nbr not deleted XXX this is lazily evaluated right now anyway
+        for (size_t i = 0; i < edge_props.size() && use_edge; i++) // checking edge properties
+        {
+            if (!e->has_property(edge_props[i])) {
+                use_edge = false;
+                break;
+            }
+        }
+        if (use_edge) {
+            func(e);
+        }
+    }
+    n->update_mutex.unlock();
+}
+
+void
+handle_dijkstra_request(db::graph *G, void *req)
+{
+    db::path_request *request = (db::path_request *) req;
+    message::message msg(message::DIJKSTRA_PROP);
+    uint64_t myclock_recd = request->start_time;
+    size_t current_cost = 0;
+
+    auto queue_add_fun = [&current_cost, myclock_recd, &request] (db::element::edge * e) {
+        std::pair<bool, size_t> weightpair = e->get_property_value(request->edge_weight_name, myclock_recd); // first is whether key exists, second is value
+        if (weightpair.first){
+            size_t priority = request->is_widest_path ? weightpair.second : weightpair.second + current_cost;
+    //        std::cout << "adding priority" << priority << " from edge of weight " << weightpair.second << " and current cost " <<  current_cost << std::endl;
+            request->possible_next_nodes.push(db::dijkstra_queue_elem(priority, e->nbr->get_loc(), (size_t) e->nbr->get_addr()));
+        }
+    };
+
+    while (!request->possible_next_nodes.empty()){
+        db::dijkstra_queue_elem next_to_add = request->possible_next_nodes.top();
+        request->possible_next_nodes.pop();
+        current_cost = next_to_add.cost;
+        // we have found destination!
+        if (next_to_add.addr == request->dest_ptr && next_to_add.shard_loc == request->dest_loc){
+            message::prepare_message(msg, message::DIJKSTRA_REPLY, request->coord_id, true, current_cost);
+            G->send_coord(msg.buf);
+            delete request;
+            return;
+        } else if (next_to_add.shard_loc != G->myid) {
+            // node to add neighbors for is on another shard
+            message::prepare_message(msg, message::DIJKSTRA_PROP, (size_t) request, next_to_add.addr, request->is_widest_path, 
+                    request->edge_weight_name, next_to_add.cost, request->edge_props, G->myid, request->coord_id);
+            G->send(next_to_add.shard_loc, msg.buf);
+            // let thread who handles the response continue the search, request object still in heap and pointer passed in message
+            return;
+        } else {
+            //if a local node
+            db::element::node * next_node = (db::element::node *) next_to_add.addr;
+
+            // need to check if node hadn't been deleted. This needed if we don't update in edges for a deleted node
+            if (next_node->get_del_time() <= myclock_recd){
+                continue;
+            }
+
+            auto location_pair = std::make_pair(next_to_add.shard_loc, next_to_add.addr); 
+            if (request->visited_map.count(location_pair) > 0 && request->visited_map[location_pair] <= current_cost){
+                continue;
+            } else {
+                apply_to_valid_edges(next_node, request->edge_props, myclock_recd, queue_add_fun);
+                request->visited_map[location_pair] = current_cost; // mark the cost to get here
+            }
+        }
+    }
+    // dest couldn't be reached
+    message::prepare_message(msg, message::DIJKSTRA_REPLY, request->coord_id, false, 0);
+    G->send_coord(msg.buf);
+    delete request;
+}
+
+// XXX
+void
+unpack_dijkstra_request(db::graph *G, std::unique_ptr<message::message> msg)
+{
+    size_t source_ptr;
+
+    db::path_request *req= new db::path_request;
+
+    message::unpack_message(*msg, message::DIJKSTRA_REQ, source_ptr, req->dest_ptr, req->dest_loc, 
+            req->edge_weight_name, req->coord_id, req->is_widest_path, req->edge_props, req->vector_clock);
+
+
+    req->start_time = req->vector_clock[G->myid];
+
+    // TODO pass clock into has_property
+    change_property_times(req->edge_props, req->start_time);
+
+    req->possible_next_nodes.push(db::dijkstra_queue_elem( 0, G->myid, req->source_ptr)); //no emplace but only 3 words
+    db::thread::unstarted_traversal_thread *dijkstra_req = new db::thread::unstarted_traversal_thread(req->coord_id, req->start_time,  handle_dijkstra_request, G, req);
+    G->thread_pool.add_traversal_request(dijkstra_req);
+}
+
+// XXX
+void
+unpack_dijkstra_prop(db::graph *G, std::unique_ptr<message::message> msg)
+{
+    size_t source_ptr;
+
+    db::dijkstra_prop *req= new db::dijkstra_prop;
+
+    message::unpack_message(*msg, message::DIJKSTRA_PROP, req->req_ptr, req->node_ptr, req->is_widest_path, 
+            req->edge_weight_name, req->current_cost, req->edge_props, req->start_time, req->reply_loc, req->coord_id);
+
+    // TODO pass clock into has_property
+    change_property_times(req->edge_props, req->start_Time);
+
+    std::cout << "got a path prop!" << std::endl;
+
+    // TODO pass clock into has_property
+    change_property_times(req->edge_props, req->start_time);
+
+    db::thread::unstarted_traversal_thread *dijkstra_req = new db::thread::unstarted_traversal_thread(req->coord_id, req->start_time,  handle_dijkstra_prop, G, req);
+    G->thread_pool.add_traversal_request(dijkstra_req);
+}
+
+
+inline void
+handle_dijkstra_prop(db::graph *G, void * request)
+{
+    db::dijkstra_prop * req = (db::dijkstra_prop *) request;
+    std::vector<db::dijkstra_queue_elem> entries_to_add;
+
+    db::element::node * next_node = (db::element::node *) req->node_ptr;
+
+    if (next_node->get_del_time() > req->start_time){
+        auto list_add_fun = [&req] (db::element::edge * e) {
+            std::pair<bool, size_t> weightpair = e->get_property_value(req->edge_weight_name, req->start_time); // first is whether key exists, second is value
+            if (weightpair.first){
+                size_t priority = req->is_widest_path ? weightpair.second : weightpair.second + req->current_cost;
+                entries_to_add.emplace_back(db::dijkstra_queue_elem(priority, e->nbr->get_loc(), (size_t) e->nbr->get_addr()));
+            }
+        };
+        apply_to_valid_edges(next_node, req->edge_props, req->start_time, list_add_fun);
+    }
+    message::message msg;
+    message::prepare_message(msg, message::DIJKSTRA_PROP_REPLY, req->req_ptr, entries_to_add);
+    G->send(req->reply_loc, msg.buf);
+}
+
+inline void
+handle_path_prop_reply(db::graph *G, std::unique_ptr<message::message> msg)
+{
+    size_t req_ptr;
+    std::vector<db::dijkstra_queue_elem> entries_to_add;
+    db::path_request *request;
+
+    message::unpack_message(*msg, message::DIJKSTRA_PROP_REPLY, req_ptr, entries_to_add);
+    request = (db::path_request *) req_ptr;
+    for (auto &elem : entries_to_add){
+        request->possible_next_nodes.push(elem);
+    }
+    // continue the path request from this thread
+    handle_dijkstra_req(G, request);
+}
+*/
 
 /*
 // Adds to numerator of a clustering coefficent and replies to coordinator and frees request if all responses have been recieved
@@ -947,8 +1117,9 @@ migrated_nbr_update(db::graph *G, std::unique_ptr<message::message> msg)
 
 // unpack update request and call appropriate function
 void
-unpack_update_request(db::graph *G, db::update_request *request)
+unpack_update_request(db::graph *G, void *req)
 {
+    db::update_request *request = (db::update_request *) req;
     size_t req_id;
     uint64_t start_time, time2;
     size_t n1, n2, edge;
@@ -1108,8 +1279,9 @@ unpack_transit_update_request(db::graph *G, db::update_request *request)
 }
 
 void
-process_pending_updates(db::graph *G, db::update_request *request)
+process_pending_updates(db::graph *G, void *req)
 {
+    db::update_request *request = (db::update_request *) req;
     size_t req_id;
     request->msg->buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(enum message::msg_type)) >> req_id;
     db::update_request *r = new db::update_request(request->type, req_id, std::move(request->msg));
@@ -1144,7 +1316,7 @@ runner(db::graph *G)
     enum message::msg_type mtype;
     std::unique_ptr<message::message> rec_msg;
     message::message msg;
-    db::thread::unstarted_update_thread *thr;
+    db::thread::unstarted_thread *thr;
     db::update_request *request;
     size_t done_id;
     uint64_t start_time;
@@ -1171,8 +1343,8 @@ runner(db::graph *G)
             case message::EDGE_DELETE_PROP:
                 rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(mtype)) >> start_time;
                 request = new db::update_request(mtype, start_time - 1, std::move(rec_msg));
-                thr = new db::thread::unstarted_update_thread(unpack_update_request, G, request);
-                G->thread_pool.add_update_request(thr);
+                thr = new db::thread::unstarted_thread(start_time -1, unpack_update_request, G, request);
+                G->thread_pool.add_request(thr);
                 break;
 
             case message::TRANSIT_NODE_DELETE_REQ:
@@ -1182,8 +1354,8 @@ runner(db::graph *G)
             case message::TRANSIT_EDGE_ADD_PROP:
             case message::TRANSIT_EDGE_DELETE_PROP:
                 request = new db::update_request(mtype, 0, std::move(rec_msg));
-                thr = new db::thread::unstarted_update_thread(process_pending_updates, G, request);
-                G->thread_pool.add_update_request(thr);
+                thr = new db::thread::unstarted_thread(0, process_pending_updates, G, request);
+                G->thread_pool.add_request(thr);
                 break;
 
             case message::REACHABLE_REPLY:
@@ -1195,20 +1367,32 @@ runner(db::graph *G)
             case message::MIGRATE_NODE_STEP5:
             case message::MIGRATED_NBR_UPDATE:
                 request = new db::update_request(mtype, 0, std::move(rec_msg));
-                thr = new db::thread::unstarted_update_thread(unpack_update_request, G, request);
-                G->thread_pool.add_update_request(thr);
+                thr = new db::thread::unstarted_thread(0, unpack_update_request, G, request);
+                G->thread_pool.add_request(thr);
                 break;
 
             case message::REACHABLE_PROP:
                 request = new db::update_request(mtype, 0, std::move(rec_msg));
-                thr = new db::thread::unstarted_update_thread(unpack_update_request, G, request);
-                G->thread_pool.add_update_request(thr);
+                thr = new db::thread::unstarted_thread(0, unpack_update_request, G, request);
+                G->thread_pool.add_request(thr);
                 break;
 
             case message::REACHABLE_DONE:
                 message::unpack_message(*rec_msg, message::REACHABLE_DONE, done_id);
                 G->add_done_request(done_id);
                 break;
+
+            /*
+            case message::DIJKSTRA_REQ:
+            case message::DIJKSTRA_PROP:
+                unpack_dijkstra_request(G, std::move(rec_msg));
+                break;
+
+            case message::DIJKSTRA_PROP_REPLY:
+                db::thread::unstarted_traversal_thread *dijkstra_prop_reply = new db::thread::unstarted_traversal_thread(0, 0, handle_path_prop_reply, G, std::move(rec_msg));
+                G->thread_pool.add_traversal_request(dijkstra_prop_reply);
+                break;
+                */
 
 /*
             case message::CLUSTERING_REQ:

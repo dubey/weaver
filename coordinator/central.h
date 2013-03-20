@@ -43,6 +43,7 @@ namespace coordinator
             po6::threads::mutex mutex;
             size_t clustering_numerator;
             size_t clustering_denominator;
+            size_t cost;
             bool waiting;
             po6::threads::cond reply;
             po6::threads::cond del_reply;

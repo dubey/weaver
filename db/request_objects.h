@@ -69,7 +69,8 @@ namespace db
     class path_request
     {
         public:
-            size_t id; // coordinator's req id
+            size_t coord_id; // coordinator's req id
+            size_t start_time;
             std::priority_queue<dijkstra_queue_elem> possible_next_nodes; 
             std::unordered_map<std::pair<int,size_t>, size_t> visited_map;
 
@@ -81,6 +82,22 @@ namespace db
             bool is_widest_path;
 
             path_request()
+            {
+            }
+    };
+
+    // Pending XXX
+    class dijkstra_prop
+    {
+        public:
+            size_t req_ptr, node_ptr, current_cost;
+            int reply_loc;
+            std::vector<common::property> edge_props;
+            uint64_t start_time, coord_id;
+            uint32_t edge_weight_name;
+            bool is_widest_path;
+
+            dijkstra_prop()
             {
             }
     };

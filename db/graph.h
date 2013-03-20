@@ -367,8 +367,7 @@ namespace db
         }
         update_mutex.unlock();
         thread_pool.queue_mutex.lock();
-        thread_pool.traversal_queue_cond.broadcast();
-        thread_pool.update_queue_cond.broadcast();
+        thread_pool.work_queue_cond.broadcast();
         thread_pool.queue_mutex.unlock();
         return check;
     }
@@ -820,10 +819,11 @@ namespace db
         }
     }
 
+    /*
     inline bool
     thread :: unstarted_traversal_thread :: operator>(const unstarted_traversal_thread &t) const
     {
-        return (*req > *t.req); 
+        return (priority > t.priority); 
     }
 
     inline bool
@@ -831,40 +831,42 @@ namespace db
     {
         return (*req > *t.req); 
     }
+    */
 
     void
-    thread :: traversal_thread_loop(thread::pool *tpool)
+    thread :: worker_thread_loop(thread::pool *tpool)
     {
-        thread::unstarted_traversal_thread *thr;
-        std::priority_queue<thread::unstarted_traversal_thread*, 
-            std::vector<unstarted_traversal_thread*>, 
-            thread::traversal_req_compare> &tq = tpool->traversal_queue;
+        thread::unstarted_thread *thr;
+        std::priority_queue<thread::unstarted_thread*, 
+            std::vector<unstarted_thread*>, 
+            thread::work_thread_compare> &tq = tpool->work_queue;
         po6::threads::mutex &m = tpool->queue_mutex;
-        po6::threads::cond &c = tpool->traversal_queue_cond;
+        po6::threads::cond &c = tpool->work_queue_cond;
         bool can_start;
         while (true)
         {
             m.lock();
             if (!tq.empty()) {
                 thr = tq.top();
-                can_start = thr->G->check_clock(thr->req->start_time);
+                can_start = thr->G->check_clock(thr->start_time); // as priority is equal to the start time of the req
             }
             while (tq.empty() || !can_start)
             {
                 c.wait();
                 if (!tq.empty()) {
                     thr = tq.top();
-                    can_start = thr->G->check_clock(thr->req->start_time);
+                    can_start = thr->G->check_clock(thr->start_time);
                 }
             }
             tq.pop();
             c.broadcast();
             m.unlock();
-            (*thr->func)(thr->G, thr->req);
+            (*thr->func)(thr->G, thr->arg);
             delete thr;
         }
     }
 
+/*
     void
     thread :: update_thread_loop(thread::pool *tpool)
     {
@@ -897,6 +899,7 @@ namespace db
             delete thr;
         }
     }
+    */
 
 } //namespace db
 

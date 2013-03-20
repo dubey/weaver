@@ -349,6 +349,54 @@ reachability_request(common::meta_element *node1, common::meta_element *node2,
     return ret;
 }
 
+// find the shortest or widest path from one node to another given a key for edge weights and only using edges with properties in edge_props
+void
+path_request(common::meta_element *node1, common::meta_element *node2, uint32_t edge_weight_key, bool is_widest_path,
+        std::shared_ptr<std::vector<common::property>> edge_props, coordinator::central *server, bool &reachable, size_t &cost)
+{
+    coordinator::pending_req *request;
+    message::message msg(message::DIJKSTRA_REQ);
+    size_t req_id;
+    
+    server->update_mutex.lock();
+    if (node1->get_del_time() < MAX_TIME || node2->get_del_time() < MAX_TIME)
+    {
+        std::cerr << "one of the nodes has been deleted, cannot perform request"
+            << std::endl;
+        server->update_mutex.unlock();
+        reachable = false;
+        return;
+    }
+    request = new coordinator::pending_req(&server->update_mutex);
+    req_id = ++server->request_id;
+    server->pending[req_id] = request;
+#ifdef DEBUG
+    std::cout << "Path request number " << req_id << " from node " << node1->get_addr() << node1->get_loc() 
+        << " to node " << node1->get_addr() << " " << node2->get_loc() << std::endl;
+#endif
+    request->mutex.lock();
+    message::prepare_message(msg, message::DIJKSTRA_REQ, (size_t) node1->get_addr(), (size_t) node2->get_addr(),
+            node2->get_loc(), edge_weight_key, req_id, is_widest_path, *edge_props, *(server->vc.clocks));
+    server->update_mutex.unlock();
+    server->send(node1->get_loc(), msg.buf);
+    
+    while (request->waiting)
+    {
+        request->reply.wait();
+    }
+    reachable = request->reachable;
+    cost = request->cost;
+#ifdef DEBUG
+    std::cout << "Path found is " << reachable << " with cost " << cost
+        << " for request " << req_id << std::endl;
+#endif
+    request->mutex.unlock();
+    delete request;
+    server->update_mutex.lock();
+    server->pending.erase(req_id);
+    server->update_mutex.unlock();
+}
+
 // compute the local clustering coefficient for a node
 void
 clustering_request(common::meta_element *node,
@@ -416,6 +464,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     common::meta_element *lnode; // for migration
     size_t coord_handle, node_handle; // for migration
     int new_loc, from_loc; // for migration
+    size_t cost; //for reply
     
     switch(m_type)
     {
@@ -467,6 +516,19 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
                 server->cache_cond.signal();
             }
             server->update_mutex.unlock();
+            break;
+
+        case message::DIJKSTRA_REPLY:
+            message::unpack_message(*msg, message::DIJKSTRA_REPLY, req_id, is_reachable, cost);
+            server->update_mutex.lock();
+            request = server->pending[req_id];
+            server->update_mutex.unlock();
+            request->mutex.lock();
+            request->reachable = is_reachable;
+            request->cost = cost;
+            request->waiting = false;
+            request->reply.signal();
+            request->mutex.unlock();
             break;
 
         case message::CLUSTERING_REPLY:
@@ -535,9 +597,10 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
     size_t elem1, elem2, value;
     uint32_t key;
     size_t new_elem;
-    bool reachable;
+    bool reachable, is_widest_path;
     size_t clustering_numerator;
     size_t clustering_denominator;
+    size_t cost;
     auto edge_props = std::make_shared<std::vector<common::property>>();
     switch (m_type)
     {
@@ -578,6 +641,16 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
                 (common::meta_element *)elem2, edge_props, server);
             msg->change_type(message::CLIENT_REPLY);
             message::prepare_message(*msg, message::CLIENT_REPLY, reachable);
+            server->client_send(*client_loc, msg->buf);
+            break;
+
+        case message::CLIENT_DIJKSTRA_REQ: 
+            message::unpack_message(*msg, message::CLIENT_DIJKSTRA_REQ, client_port,
+                    elem1, elem2, key, is_widest_path, *edge_props);
+            client_loc->port = client_port;
+            path_request((common::meta_element *) elem1, (common::meta_element *) elem2, key,
+                    is_widest_path, edge_props, server, reachable, cost);
+            message::prepare_message(*msg, message::CLIENT_DIJKSTRA_REPLY, reachable, cost);
             server->client_send(*client_loc, msg->buf);
             break;
 
