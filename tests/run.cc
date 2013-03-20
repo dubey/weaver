@@ -11,6 +11,8 @@
  * ===============================================================
  */
 
+#include "common/debug.h"
+
 //#include "message_test.h"
 //#include "cache_test.h"
 //#include "basic_client.h"
@@ -23,6 +25,7 @@
 int
 main(int argc, char *argv[])
 {
+    //std::set_terminate(debug_terminate);
     std::cout << "Starting tests." << std::endl;
     //message_test();
     //std::cout << "Message packing/unpacking ok." << std::endl;
@@ -34,12 +37,12 @@ main(int argc, char *argv[])
     //std::cout << "Stress client ok." << std::endl;
     //multiple_stress_client();
     //std::cout << "Multiple stress client ok." << std::endl;
-    //repetitive_stress_client();
-    //std::cout << "Repetitive stress client ok." << std::endl;
+    repetitive_stress_client();
+    std::cout << "Repetitive stress client ok." << std::endl;
     //clustering_test();
     //std::cout <<"Clustering ok.\n";
-    dijkstra_test();
-    std::cout <<"Dijkstra ok.\n";
+    //dijkstra_test();
+    //std::cout <<"Dijkstra ok.\n";
 
     return 0;
 }

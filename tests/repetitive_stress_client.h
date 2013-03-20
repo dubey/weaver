@@ -49,7 +49,6 @@ check_reachability()
                 if (i==j) {
                     continue;
                 }
-                std::cout << "Test: rr from " << i << " to " << j << std::endl;
                 bool reach = c.reachability_request(repetitive_nodes[i],
                     repetitive_nodes[j], edge_props);
                 if ((i==n1 && j==n2) || (i==n3 && j==n4)) {
@@ -108,8 +107,9 @@ repetitive_stress_client()
     t = new std::thread(check_reachability);
     t->detach();
 
-    for (i = 0; i < 100; i++)
+    for (i = 0; i < 10000; i++)
     {
+        std::cout << "Test: i = " << i << std::endl;
         create_edges(&c,0,1,2,3);
         common::property prop(42, 84, 0);
         c.add_edge_prop(repetitive_nodes[0], repetitive_edges[0], prop.key, prop.value);
