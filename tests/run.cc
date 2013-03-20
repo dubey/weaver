@@ -11,6 +11,8 @@
  * ===============================================================
  */
 
+#include "common/debug.h"
+
 //#include "message_test.h"
 //#include "cache_test.h"
 //#include "basic_client.h"
@@ -22,6 +24,7 @@
 int
 main(int argc, char *argv[])
 {
+    //std::set_terminate(debug_terminate);
     std::cout << "Starting tests." << std::endl;
     //message_test();
     //std::cout << "Message packing/unpacking ok." << std::endl;
