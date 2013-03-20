@@ -819,20 +819,6 @@ namespace db
         }
     }
 
-    /*
-    inline bool
-    thread :: unstarted_traversal_thread :: operator>(const unstarted_traversal_thread &t) const
-    {
-        return (priority > t.priority); 
-    }
-
-    inline bool
-    thread :: unstarted_update_thread :: operator>(const unstarted_update_thread &t) const
-    {
-        return (*req > *t.req); 
-    }
-    */
-
     void
     thread :: worker_thread_loop(thread::pool *tpool)
     {
@@ -865,41 +851,6 @@ namespace db
             delete thr;
         }
     }
-
-/*
-    void
-    thread :: update_thread_loop(thread::pool *tpool)
-    {
-        thread::unstarted_update_thread *thr;
-        std::priority_queue<thread::unstarted_update_thread*, 
-            std::vector<unstarted_update_thread*>, 
-            thread::update_req_compare> &tq = tpool->update_queue;
-        po6::threads::mutex &m = tpool->queue_mutex;
-        po6::threads::cond &c = tpool->update_queue_cond;
-        bool can_start;
-        while (true)
-        {
-            m.lock();
-            if (!tq.empty()) {
-                thr = tq.top();
-                can_start = thr->G->check_clock(thr->req->start_time);
-            }
-            while (tq.empty() || !can_start)
-            {
-                c.wait();
-                if (!tq.empty()) {
-                    thr = tq.top();
-                    can_start = thr->G->check_clock(thr->req->start_time);
-                }
-            }
-            tq.pop();
-            c.broadcast();
-            m.unlock();
-            (*thr->func)(thr->G, thr->req);
-            delete thr;
-        }
-    }
-    */
 
 } //namespace db
 

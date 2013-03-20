@@ -77,46 +77,6 @@ namespace thread
         }
     };
     
-    /*
-    class unstarted_update_thread
-    {
-        public:
-            unstarted_update_thread(
-                void (*f)(graph*, update_request*),
-                graph *g,
-                update_request *r);
-
-        public:
-            bool operator>(const unstarted_update_thread &t) const;
-
-        public:
-            void (*func)(graph*, update_request*);
-            graph *G;
-            update_request *req;
-    };
-
-    inline
-    unstarted_update_thread :: unstarted_update_thread( 
-            void (*f)(graph*, update_request*),
-            graph *g,
-            update_request *r)
-        : func(f)
-        , G(g)
-        , req(r)
-    {
-    }
-
-    // for priority_queue
-    struct update_req_compare 
-        : std::binary_function<unstarted_update_thread*, unstarted_update_thread*, bool>
-    {
-        bool operator()(const unstarted_update_thread* const &r1, const unstarted_update_thread* const&r2)
-        {
-            return (*r1 > *r2);
-        }
-    };
-    */
-    
     class pool
     {
         public:
