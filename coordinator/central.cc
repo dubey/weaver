@@ -217,11 +217,9 @@ reachability_request_initiate(coordinator::central *server, std::shared_ptr<coor
     request->vector_clock.reset(new std::vector<uint64_t>(*server->vc.clocks));
     request->del_request = server->get_last_del_req(request);
 
-    coordinator::reachability_request_propagate(server, request);
+    reachability_request_propagate(server, request);
 }
 
-namespace coordinator
-{
 // caution: assuming we hold server->mutex
 void
 reachability_request_propagate(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request)
@@ -276,54 +274,48 @@ reachability_request_end(coordinator::central *server, std::shared_ptr<coordinat
     }
 }
 
-}
-/*
 // compute the local clustering coefficient for a node
 void
-clustering_request(coordinator::central *server, std::shared_ptr<coordinator::pending_req>request)
+clustering_request_initiate(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request)
 {
-    std::shared_ptr<coordinator::pending_req>request;
-    message::message msg(message::CLUSTERING_REQ);
-    size_t req_id;
+    message::message msg;
     
     server->update_mutex.lock();
-    if (node->get_del_time() < MAX_TIME)
+    if (request->elem1->get_del_time() < MAX_TIME)
     {
         std::cerr << "node has been deleted, cannot perform request"
             << std::endl;
         server->update_mutex.unlock();
-        return; // or NaN?
+        message::prepare_message(msg, message::CLIENT_CLUSTERING_REPLY, 0, 0);
+        server->send(std::move(request->client), msg.buf);
     }
-    request = new coordinator::pending_req(&server->update_mutex);
-    req_id = ++server->request_id;
-    server->pending[req_id] = request;
+    request->req_id = ++server->request_id;
+    server->pending[request->req_id] = request;
 #ifdef DEBUG
-    std::cout << "Clustering request number " << req_id << " for node "
-              << node->get_addr() << " " << node->get_loc() << std::endl;
+    std::cout << "Clustering request number " << request->req_id << " for node "
+              << request->elem1->get_addr() << " " << request->elem1->get_loc() << std::endl;
 #endif
-    request->mutex.lock();
-    message::prepare_message(msg, message::CLUSTERING_REQ, (size_t) node->get_addr(),
-            req_id, *edge_props, *(server->vc.clocks));
+    message::prepare_message(msg, message::CLUSTERING_REQ, (size_t) request->elem1->get_addr(),
+            request->req_id, *request->edge_props, *(server->vc.clocks));
     server->update_mutex.unlock();
-    server->send(node->get_loc(), msg.buf);
-    
-    while (request->waiting)
-    {
-        request->reply.wait();
-    }
-    numerator = request->clustering_numerator;
-    denominator = request->clustering_denominator;
-#ifdef DEBUG
-    std::cout << "Clustering reply is " << numerator << " over " << denominator
-        << " for request " << req_id << std::endl;
-#endif
-    request->mutex.unlock();
-    delete request;
-    server->update_mutex.lock();
-    server->pending.erase(req_id);
-    server->update_mutex.unlock();
+    server->send(request->elem1->get_loc(), msg.buf);
 }
-*/
+
+void
+clustering_request_end(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request)
+{
+    message::message msg;
+#ifdef DEBUG
+    std::cout << "Clustering reply is " << request->numerator << " over " << request->denominator
+        << " for request " << request->req_id << std::endl;
+#endif
+    server->update_mutex.lock();
+    server->pending.erase(request->req_id);
+    server->update_mutex.unlock();
+    message::prepare_message(msg, message::CLIENT_CLUSTERING_REPLY, 
+            request->clustering_numerator, request->clustering_denominator);
+    server->send(std::move(request->client), msg.buf);
+}
 
 // wake up thread waiting on the received message
 void
@@ -378,13 +370,13 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             request->cached_req_id = cached_req_id;
             if (request->del_request) {
                 if (request->del_request->done) {
-                    coordinator::reachability_request_end(server, request);
+                    reachability_request_end(server, request);
                 } else {
                     request->done = true;
                     server->update_mutex.unlock();
                 }
             } else {
-                coordinator::reachability_request_end(server, request);
+                reachability_request_end(server, request);
             }
             break;
 
@@ -397,20 +389,15 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             }
             break;
         
-        /*
         case message::CLUSTERING_REPLY:
             message::unpack_message(*msg, message::CLUSTERING_REPLY, req_id, clustering_numerator, clustering_denominator);
             server->update_mutex.lock();
             request = server->pending.at(req_id);
             server->update_mutex.unlock();
-            request->mutex.lock();
             request->clustering_numerator = clustering_numerator;
             request->clustering_denominator = clustering_denominator;
-            request->waiting = false;
-            request->reply.signal();
-            request->mutex.unlock();
+            clustering_request_end(server, request);
             break;
-        */
 
         case message::COORD_NODE_MIGRATE:
             message::unpack_message(*msg, message::COORD_NODE_MIGRATE, coord_handle, new_loc, node_handle, from_loc);
@@ -524,18 +511,13 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
             reachability_request_initiate(server, request);
             break;
 
-        /*
         case message::CLIENT_CLUSTERING_REQ: 
             message::unpack_message(*msg, message::CLIENT_CLUSTERING_REQ, client_port, elem1, *edge_props);
             client_loc->port = client_port;
             request.reset(new coordinator::pending_req(m_type, (common::meta_element *)elem1, 
                 NULL, edge_props, std::move(client_loc)));
-            clustering_request(server, request);
-            message::prepare_message(*msg, message::CLIENT_CLUSTERING_REPLY,
-                    clustering_numerator, clustering_denominator);
-            server->client_send(*client_loc, msg->buf);
+            clustering_request_initiate(server, request);
             break;
-        */
 
         default:
             std::cerr << "invalid client msg code" << m_type << std::endl;

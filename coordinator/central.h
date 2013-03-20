@@ -34,6 +34,15 @@
 
 namespace coordinator
 {
+    class pending_req;
+    class central;
+}
+
+void reachability_request_end(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request);
+void reachability_request_propagate(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request);
+
+namespace coordinator
+{
     // pending request state 
     class pending_req
     {
@@ -154,9 +163,6 @@ namespace coordinator
             busybee_returncode flaky_send(int loc, std::auto_ptr<e::buffer> buf, bool delay);
     };
     
-    void reachability_request_end(coordinator::central *server, std::shared_ptr<pending_req> request);
-    void reachability_request_propagate(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request);
-
     inline
     central :: central()
         : request_id(1)
