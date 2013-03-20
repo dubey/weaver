@@ -600,7 +600,7 @@ unpack_traversal_request(db::graph *G, std::unique_ptr<message::message> msg)
 
     // leftover stuff from constructor
     req->start_time = req->vector_clock.at(G->myid);
-    req->parent_nodes.assign(src_nodes->size(), UINT64_MAX);
+    req->parent_nodes.assign(req->src_nodes.size(), UINT64_MAX);
 
     db::thread::unstarted_traversal_thread *trav_req = new db::thread::unstarted_traversal_thread(handle_reachable_request, G, req);
     G->thread_pool.add_traversal_request(trav_req);
