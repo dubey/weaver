@@ -38,11 +38,17 @@ class client
         void add_edge_prop(size_t node, size_t edge, uint32_t key, size_t value);
         void del_edge_prop(size_t node, size_t edge, uint32_t key);
         bool reachability_request(size_t node1, size_t node2,
-            std::shared_ptr<std::vector<common::property>> edge_props);
+                std::shared_ptr<std::vector<common::property>> edge_props);
+        std::pair<bool, size_t> shortest_path_request(size_t node1, size_t node2, uint32_t edge_weight_prop,
+                std::shared_ptr<std::vector<common::property>> edge_props);
+        std::pair<bool, size_t> widest_path_request(size_t node1, size_t node2, uint32_t edge_weight_prop, 
+                std::shared_ptr<std::vector<common::property>> edge_props);
         double local_clustering_coefficient(size_t node,
-            std::shared_ptr<std::vector<common::property>> edge_props);
+                std::shared_ptr<std::vector<common::property>> edge_props);
 
     private:
+        std::pair<bool, size_t> path_request(size_t node1, size_t node2, uint32_t edge_weight_prop, bool is_widest,
+                std::shared_ptr<std::vector<common::property>> edge_props);
         void send_coord(std::auto_ptr<e::buffer> buf);
 };
 
@@ -93,35 +99,55 @@ client :: create_edge(size_t node1, size_t node2)
 inline void
 client :: delete_node(size_t node)
 {
+    busybee_returncode ret;
     message::message msg(message::CLIENT_NODE_DELETE_REQ);
     message::prepare_message(msg, message::CLIENT_NODE_DELETE_REQ, myloc.port, node);
     send_coord(msg.buf);
+    if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS)
+    {
+        std::cerr << "msg recv error: " << ret << std::endl;
+    }
 }
 
 inline void
 client :: delete_edge(size_t node, size_t edge)
 {
+    busybee_returncode ret;
     message::message msg(message::CLIENT_EDGE_DELETE_REQ);
     message::prepare_message(msg, message::CLIENT_EDGE_DELETE_REQ, myloc.port,
             node, edge);
     send_coord(msg.buf);
+    if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS)
+    {
+        std::cerr << "msg recv error: " << ret << std::endl;
+    }
 }
 
 inline void
 client :: add_edge_prop(size_t node, size_t edge, uint32_t key, size_t value)
 {
+    busybee_returncode ret;
     message::message msg(message::CLIENT_ADD_EDGE_PROP);
-    message::prepare_message(msg, message::CLIENT_ADD_EDGE_PROP, node, edge,
+    message::prepare_message(msg, message::CLIENT_ADD_EDGE_PROP, myloc.port, node, edge,
             key, value);
     send_coord(msg.buf);
+    if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS)
+    {
+        std::cerr << "msg recv error: " << ret << std::endl;
+    }
 }
 
 inline void
 client :: del_edge_prop(size_t node, size_t edge, uint32_t key)
 {
+    busybee_returncode ret;
     message::message msg(message::CLIENT_DEL_EDGE_PROP);
-    message::prepare_message(msg, message::CLIENT_DEL_EDGE_PROP, node, edge, key);
+    message::prepare_message(msg, message::CLIENT_DEL_EDGE_PROP, myloc.port, node, edge, key);
     send_coord(msg.buf);
+    if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS)
+    {
+        std::cerr << "msg recv error: " << ret << std::endl;
+    }
 }
 
 inline bool
@@ -131,7 +157,7 @@ client :: reachability_request(size_t node1, size_t node2,
     busybee_returncode ret;
     bool reachable;
     message::message msg(message::CLIENT_REACHABLE_REQ);
-    msg.prep_client_rr_req(myloc.port, node1, node2, edge_props);
+    message::prepare_message(msg, message::CLIENT_REACHABLE_REQ, myloc.port, node1, node2, *edge_props);
     send_coord(msg.buf);
     if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS)
     {
@@ -140,6 +166,41 @@ client :: reachability_request(size_t node1, size_t node2,
     }
     message::unpack_message(msg, message::CLIENT_REPLY, reachable);
     return reachable;
+}
+
+inline std::pair<bool, size_t> 
+client :: shortest_path_request(size_t node1, size_t node2, 
+        uint32_t edge_weight_prop, std::shared_ptr<std::vector<common::property>> edge_props)
+{
+    return path_request(node1, node2, edge_weight_prop, false, edge_props);
+}
+
+inline std::pair<bool, size_t> 
+client :: widest_path_request(size_t node1, size_t node2,
+        uint32_t edge_weight_prop, std::shared_ptr<std::vector<common::property>> edge_props)
+{
+    return path_request(node1, node2, edge_weight_prop, true, edge_props);
+}
+
+inline std::pair<bool, size_t>
+client :: path_request(size_t node1, size_t node2, uint32_t edge_weight_prop, bool is_widest,
+        std::shared_ptr<std::vector<common::property>> edge_props)
+{
+    busybee_returncode ret;
+    bool reachable;
+    size_t cost;
+    message::message msg(message::CLIENT_DIJKSTRA_REQ);
+    message::prepare_message(msg, message::CLIENT_DIJKSTRA_REQ, myloc.port,
+            node1, node2, edge_weight_prop, is_widest, *edge_props);
+    send_coord(msg.buf);
+    if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS)
+    {
+        std::cerr << "msg recv error: " << ret << std::endl;
+        return std::make_pair(false, 0);
+    }
+    message::unpack_message(msg, message::CLIENT_DIJKSTRA_REPLY,
+            reachable, cost);
+    return std::make_pair(reachable, cost);
 }
 
 inline double

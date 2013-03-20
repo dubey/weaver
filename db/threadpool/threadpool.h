@@ -16,6 +16,7 @@
 
 #include <vector>
 #include <deque>
+#include <queue>
 #include <thread>
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
@@ -26,50 +27,66 @@
 namespace db
 {
 class graph;
+class update_request;
+class batch_request;
 
 namespace thread
 {
     class pool;
-    void thread_loop(pool *tpool, bool update_thread);
+    void worker_thread_loop(pool *tpool);
 
     class unstarted_thread
     {
         public:
             unstarted_thread(
-                void (*f)(db::graph*, std::unique_ptr<message::message>),
-                db::graph *g,
-                std::unique_ptr<message::message> m);
+                size_t s,
+                void (*f)(graph *, void *),
+                graph *g,
+                void *a);
 
         public:
-            void (*func)(db::graph*, std::unique_ptr<message::message>);
-            db::graph *G;
-            std::unique_ptr<message::message> msg;
+            bool operator>(const unstarted_thread &t) const;
+
+        public:
+            size_t start_time;
+            void (*func)(graph *, void *);
+            graph *G;
+            void *arg;
     };
 
     inline
     unstarted_thread :: unstarted_thread( 
-            void (*f)(db::graph*, std::unique_ptr<message::message>),
-            db::graph *g,
-            std::unique_ptr<message::message> m)
-        : func(f)
+            size_t s,
+            void (*f)(graph *, void *),
+            graph *g,
+            void *a)
+        : start_time(s)
+        , func(f)
         , G(g)
-        , msg(std::move(m))
+        , arg(a)
     {
     }
 
+    // for priority_queue
+    struct work_thread_compare 
+        : std::binary_function<unstarted_thread*, unstarted_thread*, bool>
+    {
+        bool operator()(const unstarted_thread* const &r1, const unstarted_thread* const&r2)
+        {
+            return (r1->start_time) > (r2->start_time);
+        }
+    };
+    
     class pool
     {
         public:
             int num_threads;
-            std::deque<std::unique_ptr<unstarted_thread>> reach_req_queue;
-            std::deque<std::unique_ptr<unstarted_thread>> update_queue;
+            std::priority_queue<unstarted_thread*, std::vector<unstarted_thread*>, work_thread_compare> work_queue;
             po6::threads::mutex queue_mutex;
-            po6::threads::cond empty_queue_cond;
-            po6::threads::cond graph_update_queue_cond;
-            int num_free_update, num_free_reach;
+            po6::threads::cond work_queue_cond;
        
         public:
-            void add_request(std::unique_ptr<unstarted_thread>, bool);
+            void add_request(unstarted_thread*);
         
         public:
             pool(int n_threads);
@@ -78,92 +95,24 @@ namespace thread
     inline
     pool :: pool(int n_threads)
         : num_threads(n_threads)
-        , empty_queue_cond(&queue_mutex)
-        , graph_update_queue_cond(&queue_mutex)
-        , num_free_update(0)
-        , num_free_reach(0)
+        , work_queue_cond(&queue_mutex)
     {
         int i;
         std::unique_ptr<std::thread> t;
-        for (i = 0; i < num_threads; i++) // reachability requests
+        for (i = 0; i < num_threads; i++)
         {
-            t.reset(new std::thread(thread_loop, this, false));
-            t->detach();
-        }
-        for (i = 0; i < num_threads; i++) // graph updates
-        {
-            t.reset(new std::thread(thread_loop, this, true));
+            t.reset(new std::thread(worker_thread_loop, this));
             t->detach();
         }
     }
 
     inline void
-    pool :: add_request(std::unique_ptr<unstarted_thread> t, bool update_req = false)
+    pool :: add_request(unstarted_thread *t)
     {
-        std::unique_ptr<std::thread> thr;
         queue_mutex.lock();
-        if (update_req)
-        {
-            if (num_free_update == 0)
-            {
-                // need to create a new thread
-                // since all other threads may be waiting for an update
-                thr.reset(new std::thread(t->func, t->G, std::move(t->msg)));
-                thr->detach();
-            } else
-            { 
-                if (update_queue.empty()) {
-                    graph_update_queue_cond.signal();
-                }
-                update_queue.push_back(std::move(t));
-            }
-        } else {
-            if (reach_req_queue.empty()) {
-                empty_queue_cond.signal();
-            }
-            reach_req_queue.push_back(std::move(t));
-        }
+        work_queue_cond.broadcast();
+        work_queue.push(t);
         queue_mutex.unlock();
-    }
-
-    void
-    thread_loop(pool *tpool, bool update_thread = false)
-    {
-        std::unique_ptr<unstarted_thread> thr;
-        while (true)
-        {
-            tpool->queue_mutex.lock();
-            if (update_thread)
-            {
-                tpool->num_free_update++;
-                while (tpool->update_queue.empty())
-                {
-                    tpool->graph_update_queue_cond.wait();
-                }
-                tpool->num_free_update--;
-                thr = std::move(tpool->update_queue.front());
-                tpool->update_queue.pop_front();
-                if (!tpool->update_queue.empty())
-                {
-                    tpool->graph_update_queue_cond.signal();
-                }
-            } else {
-                tpool->num_free_reach++;
-                while (tpool->reach_req_queue.empty())
-                {
-                    tpool->empty_queue_cond.wait();
-                }
-                tpool->num_free_reach--;
-                thr = std::move(tpool->reach_req_queue.front());
-                tpool->reach_req_queue.pop_front();
-                if (!tpool->reach_req_queue.empty())
-                {
-                    tpool->empty_queue_cond.signal();
-                }
-            }
-            tpool->queue_mutex.unlock();
-            (*(thr->func))(thr->G, std::move(thr->msg));
-        }
     }
 } 
 }

@@ -80,7 +80,7 @@ namespace thread
             pool(int n_threads);
 
         public:
-            int num_threads, num_free_client;
+            int num_threads;
             std::deque<std::unique_ptr<unstarted_thread>> client_req_queue;
             std::deque<std::unique_ptr<unstarted_thread>> shard_response_queue;
             std::vector<std::thread> threads;
@@ -95,7 +95,6 @@ namespace thread
     inline
     pool :: pool(int n_threads)
         : num_threads(n_threads)
-        , num_free_client(0)
         , shard_queue_cond(&queue_mutex)
         , client_queue_cond(&queue_mutex)
     {
@@ -120,18 +119,11 @@ namespace thread
         queue_mutex.lock();
         if (client)
         {
-            if (num_free_client == 0) {
-                // need to create a new thread
-                // all other threads may be blocked, waiting for an update
-                thr.reset(new std::thread(t->func, t->server, std::move(t->msg), t->m_type, std::move(t->loc)));
-                thr->detach();
-            } else {
-                if (client_req_queue.empty())
-                {
-                    client_queue_cond.signal();
-                }
-                client_req_queue.push_back(std::move(t));
+            if (client_req_queue.empty())
+            {
+                client_queue_cond.signal();
             }
+            client_req_queue.push_back(std::move(t));
         } else {
             if (shard_response_queue.empty())
             {
@@ -150,12 +142,10 @@ namespace thread
         {
             tpool->queue_mutex.lock();
             if (client) {
-                tpool->num_free_client++;
                 while(tpool->client_req_queue.empty())
                 {
                     tpool->client_queue_cond.wait();
                 }
-                tpool->num_free_client--;
                 thr = std::move(tpool->client_req_queue.front());
                 tpool->client_req_queue.pop_front();
                 if (!tpool->client_req_queue.empty())

@@ -18,7 +18,7 @@
 #include <vector>
 #include <po6/net/location.h>
 
-#include "common/meta_element.h"
+#include "remote_node.h"
 #include "element.h"
 
 namespace db
@@ -28,18 +28,16 @@ namespace element
     class edge : public element
     {
         public:
-            edge(std::shared_ptr<po6::net::location> server, uint64_t time, 
-                std::unique_ptr<common::meta_element> _nbr);
+            edge(uint64_t time, int remote_loc, size_t remote_handle);
         
         public:
-            std::unique_ptr<common::meta_element> nbr; // out-neighbor for this edge
+            remote_node nbr; // out-neighbor for this edge
     };
 
     inline
-    edge :: edge(std::shared_ptr<po6::net::location> server, uint64_t time,
-        std::unique_ptr<common::meta_element> _nbr)
-        : element(server, time, (void*)this)
-        , nbr(std::move(_nbr))
+    edge :: edge(uint64_t time, int remote_loc, size_t remote_handle)
+        : element(time)
+        , nbr(remote_loc, remote_handle)
     {
     }
 }

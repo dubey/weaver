@@ -22,7 +22,6 @@
 
 #include "common/weaver_constants.h"
 #include "common/property.h"
-#include "common/meta_element.h"
 
 namespace db
 {
@@ -31,14 +30,13 @@ namespace element
     class element
     {
         public:
-            element(std::shared_ptr<po6::net::location> server, uint64_t time, void* mem_addr);
+            element();
+            element(uint64_t time);
             
         protected:
             std::vector<common::property> properties;
-            std::shared_ptr<po6::net::location> myloc;
             uint64_t creat_time;
             uint64_t del_time;
-            void* elem_addr; // memory address of this element on shard server
 
         public:
             void add_property(common::property prop);
@@ -46,20 +44,23 @@ namespace element
             void remove_property(common::property prop);
             bool has_property(common::property prop);
             bool check_and_add_property(common::property prop);
+            void set_properties(std::vector<common::property> &props);
             void update_del_time(uint64_t del_time);
-            //common::meta_element get_meta_element();
-            uint64_t get_creat_time();
-            uint64_t get_del_time();
-            
+            void update_creat_time(uint64_t creat_time);
+            uint64_t get_creat_time() const;
+            uint64_t get_del_time() const;
+            const std::vector<common::property>* get_props() const;
     };
 
     inline
-    element :: element(std::shared_ptr<po6::net::location> server, uint64_t time, void* mem_addr)
-        : properties(0)
-        , myloc(server)
-        , creat_time(time)
+    element :: element()
+    {
+    }
+
+    inline
+    element :: element(uint64_t time)
+        : creat_time(time)
         , del_time(MAX_TIME)
-        , elem_addr(mem_addr)
     {
     }
 
@@ -120,30 +121,39 @@ namespace element
     }
 
     inline void
+    element :: set_properties(std::vector<common::property> &props)
+    {
+        properties = props;
+    }
+
+    inline void
     element :: update_del_time(uint64_t _del_time)
     {
         del_time = _del_time;
     }
 
-    /*
-    inline common::meta_element
-    element :: get_meta_element()
+    inline void
+    element :: update_creat_time(uint64_t _creat_time)
     {
-        common::meta_element ret(myloc, creat_time, del_time, elem_addr);
-        return ret;
+        creat_time = _creat_time;
     }
-    */
 
     inline uint64_t
-    element :: get_creat_time()
+    element :: get_creat_time() const
     {
         return creat_time;
     }
 
     inline uint64_t
-    element :: get_del_time()
+    element :: get_del_time() const
     {
         return del_time;
+    }
+
+    inline const std::vector<common::property>*
+    element :: get_props() const
+    {
+        return &properties;
     }
 }
 }

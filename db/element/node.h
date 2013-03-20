@@ -17,43 +17,95 @@
 #include <stdint.h>
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
+#include <queue>
+#include <po6/threads/mutex.h>
+#include <po6/threads/cond.h>
 
+#include "common/weaver_constants.h"
 #include "element.h"
 #include "edge.h"
 
 namespace db
 {
+class update_request;
 namespace element
 {
     class node : public element
     {
         public:
-            node(std::shared_ptr<po6::net::location> server, uint64_t time);
+            node();
+            node(uint64_t time);
+
+        public:
+            enum mode
+            {
+                NASCENT = 0,
+                STABLE,
+                IN_TRANSIT,
+                MOVED
+            };
         
         public:
-            std::vector<edge *> out_edges;
+            enum mode state;
+            std::unordered_map<size_t, edge*> out_edges;
+            std::unordered_map<size_t, edge*> in_edges;
             po6::threads::mutex update_mutex;
             std::unordered_set<size_t> seen; // requests which have been seen
             std::unique_ptr<std::vector<size_t>> cached_req_ids; // requests which have been cached
-            void add_edge(edge *e);
+            // for migration
+            size_t new_handle;
+            int prev_loc, new_loc;
+            std::vector<uint32_t> msg_count;
+
+        private:
+            uint32_t out_edge_ctr, in_edge_ctr;
+
+        public:
+            size_t add_edge(edge *e, bool in_or_out);
             bool check_and_add_seen(size_t id);
             void remove_seen(size_t id);
+            void set_seen(std::unordered_set<size_t> &seen);
             void add_cached_req(size_t req_id);
             void remove_cached_req(size_t req_id);
             std::unique_ptr<std::vector<size_t>> purge_cache();
     };
 
     inline
-    node :: node(std::shared_ptr<po6::net::location> server, uint64_t time)
-        : element(server, time, (void*)this)
-        , cached_req_ids(new std::vector<size_t>())
+    node :: node()
+        : state(mode::NASCENT)
+        , cached_req_ids(new std::vector<size_t>)
+        , prev_loc(-1)
+        , new_loc(-1)
+        , msg_count(NUM_SHARDS, 0)
+        , out_edge_ctr(0)
+        , in_edge_ctr(0)
     {
     }
 
-    inline void
-    node :: add_edge(edge *e)
+    inline
+    node :: node(uint64_t time)
+        : element(time)
+        , state(mode::NASCENT)
+        , cached_req_ids(new std::vector<size_t>())
+        , prev_loc(-1)
+        , new_loc(-1)
+        , msg_count(NUM_SHARDS, 0)
+        , out_edge_ctr(0)
+        , in_edge_ctr(0)
     {
-        out_edges.push_back(e);
+    }
+
+    inline size_t
+    node :: add_edge(edge *e, bool in_or_out)
+    {
+        if (in_or_out) {
+            out_edges.emplace(out_edge_ctr, e);
+            return (out_edge_ctr++);
+        } else {
+            in_edges.emplace(in_edge_ctr, e);
+            return (in_edge_ctr++);
+        }
     }
 
     inline bool
@@ -71,6 +123,12 @@ namespace element
     node :: remove_seen(size_t id)
     {
         seen.erase(id);
+    }
+
+    inline void
+    node :: set_seen(std::unordered_set<size_t> &s)
+    {
+        seen = s;
     }
 
     inline void
@@ -93,6 +151,21 @@ namespace element
         return ret;
     }
 
+    inline bool
+    compare_msg_cnt(const node *n1, const node *n2)
+    {
+        uint64_t s1 = 0;
+        uint64_t s2 = 0;
+        for (uint32_t i: n1->msg_count) 
+        {
+            s1 += (uint64_t)i;
+        }
+        for (uint32_t i: n2->msg_count) 
+        {
+            s2 += (uint64_t)i;
+        }
+        return (s1<s2);
+    }
 }
 }
 
