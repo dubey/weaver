@@ -30,7 +30,7 @@
 #include "common/message.h"
 
 void handle_reachable_request(db::graph *G, void *request);
-void handle_dijkstra_prop(db::graph *G, void * request);
+void handle_dijkstra_prop(db::graph *G, void *request);
 void migrate_node_step1(db::graph*, db::element::node*, int);
 void migrate_node_step4_1(db::graph *G);
 /*
@@ -242,18 +242,13 @@ handle_delete_edge_property(db::graph *G, size_t req_id, size_t node_addr, size_
 void
 handle_reachable_request(db::graph *G, void *reqptr)
 {
-    std::shared_ptr<db::batch_request> request((db::batch_request *) reqptr); // XXX is shared needed?
+    std::shared_ptr<db::batch_request> request((db::batch_request *) reqptr);
     size_t cached_req_id = request->coord_id;
     db::element::node *n; // node pointer reused for each source node
     bool reached = false; // indicates if we have reached destination node
     bool propagate_req = false; // need to propagate request onward
     size_t reach_node = 0; // if reached destination, immediate preceding neighbor
     std::vector<size_t> visited_nodes; // nodes which are visited by this request, in case we need to unmark them
-    /* these pointers are crazy!
-    std::unique_ptr<std::vector<size_t>> visited_nodes(new std::vector<size_t>()); // nodes which are visited by this request, in case we need to unmark them
-    std::unique_ptr<std::vector<size_t>> deleted_nodes(new std::vector<size_t>()); // to send back to requesting shard
-    std::unique_ptr<std::vector<uint64_t>> del_times(new std::vector<uint64_t>()); // corresponding to deleted_nodes
-    */
     std::unordered_map<int, std::vector<size_t>> msg_batch; // batched messages to propagate
     size_t src_iter, src_end;
     message::message msg(message::ERROR);
@@ -376,17 +371,8 @@ handle_reachable_request(db::graph *G, void *reqptr)
     // record just visited nodes for deletion later 
     G->record_visited(request->coord_id, visited_nodes);
 
-    /* Now this isn't needed
-    if (deleted_nodes) {
-        // store deleted nodes for sending back in reachable reply
-        request->del_nodes = std::move(deleted_nodes);
-        request->del_times = std::move(del_times);
-        */
-        assert(request->del_nodes.size() == request->del_times.size());
-        /*
-    }
-    */
-
+    assert(request->del_nodes.size() == request->del_times.size());
+    
     //send messages
     if (reached) {
         // need to send back ack
@@ -455,12 +441,6 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
     prev_loc = request->prev_loc;
     prev_req_id = request->prev_id;
 
-    /* XXX
-    if (!request->src_nodes) {
-        return;
-    }
-    */
-    
     prev_reach_node = 0;
     prev_reach_node_pos = -1;
     if (reachable_reply || num_del_nodes > 0)
@@ -574,24 +554,11 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
 void
 unpack_traversal_request(db::graph *G, std::unique_ptr<message::message> msg)
 {    
-    /* This is what the templates were supposed to avoid!
-    int prev_loc, //previous server's location
-        dest_loc; //target node's location
-    size_t dest_node, // destination node handle
-        coord_req_id, // central coordinator req id
-        prev_req_id; // previous server's req counter
-    std::unique_ptr<std::vector<size_t>> src_nodes(new std::vector<size_t>());
-    std::shared_ptr<std::vector<common::property>> edge_props(new std::vector<common::property>());
-    std::unique_ptr<std::vector<uint64_t>> vector_clock(new std::vector<uint64_t>());
-    std::unique_ptr<std::vector<size_t>> ignore_cache(new std::vector<size_t>()); // invalid cached ids
-    */
-
     db::batch_request *req = new db::batch_request();
 
     // get the list of source nodes to check for reachability, as well as the single sink node
     message::unpack_message(*msg, message::REACHABLE_PROP, req->vector_clock, req->src_nodes, req->prev_loc, req->dest_addr, req->dest_loc,
         req->coord_id, req->prev_id, req->edge_props, req->ignore_cache);
-
 
     // invalidating stale cache entries
     for (auto &remove: req->ignore_cache)
@@ -602,7 +569,6 @@ unpack_traversal_request(db::graph *G, std::unique_ptr<message::message> msg)
     // leftover stuff from constructor
     req->start_time = req->vector_clock.at(G->myid);
     req->parent_nodes.assign(req->src_nodes.size(), UINT64_MAX);
-std::cout << "adding a traversal reqeuest" << std::endl;
     db::thread::unstarted_thread *trav_req = new db::thread::unstarted_thread(req->start_time,  handle_reachable_request, G, req);
     G->thread_pool.add_request(trav_req);
 }
