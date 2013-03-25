@@ -13,6 +13,7 @@
  */
 
 #include <thread>
+#include <time.h>
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
 
@@ -94,22 +95,40 @@ create_edges(client *c, int num1, int num2, int num3, int num4)
     repetitive_edges[1] = c->create_edge(repetitive_nodes[num3], repetitive_nodes[num4]);
 }
 
+timespec diff(timespec start, timespec end)
+{
+        timespec temp;
+        if ((end.tv_nsec-start.tv_nsec)<0) {
+            temp.tv_sec = end.tv_sec-start.tv_sec-1;
+            temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+        } else {
+            temp.tv_sec = end.tv_sec-start.tv_sec;
+            temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+        }
+        return temp;
+}
 void
 repetitive_stress_client()
 {
     client c(CLIENT_PORT);
     int i, j;
     std::thread *t;
+    timespec t1, t2, dif;
     for (i = 0; i < 10; i++)
     {
         repetitive_nodes[i] = c.create_node();
     }
     t = new std::thread(check_reachability);
     t->detach();
-
+    
+    clock_gettime(CLOCK_MONOTONIC, &t1);
     for (i = 0; i < 10000; i++)
     {
-        std::cout << "Test: i = " << i << std::endl;
+        clock_gettime(CLOCK_MONOTONIC, &t2);
+        dif = diff(t1, t2);
+        std::cout << "Test: i = " << i << ", ";
+        std::cout << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
+        t1 = t2;
         create_edges(&c,0,1,2,3);
         common::property prop(42, 84, 0);
         c.add_edge_prop(repetitive_nodes[0], repetitive_edges[0], prop.key, prop.value);

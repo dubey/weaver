@@ -43,6 +43,22 @@ void reachability_request_propagate(coordinator::central *server, std::shared_pt
 
 namespace coordinator
 {
+    class out_counter
+    {
+        // a counter of outstanding requests, a shared pointer to which
+        // is passed to a del request when it returns. After counter reaches
+        // zero, can commit the request.
+        public:
+            uint32_t cnt;
+            uint64_t req_id;
+            std::shared_ptr<out_counter> next;
+
+        public:
+            out_counter()
+                : cnt(0)
+            {
+            }
+    };
     // pending request state 
     class pending_req
     {
@@ -54,14 +70,16 @@ namespace coordinator
             uint32_t key;
             size_t value;
             std::unique_ptr<po6::net::location> client;
+            // permanent deletion counter
+            std::shared_ptr<out_counter> out_count;
             // request process
-            size_t req_id;
+            uint64_t req_id;
             uint64_t clock1, clock2;
             int shard_id;
             std::vector<std::shared_ptr<pending_req>> dependent_traversals;
             std::unique_ptr<std::vector<size_t>> src_node;
             std::unique_ptr<std::vector<uint64_t>> vector_clock;
-            std::vector<size_t> ignore_cache;
+            std::vector<uint64_t> ignore_cache;
             std::shared_ptr<pending_req> del_request;
             // request reply
             bool done;
@@ -70,8 +88,8 @@ namespace coordinator
             size_t clustering_numerator;
             size_t clustering_denominator;
             size_t cost;
-            size_t cached_req_id;
-            std::unique_ptr<std::vector<size_t>> cached_req_ids;
+            uint64_t cached_req_id;
+            std::unique_ptr<std::vector<uint64_t>> cached_req_ids;
             
         pending_req(message::msg_type type, common::meta_element *el1, common::meta_element *el2, 
             std::unique_ptr<po6::net::location> cloc, uint32_t k=0, size_t v=0)
@@ -107,7 +125,7 @@ namespace coordinator
             central();
 
         public:
-            size_t request_id;
+            uint64_t request_id;
             thread::pool thread_pool;
             std::shared_ptr<po6::net::location> myloc;
             std::shared_ptr<po6::net::location> myrecloc;
@@ -123,7 +141,7 @@ namespace coordinator
             int port_ctr;
             std::vector<std::shared_ptr<po6::net::location>> shards;
             uint32_t num_shards;
-            std::unordered_map<size_t, common::meta_element *> nodes;
+            std::unordered_map<uint64_t, common::meta_element *> nodes;
             std::vector<common::meta_element *> edges;
             vclock::vector vc;
             // big mutex
@@ -131,10 +149,13 @@ namespace coordinator
             // caching
             std::vector<std::shared_ptr<pending_req>> pending_delete_requests;
             // TODO clean-up of old deleted cache ids
-            std::unordered_map<size_t, std::shared_ptr<pending_req>> pending;
-            std::unique_ptr<std::unordered_set<size_t>> bad_cache_ids;
-            std::unique_ptr<std::unordered_set<size_t>> good_cache_ids;
-            std::unique_ptr<std::unordered_set<size_t>> transient_bad_cache_ids;
+            std::unordered_map<uint64_t, std::shared_ptr<pending_req>> pending;
+            std::unique_ptr<std::unordered_set<uint64_t>> bad_cache_ids;
+            std::unique_ptr<std::unordered_set<uint64_t>> good_cache_ids;
+            std::unique_ptr<std::unordered_set<uint64_t>> transient_bad_cache_ids;
+            // permanent deletion
+            std::shared_ptr<out_counter> first_del; // head
+            std::shared_ptr<out_counter> last_del; // tail
             // daemon
             uint32_t cache_acks;
             // testing
@@ -142,17 +163,17 @@ namespace coordinator
             std::uniform_real_distribution<double> dist;
 
         public:
-            void add_node(common::meta_element *n, size_t index);
+            void add_node(common::meta_element *n, uint64_t index);
             void add_edge(common::meta_element *e);
             void add_pending_del_req(std::shared_ptr<pending_req> request);
             std::shared_ptr<pending_req> get_last_del_req(std::shared_ptr<pending_req> request);
             //bool insert_del_wait(size_t del_req_id, size_t wait_req_id);
-            bool still_pending_del_req(size_t req_id);
-            void add_deleted_cache(std::shared_ptr<pending_req> request, std::vector<size_t> &cached_ids);
-            void add_deleted_cache(size_t req_ids, std::vector<size_t> &cached_ids);
-            bool is_deleted_cache_id(size_t id);
-            void add_good_cache_id(size_t id);
-            void add_bad_cache_id(size_t id);
+            bool still_pending_del_req(uint64_t req_id);
+            void add_deleted_cache(std::shared_ptr<pending_req> request, std::vector<uint64_t> &cached_ids);
+            void add_deleted_cache(uint64_t req_ids, std::vector<uint64_t> &cached_ids);
+            bool is_deleted_cache_id(uint64_t id);
+            void add_good_cache_id(uint64_t id);
+            void add_bad_cache_id(uint64_t id);
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(std::unique_ptr<po6::net::location> loc,
                 std::auto_ptr<e::buffer> buf);
@@ -177,9 +198,11 @@ namespace coordinator
         , client_send_bb(client_send_loc->address, client_send_loc->port, 0)
         , client_rec_bb(client_rec_loc->address, client_rec_loc->port, 0)
         , port_ctr(0)
-        , bad_cache_ids(new std::unordered_set<size_t>())
-        , good_cache_ids(new std::unordered_set<size_t>())
-        , transient_bad_cache_ids(new std::unordered_set<size_t>())
+        , bad_cache_ids(new std::unordered_set<uint64_t>())
+        , good_cache_ids(new std::unordered_set<uint64_t>())
+        , transient_bad_cache_ids(new std::unordered_set<uint64_t>())
+        , first_del(new out_counter())
+        , last_del(first_del)
         , cache_acks(0)
         , generator((unsigned)42) // fixed seed for deterministic random numbers
         , dist(0.0, 1.0)
@@ -198,11 +221,11 @@ namespace coordinator
             std::cerr << "File " << SHARDS_DESC_FILE << " not found.\n";
         }
         file.close();
-        num_shards = shards.size();
+        num_shards = NUM_SHARDS;
     }
 
     inline void
-    central :: add_node(common::meta_element *n, size_t index)
+    central :: add_node(common::meta_element *n, uint64_t index)
     {
         nodes.emplace(index, n);
     }
@@ -218,6 +241,9 @@ namespace coordinator
     central :: add_pending_del_req(std::shared_ptr<pending_req> request)
     {
         pending_delete_requests.emplace_back(request);
+        last_del->req_id = request->req_id;
+        last_del->next.reset(new out_counter());
+        last_del = last_del->next;
     }
 
     // caution: assuming we hold update_mutex
@@ -232,48 +258,14 @@ namespace coordinator
         return ret;
     }
 
-    /*
-    inline bool
-    central :: insert_del_wait(size_t del_req_id, size_t wait_req_id)
-    {
-        for(std::vector<T>::reverse_iterator it = pending_delete_requests.rbegin(); 
-            it != pending_delete_requests.rend(); ++it) 
-        {
-            if (it->first == del_req_id) {
-                it->second.push_back(wait_req_id);
-                return true;
-            }
-        }
-        return false;
-    }
-
-    inline bool
-    central :: still_pending_del_req(size_t req_id)
-    {
-        std::vector<std::pair<size_t, std::vector<size_t>>>::iterator iter;
-        if (req_id == 0) {
-            return false;
-        }
-        for (iter = pending_delete_requests.begin(); iter != pending_delete_requests.end(); iter++)
-        {
-            if (iter->first > req_id) {
-                return false;
-            } else if (iter->first == req_id) {
-                return true;
-            }
-        }
-        return false;
-    }
-    */
-
     // record all the invalid cached req ids
     // also update pending_delete_requests
     // caution: assuming we hold update_mutex
     inline void
-    central :: add_deleted_cache(std::shared_ptr<pending_req> request, std::vector<size_t> &cached_ids)
+    central :: add_deleted_cache(std::shared_ptr<pending_req> request, std::vector<uint64_t> &cached_ids)
     {
         std::vector<std::shared_ptr<pending_req>>::iterator pend_iter;
-        for (size_t del_iter: cached_ids)
+        for (uint64_t del_iter: cached_ids)
         {
 #ifdef DEBUG
             std::cout << "Inserting bad cache " << del_iter << std::endl;
@@ -305,7 +297,7 @@ namespace coordinator
     }
 
     inline bool
-    central :: is_deleted_cache_id(size_t id)
+    central :: is_deleted_cache_id(uint64_t id)
     {
 #ifdef DEBUG
         std::cout << "Bad cache ids:\n";
@@ -326,7 +318,7 @@ namespace coordinator
     }
 
     inline void
-    central :: add_good_cache_id(size_t id)
+    central :: add_good_cache_id(uint64_t id)
     {
         if (bad_cache_ids->find(id) != bad_cache_ids->end())
         {
@@ -335,7 +327,7 @@ namespace coordinator
     }
 
     inline void
-    central :: add_bad_cache_id(size_t id)
+    central :: add_bad_cache_id(uint64_t id)
     {
         bad_cache_ids->insert(id);
         good_cache_ids->erase(id);

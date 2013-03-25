@@ -225,6 +225,8 @@ reachability_request_initiate(coordinator::central *server, std::shared_ptr<coor
     }
     request->vector_clock.reset(new std::vector<uint64_t>(*server->vc.clocks));
     request->del_request = server->get_last_del_req(request);
+    request->out_count = server->last_del;
+    request->out_count->cnt++;
 
     reachability_request_propagate(server, request);
 }
@@ -275,6 +277,7 @@ reachability_request_end(coordinator::central *server, std::shared_ptr<coordinat
 
     if (done) {
         message::message msg;
+        request->out_count->cnt--;
         server->update_mutex.unlock();
         std::cout << "Reachable reply is " << request->reachable << " for " << "request " 
                   << request->req_id << ", cached id " << request->cached_req_id << std::endl;
@@ -356,6 +359,8 @@ clustering_request_initiate(coordinator::central *server, std::shared_ptr<coordi
 #endif
     message::prepare_message(msg, message::CLUSTERING_REQ, (size_t) request->elem1->get_addr(),
             request->req_id, *request->edge_props, *(server->vc.clocks));
+    request->out_count = server->last_del;
+    request->out_count->cnt++;
     server->update_mutex.unlock();
     server->send(request->elem1->get_loc(), msg.buf);
 }
@@ -370,6 +375,7 @@ clustering_request_end(coordinator::central *server, std::shared_ptr<coordinator
 #endif
     server->update_mutex.lock();
     server->pending.erase(request->req_id);
+    request->out_count->cnt--;
     server->update_mutex.unlock();
     message::prepare_message(msg, message::CLIENT_CLUSTERING_REPLY, 
             request->clustering_numerator, request->clustering_denominator);
@@ -381,7 +387,7 @@ void
 handle_pending_req(coordinator::central *server, std::unique_ptr<message::message> msg,
     enum message::msg_type m_type, std::unique_ptr<po6::net::location> dummy)
 {
-    size_t req_id, cached_req_id;
+    uint64_t req_id, cached_req_id;
     std::shared_ptr<coordinator::pending_req>request;
     size_t mem_addr;
     bool is_reachable; // for reply
@@ -650,26 +656,36 @@ client_msg_handler(coordinator::central *server)
 void
 coord_daemon_initiate(coordinator::central *server)
 {
-    std::vector<size_t> good, bad;
+    std::vector<uint64_t> good, bad;
+    uint64_t perm_del_id = 0;
     message::message msg;
-    std::chrono::seconds duration(500); // execute every 500 seconds
+    std::chrono::seconds duration(DAEMON_PERIOD); // execute every DAEMON_PERIOD seconds
     std::this_thread::sleep_for(duration);
     server->update_mutex.lock();
+    while (server->first_del->cnt == 0 && server->first_del != server->last_del) {
+        perm_del_id = server->first_del->req_id;
+        if (server->first_del->next) {
+            server->first_del = server->first_del->next;
+        } else {
+            break;
+        }
+    }
     if ((good.size() != 0) || (bad.size() != 0)) {
         std::copy(server->good_cache_ids->begin(), server->good_cache_ids->end(), std::back_inserter(good));
         std::copy(server->bad_cache_ids->begin(), server->bad_cache_ids->end(), std::back_inserter(bad));
         server->transient_bad_cache_ids = std::move(server->bad_cache_ids);
-        server->bad_cache_ids.reset(new std::unordered_set<size_t>());
-        server->good_cache_ids.reset(new std::unordered_set<size_t>());
+        server->bad_cache_ids.reset(new std::unordered_set<uint64_t>());
+        server->good_cache_ids.reset(new std::unordered_set<uint64_t>());
         server->update_mutex.unlock();
-        for (uint32_t i = 0; i < server->num_shards; i++)
-        {
-            message::prepare_message(msg, message::CACHE_UPDATE, good, bad);
-            server->send(i, msg.buf);
-        }
     } else {
         server->update_mutex.unlock();
     }
+    for (uint32_t i = 0; i < server->num_shards; i++)
+    {
+        message::prepare_message(msg, message::CACHE_UPDATE, good, bad, perm_del_id);
+        server->send(i, msg.buf);
+    }
+
 }
 
 // caution: assuming we hold server->update_mutex

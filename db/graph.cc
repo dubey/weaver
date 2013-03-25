@@ -131,7 +131,7 @@ change_property_times(std::vector<common::property> &props, uint64_t creat_time)
 
 // create a graph node
 void
-handle_create_node(db::graph *G, size_t req_id) 
+handle_create_node(db::graph *G, uint64_t req_id) 
 {
     db::element::node *n;
     message::message msg;
@@ -144,11 +144,11 @@ handle_create_node(db::graph *G, size_t req_id)
 
 // delete a graph node
 void
-handle_delete_node(db::graph *G, size_t req_id, size_t node_handle, std::unique_ptr<std::vector<size_t>> cache)
+handle_delete_node(db::graph *G, uint64_t req_id, size_t node_handle, std::unique_ptr<std::vector<size_t>> cache)
 {
     std::pair<bool, std::unique_ptr<std::vector<size_t>>> success;
     std::unique_ptr<message::message> msg(new message::message());
-    success = G->delete_node((db::element::node*)node_handle, (uint64_t)req_id);
+    success = G->delete_node((db::element::node*)node_handle, req_id);
     if (cache) {
         success.second = std::move(cache);
     }
@@ -163,7 +163,7 @@ handle_delete_node(db::graph *G, size_t req_id, size_t node_handle, std::unique_
 
 // create a graph edge
 void
-handle_create_edge(db::graph *G, size_t req_id, size_t n1, size_t n2, int loc2, uint64_t tc2)
+handle_create_edge(db::graph *G, uint64_t req_id, size_t n1, size_t n2, int loc2, uint64_t tc2)
 {
     std::pair<bool, size_t> success;
     std::unique_ptr<message::message> msg(new message::message());
@@ -179,7 +179,7 @@ handle_create_edge(db::graph *G, size_t req_id, size_t n1, size_t n2, int loc2, 
 
 // create a back pointer for an edge
 void
-handle_create_reverse_edge(db::graph *G, size_t req_id, size_t remote_node, int remote_loc, size_t local_node)
+handle_create_reverse_edge(db::graph *G, uint64_t req_id, size_t remote_node, int remote_loc, size_t local_node)
 {
     std::unique_ptr<message::message> msg(new message::message());
     if (!G->create_reverse_edge(req_id, local_node, remote_node, remote_loc)) {
@@ -190,7 +190,7 @@ handle_create_reverse_edge(db::graph *G, size_t req_id, size_t remote_node, int 
 
 // delete an edge
 void
-handle_delete_edge(db::graph *G, size_t req_id, size_t n, size_t e, std::unique_ptr<std::vector<size_t>> cache)
+handle_delete_edge(db::graph *G, uint64_t req_id, size_t n, size_t e, std::unique_ptr<std::vector<size_t>> cache)
 {
     std::pair<bool, std::unique_ptr<std::vector<size_t>>> success;
     std::unique_ptr<message::message> msg(new message::message());
@@ -209,7 +209,7 @@ handle_delete_edge(db::graph *G, size_t req_id, size_t n, size_t e, std::unique_
 
 // add edge property
 void
-handle_add_edge_property(db::graph *G, size_t req_id, size_t node_addr, size_t edge_addr, common::property &prop)
+handle_add_edge_property(db::graph *G, uint64_t req_id, size_t node_addr, size_t edge_addr, common::property &prop)
 {
     std::unique_ptr<message::message> msg(new message::message());
     if (!G->add_edge_property(node_addr, edge_addr, prop)) {
@@ -220,7 +220,7 @@ handle_add_edge_property(db::graph *G, size_t req_id, size_t node_addr, size_t e
 
 // delete all edge properties with the given key
 void
-handle_delete_edge_property(db::graph *G, size_t req_id, size_t node_addr, size_t edge_addr, uint32_t key,
+handle_delete_edge_property(db::graph *G, uint64_t req_id, size_t node_addr, size_t edge_addr, uint32_t key,
     std::unique_ptr<std::vector<size_t>> cache)
 {
     std::pair<bool, std::unique_ptr<std::vector<size_t>>> success;
@@ -242,8 +242,8 @@ handle_delete_edge_property(db::graph *G, size_t req_id, size_t node_addr, size_
 void
 handle_reachable_request(db::graph *G, void *reqptr)
 {
-    std::shared_ptr<db::batch_request> request((db::batch_request *) reqptr);
-    size_t cached_req_id = request->coord_id;
+    std::shared_ptr<db::batch_request> request((db::batch_request *)reqptr);
+    uint64_t cached_req_id = request->coord_id;
     db::element::node *n; // node pointer reused for each source node
     bool reached = false; // indicates if we have reached destination node
     bool propagate_req = false; // need to propagate request onward
@@ -251,7 +251,7 @@ handle_reachable_request(db::graph *G, void *reqptr)
     std::vector<size_t> visited_nodes; // nodes which are visited by this request, in case we need to unmark them
     std::unordered_map<int, std::vector<size_t>> msg_batch; // batched messages to propagate
     size_t src_iter, src_end;
-    message::message msg(message::ERROR);
+    message::message msg;
     
     //need mutex since there can be multiple replies
     //for same outstanding req
@@ -380,8 +380,8 @@ handle_reachable_request(db::graph *G, void *reqptr)
             G->myid, request->del_nodes, request->del_times, cached_req_id);
         G->send(request->prev_loc, msg.buf);
         // telling everyone this request is done
-        G->add_done_request(request->coord_id);
-        G->broadcast_done_request(request->coord_id);
+        //G->add_done_request(request->coord_id);
+        //G->broadcast_done_request(request->coord_id);
         request->reachable = true; 
     } else if (propagate_req) {
         // the destination is not reachable locally in one hop from this server, so
@@ -418,7 +418,7 @@ handle_reachable_request(db::graph *G, void *reqptr)
 void
 handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
 {
-    size_t my_outgoing_req_id, prev_req_id, cached_req_id;
+    uint64_t my_outgoing_req_id, prev_req_id, cached_req_id;
     std::shared_ptr<db::batch_request> request;
     bool reachable_reply;
     int prev_loc, reach_loc;
@@ -533,7 +533,7 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
     // check if this is the last expected reply for this batched request
     // and we got all negative replies till now
     // or this is a positive reachable reply
-    if (((request.use_count() == 1) || reachable_reply) && !request->reachable)
+    if (((request->num == 0) || reachable_reply) && !request->reachable)
     {
         request->reachable |= reachable_reply;
         message::prepare_message(*msg, message::REACHABLE_REPLY, prev_req_id, reachable_reply, prev_reach_node,
@@ -542,11 +542,6 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
         G->send(prev_loc, msg->buf);
     }
 
-    if (request->num == 0)
-    {
-        //implicitly deleting batch request as shared_ptr refcnt drops to 0
-        //return;
-    }
     request->unlock();
 }
 
@@ -569,7 +564,7 @@ unpack_traversal_request(db::graph *G, std::unique_ptr<message::message> msg)
     // leftover stuff from constructor
     req->start_time = req->vector_clock.at(G->myid);
     req->parent_nodes.assign(req->src_nodes.size(), UINT64_MAX);
-    db::thread::unstarted_thread *trav_req = new db::thread::unstarted_thread(req->start_time,  handle_reachable_request, G, req);
+    db::thread::unstarted_thread *trav_req = new db::thread::unstarted_thread(req->start_time, handle_reachable_request, G, req);
     G->thread_pool.add_request(trav_req);
 }
 
@@ -579,7 +574,8 @@ void
 handle_cache_update(db::graph *G, std::unique_ptr<message::message> msg)
 {
     std::vector<size_t> good, bad;
-    message::unpack_message(*msg, message::CACHE_UPDATE, good, bad);
+    uint64_t perm_del_id;
+    message::unpack_message(*msg, message::CACHE_UPDATE, good, bad, perm_del_id);
     
     // invalidations
     for (size_t i = 0; i < bad.size(); i++)
@@ -592,7 +588,7 @@ handle_cache_update(db::graph *G, std::unique_ptr<message::message> msg)
     {
         G->commit_cache(good[i]);
     }
-   
+
     message::prepare_message(*msg, message::CACHE_UPDATE_ACK); 
     G->send_coord(msg->buf);
 }
@@ -951,7 +947,7 @@ migrate_node_step1(db::graph *G, db::element::node *n, int shard)
     G->mrequest.num_pending_updates = 0;
     G->mrequest.my_clock = 0;
     std::vector<std::unique_ptr<message::message>>().swap(G->mrequest.pending_updates);
-    std::vector<size_t>().swap(G->mrequest.pending_update_ids);
+    std::vector<uint64_t>().swap(G->mrequest.pending_update_ids);
     std::vector<std::shared_ptr<db::batch_request>>().swap(G->mrequest.pending_requests);
     message::prepare_message(msg, message::MIGRATE_NODE_STEP1, *n, G->myid);
     n->update_mutex.unlock();
@@ -1024,7 +1020,7 @@ migrate_node_step4_1(db::graph *G)
 void
 migrate_node_step5(db::graph *G, std::unique_ptr<message::message> msg)
 {
-    std::vector<size_t> update_ids;
+    std::vector<uint64_t> update_ids;
     db::element::node *n = G->migr_node;
     message::unpack_message(*msg, message::MIGRATE_NODE_STEP4, update_ids);
     n->update_mutex.lock();
@@ -1053,7 +1049,6 @@ migrate_node_step6(db::graph *G)
     size_t nptr = (size_t)n;
     n->state = db::element::node::mode::MOVED;
     // inform all in-nbrs of new location
-    std::cout << n->in_edges.size() << std::endl;
     for (auto &nbr: n->in_edges)
     {
         message::prepare_message(msg, message::MIGRATED_NBR_UPDATE, nbr.second->nbr.handle, 
@@ -1086,7 +1081,7 @@ void
 unpack_update_request(db::graph *G, void *req)
 {
     db::update_request *request = (db::update_request *) req;
-    size_t req_id;
+    uint64_t req_id;
     uint64_t start_time, time2;
     size_t n1, n2, edge;
     int loc;
@@ -1196,7 +1191,7 @@ unpack_update_request(db::graph *G, void *req)
 void
 unpack_transit_update_request(db::graph *G, db::update_request *request)
 {
-    size_t req_id;
+    uint64_t req_id;
     size_t n2, edge;
     int loc;
     uint64_t time;
@@ -1248,7 +1243,7 @@ void
 process_pending_updates(db::graph *G, void *req)
 {
     db::update_request *request = (db::update_request *) req;
-    size_t req_id;
+    uint64_t req_id;
     request->msg->buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(enum message::msg_type)) >> req_id;
     db::update_request *r = new db::update_request(request->type, req_id, std::move(request->msg));
     G->migration_mutex.lock();
@@ -1284,7 +1279,7 @@ runner(db::graph *G)
     message::message msg;
     db::thread::unstarted_thread *thr;
     db::update_request *request;
-    size_t done_id;
+    uint64_t done_id;
     uint64_t start_time;
 
     while (1)
@@ -1403,7 +1398,7 @@ runner(db::graph *G)
 void
 shard_daemon(db::graph *G)
 {
-    std::unordered_map<size_t, std::vector<size_t>> *next_map;
+    std::unordered_map<uint64_t, std::vector<size_t>> *next_map;
     while (true)
     {
         std::chrono::seconds duration(40); // execution frequency in seconds
@@ -1419,7 +1414,7 @@ shard_daemon(db::graph *G)
         }
         for (auto it = next_map->begin(); it != next_map->end(); it++)
         {
-            size_t req_id = it->first;
+            uint64_t req_id = it->first;
             for (auto vec_it = it->second.begin(); vec_it != it->second.end(); vec_it++)
             {
                 db::element::node *n = (db::element::node *)*vec_it;

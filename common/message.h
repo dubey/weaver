@@ -219,7 +219,7 @@ namespace message
     {
         size_t total_size = 0;
         // O(n) size operation can handle keys and values of differing sizes
-        for (const std::pair<T1,T2> &pair : t) //XXX change to reference
+        for (const std::pair<T1,T2> &pair : t)
         {
             total_size += size(pair.first) + size(pair.second);
         }

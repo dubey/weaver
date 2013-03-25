@@ -51,8 +51,8 @@ namespace element
             std::unordered_map<size_t, edge*> out_edges;
             std::unordered_map<size_t, edge*> in_edges;
             po6::threads::mutex update_mutex;
-            std::unordered_set<size_t> seen; // requests which have been seen
-            std::unique_ptr<std::vector<size_t>> cached_req_ids; // requests which have been cached
+            std::unordered_set<uint64_t> seen; // requests which have been seen
+            std::unique_ptr<std::vector<uint64_t>> cached_req_ids; // requests which have been cached
             // for migration
             size_t new_handle;
             int prev_loc, new_loc;
@@ -63,18 +63,18 @@ namespace element
 
         public:
             size_t add_edge(edge *e, bool in_or_out);
-            bool check_and_add_seen(size_t id);
-            void remove_seen(size_t id);
-            void set_seen(std::unordered_set<size_t> &seen);
-            void add_cached_req(size_t req_id);
-            void remove_cached_req(size_t req_id);
-            std::unique_ptr<std::vector<size_t>> purge_cache();
+            bool check_and_add_seen(uint64_t id);
+            void remove_seen(uint64_t id);
+            void set_seen(std::unordered_set<uint64_t> &seen);
+            void add_cached_req(uint64_t req_id);
+            void remove_cached_req(uint64_t req_id);
+            std::unique_ptr<std::vector<uint64_t>> purge_cache();
     };
 
     inline
     node :: node()
         : state(mode::NASCENT)
-        , cached_req_ids(new std::vector<size_t>)
+        , cached_req_ids(new std::vector<uint64_t>)
         , prev_loc(-1)
         , new_loc(-1)
         , msg_count(NUM_SHARDS, 0)
@@ -87,7 +87,7 @@ namespace element
     node :: node(uint64_t time)
         : element(time)
         , state(mode::NASCENT)
-        , cached_req_ids(new std::vector<size_t>())
+        , cached_req_ids(new std::vector<uint64_t>())
         , prev_loc(-1)
         , new_loc(-1)
         , msg_count(NUM_SHARDS, 0)
@@ -109,8 +109,10 @@ namespace element
     }
 
     inline bool
-    node :: check_and_add_seen(size_t id)
+    node :: check_and_add_seen(uint64_t id)
     {
+        //std::cout << "Num visited ds, for node " << (void*)this << " = "
+        //    << seen.size() << std::endl;
         if (seen.find(id) != seen.end()) {
             return true;
         } else {
@@ -120,34 +122,34 @@ namespace element
     }
 
     inline void
-    node :: remove_seen(size_t id)
+    node :: remove_seen(uint64_t id)
     {
         seen.erase(id);
     }
 
     inline void
-    node :: set_seen(std::unordered_set<size_t> &s)
+    node :: set_seen(std::unordered_set<uint64_t> &s)
     {
         seen = s;
     }
 
     inline void
-    node :: add_cached_req(size_t req_id)
+    node :: add_cached_req(uint64_t req_id)
     {
         cached_req_ids->push_back(req_id);
     }
 
     inline void
-    node :: remove_cached_req(size_t req_id)
+    node :: remove_cached_req(uint64_t req_id)
     {
         cached_req_ids->erase(std::remove(cached_req_ids->begin(), cached_req_ids->end(), req_id), cached_req_ids->end());
     }
 
-    inline std::unique_ptr<std::vector<size_t>>
+    inline std::unique_ptr<std::vector<uint64_t>>
     node :: purge_cache()
     {
-        std::unique_ptr<std::vector<size_t>> ret = std::move(cached_req_ids);
-        cached_req_ids.reset(new std::vector<size_t>());
+        std::unique_ptr<std::vector<uint64_t>> ret = std::move(cached_req_ids);
+        cached_req_ids.reset(new std::vector<uint64_t>());
         return ret;
     }
 

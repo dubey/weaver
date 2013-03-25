@@ -16,7 +16,6 @@
 #define __REQ_OBJS__
 
 #include <vector>
-//#include <fstream>
 //#include <iostream>
 #include <unordered_map>
 //#include <po6/net/location.h>
@@ -46,17 +45,23 @@ namespace std
 
 namespace db
 {
-    class dijkstra_queue_elem{
+    class dijkstra_queue_elem
+    {
         public:
             size_t cost;
             int shard_loc;
             size_t addr;
+
+        public:
             int operator<(const dijkstra_queue_elem& other) const
-              { return cost > other.cost; }
+            { 
+                return cost > other.cost; 
+            }
 
             dijkstra_queue_elem()
             {
             }
+
             dijkstra_queue_elem(size_t c, int s, size_t a)
             {
                 cost = c;
@@ -66,14 +71,14 @@ namespace db
     };
 
     // Pending shorest or widest path request
+    // TODO convert req_ids to uint64_t
     class path_request
     {
         public:
-            size_t coord_id; // coordinator's req id
+            uint64_t coord_id; // coordinator's req id
             size_t start_time;
             std::priority_queue<dijkstra_queue_elem> possible_next_nodes; 
             std::unordered_map<std::pair<int,size_t>, size_t> visited_map;
-
             size_t dest_ptr;
             int dest_loc;
             std::vector<common::property> edge_props;
@@ -180,6 +185,6 @@ namespace db
     {
     }
     */
-} //namespace db
+} 
 
 #endif //__REQ_OBJS__
