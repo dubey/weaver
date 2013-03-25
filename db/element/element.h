@@ -74,10 +74,8 @@ namespace element
     element :: delete_property(uint32_t key, uint64_t del_time)
     {
         std::vector<common::property>::iterator iter;
-        for (iter = properties.begin(); iter<properties.end(); iter++)
-        {
-            if (iter->key == key) 
-            {
+        for (iter = properties.begin(); iter<properties.end(); iter++) {
+            if (iter->key == key) {
                 iter->update_del_time(del_time);
             }
         }
@@ -94,11 +92,8 @@ namespace element
     element :: has_property(common::property prop)
     {
         std::vector<common::property>::iterator iter;
-        for (iter = properties.begin(); iter<properties.end(); iter++)
-        {
-            if (prop == *iter && prop.get_creat_time() >= iter->get_creat_time()
-                && prop.get_creat_time() < iter->get_del_time()) 
-            {
+        for (iter = properties.begin(); iter<properties.end(); iter++) {
+            if (prop == *iter && prop.get_creat_time() >= iter->get_creat_time() && prop.get_creat_time() < iter->get_del_time()) {
                 return true;
             } 
         }
@@ -109,10 +104,8 @@ namespace element
     element :: check_and_add_property(common::property prop)
     {
         std::vector<common::property>::iterator iter;
-        for (iter = properties.begin(); iter<properties.end(); iter++)
-        {
-            if (prop == *iter) 
-            {
+        for (iter = properties.begin(); iter<properties.end(); iter++) {
+            if (prop == *iter) {
                 return true;
             }
         }

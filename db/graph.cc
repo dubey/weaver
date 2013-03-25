@@ -123,8 +123,7 @@ handle_refresh_response(db::graph *G, std::unique_ptr<message::message> msg){
 inline void
 change_property_times(std::vector<common::property> &props, uint64_t creat_time)
 {
-    for (auto &p : props)
-    {
+    for (auto &p : props) {
         p.creat_time = creat_time;
     }
 }
@@ -256,22 +255,19 @@ handle_reachable_request(db::graph *G, void *reqptr)
     //need mutex since there can be multiple replies
     //for same outstanding req
     request->lock();
-    
-    if (!G->check_request(request->coord_id)) // checking if the request has been handled
-    {
+    // checking if the request has been handled
+    if (!G->check_request(request->coord_id)) {
     // iterating over src_nodes
     src_iter = 0;
     src_end = request->src_nodes.size();
-    while ((src_iter < src_end) && (!reached)) // traverse local graph as much as possible
-    {
-        for (; src_iter < src_end; src_iter++)
-        {
+    // traverse local graph as much as possible
+    while ((src_iter < src_end) && (!reached)) {
+        for (; src_iter < src_end; src_iter++) {
             // because the coordinator placed the node's address in the message, 
             // we can just cast it back to a pointer
             n = (db::element::node *)(request->src_nodes.at(src_iter));
             n->update_mutex.lock();
-            if (n->get_del_time() <= request->coord_id)
-            {
+            if (n->get_del_time() <= request->coord_id) {
                 // trying to traverse deleted node
                 request->del_nodes.push_back((size_t)n);
                 request->del_times.push_back(n->get_del_time());
@@ -313,22 +309,19 @@ handle_reachable_request(db::graph *G, void *reqptr)
 #endif
                     } else {
                         // check the properties of each out-edge
-                        for (auto &iter : n->out_edges)
-                        {
+                        for (auto &iter : n->out_edges) {
                             db::element::edge *e = iter.second;
                             bool traverse_edge = e->get_creat_time() <= request->coord_id
                                 && e->get_del_time() > request->coord_id; // edge created and deleted in acceptable timeframe
                             size_t i;
-                            for (i = 0; i < request->edge_props.size() && traverse_edge; i++) // checking edge properties
-                            {
-                                if (!e->has_property(request->edge_props.at(i)))
-                                {
+                            // checking edge properties
+                            for (i = 0; i < request->edge_props.size() && traverse_edge; i++) {
+                                if (!e->has_property(request->edge_props.at(i))) {
                                     traverse_edge = false;
                                     break;
                                 }
                             }
-                            if (traverse_edge)
-                            {
+                            if (traverse_edge) {
                                 // Continue propagating reachability request
                                 if (e->nbr.loc == G->myid) {
                                     request->src_nodes.emplace_back(e->nbr.handle);
@@ -356,8 +349,7 @@ handle_reachable_request(db::graph *G, void *reqptr)
                 }
             }
             n->update_mutex.unlock();
-            if (reached)
-            {
+            if (reached) {
                 break;
             }
         }
@@ -394,8 +386,7 @@ handle_reachable_request(db::graph *G, void *reqptr)
 #ifdef DEBUG
         std::cout << "Count for request " << request->coord_id << " is " << G->req_count[request->coord_id] << std::endl;
 #endif
-        for (loc_iter = msg_batch.begin(); loc_iter != msg_batch.end(); loc_iter++)
-        {
+        for (loc_iter = msg_batch.begin(); loc_iter != msg_batch.end(); loc_iter++) {
             if (loc_iter->second.size() != 0) {
                 request->num++;
                 G->propagate_request(loc_iter->second, request, loc_iter->first);
@@ -443,42 +434,32 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
 
     prev_reach_node = 0;
     prev_reach_node_pos = -1;
-    if (reachable_reply || num_del_nodes > 0)
-    {   
+    if (reachable_reply || num_del_nodes > 0) {   
         // caching positive result
         // also deleting edges for nodes that have been deleted
-        for (auto node_iter: request->src_nodes)
-        {
+        for (auto node_iter: request->src_nodes) {
             prev_reach_node_pos++;
             n = (db::element::node *)(node_iter);
             n->update_mutex.lock();
-            for (auto &iter : n->out_edges)
-            {
+            for (auto &iter : n->out_edges) {
                 db::element::edge *e = iter.second;
                 // deleting edges
-                if (num_del_nodes > 0)
-                {
-                    for (size_t i = 0; i < num_del_nodes; i++)
-                    {
-                        if (e->nbr.handle == del_nodes[i])
-                        {
+                if (num_del_nodes > 0) {
+                    for (size_t i = 0; i < num_del_nodes; i++) {
+                        if (e->nbr.handle == del_nodes[i]) {
                             e->update_del_time(del_times[i]);
                         }
                     }
                 }
                 // caching
-                if (reachable_reply && !request->reachable)
-                {
-                    if ((e->nbr.handle == reach_node) &&
-                        (e->nbr.loc == reach_loc))
-                    {
+                if (reachable_reply && !request->reachable) {
+                    if ((e->nbr.handle == reach_node) && (e->nbr.loc == reach_loc)) {
                         bool traverse_edge = e->get_creat_time() <= request->coord_id
                             && e->get_del_time() > request->coord_id; // edge created and deleted in acceptable timeframe
                         size_t i;
-                        for (i = 0; i < request->edge_props.size() && traverse_edge; i++) // checking edge properties
-                        {
-                            if (!e->has_property(request->edge_props.at(i)))
-                            {
+                        // checking edge properties
+                        for (i = 0; i < request->edge_props.size() && traverse_edge; i++) {
+                            if (!e->has_property(request->edge_props.at(i))) {
                                 traverse_edge = false;
                                 break;
                             }
@@ -506,8 +487,7 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
             bool loop = true;
             db::element::node *n;
             size_t prev_pos = request->parent_nodes.at(prev_reach_node_pos);
-            while (loop)
-            {
+            while (loop) {
                 if (prev_pos == UINT64_MAX) {
                     loop = false;
                 } else {
@@ -533,8 +513,7 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
     // check if this is the last expected reply for this batched request
     // and we got all negative replies till now
     // or this is a positive reachable reply
-    if (((request->num == 0) || reachable_reply) && !request->reachable)
-    {
+    if (((request->num == 0) || reachable_reply) && !request->reachable) {
         request->reachable |= reachable_reply;
         message::prepare_message(*msg, message::REACHABLE_REPLY, prev_req_id, reachable_reply, prev_reach_node,
             G->myid, request->del_nodes, request->del_times, cached_req_id);
@@ -556,8 +535,7 @@ unpack_traversal_request(db::graph *G, std::unique_ptr<message::message> msg)
         req->coord_id, req->prev_id, req->edge_props, req->ignore_cache);
 
     // invalidating stale cache entries
-    for (auto &remove: req->ignore_cache)
-    {
+    for (auto &remove: req->ignore_cache) {
         G->remove_cache(remove);
     }
 
@@ -578,16 +556,16 @@ handle_cache_update(db::graph *G, std::unique_ptr<message::message> msg)
     message::unpack_message(*msg, message::CACHE_UPDATE, good, bad, perm_del_id);
     
     // invalidations
-    for (size_t i = 0; i < bad.size(); i++)
-    {
+    for (size_t i = 0; i < bad.size(); i++) {
         G->remove_cache(bad[i]);
     }
 
     // confirmations
-    for (size_t i = 0; i < good.size(); i++)
-    {
+    for (size_t i = 0; i < good.size(); i++) {
         G->commit_cache(good[i]);
     }
+
+    G->permanent_delete(perm_del_id);
 
     message::prepare_message(*msg, message::CACHE_UPDATE_ACK); 
     G->send_coord(msg->buf);
@@ -789,8 +767,7 @@ find_num_valid_neighbors(db::element::node *n, std::unordered_map<int, std::unor
         std::vector<common::property> &edge_props, uint64_t myclock_recd, std::vector<uint64_t> &vector_clock)
 {
     size_t num_valid_nbrs = 0;
-    for(db::element::edge *e : n->out_edges)
-    {
+    for (db::element::edge *e : n->out_edges) {
         if (nbrs.count(e->nbr->get_loc()) > 0 && nbrs[e->nbr->get_loc()].count((size_t) e->nbr->get_addr()) > 0){
             uint64_t nbrclock_recd = vector_clock[e->nbr->get_loc()];
             bool use_edge = e->get_creat_time() <= myclock_recd  
@@ -1009,8 +986,7 @@ migrate_node_step4_1(db::graph *G)
     G->mrequest.mutex.lock();
     message::prepare_message(msg, message::MIGRATE_NODE_STEP4, G->mrequest.pending_update_ids);
     G->send(G->mrequest.new_loc, msg.buf);
-    for (auto &m: G->mrequest.pending_updates)
-    {
+    for (auto &m: G->mrequest.pending_updates) {
         G->send(G->mrequest.new_loc, m->buf);
     }
     G->mrequest.mutex.unlock();
@@ -1049,15 +1025,13 @@ migrate_node_step6(db::graph *G)
     size_t nptr = (size_t)n;
     n->state = db::element::node::mode::MOVED;
     // inform all in-nbrs of new location
-    for (auto &nbr: n->in_edges)
-    {
+    for (auto &nbr: n->in_edges) {
         message::prepare_message(msg, message::MIGRATED_NBR_UPDATE, nbr.second->nbr.handle, 
             nptr, G->myid, G->mrequest.migr_node, G->mrequest.new_loc);
         G->send(nbr.second->nbr.loc, msg.buf);
     }
     nodes.push_back(G->mrequest.migr_node);
-    for (auto &r: G->mrequest.pending_requests)
-    {
+    for (auto &r: G->mrequest.pending_requests) {
         r->lock();
         G->propagate_request(nodes, r, G->mrequest.new_loc);
         r->unlock();
@@ -1248,8 +1222,7 @@ process_pending_updates(db::graph *G, void *req)
     db::update_request *r = new db::update_request(request->type, req_id, std::move(request->msg));
     G->migration_mutex.lock();
     G->pending_updates.push(r);
-    while (G->pending_update_ids.front() == G->pending_updates.top()->start_time)
-    {
+    while (G->pending_update_ids.front() == G->pending_updates.top()->start_time) {
         unpack_transit_update_request(G, G->pending_updates.top());
         G->pending_updates.pop();
         G->pending_update_ids.pop_front();
@@ -1282,10 +1255,8 @@ runner(db::graph *G)
     uint64_t done_id;
     uint64_t start_time;
 
-    while (1)
-    {
-        if ((ret = G->bb_recv.recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS)
-        {
+    while (true) {
+        if ((ret = G->bb_recv.recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
             std::cerr << "msg recv error: " << ret << std::endl;
             continue;
         }
@@ -1399,8 +1370,7 @@ void
 shard_daemon(db::graph *G)
 {
     std::unordered_map<uint64_t, std::vector<size_t>> *next_map;
-    while (true)
-    {
+    while (true) {
         std::chrono::seconds duration(40); // execution frequency in seconds
         std::this_thread::sleep_for(duration);
         // deleting visited props
@@ -1412,11 +1382,9 @@ shard_daemon(db::graph *G)
             next_map = &G->visit_map_even;
             G->visit_map = true;
         }
-        for (auto it = next_map->begin(); it != next_map->end(); it++)
-        {
+        for (auto it = next_map->begin(); it != next_map->end(); it++) {
             uint64_t req_id = it->first;
-            for (auto vec_it = it->second.begin(); vec_it != it->second.end(); vec_it++)
-            {
+            for (auto vec_it = it->second.begin(); vec_it != it->second.end(); vec_it++) {
                 db::element::node *n = (db::element::node *)*vec_it;
                 n->update_mutex.lock();
                 G->remove_visited(n, req_id);
@@ -1432,8 +1400,7 @@ int
 main(int argc, char* argv[])
 {
     std::thread *t;
-    if (argc != 4)
-    {
+    if (argc != 4) {
         std::cerr << "Usage: " << argv[0] << " <myid> <ipaddr> <port> " << std::endl;
         return -1;
     }

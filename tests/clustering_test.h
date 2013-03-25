@@ -25,18 +25,15 @@ clustering_test()
     size_t star_edges[num_nodes*2];
     size_t edges_per_node = 6;
     size_t ring_edges[num_nodes*edges_per_node];
-    for (i = 0; i < num_nodes; i++)
-    {
+    for (i = 0; i < num_nodes; i++) {
         star_nodes[i] = c.create_node();
     }
-    for (i = 0; i < num_nodes; i++)
-    {
+    for (i = 0; i < num_nodes; i++) {
         star_edges[i] = c.create_edge(central_node, star_nodes[i]);
     }
     //connect star nodes back to center. Shouldn't change coefficient
     assert(c.local_clustering_coefficient(central_node, edge_props) == 0);
-    for (i = 0; i < num_nodes; i++)
-    {
+    for (i = 0; i < num_nodes; i++) {
         star_edges[i+num_nodes] = c.create_edge(star_nodes[i], central_node);
     }
     assert(c.local_clustering_coefficient(central_node, edge_props) == 0);
@@ -44,10 +41,8 @@ clustering_test()
     size_t numerator;
     double denominator = (double) ((num_nodes)*(num_nodes-1));
     double calculated_coeff;
-    for (int node_skip = 1; node_skip <= edges_per_node; node_skip++)
-    {
-        for (i = 0; i < num_nodes; i++)
-        {
+    for (int node_skip = 1; node_skip <= edges_per_node; node_skip++) {
+        for (i = 0; i < num_nodes; i++) {
             ring_edges[i+((node_skip-1)*num_nodes)] =
                 c.create_edge(star_nodes[i], star_nodes[(i+node_skip)%num_nodes]);
             numerator = ((node_skip-1)*num_nodes+i+1);
@@ -56,19 +51,18 @@ clustering_test()
         }
     }
     //delete some of the original edges and nodes of star graph
-    for (i = 0; i < (num_nodes-edges_per_node); i++)
-    {
+    for (i = 0; i < (num_nodes-edges_per_node); i++) {
         denominator = (double) ((num_nodes-i-1)*(num_nodes-i-2));
         numerator = edges_per_node*(num_nodes-i-1);
         //account for edges pointing to already deleted nodes
-        for (int j = 0; j <= i && j < edges_per_node; j++){
+        for (int j = 0; j <= i && j < edges_per_node; j++) {
             numerator -= (edges_per_node-j);
         }
-        if ((i % 2) == 0)
+        if ((i % 2) == 0) {
             c.delete_edge(central_node, star_edges[i]);
-        else
+        } else {
             c.delete_node(star_nodes[i]);
-        //std::cerr << "expected " << numerator << " over " << denominator << "\n";
+        }
         assert(c.local_clustering_coefficient(central_node, edge_props) == numerator/denominator);
     }
 }

@@ -158,12 +158,10 @@ namespace element
     {
         uint64_t s1 = 0;
         uint64_t s2 = 0;
-        for (uint32_t i: n1->msg_count) 
-        {
+        for (uint32_t i: n1->msg_count) {
             s1 += (uint64_t)i;
         }
-        for (uint32_t i: n2->msg_count) 
-        {
+        for (uint32_t i: n2->msg_count) {
             s2 += (uint64_t)i;
         }
         return (s1<s2);

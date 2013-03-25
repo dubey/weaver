@@ -33,8 +33,7 @@ check_reachability()
 {
     client c(CLIENT_PORT+1);
     int i, j;
-    while (true)
-    {
+    while (true) {
         synch_mutex.lock();
         while (!check_reachable && !end_program) {
             synch_cond.wait();
@@ -43,15 +42,12 @@ check_reachability()
             synch_mutex.unlock();
             return;
         }
-        for (i = 0; i < 4; i++)
-        {
-            for (j = 0; j < 4; j++)
-            {
+        for (i = 0; i < 4; i++) {
+            for (j = 0; j < 4; j++) {
                 if (i==j) {
                     continue;
                 }
-                bool reach = c.reachability_request(repetitive_nodes[i],
-                    repetitive_nodes[j], edge_props);
+                bool reach = c.reachability_request(repetitive_nodes[i], repetitive_nodes[j], edge_props);
                 if ((i==n1 && j==n2) || (i==n3 && j==n4)) {
                     assert(reach);
                 } else {
@@ -114,16 +110,14 @@ repetitive_stress_client()
     int i, j;
     std::thread *t;
     timespec t1, t2, dif;
-    for (i = 0; i < 10; i++)
-    {
+    for (i = 0; i < 10; i++) {
         repetitive_nodes[i] = c.create_node();
     }
     t = new std::thread(check_reachability);
     t->detach();
     
     clock_gettime(CLOCK_MONOTONIC, &t1);
-    for (i = 0; i < 10000; i++)
-    {
+    for (i = 0; i < 10000; i++) {
         clock_gettime(CLOCK_MONOTONIC, &t2);
         dif = diff(t1, t2);
         std::cout << "Test: i = " << i << ", ";

@@ -21,6 +21,7 @@
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
 
+#include "request_objects.h"
 #include "graph.h"
 #include "common/message.h"
 
@@ -99,8 +100,7 @@ namespace thread
     {
         int i;
         std::unique_ptr<std::thread> t;
-        for (i = 0; i < num_threads; i++)
-        {
+        for (i = 0; i < num_threads; i++) {
             t.reset(new std::thread(worker_thread_loop, this));
             t->detach();
         }
