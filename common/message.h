@@ -61,6 +61,8 @@ namespace message
         TRANSIT_NODE_DELETE_REQ,
         EDGE_DELETE_REQ,
         TRANSIT_EDGE_DELETE_REQ,
+        PERMANENT_DELETE_EDGE,
+        PERMANENT_DELETE_EDGE_ACK,
         NODE_DELETE_ACK,
         EDGE_DELETE_ACK,
         EDGE_ADD_PROP,

@@ -26,8 +26,8 @@
 #include "busybee_constants.h"
 
 #include "common/weaver_constants.h"
-#include "graph.h"
 #include "common/message.h"
+#include "graph.h"
 
 void handle_reachable_request(db::graph *G, void *request);
 void handle_dijkstra_prop(db::graph *G, void *request);
@@ -143,9 +143,9 @@ handle_create_node(db::graph *G, uint64_t req_id)
 
 // delete a graph node
 void
-handle_delete_node(db::graph *G, uint64_t req_id, size_t node_handle, std::unique_ptr<std::vector<size_t>> cache)
+handle_delete_node(db::graph *G, uint64_t req_id, size_t node_handle, std::unique_ptr<std::vector<uint64_t>> cache)
 {
-    std::pair<bool, std::unique_ptr<std::vector<size_t>>> success;
+    std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> success;
     std::unique_ptr<message::message> msg(new message::message());
     success = G->delete_node((db::element::node*)node_handle, req_id);
     if (cache) {
@@ -164,7 +164,7 @@ handle_delete_node(db::graph *G, uint64_t req_id, size_t node_handle, std::uniqu
 void
 handle_create_edge(db::graph *G, uint64_t req_id, size_t n1, size_t n2, int loc2, uint64_t tc2)
 {
-    std::pair<bool, size_t> success;
+    std::pair<bool, uint64_t> success;
     std::unique_ptr<message::message> msg(new message::message());
     success = G->create_edge(n1, req_id, n2, loc2, tc2);
     if (success.first) {
@@ -189,9 +189,9 @@ handle_create_reverse_edge(db::graph *G, uint64_t req_id, size_t remote_node, in
 
 // delete an edge
 void
-handle_delete_edge(db::graph *G, uint64_t req_id, size_t n, size_t e, std::unique_ptr<std::vector<size_t>> cache)
+handle_delete_edge(db::graph *G, uint64_t req_id, size_t n, uint64_t e, std::unique_ptr<std::vector<uint64_t>> cache)
 {
-    std::pair<bool, std::unique_ptr<std::vector<size_t>>> success;
+    std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> success;
     std::unique_ptr<message::message> msg(new message::message());
     success = G->delete_edge((db::element::node*)n, e, req_id);
     if (cache) {
@@ -208,7 +208,7 @@ handle_delete_edge(db::graph *G, uint64_t req_id, size_t n, size_t e, std::uniqu
 
 // add edge property
 void
-handle_add_edge_property(db::graph *G, uint64_t req_id, size_t node_addr, size_t edge_addr, common::property &prop)
+handle_add_edge_property(db::graph *G, uint64_t req_id, size_t node_addr, uint64_t edge_addr, common::property &prop)
 {
     std::unique_ptr<message::message> msg(new message::message());
     if (!G->add_edge_property(node_addr, edge_addr, prop)) {
@@ -219,10 +219,10 @@ handle_add_edge_property(db::graph *G, uint64_t req_id, size_t node_addr, size_t
 
 // delete all edge properties with the given key
 void
-handle_delete_edge_property(db::graph *G, uint64_t req_id, size_t node_addr, size_t edge_addr, uint32_t key,
-    std::unique_ptr<std::vector<size_t>> cache)
+handle_delete_edge_property(db::graph *G, uint64_t req_id, size_t node_addr, uint64_t edge_addr, uint32_t key,
+    std::unique_ptr<std::vector<uint64_t>> cache)
 {
-    std::pair<bool, std::unique_ptr<std::vector<size_t>>> success;
+    std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> success;
     std::unique_ptr<message::message> msg(new message::message());
     success = G->delete_all_edge_property(node_addr, edge_addr, key, req_id);
     if (cache) {
@@ -566,9 +566,6 @@ handle_cache_update(db::graph *G, std::unique_ptr<message::message> msg)
     }
 
     G->permanent_delete(perm_del_id);
-
-    message::prepare_message(*msg, message::CACHE_UPDATE_ACK); 
-    G->send_coord(msg->buf);
 }
 
 /*
@@ -1057,11 +1054,12 @@ unpack_update_request(db::graph *G, void *req)
     db::update_request *request = (db::update_request *) req;
     uint64_t req_id;
     uint64_t start_time, time2;
-    size_t n1, n2, edge;
+    size_t n1, n2;
+    uint64_t edge;
     int loc;
     common::property prop;
     uint32_t key;
-    std::unique_ptr<std::vector<size_t>> cache;
+    std::unique_ptr<std::vector<uint64_t>> cache;
 
     switch (request->type)
     {
@@ -1101,6 +1099,17 @@ unpack_update_request(db::graph *G, void *req)
             if (G->increment_clock()) {
                 migrate_node_step4_1(G);
             }
+            break;
+
+        case message::PERMANENT_DELETE_EDGE:
+            message::unpack_message(*request->msg, message::PERMANENT_DELETE_EDGE, n1, edge);
+            G->permanent_edge_delete(n1, edge);
+            break;
+
+        case message::PERMANENT_DELETE_EDGE_ACK:
+            message::unpack_message(*request->msg, message::PERMANENT_DELETE_EDGE_ACK, n1, edge);
+            G->permanent_delete_front(n1, edge);
+            G->permanent_delete(G->del_id);
             break;
 
         case message::EDGE_ADD_PROP:
@@ -1171,7 +1180,7 @@ unpack_transit_update_request(db::graph *G, db::update_request *request)
     uint64_t time;
     common::property prop;
     uint32_t key;
-    std::unique_ptr<std::vector<size_t>> cache;
+    std::unique_ptr<std::vector<uint64_t>> cache;
 
     switch (request->type)
     {
@@ -1298,6 +1307,8 @@ runner(db::graph *G)
             case message::MIGRATE_NODE_STEP4:
             case message::MIGRATE_NODE_STEP5:
             case message::MIGRATED_NBR_UPDATE:
+            case message::PERMANENT_DELETE_EDGE:
+            case message::PERMANENT_DELETE_EDGE_ACK:
                 request = new db::update_request(mtype, 0, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(0, unpack_update_request, G, request);
                 G->thread_pool.add_request(thr);

@@ -20,6 +20,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <po6/net/location.h>
+#include <po6/threads/mutex.h>
 
 #include "common/property.h"
 

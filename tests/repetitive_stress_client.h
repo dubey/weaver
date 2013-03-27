@@ -111,8 +111,10 @@ repetitive_stress_client()
     std::thread *t;
     timespec t1, t2, dif;
     for (i = 0; i < 10; i++) {
+        std::cout << "Creating node " << (i+1) << std::endl;
         repetitive_nodes[i] = c.create_node();
     }
+    std::cout << "Created nodes\n";
     t = new std::thread(check_reachability);
     t->detach();
     

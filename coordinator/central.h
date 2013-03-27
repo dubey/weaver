@@ -83,7 +83,8 @@ namespace coordinator
             std::shared_ptr<pending_req> del_request;
             // request reply
             bool done;
-            size_t addr;
+            size_t node_handle;
+            uint64_t edge_handle;
             bool reachable;
             size_t clustering_numerator;
             size_t clustering_denominator;
@@ -100,7 +101,6 @@ namespace coordinator
             , value(v)
             , client(std::move(cloc))
             , done(false)
-            , addr(0)
             , cached_req_id(0)
         {
         }
@@ -113,7 +113,6 @@ namespace coordinator
             , edge_props(eprops)
             , client(std::move(cloc))
             , done(false)
-            , addr(0)
             , cached_req_id(0)
         {
         }
@@ -141,8 +140,8 @@ namespace coordinator
             int port_ctr;
             std::vector<std::shared_ptr<po6::net::location>> shards;
             uint32_t num_shards;
-            std::unordered_map<uint64_t, common::meta_element *> nodes;
-            std::vector<common::meta_element *> edges;
+            std::unordered_map<uint64_t, common::meta_element*> nodes;
+            std::vector<common::meta_element*> edges;
             vclock::vector vc;
             // big mutex
             po6::threads::mutex update_mutex;

@@ -48,8 +48,8 @@ namespace element
         
         public:
             enum mode state;
-            std::unordered_map<size_t, edge*> out_edges;
-            std::unordered_map<size_t, edge*> in_edges;
+            std::unordered_map<uint64_t, edge*> out_edges;
+            std::unordered_map<uint64_t, edge*> in_edges;
             po6::threads::mutex update_mutex;
             std::unordered_set<uint64_t> seen; // requests which have been seen
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids; // requests which have been cached
@@ -62,7 +62,7 @@ namespace element
             uint32_t out_edge_ctr, in_edge_ctr;
 
         public:
-            size_t add_edge(edge *e, bool in_or_out);
+            uint64_t add_edge(edge *e, bool in_or_out);
             bool check_and_add_seen(uint64_t id);
             void remove_seen(uint64_t id);
             void set_seen(std::unordered_set<uint64_t> &seen);
@@ -96,23 +96,20 @@ namespace element
     {
     }
 
-    inline size_t
+    inline uint64_t
     node :: add_edge(edge *e, bool in_or_out)
     {
         if (in_or_out) {
-            out_edges.emplace(out_edge_ctr, e);
-            return (out_edge_ctr++);
+            out_edges.emplace(e->get_creat_time(), e);
         } else {
-            in_edges.emplace(in_edge_ctr, e);
-            return (in_edge_ctr++);
+            in_edges.emplace(e->get_creat_time(), e);
         }
+        return e->get_creat_time();
     }
 
     inline bool
     node :: check_and_add_seen(uint64_t id)
     {
-        //std::cout << "Num visited ds, for node " << (void*)this << " = "
-        //    << seen.size() << std::endl;
         if (seen.find(id) != seen.end()) {
             return true;
         } else {
