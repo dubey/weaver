@@ -28,17 +28,18 @@
 #include "common/meta_element.h"
 #include "element/node.h"
 #include "element/edge.h"
+#include "element/remote_node.h"
 
 namespace std
 {
-    // used if we want a hash table with a pair as the key (in our cause a pair or shard location with mem location
+    // used if we want a hash table with a remote node as the key
     template <>
-    struct hash<std::pair<int, size_t>> 
+    struct hash<db::element::remote_node> 
     {
         public:
-            size_t operator()(std::pair<int, size_t> x) const throw() 
+            size_t operator()(db::element::remote_node x) const throw() 
             {
-                return (hash<int>()(x.first) * 6291469) + (hash<size_t>()(x.second) * 393241); // some big primes
+                return (hash<int>()(x.loc) * 6291469) + (hash<size_t>()(x.handle) * 393241); // some big primes
             }
     };
 }
@@ -47,12 +48,11 @@ namespace db
 {
     class dijkstra_queue_elem
     {
-        public:
+            public:
             size_t cost;
-            int shard_loc;
-            size_t addr;
+            db::element::remote_node node;
+            db::element::remote_node from_node;
 
-        public:
             int operator<(const dijkstra_queue_elem& other) const
             { 
                 return cost > other.cost; 
@@ -62,31 +62,30 @@ namespace db
             {
             }
 
-            dijkstra_queue_elem(size_t c, int s, size_t a)
+            dijkstra_queue_elem(size_t c, db::element::remote_node n, db::element::remote_node prev)
             {
                 cost = c;
-                shard_loc = s;
-                addr = a;
+                node = n;
+                from_node = prev;
             }
     };
 
     // Pending shorest or widest path request
     // TODO convert req_ids to uint64_t
-    class path_request
+    class dijkstra_request
     {
-        public:
+            public:
             uint64_t coord_id; // coordinator's req id
             size_t start_time;
             std::priority_queue<dijkstra_queue_elem> possible_next_nodes; 
-            std::unordered_map<std::pair<int,size_t>, size_t> visited_map;
-            size_t dest_ptr;
-            int dest_loc;
+            std::unordered_map<db::element::remote_node, std::pair<size_t, db::element::remote_node>> visited_map; // map from a node to its cost and the neighbor the path of that cost came from
+            db::element::remote_node dest_node;
             std::vector<common::property> edge_props;
             std::vector<uint64_t> vector_clock;
             uint32_t edge_weight_name; // they key of the property which holds the weight of an an edge
             bool is_widest_path;
 
-            path_request()
+            dijkstra_request()
             {
             }
     };
@@ -101,10 +100,6 @@ namespace db
             uint64_t start_time, coord_id;
             uint32_t edge_weight_name;
             bool is_widest_path;
-
-            dijkstra_prop()
-            {
-            }
     };
 
     /*

@@ -606,6 +606,16 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
                 NULL, edge_props, std::move(client_loc)));
             clustering_request_initiate(server, request);
             break;
+
+        case message::CLIENT_DIJKSTRA_REQ:
+            message::unpack_message(*msg, message::CLIENT_DIJKSTRA_REQ, 
+                    client_port, elem1, elem2, key, is_widest_path, *edge_props);
+            client_loc->port = client_port;
+            request.reset(new coordinator::pending_req(m_type, (common::meta_element *)elem1, 
+                (common::meta_element *)elem2, edge_props, std::move(client_loc)));
+            reques
+            reachability_request_initiate(server, request);
+            break;
 /*
         case message::CLIENT_DIJKSTRA_REQ: 
             message::unpack_message(*msg, message::CLIENT_DIJKSTRA_REQ, client_port,

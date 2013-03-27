@@ -21,11 +21,13 @@ namespace element
     class remote_node
     {
         public:
+            remote_node();
             remote_node(int, size_t);
 
         public:
             int loc;
             size_t handle;
+            bool operator==(const db::element::remote_node &t) const;
     };
     
     inline
@@ -33,6 +35,16 @@ namespace element
         : loc(l)
         , handle(h)
     {
+    }
+
+    inline
+    remote_node :: remote_node()
+    {
+    }
+
+    inline bool
+    remote_node :: operator==(const db::element::remote_node &t) const{
+        return (handle == t.handle) && (loc == t.loc);
     }
 }
 }

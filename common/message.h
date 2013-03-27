@@ -29,6 +29,7 @@
 #include "db/cache/cache.h" //so we get std::hash override for location
 #include "db/element/node.h"
 #include "db/element/edge.h"
+#include "db/element/remote_node.h"
 #include "db/request_objects.h" // used for packing dijkstra_queue_elem
 
 namespace message
@@ -116,12 +117,15 @@ namespace message
     template <typename T1, typename T2> inline size_t size(const std::unordered_map<T1, T2>& t);
     template <typename T> inline size_t size(const std::unordered_set<T>& t);
     template <typename T> inline size_t size(const std::vector<T>& t);
+    template <typename T1, typename T2> inline size_t size(const std::pair<T1, T2>& t);
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::vector<T>& t);
+    template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer &packer, const std::pair<T1, T2>& t);
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::vector<T>& t);
+    template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::pair<T1, T2>& t);
 
     inline
     message :: message()
@@ -191,9 +195,13 @@ namespace message
         sz += size(t.seen);
         return sz;
     }
+    inline size_t size(const db::element::remote_node &t)
+    {
+        return size(t.loc) + size(t.handle);
+    }
     inline size_t size(const db::dijkstra_queue_elem& t)
     {
-        return size(t.cost) + size(t.shard_loc) + size(t.addr);
+        return size(t.cost) + size(t.node) + size(t.from_node);
     }
 
     template <typename T1, typename T2>
@@ -287,12 +295,18 @@ namespace message
         packer = packer << t.key << t.value << t.creat_time << t.del_time;
     }
 
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const db::element::remote_node& t)
+    {
+        packer = packer << t.loc << t.handle;
+    }
+
     inline void
     pack_buffer(e::buffer::packer &packer, const db::dijkstra_queue_elem& t)
     {
         pack_buffer(packer, t.cost);
-        pack_buffer(packer, t.shard_loc);
-        pack_buffer(packer, t.addr);
+        pack_buffer(packer, t.node);
+        pack_buffer(packer, t.from_node);
     }
 
     template <typename T1, typename T2>
@@ -437,12 +451,18 @@ namespace message
         memcpy(&t, &dbl, sizeof(double)); //to avoid casting issues, probably could avoid copy
     }
 
+    inline void 
+    unpack_buffer(e::unpacker &unpacker, db::element::remote_node& t)
+    {
+        unpacker = unpacker >> t.loc >> t.handle;
+    }
+
     inline void
     unpack_buffer(e::unpacker &unpacker, db::dijkstra_queue_elem& t)
     {
         unpack_buffer(unpacker, t.cost);
-        unpack_buffer(unpacker, t.shard_loc);
-        unpack_buffer(unpacker, t.addr);
+        unpack_buffer(unpacker, t.node);
+        unpack_buffer(unpacker, t.from_node);
     }
 
     template <typename T1, typename T2>
