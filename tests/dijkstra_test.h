@@ -24,8 +24,7 @@ dijkstra_test()
     size_t nodes[6];
     size_t edges[8];
     std::cout << "adding first node " << std::endl;
-    for (i = 0; i < 6; i++)
-    {
+    for (i = 0; i < 6; i++) {
         nodes[i] = c.create_node();
         std::cout << "added node " << i<< std::endl;
     }
@@ -56,7 +55,7 @@ dijkstra_test()
     edges[7] = c.create_edge(nodes[4], nodes[5]);
     c.add_edge_prop(nodes[4], edges[7], weight_label, 6);
 
-std::cout << " starting path requests " << std::endl;
+    std::cout << " starting path requests " << std::endl;
 
     auto retpair = c.shortest_path_request(nodes[0], nodes[5], weight_label, edge_props);
     std::cout <<retpair.first <<std::endl;

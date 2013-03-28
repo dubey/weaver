@@ -37,11 +37,11 @@ namespace common
             uint64_t del_time;
 
         public:
-            bool operator==(property p2) const;
+            bool operator==(property const &p2) const;
 
         public:
-            uint64_t get_creat_time();
-            uint64_t get_del_time();
+            uint64_t get_creat_time() const;
+            uint64_t get_del_time() const;
             void update_del_time(uint64_t);
     };
 
@@ -64,19 +64,19 @@ namespace common
     }
 
     inline bool
-    property :: operator==(property p2) const
+    property :: operator==(property const &p2) const
     {
         return ((key == p2.key) && (value == p2.value));
     }
 
     inline uint64_t
-    property :: get_creat_time()
+    property :: get_creat_time() const
     {
         return creat_time;
     }
 
     inline uint64_t
-    property :: get_del_time()
+    property :: get_del_time() const
     {
         return del_time;
     }

@@ -46,6 +46,59 @@ namespace std
 
 namespace db
 {
+
+    // Pending batched request
+    class batch_request
+    {
+        public:
+            int prev_loc; // prev server's id
+            size_t dest_addr; // dest node's handle
+            int dest_loc; // dest node's server id
+            uint64_t coord_id; // coordinator's req id
+            uint64_t prev_id; // prev server's req id
+            std::vector<size_t> src_nodes;
+            std::vector<size_t> parent_nodes; // pointers to parent node in traversal
+            std::vector<common::property> edge_props;
+            std::vector<uint64_t> vector_clock;
+            std::vector<uint64_t> ignore_cache;
+            uint64_t start_time;
+            int num; // number of onward requests
+            bool reachable; // request specific data
+            std::vector<size_t> del_nodes; // deleted nodes
+            std::vector<uint64_t> del_times; // delete times corr. to del_nodes
+            uint32_t use_cnt; // testing
+
+        private:
+            po6::threads::mutex mutex;
+
+        public:
+            bool operator>(const batch_request &r) const;
+
+        public:
+            void lock();
+            void unlock();
+    };
+
+    inline bool
+    batch_request :: operator>(const batch_request &r) const
+    {
+        return (coord_id > r.coord_id);
+    }
+
+    inline void
+    batch_request :: lock()
+    {
+        mutex.lock();
+        use_cnt++;
+    }
+
+    inline void
+    batch_request :: unlock()
+    {
+        use_cnt--;
+        mutex.unlock();
+    }
+
     class dijkstra_queue_elem
     {
             public:
@@ -140,8 +193,7 @@ namespace db
         void wait_on_responses()
         {
             finished_lock.lock();
-            while (!finished)
-            {
+            while (!finished) {
                 finished_cond.wait();
             }
 
@@ -152,10 +204,8 @@ namespace db
         void add_response(std::vector<std::pair<size_t, uint64_t>> &deleted_nodes, int from_loc)
         {
             node->update_mutex.lock();
-            for (std::pair<size_t,uint64_t> &p : deleted_nodes)
-            {
-                for (db::element::edge *e : node->out_edges)
-                {
+            for (std::pair<size_t,uint64_t> &p : deleted_nodes) {
+                for (db::element::edge *e : node->out_edges) {
                     if (from_loc == e->nbr->get_loc() && p.first == (size_t) e->nbr->get_addr()) {
                         e->nbr->update_del_time(p.second);
                     }

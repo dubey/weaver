@@ -62,6 +62,8 @@ namespace message
         TRANSIT_NODE_DELETE_REQ,
         EDGE_DELETE_REQ,
         TRANSIT_EDGE_DELETE_REQ,
+        PERMANENT_DELETE_EDGE,
+        PERMANENT_DELETE_EDGE_ACK,
         NODE_DELETE_ACK,
         EDGE_DELETE_ACK,
         EDGE_ADD_PROP,
@@ -104,7 +106,7 @@ namespace message
         public:
             message();
             message(enum msg_type t);
-            message(message& copy);
+            message(message &copy);
 
         public:
             enum msg_type type;
@@ -140,7 +142,7 @@ namespace message
     }
 
     inline 
-    message :: message(message& copy)
+    message :: message(message &copy)
         : type(copy.type)
     {
         buf = copy.buf;
@@ -173,7 +175,7 @@ namespace message
     {
         return sizeof(int);
     }
-    inline size_t size(const common::property& t)
+    inline size_t size(const common::property &t)
     {
         return sizeof(uint32_t)+sizeof(size_t)+2*sizeof(uint64_t);
     }
@@ -205,7 +207,7 @@ namespace message
     }
 
     template <typename T1, typename T2>
-    inline size_t size(const std::pair<T1, T2>& t)
+    inline size_t size(const std::pair<T1, T2> &t)
     {
         return size(t.first) + size(t.second);
     }
@@ -215,20 +217,18 @@ namespace message
     {
         // O(n) size operation can handle elements of differing sizes
         size_t total_size = 0;
-        for(const T &elem : t)
-        {
+        for(const T &elem : t) {
             total_size += size(elem);
         }
         return sizeof(size_t)+total_size;
     }
 
     template <typename T1, typename T2>
-    inline size_t size(const std::unordered_map<T1, T2>& t)
+    inline size_t size(const std::unordered_map<T1, T2> &t)
     {
         size_t total_size = 0;
         // O(n) size operation can handle keys and values of differing sizes
-        for (const std::pair<T1,T2> &pair : t)
-        {
+        for (const std::pair<T1,T2> &pair : t) {
             total_size += size(pair.first) + size(pair.second);
         }
         return sizeof(size_t)+total_size;
@@ -238,17 +238,16 @@ namespace message
     inline size_t size(const std::vector<T> &t)
     {
         // first size_t to record size of vector, assumes constant size elements
-        if (t.size()>0){
+        if (t.size()>0) {
             return sizeof(size_t) + (t.size()*size(t[0]));
         }
-        else
-        {
+        else {
             return sizeof(size_t);
         }
     }
 
     template <typename T, typename... Args>
-    inline size_t size(const T& t, const Args&... args)
+    inline size_t size(const T &t, const Args&... args)
     {
         return size(t) + size(args...);
     }
@@ -282,7 +281,7 @@ namespace message
     }
 
     inline void 
-    pack_buffer(e::buffer::packer &packer, const double& t)
+    pack_buffer(e::buffer::packer &packer, const double &t)
     {
         uint64_t dbl;
         memcpy(&dbl, &t, sizeof(double)); //to avoid casting issues, probably could avoid copy
@@ -290,7 +289,7 @@ namespace message
     }
 
     inline void 
-    pack_buffer(e::buffer::packer &packer, const common::property& t)
+    pack_buffer(e::buffer::packer &packer, const common::property &t)
     {
         packer = packer << t.key << t.value << t.creat_time << t.del_time;
     }
@@ -302,7 +301,7 @@ namespace message
     }
 
     inline void
-    pack_buffer(e::buffer::packer &packer, const db::dijkstra_queue_elem& t)
+    pack_buffer(e::buffer::packer &packer, const db::dijkstra_queue_elem &t)
     {
         pack_buffer(packer, t.cost);
         pack_buffer(packer, t.node);
@@ -311,21 +310,21 @@ namespace message
 
     template <typename T1, typename T2>
     inline void 
-    pack_buffer(e::buffer::packer &packer, const std::pair<T1, T2>& t)
+    pack_buffer(e::buffer::packer &packer, const std::pair<T1, T2> &t)
     {
         // assumes constant size
         pack_buffer(packer, t.first);
         pack_buffer(packer, t.second);
     }
 
-    inline void pack_buffer(e::buffer::packer& packer, const db::element::edge* const &t)
+    inline void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t)
     {
         packer = packer << t->get_creat_time() << t->get_del_time() << t->nbr.handle << t->nbr.loc;
         pack_buffer(packer, *t->get_props());
     }
 
     inline void
-    pack_buffer(e::buffer::packer& packer, const db::element::node &t)
+    pack_buffer(e::buffer::packer &packer, const db::element::node &t)
     {
         packer = packer << t.get_creat_time() << t.get_del_time();
         pack_buffer(packer, *t.get_props());
@@ -336,15 +335,14 @@ namespace message
 
     template <typename T> 
     inline void 
-    pack_buffer(e::buffer::packer &packer, const std::vector<T>& t)
+    pack_buffer(e::buffer::packer &packer, const std::vector<T> &t)
     {
         // !assumes constant element size
         size_t num_elems = t.size();
         packer = packer << num_elems;
         if (num_elems > 0){
             size_t element_size = size(t[0]);
-            for (const T &elem : t)
-            {
+            for (const T &elem : t) {
                 pack_buffer(packer, elem);
                 assert(element_size == size(elem));//slow
             }
@@ -353,24 +351,22 @@ namespace message
 
     template <typename T>
     inline void 
-    pack_buffer(e::buffer::packer &packer, const std::unordered_set<T>& t)
+    pack_buffer(e::buffer::packer &packer, const std::unordered_set<T> &t)
     {
         size_t num_keys = t.size();
         packer = packer << num_keys;
-        for (const T &elem : t)
-        {
+        for (const T &elem : t) {
             pack_buffer(packer, elem);
         }
     }
 
     template <typename T1, typename T2>
     inline void 
-    pack_buffer(e::buffer::packer &packer, const std::unordered_map<T1, T2>& t)
+    pack_buffer(e::buffer::packer &packer, const std::unordered_map<T1, T2> &t)
     {
         size_t num_keys = t.size();
         packer = packer << num_keys;
-        for (const std::pair<T1, T2> &pair : t)
-        {
+        for (const std::pair<T1, T2> &pair : t) {
             pack_buffer(packer, pair.first);
             pack_buffer(packer, pair.second);
         }
@@ -379,7 +375,7 @@ namespace message
 
     template <typename T, typename... Args>
     inline void 
-    pack_buffer(e::buffer::packer &packer, const T& t, const Args&... args)
+    pack_buffer(e::buffer::packer &packer, const T &t, const Args&... args)
     {
         pack_buffer(packer, t);
         pack_buffer(packer, args...);
@@ -438,13 +434,13 @@ namespace message
     }
 
     inline void 
-    unpack_buffer(e::unpacker &unpacker, common::property& t)
+    unpack_buffer(e::unpacker &unpacker, common::property &t)
     {
         unpacker = unpacker >> t.key >> t.value >> t.creat_time >> t.del_time;
     }
 
     inline void 
-    unpack_buffer(e::unpacker &unpacker, double& t)
+    unpack_buffer(e::unpacker &unpacker, double &t)
     {
         uint64_t dbl;
         unpacker = unpacker >> dbl;
@@ -458,7 +454,7 @@ namespace message
     }
 
     inline void
-    unpack_buffer(e::unpacker &unpacker, db::dijkstra_queue_elem& t)
+    unpack_buffer(e::unpacker &unpacker, db::dijkstra_queue_elem &t)
     {
         unpack_buffer(unpacker, t.cost);
         unpack_buffer(unpacker, t.node);
@@ -467,7 +463,7 @@ namespace message
 
     template <typename T1, typename T2>
     inline void 
-    unpack_buffer(e::unpacker &unpacker, std::pair<T1, T2>& t)
+    unpack_buffer(e::unpacker &unpacker, std::pair<T1, T2> &t)
     {
         //assumes constant size
         unpack_buffer(unpacker, t.first);
@@ -505,7 +501,7 @@ namespace message
 
     template <typename T> 
     inline void 
-    unpack_buffer(e::unpacker &unpacker, std::vector<T>& t)
+    unpack_buffer(e::unpacker &unpacker, std::vector<T> &t)
     {
         assert(t.size() == 0);
         size_t elements_left;
@@ -513,7 +509,7 @@ namespace message
 
         t.reserve(elements_left);
 
-        while (elements_left > 0){
+        while (elements_left > 0) {
             T to_add;
             unpack_buffer(unpacker, to_add);
             t.push_back(to_add);
@@ -523,7 +519,7 @@ namespace message
 
     template <typename T>
     inline void 
-    unpack_buffer(e::unpacker &unpacker, std::unordered_set<T>& t)
+    unpack_buffer(e::unpacker &unpacker, std::unordered_set<T> &t)
     {
         assert(t.size() == 0);
         size_t elements_left;
@@ -531,7 +527,7 @@ namespace message
 
         t.rehash(elements_left*1.25); // set number of buckets to 1.25*elements it will contain
 
-        while (elements_left > 0){
+        while (elements_left > 0) {
             T to_add;
             unpack_buffer(unpacker, to_add);
             t.insert(to_add);
@@ -550,7 +546,7 @@ namespace message
         // did not use reserve as max_load_factor is default 1
         t.rehash(elements_left*1.25); 
 
-        while (elements_left > 0){
+        while (elements_left > 0) {
             T1 key_to_add;
             T2 val_to_add;
 

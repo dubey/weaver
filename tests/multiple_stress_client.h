@@ -33,8 +33,7 @@ delete_random_edges()
 {
     int i;
     client c(CLIENT_PORT+1);
-    for (i = 0; i < NUM_EDGE_DEL; i++)
-    {
+    for (i = 0; i < NUM_EDGE_DEL; i++) {
         std::cout << "Deleting edge " << (i*19) << std::endl;
         c.delete_edge(edge_leading_nodes[i*19], edges[i*19]);
     }
@@ -48,16 +47,13 @@ multiple_stress_client()
     int i;
     std::thread *t;
     srand(42); // magic seed
-    for (i = 0; i < NUM_NODES; i++)
-    {
+    for (i = 0; i < NUM_NODES; i++) {
         nodes[i] = c.create_node();
     }
-    for (i = 0; i < NUM_EDGES; i++)
-    {
+    for (i = 0; i < NUM_EDGES; i++) {
         int first = rand() % NUM_NODES;
         int second = rand() % NUM_NODES;
-        while (second == first)
-        {
+        while (second == first) {
             second = rand() % NUM_NODES;
         }
         edges[i] = c.create_edge(nodes[first], nodes[second]);
@@ -65,16 +61,13 @@ multiple_stress_client()
     }
     long seed;
     std::cout << "Starting requests\n";
-    for (seed = 0; seed < MAX_SEED; seed += 100)
-    {
+    for (seed = 0; seed < MAX_SEED; seed += 100) {
         std::cout << "Seed " << seed << std::endl;
         srand(seed);
-        for (i = 0; i < NUM_REQUESTS; i++)
-        {
+        for (i = 0; i < NUM_REQUESTS; i++) {
             int first = rand() % NUM_NODES;
             int second = rand() % NUM_NODES;
-            while (second == first)
-            {
+            while (second == first) {
                 second = rand() % NUM_NODES;
             }
             c.reachability_request(nodes[first], nodes[second], edge_props);
@@ -83,8 +76,7 @@ multiple_stress_client()
             //std::cout << "Done! Req " << i << " result "
             //    << c.reachability_request(nodes[first], nodes[second], edge_props) << std::endl;
         }
-        if (seed == 2000)
-        {
+        if (seed == 2000) {
             t = new std::thread(delete_random_edges);
             t->detach();
         }
