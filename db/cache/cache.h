@@ -20,6 +20,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <po6/net/location.h>
+#include <po6/threads/mutex.h>
 
 #include "common/property.h"
 
@@ -71,12 +72,9 @@ namespace cache
             itable transient_invalidation_table;
 
         public:
-            bool insert_entry(int dest_loc, size_t dest_node, size_t local_node, uint64_t req_id, 
-                std::vector<common::property>& edge_props);
-            bool transient_insert_entry(int dest_loc, size_t dest_node, size_t local_node, uint64_t req_id, 
-                std::vector<common::property>& edge_props);
-            size_t get_req_id(int dest_loc, size_t dest_node, size_t local_node,
-                std::vector<common::property>& edge_props);
+            bool insert_entry(int dest_loc, size_t dest_node, size_t local_node, uint64_t req_id, std::vector<common::property>& edge_props);
+            bool transient_insert_entry(int dest_loc, size_t dest_node, size_t local_node, uint64_t req_id, std::vector<common::property>& edge_props);
+            size_t get_req_id(int dest_loc, size_t dest_node, size_t local_node, std::vector<common::property>& edge_props);
             std::unique_ptr<std::vector<size_t>> remove_entry(uint64_t req_id);
             std::unique_ptr<std::vector<size_t>> remove_transient_entry(uint64_t req_id);
             void commit(size_t id);
@@ -85,8 +83,7 @@ namespace cache
             po6::threads::mutex cache_mutex;
                 
         private:
-            bool entry_exists(int dest_loc, size_t dest_node, size_t local_node,
-                std::vector<common::property>& edge_props, ctable **table);
+            bool entry_exists(int dest_loc, size_t dest_node, size_t local_node, std::vector<common::property>& edge_props, ctable **table);
             bool entry_exists(int dest_loc, size_t dest_node, size_t local_node, ctable **table);
             bool mapping_exists(int dest_loc, size_t dest_node, ctable **table);
             bool insert_into_table(int dest_loc, size_t dest_node, size_t local_node, uint64_t req_id,
@@ -100,8 +97,7 @@ namespace cache
         int i;
         cache_table = (ctable **)malloc(num_shards * sizeof(ctable *));
         transient_cache_table = (ctable **)malloc(num_shards * sizeof(ctable *));
-        for (i = 0; i < num_shards; i++)
-        {
+        for (i = 0; i < num_shards; i++) {
             cache_table[i] = new ctable();
             transient_cache_table[i] = new ctable();
         }
@@ -125,8 +121,7 @@ namespace cache
         } else {
             uint64_t req_id = lnode_iter->second;
             std::unordered_set<common::property> &cached_props = cobj.edge_props.at(req_id);
-            for (auto &p: edge_props)
-            {
+            for (auto &p: edge_props) {
                 if (cached_props.find(p) == cached_props.end()) {
                     return false;
                 }
@@ -186,13 +181,11 @@ namespace cache
         std::vector<common::property>& edge_props, ctable **c_table, itable *i_table)
     {
         cache_mutex.lock();
-        if (!entry_exists(dest_loc, dest_node, local_node, c_table))
-        {
+        if (!entry_exists(dest_loc, dest_node, local_node, c_table)) {
             cached_object &cobj = (*c_table[dest_loc])[dest_node];
             cobj.nodes[local_node] = req_id;
             if (cobj.edge_props.find(req_id) == cobj.edge_props.end()) {
-                for (auto &p: edge_props)
-                {
+                for (auto &p: edge_props) {
                     cobj.edge_props[req_id].insert(p); 
                 }
                 (*i_table)[req_id] = std::make_pair(dest_loc, dest_node);
@@ -209,16 +202,14 @@ namespace cache
     reach_cache :: insert_entry(int dest_loc, size_t dest_node, size_t local_node, uint64_t req_id, 
                 std::vector<common::property>& edge_props)
     {
-        return insert_into_table(dest_loc, dest_node, local_node, req_id, 
-            edge_props, cache_table, &invalidation_table);
+        return insert_into_table(dest_loc, dest_node, local_node, req_id, edge_props, cache_table, &invalidation_table);
     }
 
     inline bool
     reach_cache :: transient_insert_entry(int dest_loc, size_t dest_node, size_t local_node, uint64_t req_id, 
                 std::vector<common::property>& edge_props)
     {
-        return insert_into_table(dest_loc, dest_node, local_node, req_id,
-            edge_props, transient_cache_table, &transient_invalidation_table);
+        return insert_into_table(dest_loc, dest_node, local_node, req_id, edge_props, transient_cache_table, &transient_invalidation_table);
     }
 
     // return a set of local nodes that have cached this entry
@@ -230,20 +221,17 @@ namespace cache
         cache_mutex.lock();
         iter = i_table->find(req_id);
         // checking if the entry has not already been deleted
-        if (iter != i_table->end()) 
-        {
+        if (iter != i_table->end()) {
             size_t dest_node = iter->second.second;
             int dest_loc = iter->second.first;
             ret.reset(new std::vector<size_t>());
             cached_object &cobj = c_table[dest_loc]->at(dest_node);
-            for (auto &node_iter: cobj.nodes)
-            {
+            for (auto &node_iter: cobj.nodes) {
                 if (node_iter.second == req_id) {
                     ret->emplace_back(node_iter.first);
                 }
             }
-            for (auto lnode: *ret)
-            {
+            for (auto lnode: *ret) {
                 cobj.nodes.erase(lnode);
             }
             cobj.edge_props.erase(req_id);
@@ -278,10 +266,8 @@ namespace cache
             cached_object &transient_cobj = transient_cache_table[dest_loc]->at(dest_node);
             cached_object &cobj = (*cache_table[dest_loc])[dest_node];
             std::vector<size_t> to_delete;
-            for (auto &node_iter: transient_cobj.nodes)
-            {
-                if (node_iter.second == id)
-                {
+            for (auto &node_iter: transient_cobj.nodes) {
+                if (node_iter.second == id) {
                     cobj.nodes.emplace(node_iter.first, node_iter.second);
                 }
                 to_delete.emplace_back(node_iter.first);
@@ -294,8 +280,7 @@ namespace cache
             if (to_delete.size() == transient_cobj.nodes.size()) {
                 transient_cache_table[dest_loc]->erase(dest_node);
             } else {
-                for (auto del_node: to_delete)
-                {
+                for (auto del_node: to_delete) {
                     transient_cobj.nodes.erase(del_node);
                 }
                 transient_cobj.edge_props.erase(id);

@@ -37,11 +37,12 @@ namespace element
             std::vector<common::property> properties;
             uint64_t creat_time;
             uint64_t del_time;
+            uint32_t rem_key;
 
         public:
             void add_property(common::property prop);
             void delete_property(uint32_t key, uint64_t del_time);
-            void remove_property(common::property prop);
+            void remove_property(uint32_t key, uint64_t del_time);
             bool has_property(common::property prop);
             bool check_and_add_property(common::property prop);
             void set_properties(std::vector<common::property> &props);
@@ -73,32 +74,45 @@ namespace element
     inline void
     element :: delete_property(uint32_t key, uint64_t del_time)
     {
-        std::vector<common::property>::iterator iter;
-        for (iter = properties.begin(); iter<properties.end(); iter++)
-        {
-            if (iter->key == key) 
-            {
-                iter->update_del_time(del_time);
+        for (auto &iter: properties) {
+            if (iter.key == key) {
+                iter.update_del_time(del_time);
             }
         }
     }
 
-    inline void
-    element :: remove_property(common::property prop)
+    class match_key
     {
-        std::vector<common::property>::iterator iter = std::remove(properties.begin(), properties.end(), prop);
+        public:
+            uint32_t key;
+            uint64_t del_time;
+
+            inline
+            match_key(uint32_t k, uint64_t t)
+                : key(k)
+                , del_time(t)
+            {
+            }
+
+            bool operator()(common::property const &prop) const
+            {
+                return (prop.key == key && prop.get_del_time() <= del_time);
+            }
+    };
+
+    // remove properties which match key
+    inline void
+    element :: remove_property(uint32_t key, uint64_t del_time)
+    {
+        auto iter = std::remove_if(properties.begin(), properties.end(), match_key(key, del_time));
         properties.erase(iter, properties.end());
     }
 
     bool
     element :: has_property(common::property prop)
     {
-        std::vector<common::property>::iterator iter;
-        for (iter = properties.begin(); iter<properties.end(); iter++)
-        {
-            if (prop == *iter && prop.get_creat_time() >= iter->get_creat_time()
-                && prop.get_creat_time() < iter->get_del_time()) 
-            {
+        for (auto &iter: properties) {
+            if (prop == iter && prop.get_creat_time() >= iter.get_creat_time() && prop.get_creat_time() < iter.get_del_time()) {
                 return true;
             } 
         }
@@ -108,11 +122,8 @@ namespace element
     bool
     element :: check_and_add_property(common::property prop)
     {
-        std::vector<common::property>::iterator iter;
-        for (iter = properties.begin(); iter<properties.end(); iter++)
-        {
-            if (prop == *iter) 
-            {
+        for (auto &iter: properties) {
+            if (prop == iter) {
                 return true;
             }
         }

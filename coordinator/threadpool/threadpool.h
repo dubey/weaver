@@ -100,13 +100,11 @@ namespace thread
     {
         int i;
         std::unique_ptr<std::thread> t;
-        for (i = 0; i < num_threads; i++)
-        {
+        for (i = 0; i < num_threads; i++) {
             t.reset(new std::thread(thread_loop, this, false));
             t->detach();
         }
-        for (i = 0; i < num_threads; i++)
-        {
+        for (i = 0; i < num_threads; i++) {
             t.reset(new std::thread(thread_loop, this, true));
             t->detach();
         }
@@ -117,16 +115,13 @@ namespace thread
     {
         std::unique_ptr<std::thread> thr;
         queue_mutex.lock();
-        if (client)
-        {
-            if (client_req_queue.empty())
-            {
+        if (client) {
+            if (client_req_queue.empty()) {
                 client_queue_cond.signal();
             }
             client_req_queue.push_back(std::move(t));
         } else {
-            if (shard_response_queue.empty())
-            {
+            if (shard_response_queue.empty()) {
                 shard_queue_cond.signal();
             }
             shard_response_queue.push_back(std::move(t));
@@ -138,29 +133,24 @@ namespace thread
     thread_loop(pool *tpool, bool client)
     {
         std::unique_ptr<unstarted_thread> thr;
-        while (true)
-        {
+        while (true) {
             tpool->queue_mutex.lock();
             if (client) {
-                while(tpool->client_req_queue.empty())
-                {
+                while(tpool->client_req_queue.empty()) {
                     tpool->client_queue_cond.wait();
                 }
                 thr = std::move(tpool->client_req_queue.front());
                 tpool->client_req_queue.pop_front();
-                if (!tpool->client_req_queue.empty())
-                {
+                if (!tpool->client_req_queue.empty()) {
                     tpool->client_queue_cond.signal();
                 }
             } else {
-                while(tpool->shard_response_queue.empty())
-                {
+                while(tpool->shard_response_queue.empty()) {
                     tpool->shard_queue_cond.wait();
                 }
                 thr = std::move(tpool->shard_response_queue.front());
                 tpool->shard_response_queue.pop_front();
-                if (!tpool->shard_response_queue.empty())
-                {
+                if (!tpool->shard_response_queue.empty()) {
                     tpool->shard_queue_cond.signal();
                 }
             }

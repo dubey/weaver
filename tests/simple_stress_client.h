@@ -26,27 +26,22 @@ stress_client_test()
     size_t edge_leading_nodes[NUM_EDGES];
     int i;
     srand(42); // magic seed
-    for (i = 0; i < NUM_NODES; i++)
-    {
+    for (i = 0; i < NUM_NODES; i++) {
         nodes[i] = c.create_node();
     }
-    for (i = 0; i < NUM_EDGES; i++)
-    {
+    for (i = 0; i < NUM_EDGES; i++) {
         int first = rand() % NUM_NODES;
         int second = rand() % NUM_NODES;
-        while (second == first)
-        {
+        while (second == first) {
             second = rand() % NUM_NODES;
         }
         edges[i] = c.create_edge(nodes[first], nodes[second]);
         edge_leading_nodes[i] = nodes[first];
     }
-    for (i = 0; i < NUM_REQUESTS; i++)
-    {
+    for (i = 0; i < NUM_REQUESTS; i++) {
         int first = rand() % NUM_NODES;
         int second = rand() % NUM_NODES;
-        while (second == first)
-        {
+        while (second == first) {
             second = rand() % NUM_NODES;
         }
         std::cout << "Req " << i << " result "

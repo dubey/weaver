@@ -83,7 +83,8 @@ namespace coordinator
             std::shared_ptr<pending_req> del_request;
             // request reply
             bool done;
-            size_t addr;
+            size_t node_handle;
+            uint64_t edge_handle;
             bool reachable;
             size_t clustering_numerator;
             size_t clustering_denominator;
@@ -101,7 +102,6 @@ namespace coordinator
             , value(v)
             , client(std::move(cloc))
             , done(false)
-            , addr(0)
             , cached_req_id(0)
         {
         }
@@ -114,7 +114,6 @@ namespace coordinator
             , edge_props(eprops)
             , client(std::move(cloc))
             , done(false)
-            , addr(0)
             , cached_req_id(0)
         {
         }
@@ -123,7 +122,6 @@ namespace coordinator
         pending_req(message::msg_type type)
             : req_type(type)
             , done(false)
-            , addr(0)
             , cached_req_id(0)
             {
             }
@@ -151,8 +149,8 @@ namespace coordinator
             int port_ctr;
             std::vector<std::shared_ptr<po6::net::location>> shards;
             uint32_t num_shards;
-            std::unordered_map<uint64_t, common::meta_element *> nodes;
-            std::vector<common::meta_element *> edges;
+            std::unordered_map<uint64_t, common::meta_element*> nodes;
+            std::vector<common::meta_element*> edges;
             vclock::vector vc;
             // big mutex
             po6::threads::mutex update_mutex;
@@ -222,8 +220,7 @@ namespace coordinator
         std::string ipaddr;
         int port;
         if (file != NULL) {
-            while (file >> ipaddr >> port)
-            {
+            while (file >> ipaddr >> port) {
                 auto new_shard = std::make_shared<po6::net::location>(ipaddr.c_str(), port);
                 shards.push_back(new_shard);
             }
@@ -275,22 +272,19 @@ namespace coordinator
     central :: add_deleted_cache(std::shared_ptr<pending_req> request, std::vector<uint64_t> &cached_ids)
     {
         std::vector<std::shared_ptr<pending_req>>::iterator pend_iter;
-        for (uint64_t del_iter: cached_ids)
-        {
+        for (uint64_t del_iter: cached_ids) {
 #ifdef DEBUG
             std::cout << "Inserting bad cache " << del_iter << std::endl;
 #endif
             bad_cache_ids->insert(del_iter);
         }
-        for (pend_iter = pending_delete_requests.begin(); pend_iter != pending_delete_requests.end(); pend_iter++)
-        {
+        for (pend_iter = pending_delete_requests.begin(); pend_iter != pending_delete_requests.end(); pend_iter++) {
             if ((**pend_iter).req_id == request->req_id) {
                 break;
             }
         }
         assert(pend_iter != pending_delete_requests.end());
-        for (auto &dep_req: (**pend_iter).dependent_traversals)
-        {
+        for (auto &dep_req: (**pend_iter).dependent_traversals) {
             if (dep_req->done) {
                 reachability_request_end(this, dep_req); // TODO this is bad, should be processed by different threads.
             }
@@ -298,8 +292,7 @@ namespace coordinator
         pending_delete_requests.erase(pend_iter);
 #ifdef DEBUG
         std::cout << "Bad cache ids:\n";
-        for (auto &it: *bad_cache_ids)
-        {
+        for (auto &it: *bad_cache_ids) {
             std::cout << it << " ";
         }
         std::cout << std::endl;
@@ -311,27 +304,23 @@ namespace coordinator
     {
 #ifdef DEBUG
         std::cout << "Bad cache ids:\n";
-        for (auto &it: *bad_cache_ids)
-        {
+        for (auto &it: *bad_cache_ids) {
             std::cout << it << " ";
         }
         std::cout << std::endl;
         std::cout << "Transient Bad cache ids:\n";
-        for (auto &it: *transient_bad_cache_ids)
-        {
+        for (auto &it: *transient_bad_cache_ids) {
             std::cout << it << " ";
         }
         std::cout << std::endl;
 #endif
-        return ((bad_cache_ids->find(id) != bad_cache_ids->end()) ||
-            (transient_bad_cache_ids->find(id) != transient_bad_cache_ids->end()));
+        return ((bad_cache_ids->find(id) != bad_cache_ids->end()) || (transient_bad_cache_ids->find(id) != transient_bad_cache_ids->end()));
     }
 
     inline void
     central :: add_good_cache_id(uint64_t id)
     {
-        if (bad_cache_ids->find(id) != bad_cache_ids->end())
-        {
+        if (bad_cache_ids->find(id) != bad_cache_ids->end()) {
             good_cache_ids->insert(id);
         }
     }
@@ -348,8 +337,7 @@ namespace coordinator
     {
         busybee_returncode ret;
         bb_mutex.lock();
-        if ((ret = bb.send(loc, buf)) != BUSYBEE_SUCCESS)
-        {
+        if ((ret = bb.send(loc, buf)) != BUSYBEE_SUCCESS) {
             std::cerr << "message sending error: " << ret << std::endl;
         }
         bb_mutex.unlock();
@@ -361,8 +349,7 @@ namespace coordinator
     {
         busybee_returncode ret;
         bb_mutex.lock();
-        if ((ret = bb.send(*loc, buf)) != BUSYBEE_SUCCESS)
-        {
+        if ((ret = bb.send(*loc, buf)) != BUSYBEE_SUCCESS) {
             std::cerr << "message sending error: " << ret << std::endl;
         }
         bb_mutex.unlock();
@@ -374,8 +361,7 @@ namespace coordinator
     {
         busybee_returncode ret;
         bb_mutex.lock();
-        if ((ret = bb.send(*loc, buf)) != BUSYBEE_SUCCESS)
-        {
+        if ((ret = bb.send(*loc, buf)) != BUSYBEE_SUCCESS) {
             std::cerr << "message sending error: " << ret << std::endl;
         }
         bb_mutex.unlock();
@@ -387,8 +373,7 @@ namespace coordinator
     {
         busybee_returncode ret;
         bb_mutex.lock();
-        if ((ret = bb.send(*shards[shard_id], buf)) != BUSYBEE_SUCCESS)
-        {
+        if ((ret = bb.send(*shards[shard_id], buf)) != BUSYBEE_SUCCESS) {
             std::cerr << "message sending error: " << ret << std::endl;
         }
         bb_mutex.unlock();
@@ -400,8 +385,7 @@ namespace coordinator
     {
         busybee_returncode ret;
         client_bb_mutex.lock();
-        if ((ret = bb.send(loc, buf)) != BUSYBEE_SUCCESS)
-        {
+        if ((ret = bb.send(loc, buf)) != BUSYBEE_SUCCESS) {
             std::cerr << "message sending error " << ret << std::endl;
         }
         client_bb_mutex.unlock();
@@ -412,14 +396,13 @@ namespace coordinator
     central :: flaky_send(int loc, std::auto_ptr<e::buffer> buf, bool delay)
     {
         busybee_returncode ret;
-        if (dist(generator) <= 0.5 && delay) // 50% messages delayed
-        {
+        // 50% messages delayed
+        if (dist(generator) <= 0.5 && delay) {
             std::chrono::seconds duration(1);
             std::this_thread::sleep_for(duration);
         }
         bb_mutex.lock();
-        if ((ret = bb.send(*shards[loc], buf)) != BUSYBEE_SUCCESS)
-        {
+        if ((ret = bb.send(*shards[loc], buf)) != BUSYBEE_SUCCESS) {
             std::cerr << "message sending error " << ret << std::endl;
         }
         bb_mutex.unlock();

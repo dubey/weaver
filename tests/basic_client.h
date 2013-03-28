@@ -21,8 +21,7 @@ basic_client_test()
     size_t nodes[10];
     size_t edges[10];
     int i;
-    for (i = 0; i < 10; i++)
-    {
+    for (i = 0; i < 10; i++) {
         nodes[i] = c.create_node();
     }
     edges[0] = c.create_edge(nodes[0], nodes[1]);

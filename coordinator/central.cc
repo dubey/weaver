@@ -57,12 +57,11 @@ create_edge_initiate(coordinator::central *server, std::shared_ptr<coordinator::
     request->req_id = ++server->request_id;
     server->pending[request->req_id] = request;
     server->update_mutex.unlock();
-    size_t node1_addr = request->elem1->get_addr();
-    size_t node2_addr = request->elem2->get_addr();
+    size_t node1_addr = request->elem1->get_node_handle();
+    size_t node2_addr = request->elem2->get_node_handle();
     int loc1 = request->elem1->get_loc();
     int loc2 = request->elem2->get_loc();
-    message::prepare_message(msg, message::EDGE_CREATE_REQ, request->clock1, request->req_id, node1_addr, 
-        node2_addr, loc2, request->clock2);
+    message::prepare_message(msg, message::EDGE_CREATE_REQ, request->clock1, request->req_id, node1_addr, node2_addr, loc2, request->clock2);
     server->send(loc1, msg.buf);
 }
 
@@ -71,18 +70,15 @@ create_end(coordinator::central *server, std::shared_ptr<coordinator::pending_re
 {
     message::message msg;
     common::meta_element *new_elem;
-    if (request->req_type == message::CLIENT_NODE_CREATE_REQ) {
-        new_elem = new common::meta_element(request->shard_id, request->clock1, MAX_TIME, request->addr);
-    } else {
-        new_elem = new common::meta_element(request->elem1->get_loc(), request->clock1, MAX_TIME, request->addr);
-    }
     server->update_mutex.lock();
-    server->pending.erase(request->req_id);
     if (request->req_type == message::CLIENT_NODE_CREATE_REQ) {
+        new_elem = new common::meta_element(request->shard_id, request->clock1, MAX_TIME, (void*)request->node_handle);
         server->add_node(new_elem, request->req_id);
     } else {
+        new_elem = new common::meta_element(request->elem1->get_loc(), request->clock1, MAX_TIME, request->edge_handle);
         server->add_edge(new_elem);
     }
+    server->pending.erase(request->req_id);
     server->update_mutex.unlock();
 #ifdef DEBUG
     std::cout << "Edge id is " << (void *)new_edge << " " <<
@@ -100,8 +96,7 @@ delete_node_initiate(coordinator::central *server, std::shared_ptr<coordinator::
     message::message msg;
 
     server->update_mutex.lock();
-    if (request->elem1->get_del_time() < MAX_TIME)
-    {
+    if (request->elem1->get_del_time() < MAX_TIME) {
         std::cerr << "cannot delete node twice" << std::endl;
         server->update_mutex.unlock();
         return;
@@ -110,7 +105,7 @@ delete_node_initiate(coordinator::central *server, std::shared_ptr<coordinator::
     request->elem1->update_del_time(request->clock1);
     request->req_id = ++server->request_id;
     server->pending[request->req_id] = request;
-    size_t node_addr = request->elem1->get_addr();
+    size_t node_addr = request->elem1->get_node_handle();
     message::prepare_message(msg, message::NODE_DELETE_REQ, request->clock1, request->req_id, node_addr);
     server->add_pending_del_req(request);
     server->update_mutex.unlock();
@@ -126,8 +121,7 @@ delete_edge_initiate(coordinator::central *server, std::shared_ptr<coordinator::
     message::message msg;
 
     server->update_mutex.lock();
-    if (request->elem2->get_del_time() < MAX_TIME || request->elem1->get_del_time() < MAX_TIME)
-    {
+    if (request->elem2->get_del_time() < MAX_TIME || request->elem1->get_del_time() < MAX_TIME) {
         std::cerr << "cannot delete edge/node twice" << std::endl;
         server->update_mutex.unlock();
         return;
@@ -136,8 +130,8 @@ delete_edge_initiate(coordinator::central *server, std::shared_ptr<coordinator::
     request->elem2->update_del_time(request->clock1);
     request->req_id = ++server->request_id;
     server->pending[request->req_id] = request;
-    size_t node_addr = request->elem1->get_addr();
-    size_t edge_addr = request->elem2->get_addr();
+    size_t node_addr = request->elem1->get_node_handle();
+    uint64_t edge_addr = request->elem2->get_edge_handle();
     message::prepare_message(msg, message::EDGE_DELETE_REQ, request->clock1, request->req_id, node_addr, edge_addr);
     server->add_pending_del_req(request);
     server->update_mutex.unlock();
@@ -153,8 +147,7 @@ add_edge_property(coordinator::central *server, std::shared_ptr<coordinator::pen
     message::message msg;
 
     server->update_mutex.lock();
-    if (request->elem2->get_del_time() < MAX_TIME || request->elem1->get_del_time() < MAX_TIME)
-    {
+    if (request->elem2->get_del_time() < MAX_TIME || request->elem1->get_del_time() < MAX_TIME) {
         std::cerr << "cannot add property to deleted edge/node" << std::endl;
         server->update_mutex.unlock();
         return;
@@ -162,8 +155,8 @@ add_edge_property(coordinator::central *server, std::shared_ptr<coordinator::pen
     request->clock1 = ++server->vc.clocks->at(request->elem1->get_loc());
     request->req_id = ++server->request_id;
     server->update_mutex.unlock();
-    size_t node_addr = request->elem1->get_addr();
-    size_t edge_addr = request->elem2->get_addr();
+    size_t node_addr = request->elem1->get_node_handle();
+    uint64_t edge_addr = request->elem2->get_edge_handle();
     common::property prop(request->key, request->value, request->req_id);
     message::prepare_message(msg, message::EDGE_ADD_PROP, request->clock1, request->req_id, node_addr, edge_addr, prop);
     server->send(request->elem1->get_loc(), msg.buf);
@@ -177,8 +170,7 @@ delete_edge_property_initiate(coordinator::central *server, std::shared_ptr<coor
     message::message msg;
 
     server->update_mutex.lock();
-    if (request->elem2->get_del_time() < MAX_TIME || request->elem1->get_del_time() < MAX_TIME)
-    {
+    if (request->elem2->get_del_time() < MAX_TIME || request->elem1->get_del_time() < MAX_TIME) {
         std::cerr << "cannot delete property of deleted edge/node" << std::endl;
         server->update_mutex.unlock();
         return;
@@ -186,8 +178,8 @@ delete_edge_property_initiate(coordinator::central *server, std::shared_ptr<coor
     request->clock1 = ++server->vc.clocks->at(request->elem1->get_loc());
     request->req_id = ++server->request_id;
     server->pending[request->req_id] = request;
-    size_t node_addr = request->elem1->get_addr();
-    size_t edge_addr = request->elem2->get_addr();
+    size_t node_addr = request->elem1->get_node_handle();
+    uint64_t edge_addr = request->elem2->get_edge_handle();
     message::prepare_message(msg, message::EDGE_DELETE_PROP, request->clock1, request->req_id, node_addr, edge_addr, request->key);
     server->add_pending_del_req(request);
     server->update_mutex.unlock();
@@ -213,9 +205,8 @@ void
 reachability_request_initiate(coordinator::central *server, std::shared_ptr<coordinator::pending_req>request)
 {
     server->update_mutex.lock();
-    request->src_node.reset(new std::vector<size_t>(1, request->elem1->get_addr()));
-    if (request->elem1->get_del_time() < MAX_TIME || request->elem2->get_del_time() < MAX_TIME)
-    {
+    request->src_node.reset(new std::vector<size_t>(1, request->elem1->get_node_handle()));
+    if (request->elem1->get_del_time() < MAX_TIME || request->elem2->get_del_time() < MAX_TIME) {
         std::cerr << "one of the nodes has been deleted, cannot perform request"
             << std::endl;
         server->update_mutex.unlock();
@@ -237,18 +228,17 @@ reachability_request_propagate(coordinator::central *server, std::shared_ptr<coo
 {
     message::message msg;
     request->req_id = ++server->request_id;
-    for (auto &p: request->edge_props)
-    {
+    for (auto &p: request->edge_props) {
         p.creat_time = request->req_id;
         p.del_time = MAX_TIME;
     }
     server->pending[request->req_id] = request;
     std::cout << "Reachability request number " << request->req_id << " from source"
-              << " request->elem " << request->elem1->get_addr() << " " << request->elem1->get_loc() 
-              << " to destination request->elem " << request->elem2->get_addr() << " " 
+              << " request->elem " << request->elem1->get_node_handle() << " " << request->elem1->get_loc() 
+              << " to destination request->elem " << request->elem2->get_node_handle() << " " 
               << request->elem2->get_loc() << std::endl;
     message::prepare_message(msg, message::REACHABLE_PROP, *request->vector_clock, 
-        *request->src_node, -1, request->elem2->get_addr(), request->elem2->get_loc(), 
+        *request->src_node, -1, request->elem2->get_node_handle(), request->elem2->get_loc(), 
         request->req_id, request->req_id, request->edge_props, request->ignore_cache);
     server->update_mutex.unlock();
     server->send(request->elem1->get_loc(), msg.buf);
@@ -343,8 +333,7 @@ clustering_request_initiate(coordinator::central *server, std::shared_ptr<coordi
     message::message msg;
     
     server->update_mutex.lock();
-    if (request->elem1->get_del_time() < MAX_TIME)
-    {
+    if (request->elem1->get_del_time() < MAX_TIME) {
         std::cerr << "node has been deleted, cannot perform request"
             << std::endl;
         server->update_mutex.unlock();
@@ -355,9 +344,9 @@ clustering_request_initiate(coordinator::central *server, std::shared_ptr<coordi
     server->pending[request->req_id] = request;
 #ifdef DEBUG
     std::cout << "Clustering request number " << request->req_id << " for node "
-              << request->elem1->get_addr() << " " << request->elem1->get_loc() << std::endl;
+              << request->elem1->get_node_handle() << " " << request->elem1->get_loc() << std::endl;
 #endif
-    message::prepare_message(msg, message::CLUSTERING_REQ, (size_t) request->elem1->get_addr(),
+    message::prepare_message(msg, message::CLUSTERING_REQ, request->elem1->get_node_handle(),
             request->req_id, request->edge_props, *(server->vc.clocks));
     request->out_count = server->last_del;
     request->out_count->cnt++;
@@ -377,8 +366,7 @@ clustering_request_end(coordinator::central *server, std::shared_ptr<coordinator
     server->pending.erase(request->req_id);
     request->out_count->cnt--;
     server->update_mutex.unlock();
-    message::prepare_message(msg, message::CLIENT_CLUSTERING_REPLY, 
-            request->clustering_numerator, request->clustering_denominator);
+    message::prepare_message(msg, message::CLIENT_CLUSTERING_REPLY, request->clustering_numerator, request->clustering_denominator);
     server->send(std::move(request->client), msg.buf);
 }
 
@@ -389,7 +377,8 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
 {
     uint64_t req_id, cached_req_id;
     std::shared_ptr<coordinator::pending_req>request;
-    size_t mem_addr;
+    size_t node_handle;
+    uint64_t edge_handle;
     bool is_reachable; // for reply
     size_t src_node; // for reply
     int src_loc; // for reply
@@ -399,19 +388,25 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     size_t clustering_numerator; //for reply
     size_t clustering_denominator; //for reply
     common::meta_element *lnode; // for migration
-    size_t coord_handle, node_handle; // for migration
+    size_t coord_handle; // for migration
     int new_loc, from_loc; // for migration
     size_t cost; //for reply
     
-    switch(m_type)
-    {
+    switch(m_type) {
         case message::NODE_CREATE_ACK:
-        case message::EDGE_CREATE_ACK:
-            message::unpack_message(*msg, m_type, req_id, mem_addr);
+            message::unpack_message(*msg, m_type, req_id, node_handle);
             server->update_mutex.lock();
             request = server->pending.at(req_id);
             server->update_mutex.unlock();
-            request->addr = mem_addr;
+            request->node_handle = node_handle;
+            create_end(server, request);
+            break;
+        case message::EDGE_CREATE_ACK:
+            message::unpack_message(*msg, m_type, req_id, edge_handle);
+            server->update_mutex.lock();
+            request = server->pending.at(req_id);
+            server->update_mutex.unlock();
+            request->edge_handle = edge_handle;
             create_end(server, request);
             break;
         
@@ -482,9 +477,9 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
         case message::COORD_NODE_MIGRATE:
             message::unpack_message(*msg, message::COORD_NODE_MIGRATE, coord_handle, new_loc, node_handle, from_loc);
             server->update_mutex.lock();
-            lnode = (common::meta_element *)server->nodes[coord_handle];
+            lnode = (common::meta_element*)server->nodes[coord_handle];
             lnode->update_loc(new_loc);
-            lnode->update_addr(node_handle);
+            lnode->update_node_handle(node_handle);
             message::prepare_message(*msg, message::COORD_NODE_MIGRATE_ACK, server->vc.clocks->at(from_loc));
             server->update_mutex.unlock();
             server->send(from_loc, msg->buf);
@@ -507,10 +502,8 @@ shard_msg_handler(coordinator::central *server)
     std::unique_ptr<message::message> rec_msg;
     std::unique_ptr<coordinator::thread::unstarted_thread> thr;
     
-    while (1)
-    {
-        if ((ret = server->rec_bb.recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS)
-        {
+    while (1) {
+        if ((ret = server->rec_bb.recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
             std::cerr << "msg recv error: " << ret << std::endl;
             continue;
         }
@@ -579,8 +572,7 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
             message::unpack_message(*msg, message::CLIENT_CLUSTERING_REQ, 
                     client_port, elem1, *edge_props);
             client_loc->port = client_port;
-            request.reset(new coordinator::pending_req(m_type, (common::meta_element *)elem1, 
-                NULL, edge_props, std::move(client_loc)));
+            request.reset(new coordinator::pending_req(m_type, (common::meta_element*)elem1, NULL, edge_props, std::move(client_loc)));
             clustering_request_initiate(server, request);
             break;
 
@@ -588,7 +580,7 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
             message::unpack_message(*msg, message::CLIENT_DIJKSTRA_REQ, client_port,
                     elem1, elem2, key, is_widest_path, *edge_props);
             client_loc->port = client_port;
-            path_request((common::meta_element *) elem1, (common::meta_element *) elem2, key,
+            path_request((common::meta_element*) elem1, (common::meta_element*) elem2, key,
                     is_widest_path, edge_props, server, reachable, cost);
             message::prepare_message(*msg, message::CLIENT_DIJKSTRA_REPLY, reachable, cost);
             server->client_send(*client_loc, msg->buf);
@@ -614,8 +606,7 @@ client_msg_handler(coordinator::central *server)
 
     while (1)
     {
-        if ((ret = server->client_rec_bb.recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS)
-        {
+        if ((ret = server->client_rec_bb.recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
             std::cerr << "msg recv error: " << ret << std::endl;
             continue;
         }
@@ -623,8 +614,7 @@ client_msg_handler(coordinator::central *server)
         rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
         mtype = (enum message::msg_type)code;
         client_loc.reset(new po6::net::location(sender));
-        thr.reset(new coordinator::thread::unstarted_thread(handle_client_req,
-            server, std::move(rec_msg), mtype, std::move(client_loc)));
+        thr.reset(new coordinator::thread::unstarted_thread(handle_client_req, server, std::move(rec_msg), mtype, std::move(client_loc)));
         server->thread_pool.add_request(std::move(thr), true);
     }
 }
@@ -657,8 +647,7 @@ coord_daemon_initiate(coordinator::central *server)
     } else {
         server->update_mutex.unlock();
     }
-    for (uint32_t i = 0; i < server->num_shards; i++)
-    {
+    for (uint32_t i = 0; i < server->num_shards; i++) {
         message::prepare_message(msg, message::CACHE_UPDATE, good, bad, perm_del_id);
         server->send(i, msg.buf);
     }
