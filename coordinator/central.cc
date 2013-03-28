@@ -237,7 +237,7 @@ reachability_request_propagate(coordinator::central *server, std::shared_ptr<coo
 {
     message::message msg;
     request->req_id = ++server->request_id;
-    for (auto &p: *request->edge_props)
+    for (auto &p: request->edge_props)
     {
         p.creat_time = request->req_id;
         p.del_time = MAX_TIME;
@@ -249,7 +249,7 @@ reachability_request_propagate(coordinator::central *server, std::shared_ptr<coo
               << request->elem2->get_loc() << std::endl;
     message::prepare_message(msg, message::REACHABLE_PROP, *request->vector_clock, 
         *request->src_node, -1, request->elem2->get_addr(), request->elem2->get_loc(), 
-        request->req_id, request->req_id, *request->edge_props, request->ignore_cache);
+        request->req_id, request->req_id, request->edge_props, request->ignore_cache);
     server->update_mutex.unlock();
     server->send(request->elem1->get_loc(), msg.buf);
 }
@@ -358,7 +358,7 @@ clustering_request_initiate(coordinator::central *server, std::shared_ptr<coordi
               << request->elem1->get_addr() << " " << request->elem1->get_loc() << std::endl;
 #endif
     message::prepare_message(msg, message::CLUSTERING_REQ, (size_t) request->elem1->get_addr(),
-            request->req_id, *request->edge_props, *(server->vc.clocks));
+            request->req_id, request->edge_props, *(server->vc.clocks));
     request->out_count = server->last_del;
     request->out_count->cnt++;
     server->update_mutex.unlock();
@@ -528,76 +528,53 @@ void
 handle_client_req(coordinator::central *server, std::unique_ptr<message::message> msg,
     enum message::msg_type m_type, std::unique_ptr<po6::net::location> client_loc)
 {
-    uint16_t client_port;
-    size_t elem1, elem2, value;
-    uint32_t key;
-    bool is_widest_path;
-    size_t cost;
-    auto edge_props = std::make_shared<std::vector<common::property>>();
-    std::shared_ptr<coordinator::pending_req>request;
+    auto request = std::make_shared<coordinator::pending_req>(m_type);
+    request->client = std::move(client_loc);
+
     switch (m_type)
     {
         case message::CLIENT_NODE_CREATE_REQ:
-            message::unpack_message(*msg, message::CLIENT_NODE_CREATE_REQ, client_port);
-            client_loc->port = client_port;
-            request.reset(new coordinator::pending_req(m_type, NULL, NULL, std::move(client_loc)));
+            message::unpack_message(*msg, message::CLIENT_NODE_CREATE_REQ, request->client->port);
             create_node_initiate(server, request);
             break;
 
         case message::CLIENT_EDGE_CREATE_REQ: 
             message::unpack_message(*msg, message::CLIENT_EDGE_CREATE_REQ,
-                    client_port, elem1, elem2);
-            client_loc->port = client_port;
-            request.reset(new coordinator::pending_req(m_type, (common::meta_element *)elem1, 
-                (common::meta_element *)elem2, std::move(client_loc)));
+                    request->client->port, (size_t &) request->elem1, (size_t &) request->elem2);
             create_edge_initiate(server, request);
             break;
 
         case message::CLIENT_NODE_DELETE_REQ:
             message::unpack_message(*msg, message::CLIENT_NODE_DELETE_REQ,
-                    client_port, elem1);
-            client_loc->port = client_port;
-            request.reset(new coordinator::pending_req(m_type, (common::meta_element *)elem1, 
-                NULL, std::move(client_loc)));
+                    request->client->port, (size_t &) request->elem1);
             delete_node_initiate(server, request);
             break;
 
         case message::CLIENT_EDGE_DELETE_REQ: 
             message::unpack_message(*msg, message::CLIENT_EDGE_DELETE_REQ,
-                    client_port, elem1, elem2);
-            client_loc->port = client_port;
-            request.reset(new coordinator::pending_req(m_type, (common::meta_element *)elem1, 
-                (common::meta_element *)elem2, std::move(client_loc)));
+                    request->client->port, (size_t &) request->elem1, (size_t &) request->elem2);
             delete_edge_initiate(server, request);
             break;
 
         case message::CLIENT_ADD_EDGE_PROP:
             message::unpack_message(*msg, message::CLIENT_ADD_EDGE_PROP, 
-                    client_port, elem1, elem2, key, value);
-            client_loc->port = client_port;
-            request.reset(new coordinator::pending_req(m_type, (common::meta_element *)elem1, 
-                (common::meta_element *)elem2, std::move(client_loc), key, value));
+                    request->client->port, (size_t &) request->elem1, (size_t &) request->elem2, request->key, request->value);
             add_edge_property(server, request);
             break;
 
         case message::CLIENT_DEL_EDGE_PROP:
             message::unpack_message(*msg, message::CLIENT_DEL_EDGE_PROP, 
-                    client_port, elem1, elem2, key);
-            client_loc->port = client_port;
-            request.reset(new coordinator::pending_req(m_type, (common::meta_element *)elem1, 
-                (common::meta_element *)elem2, std::move(client_loc), key));
+                    request->client->port, (size_t &) request->elem1, (size_t &) request->elem2, request->key);
             delete_edge_property_initiate(server, request);
             break;
 
         case message::CLIENT_REACHABLE_REQ:
             message::unpack_message(*msg, message::CLIENT_REACHABLE_REQ, 
-                    client_port, elem1, elem2, *edge_props);
-            client_loc->port = client_port;
-            request.reset(new coordinator::pending_req(m_type, (common::meta_element *)elem1, 
-                (common::meta_element *)elem2, edge_props, std::move(client_loc)));
+                    request->client->port, (size_t &) request->elem1, (size_t &) request->elem2, request->edge_props);
             reachability_request_initiate(server, request);
             break;
 
+/*
         case message::CLIENT_CLUSTERING_REQ: 
             message::unpack_message(*msg, message::CLIENT_CLUSTERING_REQ, 
                     client_port, elem1, *edge_props);
@@ -606,7 +583,7 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
                 NULL, edge_props, std::move(client_loc)));
             clustering_request_initiate(server, request);
             break;
-/*
+
         case message::CLIENT_DIJKSTRA_REQ: 
             message::unpack_message(*msg, message::CLIENT_DIJKSTRA_REQ, client_port,
                     elem1, elem2, key, is_widest_path, *edge_props);

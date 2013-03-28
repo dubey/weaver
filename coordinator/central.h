@@ -66,7 +66,7 @@ namespace coordinator
             // request init
             message::msg_type req_type;
             common::meta_element *elem1, *elem2;
-            std::shared_ptr<std::vector<common::property>> edge_props;
+            std::vector<common::property> edge_props;
             uint32_t key;
             size_t value;
             std::unique_ptr<po6::net::location> client;
@@ -91,6 +91,7 @@ namespace coordinator
             uint64_t cached_req_id;
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids;
             
+        /*
         pending_req(message::msg_type type, common::meta_element *el1, common::meta_element *el2, 
             std::unique_ptr<po6::net::location> cloc, uint32_t k=0, size_t v=0)
             : req_type(type)
@@ -117,6 +118,15 @@ namespace coordinator
             , cached_req_id(0)
         {
         }
+        */
+
+        pending_req(message::msg_type type)
+            : req_type(type)
+            , done(false)
+            , addr(0)
+            , cached_req_id(0)
+            {
+            }
     };
 
     class central
