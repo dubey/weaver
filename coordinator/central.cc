@@ -232,7 +232,7 @@ reachability_request_propagate(coordinator::central *server, std::shared_ptr<coo
         p.creat_time = request->req_id;
         p.del_time = MAX_TIME;
     }
-    server->pending[request->req_id] = request;
+    server->pending.insert(std::make_pair(request->req_id, request));
     std::cout << "Reachability request number " << request->req_id << " from source"
               << " request->elem " << request->elem1->get_node_handle() << " " << request->elem1->get_loc() 
               << " to destination request->elem " << request->elem2->get_node_handle() << " " 
@@ -249,7 +249,8 @@ void
 reachability_request_end(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request)
 {       
     bool done = false;
-    if (request->cached_req_id == request->req_id) {
+    uint64_t req_id = request->req_id;
+    if (request->cached_req_id == req_id) {
         done = true;
     } else {
         if (!server->is_deleted_cache_id(request->cached_req_id)) {
@@ -263,7 +264,7 @@ reachability_request_end(coordinator::central *server, std::shared_ptr<coordinat
             reachability_request_propagate(server, request);
         }
     }
-    server->pending.erase(request->req_id);
+    server->pending.erase(req_id);
 
     if (done) {
         message::message msg;

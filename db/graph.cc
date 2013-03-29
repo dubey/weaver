@@ -496,7 +496,7 @@ handle_reachable_reply(db::graph *G, std::unique_ptr<message::message> msg)
                     n->update_mutex.lock();
                     if (cached_req_id == request->coord_id) {
 #ifdef DEBUG
-                        std::cout << "Adding to cache, req " << request->coord_id << ", from this node " << node_iter << " " << G->myid
+                        std::cout << "Adding to cache (continued), req " << request->coord_id << ", from this node " << prev_reach_node << " " << G->myid
                             << " to dest " << request->dest_addr << " " << request->dest_loc << std::endl;
 #endif
                         G->add_cache((size_t)n, request->dest_loc, request->dest_addr, cached_req_id, request->edge_props);
@@ -1102,8 +1102,8 @@ unpack_update_request(db::graph *G, void *req)
             break;
 
         case message::PERMANENT_DELETE_EDGE:
-            message::unpack_message(*request->msg, message::PERMANENT_DELETE_EDGE, n1, edge);
-            G->permanent_edge_delete(n1, edge);
+            message::unpack_message(*request->msg, message::PERMANENT_DELETE_EDGE, req_id, n1, edge);
+            G->permanent_edge_delete(n1, edge, req_id);
             break;
 
         case message::PERMANENT_DELETE_EDGE_ACK:
