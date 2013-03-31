@@ -142,7 +142,7 @@ namespace db
             graph(int my_id, const char* ip_addr, int port);
 
         private:
-            po6::threads::mutex update_mutex, request_mutex;
+            po6::threads::mutex clock_mutex, request_mutex, deletion_mutex;
             uint64_t my_clock;
 
         public:
@@ -192,10 +192,10 @@ namespace db
             std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> delete_edge(element::node *n, size_t edge_handle, uint64_t del_time);
             bool add_edge_property(size_t n, uint64_t e, common::property &prop);
             std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> delete_all_edge_property(size_t n, uint64_t e, uint32_t key, uint64_t del_time);
-            bool already_perm_del(size_t n, uint64_t e);
+            bool check_del_list(size_t n, uint64_t e, uint64_t del_id);
             void permanent_delete_front(size_t node_handle, uint64_t edge_handle);
             void permanent_delete(uint64_t req_id);
-            void permanent_edge_delete(size_t n, uint64_t e);
+            void permanent_edge_delete(size_t n, uint64_t e, uint64_t del_id);
             // traversals
             void add_done_request(uint64_t req_id);
             void broadcast_done_request(uint64_t req_id); 
@@ -262,9 +262,9 @@ namespace db
     graph :: check_clock(uint64_t time)
     {
         bool ret;
-        update_mutex.lock();
+        clock_mutex.lock();
         ret = (time <= my_clock);
-        update_mutex.unlock();
+        clock_mutex.unlock();
         return ret;
     }
 
@@ -282,13 +282,13 @@ namespace db
     graph :: increment_clock()
     {
         bool check;
-        update_mutex.lock();
+        clock_mutex.lock();
         my_clock++;
         check = (my_clock == target_clock);
         if (check) {
             target_clock = 0;
         }
-        update_mutex.unlock();
+        clock_mutex.unlock();
         thread_pool.queue_mutex.lock();
         thread_pool.work_queue_cond.broadcast();
         thread_pool.queue_mutex.unlock();
@@ -309,9 +309,6 @@ namespace db
             new_node->state = element::node::mode::STABLE;
             //increment_clock();
         }
-        update_mutex.lock();
-        nodes.emplace_back(new_node);
-        update_mutex.unlock();
 #ifdef DEBUG
         std::cout << "Creating node, addr = " << (void*) new_node 
                 << " and node count " << (++node_count) << std::endl;
@@ -335,9 +332,9 @@ namespace db
             remove_cache(rid, n);
         }
         n->update_mutex.unlock();
-        update_mutex.lock();
+        deletion_mutex.lock();
         delete_req_ids.emplace_back(message::NODE_DELETE_REQ, del_time, n);
-        update_mutex.unlock();
+        deletion_mutex.unlock();
         return ret;
     }
 
@@ -404,9 +401,9 @@ namespace db
             remove_cache(rid, n);
         }
         n->update_mutex.unlock();
-        update_mutex.lock();
+        deletion_mutex.lock();
         delete_req_ids.emplace_back(message::EDGE_DELETE_REQ, del_time, n, edge_handle);
-        update_mutex.unlock();
+        deletion_mutex.unlock();
         return ret;
     }
 
@@ -445,34 +442,61 @@ namespace db
             remove_cache(rid, n);
         }
         n->update_mutex.unlock();
-        update_mutex.lock();
+        deletion_mutex.lock();
         delete_req_ids.emplace_back(message::EDGE_DELETE_PROP, time, n, edge, key);
-        update_mutex.unlock();
+        deletion_mutex.unlock();
         return ret;
     }
 
     inline bool
-    graph :: already_perm_del(size_t node_handle, uint64_t edge_handle)
+    graph :: check_del_list(size_t node_handle, uint64_t edge_handle, uint64_t del_id)
     {
         bool ret = false;
-        update_mutex.lock();
-        for (auto &del_req: delete_req_ids) {
-            if (del_req.type == message::EDGE_DELETE_REQ) {
-                auto &edge_req = del_req.request.del_edge;
-                if ((size_t)edge_req.n == node_handle && edge_req.edge_handle == edge_handle) {
-                    ret = true;
+        bool breakloop = false;
+        deletion_mutex.lock();
+        for (auto del_req = delete_req_ids.begin(); del_req != delete_req_ids.end(); del_req++) {
+            if (del_req->req_id > del_id) {
+                break;
+            }
+            switch (del_req->type) {
+                case message::NODE_DELETE_REQ: {
+                    if ((size_t)del_req->request.del_node == node_handle) {
+                        breakloop = true;
+                        ret = true;
+                    }
                     break;
                 }
+                case message::EDGE_DELETE_REQ: {
+                    auto &edge_req = del_req->request.del_edge;
+                    if ((size_t)edge_req.n == node_handle && edge_req.edge_handle == edge_handle) {
+                        breakloop = true;
+                        ret = true;
+                    }
+                    break;
+                }
+                case message::EDGE_DELETE_PROP: {
+                    auto &edge_req = del_req->request.del_edge_prop;
+                    if ((size_t)edge_req.n == node_handle && edge_req.edge_handle == edge_handle) {
+                        delete_req_ids.erase(del_req);
+                        breakloop = true;
+                    }
+                    break;
+                }
+                default:
+                    std::cerr << "Bad type in permanent delete list " << del_req->type << std::endl;
+            }
+            if (breakloop) {
+                break;
             }
         }
-        update_mutex.unlock();
+        deletion_mutex.unlock();
         return ret;
     }
 
     inline void
     graph :: permanent_delete_front(size_t node_handle, uint64_t edge_handle=0)
     {
-        update_mutex.lock();
+        deletion_mutex.lock();
         perm_del &front = delete_req_ids.front();
         switch (front.type) {
             case message::NODE_DELETE_REQ:
@@ -494,16 +518,16 @@ namespace db
             }
 
             default:
-                std::cerr << "Bad type in permanent delete " << front.type << std::endl;
+                std::cerr << "Bad type in permanent delete list " << front.type << std::endl;
         }
-        update_mutex.unlock();
+        deletion_mutex.unlock();
     }
 
     inline void
     graph :: permanent_delete(uint64_t req_id)
     {
         bool breakloop = false;
-        update_mutex.lock();
+        deletion_mutex.lock();
         del_id = req_id;
         while (!delete_req_ids.empty()) {
             perm_del &front = delete_req_ids.front();
@@ -520,7 +544,7 @@ namespace db
                         uint64_t edge_handle = (uint64_t)front.request.del_edge.edge_handle;
                         n->update_mutex.lock();
                         element::edge *e = n->out_edges[edge_handle];
-                        message::prepare_message(msg, message::PERMANENT_DELETE_EDGE, e->nbr.handle, edge_handle);
+                        message::prepare_message(msg, message::PERMANENT_DELETE_EDGE, req_id, e->nbr.handle, edge_handle);
                         send(e->nbr.loc, msg.buf);
                         n->update_mutex.unlock();
                         breakloop = true;
@@ -537,7 +561,7 @@ namespace db
                         break;
                     }
                     default:
-                        std::cerr << "Bad type in permanent delete " << front.type << std::endl;
+                        std::cerr << "Bad type in permanent delete list " << front.type << std::endl;
                 }
             } else {
                 message::message msg;
@@ -549,7 +573,7 @@ namespace db
                 break;
             }
         }
-        update_mutex.unlock();
+        deletion_mutex.unlock();
         if (!breakloop) {
             message::message msg;
             message::prepare_message(msg, message::CACHE_UPDATE_ACK); 
@@ -558,14 +582,14 @@ namespace db
    }
 
    inline void
-   graph :: permanent_edge_delete(size_t node_handle, uint64_t edge_handle)
+   graph :: permanent_edge_delete(size_t node_handle, uint64_t edge_handle, uint64_t del_id)
    {
        element::node *n = (element::node*)node_handle;
        element::edge *e;
        int remote_loc;
        size_t remote_node;
        message::message msg;
-       if (!already_perm_del(node_handle, edge_handle)) { // TODO optimize by sending req_ids, so that minimal list traversal occurs
+       if (!check_del_list(node_handle, edge_handle, del_id)) {
            n->update_mutex.lock();
            if (n->in_edges.find(edge_handle) != n->in_edges.end()) {
                e = n->in_edges[edge_handle];
@@ -732,14 +756,14 @@ namespace db
     graph :: set_target_clock(uint64_t time)
     {
         bool ret;
-        update_mutex.lock();
+        clock_mutex.lock();
         if (time == my_clock) {
             ret = true;
         } else {
             target_clock = time;
             ret = false;
         }
-        update_mutex.unlock();
+        clock_mutex.unlock();
         return ret;
     }
 

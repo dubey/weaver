@@ -185,11 +185,14 @@ namespace cache
             cached_object &cobj = (*c_table[dest_loc])[dest_node];
             cobj.nodes[local_node] = req_id;
             if (cobj.edge_props.find(req_id) == cobj.edge_props.end()) {
+                std::unordered_set<common::property> new_props;
                 for (auto &p: edge_props) {
-                    cobj.edge_props[req_id].insert(p); 
+                    new_props.insert(p);
+                    //cobj.edge_props[req_id].insert(p); 
                 }
+                cobj.edge_props.insert(std::make_pair(req_id, new_props));
                 (*i_table)[req_id] = std::make_pair(dest_loc, dest_node);
-            }
+            } 
             cache_mutex.unlock();
             return true;
         } else {
