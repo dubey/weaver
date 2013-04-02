@@ -168,6 +168,7 @@ handle_create_edge(db::graph *G, uint64_t req_id, size_t n1, size_t n2, int loc2
     std::pair<bool, uint64_t> success;
     std::unique_ptr<message::message> msg(new message::message());
     success = G->create_edge(n1, req_id, n2, loc2, tc2);
+
     if (success.first) {
         message::prepare_message(*msg, message::EDGE_CREATE_ACK, req_id, success.second);
         G->send_coord(msg->buf);
@@ -570,15 +571,13 @@ handle_cache_update(db::graph *G, std::unique_ptr<message::message> msg)
 }
 
 template<typename Func>
-void apply_to_valid_edges(db::element::node* n, std::vector<common::property>& edge_props, uint64_t myclock_recd, Func func){
-    // check the properties of each out-edge
-    n->update_mutex.lock();
+void apply_to_valid_edges(db::element::node* n, std::vector<common::property>& edge_props, size_t req_id, Func func){
+    // check the properties of each out-edge, assumes lock for node is held
     for (const std::pair<size_t, db::element::edge*> &e : n->out_edges)
     {
-        //uint64_t nbrclock_recd = vector_clock[e->nbr->get_loc()];
-        bool use_edge = e.second->get_creat_time() <= myclock_recd  
-            && e.second->get_del_time() > myclock_recd; // edge created and deleted in acceptable timeframe
-           // && e->nbr->get_del_time() > nbrclock_recd; // nbr not deleted XXX this is lazily evaluated right now anyway
+        bool use_edge = e.second->get_creat_time() <= req_id  
+            && e.second->get_del_time() > req_id; // edge created and deleted in acceptable timeframe
+
         for (size_t i = 0; i < edge_props.size() && use_edge; i++) // checking edge properties
         {
             if (!e.second->has_property(edge_props[i])) {
@@ -590,7 +589,6 @@ void apply_to_valid_edges(db::element::node* n, std::vector<common::property>& e
             func(e.second);
         }
     }
-    n->update_mutex.unlock();
 }
 
 void
@@ -598,15 +596,13 @@ handle_dijkstra_request(db::graph *G, void *req)
 {
     db::dijkstra_request *request = (db::dijkstra_request *) req;
     message::message msg(message::DIJKSTRA_PROP);
-    uint64_t myclock_recd = request->start_time;
     size_t current_cost = 0;
 
     db::dijkstra_queue_elem next_to_add;
-    auto queue_add_fun = [&current_cost, myclock_recd, &request, next_to_add] (db::element::edge * e) {
-        std::pair<bool, size_t> weightpair = e->get_property_value(request->edge_weight_name, myclock_recd); // first is whether key exists, second is value
+    auto queue_add_fun = [&current_cost, &request, next_to_add] (db::element::edge * e) {
+        std::pair<bool, size_t> weightpair = e->get_property_value(request->edge_weight_name, request->coord_id); // first is whether key exists, second is value
         if (weightpair.first){
             size_t priority = request->is_widest_path ? weightpair.second : weightpair.second + current_cost;
-    //        std::cout << "adding priority" << priority << " from edge of weight " << weightpair.second << " and current cost " <<  current_cost << std::endl;
             request->possible_next_nodes.emplace(priority, e->nbr, next_to_add.node);
         }
     };
@@ -618,11 +614,17 @@ handle_dijkstra_request(db::graph *G, void *req)
         // we have found destination!
         if (next_to_add.node == request->dest_node)
         {
-            /*
-            message::prepare_message(msg, message::DIJKSTRA_REPLY, request->coord_id, true, current_cost);
+            std::vector<std::pair<int, size_t>> path;
+            db::element::remote_node cur = request->dest_node;
+            db::element::remote_node prev = next_to_add.from_node;
+            while (cur != prev){
+                path.emplace_back(cur.loc, cur.handle);
+                std::swap(cur, prev);
+                prev = request->visited_map[prev].second;
+            }
+            message::prepare_message(msg, message::DIJKSTRA_REPLY, request->coord_id, current_cost, path);
             G->send_coord(msg.buf);
             delete request;
-            */ //XXX change to find path
             return;
         } else if (next_to_add.node.loc != G->myid) {
             // node to add neighbors for is on another shard
@@ -635,21 +637,26 @@ handle_dijkstra_request(db::graph *G, void *req)
             //if a local node
             db::element::node * next_node = (db::element::node *) next_to_add.node.handle;
 
+            next_node->update_mutex.lock();
             // need to check if node hadn't been deleted. This needed if we don't update in edges for a deleted node
-            if (next_node->get_del_time() <= myclock_recd){
+            if (next_node->get_del_time() <= request->coord_id){
+                next_node->update_mutex.unlock();
                 continue;
             }
 
             if (request->visited_map.count(next_to_add.node) > 0 && request->visited_map[next_to_add.node].first <= current_cost){
+                next_node->update_mutex.unlock();
                 continue;
             } else {
-                apply_to_valid_edges(next_node, request->edge_props, myclock_recd, queue_add_fun);
+                apply_to_valid_edges(next_node, request->edge_props, request->coord_id, queue_add_fun);
+                next_node->update_mutex.unlock();
                 request->visited_map.emplace(next_to_add.node, std::make_pair(current_cost, next_to_add.from_node)); // mark the cost to get here
             }
         }
     }
     // dest couldn't be reached
-    message::prepare_message(msg, message::DIJKSTRA_REPLY, request->coord_id, false, 0);
+    std::vector<std::pair<int, size_t>> emptyPath;
+    message::prepare_message(msg, message::DIJKSTRA_REPLY, request->coord_id, 0, emptyPath);
     G->send_coord(msg.buf);
     delete request;
 }
@@ -659,11 +666,12 @@ void
 unpack_dijkstra_request(db::graph *G, std::unique_ptr<message::message> msg)
 {
     db::element::remote_node source_node;
+    source_node.loc = G->myid;
 
     db::dijkstra_request *req= new db::dijkstra_request;
 
-    message::unpack_message(*msg, message::DIJKSTRA_REQ, source_node, req->dest_node, 
-            req->edge_weight_name, req->coord_id, req->is_widest_path, req->edge_props, req->vector_clock);
+    message::unpack_message(*msg, message::DIJKSTRA_REQ, req->vector_clock, source_node.handle, req->dest_node.handle, req->dest_node.loc, req->coord_id, 
+            req->edge_weight_name, req->edge_props, req->is_widest_path);
 
     req->start_time = req->vector_clock[G->myid];
 
@@ -687,11 +695,6 @@ unpack_dijkstra_prop(db::graph *G, std::unique_ptr<message::message> msg)
     // TODO pass clock into has_property
     change_property_times(req->edge_props, req->start_time);
 
-    std::cout << "got a path prop!" << std::endl;
-
-    // TODO pass clock into has_property
-    change_property_times(req->edge_props, req->start_time);
-
     db::thread::unstarted_thread *dijkstra_req = new db::thread::unstarted_thread(req->start_time, handle_dijkstra_prop, G, req);
     G->thread_pool.add_request(dijkstra_req);
 }
@@ -705,6 +708,7 @@ handle_dijkstra_prop(db::graph *G, void * request)
 
     db::element::node * next_node = (db::element::node *) req->node_ptr;
 
+    next_node->update_mutex.lock();
     if (next_node->get_del_time() > req->start_time){
         auto list_add_fun = [&req, &entries_to_add] (db::element::edge * e) {
             std::pair<bool, size_t> weightpair = e->get_property_value(req->edge_weight_name, req->start_time); // first is whether key exists, second is value
@@ -715,26 +719,31 @@ handle_dijkstra_prop(db::graph *G, void * request)
         };
         apply_to_valid_edges(next_node, req->edge_props, req->start_time, list_add_fun);
     }
+    next_node->update_mutex.unlock();
+
     message::message msg;
     message::prepare_message(msg, message::DIJKSTRA_PROP_REPLY, req->req_ptr, entries_to_add, db::element::remote_node(req->node_ptr, G->myid));
     G->send(req->reply_loc, msg.buf);
 }
 
+/* starts right away as we are continuing a previous request on the same shard */
 inline void
-handle_dijkstra_prop_reply(db::graph *G, std::unique_ptr<message::message> msg)
+handle_dijkstra_prop_reply(db::graph *G, void * request)
 {
+    db::update_request *req = (db::update_request *) request;
     size_t req_ptr;
     std::vector<std::pair<size_t, db::element::remote_node>> entries_to_add;
     db::element::remote_node prev_node(0,0);
-    db::dijkstra_request *request;
 
-    message::unpack_message(*msg, message::DIJKSTRA_PROP_REPLY, req_ptr, entries_to_add, prev_node);
-    request = (db::dijkstra_request *) req_ptr;
+    message::unpack_message(*(req->msg), message::DIJKSTRA_PROP_REPLY, req_ptr, entries_to_add, prev_node);
+    db::dijkstra_request *request_to_continue = (db::dijkstra_request *) req_ptr;
+
     for (auto &elem : entries_to_add){
-        request->possible_next_nodes.emplace(elem.first, elem.second, prev_node);
+        request_to_continue->possible_next_nodes.emplace(elem.first, elem.second, prev_node);
     }
+    delete req;
     // continue the path request from this thread
-    handle_dijkstra_request(G, request);
+    handle_dijkstra_request(G, request_to_continue);
 }
 
 /*
@@ -1325,17 +1334,19 @@ runner(db::graph *G)
                 G->add_done_request(done_id);
                 break;
 
-            /*
             case message::DIJKSTRA_REQ:
-            case message::DIJKSTRA_PROP:
                 unpack_dijkstra_request(G, std::move(rec_msg));
                 break;
 
-            case message::DIJKSTRA_PROP_REPLY:
-                db::thread::unstarted_traversal_thread *dijkstra_prop_reply = new db::thread::unstarted_traversal_thread(0, 0, handle_path_prop_reply, G, std::move(rec_msg));
-                G->thread_pool.add_traversal_request(dijkstra_prop_reply);
+            case message::DIJKSTRA_PROP:
+                unpack_dijkstra_prop(G, std::move(rec_msg));
                 break;
-                */
+
+            case message::DIJKSTRA_PROP_REPLY:
+                request = new db::update_request(mtype, 0, std::move(rec_msg));
+                thr = new db::thread::unstarted_thread(0, handle_dijkstra_prop_reply, G, request);
+                G->thread_pool.add_request(thr);
+                break;
 
 /*
             case message::CLUSTERING_REQ:

@@ -12,6 +12,7 @@
  */
 
 #include "client/client.h"
+#include <vector>
 
 void
 dijkstra_test()
@@ -59,12 +60,12 @@ dijkstra_test()
 
     auto retpair = c.shortest_path_request(nodes[0], nodes[5], weight_label, edge_props);
     std::cout <<retpair.first <<std::endl;
-    assert(retpair.first == true);
-    std::cout <<retpair.second <<std::endl;
-    assert(retpair.second == 17);
+    assert(retpair.first == 17);
+    //std::cout <<retpair.second <<std::endl;
+    //assert(retpair.second == 17);
     std::cout << "Shortest path good" << std::endl;
     retpair = c.widest_path_request(nodes[0], nodes[5], weight_label, edge_props);
-    assert(retpair.first == true);
-    assert(retpair.second == 6);
+    assert(retpair.first == 6);
+    //assert(retpair.second == 6);
     std::cout << "Widest path good" << std::endl;
 }

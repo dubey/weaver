@@ -28,6 +28,7 @@ namespace element
             int loc;
             size_t handle;
             bool operator==(const db::element::remote_node &t) const;
+            bool operator!=(const db::element::remote_node &t) const;
     };
     
     inline
@@ -46,6 +47,12 @@ namespace element
     remote_node :: operator==(const db::element::remote_node &t) const{
         return (handle == t.handle) && (loc == t.loc);
     }
+
+    inline bool
+    remote_node :: operator!=(const db::element::remote_node &t) const{
+        return (handle != t.handle) || (loc != t.loc);
+    }
+    
 }
 }
 
