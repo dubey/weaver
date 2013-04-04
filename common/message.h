@@ -203,7 +203,7 @@ namespace message
     }
     inline size_t size(const db::dijkstra_queue_elem& t)
     {
-        return size(t.cost) + size(t.node) + size(t.from_node);
+        return size(t.cost) + size(t.node) + size(t.prev_node_req_id);
     }
 
     template <typename T1, typename T2>
@@ -305,7 +305,7 @@ namespace message
     {
         pack_buffer(packer, t.cost);
         pack_buffer(packer, t.node);
-        pack_buffer(packer, t.from_node);
+        pack_buffer(packer, t.prev_node_req_id);
     }
 
     template <typename T1, typename T2>
@@ -458,7 +458,7 @@ namespace message
     {
         unpack_buffer(unpacker, t.cost);
         unpack_buffer(unpacker, t.node);
-        unpack_buffer(unpacker, t.from_node);
+        unpack_buffer(unpacker, t.prev_node_req_id);
     }
 
     template <typename T1, typename T2>

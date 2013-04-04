@@ -83,7 +83,7 @@ namespace coordinator
             std::shared_ptr<pending_req> del_request;
             // used for dijkstra requests
             bool is_widest;
-            std::unique_ptr<std::vector<std::pair<int, size_t>>> path;
+            std::unique_ptr<std::vector<size_t>> path;
             // request reply
             bool done;
             size_t node_handle;

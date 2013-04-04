@@ -104,7 +104,7 @@ namespace db
             public:
             size_t cost;
             db::element::remote_node node;
-            db::element::remote_node from_node;
+            size_t prev_node_req_id; // used for reconstructing path in coordinator
 
             int operator<(const dijkstra_queue_elem& other) const
             { 
@@ -115,11 +115,11 @@ namespace db
             {
             }
 
-            dijkstra_queue_elem(size_t c, db::element::remote_node n, db::element::remote_node prev)
+            dijkstra_queue_elem(size_t c, db::element::remote_node n, size_t prev)
             {
                 cost = c;
                 node = n;
-                from_node = prev;
+                prev_node_req_id = prev;
             }
     };
 
@@ -131,11 +131,12 @@ namespace db
             uint64_t coord_id; // coordinator's req id
             size_t start_time;
             std::priority_queue<dijkstra_queue_elem> possible_next_nodes; 
-            std::unordered_map<db::element::remote_node, std::pair<size_t, db::element::remote_node>> visited_map; // map from a node to its cost and the neighbor the path of that cost came from
+            std::unordered_map<size_t, std::pair<size_t, size_t>> visited_map; // map from a node (by its create time) to its cost and the req_id of the node that came before it in the shortest path
             db::element::remote_node dest_node;
             std::vector<common::property> edge_props;
             std::vector<uint64_t> vector_clock;
             uint32_t edge_weight_name; // they key of the property which holds the weight of an an edge
+            uint64_t dest_node_creat_id; // id for destination node
             bool is_widest_path;
 
             dijkstra_request()
@@ -143,7 +144,6 @@ namespace db
             }
     };
 
-    // Pending XXX
     class dijkstra_prop
     {
         public:

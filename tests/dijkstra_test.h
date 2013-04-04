@@ -58,14 +58,32 @@ dijkstra_test()
 
     std::cout << " starting path requests " << std::endl;
 
+    std::cout << "nodes[0] = " << nodes[0] <<std::endl;
+    std::cout << "nodes[1] = " << nodes[1] <<std::endl;
+    std::cout << "nodes[2] = " << nodes[2] <<std::endl;
+    std::cout << "nodes[3] = " << nodes[3] <<std::endl;
+    std::cout << "nodes[4] = " << nodes[4] <<std::endl;
+    std::cout << "nodes[5] = " << nodes[5] <<std::endl;
+
     auto retpair = c.shortest_path_request(nodes[0], nodes[5], weight_label, edge_props);
     std::cout <<retpair.first <<std::endl;
     assert(retpair.first == 17);
+    std::cout << "path is" << std::endl;
+    for (auto label : retpair.second){
+        std::cout << label << std::endl;
+    }
+    std::cout << "path end" << std::endl;
     //std::cout <<retpair.second <<std::endl;
     //assert(retpair.second == 17);
     std::cout << "Shortest path good" << std::endl;
     retpair = c.widest_path_request(nodes[0], nodes[5], weight_label, edge_props);
     assert(retpair.first == 6);
+    std::cout <<retpair.first <<std::endl;
+    std::cout << "path is" << std::endl;
+    for (auto label : retpair.second){
+        std::cout << label << std::endl;
+    }
+    std::cout << "path end" << std::endl;
     //assert(retpair.second == 6);
     std::cout << "Widest path good" << std::endl;
 }

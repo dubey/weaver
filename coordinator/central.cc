@@ -311,7 +311,7 @@ dijkstra_request_initiate(coordinator::central *server, std::shared_ptr<coordina
               << " with is_widest_path = " << request->is_widest << std::endl;
     message::prepare_message(msg, message::DIJKSTRA_REQ, *request->vector_clock, 
         request->elem1->get_node_handle(), request->elem2->get_node_handle(), request->elem2->get_loc(), 
-        request->req_id, request->key, request->edge_props, request->is_widest);
+        request->req_id, request->key, request->edge_props, request->is_widest, request->elem1->get_creat_time(), request->elem2->get_creat_time());
     server->update_mutex.unlock();
     server->send(request->elem1->get_loc(), msg.buf);
 }
@@ -465,7 +465,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     common::meta_element *lnode; // for migration
     size_t coord_handle; // for migration
     int new_loc, from_loc; // for migration
-    std::unique_ptr<std::vector<std::pair<int, size_t>>> found_path(new std::vector<std::pair<int, size_t>>); // for dijkstra requests
+    std::unique_ptr<std::vector<size_t>> found_path(new std::vector<size_t>); // for dijkstra requests
     size_t cost; //for reply
     
     switch(m_type) {
