@@ -82,7 +82,7 @@ namespace db
     inline bool
     batch_request :: operator>(const batch_request &r) const
     {
-        return (coord_id > r.coord_id);
+        return (coord_id < r.coord_id);
     }
 
     inline void
@@ -108,7 +108,12 @@ namespace db
 
             int operator<(const dijkstra_queue_elem& other) const
             { 
-                return cost > other.cost; 
+                return other.cost < cost; 
+            }
+
+            int operator>(const dijkstra_queue_elem& other) const
+            { 
+                return other.cost > cost; 
             }
 
             dijkstra_queue_elem()
@@ -129,9 +134,10 @@ namespace db
     {
             public:
             uint64_t coord_id; // coordinator's req id
-            size_t start_time;
-            std::priority_queue<dijkstra_queue_elem> possible_next_nodes; 
-            std::unordered_map<size_t, std::pair<size_t, size_t>> visited_map; // map from a node (by its create time) to its cost and the req_id of the node that came before it in the shortest path
+            uint64_t start_time;
+            std::priority_queue<dijkstra_queue_elem, std::vector<dijkstra_queue_elem>, std::less<dijkstra_queue_elem>> next_nodes_shortest; 
+            std::priority_queue<dijkstra_queue_elem, std::vector<dijkstra_queue_elem>, std::greater<dijkstra_queue_elem>> next_nodes_widest; 
+            std::unordered_map<uint64_t, std::pair<uint64_t , uint64_t >> visited_map; // map from a node (by its create time) to its cost and the req_id of the node that came before it in the shortest path
             db::element::remote_node dest_node;
             std::vector<common::property> edge_props;
             std::vector<uint64_t> vector_clock;

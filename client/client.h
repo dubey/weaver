@@ -38,15 +38,15 @@ class client
         void add_edge_prop(size_t node, size_t edge, uint32_t key, size_t value);
         void del_edge_prop(size_t node, size_t edge, uint32_t key);
         bool reachability_request(size_t node1, size_t node2, std::shared_ptr<std::vector<common::property>> edge_props);
-        std::pair<size_t, std::vector<size_t>> shortest_path_request(size_t node1, size_t node2, uint32_t edge_weight_prop,
+        std::pair<size_t, std::vector<std::pair<size_t, size_t>>> shortest_path_request(size_t node1, size_t node2, uint32_t edge_weight_prop,
                 std::shared_ptr<std::vector<common::property>> edge_props);
-        std::pair<size_t, std::vector<size_t>> widest_path_request(size_t node1, size_t node2, uint32_t edge_weight_prop, 
+        std::pair<size_t, std::vector<std::pair<size_t, size_t>>> widest_path_request(size_t node1, size_t node2, uint32_t edge_weight_prop, 
                 std::shared_ptr<std::vector<common::property>> edge_props);
         double local_clustering_coefficient(size_t node,
                 std::shared_ptr<std::vector<common::property>> edge_props);
 
     private:
-        std::pair<size_t, std::vector<size_t>> dijkstra_request(size_t node1, size_t node2, uint32_t edge_weight_prop, bool is_widest,
+        std::pair<size_t, std::vector<std::pair<size_t, size_t>>> dijkstra_request(size_t node1, size_t node2, uint32_t edge_weight_prop, bool is_widest,
                 std::shared_ptr<std::vector<common::property>> edge_props);
         void send_coord(std::auto_ptr<e::buffer> buf);
 };
@@ -159,26 +159,26 @@ client :: reachability_request(size_t node1, size_t node2,
     return reachable;
 }
 
-inline std::pair<size_t, std::vector<size_t>>
+inline std::pair<size_t, std::vector<std::pair<size_t, size_t>>>
 client :: shortest_path_request(size_t node1, size_t node2, 
     uint32_t edge_weight_prop, std::shared_ptr<std::vector<common::property>> edge_props)
 {
     return dijkstra_request(node1, node2, edge_weight_prop, false, edge_props);
 }
 
-inline std::pair<size_t, std::vector<size_t>>
+inline std::pair<size_t, std::vector<std::pair<size_t, size_t>>>
 client :: widest_path_request(size_t node1, size_t node2,
     uint32_t edge_weight_prop, std::shared_ptr<std::vector<common::property>> edge_props)
 {
     return dijkstra_request(node1, node2, edge_weight_prop, true, edge_props);
 }
 
-inline std::pair<size_t, std::vector<size_t>>
+inline std::pair<size_t, std::vector<std::pair<size_t, size_t>>>
 client :: dijkstra_request(size_t node1, size_t node2, uint32_t edge_weight_prop, bool is_widest,
     std::shared_ptr<std::vector<common::property>> edge_props)
 {
     busybee_returncode ret;
-    std::pair<size_t, std::vector<size_t>> toRet; // pair of cost and path
+    std::pair<size_t, std::vector<std::pair<size_t, size_t>>> toRet; // pair of cost and path
     message::message msg(message::CLIENT_DIJKSTRA_REQ);
     message::prepare_message(msg, message::CLIENT_DIJKSTRA_REQ, myloc.port, node1, node2, edge_weight_prop, is_widest, *edge_props);
     send_coord(msg.buf);

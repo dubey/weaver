@@ -591,6 +591,17 @@ void apply_to_valid_edges(db::element::node* n, std::vector<common::property>& e
     }
 }
 
+inline size_t
+calculate_priority(size_t current_cost, size_t edge_cost, bool is_widest_path){
+    size_t priority;
+    if (is_widest_path){
+        priority = current_cost < edge_cost ? current_cost : edge_cost;
+    } else {
+        priority = edge_cost + current_cost;
+    }
+    return priority;
+}
+
 void
 handle_dijkstra_request(db::graph *G, void *req)
 {
@@ -603,26 +614,40 @@ handle_dijkstra_request(db::graph *G, void *req)
     auto queue_add_fun = [&current_cost, &request, &next_req_id] (db::element::edge * e) {
         std::pair<bool, size_t> weightpair = e->get_property_value(request->edge_weight_name, request->coord_id); // first is whether key exists, second is value
         if (weightpair.first){
-            size_t priority = request->is_widest_path ? weightpair.second : weightpair.second + current_cost;
-            request->possible_next_nodes.emplace(priority, e->nbr, next_req_id);
+            size_t priority = calculate_priority(current_cost, weightpair.second, request->is_widest_path);
+            if (request->is_widest_path){
+                request->next_nodes_widest.emplace(priority, e->nbr, next_req_id);
+            } else {
+                request->next_nodes_shortest.emplace(priority, e->nbr, next_req_id);
+            }
+            std::cout << "adding node " << next_req_id << " with cost " << priority << " to pq" << std::endl;
         }
     };
 
-    while (!request->possible_next_nodes.empty()){
-        next_to_add = request->possible_next_nodes.top();
-        request->possible_next_nodes.pop();
+    while (!request->next_nodes_shortest.empty() || !request->next_nodes_widest.empty()){
+        if (request->is_widest_path){
+            next_to_add = request->next_nodes_widest.top();
+            request->next_nodes_widest.pop();
+        } else {
+            next_to_add = request->next_nodes_shortest.top();
+            request->next_nodes_shortest.pop();
+        }
         current_cost = next_to_add.cost;
         // we have found destination!
         if (next_to_add.node == request->dest_node)
         {
-            std::vector<size_t> path; // rebuild path based on req_id's in visited_map
+            std::vector<std::pair<size_t, size_t>> path; // rebuild path based on req_id's in visited_map
             //path.push_back(request->dest_node_creat_id);
             size_t cur = next_to_add.prev_node_req_id;
+            size_t curc = next_to_add.cost;
             size_t next = request->visited_map[cur].second; // prev_node_creat_id for that node
+            size_t nextc = request->visited_map[cur].first; 
             while (cur != next){
-                path.push_back(cur);
+                path.push_back(std::make_pair(cur, curc));
                 std::swap(cur, next);
+                std::swap(curc, nextc);
                 next = request->visited_map[cur].second;
+                nextc = request->visited_map[cur].first;
             }
             message::prepare_message(msg, message::DIJKSTRA_REPLY, request->coord_id, current_cost, path);
             G->send_coord(msg.buf);
@@ -647,13 +672,17 @@ handle_dijkstra_request(db::graph *G, void *req)
             }
 
             next_req_id = next_node->get_creat_time();
-            if (request->visited_map.count(next_req_id) > 0 && request->visited_map[next_req_id].first <= current_cost){
-                next_node->update_mutex.unlock();
-                continue;
+            bool already_found = request->visited_map.count(next_req_id) > 0;
+            if (already_found){
+                size_t new_cost = request->visited_map[next_req_id].first;
+                if (request->is_widest_path ? new_cost >= current_cost : new_cost <= current_cost){
+                    next_node->update_mutex.unlock();
+                    continue;
+                }
             } else {
                 apply_to_valid_edges(next_node, request->edge_props, request->coord_id, queue_add_fun);
                 next_node->update_mutex.unlock();
-                if (request->visited_map.count(next_req_id) > 0){
+                if (already_found){
                     std::cout << "visited map there is already a value there which is" << request->visited_map[next_req_id].first << std::endl;
                 }
                 request->visited_map.emplace(next_req_id, std::make_pair(current_cost, next_to_add.prev_node_req_id)); // mark the cost to get here
@@ -686,7 +715,11 @@ unpack_dijkstra_request(db::graph *G, std::unique_ptr<message::message> msg)
     // TODO pass clock into has_property
     change_property_times(req->edge_props, req->start_time);
 
-    req->possible_next_nodes.emplace(0, source_node, source_node_creat_id);
+    if (req->is_widest_path){
+        req->next_nodes_widest.emplace(MAX_TIME, source_node, source_node_creat_id); // don't want source node to be bottleneck in path
+    } else {
+        req->next_nodes_shortest.emplace(0, source_node, source_node_creat_id);
+    }
     db::thread::unstarted_thread *dijkstra_req = new db::thread::unstarted_thread(req->start_time, handle_dijkstra_request, G, req);
     G->thread_pool.add_request(dijkstra_req);
 }
@@ -722,7 +755,7 @@ handle_dijkstra_prop(db::graph *G, void * request)
         auto list_add_fun = [&req, &entries_to_add] (db::element::edge * e) {
             std::pair<bool, size_t> weightpair = e->get_property_value(req->edge_weight_name, req->start_time); // first is whether key exists, second is value
             if (weightpair.first){
-                size_t priority = req->is_widest_path ? weightpair.second : weightpair.second + req->current_cost;
+                size_t priority = calculate_priority(req->current_cost, weightpair.second, req->is_widest_path);
                 entries_to_add.emplace_back(std::make_pair(priority, e->nbr));
             }
         };
@@ -747,8 +780,14 @@ handle_dijkstra_prop_reply(db::graph *G, void * request)
     message::unpack_message(*(req->msg), message::DIJKSTRA_PROP_REPLY, req_ptr, entries_to_add, prev_node_req_id);
     db::dijkstra_request *request_to_continue = (db::dijkstra_request *) req_ptr;
 
-    for (auto &elem : entries_to_add){
-        request_to_continue->possible_next_nodes.emplace(elem.first, elem.second, prev_node_req_id);
+    if (request_to_continue->is_widest_path){
+        for (auto &elem : entries_to_add){
+            request_to_continue->next_nodes_widest.emplace(elem.first, elem.second, prev_node_req_id);
+        }
+    } else {
+        for (auto &elem : entries_to_add){
+            request_to_continue->next_nodes_widest.emplace(elem.first, elem.second, prev_node_req_id);
+        }
     }
     delete req;
     // continue the path request from this thread

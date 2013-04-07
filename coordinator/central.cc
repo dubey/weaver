@@ -465,7 +465,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     common::meta_element *lnode; // for migration
     size_t coord_handle; // for migration
     int new_loc, from_loc; // for migration
-    std::unique_ptr<std::vector<size_t>> found_path(new std::vector<size_t>); // for dijkstra requests
+    std::unique_ptr<std::vector<std::pair<size_t, size_t>>> found_path(new std::vector<std::pair<size_t, size_t>>); // for dijkstra requests
     size_t cost; //for reply
     
     switch(m_type) {
