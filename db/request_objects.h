@@ -16,12 +16,8 @@
 #define __REQ_OBJS__
 
 #include <vector>
-//#include <iostream>
 #include <unordered_map>
-//#include <po6/net/location.h>
 #include <po6/threads/mutex.h>
-//#include <po6/threads/cond.h>
-//#include <busybee_sta.h>
 
 #include "common/weaver_constants.h"
 #include "common/property.h"
@@ -52,19 +48,19 @@ namespace db
     {
         public:
             int prev_loc; // prev server's id
-            size_t dest_addr; // dest node's handle
+            uint64_t dest_addr; // dest node's handle
             int dest_loc; // dest node's server id
             uint64_t coord_id; // coordinator's req id
             uint64_t prev_id; // prev server's req id
-            std::vector<size_t> src_nodes;
-            std::vector<size_t> parent_nodes; // pointers to parent node in traversal
+            std::vector<uint64_t> src_nodes;
+            std::vector<uint64_t> parent_nodes; // pointers to parent node in traversal
             std::vector<common::property> edge_props;
             std::vector<uint64_t> vector_clock;
             std::vector<uint64_t> ignore_cache;
             uint64_t start_time;
             int num; // number of onward requests
             bool reachable; // request specific data
-            std::vector<size_t> del_nodes; // deleted nodes
+            std::vector<uint64_t> del_nodes; // deleted nodes
             std::vector<uint64_t> del_times; // delete times corr. to del_nodes
             uint32_t use_cnt; // testing
 
@@ -104,7 +100,7 @@ namespace db
             public:
             size_t cost;
             db::element::remote_node node;
-            size_t prev_node_req_id; // used for reconstructing path in coordinator
+            uint64_t prev_node_req_id; // used for reconstructing path in coordinator
 
             int operator<(const dijkstra_queue_elem& other) const
             { 
@@ -137,7 +133,8 @@ namespace db
             uint64_t start_time;
             std::priority_queue<dijkstra_queue_elem, std::vector<dijkstra_queue_elem>, std::less<dijkstra_queue_elem>> next_nodes_shortest; 
             std::priority_queue<dijkstra_queue_elem, std::vector<dijkstra_queue_elem>, std::greater<dijkstra_queue_elem>> next_nodes_widest; 
-            std::unordered_map<uint64_t, std::pair<uint64_t , uint64_t >> visited_map; // map from a node (by its create time) to its cost and the req_id of the node that came before it in the shortest path
+            // map from a node (by its create time) to its cost and the req_id of the node that came before it in the shortest path
+            std::unordered_map<uint64_t, std::pair<uint64_t , uint64_t >> visited_map; 
             db::element::remote_node dest_node;
             std::vector<common::property> edge_props;
             std::vector<uint64_t> vector_clock;
@@ -153,7 +150,8 @@ namespace db
     class dijkstra_prop
     {
         public:
-            size_t req_ptr, node_ptr, current_cost;
+            uint64_t node_ptr;
+            size_t req_ptr, current_cost;
             int reply_loc;
             std::vector<common::property> edge_props;
             uint64_t start_time, coord_id;

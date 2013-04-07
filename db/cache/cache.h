@@ -45,14 +45,14 @@ namespace cache
         public:
             // "nodes" is a map from local node handles to the         
             // request ids that caused this entry to be cached
-            std::unordered_map<size_t, uint64_t> nodes;
+            std::unordered_map<uint64_t, uint64_t> nodes;
             // "edge_props" is a map from request ids to the
             // edge props associated with those ids
             std::unordered_map<uint64_t, std::unordered_set<common::property>> edge_props;
     };
 
-    typedef std::unordered_map<size_t, cached_object> ctable;
-    typedef std::unordered_map<uint64_t, std::pair<int, size_t>> itable;
+    typedef std::unordered_map<uint64_t, cached_object> ctable;
+    typedef std::unordered_map<uint64_t, std::pair<int, uint64_t>> itable;
     class reach_cache
     {
         public:
@@ -72,23 +72,23 @@ namespace cache
             itable transient_invalidation_table;
 
         public:
-            bool insert_entry(int dest_loc, size_t dest_node, size_t local_node, uint64_t req_id, std::vector<common::property>& edge_props);
-            bool transient_insert_entry(int dest_loc, size_t dest_node, size_t local_node, uint64_t req_id, std::vector<common::property>& edge_props);
-            size_t get_req_id(int dest_loc, size_t dest_node, size_t local_node, std::vector<common::property>& edge_props);
-            std::unique_ptr<std::vector<size_t>> remove_entry(uint64_t req_id);
-            std::unique_ptr<std::vector<size_t>> remove_transient_entry(uint64_t req_id);
-            void commit(size_t id);
+            bool insert_entry(int dest_loc, uint64_t dest_node, uint64_t local_node, uint64_t req_id, std::vector<common::property>& edge_props);
+            bool transient_insert_entry(int dest_loc, uint64_t dest_node, uint64_t local_node, uint64_t req_id, std::vector<common::property>& edge_props);
+            uint64_t get_req_id(int dest_loc, uint64_t dest_node, uint64_t local_node, std::vector<common::property>& edge_props);
+            std::unique_ptr<std::vector<uint64_t>> remove_entry(uint64_t req_id);
+            std::unique_ptr<std::vector<uint64_t>> remove_transient_entry(uint64_t req_id);
+            void commit(uint64_t id);
 
         private:
             po6::threads::mutex cache_mutex;
                 
         private:
-            bool entry_exists(int dest_loc, size_t dest_node, size_t local_node, std::vector<common::property>& edge_props, ctable **table);
-            bool entry_exists(int dest_loc, size_t dest_node, size_t local_node, ctable **table);
-            bool mapping_exists(int dest_loc, size_t dest_node, ctable **table);
-            bool insert_into_table(int dest_loc, size_t dest_node, size_t local_node, uint64_t req_id,
+            bool entry_exists(int dest_loc, uint64_t dest_node, uint64_t local_node, std::vector<common::property>& edge_props, ctable **table);
+            bool entry_exists(int dest_loc, uint64_t dest_node, uint64_t local_node, ctable **table);
+            bool mapping_exists(int dest_loc, uint64_t dest_node, ctable **table);
+            bool insert_into_table(int dest_loc, uint64_t dest_node, uint64_t local_node, uint64_t req_id,
                 std::vector<common::property>& edge_props, ctable **c_table, itable *i_table);
-            std::unique_ptr<std::vector<size_t>> remove_from_table(uint64_t req_id, ctable **c_table, itable *i_table);
+            std::unique_ptr<std::vector<uint64_t>> remove_from_table(uint64_t req_id, ctable **c_table, itable *i_table);
     };
 
     inline
@@ -105,7 +105,7 @@ namespace cache
 
     // caution: not protected by mutex
     inline bool
-    reach_cache :: entry_exists(int dest_loc, size_t dest_node, size_t local_node,
+    reach_cache :: entry_exists(int dest_loc, uint64_t dest_node, uint64_t local_node,
         std::vector<common::property>& edge_props, ctable **table)
     {
         ctable::iterator dest_iter;
@@ -113,7 +113,7 @@ namespace cache
         if (dest_iter == table[dest_loc]->end()) {
             return false;
         }
-        std::unordered_map<size_t, uint64_t>::iterator lnode_iter;
+        std::unordered_map<uint64_t, uint64_t>::iterator lnode_iter;
         cached_object &cobj = dest_iter->second; // the cached object
         lnode_iter = cobj.nodes.find(local_node);
         if (lnode_iter == cobj.nodes.end()) {
@@ -132,14 +132,14 @@ namespace cache
 
     // caution: not protected by mutex
     inline bool
-    reach_cache :: entry_exists(int dest_loc, size_t dest_node, size_t local_node, ctable **table)
+    reach_cache :: entry_exists(int dest_loc, uint64_t dest_node, uint64_t local_node, ctable **table)
     {
         ctable::iterator dest_iter;
         dest_iter = table[dest_loc]->find(dest_node);
         if (dest_iter == table[dest_loc]->end()) {
             return false;
         }
-        std::unordered_map<size_t, uint64_t>::iterator lnode_iter;
+        std::unordered_map<uint64_t, uint64_t>::iterator lnode_iter;
         cached_object &cobj = dest_iter->second; // the cached object
         lnode_iter = cobj.nodes.find(local_node);
         if (lnode_iter == cobj.nodes.end()) {
@@ -151,7 +151,7 @@ namespace cache
    
     // caution: not protected by mutex
     inline bool
-    reach_cache :: mapping_exists(int dest_loc, size_t dest_node, ctable **table)
+    reach_cache :: mapping_exists(int dest_loc, uint64_t dest_node, ctable **table)
     {
         ctable::iterator dest_iter;
         dest_iter = table[dest_loc]->find(dest_node);
@@ -161,7 +161,7 @@ namespace cache
     // return 0 if the entry is not in cache
     // otherwise return the req_id which caused it to be cached
     inline uint64_t
-    reach_cache :: get_req_id(int dest_loc, size_t dest_node, size_t local_node,
+    reach_cache :: get_req_id(int dest_loc, uint64_t dest_node, uint64_t local_node,
         std::vector<common::property>& edge_props)
     {
         uint64_t ret;
@@ -177,8 +177,8 @@ namespace cache
     }
 
     inline bool
-    reach_cache :: insert_into_table(int dest_loc, size_t dest_node, size_t local_node, uint64_t req_id,
-        std::vector<common::property>& edge_props, ctable **c_table, itable *i_table)
+    reach_cache :: insert_into_table(int dest_loc, uint64_t dest_node, uint64_t local_node, uint64_t req_id,
+        std::vector<common::property> &edge_props, ctable **c_table, itable *i_table)
     {
         cache_mutex.lock();
         if (!entry_exists(dest_loc, dest_node, local_node, c_table)) {
@@ -202,32 +202,32 @@ namespace cache
     }
 
     inline bool
-    reach_cache :: insert_entry(int dest_loc, size_t dest_node, size_t local_node, uint64_t req_id, 
+    reach_cache :: insert_entry(int dest_loc, uint64_t dest_node, uint64_t local_node, uint64_t req_id, 
                 std::vector<common::property>& edge_props)
     {
         return insert_into_table(dest_loc, dest_node, local_node, req_id, edge_props, cache_table, &invalidation_table);
     }
 
     inline bool
-    reach_cache :: transient_insert_entry(int dest_loc, size_t dest_node, size_t local_node, uint64_t req_id, 
+    reach_cache :: transient_insert_entry(int dest_loc, uint64_t dest_node, uint64_t local_node, uint64_t req_id, 
                 std::vector<common::property>& edge_props)
     {
         return insert_into_table(dest_loc, dest_node, local_node, req_id, edge_props, transient_cache_table, &transient_invalidation_table);
     }
 
     // return a set of local nodes that have cached this entry
-    inline std::unique_ptr<std::vector<size_t>>
+    inline std::unique_ptr<std::vector<uint64_t>>
     reach_cache :: remove_from_table(uint64_t req_id, ctable **c_table, itable *i_table)
     {
         itable::iterator iter;
-        std::unique_ptr<std::vector<size_t>> ret;
+        std::unique_ptr<std::vector<uint64_t>> ret;
         cache_mutex.lock();
         iter = i_table->find(req_id);
         // checking if the entry has not already been deleted
         if (iter != i_table->end()) {
-            size_t dest_node = iter->second.second;
+            uint64_t dest_node = iter->second.second;
             int dest_loc = iter->second.first;
-            ret.reset(new std::vector<size_t>());
+            ret.reset(new std::vector<uint64_t>());
             cached_object &cobj = c_table[dest_loc]->at(dest_node);
             for (auto &node_iter: cobj.nodes) {
                 if (node_iter.second == req_id) {
@@ -244,13 +244,13 @@ namespace cache
         return ret;
     }
 
-    inline std::unique_ptr<std::vector<size_t>>
+    inline std::unique_ptr<std::vector<uint64_t>>
     reach_cache :: remove_entry(uint64_t req_id)
     {
         return remove_from_table(req_id, cache_table, &invalidation_table);
     }
 
-    inline std::unique_ptr<std::vector<size_t>>
+    inline std::unique_ptr<std::vector<uint64_t>>
     reach_cache :: remove_transient_entry(uint64_t req_id)
     {
         return remove_from_table(req_id, transient_cache_table, &transient_invalidation_table);
@@ -264,11 +264,11 @@ namespace cache
         it = transient_invalidation_table.find(id);
         if (it != transient_invalidation_table.end()) {
             // inserting into cache
-            size_t dest_node = it->second.second;
+            uint64_t dest_node = it->second.second;
             int dest_loc = it->second.first;
             cached_object &transient_cobj = transient_cache_table[dest_loc]->at(dest_node);
             cached_object &cobj = (*cache_table[dest_loc])[dest_node];
-            std::vector<size_t> to_delete;
+            std::vector<uint64_t> to_delete;
             for (auto &node_iter: transient_cobj.nodes) {
                 if (node_iter.second == id) {
                     cobj.nodes.emplace(node_iter.first, node_iter.second);

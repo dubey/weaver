@@ -28,14 +28,14 @@ namespace element
     class edge : public element
     {
         public:
-            edge(uint64_t time, int remote_loc, size_t remote_handle);
+            edge(uint64_t time, int remote_loc, uint64_t remote_handle);
         
         public:
             remote_node nbr; // out-neighbor for this edge
     };
 
     inline
-    edge :: edge(uint64_t time, int remote_loc, size_t remote_handle)
+    edge :: edge(uint64_t time, int remote_loc, uint64_t remote_handle)
         : element(time)
         , nbr(remote_loc, remote_handle)
     {

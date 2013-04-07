@@ -54,7 +54,7 @@ namespace element
             std::unordered_set<uint64_t> seen; // requests which have been seen
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids; // requests which have been cached
             // for migration
-            size_t new_handle;
+            uint64_t new_handle;
             int prev_loc, new_loc;
             std::vector<uint32_t> msg_count;
 
@@ -62,7 +62,7 @@ namespace element
             uint32_t out_edge_ctr, in_edge_ctr;
 
         public:
-            uint64_t add_edge(edge *e, bool in_or_out);
+            void add_edge(edge *e, bool in_or_out);
             bool check_and_add_seen(uint64_t id);
             void remove_seen(uint64_t id);
             void set_seen(std::unordered_set<uint64_t> &seen);
@@ -96,7 +96,7 @@ namespace element
     {
     }
 
-    inline uint64_t
+    inline void
     node :: add_edge(edge *e, bool in_or_out)
     {
         if (in_or_out) {
@@ -104,7 +104,6 @@ namespace element
         } else {
             in_edges.emplace(e->get_creat_time(), e);
         }
-        return e->get_creat_time();
     }
 
     inline bool

@@ -32,7 +32,7 @@ namespace element
     };
     
     inline
-    remote_node :: remote_node(int l, size_t h)
+    remote_node :: remote_node(int l, uint64_t h)
         : loc(l)
         , handle(h)
     {
