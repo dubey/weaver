@@ -746,27 +746,25 @@ handle_dijkstra_prop(db::graph *G, void *request)
     std::vector<std::pair<size_t, db::element::remote_node>> entries_to_add;
     uint64_t next_node_req_id; 
     db::element::node *next_node = G->acquire_node(req->node_ptr);
-    if (next_node == NULL) {
-        // XXX node permanently deleted
-    } else if (next_node->get_del_time() <= req->coord_id) {
-        // XXX node deleted
-        G->release_node(next_node);
-    } else {
-        next_node_req_id = next_node->get_creat_time();
-        if (next_node->get_del_time() > req->start_time){
-            auto list_add_fun = [&req, &entries_to_add] (db::element::edge * e) {
-                // first is whether key exists, second is value
-                std::pair<bool, size_t> weightpair = e->get_property_value(req->edge_weight_name, req->start_time); 
-                if (weightpair.first){
-                    size_t priority = calculate_priority(req->current_cost, weightpair.second, req->is_widest_path);
-                    entries_to_add.emplace_back(std::make_pair(priority, e->nbr));
-                }
-            };
-            apply_to_valid_edges(next_node, req->edge_props, req->start_time, list_add_fun);
+    // check for permanent deletion
+    if (next_node != NULL) {
+        // check for deletion
+        if (next_node->get_del_time() > req->coord_id) {
+            next_node_req_id = next_node->get_creat_time();
+            if (next_node->get_del_time() > req->start_time) {
+                auto list_add_fun = [&req, &entries_to_add] (db::element::edge * e) {
+                    // first is whether key exists, second is value
+                    std::pair<bool, size_t> weightpair = e->get_property_value(req->edge_weight_name, req->start_time); 
+                    if (weightpair.first) {
+                        size_t priority = calculate_priority(req->current_cost, weightpair.second, req->is_widest_path);
+                        entries_to_add.emplace_back(std::make_pair(priority, e->nbr));
+                    }
+                };
+                apply_to_valid_edges(next_node, req->edge_props, req->start_time, list_add_fun);
+            }
+            G->release_node(next_node);
         }
-        G->release_node(next_node);
     }
-
     message::message msg;
     message::prepare_message(msg, message::DIJKSTRA_PROP_REPLY, req->req_ptr, entries_to_add, next_node_req_id);
     G->send(req->reply_loc, msg.buf);
@@ -774,22 +772,22 @@ handle_dijkstra_prop(db::graph *G, void *request)
 
 /* starts right away as we are continuing a previous request on the same shard */
 inline void
-handle_dijkstra_prop_reply(db::graph *G, void * request)
+handle_dijkstra_prop_reply(db::graph *G, void *request)
 {
-    db::update_request *req = (db::update_request *) request;
+    db::update_request *req = (db::update_request *)request;
     size_t req_ptr;
     std::vector<std::pair<size_t, db::element::remote_node>> entries_to_add;
     size_t prev_node_req_id;
 
-    message::unpack_message(*(req->msg), message::DIJKSTRA_PROP_REPLY, req_ptr, entries_to_add, prev_node_req_id);
-    db::dijkstra_request *request_to_continue = (db::dijkstra_request *) req_ptr;
+    message::unpack_message(*req->msg, message::DIJKSTRA_PROP_REPLY, req_ptr, entries_to_add, prev_node_req_id);
+    db::dijkstra_request *request_to_continue = (db::dijkstra_request *)req_ptr;
 
-    if (request_to_continue->is_widest_path){
-        for (auto &elem : entries_to_add){
+    if (request_to_continue->is_widest_path) {
+        for (auto &elem : entries_to_add) {
             request_to_continue->next_nodes_widest.emplace(elem.first, elem.second, prev_node_req_id);
         }
     } else {
-        for (auto &elem : entries_to_add){
+        for (auto &elem : entries_to_add) {
             request_to_continue->next_nodes_widest.emplace(elem.first, elem.second, prev_node_req_id);
         }
     }
