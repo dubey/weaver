@@ -51,19 +51,19 @@ namespace db
     {
         public:
             int prev_loc; // prev server's id
-            size_t dest_addr; // dest node's handle
+            uint64_t dest_addr; // dest node's handle
             int dest_loc; // dest node's server id
             uint64_t coord_id; // coordinator's req id
             uint64_t prev_id; // prev server's req id
-            std::vector<size_t> src_nodes;
-            std::vector<size_t> parent_nodes; // pointers to parent node in traversal
+            std::vector<uint64_t> src_nodes;
+            std::vector<uint64_t> parent_nodes; // pointers to parent node in traversal
             std::vector<common::property> edge_props;
             std::vector<uint64_t> vector_clock;
             std::vector<uint64_t> ignore_cache;
             uint64_t start_time;
             int num; // number of onward requests
             bool reachable; // request specific data
-            std::vector<size_t> del_nodes; // deleted nodes
+            std::vector<uint64_t> del_nodes; // deleted nodes
             std::vector<uint64_t> del_times; // delete times corr. to del_nodes
             uint32_t use_cnt; // testing
 
@@ -129,7 +129,7 @@ namespace db
     {
         public:
             uint64_t coord_id; // coordinator's req id
-            size_t start_time;
+            uint64_t start_time;
             std::priority_queue<dijkstra_queue_elem> possible_next_nodes; 
             std::unordered_map<std::pair<int,size_t>, size_t> visited_map;
             size_t dest_ptr;

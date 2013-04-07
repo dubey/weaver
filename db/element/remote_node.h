@@ -21,15 +21,15 @@ namespace element
     class remote_node
     {
         public:
-            remote_node(int, size_t);
+            remote_node(int, uint64_t);
 
         public:
             int loc;
-            size_t handle;
+            uint64_t handle;
     };
     
     inline
-    remote_node :: remote_node(int l, size_t h)
+    remote_node :: remote_node(int l, uint64_t h)
         : loc(l)
         , handle(h)
     {
