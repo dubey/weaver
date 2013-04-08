@@ -1,12 +1,11 @@
 TODO
 Make unit tests!
 Test for concurrent reachability requests.
-Finish Dijkstra
 Unified threadpool
 Try to get rid of PO6_NDEBUG_LEAKS.
 
 BUGS
-Cache bug (out_of_range)
+(Sync) bug in permanent deletion or node map. Need to reproduce it.
 
 WISHLIST
 Make allowance for multiple reach_nodes in reachability requests.
@@ -14,5 +13,5 @@ Check memory leaks using valgrind.
 Do code profiling to identify bottleneck functions.
 Fault tolerant (chain replicated) coordinator and shards!
 Expanding the API:
-1. Pagerank
-2. K shortest paths - topic graph
+    1. Pagerank
+    2. K shortest paths - topic graph
