@@ -499,25 +499,6 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     size_t cost; //for reply
     
     switch(m_type) {
-        /*
-        case message::NODE_CREATE_ACK:
-            message::unpack_message(*msg, m_type, req_id, node_handle);
-            server->update_mutex.lock();
-            request = server->pending.at(req_id);
-            server->update_mutex.unlock();
-            request->node_handle = node_handle;
-            create_end(server, request);
-            break;
-        case message::EDGE_CREATE_ACK:
-            message::unpack_message(*msg, m_type, req_id, edge_handle);
-            server->update_mutex.lock();
-            request = server->pending.at(req_id);
-            server->update_mutex.unlock();
-            request->edge_handle = edge_handle;
-            create_end(server, request);
-            break;
-        */
-        
         case message::NODE_DELETE_ACK:
         case message::EDGE_DELETE_ACK:
         case message::EDGE_DELETE_PROP_ACK:
