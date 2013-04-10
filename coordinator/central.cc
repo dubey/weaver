@@ -319,12 +319,12 @@ dijkstra_request_initiate(coordinator::central *server, std::shared_ptr<coordina
         server->send(std::move(request->client), msg.buf);
     }
     request->vector_clock.reset(new std::vector<uint64_t>(*server->vc.clocks));
-    /* maybe do this stuff for cachine later 
+    /* maybe do this stuff for caching later 
     request->del_request = server->get_last_del_req(request);
     request->out_count = server->last_del;
     request->out_count->cnt++;
     */
-
+/*
     message::message msg;
     common::meta_element *me1, *me2;
     me1 = server->nodes.at(request->elem1);
@@ -336,6 +336,7 @@ dijkstra_request_initiate(coordinator::central *server, std::shared_ptr<coordina
     }
     server->pending[request->req_id] = request;
     std::cout << "Dijkstra request number " << request->req_id << " from source"
+<<<<<<< Updated upstream
               << " request->elem " << request->elem1 << " " << me1->get_loc() 
               << " to destination request->elem " << request->elem2 << " " 
               << me2->get_loc() 
@@ -343,8 +344,19 @@ dijkstra_request_initiate(coordinator::central *server, std::shared_ptr<coordina
     message::prepare_message(msg, message::DIJKSTRA_REQ, *request->vector_clock, 
         request->elem1, request->elem2, me2->get_loc(), 
         request->req_id, request->key, request->edge_props, request->is_widest, request->elem1, request->elem2);
+=======
+              << " request->elem " << request->elem1->get_node_handle() << " " << request->elem1->get_loc() 
+              << " but request->elem creat time is " << request->elem1->get_creat_time() 
+              << " to destination request->elem " << request->elem2->get_node_handle() << " " 
+              << request->elem2->get_loc() 
+              << " with is_widest_path = " << request->is_widest << std::endl;
+    message::prepare_message(msg, message::DIJKSTRA_REQ, *request->vector_clock, 
+        request->elem1->get_node_handle(), request->elem2->get_node_handle(), request->elem2->get_loc(), 
+        request->req_id, request->key, request->edge_props, request->is_widest, request->elem1->get_node_handle(), request->elem2->get_node_handle());
+>>>>>>> Stashed changes
     server->update_mutex.unlock();
     server->send(me1->get_loc(), msg.buf);
+    */
 }
 
 void

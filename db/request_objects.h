@@ -134,13 +134,15 @@ namespace db
             std::priority_queue<dijkstra_queue_elem, std::vector<dijkstra_queue_elem>, std::less<dijkstra_queue_elem>> next_nodes_shortest; 
             std::priority_queue<dijkstra_queue_elem, std::vector<dijkstra_queue_elem>, std::greater<dijkstra_queue_elem>> next_nodes_widest; 
             // map from a node (by its create time) to its cost and the req_id of the node that came before it in the shortest path
-            std::unordered_map<uint64_t, std::pair<uint64_t , uint64_t >> visited_map; 
+            std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> visited_map; 
             db::element::remote_node dest_node;
             std::vector<common::property> edge_props;
             std::vector<uint64_t> vector_clock;
             uint32_t edge_weight_name; // they key of the property which holds the weight of an an edge
             uint64_t dest_node_creat_id; // id for destination node
             bool is_widest_path;
+            // for returning from a prop
+            std::pair<uint64_t, uint64_t> tentative_map_value;
 
             dijkstra_request()
             {
