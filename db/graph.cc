@@ -133,14 +133,11 @@ change_property_times(std::vector<common::property> &props, uint64_t creat_time)
 inline void
 handle_create_node(db::graph *G, uint64_t req_id) 
 {
-    message::message msg;
     G->create_node(req_id);
-    message::prepare_message(msg, message::NODE_CREATE_ACK, req_id, req_id);
-    G->send_coord(msg.buf);
 }
 
 // delete a graph node
-void
+inline void
 handle_delete_node(db::graph *G, uint64_t req_id, uint64_t node_handle, std::unique_ptr<std::vector<uint64_t>> cache)
 {
     std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> success;
@@ -159,32 +156,29 @@ handle_delete_node(db::graph *G, uint64_t req_id, uint64_t node_handle, std::uni
 }
 
 // create a graph edge
-void
+inline void
 handle_create_edge(db::graph *G, uint64_t req_id, uint64_t n1, uint64_t n2, int loc2, uint64_t tc2)
 {
-    std::unique_ptr<message::message> msg(new message::message());
-    if (G->create_edge(n1, req_id, n2, loc2, tc2)) {
-        message::prepare_message(*msg, message::EDGE_CREATE_ACK, req_id, req_id);
-        G->send_coord(msg->buf);
-    } else {
+    if (!G->create_edge(n1, req_id, n2, loc2, tc2)) {
+        std::unique_ptr<message::message> msg(new message::message());
         message::prepare_message(*msg, message::TRANSIT_EDGE_CREATE_REQ, req_id, n2, loc2, tc2);
         G->queue_transit_node_update(req_id, std::move(msg));
     }
 }
 
 // create a back pointer for an edge
-void
+inline void
 handle_create_reverse_edge(db::graph *G, uint64_t req_id, uint64_t remote_node, int remote_loc, uint64_t local_node)
 {
-    std::unique_ptr<message::message> msg(new message::message());
     if (!G->create_reverse_edge(req_id, local_node, remote_node, remote_loc)) {
+        std::unique_ptr<message::message> msg(new message::message());
         message::prepare_message(*msg, message::TRANSIT_REVERSE_EDGE_CREATE, req_id, remote_node, remote_loc);
         G->queue_transit_node_update(0, std::move(msg));
     }
 }
 
 // delete an edge
-void
+inline void
 handle_delete_edge(db::graph *G, uint64_t req_id, uint64_t n, uint64_t e, std::unique_ptr<std::vector<uint64_t>> cache)
 {
     std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> success;
@@ -203,18 +197,18 @@ handle_delete_edge(db::graph *G, uint64_t req_id, uint64_t n, uint64_t e, std::u
 }
 
 // add edge property
-void
+inline void
 handle_add_edge_property(db::graph *G, uint64_t req_id, uint64_t node_addr, uint64_t edge_addr, common::property &prop)
 {
-    std::unique_ptr<message::message> msg(new message::message());
     if (!G->add_edge_property(node_addr, edge_addr, prop)) {
+        std::unique_ptr<message::message> msg(new message::message());
         message::prepare_message(*msg, message::TRANSIT_EDGE_ADD_PROP, req_id, edge_addr, prop);
         G->queue_transit_node_update(req_id, std::move(msg));
     }
 }
 
 // delete all edge properties with the given key
-void
+inline void
 handle_delete_edge_property(db::graph *G, uint64_t req_id, uint64_t node_addr, uint64_t edge_addr, uint32_t key,
     std::unique_ptr<std::vector<uint64_t>> cache)
 {
@@ -1004,7 +998,7 @@ migrate_node_step2(db::graph *G, std::unique_ptr<message::message> msg)
     message::unpack_message(*msg, message::MIGRATE_NODE_STEP1, node_handle, *n, from_loc);
     n->prev_loc = from_loc;
     G->release_node(n);
-    message::prepare_message(*msg, message::MIGRATE_NODE_STEP2, node_handle);
+    message::prepare_message(*msg, message::MIGRATE_NODE_STEP2);
     G->send(from_loc, msg->buf);
 }
 
@@ -1013,14 +1007,9 @@ void
 migrate_node_step3(db::graph *G, std::unique_ptr<message::message> msg)
 {
     db::element::node *n;
-    uint64_t new_node_handle;
     G->mrequest.mutex.lock();
     n = G->acquire_node(G->mrequest.cur_node);
-    message::unpack_message(*msg, message::MIGRATE_NODE_STEP2, new_node_handle);
-    G->mrequest.migr_node = new_node_handle;
-    n->new_handle = new_node_handle;
-    uint64_t tc = n->get_creat_time();
-    message::prepare_message(*msg, message::COORD_NODE_MIGRATE, tc, n->new_loc, new_node_handle, G->myid);
+    message::prepare_message(*msg, message::COORD_NODE_MIGRATE, G->mrequest.cur_node, n->new_loc, G->myid);
     G->release_node(n);
     G->send_coord(msg->buf);
     G->mrequest.mutex.unlock();

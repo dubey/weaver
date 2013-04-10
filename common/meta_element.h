@@ -26,48 +26,40 @@ namespace common
     class meta_element
     {
         public:
-            meta_element(int loc, uint64_t t_creat, uint64_t t_delete, void *node_handle);
-            meta_element(int loc, uint64_t t_creat, uint64_t t_delete, uint64_t edge_handle);
+            meta_element(int loc, uint64_t t_creat, uint64_t t_delete, uint64_t elem_handle);
+            meta_element(int loc);
         
         protected:
             int myloc;
             uint64_t creat_time;
             uint64_t del_time;
             //unique handle of this element on shard server
-            union {
-                size_t node;
-                uint64_t edge;
-            } handle;
+            uint64_t handle;
         
         public:
             uint64_t get_creat_time();
             uint64_t get_del_time();
             void update_del_time(uint64_t _del_time);
             void update_creat_time(uint64_t _creat_time);
-            size_t get_node_handle();
-            uint64_t get_edge_handle();
-            void update_node_handle(size_t addr);
-            void update_edge_handle(uint64_t handle);
+            uint64_t get_handle();
+            void update_handle(uint64_t newhandle);
             int get_loc();
             void update_loc(int newloc);
     };
 
     inline
-    meta_element :: meta_element(int loc, uint64_t t_creat, uint64_t t_delete, void *node_handle)
+    meta_element :: meta_element(int loc)
         : myloc(loc)
-        , creat_time(t_creat)
-        , del_time(t_delete)
     {
-        handle.node = (size_t)node_handle;
     }
 
     inline
-    meta_element :: meta_element(int loc, uint64_t t_creat, uint64_t t_delete, uint64_t edge_handle)
+    meta_element :: meta_element(int loc, uint64_t t_creat, uint64_t t_delete, uint64_t elem_handle)
         : myloc(loc)
         , creat_time(t_creat)
         , del_time(t_delete)
+        , handle(elem_handle)
     {
-        handle.edge = edge_handle;
     }
 
     inline uint64_t
@@ -94,28 +86,16 @@ namespace common
         creat_time = _creat_time;
     }
 
-    inline size_t
-    meta_element :: get_node_handle()
-    {
-        return handle.node;
-    }
-
     inline uint64_t
-    meta_element :: get_edge_handle()
+    meta_element :: get_handle()
     {
-        return handle.edge;
+        return handle;
     }
 
     inline void
-    meta_element :: update_node_handle(size_t addr)
+    meta_element :: update_handle(uint64_t newhandle)
     {
-        handle.node = addr;
-    }
-
-    inline void
-    meta_element :: update_edge_handle(uint64_t ehandle)
-    {
-        handle.edge = ehandle;
+        handle = newhandle;
     }
 
     inline int

@@ -65,7 +65,7 @@ namespace coordinator
         public:
             // request init
             message::msg_type req_type;
-            common::meta_element *elem1, *elem2;
+            uint64_t elem1, elem2;
             std::vector<common::property> edge_props;
             uint32_t key;
             size_t value;
@@ -77,7 +77,7 @@ namespace coordinator
             uint64_t clock1, clock2;
             int shard_id;
             std::vector<std::shared_ptr<pending_req>> dependent_traversals;
-            std::unique_ptr<std::vector<size_t>> src_node;
+            std::unique_ptr<std::vector<uint64_t>> src_node;
             std::unique_ptr<std::vector<uint64_t>> vector_clock;
             std::vector<uint64_t> ignore_cache;
             std::shared_ptr<pending_req> del_request;
@@ -86,8 +86,6 @@ namespace coordinator
             std::unique_ptr<std::vector<std::pair<size_t, size_t>>> path;
             // request reply
             bool done;
-            size_t node_handle;
-            uint64_t edge_handle;
             bool reachable;
             size_t clustering_numerator;
             size_t clustering_denominator;
@@ -95,33 +93,6 @@ namespace coordinator
             uint64_t cached_req_id;
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids;
             
-        /*
-        pending_req(message::msg_type type, common::meta_element *el1, common::meta_element *el2, 
-            std::unique_ptr<po6::net::location> cloc, uint32_t k=0, size_t v=0)
-            : req_type(type)
-            , elem1(el1)
-            , elem2(el2)
-            , key(k)
-            , value(v)
-            , client(std::move(cloc))
-            , done(false)
-            , cached_req_id(0)
-        {
-        }
-
-        pending_req(message::msg_type type, common::meta_element *el1, common::meta_element *el2, 
-            std::shared_ptr<std::vector<common::property>> eprops, std::unique_ptr<po6::net::location> cloc)
-            : req_type(type)
-            , elem1(el1)
-            , elem2(el2)
-            , edge_props(eprops)
-            , client(std::move(cloc))
-            , done(false)
-            , cached_req_id(0)
-        {
-        }
-        */
-
         pending_req(message::msg_type type)
             : req_type(type)
             , done(false)
@@ -153,7 +124,7 @@ namespace coordinator
             std::vector<std::shared_ptr<po6::net::location>> shards;
             uint32_t num_shards;
             std::unordered_map<uint64_t, common::meta_element*> nodes;
-            std::vector<common::meta_element*> edges;
+            std::unordered_map<uint64_t, common::meta_element*> edges;
             vclock::vector vc;
             // big mutex
             po6::threads::mutex update_mutex;
@@ -175,7 +146,7 @@ namespace coordinator
 
         public:
             void add_node(common::meta_element *n, uint64_t index);
-            void add_edge(common::meta_element *e);
+            void add_edge(common::meta_element *e, uint64_t index);
             void add_pending_del_req(std::shared_ptr<pending_req> request);
             std::shared_ptr<pending_req> get_last_del_req(std::shared_ptr<pending_req> request);
             //bool insert_del_wait(size_t del_req_id, size_t wait_req_id);
@@ -241,9 +212,9 @@ namespace coordinator
     }
 
     inline void
-    central :: add_edge(common::meta_element *e)
+    central :: add_edge(common::meta_element *e, uint64_t index)
     {
-        edges.push_back(e);
+        edges.emplace(index, e);
     }
 
     // caution: assuming we hold update_mutex
