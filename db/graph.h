@@ -33,6 +33,7 @@
 #include "cache/cache.h"
 #include "threadpool/threadpool.h"
 #include "request_objects.h"
+#include "node_program.h"
 
 namespace db
 {
@@ -182,6 +183,20 @@ namespace db
             // testing
             std::unordered_map<uint64_t, uint64_t> req_count;
             bool already_migrated;
+
+            // below for node_programs:
+
+            // prog_type-> map from request_id to map from node handle to request state for that node
+            std::unordered_map<prog_type, std::unordered_map<uint64_t, std::unordered_map<uint64_t, void*>>> node_prog_req_state; 
+            void * fetch_prog_req_state(prog_type t, uint64_t request_id, uint64_t local_node_handle);
+
+            // prog_type-> map from node handle to map from request_id to cache values -- used to do cache read/updates
+            std::unordered_map<prog_type, std::unordered_map<uint64_t, std::unordered_map<uint64_t, void*>>> node_prog_cache; 
+            void * fetch_prog_cache(prog_type t, uint64_t request_id, uint64_t local_node_handle);
+
+            // prog_type-> map from request_id to list of nodes that contain that a cache for that request_id -- used to do cache invalidation on lookup map
+            std::unordered_map<prog_type, std::unordered_map<uint64_t, std::vector<uint64_t>>> node_prog_cache_use_list; 
+            void invalidate_prog_cache(prog_type t, uint64_t request_id);
             
         public:
             // consistency

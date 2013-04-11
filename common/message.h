@@ -92,6 +92,9 @@ namespace message
         COORD_NODE_MIGRATE,
         COORD_NODE_MIGRATE_ACK,
         MIGRATED_NBR_UPDATE,
+
+        NODE_PROG,
+
         ERROR
     };
 
