@@ -272,25 +272,25 @@ migrated_nbr_update(db::graph *G, std::unique_ptr<message::message> msg)
     G->update_migrated_nbr(local_node, orig_node, orig_loc, new_node, new_loc);
 }
 
-template <typename params_type, typename node_state_type, typename cache_value_type>
+template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_program_runner(db::graph *G,
-        db::node_program<params_type, node_state_type, cache_value_type> np,
-        std::vector<std::pair<uint64_t, params_type>> start_node_params,
+        db::node_program<ParamsType, NodeStateType, CacheValueType>::value_type np,
+        std::vector<std::pair<uint64_t, ParamsType>> start_node_params,
         db::prog_type program,
         uint64_t request_id)
 {
-    std::unordered_map<int, std::vector<std::pair<uint64_t, params_type>>> batched_node_progs;
+    std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> batched_node_progs;
     while (!start_node_params.empty()){
         for (auto &handle_params : start_node_params)
         {
             db::element::node* node = G->acquire_node(handle_params.first); // maybe use a try-lock later so forward progress can continue on other nodes in list
-            cache_value_type *cache = (cache_value_type *) G->fetch_prog_cache(program, request_id, handle_params.first);
-            node_state_type *state = (node_state_type *) G->fetch_prog_req_state(program, request_id, handle_params.first);
-            auto next_node_params = np.f(*node, handle_params.second, state, cache); // call node program
+            CacheValueType *cache = (CacheValueType *) G->fetch_prog_cache(program, request_id, handle_params.first);
+            NodeStateType *state = (NodeStateType *) G->fetch_prog_req_state(program, request_id, handle_params.first);
+            auto next_node_params = np(*node, handle_params.second, state, cache); // call node program
             G->release_node(node);
-            for (std::pair<db::element::remote_node, params_type> &np : next_node_params)
+            for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params)
             {
-                batched_node_progs[np.first.loc].emplace_back(np.first.handle, np.second);
+                batched_node_progs[res.first.loc].emplace_back(res.first.handle, res.second);
             }
         }
         start_node_params = std::move(batched_node_progs[G->myid]); // hopefully this nicely cleans up old vector, makes sure batched nodes

@@ -35,15 +35,15 @@ namespace db
     };
 
     template <typename params_type, typename node_state_type, typename cache_value_type>
-    class node_program
+    struct node_program
     {
-        std::vector<std::pair<element::remote_node, params_type>> (f)(element::node&, params_type&, node_state_type&, cache_value_type&);
+        typedef std::vector<std::pair<element::remote_node, params_type>> (*value_type)(element::node&, params_type&, node_state_type&, cache_value_type&);
     };
 } 
 
 namespace std
 {
-    // used if we want a hash table with a remote node as the key
+    // used if we want a hash table with a prog type as the key
     template <>
     struct hash<db::prog_type>
     {
