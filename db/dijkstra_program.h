@@ -1,14 +1,23 @@
+#ifndef __DIJKSTRA_PROG__
+#define __DIJKSTRA_PROG__
+
+#include <vector>
+
+#include "element/node.h"
+#include "element/remote_node.h"
+
 namespace db
 {
-    class disjktra_params{
+    class dijkstra_params{
+        
+    };
+    class dijkstra_node_state{
 
-    }
-    class disjktra_node_state{
+    };
 
-    }
-    class disjktra_cache_value{
+    class dijkstra_cache_value{
 
-    }
+    };
 
     std::vector<std::pair<element::remote_node, dijkstra_params>> 
     dijkstra_node_program(element::node &n,
@@ -19,3 +28,5 @@ namespace db
         return std::vector<std::pair<element::remote_node, dijkstra_params>>();
     }
 }
+
+#endif //__DIKJSTRA_PROG__

@@ -893,6 +893,17 @@ namespace db
         }
     }
 
+    // node program stuff
+    inline void * 
+    graph :: fetch_prog_req_state(prog_type t, uint64_t request_id, uint64_t local_node_handle){
+        return NULL;
+    }
+
+    inline void *
+    graph :: fetch_prog_cache(prog_type t, uint64_t request_id, uint64_t local_node_handle){
+        return NULL;
+    }
+
 } //namespace db
 
 #endif //__GRAPH__
