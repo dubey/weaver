@@ -33,7 +33,7 @@
 #include "cache/cache.h"
 #include "threadpool/threadpool.h"
 #include "request_objects.h"
-#include "node_program.h"
+#include "db/node_prog_type.h"
 
 namespace db
 {

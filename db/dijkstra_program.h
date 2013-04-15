@@ -24,7 +24,7 @@ namespace db
             dijkstra_params &params,
             dijkstra_node_state &state,
             dijkstra_cache_value &cache){
-
+        // empty response
         return std::vector<std::pair<element::remote_node, dijkstra_params>>();
     }
 }

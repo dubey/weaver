@@ -273,52 +273,6 @@ migrated_nbr_update(db::graph *G, std::unique_ptr<message::message> msg)
     G->update_migrated_nbr(local_node, orig_node, orig_loc, new_node, new_loc);
 }
 
-/*
-typedef void (*destructor_func)(void *);
-// Used to cast and destroy a void * that has a given type
-template<typename ToDestroy>
-destructor_func destructor() { 
-    return [] (void * ptr){
-        ToDestroy *d = (ToDestroy *) ptr;
-        delete d;
-    };
-}
-*/
-
-template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-void node_program_runner(db::graph *G,
-        typename db::node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type np,
-        std::vector<std::pair<uint64_t, ParamsType>> &start_node_params,
-        db::prog_type program,
-        uint64_t request_id)
-{
-    std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> batched_node_progs;
-    while (!start_node_params.empty()){
-        for (auto &handle_params : start_node_params)
-        {
-            db::element::node* node = G->acquire_node(handle_params.first); // maybe use a try-lock later so forward progress can continue on other nodes in list
-            CacheValueType *cache = (CacheValueType *) G->fetch_prog_cache(program, request_id, handle_params.first);
-            NodeStateType *state = (NodeStateType *) G->fetch_prog_req_state(program, request_id, handle_params.first);
-            auto next_node_params = np(*node, handle_params.second, *state, *cache); // call node program
-            for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params)
-            {
-                batched_node_progs[res.first.loc].emplace_back(res.first.handle, std::move(res.second));
-            }
-        }
-        start_node_params = std::move(batched_node_progs[G->myid]); // hopefully this nicely cleans up old vector, makes sure batched nodes
-    }
-    // if done send to coordinator and call delete on all objects in the map for node state
-    
-    // now propagate requests
-    for (auto &batch : batched_node_progs){
-        if (batch.first == G->myid){
-            // this shouldnt happen or it should be an empty vector
-            // make sure not to do anything here because the vector was moved out
-        } else {
-            // send msg to batch.first (location) with contents batch.second (start_node_params for that machine)
-        }
-    }
-}
 
 // unpack update request and call appropriate function
 void
@@ -545,13 +499,6 @@ runner(db::graph *G)
         rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
         mtype = (enum message::msg_type)code;
         rec_msg->change_type(mtype);
-        // XXX temp temp
-        node_program_runner<db::dijkstra_params, db::dijkstra_node_state, db::dijkstra_cache_value>(G, 
-        db::dijkstra_node_program,
-        std::vector<std::pair<uint64_t, db::dijkstra_params>>(),
-        db::DIJKSTRA,
-        23);
-        // /temp temp
         switch (mtype)
         {
             case message::NODE_CREATE_REQ:
