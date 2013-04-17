@@ -187,12 +187,18 @@ namespace db
             // below for node_programs:
 
             // prog_type-> map from request_id to map from node handle to request state for that node
-            std::unordered_map<prog_type, std::unordered_map<uint64_t, std::unordered_map<uint64_t, void*>>> node_prog_req_state; 
-            void * fetch_prog_req_state(prog_type t, uint64_t request_id, uint64_t local_node_handle);
+            std::unordered_map<prog_type, std::unordered_map<uint64_t, std::unordered_map<uint64_t, Deletable *>>> node_prog_req_state; 
+            bool prog_req_state_exists(prog_type t, uint64_t request_id, uint64_t local_node_handle);
+            Deletable * fetch_prog_req_state(prog_type t, uint64_t request_id, uint64_t local_node_handle);
+            void insert_prog_req_state(prog_type t, uint64_t request_id, uint64_t local_node_handle, Deletable * toAdd);
 
             // prog_type-> map from node handle to map from request_id to cache values -- used to do cache read/updates
-            std::unordered_map<prog_type, std::unordered_map<uint64_t, std::unordered_map<uint64_t, void*>>> node_prog_cache; 
-            void * fetch_prog_cache(prog_type t, uint64_t request_id, uint64_t local_node_handle);
+            std::unordered_map<prog_type, std::unordered_map<uint64_t, std::unordered_map<uint64_t, Deletable *>>> node_prog_cache; 
+            bool prog_cache_exists(prog_type t, uint64_t request_id, uint64_t local_node_handle);
+            Deletable * fetch_prog_cache(prog_type t, uint64_t request_id, uint64_t local_node_handle);
+            void insert_prog_cache(prog_type t, uint64_t request_id, uint64_t local_node_handle, Deletable * toAdd);
+            //std::unordered_map<prog_type, std::unordered_map<uint64_t, std::unordered_map<uint64_t, void *>>> node_prog_cache; 
+            //void * fetch_prog_cache(prog_type t, uint64_t request_id, uint64_t local_node_handle);
 
             // prog_type-> map from request_id to list of nodes that contain that a cache for that request_id -- used to do cache invalidation on lookup map
             std::unordered_map<prog_type, std::unordered_map<uint64_t, std::vector<uint64_t>>> node_prog_cache_use_list; 
@@ -894,14 +900,34 @@ namespace db
     }
 
     // node program stuff
-    inline void * 
+    inline bool 
+    graph :: prog_req_state_exists(prog_type t, uint64_t request_id, uint64_t local_node_handle){
+        return false;
+    }
+
+    inline Deletable * 
     graph :: fetch_prog_req_state(prog_type t, uint64_t request_id, uint64_t local_node_handle){
         return NULL;
     }
 
-    inline void *
+    inline void 
+    graph :: insert_prog_req_state(prog_type t, uint64_t request_id, uint64_t local_node_handle, Deletable * toAdd){
+        return;
+    }
+
+    inline bool
+    graph :: prog_cache_exists(prog_type t, uint64_t request_id, uint64_t local_node_handle){
+        return false;
+    }
+
+    inline Deletable *
     graph :: fetch_prog_cache(prog_type t, uint64_t request_id, uint64_t local_node_handle){
         return NULL;
+    }
+
+    inline void
+    graph :: insert_prog_cache(prog_type t, uint64_t request_id, uint64_t local_node_handle, Deletable * toAdd){
+        return;
     }
 
 } //namespace db
