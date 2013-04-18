@@ -352,6 +352,9 @@ unpack_update_request(db::graph *G, void *req)
             }
             break;
 
+            /*case message::NODE_PROG:
+            message::unpack_messag
+            */
 /*
         case message::REACHABLE_PROP:
             unpack_traversal_request(G, std::move(request->msg));
@@ -540,11 +543,18 @@ runner(db::graph *G)
                 G->thread_pool.add_request(thr);
                 break;
 
+/*
             case message::NODE_PROG:
                 request = new db::update_request(mtype, 0, std::move(rec_msg));
+                rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(message::msg_type) >> code;
+                db::prog_type ptype = (db::prog_type) code;
+                node_program * toRun = programs.at(pType);
+                toRun.unpack_and_run(G, msg);
+
                 thr = new db::thread::unstarted_thread(0, unpack_update_request, G, request);
                 G->thread_pool.add_request(thr);
                 break;
+                */
 /*
 
             case message::REACHABLE_PROP:

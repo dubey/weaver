@@ -39,6 +39,31 @@ namespace db
                 db::prog_type program,
                 uint64_t request_id)
         {
+        }
+
+    struct node_program{
+        public:
+            virtual void unpack_and_run(db::graph *g, message::message &msg) = 0;
+            //virtual void pack_message(e::buffer::packer&, Deletable params) = 0;
+            //virtual void destroy_cache_value(void *val) = 0;
+            virtual ~node_program() { }
+    };
+
+    template <typename ParamsType, typename NodeStateType, typename CacheValueType>
+        class particular_node_program : public virtual node_program {
+            public:
+                typedef typename node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type func;
+                func enclosed_function;
+                prog_type type;
+                particular_node_program(prog_type _type, func _enclosed_function) :
+                    enclosed_function(_enclosed_function), type(_type)
+            { }
+
+                virtual void unpack_and_run(db::graph *G, message::message &msg) {
+                    // unpack some start params from msg:
+                    std::vector<std::pair<uint64_t, ParamsType>> start_node_params;
+                    //message::unpack_message(msg, message::NODE_PROG, toUnpack);
+                    uint64_t unpacked_req_id;
             std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> batched_node_progs;
             while (!start_node_params.empty()){
                 for (auto &handle_params : start_node_params)
@@ -81,31 +106,6 @@ namespace db
                     // send msg to batch.first (location) with contents batch.second (start_node_params for that machine)
                 }
             }
-        }
-
-    struct node_program{
-        public:
-            virtual void unpack_and_run(db::graph *g, message::message &msg) = 0;
-            //virtual void pack_message(e::buffer::packer&, Deletable params) = 0;
-            //virtual void destroy_cache_value(void *val) = 0;
-            virtual ~node_program() { }
-    };
-
-    template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-        class particular_node_program : public virtual node_program {
-            public:
-                typedef typename node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type func;
-                func enclosed_function;
-                prog_type type;
-                particular_node_program(prog_type _type, func _enclosed_function) :
-                    enclosed_function(_enclosed_function), type(_type)
-            { }
-
-                virtual void unpack_and_run(db::graph *G, message::message &msg) {
-                    // unpack some start params from msg:
-                    std::vector<std::pair<uint64_t, ParamsType>> paramz;
-                    uint64_t unpacked_req_id;
-                    db::node_program_runner<ParamsType, NodeStateType, CacheValueType>(G, enclosed_function, paramz, type, unpacked_req_id);
                 }
 
                 /*

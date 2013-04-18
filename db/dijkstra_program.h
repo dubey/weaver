@@ -14,7 +14,7 @@ namespace db
     struct dijkstra_params {
         enum mode {START, PROP};
         db::element::remote_node source;
-        db::element::remote_node dest_node;
+        db::element::remote_node dest;
         uint32_t edge_weight_name; // they key of the property which holds the weight of an an edge
         std::vector<common::property> edge_props;
         bool is_widest_path;
