@@ -30,6 +30,7 @@
 #include "common/meta_element.h"
 #include "common/weaver_constants.h"
 #include "common/vclock.h"
+#include "db/node_prog_type.h"
 #include "threadpool/threadpool.h"
 
 namespace coordinator
@@ -92,6 +93,10 @@ namespace coordinator
             size_t cost;
             uint64_t cached_req_id;
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids;
+
+            // for node progs
+            db::prog_type node_prog_type;
+            std::vector<std::pair<uint64_t, db::Packable>> node_prog_args; 
             
         pending_req(message::msg_type type)
             : req_type(type)

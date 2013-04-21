@@ -31,6 +31,7 @@
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
 #include "db/request_objects.h" // used for packing dijkstra_queue_elem
+#include "db/node_prog_type.h" // used for packing Packable objects
 
 namespace message
 {
@@ -94,6 +95,8 @@ namespace message
         MIGRATED_NBR_UPDATE,
 
         NODE_PROG,
+        CLIENT_NODE_PROG_REQ,
+        CLIENT_NODE_PROG_REPLY,
 
         ERROR
     };
@@ -158,6 +161,13 @@ namespace message
     }
 
 // size templates
+    inline size_t size(const db::prog_type &t){
+        return sizeof(uint32_t);
+    }
+    inline size_t size(const db::Packable &t)
+    {
+        return t.size();
+    }
     inline size_t size(const bool &t)
     {
         return sizeof(uint16_t);
@@ -256,6 +266,15 @@ namespace message
     }
 
     // packing templates
+
+    inline void pack_buffer(e::buffer::packer &packer, const db::Packable &t)
+    {
+        t.pack(packer);
+    }
+    inline void pack_buffer(e::buffer::packer &packer, const db::prog_type &t)
+    {
+        packer << t;
+    }
 
     inline void pack_buffer(e::buffer::packer &packer, const bool &t)
     {
@@ -408,6 +427,17 @@ namespace message
     }
 
     // unpacking templates
+    inline void
+    unpack_buffer(e::unpacker &unpacker, db::Packable &t)
+    {
+        t.unpack(unpacker);
+    }
+    inline void
+    unpack_buffer(e::unpacker &unpacker, db::prog_type &t){
+        uint32_t _type;
+        unpacker >> _type;
+        t = (enum db::prog_type) _type;
+    }
     inline void
     unpack_buffer(e::unpacker &unpacker, bool &t)
     {

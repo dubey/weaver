@@ -29,6 +29,7 @@
 #include "common/message.h"
 #include "request_objects.h"
 #include "graph.h"
+#include "node_prog_type.h"
 #include "node_program.h"
 #include "dijkstra_program.h"
 
@@ -273,6 +274,16 @@ migrated_nbr_update(db::graph *G, std::unique_ptr<message::message> msg)
     G->update_migrated_nbr(local_node, orig_node, orig_loc, new_node, new_loc);
 }
 
+void
+unpack_and_run_node_program(db::graph *G, void *req)
+{
+    db::update_request *request = (db::update_request *) req;
+    db::prog_type pType;
+
+    message::unpack_message(*request->msg, message::NODE_PROG, pType);
+    db::programs.at(pType)->unpack_and_run(G, *request->msg);
+    delete request;
+}
 
 // unpack update request and call appropriate function
 void
@@ -351,10 +362,6 @@ unpack_update_request(db::graph *G, void *req)
                 migrate_node_step4_1(G);
             }
             break;
-
-            /*case message::NODE_PROG:
-            message::unpack_messag
-            */
 /*
         case message::REACHABLE_PROP:
             unpack_traversal_request(G, std::move(request->msg));
@@ -396,7 +403,7 @@ unpack_update_request(db::graph *G, void *req)
         default:
             std::cerr << "Bad msg type in unpack_update_request" << std::endl;
     }
-    delete request;
+        delete request;
 }
 
 // assuming caller holds migration_lock
@@ -492,6 +499,9 @@ runner(db::graph *G)
     db::update_request *request;
     uint64_t done_id;
     uint64_t start_time;
+    // used for node programs
+    db::prog_type pType;
+    std::vector<uint64_t> vclocks;
 
     while (true) {
         if ((ret = G->bb_recv.recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
@@ -543,18 +553,13 @@ runner(db::graph *G)
                 G->thread_pool.add_request(thr);
                 break;
 
-/*
             case message::NODE_PROG:
+                message::unpack_message(*rec_msg, message::NODE_PROG, pType, vclocks);
                 request = new db::update_request(mtype, 0, std::move(rec_msg));
-                rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(message::msg_type) >> code;
-                db::prog_type ptype = (db::prog_type) code;
-                node_program * toRun = programs.at(pType);
-                toRun.unpack_and_run(G, msg);
-
-                thr = new db::thread::unstarted_thread(0, unpack_update_request, G, request);
+                thr = new db::thread::unstarted_thread(vclocks[G->myid], unpack_and_run_node_program, G, request);
                 G->thread_pool.add_request(thr);
                 break;
-                */
+
 /*
 
             case message::REACHABLE_PROP:

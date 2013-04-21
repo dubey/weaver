@@ -20,6 +20,7 @@
 #include "common/weaver_constants.h"
 #include "common/message.h"
 #include "common/property.h"
+#include "db/node_prog_type.h"
 
 class client
 {
@@ -44,6 +45,11 @@ class client
                 std::shared_ptr<std::vector<common::property>> edge_props);
         double local_clustering_coefficient(size_t node,
                 std::shared_ptr<std::vector<common::property>> edge_props);
+        
+
+
+        template <typename ParamsType>
+        ParamsType *run_node_program(db::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args);
 
     private:
         std::pair<size_t, std::vector<std::pair<size_t, size_t>>> dijkstra_request(size_t node1, size_t node2, uint32_t edge_weight_prop, bool is_widest,
@@ -214,6 +220,24 @@ client :: local_clustering_coefficient(size_t node, std::shared_ptr<std::vector<
         std::cerr << "Client got " << numerator << " over " << denominator << std::endl;
         return (double) numerator/ denominator;
     }
+}
+
+template <typename ParamsType>
+inline ParamsType *
+client :: run_node_program(db::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args)
+{
+    ParamsType toRet = new ParamsType(); // make sure client frees
+    busybee_returncode ret;
+    message::message msg(message::CLIENT_NODE_PROG_REQ);
+    message::prepare_message(msg, message::CLIENT_NODE_PROG_REQ, myloc.port, prog_to_run, initial_args);
+    send_coord(msg.buf);
+    if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS) {
+        std::cerr << "msg recv error: " << ret << std::endl;
+        toRet.first = 0;
+        return toRet;
+    }
+    message::unpack_message(msg, message::CLIENT_NODE_PROG_REPLY, *toRet);
+    return toRet;
 }
 
 inline void

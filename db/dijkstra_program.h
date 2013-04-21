@@ -11,7 +11,8 @@
 
 namespace db
 {
-    struct dijkstra_params {
+    class dijkstra_params : public virtual Packable {
+        public:
         enum mode {START, PROP};
         db::element::remote_node source;
         db::element::remote_node dest;
@@ -21,6 +22,17 @@ namespace db
 
         // for returning from a prop
         std::pair<uint64_t, uint64_t> tentative_map_value;
+
+        public:
+        virtual size_t size() const {
+            return 8;   //message::size(source) + message::size(dest);
+        }
+        virtual void pack(e::buffer::packer&) const{
+            return;
+        }
+        virtual void unpack(e::unpacker&){
+            return;
+        }
     };
 
     struct dijkstra_node_state : Deletable {

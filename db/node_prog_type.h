@@ -17,6 +17,8 @@
 #include <vector>
 #include <map>
 #include <unordered_map>
+#include "element/node.h"
+#include "element/remote_node.h"
 
 namespace db
 {
@@ -36,7 +38,8 @@ namespace db
 
     class Packable {
         public:
-            virtual void pack(e::buffer::packer&) = 0;
+            virtual size_t size() const  = 0;
+            virtual void pack(e::buffer::packer&) const = 0;
             virtual void unpack(e::unpacker&) = 0;
     };
 

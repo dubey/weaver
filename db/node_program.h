@@ -59,61 +59,61 @@ namespace db
                     enclosed_function(_enclosed_function), type(_type)
             { }
 
-                virtual void unpack_and_run(db::graph *G, message::message &msg) {
+                virtual void unpack_and_run(db::graph *G, message::message  &msg) {
                     // unpack some start params from msg:
                     std::vector<std::pair<uint64_t, ParamsType>> start_node_params;
-                    //message::unpack_message(msg, message::NODE_PROG, toUnpack);
-                    uint64_t unpacked_req_id;
-            std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> batched_node_progs;
-            while (!start_node_params.empty()){
-                for (auto &handle_params : start_node_params)
-                {
-                    uint64_t node_handle = handle_params.first;
-                    db::element::node* node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
+                    uint64_t unpacked_request_id;
+                    std::vector<uint64_t> vclocks; //needed to pass to next message
+                    prog_type ignore;
 
-                    CacheValueType *cache;
-                    if (G->prog_cache_exists(program, request_id, node_handle)){
-                        cache = (CacheValueType *) G->fetch_prog_cache(program, request_id, node_handle);
-                    } else {
-                        cache = new CacheValueType();
-                        G->insert_prog_cache(program, request_id, node_handle, cache);
-                    }
+                    printf("ZAAAAAAAAAAAAAAAAAA\n");
+                    message::unpack_message(msg, message::NODE_PROG, ignore, vclocks, unpacked_request_id, start_node_params);
 
-                    NodeStateType *state;
-                    if (G->prog_req_state_exists(program, request_id, node_handle)){
-                        state = (NodeStateType *) G->fetch_prog_req_state(program, request_id, node_handle);
-                    } else {
-                        state = new NodeStateType();
-                        G->insert_prog_req_state(program, request_id, node_handle, state);
+
+                    std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> batched_node_progs;
+
+                    while (!start_node_params.empty()){
+                        for (auto &handle_params : start_node_params)
+                        {
+                            uint64_t node_handle = handle_params.first;
+                            db::element::node* node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
+
+                            CacheValueType *cache;
+                            if (G->prog_cache_exists(type, unpacked_request_id, node_handle)){
+                                cache = (CacheValueType *) G->fetch_prog_cache(type, unpacked_request_id, node_handle);
+                            } else {
+                                cache = new CacheValueType();
+                                G->insert_prog_cache(type, unpacked_request_id, node_handle, cache);
+                            }
+
+                            NodeStateType *state;
+                            if (G->prog_req_state_exists(type, unpacked_request_id, node_handle)){
+                                state = (NodeStateType *) G->fetch_prog_req_state(type, unpacked_request_id, node_handle);
+                            } else {
+                                state = new NodeStateType();
+                                G->insert_prog_req_state(type, unpacked_request_id, node_handle, state);
+                            }
+
+                            auto next_node_params = enclosed_function(*node, handle_params.second, *state, *cache); // call node program
+                            for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params)
+                            {
+                                batched_node_progs[res.first.loc].emplace_back(res.first.handle, std::move(res.second));
+                            }
+                        }
+                        start_node_params = std::move(batched_node_progs[G->myid]); // hopefully this nicely cleans up old vector, makes sure batched nodes
                     }
-                    
-                    auto next_node_params = np(*node, handle_params.second, *state, *cache); // call node program
-                    for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params)
-                    {
-                        batched_node_progs[res.first.loc].emplace_back(res.first.handle, std::move(res.second));
+                    // if done send to coordinator and call delete on all objects in the map for node state
+
+                    // now propagate requests
+                    for (auto &batch : batched_node_progs){
+                        if (batch.first == G->myid){
+                            // this shouldnt happen or it should be an empty vector
+                            // make sure not to do anything here because the vector was moved out
+                        } else {
+                            // send msg to batch.first (location) with contents batch.second (start_node_params for that machine)
+                        }
                     }
                 }
-                start_node_params = std::move(batched_node_progs[G->myid]); // hopefully this nicely cleans up old vector, makes sure batched nodes
-            }
-            // if done send to coordinator and call delete on all objects in the map for node state
-
-            // now propagate requests
-            for (auto &batch : batched_node_progs){
-                if (batch.first == G->myid){
-                    // this shouldnt happen or it should be an empty vector
-                    // make sure not to do anything here because the vector was moved out
-                } else {
-                    // send msg to batch.first (location) with contents batch.second (start_node_params for that machine)
-                }
-            }
-                }
-
-                /*
-                   virtual void destroy_cache_value(void *val) {
-                   CacheValueTyp *cvt = (CacheValueType *)val;
-                   delete cvt;
-                   }
-                 */
         };
 
     std::map<prog_type, node_program*> programs = {
