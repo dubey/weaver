@@ -166,6 +166,7 @@ namespace message
     }
     inline size_t size(const db::Packable &t)
     {
+        std::cout << "called size on Packable of size " << t.size() << std::endl;
         return t.size();
     }
     /*inline size_t size(const std::unique_ptr<db::Packable> &t)
@@ -285,8 +286,8 @@ namespace message
     */
     inline void pack_buffer(e::buffer::packer &packer, const db::prog_type &t)
     {
-        packer << t;
-        std::cout << "ack buffer packed " << t << " of size " << sizeof(db::prog_type) << std::endl;
+        packer = packer << t;
+        std::cout << "pack buffer packed prog_type " << t << " of size " << sizeof(db::prog_type) << std::endl;
     }
 
     inline void pack_buffer(e::buffer::packer &packer, const bool &t)
@@ -374,6 +375,7 @@ namespace message
     {
         // !assumes constant element size
         size_t num_elems = t.size();
+        std::cout << "pack buffer packed vector of size " << num_elems<< std::endl;
         packer = packer << num_elems;
         if (num_elems > 0){
             size_t element_size = size(t[0]);
@@ -458,7 +460,7 @@ namespace message
     inline void
     unpack_buffer(e::unpacker &unpacker, db::prog_type &t){
         uint32_t _type;
-        unpacker >> _type;
+        unpacker = unpacker >> _type;
         std::cout << "unpack buffer got " << _type << std::endl;
         t = (enum db::prog_type) _type;
     }

@@ -230,8 +230,7 @@ client :: run_node_program(db::prog_type prog_to_run, std::vector<std::pair<uint
     busybee_returncode ret;
     message::message msg(message::CLIENT_NODE_PROG_REQ);
     std::cout << "client sent type " << prog_to_run << std::endl;
-    std::vector<std::pair<uint64_t, ParamsType>> dummy;
-    message::prepare_message(msg, message::CLIENT_NODE_PROG_REQ, myloc.port, prog_to_run, dummy); // XXX , initial_args);
+    message::prepare_message(msg, message::CLIENT_NODE_PROG_REQ, myloc.port, prog_to_run, initial_args);
     send_coord(msg.buf);
     if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS) {
         std::cerr << "msg recv error: " << ret << std::endl;

@@ -615,6 +615,7 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
 {
     auto request = std::make_shared<coordinator::pending_req>(m_type);
     request->client = std::move(client_loc);
+    uint32_t temp_prog;
 
     switch (m_type)
     {
@@ -666,8 +667,7 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
             break;
 
         case message::CLIENT_NODE_PROG_REQ:
-            message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ,
-                    request->client->port, request->pType);
+            message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, request->client->port, request->pType);
             std::cout << "server got type " << request->pType << std::endl;
             db::programs.at(request->pType)->unpack_and_start_coord(server, *msg, request);
             break;
