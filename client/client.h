@@ -21,6 +21,8 @@
 #include "common/message.h"
 #include "common/property.h"
 #include "db/node_prog_type.h"
+#include "db/node_program.h"
+#include "db/dijkstra_program.h"
 
 class client
 {
@@ -45,11 +47,9 @@ class client
                 std::shared_ptr<std::vector<common::property>> edge_props);
         double local_clustering_coefficient(size_t node,
                 std::shared_ptr<std::vector<common::property>> edge_props);
-        
-
 
         template <typename ParamsType>
-        ParamsType *run_node_program(db::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args);
+        ParamsType * run_node_program(db::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args);
 
     private:
         std::pair<size_t, std::vector<std::pair<size_t, size_t>>> dijkstra_request(size_t node1, size_t node2, uint32_t edge_weight_prop, bool is_widest,
@@ -226,17 +226,19 @@ template <typename ParamsType>
 inline ParamsType *
 client :: run_node_program(db::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args)
 {
-    ParamsType toRet = new ParamsType(); // make sure client frees
+    ParamsType *toRet = new ParamsType(); // make sure client frees
     busybee_returncode ret;
     message::message msg(message::CLIENT_NODE_PROG_REQ);
-    message::prepare_message(msg, message::CLIENT_NODE_PROG_REQ, myloc.port, prog_to_run, initial_args);
+    std::cout << "client sent type " << prog_to_run << std::endl;
+
+    message::prepare_message(msg, message::CLIENT_NODE_PROG_REQ, myloc.port, prog_to_run); //, initial_args); //XXX we really want initial args to work
     send_coord(msg.buf);
     if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS) {
         std::cerr << "msg recv error: " << ret << std::endl;
-        toRet.first = 0;
-        return toRet;
+        delete toRet;
+        return NULL;
     }
-    message::unpack_message(msg, message::CLIENT_NODE_PROG_REPLY, *toRet);
+    //message::unpack_message(msg, message::CLIENT_NODE_PROG_REPLY, *toRet);
     return toRet;
 }
 

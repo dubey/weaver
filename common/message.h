@@ -168,6 +168,11 @@ namespace message
     {
         return t.size();
     }
+    /*inline size_t size(const std::unique_ptr<db::Packable> &t)
+    {
+        return size(*t);
+    }
+    */
     inline size_t size(const bool &t)
     {
         return sizeof(uint16_t);
@@ -271,9 +276,16 @@ namespace message
     {
         t.pack(packer);
     }
+    /*
+    inline void pack_buffer(e::buffer::packer &packer, const std::unique_ptr<db::Packable> &t)
+    {
+        pack_buffer(packer, *t);
+    }
+    */
     inline void pack_buffer(e::buffer::packer &packer, const db::prog_type &t)
     {
         packer << t;
+        std::cout << "ack buffer packed " << t << " of size " << sizeof(db::prog_type) << std::endl;
     }
 
     inline void pack_buffer(e::buffer::packer &packer, const bool &t)
@@ -432,10 +444,18 @@ namespace message
     {
         t.unpack(unpacker);
     }
+    /*
+    inline void
+    unpack_buffer(e::unpacker &unpacker, std::unique_ptr<db::Packable> &t)
+    {
+        unpack_buffer(unpacker, *t);
+    }
+    */
     inline void
     unpack_buffer(e::unpacker &unpacker, db::prog_type &t){
         uint32_t _type;
         unpacker >> _type;
+        std::cout << "unpack buffer got " << _type << std::endl;
         t = (enum db::prog_type) _type;
     }
     inline void
@@ -545,7 +565,7 @@ namespace message
         while (elements_left > 0) {
             T to_add;
             unpack_buffer(unpacker, to_add);
-            t.push_back(to_add);
+            t.push_back(std::move(to_add));
             elements_left--;
         }
     }
@@ -563,7 +583,7 @@ namespace message
         while (elements_left > 0) {
             T to_add;
             unpack_buffer(unpacker, to_add);
-            t.insert(to_add);
+            t.insert(std::move(to_add));
             elements_left--;
         }
     }
@@ -587,7 +607,7 @@ namespace message
 
             unpack_buffer(unpacker, val_to_add);
 
-            t[key_to_add] = val_to_add;
+            t[key_to_add] = std::move(val_to_add); // XXX change to insert later to reduce overhead
             elements_left--;
         }
     }

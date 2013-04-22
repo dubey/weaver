@@ -25,6 +25,7 @@
 #include "common/message.h"
 #include "common/debug.h"
 
+#include "db/node_program.h"
 #include "db/node_prog_type.h"
 
 void coord_daemon_end(coordinator::central *server);
@@ -309,24 +310,30 @@ reachability_request_end(coordinator::central *server, std::shared_ptr<coordinat
 void
 node_program_initiate(coordinator::central *server, std::shared_ptr<coordinator::pending_req>request)
 {
-    std::unordered_map<int, std::vector<std::pair<uint64_t, db::Packable>>> initial_batches; // map from locations to a list of start_node_params to send to that shard
+    /*
+    //std::unordered_map<int, std::vector<std::pair<uint64_t, std::unique_ptr<db::Packable>>>> initial_batches; // map from locations to a list of start_node_params to send to that shard
     server->update_mutex.lock();
-    for (std::pair<uint64_t, db::Packable>& node_params_pair : request->node_prog_args){
+    uint64_request->node_prog_args[0].first
+    
+    for (std::pair<uint64_t, std::unique_ptr<db::Packable>>& node_params_pair : request->node_prog_args){
         if (check_elem(server, node_params_pair.first, true)){
             std::cerr << "one of the nodes has been deleted, cannot perform request"
                 << std::endl;
             server->update_mutex.unlock();
-            /*
+               */
+               /*
                message::message msg;
                message::prepare_message(msg, message::CLIENT_REPLY, false);
                server->send(std::move(request->client), msg.buf);
-             */
+               */
+               /*
             return;
         }
         common::meta_element *me = server->nodes.at(node_params_pair.first);
-        initial_batches[me->get_loc()].emplace_back(node_params_pair);
+        initial_batches[me->get_loc()].emplace_back(make_pair(node_params_pair.first, std::move(node_params_pair.second)));
     }
     request->vector_clock.reset(new std::vector<uint64_t>(*server->vc.clocks));
+               */
     /*
     request->out_count = server->last_del;
     request->out_count->cnt++;
@@ -342,6 +349,7 @@ node_program_initiate(coordinator::central *server, std::shared_ptr<coordinator:
               << me2->get_loc() << std::endl;
      */
 
+    /*
     message::message msg;
     for (auto &batch_pair : initial_batches){
         message::prepare_message(msg, message::NODE_PROG, request->node_prog_type, *request->vector_clock, 
@@ -349,6 +357,7 @@ node_program_initiate(coordinator::central *server, std::shared_ptr<coordinator:
         server->send(batch_pair.first, msg.buf); // later change to send without update mutex lock
     }
     server->update_mutex.unlock();
+     */
 }
 
 void
@@ -683,6 +692,7 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
 {
     auto request = std::make_shared<coordinator::pending_req>(m_type);
     request->client = std::move(client_loc);
+    db::prog_type pType;
 
     switch (m_type)
     {
@@ -735,8 +745,10 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
 
         case message::CLIENT_NODE_PROG_REQ:
             message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ,
-                    request->client->port, request->node_prog_type, request->node_prog_args);
-            node_program_initiate(server, request);
+                    request->client->port, pType);
+            std::cout << "server got type " << pType << std::endl;
+            //node_program_unpack_and_initiate(server, request);
+            db::programs.at(pType)->unpack_and_start_coord(server, *msg);
             break;
 
 /*

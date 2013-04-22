@@ -39,8 +39,8 @@ namespace db
     class Packable {
         public:
             virtual size_t size() const  = 0;
-            virtual void pack(e::buffer::packer&) const = 0;
-            virtual void unpack(e::unpacker&) = 0;
+            virtual void pack(e::buffer::packer& packer) const = 0;
+            virtual void unpack(e::unpacker& unpacker) = 0;
     };
 
     class Deletable {

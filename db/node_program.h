@@ -27,6 +27,7 @@
 #include "element/remote_node.h"
 #include "db/graph.h"
 
+#include "coordinator/central.h"
 #include "db/node_prog_type.h"
 #include "db/dijkstra_program.h"
 
@@ -43,7 +44,8 @@ namespace db
 
     struct node_program{
         public:
-            virtual void unpack_and_run(db::graph *g, message::message &msg) = 0;
+            virtual void unpack_and_run_db(db::graph *g, message::message &msg) = 0;
+            virtual void unpack_and_start_coord(coordinator::central *server, message::message &msg) = 0;
             //virtual void pack_message(e::buffer::packer&, Deletable params) = 0;
             //virtual void destroy_cache_value(void *val) = 0;
             virtual ~node_program() { }
@@ -59,7 +61,7 @@ namespace db
                     enclosed_function(_enclosed_function), type(_type)
             { }
 
-                virtual void unpack_and_run(db::graph *G, message::message  &msg) {
+                virtual void unpack_and_run_db(db::graph *G, message::message &msg) {
                     // unpack some start params from msg:
                     std::vector<std::pair<uint64_t, ParamsType>> start_node_params;
                     uint64_t unpacked_request_id;
@@ -114,6 +116,10 @@ namespace db
                         }
                     }
                 }
+
+            virtual void unpack_and_start_coord(coordinator::central *server, message::message &msg){
+                    printf("coordinator ZAAAAAAAAAAAAAAAAAA\n");
+            }
         };
 
     std::map<prog_type, node_program*> programs = {

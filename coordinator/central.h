@@ -94,10 +94,6 @@ namespace coordinator
             uint64_t cached_req_id;
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids;
 
-            // for node progs
-            db::prog_type node_prog_type;
-            std::vector<std::pair<uint64_t, db::Packable>> node_prog_args; 
-            
         pending_req(message::msg_type type)
             : req_type(type)
             , done(false)

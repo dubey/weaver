@@ -5,6 +5,7 @@
 
 #include "element/node.h"
 #include "element/remote_node.h"
+#include "common/message.h"
 #include "db/node_prog_type.h"
 #include "db/node_program.h"
 #include "db/element/remote_node.h"
@@ -13,7 +14,6 @@ namespace db
 {
     class dijkstra_params : public virtual Packable {
         public:
-        enum mode {START, PROP};
         db::element::remote_node source;
         db::element::remote_node dest;
         uint32_t edge_weight_name; // they key of the property which holds the weight of an an edge
@@ -25,13 +25,25 @@ namespace db
 
         public:
         virtual size_t size() const {
-            return 8;   //message::size(source) + message::size(dest);
+            size_t toRet = message::size(source) + message::size(dest);
+            toRet += message::size(edge_weight_name) + message::size(edge_props);
+            toRet += message::size(is_widest_path) + message::size(tentative_map_value);
+            return toRet;
         }
-        virtual void pack(e::buffer::packer&) const{
-            return;
+        virtual void pack(e::buffer::packer& packer) const {
+            message::pack_buffer(packer, source);
+            message::pack_buffer(packer, dest);
+            message::pack_buffer(packer, edge_weight_name);
+            message::pack_buffer(packer, edge_props);
+            message::pack_buffer(packer, is_widest_path);
         }
-        virtual void unpack(e::unpacker&){
-            return;
+
+        virtual void unpack(e::unpacker& unpacker){
+            message::unpack_buffer(unpacker, source);
+            message::unpack_buffer(unpacker, dest);
+            message::unpack_buffer(unpacker, edge_weight_name);
+            message::unpack_buffer(unpacker, edge_props);
+            message::unpack_buffer(unpacker, is_widest_path);
         }
     };
 

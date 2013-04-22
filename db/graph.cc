@@ -281,7 +281,7 @@ unpack_and_run_node_program(db::graph *G, void *req)
     db::prog_type pType;
 
     message::unpack_message(*request->msg, message::NODE_PROG, pType);
-    db::programs.at(pType)->unpack_and_run(G, *request->msg);
+    db::programs.at(pType)->unpack_and_run_db(G, *request->msg);
     delete request;
 }
 
