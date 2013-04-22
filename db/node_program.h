@@ -1,10 +1,11 @@
 /*
  * ===============================================================
- *    Description:  something
+ *    Description:  Template for a node program.
  *
  *        Created:  Sunday 17 March 2013 11:00:03  EDT
  *
- *         Author:  Ayush Dubey, Greg Hill, dubey@cs.cornell.edu, gdh39@cornell.edu
+ *         Author:  Ayush Dubey, Greg Hill
+ *                  dubey@cs.cornell.edu, gdh39@cornell.edu
  *
  * Copyright (C) 2013, Cornell University, see the LICENSE file
  *                     for licensing agreement

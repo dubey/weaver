@@ -27,16 +27,20 @@
 
 #include "common/weaver_constants.h"
 #include "common/message.h"
-#include "request_objects.h"
 #include "graph.h"
 #include "node_prog_type.h"
 #include "node_program.h"
 #include "dijkstra_program.h"
 
-void handle_reachable_request(db::graph *G, void *request);
-void handle_dijkstra_prop(db::graph *G, void *request);
-void migrate_node_step1(db::graph *G, uint64_t node, int new_loc);
+// migration methods
+void migrate_node_step1(db::graph *G, uint64_t node_handle, int new_shard);
+void migrate_node_step2(db::graph *G, std::unique_ptr<message::message> msg);
+void migrate_node_step3(db::graph *G, std::unique_ptr<message::message> msg);
+void migrate_node_step4(db::graph *G, std::unique_ptr<message::message> msg);
 void migrate_node_step4_1(db::graph *G);
+void migrate_node_step5(db::graph *G, std::unique_ptr<message::message> msg);
+void migrate_node_step6(db::graph *G);
+
 
 // create a graph node
 inline void
@@ -257,7 +261,7 @@ migrate_node_step6(db::graph *G)
     nodes.push_back(G->mrequest.migr_node);
     for (auto &r: G->mrequest.pending_requests) {
         r->lock();
-        G->propagate_request(nodes, r, G->mrequest.new_loc);
+        //G->propagate_request(nodes, r, G->mrequest.new_loc); TODO
         r->unlock();
     }
     G->release_node(n);
@@ -274,10 +278,33 @@ migrated_nbr_update(db::graph *G, std::unique_ptr<message::message> msg)
     G->update_migrated_nbr(local_node, orig_node, orig_loc, new_node, new_loc);
 }
 
+// update cache based on confirmations for transient cached values
+// and invalidations for stale entries
+void
+handle_cache_update(db::graph *G, std::unique_ptr<message::message> msg)
+{
+    std::vector<uint64_t> good, bad;
+    uint64_t perm_del_id;
+    message::unpack_message(*msg, message::CACHE_UPDATE, good, bad, perm_del_id);
+    
+    // invalidations
+    for (size_t i = 0; i < bad.size(); i++) {
+        //G->remove_cache(bad[i]);
+    }
+    
+    // confirmations
+    for (size_t i = 0; i < good.size(); i++) {
+        //G->commit_cache(good[i]);
+    }
+    
+    G->permanent_delete(perm_del_id);
+    std::cout << "Permanent delete, id = " << perm_del_id << std::endl;
+}
+
 void
 unpack_and_run_node_program(db::graph *G, void *req)
 {
-    db::update_request *request = (db::update_request *) req;
+    db::update_request *request = (db::update_request *)req;
     db::prog_type pType;
 
     message::unpack_message(*request->msg, message::NODE_PROG, pType);
@@ -362,19 +389,10 @@ unpack_update_request(db::graph *G, void *req)
                 migrate_node_step4_1(G);
             }
             break;
-/*
-        case message::REACHABLE_PROP:
-            unpack_traversal_request(G, std::move(request->msg));
-            break;
-
-        case message::REACHABLE_REPLY:
-            handle_reachable_reply(G, std::move(request->msg));
-            break;
 
         case message::CACHE_UPDATE:
             handle_cache_update(G, std::move(request->msg));
             break;
-            */
 
         case message::MIGRATE_NODE_STEP1:
             migrate_node_step2(G, std::move(request->msg));
@@ -538,7 +556,6 @@ runner(db::graph *G)
                 G->thread_pool.add_request(thr);
                 break;
 
-            case message::REACHABLE_REPLY:
             case message::CACHE_UPDATE:
             case message::MIGRATE_NODE_STEP1:
             case message::MIGRATE_NODE_STEP2:
@@ -560,72 +577,13 @@ runner(db::graph *G)
                 G->thread_pool.add_request(thr);
                 break;
 
-/*
-
-            case message::REACHABLE_PROP:
-                request = new db::update_request(mtype, 0, std::move(rec_msg));
-                thr = new db::thread::unstarted_thread(0, unpack_update_request, G, request);
-                G->thread_pool.add_request(thr);
-                break;
-
-            case message::REACHABLE_DONE:
-                message::unpack_message(*rec_msg, message::REACHABLE_DONE, done_id);
-                G->add_done_request(done_id);
-                break;
-
-            case message::DIJKSTRA_REQ:
-                unpack_dijkstra_request(G, std::move(rec_msg));
-                break;
-
-            case message::DIJKSTRA_PROP:
-                unpack_dijkstra_prop(G, std::move(rec_msg));
-                break;
-
-            case message::DIJKSTRA_PROP_REPLY:
-                request = new db::update_request(mtype, 0, std::move(rec_msg));
-                thr = new db::thread::unstarted_thread(0, handle_dijkstra_prop_reply, G, request);
-                G->thread_pool.add_request(thr);
-                break;
-
-            case message::CLUSTERING_REQ:
-                thr.reset(new
-                db::thread::unstarted_thread(handle_clustering_request, G, std::move(rec_msg)));
-                G->thread_pool.add_request(std::move(thr));
-                break;
-
-            case message::CLUSTERING_PROP:
-                thr.reset(new
-                db::thread::unstarted_thread(handle_clustering_prop, G, std::move(rec_msg)));
-                G->thread_pool.add_request(std::move(thr));
-                break;
-
-            case message::CLUSTERING_PROP_REPLY:
-                thr.reset(new
-                db::thread::unstarted_thread(handle_clustering_prop_reply, G, std::move(rec_msg)));
-                G->thread_pool.add_request(std::move(thr));
-                break;
-
-            case message::NODE_REFRESH_REQ:
-                thr.reset(new
-                db::thread::unstarted_thread(handle_refresh_request, G, std::move(rec_msg)));
-                G->thread_pool.add_request(std::move(thr));
-                break;
-
-            case message::NODE_REFRESH_REPLY:
-                thr.reset(new
-                db::thread::unstarted_thread(handle_refresh_response, G, std::move(rec_msg)));
-                G->thread_pool.add_request(std::move(thr));
-                break;
-*/
-           default:
+            default:
                 std::cerr << "unexpected msg type " << (message::CLIENT_REPLY ==
                 code) << std::endl;
         }
     }
 }
 
-// delete old visited properties
-// TODO delete old done_requests
 void
 shard_daemon(db::graph *G)
 {
@@ -633,25 +591,6 @@ shard_daemon(db::graph *G)
     while (true) {
         std::chrono::seconds duration(40); // execution frequency in seconds
         std::this_thread::sleep_for(duration);
-        // deleting visited props
-        G->visited_mutex.lock();
-        if (G->visit_map) {
-            next_map = &G->visit_map_odd;
-            G->visit_map = false;
-        } else {
-            next_map = &G->visit_map_even;
-            G->visit_map = true;
-        }
-        for (auto it = next_map->begin(); it != next_map->end(); it++) {
-            uint64_t req_id = it->first;
-            for (auto vec_it: it->second) {
-                db::element::node *n = G->acquire_node(vec_it);
-                G->remove_visited(n, req_id);
-                G->release_node(n);
-            }
-        }
-        next_map->clear();
-        G->visited_mutex.unlock();
     }
 }
 

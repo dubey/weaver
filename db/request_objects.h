@@ -26,20 +26,6 @@
 #include "element/edge.h"
 #include "element/remote_node.h"
 
-namespace std
-{
-    // used if we want a hash table with a remote node as the key
-    template <>
-    struct hash<db::element::remote_node> 
-    {
-        public:
-            size_t operator()(db::element::remote_node x) const throw() 
-            {
-                return (hash<int>()(x.loc) * 6291469) + (hash<size_t>()(x.handle) * 393241); // some big primes
-            }
-    };
-}
-
 namespace db
 {
 

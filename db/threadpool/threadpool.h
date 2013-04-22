@@ -21,15 +21,11 @@
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
 
-#include "db/request_objects.h"
-#include "db/graph.h"
 #include "common/message.h"
 
 namespace db
 {
 class graph;
-class update_request;
-class batch_request;
 
 namespace thread
 {
