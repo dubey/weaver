@@ -166,14 +166,8 @@ namespace message
     }
     inline size_t size(const db::Packable &t)
     {
-        std::cout << "called size on Packable of size " << t.size() << std::endl;
         return t.size();
     }
-    /*inline size_t size(const std::unique_ptr<db::Packable> &t)
-    {
-        return size(*t);
-    }
-    */
     inline size_t size(const bool &t)
     {
         return sizeof(uint16_t);
@@ -275,19 +269,13 @@ namespace message
 
     inline void pack_buffer(e::buffer::packer &packer, const db::Packable &t)
     {
-        std::cout << "pack buffer called for Packable type!" << std::endl;
+        //std::cout << "pack buffer called for Packable type!" << std::endl;
         t.pack(packer);
     }
-    /*
-    inline void pack_buffer(e::buffer::packer &packer, const std::unique_ptr<db::Packable> &t)
-    {
-        pack_buffer(packer, *t);
-    }
-    */
     inline void pack_buffer(e::buffer::packer &packer, const db::prog_type &t)
     {
         packer = packer << t;
-        std::cout << "pack buffer packed prog_type " << t << " of size " << sizeof(db::prog_type) << std::endl;
+    //    std::cout << "pack buffer packed prog_type " << t << " of size " << sizeof(db::prog_type) << std::endl;
     }
 
     inline void pack_buffer(e::buffer::packer &packer, const bool &t)
@@ -375,7 +363,7 @@ namespace message
     {
         // !assumes constant element size
         size_t num_elems = t.size();
-        std::cout << "pack buffer packed vector of size " << num_elems<< std::endl;
+        //std::cout << "pack buffer packed vector of size " << num_elems<< std::endl;
         packer = packer << num_elems;
         if (num_elems > 0){
             size_t element_size = size(t[0]);
@@ -432,9 +420,11 @@ namespace message
     prepare_message(message &m, const enum msg_type given_type, const Args&... args)
     {
         size_t bytes_to_pack = size(args...) + sizeof(enum msg_type);
+        /*
         if (given_type == NODE_PROG || given_type == CLIENT_NODE_PROG_REQ){
             std::cout << "preparing message contents of size " << bytes_to_pack << std::endl;
         }
+        */
         m.type = given_type;
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
@@ -447,21 +437,14 @@ namespace message
     inline void
     unpack_buffer(e::unpacker &unpacker, db::Packable &t)
     {
-        std::cout << "unpack buffer called for Packable type!" << std::endl;
+        //std::cout << "unpack buffer called for Packable type!" << std::endl;
         t.unpack(unpacker);
     }
-    /*
-    inline void
-    unpack_buffer(e::unpacker &unpacker, std::unique_ptr<db::Packable> &t)
-    {
-        unpack_buffer(unpacker, *t);
-    }
-    */
     inline void
     unpack_buffer(e::unpacker &unpacker, db::prog_type &t){
         uint32_t _type;
         unpacker = unpacker >> _type;
-        std::cout << "unpack buffer got " << _type << std::endl;
+        //std::cout << "unpack buffer got " << _type << std::endl;
         t = (enum db::prog_type) _type;
     }
     inline void

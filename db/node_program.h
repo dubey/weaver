@@ -71,16 +71,18 @@ namespace db
                     std::vector<uint64_t> vclocks; //needed to pass to next message
                     prog_type ignore;
 
-                    printf("ZAAAAAAAAAAAAAAAAAA\n");
+                    printf("db ZAAAAAAAAAAAAAAAAAA\n");
                     message::unpack_message(msg, message::NODE_PROG, ignore, vclocks, unpacked_request_id, start_node_params);
 
 
                     std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> batched_node_progs;
 
                     while (!start_node_params.empty()){
+                        printf("going throug local next nodes loop\n");
                         for (auto &handle_params : start_node_params)
                         {
                             uint64_t node_handle = handle_params.first;
+                            // XXX todo: double check node exists
                             db::element::node* node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
 
                             CacheValueType *cache;
@@ -115,6 +117,7 @@ namespace db
                             // this shouldnt happen or it should be an empty vector
                             // make sure not to do anything here because the vector was moved out
                         } else {
+                            printf("would send to other server here\n");
                             // send msg to batch.first (location) with contents batch.second (start_node_params for that machine)
                         }
                     }
@@ -140,7 +143,7 @@ namespace db
                            message::prepare_message(msg, message::CLIENT_REPLY, false);
                            server->send(std::move(request->client), msg.buf);
                          */
-                   return;
+                        return;
                     }
                     common::meta_element *me = server->nodes.at(node_params_pair.first);
                     initial_batches[me->get_loc()].emplace_back(std::make_pair(node_params_pair.first, std::move(node_params_pair.second)));

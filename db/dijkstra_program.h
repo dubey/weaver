@@ -31,31 +31,31 @@ namespace db
             return toRet;
         }
         virtual void pack(e::buffer::packer& packer) const {
-            std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
+            //std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
             message::pack_buffer(packer, source);
-            std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
+            //std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
             message::pack_buffer(packer, dest);
-            std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
+            //std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
             message::pack_buffer(packer, edge_weight_name);
-            std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
+            //std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
             message::pack_buffer(packer, edge_props);
-            std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
+            //std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
             message::pack_buffer(packer, is_widest_path);
-            std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
+            //std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
         }
 
         virtual void unpack(e::unpacker& unpacker){
-            std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
+            //std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
             message::unpack_buffer(unpacker, source);
-            std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
+            //std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
             message::unpack_buffer(unpacker, dest);
-            std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
+            //std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
             message::unpack_buffer(unpacker, edge_weight_name);
-            std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
+            //std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
             message::unpack_buffer(unpacker, edge_props);
-            std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
+            //std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
             message::unpack_buffer(unpacker, is_widest_path);
-            std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
+            //std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
         }
     };
 
@@ -81,9 +81,15 @@ namespace db
     dijkstra_node_program(element::node &n,
             dijkstra_params &params,
             dijkstra_node_state &state,
-            dijkstra_cache_value &cache){
-        // empty response
-        return std::vector<std::pair<element::remote_node, dijkstra_params>>();
+            dijkstra_cache_value &cache)
+    {
+        std::cout << "OMG ITS RUNNING THE NODE PROGRAM" << std::cout;
+        std::vector<std::pair<element::remote_node, dijkstra_params>> next;
+        for(std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges)
+        {
+            next.emplace_back(std::make_pair(possible_nbr.second->nbr, params));
+        }
+        return next;
     }
 }
 
