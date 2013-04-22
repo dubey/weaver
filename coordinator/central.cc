@@ -229,6 +229,7 @@ reachability_request_initiate(coordinator::central *server, std::shared_ptr<coor
 void
 reachability_request_propagate(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request)
 {
+/*
     message::message msg;
     common::meta_element *me1, *me2;
     me1 = server->nodes.at(request->elem1);
@@ -248,12 +249,14 @@ reachability_request_propagate(coordinator::central *server, std::shared_ptr<coo
         request->req_id, request->req_id, request->edge_props, request->ignore_cache);
     server->update_mutex.unlock();
     server->send(me1->get_loc(), msg.buf);
+    */
 }
 
 // caution: assuming we hold server->mutex
 void
 reachability_request_end(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request)
 {       
+/*
     bool done = false;
     uint64_t req_id = request->req_id;
     if (request->cached_req_id == req_id) {
@@ -281,6 +284,7 @@ reachability_request_end(coordinator::central *server, std::shared_ptr<coordinat
         message::prepare_message(msg, message::CLIENT_REPLY, request->reachable);
         server->send(std::move(request->client), msg.buf);
     }
+*/
 }
 
 void
@@ -422,6 +426,7 @@ path_request(common::meta_element *node1, common::meta_element *node2, uint32_t 
 }
 */
 
+/*
 // compute the local clustering coefficient for a node
 void
 clustering_request_initiate(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request)
@@ -466,6 +471,7 @@ clustering_request_end(coordinator::central *server, std::shared_ptr<coordinator
     message::prepare_message(msg, message::CLIENT_CLUSTERING_REPLY, request->clustering_numerator, request->clustering_denominator);
     server->send(std::move(request->client), msg.buf);
 }
+*/
 
 // wake up thread waiting on the received message
 void
@@ -520,6 +526,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             delete_end(server, request);
             break;
         
+        /*
         case message::REACHABLE_REPLY:
             message::unpack_message(*msg, message::REACHABLE_REPLY, req_id, is_reachable,
                 src_node, src_loc, *del_nodes, *del_times, cached_req_id);
@@ -538,6 +545,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
                 reachability_request_end(server, request);
             }
             break;
+            */
 
         case message::CACHE_UPDATE_ACK:
             server->update_mutex.lock();
@@ -548,6 +556,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             }
             break;
 
+        /*
         case message::DIJKSTRA_REPLY:
             message::unpack_message(*msg, message::DIJKSTRA_REPLY, req_id, cost, *found_path);
             server->update_mutex.lock();
@@ -566,6 +575,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             request->clustering_denominator = clustering_denominator;
             clustering_request_end(server, request);
             break;
+            */
 
         case message::COORD_NODE_MIGRATE:
             message::unpack_message(*msg, message::COORD_NODE_MIGRATE, coord_handle, new_loc, from_loc);
@@ -654,6 +664,7 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
             delete_edge_property_initiate(server, request);
             break;
 
+/*
         case message::CLIENT_REACHABLE_REQ:
             message::unpack_message(*msg, message::CLIENT_REACHABLE_REQ, 
                     request->client->port, request->elem1, request->elem2, request->edge_props);
@@ -665,6 +676,7 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
                     request->client->port, request->elem1, request->elem2, request->key, request->is_widest, request->edge_props);
             dijkstra_request_initiate(server, request);
             break;
+            */
 
         case message::CLIENT_NODE_PROG_REQ:
             message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, request->client->port, request->pType);
