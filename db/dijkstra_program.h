@@ -31,19 +31,31 @@ namespace db
             return toRet;
         }
         virtual void pack(e::buffer::packer& packer) const {
+            std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
             message::pack_buffer(packer, source);
+            std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
             message::pack_buffer(packer, dest);
+            std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
             message::pack_buffer(packer, edge_weight_name);
+            std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
             message::pack_buffer(packer, edge_props);
+            std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
             message::pack_buffer(packer, is_widest_path);
+            std::cout << "packer bytes remaining is " << packer.remain() << std::endl;
         }
 
         virtual void unpack(e::unpacker& unpacker){
+            std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
             message::unpack_buffer(unpacker, source);
+            std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
             message::unpack_buffer(unpacker, dest);
+            std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
             message::unpack_buffer(unpacker, edge_weight_name);
+            std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
             message::unpack_buffer(unpacker, edge_props);
+            std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
             message::unpack_buffer(unpacker, is_widest_path);
+            std::cout << "unpacker bytes remaining is " << unpacker.remain() << std::endl;
         }
     };
 

@@ -45,7 +45,10 @@ namespace db
     struct node_program{
         public:
             virtual void unpack_and_run_db(db::graph *g, message::message &msg) = 0;
-            virtual void unpack_and_start_coord(coordinator::central *server, message::message &msg) = 0;
+            virtual void unpack_and_start_coord(coordinator::central *server,
+                    message::message &msg,
+                    std::shared_ptr<coordinator::pending_req> request) = 0;
+
             //virtual void pack_message(e::buffer::packer&, Deletable params) = 0;
             //virtual void destroy_cache_value(void *val) = 0;
             virtual ~node_program() { }
@@ -117,8 +120,54 @@ namespace db
                     }
                 }
 
-            virtual void unpack_and_start_coord(coordinator::central *server, message::message &msg){
-                    printf("coordinator ZAAAAAAAAAAAAAAAAAA\n");
+            virtual void unpack_and_start_coord(coordinator::central *server, message::message &msg, std::shared_ptr<coordinator::pending_req> request)
+            {
+                db::prog_type ignore;
+                printf("coordinator ZAAAAAAAAAAAAAAAAAA\n");
+                std::vector<std::pair<uint64_t, ParamsType>> initial_args;
+
+                message::unpack_message(msg, message::CLIENT_NODE_PROG_REQ, request->client->port, ignore, initial_args);
+
+                std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> initial_batches; // map from locations to a list of start_node_params to send to that shard
+                server->update_mutex.lock();
+
+                for (std::pair<uint64_t, ParamsType>& node_params_pair : initial_args)
+                {
+                    if (check_elem(server, node_params_pair.first, true)){
+                        std::cerr << "one of the arg nodes has been deleted, cannot perform request" << std::endl;
+                        /*
+                           message::message msg;
+                           message::prepare_message(msg, message::CLIENT_REPLY, false);
+                           server->send(std::move(request->client), msg.buf);
+                         */
+                   return;
+                    }
+                    common::meta_element *me = server->nodes.at(node_params_pair.first);
+                    initial_batches[me->get_loc()].emplace_back(std::make_pair(node_params_pair.first, std::move(node_params_pair.second)));
+                }
+                request->vector_clock.reset(new std::vector<uint64_t>(*server->vc.clocks));
+                /*
+                   request->out_count = server->last_del;
+                   request->out_count->cnt++;
+                 */
+
+                request->req_id = ++server->request_id;
+
+                server->pending.insert(std::make_pair(request->req_id, request));
+                /*
+                   std::cout << "Reachability request number " << request->req_id << " from source"
+                   << " request->elem " << request->elem1 << " " << me1->get_loc() 
+                   << " to destination request->elem " << request->elem2 << " " 
+                   << me2->get_loc() << std::endl;
+                 */
+
+                message::message msg_to_send;
+                for (auto &batch_pair : initial_batches){
+                    message::prepare_message(msg_to_send, message::NODE_PROG, request->pType, *request->vector_clock, 
+                            request->req_id, batch_pair.second);
+                    server->send(batch_pair.first, msg_to_send.buf); // later change to send without update mutex lock
+                   }
+                   server->update_mutex.unlock();
             }
         };
 

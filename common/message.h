@@ -274,6 +274,7 @@ namespace message
 
     inline void pack_buffer(e::buffer::packer &packer, const db::Packable &t)
     {
+        std::cout << "pack buffer called for Packable type!" << std::endl;
         t.pack(packer);
     }
     /*
@@ -406,7 +407,6 @@ namespace message
         }
     }
 
-
     template <typename T, typename... Args>
     inline void 
     pack_buffer(e::buffer::packer &packer, const T &t, const Args&... args)
@@ -430,6 +430,9 @@ namespace message
     prepare_message(message &m, const enum msg_type given_type, const Args&... args)
     {
         size_t bytes_to_pack = size(args...) + sizeof(enum msg_type);
+        if (given_type == NODE_PROG || given_type == CLIENT_NODE_PROG_REQ){
+            std::cout << "preparing message contents of size " << bytes_to_pack << std::endl;
+        }
         m.type = given_type;
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
@@ -442,6 +445,7 @@ namespace message
     inline void
     unpack_buffer(e::unpacker &unpacker, db::Packable &t)
     {
+        std::cout << "unpack buffer called for Packable type!" << std::endl;
         t.unpack(unpacker);
     }
     /*

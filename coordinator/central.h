@@ -94,6 +94,9 @@ namespace coordinator
             uint64_t cached_req_id;
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids;
 
+            // for node programs
+            db::prog_type pType;
+
         pending_req(message::msg_type type)
             : req_type(type)
             , done(false)
@@ -383,6 +386,33 @@ namespace coordinator
         bb_mutex.unlock();
         return ret;
     }
+
+    // caution: assuming caller holds server->mutex
+    // moved from .cc to use in node_program
+    bool
+        check_elem(coordinator::central *server, uint64_t handle, bool node_or_edge)
+        {
+            common::meta_element *elem;
+            if (node_or_edge) {
+                // check for node
+                if (server->nodes.find(handle) != server->nodes.end()) {
+                    return false;
+                }
+                elem = server->nodes.at(handle);
+            } else {
+                // check for edge
+                if (server->edges.find(handle) != server->edges.end()) {
+                    return false;
+                }
+                elem = server->edges.at(handle);
+            }
+            if (elem->get_del_time() < MAX_TIME) {
+                return false;
+            } else {
+                return true;
+            }
+        }
+
 }
 
 #endif // __CENTRAL__
