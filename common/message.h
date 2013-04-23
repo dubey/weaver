@@ -31,7 +31,7 @@
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
 #include "db/request_objects.h" // used for packing dijkstra_queue_elem
-#include "db/node_prog_type.h" // used for packing Packable objects
+#include "node_prog/node_prog_type.h" // used for packing Packable objects
 
 namespace message
 {
@@ -150,10 +150,10 @@ namespace message
     }
 
 // size templates
-    inline size_t size(const db::prog_type &t){
+    inline size_t size(const node_prog::prog_type &t){
         return sizeof(uint32_t);
     }
-    inline size_t size(const db::Packable &t)
+    inline size_t size(const node_prog::Packable &t)
     {
         return t.size();
     }
@@ -203,11 +203,6 @@ namespace message
     {
         return size(t.loc) + size(t.handle);
     }
-    inline size_t size(const db::dijkstra_queue_elem& t)
-    {
-        return size(t.cost) + size(t.node) + size(t.prev_node_req_id);
-    }
-
     template <typename T1, typename T2>
     inline size_t size(const std::pair<T1, T2> &t)
     {
@@ -256,12 +251,12 @@ namespace message
 
     // packing templates
 
-    inline void pack_buffer(e::buffer::packer &packer, const db::Packable &t)
+    inline void pack_buffer(e::buffer::packer &packer, const node_prog::Packable &t)
     {
         //std::cout << "pack buffer called for Packable type!" << std::endl;
         t.pack(packer);
     }
-    inline void pack_buffer(e::buffer::packer &packer, const db::prog_type &t)
+    inline void pack_buffer(e::buffer::packer &packer, const node_prog::prog_type &t)
     {
         packer = packer << t;
     //    std::cout << "pack buffer packed prog_type " << t << " of size " << sizeof(db::prog_type) << std::endl;
@@ -311,14 +306,6 @@ namespace message
     pack_buffer(e::buffer::packer &packer, const db::element::remote_node& t)
     {
         packer = packer << t.loc << t.handle;
-    }
-
-    inline void
-    pack_buffer(e::buffer::packer &packer, const db::dijkstra_queue_elem &t)
-    {
-        pack_buffer(packer, t.cost);
-        pack_buffer(packer, t.node);
-        pack_buffer(packer, t.prev_node_req_id);
     }
 
     template <typename T1, typename T2>
@@ -424,17 +411,17 @@ namespace message
 
     // unpacking templates
     inline void
-    unpack_buffer(e::unpacker &unpacker, db::Packable &t)
+    unpack_buffer(e::unpacker &unpacker, node_prog::Packable &t)
     {
         //std::cout << "unpack buffer called for Packable type!" << std::endl;
         t.unpack(unpacker);
     }
     inline void
-    unpack_buffer(e::unpacker &unpacker, db::prog_type &t){
+    unpack_buffer(e::unpacker &unpacker, node_prog::prog_type &t){
         uint32_t _type;
         unpacker = unpacker >> _type;
         //std::cout << "unpack buffer got " << _type << std::endl;
-        t = (enum db::prog_type) _type;
+        t = (enum node_prog::prog_type) _type;
     }
     inline void
     unpack_buffer(e::unpacker &unpacker, bool &t)
@@ -482,14 +469,6 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, db::element::remote_node& t)
     {
         unpacker = unpacker >> t.loc >> t.handle;
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, db::dijkstra_queue_elem &t)
-    {
-        unpack_buffer(unpacker, t.cost);
-        unpack_buffer(unpacker, t.node);
-        unpack_buffer(unpacker, t.prev_node_req_id);
     }
 
     template <typename T1, typename T2>

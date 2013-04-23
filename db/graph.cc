@@ -28,9 +28,9 @@
 #include "common/weaver_constants.h"
 #include "common/message.h"
 #include "graph.h"
-#include "node_prog_type.h"
-#include "node_program.h"
-#include "dijkstra_program.h"
+#include "node_prog/node_prog_type.h"
+#include "node_prog/node_program.h"
+#include "node_prog/dijkstra_program.h"
 
 // migration methods
 void migrate_node_step1(db::graph *G, uint64_t node_handle, int new_shard);
@@ -305,11 +305,88 @@ void
 unpack_and_run_node_program(db::graph *G, void *req)
 {
     db::update_request *request = (db::update_request *)req;
-    db::prog_type pType;
+    node_prog::prog_type pType;
 
     message::unpack_message(*request->msg, message::NODE_PROG, pType);
-    db::programs.at(pType)->unpack_and_run_db(G, *request->msg);
+    node_prog::programs.at(pType)->unpack_and_run_db(G, *request->msg);
     delete request;
+}
+
+template <typename ParamsType, typename NodeStateType, typename CacheValueType>
+void
+node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_and_run_db(db::graph *G, message::message &msg)
+{
+    // unpack some start params from msg:
+    std::vector<std::pair<uint64_t, ParamsType>> start_node_params;
+    uint64_t unpacked_request_id;
+    std::vector<uint64_t> vclocks; //needed to pass to next message
+    prog_type prog_type_recvd;
+
+    printf("db ZAAAAAAAAAAAAAAAAAA\n");
+    message::unpack_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id, start_node_params);
+
+    std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> batched_node_progs;
+
+    while (!start_node_params.empty()) {
+        printf("going throug local next nodes loop\n");
+        for (auto &handle_params : start_node_params) {
+            uint64_t node_handle = handle_params.first;
+            // XXX todo: double check node exists
+            db::element::node* node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
+
+            CacheValueType *cache;
+            if (G->prog_cache_exists(type, unpacked_request_id, node_handle)) {
+                cache = dynamic_cast<CacheValueType *>(G->fetch_prog_cache(type, unpacked_request_id, node_handle));
+                if (cache == NULL) {
+                    // dynamic_cast failed, CacheValueType needs to extend Deletable
+                    std::cerr << "CacheValueType needs to extend Deletable" << std::endl;
+                }
+            } else {
+                cache = new CacheValueType();
+                G->insert_prog_cache(type, unpacked_request_id, node_handle, cache);
+            }
+
+            NodeStateType *state;
+            if (G->prog_req_state_exists(type, unpacked_request_id, node_handle)) {
+                state = dynamic_cast<NodeStateType *>(G->fetch_prog_req_state(type, unpacked_request_id, node_handle));
+                if (state == NULL) {
+                    // dynamic_cast failed, NodeStateType needs to extend Deletable
+                    std::cerr << "NodeStateType needs to extend Deletable" << std::endl;
+                }
+            } else {
+                state = new NodeStateType();
+                G->insert_prog_req_state(type, unpacked_request_id, node_handle, state);
+            }
+
+            auto next_node_params = enclosed_function(*node, handle_params.second, *state, *cache); // call node program
+
+            for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
+                batched_node_progs[res.first.loc].emplace_back(res.first.handle, std::move(res.second));
+            }
+        }
+        start_node_params = std::move(batched_node_progs[G->myid]); // hopefully this nicely cleans up old vector, makes sure batched nodes
+    }
+    // if done send to coordinator and call delete on all objects in the map for node state
+
+    // now propagate requests
+    for (auto &batch_pair : batched_node_progs) {
+        if (batch_pair.first == G->myid) {
+            // this shouldnt happen or it should be an empty vector
+            // make sure not to do anything here because the vector was moved out
+        } else {
+            // send msg to batch.first (location) with contents batch.second (start_node_params for that machine)
+            message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, 
+                    unpacked_request_id, batch_pair.second);
+            G->send(batch_pair.first, msg.buf);
+        }
+    }
+}
+
+
+template <typename ParamsType, typename NodeStateType, typename CacheValueType>
+void
+node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_and_start_coord(coordinator::central *server, message::message &msg, std::shared_ptr<coordinator::pending_req> request)
+{
 }
 
 // unpack update request and call appropriate function
@@ -518,7 +595,7 @@ runner(db::graph *G)
     uint64_t done_id;
     uint64_t start_time;
     // used for node programs
-    db::prog_type pType;
+    node_prog::prog_type pType;
     std::vector<uint64_t> vclocks;
 
     while (true) {

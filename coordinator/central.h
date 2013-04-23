@@ -30,7 +30,7 @@
 #include "common/meta_element.h"
 #include "common/weaver_constants.h"
 #include "common/vclock.h"
-#include "db/node_prog_type.h"
+#include "node_prog/node_prog_type.h"
 #include "threadpool/threadpool.h"
 
 namespace coordinator
@@ -95,7 +95,7 @@ namespace coordinator
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids;
 
             // for node programs
-            db::prog_type pType;
+            node_prog::prog_type pType;
 
         pending_req(message::msg_type type)
             : req_type(type)

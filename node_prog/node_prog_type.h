@@ -20,7 +20,7 @@
 #include "element/node.h"
 #include "element/remote_node.h"
 
-namespace db
+namespace node_prog
 {
     enum prog_type
     {
@@ -33,7 +33,7 @@ namespace db
     struct node_function_type
     {
         public:
-            typedef std::vector<std::pair<element::remote_node, params_type>> (*value_type)(element::node&, params_type&, node_state_type&, cache_value_type&);
+            typedef std::vector<std::pair<db::element::remote_node, params_type>> (*value_type)(db::element::node&, params_type&, node_state_type&, cache_value_type&);
     };
 
     class Packable 
@@ -60,10 +60,10 @@ namespace std
 {
     // used if we want a hash table with a prog type as the key
     template <>
-    struct hash<db::prog_type>
+    struct hash<node_prog::prog_type>
     {
         public:
-            size_t operator()(db::prog_type x) const throw() 
+            size_t operator()(node_prog::prog_type x) const throw() 
             {
                 return hash<int>()(x);
             }

@@ -6,11 +6,11 @@
 #include "element/node.h"
 #include "element/remote_node.h"
 #include "common/message.h"
-#include "db/node_prog_type.h"
-#include "db/node_program.h"
+#include "node_prog_type.h"
+#include "node_program.h"
 #include "db/element/remote_node.h"
 
-namespace db
+namespace node_prog
 {
     class dijkstra_params : public virtual Packable 
     {
@@ -52,8 +52,8 @@ namespace db
 
     struct dijkstra_node_state : Deletable 
     {
-        std::priority_queue<dijkstra_queue_elem, std::vector<dijkstra_queue_elem>, std::less<dijkstra_queue_elem>> next_nodes_shortest; 
-        std::priority_queue<dijkstra_queue_elem, std::vector<dijkstra_queue_elem>, std::greater<dijkstra_queue_elem>> next_nodes_widest; 
+        //std::priority_queue<dijkstra_queue_elem, std::vector<dijkstra_queue_elem>, std::less<dijkstra_queue_elem>> next_nodes_shortest; 
+        //std::priority_queue<dijkstra_queue_elem, std::vector<dijkstra_queue_elem>, std::greater<dijkstra_queue_elem>> next_nodes_widest; 
         // map from a node (by its create time) to its cost and the req_id of the node that came before it in the shortest path
         std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> visited_map; 
 
@@ -73,14 +73,14 @@ namespace db
         }
     };
 
-    std::vector<std::pair<element::remote_node, dijkstra_params>> 
-    dijkstra_node_program(element::node &n,
+    std::vector<std::pair<db::element::remote_node, dijkstra_params>> 
+    dijkstra_node_program(db::element::node &n,
             dijkstra_params &params,
             dijkstra_node_state &state,
             dijkstra_cache_value &cache)
     {
         std::cout << "OMG ITS RUNNING THE NODE PROGRAM" << std::cout;
-        std::vector<std::pair<element::remote_node, dijkstra_params>> next;
+        std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
         for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
             next.emplace_back(std::make_pair(possible_nbr.second->nbr, params));
         }

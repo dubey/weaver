@@ -16,13 +16,13 @@
 
 #include <unordered_map>
 
-#include "node_prog_type.h"
+#include "node_prog/node_prog_type.h"
 
 namespace state
 {
-    typedef std::unordered_map<uint64_t, db::Deletable*> node_map;
+    typedef std::unordered_map<uint64_t, node_prog::Deletable*> node_map;
     typedef std::unordered_map<uint64_t, node_map> req_map;
-    typedef std::unordered_map<db::prog_type, req_map> prog_map;
+    typedef std::unordered_map<node_prog::prog_type, req_map> prog_map;
 
     class program_state
     {
@@ -32,21 +32,21 @@ namespace state
             program_state();
 
         public:
-            bool state_exists(db::prog_type t, uint64_t req_id, uint64_t node_handle);
-            db::Deletable* get_state(db::prog_type t, uint64_t req_id, uint64_t node_handle);
-            void put_state(db::prog_type t, uint64_t req_id, uint64_t node_handle, db::Deletable *new_state);
+            bool state_exists(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle);
+            node_prog::Deletable* get_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle);
+            void put_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle, node_prog::Deletable *new_state);
     };
 
     program_state :: program_state()
     {
         req_map new_req_map;
-        prog_state.emplace(db::REACHABILITY, new_req_map);
-        prog_state.emplace(db::DIJKSTRA, new_req_map);
-        prog_state.emplace(db::CLUSTERING, new_req_map);
+        prog_state.emplace(node_prog::REACHABILITY, new_req_map);
+        prog_state.emplace(node_prog::DIJKSTRA, new_req_map);
+        prog_state.emplace(node_prog::CLUSTERING, new_req_map);
     }
 
     inline bool
-    program_state :: state_exists(db::prog_type t, uint64_t req_id, uint64_t node_handle)
+    program_state :: state_exists(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle)
     {
         req_map &rmap = prog_state.at(t);
         req_map::iterator rmap_iter = rmap.find(req_id);
@@ -62,10 +62,10 @@ namespace state
         }
     }
 
-    inline db::Deletable* 
-    program_state :: get_state(db::prog_type t, uint64_t req_id, uint64_t node_handle)
+    inline node_prog::Deletable* 
+    program_state :: get_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle)
     {
-        db::Deletable *state = NULL;
+        node_prog::Deletable *state = NULL;
         if (state_exists(t, req_id, node_handle)) {
             state = prog_state.at(t).at(req_id).at(node_handle);
         }
@@ -73,10 +73,10 @@ namespace state
     }
 
     inline void
-    program_state :: put_state(db::prog_type t, uint64_t req_id, uint64_t node_handle, db::Deletable *new_state)
+    program_state :: put_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle, node_prog::Deletable *new_state)
     {
         if (state_exists(t, req_id, node_handle)) {
-            db::Deletable *old_state = get_state(t, req_id, node_handle);
+            node_prog::Deletable *old_state = get_state(t, req_id, node_handle);
             delete old_state;
         }
         prog_state[t][req_id][node_handle] = new_state;

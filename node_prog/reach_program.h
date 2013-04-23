@@ -6,8 +6,8 @@
 #include "element/node.h"
 #include "element/remote_node.h"
 #include "common/message.h"
-#include "db/node_prog_type.h"
-#include "db/node_program.h"
+#include "node_prog_type.h"
+#include "node_program.h"
 #include "db/element/remote_node.h"
 
 namespace db
