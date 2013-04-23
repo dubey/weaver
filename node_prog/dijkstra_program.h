@@ -6,8 +6,6 @@
 #include "element/node.h"
 #include "element/remote_node.h"
 #include "common/message.h"
-#include "node_prog_type.h"
-#include "node_program.h"
 #include "db/element/remote_node.h"
 
 namespace node_prog
@@ -79,7 +77,7 @@ namespace node_prog
             dijkstra_node_state &state,
             dijkstra_cache_value &cache)
     {
-        std::cout << "OMG ITS RUNNING THE NODE PROGRAM" << std::cout;
+        std::cout << "OMG ITS RUNNING THE NODE PROGRAM" << std::endl;
         std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
         for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
             next.emplace_back(std::make_pair(possible_nbr.second->nbr, params));

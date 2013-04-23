@@ -1,6 +1,6 @@
 /*
  * ===============================================================
- *    Description:  Basic graph db clustering coefficient calc test
+ *    Description:  Basic graph db node program.
  *
  *        Created:  01/23/2013 01:20:10 PM
  *
@@ -13,8 +13,8 @@
 
 #include "client/client.h"
 #include <vector>
-#include "db/node_prog_type.h"
-#include "db/dijkstra_program.h"
+#include "node_prog/node_prog_type.h"
+#include "node_prog/dijkstra_program.h"
 
 void
 node_prog_test()
@@ -67,9 +67,9 @@ node_prog_test()
     std::cout << "nodes[4] = " << nodes[4] <<std::endl;
     std::cout << "nodes[5] = " << nodes[5] <<std::endl;
 
-    std::vector<std::pair<uint64_t, db::dijkstra_params>> initial_args;
-    initial_args.emplace_back(std::make_pair(nodes[0], db::dijkstra_params()));
-    db::dijkstra_params* res = c.run_node_program(db::DIJKSTRA, initial_args);
+    std::vector<std::pair<uint64_t, node_prog::dijkstra_params>> initial_args;
+    initial_args.emplace_back(std::make_pair(nodes[0], node_prog::dijkstra_params()));
+    node_prog::dijkstra_params* res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
     /*
     auto retpair = c.shortest_path_request(nodes[0], nodes[5], weight_label, edge_props);
     std::cout <<retpair.first <<std::endl;

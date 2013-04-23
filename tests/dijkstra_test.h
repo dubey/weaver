@@ -13,8 +13,6 @@
 
 #include "client/client.h"
 #include <vector>
-#include "db/node_prog_type.h"
-#include "db/dijkstra_program.h"
 
 void
 dijkstra_test()

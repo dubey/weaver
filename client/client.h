@@ -20,9 +20,7 @@
 #include "common/weaver_constants.h"
 #include "common/message.h"
 #include "common/property.h"
-#include "db/node_prog_type.h"
-#include "db/node_program.h"
-#include "db/dijkstra_program.h"
+#include "node_prog/node_prog_type.h"
 
 class client
 {
@@ -49,7 +47,7 @@ class client
                 std::shared_ptr<std::vector<common::property>> edge_props);
 
         template <typename ParamsType>
-        ParamsType * run_node_program(db::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args);
+        ParamsType * run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args);
 
     private:
         std::pair<size_t, std::vector<std::pair<size_t, size_t>>> dijkstra_request(size_t node1, size_t node2, uint32_t edge_weight_prop, bool is_widest,
@@ -224,7 +222,7 @@ client :: local_clustering_coefficient(size_t node, std::shared_ptr<std::vector<
 
 template <typename ParamsType>
 inline ParamsType *
-client :: run_node_program(db::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args)
+client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args)
 {
     ParamsType *toRet = new ParamsType(); // make sure client frees
     busybee_returncode ret;
