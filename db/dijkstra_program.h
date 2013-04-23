@@ -81,7 +81,7 @@ namespace db
     {
         std::cout << "OMG ITS RUNNING THE NODE PROGRAM" << std::cout;
         std::vector<std::pair<element::remote_node, dijkstra_params>> next;
-        for(std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
+        for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
             next.emplace_back(std::make_pair(possible_nbr.second->nbr, params));
         }
         return next;
