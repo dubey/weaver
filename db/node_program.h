@@ -93,7 +93,7 @@ namespace db
                         if (G->prog_cache_exists(type, unpacked_request_id, node_handle)) {
                             cache = dynamic_cast<CacheValueType *>(G->fetch_prog_cache(type, unpacked_request_id, node_handle));
                             if (cache == NULL) {
-                                // dynamic_cast failed, CacheValueType needs to extend Deletabled
+                                // dynamic_cast failed, CacheValueType needs to extend Deletable
                                 std::cerr << "CacheValueType needs to extend Deletable" << std::endl;
                             }
                         } else {
@@ -105,7 +105,7 @@ namespace db
                         if (G->prog_req_state_exists(type, unpacked_request_id, node_handle)) {
                             state = dynamic_cast<NodeStateType *>(G->fetch_prog_req_state(type, unpacked_request_id, node_handle));
                             if (state == NULL) {
-                                // dynamic_cast failed, NodeStateType needs to extend Deletabled
+                                // dynamic_cast failed, NodeStateType needs to extend Deletable
                                 std::cerr << "NodeStateType needs to extend Deletable" << std::endl;
                             }
                         } else {
@@ -114,6 +114,7 @@ namespace db
                         }
 
                         auto next_node_params = enclosed_function(*node, handle_params.second, *state, *cache); // call node program
+
                         for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                             batched_node_progs[res.first.loc].emplace_back(res.first.handle, std::move(res.second));
                         }
@@ -145,8 +146,7 @@ namespace db
             std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> initial_batches; // map from locations to a list of start_node_params to send to that shard
             server->update_mutex.lock();
 
-            for (std::pair<uint64_t, ParamsType>& node_params_pair : initial_args)
-            {
+            for (std::pair<uint64_t, ParamsType>& node_params_pair : initial_args) {
                 if (check_elem(server, node_params_pair.first, true)){
                     std::cerr << "one of the arg nodes has been deleted, cannot perform request" << std::endl;
                     /*

@@ -264,7 +264,7 @@ namespace coordinator
         assert(pend_iter != pending_delete_requests.end());
         for (auto &dep_req: (**pend_iter).dependent_traversals) {
             if (dep_req->done) {
-                reachability_request_end(this, dep_req); // TODO this is bad, should be processed by different threads.
+                //reachability_request_end(this, dep_req); // TODO this is bad, should be processed by different threads.
             }
         }
         pending_delete_requests.erase(pend_iter);
