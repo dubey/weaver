@@ -75,10 +75,10 @@ namespace db
                 std::vector<std::pair<uint64_t, ParamsType>> start_node_params;
                 uint64_t unpacked_request_id;
                 std::vector<uint64_t> vclocks; //needed to pass to next message
-                prog_type ignore;
+                prog_type prog_type_recvd;
 
                 printf("db ZAAAAAAAAAAAAAAAAAA\n");
-                message::unpack_message(msg, message::NODE_PROG, ignore, vclocks, unpacked_request_id, start_node_params);
+                message::unpack_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id, start_node_params);
 
                 std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> batched_node_progs;
 
@@ -123,13 +123,15 @@ namespace db
                 // if done send to coordinator and call delete on all objects in the map for node state
 
                 // now propagate requests
-                for (auto &batch : batched_node_progs) {
-                    if (batch.first == G->myid) {
+                for (auto &batch_pair : batched_node_progs) {
+                    if (batch_pair.first == G->myid) {
                         // this shouldnt happen or it should be an empty vector
                         // make sure not to do anything here because the vector was moved out
                     } else {
-                        printf("would send to other server here\n");
                         // send msg to batch.first (location) with contents batch.second (start_node_params for that machine)
+                        message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, 
+                                unpacked_request_id, batch_pair.second);
+                        G->send(batch_pair.first, msg.buf);
                     }
                 }
             }
