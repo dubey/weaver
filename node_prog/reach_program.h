@@ -41,22 +41,30 @@ namespace node_prog
 
             virtual size_t size() const 
             {
-                size_t toRet = message::size(prev_node) + message::size(dest) + message::size(edge_props);
+                size_t toRet = message::size(mode)
+                    + message::size(prev_node)
+                    + message::size(dest) 
+                    + message::size(edge_props)
+                    + message::size(reachable);
                 return toRet;
             }
 
             virtual void pack(e::buffer::packer& packer) const 
             {
+                message::pack_buffer(packer, mode);
                 message::pack_buffer(packer, prev_node);
                 message::pack_buffer(packer, dest);
                 message::pack_buffer(packer, edge_props);
+                message::pack_buffer(packer, reachable);
             }
 
             virtual void unpack(e::unpacker& unpacker)
             {
+                message::unpack_buffer(unpacker, mode);
                 message::unpack_buffer(unpacker, prev_node);
                 message::unpack_buffer(unpacker, dest);
                 message::unpack_buffer(unpacker, edge_props);
+                message::unpack_buffer(unpacker, reachable);
             }
     };
 
@@ -102,10 +110,11 @@ namespace node_prog
         params.prev_node = rn;
         std::vector<std::pair<db::element::remote_node, reach_params>> next;
         if (!params.mode) { // request mode
-            if (params.dest == rn) {
+            if (params.dest.handle == rn.handle) {
                 params.mode = true;
                 params.reachable = true;
                 next.emplace_back(std::make_pair(state.prev_node, params));
+                std::cout << "True reply now\n";
                 // TODO signal deletion of state
             } else if (!state.visited) {
                 db::element::edge *e;
@@ -136,11 +145,14 @@ namespace node_prog
                 params.mode = true;
                 params.reachable = false;
                 next.emplace_back(std::make_pair(state.prev_node, params));
+                std::cout << "False reply now\n";
             }
         } else { // reply mode
+            std::cout << "Got reply\n";
             if (((state.out_count == 0) || params.reachable) && !state.reachable) {
                 state.reachable |= params.reachable;
                 next.emplace_back(std::make_pair(state.prev_node, params));
+                std::cout << "Prop reply\n";
             }
         }
         return next;

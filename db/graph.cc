@@ -659,6 +659,7 @@ runner(db::graph *G)
                 break;
 
             case message::NODE_PROG:
+                vclocks.clear();
                 message::unpack_message(*rec_msg, message::NODE_PROG, pType, vclocks);
                 request = new db::update_request(mtype, 0, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(vclocks[G->myid], unpack_and_run_node_program, G, request);

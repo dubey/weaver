@@ -21,7 +21,8 @@
 #include "repetitive_stress_client.h"
 //#include "clustering_test.h"
 #include "dijkstra_test.h"
-#include "node_prog_test.h"
+//#include "node_prog_test.h"
+#include "reach_prog_test.h"
 
 int
 main(int argc, char *argv[])

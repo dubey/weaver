@@ -23,9 +23,9 @@
 #include "common/weaver_constants.h"
 #include "common/property.h"
 #include "common/meta_element.h"
-#include "element/node.h"
-#include "element/edge.h"
-#include "element/remote_node.h"
+#include "db/element/node.h"
+#include "db/element/edge.h"
+#include "db/element/remote_node.h"
 
 #include "node_prog_type.h"
 #include "dijkstra_program.h"

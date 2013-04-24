@@ -17,8 +17,8 @@
 #include <vector>
 #include <map>
 #include <unordered_map>
-#include "element/node.h"
-#include "element/remote_node.h"
+#include "db/element/node.h"
+#include "db/element/remote_node.h"
 
 namespace node_prog
 {
