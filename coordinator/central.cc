@@ -486,8 +486,8 @@ main()
     t->detach();
 
     // initialize client msg receiving thread
-    t = new std::thread(coord_daemon_initiate, &server);
-    t->detach();
+    //t = new std::thread(coord_daemon_initiate, &server);
+    //t->detach();
 
     // call periodic cache update function
     client_msg_handler(&server);

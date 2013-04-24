@@ -323,19 +323,20 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     std::vector<uint64_t> vclocks; //needed to pass to next message
     prog_type prog_type_recvd;
 
-    printf("db ZAAAAAAAAAAAAAAAAAA\n");
+    printf("\ndb ZAAAAAAAAAAAAAAAAAA\n");
     message::unpack_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id, start_node_params);
 
     std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> batched_node_progs;
-    db::element::remote_node this_node(0, G->myid);
+    db::element::remote_node this_node(G->myid, 0);
 
     while (!start_node_params.empty()) {
         printf("going throug local next nodes loop\n");
         for (auto &handle_params : start_node_params) {
             uint64_t node_handle = handle_params.first;
             this_node.handle = handle_params.first;
+            std::cout << "This node " << this_node.handle << " " << this_node.loc << std::endl;
             // XXX todo: double check node exists
-            db::element::node* node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
+            db::element::node *node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
 
             CacheValueType *cache;
             if (G->prog_cache_exists(type, unpacked_request_id, node_handle)) {
@@ -361,7 +362,9 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                 G->insert_prog_req_state(type, unpacked_request_id, node_handle, state);
             }
 
+            std::cout << "Calling enclosed function now\n";
             auto next_node_params = enclosed_function(unpacked_request_id, *node, this_node, handle_params.second, *state, *cache); // call node program
+            G->release_node(node);
 
             for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                 // signal to send back to coordinator

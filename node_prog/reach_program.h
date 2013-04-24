@@ -104,20 +104,24 @@ namespace node_prog
             reach_node_state &state,
             reach_cache_value &cache)
     {
-        std::cout << "Reachability program\n" << std::endl;
+        std::cout << "Reachability program" << std::endl;
+        std::cout << "Node handle " << rn.handle << " node loc " << rn.loc << std::endl;
         bool false_reply = false;
-        state.prev_node = params.prev_node;
+        db::element::remote_node prev_node = params.prev_node;
         params.prev_node = rn;
         std::vector<std::pair<db::element::remote_node, reach_params>> next;
         if (!params.mode) { // request mode
+            std::cout << "Got request\n";
             if (params.dest.handle == rn.handle) {
                 params.mode = true;
                 params.reachable = true;
-                next.emplace_back(std::make_pair(state.prev_node, params));
+                next.emplace_back(std::make_pair(prev_node, params));
                 std::cout << "True reply now\n";
+                std::cout << "Prev node " << state.prev_node.handle << " " << state.prev_node.loc << std::endl;
                 // TODO signal deletion of state
             } else if (!state.visited) {
                 db::element::edge *e;
+                state.prev_node = prev_node;
                 state.visited = true;
                 for (auto &iter: n.out_edges) {
                     e = iter.second;
@@ -144,7 +148,7 @@ namespace node_prog
             if (false_reply) {
                 params.mode = true;
                 params.reachable = false;
-                next.emplace_back(std::make_pair(state.prev_node, params));
+                next.emplace_back(std::make_pair(prev_node, params));
                 std::cout << "False reply now\n";
             }
         } else { // reply mode
@@ -153,6 +157,7 @@ namespace node_prog
                 state.reachable |= params.reachable;
                 next.emplace_back(std::make_pair(state.prev_node, params));
                 std::cout << "Prop reply\n";
+                std::cout << "Prev node " << state.prev_node.handle << " " << state.prev_node.loc << std::endl;
             }
         }
         return next;
