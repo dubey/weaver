@@ -267,6 +267,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
     common::meta_element *lnode; // for migration
     size_t coord_handle; // for migration
     int new_loc, from_loc; // for migration
+    node_prog::prog_type pType;
     
     switch(m_type) {
        
@@ -299,6 +300,16 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             message::prepare_message(*msg, message::COORD_NODE_MIGRATE_ACK, server->vc.clocks->at(from_loc));
             server->update_mutex.unlock();
             server->send(from_loc, msg->buf);
+            break;
+
+        // response from a shard
+        case message::NODE_PROG:
+            message::unpack_message(*msg, message::NODE_PROG, pType, req_id); // don't unpack rest
+            server->update_mutex.lock();
+            request = server->pending.at(req_id);
+            server->update_mutex.unlock();
+            // send same message along to client
+            server->send(std::move(request->client), msg->buf);
             break;
         
         default:

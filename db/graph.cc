@@ -361,7 +361,15 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
             auto next_node_params = enclosed_function(*node, handle_params.second, *state, *cache); // call node program
 
             for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
-                batched_node_progs[res.first.loc].emplace_back(res.first.handle, std::move(res.second));
+                // signal to send back to coordinator
+                if (res.first.loc == -1){
+                    // XXX get rid of pair, without pair it is not working for some reason
+                    std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
+                    message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, unpacked_request_id, temppair);
+                    G->send_coord(msg.buf);
+                } else {
+                    batched_node_progs[res.first.loc].emplace_back(res.first.handle, std::move(res.second));
+                }
             }
         }
         start_node_params = std::move(batched_node_progs[G->myid]); // hopefully this nicely cleans up old vector, makes sure batched nodes

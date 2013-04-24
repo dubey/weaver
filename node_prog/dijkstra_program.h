@@ -13,8 +13,8 @@ namespace node_prog
     class dijkstra_params : public virtual Packable 
     {
         public:
-            db::element::remote_node source;
-            db::element::remote_node dest;
+            uint64_t source_handle;
+            uint64_t dest_handle;
             uint32_t edge_weight_name; // the key of the property which holds the weight of an an edge
             std::vector<common::property> edge_props;
             bool is_widest_path;
@@ -23,7 +23,7 @@ namespace node_prog
         public:
             virtual size_t size() const 
             {
-                size_t toRet = message::size(source) + message::size(dest);
+                size_t toRet = message::size(source_handle) + message::size(dest_handle);
                 toRet += message::size(edge_weight_name) + message::size(edge_props);
                 toRet += message::size(is_widest_path) + message::size(tentative_map_value);
                 return toRet;
@@ -31,8 +31,8 @@ namespace node_prog
 
             virtual void pack(e::buffer::packer& packer) const 
             {
-                message::pack_buffer(packer, source);
-                message::pack_buffer(packer, dest);
+                message::pack_buffer(packer, source_handle);
+                message::pack_buffer(packer, dest_handle);
                 message::pack_buffer(packer, edge_weight_name);
                 message::pack_buffer(packer, edge_props);
                 message::pack_buffer(packer, is_widest_path);
@@ -40,8 +40,8 @@ namespace node_prog
 
             virtual void unpack(e::unpacker& unpacker)
             {
-                message::unpack_buffer(unpacker, source);
-                message::unpack_buffer(unpacker, dest);
+                message::unpack_buffer(unpacker, source_handle);
+                message::unpack_buffer(unpacker, dest_handle);
                 message::unpack_buffer(unpacker, edge_weight_name);
                 message::unpack_buffer(unpacker, edge_props);
                 message::unpack_buffer(unpacker, is_widest_path);
@@ -77,8 +77,14 @@ namespace node_prog
             dijkstra_node_state &state,
             dijkstra_cache_value &cache)
     {
-        std::cout << "OMG ITS RUNNING THE NODE PROGRAM" << std::endl;
         std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
+        if (n.get_creat_time() == params.dest_handle){
+            params.edge_weight_name = 42;
+            std::cout << "FOUND DEST, RETURNING" << std::endl;
+            next.emplace_back(std::make_pair(db::element::remote_node(-1, 1337), params));
+            return next;
+        }
+        std::cout << "OMG ITS RUNNING THE NODE PROGRAM" << std::endl;
         for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
             next.emplace_back(std::make_pair(possible_nbr.second->nbr, params));
         }

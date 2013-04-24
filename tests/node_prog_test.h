@@ -69,7 +69,11 @@ node_prog_test()
 
     std::vector<std::pair<uint64_t, node_prog::dijkstra_params>> initial_args;
     initial_args.emplace_back(std::make_pair(nodes[0], node_prog::dijkstra_params()));
+    initial_args[0].second.dest_handle = nodes[5];
+    initial_args[0].second.edge_weight_name = 41;
     node_prog::dijkstra_params* res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
+    assert(res->edge_weight_name == 42);
+    delete res;
     /*
     auto retpair = c.shortest_path_request(nodes[0], nodes[5], weight_label, edge_props);
     std::cout <<retpair.first <<std::endl;

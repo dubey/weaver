@@ -224,7 +224,6 @@ template <typename ParamsType>
 inline ParamsType *
 client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args)
 {
-    ParamsType *toRet = new ParamsType(); // make sure client frees
     busybee_returncode ret;
     message::message msg(message::CLIENT_NODE_PROG_REQ);
     std::cout << "client sent type " << prog_to_run << std::endl;
@@ -232,10 +231,14 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
     send_coord(msg.buf);
     if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS) {
         std::cerr << "msg recv error: " << ret << std::endl;
-        delete toRet;
         return NULL;
     }
-    //message::unpack_message(msg, message::CLIENT_NODE_PROG_REPLY, *toRet);
+    uint64_t ignore_req_id;
+    node_prog::prog_type ignore;
+    std::pair<uint64_t, ParamsType> tempPair;
+    message::unpack_message(msg, message::NODE_PROG, ignore, ignore_req_id, tempPair);
+
+    ParamsType *toRet = new ParamsType(tempPair.second); // make sure client frees
     return toRet;
 }
 
