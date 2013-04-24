@@ -31,6 +31,7 @@
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
 #include "node_prog/dijkstra_program.h"
+#include "node_prog/reach_program.h"
 
 // migration methods
 void migrate_node_step1(db::graph *G, uint64_t node_handle, int new_shard);
@@ -313,8 +314,8 @@ unpack_and_run_node_program(db::graph *G, void *req)
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-void
-node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_and_run_db(db::graph *G, message::message &msg)
+void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
+    unpack_and_run_db(db::graph *G, message::message &msg)
 {
     // unpack some start params from msg:
     std::vector<std::pair<uint64_t, ParamsType>> start_node_params;
@@ -326,11 +327,13 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
     message::unpack_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id, start_node_params);
 
     std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> batched_node_progs;
+    db::element::remote_node this_node(0, G->myid);
 
     while (!start_node_params.empty()) {
         printf("going throug local next nodes loop\n");
         for (auto &handle_params : start_node_params) {
             uint64_t node_handle = handle_params.first;
+            this_node.handle = handle_params.first;
             // XXX todo: double check node exists
             db::element::node* node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
 
@@ -358,7 +361,7 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
                 G->insert_prog_req_state(type, unpacked_request_id, node_handle, state);
             }
 
-            auto next_node_params = enclosed_function(*node, handle_params.second, *state, *cache); // call node program
+            auto next_node_params = enclosed_function(unpacked_request_id, *node, this_node, handle_params.second, *state, *cache); // call node program
 
             for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                 batched_node_progs[res.first.loc].emplace_back(res.first.handle, std::move(res.second));
@@ -384,8 +387,8 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
 
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-void
-node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_and_start_coord(coordinator::central *server, message::message &msg, std::shared_ptr<coordinator::pending_req> request)
+void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
+    unpack_and_start_coord(coordinator::central *server, message::message &msg, std::shared_ptr<coordinator::pending_req> request)
 {
 }
 

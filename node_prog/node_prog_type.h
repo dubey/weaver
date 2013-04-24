@@ -33,7 +33,12 @@ namespace node_prog
     struct node_function_type
     {
         public:
-            typedef std::vector<std::pair<db::element::remote_node, params_type>> (*value_type)(db::element::node&, params_type&, node_state_type&, cache_value_type&);
+            typedef std::vector<std::pair<db::element::remote_node, params_type>> (*value_type)(uint64_t, // req_id
+                db::element::node&, // this node
+                db::element::remote_node&, // this remote node
+                params_type&,
+                node_state_type&,
+                cache_value_type&);
     };
 
     class Packable 

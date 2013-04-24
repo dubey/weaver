@@ -29,6 +29,7 @@
 
 #include "node_prog_type.h"
 #include "dijkstra_program.h"
+#include "reach_program.h"
 
 namespace coordinator
 {
@@ -84,8 +85,8 @@ namespace node_prog
     };
     
     std::map<prog_type, node_program*> programs = {
-        {DIJKSTRA, new particular_node_program<node_prog::dijkstra_params, node_prog::dijkstra_node_state, node_prog::dijkstra_cache_value>(DIJKSTRA, node_prog::dijkstra_node_program)}, 
-        {REACHABILITY, NULL}
+        {REACHABILITY, new particular_node_program<node_prog::reach_params, node_prog::reach_node_state, node_prog::reach_cache_value>(REACHABILITY, node_prog::reach_node_program)},
+        {DIJKSTRA, new particular_node_program<node_prog::dijkstra_params, node_prog::dijkstra_node_state, node_prog::dijkstra_cache_value>(DIJKSTRA, node_prog::dijkstra_node_program)} 
     };
 } 
 

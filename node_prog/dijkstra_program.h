@@ -1,11 +1,24 @@
+/*
+ * ===============================================================
+ *    Description:  Dijkstra shortest path program.
+ *
+ *        Created:  Sunday 21 April 2013 11:00:03  EDT
+ *
+ *         Author:  Ayush Dubey, Greg Hill
+ *                  dubey@cs.cornell.edu, gdh39@cornell.edu
+ *
+ * Copyright (C) 2013, Cornell University, see the LICENSE file
+ *                     for licensing agreement
+ * ================================================================
+ */
+
 #ifndef __DIJKSTRA_PROG__
 #define __DIJKSTRA_PROG__
 
 #include <vector>
 
-#include "element/node.h"
-#include "element/remote_node.h"
 #include "common/message.h"
+#include "db/element/node.h"
 #include "db/element/remote_node.h"
 
 namespace node_prog
@@ -72,7 +85,9 @@ namespace node_prog
     };
 
     std::vector<std::pair<db::element::remote_node, dijkstra_params>> 
-    dijkstra_node_program(db::element::node &n,
+    dijkstra_node_program(uint64_t req_id,
+            db::element::node &n,
+            db::element::remote_node &rn,
             dijkstra_params &params,
             dijkstra_node_state &state,
             dijkstra_cache_value &cache)

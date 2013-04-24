@@ -200,8 +200,8 @@ delete_end(coordinator::central *server, std::shared_ptr<coordinator::pending_re
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-void
-node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_and_start_coord(coordinator::central *server, message::message &msg, std::shared_ptr<coordinator::pending_req> request)
+void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
+    unpack_and_start_coord(coordinator::central *server, message::message &msg, std::shared_ptr<coordinator::pending_req> request)
 {
     node_prog::prog_type ignore;
     printf("coordinator ZAAAAAAAAAAAAAAAAAA\n");
@@ -212,8 +212,8 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
     std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> initial_batches; // map from locations to a list of start_node_params to send to that shard
     server->update_mutex.lock();
 
-    for (std::pair<uint64_t, ParamsType>& node_params_pair : initial_args) {
-        if (check_elem(server, node_params_pair.first, true)){
+    for (std::pair<uint64_t, ParamsType> &node_params_pair : initial_args) {
+        if (check_elem(server, node_params_pair.first, true)) {
             std::cerr << "one of the arg nodes has been deleted, cannot perform request" << std::endl;
             /*
                message::message msg;

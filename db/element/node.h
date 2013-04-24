@@ -29,6 +29,7 @@
 namespace db
 {
 class update_request;
+
 namespace element
 {
     class node : public element
