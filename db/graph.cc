@@ -316,6 +316,7 @@ NodeStateType& get_node_state(db::graph *G, node_prog::prog_type pType, uint64_t
             toRet = new NodeStateType();
             G->insert_prog_req_state(pType, req_id, node_handle, toRet);
         }
+        std::cout << "get node state " << toRet << std::endl;
         return *toRet;
 }
 

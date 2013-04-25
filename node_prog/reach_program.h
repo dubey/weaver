@@ -104,8 +104,9 @@ namespace node_prog
             std::function<reach_node_state&()> state_getter,
             std::function<reach_cache_value&()> cache_getter)
     {
-        reach_node_state state = state_getter();
+        reach_node_state &state = state_getter();
         std::cout << "Reachability program, state = " << &state << ", req_id = " << req_id << std::endl;
+        std::cout << "Current state at beginning: visited " << state.visited << ", prev_node: " << state.prev_node.handle << "," << state.prev_node.loc << ", count: " << state.out_count << ", reachable " <<  state.reachable << std::endl; 
         std::cout << "Node handle " << rn.handle << " node loc " << rn.loc << std::endl;
         bool false_reply = false;
         db::element::remote_node prev_node = params.prev_node;

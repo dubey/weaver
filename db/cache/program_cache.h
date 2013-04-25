@@ -41,13 +41,13 @@ namespace cache
 
         public:
             bool entry_exists(node_prog::prog_type t, uint64_t node_handle);
-            node_prog::Deletable* get_cache(node_prog::prog_type t, uint64_t node_handle);
+            std::vector<node_prog::Deletable*> get_cache(node_prog::prog_type t, uint64_t node_handle);
             void put_cache(uint64_t req_id, node_prog::prog_type t, uint64_t node_handle, node_prog::Deletable *new_cache);
             void delete_cache(uint64_t req_id);
 
         private:
             bool entry_exists(node_prog::prog_type t, uint64_t node_handle, prog_map &pc);
-            node_prog::Deletable* get_cache(node_prog::prog_type t, uint64_t node_handle, prog_map &pc);
+            std::vector<node_prog::Deletable*> get_cache(node_prog::prog_type t, uint64_t node_handle, prog_map &pc);
             void put_cache(uint64_t req_id, node_prog::prog_type t, uint64_t node_handle, node_prog::Deletable *new_cache, prog_map &pc, invalid_map &it);
             void delete_cache(uint64_t req_id, prog_map &pc, invalid_map &it);
     };
@@ -94,7 +94,7 @@ namespace cache
         return (nmap_iter != nmap.end());
     }
 
-    inline node_prog::Deletable*
+    inline std::vector<node_prog::Deletable*>
     program_cache :: get_cache(node_prog::prog_type t, uint64_t node_handle, prog_map &pc)
     {
         node_prog::Deletable *cache = NULL;
