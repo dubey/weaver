@@ -65,6 +65,27 @@ namespace cache
     }
 
     inline bool
+    program_cache :: entry_exists(node_prog::prog_type t, uint64_t node_handle)
+    {
+    }
+
+    inline node_prog::Deletable*
+    program_cache :: get_cache(node_prog::prog_type t, uint64_t node_handle)
+    {
+        return NULL;
+    }
+
+    inline void
+    program_cache :: put_cache(uint64_t req_id, node_prog::prog_type t, uint64_t node_handle, node_prog::Deletable *new_cache)
+    {
+    }
+
+    inline void
+    program_cache :: delete_cache(uint64_t req_id)
+    {
+    }
+
+    inline bool
     program_cache :: entry_exists(node_prog::prog_type t, uint64_t node_handle, prog_map &pc)
     {
         node_map &nmap = pc.at(t);
