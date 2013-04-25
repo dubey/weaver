@@ -53,16 +53,20 @@ namespace state
     inline bool
     program_state :: state_exists_nolock(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle)
     {
+        mutex.lock();
         req_map &rmap = prog_state.at(t);
         req_map::iterator rmap_iter = rmap.find(req_id);
         if (rmap_iter == rmap.end()) {
+            mutex.unlock();
             return false;
         }
         node_map &nmap = rmap.at(req_id);
         node_map::iterator nmap_iter = nmap.find(node_handle);
         if (nmap_iter == nmap.end()) {
+            mutex.unlock();
             return false;
         } else {
+            mutex.unlock();
             return true;
         }
     }
