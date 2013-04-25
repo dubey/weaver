@@ -39,8 +39,7 @@ namespace coordinator
     class central;
 }
 
-void reachability_request_end(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request);
-void reachability_request_propagate(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request);
+void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request);
 
 namespace coordinator
 {
@@ -80,27 +79,18 @@ namespace coordinator
             std::vector<std::shared_ptr<pending_req>> dependent_traversals;
             std::unique_ptr<std::vector<uint64_t>> src_node;
             std::unique_ptr<std::vector<uint64_t>> vector_clock;
+            // node programs
+            std::unique_ptr<message::message> req_msg;
+            std::unique_ptr<message::message> reply_msg;
             std::vector<uint64_t> ignore_cache;
             std::shared_ptr<pending_req> del_request;
-            // used for dijkstra requests
-            bool is_widest;
-            std::unique_ptr<std::vector<std::pair<size_t, size_t>>> path;
-            // request reply
-            bool done;
-            bool reachable;
-            size_t clustering_numerator;
-            size_t clustering_denominator;
-            size_t cost;
-            uint64_t cached_req_id;
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids;
-
-            // for node programs
             node_prog::prog_type pType;
+            bool done;
 
         pending_req(message::msg_type type)
             : req_type(type)
             , done(false)
-            , cached_req_id(0)
             {
             }
     };
@@ -264,7 +254,7 @@ namespace coordinator
         assert(pend_iter != pending_delete_requests.end());
         for (auto &dep_req: (**pend_iter).dependent_traversals) {
             if (dep_req->done) {
-                //reachability_request_end(this, dep_req); // TODO this is bad, should be processed by different threads.
+                end_node_prog(this, dep_req); // TODO this is bad, should be processed by different threads.
             }
         }
         pending_delete_requests.erase(pend_iter);

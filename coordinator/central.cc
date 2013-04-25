@@ -207,7 +207,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     printf("coordinator ZAAAAAAAAAAAAAAAAAA\n");
     std::vector<std::pair<uint64_t, ParamsType>> initial_args;
 
-    message::unpack_message(msg, message::CLIENT_NODE_PROG_REQ, request->client->port, ignore, initial_args);
+    message::unpack_message(*request->req_msg, message::CLIENT_NODE_PROG_REQ, request->client->port, ignore, initial_args);
 
     std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> initial_batches; // map from locations to a list of start_node_params to send to that shard
     server->update_mutex.lock();
@@ -215,39 +215,55 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     for (std::pair<uint64_t, ParamsType> &node_params_pair : initial_args) {
         if (check_elem(server, node_params_pair.first, true)) {
             std::cerr << "one of the arg nodes has been deleted, cannot perform request" << std::endl;
-            /*
-               message::message msg;
-               message::prepare_message(msg, message::CLIENT_REPLY, false);
-               server->send(std::move(request->client), msg.buf);
-             */
+            /* TODO send back error msg */
             return;
         }
         common::meta_element *me = server->nodes.at(node_params_pair.first);
         initial_batches[me->get_loc()].emplace_back(std::make_pair(node_params_pair.first, std::move(node_params_pair.second)));
     }
     request->vector_clock.reset(new std::vector<uint64_t>(*server->vc.clocks));
-    /*
-       request->out_count = server->last_del;
-       request->out_count->cnt++;
-     */
-
+    request->del_request = server->get_last_del_req(request);
+    request->out_count = server->last_del;
+    request->out_count->cnt++;
     request->req_id = ++server->request_id;
-
     server->pending.insert(std::make_pair(request->req_id, request));
-    /*
-       std::cout << "Reachability request number " << request->req_id << " from source"
-       << " request->elem " << request->elem1 << " " << me1->get_loc() 
-       << " to destination request->elem " << request->elem2 << " " 
-       << me2->get_loc() << std::endl;
-     */
 
     message::message msg_to_send;
     for (auto &batch_pair : initial_batches) {
+        // TODO add ignore_cache and cached_ids
         message::prepare_message(msg_to_send, message::NODE_PROG, request->pType, *request->vector_clock, 
                 request->req_id, batch_pair.second);
-        server->send(batch_pair.first, msg_to_send.buf); // later change to send without update mutex lock
+        server->send(batch_pair.first, msg_to_send.buf); // TODO later change to send without update mutex lock
     }
     server->update_mutex.unlock();
+}
+
+// caution: assuming we hold server->mutex
+void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request)
+{
+    bool done = true;
+    uint64_t req_id = request->req_id;
+    request->out_count->cnt--;
+    for (uint64_t cached_id: *request->cached_req_ids) {
+        if (!server->is_deleted_cache_id(cached_id)) {
+            server->add_good_cache_id(cached_id);
+        } else {
+            // request was served based on cache value that should be
+            // invalidated; restarting request
+            done = false;
+            request->ignore_cache.emplace_back(cached_id);
+            server->add_bad_cache_id(cached_id);
+            request->del_request.reset();
+            server->update_mutex.unlock();
+            node_prog::programs.at(request->pType)->unpack_and_start_coord(server, *request->req_msg, request);
+        }
+    }
+    server->pending.erase(req_id);
+    if (done) {
+        server->update_mutex.unlock();
+        // send same message along to client
+        server->send(std::move(request->client), request->reply_msg->buf);
+    }
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
@@ -263,9 +279,10 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
 {
     uint64_t req_id, cached_req_id;
     std::shared_ptr<coordinator::pending_req>request;
-    std::unique_ptr<std::vector<size_t>> cached_req_ids; // for reply
+    std::vector<uint64_t> vclock; // for reply
+    std::unique_ptr<std::vector<uint64_t>> cached_req_ids; // for reply
     common::meta_element *lnode; // for migration
-    size_t coord_handle; // for migration
+    uint64_t coord_handle; // for migration
     int new_loc, from_loc; // for migration
     node_prog::prog_type pType;
     
@@ -274,7 +291,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
         case message::NODE_DELETE_ACK:
         case message::EDGE_DELETE_ACK:
         case message::EDGE_DELETE_PROP_ACK:
-            cached_req_ids.reset(new std::vector<size_t>());
+            cached_req_ids.reset(new std::vector<uint64_t>());
             message::unpack_message(*msg, m_type, req_id, *cached_req_ids);
             server->update_mutex.lock();
             request = server->pending.at(req_id);
@@ -304,12 +321,22 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
 
         // response from a shard
         case message::NODE_PROG:
-            message::unpack_message(*msg, message::NODE_PROG, pType, req_id); // don't unpack rest
+            cached_req_ids.reset(new std::vector<uint64_t>());
+            message::unpack_message(*msg, message::NODE_PROG, pType, req_id, vclock, *cached_req_ids); // don't unpack rest
             server->update_mutex.lock();
             request = server->pending.at(req_id);
-            server->update_mutex.unlock();
-            // send same message along to client
-            server->send(std::move(request->client), msg->buf);
+            request->cached_req_ids = std::move(cached_req_ids);
+            request->reply_msg = std::move(msg);
+            if (request->del_request) {
+                if (request->del_request->done) {
+                    end_node_prog(server, request);
+                } else {
+                    request->done = true;
+                    server->update_mutex.unlock();
+                }
+            } else {
+                end_node_prog(server, request);
+            }
             break;
         
         default:
@@ -391,7 +418,8 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
         case message::CLIENT_NODE_PROG_REQ:
             message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, request->client->port, request->pType);
             std::cout << "server got type " << request->pType << std::endl;
-            node_prog::programs.at(request->pType)->unpack_and_start_coord(server, *msg, request);
+            request->req_msg = std::move(msg);
+            node_prog::programs.at(request->pType)->unpack_and_start_coord(server, *request->req_msg, request);
             break;
 
         default:
@@ -477,7 +505,6 @@ main()
 {
     coordinator::central server;
     std::thread *t;
-    //std::set_terminate(debug_terminate);
     
     std::cout << "Weaver: coordinator" << std::endl;
 
