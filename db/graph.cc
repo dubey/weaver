@@ -441,7 +441,7 @@ std::function<void()>
                 if (res.first.loc == -1){
                     // XXX get rid of pair, without pair it is not working for some reason
                     std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
-                    message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, unpacked_request_id, temppair, dirty_cache_ids);
+                    message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, unpacked_request_id, temppair, dirty_cache_ids, invalid_cache_ids);
                     G->send_coord(msg.buf);
                 } else {
                     batched_node_progs[res.first.loc].emplace_back(res.first.handle, std::move(res.second));
