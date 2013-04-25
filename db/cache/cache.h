@@ -24,6 +24,8 @@
 
 #include "common/property.h"
 
+#include "node_prog/node_prog_type.h"
+
 namespace std
 {
     template <>
@@ -40,7 +42,81 @@ namespace std
 
 namespace cache
 {
-    class cached_object
+    po6::threads::mutex cache_mutex;
+
+    // map from prog_type to node handle to req id to cache value
+    std::unordered_map<node_prog::prog_type, std::unordered_map<uint64_t, std::unordered_map<uint64_t, node_prog::CacheValueBase *>>> ctable;
+
+    // map from prog_type to req_id to list of nodes that have a cache value for that req_id
+    std::unordered_map<node_prog::prog_type, std::unordered_map<uint64_t, std::vector<uint64_t>>> delete_table;
+
+    // XXX later change this to iterator
+    std::vector<node_prog::CacheValueBase *> get_prog_cache(node_prog::prog_type pType, uint64_t node_handle, uint64_t req_id, std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t>& ignore_set){
+        std::vector<node_prog::CacheValueBase *> toRet;
+
+        cache_mutex.lock();
+        if ((ctable.count(pType) > 0) && (ctable[pType].count(node_handle) > 0)){
+            for (std::pair<const uint64_t, node_prog::CacheValueBase *> &cval : ctable[pType][node_handle]){
+                // dont return if cache value is for later request or is in ignore set
+                if (cval.first > req_id || ignore_set.count(cval.first) == 0){ 
+                    toRet.push_back(cval.second);
+                    cval.second->set_dirty_list_ptr(dirty_list_ptr); // so when they call mark it adds its req_id to the right vector
+                }
+            }
+        }
+        cache_mutex.unlock();
+        return std::move(toRet);
+    }
+
+    bool prog_cache_exists(node_prog::prog_type pType, uint64_t node_handle, uint64_t req_id){
+        cache_mutex.lock();
+        bool toRet = (ctable.count(pType) > 0) && (ctable[pType].count(node_handle) > 0) && (ctable[pType][node_handle].count(req_id) > 0);
+        cache_mutex.unlock();
+        return toRet;
+    }
+
+    node_prog::CacheValueBase * prog_cache_single_get(node_prog::prog_type pType, uint64_t node_handle, uint64_t req_id){
+        cache_mutex.lock();
+node_prog::CacheValueBase *toRet = ctable[pType][node_handle][req_id];
+        cache_mutex.unlock();
+        return toRet;
+    }
+
+    void prog_cache_insert(node_prog::prog_type pType, uint64_t node_handle, uint64_t req_id, node_prog::CacheValueBase * toAdd){
+        cache_mutex.lock();
+        if (ctable.count(pType) == 0){
+            ctable.emplace(pType, std::unordered_map<uint64_t, std::unordered_map<uint64_t, node_prog::CacheValueBase *>>());
+        }
+        if (ctable[pType].count(node_handle) == 0){
+            ctable[pType].emplace(node_handle, std::unordered_map<uint64_t, node_prog::CacheValueBase *>());
+        }
+        ctable[pType][node_handle].emplace(req_id, toAdd);
+
+        // add to delete table as well for invalidations
+        if (delete_table.count(pType) == 0){
+            delete_table.emplace(pType, std::unordered_map<uint64_t, std::vector<uint64_t>>());
+        }
+        if (delete_table[pType].count(req_id) == 0){
+            delete_table[pType].emplace(req_id, std::vector<uint64_t>());
+        }
+        delete_table[pType][req_id].push_back(node_handle);
+
+        cache_mutex.unlock();
+    }
+
+    void prog_cache_invalidate(node_prog::prog_type pType, uint64_t req_id){
+        cache_mutex.lock();
+        if (delete_table.count(pType) == 0 || delete_table[pType].count(req_id) == 0){
+            return;
+        }
+        for (uint64_t node_handle : delete_table[pType][req_id]){
+            ctable[pType][node_handle].erase(req_id); // XXX not pos this calls the destructor
+        }
+        cache_mutex.unlock();
+    }
+
+    /*
+       class cached_object
     {
         public:
             // "nodes" is a map from local node handles to the         
@@ -292,6 +368,7 @@ namespace cache
         }
         cache_mutex.unlock();
     }
+    */
 }
 
 #endif //__CACHE__

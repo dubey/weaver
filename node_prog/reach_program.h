@@ -87,7 +87,7 @@ namespace node_prog
         }
     };
 
-    struct reach_cache_value : Deletable 
+    struct reach_cache_value : CacheValueBase 
     {
         int dummy;
 
@@ -102,7 +102,8 @@ namespace node_prog
             db::element::remote_node &rn,
             reach_params &params,
             std::function<reach_node_state&()> state_getter,
-            std::function<reach_cache_value&()> cache_getter)
+            std::function<reach_cache_value&()> cache_getter,
+            std::function<std::vector<reach_cache_value *>()> cached_values_getter)
     {
         reach_node_state state = state_getter();
         std::cout << "Reachability program" << std::endl;
