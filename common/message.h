@@ -26,7 +26,7 @@
 #include "common/vclock.h"
 #include "unordered_set"
 #include "unordered_map"
-#include "db/cache/cache.h" //so we get std::hash override for location
+//#include "db/cache/cache.h" //so we get std::hash override for location
 #include "db/element/node.h"
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"

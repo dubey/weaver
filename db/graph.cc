@@ -389,20 +389,17 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     std::function<CacheValueType&()> cache_value_getter;
 
     while (!start_node_params.empty()) {
-        printf("going throug local next nodes loop\n");
         for (auto &handle_params : start_node_params) {
             node_handle = handle_params.first;
             this_node.handle = handle_params.first;
-            std::cout << "This node " << this_node.handle << " " << this_node.loc << std::endl;
             // XXX todo: double check node exists
             db::element::node *node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
 
             node_state_getter = std::bind(get_node_state<NodeStateType>, G, prog_type_recvd, unpacked_request_id, node_handle);
             cache_value_getter = std::bind(get_cache_value<CacheValueType>, G, prog_type_recvd, unpacked_request_id, node_handle);
-
-            std::cout << "Calling enclosed function now\n";
             // call node program
             auto next_node_params = enclosed_function(unpacked_request_id, *node, this_node, handle_params.second, node_state_getter, cache_value_getter); 
+            
             G->release_node(node);
 
             for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
