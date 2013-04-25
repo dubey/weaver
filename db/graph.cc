@@ -302,6 +302,42 @@ handle_cache_update(db::graph *G, std::unique_ptr<message::message> msg)
     std::cout << "Permanent delete, id = " << perm_del_id << std::endl;
 }
 
+template <typename NodeStateType>
+NodeStateType& get_node_state(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle){
+        NodeStateType *toRet = new NodeStateType();
+        if (G->prog_req_state_exists(pType, req_id, node_handle)) {
+            std::cout << "geting existing NodeStateType" << std::endl;
+            toRet = dynamic_cast<NodeStateType *>(G->fetch_prog_req_state(pType, req_id, node_handle));
+            if (toRet == NULL) {
+                // dynamic_cast failed, NodeStateType needs to extend Deletable
+                std::cerr << "NodeStateType needs to extend Deletable" << std::endl;
+            }
+        } else {
+            std::cout << "making new NodeStateType" << std::endl;
+            toRet = new NodeStateType();
+            G->insert_prog_req_state(pType, req_id, node_handle, toRet);
+        }
+        return *toRet;
+}
+
+template <typename CacheValueType>
+CacheValueType& get_cache_value(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle){
+    CacheValueType *cache;
+
+    if (G->prog_cache_exists(pType, req_id, node_handle)) {
+        cache = dynamic_cast<CacheValueType *>(G->fetch_prog_cache(pType, req_id, node_handle));
+        if (cache == NULL) {
+            // dynamic_cast failed, CacheValueType needs to extend Deletable
+            std::cerr << "CacheValueType needs to extend Deletable" << std::endl;
+        }
+    } else {
+        cache = new CacheValueType();
+        G->insert_prog_cache(pType, req_id, node_handle, cache);
+    }
+
+    return *cache;
+}
+
 void
 unpack_and_run_node_program(db::graph *G, void *req)
 {
@@ -328,42 +364,45 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> batched_node_progs;
     db::element::remote_node this_node(G->myid, 0);
+    uint64_t node_handle;
+
+    /*
+    std::function<NodeStateType&()> node_state_getter = [G, prog_type_recvd, unpacked_request_id, &node_handle]()
+    {
+        NodeStateType *toRet = new NodeStateType();
+        if (G->prog_req_state_exists(prog_type_recvd, unpacked_request_id, node_handle)) {
+            toRet = dynamic_cast<NodeStateType *>(G->fetch_prog_req_state(prog_type_recvd, unpacked_request_id, node_handle));
+            if (toRet == NULL) {
+                // dynamic_cast failed, NodeStateType needs to extend Deletable
+                std::cerr << "NodeStateType needs to extend Deletable" << std::endl;
+            }
+        } else {
+            toRet = new NodeStateType();
+            G->insert_prog_req_state(prog_type_recv, unpacked_request_id, node_handle, toRet);
+        }
+        NodeStateType & ret = (*toRet);
+        return ret;
+    };
+     */
+
+    std::function<NodeStateType&()> node_state_getter;
+    std::function<CacheValueType&()> cache_value_getter;
 
     while (!start_node_params.empty()) {
         printf("going throug local next nodes loop\n");
         for (auto &handle_params : start_node_params) {
-            uint64_t node_handle = handle_params.first;
+            node_handle = handle_params.first;
             this_node.handle = handle_params.first;
             std::cout << "This node " << this_node.handle << " " << this_node.loc << std::endl;
             // XXX todo: double check node exists
             db::element::node *node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
 
-            CacheValueType *cache;
-            if (G->prog_cache_exists(type, unpacked_request_id, node_handle)) {
-                cache = dynamic_cast<CacheValueType *>(G->fetch_prog_cache(type, unpacked_request_id, node_handle));
-                if (cache == NULL) {
-                    // dynamic_cast failed, CacheValueType needs to extend Deletable
-                    std::cerr << "CacheValueType needs to extend Deletable" << std::endl;
-                }
-            } else {
-                cache = new CacheValueType();
-                G->insert_prog_cache(type, unpacked_request_id, node_handle, cache);
-            }
-
-            NodeStateType *state;
-            if (G->prog_req_state_exists(type, unpacked_request_id, node_handle)) {
-                state = dynamic_cast<NodeStateType *>(G->fetch_prog_req_state(type, unpacked_request_id, node_handle));
-                if (state == NULL) {
-                    // dynamic_cast failed, NodeStateType needs to extend Deletable
-                    std::cerr << "NodeStateType needs to extend Deletable" << std::endl;
-                }
-            } else {
-                state = new NodeStateType();
-                G->insert_prog_req_state(type, unpacked_request_id, node_handle, state);
-            }
+            node_state_getter = std::bind(get_node_state<NodeStateType>, G, prog_type_recvd, unpacked_request_id, node_handle);
+            cache_value_getter = std::bind(get_cache_value<CacheValueType>, G, prog_type_recvd, unpacked_request_id, node_handle);
 
             std::cout << "Calling enclosed function now\n";
-            auto next_node_params = enclosed_function(unpacked_request_id, *node, this_node, handle_params.second, *state, *cache); // call node program
+            // call node program
+            auto next_node_params = enclosed_function(unpacked_request_id, *node, this_node, handle_params.second, node_state_getter, cache_value_getter); 
             G->release_node(node);
 
             for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {

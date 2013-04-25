@@ -101,9 +101,10 @@ namespace node_prog
             db::element::node &n,
             db::element::remote_node &rn,
             reach_params &params,
-            reach_node_state &state,
-            reach_cache_value &cache)
+            std::function<reach_node_state&()> state_getter,
+            std::function<reach_cache_value&()> cache_getter)
     {
+        reach_node_state state = state_getter();
         std::cout << "Reachability program" << std::endl;
         std::cout << "Node handle " << rn.handle << " node loc " << rn.loc << std::endl;
         bool false_reply = false;

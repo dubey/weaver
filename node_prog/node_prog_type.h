@@ -37,8 +37,8 @@ namespace node_prog
                 db::element::node&, // this node
                 db::element::remote_node&, // this remote node
                 params_type&,
-                node_state_type&,
-                cache_value_type&);
+                std::function<node_state_type&()>,
+                std::function<cache_value_type&()>);
     };
 
     class Packable 

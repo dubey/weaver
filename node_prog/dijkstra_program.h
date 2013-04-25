@@ -89,8 +89,8 @@ namespace node_prog
             db::element::node &n,
             db::element::remote_node &rn,
             dijkstra_params &params,
-            dijkstra_node_state &state,
-            dijkstra_cache_value &cache)
+            std::function<dijkstra_node_state&()> state_getter,
+            std::function<dijkstra_cache_value&()> cache_getter)
     {
         std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
         if (n.get_creat_time() == params.dest_handle){
