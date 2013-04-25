@@ -30,11 +30,10 @@
 #include "common/property.h"
 #include "element/node.h"
 #include "element/edge.h"
-#include "cache/cache.h"
 #include "threadpool/threadpool.h"
-#include "request_objects.h"
 #include "node_prog/node_prog_type.h"
-#include "db/state/program_state.h"
+#include "cache/program_cache.h"
+#include "state/program_state.h"
 
 namespace db
 {
@@ -211,14 +210,11 @@ namespace db
             node_prog::Deletable* fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
             void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::Deletable *toAdd);
             // prog_type-> map from node handle to map from request_id to cache values -- used to do cache read/updates
-            std::unordered_map<node_prog::prog_type, std::unordered_map<uint64_t, std::unordered_map<uint64_t, node_prog::Deletable*>>> node_prog_cache; 
-            bool prog_cache_exists(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
-            node_prog::Deletable* fetch_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
+            cache::program_cache node_prog_cache;
+            bool prog_cache_exists(node_prog::prog_type t, uint64_t local_node_handle);
+            node_prog::Deletable* fetch_prog_cache(node_prog::prog_type t, uint64_t local_node_handle);
             void insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::Deletable *toAdd);
-            // prog_type-> map from request_id to list of nodes that contain that a cache for that request_id -- used to do cache invalidation on lookup map
-            std::unordered_map<node_prog::prog_type, std::unordered_map<uint64_t, std::vector<uint64_t>>> node_prog_cache_use_list; 
-            void invalidate_prog_cache(node_prog::prog_type t, uint64_t request_id);
-            
+            void invalidate_prog_cache(uint64_t request_id);
     };
 
     inline
@@ -732,21 +728,28 @@ namespace db
     }
 
     inline bool
-    graph :: prog_cache_exists(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle)
+    graph :: prog_cache_exists(node_prog::prog_type t, uint64_t node_handle)
     {
-        return false;
+        return node_prog_cache.entry_exists(t, node_handle);
     }
 
     inline node_prog::Deletable*
-    graph :: fetch_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle)
+    graph :: fetch_prog_cache(node_prog::prog_type t, uint64_t node_handle)
     {
-        return NULL;
+        return node_prog_cache.get_cache(t, node_handle);
     }
 
     inline void
-    graph :: insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::Deletable* toAdd)
+    graph :: insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t node_handle, node_prog::Deletable* toAdd)
     {
+        node_prog_cache.put_cache(request_id, t, node_handle, toAdd);
         return;
+    }
+
+    inline void
+    graph :: invalidate_prog_cache(uint64_t request_id)
+    {
+        node_prog_cache.delete_cache(request_id);
     }
 
 } //namespace db

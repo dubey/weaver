@@ -339,8 +339,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             db::element::node *node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
 
             CacheValueType *cache;
-            if (G->prog_cache_exists(type, unpacked_request_id, node_handle)) {
-                cache = dynamic_cast<CacheValueType *>(G->fetch_prog_cache(type, unpacked_request_id, node_handle));
+            if (G->prog_cache_exists(type, node_handle)) {
+                cache = dynamic_cast<CacheValueType *>(G->fetch_prog_cache(type, node_handle));
                 if (cache == NULL) {
                     // dynamic_cast failed, CacheValueType needs to extend Deletable
                     std::cerr << "CacheValueType needs to extend Deletable" << std::endl;
