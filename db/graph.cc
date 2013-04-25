@@ -357,9 +357,15 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     uint64_t unpacked_request_id;
     std::vector<uint64_t> vclocks; //needed to pass to next message
     prog_type prog_type_recvd;
+    std::vector<uint64_t> deleted_nodes;
+    uint64_t cur_node;
 
     printf("\ndb ZAAAAAAAAAAAAAAAAAA\n");
+    // TODO unpack ignore_cache, cached_ids, deleted_nodes, cur_node (corresponding to deleted_nodes)
     message::unpack_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id, start_node_params);
+
+    for (uint64_t del_node: deleted_nodes) {
+    }
 
     std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> batched_node_progs;
     db::element::remote_node this_node(G->myid, 0);
@@ -393,11 +399,15 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             this_node.handle = handle_params.first;
             // XXX todo: double check node exists
             db::element::node *node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
+            if (node == NULL || node->get_del_time() <= unpacked_request_id) {
+                deleted_nodes.push_back(node_handle);
+                continue;
+            }
 
             node_state_getter = std::bind(get_node_state<NodeStateType>, G, prog_type_recvd, unpacked_request_id, node_handle);
             cache_value_getter = std::bind(get_cache_value<CacheValueType>, G, prog_type_recvd, unpacked_request_id, node_handle);
             // call node program
-            auto next_node_params = enclosed_function(unpacked_request_id, *node, this_node, handle_params.second, node_state_getter, cache_value_getter); 
+            auto next_node_params = enclosed_function(unpacked_request_id, *node, this_node, handle_params.second, node_state_getter, cache_value_getter);
             
             G->release_node(node);
 
