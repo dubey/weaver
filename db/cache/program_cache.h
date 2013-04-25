@@ -67,6 +67,7 @@ namespace cache
     inline bool
     program_cache :: entry_exists(node_prog::prog_type t, uint64_t node_handle)
     {
+        return false;
     }
 
     inline node_prog::Deletable*

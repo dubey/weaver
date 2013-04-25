@@ -309,7 +309,6 @@ NodeStateType& get_node_state(db::graph *G, node_prog::prog_type pType, uint64_t
             std::cout << "geting existing NodeStateType" << std::endl;
             toRet = dynamic_cast<NodeStateType *>(G->fetch_prog_req_state(pType, req_id, node_handle));
             if (toRet == NULL) {
-                // dynamic_cast failed, NodeStateType needs to extend Deletable
                 std::cerr << "NodeStateType needs to extend Deletable" << std::endl;
             }
         } else {
@@ -324,10 +323,9 @@ template <typename CacheValueType>
 CacheValueType& get_cache_value(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle){
     CacheValueType *cache;
 
-    if (G->prog_cache_exists(pType, req_id, node_handle)) {
-        cache = dynamic_cast<CacheValueType *>(G->fetch_prog_cache(pType, req_id, node_handle));
+    if (G->prog_cache_exists(pType, node_handle)) {
+        cache = dynamic_cast<CacheValueType *>(G->fetch_prog_cache(pType, node_handle));
         if (cache == NULL) {
-            // dynamic_cast failed, CacheValueType needs to extend Deletable
             std::cerr << "CacheValueType needs to extend Deletable" << std::endl;
         }
     } else {

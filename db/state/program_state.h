@@ -37,6 +37,9 @@ namespace state
             bool state_exists(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle);
             node_prog::Deletable* get_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle);
             void put_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle, node_prog::Deletable *new_state);
+
+        private:
+            bool state_exists_nolock(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle);
     };
 
     program_state :: program_state()
@@ -48,24 +51,30 @@ namespace state
     }
 
     inline bool
-    program_state :: state_exists(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle)
+    program_state :: state_exists_nolock(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle)
     {
-        mutex.lock();
         req_map &rmap = prog_state.at(t);
         req_map::iterator rmap_iter = rmap.find(req_id);
         if (rmap_iter == rmap.end()) {
-            mutex.unlock();
             return false;
         }
         node_map &nmap = rmap.at(req_id);
         node_map::iterator nmap_iter = nmap.find(node_handle);
         if (nmap_iter == nmap.end()) {
-            mutex.unlock();
             return false;
         } else {
-            mutex.unlock();
             return true;
         }
+    }
+
+    inline bool
+    program_state :: state_exists(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle)
+    {
+        bool exists;
+        mutex.lock();
+        exists = state_exists_nolock(t, req_id, node_handle);
+        mutex.unlock();
+        return exists;
     }
 
     inline node_prog::Deletable* 
@@ -73,7 +82,7 @@ namespace state
     {
         node_prog::Deletable *state = NULL;
         mutex.lock();
-        if (state_exists(t, req_id, node_handle)) {
+        if (state_exists_nolock(t, req_id, node_handle)) {
             state = prog_state.at(t).at(req_id).at(node_handle);
         }
         mutex.unlock();
@@ -84,8 +93,8 @@ namespace state
     program_state :: put_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle, node_prog::Deletable *new_state)
     {
         mutex.lock();
-        if (state_exists(t, req_id, node_handle)) {
-            node_prog::Deletable *old_state = get_state(t, req_id, node_handle);
+        if (state_exists_nolock(t, req_id, node_handle)) {
+            node_prog::Deletable *old_state = prog_state.at(t).at(req_id).at(node_handle);
             delete old_state;
         }
         prog_state[t][req_id][node_handle] = new_state;
