@@ -20,8 +20,9 @@
 #include "multiple_stress_client.h"
 #include "repetitive_stress_client.h"
 //#include "clustering_test.h"
-#include "dijkstra_test.h"
+//#include "dijkstra_test.h"
 //#include "node_prog_test.h"
+#include "dijkstra_prog_test.h"
 #include "reach_prog_test.h"
 
 int
@@ -41,8 +42,9 @@ main(int argc, char *argv[])
     //std::cout << "Multiple stress client ok." << std::endl;
     //repetitive_stress_client();
     //std::cout << "Repetitive stress client ok." << std::endl;
-    node_prog_test();
-    std::cout << "Node prog test done." << std::endl;
+    reach_prog_test();
+    dijkstra_prog_test();
+    std::cout << "Node prog tests done." << std::endl;
     //clustering_test();
     //std::cout <<"Clustering ok.\n";
     //dijkstra_test();

@@ -18,7 +18,7 @@
 #include "node_prog/reach_program.h"
 
 void
-node_prog_test()
+reach_prog_test()
 {
     client c(CLIENT_PORT);
     auto edge_props = std::make_shared<std::vector<common::property>>();
