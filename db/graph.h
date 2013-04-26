@@ -214,7 +214,7 @@ namespace db
             bool prog_cache_exists(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id);
             std::vector<node_prog::CacheValueBase*> fetch_prog_cache(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id, std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set);
             node_prog::CacheValueBase* fetch_prog_cache_single(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id);
-            void insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::CacheValueBase *toAdd);
+            void insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::CacheValueBase *toAdd, element::node *n);
             void invalidate_prog_cache(uint64_t request_id);
     };
 
@@ -747,8 +747,9 @@ namespace db
     }
 
     inline void
-    graph :: insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::CacheValueBase *toAdd)
+    graph :: insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::CacheValueBase *toAdd, element::node *n)
     {
+        n->add_cached_req(request_id);
         node_prog_cache.put_cache(request_id, t, local_node_handle, toAdd);
     }
 

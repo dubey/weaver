@@ -337,7 +337,7 @@ std::vector<CacheValueType *> get_cached_values(db::graph *G, node_prog::prog_ty
 }
 
 template <typename CacheValueType>
-CacheValueType& put_cache_value(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle)
+CacheValueType& put_cache_value(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle, db::element::node *n)
 {
     CacheValueType * toRet;
     if (G->prog_cache_exists(pType, node_handle, req_id)) {
@@ -349,7 +349,7 @@ CacheValueType& put_cache_value(db::graph *G, node_prog::prog_type pType, uint64
         }
     } else {
         toRet = new CacheValueType();
-        G->insert_prog_cache(pType, req_id, node_handle, toRet);
+        G->insert_prog_cache(pType, req_id, node_handle, toRet, n);
     }
     return *toRet;
 }
@@ -406,7 +406,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             }
 
             node_state_getter = std::bind(get_node_state<NodeStateType>, G, prog_type_recvd, unpacked_request_id, node_handle);
-            cache_value_putter = std::bind(put_cache_value<CacheValueType>, G, prog_type_recvd, unpacked_request_id, node_handle);
+            cache_value_putter = std::bind(put_cache_value<CacheValueType>, G, prog_type_recvd, unpacked_request_id, node_handle, node);
             cached_values_getter = std::bind(get_cached_values<CacheValueType>, G, prog_type_recvd, unpacked_request_id, node_handle, &dirty_cache_ids, invalid_cache_ids);
             std::cout << "Calling enclosed function now\n";
             // call node program
