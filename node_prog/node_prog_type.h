@@ -38,7 +38,8 @@ namespace node_prog
                 db::element::remote_node&, // this remote node
                 params_type&,
                 std::function<node_state_type&()>,
-                std::function<cache_value_type&()>);
+                std::function<cache_value_type&()>,
+                std::function<std::vector<cache_value_type *>()>);
     };
 
     class Packable 
@@ -59,6 +60,29 @@ namespace node_prog
     { 
         /* destructor must be defined */ 
     }
+
+    class CacheValueBase : Deletable
+    {
+        private:
+            uint64_t req_id;
+            std::vector<uint64_t>* dirty_list;
+        
+        public:
+        CacheValueBase()
+        {
+        }
+
+        void set_dirty_list_ptr(std::vector<uint64_t>* lst){
+            dirty_list = lst;
+        };
+        void set_req_id(uint64_t id){
+            req_id = id;
+        };
+
+        void mark(){
+            dirty_list->push_back(req_id);
+        };
+    };
 }
 
 namespace std

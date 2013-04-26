@@ -229,10 +229,11 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     server->pending.insert(std::make_pair(request->req_id, request));
 
     message::message msg_to_send;
+    std::vector<uint64_t> empty_vector;
     for (auto &batch_pair : initial_batches) {
         // TODO add ignore_cache and cached_ids
         message::prepare_message(msg_to_send, message::NODE_PROG, request->pType, *request->vector_clock, 
-                request->req_id, batch_pair.second);
+                request->req_id, batch_pair.second, empty_vector, request->ignore_cache);
         server->send(batch_pair.first, msg_to_send.buf); // TODO later change to send without update mutex lock
     }
     server->update_mutex.unlock();
@@ -251,7 +252,7 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
             // request was served based on cache value that should be
             // invalidated; restarting request
             done = false;
-            request->ignore_cache.emplace_back(cached_id);
+            request->ignore_cache.insert(cached_id);
             server->add_bad_cache_id(cached_id);
             request->del_request.reset();
             server->update_mutex.unlock();

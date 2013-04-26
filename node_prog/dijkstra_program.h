@@ -74,7 +74,7 @@ namespace node_prog
         }
     };
 
-    struct dijkstra_cache_value : Deletable 
+    struct dijkstra_cache_value : CacheValueBase 
     {
         int dummy;
 
@@ -90,7 +90,8 @@ namespace node_prog
             db::element::remote_node &rn,
             dijkstra_params &params,
             std::function<dijkstra_node_state&()> state_getter,
-            std::function<dijkstra_cache_value&()> cache_getter)
+            std::function<dijkstra_cache_value&()> cache_value_putter,
+            std::function<std::vector<dijkstra_cache_value *>()> cached_values_getter)
     {
         std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
         if (n.get_creat_time() == params.dest_handle){

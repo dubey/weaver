@@ -211,9 +211,10 @@ namespace db
             void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::Deletable *toAdd);
             // prog_type-> map from node handle to map from request_id to cache values -- used to do cache read/updates
             cache::program_cache node_prog_cache;
-            bool prog_cache_exists(node_prog::prog_type t, uint64_t local_node_handle);
-            node_prog::Deletable* fetch_prog_cache(node_prog::prog_type t, uint64_t local_node_handle);
-            void insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::Deletable *toAdd);
+            bool prog_cache_exists(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id);
+            std::vector<node_prog::CacheValueBase*> fetch_prog_cache(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id, std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set);
+            node_prog::CacheValueBase* fetch_prog_cache_single(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id);
+            void insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::CacheValueBase *toAdd);
             void invalidate_prog_cache(uint64_t request_id);
     };
 
@@ -728,22 +729,27 @@ namespace db
     }
 
     inline bool
-    graph :: prog_cache_exists(node_prog::prog_type t, uint64_t node_handle)
+    graph :: prog_cache_exists(node_prog::prog_type t, uint64_t node_handle, uint64_t req_id)
     {
-        return node_prog_cache.entry_exists(t, node_handle);
+        return node_prog_cache.cache_exists(t, node_handle, req_id);
     }
 
-    inline node_prog::Deletable*
-    graph :: fetch_prog_cache(node_prog::prog_type t, uint64_t node_handle)
+    inline std::vector<node_prog::CacheValueBase*>
+    graph :: fetch_prog_cache(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id, std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set)
     {
-        return node_prog_cache.get_cache(t, node_handle);
+        return node_prog_cache.get_cache(t, local_node_handle, req_id, dirty_list_ptr, ignore_set);
+    }
+
+    inline node_prog::CacheValueBase*
+    graph :: fetch_prog_cache_single(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id)
+    {
+        return node_prog_cache.single_get_cache(t, local_node_handle, req_id);
     }
 
     inline void
-    graph :: insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t node_handle, node_prog::Deletable* toAdd)
+    graph :: insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::CacheValueBase *toAdd)
     {
-        node_prog_cache.put_cache(request_id, t, node_handle, toAdd);
-        return;
+        node_prog_cache.put_cache(request_id, t, local_node_handle, toAdd);
     }
 
     inline void

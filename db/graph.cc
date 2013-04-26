@@ -321,20 +321,37 @@ NodeStateType& get_node_state(db::graph *G, node_prog::prog_type pType, uint64_t
 }
 
 template <typename CacheValueType>
-CacheValueType& get_cache_value(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle){
+std::vector<CacheValueType *> get_cached_values(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle, std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t>& ignore_set)
+{
+    std::vector<CacheValueType *> toRet;
     CacheValueType *cache;
-
-    if (G->prog_cache_exists(pType, node_handle)) {
-        cache = dynamic_cast<CacheValueType *>(G->fetch_prog_cache(pType, node_handle));
+    for (node_prog::CacheValueBase *cval : G->fetch_prog_cache(pType, node_handle, req_id, dirty_list_ptr, ignore_set)) {
+        cache = dynamic_cast<CacheValueType *>(cval);
         if (cache == NULL) {
-            std::cerr << "CacheValueType needs to extend Deletable" << std::endl;
+            std::cerr << "CacheValueType needs to extend CacheValueBase" << std::endl;
+        } else {
+            toRet.push_back(cache);
+        }
+    }
+    return std::move(toRet);
+}
+
+template <typename CacheValueType>
+CacheValueType& put_cache_value(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle)
+{
+    CacheValueType * toRet;
+    if (G->prog_cache_exists(pType, node_handle, req_id)) {
+        // XXX They wrote cache twice! delete and replace probably
+        toRet = dynamic_cast<CacheValueType *>(G->fetch_prog_cache_single(pType, node_handle, req_id));
+        if (toRet == NULL) {
+            // dynamic_cast failed, CacheValueType needs to extend CacheValueBase
+            std::cerr << "CacheValueType needs to extend CacheValueBase" << std::endl;
         }
     } else {
-        cache = new CacheValueType();
-        G->insert_prog_cache(pType, req_id, node_handle, cache);
+        toRet = new CacheValueType();
+        G->insert_prog_cache(pType, req_id, node_handle, toRet);
     }
-
-    return *cache;
+    return *toRet;
 }
 
 void
@@ -359,10 +376,12 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     prog_type prog_type_recvd;
     std::vector<uint64_t> deleted_nodes;
     uint64_t cur_node;
+    std::vector<uint64_t> dirty_cache_ids; // cache values used by user that we need to verify are good at coord
+    std::unordered_set<uint64_t> invalid_cache_ids; // cache values from coordinator we know are invalid
 
     printf("\ndb ZAAAAAAAAAAAAAAAAAA\n");
     // TODO unpack ignore_cache, cached_ids, deleted_nodes, cur_node (corresponding to deleted_nodes)
-    message::unpack_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id, start_node_params);
+    message::unpack_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id, start_node_params, dirty_cache_ids, invalid_cache_ids);
 
     for (uint64_t del_node: deleted_nodes) {
     }
@@ -371,27 +390,9 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     db::element::remote_node this_node(G->myid, 0);
     uint64_t node_handle;
 
-    /*
-    std::function<NodeStateType&()> node_state_getter = [G, prog_type_recvd, unpacked_request_id, &node_handle]()
-    {
-        NodeStateType *toRet = new NodeStateType();
-        if (G->prog_req_state_exists(prog_type_recvd, unpacked_request_id, node_handle)) {
-            toRet = dynamic_cast<NodeStateType *>(G->fetch_prog_req_state(prog_type_recvd, unpacked_request_id, node_handle));
-            if (toRet == NULL) {
-                // dynamic_cast failed, NodeStateType needs to extend Deletable
-                std::cerr << "NodeStateType needs to extend Deletable" << std::endl;
-            }
-        } else {
-            toRet = new NodeStateType();
-            G->insert_prog_req_state(prog_type_recv, unpacked_request_id, node_handle, toRet);
-        }
-        NodeStateType & ret = (*toRet);
-        return ret;
-    };
-     */
-
     std::function<NodeStateType&()> node_state_getter;
-    std::function<CacheValueType&()> cache_value_getter;
+    std::function<CacheValueType&()> cache_value_putter;
+    std::function<std::vector<CacheValueType *>()> cached_values_getter;
 
     while (!start_node_params.empty()) {
         for (auto &handle_params : start_node_params) {
@@ -405,10 +406,11 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             }
 
             node_state_getter = std::bind(get_node_state<NodeStateType>, G, prog_type_recvd, unpacked_request_id, node_handle);
-            cache_value_getter = std::bind(get_cache_value<CacheValueType>, G, prog_type_recvd, unpacked_request_id, node_handle);
+            cache_value_putter = std::bind(put_cache_value<CacheValueType>, G, prog_type_recvd, unpacked_request_id, node_handle);
+            cached_values_getter = std::bind(get_cached_values<CacheValueType>, G, prog_type_recvd, unpacked_request_id, node_handle, &dirty_cache_ids, invalid_cache_ids);
+            std::cout << "Calling enclosed function now\n";
             // call node program
-            auto next_node_params = enclosed_function(unpacked_request_id, *node, this_node, handle_params.second, node_state_getter, cache_value_getter);
-            
+            auto next_node_params = enclosed_function(unpacked_request_id, *node, this_node, handle_params.second, node_state_getter, cache_value_putter, cached_values_getter); 
             G->release_node(node);
 
             for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
@@ -416,7 +418,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                 if (res.first.loc == -1){
                     // XXX get rid of pair, without pair it is not working for some reason
                     std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
-                    message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, unpacked_request_id, temppair);
+                    message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, unpacked_request_id, temppair, dirty_cache_ids, invalid_cache_ids);
                     G->send_coord(msg.buf);
                 } else {
                     batched_node_progs[res.first.loc].emplace_back(res.first.handle, std::move(res.second));
@@ -434,8 +436,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             // make sure not to do anything here because the vector was moved out
         } else {
             // send msg to batch.first (location) with contents batch.second (start_node_params for that machine)
-            message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, 
-                    unpacked_request_id, batch_pair.second);
+            message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id, batch_pair.second, dirty_cache_ids, invalid_cache_ids);
             G->send(batch_pair.first, msg.buf);
         }
     }

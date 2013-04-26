@@ -82,7 +82,7 @@ namespace coordinator
             // node programs
             std::unique_ptr<message::message> req_msg;
             std::unique_ptr<message::message> reply_msg;
-            std::vector<uint64_t> ignore_cache;
+            std::unordered_set<uint64_t> ignore_cache;
             std::shared_ptr<pending_req> del_request;
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids;
             node_prog::prog_type pType;
