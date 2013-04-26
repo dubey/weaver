@@ -166,6 +166,15 @@ namespace node_prog
         }
         return next;
     }
+
+    std::vector<std::pair<db::element::remote_node, reach_params>> 
+    reach_node_deleted_program(uint64_t req_id,
+                db::element::node &n, // node who asked to go to deleted node
+                uint64_t deleted_handle, // handle of node that didn't exist
+            reach_params &params_given, // params we had sent to deleted node
+            std::function<reach_node_state&()> state_getter){
+        return std::vector<std::pair<db::element::remote_node, reach_params>>(); 
+    }
 }
 
 #endif //__DIKJSTRA_PROG__

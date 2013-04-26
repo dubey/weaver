@@ -115,14 +115,19 @@ namespace message
     template <typename T> inline size_t size(const std::unordered_set<T>& t);
     template <typename T> inline size_t size(const std::vector<T>& t);
     template <typename T1, typename T2> inline size_t size(const std::pair<T1, T2>& t);
+    template <typename T1, typename T2, typename T3> inline size_t size(const std::tuple<T1, T2, T3>& t);
+
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::vector<T>& t);
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer &packer, const std::pair<T1, T2>& t);
+    template <typename T1, typename T2, typename T3> inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3>& t);
+
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::vector<T>& t);
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::pair<T1, T2>& t);
+    template <typename T1, typename T2, typename T3> inline void unpack_buffer(e::unpacker& unpacker, std::tuple<T1, T2, T3>& t);
 
     inline
     message :: message()
@@ -207,6 +212,11 @@ namespace message
     inline size_t size(const std::pair<T1, T2> &t)
     {
         return size(t.first) + size(t.second);
+    }
+
+    template <typename T1, typename T2, typename T3>
+    inline size_t size(const std::tuple<T1, T2, T3>& t){
+        return size(std::get<0>(t)) + size(std::get<1>(t)) + size(std::get<2>(t));
     }
 
     template <typename T>
@@ -315,6 +325,13 @@ namespace message
         // assumes constant size
         pack_buffer(packer, t.first);
         pack_buffer(packer, t.second);
+    }
+
+    template <typename T1, typename T2, typename T3>
+    inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3>& t){
+        pack_buffer(packer, std::get<0>(t));
+        pack_buffer(packer, std::get<1>(t));
+        pack_buffer(packer, std::get<2>(t));
     }
 
     inline void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t)
@@ -478,6 +495,13 @@ namespace message
         //assumes constant size
         unpack_buffer(unpacker, t.first);
         unpack_buffer(unpacker, t.second);
+    }
+
+    template <typename T1, typename T2, typename T3>
+    inline void unpack_buffer(e::unpacker& unpacker, std::tuple<T1, T2, T3>& t){
+        unpack_buffer(unpacker, std::get<0>(t));
+        unpack_buffer(unpacker, std::get<1>(t));
+        unpack_buffer(unpacker, std::get<2>(t));
     }
 
     inline void

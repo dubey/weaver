@@ -69,12 +69,15 @@ namespace node_prog
     {
         public:
             typedef typename node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type func;
-            func enclosed_function;
+            typedef typename deleted_node_function_type<ParamsType, NodeStateType>::value_type dfunc;
+            func enclosed_node_prog_func;
+            dfunc enclosed_node_deleted_func;
             prog_type type;
 
         public:
-            particular_node_program(prog_type _type, func _enclosed_function)
-                : enclosed_function(_enclosed_function)
+            particular_node_program(prog_type _type, func node_prog_func, dfunc node_deleted_func)
+                : enclosed_node_prog_func(node_prog_func)
+                , enclosed_node_deleted_func(node_deleted_func)
                 , type(_type)
             {
             }
@@ -85,8 +88,8 @@ namespace node_prog
     };
     
     std::map<prog_type, node_program*> programs = {
-        {REACHABILITY, new particular_node_program<node_prog::reach_params, node_prog::reach_node_state, node_prog::reach_cache_value>(REACHABILITY, node_prog::reach_node_program)},
-        {DIJKSTRA, new particular_node_program<node_prog::dijkstra_params, node_prog::dijkstra_node_state, node_prog::dijkstra_cache_value>(DIJKSTRA, node_prog::dijkstra_node_program)} 
+        {REACHABILITY, new particular_node_program<node_prog::reach_params, node_prog::reach_node_state, node_prog::reach_cache_value>(REACHABILITY, node_prog::reach_node_program, node_prog::reach_node_deleted_program)},
+        {DIJKSTRA, new particular_node_program<node_prog::dijkstra_params, node_prog::dijkstra_node_state, node_prog::dijkstra_cache_value>(DIJKSTRA, node_prog::dijkstra_node_program, dijkstra_node_deleted_program)} 
     };
 } 
 
