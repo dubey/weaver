@@ -112,11 +112,13 @@ namespace node_prog
         std::vector<std::pair<db::element::remote_node, reach_params>> next;
         if (!params.mode) { // request mode
             if (params.dest.handle == rn.handle) {
+	        // we found the node we are looking for, prepare a reply
                 params.mode = true;
                 params.reachable = true;
                 next.emplace_back(std::make_pair(prev_node, params));
                 // TODO signal deletion of state
             } else { 
+	        // have not found it yet, check the cache, then follow all out edges
                 std::vector<reach_cache_value*> cache = cached_values_getter();
                 bool got_cache = false;
                 std::cout << "Checking cache\n";
