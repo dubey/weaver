@@ -26,6 +26,7 @@
 #include "common/debug.h"
 #include "node_prog/node_program.h"
 #include "node_prog/node_prog_type.h"
+#include "db/element/remote_node.h"
 
 void coord_daemon_end(coordinator::central *server);
 
@@ -209,7 +210,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     message::unpack_message(*request->req_msg, message::CLIENT_NODE_PROG_REQ, request->client->port, ignore, initial_args);
 
-    std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> initial_batches; // map from locations to a list of start_node_params to send to that shard
+    std::unordered_map<int, std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>> initial_batches; // map from locations to a list of start_node_params to send to that shard
     server->update_mutex.lock();
 
     for (std::pair<uint64_t, ParamsType> &node_params_pair : initial_args) {
@@ -219,7 +220,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             return;
         }
         common::meta_element *me = server->nodes.at(node_params_pair.first);
-        initial_batches[me->get_loc()].emplace_back(std::make_pair(node_params_pair.first, std::move(node_params_pair.second)));
+        initial_batches[me->get_loc()].emplace_back(std::make_tuple(node_params_pair.first, std::move(node_params_pair.second), db::element::remote_node())); // constructor
     }
     request->vector_clock.reset(new std::vector<uint64_t>(*server->vc.clocks));
     request->del_request = server->get_last_del_req(request);
