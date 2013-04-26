@@ -1,5 +1,6 @@
 TODO
 Check logic for multiple used cache ids.
+Edge deleted edges - check for del time, give users a custom iterator.
 Make unit tests!
 Test for concurrent reachability requests.
 Unified threadpool
