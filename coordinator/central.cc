@@ -234,7 +234,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     std::vector<uint64_t> empty_vector;
     printf("sending batched args for node program\n");
     for (auto &batch_pair : initial_batches) {
-        // TODO add ignore_cache and cached_ids
         message::prepare_message(msg_to_send, message::NODE_PROG, request->pType, *request->vector_clock, 
                 request->req_id, batch_pair.second, empty_vector, request->ignore_cache);
         server->send(batch_pair.first, msg_to_send.buf); // TODO later change to send without update mutex lock

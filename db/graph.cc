@@ -451,7 +451,9 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     // now propagate requests
     for (auto &batch_pair : batched_node_progs) {
-        assert(batch_pair.first != G->myid);
+        if (batch_pair.first == G->myid) {
+            assert(batch_pair.second.empty());
+        }
         // send msg to batch.first (location) with contents batch.second (start_node_params for that machine)
         message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id, batch_pair.second, dirty_cache_ids, invalid_cache_ids);
         G->send(batch_pair.first, msg.buf);
