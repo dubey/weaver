@@ -87,7 +87,7 @@ namespace cache
     {
         node_prog::CacheValueBase *ret;
         mutex.lock();
-        ret = single_get_cache(t, node_handle, req_id);
+        ret = single_get_cache(t, node_handle, req_id, prog_cache);
         mutex.unlock();
         return ret;
     }
@@ -107,6 +107,7 @@ namespace cache
     program_cache :: put_cache(uint64_t req_id, node_prog::prog_type t, uint64_t node_handle, node_prog::CacheValueBase *new_cache)
     {
         mutex.lock();
+        put_cache(req_id, t, node_handle, new_cache, transient_prog_cache, transient_itable);
         put_cache(req_id, t, node_handle, new_cache, prog_cache, itable);
         mutex.unlock();
     }

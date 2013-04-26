@@ -328,7 +328,7 @@ namespace db
         }
         ret.second = std::move(n->purge_cache());
         for (auto rid: *ret.second) {
-            //remove_cache(rid, node_handle);
+            invalidate_prog_cache(rid);
         }
         release_node(n);
         deletion_mutex.lock();
@@ -395,7 +395,7 @@ namespace db
         }
         ret.second = std::move(n->purge_cache());
         for (auto rid: *ret.second) {
-            //remove_cache(rid, node_handle);
+            invalidate_prog_cache(rid);
         }
         release_node(n);
         deletion_mutex.lock();
@@ -434,7 +434,7 @@ namespace db
         }
         ret.second = std::move(n->purge_cache());
         for (auto rid: *ret.second) {
-            //remove_cache(rid, node);
+            invalidate_prog_cache(rid);
         }
         release_node(n);
         deletion_mutex.lock();

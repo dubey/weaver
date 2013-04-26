@@ -26,12 +26,11 @@
 #include "common/vclock.h"
 #include "unordered_set"
 #include "unordered_map"
-//#include "db/cache/cache.h" //so we get std::hash override for location
 #include "db/element/node.h"
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
-#include "db/request_objects.h" // used for packing dijkstra_queue_elem
 #include "node_prog/node_prog_type.h" // used for packing Packable objects
+#include "db/request_objects.h"
 
 namespace message
 {

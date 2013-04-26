@@ -83,16 +83,20 @@ namespace node_prog
         {
         }
 
-        void set_dirty_list_ptr(std::vector<uint64_t>* lst){
+        void set_dirty_list_ptr(std::vector<uint64_t>* lst)
+        {
             dirty_list = lst;
-        };
-        void set_req_id(uint64_t id){
-            req_id = id;
-        };
+        }
 
-        void mark(){
+        void set_req_id(uint64_t id)
+        {
+            req_id = id;
+        }
+
+        void mark()
+        {
             dirty_list->push_back(req_id);
-        };
+        }
     };
 }
 

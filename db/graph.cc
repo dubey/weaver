@@ -290,12 +290,12 @@ handle_cache_update(db::graph *G, std::unique_ptr<message::message> msg)
     
     // invalidations
     for (size_t i = 0; i < bad.size(); i++) {
-        //G->remove_cache(bad[i]);
+        G->invalidate_prog_cache(bad[i]);
     }
     
     // confirmations
     for (size_t i = 0; i < good.size(); i++) {
-        //G->commit_cache(good[i]);
+        G->commit_prog_cache(good[i]);
     }
     
     G->permanent_delete(perm_del_id);
@@ -451,7 +451,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                 if (res.first.loc == -1){
                     // XXX get rid of pair, without pair it is not working for some reason
                     std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
-                    message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, unpacked_request_id, temppair, dirty_cache_ids, invalid_cache_ids);
+                    message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, unpacked_request_id, dirty_cache_ids, temppair);
                     G->send_coord(msg.buf);
                 } else {
                     batched_node_progs[res.first.loc].emplace_back(res.first.handle, std::move(res.second), this_node);

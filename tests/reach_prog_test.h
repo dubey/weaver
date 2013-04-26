@@ -45,14 +45,16 @@ reach_prog_test()
     std::cout << "nodes[4] = " << nodes[4] <<std::endl;
     std::cout << "nodes[5] = " << nodes[5] <<std::endl;
 
-    std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args;
-    initial_args.emplace_back(std::make_pair(nodes[0], node_prog::reach_params()));
-    node_prog::reach_params &params = initial_args[0].second;
-    params.prev_node.loc = -1;
-    params.dest.handle = nodes[4];
-    node_prog::reach_params *res = c.run_node_program(node_prog::REACHABILITY, initial_args);
-    std::cout << "Got back reachability reply " << res->reachable << std::endl;
-    delete res;
+    for (int i = 0; i < 5; i++) {
+        std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args;
+        initial_args.emplace_back(std::make_pair(nodes[i], node_prog::reach_params()));
+        node_prog::reach_params &params = initial_args[0].second;
+        params.prev_node.loc = -1;
+        params.dest.handle = nodes[5];
+        node_prog::reach_params *res = c.run_node_program(node_prog::REACHABILITY, initial_args);
+        std::cout << "Got back reachability reply " << res->reachable << std::endl;
+        delete res;
+    }
     /*
     auto retpair = c.shortest_path_request(nodes[0], nodes[5], weight_label, edge_props);
     std::cout <<retpair.first <<std::endl;

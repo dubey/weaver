@@ -235,8 +235,9 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
     }
     uint64_t ignore_req_id;
     node_prog::prog_type ignore;
+    std::vector<uint64_t> ignore_cache;
     std::pair<uint64_t, ParamsType> tempPair;
-    message::unpack_message(msg, message::NODE_PROG, ignore, ignore_req_id, tempPair);
+    message::unpack_message(msg, message::NODE_PROG, ignore, ignore_req_id, ignore_cache, tempPair);
 
     ParamsType *toRet = new ParamsType(tempPair.second); // make sure client frees
     return toRet;

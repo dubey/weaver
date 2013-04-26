@@ -260,6 +260,7 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
             request->del_request.reset();
             server->update_mutex.unlock();
             node_prog::programs.at(request->pType)->unpack_and_start_coord(server, *request->req_msg, request);
+            break;
         }
     }
     server->pending.erase(req_id);
@@ -326,7 +327,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
         // response from a shard
         case message::NODE_PROG:
             cached_req_ids.reset(new std::vector<uint64_t>());
-            message::unpack_message(*msg, message::NODE_PROG, pType, req_id, vclock, *cached_req_ids); // don't unpack rest
+            message::unpack_message(*msg, message::NODE_PROG, pType, req_id, *cached_req_ids); // don't unpack rest
             server->update_mutex.lock();
             if (server->pending.count(req_id) == 0){
                 // XXX anything else we need to do?
