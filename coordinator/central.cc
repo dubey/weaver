@@ -213,6 +213,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     std::unordered_map<int, std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>> initial_batches; // map from locations to a list of start_node_params to send to that shard
     server->update_mutex.lock();
 
+    printf("batching args for node program\n");
     for (std::pair<uint64_t, ParamsType> &node_params_pair : initial_args) {
         if (check_elem(server, node_params_pair.first, true)) {
             std::cerr << "one of the arg nodes has been deleted, cannot perform request" << std::endl;
@@ -231,6 +232,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     message::message msg_to_send;
     std::vector<uint64_t> empty_vector;
+    printf("sending batched args for node program\n");
     for (auto &batch_pair : initial_batches) {
         // TODO add ignore_cache and cached_ids
         message::prepare_message(msg_to_send, message::NODE_PROG, request->pType, *request->vector_clock, 
@@ -326,6 +328,12 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             cached_req_ids.reset(new std::vector<uint64_t>());
             message::unpack_message(*msg, message::NODE_PROG, pType, req_id, vclock, *cached_req_ids); // don't unpack rest
             server->update_mutex.lock();
+            if (server->pending.count(req_id) == 0){
+                // XXX anything else we need to do?
+                server->update_mutex.unlock();
+                std::cerr << "got response for request that does not exist anymore" << std::endl;
+                return;
+            }
             request = server->pending.at(req_id);
             request->cached_req_ids = std::move(cached_req_ids);
             request->reply_msg = std::move(msg);
