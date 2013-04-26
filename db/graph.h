@@ -216,6 +216,7 @@ namespace db
             node_prog::CacheValueBase* fetch_prog_cache_single(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id);
             void insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::CacheValueBase *toAdd, element::node *n);
             void invalidate_prog_cache(uint64_t request_id);
+            void commit_prog_cache(uint64_t req_id);
     };
 
     inline
@@ -757,6 +758,12 @@ namespace db
     graph :: invalidate_prog_cache(uint64_t request_id)
     {
         node_prog_cache.delete_cache(request_id);
+    }
+
+    inline void
+    graph :: commit_prog_cache(uint64_t req_id)
+    {
+        node_prog_cache.commit(req_id);
     }
 
 } //namespace db
