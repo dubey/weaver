@@ -106,21 +106,15 @@ namespace node_prog
             std::function<std::vector<reach_cache_value *>()> cached_values_getter)
     {
         reach_node_state &state = state_getter();
-        //std::cout << "Reachability program, state = " << &state << ", req_id = " << req_id << std::endl;
-        //std::cout << "Current state at beginning: visited " << state.visited << ", prev_node: " << state.prev_node.handle << "," << state.prev_node.loc << ", count: " << state.out_count << ", reachable " <<  state.reachable << std::endl; 
-        //std::cout << "Node handle " << rn.handle << " node loc " << rn.loc << std::endl;
         bool false_reply = false;
         db::element::remote_node prev_node = params.prev_node;
         params.prev_node = rn;
         std::vector<std::pair<db::element::remote_node, reach_params>> next;
         if (!params.mode) { // request mode
-            //std::cout << "Got request\n";
             if (params.dest.handle == rn.handle) {
                 params.mode = true;
                 params.reachable = true;
                 next.emplace_back(std::make_pair(prev_node, params));
-                //std::cout << "True reply now\n";
-                //std::cout << "Prev node " << prev_node.handle << " " << prev_node.loc << std::endl;
                 // TODO signal deletion of state
             } else { 
                 std::vector<reach_cache_value*> cache = cached_values_getter();
@@ -141,9 +135,9 @@ namespace node_prog
                     db::element::edge *e;
                     state.prev_node = prev_node;
                     state.visited = true;
-                    //std::cout << "Set prev node to " << state.prev_node.handle << "," << state.prev_node.loc << std::endl;
                     for (auto &iter: n.out_edges) {
                         e = iter.second;
+                        // TODO change this so that the user does not see invalid edges
                         bool traverse_edge = e->get_creat_time() <= req_id
                             && e->get_del_time() > req_id; // edge created and deleted in acceptable timeframe
                         // checking edge properties
@@ -169,10 +163,8 @@ namespace node_prog
                 params.mode = true;
                 params.reachable = false;
                 next.emplace_back(std::make_pair(prev_node, params));
-                //std::cout << "False reply now\n";
             }
         } else { // reply mode
-            //std::cout << "Got reply\n";
             if (((--state.out_count == 0) || params.reachable) && !state.reachable) {
                 state.reachable |= params.reachable;
                 next.emplace_back(std::make_pair(state.prev_node, params));
@@ -181,8 +173,6 @@ namespace node_prog
                     reach_cache_value &rcv = cache_putter();
                     rcv.reachable_node = params.dest.handle;
                 }
-                //std::cout << "Prop reply\n";
-                //std::cout << "Prev node " << state.prev_node.handle << " " << state.prev_node.loc << std::endl;
             }
         }
         return next;

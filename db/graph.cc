@@ -365,16 +365,6 @@ unpack_and_run_node_program(db::graph *G, void *req)
     delete request;
 }
 
-/*
-inline
-void batch_node_params(
-        std::vector<std::pair<db::element::remote_node, dijkstra_params>> &next_node_params,
-        std::unordered_map<int, std::vector<std::pair<uint64_t, ParamsType>>> &batched_node_progs,
-        std::vector<std::pair<uint64_t, ParamsType>> &start_node_params){
-
-}
-*/
-
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
     unpack_and_run_db(db::graph *G, message::message &msg)
@@ -390,22 +380,19 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     uint64_t cur_node;
     std::vector<uint64_t> dirty_cache_ids; // cache values used by user that we need to verify are good at coord
     std::unordered_set<uint64_t> invalid_cache_ids; // cache values from coordinator we know are invalid
-
-    printf("\ndb ZAAAAAAAAAAAAAAAAAA\n");
-    // TODO unpack ignore_cache, cached_ids, deleted_nodes, cur_node (corresponding to deleted_nodes)
-    message::unpack_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id, start_node_params, dirty_cache_ids, invalid_cache_ids);
-
-    std::unordered_map<int, std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>> batched_node_progs;
-
+    std::unordered_map<int, std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>> batched_node_progs; // node programs that will be propagated
     db::element::remote_node this_node(G->myid, 0);
     uint64_t node_handle;
 
+    // unpack the node program
+    message::unpack_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id, start_node_params, dirty_cache_ids, invalid_cache_ids);
+    // node state and cache functions
     std::function<NodeStateType&()> node_state_getter;
     std::function<CacheValueType&()> cache_value_putter;
     std::function<std::vector<CacheValueType *>()> cached_values_getter;
 
     while (!start_node_params.empty() || !deleted_nodes.empty()) {
-        for (uint64_t del_node : deleted_nodes) {
+        for (uint64_t del_node: deleted_nodes) {
             db::element::node *node = G->acquire_node(deleted_nodes_parent.handle); // parent should definately exist
             this_node.handle = deleted_nodes_parent.handle;
             node_state_getter = std::bind(get_node_state<NodeStateType>, G, prog_type_recvd, unpacked_request_id, deleted_nodes_parent.handle);
@@ -413,7 +400,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                 // signal to send back to coordinator
                 int next_loc = res.first.loc;
-                if (next_loc == -1){
+                if (next_loc == -1) {
                     // XXX get rid of pair, without pair it is not working for some reason
                     std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
                     message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, unpacked_request_id, temppair, dirty_cache_ids, invalid_cache_ids);
@@ -430,25 +417,26 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         for (auto &handle_params : start_node_params) {
             node_handle = std::get<0>(handle_params);
             this_node.handle = node_handle;
-            // XXX todo: double check node exists
             db::element::node *node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
             if (node == NULL || node->get_del_time() <= unpacked_request_id) {
                 deleted_nodes.push_back(node_handle);
                 continue;
             }
-
+            // bind cache getter and putter function variables to functions
             node_state_getter = std::bind(get_node_state<NodeStateType>, G, prog_type_recvd, unpacked_request_id, node_handle);
             cache_value_putter = std::bind(put_cache_value<CacheValueType>, G, prog_type_recvd, unpacked_request_id, node_handle, node);
             cached_values_getter = std::bind(get_cached_values<CacheValueType>, G, prog_type_recvd, unpacked_request_id, node_handle, &dirty_cache_ids, invalid_cache_ids);
-            std::cout << "Calling enclosed function now\n";
             // call node program
-            auto next_node_params = enclosed_node_prog_func(unpacked_request_id, *node, this_node, std::get<1>(handle_params), node_state_getter, cache_value_putter, cached_values_getter); 
+            auto next_node_params = enclosed_node_prog_func(unpacked_request_id, *node, this_node, 
+                std::get<1>(handle_params), // actual parameters for this node program
+                node_state_getter, 
+                cache_value_putter, 
+                cached_values_getter); 
             G->release_node(node);
-
-            //batch_node_params(next_node_params, batched_node_progs, start_node_params);
+            // batch the newly generated node programs for onward propagation
             for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                 // signal to send back to coordinator
-                if (res.first.loc == -1){
+                if (res.first.loc == -1) {
                     // XXX get rid of pair, without pair it is not working for some reason
                     std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
                     message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, unpacked_request_id, dirty_cache_ids, temppair);
@@ -458,20 +446,15 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                 }
             }
         }
-        start_node_params = std::move(batched_node_progs[G->myid]); // hopefully this nicely cleans up old vector, makes sure batched nodes
+        start_node_params = std::move(batched_node_progs[G->myid]);
     }
-    // if done send to coordinator and call delete on all objects in the map for node state
 
     // now propagate requests
     for (auto &batch_pair : batched_node_progs) {
-        if (batch_pair.first == G->myid) {
-            // this shouldnt happen or it should be an empty vector
-            // make sure not to do anything here because the vector was moved out
-        } else {
-            // send msg to batch.first (location) with contents batch.second (start_node_params for that machine)
-            message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id, batch_pair.second, dirty_cache_ids, invalid_cache_ids);
-            G->send(batch_pair.first, msg.buf);
-        }
+        assert(batch_pair.first != G->myid);
+        // send msg to batch.first (location) with contents batch.second (start_node_params for that machine)
+        message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id, batch_pair.second, dirty_cache_ids, invalid_cache_ids);
+        G->send(batch_pair.first, msg.buf);
     }
 }
 
