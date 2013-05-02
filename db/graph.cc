@@ -32,6 +32,7 @@
 #include "node_prog/node_program.h"
 #include "node_prog/dijkstra_program.h"
 #include "node_prog/reach_program.h"
+#include "node_prog/clustering_program.h"
 
 // migration methods
 void migrate_node_step1(db::graph *G, uint64_t node_handle, int new_shard);
@@ -393,6 +394,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     while (!start_node_params.empty() || !deleted_nodes.empty()) {
         for (uint64_t del_node: deleted_nodes) {
+            std::cout << "in del nodes" << std::endl;
+
             db::element::node *node = G->acquire_node(deleted_nodes_parent.handle); // parent should definately exist
             this_node.handle = deleted_nodes_parent.handle;
             node_state_getter = std::bind(get_node_state<NodeStateType>, G, prog_type_recvd, unpacked_request_id, deleted_nodes_parent.handle);
@@ -419,6 +422,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             this_node.handle = node_handle;
             db::element::node *node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
             if (node == NULL || node->get_del_time() <= unpacked_request_id) {
+                std::cout << "FOUND A DEL NODE:" << node_handle << std::endl;
                 deleted_nodes.push_back(node_handle);
                 continue;
             }

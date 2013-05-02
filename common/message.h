@@ -181,6 +181,10 @@ namespace message
     {
         return sizeof(int);
     }
+    inline size_t size(const double &t)
+    {
+        return sizeof(uint64_t);
+    }
     inline size_t size(const common::property &t)
     {
         return sizeof(uint32_t)+sizeof(size_t)+2*sizeof(uint64_t);
