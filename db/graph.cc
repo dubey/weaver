@@ -445,7 +445,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                 cache_value_putter = std::bind(put_cache_value<CacheValueType>, G,
                         prog_type_recvd, unpacked_request_id, node_handle, node);
                 cached_values_getter = std::bind(get_cached_values<CacheValueType>, G,
-                        prog_type_recvd, unpacked_request_id, node_handle, &dirty_cache_ids, invalid_cache_ids);
+                        prog_type_recvd, unpacked_request_id, node_handle, &dirty_cache_ids, std::ref(invalid_cache_ids));
                 // call node program
                 auto next_node_params = enclosed_node_prog_func(unpacked_request_id, *node, this_node, 
                         std::get<1>(handle_params), // actual parameters for this node program
