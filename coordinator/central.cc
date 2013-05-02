@@ -205,7 +205,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     unpack_and_start_coord(coordinator::central *server, message::message &msg, std::shared_ptr<coordinator::pending_req> request)
 {
     node_prog::prog_type ignore;
-    printf("coordinator ZAAAAAAAAAAAAAAAAAA\n");
+    //printf("coordinator ZAAAAAAAAAAAAAAAAAA\n");
     std::vector<std::pair<uint64_t, ParamsType>> initial_args;
 
     message::unpack_message(*request->req_msg, message::CLIENT_NODE_PROG_REQ, request->client->port, ignore, initial_args);
@@ -213,7 +213,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     std::unordered_map<int, std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>> initial_batches; // map from locations to a list of start_node_params to send to that shard
     server->update_mutex.lock();
 
-    printf("batching args for node program\n");
+    //printf("batching args for node program\n");
     for (std::pair<uint64_t, ParamsType> &node_params_pair : initial_args) {
         if (check_elem(server, node_params_pair.first, true)) {
             std::cerr << "one of the arg nodes has been deleted, cannot perform request" << std::endl;
@@ -232,7 +232,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     message::message msg_to_send;
     std::vector<uint64_t> empty_vector;
-    printf("sending batched args for node program\n");
+    //printf("sending batched args for node program\n");
     for (auto &batch_pair : initial_batches) {
         message::prepare_message(msg_to_send, message::NODE_PROG, request->pType, *request->vector_clock, 
                 request->req_id, batch_pair.second, empty_vector, request->ignore_cache);
@@ -427,7 +427,7 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
 
         case message::CLIENT_NODE_PROG_REQ:
             message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, request->client->port, request->pType);
-            std::cout << "server got type " << request->pType << std::endl;
+            //std::cout << "server got type " << request->pType << std::endl;
             request->req_msg = std::move(msg);
             node_prog::programs.at(request->pType)->unpack_and_start_coord(server, *request->req_msg, request);
             break;

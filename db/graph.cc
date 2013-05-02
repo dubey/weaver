@@ -307,17 +307,17 @@ template <typename NodeStateType>
 NodeStateType& get_node_state(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle){
         NodeStateType *toRet = new NodeStateType();
         if (G->prog_req_state_exists(pType, req_id, node_handle)) {
-            std::cout << "geting existing NodeStateType" << std::endl;
+            //std::cout << "geting existing NodeStateType" << std::endl;
             toRet = dynamic_cast<NodeStateType *>(G->fetch_prog_req_state(pType, req_id, node_handle));
             if (toRet == NULL) {
                 std::cerr << "NodeStateType needs to extend Deletable" << std::endl;
             }
         } else {
-            std::cout << "making new NodeStateType" << std::endl;
+            //std::cout << "making new NodeStateType" << std::endl;
             toRet = new NodeStateType();
             G->insert_prog_req_state(pType, req_id, node_handle, toRet);
         }
-        std::cout << "get node state " << toRet << std::endl;
+        //std::cout << "get node state " << toRet << std::endl;
         return *toRet;
 }
 
@@ -394,7 +394,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     while (!start_node_params.empty() || !deleted_nodes.empty()) {
         for (uint64_t del_node: deleted_nodes) {
-            std::cout << "in del nodes" << std::endl;
+            //std::cout << "in del nodes" << std::endl;
 
             db::element::node *node = G->acquire_node(deleted_nodes_parent.handle); // parent should definately exist
             this_node.handle = deleted_nodes_parent.handle;
@@ -422,7 +422,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             this_node.handle = node_handle;
             db::element::node *node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
             if (node == NULL || node->get_del_time() <= unpacked_request_id) {
-                std::cout << "FOUND A DEL NODE:" << node_handle << std::endl;
+                //std::cout << "FOUND A DEL NODE:" << node_handle << std::endl;
                 deleted_nodes.push_back(node_handle);
                 continue;
             }
