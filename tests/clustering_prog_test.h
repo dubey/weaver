@@ -24,7 +24,7 @@ clustering_prog_test()
     int i;
     int testcount = 0;
     size_t central_node = c.create_node();
-    size_t num_nodes = 100;
+    size_t num_nodes = 200;
     size_t star_nodes[num_nodes];
     size_t star_edges[num_nodes*2];
     size_t edges_per_node = 6;
@@ -43,18 +43,18 @@ clustering_prog_test()
         star_edges[i] = c.create_edge(central_node, star_nodes[i]);
     }
     //connect star nodes back to center. Shouldn't change coefficient
-   // res = c.run_node_program(node_prog::CLUSTERING, initial_args);
-    //assert(res->clustering_coeff == 0);
+    res = c.run_node_program(node_prog::CLUSTERING, initial_args);
+    assert(res->clustering_coeff == 0);
     std::cout << "completed test " << ++testcount << std::endl;
-//    delete res;
+    delete res;
 
     for (i = 0; i < num_nodes; i++) {
         star_edges[i+num_nodes] = c.create_edge(star_nodes[i], central_node);
     }
-//    res = c.run_node_program(node_prog::CLUSTERING, initial_args);
-//    assert(res->clustering_coeff == 0);
+    res = c.run_node_program(node_prog::CLUSTERING, initial_args);
+    assert(res->clustering_coeff == 0);
     std::cout << "completed test " << ++testcount << std::endl;
- //   delete res;
+    delete res;
 
     size_t numerator;
     double denominator = (double) ((num_nodes)*(num_nodes-1));
@@ -64,10 +64,10 @@ clustering_prog_test()
             ring_edges[i+((node_skip-1)*num_nodes)] =
                 c.create_edge(star_nodes[i], star_nodes[(i+node_skip)%num_nodes]);
             numerator = ((node_skip-1)*num_nodes+i+1);
- //           res = c.run_node_program(node_prog::CLUSTERING, initial_args);
-  //          assert(res->clustering_coeff == (numerator/denominator));
+           res = c.run_node_program(node_prog::CLUSTERING, initial_args);
+           assert(res->clustering_coeff == (numerator/denominator));
             std::cout << "completed test " << ++testcount << std::endl;
- //           delete res;
+            delete res;
         }
     }
     std::cout << "starting clustering tests with deletion" <<  std::endl;
@@ -85,8 +85,7 @@ clustering_prog_test()
             c.delete_node(star_nodes[i]);
         }
         res = c.run_node_program(node_prog::CLUSTERING, initial_args);
-        std::cout << "expected " << (numerator/denominator) << " but got "
-         << res->clustering_coeff <<  std::endl;
+        //std::cout << "expected " << numerator << "/" << denominator << " = " << (numerator/denominator) << " but got " << res->clustering_coeff <<  std::endl;
         assert(res->clustering_coeff == (numerator/denominator));
         std::cout << "completed test " << ++testcount << std::endl;
         delete res;
