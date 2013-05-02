@@ -307,13 +307,13 @@ template <typename NodeStateType>
 NodeStateType& get_node_state(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle){
         NodeStateType *toRet = new NodeStateType();
         if (G->prog_req_state_exists(pType, req_id, node_handle)) {
-            //std::cout << "geting existing NodeStateType" << std::endl;
+            std::cout << "geting existing NodeStateType handle" << node_handle << std::endl;
             toRet = dynamic_cast<NodeStateType *>(G->fetch_prog_req_state(pType, req_id, node_handle));
             if (toRet == NULL) {
                 std::cerr << "NodeStateType needs to extend Deletable" << std::endl;
             }
         } else {
-            //std::cout << "making new NodeStateType" << std::endl;
+            std::cout << "making new NodeStateType hanlde "<< node_handle << std::endl;
             toRet = new NodeStateType();
             G->insert_prog_req_state(pType, req_id, node_handle, toRet);
         }
@@ -377,7 +377,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     prog_type prog_type_recvd;
     db::element::remote_node deleted_nodes_parent;
     ParamsType deleted_nodes_param;
-    std::vector<uint64_t> deleted_nodes;
+    std::vector<std::pair<uint64_t, db::element::remote_node>> deleted_nodes; // node that was deleted and it's parent's handle
     uint64_t cur_node;
     std::vector<uint64_t> dirty_cache_ids; // cache values used by user that we need to verify are good at coord
     std::unordered_set<uint64_t> invalid_cache_ids; // cache values from coordinator we know are invalid
@@ -393,13 +393,15 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     std::function<std::vector<CacheValueType *>()> cached_values_getter;
 
     while (!start_node_params.empty() || !deleted_nodes.empty()) {
-        for (uint64_t del_node: deleted_nodes) {
-            //std::cout << "in del nodes" << std::endl;
+        for (std::pair<uint64_t, db::element::remote_node> del_node: deleted_nodes) {
+            //std::cout << "in del nodes "<< del_node << std::endl;
 
-            db::element::node *node = G->acquire_node(deleted_nodes_parent.handle); // parent should definately exist
-            this_node.handle = deleted_nodes_parent.handle;
-            node_state_getter = std::bind(get_node_state<NodeStateType>, G, prog_type_recvd, unpacked_request_id, deleted_nodes_parent.handle);
-            auto next_node_params = enclosed_node_deleted_func(unpacked_request_id, *node, del_node, deleted_nodes_param, node_state_getter); 
+            size_t parent_handle = del_node.second.handle;
+
+            db::element::node *node = G->acquire_node(parent_handle); // parent should definately exist
+            //this_node.handle = handle;
+            node_state_getter = std::bind(get_node_state<NodeStateType>, G, prog_type_recvd, unpacked_request_id, parent_handle);
+            auto next_node_params = enclosed_node_deleted_func(unpacked_request_id, *node, del_node.second.handle, deleted_nodes_param, node_state_getter); 
             for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                 // signal to send back to coordinator
                 int next_loc = res.first.loc;
@@ -420,10 +422,11 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         for (auto &handle_params : start_node_params) {
             node_handle = std::get<0>(handle_params);
             this_node.handle = node_handle;
+//            std::cout << "not stuck here 1" << std::endl;
             db::element::node *node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
             if (node == NULL || node->get_del_time() <= unpacked_request_id) {
-                //std::cout << "FOUND A DEL NODE:" << node_handle << std::endl;
-                deleted_nodes.push_back(node_handle);
+                std::cout << "FOUND A DEL NODE:" << node_handle << std::endl;
+                deleted_nodes.push_back(std::make_pair(node_handle, std::get<2>(handle_params)));
                 continue;
             }
             // bind cache getter and putter function variables to functions
@@ -437,22 +440,26 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                 cache_value_putter, 
                 cached_values_getter); 
             G->release_node(node);
+//            std::cout << "not stuck here 1.4 adding:" << next_node_params.size() << std::endl;
             // batch the newly generated node programs for onward propagation
             for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                 // signal to send back to coordinator
                 if (res.first.loc == -1) {
+                    std::cout << "not stuck here coord" << std::endl;
                     // XXX get rid of pair, without pair it is not working for some reason
                     std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
                     message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, unpacked_request_id, dirty_cache_ids, temppair);
                     G->send_coord(msg.buf);
                 } else {
                     batched_node_progs[res.first.loc].emplace_back(res.first.handle, std::move(res.second), this_node);
+                    //std::cout << "not stuck here batch of size "<<  batched_node_progs[res.first.loc].size() << std::endl;
                 }
             }
         }
         start_node_params = std::move(batched_node_progs[G->myid]);
     }
 
+   // std::cout << "not stuck here 2" << std::endl;
     // now propagate requests
     for (auto &batch_pair : batched_node_progs) {
         if (batch_pair.first == G->myid) {
@@ -460,8 +467,10 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         }
         // send msg to batch.first (location) with contents batch.second (start_node_params for that machine)
         message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id, batch_pair.second, dirty_cache_ids, invalid_cache_ids);
+  //      std::cout << "not stuck here mids" << std::endl;
         G->send(batch_pair.first, msg.buf);
     }
+ //   std::cout << "not stuck here 3" << std::endl;
 }
 
 
