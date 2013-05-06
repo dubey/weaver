@@ -152,7 +152,7 @@ namespace cache
         if (entry_exists(t, node_handle, pc)) {
             for (auto &entry: pc.at(t).at(node_handle)) {
                 // check if entry is for later request or in ignore set
-                if (entry.first < req_id || ignore_set.count(entry.first)==0) {
+                if ((entry.first < req_id) && (ignore_set.find(entry.first) == ignore_set.end())) {
                     cache.push_back(entry.second);
                     entry.second->set_dirty_list_ptr(dirty_list_ptr);
                 }
@@ -194,9 +194,6 @@ namespace cache
                     if (rmap.size() == 0) {
                         nmap.erase(node);
                     }
-                }
-                if (nmap.size() == 0) {
-                    pc.erase(inv.first);
                 }
             }
             it.erase(req_id);

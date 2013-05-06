@@ -17,13 +17,14 @@
 //#include "cache_test.h"
 //#include "basic_client.h"
 //#include "simple_stress_client.h"
-#include "multiple_stress_client.h"
-#include "repetitive_stress_client.h"
+//#include "multiple_stress_client.h"
+//#include "repetitive_stress_client.h"
 //#include "clustering_test.h"
 //#include "dijkstra_test.h"
 //#include "node_prog_test.h"
-#include "dijkstra_prog_test.h"
-#include "reach_prog_test.h"
+//#include "dijkstra_prog_test.h"
+#include "repetitive_reach_prog.h"
+//#include "reach_prog_test.h"
 
 int
 main(int argc, char *argv[])
@@ -42,7 +43,8 @@ main(int argc, char *argv[])
     //std::cout << "Multiple stress client ok." << std::endl;
     //repetitive_stress_client();
     //std::cout << "Repetitive stress client ok." << std::endl;
-    reach_prog_test();
+    //reach_prog_test();
+    repetitive_reach_prog();
     //dijkstra_prog_test();
     std::cout << "Node prog tests done." << std::endl;
     //clustering_test();

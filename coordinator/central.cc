@@ -213,7 +213,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     std::unordered_map<int, std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>> initial_batches; // map from locations to a list of start_node_params to send to that shard
     server->update_mutex.lock();
 
-    printf("batching args for node program\n");
     for (std::pair<uint64_t, ParamsType> &node_params_pair : initial_args) {
         if (check_elem(server, node_params_pair.first, true)) {
             std::cerr << "one of the arg nodes has been deleted, cannot perform request" << std::endl;
@@ -232,7 +231,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     message::message msg_to_send;
     std::vector<uint64_t> empty_vector;
-    printf("sending batched args for node program\n");
+    std::cout << "Beginning req " << request->req_id << std::endl;
     for (auto &batch_pair : initial_batches) {
         message::prepare_message(msg_to_send, message::NODE_PROG, request->pType, *request->vector_clock, 
                 request->req_id, batch_pair.second, empty_vector, request->ignore_cache);
@@ -250,6 +249,7 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
     for (uint64_t cached_id: *request->cached_req_ids) {
         if (!server->is_deleted_cache_id(cached_id)) {
             server->add_good_cache_id(cached_id);
+            std::cout << "Good cache " << cached_id << std::endl;
         } else {
             // request was served based on cache value that should be
             // invalidated; restarting request
@@ -258,6 +258,7 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
             server->add_bad_cache_id(cached_id);
             request->del_request.reset();
             server->update_mutex.unlock();
+            std::cout << "Bad cache " << cached_id << std::endl;
             node_prog::programs.at(request->pType)->unpack_and_start_coord(server, *request->req_msg, request);
             break;
         }
@@ -522,10 +523,10 @@ main()
     t = new std::thread(shard_msg_handler, &server);
     t->detach();
 
-    // initialize client msg receiving thread
-    //t = new std::thread(coord_daemon_initiate, &server);
-    //t->detach();
-
     // call periodic cache update function
+    t = new std::thread(coord_daemon_initiate, &server);
+    t->detach();
+
+    // initialize client msg receiving thread
     client_msg_handler(&server);
 }

@@ -226,7 +226,6 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
 {
     busybee_returncode ret;
     message::message msg(message::CLIENT_NODE_PROG_REQ);
-    std::cout << "client sent type " << prog_to_run << std::endl;
     message::prepare_message(msg, message::CLIENT_NODE_PROG_REQ, myloc.port, prog_to_run, initial_args);
     send_coord(msg.buf);
     if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS) {

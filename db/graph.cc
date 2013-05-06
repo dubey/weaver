@@ -303,25 +303,24 @@ handle_cache_update(db::graph *G, std::unique_ptr<message::message> msg)
 }
 
 template <typename NodeStateType>
-NodeStateType& get_node_state(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle){
+NodeStateType& get_node_state(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle)
+{
         NodeStateType *toRet = new NodeStateType();
         if (G->prog_req_state_exists(pType, req_id, node_handle)) {
-            std::cout << "geting existing NodeStateType" << std::endl;
             toRet = dynamic_cast<NodeStateType *>(G->fetch_prog_req_state(pType, req_id, node_handle));
             if (toRet == NULL) {
                 std::cerr << "NodeStateType needs to extend Deletable" << std::endl;
             }
         } else {
-            std::cout << "making new NodeStateType" << std::endl;
             toRet = new NodeStateType();
             G->insert_prog_req_state(pType, req_id, node_handle, toRet);
         }
-        std::cout << "get node state " << toRet << std::endl;
         return *toRet;
 }
 
 template <typename CacheValueType>
-std::vector<CacheValueType *> get_cached_values(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle, std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t>& ignore_set)
+std::vector<CacheValueType *> get_cached_values(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle, 
+    std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set)
 {
     std::vector<CacheValueType *> toRet;
     CacheValueType *cache;
