@@ -30,6 +30,7 @@
 #include "common/meta_element.h"
 #include "common/weaver_constants.h"
 #include "common/vclock.h"
+#include "node_prog/node_prog_type.h"
 #include "threadpool/threadpool.h"
 
 namespace coordinator
@@ -38,8 +39,7 @@ namespace coordinator
     class central;
 }
 
-void reachability_request_end(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request);
-void reachability_request_propagate(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request);
+void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request);
 
 namespace coordinator
 {
@@ -79,24 +79,18 @@ namespace coordinator
             std::vector<std::shared_ptr<pending_req>> dependent_traversals;
             std::unique_ptr<std::vector<uint64_t>> src_node;
             std::unique_ptr<std::vector<uint64_t>> vector_clock;
-            std::vector<uint64_t> ignore_cache;
+            // node programs
+            std::unique_ptr<message::message> req_msg;
+            std::unique_ptr<message::message> reply_msg;
+            std::unordered_set<uint64_t> ignore_cache;
             std::shared_ptr<pending_req> del_request;
-            // used for dijkstra requests
-            bool is_widest;
-            std::unique_ptr<std::vector<std::pair<size_t, size_t>>> path;
-            // request reply
-            bool done;
-            bool reachable;
-            size_t clustering_numerator;
-            size_t clustering_denominator;
-            size_t cost;
-            uint64_t cached_req_id;
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids;
-            
+            node_prog::prog_type pType;
+            bool done;
+
         pending_req(message::msg_type type)
             : req_type(type)
             , done(false)
-            , cached_req_id(0)
             {
             }
     };
@@ -260,7 +254,7 @@ namespace coordinator
         assert(pend_iter != pending_delete_requests.end());
         for (auto &dep_req: (**pend_iter).dependent_traversals) {
             if (dep_req->done) {
-                reachability_request_end(this, dep_req); // TODO this is bad, should be processed by different threads.
+                end_node_prog(this, dep_req); // TODO this is bad, should be processed by different threads.
             }
         }
         pending_delete_requests.erase(pend_iter);
@@ -382,6 +376,33 @@ namespace coordinator
         bb_mutex.unlock();
         return ret;
     }
+
+    // caution: assuming caller holds server->mutex
+    // moved from .cc to use in node_program
+    bool
+        check_elem(coordinator::central *server, uint64_t handle, bool node_or_edge)
+        {
+            common::meta_element *elem;
+            if (node_or_edge) {
+                // check for node
+                if (server->nodes.find(handle) != server->nodes.end()) {
+                    return false;
+                }
+                elem = server->nodes.at(handle);
+            } else {
+                // check for edge
+                if (server->edges.find(handle) != server->edges.end()) {
+                    return false;
+                }
+                elem = server->edges.at(handle);
+            }
+            if (elem->get_del_time() < MAX_TIME) {
+                return false;
+            } else {
+                return true;
+            }
+        }
+
 }
 
 #endif // __CENTRAL__

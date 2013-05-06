@@ -1,6 +1,6 @@
 CC=g++-4.7
 INCLUDE_DIRS=-I.. -I.
-CFLAGS=-g -O0 -std=c++0x -Wall -Wextra
+CFLAGS=-g -O0 -std=c++0x #-Wall -Wextra
 LIBS=-lbusybee-sta -le -lrt -pthread
 
 OBJS=graph.o

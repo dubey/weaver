@@ -44,16 +44,32 @@ namespace element
     }
 
     inline bool
-    remote_node :: operator==(const db::element::remote_node &t) const{
+    remote_node :: operator==(const db::element::remote_node &t) const
+    {
         return (handle == t.handle) && (loc == t.loc);
     }
 
     inline bool
-    remote_node :: operator!=(const db::element::remote_node &t) const{
+    remote_node :: operator!=(const db::element::remote_node &t) const
+    {
         return (handle != t.handle) || (loc != t.loc);
     }
     
 }
+}
+
+namespace std
+{
+    // used if we want a hash table with a remote node as the key
+    template <>
+    struct hash<db::element::remote_node> 
+    {
+        public:
+            size_t operator()(db::element::remote_node x) const throw() 
+            {
+                return (hash<int>()(x.loc) * 6291469) + (hash<size_t>()(x.handle) * 393241); // some big primes
+            }
+    };
 }
 
 #endif

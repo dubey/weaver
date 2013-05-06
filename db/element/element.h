@@ -44,6 +44,7 @@ namespace element
             void delete_property(uint32_t key, uint64_t del_time);
             void remove_property(uint32_t key, uint64_t del_time);
             bool has_property(common::property prop);
+            bool has_property(common::property prop, uint64_t req_id);
             bool check_and_add_property(common::property prop);
             void set_properties(std::vector<common::property> &props);
             void update_del_time(uint64_t del_time);
@@ -110,10 +111,21 @@ namespace element
     }
 
     bool
+    element :: has_property(common::property prop, uint64_t req_id)
+    {
+        for (auto &p: properties) {
+            if (prop == p && req_id >= p.get_creat_time() && req_id < p.get_del_time()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    bool
     element :: has_property(common::property prop)
     {
-        for (auto &iter: properties) {
-            if (prop == iter && prop.get_creat_time() >= iter.get_creat_time() && prop.get_creat_time() < iter.get_del_time()) {
+        for (auto &p: properties) {
+            if (prop == p && prop.get_creat_time() >= p.get_creat_time() && prop.get_creat_time() < p.get_del_time()) {
                 return true;
             } 
         }

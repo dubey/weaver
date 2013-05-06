@@ -26,11 +26,11 @@
 #include "common/vclock.h"
 #include "unordered_set"
 #include "unordered_map"
-#include "db/cache/cache.h" //so we get std::hash override for location
 #include "db/element/node.h"
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
-#include "db/request_objects.h" // used for packing dijkstra_queue_elem
+#include "node_prog/node_prog_type.h" // used for packing Packable objects
+#include "db/request_objects.h"
 
 namespace message
 {
@@ -71,19 +71,8 @@ namespace message
         EDGE_DELETE_PROP,
         TRANSIT_EDGE_DELETE_PROP,
         EDGE_DELETE_PROP_ACK,
-        REACHABLE_REPLY,
-        REACHABLE_PROP,
-        REACHABLE_DONE,
         CACHE_UPDATE,
         CACHE_UPDATE_ACK,
-        DIJKSTRA_REQ,
-        DIJKSTRA_PROP,
-        DIJKSTRA_PROP_REPLY,
-        DIJKSTRA_REPLY,
-        CLUSTERING_REQ,
-        CLUSTERING_REPLY,
-        CLUSTERING_PROP,
-        CLUSTERING_PROP_REPLY,
         MIGRATE_NODE_STEP1,
         MIGRATE_NODE_STEP2,
         MIGRATE_NODE_STEP3,
@@ -92,6 +81,11 @@ namespace message
         COORD_NODE_MIGRATE,
         COORD_NODE_MIGRATE_ACK,
         MIGRATED_NBR_UPDATE,
+
+        NODE_PROG,
+        CLIENT_NODE_PROG_REQ,
+        CLIENT_NODE_PROG_REPLY,
+
         ERROR
     };
 
@@ -120,14 +114,19 @@ namespace message
     template <typename T> inline size_t size(const std::unordered_set<T>& t);
     template <typename T> inline size_t size(const std::vector<T>& t);
     template <typename T1, typename T2> inline size_t size(const std::pair<T1, T2>& t);
+    template <typename T1, typename T2, typename T3> inline size_t size(const std::tuple<T1, T2, T3>& t);
+
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::vector<T>& t);
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer &packer, const std::pair<T1, T2>& t);
+    template <typename T1, typename T2, typename T3> inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3>& t);
+
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::vector<T>& t);
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::pair<T1, T2>& t);
+    template <typename T1, typename T2, typename T3> inline void unpack_buffer(e::unpacker& unpacker, std::tuple<T1, T2, T3>& t);
 
     inline
     message :: message()
@@ -155,6 +154,13 @@ namespace message
     }
 
 // size templates
+    inline size_t size(const node_prog::prog_type &t){
+        return sizeof(uint32_t);
+    }
+    inline size_t size(const node_prog::Packable &t)
+    {
+        return t.size();
+    }
     inline size_t size(const bool &t)
     {
         return sizeof(uint16_t);
@@ -174,6 +180,10 @@ namespace message
     inline size_t size(const int &t)
     {
         return sizeof(int);
+    }
+    inline size_t size(const double &t)
+    {
+        return sizeof(uint64_t);
     }
     inline size_t size(const common::property &t)
     {
@@ -201,15 +211,15 @@ namespace message
     {
         return size(t.loc) + size(t.handle);
     }
-    inline size_t size(const db::dijkstra_queue_elem& t)
-    {
-        return size(t.cost) + size(t.node) + size(t.prev_node_req_id);
-    }
-
     template <typename T1, typename T2>
     inline size_t size(const std::pair<T1, T2> &t)
     {
         return size(t.first) + size(t.second);
+    }
+
+    template <typename T1, typename T2, typename T3>
+    inline size_t size(const std::tuple<T1, T2, T3>& t){
+        return size(std::get<0>(t)) + size(std::get<1>(t)) + size(std::get<2>(t));
     }
 
     template <typename T>
@@ -237,6 +247,17 @@ namespace message
     template <typename T>
     inline size_t size(const std::vector<T> &t)
     {
+        size_t tot_size = sizeof(size_t);
+        for (const T &elem : t) {
+            tot_size += size(elem);
+        }
+        return tot_size;
+    }
+
+    /*
+    template <typename T>
+    inline size_t size(const std::vector<T> &t)
+    {
         // first size_t to record size of vector, assumes constant size elements
         if (t.size()>0) {
             return sizeof(size_t) + (t.size()*size(t[0]));
@@ -245,6 +266,7 @@ namespace message
             return sizeof(size_t);
         }
     }
+    */
 
     template <typename T, typename... Args>
     inline size_t size(const T &t, const Args&... args)
@@ -253,6 +275,17 @@ namespace message
     }
 
     // packing templates
+
+    inline void pack_buffer(e::buffer::packer &packer, const node_prog::Packable &t)
+    {
+        //std::cout << "pack buffer called for Packable type!" << std::endl;
+        t.pack(packer);
+    }
+    inline void pack_buffer(e::buffer::packer &packer, const node_prog::prog_type &t)
+    {
+        packer = packer << t;
+    //    std::cout << "pack buffer packed prog_type " << t << " of size " << sizeof(db::prog_type) << std::endl;
+    }
 
     inline void pack_buffer(e::buffer::packer &packer, const bool &t)
     {
@@ -300,14 +333,6 @@ namespace message
         packer = packer << t.loc << t.handle;
     }
 
-    inline void
-    pack_buffer(e::buffer::packer &packer, const db::dijkstra_queue_elem &t)
-    {
-        pack_buffer(packer, t.cost);
-        pack_buffer(packer, t.node);
-        pack_buffer(packer, t.prev_node_req_id);
-    }
-
     template <typename T1, typename T2>
     inline void 
     pack_buffer(e::buffer::packer &packer, const std::pair<T1, T2> &t)
@@ -315,6 +340,13 @@ namespace message
         // assumes constant size
         pack_buffer(packer, t.first);
         pack_buffer(packer, t.second);
+    }
+
+    template <typename T1, typename T2, typename T3>
+    inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3>& t){
+        pack_buffer(packer, std::get<0>(t));
+        pack_buffer(packer, std::get<1>(t));
+        pack_buffer(packer, std::get<2>(t));
     }
 
     inline void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t)
@@ -339,6 +371,24 @@ namespace message
     {
         // !assumes constant element size
         size_t num_elems = t.size();
+        //std::cout << "pack buffer packed vector of size " << num_elems<< std::endl;
+        packer = packer << num_elems;
+        if (num_elems > 0){
+            //size_t element_size = size(t[0]);
+            for (const T &elem : t) {
+                pack_buffer(packer, elem);
+            }
+        }
+    }
+
+    /* vector with elements of constant size
+    template <typename T> 
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const std::vector<T> &t)
+    {
+        // !assumes constant element size
+        size_t num_elems = t.size();
+        //std::cout << "pack buffer packed vector of size " << num_elems<< std::endl;
         packer = packer << num_elems;
         if (num_elems > 0){
             size_t element_size = size(t[0]);
@@ -348,6 +398,8 @@ namespace message
             }
         }
     }
+    */
+
 
     template <typename T>
     inline void 
@@ -372,7 +424,6 @@ namespace message
         }
     }
 
-
     template <typename T, typename... Args>
     inline void 
     pack_buffer(e::buffer::packer &packer, const T &t, const Args&... args)
@@ -396,6 +447,11 @@ namespace message
     prepare_message(message &m, const enum msg_type given_type, const Args&... args)
     {
         size_t bytes_to_pack = size(args...) + sizeof(enum msg_type);
+        /*
+        if (given_type == NODE_PROG || given_type == CLIENT_NODE_PROG_REQ){
+            std::cout << "preparing message contents of size " << bytes_to_pack << std::endl;
+        }
+        */
         m.type = given_type;
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
@@ -405,6 +461,19 @@ namespace message
     }
 
     // unpacking templates
+    inline void
+    unpack_buffer(e::unpacker &unpacker, node_prog::Packable &t)
+    {
+        //std::cout << "unpack buffer called for Packable type!" << std::endl;
+        t.unpack(unpacker);
+    }
+    inline void
+    unpack_buffer(e::unpacker &unpacker, node_prog::prog_type &t){
+        uint32_t _type;
+        unpacker = unpacker >> _type;
+        //std::cout << "unpack buffer got " << _type << std::endl;
+        t = (enum node_prog::prog_type) _type;
+    }
     inline void
     unpack_buffer(e::unpacker &unpacker, bool &t)
     {
@@ -453,14 +522,6 @@ namespace message
         unpacker = unpacker >> t.loc >> t.handle;
     }
 
-    inline void
-    unpack_buffer(e::unpacker &unpacker, db::dijkstra_queue_elem &t)
-    {
-        unpack_buffer(unpacker, t.cost);
-        unpack_buffer(unpacker, t.node);
-        unpack_buffer(unpacker, t.prev_node_req_id);
-    }
-
     template <typename T1, typename T2>
     inline void 
     unpack_buffer(e::unpacker &unpacker, std::pair<T1, T2> &t)
@@ -468,6 +529,13 @@ namespace message
         //assumes constant size
         unpack_buffer(unpacker, t.first);
         unpack_buffer(unpacker, t.second);
+    }
+
+    template <typename T1, typename T2, typename T3>
+    inline void unpack_buffer(e::unpacker& unpacker, std::tuple<T1, T2, T3>& t){
+        unpack_buffer(unpacker, std::get<0>(t));
+        unpack_buffer(unpacker, std::get<1>(t));
+        unpack_buffer(unpacker, std::get<2>(t));
     }
 
     inline void
@@ -512,7 +580,7 @@ namespace message
         while (elements_left > 0) {
             T to_add;
             unpack_buffer(unpacker, to_add);
-            t.push_back(to_add);
+            t.push_back(std::move(to_add));
             elements_left--;
         }
     }
@@ -530,7 +598,7 @@ namespace message
         while (elements_left > 0) {
             T to_add;
             unpack_buffer(unpacker, to_add);
-            t.insert(to_add);
+            t.insert(std::move(to_add));
             elements_left--;
         }
     }
@@ -554,7 +622,7 @@ namespace message
 
             unpack_buffer(unpacker, val_to_add);
 
-            t[key_to_add] = val_to_add;
+            t[key_to_add] = std::move(val_to_add); // XXX change to insert later to reduce overhead
             elements_left--;
         }
     }

@@ -29,8 +29,46 @@
 namespace db
 {
 class update_request;
+
 namespace element
 {
+    class edge_iterator
+    {
+        std::unordered_map<uint64_t, edge*>::iterator iter;
+        std::unordered_map<uint64_t, edge*> &map;
+        uint64_t req_id;
+
+        public:
+            edge_iterator(std::unordered_map<uint64_t, edge*> m, uint64_t id);
+            void next();
+            edge* get_edge();
+    };
+
+    inline
+    edge_iterator :: edge_iterator(std::unordered_map<uint64_t, edge*> m, uint64_t id)
+        : map(m)
+        , req_id(id)
+    {
+        iter = map.begin();
+    }
+
+    inline void 
+    edge_iterator :: next()
+    {
+        while(iter != map.end()) {
+            if (iter->second->get_del_time() > req_id) {
+                break;
+            }
+            iter++;
+        }
+    }
+
+    inline edge*
+    edge_iterator :: get_edge()
+    {
+        return iter->second;
+    }
+
     class node : public element
     {
         public:

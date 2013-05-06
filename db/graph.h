@@ -30,9 +30,10 @@
 #include "common/property.h"
 #include "element/node.h"
 #include "element/edge.h"
-#include "cache/cache.h"
 #include "threadpool/threadpool.h"
-#include "request_objects.h"
+#include "node_prog/node_prog_type.h"
+#include "cache/program_cache.h"
+#include "state/program_state.h"
 
 namespace db
 {
@@ -149,48 +150,19 @@ namespace db
             uint64_t my_clock;
 
         public:
+            // Consistency
+            bool check_clock(uint64_t time);
+            bool increment_clock();
+            element::node* acquire_node(uint64_t node_handle);
+            void release_node(element::node *n);
+
+            // Graph state
             std::unordered_map<uint64_t, element::node*> nodes;
-            int node_count;
-            int num_shards;
             std::shared_ptr<po6::net::location> myloc;
             std::shared_ptr<po6::net::location> coord;
             po6::net::location **shard_locs; // po6 locations for each shard
-            cache::reach_cache cache; // reachability cache
-            busybee_sta bb; // Busybee instance used for sending messages
-            busybee_sta bb_recv; // Busybee instance used for receiving messages
-            po6::threads::mutex bb_lock; // Busybee lock
             int myid;
-            // For traversal
-            uint64_t outgoing_req_id_counter;
-            po6::threads::mutex outgoing_req_id_counter_mutex, visited_mutex;
-            std::unordered_map<uint64_t, std::shared_ptr<batch_request>> pending_batch;
-            std::unordered_set<uint64_t> done_requests; // requests which need to be killed // TODO need clean up of old done requests
             db::thread::pool thread_pool;
-            std::unordered_map<uint64_t, std::vector<uint64_t>> visit_map_odd, visit_map_even; // visited ids -> nodes
-            bool visit_map;
-            // For node migration
-            migrate_request mrequest; // pending migration request object
-            po6::threads::mutex migration_mutex;
-            //element::node *migr_node; // newly migrated node
-            uint64_t migr_node; // newly migrated node
-            std::priority_queue<update_request*, std::vector<update_request*>, req_compare> pending_updates;
-            std::deque<uint64_t> pending_update_ids;
-            uint64_t target_clock;
-            // For permanent deletion
-            uint64_t del_id;
-            std::deque<perm_del> delete_req_ids;
-            // testing
-            std::unordered_map<uint64_t, uint64_t> req_count;
-            bool already_migrated;
-            
-        public:
-            // consistency
-            bool check_clock(uint64_t time);
-            bool check_request(uint64_t req_id);
-            bool increment_clock();
-            // graph update
-            element::node* acquire_node(uint64_t node_handle);
-            void release_node(element::node *n);
             void create_node(uint64_t time, bool migrate);
             std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> delete_node(uint64_t node, uint64_t del_time);
             bool create_edge(uint64_t local_node, uint64_t time, uint64_t remote_node, int remote_loc, uint64_t remote_time);
@@ -200,59 +172,69 @@ namespace db
             std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> delete_all_edge_property(uint64_t n, uint64_t e, uint32_t key, uint64_t del_time);
             void permanent_delete(uint64_t req_id);
             void permanent_edge_delete(uint64_t n, uint64_t e);
-            // traversals
-            void add_done_request(uint64_t req_id);
-            void broadcast_done_request(uint64_t req_id); 
-            bool mark_visited(element::node *n, uint64_t req_id);
-            void remove_visited(element::node *n, uint64_t req_id);
-            void record_visited(uint64_t coord_req_id, const std::vector<uint64_t> &nodes);
-            uint64_t get_cache(uint64_t local_node, int dest_loc, uint64_t dest_node, std::vector<common::property> &edge_props);
-            void add_cache(element::node *n, uint64_t local_node, int dest_loc, uint64_t dest_node, 
-                uint64_t req_id, std::vector<common::property> &edge_props);
-            void transient_add_cache(element::node *n, uint64_t local_node, int dest_loc, uint64_t dest_node, 
-                uint64_t req_id, std::vector<common::property> &edge_props);
-            void remove_cache(uint64_t req_id, uint64_t ignore_node);
-            void commit_cache(uint64_t req_id);
-            void propagate_request(std::vector<uint64_t> &nodes, std::shared_ptr<batch_request> request, int prop_loc);
-            // migration
+
+            // Node migration
+            migrate_request mrequest; // pending migration request object
+            po6::threads::mutex migration_mutex;
+            uint64_t migr_node; // newly migrated node
+            std::priority_queue<update_request*, std::vector<update_request*>, req_compare> pending_updates;
+            std::deque<uint64_t> pending_update_ids;
+            uint64_t target_clock;
             void update_migrated_nbr(uint64_t lnode, uint64_t orig_node, int orig_loc, uint64_t new_node, int new_loc);
             bool set_target_clock(uint64_t time);
             void set_update_ids(std::vector<uint64_t>&);
             void queue_transit_node_update(uint64_t req_id, std::unique_ptr<message::message> msg);
-            // busybee send methods
+            
+            // Permanent deletion
+            uint64_t del_id;
+            std::deque<perm_del> delete_req_ids;
+            
+            // Messaging infrastructure
+            busybee_sta bb; // Busybee instance used for sending messages
+            busybee_sta bb_recv; // Busybee instance used for receiving messages
+            po6::threads::mutex bb_lock; // Busybee lock
             busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(std::unique_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(po6::net::location *loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send(int loc, std::auto_ptr<e::buffer> buf);
             busybee_returncode send_coord(std::auto_ptr<e::buffer> buf);
-            // XXX
-            //void refresh_edge(element::node *n, element::edge *e, uint64_t del_time);
+            
             // testing
+            std::unordered_map<uint64_t, uint64_t> req_count;
             void sort_and_print_nodes();
+
+            // Node programs
+            // prog_type-> map from request_id to map from node handle to request state for that node
+            state::program_state node_prog_req_state; 
+            bool prog_req_state_exists(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
+            node_prog::Deletable* fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
+            void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::Deletable *toAdd);
+            // prog_type-> map from node handle to map from request_id to cache values -- used to do cache read/updates
+            cache::program_cache node_prog_cache;
+            bool prog_cache_exists(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id);
+            std::vector<node_prog::CacheValueBase*> fetch_prog_cache(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id, std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set);
+            node_prog::CacheValueBase* fetch_prog_cache_single(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id);
+            void insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::CacheValueBase *toAdd, element::node *n);
+            void invalidate_prog_cache(uint64_t request_id);
+            void commit_prog_cache(uint64_t req_id);
     };
 
     inline
     graph :: graph(int my_id, const char* ip_addr, int port)
         : my_clock(0)
-        , node_count(0)
-        , num_shards(NUM_SHARDS)
         , myloc(new po6::net::location(ip_addr, port))
         , coord(new po6::net::location(COORD_IPADDR, COORD_REC_PORT))
-        , cache(NUM_SHARDS)
+        , myid(my_id)
+        , thread_pool(NUM_THREADS)
+        , target_clock(0)
         , bb(myloc->address, myloc->port + SEND_PORT_INCR, 0)
         , bb_recv(myloc->address, myloc->port, 0)
-        , myid(my_id)
-        , outgoing_req_id_counter(0)
-        , thread_pool(NUM_THREADS)
-        , visit_map(true)
-        , target_clock(0)
-        , already_migrated(false)
     {
         int i, inport;
         po6::net::location *temp_loc;
         std::string ipaddr;
         std::ifstream file(SHARDS_DESC_FILE);
-        shard_locs = (po6::net::location **)malloc(sizeof(po6::net::location *) * num_shards);
+        shard_locs = (po6::net::location **)malloc(sizeof(po6::net::location *) * NUM_SHARDS);
         i = 0;
         while (file >> ipaddr >> inport) {
             temp_loc = new po6::net::location(ipaddr.c_str(), inport);
@@ -271,16 +253,6 @@ namespace db
         clock_mutex.lock();
         ret = (time <= my_clock);
         clock_mutex.unlock();
-        return ret;
-    }
-
-    inline bool
-    graph :: check_request(uint64_t req_id)
-    {
-        bool ret;
-        request_mutex.lock();
-        ret = (done_requests.find(req_id) != done_requests.end());
-        request_mutex.unlock();
         return ret;
     }
 
@@ -339,8 +311,7 @@ namespace db
             new_node->state = element::node::mode::STABLE;
         }
 #ifdef DEBUG
-        std::cout << "Creating node, addr = " << (void*) new_node 
-                << " and node count " << (++node_count) << std::endl;
+        std::cout << "Creating node, addr = " << (void*) new_node << std::endl;
 #endif
     }
 
@@ -357,7 +328,7 @@ namespace db
         }
         ret.second = std::move(n->purge_cache());
         for (auto rid: *ret.second) {
-            remove_cache(rid, node_handle);
+            invalidate_prog_cache(rid);
         }
         release_node(n);
         deletion_mutex.lock();
@@ -424,7 +395,7 @@ namespace db
         }
         ret.second = std::move(n->purge_cache());
         for (auto rid: *ret.second) {
-            remove_cache(rid, node_handle);
+            invalidate_prog_cache(rid);
         }
         release_node(n);
         deletion_mutex.lock();
@@ -463,7 +434,7 @@ namespace db
         }
         ret.second = std::move(n->purge_cache());
         for (auto rid: *ret.second) {
-            remove_cache(rid, node);
+            invalidate_prog_cache(rid);
         }
         release_node(n);
         deletion_mutex.lock();
@@ -571,133 +542,6 @@ namespace db
         release_node(n);
         deletion_mutex.unlock();
     }
-
-    // traversal methods
-
-    inline void
-    graph :: add_done_request(uint64_t req_id)
-    {
-        request_mutex.lock();
-        done_requests.insert(req_id);
-        request_mutex.unlock();
-    }
-
-    inline void
-    graph :: broadcast_done_request(uint64_t req_id)
-    {
-        int i;
-        message::message msg;
-        for (i = 0; i < num_shards; i++) {
-            message::prepare_message(msg, message::REACHABLE_DONE, req_id);
-            if (i == myid) {
-                continue;
-            }
-            send(i, msg.buf);
-        }
-    }
-
-    // caution: assuming caller holds n->update_mutex
-    inline bool
-    graph :: mark_visited(element::node *n, uint64_t req_id)
-    {
-        return n->check_and_add_seen(req_id);
-    }
-
-    // caution: assuming caller holds n->update_mutex
-    inline void
-    graph :: remove_visited(element::node *n, uint64_t req_id)
-    {
-        n->remove_seen(req_id);
-    }
-
-    inline void 
-    graph :: record_visited(uint64_t coord_req_id, const std::vector<uint64_t> &nodes)
-    {
-        visited_mutex.lock();
-        if (visit_map) {
-            visit_map_even[coord_req_id].insert(visit_map_even[coord_req_id].end(), nodes.begin(), nodes.end());
-        } else {
-            visit_map_odd[coord_req_id].insert(visit_map_odd[coord_req_id].end(), nodes.begin(), nodes.end());
-        }
-        visited_mutex.unlock();
-    }
- 
-    inline uint64_t
-    graph :: get_cache(uint64_t local_node, int dest_loc, uint64_t dest_node, std::vector<common::property> &edge_props)
-    {
-        return cache.get_req_id(dest_loc, dest_node, local_node, edge_props);
-    }
-
-    // caution: assuming caller holds n->update_mutex
-    inline void 
-    graph :: add_cache(element::node *n, uint64_t local_node, int dest_loc, uint64_t dest_node, 
-        uint64_t req_id, std::vector<common::property> &edge_props)
-    {
-        if (cache.insert_entry(dest_loc, dest_node, local_node, req_id, edge_props)) {
-            n->add_cached_req(req_id);
-        }
-    }
-
-    // caution: assuming caller holds n->update_mutex
-    inline void
-    graph :: transient_add_cache(element::node *n, uint64_t local_node, int dest_loc, uint64_t dest_node, 
-        uint64_t req_id, std::vector<common::property> &edge_props)
-    {
-        if (cache.transient_insert_entry(dest_loc, dest_node, local_node, req_id, edge_props)) {
-            n->add_cached_req(req_id);
-        }
-    }
-
-    // caution: assuming caller holds ignore_node->update_mutex
-    inline void
-    graph :: remove_cache(uint64_t req_id, uint64_t ignore_node=0)
-    {
-        std::unique_ptr<std::vector<uint64_t>> caching_nodes1 = std::move(cache.remove_entry(req_id));
-        std::unique_ptr<std::vector<uint64_t>> caching_nodes2 = std::move(cache.remove_transient_entry(req_id));
-        if (caching_nodes1) {
-            for (auto iter: *caching_nodes1) {
-                if (iter != ignore_node) {
-                    element::node *n = acquire_node(iter);
-                    n->remove_cached_req(req_id);
-                    release_node(n);
-                }
-            }
-        } 
-        if (caching_nodes2) {
-            for (auto iter: *caching_nodes2) {
-                if (iter != ignore_node) {
-                    element::node *n = acquire_node(iter);
-                    n->remove_cached_req(req_id);
-                    release_node(n);
-                }
-            }
-        }
-    }
-
-    inline void
-    graph :: commit_cache(uint64_t req_id)
-    {
-        cache.commit(req_id);
-    }
-
-    // caution: assuming we hold the request->mutex
-    inline void 
-    graph :: propagate_request(std::vector<uint64_t> &nodes, std::shared_ptr<batch_request> request, int prop_loc)
-    {
-        message::message msg(message::REACHABLE_PROP);
-        uint64_t my_outgoing_req_id;
-        outgoing_req_id_counter_mutex.lock();
-        my_outgoing_req_id = outgoing_req_id_counter++;
-        std::pair<uint64_t, std::shared_ptr<batch_request>> new_elem(my_outgoing_req_id, request);
-        assert(pending_batch.insert(new_elem).second);
-        outgoing_req_id_counter_mutex.unlock();
-        message::prepare_message(msg, message::REACHABLE_PROP, request->vector_clock, nodes, myid,
-            request->dest_addr, request->dest_loc, request->coord_id, my_outgoing_req_id, 
-            request->edge_props, request->ignore_cache);
-        // no local messages possible, so have to send via network
-        send(prop_loc, msg.buf);
-    }
-
 
     // migration methods
 
@@ -819,18 +663,6 @@ namespace db
         return ret;
     }
 
-    //XXX where is this used?
-    /*
-    inline void
-    graph :: refresh_edge(element::node *n, element::edge *e, uint64_t del_time)
-    {
-        // TODO caching and edge refreshes
-        n->update_mutex.lock();
-        e->update_del_time(del_time);
-        n->update_mutex.unlock();
-    }
-    */
-
     // testing methods
     void
     graph :: sort_and_print_nodes()
@@ -876,6 +708,62 @@ namespace db
             (*thr->func)(thr->G, thr->arg);
             delete thr;
         }
+    }
+
+    // node program
+    inline bool 
+    graph :: prog_req_state_exists(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle)
+    {
+        return node_prog_req_state.state_exists(t, request_id, local_node_handle);
+    }
+
+    inline node_prog::Deletable*
+    graph :: fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle)
+    {
+        return node_prog_req_state.get_state(t, request_id, local_node_handle);
+    }
+
+    inline void 
+    graph :: insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::Deletable* toAdd)
+    {
+        node_prog_req_state.put_state(t, request_id, local_node_handle, toAdd);
+    }
+
+    inline bool
+    graph :: prog_cache_exists(node_prog::prog_type t, uint64_t node_handle, uint64_t req_id)
+    {
+        return node_prog_cache.cache_exists(t, node_handle, req_id);
+    }
+
+    inline std::vector<node_prog::CacheValueBase*>
+    graph :: fetch_prog_cache(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id, std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set)
+    {
+        return node_prog_cache.get_cache(t, local_node_handle, req_id, dirty_list_ptr, ignore_set);
+    }
+
+    inline node_prog::CacheValueBase*
+    graph :: fetch_prog_cache_single(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id)
+    {
+        return node_prog_cache.single_get_cache(t, local_node_handle, req_id);
+    }
+
+    inline void
+    graph :: insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::CacheValueBase *toAdd, element::node *n)
+    {
+        n->add_cached_req(request_id);
+        node_prog_cache.put_cache(request_id, t, local_node_handle, toAdd);
+    }
+
+    inline void
+    graph :: invalidate_prog_cache(uint64_t request_id)
+    {
+        node_prog_cache.delete_cache(request_id);
+    }
+
+    inline void
+    graph :: commit_prog_cache(uint64_t req_id)
+    {
+        node_prog_cache.commit(req_id);
     }
 
 } //namespace db
