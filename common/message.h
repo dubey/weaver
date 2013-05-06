@@ -181,6 +181,10 @@ namespace message
     {
         return sizeof(int);
     }
+    inline size_t size(const double &t)
+    {
+        return sizeof(uint64_t);
+    }
     inline size_t size(const common::property &t)
     {
         return sizeof(uint32_t)+sizeof(size_t)+2*sizeof(uint64_t);
@@ -243,6 +247,17 @@ namespace message
     template <typename T>
     inline size_t size(const std::vector<T> &t)
     {
+        size_t tot_size = sizeof(size_t);
+        for (const T &elem : t) {
+            tot_size += size(elem);
+        }
+        return tot_size;
+    }
+
+    /*
+    template <typename T>
+    inline size_t size(const std::vector<T> &t)
+    {
         // first size_t to record size of vector, assumes constant size elements
         if (t.size()>0) {
             return sizeof(size_t) + (t.size()*size(t[0]));
@@ -251,6 +266,7 @@ namespace message
             return sizeof(size_t);
         }
     }
+    */
 
     template <typename T, typename... Args>
     inline size_t size(const T &t, const Args&... args)
@@ -358,6 +374,23 @@ namespace message
         //std::cout << "pack buffer packed vector of size " << num_elems<< std::endl;
         packer = packer << num_elems;
         if (num_elems > 0){
+            //size_t element_size = size(t[0]);
+            for (const T &elem : t) {
+                pack_buffer(packer, elem);
+            }
+        }
+    }
+
+    /* vector with elements of constant size
+    template <typename T> 
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const std::vector<T> &t)
+    {
+        // !assumes constant element size
+        size_t num_elems = t.size();
+        //std::cout << "pack buffer packed vector of size " << num_elems<< std::endl;
+        packer = packer << num_elems;
+        if (num_elems > 0){
             size_t element_size = size(t[0]);
             for (const T &elem : t) {
                 pack_buffer(packer, elem);
@@ -365,6 +398,8 @@ namespace message
             }
         }
     }
+    */
+
 
     template <typename T>
     inline void 

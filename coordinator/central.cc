@@ -205,7 +205,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     unpack_and_start_coord(coordinator::central *server, message::message &msg, std::shared_ptr<coordinator::pending_req> request)
 {
     node_prog::prog_type ignore;
-    printf("coordinator ZAAAAAAAAAAAAAAAAAA\n");
+    //printf("coordinator ZAAAAAAAAAAAAAAAAAA\n");
     std::vector<std::pair<uint64_t, ParamsType>> initial_args;
 
     message::unpack_message(*request->req_msg, message::CLIENT_NODE_PROG_REQ, request->client->port, ignore, initial_args);
@@ -428,7 +428,7 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
 
         case message::CLIENT_NODE_PROG_REQ:
             message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, request->client->port, request->pType);
-            std::cout << "server got type " << request->pType << std::endl;
+            //std::cout << "server got type " << request->pType << std::endl;
             request->req_msg = std::move(msg);
             node_prog::programs.at(request->pType)->unpack_and_start_coord(server, *request->req_msg, request);
             break;

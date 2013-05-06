@@ -94,16 +94,19 @@ namespace node_prog
             std::function<std::vector<dijkstra_cache_value *>()> cached_values_getter)
     {
         std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
+        if (params.edge_weight_name == 88){
+            std::cout << "YERRRRRRRRRRRRRr" << std::endl;
+        }
         if (n.get_creat_time() == params.dest_handle){
             params.edge_weight_name = 42;
             std::cout << "FOUND DEST, RETURNING" << std::endl;
             next.emplace_back(std::make_pair(db::element::remote_node(-1, 1337), params));
             return next;
         }
-        std::cout << "OMG ITS RUNNING THE NODE PROGRAM" << std::endl;
         for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
             next.emplace_back(std::make_pair(possible_nbr.second->nbr, params));
         }
+        std::cout << "OMG ITS RUNNING THE NODE PROGRAM " << next.size()<< std::endl;
         return next;
     }
 
@@ -113,6 +116,7 @@ namespace node_prog
                 uint64_t deleted_handle, // handle of node that didn't exist
             dijkstra_params &params_given, // params we had sent to deleted node
             std::function<dijkstra_node_state&()> state_getter){
+        std::cout << "DELETED PROGRAM " <<  std::endl;
         return std::vector<std::pair<db::element::remote_node, dijkstra_params>>(); 
     }
 }
