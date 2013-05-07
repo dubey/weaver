@@ -29,6 +29,7 @@ namespace element
     {
         public:
             edge(uint64_t time, int remote_loc, uint64_t remote_handle);
+            edge(uint64_t time, remote_node rn);
         
         public:
             remote_node nbr; // out-neighbor for this edge
@@ -38,6 +39,13 @@ namespace element
     edge :: edge(uint64_t time, int remote_loc, uint64_t remote_handle)
         : element(time)
         , nbr(remote_loc, remote_handle)
+    {
+    }
+
+    inline
+    edge :: edge(uint64_t time, remote_node rn)
+        : element(time)
+        , nbr(rn)
     {
     }
 }

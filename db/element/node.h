@@ -89,10 +89,8 @@ namespace element
             std::unordered_map<uint64_t, edge*> out_edges;
             std::unordered_map<uint64_t, edge*> in_edges;
             po6::threads::mutex update_mutex;
-            std::unordered_set<uint64_t> seen; // requests which have been seen
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids; // requests which have been cached
             // for migration
-            uint64_t new_handle;
             int prev_loc, new_loc;
             std::vector<uint32_t> msg_count;
 
@@ -101,9 +99,6 @@ namespace element
 
         public:
             void add_edge(edge *e, bool in_or_out);
-            bool check_and_add_seen(uint64_t id);
-            void remove_seen(uint64_t id);
-            void set_seen(std::unordered_set<uint64_t> &seen);
             void add_cached_req(uint64_t req_id);
             void remove_cached_req(uint64_t req_id);
             std::unique_ptr<std::vector<uint64_t>> purge_cache();
@@ -142,29 +137,6 @@ namespace element
         } else {
             in_edges.emplace(e->get_creat_time(), e);
         }
-    }
-
-    inline bool
-    node :: check_and_add_seen(uint64_t id)
-    {
-        if (seen.find(id) != seen.end()) {
-            return true;
-        } else {
-            seen.insert(id);
-            return false;
-        }
-    }
-
-    inline void
-    node :: remove_seen(uint64_t id)
-    {
-        seen.erase(id);
-    }
-
-    inline void
-    node :: set_seen(std::unordered_set<uint64_t> &s)
-    {
-        seen = s;
     }
 
     inline void

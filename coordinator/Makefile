@@ -3,8 +3,17 @@ INCLUDE_DIRS=-I.. -I.
 CFLAGS=-g -O0 -std=c++0x #-Wall -Wextra
 LIBS=-lbusybee-sta -le -lrt -pthread
 
+SRCS=central.cc
 OBJS=central.o
 TARGET=coordinator
+
+all: depend $(TARGET)
+
+depend: .depend
+
+.depend: $(SRCS)
+	rm -f ./.depend
+	$(CC) $(CFLAGS) $(INCLUDE_DIRS) -MM $^ -MF ./.depend;
 
 $(TARGET):	$(OBJS)
 	$(CC) -o $@ $(OBJS) $(LIBS_DIR) $(LIBS)
@@ -17,3 +26,5 @@ clean:
 
 clobber:	clean
 	rm -f $(TARGET)
+
+include .depend

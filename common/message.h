@@ -154,7 +154,8 @@ namespace message
     }
 
 // size templates
-    inline size_t size(const node_prog::prog_type &t){
+    inline size_t size(const node_prog::prog_type &t)
+    {
         return sizeof(uint32_t);
     }
     inline size_t size(const node_prog::Packable &t)
@@ -189,13 +190,15 @@ namespace message
     {
         return sizeof(uint32_t)+sizeof(size_t)+2*sizeof(uint64_t);
     }
-
+    inline size_t size(const db::element::remote_node &t)
+    {
+        return size(t.loc) + size(t.handle);
+    }
     inline size_t size(const db::element::edge* const &t)
     {
         size_t sz = 2*sizeof(uint64_t) + // time stamps
             size(*t->get_props()) + // properties
-            sizeof(size_t) + // neighbor handle
-            sizeof(int); // neighbor loc
+            size(t->nbr);
         return sz;
     }
     inline size_t size(const db::element::node &t)
@@ -204,12 +207,8 @@ namespace message
         sz += size(*t.get_props());  // properties
         sz += size(t.out_edges);
         sz += size(t.in_edges);
-        sz += size(t.seen);
+        sz += size(t.msg_count);
         return sz;
-    }
-    inline size_t size(const db::element::remote_node &t)
-    {
-        return size(t.loc) + size(t.handle);
     }
     template <typename T1, typename T2>
     inline size_t size(const std::pair<T1, T2> &t)
@@ -351,8 +350,9 @@ namespace message
 
     inline void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t)
     {
-        packer = packer << t->get_creat_time() << t->get_del_time() << t->nbr.handle << t->nbr.loc;
+        packer = packer << t->get_creat_time() << t->get_del_time();
         pack_buffer(packer, *t->get_props());
+        pack_buffer(packer, t->nbr);
     }
 
     inline void
@@ -362,7 +362,7 @@ namespace message
         pack_buffer(packer, *t.get_props());
         pack_buffer(packer, t.out_edges);
         pack_buffer(packer, t.in_edges);
-        pack_buffer(packer, t.seen);
+        pack_buffer(packer, t.msg_count);
     }
 
     template <typename T> 
@@ -543,11 +543,13 @@ namespace message
     {
         uint64_t tc, td;
         std::vector<common::property> props;
+        db::element::remote_node rn;
         size_t nbr_handle;
         int nbr_loc;
-        unpacker = unpacker >> tc >> td >> nbr_handle >> nbr_loc;
+        unpacker = unpacker >> tc >> td;
         unpack_buffer(unpacker, props);
-        t = new db::element::edge(tc, nbr_loc, nbr_handle);
+        unpack_buffer(unpacker, rn);
+        t = new db::element::edge(tc, rn);
         t->update_del_time(td);
         t->set_properties(props);
     }
@@ -561,7 +563,7 @@ namespace message
         unpack_buffer(unpacker, props);
         unpack_buffer(unpacker, t.out_edges);
         unpack_buffer(unpacker, t.in_edges);
-        unpack_buffer(unpacker, t.seen);
+        unpack_buffer(unpacker, t.msg_count);
         t.update_creat_time(tc);
         t.update_del_time(td);
         t.set_properties(props);

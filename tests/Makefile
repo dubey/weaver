@@ -1,13 +1,21 @@
 CC=g++-4.7
 INCLUDE_DIRS=-I.. -I../db
 CFLAGS=-g -O0 -std=c++0x -D__STDC_LIMIT_MACROS
-#LIBS_DIR=-L/usr/local/lib
 LIBS=-lbusybee-sta -le -lrt -pthread
 
+SRCS=run.cc
 OBJS=run.o
 TARGET=tests
 
-tests:	$(OBJS)
+all: depend $(TARGET)
+
+depend: .depend
+
+.depend: $(SRCS)
+	rm -f ./.depend
+	$(CC) $(CFLAGS) $(INCLUDE_DIRS) -MM $^ -MF ./.depend;
+
+$(TARGET):	$(OBJS)
 	$(CC) -o $@ $(OBJS) $(LIBS_DIR) $(LIBS)
 
 %.o:	%.cc
@@ -21,3 +29,5 @@ clobber:	clean
 
 check:	tests
 	./tests
+
+include .depend
