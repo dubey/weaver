@@ -45,10 +45,10 @@ main(int argc, char *argv[])
     //repetitive_stress_client();
     //std::cout << "Repetitive stress client ok." << std::endl;
     //reach_prog_test();
-    //repetitive_reach_prog();
+    repetitive_reach_prog();
     //delete_prog_test();
     //dijkstra_prog_test();
-    clustering_prog_test();
+    //clustering_prog_test();
     std::cout << "Node prog tests done." << std::endl;
     //clustering_test();
     //std::cout <<"Clustering ok.\n";

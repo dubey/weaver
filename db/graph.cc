@@ -38,10 +38,10 @@
 void migrate_node_step1(db::graph *G, uint64_t node_handle, int new_shard);
 void migrate_node_step2(db::graph *G, std::unique_ptr<message::message> msg);
 void migrate_node_step3(db::graph *G, std::unique_ptr<message::message> msg);
-void migrate_node_step4(db::graph *G, std::unique_ptr<message::message> msg);
-void migrate_node_step4_1(db::graph *G);
+void migrate_node_step4(db::graph *G);
 void migrate_node_step5(db::graph *G, std::unique_ptr<message::message> msg);
 void migrate_node_step6(db::graph *G);
+void migrate_node_step7(db::graph *G);
 
 
 // create a graph node
@@ -55,18 +55,18 @@ handle_create_node(db::graph *G, uint64_t req_id)
 inline void
 handle_delete_node(db::graph *G, uint64_t req_id, uint64_t node_handle, std::unique_ptr<std::vector<uint64_t>> cache)
 {
-    std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> success;
+    std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> success;
     std::unique_ptr<message::message> msg(new message::message());
     success = G->delete_node(node_handle, req_id);
     if (cache) {
         success.second = std::move(cache);
     }
-    if (success.first) {
+    if (success.first == 0) {
         message::prepare_message(*msg, message::NODE_DELETE_ACK, req_id, *success.second);
         G->send_coord(msg->buf);
     } else {
-        message::prepare_message(*msg, message::TRANSIT_NODE_DELETE_REQ, req_id, *success.second);
-        G->queue_transit_node_update(req_id, std::move(msg));
+        message::prepare_message(*msg, message::TRANSIT_NODE_DELETE_REQ, success.first, req_id, *success.second);
+        G->fwd_transit_node_update(std::move(msg));
     }
 }
 
@@ -74,10 +74,11 @@ handle_delete_node(db::graph *G, uint64_t req_id, uint64_t node_handle, std::uni
 inline void
 handle_create_edge(db::graph *G, uint64_t req_id, uint64_t n1, uint64_t n2, int loc2, uint64_t tc2)
 {
-    if (!G->create_edge(n1, req_id, n2, loc2, tc2)) {
+    uint64_t ret = G->create_edge(n1, req_id, n2, loc2, tc2);
+    if (ret != 0) {
         std::unique_ptr<message::message> msg(new message::message());
-        message::prepare_message(*msg, message::TRANSIT_EDGE_CREATE_REQ, req_id, n2, loc2, tc2);
-        G->queue_transit_node_update(req_id, std::move(msg));
+        message::prepare_message(*msg, message::TRANSIT_EDGE_CREATE_REQ, ret, req_id, n2, loc2, tc2);
+        G->fwd_transit_node_update(std::move(msg));
     }
 }
 
@@ -85,10 +86,11 @@ handle_create_edge(db::graph *G, uint64_t req_id, uint64_t n1, uint64_t n2, int 
 inline void
 handle_create_reverse_edge(db::graph *G, uint64_t req_id, uint64_t remote_node, int remote_loc, uint64_t local_node)
 {
-    if (!G->create_reverse_edge(req_id, local_node, remote_node, remote_loc)) {
+    uint64_t ret = G->create_reverse_edge(req_id, local_node, remote_node, remote_loc);
+    if (ret != 0) {
         std::unique_ptr<message::message> msg(new message::message());
-        message::prepare_message(*msg, message::TRANSIT_REVERSE_EDGE_CREATE, req_id, remote_node, remote_loc);
-        G->queue_transit_node_update(0, std::move(msg));
+        message::prepare_message(*msg, message::TRANSIT_REVERSE_EDGE_CREATE, ret, req_id, remote_node, remote_loc);
+        G->fwd_transit_node_update(std::move(msg));
     }
 }
 
@@ -96,18 +98,18 @@ handle_create_reverse_edge(db::graph *G, uint64_t req_id, uint64_t remote_node, 
 inline void
 handle_delete_edge(db::graph *G, uint64_t req_id, uint64_t n, uint64_t e, std::unique_ptr<std::vector<uint64_t>> cache)
 {
-    std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> success;
+    std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> success;
     std::unique_ptr<message::message> msg(new message::message());
     success = G->delete_edge(n, e, req_id);
     if (cache) {
         success.second = std::move(cache);
     }
-    if (success.first) {
+    if (success.first == 0) {
         message::prepare_message(*msg, message::EDGE_DELETE_ACK, req_id, *success.second);
         G->send_coord(msg->buf);
     } else {
-        message::prepare_message(*msg, message::TRANSIT_EDGE_DELETE_REQ, req_id, e, *success.second);
-        G->queue_transit_node_update(req_id, std::move(msg));
+        message::prepare_message(*msg, message::TRANSIT_EDGE_DELETE_REQ, success.first, req_id, e, *success.second);
+        G->fwd_transit_node_update(std::move(msg));
     }
 }
 
@@ -115,10 +117,11 @@ handle_delete_edge(db::graph *G, uint64_t req_id, uint64_t n, uint64_t e, std::u
 inline void
 handle_add_edge_property(db::graph *G, uint64_t req_id, uint64_t node_addr, uint64_t edge_addr, common::property &prop)
 {
-    if (!G->add_edge_property(node_addr, edge_addr, prop)) {
+    uint64_t ret = G->add_edge_property(node_addr, edge_addr, prop);
+    if (ret != 0) {
         std::unique_ptr<message::message> msg(new message::message());
-        message::prepare_message(*msg, message::TRANSIT_EDGE_ADD_PROP, req_id, edge_addr, prop);
-        G->queue_transit_node_update(req_id, std::move(msg));
+        message::prepare_message(*msg, message::TRANSIT_EDGE_ADD_PROP, ret, req_id, edge_addr, prop);
+        G->fwd_transit_node_update(std::move(msg));
     }
 }
 
@@ -127,50 +130,54 @@ inline void
 handle_delete_edge_property(db::graph *G, uint64_t req_id, uint64_t node_addr, uint64_t edge_addr, uint32_t key,
     std::unique_ptr<std::vector<uint64_t>> cache)
 {
-    std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> success;
+    std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> success;
     std::unique_ptr<message::message> msg(new message::message());
     success = G->delete_all_edge_property(node_addr, edge_addr, key, req_id);
     if (cache) {
         success.second = std::move(cache);
     }
-    if (success.first) {
+    if (success.first == 0) {
         message::prepare_message(*msg, message::EDGE_DELETE_PROP_ACK, req_id, *success.second);
         G->send_coord(msg->buf);
     } else {
         message::prepare_message(*msg, message::TRANSIT_EDGE_DELETE_PROP, req_id, edge_addr, key, *success.second);
-        G->queue_transit_node_update(req_id, std::move(msg));
+        G->fwd_transit_node_update(std::move(msg));
     }
 }
 
 // send node information to new shard
-// mark node as "in_transit" so that subsequent requests are queued up
+// mark node as "in transit" so that subsequent requests are queued up
+// send migration information to coord
 void
 migrate_node_step1(db::graph *G, uint64_t node_handle, int shard)
 {
+    std::cout << "Starting step1\n";
     db::element::node *n;
     G->mrequest.mutex.lock();
     n = G->acquire_node(node_handle);
+    // mark node as "in transit"
     n->state = db::element::node::mode::IN_TRANSIT;
     n->new_loc = shard;
-    // pack entire node info in a ginormous message
+    // pack entire node info in a ginormous message and send to new loc
     message::message msg(message::MIGRATE_NODE_STEP1);
     G->mrequest.cur_node = node_handle;
     G->mrequest.new_loc = shard;
-    G->mrequest.num_pending_updates = 0;
-    G->mrequest.my_clock = 0;
-    std::vector<std::unique_ptr<message::message>>().swap(G->mrequest.pending_updates);
-    std::vector<uint64_t>().swap(G->mrequest.pending_update_ids);
-    std::vector<std::shared_ptr<db::batch_request>>().swap(G->mrequest.pending_requests);
-    message::prepare_message(msg, message::MIGRATE_NODE_STEP1, n->get_creat_time(), *n, G->myid);
+    std::vector<std::unique_ptr<message::message>>().swap(G->mrequest.pending_requests);
+    message::prepare_message(msg, message::MIGRATE_NODE_STEP1, node_handle, G->myid, *n);
+    G->send(shard, msg.buf);
+    // send new loc information to coordinator
+    message::prepare_message(msg, message::COORD_NODE_MIGRATE, G->mrequest.cur_node, n->new_loc);
+    G->send_coord(msg.buf);
     G->release_node(n);
     G->mrequest.mutex.unlock();
-    G->send(shard, msg.buf);
+    std::cout << "Ending step1\n";
 }
 
 // Receive and place a node which has been migrated to this shard
 void
 migrate_node_step2(db::graph *G, std::unique_ptr<message::message> msg)
 {
+    std::cout << "Starting step2\n";
     int from_loc;
     uint64_t node_handle;
     db::element::node *n;
@@ -178,106 +185,119 @@ migrate_node_step2(db::graph *G, std::unique_ptr<message::message> msg)
     message::unpack_message(*msg, message::MIGRATE_NODE_STEP1, node_handle);
     G->create_node(node_handle, true);
     n = G->acquire_node(node_handle);
+    std::vector<uint32_t>().swap(n->msg_count);
     // TODO change at coordinator so that user does not have to enter node for edge
-    message::unpack_message(*msg, message::MIGRATE_NODE_STEP1, node_handle, *n, from_loc);
+    message::unpack_message(*msg, message::MIGRATE_NODE_STEP1, node_handle, from_loc, *n);
     n->prev_loc = from_loc;
     G->release_node(n);
-    message::prepare_message(*msg, message::MIGRATE_NODE_STEP2);
-    G->send(from_loc, msg->buf);
+    std::cout << "Ending step2\n";
 }
 
-// send migration information to coord
+// receive last update clock value from coord
 void
 migrate_node_step3(db::graph *G, std::unique_ptr<message::message> msg)
 {
+    std::cout << "Starting step3\n";
+    uint64_t my_clock, other_clock;
+    message::unpack_message(*msg, message::COORD_NODE_MIGRATE_ACK, my_clock, other_clock);
+    G->mrequest.mutex.lock();
+    G->mrequest.other_clock = other_clock;
+    G->mrequest.mutex.unlock();
+    if (G->set_callback(my_clock, migrate_node_step4)) {
+        migrate_node_step4(G);
+    }
+    std::cout << "Ending step3\n";
+}
+
+// all pre-migration time updates have been received
+void
+migrate_node_step4(db::graph *G)
+{
+    std::cout << "Starting step4\n";
+    message::message msg;
     db::element::node *n;
     G->mrequest.mutex.lock();
     n = G->acquire_node(G->mrequest.cur_node);
-    message::prepare_message(*msg, message::COORD_NODE_MIGRATE, G->mrequest.cur_node, n->new_loc, G->myid);
-    G->release_node(n);
-    G->send_coord(msg->buf);
-    G->mrequest.mutex.unlock();
-}
-
-// wait for updates till the received clock value, which are being forwarded to new shard
-void
-migrate_node_step4(db::graph *G, std::unique_ptr<message::message> msg)
-{
-    uint64_t my_clock;
-    message::unpack_message(*msg, message::COORD_NODE_MIGRATE_ACK, my_clock);
-    if (G->set_target_clock(my_clock)) {
-        migrate_node_step4_1(G);
-    }
-}
-
-// forward queued update requests
-void
-migrate_node_step4_1(db::graph *G)
-{
-    message::message msg;
-    G->mrequest.mutex.lock();
     // TODO check this logic. Won't msg reordering affect this?
-    message::prepare_message(msg, message::MIGRATE_NODE_STEP4, G->mrequest.pending_update_ids);
+    message::prepare_message(msg, message::MIGRATE_NODE_STEP4, n->update_count, G->mrequest.other_clock);
     G->send(G->mrequest.new_loc, msg.buf);
-    for (auto &m: G->mrequest.pending_updates) {
-        G->send(G->mrequest.new_loc, m->buf);
-    }
+    G->release_node(n);
     G->mrequest.mutex.unlock();
+    std::cout << "Ending step4\n";
 }
 
 // receive the number of pending updates for the newly migrated node
 void
 migrate_node_step5(db::graph *G, std::unique_ptr<message::message> msg)
 {
-    std::vector<uint64_t> update_ids;
+    std::cout << "Starting step5\n";
+    uint64_t update_count, target_clock;
     db::element::node *n = G->acquire_node(G->migr_node);
-    message::unpack_message(*msg, message::MIGRATE_NODE_STEP4, update_ids);
-    if (update_ids.empty()) {
+    message::unpack_message(*msg, message::MIGRATE_NODE_STEP4, update_count, target_clock);
+    if (n->update_count == update_count) {
+        // no pending updates left
         n->state = db::element::node::mode::STABLE;
-        message::prepare_message(*msg, message::MIGRATE_NODE_STEP5);
-        G->send(n->prev_loc, msg->buf);
         G->release_node(n);
+        if (G->set_callback(target_clock, migrate_node_step6)) {
+            migrate_node_step6(G);
+        }
     } else {
+        // some updates yet to trickle through
+        G->set_update_count(update_count, n->update_count, target_clock);
         G->release_node(n);
-        G->set_update_ids(update_ids);
     }
+    std::cout << "Ending step5\n";
 }
 
 // inform other shards of migration
-// forward queued traversal requests to new location
+// Caution: assuming we have acquired node lock
 void
 migrate_node_step6(db::graph *G)
 {
+    std::cout << "Starting step6\n";
+    G->increment_clock(); // let subsequent updates come through now
+    db::element::node *n = G->acquire_node(G->migr_node);
+    // signal previous loc to forward pending node programs
+    message::message msg;
+    message::prepare_message(msg, message::MIGRATE_NODE_STEP6);
+    G->send(n->prev_loc, msg.buf);
+    // update in-neighbors
+    for (auto &nbr: n->in_edges) {
+        message::prepare_message(msg, message::MIGRATED_NBR_UPDATE, nbr.second->nbr.handle, nbr.first, G->migr_node, G->myid);
+        G->send(nbr.second->nbr.loc, msg.buf);
+    }
+    G->release_node(n);
+    std::cout << "Ending step6\n";
+}
+
+// forward queued traversal requests to new location
+void
+migrate_node_step7(db::graph *G)
+{
+    std::cout << "Starting step7\n";
     message::message msg;
     std::vector<uint64_t> nodes;
     db::element::node *n;
     G->mrequest.mutex.lock();
     n = G->acquire_node(G->mrequest.cur_node);
     n->state = db::element::node::mode::MOVED;
-    // inform all in-nbrs of new location
-    for (auto &nbr: n->in_edges) {
-        message::prepare_message(msg, message::MIGRATED_NBR_UPDATE, nbr.second->nbr.handle, 
-            G->mrequest.cur_node, G->myid, G->mrequest.migr_node, G->mrequest.new_loc);
-        G->send(nbr.second->nbr.loc, msg.buf);
-    }
-    nodes.push_back(G->mrequest.migr_node);
     for (auto &r: G->mrequest.pending_requests) {
-        r->lock();
-        //G->propagate_request(nodes, r, G->mrequest.new_loc); TODO
-        r->unlock();
+        G->send(G->mrequest.new_loc, r->buf);
     }
     G->release_node(n);
     G->mrequest.mutex.unlock();
+    std::cout << "Ending step7\n";
 }
 
 void
 migrated_nbr_update(db::graph *G, std::unique_ptr<message::message> msg)
 {
-    uint64_t local_node, orig_node, new_node;
+    std::cout << "Starting nbr update\n";
+    uint64_t local_node, remote_node, edge;
     int orig_loc, new_loc;
-    message::unpack_message(*msg, message::MIGRATED_NBR_UPDATE, local_node,
-        orig_node, orig_loc, new_node, new_loc);
-    G->update_migrated_nbr(local_node, orig_node, orig_loc, new_node, new_loc);
+    message::unpack_message(*msg, message::MIGRATED_NBR_UPDATE, local_node, edge, remote_node, new_loc);
+    G->update_migrated_nbr(local_node, edge, remote_node, new_loc);
+    std::cout << "Ending nbr update\n";
 }
 
 // update cache based on confirmations for transient cached values
@@ -387,6 +407,12 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     // unpack the node program
     message::unpack_message(msg, message::NODE_PROG, prog_type_recvd, vclocks,
             unpacked_request_id, start_node_params, dirty_cache_ids, invalid_cache_ids);
+    G->migrtestmutex.lock();
+    if (!G->already_migr && unpacked_request_id>500 && G->myid==0) {
+        G->already_migr = true;
+        migrate_node_step1(G, std::get<0>(start_node_params.at(0)), (G->myid+1)%2);
+    }
+    G->migrtestmutex.unlock();
 
     // node state and cache functions
     std::function<NodeStateType&()> node_state_getter;
@@ -395,12 +421,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     while (!start_node_params.empty() || !deleted_nodes.empty()) {
         for (std::pair<uint64_t, db::element::remote_node> del_node: deleted_nodes) {
-            //std::cout << "in del nodes "<< del_node << std::endl;
-
             size_t parent_handle = del_node.second.handle;
-
-            db::element::node *node = G->acquire_node(parent_handle); // parent should definately exist
-            //this_node.handle = handle;
+            db::element::node *node = G->acquire_node(parent_handle); // parent should definitely exist
             node_state_getter = std::bind(get_node_state<NodeStateType>, G, prog_type_recvd, unpacked_request_id, parent_handle);
             auto next_node_params = enclosed_node_deleted_func(unpacked_request_id, *node, del_node.first, deleted_nodes_param, node_state_getter); 
             G->release_node(node);
@@ -421,24 +443,28 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         }
         deleted_nodes.clear();
 
-     //   std::cout << "^^^ about to loop over local programs size " << start_node_params.size() << std::endl;
         for (auto &handle_params : start_node_params) {
             node_handle = std::get<0>(handle_params);
             this_node.handle = node_handle;
-//            std::cout << "not stuck here 1" << std::endl;
-            //std::cout << "about %%% to acquire node" << std::endl;
             db::element::node *node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
-            //std::cout << "not deadlocked " << start_node_params.size() << std::endl;
             if (node->get_del_time() <= unpacked_request_id) {
                 G->release_node(node);
-                //std::cout << "FOUND A DEL NODE:" << node_handle << std::endl;
                 deleted_nodes.push_back(std::make_pair(node_handle, std::get<2>(handle_params)));
             } else if (node == NULL) {
-                //std::cout << "FOUND A DEL NODE:" << node_handle << std::endl;
                 deleted_nodes.push_back(std::make_pair(node_handle, std::get<2>(handle_params)));
+            } else if (node->state == db::element::node::mode::IN_TRANSIT || node->state == db::element::node::mode::MOVED) {
+                // queueing/forwarding node programs logic goes here
+                std::unique_ptr<message::message> m(new message::message());
+                std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> fwd_node_params;
+                fwd_node_params.emplace_back(handle_params);
+                message::prepare_message(*m, message::NODE_PROG, prog_type_recvd, vclocks,
+                    unpacked_request_id, fwd_node_params, dirty_cache_ids, invalid_cache_ids);
+                G->mrequest.mutex.lock();
+                G->mrequest.pending_requests.emplace_back(std::move(m));
+                G->mrequest.mutex.unlock();
+                G->release_node(node);
             } else { // node does exist
                 // bind cache getter and putter function variables to functions
-                //std::cout << "&&& making getter functions" << std::endl;
                 node_state_getter = std::bind(get_node_state<NodeStateType>, G,
                         prog_type_recvd, unpacked_request_id, node_handle);
                 cache_value_putter = std::bind(put_cache_value<CacheValueType>, G,
@@ -452,12 +478,10 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                         cache_value_putter, 
                         cached_values_getter); 
                 G->release_node(node);
-                //            std::cout << "not stuck here 1.4 adding:" << next_node_params.size() << std::endl;
                 // batch the newly generated node programs for onward propagation
                 for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                     // signal to send back to coordinator
                     if (res.first.loc == -1) {
-                        //std::cout << "not stuck here coord" << std::endl;
                         // XXX get rid of pair, without pair it is not working for some reason
                         std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
                         message::prepare_message(msg, message::NODE_PROG, prog_type_recvd,
@@ -465,7 +489,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                         G->send_coord(msg.buf);
                     } else {
                         batched_node_progs[res.first.loc].emplace_back(res.first.handle, std::move(res.second), this_node);
-                        //std::cout << "not stuck here batch of size "<<  batched_node_progs[res.first.loc].size() << std::endl;
                     }
                 }
             }
@@ -473,8 +496,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         start_node_params = std::move(batched_node_progs[G->myid]);
     }
 
-   // std::cout << "not stuck here 2" << std::endl;
-    //std::cout << "### about to propagate to other shards size " << batched_node_progs.size() << std::endl;
     // now propagate requests
     for (auto &batch_pair : batched_node_progs) {
         if (batch_pair.first == G->myid) {
@@ -482,10 +503,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         }
         // send msg to batch.first (location) with contents batch.second (start_node_params for that machine)
         message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id, batch_pair.second, dirty_cache_ids, invalid_cache_ids);
-  //      std::cout << "not stuck here mids" << std::endl;
         G->send(batch_pair.first, msg.buf);
     }
- //   std::cout << "not stuck here 3" << std::endl;
 }
 
 
@@ -515,7 +534,7 @@ unpack_update_request(db::graph *G, void *req)
             message::unpack_message(*request->msg, message::NODE_CREATE_REQ, start_time, req_id);
             handle_create_node(G, req_id);
             if (G->increment_clock()) {
-                migrate_node_step4_1(G);
+                G->migr_func(G);
             }
             break;
 
@@ -523,7 +542,7 @@ unpack_update_request(db::graph *G, void *req)
             message::unpack_message(*request->msg, message::NODE_DELETE_REQ, start_time, req_id, n1);
             handle_delete_node(G, req_id, n1, std::move(cache));
             if (G->increment_clock()) {
-                migrate_node_step4_1(G);
+                G->migr_func(G);
             }
             break;
 
@@ -532,7 +551,7 @@ unpack_update_request(db::graph *G, void *req)
                 n1, n2, loc, time2);
             handle_create_edge(G, req_id, n1, n2, loc, time2);
             if (G->increment_clock()) {
-                migrate_node_step4_1(G);
+                G->migr_func(G);
             }
             break;
 
@@ -540,7 +559,7 @@ unpack_update_request(db::graph *G, void *req)
             message::unpack_message(*request->msg, message::REVERSE_EDGE_CREATE, start_time, req_id, n2, loc, n1);
             handle_create_reverse_edge(G, req_id, n2, loc, n1);
             if (G->increment_clock()) {
-                migrate_node_step4_1(G);
+                G->migr_func(G);
             }
             break;
 
@@ -548,7 +567,7 @@ unpack_update_request(db::graph *G, void *req)
             message::unpack_message(*request->msg, message::EDGE_DELETE_REQ, start_time, req_id, n1, edge);
             handle_delete_edge(G, req_id, n1, edge, std::move(cache));
             if (G->increment_clock()) {
-                migrate_node_step4_1(G);
+                G->migr_func(G);
             }
             break;
 
@@ -561,7 +580,7 @@ unpack_update_request(db::graph *G, void *req)
             message::unpack_message(*request->msg, message::EDGE_ADD_PROP, start_time, req_id, n1, edge, prop);
             handle_add_edge_property(G, req_id, n1, edge, prop);
             if (G->increment_clock()) {
-                migrate_node_step4_1(G);
+                G->migr_func(G);
             }
             break;
 
@@ -569,7 +588,7 @@ unpack_update_request(db::graph *G, void *req)
             message::unpack_message(*request->msg, message::EDGE_DELETE_PROP, start_time, req_id, n1, edge, key);
             handle_delete_edge_property(G, req_id, n1, edge, key, std::move(cache));
             if (G->increment_clock()) {
-                migrate_node_step4_1(G);
+                G->migr_func(G);
             }
             break;
 
@@ -581,20 +600,16 @@ unpack_update_request(db::graph *G, void *req)
             migrate_node_step2(G, std::move(request->msg));
             break;
         
-        case message::MIGRATE_NODE_STEP2:
-            migrate_node_step3(G, std::move(request->msg));
-            break;
-
         case message::COORD_NODE_MIGRATE_ACK:
-            migrate_node_step4(G, std::move(request->msg));
+            migrate_node_step3(G, std::move(request->msg));
             break;
 
         case message::MIGRATE_NODE_STEP4:
             migrate_node_step5(G, std::move(request->msg));
             break;
 
-        case message::MIGRATE_NODE_STEP5:
-            migrate_node_step6(G);
+        case message::MIGRATE_NODE_STEP6:
+            migrate_node_step7(G);
             break;
 
         case message::MIGRATED_NBR_UPDATE:
@@ -604,14 +619,14 @@ unpack_update_request(db::graph *G, void *req)
         default:
             std::cerr << "Bad msg type in unpack_update_request" << std::endl;
     }
-        delete request;
+    delete request;
 }
 
 // assuming caller holds migration_lock
 void
 unpack_transit_update_request(db::graph *G, db::update_request *request)
 {
-    uint64_t req_id;
+    uint64_t req_id, update_count;
     uint64_t n2, edge;
     int loc;
     uint64_t time;
@@ -623,34 +638,34 @@ unpack_transit_update_request(db::graph *G, db::update_request *request)
     {
         case message::TRANSIT_NODE_DELETE_REQ:
             cache.reset(new std::vector<uint64_t>());
-            message::unpack_message(*request->msg, message::TRANSIT_NODE_DELETE_REQ, req_id, *cache);
+            message::unpack_message(*request->msg, message::TRANSIT_NODE_DELETE_REQ, update_count, req_id, *cache);
             handle_delete_node(G, req_id, G->migr_node, std::move(cache));
             break;
 
         case message::TRANSIT_EDGE_CREATE_REQ:
-            message::unpack_message(*request->msg, message::TRANSIT_EDGE_CREATE_REQ, req_id, n2, loc, time);
+            message::unpack_message(*request->msg, message::TRANSIT_EDGE_CREATE_REQ, update_count, req_id, n2, loc, time);
             handle_create_edge(G, req_id, G->migr_node, n2, loc, time);
             break;
 
         case message::TRANSIT_REVERSE_EDGE_CREATE:
-            message::unpack_message(*request->msg, message::TRANSIT_REVERSE_EDGE_CREATE, req_id, n2, loc);
+            message::unpack_message(*request->msg, message::TRANSIT_REVERSE_EDGE_CREATE, update_count, req_id, n2, loc);
             handle_create_reverse_edge(G, req_id, n2, loc, G->migr_node);
             break;
         
         case message::TRANSIT_EDGE_DELETE_REQ:
             cache.reset(new std::vector<uint64_t>());
-            message::unpack_message(*request->msg, message::TRANSIT_EDGE_DELETE_REQ, req_id, edge, *cache);
+            message::unpack_message(*request->msg, message::TRANSIT_EDGE_DELETE_REQ, update_count, req_id, edge, *cache);
             handle_delete_edge(G, req_id, G->migr_node, edge, std::move(cache));
             break;
 
         case message::TRANSIT_EDGE_ADD_PROP:
-            message::unpack_message(*request->msg, message::TRANSIT_EDGE_ADD_PROP, req_id, edge, prop);
+            message::unpack_message(*request->msg, message::TRANSIT_EDGE_ADD_PROP, update_count, req_id, edge, prop);
             handle_add_edge_property(G, req_id, G->migr_node, edge, prop);
             break;
 
         case message::TRANSIT_EDGE_DELETE_PROP:
             cache.reset(new std::vector<uint64_t>());
-            message::unpack_message(*request->msg, message::TRANSIT_EDGE_DELETE_PROP, req_id, edge, key, *cache);
+            message::unpack_message(*request->msg, message::TRANSIT_EDGE_DELETE_PROP, update_count, req_id, edge, key, *cache);
             handle_delete_edge_property(G, req_id, G->migr_node, edge, key, std::move(cache));
             break;
 
@@ -662,24 +677,27 @@ unpack_transit_update_request(db::graph *G, db::update_request *request)
 void
 process_pending_updates(db::graph *G, void *req)
 {
-    db::update_request *request = (db::update_request *) req;
-    uint64_t req_id;
-    request->msg->buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(enum message::msg_type)) >> req_id;
-    db::update_request *r = new db::update_request(request->type, req_id, std::move(request->msg));
+    db::update_request *request = (db::update_request *)req;
+    delete request;
     G->migration_mutex.lock();
-    G->pending_updates.push(r);
-    while (G->pending_update_ids.front() == G->pending_updates.top()->start_time) {
-        unpack_transit_update_request(G, G->pending_updates.top());
-        G->pending_updates.pop();
-        G->pending_update_ids.pop_front();
-        if (G->pending_update_ids.empty()) {
-            message::message msg;
-            db::element::node *n = G->acquire_node(G->migr_node);
-            n->state = db::element::node::mode::STABLE;
-            message::prepare_message(msg, message::MIGRATE_NODE_STEP5);
-            G->send(n->prev_loc, msg.buf);
-            G->release_node(n);
-            break;
+    while (!G->pending_updates.empty()) {
+        request = G->pending_updates.top();
+        if (G->current_update_count == (request->start_time-1)) {
+            G->pending_updates.pop();
+            G->migration_mutex.unlock();
+            unpack_transit_update_request(G, request);
+            delete request;
+            G->migration_mutex.lock();
+            G->current_update_count++;
+            if (G->pending_update_count == G->current_update_count) {
+                // processed all pending updates
+                db::element::node *n = G->acquire_node(G->migr_node);
+                n->state = db::element::node::mode::STABLE;
+                G->release_node(n);
+                if (G->set_callback(G->new_shard_target_clock, migrate_node_step6)) {
+                    migrate_node_step6(G);
+                }
+            }
         }
     }
     G->migration_mutex.unlock();
@@ -699,7 +717,7 @@ runner(db::graph *G)
     db::thread::unstarted_thread *thr;
     db::update_request *request;
     uint64_t done_id;
-    uint64_t start_time;
+    uint64_t start_time, update_count;
     // used for node programs
     node_prog::prog_type pType;
     std::vector<uint64_t> vclocks;
@@ -734,17 +752,21 @@ runner(db::graph *G)
             case message::TRANSIT_EDGE_DELETE_REQ:
             case message::TRANSIT_EDGE_ADD_PROP:
             case message::TRANSIT_EDGE_DELETE_PROP:
-                request = new db::update_request(mtype, 0, std::move(rec_msg));
+                rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(mtype)) >> update_count >> start_time;
+                request = new db::update_request(mtype, update_count, std::move(rec_msg));
+                G->migration_mutex.lock();
+                G->pending_updates.push(request);
+                G->migration_mutex.unlock();
+                request = new db::update_request(mtype, 0);
                 thr = new db::thread::unstarted_thread(0, process_pending_updates, G, request);
                 G->thread_pool.add_request(thr);
                 break;
 
             case message::CACHE_UPDATE:
             case message::MIGRATE_NODE_STEP1:
-            case message::MIGRATE_NODE_STEP2:
             case message::COORD_NODE_MIGRATE_ACK:
             case message::MIGRATE_NODE_STEP4:
-            case message::MIGRATE_NODE_STEP5:
+            case message::MIGRATE_NODE_STEP6:
             case message::MIGRATED_NBR_UPDATE:
             case message::PERMANENT_DELETE_EDGE:
             case message::PERMANENT_DELETE_EDGE_ACK:
@@ -762,8 +784,7 @@ runner(db::graph *G)
                 break;
 
             default:
-                std::cerr << "unexpected msg type " << (message::CLIENT_REPLY ==
-                code) << std::endl;
+                std::cerr << "unexpected msg type " << (message::CLIENT_REPLY == code) << std::endl;
         }
     }
 }

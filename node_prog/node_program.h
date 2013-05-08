@@ -93,6 +93,6 @@ namespace node_prog
         {DIJKSTRA, new particular_node_program<node_prog::dijkstra_params, node_prog::dijkstra_node_state, node_prog::dijkstra_cache_value>(DIJKSTRA, node_prog::dijkstra_node_program, dijkstra_node_deleted_program)},
         {CLUSTERING, new particular_node_program<node_prog::clustering_params, node_prog::clustering_node_state, node_prog::clustering_cache_value>(CLUSTERING, node_prog::clustering_node_program, clustering_node_deleted_program)} 
     };
-} 
 
+}
 #endif //__NODE_PROG__

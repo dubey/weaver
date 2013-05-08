@@ -74,10 +74,8 @@ namespace message
         CACHE_UPDATE,
         CACHE_UPDATE_ACK,
         MIGRATE_NODE_STEP1,
-        MIGRATE_NODE_STEP2,
-        MIGRATE_NODE_STEP3,
         MIGRATE_NODE_STEP4,
-        MIGRATE_NODE_STEP5,
+        MIGRATE_NODE_STEP6,
         COORD_NODE_MIGRATE,
         COORD_NODE_MIGRATE_ACK,
         MIGRATED_NBR_UPDATE,
@@ -207,6 +205,7 @@ namespace message
         sz += size(*t.get_props());  // properties
         sz += size(t.out_edges);
         sz += size(t.in_edges);
+        sz += size(t.update_count);
         sz += size(t.msg_count);
         return sz;
     }
@@ -362,6 +361,7 @@ namespace message
         pack_buffer(packer, *t.get_props());
         pack_buffer(packer, t.out_edges);
         pack_buffer(packer, t.in_edges);
+        pack_buffer(packer, t.update_count);
         pack_buffer(packer, t.msg_count);
     }
 
@@ -563,6 +563,7 @@ namespace message
         unpack_buffer(unpacker, props);
         unpack_buffer(unpacker, t.out_edges);
         unpack_buffer(unpacker, t.in_edges);
+        unpack_buffer(unpacker, t.update_count);
         unpack_buffer(unpacker, t.msg_count);
         t.update_creat_time(tc);
         t.update_del_time(td);

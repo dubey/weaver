@@ -315,11 +315,13 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             break;
 
         case message::COORD_NODE_MIGRATE:
-            message::unpack_message(*msg, message::COORD_NODE_MIGRATE, coord_handle, new_loc, from_loc);
+            message::unpack_message(*msg, message::COORD_NODE_MIGRATE, coord_handle, new_loc);
             server->update_mutex.lock();
             lnode = server->nodes.at(coord_handle);
+            from_loc = lnode->get_loc();
             lnode->update_loc(new_loc);
-            message::prepare_message(*msg, message::COORD_NODE_MIGRATE_ACK, server->vc.clocks->at(from_loc));
+            message::prepare_message(*msg, message::COORD_NODE_MIGRATE_ACK, server->vc.clocks->at(from_loc), server->vc.clocks->at(new_loc));
+            server->vc.clocks->at(new_loc)++;
             server->update_mutex.unlock();
             server->send(from_loc, msg->buf);
             break;

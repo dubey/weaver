@@ -90,7 +90,8 @@ namespace db
     class update_request
     {
         public:
-            update_request(enum message::msg_type, uint64_t, std::unique_ptr<message::message>);
+            update_request(enum message::msg_type, uint64_t, uint64_t);
+            update_request(enum message::msg_type, uint64_t, std::unique_ptr<message::message>, uint64_t);
 
         public:
             bool operator>(const update_request &r) const;
@@ -98,14 +99,24 @@ namespace db
         public:
             enum message::msg_type type;
             uint64_t start_time;
+            uint64_t update_count; // for transit update requests (migration)
             std::unique_ptr<message::message> msg;
     };
 
     inline
-    update_request :: update_request(enum message::msg_type mt, uint64_t st, std::unique_ptr<message::message> m)
+    update_request :: update_request(enum message::msg_type mt, uint64_t st, uint64_t uc=0)
+        : type(mt)
+        , start_time(st)
+        , update_count(uc)
+    {
+    }
+
+    inline
+    update_request :: update_request(enum message::msg_type mt, uint64_t st, std::unique_ptr<message::message> m, uint64_t uc=0)
         : type(mt)
         , start_time(st)
         , msg(std::move(m))
+        , update_count(uc)
     {
     }
 
@@ -130,15 +141,13 @@ namespace db
         public:
             po6::threads::mutex mutex;
             uint64_t cur_node; // node being migrated
-            //element::node *cur_node;
             int new_loc; // shard to which this node is being migrated
-            uint64_t migr_node; // node handle on new shard
-            std::vector<std::unique_ptr<message::message>> pending_updates; // queued updates
-            std::vector<uint64_t> pending_update_ids; // ids of queued updates
-            uint32_t num_pending_updates;
-            std::vector<std::shared_ptr<batch_request>> pending_requests; // queued requests
-            uint64_t my_clock;
+            std::vector<std::unique_ptr<message::message>> pending_requests; // queued requests
+            uint64_t other_clock;
     };
+
+    class graph;
+    typedef void (*graph_arg_func)(graph*);
 
     class graph
     {
@@ -164,12 +173,12 @@ namespace db
             int myid;
             db::thread::pool thread_pool;
             void create_node(uint64_t time, bool migrate);
-            std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> delete_node(uint64_t node, uint64_t del_time);
-            bool create_edge(uint64_t local_node, uint64_t time, uint64_t remote_node, int remote_loc, uint64_t remote_time);
-            bool create_reverse_edge(uint64_t time, uint64_t local_node, uint64_t remote_node, int remote_loc);
-            std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> delete_edge(uint64_t node, uint64_t edge_handle, uint64_t del_time);
-            bool add_edge_property(uint64_t n, uint64_t e, common::property &prop);
-            std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> delete_all_edge_property(uint64_t n, uint64_t e, uint32_t key, uint64_t del_time);
+            std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> delete_node(uint64_t node, uint64_t del_time);
+            uint64_t create_edge(uint64_t local_node, uint64_t time, uint64_t remote_node, int remote_loc, uint64_t remote_time);
+            uint64_t create_reverse_edge(uint64_t time, uint64_t local_node, uint64_t remote_node, int remote_loc);
+            std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> delete_edge(uint64_t node, uint64_t edge_handle, uint64_t del_time);
+            uint64_t add_edge_property(uint64_t n, uint64_t e, common::property &prop);
+            std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> delete_all_edge_property(uint64_t n, uint64_t e, uint32_t key, uint64_t del_time);
             void permanent_delete(uint64_t req_id);
             void permanent_edge_delete(uint64_t n, uint64_t e);
 
@@ -178,12 +187,17 @@ namespace db
             po6::threads::mutex migration_mutex;
             uint64_t migr_node; // newly migrated node
             std::priority_queue<update_request*, std::vector<update_request*>, req_compare> pending_updates;
-            std::deque<uint64_t> pending_update_ids;
-            uint64_t target_clock;
-            void update_migrated_nbr(uint64_t lnode, uint64_t orig_node, int orig_loc, uint64_t new_node, int new_loc);
+            //std::deque<uint64_t> pending_update_ids;
+            uint64_t pending_update_count;
+            uint64_t current_update_count;
+            uint64_t target_clock, new_shard_target_clock;
+            graph_arg_func migr_func;
+            void update_migrated_nbr(uint64_t lnode, uint64_t edge, uint64_t rnode, int new_loc);
             bool set_target_clock(uint64_t time);
-            void set_update_ids(std::vector<uint64_t>&);
-            void queue_transit_node_update(uint64_t req_id, std::unique_ptr<message::message> msg);
+            bool set_callback(uint64_t time, graph_arg_func mfunc);
+            void set_update_count(uint64_t pending_count, uint64_t current_count, uint64_t target_clock);
+            //void set_update_ids(std::vector<uint64_t>&);
+            void fwd_transit_node_update(std::unique_ptr<message::message> msg);
             
             // Permanent deletion
             uint64_t del_id;
@@ -202,6 +216,8 @@ namespace db
             // testing
             std::unordered_map<uint64_t, uint64_t> req_count;
             void sort_and_print_nodes();
+            po6::threads::mutex migrtestmutex;
+            bool already_migr;
 
             // Node programs
             // prog_type-> map from request_id to map from node handle to request state for that node
@@ -227,8 +243,10 @@ namespace db
         , myid(my_id)
         , thread_pool(NUM_THREADS)
         , target_clock(0)
+        , new_shard_target_clock(0)
         , bb(myloc->address, myloc->port + SEND_PORT_INCR, 0)
         , bb_recv(myloc->address, myloc->port, 0)
+        , already_migr(false)
     {
         int i, inport;
         po6::net::location *temp_loc;
@@ -315,16 +333,15 @@ namespace db
 #endif
     }
 
-    inline std::pair<bool, std::unique_ptr<std::vector<uint64_t>>>
+    inline std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>>
     graph :: delete_node(uint64_t node_handle, uint64_t del_time)
     {
-        std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> ret;
+        std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> ret;
         element::node *n = acquire_node(node_handle);
-        if (n->state == element::node::mode::IN_TRANSIT) {
-            ret.first = false;
-        } else {
+        ret.first = ++n->update_count;
+        if (n->state != element::node::mode::IN_TRANSIT) {
             n->update_del_time(del_time);
-            ret.first = true;
+            ret.first = 0;
         }
         ret.second = std::move(n->purge_cache());
         for (auto rid: *ret.second) {
@@ -337,14 +354,14 @@ namespace db
         return ret;
     }
 
-    inline bool
+    inline uint64_t
     graph :: create_edge(uint64_t local_node, uint64_t time, uint64_t remote_node, int remote_loc, uint64_t remote_time)
     {
-        bool ret;
+        uint64_t ret;
         element::node *n = acquire_node(local_node);
+        ret = ++n->update_count;
         if (n->state == element::node::mode::IN_TRANSIT) {
             release_node(n);
-            ret = false;
         } else {
             element::edge *new_edge = new element::edge(time, remote_loc, remote_node);
             n->add_edge(new_edge, true);
@@ -355,19 +372,18 @@ namespace db
 #ifdef DEBUG
             std::cout << "Creating edge, addr = " << (void*) new_edge << std::endl;
 #endif
-            ret = true;
+            ret = 0;
         }
         return ret;
     }
 
-    inline bool
+    inline uint64_t
     graph :: create_reverse_edge(uint64_t time, uint64_t local_node, uint64_t remote_node, int remote_loc)
     {
-        bool ret;
+        uint64_t ret;
         element::node *n = acquire_node(local_node);
-        if (n->state == element::node::mode::IN_TRANSIT) {
-            ret = false;
-        } else {
+        ret = ++n->update_count;
+        if (n->state != element::node::mode::IN_TRANSIT) {
             element::edge *new_edge = new element::edge(time, remote_loc, remote_node);
             n->add_edge(new_edge, false);
 #ifdef DEBUG
@@ -375,23 +391,22 @@ namespace db
                       << new_edge->nbr.loc << " at lnode " << (void*)local_node << std::endl;
             std::cout << " in edge size " << n->in_edges.size() << std::endl;
 #endif
-            ret = true;
+            ret = 0;
         }
         release_node(n);
         return ret;
     }
 
-    inline std::pair<bool, std::unique_ptr<std::vector<uint64_t>>>
+    inline std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>>
     graph :: delete_edge(uint64_t node_handle, uint64_t edge_handle, uint64_t del_time)
     {
-        std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> ret;
+        std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> ret;
         element::node *n = acquire_node(node_handle);
-        if (n->state == element::node::mode::IN_TRANSIT) {
-            ret.first = false;
-        } else {
+        ret.first = ++n->update_count;
+        if (n->state != element::node::mode::IN_TRANSIT) {
             element::edge *e = n->out_edges.at(edge_handle);
             e->update_del_time(del_time);
-            ret.first = true;
+            ret.first = 0;
         }
         ret.second = std::move(n->purge_cache());
         for (auto rid: *ret.second) {
@@ -404,33 +419,30 @@ namespace db
         return ret;
     }
 
-    inline bool
+    inline uint64_t
     graph :: add_edge_property(uint64_t node, uint64_t edge, common::property &prop)
     {
         element::node *n = acquire_node(node);
         element::edge *e = n->out_edges.at(edge);
-        bool ret;
-        if (n->state == element::node::mode::IN_TRANSIT) {
-            ret = false;
-        } else {
+        uint64_t ret = ++n->update_count;
+        if (n->state != element::node::mode::IN_TRANSIT) {
             e->add_property(prop);
-            ret = true;
+            ret = 0;
         }
         release_node(n);
         return ret;
     }
 
-    inline std::pair<bool, std::unique_ptr<std::vector<uint64_t>>>
+    inline std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>>
     graph :: delete_all_edge_property(uint64_t node, uint64_t edge, uint32_t key, uint64_t time)
     {
         element::node *n = acquire_node(node);
         element::edge *e = n->out_edges.at(edge);
-        std::pair<bool, std::unique_ptr<std::vector<uint64_t>>> ret;
-        if (n->state == element::node::mode::IN_TRANSIT) {
-            ret.first = false;
-        } else {
+        std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> ret;
+        ret.first = ++n->update_count;
+        if (n->state != element::node::mode::IN_TRANSIT) {
             e->delete_property(key, time);
-            ret.first = true;
+            ret.first = 0;
         }
         ret.second = std::move(n->purge_cache());
         for (auto rid: *ret.second) {
@@ -546,15 +558,12 @@ namespace db
     // migration methods
 
     inline void
-    graph :: update_migrated_nbr(uint64_t local_node, uint64_t orig_node, int orig_loc, uint64_t new_node, int new_loc)
+    graph :: update_migrated_nbr(uint64_t local_node, uint64_t edge_handle, uint64_t remote_node, int new_loc)
     {
         element::node *n = acquire_node(local_node);
-        for (auto &it: n->out_edges) {
-            element::edge *e = it.second;
-            if (e->nbr.handle == orig_node && e->nbr.loc == orig_loc) {
-                e->nbr.handle = new_node;
-                e->nbr.loc = new_loc;
-            }
+        if (n->out_edges.find(edge_handle) != n->out_edges.end()) {
+            element::edge *e = n->out_edges.at(edge_handle);
+            e->nbr.loc = new_loc;
         }
         release_node(n);
     }
@@ -574,22 +583,37 @@ namespace db
         return ret;
     }
 
+    inline bool
+    graph :: set_callback(uint64_t time, graph_arg_func mfunc)
+    {
+        bool ret;
+        clock_mutex.lock();
+        if (time == my_clock) {
+            ret = true;
+        } else {
+            target_clock = time;
+            migr_func = mfunc;
+            ret = false;
+        }
+        clock_mutex.unlock();
+        return ret;
+    }
+
     inline void
-    graph :: set_update_ids(std::vector<uint64_t> &update_ids)
+    graph :: set_update_count(uint64_t pending_count, uint64_t current_count, uint64_t tclock)
     {
         migration_mutex.lock();
-        for (uint64_t id: update_ids) {
-            pending_update_ids.push_back(id);
-        }
+        pending_update_count = pending_count;
+        current_update_count = current_count;
+        new_shard_target_clock = tclock;
         migration_mutex.unlock();
     }
 
     inline void
-    graph :: queue_transit_node_update(uint64_t req_id, std::unique_ptr<message::message> msg)
+    graph :: fwd_transit_node_update(std::unique_ptr<message::message> msg)
     {
         mrequest.mutex.lock();
-        mrequest.pending_updates.emplace_back(std::move(msg));
-        mrequest.pending_update_ids.emplace_back(req_id);
+        send(mrequest.new_loc, msg->buf);
         mrequest.mutex.unlock();
     }
 

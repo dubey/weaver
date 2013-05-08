@@ -92,10 +92,8 @@ namespace element
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids; // requests which have been cached
             // for migration
             int prev_loc, new_loc;
+            uint64_t update_count;
             std::vector<uint32_t> msg_count;
-
-        private:
-            uint32_t out_edge_ctr, in_edge_ctr;
 
         public:
             void add_edge(edge *e, bool in_or_out);
@@ -110,9 +108,8 @@ namespace element
         , cached_req_ids(new std::vector<uint64_t>)
         , prev_loc(-1)
         , new_loc(-1)
+        , update_count(0)
         , msg_count(NUM_SHARDS, 0)
-        , out_edge_ctr(0)
-        , in_edge_ctr(0)
     {
     }
 
@@ -123,9 +120,8 @@ namespace element
         , cached_req_ids(new std::vector<uint64_t>())
         , prev_loc(-1)
         , new_loc(-1)
+        , update_count(0)
         , msg_count(NUM_SHARDS, 0)
-        , out_edge_ctr(0)
-        , in_edge_ctr(0)
     {
     }
 
