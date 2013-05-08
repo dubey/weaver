@@ -23,15 +23,52 @@
 
 namespace node_prog
 {
+    class dijkstra_queue_elem
+    {
+            public:
+            size_t cost;
+            db::element::remote_node node;
+            uint64_t prev_node_req_id; // used for reconstructing path in coordinator
+
+            int operator<(const dijkstra_queue_elem& other) const
+            { 
+                return other.cost < cost; 
+            }
+
+            int operator>(const dijkstra_queue_elem& other) const
+            { 
+                return other.cost > cost; 
+            }
+
+            dijkstra_queue_elem()
+            {
+            }
+
+            dijkstra_queue_elem(size_t c, db::element::remote_node n, size_t prev)
+            {
+                cost = c;
+                node = n;
+                prev_node_req_id = prev;
+            }
+    };
+
     class dijkstra_params : public virtual Packable 
     {
         public:
             uint64_t source_handle;
+            db::element::remote_node source_node;
             uint64_t dest_handle;
             uint32_t edge_weight_name; // the key of the property which holds the weight of an an edge
             std::vector<common::property> edge_props;
             bool is_widest_path;
             std::pair<uint64_t, uint64_t> tentative_map_value; // for returning from a prop
+            bool adding_nodes;
+            uint64_t prev_node_id;
+            std::vector<std::pair<uint64_t, db::element::remote_node>> entries_to_add;
+            uint64_t final_cost;
+            std::vector<std::pair<uint64_t, uint64_t>> final_path;
+            uint64_t current_cost;
+
 
         public:
             virtual size_t size() const 
@@ -63,8 +100,8 @@ namespace node_prog
 
     struct dijkstra_node_state : Deletable 
     {
-        //std::priority_queue<dijkstra_queue_elem, std::vector<dijkstra_queue_elem>, std::less<dijkstra_queue_elem>> next_nodes_shortest; 
-        //std::priority_queue<dijkstra_queue_elem, std::vector<dijkstra_queue_elem>, std::greater<dijkstra_queue_elem>> next_nodes_widest; 
+        std::priority_queue<dijkstra_queue_elem, std::vector<dijkstra_queue_elem>, std::less<dijkstra_queue_elem>> next_nodes_shortest; 
+        std::priority_queue<dijkstra_queue_elem, std::vector<dijkstra_queue_elem>, std::greater<dijkstra_queue_elem>> next_nodes_widest; 
         // map from a node (by its create time) to its cost and the req_id of the node that came before it in the shortest path
         std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> visited_map; 
 
@@ -133,29 +170,29 @@ namespace node_prog
             if (params.adding_nodes == true){ // response from a propagation, add nodes it could potentially reach to priority queue
                 if (params.is_widest_path) {
                     for (auto &elem : params.entries_to_add) {
-                        node_statenext_nodes_widest.emplace(elem.first, elem.second, params.prev_node_id);
+                        node_state.next_nodes_widest.emplace(elem.first, elem.second, params.prev_node_id);
                     }
                 } else {
                     for (auto &elem : params.entries_to_add) {
                         node_state.next_nodes_shortest.emplace(elem.first, elem.second, params.prev_node_id);
                     }
                 }
-                // XXX add to visited map here?
-                node_state.visited_map.emplace(next_req_id, std::make_pair(current_cost, next_to_add.prev_node_req_id)); // mark the cost to get here
+                node_state.visited_map.emplace(params.prev_node_id, params.tentative_map_value);
             } else { // starting the request, add source to priority queue
+                        params.source_node = rn;
                 if (params.is_widest_path){
-                    params.next_nodes_widest.emplace(MAX_TIME, source_node, node.get_creat_id()); // don't want source node to be bottleneck in path
+                    node_state.next_nodes_widest.emplace(MAX_TIME, params.source_node, n.get_creat_time()); // don't want source node to be bottleneck in path
                 } else {
-                    params.next_nodes_shortest.emplace(0, source_node, node.get_creat_id());
+                    node_state.next_nodes_shortest.emplace(0, params.source_node, n.get_creat_time());
                 }
                 params.adding_nodes = true;
             }
             // select which node to visit next based on priority queue
             size_t current_cost = 0;
-            db::dijkstra_queue_elem next_to_add; //XXX change to reference, maybe need const
+            dijkstra_queue_elem next_to_add; //XXX change to reference, maybe need const
             uint64_t next_req_id;
 
-            while (!request->next_nodes_shortest.empty() || !request->next_nodes_widest.empty()) {
+            while (!node_state.next_nodes_shortest.empty() || !node_state.next_nodes_widest.empty()) {
                 if (params.is_widest_path) {
                     next_to_add = node_state.next_nodes_widest.top();
                     node_state.next_nodes_widest.pop();
@@ -168,16 +205,16 @@ namespace node_prog
                 // we have found destination! We know it was not deleted as coord checked
                 if (next_node_id == params.dest_handle) {
                     // rebuild path based on req_id's in visited_map
-                    size_t cur = next_to_add.prev_node_req_id;
-                    size_t curc = next_to_add.cost;
-                    size_t next = node_state.visited_map[cur].second; // prev_node_creat_id for that node
-                    size_t nextc = node_state.visited_map[cur].first; 
-                    while (cur != next){
-                        params.final_path.push_back(std::make_pair(cur, curc));
-                        std::swap(cur, next);
-                        std::swap(curc, nextc);
-                        next = node_state.visited_map[cur].second;
-                        nextc = node_state.visited_map[cur].first;
+                    size_t cur_node = next_to_add.prev_node_req_id;
+                    size_t cur_node_c = next_to_add.cost;
+                    size_t next_node = node_state.visited_map[cur_node].second; // prev_node_creat_id for that node
+                    size_t next_node_c = node_state.visited_map[cur_node].first; 
+                    while (cur_node != next_node){
+                        params.final_path.push_back(std::make_pair(cur_node, cur_node_c));
+                        std::swap(cur_node, next_node);
+                        std::swap(cur_node_c, next_node_c);
+                        next_node = node_state.visited_map[cur_node].second;
+                        next_node_c = node_state.visited_map[cur_node].first;
                     }
                     params.final_cost = current_cost;
                     next.emplace_back(std::make_pair(db::element::remote_node(-1, 1337), params));
@@ -189,41 +226,56 @@ namespace node_prog
                             get_neighbors = false;
                         }
                         if (get_neighbors){
+                            params.current_cost = current_cost;
                             params.prev_node_id = next_req_id;
+                            params.tentative_map_value = std::make_pair(current_cost, next_req_id); // added if node exists
                             next.emplace_back(std::make_pair(next_to_add.node, params));
                             return next;
                         }
                     }
                 }
-                // dest couldn't be reached, send failure to coord
-                std::vector<uint64_t> emptyPath;
-                params.final_path = emptypath;
-                params.final_cost = 0;
-                next.emplace_back(std::make_pair(db::element::remote_node(-1, 1337), params));
-            } else { // it is a request to add neighbors
-                auto list_add_fun = [&params] (db::element::edge * e) {
+            }
+            // dest couldn't be reached, send failure to coord
+            std::vector<std::pair<uint64_t, uint64_t>> emptyPath;
+            params.final_path = emptyPath;
+            params.final_cost = 0;
+            next.emplace_back(std::make_pair(db::element::remote_node(-1, 1337), params));
+        } else { // it is a request to add neighbors
+            // check the properties of each out-edge, assumes lock for node is held
+            for (const std::pair<size_t, db::element::edge*> &e : n.out_edges)
+            {
+                bool use_edge = e.second->get_creat_time() <= req_id  
+                    && e.second->get_del_time() > req_id; // edge created and deleted in acceptable timeframe
+
+                for (size_t i = 0; i < params.edge_props.size() && use_edge; i++) // checking edge properties
+                {
+                    if (!e.second->has_property(params.edge_props[i])) {
+                        use_edge = false;
+                        break;
+                    }
+                }
+                if (use_edge) {
                     // first is whether key exists, second is value
-                    std::pair<bool, size_t> weightpair = e->get_property_value(req->edge_weight_name, req->start_time); 
+                    std::pair<bool, size_t> weightpair = e.second->get_property_value(params.edge_weight_name, req_id);
                     if (weightpair.first) {
                         size_t priority = calculate_priority(params.current_cost, weightpair.second, params.is_widest_path);
-                        params.entries_to_add.emplace_back(std::make_pair(priority, e->nbr));
+                        params.entries_to_add.emplace_back(std::make_pair(priority, e.second->nbr));
                     }
-                };
-                apply_to_valid_edges(next_node, params.edge_props, req_id, list_add_fun);
-                params.adding_nodes = true;
-                next.emplace_back(std::make_pair(params.source_node, params));
+                }
             }
-            return next;
+            params.adding_nodes = true;
+            next.emplace_back(std::make_pair(params.source_node, params));
         }
+        return next;
     }
 
-    std::vector<std::pair<db::element::remote_node, dijkstra_params>> 
-        dijkstra_node_deleted_program(uint64_t req_id,
-                db::element::node &n, // node who asked to go to deleted node
-                uint64_t deleted_handle, // handle of node that didn't exist
-                dijkstra_params &params_given, // params we had sent to deleted node
-                std::function<dijkstra_node_state&()> state_getter){
-            std::cout << "DELETED PROGRAM " <<  std::endl;
+std::vector<std::pair<db::element::remote_node, dijkstra_params>> 
+dijkstra_node_deleted_program(uint64_t req_id,
+        db::element::node &n, // node who asked to go to deleted node
+        uint64_t deleted_handle, // handle of node that didn't exist
+        dijkstra_params &params_given, // params we had sent to deleted node
+        std::function<dijkstra_node_state&()> state_getter){
+    std::cout << "DELETED PROGRAM " <<  std::endl;
             return std::vector<std::pair<db::element::remote_node, dijkstra_params>>(); 
         }
 }
