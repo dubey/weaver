@@ -84,6 +84,39 @@ namespace node_prog
         }
     };
 
+    // caution: assuming we hold n->update_mutex
+    template<typename Func>
+    void apply_to_valid_edges(db::element::node* n, std::vector<common::property>& edge_props, size_t req_id, Func func){
+            // check the properties of each out-edge, assumes lock for node is held
+            for (const std::pair<size_t, db::element::edge*> &e : n->out_edges)
+            {
+                bool use_edge = e.second->get_creat_time() <= req_id  
+                    && e.second->get_del_time() > req_id; // edge created and deleted in acceptable timeframe
+
+                for (size_t i = 0; i < edge_props.size() && use_edge; i++) // checking edge properties
+                {
+                    if (!e.second->has_property(edge_props[i])) {
+                        use_edge = false;
+                        break;
+                    }
+                }
+                if (use_edge) {
+                    func(e.second);
+                }
+            }
+        }
+
+    inline size_t
+        calculate_priority(size_t current_cost, size_t edge_cost, bool is_widest_path){
+            size_t priority;
+            if (is_widest_path){
+                priority = current_cost < edge_cost ? current_cost : edge_cost;
+            } else {
+                priority = edge_cost + current_cost;
+            }
+            return priority;
+        }
+
     std::vector<std::pair<db::element::remote_node, dijkstra_params>> 
     dijkstra_node_program(uint64_t req_id,
             db::element::node &n,
@@ -94,31 +127,105 @@ namespace node_prog
             std::function<std::vector<dijkstra_cache_value *>()> cached_values_getter)
     {
         std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
-        if (params.edge_weight_name == 88){
-            std::cout << "YERRRRRRRRRRRRRr" << std::endl;
-        }
-        if (n.get_creat_time() == params.dest_handle){
-            params.edge_weight_name = 42;
-            std::cout << "FOUND DEST, RETURNING" << std::endl;
-            next.emplace_back(std::make_pair(db::element::remote_node(-1, 1337), params));
+
+        if (n.get_creat_time() == params.source_handle){
+            dijkstra_node_state& node_state = state_getter();
+            if (params.adding_nodes == true){ // response from a propagation, add nodes it could potentially reach to priority queue
+                if (params.is_widest_path) {
+                    for (auto &elem : params.entries_to_add) {
+                        node_statenext_nodes_widest.emplace(elem.first, elem.second, params.prev_node_id);
+                    }
+                } else {
+                    for (auto &elem : params.entries_to_add) {
+                        node_state.next_nodes_shortest.emplace(elem.first, elem.second, params.prev_node_id);
+                    }
+                }
+                // XXX add to visited map here?
+                node_state.visited_map.emplace(next_req_id, std::make_pair(current_cost, next_to_add.prev_node_req_id)); // mark the cost to get here
+            } else { // starting the request, add source to priority queue
+                if (params.is_widest_path){
+                    params.next_nodes_widest.emplace(MAX_TIME, source_node, node.get_creat_id()); // don't want source node to be bottleneck in path
+                } else {
+                    params.next_nodes_shortest.emplace(0, source_node, node.get_creat_id());
+                }
+                params.adding_nodes = true;
+            }
+            // select which node to visit next based on priority queue
+            size_t current_cost = 0;
+            db::dijkstra_queue_elem next_to_add; //XXX change to reference, maybe need const
+            uint64_t next_req_id;
+
+            while (!request->next_nodes_shortest.empty() || !request->next_nodes_widest.empty()) {
+                if (params.is_widest_path) {
+                    next_to_add = node_state.next_nodes_widest.top();
+                    node_state.next_nodes_widest.pop();
+                } else {
+                    next_to_add = node_state.next_nodes_shortest.top();
+                    node_state.next_nodes_shortest.pop();
+                }
+                size_t current_cost = next_to_add.cost;
+                uint64_t next_node_id = next_to_add.node.handle;
+                // we have found destination! We know it was not deleted as coord checked
+                if (next_node_id == params.dest_handle) {
+                    // rebuild path based on req_id's in visited_map
+                    size_t cur = next_to_add.prev_node_req_id;
+                    size_t curc = next_to_add.cost;
+                    size_t next = node_state.visited_map[cur].second; // prev_node_creat_id for that node
+                    size_t nextc = node_state.visited_map[cur].first; 
+                    while (cur != next){
+                        params.final_path.push_back(std::make_pair(cur, curc));
+                        std::swap(cur, next);
+                        std::swap(curc, nextc);
+                        next = node_state.visited_map[cur].second;
+                        nextc = node_state.visited_map[cur].first;
+                    }
+                    params.final_cost = current_cost;
+                    next.emplace_back(std::make_pair(db::element::remote_node(-1, 1337), params));
+                } else { // we need to send a prop
+                    bool get_neighbors = true;
+                    if (node_state.visited_map.count(next_node_id) > 0) {
+                        size_t old_cost = node_state.visited_map[next_req_id].first;
+                        if (params.is_widest_path ? old_cost >= current_cost : old_cost <= current_cost){
+                            get_neighbors = false;
+                        }
+                        if (get_neighbors){
+                            params.prev_node_id = next_req_id;
+                            next.emplace_back(std::make_pair(next_to_add.node, params));
+                            return next;
+                        }
+                    }
+                }
+                // dest couldn't be reached, send failure to coord
+                std::vector<uint64_t> emptyPath;
+                params.final_path = emptypath;
+                params.final_cost = 0;
+                next.emplace_back(std::make_pair(db::element::remote_node(-1, 1337), params));
+            } else { // it is a request to add neighbors
+                auto list_add_fun = [&params] (db::element::edge * e) {
+                    // first is whether key exists, second is value
+                    std::pair<bool, size_t> weightpair = e->get_property_value(req->edge_weight_name, req->start_time); 
+                    if (weightpair.first) {
+                        size_t priority = calculate_priority(params.current_cost, weightpair.second, params.is_widest_path);
+                        params.entries_to_add.emplace_back(std::make_pair(priority, e->nbr));
+                    }
+                };
+                apply_to_valid_edges(next_node, params.edge_props, req_id, list_add_fun);
+                params.adding_nodes = true;
+                next.emplace_back(std::make_pair(params.source_node, params));
+            }
             return next;
         }
-        for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
-            next.emplace_back(std::make_pair(possible_nbr.second->nbr, params));
-        }
-        std::cout << "OMG ITS RUNNING THE NODE PROGRAM " << next.size()<< std::endl;
-        return next;
     }
 
     std::vector<std::pair<db::element::remote_node, dijkstra_params>> 
-    dijkstra_node_deleted_program(uint64_t req_id,
+        dijkstra_node_deleted_program(uint64_t req_id,
                 db::element::node &n, // node who asked to go to deleted node
                 uint64_t deleted_handle, // handle of node that didn't exist
-            dijkstra_params &params_given, // params we had sent to deleted node
-            std::function<dijkstra_node_state&()> state_getter){
-        std::cout << "DELETED PROGRAM " <<  std::endl;
-        return std::vector<std::pair<db::element::remote_node, dijkstra_params>>(); 
-    }
+                dijkstra_params &params_given, // params we had sent to deleted node
+                std::function<dijkstra_node_state&()> state_getter){
+            std::cout << "DELETED PROGRAM " <<  std::endl;
+            return std::vector<std::pair<db::element::remote_node, dijkstra_params>>(); 
+        }
 }
 
 #endif //__DIKJSTRA_PROG__
