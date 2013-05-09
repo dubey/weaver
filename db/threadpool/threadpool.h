@@ -37,7 +37,7 @@ namespace thread
         public:
             unstarted_thread(
                 uint64_t s,
-                void (*f)(graph *, void *),
+                void (*f)(graph*, void*),
                 graph *g,
                 void *a);
 
@@ -46,7 +46,7 @@ namespace thread
 
         public:
             uint64_t start_time;
-            void (*func)(graph *, void *);
+            void (*func)(graph*, void*);
             graph *G;
             void *arg;
     };
@@ -54,7 +54,7 @@ namespace thread
     inline
     unstarted_thread :: unstarted_thread( 
             uint64_t s,
-            void (*f)(graph *, void *),
+            void (*f)(graph*, void*),
             graph *g,
             void *a)
         : start_time(s)

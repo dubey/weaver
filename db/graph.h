@@ -184,14 +184,15 @@ namespace db
 
             // Node migration
             migrate_request mrequest; // pending migration request object
-            po6::threads::mutex migration_mutex;
+            po6::threads::mutex migration_mutex, msg_count_mutex;
             uint64_t migr_node; // newly migrated node
             std::priority_queue<update_request*, std::vector<update_request*>, req_compare> pending_updates;
             uint64_t pending_update_count;
             uint64_t current_update_count;
             uint64_t target_clock, new_shard_target_clock;
             graph_arg_func migr_func;
-            std::deque<uint64_t> sorted_nodes;
+            std::unordered_map<uint64_t, uint32_t> agg_msg_count;
+            std::deque<std::pair<uint64_t, uint32_t>> sorted_nodes;
             void update_migrated_nbr_nonlocking(element::node *n, uint64_t edge, uint64_t rnode, int new_loc);
             void update_migrated_nbr(uint64_t lnode, uint64_t edge, uint64_t rnode, int new_loc);
             bool set_target_clock(uint64_t time);
@@ -329,6 +330,9 @@ namespace db
         } else {
             new_node->state = element::node::mode::STABLE;
         }
+        msg_count_mutex.lock();
+        agg_msg_count.emplace(time, 0);
+        msg_count_mutex.unlock();
 #ifdef DEBUG
         std::cout << "Creating node, addr = " << (void*) new_node << std::endl;
 #endif
@@ -342,6 +346,7 @@ namespace db
         ret.first = ++n->update_count;
         if (n->state != element::node::mode::IN_TRANSIT) {
             n->update_del_time(del_time);
+            n->updated = true;
             ret.first = 0;
         }
         ret.second = std::move(n->purge_cache());
@@ -349,9 +354,11 @@ namespace db
             invalidate_prog_cache(rid);
         }
         release_node(n);
-        deletion_mutex.lock();
-        delete_req_ids.emplace_back(message::NODE_DELETE_REQ, del_time, node_handle);
-        deletion_mutex.unlock();
+        if (ret.first == 0) {
+            deletion_mutex.lock();
+            delete_req_ids.emplace_back(message::NODE_DELETE_REQ, del_time, node_handle);
+            deletion_mutex.unlock();
+        }
         return ret;
     }
 
@@ -366,6 +373,7 @@ namespace db
         } else {
             element::edge *new_edge = new element::edge(time, remote_loc, remote_node);
             n->add_edge(new_edge, true);
+            n->updated = true;
             release_node(n);
             message::message msg(message::REVERSE_EDGE_CREATE);
             message::prepare_message(msg, message::REVERSE_EDGE_CREATE, remote_time, time, local_node, myid, remote_node);
@@ -387,6 +395,7 @@ namespace db
         if (n->state != element::node::mode::IN_TRANSIT) {
             element::edge *new_edge = new element::edge(time, remote_loc, remote_node);
             n->add_edge(new_edge, false);
+            n->updated = true;
 #ifdef DEBUG
             std::cout << "New rev edge: " << (void*)new_edge->nbr.handle << " " 
                       << new_edge->nbr.loc << " at lnode " << (void*)local_node << std::endl;
@@ -407,6 +416,8 @@ namespace db
         if (n->state != element::node::mode::IN_TRANSIT) {
             element::edge *e = n->out_edges.at(edge_handle);
             e->update_del_time(del_time);
+            n->updated = true;
+            n->dependent_del++;
             ret.first = 0;
         }
         ret.second = std::move(n->purge_cache());
@@ -414,9 +425,11 @@ namespace db
             invalidate_prog_cache(rid);
         }
         release_node(n);
-        deletion_mutex.lock();
-        delete_req_ids.emplace_back(message::EDGE_DELETE_REQ, del_time, node_handle, edge_handle);
-        deletion_mutex.unlock();
+        if (ret.first == 0) {
+            deletion_mutex.lock();
+            delete_req_ids.emplace_back(message::EDGE_DELETE_REQ, del_time, node_handle, edge_handle);
+            deletion_mutex.unlock();
+        }
         return ret;
     }
 
@@ -428,6 +441,7 @@ namespace db
         uint64_t ret = ++n->update_count;
         if (n->state != element::node::mode::IN_TRANSIT) {
             e->add_property(prop);
+            n->updated = true;
             ret = 0;
         }
         release_node(n);
@@ -443,6 +457,8 @@ namespace db
         ret.first = ++n->update_count;
         if (n->state != element::node::mode::IN_TRANSIT) {
             e->delete_property(key, time);
+            n->updated = true;
+            n->dependent_del++;
             ret.first = 0;
         }
         ret.second = std::move(n->purge_cache());
@@ -450,9 +466,11 @@ namespace db
             invalidate_prog_cache(rid);
         }
         release_node(n);
-        deletion_mutex.lock();
-        delete_req_ids.emplace_back(message::EDGE_DELETE_PROP, time, node, edge, key);
-        deletion_mutex.unlock();
+        if (ret.first == 0) {
+            deletion_mutex.lock();
+            delete_req_ids.emplace_back(message::EDGE_DELETE_PROP, time, node, edge, key);
+            deletion_mutex.unlock();
+        }
         return ret;
     }
 
@@ -471,6 +489,9 @@ namespace db
                         auto &req = front.request.del_node;
                         element::node *n;
                         element::edge *e;
+                        msg_count_mutex.lock();
+                        agg_msg_count.erase(req.node_handle);
+                        msg_count_mutex.unlock();
                         update_mutex.lock();
                         n = nodes.at(req.node_handle);
                         nodes.erase(req.node_handle);
@@ -504,6 +525,7 @@ namespace db
                         } else {
                             std::cout << "Not found edge in perm_del\n";
                         }
+                        n->dependent_del--;
                         release_node(n);
                         break;
                     }
@@ -514,6 +536,7 @@ namespace db
                             element::edge *e = n->out_edges.at(req.edge_handle);
                             e->remove_property(req.key, front.req_id);
                         }
+                        n->dependent_del--;
                         release_node(n);
                         break;
                     }
@@ -629,6 +652,9 @@ namespace db
     graph :: delete_migrated_node(uint64_t migr_node)
     {
         element::node *n;
+        msg_count_mutex.lock();
+        agg_msg_count.erase(migr_node);
+        msg_count_mutex.unlock();
         update_mutex.lock();
         n = nodes.at(migr_node);
         nodes.erase(migr_node);
