@@ -187,17 +187,18 @@ namespace db
             po6::threads::mutex migration_mutex;
             uint64_t migr_node; // newly migrated node
             std::priority_queue<update_request*, std::vector<update_request*>, req_compare> pending_updates;
-            //std::deque<uint64_t> pending_update_ids;
             uint64_t pending_update_count;
             uint64_t current_update_count;
             uint64_t target_clock, new_shard_target_clock;
             graph_arg_func migr_func;
+            std::deque<uint64_t> sorted_nodes;
+            void update_migrated_nbr_nonlocking(element::node *n, uint64_t edge, uint64_t rnode, int new_loc);
             void update_migrated_nbr(uint64_t lnode, uint64_t edge, uint64_t rnode, int new_loc);
             bool set_target_clock(uint64_t time);
             bool set_callback(uint64_t time, graph_arg_func mfunc);
             void set_update_count(uint64_t pending_count, uint64_t current_count, uint64_t target_clock);
-            //void set_update_ids(std::vector<uint64_t>&);
             void fwd_transit_node_update(std::unique_ptr<message::message> msg);
+            void delete_migrated_node(uint64_t migr_node);
             
             // Permanent deletion
             uint64_t del_id;
@@ -558,13 +559,20 @@ namespace db
     // migration methods
 
     inline void
+    graph :: update_migrated_nbr_nonlocking(element::node *n, uint64_t edge_handle, uint64_t remote_node, int new_loc)
+    {
+        if (n->out_edges.find(edge_handle) != n->out_edges.end()) {
+            element::edge *e = n->out_edges.at(edge_handle);
+            assert(e->nbr.handle == remote_node);
+            e->nbr.loc = new_loc;
+        }
+    }
+
+    inline void
     graph :: update_migrated_nbr(uint64_t local_node, uint64_t edge_handle, uint64_t remote_node, int new_loc)
     {
         element::node *n = acquire_node(local_node);
-        if (n->out_edges.find(edge_handle) != n->out_edges.end()) {
-            element::edge *e = n->out_edges.at(edge_handle);
-            e->nbr.loc = new_loc;
-        }
+        update_migrated_nbr_nonlocking(n, edge_handle, remote_node, new_loc);
         release_node(n);
     }
 
@@ -615,6 +623,24 @@ namespace db
         mrequest.mutex.lock();
         send(mrequest.new_loc, msg->buf);
         mrequest.mutex.unlock();
+    }
+
+    inline void
+    graph :: delete_migrated_node(uint64_t migr_node)
+    {
+        element::node *n;
+        update_mutex.lock();
+        n = nodes.at(migr_node);
+        nodes.erase(migr_node);
+        n->update_mutex.lock();
+        update_mutex.unlock();
+        for (auto &e: n->out_edges) {
+            delete e.second;
+        }
+        for (auto &e: n->in_edges) {
+            delete e.second;
+        }
+        delete n;
     }
 
     // busybee send methods

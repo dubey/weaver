@@ -72,7 +72,6 @@ namespace element
     class node : public element
     {
         public:
-            node();
             node(uint64_t time);
 
         public:
@@ -101,17 +100,6 @@ namespace element
             void remove_cached_req(uint64_t req_id);
             std::unique_ptr<std::vector<uint64_t>> purge_cache();
     };
-
-    inline
-    node :: node()
-        : state(mode::NASCENT)
-        , cached_req_ids(new std::vector<uint64_t>)
-        , prev_loc(-1)
-        , new_loc(-1)
-        , update_count(0)
-        , msg_count(NUM_SHARDS, 0)
-    {
-    }
 
     inline
     node :: node(uint64_t time)

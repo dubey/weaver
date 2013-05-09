@@ -79,6 +79,7 @@ namespace message
         COORD_NODE_MIGRATE,
         COORD_NODE_MIGRATE_ACK,
         MIGRATED_NBR_UPDATE,
+        MIGRATION_TOKEN,
 
         NODE_PROG,
         CLIENT_NODE_PROG_REQ,

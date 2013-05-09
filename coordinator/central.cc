@@ -231,7 +231,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     message::message msg_to_send;
     std::vector<uint64_t> empty_vector;
-    std::cout << "Beginning req " << request->req_id << std::endl;
     for (auto &batch_pair : initial_batches) {
         message::prepare_message(msg_to_send, message::NODE_PROG, request->pType, *request->vector_clock, 
                 request->req_id, batch_pair.second, empty_vector, request->ignore_cache);
@@ -249,7 +248,6 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
     for (uint64_t cached_id: *request->cached_req_ids) {
         if (!server->is_deleted_cache_id(cached_id)) {
             server->add_good_cache_id(cached_id);
-            std::cout << "Good cache " << cached_id << std::endl;
         } else {
             // request was served based on cache value that should be
             // invalidated; restarting request
@@ -258,7 +256,6 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
             server->add_bad_cache_id(cached_id);
             request->del_request.reset();
             server->update_mutex.unlock();
-            std::cout << "Bad cache " << cached_id << std::endl;
             node_prog::programs.at(request->pType)->unpack_and_start_coord(server, *request->req_msg, request);
             break;
         }
@@ -430,7 +427,6 @@ handle_client_req(coordinator::central *server, std::unique_ptr<message::message
 
         case message::CLIENT_NODE_PROG_REQ:
             message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, request->client->port, request->pType);
-            //std::cout << "server got type " << request->pType << std::endl;
             request->req_msg = std::move(msg);
             node_prog::programs.at(request->pType)->unpack_and_start_coord(server, *request->req_msg, request);
             break;
