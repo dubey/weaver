@@ -26,9 +26,9 @@
 
 namespace cache
 {
-    typedef std::unordered_map<uint64_t, node_prog::CacheValueBase*> req_map;
-    typedef std::unordered_map<uint64_t, req_map> node_map;
-    typedef std::unordered_map<node_prog::prog_type, node_map> prog_map;
+    typedef std::unordered_map<uint64_t, node_prog::CacheValueBase*> req_map; // req_id -> cached value
+    typedef std::unordered_map<uint64_t, req_map> node_map; // node handle -> req_map
+    typedef std::unordered_map<node_prog::prog_type, node_map> prog_map; // prog_type -> node_map
     typedef std::unordered_map<uint64_t, std::pair<node_prog::prog_type, std::vector<uint64_t>>> invalid_map;
 
     class program_cache

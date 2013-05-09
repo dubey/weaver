@@ -92,6 +92,7 @@ namespace element
             // for migration
             int prev_loc, new_loc;
             uint64_t update_count;
+            std::vector<uint64_t> agg_msg_count;
             std::vector<uint32_t> msg_count;
             bool updated;
             uint32_t dependent_del;
@@ -111,6 +112,7 @@ namespace element
         , prev_loc(-1)
         , new_loc(-1)
         , update_count(0)
+        , agg_msg_count(NUM_SHARDS, 0)
         , msg_count(NUM_SHARDS, 0)
         , updated(true)
         , dependent_del(0)

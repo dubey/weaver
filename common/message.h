@@ -207,7 +207,7 @@ namespace message
         sz += size(t.out_edges);
         sz += size(t.in_edges);
         sz += size(t.update_count);
-        sz += size(t.msg_count);
+        sz += size(t.agg_msg_count);
         return sz;
     }
     template <typename T1, typename T2>
@@ -363,7 +363,7 @@ namespace message
         pack_buffer(packer, t.out_edges);
         pack_buffer(packer, t.in_edges);
         pack_buffer(packer, t.update_count);
-        pack_buffer(packer, t.msg_count);
+        pack_buffer(packer, t.agg_msg_count);
     }
 
     template <typename T> 
@@ -565,7 +565,7 @@ namespace message
         unpack_buffer(unpacker, t.out_edges);
         unpack_buffer(unpacker, t.in_edges);
         unpack_buffer(unpacker, t.update_count);
-        unpack_buffer(unpacker, t.msg_count);
+        unpack_buffer(unpacker, t.agg_msg_count);
         t.update_creat_time(tc);
         t.update_del_time(td);
         t.set_properties(props);

@@ -196,7 +196,7 @@ migrate_node_step2(db::graph *G, std::unique_ptr<message::message> msg)
     message::unpack_message(*msg, message::MIGRATE_NODE_STEP1, node_handle);
     G->create_node(node_handle, true);
     n = G->acquire_node(node_handle);
-    std::vector<uint32_t>().swap(n->msg_count);
+    std::vector<uint64_t>().swap(n->agg_msg_count);
     // TODO change at coordinator so that user does not have to enter node for edge
     message::unpack_message(*msg, message::MIGRATE_NODE_STEP1, node_handle, from_loc, *n);
     n->prev_loc = from_loc;
@@ -823,7 +823,7 @@ runner(db::graph *G)
 void
 migration_wrapper(db::graph *G)
 {
-    std::cout << "\tMigration wrapper begin\n";
+//    std::cout << "\tMigration wrapper begin\n";
     bool no_migr = true;
     while (!G->sorted_nodes.empty()) {
         db::element::node *n;
@@ -835,11 +835,17 @@ migration_wrapper(db::graph *G)
             continue;
         }
         n->updated = false;
+        for (size_t j = 0; j < NUM_SHARDS; j++) {
+            n->agg_msg_count[j] += (uint64_t)(0.8 * (double)(n->msg_count[j]));
+        }
         max_pos = 0;
-        for (size_t j = 1; j < n->msg_count.size(); j++) {
-            if (n->msg_count.at(max_pos) < n->msg_count.at(j)) {
+        for (size_t j = 1; j < n->agg_msg_count.size(); j++) {
+            if (n->agg_msg_count.at(max_pos) < n->agg_msg_count.at(j)) {
                 max_pos = j;
             }
+        }
+        for (uint32_t &cnt: n->msg_count) {
+            cnt = 0;
         }
         G->release_node(n);
         G->sorted_nodes.pop_front();
@@ -850,7 +856,7 @@ migration_wrapper(db::graph *G)
         }
     }
     if (no_migr) {
-        std::cout << "Migration wrapper end\n";
+//        std::cout << "Migration wrapper end\n";
         shard_daemon_end(G);
     }
 }
@@ -863,11 +869,11 @@ bool agg_count_compare(std::pair<uint64_t, uint32_t> p1, std::pair<uint64_t, uin
 void
 shard_daemon_begin(db::graph *G, void *dummy)
 {
-    std::cout << "Starting shard daemon\n";
+//    std::cout << "Starting shard daemon\n";
     std::deque<std::pair<uint64_t, uint32_t>> &sn = G->sorted_nodes;
     std::chrono::seconds duration(10); // execution frequency in seconds
     std::this_thread::sleep_for(duration);
-    std::cout << "Shard daemon woken up, going to start migration process\n";
+//    std::cout << "Shard daemon woken up, going to start migration process\n";
     sn.clear();
     G->msg_count_mutex.lock();
     for (auto &p: G->agg_msg_count) {
@@ -877,7 +883,7 @@ shard_daemon_begin(db::graph *G, void *dummy)
     std::sort(sn.begin(), sn.end(), agg_count_compare);
     size_t num_nodes = sn.size();
     sn.erase(sn.begin() + num_nodes/2, sn.end());
-    std::cout << "Migr nodes size = " << sn.size() << std::endl;
+//    std::cout << "Migr nodes size = " << sn.size() << std::endl;
     migration_wrapper(G);
 }
 
