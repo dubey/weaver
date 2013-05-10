@@ -143,6 +143,7 @@ namespace db
             uint64_t cur_node; // node being migrated
             int new_loc; // shard to which this node is being migrated
             std::vector<std::unique_ptr<message::message>> pending_requests; // queued requests
+            uint64_t migr_clock; // clock at which migration started
             uint64_t other_clock;
     };
 
@@ -162,6 +163,7 @@ namespace db
             // Consistency
             bool check_clock(uint64_t time);
             bool increment_clock();
+            uint64_t get_clock();
             element::node* acquire_node(uint64_t node_handle);
             void release_node(element::node *n);
 
@@ -193,6 +195,7 @@ namespace db
             graph_arg_func migr_func;
             std::unordered_map<uint64_t, uint32_t> agg_msg_count;
             std::deque<std::pair<uint64_t, uint32_t>> sorted_nodes;
+            std::deque<std::pair<uint64_t, uint64_t>> migrated_nodes; // for permanent deletion later on
             void update_migrated_nbr_nonlocking(element::node *n, uint64_t edge, uint64_t rnode, int new_loc);
             void update_migrated_nbr(uint64_t lnode, uint64_t edge, uint64_t rnode, int new_loc);
             bool set_target_clock(uint64_t time);
@@ -291,6 +294,16 @@ namespace db
         thread_pool.work_queue_cond.broadcast();
         thread_pool.queue_mutex.unlock();
         return check;
+    }
+
+    inline uint64_t
+    graph :: get_clock()
+    {
+        uint64_t clk;
+        clock_mutex.lock();
+        clk = my_clock;
+        clock_mutex.unlock();
+        return clk;
     }
 
     // graph update methods
@@ -477,6 +490,16 @@ namespace db
     inline void
     graph :: permanent_delete(uint64_t req_id)
     {
+        while (!migrated_nodes.empty()) {
+            auto &p = migrated_nodes.front();
+            if (p.first > req_id) {
+                break;
+            } else {
+                std::cout << "Perm del migr node " << p.second << ", migr_clock = " << p.first << ", del_id " << req_id << std::endl;
+                delete_migrated_node(p.second);
+                migrated_nodes.pop_front();
+            }
+        }
         deletion_mutex.lock();
         del_id = req_id;
         while (!delete_req_ids.empty()) {

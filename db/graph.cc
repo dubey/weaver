@@ -172,6 +172,8 @@ migrate_node_step1(db::graph *G, uint64_t node_handle, int shard)
         message::message msg(message::MIGRATE_NODE_STEP1);
         G->mrequest.cur_node = node_handle;
         G->mrequest.new_loc = shard;
+        G->mrequest.migr_clock = 0;
+        G->mrequest.other_clock = 0;
         std::vector<std::unique_ptr<message::message>>().swap(G->mrequest.pending_requests);
         message::prepare_message(msg, message::MIGRATE_NODE_STEP1, node_handle, G->myid, *n);
         G->send(shard, msg.buf);
@@ -218,6 +220,7 @@ migrate_node_step3(db::graph *G, std::unique_ptr<message::message> msg)
     uint64_t my_clock, other_clock;
     message::unpack_message(*msg, message::COORD_NODE_MIGRATE_ACK, my_clock, other_clock);
     G->mrequest.mutex.lock();
+    G->mrequest.migr_clock = my_clock;
     G->mrequest.other_clock = other_clock;
     G->mrequest.mutex.unlock();
     if (G->set_callback(my_clock, migrate_node_step4)) {
@@ -302,7 +305,9 @@ migrate_node_step7(db::graph *G)
     message::message msg;
     std::vector<uint64_t> nodes;
     db::element::node *n;
+    uint64_t migr_clock;
     G->mrequest.mutex.lock();
+    migr_clock = G->mrequest.migr_clock;
     n = G->acquire_node(G->mrequest.cur_node);
     n->state = db::element::node::mode::MOVED;
     for (auto &r: G->mrequest.pending_requests) {
@@ -310,8 +315,8 @@ migrate_node_step7(db::graph *G)
     }
     G->release_node(n);
     G->mrequest.mutex.unlock();
-    // when is this safe TODO?
-    G->delete_migrated_node(G->mrequest.cur_node);
+    G->migrated_nodes.emplace_back(std::make_pair(migr_clock, G->mrequest.cur_node));
+//    G->delete_migrated_node(G->mrequest.cur_node);
     migration_wrapper(G);
     std::cout << "Ending step7\n";
 }
@@ -838,7 +843,8 @@ migration_wrapper(db::graph *G)
         size_t max_pos;
         uint64_t migr_node = G->sorted_nodes.front().first;
         n = G->acquire_node(migr_node);
-        if (n == NULL || n->get_del_time() < MAX_TIME || n->dependent_del > 0) {
+        if (n == NULL || n->get_del_time() < MAX_TIME || n->dependent_del > 0 ||
+            n->state == db::element::node::mode::IN_TRANSIT || n->state == db::element::node::mode::MOVED) {
             G->release_node(n);
             continue;
         }
