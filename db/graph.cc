@@ -429,12 +429,13 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 //            std::cout << "not stuck here 1" << std::endl;
             //std::cout << "about %%% to acquire node" << std::endl;
             db::element::node *node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
-            //std::cout << "not deadlocked " << start_node_params.size() << std::endl;
-            if (node->get_del_time() <= unpacked_request_id) {
-                G->release_node(node);
+            //std::cout << "@@@@aquiriring node " << node_handle << " has address " << node << std::endl;
+
+            if (node == NULL) {
                 //std::cout << "FOUND A DEL NODE:" << node_handle << std::endl;
                 deleted_nodes.push_back(std::make_pair(node_handle, std::get<2>(handle_params)));
-            } else if (node == NULL) {
+            } else if (node->get_del_time() <= unpacked_request_id) {
+                G->release_node(node);
                 //std::cout << "FOUND A DEL NODE:" << node_handle << std::endl;
                 deleted_nodes.push_back(std::make_pair(node_handle, std::get<2>(handle_params)));
             } else { // node does exist
@@ -453,7 +454,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                         cache_value_putter, 
                         cached_values_getter); 
                 G->release_node(node);
-                //            std::cout << "not stuck here 1.4 adding:" << next_node_params.size() << std::endl;
+                std::cout << "node program propagating to " << next_node_params.size() << " more nodes" << std::endl;
                 // batch the newly generated node programs for onward propagation
                 for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                     // signal to send back to coordinator

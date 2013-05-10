@@ -67,12 +67,34 @@ dijkstra_prog_test()
     std::cout << "nodes[4] = " << nodes[4] <<std::endl;
     std::cout << "nodes[5] = " << nodes[5] <<std::endl;
 
+    std::cout << "want shortest path from node " << nodes[0] << " to " << nodes[5] << std::endl;
     std::vector<std::pair<uint64_t, node_prog::dijkstra_params>> initial_args;
     initial_args.emplace_back(std::make_pair(nodes[0], node_prog::dijkstra_params()));
+    initial_args[0].second.adding_nodes = false;
+    initial_args[0].second.is_widest_path = false;
+    initial_args[0].second.source_handle = nodes[0];
     initial_args[0].second.dest_handle = nodes[5];
-    initial_args[0].second.edge_weight_name = 41;
+    initial_args[0].second.edge_weight_name = weight_label;
     node_prog::dijkstra_params* res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
-    assert(res->edge_weight_name == 42);
+
+    std::cout << "path of cost " << res->cost <<" is" << std::endl;
+    assert(res->cost == 17);
+    for (auto label : res->final_path){
+        std::cout << label.first << " cost: " << label.second << std::endl;
+    }
+    std::cout << "path end" << std::endl;
     delete res;
-    std::cout << "Shortest path good" << std::endl;
+    std::cout << "Shortest path good, checking widest" << std::endl;
+
+    initial_args[0].second.is_widest_path = true;
+    res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
+
+    std::cout << "path of width " << res->cost <<" is" << std::endl;
+    assert(res->cost == 6);
+    for (auto label : res->final_path){
+        std::cout << label.first << " cost: " << label.second << std::endl;
+    }
+    std::cout << "path end" << std::endl;
+    delete res;
+    std::cout << "Widest path good" << std::endl;
 }
