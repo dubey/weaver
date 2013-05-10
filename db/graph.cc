@@ -229,7 +229,6 @@ migrate_node_step4(db::graph *G)
     db::element::node *n;
     G->mrequest.mutex.lock();
     n = G->acquire_node(G->mrequest.cur_node);
-    // TODO check this logic. Won't msg reordering affect this?
     message::prepare_message(msg, message::MIGRATE_NODE_STEP4, n->update_count, G->mrequest.other_clock);
     G->send(G->mrequest.new_loc, msg.buf);
     G->release_node(n);
@@ -305,6 +304,7 @@ migrate_node_step7(db::graph *G)
     }
     G->release_node(n);
     G->mrequest.mutex.unlock();
+    // when is this safe TODO?
     G->delete_migrated_node(G->mrequest.cur_node);
     migration_wrapper(G);
     std::cout << "Ending step7\n";
@@ -468,11 +468,13 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             node_handle = std::get<0>(handle_params);
             this_node.handle = node_handle;
             db::element::node *node = G->acquire_node(node_handle); // maybe use a try-lock later so forward progress can continue on other nodes in list
-            if (node->get_del_time() <= unpacked_request_id) {
+            if (node == NULL) {
                 G->release_node(node);
                 deleted_nodes.push_back(std::make_pair(node_handle, std::get<2>(handle_params)));
-            } else if (node == NULL) {
+                std::cout << "Node deleted!\n";
+            } else if (node->get_del_time() <= unpacked_request_id) {
                 deleted_nodes.push_back(std::make_pair(node_handle, std::get<2>(handle_params)));
+                std::cout << "Node deleted!\n";
             } else if (node->state == db::element::node::mode::IN_TRANSIT || node->state == db::element::node::mode::MOVED) {
                 // queueing/forwarding node programs logic goes here
                 std::unique_ptr<message::message> m(new message::message());
