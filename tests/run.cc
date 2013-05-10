@@ -23,6 +23,7 @@
 //#include "dijkstra_test.h"
 //#include "node_prog_test.h"
 #include "dijkstra_prog_test.h"
+#include "tree_test.h"
 #include "reach_prog_test.h"
 #include "clustering_prog_test.h"
 
@@ -45,7 +46,8 @@ main(int argc, char *argv[])
     //std::cout << "Repetitive stress client ok." << std::endl;
     //reach_prog_test();
     //delete_prog_test();
-    dijkstra_prog_test();
+    //dijkstra_prog_test();
+    tree_test();
 //    clustering_prog_test();
     std::cout << "Node prog tests done." << std::endl;
     //clustering_test();
