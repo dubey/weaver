@@ -191,13 +191,19 @@ delete_edge_property_initiate(coordinator::central *server, std::shared_ptr<coor
 }
 
 void
-delete_end(coordinator::central *server, std::shared_ptr<coordinator::pending_req>request)
+delete_end(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request)
 {
     server->update_mutex.lock();
     server->add_deleted_cache(request, *request->cached_req_ids);
     server->pending.erase(request->req_id);
     server->update_mutex.unlock();
     request->done = true;
+}
+
+// caution: assuming we hold server->update_mutex
+void
+invalidate_migr_cache(coordinator::central *server, std::vector<uint64_t> &cached_ids)
+{
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
@@ -312,13 +318,18 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             break;
 
         case message::COORD_NODE_MIGRATE:
-            message::unpack_message(*msg, message::COORD_NODE_MIGRATE, coord_handle, new_loc);
+            cached_req_ids.reset(new std::vector<uint64_t>());
+            message::unpack_message(*msg, message::COORD_NODE_MIGRATE, coord_handle, new_loc, *cached_req_ids);
             server->update_mutex.lock();
             lnode = server->nodes.at(coord_handle);
             from_loc = lnode->get_loc();
             lnode->update_loc(new_loc);
             message::prepare_message(*msg, message::COORD_NODE_MIGRATE_ACK, server->vc.clocks->at(from_loc), server->vc.clocks->at(new_loc));
             server->vc.clocks->at(new_loc)++;
+            // invalidate cached ids
+            for (uint64_t del_iter: *cached_req_ids) {
+                server->bad_cache_ids->insert(del_iter);
+            }
             server->update_mutex.unlock();
             server->send(from_loc, msg->buf);
             break;

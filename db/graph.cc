@@ -175,8 +175,14 @@ migrate_node_step1(db::graph *G, uint64_t node_handle, int shard)
         std::vector<std::unique_ptr<message::message>>().swap(G->mrequest.pending_requests);
         message::prepare_message(msg, message::MIGRATE_NODE_STEP1, node_handle, G->myid, *n);
         G->send(shard, msg.buf);
+        // invalidating cache
+        // TODO can we avoid cache invalidation?
+        std::unique_ptr<std::vector<uint64_t>> cached_ids = n->purge_cache();
+        for (auto rid: *cached_ids) {
+            G->invalidate_prog_cache(rid);
+        }
         // send new loc information to coordinator
-        message::prepare_message(msg, message::COORD_NODE_MIGRATE, G->mrequest.cur_node, n->new_loc);
+        message::prepare_message(msg, message::COORD_NODE_MIGRATE, G->mrequest.cur_node, n->new_loc, *cached_ids);
         G->send_coord(msg.buf);
         G->release_node(n);
         G->mrequest.mutex.unlock();
