@@ -48,7 +48,7 @@ main(int argc, char *argv[])
     //delete_prog_test();
     //dijkstra_prog_test();
     tree_test();
-//    clustering_prog_test();
+    //clustering_prog_test();
     std::cout << "Node prog tests done." << std::endl;
     //clustering_test();
     //std::cout <<"Clustering ok.\n";
