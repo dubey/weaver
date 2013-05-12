@@ -16,13 +16,13 @@
 #include "node_prog/node_prog_type.h"
 #include "node_prog/dijkstra_program.h"
 
-#define TREE_HEIGHT 18 // dont set to 1
+#define TREE_HEIGHT 5 // dont set to 1
 
 inline 
-uint64_t path_cost(uint64_t start_node_idx){
-    uint64_t max = 1 << TREE_HEIGHT;
+uint64_t path_cost(uint64_t start_node_idx, int tree_height){
+    uint64_t max = 1 << tree_height;
     uint64_t height = 0;
-    while ((max | start_node_idx) > start_node_idx) 
+    while ((max | start_node_idx) > start_node_idx) // finds height difference (distance of MSBs)
     {
         max >>= 1;
         height++;
@@ -35,11 +35,14 @@ tree_test()
 {
     client c(CLIENT_PORT);
     auto edge_props = std::make_shared<std::vector<common::property>>();
-    uint32_t weight_label = 0xACC;
+    const uint32_t weight_label = 0xACC;
 
     uint64_t total_nodes = (1 << TREE_HEIGHT); // I want to 1-index nodes
-    uint64_t nodes[total_nodes+1];
-    uint64_t edges[total_nodes+1];
+    //std::cout << "total nodes is " << total_nodes << " bit shifted is " << (total_nodes >> 1) << std::endl;
+    const uint64_t total_nodes_const = (1 << TREE_HEIGHT); // I want to 1-index nodes
+    //std::cout << "total nodes const is " << total_nodes_const << " bit shifted is " << (total_nodes_const >> 1) << std::endl;
+    uint64_t nodes[total_nodes + 1];
+    uint64_t edges[total_nodes+ 1]; // change this to total_nodes_const for segfault?
     uint64_t i;
     for (i = 1; i < total_nodes; i++) {
         nodes[i] = c.create_node();
@@ -49,12 +52,12 @@ tree_test()
     for (i = 1; i < (total_nodes >> 1); i++) {
         edges[2*i] = c.create_edge(nodes[i], nodes[2*i]);
         c.add_edge_prop(nodes[i], edges[2*i], weight_label, 2*i);
-        std::cout << "added edge of weight " << 2*i<< std::endl;
+        std::cout << "added edge " << edges[2*i] << " of weight " << 2*i<< std::endl;
 
         edges[2*i+1] = c.create_edge(nodes[i], nodes[2*i + 1]);
         c.add_edge_prop(nodes[i], edges[2*i + 1], weight_label, 2*i + 1);
 
-        std::cout << "added edge of weight " << 2*i+1<< std::endl;
+        std::cout << "added edge " << edges[2*i + 1] << " of weight " << 2*i+1<< std::endl;
     }
     uint64_t super_sink = c.create_node();
     std::cout << "added super sink "<< std::endl;
@@ -75,10 +78,36 @@ tree_test()
         initial_args[0].second.source_handle = nodes[i];
         initial_args[0].second.dest_handle = super_sink;
         initial_args[0].second.edge_weight_name = weight_label;
+        std::cout << "about to run dijkstra for source " << i << std::endl;
         node_prog::dijkstra_params* res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
 
-        std::cout << "path of cost " << res->cost <<" wanted" << path_cost(i) << std::endl;
-        assert(res->cost == path_cost(i));
+        std::cout << "path of cost " << res->cost <<" wanted" << path_cost(i, TREE_HEIGHT) << std::endl;
+        assert(res->cost == path_cost(i, TREE_HEIGHT));
+        if (res != NULL){
+            delete res;
+        }
+        initial_args.clear();
+    }
+
+    std::cout << "about to test dijkstra after deleting some nodes" << std::endl;
+    // delete nodes up from the bottom left, then test from top node
+    for (int height = TREE_HEIGHT; height > 1; height--) {
+        // XXX TO FIX THIS, add map back to deleted nodes, batch and propagate to other shards
+        uint64_t delete_idx = 1 << (height - 1);
+        c.delete_node(nodes[delete_idx]);
+
+        initial_args.emplace_back(std::make_pair(nodes[1], node_prog::dijkstra_params()));
+        initial_args[0].second.adding_nodes = false;
+        initial_args[0].second.is_widest_path = false;
+        initial_args[0].second.source_handle = nodes[1];
+        initial_args[0].second.dest_handle = super_sink;
+        initial_args[0].second.edge_weight_name = weight_label;
+        node_prog::dijkstra_params* res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
+
+        uint64_t alternate_route_node = (1 << height)+1;
+        uint64_t expected_cost = path_cost(1, height-1) + alternate_route_node + path_cost(alternate_route_node, TREE_HEIGHT);
+        std::cout << "path of cost " << res->cost <<" wanted" << expected_cost << std::endl;
+        assert(res->cost == expected_cost);
         delete res;
         initial_args.clear();
     }

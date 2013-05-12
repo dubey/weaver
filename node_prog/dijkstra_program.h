@@ -349,7 +349,7 @@ dijkstra_node_deleted_program(uint64_t req_id,
         uint64_t deleted_handle, // handle of node that didn't exist
         dijkstra_params &params_given, // params we had sent to deleted node
         std::function<dijkstra_node_state&()> state_getter){
-    std::cout << "DELETED PROGRAM " <<  std::endl;
+    std::cout << "DELETED PROGRAM " << deleted_handle << std::endl;
     params_given.adding_nodes = false;
     std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
     next.emplace_back(std::make_pair(params_given.source_node, params_given));
