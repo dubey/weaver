@@ -92,7 +92,6 @@ tree_test()
     std::cout << "about to test dijkstra after deleting some nodes" << std::endl;
     // delete nodes up from the bottom left, then test from top node
     for (int height = TREE_HEIGHT; height > 1; height--) {
-        // XXX TO FIX THIS, add map back to deleted nodes, batch and propagate to other shards
         uint64_t delete_idx = 1 << (height - 1);
         c.delete_node(nodes[delete_idx]);
 
