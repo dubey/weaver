@@ -232,11 +232,11 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     message::message msg_to_send;
     std::vector<uint64_t> empty_vector;
-    std::vector<std::pair<uint64_t, uint64_t>> empty_pair_vector;
+    std::vector<std::tuple<uint64_t, ParamsType, uint64_t>> empty_tuple_vector;
     //printf("sending batched args for node program\n");
     for (auto &batch_pair : initial_batches) {
         message::prepare_message(msg_to_send, message::NODE_PROG, request->pType, *request->vector_clock, 
-                request->req_id, batch_pair.second, empty_vector, request->ignore_cache, empty_pair_vector);
+                request->req_id, batch_pair.second, empty_vector, request->ignore_cache, empty_tuple_vector);
         server->send(batch_pair.first, msg_to_send.buf); // TODO later change to send without update mutex lock
     }
     server->update_mutex.unlock();

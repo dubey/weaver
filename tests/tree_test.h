@@ -16,7 +16,7 @@
 #include "node_prog/node_prog_type.h"
 #include "node_prog/dijkstra_program.h"
 
-#define TREE_HEIGHT 5 // dont set to 1
+#define TREE_HEIGHT 12 // dont set to 1
 
 inline 
 uint64_t path_cost(uint64_t start_node_idx, int tree_height){
@@ -103,9 +103,9 @@ tree_test()
         initial_args[0].second.edge_weight_name = weight_label;
         node_prog::dijkstra_params* res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
 
-        uint64_t alternate_route_node = (1 << height)+1;
+        uint64_t alternate_route_node = (1 << height - 1)+1;
         uint64_t expected_cost = path_cost(1, height-1) + alternate_route_node + path_cost(alternate_route_node, TREE_HEIGHT);
-        std::cout << "path of cost " << res->cost <<" wanted" << expected_cost << std::endl;
+        std::cout << "path of cost " << res->cost <<" wanted " << expected_cost << " though node " << alternate_route_node << std::endl;
         assert(res->cost == expected_cost);
         delete res;
         initial_args.clear();
