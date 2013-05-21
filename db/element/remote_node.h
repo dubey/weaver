@@ -22,11 +22,11 @@ namespace element
     {
         public:
             remote_node();
-            remote_node(int, size_t);
+            remote_node(int, uint64_t);
 
         public:
             int loc;
-            size_t handle;
+            uint64_t handle;
             bool operator==(const db::element::remote_node &t) const;
             bool operator!=(const db::element::remote_node &t) const;
     };

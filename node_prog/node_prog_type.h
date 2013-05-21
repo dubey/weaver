@@ -72,6 +72,10 @@ namespace node_prog
         /* destructor must be defined */ 
     }
 
+    class Packable_Deletable : public Packable, public Deletable
+    {
+    };
+
     class CacheValueBase : Deletable
     {
         private:

@@ -32,25 +32,25 @@ class client
         busybee_sta client_bb;
 
     public:
-        size_t create_node();
-        size_t create_edge(size_t node1, size_t node2);
-        void delete_node(size_t node); 
-        void delete_edge(size_t node, size_t edge);
-        void add_edge_prop(size_t node, size_t edge, uint32_t key, size_t value);
-        void del_edge_prop(size_t node, size_t edge, uint32_t key);
-        bool reachability_request(size_t node1, size_t node2, std::shared_ptr<std::vector<common::property>> edge_props);
-        std::pair<size_t, std::vector<std::pair<size_t, size_t>>> shortest_path_request(size_t node1, size_t node2, uint32_t edge_weight_prop,
+        uint64_t create_node();
+        uint64_t create_edge(uint64_t node1, uint64_t node2);
+        void delete_node(uint64_t node); 
+        void delete_edge(uint64_t node, uint64_t edge);
+        void add_edge_prop(uint64_t node, uint64_t edge, uint32_t key, uint64_t value);
+        void del_edge_prop(uint64_t node, uint64_t edge, uint32_t key);
+        bool reachability_request(uint64_t node1, uint64_t node2, std::shared_ptr<std::vector<common::property>> edge_props);
+        std::pair<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>> shortest_path_request(uint64_t node1, uint64_t node2, uint32_t edge_weight_prop,
                 std::shared_ptr<std::vector<common::property>> edge_props);
-        std::pair<size_t, std::vector<std::pair<size_t, size_t>>> widest_path_request(size_t node1, size_t node2, uint32_t edge_weight_prop, 
+        std::pair<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>> widest_path_request(uint64_t node1, uint64_t node2, uint32_t edge_weight_prop, 
                 std::shared_ptr<std::vector<common::property>> edge_props);
-        double local_clustering_coefficient(size_t node,
+        double local_clustering_coefficient(uint64_t node,
                 std::shared_ptr<std::vector<common::property>> edge_props);
 
         template <typename ParamsType>
         ParamsType * run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args);
 
     private:
-        std::pair<size_t, std::vector<std::pair<size_t, size_t>>> dijkstra_request(size_t node1, size_t node2, uint32_t edge_weight_prop, bool is_widest,
+        std::pair<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>> dijkstra_request(uint64_t node1, uint64_t node2, uint32_t edge_weight_prop, bool is_widest,
                 std::shared_ptr<std::vector<common::property>> edge_props);
         void send_coord(std::auto_ptr<e::buffer> buf);
 };
@@ -64,11 +64,11 @@ client :: client(uint16_t myport)
 {
 }
 
-inline size_t
+inline uint64_t
 client :: create_node()
 {
     busybee_returncode ret;
-    size_t new_node;
+    uint64_t new_node;
     message::message msg(message::CLIENT_NODE_CREATE_REQ);
     message::prepare_message(msg, message::CLIENT_NODE_CREATE_REQ, myloc.port);
     send_coord(msg.buf);
@@ -80,11 +80,11 @@ client :: create_node()
     return new_node;
 }
 
-inline size_t
-client :: create_edge(size_t node1, size_t node2)
+inline uint64_t
+client :: create_edge(uint64_t node1, uint64_t node2)
 {
     busybee_returncode ret;
-    size_t new_edge;
+    uint64_t new_edge;
     message::message msg(message::CLIENT_EDGE_CREATE_REQ);
     message::prepare_message(msg, message::CLIENT_EDGE_CREATE_REQ, myloc.port,
             node1, node2);
@@ -98,7 +98,7 @@ client :: create_edge(size_t node1, size_t node2)
 }
 
 inline void
-client :: delete_node(size_t node)
+client :: delete_node(uint64_t node)
 {
     busybee_returncode ret;
     message::message msg(message::CLIENT_NODE_DELETE_REQ);
@@ -110,7 +110,7 @@ client :: delete_node(size_t node)
 }
 
 inline void
-client :: delete_edge(size_t node, size_t edge)
+client :: delete_edge(uint64_t node, uint64_t edge)
 {
     busybee_returncode ret;
     message::message msg(message::CLIENT_EDGE_DELETE_REQ);
@@ -123,7 +123,7 @@ client :: delete_edge(size_t node, size_t edge)
 }
 
 inline void
-client :: add_edge_prop(size_t node, size_t edge, uint32_t key, size_t value)
+client :: add_edge_prop(uint64_t node, uint64_t edge, uint32_t key, uint64_t value)
 {
     busybee_returncode ret;
     message::message msg(message::CLIENT_ADD_EDGE_PROP);
@@ -135,7 +135,7 @@ client :: add_edge_prop(size_t node, size_t edge, uint32_t key, size_t value)
 }
 
 inline void
-client :: del_edge_prop(size_t node, size_t edge, uint32_t key)
+client :: del_edge_prop(uint64_t node, uint64_t edge, uint32_t key)
 {
     busybee_returncode ret;
     message::message msg(message::CLIENT_DEL_EDGE_PROP);
@@ -147,7 +147,7 @@ client :: del_edge_prop(size_t node, size_t edge, uint32_t key)
 }
 
 inline bool
-client :: reachability_request(size_t node1, size_t node2,
+client :: reachability_request(uint64_t node1, uint64_t node2,
     std::shared_ptr<std::vector<common::property>> edge_props)
 {
     busybee_returncode ret;
@@ -163,26 +163,26 @@ client :: reachability_request(size_t node1, size_t node2,
     return reachable;
 }
 
-inline std::pair<size_t, std::vector<std::pair<size_t, size_t>>>
-client :: shortest_path_request(size_t node1, size_t node2, 
+inline std::pair<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>>
+client :: shortest_path_request(uint64_t node1, uint64_t node2, 
     uint32_t edge_weight_prop, std::shared_ptr<std::vector<common::property>> edge_props)
 {
     return dijkstra_request(node1, node2, edge_weight_prop, false, edge_props);
 }
 
-inline std::pair<size_t, std::vector<std::pair<size_t, size_t>>>
-client :: widest_path_request(size_t node1, size_t node2,
+inline std::pair<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>>
+client :: widest_path_request(uint64_t node1, uint64_t node2,
     uint32_t edge_weight_prop, std::shared_ptr<std::vector<common::property>> edge_props)
 {
     return dijkstra_request(node1, node2, edge_weight_prop, true, edge_props);
 }
 
-inline std::pair<size_t, std::vector<std::pair<size_t, size_t>>>
-client :: dijkstra_request(size_t node1, size_t node2, uint32_t edge_weight_prop, bool is_widest,
+inline std::pair<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>>
+client :: dijkstra_request(uint64_t node1, uint64_t node2, uint32_t edge_weight_prop, bool is_widest,
     std::shared_ptr<std::vector<common::property>> edge_props)
 {
     busybee_returncode ret;
-    std::pair<size_t, std::vector<std::pair<size_t, size_t>>> toRet; // pair of cost and path
+    std::pair<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>> toRet; // pair of cost and path
     message::message msg(message::CLIENT_DIJKSTRA_REQ);
     message::prepare_message(msg, message::CLIENT_DIJKSTRA_REQ, myloc.port, node1, node2, edge_weight_prop, is_widest, *edge_props);
     send_coord(msg.buf);
@@ -197,11 +197,11 @@ client :: dijkstra_request(size_t node1, size_t node2, uint32_t edge_weight_prop
 }
 
 inline double
-client :: local_clustering_coefficient(size_t node, std::shared_ptr<std::vector<common::property>> edge_props)
+client :: local_clustering_coefficient(uint64_t node, std::shared_ptr<std::vector<common::property>> edge_props)
 {
     busybee_returncode ret;
-    size_t numerator;
-    size_t denominator;
+    uint64_t numerator;
+    uint64_t denominator;
     message::message msg(message::CLIENT_CLUSTERING_REQ);
     message::prepare_message(msg, message::CLIENT_CLUSTERING_REQ, myloc.port, node, *edge_props);
     send_coord(msg.buf);

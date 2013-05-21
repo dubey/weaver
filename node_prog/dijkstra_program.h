@@ -121,7 +121,7 @@ namespace node_prog
             }
     };
 
-    struct dijkstra_node_state : Deletable 
+    struct dijkstra_node_state : Packable_Deletable 
     {
         std::priority_queue<dijkstra_queue_elem, std::vector<dijkstra_queue_elem>, std::less<dijkstra_queue_elem>> next_nodes_shortest; 
         std::priority_queue<dijkstra_queue_elem, std::vector<dijkstra_queue_elem>, std::greater<dijkstra_queue_elem>> next_nodes_widest; 
@@ -131,6 +131,19 @@ namespace node_prog
         virtual ~dijkstra_node_state()
         {
             /* implement me? XXX */
+        }
+        virtual size_t size() const
+        {
+            // TODO
+            return 0;
+        }
+        virtual void pack(e::buffer::packer& packer) const 
+        {
+            // TODO
+        }
+        virtual void unpack(e::unpacker& unpacker)
+        {
+            // TODO
         }
     };
 

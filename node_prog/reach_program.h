@@ -49,7 +49,7 @@ namespace node_prog
                 return toRet;
             }
 
-            virtual void pack(e::buffer::packer& packer) const 
+            virtual void pack(e::buffer::packer &packer) const 
             {
                 message::pack_buffer(packer, mode);
                 message::pack_buffer(packer, prev_node);
@@ -58,7 +58,7 @@ namespace node_prog
                 message::pack_buffer(packer, reachable);
             }
 
-            virtual void unpack(e::unpacker& unpacker)
+            virtual void unpack(e::unpacker &unpacker)
             {
                 message::unpack_buffer(unpacker, mode);
                 message::unpack_buffer(unpacker, prev_node);
@@ -68,7 +68,7 @@ namespace node_prog
             }
     };
 
-    struct reach_node_state : Deletable 
+    struct reach_node_state : Packable_Deletable
     {
         bool visited;
         db::element::remote_node prev_node; // previous node
@@ -84,6 +84,31 @@ namespace node_prog
 
         virtual ~reach_node_state()
         {
+        }
+
+        virtual size_t size() const 
+        {
+            size_t toRet = message::size(visited)
+                + message::size(prev_node)
+                + message::size(out_count)
+                + message::size(reachable);
+            return toRet;
+        }
+
+        virtual void pack(e::buffer::packer& packer) const 
+        {
+            message::pack_buffer(packer, visited);
+            message::pack_buffer(packer, prev_node);
+            message::pack_buffer(packer, out_count);
+            message::pack_buffer(packer, reachable);
+        }
+
+        virtual void unpack(e::unpacker& unpacker)
+        {
+            message::unpack_buffer(unpacker, visited);
+            message::unpack_buffer(unpacker, prev_node);
+            message::unpack_buffer(unpacker, out_count);
+            message::unpack_buffer(unpacker, reachable);
         }
     };
 
@@ -187,6 +212,9 @@ namespace node_prog
                     reach_cache_value &rcv = cache_putter();
                     rcv.reachable_node = params.dest;
                 }
+            } else if (state.out_count < 0) {
+                std::cout << "ALERT! Bad state value in reach program\n";
+                while(1);
             }
         }
         return next;

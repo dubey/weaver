@@ -74,11 +74,14 @@ namespace message
         CACHE_UPDATE,
         CACHE_UPDATE_ACK,
         MIGRATE_NODE_STEP1,
+        MIGRATE_NODE_STEP2,
         MIGRATE_NODE_STEP4,
-        MIGRATE_NODE_STEP6,
+        MIGRATE_NODE_STEP6a,
+        MIGRATE_NODE_STEP6b,
         COORD_NODE_MIGRATE,
         COORD_NODE_MIGRATE_ACK,
         MIGRATED_NBR_UPDATE,
+        MIGRATED_NBR_ACK,
         MIGRATION_TOKEN,
 
         NODE_PROG,
@@ -126,6 +129,12 @@ namespace message
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::vector<T>& t);
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void unpack_buffer(e::unpacker& unpacker, std::tuple<T1, T2, T3>& t);
+    size_t size(const db::element::edge* const &t);
+    size_t size(const db::element::node &t);
+    void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t);
+    void pack_buffer(e::buffer::packer &packer, const db::element::node &t);
+    void unpack_buffer(e::unpacker &unpacker, db::element::edge *&t);
+    void unpack_buffer(e::unpacker &unpacker, db::element::node &t);
 
     inline
     message :: message()
@@ -161,6 +170,10 @@ namespace message
     {
         return t.size();
     }
+    inline size_t size(const node_prog::Packable_Deletable *&t)
+    {
+        return t->size();
+    }
     inline size_t size(const bool &t)
     {
         return sizeof(uint16_t);
@@ -187,28 +200,13 @@ namespace message
     }
     inline size_t size(const common::property &t)
     {
-        return sizeof(uint32_t)+sizeof(size_t)+2*sizeof(uint64_t);
+        return sizeof(t.key)
+            + sizeof(t.value)
+            + 2*sizeof(t.creat_time);
     }
     inline size_t size(const db::element::remote_node &t)
     {
         return size(t.loc) + size(t.handle);
-    }
-    inline size_t size(const db::element::edge* const &t)
-    {
-        size_t sz = 2*sizeof(uint64_t) + // time stamps
-            size(*t->get_props()) + // properties
-            size(t->nbr);
-        return sz;
-    }
-    inline size_t size(const db::element::node &t)
-    {
-        size_t sz = 2*sizeof(uint64_t); // time stamps
-        sz += size(*t.get_props());  // properties
-        sz += size(t.out_edges);
-        sz += size(t.in_edges);
-        sz += size(t.update_count);
-        sz += size(t.agg_msg_count);
-        return sz;
     }
     template <typename T1, typename T2>
     inline size_t size(const std::pair<T1, T2> &t)
@@ -280,6 +278,11 @@ namespace message
         //std::cout << "pack buffer called for Packable type!" << std::endl;
         t.pack(packer);
     }
+    inline void pack_buffer(e::buffer::packer &packer, const node_prog::Packable_Deletable *&t)
+    {
+        //std::cout << "pack buffer called for Packable type!" << std::endl;
+        t->pack(packer);
+    }
     inline void pack_buffer(e::buffer::packer &packer, const node_prog::prog_type &t)
     {
         packer = packer << t;
@@ -346,24 +349,6 @@ namespace message
         pack_buffer(packer, std::get<0>(t));
         pack_buffer(packer, std::get<1>(t));
         pack_buffer(packer, std::get<2>(t));
-    }
-
-    inline void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t)
-    {
-        packer = packer << t->get_creat_time() << t->get_del_time();
-        pack_buffer(packer, *t->get_props());
-        pack_buffer(packer, t->nbr);
-    }
-
-    inline void
-    pack_buffer(e::buffer::packer &packer, const db::element::node &t)
-    {
-        packer = packer << t.get_creat_time() << t.get_del_time();
-        pack_buffer(packer, *t.get_props());
-        pack_buffer(packer, t.out_edges);
-        pack_buffer(packer, t.in_edges);
-        pack_buffer(packer, t.update_count);
-        pack_buffer(packer, t.agg_msg_count);
     }
 
     template <typename T> 
@@ -469,11 +454,18 @@ namespace message
         t.unpack(unpacker);
     }
     inline void
-    unpack_buffer(e::unpacker &unpacker, node_prog::prog_type &t){
+    unpack_buffer(e::unpacker &unpacker, node_prog::Packable_Deletable *&t)
+    {
+        //std::cout << "unpack buffer called for Packable type!" << std::endl;
+        t->unpack(unpacker);
+    }
+    inline void
+    unpack_buffer(e::unpacker &unpacker, node_prog::prog_type &t)
+    {
         uint32_t _type;
         unpacker = unpacker >> _type;
         //std::cout << "unpack buffer got " << _type << std::endl;
-        t = (enum node_prog::prog_type) _type;
+        t = (enum node_prog::prog_type)_type;
     }
     inline void
     unpack_buffer(e::unpacker &unpacker, bool &t)
@@ -537,38 +529,6 @@ namespace message
         unpack_buffer(unpacker, std::get<0>(t));
         unpack_buffer(unpacker, std::get<1>(t));
         unpack_buffer(unpacker, std::get<2>(t));
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, db::element::edge *&t)
-    {
-        uint64_t tc, td;
-        std::vector<common::property> props;
-        db::element::remote_node rn;
-        size_t nbr_handle;
-        int nbr_loc;
-        unpacker = unpacker >> tc >> td;
-        unpack_buffer(unpacker, props);
-        unpack_buffer(unpacker, rn);
-        t = new db::element::edge(tc, rn);
-        t->update_del_time(td);
-        t->set_properties(props);
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, db::element::node &t)
-    {
-        uint64_t tc, td;
-        std::vector<common::property> props;
-        unpacker = unpacker >> tc >> td;
-        unpack_buffer(unpacker, props);
-        unpack_buffer(unpacker, t.out_edges);
-        unpack_buffer(unpacker, t.in_edges);
-        unpack_buffer(unpacker, t.update_count);
-        unpack_buffer(unpacker, t.agg_msg_count);
-        t.update_creat_time(tc);
-        t.update_del_time(td);
-        t.set_properties(props);
     }
 
     template <typename T> 

@@ -13,13 +13,13 @@
  */
 
 #include <thread>
-#include <time.h>
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
  
 #include "client/client.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/reach_program.h"
+#include "test_base.h"
 
 static uint64_t repetitive_nodes[10];
 static uint64_t repetitive_edges[10];
@@ -119,19 +119,6 @@ create_edges(client *c, int num1, int num2, int num3, int num4)
 {
     repetitive_edges[0] = c->create_edge(repetitive_nodes[num1], repetitive_nodes[num2]);
     repetitive_edges[1] = c->create_edge(repetitive_nodes[num3], repetitive_nodes[num4]);
-}
-
-timespec diff(timespec start, timespec end)
-{
-        timespec temp;
-        if ((end.tv_nsec-start.tv_nsec)<0) {
-            temp.tv_sec = end.tv_sec-start.tv_sec-1;
-            temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
-        } else {
-            temp.tv_sec = end.tv_sec-start.tv_sec;
-            temp.tv_nsec = end.tv_nsec-start.tv_nsec;
-        }
-        return temp;
 }
 
 void

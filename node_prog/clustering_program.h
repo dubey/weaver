@@ -60,7 +60,7 @@ namespace node_prog
             }
     };
 
-    struct clustering_node_state : Deletable 
+    struct clustering_node_state : Packable_Deletable 
     {
         // map from a node (by its create time) to the number of neighbors who are connected to it
         std::unordered_map<size_t, int> neighbor_counts;
@@ -70,6 +70,20 @@ namespace node_prog
         virtual ~clustering_node_state()
         {
             /* implement me? XXX */
+        }
+
+        virtual size_t size() const
+        {
+            // TODO
+            return 0;
+        }
+        virtual void pack(e::buffer::packer& packer) const 
+        {
+            // TODO
+        }
+        virtual void unpack(e::unpacker& unpacker)
+        {
+            // TODO
         }
     };
 

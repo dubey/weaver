@@ -68,7 +68,7 @@ namespace coordinator
             uint64_t elem1, elem2;
             std::vector<common::property> edge_props;
             uint32_t key;
-            size_t value;
+            uint64_t value;
             std::unique_ptr<po6::net::location> client;
             // permanent deletion counter
             std::shared_ptr<out_counter> out_count;
@@ -143,7 +143,6 @@ namespace coordinator
             void add_edge(common::meta_element *e, uint64_t index);
             void add_pending_del_req(std::shared_ptr<pending_req> request);
             std::shared_ptr<pending_req> get_last_del_req(std::shared_ptr<pending_req> request);
-            //bool insert_del_wait(size_t del_req_id, size_t wait_req_id);
             bool still_pending_del_req(uint64_t req_id);
             void add_deleted_cache(std::shared_ptr<pending_req> request, std::vector<uint64_t> &cached_ids);
             void add_deleted_cache(uint64_t req_ids, std::vector<uint64_t> &cached_ids);

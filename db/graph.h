@@ -145,6 +145,10 @@ namespace db
             std::vector<std::unique_ptr<message::message>> pending_requests; // queued requests
             uint64_t migr_clock; // clock at which migration started
             uint64_t other_clock;
+            uint8_t start_step4; // step 4 can be started only when both coordinator and other shard
+                                 // send their acks, i.e. this count reaches 2
+            uint8_t start_next_round;   // this migration is finished when all pending requests have been forwarded
+                                        // and all in-nbrs have been updated, i.e. this count reaches 2
     };
 
     class graph;
@@ -191,6 +195,7 @@ namespace db
             std::priority_queue<update_request*, std::vector<update_request*>, req_compare> pending_updates;
             uint64_t pending_update_count;
             uint64_t current_update_count;
+            uint64_t pending_edge_updates;
             uint64_t target_clock, new_shard_target_clock;
             graph_arg_func migr_func;
             std::unordered_map<uint64_t, uint32_t> agg_msg_count;
@@ -228,8 +233,8 @@ namespace db
             // prog_type-> map from request_id to map from node handle to request state for that node
             state::program_state node_prog_req_state; 
             bool prog_req_state_exists(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
-            node_prog::Deletable* fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
-            void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::Deletable *toAdd);
+            node_prog::Packable_Deletable* fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
+            void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::Packable_Deletable *toAdd);
             // prog_type-> map from node handle to map from request_id to cache values -- used to do cache read/updates
             cache::program_cache node_prog_cache;
             bool prog_cache_exists(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id);
@@ -247,6 +252,9 @@ namespace db
         , coord(new po6::net::location(COORD_IPADDR, COORD_REC_PORT))
         , myid(my_id)
         , thread_pool(NUM_THREADS)
+        , pending_update_count(MAX_TIME)
+        , current_update_count(MAX_TIME)
+        , pending_edge_updates(0)
         , target_clock(0)
         , new_shard_target_clock(0)
         , bb(myloc->address, myloc->port + SEND_PORT_INCR, 0)
@@ -265,6 +273,7 @@ namespace db
             ++i;
         }
         file.close();
+        message::prog_state = &node_prog_req_state;
     }
 
     // consistency methods
@@ -490,6 +499,11 @@ namespace db
     inline void
     graph :: permanent_delete(uint64_t req_id)
     {
+        std::cout << "Migrated node list :";
+        for (auto &p: migrated_nodes) {
+            std::cout << " " << p.second;
+        }
+        std::cout << std::endl;
         while (!migrated_nodes.empty()) {
             auto &p = migrated_nodes.front();
             if (p.first > req_id) {
@@ -611,6 +625,8 @@ namespace db
             element::edge *e = n->out_edges.at(edge_handle);
             assert(e->nbr.handle == remote_node);
             e->nbr.loc = new_loc;
+        } else {
+            std::cout << "Did not find edge, no update\n";
         }
     }
 
@@ -816,14 +832,14 @@ namespace db
         return node_prog_req_state.state_exists(t, request_id, local_node_handle);
     }
 
-    inline node_prog::Deletable*
+    inline node_prog::Packable_Deletable*
     graph :: fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle)
     {
         return node_prog_req_state.get_state(t, request_id, local_node_handle);
     }
 
     inline void 
-    graph :: insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::Deletable* toAdd)
+    graph :: insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::Packable_Deletable* toAdd)
     {
         node_prog_req_state.put_state(t, request_id, local_node_handle, toAdd);
     }
