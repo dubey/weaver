@@ -140,7 +140,8 @@ namespace db
     {
         public:
             po6::threads::mutex mutex;
-            uint64_t cur_node; // node being migrated
+            uint64_t cur_node, // node being migrated
+                prev_node; // last node which was migrated (used for permanent deletion of migrated nodes)
             int new_loc; // shard to which this node is being migrated
             std::vector<std::unique_ptr<message::message>> pending_requests; // queued requests
             uint64_t migr_clock; // clock at which migration started
@@ -149,6 +150,17 @@ namespace db
                                  // send their acks, i.e. this count reaches 2
             uint8_t start_next_round;   // this migration is finished when all pending requests have been forwarded
                                         // and all in-nbrs have been updated, i.e. this count reaches 2
+            
+            migrate_request()
+                : cur_node(0)
+                , prev_node(0)
+                , new_loc(-1)
+                , migr_clock(0)
+                , other_clock(0)
+                , start_step4(0)
+                , start_next_round(0)
+            {
+            }
     };
 
     class graph;
@@ -185,7 +197,7 @@ namespace db
             std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> delete_edge(uint64_t node, uint64_t edge_handle, uint64_t del_time);
             uint64_t add_edge_property(uint64_t n, uint64_t e, common::property &prop);
             std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> delete_all_edge_property(uint64_t n, uint64_t e, uint32_t key, uint64_t del_time);
-            void permanent_delete(uint64_t req_id);
+            void permanent_delete(uint64_t req_id, uint64_t migr_del_id);
             void permanent_edge_delete(uint64_t n, uint64_t e);
 
             // Node migration
@@ -497,19 +509,20 @@ namespace db
     }
 
     inline void
-    graph :: permanent_delete(uint64_t req_id)
+    graph :: permanent_delete(uint64_t req_id, uint64_t migr_del_id)
     {
         std::cout << "Migrated node list :";
         for (auto &p: migrated_nodes) {
             std::cout << " " << p.second;
         }
         std::cout << std::endl;
+        std::cout << "Num migr nodes " << migrated_nodes.size() << ", migr_del_id = " << migr_del_id << std::endl;
         while (!migrated_nodes.empty()) {
             auto &p = migrated_nodes.front();
-            if (p.first > req_id) {
+            if (p.first >= migr_del_id) {
                 break;
             } else {
-                std::cout << "Perm del migr node " << p.second << ", migr_clock = " << p.first << ", del_id " << req_id << std::endl;
+                std::cout << "Perm del migr node " << p.second << ", migr_clock = " << p.first << ", del_id " << migr_del_id << std::endl;
                 delete_migrated_node(p.second);
                 migrated_nodes.pop_front();
             }
@@ -621,12 +634,21 @@ namespace db
     inline void
     graph :: update_migrated_nbr_nonlocking(element::node *n, uint64_t edge_handle, uint64_t remote_node, int new_loc)
     {
+        bool found = false;
         if (n->out_edges.find(edge_handle) != n->out_edges.end()) {
             element::edge *e = n->out_edges.at(edge_handle);
             assert(e->nbr.handle == remote_node);
             e->nbr.loc = new_loc;
-        } else {
-            std::cout << "Did not find edge, no update\n";
+            found = true;
+        }
+        if (n->in_edges.find(edge_handle) != n->in_edges.end()) {
+            element::edge *e = n->in_edges.at(edge_handle);
+            assert(e->nbr.handle == remote_node);
+            e->nbr.loc = new_loc;
+            found = true;
+        }
+        if (!found) {
+            std::cerr << "Neighbor not found for migrated node " << remote_node << std::endl;
         }
     }
 

@@ -325,7 +325,7 @@ handle_pending_req(coordinator::central *server, std::unique_ptr<message::messag
             lnode = server->nodes.at(coord_handle);
             from_loc = lnode->get_loc();
             lnode->update_loc(new_loc);
-            message::prepare_message(*msg, message::COORD_NODE_MIGRATE_ACK, server->vc.clocks->at(from_loc), server->vc.clocks->at(new_loc));
+            message::prepare_message(*msg, message::COORD_NODE_MIGRATE_ACK, server->vc.clocks->at(from_loc), server->vc.clocks->at(new_loc), server->request_id);
             server->vc.clocks->at(new_loc)++;
             // invalidate cached ids
             for (uint64_t del_iter: *cached_req_ids) {
@@ -482,10 +482,17 @@ coord_daemon_initiate(coordinator::central *server)
 {
     std::vector<uint64_t> good, bad;
     uint64_t perm_del_id = 0;
+    uint64_t migr_del_id = 0;
     message::message msg;
     std::chrono::seconds duration(DAEMON_PERIOD); // execute every DAEMON_PERIOD seconds
     std::this_thread::sleep_for(duration);
     server->update_mutex.lock();
+    // figure out minimum outstanding request id
+    for (auto &r: server->pending) {
+        if ((migr_del_id == 0) || (r.first < migr_del_id)) {
+            migr_del_id = r.first;
+        }
+    }
     while (server->first_del->cnt == 0 && server->first_del != server->last_del) {
         perm_del_id = server->first_del->req_id;
         if (server->first_del->next) {
@@ -505,7 +512,7 @@ coord_daemon_initiate(coordinator::central *server)
         server->update_mutex.unlock();
     }
     for (uint32_t i = 0; i < server->num_shards; i++) {
-        message::prepare_message(msg, message::CACHE_UPDATE, good, bad, perm_del_id);
+        message::prepare_message(msg, message::CACHE_UPDATE, good, bad, perm_del_id, migr_del_id);
         server->send(i, msg.buf);
     }
 
