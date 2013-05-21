@@ -32,4 +32,5 @@
 #define NUM_THREADS 4
 #define MAX_NODE_PER_REQUEST 500
 #define SHARDS_DESC_FILE "../common/shards"
+#define MIGR_FREQ 10 // seconds delay between consecutive migrations
 #endif

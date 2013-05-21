@@ -44,6 +44,7 @@ namespace state
             size_t size(uint64_t node_handle);
             void pack(uint64_t node_handle, e::buffer::packer &packer);
             void unpack(uint64_t node_handle, e::unpacker &unpacker);
+            void delete_node_state(uint64_t node_handle);
 
         private:
             bool state_exists_nolock(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle);
@@ -265,6 +266,21 @@ namespace state
 
             if (rmap.size() > 0) {
                 prog_state.at(type).emplace(node, rmap);
+            }
+        }
+        mutex.unlock();
+    }
+
+    inline void
+    program_state :: delete_node_state(uint64_t node_handle)
+    {
+        mutex.lock();
+        for (auto &t: prog_state) {
+            if (node_entry_exists_nolock(t.first, node_handle)) {
+                for (const std::pair<uint64_t, node_prog::Packable_Deletable*> &r: t.second.at(node_handle)) {
+                    delete r.second;
+                }
+                t.second.erase(node_handle);
             }
         }
         mutex.unlock();

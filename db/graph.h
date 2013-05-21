@@ -209,6 +209,8 @@ namespace db
             uint64_t current_update_count;
             uint64_t pending_edge_updates;
             uint64_t target_clock, new_shard_target_clock;
+            bool migrated, migr_token;
+            timespec migr_time;
             graph_arg_func migr_func;
             std::unordered_map<uint64_t, uint32_t> agg_msg_count;
             std::deque<std::pair<uint64_t, uint32_t>> sorted_nodes;
@@ -267,6 +269,8 @@ namespace db
         , pending_update_count(MAX_TIME)
         , current_update_count(MAX_TIME)
         , pending_edge_updates(0)
+        , migrated(false)
+        , migr_token(false)
         , target_clock(0)
         , new_shard_target_clock(0)
         , bb(myloc->address, myloc->port + SEND_PORT_INCR, 0)
@@ -511,12 +515,12 @@ namespace db
     inline void
     graph :: permanent_delete(uint64_t req_id, uint64_t migr_del_id)
     {
-        std::cout << "Migrated node list :";
-        for (auto &p: migrated_nodes) {
-            std::cout << " " << p.second;
-        }
-        std::cout << std::endl;
-        std::cout << "Num migr nodes " << migrated_nodes.size() << ", migr_del_id = " << migr_del_id << std::endl;
+        //std::cout << "Migrated node list :";
+        //for (auto &p: migrated_nodes) {
+        //    std::cout << " " << p.second;
+        //}
+        //std::cout << std::endl;
+        //std::cout << "Num migr nodes " << migrated_nodes.size() << ", migr_del_id = " << migr_del_id << std::endl;
         while (!migrated_nodes.empty()) {
             auto &p = migrated_nodes.front();
             if (p.first >= migr_del_id) {
@@ -728,6 +732,7 @@ namespace db
             delete e.second;
         }
         delete n;
+        node_prog_req_state.delete_node_state(migr_node);
     }
 
     // busybee send methods
