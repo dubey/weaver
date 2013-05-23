@@ -33,7 +33,7 @@ static node_prog::reach_params rp;
 void
 check_reachability()
 {
-    client c(CLIENT_PORT+1);
+    client c(CLIENT_ID+1);
     int i, j;
     std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args;
     while (true) {
@@ -124,7 +124,7 @@ create_edges(client *c, int num1, int num2, int num3, int num4)
 void
 repetitive_reach_prog()
 {
-    client c(CLIENT_PORT);
+    client c(CLIENT_ID);
     int i, j;
     std::thread *t;
     timespec t1, t2, dif;

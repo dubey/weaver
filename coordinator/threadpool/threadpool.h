@@ -17,7 +17,6 @@
 #include <vector>
 #include <deque>
 #include <thread>
-#include <po6/net/location.h>
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
 
@@ -39,21 +38,21 @@ namespace thread
     {
         public:
             unstarted_thread(
-                void (*f)(coordinator::central*, std::unique_ptr<message::message>, enum message::msg_type, std::unique_ptr<po6::net::location>),
+                void (*f)(coordinator::central*, std::unique_ptr<message::message>, enum message::msg_type, uint64_t),
                 coordinator::central *s,
                 std::unique_ptr<message::message> m,
                 enum message::msg_type mtype,
-                std::unique_ptr<po6::net::location> l);
+                uint64_t l);
 
         public:
             void (*func)(coordinator::central*,
                          std::unique_ptr<message::message>, 
                          enum message::msg_type,
-                         std::unique_ptr<po6::net::location>);
+                         uint64_t);
             coordinator::central *server;
             std::unique_ptr<message::message> msg;
             enum message::msg_type m_type;
-            std::unique_ptr<po6::net::location> loc;
+            uint64_t loc;
     };
 
     inline
@@ -61,16 +60,16 @@ namespace thread
             void (*f)(coordinator::central*, 
                       std::unique_ptr<message::message>,
                       enum message::msg_type,
-                      std::unique_ptr<po6::net::location>),
+                      uint64_t),
             coordinator::central *s,
             std::unique_ptr<message::message> m,
             enum message::msg_type mtype,
-            std::unique_ptr<po6::net::location> l)
+            uint64_t l)
         : func(f)
         , server(s)
         , msg(std::move(m))
         , m_type(mtype)
-        , loc(std::move(l))
+        , loc(l)
     {
     }
 

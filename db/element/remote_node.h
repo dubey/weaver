@@ -22,17 +22,17 @@ namespace element
     {
         public:
             remote_node();
-            remote_node(int, uint64_t);
+            remote_node(uint64_t, uint64_t);
 
         public:
-            int loc;
+            uint64_t loc;
             uint64_t handle;
             bool operator==(const db::element::remote_node &t) const;
             bool operator!=(const db::element::remote_node &t) const;
     };
     
     inline
-    remote_node :: remote_node(int l, uint64_t h)
+    remote_node :: remote_node(uint64_t l, uint64_t h)
         : loc(l)
         , handle(h)
     {

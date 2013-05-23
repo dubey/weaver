@@ -90,7 +90,7 @@ namespace element
             po6::threads::mutex update_mutex;
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids; // requests which have been cached
             // for migration
-            int prev_loc, new_loc;
+            uint64_t prev_loc, new_loc;
             uint64_t update_count;
             std::vector<uint64_t> agg_msg_count;
             std::vector<uint32_t> msg_count;

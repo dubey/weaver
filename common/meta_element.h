@@ -26,11 +26,11 @@ namespace common
     class meta_element
     {
         public:
-            meta_element(int loc, uint64_t t_creat, uint64_t t_delete, uint64_t elem_handle);
-            meta_element(int loc);
+            meta_element(uint64_t loc, uint64_t t_creat, uint64_t t_delete, uint64_t elem_handle);
+            meta_element(uint64_t loc);
         
         protected:
-            int myloc;
+            uint64_t myloc;
             uint64_t creat_time;
             uint64_t del_time;
             //unique handle of this element on shard server
@@ -43,18 +43,18 @@ namespace common
             void update_creat_time(uint64_t _creat_time);
             uint64_t get_handle();
             void update_handle(uint64_t newhandle);
-            int get_loc();
-            void update_loc(int newloc);
+            uint64_t get_loc();
+            void update_loc(uint64_t newloc);
     };
 
     inline
-    meta_element :: meta_element(int loc)
+    meta_element :: meta_element(uint64_t loc)
         : myloc(loc)
     {
     }
 
     inline
-    meta_element :: meta_element(int loc, uint64_t t_creat, uint64_t t_delete, uint64_t elem_handle)
+    meta_element :: meta_element(uint64_t loc, uint64_t t_creat, uint64_t t_delete, uint64_t elem_handle)
         : myloc(loc)
         , creat_time(t_creat)
         , del_time(t_delete)
@@ -98,14 +98,14 @@ namespace common
         handle = newhandle;
     }
 
-    inline int
+    inline uint64_t
     meta_element :: get_loc()
     {
         return myloc;
     }
     
     inline void
-    meta_element :: update_loc(int newloc)
+    meta_element :: update_loc(uint64_t newloc)
     {
         myloc = newloc;
     }

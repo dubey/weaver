@@ -24,10 +24,10 @@
 #include <po6/net/location.h>
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
-#include <busybee_sta.h>
 
 #include "common/weaver_constants.h"
 #include "common/property.h"
+#include "common/busybee_infra.h"
 #include "element/node.h"
 #include "element/edge.h"
 #include "threadpool/threadpool.h"
@@ -142,7 +142,7 @@ namespace db
             po6::threads::mutex mutex;
             uint64_t cur_node, // node being migrated
                 prev_node; // last node which was migrated (used for permanent deletion of migrated nodes)
-            int new_loc; // shard to which this node is being migrated
+            uint64_t new_loc; // shard to which this node is being migrated
             std::vector<std::unique_ptr<message::message>> pending_requests; // queued requests
             uint64_t migr_clock; // clock at which migration started
             uint64_t other_clock;
@@ -169,7 +169,7 @@ namespace db
     class graph
     {
         public:
-            graph(int my_id, const char* ip_addr, int port);
+            graph(uint64_t my_id);
 
         private:
             po6::threads::mutex clock_mutex, update_mutex, request_mutex, deletion_mutex;
@@ -185,15 +185,12 @@ namespace db
 
             // Graph state
             std::unordered_map<uint64_t, element::node*> nodes;
-            std::shared_ptr<po6::net::location> myloc;
-            std::shared_ptr<po6::net::location> coord;
-            po6::net::location **shard_locs; // po6 locations for each shard
-            int myid;
+            uint64_t myid;
             db::thread::pool thread_pool;
             void create_node(uint64_t time, bool migrate);
             std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> delete_node(uint64_t node, uint64_t del_time);
-            uint64_t create_edge(uint64_t local_node, uint64_t time, uint64_t remote_node, int remote_loc, uint64_t remote_time);
-            uint64_t create_reverse_edge(uint64_t time, uint64_t local_node, uint64_t remote_node, int remote_loc);
+            uint64_t create_edge(uint64_t local_node, uint64_t time, uint64_t remote_node, uint64_t remote_loc, uint64_t remote_time);
+            uint64_t create_reverse_edge(uint64_t time, uint64_t local_node, uint64_t remote_node, uint64_t remote_loc);
             std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> delete_edge(uint64_t node, uint64_t edge_handle, uint64_t del_time);
             uint64_t add_edge_property(uint64_t n, uint64_t e, common::property &prop);
             std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> delete_all_edge_property(uint64_t n, uint64_t e, uint32_t key, uint64_t del_time);
@@ -215,8 +212,8 @@ namespace db
             std::unordered_map<uint64_t, uint32_t> agg_msg_count;
             std::deque<std::pair<uint64_t, uint32_t>> sorted_nodes;
             std::deque<std::pair<uint64_t, uint64_t>> migrated_nodes; // for permanent deletion later on
-            void update_migrated_nbr_nonlocking(element::node *n, uint64_t edge, uint64_t rnode, int new_loc);
-            void update_migrated_nbr(uint64_t lnode, uint64_t edge, uint64_t rnode, int new_loc);
+            void update_migrated_nbr_nonlocking(element::node *n, uint64_t edge, uint64_t rnode, uint64_t new_loc);
+            void update_migrated_nbr(uint64_t lnode, uint64_t edge, uint64_t rnode, uint64_t new_loc);
             bool set_target_clock(uint64_t time);
             bool set_callback(uint64_t time, graph_arg_func mfunc);
             void set_update_count(uint64_t pending_count, uint64_t current_count, uint64_t target_clock);
@@ -228,14 +225,16 @@ namespace db
             std::deque<perm_del> delete_req_ids;
             
             // Messaging infrastructure
-            busybee_sta bb; // Busybee instance used for sending messages
-            busybee_sta bb_recv; // Busybee instance used for receiving messages
+            std::shared_ptr<po6::net::location> myloc;
+            std::shared_ptr<po6::net::location> myrecloc;
+            busybee_sta *bb; // Busybee instance used for sending messages
+            busybee_sta *bb_recv; // Busybee instance used for receiving messages
             po6::threads::mutex bb_lock; // Busybee lock
-            busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
-            busybee_returncode send(std::unique_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> buf);
-            busybee_returncode send(po6::net::location *loc, std::auto_ptr<e::buffer> buf);
-            busybee_returncode send(int loc, std::auto_ptr<e::buffer> buf);
-            busybee_returncode send_coord(std::auto_ptr<e::buffer> buf);
+            //busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
+            //busybee_returncode send(std::unique_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> buf);
+            //busybee_returncode send(po6::net::location *loc, std::auto_ptr<e::buffer> buf);
+            //busybee_returncode send_coord(std::auto_ptr<e::buffer> buf);
+            busybee_returncode send(uint64_t loc, std::auto_ptr<e::buffer> buf);
             
             // testing
             std::unordered_map<uint64_t, uint64_t> req_count;
@@ -260,10 +259,8 @@ namespace db
     };
 
     inline
-    graph :: graph(int my_id, const char* ip_addr, int port)
+    graph :: graph(uint64_t my_id)
         : my_clock(0)
-        , myloc(new po6::net::location(ip_addr, port))
-        , coord(new po6::net::location(COORD_IPADDR, COORD_REC_PORT))
         , myid(my_id)
         , thread_pool(NUM_THREADS)
         , pending_update_count(MAX_TIME)
@@ -273,22 +270,29 @@ namespace db
         , migr_token(false)
         , target_clock(0)
         , new_shard_target_clock(0)
-        , bb(myloc->address, myloc->port + SEND_PORT_INCR, 0)
-        , bb_recv(myloc->address, myloc->port, 0)
         , already_migr(false)
     {
-        int i, inport;
-        po6::net::location *temp_loc;
-        std::string ipaddr;
-        std::ifstream file(SHARDS_DESC_FILE);
-        shard_locs = (po6::net::location **)malloc(sizeof(po6::net::location *) * NUM_SHARDS);
-        i = 0;
-        while (file >> ipaddr >> inport) {
-            temp_loc = new po6::net::location(ipaddr.c_str(), inport);
-            shard_locs[i] = temp_loc;
-            ++i;
-        }
-        file.close();
+        //int inport;
+        //uint64_t server_id, num_servers;
+        //std::string ipaddr;
+        //std::unordered_map<uint64_t, po6::net::location> member_list;
+        //std::ifstream file(SHARDS_DESC_FILE);
+        ////std::unique_ptr<po6::net::location> myrecloc;
+        //num_servers = 0;
+        //while (file >> server_id >> ipaddr >> inport) {
+        //    uint64_t incr_id = ID_INCR + server_id;
+        //    member_list.emplace(incr_id, po6::net::location(ipaddr.c_str(), inport));
+        //    if (server_id == myid) {
+        //        myloc.reset(new po6::net::location(ipaddr.c_str(), inport));
+        //        //myrecloc.reset(new po6::net::location(ipaddr, inport + SEND_PORT_INCR));
+        //    }
+        //    num_servers++;
+        //}
+        //file.close();
+        //weaver_mapper *wmap = new weaver_mapper(member_list);
+        //bb = new busybee_mta(wmap, *myloc, ID_INCR+myid, NUM_THREADS);
+        initialize_busybee(bb, myid+SEND_PORT_INCR, myloc);
+        initialize_busybee(bb_recv, myid, myloc);
         message::prog_state = &node_prog_req_state;
     }
 
@@ -401,7 +405,7 @@ namespace db
     }
 
     inline uint64_t
-    graph :: create_edge(uint64_t local_node, uint64_t time, uint64_t remote_node, int remote_loc, uint64_t remote_time)
+    graph :: create_edge(uint64_t local_node, uint64_t time, uint64_t remote_node, uint64_t remote_loc, uint64_t remote_time)
     {
         uint64_t ret;
         element::node *n = acquire_node(local_node);
@@ -425,7 +429,7 @@ namespace db
     }
 
     inline uint64_t
-    graph :: create_reverse_edge(uint64_t time, uint64_t local_node, uint64_t remote_node, int remote_loc)
+    graph :: create_reverse_edge(uint64_t time, uint64_t local_node, uint64_t remote_node, uint64_t remote_loc)
     {
         uint64_t ret;
         element::node *n = acquire_node(local_node);
@@ -515,12 +519,6 @@ namespace db
     inline void
     graph :: permanent_delete(uint64_t req_id, uint64_t migr_del_id)
     {
-        //std::cout << "Migrated node list :";
-        //for (auto &p: migrated_nodes) {
-        //    std::cout << " " << p.second;
-        //}
-        //std::cout << std::endl;
-        //std::cout << "Num migr nodes " << migrated_nodes.size() << ", migr_del_id = " << migr_del_id << std::endl;
         while (!migrated_nodes.empty()) {
             auto &p = migrated_nodes.front();
             if (p.first >= migr_del_id) {
@@ -605,7 +603,7 @@ namespace db
         deletion_mutex.unlock();
         message::message msg;
         message::prepare_message(msg, message::CACHE_UPDATE_ACK); 
-        send_coord(msg.buf);
+        send(COORD_ID, msg.buf);
     }
 
     inline void
@@ -636,7 +634,7 @@ namespace db
     // migration methods
 
     inline void
-    graph :: update_migrated_nbr_nonlocking(element::node *n, uint64_t edge_handle, uint64_t remote_node, int new_loc)
+    graph :: update_migrated_nbr_nonlocking(element::node *n, uint64_t edge_handle, uint64_t remote_node, uint64_t new_loc)
     {
         bool found = false;
         if (n->out_edges.find(edge_handle) != n->out_edges.end()) {
@@ -657,7 +655,7 @@ namespace db
     }
 
     inline void
-    graph :: update_migrated_nbr(uint64_t local_node, uint64_t edge_handle, uint64_t remote_node, int new_loc)
+    graph :: update_migrated_nbr(uint64_t local_node, uint64_t edge_handle, uint64_t remote_node, uint64_t new_loc)
     {
         element::node *n = acquire_node(local_node);
         update_migrated_nbr_nonlocking(n, edge_handle, remote_node, new_loc);
@@ -737,6 +735,7 @@ namespace db
 
     // busybee send methods
    
+    /*
     inline busybee_returncode
     graph :: send(po6::net::location loc, std::auto_ptr<e::buffer> msg)
     {
@@ -777,28 +776,28 @@ namespace db
     }
 
     inline busybee_returncode
-    graph :: send(int loc, std::auto_ptr<e::buffer> msg)
-    {
-        if (loc == -1) {
-            return send_coord(msg);
-        }
-        busybee_returncode ret;
-        bb_lock.lock();
-        if ((ret = bb.send(*shard_locs[loc], msg)) != BUSYBEE_SUCCESS)
-        {
-            std::cerr << "msg send error: " << ret << std::endl;
-        }
-        bb_lock.unlock();
-        return ret;
-    }
-
-    inline busybee_returncode
     graph :: send_coord(std::auto_ptr<e::buffer> msg)
     {
         busybee_returncode ret;
         bb_lock.lock();
         if ((ret = bb.send(*coord, msg)) != BUSYBEE_SUCCESS)
         {
+            std::cerr << "msg send error: " << ret << std::endl;
+        }
+        bb_lock.unlock();
+        return ret;
+    }
+   */
+
+    inline busybee_returncode
+    graph :: send(uint64_t loc, std::auto_ptr<e::buffer> msg)
+    {
+        //if (loc == -1) {
+        //    return send_coord(msg);
+        //}
+        busybee_returncode ret;
+        bb_lock.lock();
+        if ((ret = bb->send(loc, msg)) != BUSYBEE_SUCCESS) {
             std::cerr << "msg send error: " << ret << std::endl;
         }
         bb_lock.unlock();

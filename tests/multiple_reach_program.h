@@ -27,7 +27,7 @@
 void
 multiple_reach_prog()
 {
-    client c(CLIENT_PORT);
+    client c(CLIENT_ID);
     int i;
     std::thread *t;
     timespec t1, t2, dif;

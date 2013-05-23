@@ -23,13 +23,13 @@
 #include <random> // testing
 #include <chrono>
 #include <thread>
-#include <busybee_sta.h>
 #include <po6/net/location.h>
 #include <po6/threads/cond.h>
 
-#include "common/meta_element.h"
 #include "common/weaver_constants.h"
+#include "common/meta_element.h"
 #include "common/vclock.h"
+#include "common/busybee_infra.h"
 #include "node_prog/node_prog_type.h"
 #include "threadpool/threadpool.h"
 
@@ -69,13 +69,13 @@ namespace coordinator
             std::vector<common::property> edge_props;
             uint32_t key;
             uint64_t value;
-            std::unique_ptr<po6::net::location> client;
+            uint64_t client;
             // permanent deletion counter
             std::shared_ptr<out_counter> out_count;
             // request process
             uint64_t req_id;
             uint64_t clock1, clock2;
-            int shard_id;
+            uint64_t shard_id;
             std::vector<std::shared_ptr<pending_req>> dependent_traversals;
             std::unique_ptr<std::vector<uint64_t>> src_node;
             std::unique_ptr<std::vector<uint64_t>> vector_clock;
@@ -105,17 +105,19 @@ namespace coordinator
             thread::pool thread_pool;
             std::shared_ptr<po6::net::location> myloc;
             std::shared_ptr<po6::net::location> myrecloc;
-            std::shared_ptr<po6::net::location> client_send_loc, client_rec_loc;
+            //std::shared_ptr<po6::net::location> client_send_loc, client_rec_loc;
             // messaging
-            busybee_sta bb;
-            busybee_sta rec_bb;
-            busybee_sta client_send_bb;
-            busybee_sta client_rec_bb;
+            busybee_sta *bb;
+            busybee_sta *rec_bb;
+            //busybee_sta bb;
+            //busybee_sta rec_bb;
+            //busybee_sta client_send_bb;
+            //busybee_sta client_rec_bb;
             po6::threads::mutex bb_mutex;
-            po6::threads::mutex client_bb_mutex;
+            //po6::threads::mutex client_bb_mutex;
             // graph state
-            int port_ctr;
-            std::vector<std::shared_ptr<po6::net::location>> shards;
+            uint64_t port_ctr;
+            //std::vector<std::shared_ptr<po6::net::location>> shards;
             uint32_t num_shards;
             std::unordered_map<uint64_t, common::meta_element*> nodes;
             std::unordered_map<uint64_t, common::meta_element*> edges;
@@ -149,29 +151,20 @@ namespace coordinator
             bool is_deleted_cache_id(uint64_t id);
             void add_good_cache_id(uint64_t id);
             void add_bad_cache_id(uint64_t id);
-            busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
-            busybee_returncode send(std::unique_ptr<po6::net::location> loc,
-                std::auto_ptr<e::buffer> buf);
-            busybee_returncode send(std::shared_ptr<po6::net::location> loc,
-                std::auto_ptr<e::buffer> buf);
-            busybee_returncode send(int shard_id, std::auto_ptr<e::buffer> buf);
-            busybee_returncode client_send(po6::net::location loc,
-                std::auto_ptr<e::buffer> buf);
-            busybee_returncode flaky_send(int loc, std::auto_ptr<e::buffer> buf, bool delay);
+            busybee_returncode send(uint64_t shard_id, std::auto_ptr<e::buffer> buf);
     };
     
     inline
     central :: central()
         : request_id(1)
         , thread_pool(NUM_THREADS)
-        , myloc(new po6::net::location(COORD_IPADDR, COORD_PORT))
-        , myrecloc(new po6::net::location(COORD_IPADDR, COORD_REC_PORT))
-        , client_send_loc(new po6::net::location(COORD_IPADDR, COORD_CLIENT_SEND_PORT))
-        , client_rec_loc(new po6::net::location(COORD_IPADDR, COORD_CLIENT_REC_PORT))
-        , bb(myloc->address, myloc->port, 0)
-        , rec_bb(myrecloc->address, myrecloc->port, 0)
-        , client_send_bb(client_send_loc->address, client_send_loc->port, 0)
-        , client_rec_bb(client_rec_loc->address, client_rec_loc->port, 0)
+        //, myrecloc(new po6::net::location(COORD_IPADDR, COORD_REC_PORT))
+        //, client_send_loc(new po6::net::location(COORD_IPADDR, COORD_CLIENT_SEND_PORT))
+        //, client_rec_loc(new po6::net::location(COORD_IPADDR, COORD_CLIENT_REC_PORT))
+        //, bb(myloc->address, myloc->port, 0)
+        //, rec_bb(myrecloc->address, myrecloc->port, 0)
+        //, client_send_bb(client_send_loc->address, client_send_loc->port, 0)
+        //, client_rec_bb(client_rec_loc->address, client_rec_loc->port, 0)
         , port_ctr(0)
         , bad_cache_ids(new std::unordered_set<uint64_t>())
         , good_cache_ids(new std::unordered_set<uint64_t>())
@@ -183,18 +176,23 @@ namespace coordinator
         , dist(0.0, 1.0)
     {
         // initialize array of shard server locations
-        std::ifstream file(SHARDS_DESC_FILE);
-        std::string ipaddr;
-        int port;
-        if (file != NULL) {
-            while (file >> ipaddr >> port) {
-                auto new_shard = std::make_shared<po6::net::location>(ipaddr.c_str(), port);
-                shards.push_back(new_shard);
-            }
-        } else {
-            std::cerr << "File " << SHARDS_DESC_FILE << " not found.\n";
-        }
-        file.close();
+        initialize_busybee(bb, COORD_ID+SEND_PORT_INCR, myloc);
+        initialize_busybee(rec_bb, COORD_ID, myrecloc);
+        //int port;
+        //uint64_t server_id;
+        //std::string ipaddr;
+        //std::unordered_map<uint64_t, po6::net::location> member_list;
+        //std::ifstream file(SHARDS_DESC_FILE);
+        //if (file != NULL) {
+        //    while (file >> server_id >> ipaddr >> port) {
+        //        member_list.emplace(server_id, po6::net::location(ipaddr.c_str(), port));
+        //    }
+        //} else {
+        //    std::cerr << "File " << SHARDS_DESC_FILE << " not found.\n";
+        //}
+        //file.close();
+        //weaver_mapper *wmap = new weaver_mapper(member_list);
+        //bb = new busybee_mta(wmap, *myloc, 0, NUM_THREADS);
         num_shards = NUM_SHARDS;
     }
 
@@ -300,82 +298,17 @@ namespace coordinator
     }
 
     inline busybee_returncode
-    central :: send(po6::net::location loc, std::auto_ptr<e::buffer> buf)
+    central :: send(uint64_t shard_id, std::auto_ptr<e::buffer> buf)
     {
         busybee_returncode ret;
         bb_mutex.lock();
-        if ((ret = bb.send(loc, buf)) != BUSYBEE_SUCCESS) {
-            std::cerr << "message sending error: " << ret << std::endl;
-        }
-        bb_mutex.unlock();
-        return ret;
-    }
-
-    inline busybee_returncode
-    central :: send(std::unique_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> buf)
-    {
-        busybee_returncode ret;
-        bb_mutex.lock();
-        if ((ret = bb.send(*loc, buf)) != BUSYBEE_SUCCESS) {
-            std::cerr << "message sending error: " << ret << std::endl;
-        }
-        bb_mutex.unlock();
-        return ret;
-    }
-
-    inline busybee_returncode
-    central :: send(std::shared_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> buf)
-    {
-        busybee_returncode ret;
-        bb_mutex.lock();
-        if ((ret = bb.send(*loc, buf)) != BUSYBEE_SUCCESS) {
-            std::cerr << "message sending error: " << ret << std::endl;
-        }
-        bb_mutex.unlock();
-        return ret;
-    }
-
-    inline busybee_returncode
-    central :: send(int shard_id, std::auto_ptr<e::buffer> buf)
-    {
-        busybee_returncode ret;
-        bb_mutex.lock();
-        if ((ret = bb.send(*shards[shard_id], buf)) != BUSYBEE_SUCCESS) {
+        if ((ret = bb->send(shard_id, buf)) != BUSYBEE_SUCCESS) {
             std::cerr << "message sending error: " << ret << std::endl;
         }
         bb_mutex.unlock();
         return ret;
     }
     
-    inline busybee_returncode
-    central :: client_send(po6::net::location loc, std::auto_ptr<e::buffer> buf)
-    {
-        busybee_returncode ret;
-        client_bb_mutex.lock();
-        if ((ret = bb.send(loc, buf)) != BUSYBEE_SUCCESS) {
-            std::cerr << "message sending error " << ret << std::endl;
-        }
-        client_bb_mutex.unlock();
-        return ret;
-    }
-    
-    inline busybee_returncode
-    central :: flaky_send(int loc, std::auto_ptr<e::buffer> buf, bool delay)
-    {
-        busybee_returncode ret;
-        // 50% messages delayed
-        if (dist(generator) <= 0.5 && delay) {
-            std::chrono::seconds duration(1);
-            std::this_thread::sleep_for(duration);
-        }
-        bb_mutex.lock();
-        if ((ret = bb.send(*shards[loc], buf)) != BUSYBEE_SUCCESS) {
-            std::cerr << "message sending error " << ret << std::endl;
-        }
-        bb_mutex.unlock();
-        return ret;
-    }
-
     // caution: assuming caller holds server->mutex
     // moved from .cc to use in node_program
     bool

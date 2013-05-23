@@ -19,16 +19,19 @@
 #define MAX_TIME UINT64_MAX
 #define COORD_IPADDR "127.0.0.1"
 #define COORD_PORT 5200
-#define SHARD_IPADDR "127.0.0.1"
-#define COORD_REC_PORT 4200
-#define COORD_CLIENT_SEND_PORT 4201
-#define COORD_CLIENT_REC_PORT 4202
-#define CLIENT_IPADDR "127.0.0.1"
-#define CLIENT_PORT 2200
+#define ID_INCR (1ULL << 32ULL)
+#define COORD_ID (0ULL)
+#define CLIENT_ID (3ULL)
+#define SEND_PORT_INCR 1000 // outgoing port increment for shard servers
+//#define SHARD_IPADDR "127.0.0.1"
+//#define COORD_REC_PORT 4200
+//#define COORD_CLIENT_SEND_PORT 4201
+//#define COORD_CLIENT_REC_PORT 4202
+//#define CLIENT_IPADDR "127.0.0.1"
+//#define CLIENT_PORT 2200
 #define NUM_SHARDS 2
 #define DAEMON_PERIOD 10
-#define MAX_PORT (COORD_PORT + NUM_SHARDS)
-#define SEND_PORT_INCR 1000 // outgoing port increment for shard servers
+//#define MAX_PORT (COORD_PORT + NUM_SHARDS)
 #define NUM_THREADS 4
 #define MAX_NODE_PER_REQUEST 500
 #define SHARDS_DESC_FILE "../common/shards"
