@@ -17,6 +17,8 @@
 #include <time.h>
 #include <chrono>
 #include <thread>
+#include <fstream>
+#include <signal.h>
 #include "e/buffer.h"
 #include "busybee_constants.h"
 
@@ -28,6 +30,7 @@
 #include "node_prog/node_prog_type.h"
 #include "db/element/remote_node.h"
 
+static std::unordered_map<uint64_t, std::vector<uint64_t>> graph;
 void coord_daemon_end(coordinator::central *server);
 
 // create a node
@@ -49,6 +52,7 @@ create_node(coordinator::central *server, std::shared_ptr<coordinator::pending_r
     message::prepare_message(msg, message::NODE_CREATE_REQ, clock, req_id);
     server->send(loc, msg.buf);
     server->add_node(new common::meta_element(loc), req_id);
+    graph.emplace(req_id, std::vector<uint64_t>());
     message::prepare_message(msg, message::CLIENT_REPLY, req_id);
     server->send(request->client, msg.buf);
 }
@@ -85,6 +89,7 @@ create_edge(coordinator::central *server, std::shared_ptr<coordinator::pending_r
     message::prepare_message(msg, message::EDGE_CREATE_REQ, clock1, req_id, request->elem1, request->elem2, loc2, clock2);
     server->send(loc1, msg.buf);
     server->add_edge(new common::meta_element(loc1), req_id);
+    graph.at(request->elem1).emplace_back(request->elem2);
     message::prepare_message(msg, message::CLIENT_REPLY, req_id);
     server->send(request->client, msg.buf);
 }
@@ -200,6 +205,21 @@ delete_end(coordinator::central *server, std::shared_ptr<coordinator::pending_re
     request->done = true;
 }
 
+void
+write_graph(coordinator::central *server)
+{
+    std::ofstream file;
+    file.open(GRAPH_FILE);
+    for (auto &n: graph) {
+        file << n.first;
+        for (uint64_t nbr: n.second) {
+            file << " " << nbr;
+        }
+        file << '\n';
+    }
+    file.close();
+}
+
 // caution: assuming we hold server->update_mutex
 void
 invalidate_migr_cache(coordinator::central *server, std::vector<uint64_t> &cached_ids)
@@ -273,6 +293,11 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
         server->update_mutex.unlock();
         // send same message along to client
         server->send(request->client, request->reply_msg->buf);
+        //message::message done_msg;
+        //message::prepare_message(done_msg, message::DONE_NODE_PROG, req_id);
+        //for (uint64_t i = 1; i <= NUM_SHARDS; i++) {
+        //    server->send(i, done_msg.buf);
+        //}
     }
 }
 
@@ -400,6 +425,10 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg, 
             message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, crequest->pType);
             crequest->req_msg = std::move(msg);
             node_prog::programs.at(crequest->pType)->unpack_and_start_coord(server, *crequest->req_msg, crequest);
+            break;
+
+        case message:: CLIENT_COMMIT_GRAPH:
+            write_graph(server);
             break;
 
         default:
@@ -561,17 +590,24 @@ coord_daemon_end(coordinator::central *server)
     coord_daemon_initiate(server);
 }
 
+void
+end_program(int param)
+{
+    std::cerr << "Ending program, param = " << param << std::endl;
+    exit(1);
+}
 int
 main()
 {
     coordinator::central server;
     std::thread *t;
-    
+    signal(SIGINT, end_program);
+
     std::cout << "Weaver: coordinator" << std::endl;
 
     // call periodic cache update function
-    t = new std::thread(coord_daemon_initiate, &server);
-    t->detach();
+    //t = new std::thread(coord_daemon_initiate, &server);
+    //t->detach();
 
     // initialize client msg receiving thread
     msg_handler(&server);

@@ -48,6 +48,7 @@ namespace message
         CLIENT_DIJKSTRA_REQ,
         CLIENT_DIJKSTRA_REPLY,
         CLIENT_CLUSTERING_REPLY,
+        CLIENT_COMMIT_GRAPH,
         NODE_REFRESH_REQ,
         NODE_REFRESH_REPLY,
         NODE_CREATE_REQ,
@@ -87,6 +88,7 @@ namespace message
         NODE_PROG,
         CLIENT_NODE_PROG_REQ,
         CLIENT_NODE_PROG_REPLY,
+        DONE_NODE_PROG,
 
         ERROR
     };

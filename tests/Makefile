@@ -19,7 +19,7 @@ $(TARGET):	$(OBJS)
 	$(CC) -o $@ $(OBJS) $(LIBS_DIR) $(LIBS)
 
 %.o:	%.cc
-	$(CC) $(CFLAGS) $(INCLUDE_DIRS) -c $<
+	$(CC) $(CFLAGS) $(INCLUDE_DIRS) -c $< -D_GLIBCXX_USE_NANOSLEEP
 
 clean:
 	rm -f *.o

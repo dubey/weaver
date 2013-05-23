@@ -22,7 +22,7 @@
 
 #define NODES 10000
 #define EDGES 15000
-#define REQUESTS 1000
+#define REQUESTS 100
 
 void
 multiple_reach_prog()
@@ -30,9 +30,10 @@ multiple_reach_prog()
     client c(CLIENT_ID);
     int i;
     std::thread *t;
-    timespec t1, t2, dif;
+    timespec first, t1, t2, dif;
     std::vector<uint64_t> nodes, edges;
     srand(time(NULL));
+    std::chrono::milliseconds duration(1);
     for (i = 0; i < NODES; i++) {
         std::cout << "Creating node " << (i+1) << std::endl;
         nodes.emplace_back(c.create_node());
@@ -47,12 +48,17 @@ multiple_reach_prog()
         edges.emplace_back(c.create_edge(nodes[first], nodes[second]));
     }
     std::cout << "Created graph\n";
+    c.commit_graph();
+    std::cout << "Committed graph\n";
     node_prog::reach_params rp;
     rp.mode = false;
     rp.reachable = false;
     rp.prev_node.loc = -1;
     
+    std::ofstream file;
+    file.open("requests");
     clock_gettime(CLOCK_MONOTONIC, &t1);
+    first = t1;
     for (i = 0; i < REQUESTS; i++) {
         clock_gettime(CLOCK_MONOTONIC, &t2);
         dif = diff(t1, t2);
@@ -64,6 +70,7 @@ multiple_reach_prog()
         while (second == first) {
             second = rand() % NODES;
         }
+        file << first << " " << second << std::endl;
         std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args;
         rp.dest = nodes[second];
         initial_args.emplace_back(std::make_pair(nodes[first], rp));
@@ -71,4 +78,7 @@ multiple_reach_prog()
         std::cout << "Request " << i << ", from source " << nodes[first] << " to dest " << nodes[second];
         std::cout << ". Reachable = " << res->reachable << std::endl;
     }
+    file.close();
+    dif = diff(first, t2);
+    std::cout << "Total time taken " << dif.tv_sec << " : " << dif.tv_nsec << std::endl;
 }

@@ -16,7 +16,7 @@
 //#include "message_test.h"
 //#include "cache_test.h"
 //#include "basic_client.h"
-//#include "repetitive_reach_program.h"
+#include "repetitive_reach_program.h"
 #include "multiple_reach_program.h"
 //#include "dijkstra_prog_test.h"
 //#include "tree_test.h"

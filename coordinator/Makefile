@@ -1,7 +1,8 @@
 CC=g++-4.7
 INCLUDE_DIRS=-I.. -I.
 CFLAGS=-g -O0 -std=c++0x #-Wall -Wextra
-LIBS=-lbusybee -le -lrt -pthread
+LIBS=-lbusybee -le -lrt -pthread -pg
+CLIBS=-pg
 
 SRCS=central.cc
 OBJS=central.o
@@ -19,7 +20,7 @@ $(TARGET):	$(OBJS)
 	$(CC) -o $@ $(OBJS) $(LIBS_DIR) $(LIBS)
 
 %.o:	%.cc
-	$(CC) $(CFLAGS) $(INCLUDE_DIRS) -c $<
+	$(CC) $(CFLAGS) $(INCLUDE_DIRS) -c $< -D_GLIBCXX_USE_NANOSLEEP $(CLIBS)
 
 clean:
 	rm -f *.o

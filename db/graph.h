@@ -239,7 +239,8 @@ namespace db
             // testing
             std::unordered_map<uint64_t, uint64_t> req_count;
             void sort_and_print_nodes();
-            po6::threads::mutex migrtestmutex;
+            po6::threads::mutex test_mutex;
+            uint64_t sent_count, rec_count;
             bool already_migr;
 
             // Node programs
@@ -271,6 +272,8 @@ namespace db
         , target_clock(0)
         , new_shard_target_clock(0)
         , already_migr(false)
+        , sent_count(0)
+        , rec_count(0)
     {
         //int inport;
         //uint64_t server_id, num_servers;

@@ -40,6 +40,7 @@ class client
         void delete_edge(uint64_t node, uint64_t edge);
         void add_edge_prop(uint64_t node, uint64_t edge, uint32_t key, uint64_t value);
         void del_edge_prop(uint64_t node, uint64_t edge, uint32_t key);
+        void commit_graph();
         bool reachability_request(uint64_t node1, uint64_t node2, std::shared_ptr<std::vector<common::property>> edge_props);
         std::pair<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>> shortest_path_request(uint64_t node1, uint64_t node2, uint32_t edge_weight_prop,
                 std::shared_ptr<std::vector<common::property>> edge_props);
@@ -163,6 +164,14 @@ client :: del_edge_prop(uint64_t node, uint64_t edge, uint32_t key)
     if ((ret = client_bb->recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
         std::cerr << "msg recv error: " << ret << std::endl;
     }
+}
+
+inline void
+client :: commit_graph()
+{
+    message::message msg;
+    message::prepare_message(msg, message::CLIENT_COMMIT_GRAPH);
+    send_coord(msg.buf);
 }
 
 inline bool

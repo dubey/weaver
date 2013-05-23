@@ -21,6 +21,7 @@
 #include <vector>
 #include <unordered_map>
 #include <unordered_set>
+#include <signal.h>
 #include <e/buffer.h>
 #include "busybee_constants.h"
 
@@ -618,10 +619,19 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                     std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
                     message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, unpacked_request_id, temppair, dirty_cache_ids, invalid_cache_ids);
                     G->send(COORD_ID, msg.buf);
-                } else if (next_loc == G->myid){
+                } else if (next_loc == G->myid) {
                     start_node_params.emplace_back(res.first.handle, std::move(res.second), this_node);
                 } else {
-                    batched_node_progs[next_loc].emplace_back(res.first.handle, std::move(res.second), this_node);
+                    std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> fwd_params;
+                    std::vector<std::tuple<uint64_t, ParamsType, uint64_t>> empty_del_nodes; 
+                    fwd_params.emplace_back(res.first.handle, std::move(res.second), this_node);
+                    message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id,
+                            fwd_params, dirty_cache_ids, invalid_cache_ids, empty_del_nodes);
+                    G->send(next_loc, msg.buf);
+                    G->test_mutex.lock();
+                    std::cout << "1:Sending node prog to " << next_loc << ", sent count = " << (++G->sent_count) << std::endl;
+                    G->test_mutex.unlock();
+                    //batched_node_progs[next_loc].emplace_back(res.first.handle, std::move(res.second), this_node);
                 }
             }
         }
@@ -687,7 +697,22 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                             unpacked_request_id, dirty_cache_ids, temppair);
                         G->send(COORD_ID, msg.buf);
                     } else {
-                        batched_node_progs[res.first.loc].emplace_back(res.first.handle, std::move(res.second), this_node);
+                        //std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> fwd_params;
+                        std::vector<std::tuple<uint64_t, ParamsType, uint64_t>> empty_del_nodes; 
+                        auto &nplist = batched_node_progs[res.first.loc];
+                        nplist.emplace_back(res.first.handle, std::move(res.second), this_node);
+                        //fwd_params.emplace_back(res.first.handle, std::move(res.second), this_node);
+                        if (nplist.size() > 1) {
+                            message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id,
+                                    nplist, dirty_cache_ids, invalid_cache_ids, empty_del_nodes);
+                            G->send(res.first.loc, msg.buf);
+                            //std::chrono::nanoseconds duration(10);
+                            //std::this_thread::sleep_for(duration);
+                            nplist.clear();
+                        }
+                        //G->test_mutex.lock();
+                        //std::cout << "2:Sending node prog to " << res.first.loc << ", sent count = " << (++G->sent_count) << std::endl;
+                        //G->test_mutex.unlock();
                         node->msg_count[res.first.loc-1]++;
                         G->msg_count_mutex.lock();
                         G->agg_msg_count.at(node_handle)++;
@@ -707,10 +732,29 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             if ((batched_node_progs.count(next_loc) > 0 || batched_deleted_nodes.count(next_loc) > 0)
                     && (!batched_node_progs[next_loc].empty() || !batched_deleted_nodes[next_loc].empty())){
 
-                message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id,
-                        batched_node_progs[next_loc], dirty_cache_ids, invalid_cache_ids, batched_deleted_nodes[next_loc]);
+                std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> fwd_params;
+                std::vector<std::tuple<uint64_t, ParamsType, uint64_t>> empty_del_nodes; 
+                bool del = false;
+                for (auto &t: batched_node_progs[next_loc]) {
+                    fwd_params.emplace_back(t);
+                    if (!del) {
+                        message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id,
+                                fwd_params, dirty_cache_ids, invalid_cache_ids, batched_deleted_nodes[next_loc]);
+                        del = true;
+                    } else {
+                        message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id,
+                                fwd_params, dirty_cache_ids, invalid_cache_ids, empty_del_nodes);
+                    }
+                    G->send(next_loc, msg.buf);
+                    std::chrono::nanoseconds duration(100);
+                    std::this_thread::sleep_for(duration);
+                    //G->test_mutex.lock();
+                    //std::cout << "BAD! Sending node prog to " << next_loc << ", sent count = " << (++G->sent_count) << std::endl;
+                    //G->test_mutex.unlock();
+                }
+                //message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vclocks, unpacked_request_id,
+                //        batched_node_progs[next_loc], dirty_cache_ids, invalid_cache_ids, batched_deleted_nodes[next_loc]);
                 // std::cout << "not stuck here mids" << std::endl;
-                G->send(next_loc, msg.buf);
 
                 batched_node_progs.erase(next_loc);
                 batched_deleted_nodes.erase(next_loc);
@@ -985,7 +1029,7 @@ runner(db::graph *G)
 
     while (true) {
         if ((ret = G->bb_recv->recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
-            //std::cerr << "msg recv error: " << ret << std::endl;
+            std::cerr << "msg recv error: " << ret << std::endl;
             continue;
         }
         rec_msg.reset(new message::message(msg));
@@ -1045,6 +1089,9 @@ runner(db::graph *G)
                 request = new db::update_request(mtype, 0, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(vclocks[G->myid-1], unpack_and_run_node_program, G, request);
                 G->thread_pool.add_request(thr);
+                //G->test_mutex.lock();
+                //std::cout << "Received node prog, rec count = " << (++G->rec_count) << std::endl;
+                //G->test_mutex.unlock();
                 break;
 
             case message::MIGRATION_TOKEN:
@@ -1154,10 +1201,17 @@ first_shard_daemon_begin(db::graph *G)
     shard_daemon_begin(G, dummy);
 }
 
+void
+end_program(int param)
+{
+    std::cerr << "Ending program, param = " << param << std::endl;
+    exit(1);
+}
 int
 main(int argc, char* argv[])
 {
     std::thread *t;
+    signal(SIGINT, end_program);
     if (argc != 2) {
         std::cerr << "Usage: " << argv[0] << " <myid>" << std::endl;
         return -1;
@@ -1168,10 +1222,10 @@ main(int argc, char* argv[])
     std::cout << "Weaver: shard instance " << G.myid << std::endl;
 
     void *dummy = NULL;
-    if (G.myid == 1) {
-        t = new std::thread(&first_shard_daemon_begin, &G);
-        t->detach();
-    }
+    //if (G.myid == 1) {
+    //    t = new std::thread(&first_shard_daemon_begin, &G);
+    //    t->detach();
+    //}
     runner(&G);
 
     return 0;
