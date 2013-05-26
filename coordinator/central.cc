@@ -293,6 +293,7 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
         server->update_mutex.unlock();
         // send same message along to client
         server->send(request->client, request->reply_msg->buf);
+        std::cout << "Ending node prog for request " << req_id << std::endl;
         //message::message done_msg;
         //message::prepare_message(done_msg, message::DONE_NODE_PROG, req_id);
         //for (uint64_t i = 1; i <= NUM_SHARDS; i++) {
@@ -372,7 +373,7 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg, 
             if (server->pending.count(req_id) == 0){
                 // XXX anything else we need to do?
                 server->update_mutex.unlock();
-                std::cerr << "got response for request that does not exist anymore" << std::endl;
+                std::cerr << "got response for request " << req_id << ", which does not exist anymore" << std::endl;
                 return;
             }
             request = server->pending.at(req_id);

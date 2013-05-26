@@ -20,8 +20,8 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define NODES 10000
-#define EDGES 15000
+#define NODES 100000
+#define EDGES 150000
 #define REQUESTS 100
 
 void

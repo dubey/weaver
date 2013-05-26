@@ -204,6 +204,7 @@ namespace node_prog
             }
         } else { // reply mode
             //std::cout << "   Reply\n";
+            std::cout << "Starting reply, out count is " << state.out_count << std::endl;
             if (((--state.out_count == 0) || params.reachable) && !state.reachable) {
                 state.reachable |= params.reachable;
                 next.emplace_back(std::make_pair(state.prev_node, params));
