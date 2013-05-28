@@ -31,7 +31,7 @@ class client
     private:
         uint64_t myid;
         std::shared_ptr<po6::net::location> myloc;
-        busybee_sta *client_bb;
+        busybee_mta *client_bb;
 
     public:
         uint64_t create_node();
@@ -62,24 +62,7 @@ inline
 client :: client(uint64_t my_id)
     : myid(my_id)
 {
-        // initialize array of shard server locations
     initialize_busybee(client_bb, myid, myloc);
-//        int port;
-//        uint64_t server_id;
-//        std::string ipaddr;
-//        std::unordered_map<uint64_t, po6::net::location> member_list;
-//        std::ifstream file(SHARDS_DESC_FILE);
-//        if (file != NULL) {
-//            while (file >> server_id >> ipaddr >> port) {
-//                member_list.emplace(server_id, po6::net::location(ipaddr.c_str(), port));
-//            }
-//        } else {
-//            std::cerr << "File " << SHARDS_DESC_FILE << " not found.\n";
-//        }
-//        file.close();
-//        myloc.reset(new po6::net::location(member_list.at(myid)));
-//        weaver_mapper *wmap = new weaver_mapper(member_list);
-//        client_bb = new busybee_mta(wmap, *myloc, myid, NUM_THREADS);
 }
 
 inline uint64_t

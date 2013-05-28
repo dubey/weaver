@@ -11,30 +11,35 @@
  * ===============================================================
  */
 
+// debugging
+#ifndef DEBUG
+#ifdef __WEAVER_DEBUG__
+#define DEBUG std::cerr << __FILE__ << ":" << __LINE__ << " "
+#else
+#define DEBUG if (0) std::cerr << __FILE__ << ":" << __LINE__ << " "
+#endif
+#endif
+
 #ifndef __CONSTANTS__
 #define __CONSTANTS__
 
 #include "stdint.h"
 
 #define MAX_TIME UINT64_MAX
+// messaging constants
 #define COORD_IPADDR "127.0.0.1"
 #define COORD_PORT 5200
 #define ID_INCR (1ULL << 32ULL)
 #define COORD_ID (0ULL)
-#define CLIENT_ID (3ULL)
-#define SEND_PORT_INCR 1000 // outgoing port increment for shard servers
-//#define SHARD_IPADDR "127.0.0.1"
-//#define COORD_REC_PORT 4200
-//#define COORD_CLIENT_SEND_PORT 4201
-//#define COORD_CLIENT_REC_PORT 4202
-//#define CLIENT_IPADDR "127.0.0.1"
-//#define CLIENT_PORT 2200
-#define NUM_SHARDS 2
-#define DAEMON_PERIOD 10
-//#define MAX_PORT (COORD_PORT + NUM_SHARDS)
-#define NUM_THREADS 4
-#define MAX_NODE_PER_REQUEST 500
+#define CLIENT_ID (11ULL)
 #define SHARDS_DESC_FILE "../common/shards"
+// weaver setup
+#define NUM_SHARDS 10
+#define NUM_THREADS 8
 #define GRAPH_FILE "graph"
+#define DAEMON_PERIOD 10 // frequency in seconds for coordinator daemon to run
 #define MIGR_FREQ 10 // seconds delay between consecutive migrations
+#define MSG_BATCHING true // whether to batch messages or not
+#define BATCH_MSG_SIZE 100
+
 #endif

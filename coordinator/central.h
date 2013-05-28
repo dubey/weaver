@@ -104,17 +104,8 @@ namespace coordinator
             uint64_t request_id;
             thread::pool thread_pool;
             std::shared_ptr<po6::net::location> myloc;
-            std::shared_ptr<po6::net::location> myrecloc;
-            //std::shared_ptr<po6::net::location> client_send_loc, client_rec_loc;
             // messaging
-            busybee_sta *bb;
-            busybee_sta *rec_bb;
-            //busybee_sta bb;
-            //busybee_sta rec_bb;
-            //busybee_sta client_send_bb;
-            //busybee_sta client_rec_bb;
-            po6::threads::mutex bb_mutex;
-            //po6::threads::mutex client_bb_mutex;
+            busybee_mta *bb;
             // graph state
             uint64_t port_ctr;
             //std::vector<std::shared_ptr<po6::net::location>> shards;
@@ -157,14 +148,7 @@ namespace coordinator
     inline
     central :: central()
         : request_id(1)
-        , thread_pool(NUM_THREADS)
-        //, myrecloc(new po6::net::location(COORD_IPADDR, COORD_REC_PORT))
-        //, client_send_loc(new po6::net::location(COORD_IPADDR, COORD_CLIENT_SEND_PORT))
-        //, client_rec_loc(new po6::net::location(COORD_IPADDR, COORD_CLIENT_REC_PORT))
-        //, bb(myloc->address, myloc->port, 0)
-        //, rec_bb(myrecloc->address, myrecloc->port, 0)
-        //, client_send_bb(client_send_loc->address, client_send_loc->port, 0)
-        //, client_rec_bb(client_rec_loc->address, client_rec_loc->port, 0)
+        , thread_pool(NUM_THREADS-1)
         , port_ctr(0)
         , bad_cache_ids(new std::unordered_set<uint64_t>())
         , good_cache_ids(new std::unordered_set<uint64_t>())
@@ -176,23 +160,7 @@ namespace coordinator
         , dist(0.0, 1.0)
     {
         // initialize array of shard server locations
-        initialize_busybee(bb, COORD_ID+SEND_PORT_INCR, myloc);
-        initialize_busybee(rec_bb, COORD_ID, myrecloc);
-        //int port;
-        //uint64_t server_id;
-        //std::string ipaddr;
-        //std::unordered_map<uint64_t, po6::net::location> member_list;
-        //std::ifstream file(SHARDS_DESC_FILE);
-        //if (file != NULL) {
-        //    while (file >> server_id >> ipaddr >> port) {
-        //        member_list.emplace(server_id, po6::net::location(ipaddr.c_str(), port));
-        //    }
-        //} else {
-        //    std::cerr << "File " << SHARDS_DESC_FILE << " not found.\n";
-        //}
-        //file.close();
-        //weaver_mapper *wmap = new weaver_mapper(member_list);
-        //bb = new busybee_mta(wmap, *myloc, 0, NUM_THREADS);
+        initialize_busybee(bb, COORD_ID, myloc);
         num_shards = NUM_SHARDS;
     }
 
@@ -301,39 +269,37 @@ namespace coordinator
     central :: send(uint64_t shard_id, std::auto_ptr<e::buffer> buf)
     {
         busybee_returncode ret;
-        bb_mutex.lock();
         if ((ret = bb->send(shard_id, buf)) != BUSYBEE_SUCCESS) {
             std::cerr << "message sending error: " << ret << std::endl;
         }
-        bb_mutex.unlock();
         return ret;
     }
     
     // caution: assuming caller holds server->mutex
     // moved from .cc to use in node_program
     bool
-        check_elem(coordinator::central *server, uint64_t handle, bool node_or_edge)
-        {
-            common::meta_element *elem;
-            if (node_or_edge) {
-                // check for node
-                if (server->nodes.find(handle) != server->nodes.end()) {
-                    return false;
-                }
-                elem = server->nodes.at(handle);
-            } else {
-                // check for edge
-                if (server->edges.find(handle) != server->edges.end()) {
-                    return false;
-                }
-                elem = server->edges.at(handle);
-            }
-            if (elem->get_del_time() < MAX_TIME) {
+    check_elem(coordinator::central *server, uint64_t handle, bool node_or_edge)
+    {
+        common::meta_element *elem;
+        if (node_or_edge) {
+            // check for node
+            if (server->nodes.find(handle) != server->nodes.end()) {
                 return false;
-            } else {
-                return true;
             }
+            elem = server->nodes.at(handle);
+        } else {
+            // check for edge
+            if (server->edges.find(handle) != server->edges.end()) {
+                return false;
+            }
+            elem = server->edges.at(handle);
         }
+        if (elem->get_del_time() < MAX_TIME) {
+            return false;
+        } else {
+            return true;
+        }
+    }
 
 }
 

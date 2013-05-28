@@ -17,7 +17,7 @@
 #include <unordered_map>
 #include <busybee_constants.h>
 #include <busybee_mapper.h>
-#include <busybee_sta.h>
+#include <busybee_mta.h>
 
 // map from server ids -> po6 locs
 class weaver_mapper : public busybee_mapper
@@ -51,7 +51,7 @@ class weaver_mapper : public busybee_mapper
 };
 
 inline void
-initialize_busybee(busybee_sta *&bb, uint64_t sid, std::shared_ptr<po6::net::location> myloc)
+initialize_busybee(busybee_mta *&bb, uint64_t sid, std::shared_ptr<po6::net::location> myloc)
 {
     int inport;
     uint64_t server_id;
@@ -73,7 +73,7 @@ initialize_busybee(busybee_sta *&bb, uint64_t sid, std::shared_ptr<po6::net::loc
     }
     file.close();
     weaver_mapper *wmap = new weaver_mapper(member_list);
-    bb = new busybee_sta(wmap, *myloc, sid+ID_INCR);
+    bb = new busybee_mta(wmap, *myloc, sid+ID_INCR, 1);
     std::cout << "My id is " << (sid+ID_INCR) << std::endl;
 }
 

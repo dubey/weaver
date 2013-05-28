@@ -227,13 +227,7 @@ namespace db
             // Messaging infrastructure
             std::shared_ptr<po6::net::location> myloc;
             std::shared_ptr<po6::net::location> myrecloc;
-            busybee_sta *bb; // Busybee instance used for sending messages
-            busybee_sta *bb_recv; // Busybee instance used for receiving messages
-            po6::threads::mutex bb_lock; // Busybee lock
-            //busybee_returncode send(po6::net::location loc, std::auto_ptr<e::buffer> buf);
-            //busybee_returncode send(std::unique_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> buf);
-            //busybee_returncode send(po6::net::location *loc, std::auto_ptr<e::buffer> buf);
-            //busybee_returncode send_coord(std::auto_ptr<e::buffer> buf);
+            busybee_mta *bb; // Busybee instance used for sending and receiving messages
             busybee_returncode send(uint64_t loc, std::auto_ptr<e::buffer> buf);
             
             // testing
@@ -263,7 +257,7 @@ namespace db
     graph :: graph(uint64_t my_id)
         : my_clock(0)
         , myid(my_id)
-        , thread_pool(NUM_THREADS)
+        , thread_pool(NUM_THREADS-1)
         , pending_update_count(MAX_TIME)
         , current_update_count(MAX_TIME)
         , pending_edge_updates(0)
@@ -275,27 +269,7 @@ namespace db
         , sent_count(0)
         , rec_count(0)
     {
-        //int inport;
-        //uint64_t server_id, num_servers;
-        //std::string ipaddr;
-        //std::unordered_map<uint64_t, po6::net::location> member_list;
-        //std::ifstream file(SHARDS_DESC_FILE);
-        ////std::unique_ptr<po6::net::location> myrecloc;
-        //num_servers = 0;
-        //while (file >> server_id >> ipaddr >> inport) {
-        //    uint64_t incr_id = ID_INCR + server_id;
-        //    member_list.emplace(incr_id, po6::net::location(ipaddr.c_str(), inport));
-        //    if (server_id == myid) {
-        //        myloc.reset(new po6::net::location(ipaddr.c_str(), inport));
-        //        //myrecloc.reset(new po6::net::location(ipaddr, inport + SEND_PORT_INCR));
-        //    }
-        //    num_servers++;
-        //}
-        //file.close();
-        //weaver_mapper *wmap = new weaver_mapper(member_list);
-        //bb = new busybee_mta(wmap, *myloc, ID_INCR+myid, NUM_THREADS);
-        initialize_busybee(bb, myid+SEND_PORT_INCR, myloc);
-        initialize_busybee(bb_recv, myid, myloc);
+        initialize_busybee(bb, myid, myloc);
         message::prog_state = &node_prog_req_state;
     }
 
@@ -378,9 +352,7 @@ namespace db
         msg_count_mutex.lock();
         agg_msg_count.emplace(time, 0);
         msg_count_mutex.unlock();
-#ifdef DEBUG
-        std::cout << "Creating node, addr = " << (void*) new_node << std::endl;
-#endif
+        DEBUG << "Creating node, addr = " << (void*) new_node << std::endl;
     }
 
     inline std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>>
@@ -423,9 +395,7 @@ namespace db
             message::message msg(message::REVERSE_EDGE_CREATE);
             message::prepare_message(msg, message::REVERSE_EDGE_CREATE, remote_time, time, local_node, myid, remote_node);
             send(remote_loc, msg.buf);
-#ifdef DEBUG
-            std::cout << "Creating edge, addr = " << (void*) new_edge << std::endl;
-#endif
+            DEBUG << "Creating edge, addr = " << (void*) new_edge << std::endl;
             ret = 0;
         }
         return ret;
@@ -441,11 +411,9 @@ namespace db
             element::edge *new_edge = new element::edge(time, remote_loc, remote_node);
             n->add_edge(new_edge, false);
             n->updated = true;
-#ifdef DEBUG
-            std::cout << "New rev edge: " << (void*)new_edge->nbr.handle << " " 
+            DEBUG << "New rev edge: " << (void*)new_edge->nbr.handle << " " 
                       << new_edge->nbr.loc << " at lnode " << (void*)local_node << std::endl;
-            std::cout << " in edge size " << n->in_edges.size() << std::endl;
-#endif
+            DEBUG << " in edge size " << n->in_edges.size() << std::endl;
             ret = 0;
         }
         release_node(n);
@@ -527,7 +495,7 @@ namespace db
             if (p.first >= migr_del_id) {
                 break;
             } else {
-                std::cout << "Perm del migr node " << p.second << ", migr_clock = " << p.first << ", del_id " << migr_del_id << std::endl;
+                DEBUG << "Perm del migr node " << p.second << ", migr_clock = " << p.first << ", del_id " << migr_del_id << std::endl;
                 delete_migrated_node(p.second);
                 migrated_nodes.pop_front();
             }
@@ -578,7 +546,7 @@ namespace db
                             n->out_edges.erase(req.edge_handle);
                             delete e;
                         } else {
-                            std::cout << "Not found edge in perm_del\n";
+                            DEBUG << "Not found edge in perm_del\n";
                         }
                         n->dependent_del--;
                         release_node(n);
@@ -618,7 +586,7 @@ namespace db
         deletion_mutex.lock();
         n = acquire_node(node_handle);
         if (n == NULL) {
-            std::cout << "Not found node in perm_edge_del\n";
+            DEBUG << "Not found node in perm_edge_del\n";
             return;
         }
         if (n->in_edges.find(edge_handle) != n->in_edges.end()) {
@@ -736,74 +704,15 @@ namespace db
         node_prog_req_state.delete_node_state(migr_node);
     }
 
-    // busybee send methods
+    // messaging methods
    
-    /*
-    inline busybee_returncode
-    graph :: send(po6::net::location loc, std::auto_ptr<e::buffer> msg)
-    {
-        busybee_returncode ret;
-        bb_lock.lock();
-        if ((ret = bb.send(loc, msg)) != BUSYBEE_SUCCESS)
-        {
-            std::cerr << "msg send error: " << ret << std::endl;
-        }
-        bb_lock.unlock();
-        return ret;
-    }
-    
-    inline busybee_returncode
-    graph :: send(std::unique_ptr<po6::net::location> loc, std::auto_ptr<e::buffer> msg)
-    {
-        busybee_returncode ret;
-        bb_lock.lock();
-        if ((ret = bb.send(*loc, msg)) != BUSYBEE_SUCCESS)
-        {
-            std::cerr << "msg send error: " << ret << std::endl;
-        }
-        bb_lock.unlock();
-        return ret;
-    }
-    
-    inline busybee_returncode
-    graph :: send(po6::net::location *loc, std::auto_ptr<e::buffer> msg)
-    {
-        busybee_returncode ret;
-        bb_lock.lock();
-        if ((ret = bb.send(*loc, msg)) != BUSYBEE_SUCCESS)
-        {
-            std::cerr << "msg send error: " << ret << std::endl;
-        }
-        bb_lock.unlock();
-        return ret;
-    }
-
-    inline busybee_returncode
-    graph :: send_coord(std::auto_ptr<e::buffer> msg)
-    {
-        busybee_returncode ret;
-        bb_lock.lock();
-        if ((ret = bb.send(*coord, msg)) != BUSYBEE_SUCCESS)
-        {
-            std::cerr << "msg send error: " << ret << std::endl;
-        }
-        bb_lock.unlock();
-        return ret;
-    }
-   */
-
     inline busybee_returncode
     graph :: send(uint64_t loc, std::auto_ptr<e::buffer> msg)
     {
-        //if (loc == -1) {
-        //    return send_coord(msg);
-        //}
         busybee_returncode ret;
-        bb_lock.lock();
         if ((ret = bb->send(loc, msg)) != BUSYBEE_SUCCESS) {
             std::cerr << "msg send error: " << ret << std::endl;
         }
-        bb_lock.unlock();
         return ret;
     }
 
@@ -815,7 +724,7 @@ namespace db
         std::sort(nodes.begin(), nodes.end(), element::compare_msg_cnt);
         for (auto &it: nodes) {
             void *n = (void*)it.second;
-            std::cout << "Node " << n;
+            DEBUG << "Node " << n;
         }
         */
     }

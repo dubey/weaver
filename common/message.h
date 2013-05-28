@@ -217,7 +217,7 @@ namespace message
     }
 
     template <typename T1, typename T2, typename T3>
-    inline size_t size(const std::tuple<T1, T2, T3>& t){
+    inline size_t size(const std::tuple<T1, T2, T3> &t){
         return size(std::get<0>(t)) + size(std::get<1>(t)) + size(std::get<2>(t));
     }
 
@@ -253,20 +253,6 @@ namespace message
         return tot_size;
     }
 
-    /*
-    template <typename T>
-    inline size_t size(const std::vector<T> &t)
-    {
-        // first size_t to record size of vector, assumes constant size elements
-        if (t.size()>0) {
-            return sizeof(size_t) + (t.size()*size(t[0]));
-        }
-        else {
-            return sizeof(size_t);
-        }
-    }
-    */
-
     template <typename T, typename... Args>
     inline size_t size(const T &t, const Args&... args)
     {
@@ -277,18 +263,15 @@ namespace message
 
     inline void pack_buffer(e::buffer::packer &packer, const node_prog::Packable &t)
     {
-        //std::cout << "pack buffer called for Packable type!" << std::endl;
         t.pack(packer);
     }
     inline void pack_buffer(e::buffer::packer &packer, const node_prog::Packable_Deletable *&t)
     {
-        //std::cout << "pack buffer called for Packable type!" << std::endl;
         t->pack(packer);
     }
     inline void pack_buffer(e::buffer::packer &packer, const node_prog::prog_type &t)
     {
         packer = packer << t;
-    //    std::cout << "pack buffer packed prog_type " << t << " of size " << sizeof(db::prog_type) << std::endl;
     }
 
     inline void pack_buffer(e::buffer::packer &packer, const bool &t)
@@ -332,7 +315,7 @@ namespace message
     }
 
     inline void 
-    pack_buffer(e::buffer::packer &packer, const db::element::remote_node& t)
+    pack_buffer(e::buffer::packer &packer, const db::element::remote_node &t)
     {
         packer = packer << t.loc << t.handle;
     }
@@ -347,7 +330,7 @@ namespace message
     }
 
     template <typename T1, typename T2, typename T3>
-    inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3>& t){
+    inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3> &t){
         pack_buffer(packer, std::get<0>(t));
         pack_buffer(packer, std::get<1>(t));
         pack_buffer(packer, std::get<2>(t));
@@ -359,10 +342,8 @@ namespace message
     {
         // !assumes constant element size
         size_t num_elems = t.size();
-        //std::cout << "pack buffer packed vector of size " << num_elems<< std::endl;
         packer = packer << num_elems;
         if (num_elems > 0){
-            //size_t element_size = size(t[0]);
             for (const T &elem : t) {
                 pack_buffer(packer, elem);
             }
@@ -387,7 +368,6 @@ namespace message
         }
     }
     */
-
 
     template <typename T>
     inline void 
@@ -435,11 +415,6 @@ namespace message
     prepare_message(message &m, const enum msg_type given_type, const Args&... args)
     {
         size_t bytes_to_pack = size(args...) + sizeof(enum msg_type);
-        /*
-        if (given_type == NODE_PROG || given_type == CLIENT_NODE_PROG_REQ){
-            std::cout << "preparing message contents of size " << bytes_to_pack << std::endl;
-        }
-        */
         m.type = given_type;
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
@@ -452,13 +427,11 @@ namespace message
     inline void
     unpack_buffer(e::unpacker &unpacker, node_prog::Packable &t)
     {
-        //std::cout << "unpack buffer called for Packable type!" << std::endl;
         t.unpack(unpacker);
     }
     inline void
     unpack_buffer(e::unpacker &unpacker, node_prog::Packable_Deletable *&t)
     {
-        //std::cout << "unpack buffer called for Packable type!" << std::endl;
         t->unpack(unpacker);
     }
     inline void
@@ -466,7 +439,6 @@ namespace message
     {
         uint32_t _type;
         unpacker = unpacker >> _type;
-        //std::cout << "unpack buffer got " << _type << std::endl;
         t = (enum node_prog::prog_type)_type;
     }
     inline void
@@ -546,7 +518,7 @@ namespace message
         while (elements_left > 0) {
             T to_add;
             unpack_buffer(unpacker, to_add);
-            t.push_back(std::move(to_add));
+            t.emplace_back(std::move(to_add));
             elements_left--;
         }
     }
@@ -564,7 +536,7 @@ namespace message
         while (elements_left > 0) {
             T to_add;
             unpack_buffer(unpacker, to_add);
-            t.insert(std::move(to_add));
+            t.emplace(std::move(to_add));
             elements_left--;
         }
     }
@@ -585,10 +557,8 @@ namespace message
             T2 val_to_add;
 
             unpack_buffer(unpacker, key_to_add);
-
             unpack_buffer(unpacker, val_to_add);
-
-            t[key_to_add] = std::move(val_to_add); // XXX change to insert later to reduce overhead
+            t.emplace(key_to_add, std::move(val_to_add));
             elements_left--;
         }
     }

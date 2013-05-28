@@ -231,7 +231,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     unpack_and_start_coord(coordinator::central *server, message::message &msg, std::shared_ptr<coordinator::pending_req> request)
 {
     node_prog::prog_type ignore;
-    //printf("coordinator ZAAAAAAAAAAAAAAAAAA\n");
     std::vector<std::pair<uint64_t, ParamsType>> initial_args;
 
     message::unpack_message(*request->req_msg, message::CLIENT_NODE_PROG_REQ, ignore, initial_args);
@@ -247,7 +246,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             return;
         }
         common::meta_element *me = server->nodes.at(node_params_pair.first);
-        initial_batches[me->get_loc()].emplace_back(std::make_tuple(node_params_pair.first, std::move(node_params_pair.second), db::element::remote_node())); // constructor
+        initial_batches[me->get_loc()].emplace_back(std::make_tuple(node_params_pair.first,
+            std::move(node_params_pair.second), db::element::remote_node())); // constructor
     }
     request->vector_clock.reset(new std::vector<uint64_t>(*server->vc.clocks));
     request->del_request = server->get_last_del_req(request);
@@ -255,6 +255,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     request->out_count->cnt++;
     request->req_id = ++server->request_id;
     server->pending.insert(std::make_pair(request->req_id, request));
+    server->update_mutex.unlock();
 
     message::message msg_to_send;
     std::vector<uint64_t> empty_vector;
@@ -264,7 +265,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                 request->req_id, batch_pair.second, empty_vector, request->ignore_cache, empty_tuple_vector);
         server->send(batch_pair.first, msg_to_send.buf); // TODO later change to send without update mutex lock
     }
-    server->update_mutex.unlock();
 }
 
 // caution: assuming we hold server->mutex
@@ -293,7 +293,7 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
         server->update_mutex.unlock();
         // send same message along to client
         server->send(request->client, request->reply_msg->buf);
-        std::cout << "Ending node prog for request " << req_id << std::endl;
+        DEBUG << "Ending node prog for request " << req_id << std::endl;
         //message::message done_msg;
         //message::prepare_message(done_msg, message::DONE_NODE_PROG, req_id);
         //for (uint64_t i = 1; i <= NUM_SHARDS; i++) {
@@ -437,62 +437,11 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg, 
     }
 }
 
-// call appropriate function based on msg from client
-//void
-//handle_client_req(coordinator::central *server, std::unique_ptr<message::message> msg,
-//    enum message::msg_type m_type, uint64_t client_loc)
-//{
-//    auto request = std::make_shared<coordinator::pending_req>(m_type);
-//    request->client = client_loc;
-//
-//    switch (m_type)
-//    {
-//        case message::CLIENT_NODE_CREATE_REQ:
-//            create_node(server, request);
-//            break;
-//
-//        case message::CLIENT_EDGE_CREATE_REQ: 
-//            message::unpack_message(*msg, message::CLIENT_EDGE_CREATE_REQ, request->elem1, request->elem2);
-//            create_edge(server, request);
-//            break;
-//
-//        case message::CLIENT_NODE_DELETE_REQ:
-//            message::unpack_message(*msg, message::CLIENT_NODE_DELETE_REQ, request->elem1);
-//            delete_node_initiate(server, request);
-//            break;
-//
-//        case message::CLIENT_EDGE_DELETE_REQ: 
-//            message::unpack_message(*msg, message::CLIENT_EDGE_DELETE_REQ, request->elem1, request->elem2);
-//            delete_edge_initiate(server, request);
-//            break;
-//
-//        case message::CLIENT_ADD_EDGE_PROP:
-//            message::unpack_message(*msg, message::CLIENT_ADD_EDGE_PROP, request->elem1, request->elem2, request->key, request->value);
-//            add_edge_property(server, request);
-//            break;
-//
-//        case message::CLIENT_DEL_EDGE_PROP:
-//            message::unpack_message(*msg, message::CLIENT_DEL_EDGE_PROP, request->elem1, request->elem2, request->key);
-//            delete_edge_property_initiate(server, request);
-//            break;
-//
-//        case message::CLIENT_NODE_PROG_REQ:
-//            message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, request->pType);
-//            request->req_msg = std::move(msg);
-//            node_prog::programs.at(request->pType)->unpack_and_start_coord(server, *request->req_msg, request);
-//            break;
-//
-//        default:
-//            std::cerr << "invalid client msg code" << m_type << std::endl;
-//    }
-//}
-
-// handle requests from client
+// handle incoming messages
 void
 msg_handler(coordinator::central *server)
 {
     busybee_returncode ret;
-    message::message msg;
     uint32_t code;
     enum message::msg_type mtype;
     std::unique_ptr<message::message> rec_msg;
@@ -501,43 +450,17 @@ msg_handler(coordinator::central *server)
 
     while (1)
     {
-        if ((ret = server->rec_bb->recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
+        rec_msg.reset(new message::message());
+        if ((ret = server->bb->recv(&sender, &rec_msg->buf)) != BUSYBEE_SUCCESS) {
             std::cerr << "msg recv error: " << ret << std::endl;
             continue;
         }
-        rec_msg.reset(new message::message(msg));
         rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
         mtype = (enum message::msg_type)code;
         thr.reset(new coordinator::thread::unstarted_thread(handle_msg, server, std::move(rec_msg), mtype, sender));
         server->thread_pool.add_request(std::move(thr), true);
     }
 }
-// handle responses from shards
-//void
-//shard_msg_handler(coordinator::central *server)
-//{
-//    busybee_returncode ret;
-//    po6::net::location sender(COORD_IPADDR, COORD_PORT);
-//    message::message msg(message::ERROR);
-//    uint32_t code;
-//    enum message::msg_type mtype;
-//    std::unique_ptr<message::message> rec_msg;
-//    std::unique_ptr<coordinator::thread::unstarted_thread> thr;
-//    
-//    while (1) {
-//        if ((ret = server->rec_bb.recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
-//            std::cerr << "msg recv error: " << ret << std::endl;
-//            continue;
-//        }
-//        rec_msg.reset(new message::message(msg));
-//        rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
-//        mtype = (enum message::msg_type)code;
-//        thr.reset(new coordinator::thread::unstarted_thread(handle_pending_req,
-//            server, std::move(rec_msg), mtype, 0));
-//        server->thread_pool.add_request(std::move(thr), false);
-//    }
-//}
-
 
 // periodically update cache at all shards
 void
@@ -574,11 +497,11 @@ coord_daemon_initiate(coordinator::central *server)
     } else {
         server->update_mutex.unlock();
     }
+    // send out messages
     for (uint64_t i = 1; i <= NUM_SHARDS; i++) {
         message::prepare_message(msg, message::CACHE_UPDATE, good, bad, perm_del_id, migr_del_id);
         server->send(i, msg.buf);
     }
-
 }
 
 // caution: assuming we hold server->update_mutex
@@ -607,8 +530,8 @@ main()
     std::cout << "Weaver: coordinator" << std::endl;
 
     // call periodic cache update function
-    //t = new std::thread(coord_daemon_initiate, &server);
-    //t->detach();
+    t = new std::thread(coord_daemon_initiate, &server);
+    t->detach();
 
     // initialize client msg receiving thread
     msg_handler(&server);
