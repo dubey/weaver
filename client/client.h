@@ -51,6 +51,7 @@ class client
 
         template <typename ParamsType>
         ParamsType * run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args);
+        void exit_weaver();
 
     private:
         std::pair<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>> dijkstra_request(uint64_t node1, uint64_t node2, uint32_t edge_weight_prop, bool is_widest,
@@ -255,6 +256,14 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
 
     ParamsType *toRet = new ParamsType(tempPair.second); // make sure client frees
     return toRet;
+}
+
+inline void
+client :: exit_weaver()
+{
+    message::message msg;
+    message::prepare_message(msg, message::EXIT_WEAVER);
+    send_coord(msg.buf);
 }
 
 inline void

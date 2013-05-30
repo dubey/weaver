@@ -12,7 +12,6 @@
  * ===============================================================
  */
 
-#define __WEAVER_DEBUG__
 #ifndef PO6_NDEBUG_LEAKS
 #define PO6_NDEBUG_LEAKS
 
@@ -1075,6 +1074,9 @@ runner(db::graph *G)
                 G->migration_mutex.unlock();
                 break;
 
+            case message::EXIT_WEAVER:
+                exit(0);
+                
             default:
                 std::cerr << "unexpected msg type " << mtype << std::endl;
         }
@@ -1094,7 +1096,9 @@ migration_wrapper(db::graph *G)
         n = G->acquire_node(migr_node);
         if (n == NULL || n->get_del_time() < MAX_TIME || n->dependent_del > 0 ||
             n->state == db::element::node::mode::IN_TRANSIT || n->state == db::element::node::mode::MOVED) {
-            G->release_node(n);
+            if (n != NULL) {
+                G->release_node(n);
+            }
             G->sorted_nodes.pop_front();
             continue;
         }
@@ -1193,7 +1197,7 @@ main(int argc, char* argv[])
     std::cout << "Weaver: shard instance " << G.myid << std::endl;
 
     void *dummy = NULL;
-    if (G.myid == 1) {
+    if (G.myid == 1 && MIGRATION) {
         t = new std::thread(&first_shard_daemon_begin, &G);
         t->detach();
     }

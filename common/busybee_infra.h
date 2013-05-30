@@ -37,10 +37,9 @@ class weaver_mapper : public busybee_mapper
             uint64_t incr_id = ID_INCR + server_id;
             if (mlist.find(incr_id) != mlist.end()) {
                 *loc = mlist.at(incr_id);
-                std::cout << "Found server " << server_id << std::endl;
                 return true;
             } else {
-                std::cout << "Returning false from mapper lookup for id " << server_id << std::endl;
+                std::cerr << "returning false from mapper lookup for id " << server_id << std::endl;
                 return false;
             }
         }
@@ -61,11 +60,9 @@ initialize_busybee(busybee_mta *&bb, uint64_t sid, std::shared_ptr<po6::net::loc
     if (file != NULL) {
         while (file >> server_id >> ipaddr >> inport) {
             uint64_t incr_id = ID_INCR + server_id;
-            std::cout << "Now id " << incr_id << " for location " << ipaddr << ":" << inport << std::endl;
             member_list.emplace(incr_id, po6::net::location(ipaddr.c_str(), inport));
             if (server_id == sid) {
                 myloc.reset(new po6::net::location(ipaddr.c_str(), inport));
-                std::cout << "My id found " << sid << std::endl;
             }
         }
     } else {
@@ -74,7 +71,6 @@ initialize_busybee(busybee_mta *&bb, uint64_t sid, std::shared_ptr<po6::net::loc
     file.close();
     weaver_mapper *wmap = new weaver_mapper(member_list);
     bb = new busybee_mta(wmap, *myloc, sid+ID_INCR, 1);
-    std::cout << "My id is " << (sid+ID_INCR) << std::endl;
 }
 
 #endif

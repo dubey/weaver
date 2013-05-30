@@ -130,6 +130,8 @@ namespace coordinator
             // testing
             std::default_random_engine generator;
             std::uniform_real_distribution<double> dist;
+            timespec mtime;
+            std::vector<double> migr_times;
 
         public:
             void add_node(common::meta_element *n, uint64_t index);

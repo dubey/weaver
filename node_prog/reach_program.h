@@ -153,7 +153,7 @@ namespace node_prog
                 //std::cout << "Checking cache\n";
                 for (auto &rcv: cache) {
                     if (rcv->reachable_node == params.dest) {
-                        //std::cout << "GOT CACHE\n";
+                        DEBUG << "GOT CACHE\n";
                         rcv->mark();
                         params.mode = true;
                         params.reachable = true;

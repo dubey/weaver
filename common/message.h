@@ -90,6 +90,7 @@ namespace message
         CLIENT_NODE_PROG_REPLY,
         DONE_NODE_PROG,
 
+        EXIT_WEAVER,
         ERROR
     };
 

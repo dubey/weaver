@@ -19,6 +19,7 @@
 #include <thread>
 #include <fstream>
 #include <signal.h>
+#include <limits>
 #include "e/buffer.h"
 #include "busybee_constants.h"
 
@@ -31,7 +32,17 @@
 #include "db/element/remote_node.h"
 
 static std::unordered_map<uint64_t, std::vector<uint64_t>> graph;
+static coordinator::central *cserver;
 void coord_daemon_end(coordinator::central *server);
+
+void
+record_time(coordinator::central *server)
+{
+    double mtime;
+    clock_gettime(CLOCK_MONOTONIC, &server->mtime);
+    mtime = server->mtime.tv_sec + ((double)server->mtime.tv_nsec)/(1000000000ULL);
+    server->migr_times.emplace_back(mtime);
+}
 
 // create a node
 void
@@ -361,6 +372,7 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg, 
             for (uint64_t del_iter: *cached_req_ids) {
                 server->bad_cache_ids->insert(del_iter);
             }
+            record_time(server);
             server->update_mutex.unlock();
             server->send(from_loc, msg->buf);
             break;
@@ -428,9 +440,24 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg, 
             node_prog::programs.at(crequest->pType)->unpack_and_start_coord(server, *crequest->req_msg, crequest);
             break;
 
-        case message:: CLIENT_COMMIT_GRAPH:
+        case message::CLIENT_COMMIT_GRAPH:
             write_graph(server);
             break;
+
+        case message::EXIT_WEAVER: {
+            for (uint64_t s = 1; s <= NUM_SHARDS; s++) {
+                message::prepare_message(*msg, message::EXIT_WEAVER);
+                server->send(s, msg->buf);
+            }
+            std::ofstream migr_file;
+            migr_file.open("migrations");
+            migr_file.precision(std::numeric_limits<double>::digits10);
+            for (double t: cserver->migr_times) {
+                migr_file << t << std::endl;
+            }
+            migr_file.close();
+            exit(0);
+        }
 
         default:
             std::cerr << "unexpected msg type " << m_type << std::endl;
@@ -517,9 +544,17 @@ coord_daemon_end(coordinator::central *server)
 void
 end_program(int param)
 {
+    std::ofstream migr_file;
+    migr_file.open("migrations");
+    migr_file.precision(std::numeric_limits<double>::digits10);
+    for (double t: cserver->migr_times) {
+        migr_file << t << std::endl;
+    }
+    migr_file.close();
     std::cerr << "Ending program, param = " << param << std::endl;
     exit(1);
 }
+
 int
 main()
 {
@@ -528,6 +563,8 @@ main()
     signal(SIGINT, end_program);
 
     std::cout << "Weaver: coordinator" << std::endl;
+    cserver = &server;
+    record_time(&server);
 
     // call periodic cache update function
     t = new std::thread(coord_daemon_initiate, &server);
