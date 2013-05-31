@@ -44,6 +44,28 @@ record_time(coordinator::central *server)
     server->migr_times.emplace_back(mtime);
 }
 
+void exit_weaver()
+{
+    message::message msg;
+    for (uint64_t s = 1; s <= NUM_SHARDS; s++) {
+        message::prepare_message(msg, message::EXIT_WEAVER);
+        cserver->send(s, msg.buf);
+    }
+    std::ofstream migr_file, shard_file;
+    migr_file.open("migrations");
+    migr_file.precision(std::numeric_limits<double>::digits10);
+    for (double t: cserver->migr_times) {
+        migr_file << t << std::endl;
+    }
+    migr_file.close();
+    shard_file.open("shard_counts");
+    for (int i = 0; i < NUM_SHARDS; i++) {
+        shard_file << cserver->shard_node_count[i] << std::endl;
+    }
+    shard_file.close();
+    exit(0);
+}
+
 // create a node
 void
 create_node(coordinator::central *server, std::shared_ptr<coordinator::pending_req>request)
@@ -58,6 +80,7 @@ create_node(coordinator::central *server, std::shared_ptr<coordinator::pending_r
     loc = server->port_ctr+1; // node will be placed on this shard server
     clock = ++server->vc.clocks->at(loc-1);
     req_id = ++server->request_id;
+    server->shard_node_count[loc-1]++;
     server->update_mutex.unlock();
     
     message::prepare_message(msg, message::NODE_CREATE_REQ, clock, req_id);
@@ -352,7 +375,7 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg, 
         
         case message::CACHE_UPDATE_ACK:
             server->update_mutex.lock();
-            if ((++server->cache_acks) == server->num_shards) {
+            if ((++server->cache_acks) == NUM_SHARDS) {
                 coord_daemon_end(server);
             } else {
                 server->update_mutex.unlock();
@@ -366,13 +389,16 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg, 
             lnode = server->nodes.at(coord_handle);
             from_loc = lnode->get_loc();
             lnode->update_loc(new_loc);
-            message::prepare_message(*msg, message::COORD_NODE_MIGRATE_ACK, server->vc.clocks->at(from_loc-1), server->vc.clocks->at(new_loc-1), server->request_id);
+            message::prepare_message(*msg, message::COORD_NODE_MIGRATE_ACK,
+                server->vc.clocks->at(from_loc-1), server->vc.clocks->at(new_loc-1), server->request_id);
             server->vc.clocks->at(new_loc-1)++;
             // invalidate cached ids
             for (uint64_t del_iter: *cached_req_ids) {
                 server->bad_cache_ids->insert(del_iter);
             }
             record_time(server);
+            server->shard_node_count[from_loc-1]--;
+            server->shard_node_count[new_loc-1]++;
             server->update_mutex.unlock();
             server->send(from_loc, msg->buf);
             break;
@@ -444,20 +470,8 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg, 
             write_graph(server);
             break;
 
-        case message::EXIT_WEAVER: {
-            for (uint64_t s = 1; s <= NUM_SHARDS; s++) {
-                message::prepare_message(*msg, message::EXIT_WEAVER);
-                server->send(s, msg->buf);
-            }
-            std::ofstream migr_file;
-            migr_file.open("migrations");
-            migr_file.precision(std::numeric_limits<double>::digits10);
-            for (double t: cserver->migr_times) {
-                migr_file << t << std::endl;
-            }
-            migr_file.close();
-            exit(0);
-        }
+        case message::EXIT_WEAVER:
+            exit_weaver();
 
         default:
             std::cerr << "unexpected msg type " << m_type << std::endl;
@@ -535,7 +549,7 @@ coord_daemon_initiate(coordinator::central *server)
 void
 coord_daemon_end(coordinator::central *server)
 {
-    assert(server->cache_acks == server->num_shards);
+    assert(server->cache_acks == NUM_SHARDS);
     server->cache_acks = 0; 
     server->update_mutex.unlock();
     coord_daemon_initiate(server);
@@ -544,15 +558,8 @@ coord_daemon_end(coordinator::central *server)
 void
 end_program(int param)
 {
-    std::ofstream migr_file;
-    migr_file.open("migrations");
-    migr_file.precision(std::numeric_limits<double>::digits10);
-    for (double t: cserver->migr_times) {
-        migr_file << t << std::endl;
-    }
-    migr_file.close();
     std::cerr << "Ending program, param = " << param << std::endl;
-    exit(1);
+    exit_weaver();
 }
 
 int

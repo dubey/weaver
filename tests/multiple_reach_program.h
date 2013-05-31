@@ -20,7 +20,7 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define REQUESTS 10000
+#define REQUESTS 1000
 
 void
 multiple_reach_prog()
@@ -54,15 +54,15 @@ multiple_reach_prog()
         edges.emplace_back(c.create_edge(nodes[first], nodes[second]));
     }
     std::cout << "Created graph\n";
-    //c.commit_graph();
-    //std::cout << "Committed graph\n";
+    c.commit_graph();
+    std::cout << "Committed graph\n";
     node_prog::reach_params rp;
     rp.mode = false;
     rp.reachable = false;
     rp.prev_node.loc = -1;
     
-    //std::ofstream file, req_time;
-    //file.open("requests");
+    std::ofstream file, req_time;
+    file.open("requests");
     //req_time.open("time");
     clock_gettime(CLOCK_MONOTONIC, &t1);
     first = t1;
@@ -81,7 +81,7 @@ multiple_reach_prog()
         while (second == first) {
             second = rand() % num_nodes;
         }
-        //file << first << " " << second << std::endl;
+        file << first << " " << second << std::endl;
         std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args;
         rp.dest = nodes[second];
         initial_args.emplace_back(std::make_pair(nodes[first], rp));
@@ -89,7 +89,7 @@ multiple_reach_prog()
         //std::cout << "Request " << i << ", from source " << nodes[first] << " to dest " << nodes[second];
         //std::cout << ". Reachable = " << res->reachable << std::endl;
     }
-    //file.close();
+    file.close();
     //req_time.close();
     dif = diff(first, t2);
     std::cout << "Total time taken " << dif.tv_sec << "." << dif.tv_nsec << std::endl;

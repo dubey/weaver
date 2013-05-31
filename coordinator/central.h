@@ -108,10 +108,9 @@ namespace coordinator
             busybee_mta *bb;
             // graph state
             uint64_t port_ctr;
-            //std::vector<std::shared_ptr<po6::net::location>> shards;
-            uint32_t num_shards;
             std::unordered_map<uint64_t, common::meta_element*> nodes;
             std::unordered_map<uint64_t, common::meta_element*> edges;
+            std::vector<uint64_t> shard_node_count;
             vclock::vector vc;
             // big mutex
             po6::threads::mutex update_mutex;
@@ -152,6 +151,7 @@ namespace coordinator
         : request_id(1)
         , thread_pool(NUM_THREADS-1)
         , port_ctr(0)
+        , shard_node_count(NUM_SHARDS, 0)
         , bad_cache_ids(new std::unordered_set<uint64_t>())
         , good_cache_ids(new std::unordered_set<uint64_t>())
         , transient_bad_cache_ids(new std::unordered_set<uint64_t>())
@@ -163,7 +163,6 @@ namespace coordinator
     {
         // initialize array of shard server locations
         initialize_busybee(bb, COORD_ID, myloc);
-        num_shards = NUM_SHARDS;
     }
 
     inline void

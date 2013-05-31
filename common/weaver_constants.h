@@ -34,7 +34,7 @@
 #define CLIENT_ID (11ULL)
 #define SHARDS_DESC_FILE "../common/shards"
 // weaver setup
-#define NUM_SHARDS 4
+#define NUM_SHARDS 8
 #define NUM_THREADS 8
 #define GRAPH_FILE "graph"
 #define DAEMON_PERIOD 10 // frequency in seconds for coordinator daemon to run
