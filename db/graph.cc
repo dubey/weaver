@@ -700,6 +700,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                         node->msg_count[loc-1]++;
                         G->msg_count_mutex.lock();
                         G->agg_msg_count.at(node_handle)++;
+                        G->request_count[G->myid-1]++;
                         G->msg_count_mutex.unlock();
                     }
                 }
@@ -817,7 +818,7 @@ unpack_update_request(db::graph *G, void *req)
             break;
 
         case message::PERMANENT_DELETE_EDGE:
-            message::unpack_message(*request->msg, message::PERMANENT_DELETE_EDGE, req_id, n1, edge);
+            message::unpack_message(*request->msg, message::PERMANENT_DELETE_EDGE, n1, edge);
             G->permanent_edge_delete(n1, edge);
             break;
 
@@ -1074,6 +1075,11 @@ runner(db::graph *G)
                 G->migration_mutex.unlock();
                 break;
 
+            //case message::REQUEST_COUNT:
+            //    G->msg_count_mutex.lock(();
+            //    G->msg_count_mutex.unlock(();
+            //    break;
+
             case message::EXIT_WEAVER:
                 exit(0);
                 
@@ -1139,19 +1145,33 @@ bool agg_count_compare(std::pair<uint64_t, uint32_t> p1, std::pair<uint64_t, uin
 void
 shard_daemon_begin(db::graph *G, void *dummy)
 {
-    DEBUG << "Starting shard daemon\n";
-    std::deque<std::pair<uint64_t, uint32_t>> &sn = G->sorted_nodes;
-    sn.clear();
     G->msg_count_mutex.lock();
-    for (auto &p: G->agg_msg_count) {
-        sn.emplace_back(p);
-    }
-    G->msg_count_mutex.unlock();
-    std::sort(sn.begin(), sn.end(), agg_count_compare);
-    size_t num_nodes = sn.size();
-    sn.erase(sn.begin() + num_nodes/2, sn.end());
-    DEBUG << "Migr nodes size = " << sn.size() << std::endl;
-    migration_wrapper(G);
+    //if (G->request_reply_count == 0) {
+    //    message::message msg;
+    //    for (uint64_t i = 1; i <= NUM_SHARDS; i++) {
+    //        message::prepare_message(msg, message::REQUEST_COUNT);
+    //        G->send(i, msg.buf);
+    //    }
+    //    G->msg_count_mutex.unlock();
+    //    return;
+    //} else if (G->request_reply_count < NUM_SHARDS) {
+    //    // still awaiting some counter updates
+    //    G->msg_count_mutex.unlock();
+    //    return;
+    //} else {
+        DEBUG << "Starting shard daemon" << std::endl;
+        std::deque<std::pair<uint64_t, uint32_t>> &sn = G->sorted_nodes;
+        sn.clear();
+        for (auto &p: G->agg_msg_count) {
+            sn.emplace_back(p);
+        }
+        G->msg_count_mutex.unlock();
+        std::sort(sn.begin(), sn.end(), agg_count_compare);
+        size_t num_nodes = sn.size();
+        sn.erase(sn.begin() + num_nodes/2, sn.end());
+        DEBUG << "Migr nodes size = " << sn.size() << std::endl;
+        migration_wrapper(G);
+    //}
 }
 
 void

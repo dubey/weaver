@@ -207,9 +207,7 @@ namespace coordinator
     {
         std::vector<std::shared_ptr<pending_req>>::iterator pend_iter;
         for (uint64_t del_iter: cached_ids) {
-#ifdef DEBUG
-            std::cout << "Inserting bad cache " << del_iter << std::endl;
-#endif
+            DEBUG << "Inserting bad cache " << del_iter << std::endl;
             bad_cache_ids->insert(del_iter);
         }
         for (pend_iter = pending_delete_requests.begin(); pend_iter != pending_delete_requests.end(); pend_iter++) {
@@ -224,29 +222,29 @@ namespace coordinator
             }
         }
         pending_delete_requests.erase(pend_iter);
-#ifdef DEBUG
-        std::cout << "Bad cache ids:\n";
+#ifdef __WEAVER_DEBUG__
+        DEBUG << "Bad cache ids:\n";
         for (auto &it: *bad_cache_ids) {
-            std::cout << it << " ";
+            DEBUG << it << " ";
         }
-        std::cout << std::endl;
+        DEBUG << std::endl;
 #endif
     }
 
     inline bool
     central :: is_deleted_cache_id(uint64_t id)
     {
-#ifdef DEBUG
-        std::cout << "Bad cache ids:\n";
+#ifdef __WEAVER_DEBUG__
+        DEBUG << "Bad cache ids:\n";
         for (auto &it: *bad_cache_ids) {
-            std::cout << it << " ";
+            DEBUG << it << " ";
         }
-        std::cout << std::endl;
-        std::cout << "Transient Bad cache ids:\n";
+        DEBUG << std::endl;
+        DEBUG << "Transient Bad cache ids:\n";
         for (auto &it: *transient_bad_cache_ids) {
-            std::cout << it << " ";
+            DEBUG << it << " ";
         }
-        std::cout << std::endl;
+        DEBUG << std::endl;
 #endif
         return ((bad_cache_ids->find(id) != bad_cache_ids->end()) || (transient_bad_cache_ids->find(id) != transient_bad_cache_ids->end()));
     }

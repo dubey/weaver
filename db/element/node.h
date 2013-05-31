@@ -72,7 +72,7 @@ namespace element
     class node : public element
     {
         public:
-            node(uint64_t time);
+            node(uint64_t time, po6::threads::mutex *mtx);
 
         public:
             enum mode
@@ -87,7 +87,10 @@ namespace element
             enum mode state;
             std::unordered_map<uint64_t, edge*> out_edges;
             std::unordered_map<uint64_t, edge*> in_edges;
-            po6::threads::mutex update_mutex;
+            po6::threads::cond cv; // for locking node
+            bool in_use;
+            uint32_t waiters; // count of number of waiters
+            bool permanently_deleted;
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids; // requests which have been cached
             // for migration
             uint64_t prev_loc, new_loc;
@@ -105,8 +108,12 @@ namespace element
     };
 
     inline
-    node :: node(uint64_t time)
+    node :: node(uint64_t time, po6::threads::mutex *mtx)
         : element(time)
+        , cv(mtx)
+        , in_use(true)
+        , waiters(0)
+        , permanently_deleted(false)
         , state(mode::NASCENT)
         , cached_req_ids(new std::vector<uint64_t>())
         , prev_loc(-1)
