@@ -172,7 +172,7 @@ namespace db
             graph(uint64_t my_id);
 
         private:
-            po6::threads::mutex clock_mutex, update_mutex, deletion_mutex;
+            po6::threads::mutex clock_mutex, update_mutex, deletion_mutex, prog_mutex;
             uint64_t my_clock;
 
         public:
@@ -214,7 +214,7 @@ namespace db
             uint32_t request_reply_count;
             std::unordered_map<uint64_t, uint32_t> agg_msg_count;
             std::deque<std::pair<uint64_t, uint32_t>> sorted_nodes;
-            std::deque<std::pair<uint64_t, uint64_t>> migrated_nodes; // for permanent deletion later on
+            std::deque<std::unique_ptr<std::pair<uint64_t, uint64_t>>> migrated_nodes; // for permanent deletion later on
             void update_migrated_nbr_nonlocking(element::node *n, uint64_t edge, uint64_t rnode, uint64_t new_loc);
             void update_migrated_nbr(uint64_t lnode, uint64_t edge, uint64_t rnode, uint64_t new_loc);
             bool set_target_clock(uint64_t time);
@@ -225,7 +225,7 @@ namespace db
             
             // Permanent deletion
             uint64_t del_id;
-            std::deque<perm_del*> delete_req_ids;
+            std::deque<std::unique_ptr<perm_del>> delete_req_ids;
             
             // Messaging infrastructure
             std::shared_ptr<po6::net::location> myloc;
@@ -254,6 +254,11 @@ namespace db
             void insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::CacheValueBase *toAdd, element::node *n);
             void invalidate_prog_cache(uint64_t request_id);
             void commit_prog_cache(uint64_t req_id);
+            // completed node programs
+            std::unordered_set<uint64_t> done_ids;
+            void add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
+            bool check_done_request(uint64_t req_id);
+            void clear_req_use(uint64_t req_id);
     };
 
     inline
@@ -273,6 +278,7 @@ namespace db
         , sent_count(0)
         , rec_count(0)
         , already_migr(false)
+        , node_prog_req_state(&prog_mutex)
     {
         initialize_busybee(bb, myid, myloc);
         message::prog_state = &node_prog_req_state;
@@ -349,11 +355,12 @@ namespace db
             update_mutex.unlock();
         } else if (n->permanently_deleted) {
             uint64_t node_handle = n->get_creat_time();
-            permanent_node_delete(n);
+            nodes.erase(node_handle);
             update_mutex.unlock();
             msg_count_mutex.lock();
             agg_msg_count.erase(node_handle);
             msg_count_mutex.unlock();
+            permanent_node_delete(n);
         } else {
             update_mutex.unlock();
         }
@@ -374,11 +381,7 @@ namespace db
         } else {
             new_node->state = element::node::mode::STABLE;
         }
-        msg_count_mutex.lock();
-        agg_msg_count.emplace(time, 0);
-        msg_count_mutex.unlock();
         release_node(new_node);
-        DEBUG << "Creating node, addr = " << (void*) new_node << std::endl;
     }
 
     inline std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>>
@@ -399,7 +402,7 @@ namespace db
         release_node(n);
         if (ret.first == 0) {
             deletion_mutex.lock();
-            delete_req_ids.emplace_back(new perm_del(message::NODE_DELETE_REQ, del_time, node_handle));
+            delete_req_ids.emplace_back(std::unique_ptr<perm_del>(new perm_del(message::NODE_DELETE_REQ, del_time, node_handle)));
             deletion_mutex.unlock();
         }
         return ret;
@@ -421,7 +424,6 @@ namespace db
             message::message msg(message::REVERSE_EDGE_CREATE);
             message::prepare_message(msg, message::REVERSE_EDGE_CREATE, remote_time, time, local_node, myid, remote_node);
             send(remote_loc, msg.buf);
-            DEBUG << "Creating edge, addr = " << (void*) new_edge << std::endl;
             ret = 0;
         }
         return ret;
@@ -437,9 +439,6 @@ namespace db
             element::edge *new_edge = new element::edge(time, remote_loc, remote_node);
             n->add_edge(new_edge, false);
             n->updated = true;
-            DEBUG << "New rev edge: " << (void*)new_edge->nbr.handle << " " 
-                      << new_edge->nbr.loc << " at lnode " << (void*)local_node << std::endl;
-            DEBUG << " in edge size " << n->in_edges.size() << std::endl;
             ret = 0;
         }
         release_node(n);
@@ -466,7 +465,7 @@ namespace db
         release_node(n);
         if (ret.first == 0) {
             deletion_mutex.lock();
-            delete_req_ids.emplace_back(new perm_del(message::EDGE_DELETE_REQ, del_time, node_handle, edge_handle));
+            delete_req_ids.emplace_back(std::unique_ptr<perm_del>(new perm_del(message::EDGE_DELETE_REQ, del_time, node_handle, edge_handle)));
             deletion_mutex.unlock();
         }
         return ret;
@@ -507,7 +506,7 @@ namespace db
         release_node(n);
         if (ret.first == 0) {
             deletion_mutex.lock();
-            delete_req_ids.emplace_back(new perm_del(message::EDGE_DELETE_PROP, time, node, edge, key));
+            delete_req_ids.emplace_back(std::unique_ptr<perm_del>(new perm_del(message::EDGE_DELETE_PROP, time, node, edge, key)));
             deletion_mutex.unlock();
         }
         return ret;
@@ -516,25 +515,31 @@ namespace db
     inline void
     graph :: permanent_delete(uint64_t req_id, uint64_t migr_del_id)
     {
-        std::deque<perm_del*> delete_req_ids_copy;
+        std::deque<std::unique_ptr<perm_del>> delete_req_ids_copy;
+        std::deque<std::unique_ptr<std::pair<uint64_t, uint64_t>>> migrated_nodes_copy;
+        // permanently delete migrated nodes
+        mrequest.mutex.lock();
         while (!migrated_nodes.empty()) {
-            auto &p = migrated_nodes.front();
-            if (p.first >= migr_del_id) {
+            if (migrated_nodes.front()->first >= migr_del_id) {
                 break;
             } else {
-                DEBUG << "Perm del migr node " << p.second << ", migr_clock = "
-                    << p.first << ", del_id " << migr_del_id << std::endl;
-                delete_migrated_node(p.second);
+                migrated_nodes_copy.emplace_back(std::move(migrated_nodes.front()));
                 migrated_nodes.pop_front();
             }
         }
+        mrequest.mutex.unlock();
+        while (!migrated_nodes_copy.empty()) {
+            delete_migrated_node(migrated_nodes_copy.front()->second);
+            migrated_nodes_copy.pop_front();
+        }
+
+        // permanently delete deleted nodes
         deletion_mutex.lock();
         del_id = req_id;
         while (!delete_req_ids.empty()) {
-            perm_del *front = delete_req_ids.front();
-            if (front->req_id <= req_id) {
+            if (delete_req_ids.front()->req_id <= req_id) {
                 // can delete this element, place on copy list
-                delete_req_ids_copy.emplace_back(front);
+                delete_req_ids_copy.emplace_back(std::move(delete_req_ids.front()));
                 delete_req_ids.pop_front();
             } else {
                 break;
@@ -588,7 +593,7 @@ namespace db
             delete_req_ids_copy.pop_front();
         }
         message::message msg;
-        message::prepare_message(msg, message::CACHE_UPDATE_ACK); 
+        message::prepare_message(msg, message::CLEAN_UP_ACK); 
         send(COORD_ID, msg.buf);
     }
 
@@ -598,7 +603,8 @@ namespace db
     {
         element::edge *e;
         message::message msg;
-        nodes.erase(n->get_creat_time());
+        // following 2 loops are no-ops in case of deletion of
+        // migrated nodes, since edges have already been deleted
         for (auto &it: n->out_edges) {
             e = it.second;
             message::prepare_message(msg, message::PERMANENT_DELETE_EDGE, e->nbr.handle, it.first);
@@ -623,14 +629,17 @@ namespace db
         deletion_mutex.lock();
         n = acquire_node(node_handle);
         if (n == NULL) {
-            DEBUG << "Not found node in perm_edge_del\n";
+            DEBUG << "Not found node in perm_edge_del" << std::endl;
             deletion_mutex.unlock();
             return;
         }
-        assert(n->out_edges.find(edge_handle) == n->out_edges.end());
         if (n->in_edges.find(edge_handle) != n->in_edges.end()) {
             e = n->in_edges.at(edge_handle);
             n->in_edges.erase(edge_handle);
+            delete e;
+        } else if (n->out_edges.find(edge_handle) != n->out_edges.end()) {
+            e = n->out_edges.at(edge_handle);
+            n->out_edges.erase(edge_handle);
             delete e;
         }
         release_node(n);
@@ -656,7 +665,7 @@ namespace db
             found = true;
         }
         if (!found) {
-            std::cerr << "Neighbor not found for migrated node " << remote_node << std::endl;
+            DEBUG << "Neighbor not found for migrated node " << remote_node << std::endl;
         }
     }
 
@@ -723,6 +732,17 @@ namespace db
         element::node *n;
         n = acquire_node(migr_node);
         n->permanently_deleted = true;
+        // deleting edges now so as to prevent sending messages to neighbors for permanent edge deletion
+        // rest of deletion happens in release_node()
+        for (auto &e: n->out_edges) {
+            delete e.second;
+        }
+        for (auto &e: n->in_edges) {
+            delete e.second;
+        }
+        n->out_edges.clear();
+        n->in_edges.clear();
+        assert(n->waiters == 0); // nobody should try to acquire this node now
         release_node(n);
     }
 
@@ -839,6 +859,40 @@ namespace db
     graph :: commit_prog_cache(uint64_t req_id)
     {
         node_prog_cache.commit(req_id);
+    }
+
+    inline void
+    graph :: add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests)
+    {
+        prog_mutex.lock();
+        for (auto &p: completed_requests) {
+            done_ids.insert(p.first);
+        }
+        for (auto &p: completed_requests) {
+            node_prog_req_state.delete_req_state(p.first, p.second);
+        }
+        prog_mutex.unlock();
+    }
+
+    inline bool
+    graph :: check_done_request(uint64_t req_id)
+    {
+        bool ret;
+        prog_mutex.lock();
+        ret = (done_ids.find(req_id) != done_ids.end());
+        if (!ret) {
+            node_prog_req_state.set_in_use(req_id);
+        }
+        prog_mutex.unlock();
+        return ret;
+    }
+
+    inline void
+    graph :: clear_req_use(uint64_t req_id)
+    {
+        prog_mutex.lock();
+        node_prog_req_state.clear_in_use(req_id);
+        prog_mutex.unlock();
     }
 
 } //namespace db

@@ -41,21 +41,12 @@ class client
         void add_edge_prop(uint64_t node, uint64_t edge, uint32_t key, uint64_t value);
         void del_edge_prop(uint64_t node, uint64_t edge, uint32_t key);
         void commit_graph();
-        bool reachability_request(uint64_t node1, uint64_t node2, std::shared_ptr<std::vector<common::property>> edge_props);
-        std::pair<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>> shortest_path_request(uint64_t node1, uint64_t node2, uint32_t edge_weight_prop,
-                std::shared_ptr<std::vector<common::property>> edge_props);
-        std::pair<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>> widest_path_request(uint64_t node1, uint64_t node2, uint32_t edge_weight_prop, 
-                std::shared_ptr<std::vector<common::property>> edge_props);
-        double local_clustering_coefficient(uint64_t node,
-                std::shared_ptr<std::vector<common::property>> edge_props);
-
         template <typename ParamsType>
-        ParamsType * run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args);
+        ParamsType* run_node_program(node_prog::prog_type prog_to_run,
+            std::vector<std::pair<uint64_t, ParamsType>> initial_args);
         void exit_weaver();
 
     private:
-        std::pair<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>> dijkstra_request(uint64_t node1, uint64_t node2, uint32_t edge_weight_prop, bool is_widest,
-                std::shared_ptr<std::vector<common::property>> edge_props);
         void send_coord(std::auto_ptr<e::buffer> buf);
 };
 
@@ -156,83 +147,6 @@ client :: commit_graph()
     message::message msg;
     message::prepare_message(msg, message::CLIENT_COMMIT_GRAPH);
     send_coord(msg.buf);
-}
-
-inline bool
-client :: reachability_request(uint64_t node1, uint64_t node2,
-    std::shared_ptr<std::vector<common::property>> edge_props)
-{
-    busybee_returncode ret;
-    bool reachable;
-    message::message msg(message::CLIENT_REACHABLE_REQ);
-    message::prepare_message(msg, message::CLIENT_REACHABLE_REQ, node1, node2, *edge_props);
-    send_coord(msg.buf);
-    uint64_t sender;
-    if ((ret = client_bb->recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
-        return false;
-    }
-    message::unpack_message(msg, message::CLIENT_REPLY, reachable);
-    return reachable;
-}
-
-inline std::pair<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>>
-client :: shortest_path_request(uint64_t node1, uint64_t node2, 
-    uint32_t edge_weight_prop, std::shared_ptr<std::vector<common::property>> edge_props)
-{
-    return dijkstra_request(node1, node2, edge_weight_prop, false, edge_props);
-}
-
-inline std::pair<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>>
-client :: widest_path_request(uint64_t node1, uint64_t node2,
-    uint32_t edge_weight_prop, std::shared_ptr<std::vector<common::property>> edge_props)
-{
-    return dijkstra_request(node1, node2, edge_weight_prop, true, edge_props);
-}
-
-inline std::pair<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>>
-client :: dijkstra_request(uint64_t node1, uint64_t node2, uint32_t edge_weight_prop, bool is_widest,
-    std::shared_ptr<std::vector<common::property>> edge_props)
-{
-    busybee_returncode ret;
-    std::pair<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>> toRet; // pair of cost and path
-    message::message msg(message::CLIENT_DIJKSTRA_REQ);
-    message::prepare_message(msg, message::CLIENT_DIJKSTRA_REQ, node1, node2, edge_weight_prop, is_widest, *edge_props);
-    send_coord(msg.buf);
-    uint64_t sender;
-    if ((ret = client_bb->recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
-        toRet.first = 0;
-        return toRet;
-    }
-    message::unpack_message(msg, message::CLIENT_DIJKSTRA_REPLY,
-            toRet.first, toRet.second);
-    return toRet;
-}
-
-inline double
-client :: local_clustering_coefficient(uint64_t node, std::shared_ptr<std::vector<common::property>> edge_props)
-{
-    busybee_returncode ret;
-    uint64_t numerator;
-    uint64_t denominator;
-    message::message msg(message::CLIENT_CLUSTERING_REQ);
-    message::prepare_message(msg, message::CLIENT_CLUSTERING_REQ, node, *edge_props);
-    send_coord(msg.buf);
-    uint64_t sender;
-    if ((ret = client_bb->recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
-        return false;
-    }
-    message::unpack_message(msg, message::CLIENT_CLUSTERING_REPLY, numerator, denominator);
-    if (denominator == 0) {
-        std::cerr << "not possible to compute clustering coefficient: less than two valid neighbors" << std::endl;
-        return 0;
-    }
-    else {
-        std::cerr << "Client got " << numerator << " over " << denominator << std::endl;
-        return (double) numerator/ denominator;
-    }
 }
 
 template <typename ParamsType>

@@ -324,15 +324,10 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
     }
     server->pending.erase(req_id);
     if (done) {
+        server->completed_requests->emplace_back(std::make_pair(req_id, request->pType));
         server->update_mutex.unlock();
         // send same message along to client
         server->send(request->client, request->reply_msg->buf);
-        DEBUG << "Ending node prog for request " << req_id << std::endl;
-        //message::message done_msg;
-        //message::prepare_message(done_msg, message::DONE_NODE_PROG, req_id);
-        //for (uint64_t i = 1; i <= NUM_SHARDS; i++) {
-        //    server->send(i, done_msg.buf);
-        //}
     }
 }
 
@@ -373,7 +368,7 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg, 
             delete_end(server, request);
             break;
         
-        case message::CACHE_UPDATE_ACK:
+        case message::CLEAN_UP_ACK:
             server->update_mutex.lock();
             if ((++server->cache_acks) == NUM_SHARDS) {
                 coord_daemon_end(server);
@@ -503,7 +498,8 @@ msg_handler(coordinator::central *server)
     }
 }
 
-// periodically update cache at all shards
+// periodically update cache at all shards, permanently delete migrated/deleted nodes,
+// and delete state corresponding to completed node programs
 void
 coord_daemon_initiate(coordinator::central *server)
 {
@@ -514,12 +510,17 @@ coord_daemon_initiate(coordinator::central *server)
     std::chrono::seconds duration(DAEMON_PERIOD); // execute every DAEMON_PERIOD seconds
     std::this_thread::sleep_for(duration);
     server->update_mutex.lock();
+    auto completed_requests = std::move(server->completed_requests);
+    server->completed_requests.reset(new std::vector<std::pair<uint64_t, node_prog::prog_type>>());
     // figure out minimum outstanding request id
+    DEBUG << "Pending requests list: ";
     for (auto &r: server->pending) {
+        DEBUG << r.first << " ";
         if ((migr_del_id == 0) || (r.first < migr_del_id)) {
             migr_del_id = r.first;
         }
     }
+    DEBUG << std::endl;
     while (server->first_del->cnt == 0 && server->first_del != server->last_del) {
         perm_del_id = server->first_del->req_id;
         if (server->first_del->next) {
@@ -540,7 +541,8 @@ coord_daemon_initiate(coordinator::central *server)
     }
     // send out messages
     for (uint64_t i = 1; i <= NUM_SHARDS; i++) {
-        message::prepare_message(msg, message::CACHE_UPDATE, good, bad, perm_del_id, migr_del_id);
+        message::prepare_message(msg, message::CLEAN_UP, good, bad, 
+            perm_del_id, migr_del_id, *completed_requests);
         server->send(i, msg.buf);
     }
 }

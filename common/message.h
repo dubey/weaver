@@ -36,21 +36,18 @@ namespace message
 {
     enum msg_type
     {
+        // client messages
         CLIENT_NODE_CREATE_REQ = 0,
         CLIENT_EDGE_CREATE_REQ,
         CLIENT_NODE_DELETE_REQ,
         CLIENT_EDGE_DELETE_REQ,
         CLIENT_ADD_EDGE_PROP,
         CLIENT_DEL_EDGE_PROP,
-        CLIENT_CLUSTERING_REQ,
-        CLIENT_REACHABLE_REQ,
         CLIENT_REPLY,
-        CLIENT_DIJKSTRA_REQ,
-        CLIENT_DIJKSTRA_REPLY,
-        CLIENT_CLUSTERING_REPLY,
         CLIENT_COMMIT_GRAPH,
-        NODE_REFRESH_REQ,
-        NODE_REFRESH_REPLY,
+        CLIENT_NODE_PROG_REQ,
+        CLIENT_NODE_PROG_REPLY,
+        // graph update messages
         NODE_CREATE_REQ,
         EDGE_CREATE_REQ,
         TRANSIT_EDGE_CREATE_REQ,
@@ -72,8 +69,13 @@ namespace message
         EDGE_DELETE_PROP,
         TRANSIT_EDGE_DELETE_PROP,
         EDGE_DELETE_PROP_ACK,
+        CLEAN_UP,
+        CLEAN_UP_ACK,
+        // node program messages
+        NODE_PROG,
         CACHE_UPDATE,
         CACHE_UPDATE_ACK,
+        // migration messages
         MIGRATE_NODE_STEP1,
         MIGRATE_NODE_STEP2,
         MIGRATE_NODE_STEP4,
@@ -84,11 +86,6 @@ namespace message
         MIGRATED_NBR_UPDATE,
         MIGRATED_NBR_ACK,
         MIGRATION_TOKEN,
-
-        NODE_PROG,
-        CLIENT_NODE_PROG_REQ,
-        CLIENT_NODE_PROG_REPLY,
-        DONE_NODE_PROG,
 
         EXIT_WEAVER,
         ERROR

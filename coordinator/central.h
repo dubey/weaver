@@ -124,6 +124,7 @@ namespace coordinator
             // permanent deletion
             std::shared_ptr<out_counter> first_del; // head
             std::shared_ptr<out_counter> last_del; // tail
+            std::unique_ptr<std::vector<std::pair<uint64_t, node_prog::prog_type>>> completed_requests;
             // daemon
             uint32_t cache_acks;
             // testing
@@ -157,6 +158,7 @@ namespace coordinator
         , transient_bad_cache_ids(new std::unordered_set<uint64_t>())
         , first_del(new out_counter())
         , last_del(first_del)
+        , completed_requests(new std::vector<std::pair<uint64_t, node_prog::prog_type>>())
         , cache_acks(0)
         , generator((unsigned)42) // fixed seed for deterministic random numbers
         , dist(0.0, 1.0)
@@ -222,30 +224,11 @@ namespace coordinator
             }
         }
         pending_delete_requests.erase(pend_iter);
-#ifdef __WEAVER_DEBUG__
-        DEBUG << "Bad cache ids:\n";
-        for (auto &it: *bad_cache_ids) {
-            DEBUG << it << " ";
-        }
-        DEBUG << std::endl;
-#endif
     }
 
     inline bool
     central :: is_deleted_cache_id(uint64_t id)
     {
-#ifdef __WEAVER_DEBUG__
-        DEBUG << "Bad cache ids:\n";
-        for (auto &it: *bad_cache_ids) {
-            DEBUG << it << " ";
-        }
-        DEBUG << std::endl;
-        DEBUG << "Transient Bad cache ids:\n";
-        for (auto &it: *transient_bad_cache_ids) {
-            DEBUG << it << " ";
-        }
-        DEBUG << std::endl;
-#endif
         return ((bad_cache_ids->find(id) != bad_cache_ids->end()) || (transient_bad_cache_ids->find(id) != transient_bad_cache_ids->end()));
     }
 

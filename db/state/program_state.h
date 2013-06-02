@@ -15,6 +15,7 @@
 #define __PROG_STATE__
 
 #include <unordered_map>
+#include <unordered_set>
 #include <po6/threads/mutex.h>
 
 #include "node_prog/node_prog_type.h"
@@ -28,30 +29,40 @@ namespace state
     typedef std::unordered_map<uint64_t, node_prog::Packable_Deletable*> req_map;
     typedef std::unordered_map<uint64_t, req_map> node_map;
     typedef std::unordered_map<node_prog::prog_type, node_map> prog_map;
+    // for permanent deletion
+    typedef std::unordered_map<uint64_t, std::pair<uint32_t, std::unordered_set<uint64_t>>> req_to_nodes;
 
     class program_state
     {
         prog_map prog_state;
+        req_to_nodes node_list;
         po6::threads::mutex mutex;
+        po6::threads::cond in_use_cond;
 
         public:
-            program_state();
+            program_state(po6::threads::mutex *mtx);
 
         public:
             bool state_exists(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle);
-            node_prog::Packable_Deletable* get_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle);
-            void put_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle, node_prog::Packable_Deletable *new_state);
+            node_prog::Packable_Deletable* get_state(node_prog::prog_type t,
+                uint64_t req_id, uint64_t node_handle);
+            void put_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle,
+                node_prog::Packable_Deletable *new_state);
             size_t size(uint64_t node_handle);
             void pack(uint64_t node_handle, e::buffer::packer &packer);
             void unpack(uint64_t node_handle, e::unpacker &unpacker);
             void delete_node_state(uint64_t node_handle);
+            void delete_req_state(uint64_t req_id, node_prog::prog_type type);
+            void set_in_use(uint64_t req_id);
+            void clear_in_use(uint64_t req_id);
 
         private:
             bool state_exists_nolock(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle);
             bool node_entry_exists_nolock(node_prog::prog_type t, uint64_t node_handle);
     };
 
-    program_state :: program_state()
+    program_state :: program_state(po6::threads::mutex *mtx)
+        : in_use_cond(mtx)
     {
         node_map new_node_map;
         prog_state.emplace(node_prog::REACHABILITY, new_node_map);
@@ -111,12 +122,15 @@ namespace state
     }
 
     inline void
-    program_state :: put_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle, node_prog::Packable_Deletable *new_state)
+    program_state :: put_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle,
+        node_prog::Packable_Deletable *new_state)
     {
         mutex.lock();
         if (state_exists_nolock(t, req_id, node_handle)) {
             node_prog::Packable_Deletable *old_state = prog_state.at(t).at(node_handle).at(req_id);
             delete old_state;
+        } else {
+            node_list.at(req_id).second.emplace(node_handle);
         }
         prog_state[t][node_handle][req_id] = new_state;
         mutex.unlock();
@@ -138,19 +152,22 @@ namespace state
                     switch (t.first)
                     {
                         case node_prog::REACHABILITY: {
-                            node_prog::reach_node_state *rns = dynamic_cast<node_prog::reach_node_state*>(r.second);
+                            node_prog::reach_node_state *rns = 
+                                dynamic_cast<node_prog::reach_node_state*>(r.second);
                             sz += rns->size();
                             break;
                         }
 
                         case node_prog::DIJKSTRA: {
-                            node_prog::dijkstra_node_state *dns = dynamic_cast<node_prog::dijkstra_node_state*>(r.second);
+                            node_prog::dijkstra_node_state *dns =
+                                dynamic_cast<node_prog::dijkstra_node_state*>(r.second);
                             sz += dns->size();
                             break;
                         }
 
                         case node_prog::CLUSTERING: {
-                            node_prog::clustering_node_state *cns = dynamic_cast<node_prog::clustering_node_state*>(r.second);
+                            node_prog::clustering_node_state *cns =
+                                dynamic_cast<node_prog::clustering_node_state*>(r.second);
                             sz += cns->size();
                             break;
                         }
@@ -182,19 +199,22 @@ namespace state
                     switch (t.first)
                     {
                         case node_prog::REACHABILITY: {
-                            node_prog::reach_node_state *rns = dynamic_cast<node_prog::reach_node_state*>(r.second);
+                            node_prog::reach_node_state *rns =
+                                dynamic_cast<node_prog::reach_node_state*>(r.second);
                             rns->pack(packer);
                             break;
                         }
 
                         case node_prog::DIJKSTRA: {
-                            node_prog::dijkstra_node_state *dns = dynamic_cast<node_prog::dijkstra_node_state*>(r.second);
+                            node_prog::dijkstra_node_state *dns =
+                                dynamic_cast<node_prog::dijkstra_node_state*>(r.second);
                             dns->pack(packer);
                             break;
                         }
 
                         case node_prog::CLUSTERING: {
-                            node_prog::clustering_node_state *cns = dynamic_cast<node_prog::clustering_node_state*>(r.second);
+                            node_prog::clustering_node_state *cns =
+                                dynamic_cast<node_prog::clustering_node_state*>(r.second);
                             cns->pack(packer);
                             break;
                         }
@@ -224,13 +244,13 @@ namespace state
             type = (node_prog::prog_type)ptype;
             // unpacking map now
             uint64_t elements_left;
+            uint64_t key_to_add;
             unpacker = unpacker >> elements_left;
             // set number of buckets to 1.25*elements it will contain
             // did not use reserve as max_load_factor is default 1
             rmap.rehash(elements_left*1.25); 
 
             while (elements_left > 0) {
-                uint64_t key_to_add;
                 message::unpack_buffer(unpacker, key_to_add);
                 switch (t.first)
                 {
@@ -259,8 +279,12 @@ namespace state
                         std::cerr << "Bad type in program state unpack " << t.first << std::endl;
                 }
                 if (!rmap.emplace(key_to_add, new_entry).second) {
-                    std::cerr << "Insertion unsuccessful in state!\n";
+                    std::cerr << "Insertion unsuccessful in state" << std::endl;
                 }
+                if (node_list.find(key_to_add) == node_list.end()) {
+                    node_list.emplace(key_to_add, std::make_pair(0, std::unordered_set<uint64_t>()));
+                }
+                node_list.at(key_to_add).second.emplace(node);
                 elements_left--;
             }
 
@@ -279,11 +303,58 @@ namespace state
             if (node_entry_exists_nolock(t.first, node_handle)) {
                 for (const std::pair<uint64_t, node_prog::Packable_Deletable*> &r: t.second.at(node_handle)) {
                     delete r.second;
+                    node_list.at(r.first).second.erase(node_handle);
                 }
                 t.second.erase(node_handle);
             }
         }
         mutex.unlock();
+    }
+
+    // caution: assuming we hold prog_mutex (in_use_cond mutex)
+    inline void
+    program_state :: delete_req_state(uint64_t req_id, node_prog::prog_type type)
+    {
+        if (node_list.find(req_id) == node_list.end()) {
+            return;
+        }
+        while (node_list.at(req_id).first > 0) {
+            in_use_cond.wait();
+        }
+        mutex.lock();
+        std::unordered_set<uint64_t> &nodes = node_list.at(req_id).second;
+        node_map &nmap = prog_state.at(type);
+        for (uint64_t n: nodes) {
+            delete nmap.at(n).at(req_id);
+            nmap.at(n).erase(req_id);
+            if (nmap.at(n).empty()) {
+                nmap.erase(n);
+            }
+        }
+        node_list.erase(req_id);
+        mutex.unlock();
+    }
+            
+    // caution: assuming we hold prog_mutex (in_use_cond mutex)
+    inline void
+    program_state :: set_in_use(uint64_t req_id)
+    {
+        mutex.lock();
+        if (node_list.find(req_id) == node_list.end()) {
+            node_list.emplace(req_id, std::make_pair(0, std::unordered_set<uint64_t>()));
+        }
+        node_list.at(req_id).first++;
+        mutex.unlock();
+    }
+
+    // caution: assuming we hold prog_mutex (in_use_cond mutex)
+    inline void
+    program_state :: clear_in_use(uint64_t req_id)
+    {
+        mutex.lock();
+        node_list.at(req_id).first--;
+        mutex.unlock();
+        in_use_cond.broadcast();
     }
 }
 
