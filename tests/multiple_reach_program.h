@@ -20,7 +20,7 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define REQUESTS 1000
+#define REQUESTS 100
 
 void
 multiple_reach_prog()
@@ -35,9 +35,9 @@ multiple_reach_prog()
     count_in.open("node_count.rec");
     count_in >> num_nodes;
     count_in.close();
-    count_out.open("node_count.rec");
-    count_out << (num_nodes + 1000);
-    count_out.close();
+    //count_out.open("node_count.rec");
+    //count_out << (num_nodes + 1000);
+    //count_out.close();
     num_edges = (int)(1.5 * (double)num_nodes);
     for (i = 0; i < num_nodes; i++) {
         std::cout << "Creating node " << (i+1) << std::endl;

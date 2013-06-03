@@ -1,8 +1,8 @@
 CC=g++-4.7
 INCLUDE_DIRS=-I.. -I.
 CFLAGS=-O3 -std=c++0x -Wall -Wextra
-LIBS=-lbusybee -le -lrt -pthread #-pg
-CLIBS=#-pg
+LIBS=-lbusybee -le -lrt -pthread -ltcmalloc
+CLIBS=
 
 SRCS=central.cc
 OBJS=central.o
@@ -11,6 +11,8 @@ TARGET=coordinator
 all: depend $(TARGET)
 
 debug:	CFLAGS += -g -O0
+debug:	LIBS += -pg
+debug:	CLIBS += -pg
 debug:  all
 
 depend: .depend
