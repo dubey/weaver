@@ -5,7 +5,7 @@ LIBS=-lbusybee -le -lrt -pthread
 
 SRCS=run.cc
 OBJS=run.o
-TARGET=tests
+TARGET=tests.bin
 
 all: depend $(TARGET)
 

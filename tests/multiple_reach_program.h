@@ -33,10 +33,10 @@ multiple_reach_prog()
     srand(time(NULL));
     std::ifstream count_in;
     std::ofstream count_out;
-    count_in.open("node_count");
+    count_in.open("node_count.rec");
     count_in >> num_nodes;
     count_in.close();
-    count_out.open("node_count");
+    count_out.open("node_count.rec");
     count_out << (num_nodes + 1000);
     count_out.close();
     num_edges = (int)(1.5 * (double)num_nodes);
@@ -62,7 +62,7 @@ multiple_reach_prog()
     rp.prev_node.loc = -1;
     
     std::ofstream file, req_time;
-    file.open("requests");
+    file.open("requests.rec");
     //req_time.open("time");
     clock_gettime(CLOCK_MONOTONIC, &t1);
     first = t1;
@@ -94,7 +94,7 @@ multiple_reach_prog()
     dif = diff(first, t2);
     std::cout << "Total time taken " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
     std::ofstream stat_file;
-    stat_file.open("stats", std::ios::out | std::ios::app);
+    stat_file.open("stats.rec", std::ios::out | std::ios::app);
     stat_file << num_nodes << " " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
     stat_file.close();
     c.exit_weaver();

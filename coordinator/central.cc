@@ -52,13 +52,13 @@ void exit_weaver()
         cserver->send(s, msg.buf);
     }
     std::ofstream migr_file, shard_file;
-    migr_file.open("migrations");
+    migr_file.open("migrations.rec");
     migr_file.precision(std::numeric_limits<double>::digits10);
     for (double t: cserver->migr_times) {
         migr_file << t << std::endl;
     }
     migr_file.close();
-    shard_file.open("shard_counts");
+    shard_file.open("shard_counts.rec");
     for (int i = 0; i < NUM_SHARDS; i++) {
         shard_file << cserver->shard_node_count[i] << std::endl;
     }
