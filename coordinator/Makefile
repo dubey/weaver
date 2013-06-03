@@ -6,7 +6,7 @@ CLIBS=#-pg
 
 SRCS=central.cc
 OBJS=central.o
-TARGET=coordinator.bin
+TARGET=coordinator
 
 all: depend $(TARGET)
 
