@@ -212,7 +212,7 @@ namespace node_prog
                     reach_cache_value &rcv = cache_putter();
                     rcv.reachable_node = params.dest;
                 }
-            } else if (state.out_count < 0) {
+            } else if ((int)state.out_count < 0) {
                 std::cout << "ALERT! Bad state value in reach program\n";
                 while(1);
             }
@@ -227,6 +227,11 @@ namespace node_prog
             reach_params &params_given, // params we had sent to deleted node
             std::function<reach_node_state&()> state_getter)
     {
+        UNUSED(req_id);
+        UNUSED(n);
+        UNUSED(deleted_handle);
+        UNUSED(params_given);
+        UNUSED(state_getter);
         return std::vector<std::pair<db::element::remote_node, reach_params>>(); 
     }
 }

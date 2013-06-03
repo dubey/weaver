@@ -27,7 +27,6 @@ multiple_reach_prog()
 {
     client c(CLIENT_ID);
     int i, num_nodes, num_edges;
-    std::thread *t;
     timespec first, t1, t2, dif;
     std::vector<uint64_t> nodes, edges;
     srand(time(NULL));
@@ -59,7 +58,7 @@ multiple_reach_prog()
     node_prog::reach_params rp;
     rp.mode = false;
     rp.reachable = false;
-    rp.prev_node.loc = -1;
+    rp.prev_node.loc = COORD_ID;
     
     std::ofstream file, req_time;
     file.open("requests.rec");
@@ -86,6 +85,7 @@ multiple_reach_prog()
         rp.dest = nodes[second];
         initial_args.emplace_back(std::make_pair(nodes[first], rp));
         node_prog::reach_params *res = c.run_node_program(node_prog::REACHABILITY, initial_args);
+        UNUSED(res);
         //std::cout << "Request " << i << ", from source " << nodes[first] << " to dest " << nodes[second];
         //std::cout << ". Reachable = " << res->reachable << std::endl;
     }

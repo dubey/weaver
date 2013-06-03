@@ -110,11 +110,11 @@ namespace element
     inline
     node :: node(uint64_t time, po6::threads::mutex *mtx)
         : element(time)
+        , state(mode::NASCENT)
         , cv(mtx)
         , in_use(true)
         , waiters(0)
         , permanently_deleted(false)
-        , state(mode::NASCENT)
         , cached_req_ids(new std::vector<uint64_t>())
         , prev_loc(-1)
         , new_loc(-1)

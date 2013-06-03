@@ -58,9 +58,7 @@ namespace node_prog
     {
         public:
             virtual void unpack_and_run_db(db::graph *g, message::message &msg) = 0;
-            virtual void unpack_and_start_coord(coordinator::central *server,
-                    message::message &msg,
-                    std::shared_ptr<coordinator::pending_req> request) = 0;
+            virtual void unpack_and_start_coord(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request) = 0;
 
             virtual ~node_program() { }
     };
@@ -85,7 +83,7 @@ namespace node_prog
 
         public:
             virtual void unpack_and_run_db(db::graph *G, message::message &msg);
-            virtual void unpack_and_start_coord(coordinator::central *server, message::message &msg, std::shared_ptr<coordinator::pending_req> request);
+            virtual void unpack_and_start_coord(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request);
     };
     
     std::map<prog_type, node_program*> programs = {

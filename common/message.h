@@ -162,7 +162,7 @@ namespace message
     }
 
 // size templates
-    inline size_t size(const node_prog::prog_type &t)
+    inline size_t size(const node_prog::prog_type&)
     {
         return sizeof(uint32_t);
     }
@@ -174,27 +174,27 @@ namespace message
     {
         return t->size();
     }
-    inline size_t size(const bool &t)
+    inline size_t size(const bool&)
     {
         return sizeof(uint16_t);
     }
-    inline size_t size(const uint16_t &t)
+    inline size_t size(const uint16_t&)
     {
         return sizeof(uint16_t);
     }
-    inline size_t size(const uint32_t &t)
+    inline size_t size(const uint32_t&)
     {
         return sizeof(uint32_t);
     }
-    inline size_t size(const uint64_t &t)
+    inline size_t size(const uint64_t&)
     {
         return sizeof(uint64_t);
     }
-    inline size_t size(const int &t)
+    inline size_t size(const int&)
     {
         return sizeof(int);
     }
-    inline size_t size(const double &t)
+    inline size_t size(const double&)
     {
         return sizeof(uint64_t);
     }

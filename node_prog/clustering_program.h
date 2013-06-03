@@ -80,10 +80,12 @@ namespace node_prog
         virtual void pack(e::buffer::packer& packer) const 
         {
             // TODO
+            UNUSED(packer);
         }
         virtual void unpack(e::unpacker& unpacker)
         {
             // TODO
+            UNUSED(unpacker);
         }
     };
 
@@ -121,6 +123,9 @@ namespace node_prog
             std::function<clustering_cache_value&()> cache_value_putter,
             std::function<std::vector<clustering_cache_value *>()> cached_values_getter)
     {
+        UNUSED(cache_value_putter);
+        UNUSED(cached_values_getter);
+
         std::vector<std::pair<db::element::remote_node, clustering_params>> next;
         if (params.is_center){
             node_prog::clustering_node_state &cstate = state_getter();
@@ -159,29 +164,26 @@ namespace node_prog
             params.is_center = true;
             next.emplace_back(std::make_pair(params.center, params));
         }
-        //std::cout << "OMG ITS RUNNING THE NODE PROGRAM " << next.size()<< std::endl;
         return next;
     }
 
     std::vector<std::pair<db::element::remote_node, clustering_params>> 
     clustering_node_deleted_program(uint64_t req_id,
-                db::element::node &n, // node who asked to go to deleted node
-                uint64_t deleted_handle, // handle of node that didn't exist
-            clustering_params &params_given, // params we had sent to deleted node
-            std::function<clustering_node_state&()> state_getter){
+        db::element::node &n, // node who asked to go to deleted node
+        uint64_t deleted_handle, // handle of node that didn't exist
+        clustering_params &params_given, // params we had sent to deleted node
+        std::function<clustering_node_state&()> state_getter)
+    {
+        UNUSED(req_id);
+        UNUSED(n);
 
         node_prog::clustering_node_state &cstate = state_getter();
         std::vector<std::pair<db::element::remote_node, clustering_params>> next;
 
-        //std::cout << "()()()()() handle deleted was " << deleted_handle << std::endl;
-        //std::cout << "delete program reduce neighbor count from " << cstate.neighbor_counts.size()<< "which had count " << cstate.neighbor_counts[deleted_handle] <<std::endl;
         cstate.neighbor_counts.erase(deleted_handle);
-        //std::cout << "to " << cstate.neighbor_counts.size()<<  std::endl;
         if (--cstate.responses_left == 0){
             calculate_response(cstate, next, params_given);
         }
-        //std::cout << "still waiting on " << cstate.responses_left << " responses in deletion" << std::endl;
-        //std::cout << "DELETED PROGRAM "<< next.size() <<  std::endl;
         return next;
     }
 }

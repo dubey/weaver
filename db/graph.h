@@ -115,8 +115,8 @@ namespace db
     update_request :: update_request(enum message::msg_type mt, uint64_t st, std::unique_ptr<message::message> m, uint64_t uc=0)
         : type(mt)
         , start_time(st)
-        , msg(std::move(m))
         , update_count(uc)
+        , msg(std::move(m))
     {
     }
 
@@ -269,10 +269,10 @@ namespace db
         , pending_update_count(MAX_TIME)
         , current_update_count(MAX_TIME)
         , pending_edge_updates(0)
-        , migrated(false)
-        , migr_token(false)
         , target_clock(0)
         , new_shard_target_clock(0)
+        , migrated(false)
+        , migr_token(false)
         , request_count(NUM_SHARDS, 0)
         , request_reply_count(0)
         , sent_count(0)

@@ -125,7 +125,7 @@ void
 repetitive_reach_prog()
 {
     client c(CLIENT_ID);
-    int i, j;
+    int i;
     std::thread *t;
     timespec t1, t2, dif;
     std::vector<common::property> edge_props;

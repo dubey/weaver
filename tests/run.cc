@@ -26,6 +26,9 @@
 int
 main(int argc, char *argv[])
 {
+    UNUSED(argc);
+    UNUSED(argv);
+
     //std::set_terminate(debug_terminate);
     std::cout << "Starting tests." << std::endl;
     //message_test();
@@ -37,8 +40,8 @@ main(int argc, char *argv[])
     //stress_client_test();
     //std::cout << "Stress client ok." << std::endl;
     //reach_prog_test();
-    repetitive_reach_prog();
-    //multiple_reach_prog();
+    //repetitive_reach_prog();
+    multiple_reach_prog();
     //delete_prog_test();
     //dijkstra_prog_test();
     //tree_test();

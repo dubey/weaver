@@ -1,6 +1,6 @@
 CC=g++-4.7
 INCLUDE_DIRS=-I.. -I.
-CFLAGS=-g -O0 -std=c++0x #-Wall -Wextra
+CFLAGS=-O3 -std=c++0x -Wall -Wextra
 LIBS=-lbusybee -le -lrt -pthread #-pg
 CLIBS=#-pg
 
@@ -9,6 +9,9 @@ OBJS=central.o
 TARGET=coordinator
 
 all: depend $(TARGET)
+
+debug:	CFLAGS += -g -O0
+debug:  all
 
 depend: .depend
 
@@ -27,5 +30,9 @@ clean:
 
 clobber:	clean
 	rm -f $(TARGET)
+
+force:	clobber all
+
+forcedebug:	clobber debug
 
 include .depend

@@ -140,10 +140,12 @@ namespace node_prog
         virtual void pack(e::buffer::packer& packer) const 
         {
             // TODO
+            UNUSED(packer);
         }
         virtual void unpack(e::unpacker& unpacker)
         {
             // TODO
+            UNUSED(unpacker);
         }
     };
 
@@ -199,8 +201,10 @@ namespace node_prog
             std::function<dijkstra_cache_value&()> cache_value_putter,
             std::function<std::vector<dijkstra_cache_value *>()> cached_values_getter)
     {
-        std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
+        UNUSED(cache_value_putter);
+        UNUSED(cached_values_getter);
 
+        std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
         if (n.get_creat_time() == params.source_handle){
             dijkstra_node_state& node_state = state_getter();
             std::cout << "at source! " <<  std::endl;
@@ -356,18 +360,23 @@ namespace node_prog
         return next;
     }
 
-std::vector<std::pair<db::element::remote_node, dijkstra_params>> 
-dijkstra_node_deleted_program(uint64_t req_id,
+    std::vector<std::pair<db::element::remote_node, dijkstra_params>> 
+    dijkstra_node_deleted_program(uint64_t req_id,
         db::element::node &n, // node who asked to go to deleted node
         uint64_t deleted_handle, // handle of node that didn't exist
         dijkstra_params &params_given, // params we had sent to deleted node
-        std::function<dijkstra_node_state&()> state_getter){
-    std::cout << "DELETED PROGRAM " << deleted_handle << std::endl;
-    params_given.adding_nodes = false;
-    std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
-    next.emplace_back(std::make_pair(params_given.source_node, params_given));
-    return next;
-}
+        std::function<dijkstra_node_state&()> state_getter)
+    {
+        UNUSED(req_id);
+        UNUSED(n);
+        UNUSED(state_getter);
+
+        std::cout << "DELETED PROGRAM " << deleted_handle << std::endl;
+        params_given.adding_nodes = false;
+        std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
+        next.emplace_back(std::make_pair(params_given.source_node, params_given));
+        return next;
+    }
 }
 
 #endif //__DIKJSTRA_PROG__

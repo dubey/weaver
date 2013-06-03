@@ -23,18 +23,19 @@
 #ifndef __CONSTANTS__
 #define __CONSTANTS__
 
+// unused expression for no warnings
+#define UNUSED(exp) do { (void)(exp); } while (0)
+
 #include "stdint.h"
 
 #define MAX_TIME UINT64_MAX
 // messaging constants
-#define COORD_IPADDR "127.0.0.1"
-#define COORD_PORT 5200
 #define ID_INCR (1ULL << 32ULL)
 #define COORD_ID (0ULL)
 #define CLIENT_ID (11ULL)
 #define SHARDS_DESC_FILE "../common/shards"
 // weaver setup
-#define NUM_SHARDS 8
+#define NUM_SHARDS 2
 #define NUM_THREADS 8
 #define GRAPH_FILE "graph.rec"
 #define DAEMON_PERIOD 10 // frequency in seconds for coordinator daemon to run

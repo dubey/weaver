@@ -240,7 +240,7 @@ delete_end(coordinator::central *server, std::shared_ptr<coordinator::pending_re
 }
 
 void
-write_graph(coordinator::central *server)
+write_graph()
 {
     std::ofstream file;
     file.open(GRAPH_FILE);
@@ -254,15 +254,9 @@ write_graph(coordinator::central *server)
     file.close();
 }
 
-// caution: assuming we hold server->update_mutex
-void
-invalidate_migr_cache(coordinator::central *server, std::vector<uint64_t> &cached_ids)
-{
-}
-
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
-    unpack_and_start_coord(coordinator::central *server, message::message &msg, std::shared_ptr<coordinator::pending_req> request)
+    unpack_and_start_coord(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request)
 {
     node_prog::prog_type ignore;
     std::vector<std::pair<uint64_t, ParamsType>> initial_args;
@@ -318,7 +312,7 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
             server->add_bad_cache_id(cached_id);
             request->del_request.reset();
             server->update_mutex.unlock();
-            node_prog::programs.at(request->pType)->unpack_and_start_coord(server, *request->req_msg, request);
+            node_prog::programs.at(request->pType)->unpack_and_start_coord(server, request);
             break;
         }
     }
@@ -332,8 +326,8 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-void
-node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_and_run_db(db::graph *G, message::message &msg)
+void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> ::
+    unpack_and_run_db(db::graph*, message::message&)
 {
 }
 
@@ -341,7 +335,7 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
 void
 handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg, enum message::msg_type m_type, uint64_t sender)
 {
-    uint64_t req_id, cached_req_id;
+    uint64_t req_id;
     std::shared_ptr<coordinator::pending_req>request;
     std::vector<uint64_t> vclock; // for reply
     std::unique_ptr<std::vector<uint64_t>> cached_req_ids; // for reply
@@ -458,11 +452,11 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg, 
         case message::CLIENT_NODE_PROG_REQ:
             message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, crequest->pType);
             crequest->req_msg = std::move(msg);
-            node_prog::programs.at(crequest->pType)->unpack_and_start_coord(server, *crequest->req_msg, crequest);
+            node_prog::programs.at(crequest->pType)->unpack_and_start_coord(server, crequest);
             break;
 
         case message::CLIENT_COMMIT_GRAPH:
-            write_graph(server);
+            write_graph();
             break;
 
         case message::EXIT_WEAVER:

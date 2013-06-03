@@ -69,8 +69,6 @@ namespace message
         uint64_t tc, td;
         std::vector<common::property> props;
         db::element::remote_node rn;
-        uint64_t nbr_handle;
-        int nbr_loc;
         unpacker = unpacker >> tc >> td;
         unpack_buffer(unpacker, props);
         unpack_buffer(unpacker, rn);

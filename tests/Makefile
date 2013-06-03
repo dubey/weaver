@@ -1,6 +1,6 @@
 CC=g++-4.7
 INCLUDE_DIRS=-I.. -I../db
-CFLAGS=-g -O0 -std=c++0x -D__STDC_LIMIT_MACROS
+CFLAGS=-O3 -std=c++0x -Wall -Wextra -D__STDC_LIMIT_MACROS
 LIBS=-lbusybee -le -lrt -pthread
 
 SRCS=run.cc
@@ -8,6 +8,9 @@ OBJS=run.o
 TARGET=tests
 
 all: depend $(TARGET)
+
+debug:	CFLAGS += -g -O0
+debug:  all
 
 depend: .depend
 
@@ -29,5 +32,9 @@ clobber:	clean
 
 check:	tests
 	./tests
+
+force:	clobber all
+
+forcedebug:	clobber debug
 
 include .depend
