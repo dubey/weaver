@@ -1,7 +1,7 @@
 CC=g++-4.7
 INCLUDE_DIRS=-I.. -I.
 CFLAGS=-O3 -std=c++0x -Wall -Wextra
-LIBS=-lbusybee -le -lrt -pthread -ltcmalloc
+LIBS=-lbusybee -le -lrt -pthread
 CLIBS=
 
 SRCS=graph.cc

@@ -275,9 +275,11 @@ namespace db
         , migr_token(false)
         , request_count(NUM_SHARDS, 0)
         , request_reply_count(0)
+#ifdef __WEAVER_DEBUG__
         , sent_count(0)
         , rec_count(0)
         , already_migr(false)
+#endif
         , node_prog_req_state(&prog_mutex)
     {
         initialize_busybee(bb, myid, myloc);
