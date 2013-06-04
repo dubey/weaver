@@ -210,9 +210,11 @@ namespace coordinator
         std::vector<std::shared_ptr<pending_req>>::iterator pend_iter;
         for (uint64_t del_iter: cached_ids) {
             DEBUG << "Inserting bad cache " << del_iter << std::endl;
-            bad_cache_ids->insert(del_iter);
+            bad_cache_ids->emplace(del_iter);
         }
-        for (pend_iter = pending_delete_requests.begin(); pend_iter != pending_delete_requests.end(); pend_iter++) {
+        for (pend_iter = pending_delete_requests.begin();
+             pend_iter != pending_delete_requests.end();
+             pend_iter++) {
             if ((**pend_iter).req_id == request->req_id) {
                 break;
             }
@@ -229,21 +231,22 @@ namespace coordinator
     inline bool
     central :: is_deleted_cache_id(uint64_t id)
     {
-        return ((bad_cache_ids->find(id) != bad_cache_ids->end()) || (transient_bad_cache_ids->find(id) != transient_bad_cache_ids->end()));
+        return ((bad_cache_ids->find(id) != bad_cache_ids->end()) ||
+                (transient_bad_cache_ids->find(id) != transient_bad_cache_ids->end()));
     }
 
     inline void
     central :: add_good_cache_id(uint64_t id)
     {
         if (bad_cache_ids->find(id) != bad_cache_ids->end()) {
-            good_cache_ids->insert(id);
+            good_cache_ids->emplace(id);
         }
     }
 
     inline void
     central :: add_bad_cache_id(uint64_t id)
     {
-        bad_cache_ids->insert(id);
+        bad_cache_ids->emplace(id);
         good_cache_ids->erase(id);
     }
 

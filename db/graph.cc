@@ -479,7 +479,7 @@ std::vector<CacheValueType *> get_cached_values(db::graph *G, node_prog::prog_ty
         if (cache == NULL) {
             std::cerr << "CacheValueType needs to extend CacheValueBase" << std::endl;
         } else {
-            toRet.push_back(cache);
+            toRet.emplace_back(cache);
         }
     }
     return std::move(toRet);
@@ -1000,7 +1000,7 @@ runner(db::graph *G)
                 rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(mtype)) >> update_count >> start_time;
                 request = new db::update_request(mtype, update_count, std::move(rec_msg));
                 G->migration_mutex.lock();
-                G->pending_updates.push(request);
+                G->pending_updates.emplace(request);
                 G->migration_mutex.unlock();
                 request = new db::update_request(mtype, 0);
                 thr = new db::thread::unstarted_thread(0, process_pending_updates, G, request);

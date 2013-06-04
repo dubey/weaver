@@ -120,7 +120,8 @@ create_edge(coordinator::central *server, std::shared_ptr<coordinator::pending_r
 
     loc1 = me1->get_loc();
     loc2 = me2->get_loc();
-    message::prepare_message(msg, message::EDGE_CREATE_REQ, clock1, req_id, request->elem1, request->elem2, loc2, clock2);
+    message::prepare_message(msg, message::EDGE_CREATE_REQ,
+        clock1, req_id, request->elem1, request->elem2, loc2, clock2);
     server->send(loc1, msg.buf);
     server->add_edge(new common::meta_element(loc1), req_id);
     graph.at(request->elem1).emplace_back(request->elem2);
@@ -145,7 +146,8 @@ delete_node_initiate(coordinator::central *server, std::shared_ptr<coordinator::
         me->update_del_time(request->clock1);
         request->req_id = ++server->request_id;
         server->pending[request->req_id] = request;
-        message::prepare_message(msg, message::NODE_DELETE_REQ, request->clock1, request->req_id, request->elem1);
+        message::prepare_message(msg, message::NODE_DELETE_REQ,
+            request->clock1, request->req_id, request->elem1);
         server->add_pending_del_req(request);
         server->update_mutex.unlock();
         server->send(me->get_loc(), msg.buf);
@@ -172,7 +174,8 @@ delete_edge_initiate(coordinator::central *server, std::shared_ptr<coordinator::
         me2->update_del_time(request->clock1);
         request->req_id = ++server->request_id;
         server->pending[request->req_id] = request;
-        message::prepare_message(msg, message::EDGE_DELETE_REQ, request->clock1, request->req_id, request->elem1, request->elem2);
+        message::prepare_message(msg, message::EDGE_DELETE_REQ,
+            request->clock1, request->req_id, request->elem1, request->elem2);
         server->add_pending_del_req(request);
         server->update_mutex.unlock();
         server->send(me1->get_loc(), msg.buf);
@@ -198,7 +201,8 @@ add_edge_property(coordinator::central *server, std::shared_ptr<coordinator::pen
         request->req_id = ++server->request_id;
         server->update_mutex.unlock();
         common::property prop(request->key, request->value, request->req_id);
-        message::prepare_message(msg, message::EDGE_ADD_PROP, request->clock1, request->req_id, request->elem1, request->elem2, prop);
+        message::prepare_message(msg, message::EDGE_ADD_PROP,
+            request->clock1, request->req_id, request->elem1, request->elem2, prop);
         server->send(me1->get_loc(), msg.buf);
     }
     message::prepare_message(msg, message::CLIENT_REPLY);
@@ -220,7 +224,8 @@ delete_edge_property_initiate(coordinator::central *server, std::shared_ptr<coor
         request->clock1 = ++server->vc.clocks->at(me1->get_loc()-1);
         request->req_id = ++server->request_id;
         server->pending[request->req_id] = request;
-        message::prepare_message(msg, message::EDGE_DELETE_PROP, request->clock1, request->req_id, request->elem1, request->elem2, request->key);
+        message::prepare_message(msg, message::EDGE_DELETE_PROP,
+            request->clock1, request->req_id, request->elem1, request->elem2, request->key);
         server->add_pending_del_req(request);
         server->update_mutex.unlock();
         server->send(me1->get_loc(), msg.buf);
@@ -249,7 +254,7 @@ write_graph()
         for (uint64_t nbr: n.second) {
             file << " " << nbr;
         }
-        file << '\n';
+        file << std::endl;
     }
     file.close();
 }
@@ -282,7 +287,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     request->out_count = server->last_del;
     request->out_count->cnt++;
     request->req_id = ++server->request_id;
-    server->pending.insert(std::make_pair(request->req_id, request));
+    server->pending.emplace(std::make_pair(request->req_id, request));
     server->update_mutex.unlock();
 
     message::message msg_to_send;
@@ -308,7 +313,7 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
             // request was served based on cache value that should be
             // invalidated; restarting request
             done = false;
-            request->ignore_cache.insert(cached_id);
+            request->ignore_cache.emplace(cached_id);
             server->add_bad_cache_id(cached_id);
             request->del_request.reset();
             server->update_mutex.unlock();
@@ -333,7 +338,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
 // process incoming message, either from shard or client
 void
-handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg, enum message::msg_type m_type, uint64_t sender)
+handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg,
+    enum message::msg_type m_type, uint64_t sender)
 {
     uint64_t req_id;
     std::shared_ptr<coordinator::pending_req>request;
@@ -383,7 +389,7 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg, 
             server->vc.clocks->at(new_loc-1)++;
             // invalidate cached ids
             for (uint64_t del_iter: *cached_req_ids) {
-                server->bad_cache_ids->insert(del_iter);
+                server->bad_cache_ids->emplace(del_iter);
             }
             record_time(server);
             server->shard_node_count[from_loc-1]--;
@@ -440,12 +446,14 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg, 
             break;
 
         case message::CLIENT_ADD_EDGE_PROP:
-            message::unpack_message(*msg, message::CLIENT_ADD_EDGE_PROP, crequest->elem1, crequest->elem2, crequest->key, crequest->value);
+            message::unpack_message(*msg, message::CLIENT_ADD_EDGE_PROP,
+                crequest->elem1, crequest->elem2, crequest->key, crequest->value);
             add_edge_property(server, crequest);
             break;
 
         case message::CLIENT_DEL_EDGE_PROP:
-            message::unpack_message(*msg, message::CLIENT_DEL_EDGE_PROP, crequest->elem1, crequest->elem2, crequest->key);
+            message::unpack_message(*msg, message::CLIENT_DEL_EDGE_PROP,
+                crequest->elem1, crequest->elem2, crequest->key);
             delete_edge_property_initiate(server, crequest);
             break;
 

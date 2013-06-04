@@ -233,12 +233,12 @@ namespace db
             busybee_mta *bb; // Busybee instance used for sending and receiving messages
             busybee_returncode send(uint64_t loc, std::auto_ptr<e::buffer> buf);
             
+#ifdef __WEAVER_DEBUG__
             // testing
             std::unordered_map<uint64_t, uint64_t> req_count;
-            void sort_and_print_nodes();
             po6::threads::mutex test_mutex;
             uint64_t sent_count, rec_count;
-            bool already_migr;
+#endif
 
             // Node programs
             // prog_type-> map from request_id to map from node handle to request state for that node
@@ -255,7 +255,7 @@ namespace db
             void invalidate_prog_cache(uint64_t request_id);
             void commit_prog_cache(uint64_t req_id);
             // completed node programs
-            std::unordered_set<uint64_t> done_ids;
+            std::unordered_set<uint64_t> done_ids; // TODO clean up of done_ids
             void add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
             bool check_done_request(uint64_t req_id);
             void clear_req_use(uint64_t req_id);
@@ -402,14 +402,16 @@ namespace db
         release_node(n);
         if (ret.first == 0) {
             deletion_mutex.lock();
-            delete_req_ids.emplace_back(std::unique_ptr<perm_del>(new perm_del(message::NODE_DELETE_REQ, del_time, node_handle)));
+            delete_req_ids.emplace_back(std::unique_ptr<perm_del>(
+                new perm_del(message::NODE_DELETE_REQ, del_time, node_handle)));
             deletion_mutex.unlock();
         }
         return ret;
     }
 
     inline uint64_t
-    graph :: create_edge(uint64_t local_node, uint64_t time, uint64_t remote_node, uint64_t remote_loc, uint64_t remote_time)
+    graph :: create_edge(uint64_t local_node, uint64_t time, 
+        uint64_t remote_node, uint64_t remote_loc, uint64_t remote_time)
     {
         uint64_t ret;
         element::node *n = acquire_node(local_node);
@@ -422,7 +424,8 @@ namespace db
             n->updated = true;
             release_node(n);
             message::message msg(message::REVERSE_EDGE_CREATE);
-            message::prepare_message(msg, message::REVERSE_EDGE_CREATE, remote_time, time, local_node, myid, remote_node);
+            message::prepare_message(msg, message::REVERSE_EDGE_CREATE,
+                remote_time, time, local_node, myid, remote_node);
             send(remote_loc, msg.buf);
             ret = 0;
         }
@@ -465,7 +468,8 @@ namespace db
         release_node(n);
         if (ret.first == 0) {
             deletion_mutex.lock();
-            delete_req_ids.emplace_back(std::unique_ptr<perm_del>(new perm_del(message::EDGE_DELETE_REQ, del_time, node_handle, edge_handle)));
+            delete_req_ids.emplace_back(std::unique_ptr<perm_del>(
+                new perm_del(message::EDGE_DELETE_REQ, del_time, node_handle, edge_handle)));
             deletion_mutex.unlock();
         }
         return ret;
@@ -506,7 +510,8 @@ namespace db
         release_node(n);
         if (ret.first == 0) {
             deletion_mutex.lock();
-            delete_req_ids.emplace_back(std::unique_ptr<perm_del>(new perm_del(message::EDGE_DELETE_PROP, time, node, edge, key)));
+            delete_req_ids.emplace_back(std::unique_ptr<perm_del>(
+                new perm_del(message::EDGE_DELETE_PROP, time, node, edge, key)));
             deletion_mutex.unlock();
         }
         return ret;
@@ -758,19 +763,6 @@ namespace db
         return ret;
     }
 
-    // testing methods
-    void
-    graph :: sort_and_print_nodes()
-    {
-        /*
-        std::sort(nodes.begin(), nodes.end(), element::compare_msg_cnt);
-        for (auto &it: nodes) {
-            void *n = (void*)it.second;
-            DEBUG << "Node " << n;
-        }
-        */
-    }
-
     // work loop for threads in thread pool
     // pull request off job priority queue, check if it is okay to run
     // if yes, execute, else sleep and wait for clock to be incremented
@@ -819,7 +811,8 @@ namespace db
     }
 
     inline void 
-    graph :: insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::Packable_Deletable* toAdd)
+    graph :: insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle,
+        node_prog::Packable_Deletable* toAdd)
     {
         node_prog_req_state.put_state(t, request_id, local_node_handle, toAdd);
     }
@@ -831,7 +824,8 @@ namespace db
     }
 
     inline std::vector<node_prog::CacheValueBase*>
-    graph :: fetch_prog_cache(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id, std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set)
+    graph :: fetch_prog_cache(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id,
+        std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set)
     {
         return node_prog_cache.get_cache(t, local_node_handle, req_id, dirty_list_ptr, ignore_set);
     }
@@ -843,7 +837,8 @@ namespace db
     }
 
     inline void
-    graph :: insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::CacheValueBase *toAdd, element::node *n)
+    graph :: insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle,
+        node_prog::CacheValueBase *toAdd, element::node *n)
     {
         n->add_cached_req(request_id);
         node_prog_cache.put_cache(request_id, t, local_node_handle, toAdd);
@@ -866,7 +861,7 @@ namespace db
     {
         prog_mutex.lock();
         for (auto &p: completed_requests) {
-            done_ids.insert(p.first);
+            done_ids.emplace(p.first);
         }
         for (auto &p: completed_requests) {
             node_prog_req_state.delete_req_state(p.first, p.second);
