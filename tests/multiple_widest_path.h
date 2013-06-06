@@ -1,8 +1,8 @@
 /*
  * ===============================================================
- *    Description:  Multiple reachability requests.
+ *    Description:  Multiple widest path requests.
  *
- *        Created:  04/30/2013 02:10:39 PM
+ *        Created:  06/05/2013 05:35:52 PM
  *
  *         Author:  Ayush Dubey, dubey@cs.cornell.edu
  *
@@ -13,16 +13,17 @@
 
 #include "client/client.h"
 #include "node_prog/node_prog_type.h"
-#include "node_prog/reach_program.h"
+#include "node_prog/dijkstra_program.h"
 #include "test_base.h"
 
 #define REQUESTS 100
 
 void
-multiple_reach_prog()
+multiple_wp_prog()
 {
     client c(CLIENT_ID);
     int i, num_nodes, num_edges;
+    const uint32_t weight_label = 42;
     timespec first, t1, t2, dif;
     std::vector<uint64_t> nodes, edges;
     srand(time(NULL));
@@ -31,10 +32,7 @@ multiple_reach_prog()
     count_in.open("node_count.rec");
     count_in >> num_nodes;
     count_in.close();
-    //count_out.open("node_count.rec");
-    //count_out << (num_nodes + 1000);
-    //count_out.close();
-    num_edges = (int)(1.5 * (double)num_nodes);
+    num_edges = (int)(2.0 * (double)num_nodes);
     for (i = 0; i < num_nodes; i++) {
         std::cout << "Creating node " << (i+1) << std::endl;
         nodes.emplace_back(c.create_node());
@@ -51,11 +49,11 @@ multiple_reach_prog()
     std::cout << "Created graph\n";
     c.commit_graph();
     std::cout << "Committed graph\n";
-    node_prog::reach_params rp;
-    rp.mode = false;
-    rp.reachable = false;
-    rp.prev_node.loc = COORD_ID;
-    
+
+    node_prog::dijkstra_params dp;
+    dp.adding_nodes = false;
+    dp.is_widest_path = true;
+    dp.edge_weight_name = weight_label;
     std::ofstream file, req_time;
     file.open("requests.rec");
     req_time.open("time.rec");
@@ -77,12 +75,13 @@ multiple_reach_prog()
             second = rand() % num_nodes;
         }
         file << first << " " << second << std::endl;
-        std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args;
-        rp.dest = nodes[second];
-        initial_args.emplace_back(std::make_pair(nodes[first], rp));
-        node_prog::reach_params *res = c.run_node_program(node_prog::REACHABILITY, initial_args);
-        //std::cout << "Request " << i << ", from source " << nodes[first] << " to dest " << nodes[second];
-        //std::cout << ". Reachable = " << res->reachable << std::endl;
+        std::vector<std::pair<uint64_t, node_prog::dijkstra_params>> initial_args;
+        dp.source_handle = nodes[first];
+        dp.dest_handle = nodes[second];
+        initial_args.emplace_back(std::make_pair(nodes[first], dp));
+        node_prog::dijkstra_params *res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
+        std::cout << "Request " << i << ", from source " << nodes[first] << " to dest " << nodes[second];
+        std::cout << ". cost of wp = " << res->cost << std::endl;
         delete res;
     }
     file.close();

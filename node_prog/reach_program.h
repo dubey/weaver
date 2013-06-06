@@ -38,6 +38,8 @@ namespace node_prog
                 , reachable(false)
             {
             }
+            
+            virtual ~reach_params() { }
 
             virtual size_t size() const 
             {
@@ -82,9 +84,7 @@ namespace node_prog
         {
         }
 
-        virtual ~reach_node_state()
-        {
-        }
+        virtual ~reach_node_state() { }
 
         virtual size_t size() const 
         {
@@ -115,10 +115,7 @@ namespace node_prog
     struct reach_cache_value : CacheValueBase 
     {
         uint64_t reachable_node;
-
-        virtual ~reach_cache_value()
-        {
-        }
+        virtual ~reach_cache_value() { }
     };
 
     std::vector<std::pair<db::element::remote_node, reach_params>> 

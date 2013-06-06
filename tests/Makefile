@@ -1,6 +1,6 @@
 CC=g++-4.7
 INCLUDE_DIRS=-I.. -I../db
-CFLAGS=-O3 -std=c++0x -Wall -Wextra -D__STDC_LIMIT_MACROS
+CFLAGS=-O2 -std=c++0x -Wall -Wextra -D__STDC_LIMIT_MACROS
 LIBS=-lbusybee -le -lrt -pthread
 
 SRCS=run.cc

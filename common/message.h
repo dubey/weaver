@@ -15,6 +15,10 @@
 #define __MESSAGE__
 
 #include <memory>
+#include <vector>
+#include <unordered_set>
+#include <unordered_map>
+#include <queue>
 #include <string.h>
 #include <e/buffer.h>
 #include <po6/net/location.h>
@@ -24,8 +28,6 @@
 #include "common/property.h"
 #include "common/meta_element.h"
 #include "common/vclock.h"
-#include "unordered_set"
-#include "unordered_map"
 #include "db/element/node.h"
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
@@ -115,18 +117,21 @@ namespace message
     template <typename T1, typename T2> inline size_t size(const std::unordered_map<T1, T2>& t);
     template <typename T> inline size_t size(const std::unordered_set<T>& t);
     template <typename T> inline size_t size(const std::vector<T>& t);
+    template <typename T1, typename T2, typename T3> size_t size(std::priority_queue<T1, T2, T3>);
     template <typename T1, typename T2> inline size_t size(const std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline size_t size(const std::tuple<T1, T2, T3>& t);
 
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::vector<T>& t);
+    template <typename T1, typename T2, typename T3> void pack_buffer(e::buffer::packer&, std::priority_queue<T1, T2, T3>);
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer &packer, const std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3>& t);
 
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::vector<T>& t);
+    template <typename T1, typename T2, typename T3> void unpack_buffer(e::unpacker&, std::priority_queue<T1, T2, T3>&);
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void unpack_buffer(e::unpacker& unpacker, std::tuple<T1, T2, T3>& t);
     size_t size(const db::element::edge* const &t);
@@ -251,6 +256,17 @@ namespace message
         return tot_size;
     }
 
+    template <typename T1, typename T2, typename T3>
+    inline size_t size(std::priority_queue<T1, T2, T3> t)
+    {
+        size_t sz = sizeof(size_t);
+        while (!t.empty()) {
+            sz += size(t.top());
+            t.pop();
+        }
+        return sz;
+    }
+
     template <typename T, typename... Args>
     inline size_t size(const T &t, const Args&... args)
     {
@@ -345,6 +361,18 @@ namespace message
             for (const T &elem : t) {
                 pack_buffer(packer, elem);
             }
+        }
+    }
+    
+    template <typename T1, typename T2, typename T3>
+    inline void
+    pack_buffer(e::buffer::packer &packer, std::priority_queue<T1, T2, T3> t)
+    {
+        size_t num_elems = t.size();
+        packer = packer << num_elems;
+        while (!t.empty()) {
+            pack_buffer(packer, t.top());
+            t.pop();
         }
     }
 
@@ -517,6 +545,21 @@ namespace message
             T to_add;
             unpack_buffer(unpacker, to_add);
             t.emplace_back(std::move(to_add));
+            elements_left--;
+        }
+    }
+
+    template <typename T1, typename T2, typename T3>
+    inline void
+    unpack_buffer(e::unpacker &unpacker, std::priority_queue<T1, T2, T3> &t)
+    {
+        assert(t.size() == 0);
+        size_t elements_left = 0;
+        unpacker = unpacker >> elements_left;
+        while (elements_left > 0) {
+            T1 to_add;
+            unpack_buffer(unpacker, to_add);
+            t.push(std::move(to_add));
             elements_left--;
         }
     }
