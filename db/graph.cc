@@ -25,6 +25,7 @@
 #include <e/buffer.h>
 #include "busybee_constants.h"
 
+#define __WEAVER_DEBUG__
 #include "common/weaver_constants.h"
 #include "common/message_graph_elem.h"
 #include "graph.h"
@@ -441,6 +442,7 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
     for (size_t i = 0; i < good.size(); i++) {
         G->commit_prog_cache(good[i]);
     }
+    DEBUG << "Done good and bad cache ids\n";
     
     // remove state corresponding to completed node programs
     G->add_done_request(completed_requests);
@@ -449,7 +451,8 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
     G->permanent_delete(perm_del_id, migr_del_id);
     DEBUG << "Permanent delete, id = " << perm_del_id
         << "\tMigr del id = " << migr_del_id 
-        << "\tNumber of nodes = " << G->nodes.size() << std::endl;
+        << "\tNumber of nodes = " << G->nodes.size()
+        << "\tGood size = " << good.size() << ", bad size = " << bad.size() << std::endl;
 }
 
 template <typename NodeStateType>
@@ -469,26 +472,32 @@ NodeStateType& get_node_state(db::graph *G, node_prog::prog_type pType, uint64_t
 }
 
 template <typename CacheValueType>
-std::vector<CacheValueType *> get_cached_values(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle, 
-    std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set)
+std::vector<CacheValueType *> get_cached_values(db::graph *G, node_prog::prog_type pType, uint64_t req_id,
+    uint64_t node_handle, std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set)
 {
     std::vector<CacheValueType *> toRet;
     CacheValueType *cache;
-    for (node_prog::CacheValueBase *cval : G->fetch_prog_cache(pType, node_handle, req_id, dirty_list_ptr, ignore_set)) {
-        cache = dynamic_cast<CacheValueType *>(cval);
-        if (cache == NULL) {
-            std::cerr << "CacheValueType needs to extend CacheValueBase" << std::endl;
-        } else {
-            toRet.emplace_back(cache);
+    try {
+        for (node_prog::CacheValueBase *cval : G->fetch_prog_cache(pType, node_handle, req_id, dirty_list_ptr, ignore_set)) {
+            cache = dynamic_cast<CacheValueType *>(cval);
+            if (cache == NULL) {
+                std::cerr << "CacheValueType needs to extend CacheValueBase" << std::endl;
+            } else {
+                toRet.emplace_back(cache);
+            }
         }
+    } catch (const std::out_of_range &e) {
+        DEBUG << "caught error get cache " << e.what() << std::endl;
+        while(1);
     }
     return std::move(toRet);
 }
 
 template <typename CacheValueType>
-CacheValueType& put_cache_value(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle, db::element::node *n)
+CacheValueType& put_cache_value(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle,
+    db::element::node *n, std::vector<uint64_t> *dirty_list_ptr)
 {
-    CacheValueType * toRet;
+    CacheValueType *toRet;
     if (G->prog_cache_exists(pType, node_handle, req_id)) {
         // XXX They wrote cache twice! delete and replace probably
         toRet = dynamic_cast<CacheValueType *>(G->fetch_prog_cache_single(pType, node_handle, req_id));
@@ -499,6 +508,17 @@ CacheValueType& put_cache_value(db::graph *G, node_prog::prog_type pType, uint64
     } else {
         toRet = new CacheValueType();
         G->insert_prog_cache(pType, req_id, node_handle, toRet, n);
+    }
+    bool dirty = false;
+    for (uint64_t id: *dirty_list_ptr) {
+        if (id == req_id) {
+            dirty = true;
+            break;
+        }
+    }
+    if (!dirty) {
+        dirty_list_ptr->emplace_back(req_id);
+        DEBUG << "Adding to dirty list " << req_id << std::endl;
     }
     return *toRet;
 }
@@ -542,7 +562,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_nodes[G->myid].at(0)) == MAX_TIME) {
             //DEBUG << "Unpacking forwarded request in unpack_and_run\n";
             batched_deleted_nodes[G->myid].clear();
-            forwarded_req = true;
         }
 #endif
     } catch (std::bad_alloc& ba) {
@@ -606,7 +625,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                 db::element::remote_node parent = std::get<2>(handle_params);
                 batched_deleted_nodes[parent.loc].emplace_back(std::make_tuple(node_handle, params, parent.handle));
                 DEBUG << "Node " << node_handle << " deleted, cur request num " << unpacked_request_id << std::endl;
-            } else if (node->state == db::element::node::mode::IN_TRANSIT || node->state == db::element::node::mode::MOVED) {
+            } else if (node->state == db::element::node::mode::IN_TRANSIT
+                    || node->state == db::element::node::mode::MOVED) {
                 // queueing/forwarding node programs logic goes here
                 std::unique_ptr<message::message> m(new message::message());
                 std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> fwd_node_params;
@@ -636,7 +656,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                 node_state_getter = std::bind(get_node_state<NodeStateType>, G,
                         prog_type_recvd, unpacked_request_id, node_handle);
                 cache_value_putter = std::bind(put_cache_value<CacheValueType>, G,
-                        prog_type_recvd, unpacked_request_id, node_handle, node);
+                        prog_type_recvd, unpacked_request_id, node_handle, node, &dirty_cache_ids);
                 cached_values_getter = std::bind(get_cached_values<CacheValueType>, G,
                         prog_type_recvd, unpacked_request_id, node_handle, &dirty_cache_ids, std::ref(invalid_cache_ids));
 
@@ -1158,7 +1178,7 @@ void
 first_shard_daemon_begin(db::graph *G)
 {
     DEBUG << "Going to sleep in sd begin\n";
-    std::chrono::seconds duration(30); // initial delay for graph to set up
+    std::chrono::seconds duration(15); // initial delay for graph to set up
     std::this_thread::sleep_for(duration);
     void *dummy = NULL;
     DEBUG << "Starting sd begin\n";

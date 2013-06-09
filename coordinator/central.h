@@ -238,9 +238,7 @@ namespace coordinator
     inline void
     central :: add_good_cache_id(uint64_t id)
     {
-        if (bad_cache_ids->find(id) != bad_cache_ids->end()) {
-            good_cache_ids->emplace(id);
-        }
+        good_cache_ids->emplace(id);
     }
 
     inline void

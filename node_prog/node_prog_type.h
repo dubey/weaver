@@ -1,6 +1,7 @@
 /*
  * ===============================================================
- *    Description:  something
+ *    Description:  Base classes, typedefs, and necessary enum
+ *                  declarations for all node programs. 
  *
  *        Created:  Sunday 17 March 2013 11:00:03  EDT
  *
@@ -24,9 +25,22 @@ namespace node_prog
 {
     enum prog_type
     {
-        REACHABILITY = 0,
+        DEFAULT,
+        REACHABILITY,
         DIJKSTRA,
         CLUSTERING
+    };
+
+    // on deletion of an edge (tail -> head) in the graph, node program
+    // needs to specify which cache to invalidate:
+    //      at the head,
+    //      at the tail,
+    //      both head and tail
+    enum cache_inv_rule
+    {
+        INVALIDATE_HEAD,
+        INVALIDATE_TAIL,
+        INVALIDATE_BOTH
     };
 
     template <typename params_type, typename node_state_type, typename cache_value_type>
@@ -72,9 +86,7 @@ namespace node_prog
         /* destructor must be defined */ 
     }
 
-    class Packable_Deletable : public Packable, public Deletable
-    {
-    };
+    class Packable_Deletable : public Packable, public Deletable { };
 
     class CacheValueBase : Deletable
     {

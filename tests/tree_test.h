@@ -16,7 +16,7 @@
 #include "node_prog/node_prog_type.h"
 #include "node_prog/dijkstra_program.h"
 
-#define TREE_HEIGHT 12 // dont set to 1
+#define TREE_HEIGHT 15 // dont set to 1
 
 inline 
 uint64_t path_cost(uint64_t start_node_idx, int tree_height){
@@ -33,16 +33,13 @@ uint64_t path_cost(uint64_t start_node_idx, int tree_height){
 void
 tree_test()
 {
-    client c(CLIENT_PORT);
+    client c(CLIENT_ID);
     auto edge_props = std::make_shared<std::vector<common::property>>();
     const uint32_t weight_label = 0xACC;
 
     uint64_t total_nodes = (1 << TREE_HEIGHT); // I want to 1-index nodes
-    //std::cout << "total nodes is " << total_nodes << " bit shifted is " << (total_nodes >> 1) << std::endl;
-    const uint64_t total_nodes_const = (1 << TREE_HEIGHT); // I want to 1-index nodes
-    //std::cout << "total nodes const is " << total_nodes_const << " bit shifted is " << (total_nodes_const >> 1) << std::endl;
     uint64_t nodes[total_nodes + 1];
-    uint64_t edges[total_nodes+ 1]; // change this to total_nodes_const for segfault?
+    uint64_t edges[total_nodes+ 1];
     uint64_t i;
     for (i = 1; i < total_nodes; i++) {
         nodes[i] = c.create_node();
@@ -75,9 +72,9 @@ tree_test()
         initial_args.emplace_back(std::make_pair(nodes[i], node_prog::dijkstra_params()));
         initial_args[0].second.adding_nodes = false;
         initial_args[0].second.is_widest_path = false;
-        initial_args[0].second.source_handle = nodes[i];
-        initial_args[0].second.dest_handle = super_sink;
-        initial_args[0].second.edge_weight_name = weight_label;
+        initial_args[0].second.src_handle = nodes[i];
+        initial_args[0].second.dst_handle = super_sink;
+        initial_args[0].second.edge_weight_key = weight_label;
         std::cout << "about to run dijkstra for source " << i << std::endl;
         node_prog::dijkstra_params* res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
 
@@ -98,9 +95,9 @@ tree_test()
         initial_args.emplace_back(std::make_pair(nodes[1], node_prog::dijkstra_params()));
         initial_args[0].second.adding_nodes = false;
         initial_args[0].second.is_widest_path = false;
-        initial_args[0].second.source_handle = nodes[1];
-        initial_args[0].second.dest_handle = super_sink;
-        initial_args[0].second.edge_weight_name = weight_label;
+        initial_args[0].second.src_handle = nodes[1];
+        initial_args[0].second.dst_handle = super_sink;
+        initial_args[0].second.edge_weight_key = weight_label;
         node_prog::dijkstra_params* res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
 
         uint64_t alternate_route_node = (1 << height - 1)+1;
@@ -111,14 +108,5 @@ tree_test()
         initial_args.clear();
     }
 
-    /*
-    initial_args[0].second.is_widest_path = true;
-    res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
-
-    std::cout << "path of width " << res->cost <<" is" << std::endl;
-    assert(res->cost == 6);
-    delete res;
-
-    std::cout << "Widest path good" << std::endl;
-    */
+    c.exit_weaver();
 }

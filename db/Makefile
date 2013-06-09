@@ -11,9 +11,11 @@ TARGET=graph
 all: depend $(TARGET)
 
 debug:	CFLAGS += -g -O0
-debug:	LIBS += -pg
-debug:	CLIBS += -pg
 debug:  all
+
+profile:	LIBS += -pg
+profile:	CLIBS += -pg
+profile:	debug
 
 depend: .depend
 

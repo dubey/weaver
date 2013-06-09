@@ -23,6 +23,7 @@
 #include "e/buffer.h"
 #include "busybee_constants.h"
 
+#define __WEAVER_DEBUG__
 #include "central.h"
 #include "common/meta_element.h"
 #include "common/message.h"
@@ -307,11 +308,14 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
     uint64_t req_id = request->req_id;
     request->out_count->cnt--;
     for (uint64_t cached_id: *request->cached_req_ids) {
+        DEBUG << "Checking cache id " << cached_id;
         if (!server->is_deleted_cache_id(cached_id)) {
+            DEBUG << ", is good" << std::endl;
             server->add_good_cache_id(cached_id);
         } else {
             // request was served based on cache value that should be
             // invalidated; restarting request
+            DEBUG << ", is bad" << std::endl;
             done = false;
             request->ignore_cache.emplace(cached_id);
             server->add_bad_cache_id(cached_id);
@@ -531,7 +535,7 @@ coord_daemon_initiate(coordinator::central *server)
             break;
         }
     }
-    if ((good.size() != 0) || (bad.size() != 0)) {
+    if ((server->good_cache_ids->size() != 0) || (server->bad_cache_ids->size() != 0)) {
         std::copy(server->good_cache_ids->begin(), server->good_cache_ids->end(), std::back_inserter(good));
         std::copy(server->bad_cache_ids->begin(), server->bad_cache_ids->end(), std::back_inserter(bad));
         server->transient_bad_cache_ids = std::move(server->bad_cache_ids);

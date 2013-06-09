@@ -35,13 +35,13 @@
 #define CLIENT_ID (11ULL)
 #define SHARDS_DESC_FILE "../common/shards"
 // weaver setup
-#define NUM_SHARDS 8
+#define NUM_SHARDS 2
 #define NUM_THREADS 8
 #define GRAPH_FILE "graph.rec"
 #define DAEMON_PERIOD 10 // frequency in seconds for coordinator daemon to run
 #define MIGR_FREQ 10 // seconds delay between consecutive migrations
 #define MSG_BATCHING true // whether to batch messages or not
 #define BATCH_MSG_SIZE 100
-#define MIGRATION false // whether to enable migration or not
+#define MIGRATION true // whether to enable migration or not
 
 #endif

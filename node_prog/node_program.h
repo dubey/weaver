@@ -1,6 +1,6 @@
 /*
  * ===============================================================
- *    Description:  Template for a node program.
+ *    Description:  Template for a particular node program.
  *
  *        Created:  Sunday 17 March 2013 11:00:03  EDT
  *
@@ -51,14 +51,15 @@ namespace node_prog
             std::vector<std::pair<uint64_t, ParamsType>> &start_node_params,
             node_prog::prog_type program,
             uint64_t request_id)
-    {
-    }
+    { }
 
     class node_program
     {
         public:
             virtual void unpack_and_run_db(db::graph *g, message::message &msg) = 0;
-            virtual void unpack_and_start_coord(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request) = 0;
+            virtual void unpack_and_start_coord(coordinator::central *server,
+                                                std::shared_ptr<coordinator::pending_req> request) = 0;
+            bool delete_cache;
 
             virtual ~node_program() { }
     };
@@ -72,24 +73,40 @@ namespace node_prog
             func enclosed_node_prog_func;
             dfunc enclosed_node_deleted_func;
             prog_type type;
+            cache_inv_rule cache_rule;
 
         public:
-            particular_node_program(prog_type _type, func node_prog_func, dfunc node_deleted_func)
-                : enclosed_node_prog_func(node_prog_func)
-                , enclosed_node_deleted_func(node_deleted_func)
+            particular_node_program(prog_type _type, func prog_func, dfunc del_func, cache_inv_rule crule)
+                : enclosed_node_prog_func(prog_func)
+                , enclosed_node_deleted_func(del_func)
                 , type(_type)
+                , cache_rule(crule)
             {
+                delete_cache = (crule != INVALIDATE_TAIL);
             }
 
         public:
             virtual void unpack_and_run_db(db::graph *G, message::message &msg);
-            virtual void unpack_and_start_coord(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request);
+            virtual void unpack_and_start_coord(coordinator::central *server,
+                                                std::shared_ptr<coordinator::pending_req> request);
     };
     
     std::map<prog_type, node_program*> programs = {
-        {REACHABILITY, new particular_node_program<node_prog::reach_params, node_prog::reach_node_state, node_prog::reach_cache_value>(REACHABILITY, node_prog::reach_node_program, node_prog::reach_node_deleted_program)},
-        {DIJKSTRA, new particular_node_program<node_prog::dijkstra_params, node_prog::dijkstra_node_state, node_prog::dijkstra_cache_value>(DIJKSTRA, node_prog::dijkstra_node_program, dijkstra_node_deleted_program)},
-        {CLUSTERING, new particular_node_program<node_prog::clustering_params, node_prog::clustering_node_state, node_prog::clustering_cache_value>(CLUSTERING, node_prog::clustering_node_program, clustering_node_deleted_program)} 
+        { REACHABILITY,
+          new particular_node_program<node_prog::reach_params, node_prog::reach_node_state,
+                node_prog::reach_cache_value>(REACHABILITY, node_prog::reach_node_program,
+                node_prog::reach_node_deleted_program,
+                INVALIDATE_HEAD) },
+        { DIJKSTRA,
+          new particular_node_program<node_prog::dijkstra_params, node_prog::dijkstra_node_state,
+                node_prog::dijkstra_cache_value>(DIJKSTRA, node_prog::dijkstra_node_program,
+                dijkstra_node_deleted_program,
+                INVALIDATE_TAIL) },
+        { CLUSTERING,
+          new particular_node_program<node_prog::clustering_params, node_prog::clustering_node_state,
+                node_prog::clustering_cache_value>(CLUSTERING, node_prog::clustering_node_program,
+                clustering_node_deleted_program,
+                INVALIDATE_BOTH) }
     };
 
 }

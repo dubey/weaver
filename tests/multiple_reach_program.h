@@ -16,7 +16,7 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define REQUESTS 100
+#define REQUESTS 10000
 
 void
 multiple_reach_prog()

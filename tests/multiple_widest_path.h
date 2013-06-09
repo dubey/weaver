@@ -32,7 +32,7 @@ multiple_wp_prog()
     count_in.open("node_count.rec");
     count_in >> num_nodes;
     count_in.close();
-    num_edges = (int)(2.0 * (double)num_nodes);
+    num_edges = (int)(10.0 * (double)num_nodes);
     for (i = 0; i < num_nodes; i++) {
         std::cout << "Creating node " << (i+1) << std::endl;
         nodes.emplace_back(c.create_node());
@@ -45,6 +45,7 @@ multiple_wp_prog()
         }
         std::cout << "Creating edge " << (i+1) << std::endl;
         edges.emplace_back(c.create_edge(nodes[first], nodes[second]));
+        c.add_edge_prop(nodes[first], edges[edges.size()-1], weight_label, rand() % 100);
     }
     std::cout << "Created graph\n";
     c.commit_graph();
@@ -53,7 +54,7 @@ multiple_wp_prog()
     node_prog::dijkstra_params dp;
     dp.adding_nodes = false;
     dp.is_widest_path = true;
-    dp.edge_weight_name = weight_label;
+    dp.edge_weight_key = weight_label;
     std::ofstream file, req_time;
     file.open("requests.rec");
     req_time.open("time.rec");
@@ -76,8 +77,8 @@ multiple_wp_prog()
         }
         file << first << " " << second << std::endl;
         std::vector<std::pair<uint64_t, node_prog::dijkstra_params>> initial_args;
-        dp.source_handle = nodes[first];
-        dp.dest_handle = nodes[second];
+        dp.src_handle = nodes[first];
+        dp.dst_handle = nodes[second];
         initial_args.emplace_back(std::make_pair(nodes[first], dp));
         node_prog::dijkstra_params *res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
         std::cout << "Request " << i << ", from source " << nodes[first] << " to dest " << nodes[second];
