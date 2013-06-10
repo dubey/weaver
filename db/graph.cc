@@ -25,7 +25,6 @@
 #include <e/buffer.h>
 #include "busybee_constants.h"
 
-#define __WEAVER_DEBUG__
 #include "common/weaver_constants.h"
 #include "common/message_graph_elem.h"
 #include "graph.h"
@@ -68,6 +67,9 @@ handle_delete_node(db::graph *G, uint64_t req_id, uint64_t node_handle, std::uni
     std::unique_ptr<message::message> msg(new message::message());
     success = G->delete_node(node_handle, req_id);
     if (cache) {
+        for (uint64_t id: *success.second) {
+            cache->emplace_back(id);
+        }
         success.second = std::move(cache);
     }
     if (success.first == 0) {
@@ -111,6 +113,9 @@ handle_delete_edge(db::graph *G, uint64_t req_id, uint64_t n, uint64_t e, std::u
     std::unique_ptr<message::message> msg(new message::message());
     success = G->delete_edge(n, e, req_id);
     if (cache) {
+        for (uint64_t id: *success.second) {
+            cache->emplace_back(id);
+        }
         success.second = std::move(cache);
     }
     if (success.first == 0) {
@@ -143,6 +148,9 @@ handle_delete_edge_property(db::graph *G, uint64_t req_id, uint64_t node_addr, u
     std::unique_ptr<message::message> msg(new message::message());
     success = G->delete_all_edge_property(node_addr, edge_addr, key, req_id);
     if (cache) {
+        for (uint64_t id: *success.second) {
+            cache->emplace_back(id);
+        }
         success.second = std::move(cache);
     }
     if (success.first == 0) {
@@ -235,8 +243,6 @@ migrate_node_step3(db::graph *G, std::unique_ptr<message::message> msg)
     if (G->mrequest.prev_node != 0) {
         G->migrated_nodes.emplace_back(std::unique_ptr<std::pair<uint64_t, uint64_t>>(
             new std::pair<uint64_t, uint64_t>(global_clock, G->mrequest.prev_node)));
-        //DEBUG << "enqueued " << G->mrequest.prev_node << " migr node for deletion, with del clock "
-        //    << global_clock << std::endl;
     }
     G->mrequest.mutex.unlock();
     if (G->set_callback(my_clock, migrate_node_step4)) {
@@ -427,25 +433,32 @@ migrated_nbr_update(db::graph *G, std::unique_ptr<message::message> msg)
 void
 handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
 {
-    std::vector<uint64_t> good, bad;
+    DEBUG << "starting clean up" << std::endl;
+    //std::vector<uint64_t> good, bad;
+    std::unordered_set<uint64_t> good, bad;
     uint64_t perm_del_id, migr_del_id;
     std::vector<std::pair<uint64_t, node_prog::prog_type>> completed_requests;
     message::unpack_message(*msg, message::CLEAN_UP, good, bad,
         perm_del_id, migr_del_id, completed_requests);
+    std::vector<uint64_t> common(good.size() + bad.size());
     
     // invalidations
-    for (size_t i = 0; i < bad.size(); i++) {
-        G->invalidate_prog_cache(bad[i]);
+    for (uint64_t bad_id: bad) {
+        G->invalidate_prog_cache(bad_id);
     }
     
     // confirmations
-    for (size_t i = 0; i < good.size(); i++) {
-        G->commit_prog_cache(good[i]);
+    for (uint64_t good_id: good) {
+        G->commit_prog_cache(good_id);
     }
-    DEBUG << "Done good and bad cache ids\n";
+    auto end_it = std::set_intersection(good.begin(), good.end(), bad.begin(), bad.end(), common.begin());
+    common.resize(end_it - common.begin());
+    DEBUG << "Done good and bad cache ids, num common = " << common.size() << std::endl;
+    G->print_cache_size();
     
     // remove state corresponding to completed node programs
     G->add_done_request(completed_requests);
+    DEBUG << "Done add request, size = " << completed_requests.size() << std::endl;
 
     // permanent deletion of deleted and migrated nodes
     G->permanent_delete(perm_del_id, migr_del_id);
@@ -472,15 +485,15 @@ NodeStateType& get_node_state(db::graph *G, node_prog::prog_type pType, uint64_t
 }
 
 template <typename CacheValueType>
-std::vector<CacheValueType *> get_cached_values(db::graph *G, node_prog::prog_type pType, uint64_t req_id,
+std::vector<std::shared_ptr<CacheValueType>> get_cached_values(db::graph *G, node_prog::prog_type pType, uint64_t req_id,
     uint64_t node_handle, std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set)
 {
-    std::vector<CacheValueType *> toRet;
-    CacheValueType *cache;
+    std::vector<std::shared_ptr<CacheValueType>> toRet;
+    std::shared_ptr<CacheValueType> cache;
     try {
-        for (node_prog::CacheValueBase *cval : G->fetch_prog_cache(pType, node_handle, req_id, dirty_list_ptr, ignore_set)) {
-            cache = dynamic_cast<CacheValueType *>(cval);
-            if (cache == NULL) {
+        for (std::shared_ptr<node_prog::CacheValueBase> cval : G->fetch_prog_cache(pType, node_handle, req_id, dirty_list_ptr, ignore_set)) {
+            cache = std::dynamic_pointer_cast<CacheValueType>(cval);
+            if (!cache) {
                 std::cerr << "CacheValueType needs to extend CacheValueBase" << std::endl;
             } else {
                 toRet.emplace_back(cache);
@@ -497,16 +510,16 @@ template <typename CacheValueType>
 CacheValueType& put_cache_value(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle,
     db::element::node *n, std::vector<uint64_t> *dirty_list_ptr)
 {
-    CacheValueType *toRet;
+    std::shared_ptr<CacheValueType> toRet;
     if (G->prog_cache_exists(pType, node_handle, req_id)) {
         // XXX They wrote cache twice! delete and replace probably
-        toRet = dynamic_cast<CacheValueType *>(G->fetch_prog_cache_single(pType, node_handle, req_id));
+        toRet = std::dynamic_pointer_cast<CacheValueType>(G->fetch_prog_cache_single(pType, node_handle, req_id));
         if (toRet == NULL) {
             // dynamic_cast failed, CacheValueType needs to extend CacheValueBase
             std::cerr << "CacheValueType needs to extend CacheValueBase" << std::endl;
         }
     } else {
-        toRet = new CacheValueType();
+        toRet = std::make_shared<CacheValueType>();
         G->insert_prog_cache(pType, req_id, node_handle, toRet, n);
     }
     bool dirty = false;
@@ -518,7 +531,6 @@ CacheValueType& put_cache_value(db::graph *G, node_prog::prog_type pType, uint64
     }
     if (!dirty) {
         dirty_list_ptr->emplace_back(req_id);
-        DEBUG << "Adding to dirty list " << req_id << std::endl;
     }
     return *toRet;
 }
@@ -572,7 +584,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     // node state and cache functions
     std::function<NodeStateType&()> node_state_getter;
     std::function<CacheValueType&()> cache_value_putter;
-    std::function<std::vector<CacheValueType *>()> cached_values_getter;
+    std::function<std::vector<std::shared_ptr<CacheValueType>>()> cached_values_getter;
 
     // check if request completed
     if (G->check_done_request(unpacked_request_id)) {

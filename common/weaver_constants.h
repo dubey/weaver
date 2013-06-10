@@ -13,6 +13,7 @@
 
 // debugging
 #ifndef DEBUG
+#define __WEAVER_DEBUG__
 #ifdef __WEAVER_DEBUG__
 #define DEBUG std::cerr << __FILE__ << ":" << __LINE__ << " "
 #else
@@ -42,6 +43,6 @@
 #define MIGR_FREQ 10 // seconds delay between consecutive migrations
 #define MSG_BATCHING true // whether to batch messages or not
 #define BATCH_MSG_SIZE 100
-#define MIGRATION true // whether to enable migration or not
+#define MIGRATION false // whether to enable migration or not
 
 #endif

@@ -121,7 +121,7 @@ namespace node_prog
             clustering_params &params,
             std::function<clustering_node_state&()> state_getter,
             std::function<clustering_cache_value&()> cache_value_putter,
-            std::function<std::vector<clustering_cache_value *>()> cached_values_getter)
+            std::function<std::vector<std::shared_ptr<clustering_cache_value>>()> cached_values_getter)
     {
         UNUSED(cache_value_putter);
         UNUSED(cached_values_getter);

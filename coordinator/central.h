@@ -56,8 +56,7 @@ namespace coordinator
         public:
             out_counter()
                 : cnt(0)
-            {
-            }
+            { }
     };
     // pending request state 
     class pending_req
@@ -91,8 +90,7 @@ namespace coordinator
         pending_req(message::msg_type type)
             : req_type(type)
             , done(false)
-            {
-            }
+        { }
     };
 
     class central
@@ -209,7 +207,7 @@ namespace coordinator
     {
         std::vector<std::shared_ptr<pending_req>>::iterator pend_iter;
         for (uint64_t del_iter: cached_ids) {
-            DEBUG << "Inserting bad cache " << del_iter << std::endl;
+            //DEBUG << "Inserting bad cache " << del_iter << std::endl;
             bad_cache_ids->emplace(del_iter);
         }
         for (pend_iter = pending_delete_requests.begin();

@@ -23,7 +23,6 @@
 #include "e/buffer.h"
 #include "busybee_constants.h"
 
-#define __WEAVER_DEBUG__
 #include "central.h"
 #include "common/meta_element.h"
 #include "common/message.h"
@@ -308,14 +307,11 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
     uint64_t req_id = request->req_id;
     request->out_count->cnt--;
     for (uint64_t cached_id: *request->cached_req_ids) {
-        DEBUG << "Checking cache id " << cached_id;
         if (!server->is_deleted_cache_id(cached_id)) {
-            DEBUG << ", is good" << std::endl;
             server->add_good_cache_id(cached_id);
         } else {
             // request was served based on cache value that should be
             // invalidated; restarting request
-            DEBUG << ", is bad" << std::endl;
             done = false;
             request->ignore_cache.emplace(cached_id);
             server->add_bad_cache_id(cached_id);
@@ -500,7 +496,7 @@ msg_handler(coordinator::central *server)
         rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
         mtype = (enum message::msg_type)code;
         thr.reset(new coordinator::thread::unstarted_thread(handle_msg, server, std::move(rec_msg), mtype, sender));
-        server->thread_pool.add_request(std::move(thr), true);
+        server->thread_pool.add_request(std::move(thr));
     }
 }
 
@@ -509,7 +505,7 @@ msg_handler(coordinator::central *server)
 void
 coord_daemon_initiate(coordinator::central *server)
 {
-    std::vector<uint64_t> good, bad;
+    //std::vector<uint64_t> good, bad;
     uint64_t perm_del_id = 0;
     uint64_t migr_del_id = 0;
     message::message msg;
@@ -519,14 +515,11 @@ coord_daemon_initiate(coordinator::central *server)
     auto completed_requests = std::move(server->completed_requests);
     server->completed_requests.reset(new std::vector<std::pair<uint64_t, node_prog::prog_type>>());
     // figure out minimum outstanding request id
-    DEBUG << "Pending requests list: ";
     for (auto &r: server->pending) {
-        DEBUG << r.first << " ";
         if ((migr_del_id == 0) || (r.first < migr_del_id)) {
             migr_del_id = r.first;
         }
     }
-    DEBUG << std::endl;
     while (server->first_del->cnt == 0 && server->first_del != server->last_del) {
         perm_del_id = server->first_del->req_id;
         if (server->first_del->next) {
@@ -535,22 +528,22 @@ coord_daemon_initiate(coordinator::central *server)
             break;
         }
     }
-    if ((server->good_cache_ids->size() != 0) || (server->bad_cache_ids->size() != 0)) {
-        std::copy(server->good_cache_ids->begin(), server->good_cache_ids->end(), std::back_inserter(good));
-        std::copy(server->bad_cache_ids->begin(), server->bad_cache_ids->end(), std::back_inserter(bad));
-        server->transient_bad_cache_ids = std::move(server->bad_cache_ids);
-        server->bad_cache_ids.reset(new std::unordered_set<uint64_t>());
-        server->good_cache_ids.reset(new std::unordered_set<uint64_t>());
-        server->update_mutex.unlock();
-    } else {
-        server->update_mutex.unlock();
-    }
     // send out messages
     for (uint64_t i = 1; i <= NUM_SHARDS; i++) {
-        message::prepare_message(msg, message::CLEAN_UP, good, bad, 
+        message::prepare_message(msg, message::CLEAN_UP, *server->good_cache_ids, *server->bad_cache_ids, 
             perm_del_id, migr_del_id, *completed_requests);
         server->send(i, msg.buf);
     }
+    if (server->good_cache_ids->size() != 0) {
+        server->good_cache_ids.reset(new std::unordered_set<uint64_t>());
+    }
+    if (server->bad_cache_ids->size() != 0) {
+        for (uint64_t bad_id: *server->bad_cache_ids) {
+            server->transient_bad_cache_ids->emplace(bad_id);
+        }
+        server->bad_cache_ids.reset(new std::unordered_set<uint64_t>());
+    }
+    server->update_mutex.unlock();
 }
 
 // caution: assuming we hold server->update_mutex

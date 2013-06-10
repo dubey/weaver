@@ -229,7 +229,7 @@ namespace node_prog
             dijkstra_params &params,
             std::function<dijkstra_node_state&()> state_getter,
             std::function<dijkstra_cache_value&()> cache_value_putter,
-            std::function<std::vector<dijkstra_cache_value *>()> cached_values_getter)
+            std::function<std::vector<std::shared_ptr<dijkstra_cache_value>>()> cached_values_getter)
     {
         UNUSED(cache_value_putter);
         UNUSED(cached_values_getter);

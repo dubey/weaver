@@ -54,7 +54,7 @@ check_reachability()
                 }
                 initial_args[0].first = repetitive_nodes[i];
                 node_prog::reach_params &params = initial_args[0].second;
-                params.prev_node.loc = -1;
+                params.prev_node.loc = COORD_ID;
                 params.dest = repetitive_nodes[j];
                 node_prog::reach_params *res = c.run_node_program(node_prog::REACHABILITY, initial_args);
                 if ((i==n1 && j==n2) || (i==n3 && j==n4)) {
@@ -174,4 +174,5 @@ repetitive_reach_prog()
     // releasing locks, killing all threads
     end_program = true;
     synch_cond.broadcast();
+    c.exit_weaver();
 }

@@ -27,9 +27,13 @@
 
 namespace cache
 {
-    typedef std::unordered_map<uint64_t, node_prog::CacheValueBase*> req_map; // req_id -> cached value
-    typedef std::unordered_map<uint64_t, req_map> node_map; // node handle -> req_map
-    typedef std::unordered_map<node_prog::prog_type, node_map> prog_map; // prog_type -> node_map
+    // req_id -> cached value
+    typedef std::unordered_map<uint64_t, std::shared_ptr<node_prog::CacheValueBase>> req_map; 
+    // node handle -> req_map
+    typedef std::unordered_map<uint64_t, req_map> node_map; 
+    // prog_type -> node_map
+    typedef std::unordered_map<node_prog::prog_type, node_map> prog_map; 
+    // req_id -> nodes (and prog types) which have cached that request
     typedef std::unordered_map<uint64_t, std::pair<node_prog::prog_type, std::vector<uint64_t>>> invalid_map;
 
     class program_cache
@@ -43,27 +47,29 @@ namespace cache
 
         public:
             bool cache_exists(node_prog::prog_type t, uint64_t node_handle, uint64_t req_id);
-            node_prog::CacheValueBase* single_get_cache(node_prog::prog_type t,
+            std::shared_ptr<node_prog::CacheValueBase> single_get_cache(node_prog::prog_type t,
                     uint64_t node_handle, uint64_t req_id);
-            std::vector<node_prog::CacheValueBase*> get_cache(node_prog::prog_type t,
+            std::vector<std::shared_ptr<node_prog::CacheValueBase>> get_cache(node_prog::prog_type t,
                     uint64_t node_handle, uint64_t req_id, std::vector<uint64_t> *dirty_list_ptr,
                     std::unordered_set<uint64_t> &ignore_set);
             void put_cache(uint64_t req_id, node_prog::prog_type t, uint64_t node_handle,
-                    node_prog::CacheValueBase *new_cache);
+                    std::shared_ptr<node_prog::CacheValueBase> new_cache);
             node_prog::prog_type get_prog_type(uint64_t req_id);
             void delete_cache(uint64_t req_id);
             void commit(uint64_t id);
+            uint32_t potential_entries(uint64_t node, node_prog::prog_type t);
+            void print_size();
 
         private:
             bool entry_exists(node_prog::prog_type t, uint64_t node_handle, prog_map &pc);
             bool cache_exists(node_prog::prog_type t, uint64_t node_handle, uint64_t req_id, prog_map &pc);
-            node_prog::CacheValueBase* single_get_cache(node_prog::prog_type t,
+            std::shared_ptr<node_prog::CacheValueBase> single_get_cache(node_prog::prog_type t,
                     uint64_t node_handle, uint64_t req_id, prog_map &pc);
-            std::vector<node_prog::CacheValueBase*> get_cache(node_prog::prog_type t,
+            std::vector<std::shared_ptr<node_prog::CacheValueBase>> get_cache(node_prog::prog_type t,
                     uint64_t node_handle, uint64_t req_id, std::vector<uint64_t> *dirty_list_ptr,
                     std::unordered_set<uint64_t> &ignore_set, prog_map &pc);
             void put_cache(uint64_t req_id, node_prog::prog_type t, uint64_t node_handle,
-                    node_prog::CacheValueBase *new_cache, prog_map &pc, invalid_map &it);
+                    std::shared_ptr<node_prog::CacheValueBase> new_cache, prog_map &pc, invalid_map &it);
             void delete_cache(uint64_t req_id, prog_map &pc, invalid_map &it);
             void remove_entry(uint64_t req_id, prog_map &pc, invalid_map &it);
     };
@@ -90,21 +96,21 @@ namespace cache
         return ret;
     }
 
-    inline node_prog::CacheValueBase*
+    inline std::shared_ptr<node_prog::CacheValueBase>
     program_cache :: single_get_cache(node_prog::prog_type t, uint64_t node_handle, uint64_t req_id)
     {
-        node_prog::CacheValueBase *ret;
+        std::shared_ptr<node_prog::CacheValueBase> ret;
         mutex.lock();
         ret = single_get_cache(t, node_handle, req_id, prog_cache);
         mutex.unlock();
         return ret;
     }
 
-    inline std::vector<node_prog::CacheValueBase*>
+    inline std::vector<std::shared_ptr<node_prog::CacheValueBase>>
     program_cache :: get_cache(node_prog::prog_type t, uint64_t node_handle, uint64_t req_id, 
             std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set)
     {
-        std::vector<node_prog::CacheValueBase*> ret;
+        std::vector<std::shared_ptr<node_prog::CacheValueBase>> ret;
         mutex.lock();
         ret = get_cache(t, node_handle, req_id, dirty_list_ptr, ignore_set, prog_cache);
         mutex.unlock();
@@ -113,11 +119,10 @@ namespace cache
 
     inline void
     program_cache :: put_cache(uint64_t req_id, node_prog::prog_type t, uint64_t node_handle,
-            node_prog::CacheValueBase *new_cache)
+            std::shared_ptr<node_prog::CacheValueBase> new_cache)
     {
         mutex.lock();
         put_cache(req_id, t, node_handle, new_cache, transient_prog_cache, transient_itable);
-        //put_cache(req_id, t, node_handle, new_cache, prog_cache, itable);
         mutex.unlock();
     }
 
@@ -159,22 +164,22 @@ namespace cache
         }
     }
 
-    inline node_prog::CacheValueBase*
+    inline std::shared_ptr<node_prog::CacheValueBase>
     program_cache :: single_get_cache(node_prog::prog_type t, uint64_t node_handle, uint64_t req_id, prog_map &pc)
     {
         return pc.at(t).at(node_handle).at(req_id);
     }
 
-    inline std::vector<node_prog::CacheValueBase*>
+    inline std::vector<std::shared_ptr<node_prog::CacheValueBase>>
     program_cache :: get_cache(node_prog::prog_type t, uint64_t node_handle, uint64_t req_id, 
             std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set, prog_map &pc)
     {
-        std::vector<node_prog::CacheValueBase*> cache;
+        std::vector<std::shared_ptr<node_prog::CacheValueBase>> cache;
         if (entry_exists(t, node_handle, pc)) {
             for (auto &entry: pc.at(t).at(node_handle)) {
                 // check if entry is for later request or in ignore set
                 if ((entry.first < req_id) && (ignore_set.find(entry.first) == ignore_set.end())) {
-                    cache.push_back(entry.second);
+                    cache.emplace_back(entry.second);
                     entry.second->set_dirty_list_ptr(dirty_list_ptr);
                 }
             }
@@ -184,42 +189,22 @@ namespace cache
 
     inline void
     program_cache :: put_cache(uint64_t req_id, node_prog::prog_type t, uint64_t node_handle,
-            node_prog::CacheValueBase *new_cache, prog_map &pc, invalid_map &it)
+            std::shared_ptr<node_prog::CacheValueBase> new_cache, prog_map &pc, invalid_map &it)
     {
         if (pc.find(t) == pc.end()) {
             DEBUG << "not found prog type " << t << " in pc map " << std::endl;
         }
-try {
         if (pc.at(t).find(node_handle) == pc.at(t).end()) {
             pc.at(t).emplace(node_handle, req_map());
         }
-} catch (const std::out_of_range &e) {
-    DEBUG << "caught exception here" << std::endl;
-    while(1);
-}
-try {
         if (!pc.at(t).at(node_handle).emplace(req_id, new_cache).second) {
-            std::cout << "Bad put cache\n";
-            while(1);
+            DEBUG << "Bad put cache" << std::endl;
         }
-} catch (const std::out_of_range &e) {
-    DEBUG << "caught exception here" << std::endl;
-    while(1);
-}
-try {
+        new_cache->set_req_id(req_id);
         if (it.find(req_id) == it.end()) {
             it.emplace(req_id, std::make_pair(t, std::vector<uint64_t>()));
         }
-} catch (const std::out_of_range &e) {
-    DEBUG << "caught exception here" << std::endl;
-    while(1);
-}
-try {
         it.at(req_id).second.push_back(node_handle);
-} catch (const std::out_of_range &e) {
-    DEBUG << "caught exception here" << std::endl;
-    while(1);
-}
     }
 
     inline void
@@ -239,7 +224,7 @@ try {
                 if (nmap.find(node) != nmap.end()) {
                     req_map &rmap = nmap.at(node);
                     if (rmap.find(req_id) != rmap.end()) {
-                        delete rmap.at(req_id);
+                        //delete rmap.at(req_id);
                         rmap.erase(req_id);
                     }
                     if (rmap.size() == 0) {
@@ -291,6 +276,35 @@ try {
             }
             remove_entry(id, transient_prog_cache, transient_itable);
         }
+        mutex.unlock();
+    }
+
+    inline uint32_t
+    potential_entries(uint64_t node, node_prog::prog_type type)
+    {
+        uint32_t num = 0;
+        mutex.lock();
+        if (entry_exists(type, node, prog_cache)) {
+            num += prog_cache.at(type).at(node).size();
+        }
+        if (entry_exists(type, node, transient_prog_cache)) {
+            num += transient_prog_cache.at(type).at(node).size();
+        }
+        mutex.unlock();
+        return num;
+    }
+
+    inline void
+    program_cache :: print_size()
+    {
+        uint64_t sz = 0;
+        mutex.lock();
+        for (auto &nmap: prog_cache) {
+            for (auto &rmap: nmap.second) {
+                sz += rmap.second.size();
+            }
+        }
+        DEBUG << "Num cache entries = " << sz << std::endl;
         mutex.unlock();
     }
 }

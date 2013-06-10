@@ -53,7 +53,7 @@ namespace node_prog
                 params_type&,
                 std::function<node_state_type&()>,
                 std::function<cache_value_type&()>,
-                std::function<std::vector<cache_value_type *>()>);
+                std::function<std::vector<std::shared_ptr<cache_value_type>>()>);
     };
 
     template <typename params_type, typename node_state_type>

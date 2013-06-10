@@ -249,11 +249,12 @@ namespace db
             // prog_type-> map from node handle to map from request_id to cache values -- used to do cache read/updates
             cache::program_cache node_prog_cache;
             bool prog_cache_exists(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id);
-            std::vector<node_prog::CacheValueBase*> fetch_prog_cache(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id, std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set);
-            node_prog::CacheValueBase* fetch_prog_cache_single(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id);
-            void insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::CacheValueBase *toAdd, element::node *n);
+            std::vector<std::shared_ptr<node_prog::CacheValueBase>> fetch_prog_cache(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id, std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set);
+            std::shared_ptr<node_prog::CacheValueBase> fetch_prog_cache_single(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id);
+            void insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, std::shared_ptr<node_prog::CacheValueBase> toAdd, element::node *n);
             void invalidate_prog_cache(uint64_t request_id);
             void commit_prog_cache(uint64_t req_id);
+            void print_cache_size();
             // completed node programs
             std::unordered_set<uint64_t> done_ids; // TODO clean up of done_ids
             void add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
@@ -570,8 +571,7 @@ namespace db
                     element::node *n = acquire_node(req.node_handle);
                     if (n->out_edges.find(req.edge_handle) != n->out_edges.end()) {
                         element::edge *e = n->out_edges.at(req.edge_handle);
-                        message::prepare_message(msg, message::PERMANENT_DELETE_EDGE,
-                            req_id, e->nbr.handle, req.edge_handle);
+                        message::prepare_message(msg, message::PERMANENT_DELETE_EDGE, e->nbr.handle, req.edge_handle);
                         send(e->nbr.loc, msg.buf);
                         n->out_edges.erase(req.edge_handle);
                         delete e;
@@ -635,7 +635,7 @@ namespace db
         deletion_mutex.lock();
         n = acquire_node(node_handle);
         if (n == NULL) {
-            DEBUG << "Not found node in perm_edge_del" << std::endl;
+            DEBUG << "Not found node " << node_handle << " in perm_edge_del" << std::endl;
             deletion_mutex.unlock();
             return;
         }
@@ -824,14 +824,14 @@ namespace db
         return node_prog_cache.cache_exists(t, node_handle, req_id);
     }
 
-    inline std::vector<node_prog::CacheValueBase*>
+    inline std::vector<std::shared_ptr<node_prog::CacheValueBase>>
     graph :: fetch_prog_cache(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id,
         std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set)
     {
         return node_prog_cache.get_cache(t, local_node_handle, req_id, dirty_list_ptr, ignore_set);
     }
 
-    inline node_prog::CacheValueBase*
+    inline std::shared_ptr<node_prog::CacheValueBase>
     graph :: fetch_prog_cache_single(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id)
     {
         return node_prog_cache.single_get_cache(t, local_node_handle, req_id);
@@ -839,7 +839,7 @@ namespace db
 
     inline void
     graph :: insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle,
-        node_prog::CacheValueBase *toAdd, element::node *n)
+        std::shared_ptr<node_prog::CacheValueBase> toAdd, element::node *n)
     {
         try {
         n->add_cached_req(request_id);
@@ -865,6 +865,12 @@ namespace db
     graph :: commit_prog_cache(uint64_t req_id)
     {
         node_prog_cache.commit(req_id);
+    }
+    
+    inline void
+    graph :: print_cache_size()
+    {
+        node_prog_cache.print_size();
     }
 
     inline void
