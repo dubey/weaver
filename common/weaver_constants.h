@@ -13,6 +13,7 @@
 
 // debugging
 #ifndef DEBUG
+#define __WEAVER_DEBUG__
 #ifdef __WEAVER_DEBUG__
 #define DEBUG std::cerr << __FILE__ << ":" << __LINE__ << " "
 #else
