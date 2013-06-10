@@ -280,7 +280,7 @@ namespace cache
     }
 
     inline uint32_t
-    potential_entries(uint64_t node, node_prog::prog_type type)
+    program_cache :: potential_entries(uint64_t node, node_prog::prog_type type)
     {
         uint32_t num = 0;
         mutex.lock();

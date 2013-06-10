@@ -770,13 +770,13 @@ namespace db
     void
     thread :: worker_thread_loop(thread::pool *tpool)
     {
-        thread::unstarted_thread *thr;
+        thread::unstarted_thread *thr = NULL;
         std::priority_queue<thread::unstarted_thread*, 
             std::vector<unstarted_thread*>, 
             thread::work_thread_compare> &tq = tpool->work_queue;
         po6::threads::mutex &m = tpool->queue_mutex;
         po6::threads::cond &c = tpool->work_queue_cond;
-        bool can_start;
+        bool can_start = false;
         while (true) {
             m.lock();
             if (!tq.empty()) {
