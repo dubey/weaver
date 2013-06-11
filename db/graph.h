@@ -828,7 +828,12 @@ namespace db
     graph :: fetch_prog_cache(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id,
         std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set)
     {
+try {
         return node_prog_cache.get_cache(t, local_node_handle, req_id, dirty_list_ptr, ignore_set);
+} catch (const std::out_of_range &e) {
+    DEBUG << "caught exception here" << std::endl;
+    while(1);
+}
     }
 
     inline std::shared_ptr<node_prog::CacheValueBase>
@@ -841,18 +846,18 @@ namespace db
     graph :: insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle,
         std::shared_ptr<node_prog::CacheValueBase> toAdd, element::node *n)
     {
-        try {
+try {
         n->add_cached_req(request_id);
-        } catch (const std::out_of_range &e) {
-            DEBUG << "caught exception here" << std::endl;
-            while(1);
-        }
-        try {
+} catch (const std::out_of_range &e) {
+    DEBUG << "caught exception here" << std::endl;
+    while(1);
+}
+try {
         node_prog_cache.put_cache(request_id, t, local_node_handle, toAdd);
-        } catch (const std::out_of_range &e) {
-            DEBUG << "caught exception here" << std::endl;
-            while(1);
-        }
+} catch (const std::out_of_range &e) {
+    DEBUG << "caught exception here" << std::endl;
+    while(1);
+}
     }
 
     inline void

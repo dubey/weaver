@@ -34,6 +34,9 @@
 #include "node_prog/reach_program.h"
 #include "node_prog/clustering_program.h"
 
+// global static variables
+static uint64_t myid;
+
 // migration methods
 void migrate_node_step1(db::graph *G, uint64_t node_handle, uint64_t new_shard);
 void migrate_node_step2(db::graph *G, std::unique_ptr<message::message> msg);
@@ -223,7 +226,7 @@ migrate_node_step2(db::graph *G, std::unique_ptr<message::message> msg)
         message::unpack_message(*msg, message::MIGRATE_NODE_STEP1, node_handle, from_loc, *n);
     } catch (std::bad_alloc& ba) {
         DEBUG << "bad_alloc caught " << ba.what() << std::endl;
-        while(1);
+        return;
     }
     n->prev_loc = from_loc;
     G->release_node(n);
@@ -438,18 +441,29 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
     std::unordered_set<uint64_t> good, bad;
     uint64_t perm_del_id, migr_del_id;
     std::vector<std::pair<uint64_t, node_prog::prog_type>> completed_requests;
+try {
     message::unpack_message(*msg, message::CLEAN_UP, good, bad,
         perm_del_id, migr_del_id, completed_requests);
     std::vector<uint64_t> common(good.size() + bad.size());
     
     // invalidations
     for (uint64_t bad_id: bad) {
+try {
         G->invalidate_prog_cache(bad_id);
+} catch (std::exception &e) {
+    DEBUG << "caught exception here, shard = " << G->myid << std::endl;
+    return;
+}
     }
     
     // confirmations
     for (uint64_t good_id: good) {
+try {
         G->commit_prog_cache(good_id);
+} catch (std::exception &e) {
+    DEBUG << "caught exception here, shard = " << G->myid << std::endl;
+    return;
+}
     }
     auto end_it = std::set_intersection(good.begin(), good.end(), bad.begin(), bad.end(), common.begin());
     common.resize(end_it - common.begin());
@@ -457,15 +471,29 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
     G->print_cache_size();
     
     // remove state corresponding to completed node programs
+try {
     G->add_done_request(completed_requests);
+} catch (std::exception &e) {
+    DEBUG << "caught exception here, shard = " << G->myid << std::endl;
+    return;
+}
     DEBUG << "Done add request, size = " << completed_requests.size() << std::endl;
 
     // permanent deletion of deleted and migrated nodes
+try {
     G->permanent_delete(perm_del_id, migr_del_id);
+} catch (std::exception &e) {
+    DEBUG << "caught exception here, shard = " << G->myid << std::endl;
+    return;
+}
     DEBUG << "Permanent delete, id = " << perm_del_id
         << "\tMigr del id = " << migr_del_id 
         << "\tNumber of nodes = " << G->nodes.size()
         << "\tGood size = " << good.size() << ", bad size = " << bad.size() << std::endl;
+} catch (std::exception &e) {
+    DEBUG << "caught exception here, shard = " << G->myid << std::endl;
+    return;
+}
 }
 
 template <typename NodeStateType>
@@ -1203,16 +1231,26 @@ end_program(int param)
     std::cerr << "Caught SIGINT, ending program, param = " << param << std::endl;
     exit(1);
 }
+
+void
+myterminate()
+{
+    DEBUG << "In my terminate, for shard " << myid << std::endl;
+    while(1);
+}
+
 int
 main(int argc, char* argv[])
 {
     std::thread *t;
     signal(SIGINT, end_program);
+    //std::set_terminate(&myterminate);
     if (argc != 2) {
         std::cerr << "Usage: " << argv[0] << " <myid>" << std::endl;
         return -1;
     }
     uint64_t id = atoi(argv[1]);
+    myid = id;
     db::graph G(id);
     std::cout << "Weaver: shard instance " << G.myid << std::endl;
 

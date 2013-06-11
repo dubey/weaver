@@ -34,7 +34,7 @@ namespace cache
     // prog_type -> node_map
     typedef std::unordered_map<node_prog::prog_type, node_map> prog_map; 
     // req_id -> nodes (and prog types) which have cached that request
-    typedef std::unordered_map<uint64_t, std::pair<node_prog::prog_type, std::vector<uint64_t>>> invalid_map;
+    typedef std::unordered_map<uint64_t, std::pair<node_prog::prog_type, std::unordered_set<uint64_t>>> invalid_map;
 
     class program_cache
     {
@@ -72,6 +72,7 @@ namespace cache
                     std::shared_ptr<node_prog::CacheValueBase> new_cache, prog_map &pc, invalid_map &it);
             void delete_cache(uint64_t req_id, prog_map &pc, invalid_map &it);
             void remove_entry(uint64_t req_id, prog_map &pc, invalid_map &it);
+            void evict_entry(prog_map &pc, invalid_map &it, node_prog::prog_type, uint64_t node_handle);
     };
 
     inline
@@ -139,7 +140,7 @@ namespace cache
     {
         // TODO check this, probably incorrect
         if (itable.find(req_id) != itable.end()) {
-            std::pair<node_prog::prog_type, std::vector<uint64_t>> &inv = itable.at(req_id);
+            std::pair<node_prog::prog_type, std::unordered_set<uint64_t>> &inv = itable.at(req_id);
             return inv.first;
         } else {
             return node_prog::DEFAULT;
@@ -197,14 +198,18 @@ namespace cache
         if (pc.at(t).find(node_handle) == pc.at(t).end()) {
             pc.at(t).emplace(node_handle, req_map());
         }
+        if (pc.at(t).at(node_handle).size() > MAX_CACHE_PER_NODE) {
+            // need to evict an entry
+            evict_entry(pc, it, t, node_handle);
+        }
         if (!pc.at(t).at(node_handle).emplace(req_id, new_cache).second) {
             DEBUG << "Bad put cache" << std::endl;
         }
         new_cache->set_req_id(req_id);
         if (it.find(req_id) == it.end()) {
-            it.emplace(req_id, std::make_pair(t, std::vector<uint64_t>()));
+            it.emplace(req_id, std::make_pair(t, std::unordered_set<uint64_t>()));
         }
-        it.at(req_id).second.push_back(node_handle);
+        it.at(req_id).second.emplace(node_handle);
     }
 
     inline void
@@ -215,7 +220,7 @@ namespace cache
         // If and when those nodes are deleted, trying to delete this req_id
         // again would be a no-op.
         if (it.find(req_id) != it.end()) {
-            std::pair<node_prog::prog_type, std::vector<uint64_t>> &inv = it.at(req_id);
+            std::pair<node_prog::prog_type, std::unordered_set<uint64_t>> &inv = it.at(req_id);
             //if (node_prog::programs.at(inv.first)->delete_cache) {
             //    return;
             //}
@@ -244,7 +249,7 @@ namespace cache
         // If and when those nodes are deleted, trying to delete this req_id
         // again would be a no-op.
         if (it.find(req_id) != it.end()) {
-            std::pair<node_prog::prog_type, std::vector<uint64_t>> &inv = it.at(req_id);
+            std::pair<node_prog::prog_type, std::unordered_set<uint64_t>> &inv = it.at(req_id);
             for (auto &node: inv.second) {
                 node_map &nmap = pc.at(inv.first);
                 if (nmap.find(node) != nmap.end()) {
@@ -262,6 +267,24 @@ namespace cache
     }
 
     inline void
+    program_cache :: evict_entry(prog_map &pc, invalid_map &it, node_prog::prog_type t, uint64_t node_handle)
+    {
+        // random eviction for now
+        uint64_t to_evict = rand() % pc.at(t).at(node_handle).size();
+        uint64_t cntr = 0;
+        for (auto &p: pc.at(t).at(node_handle)) {
+            if ((cntr++) == to_evict) {
+                to_evict = p.first;
+                break;
+            }
+        }
+        pc.at(t).at(node_handle).erase(to_evict);
+        if (it.find(to_evict) != it.end()) {
+            it.at(to_evict).second.erase(node_handle);
+        }
+    }
+
+    inline void
     program_cache :: commit(uint64_t id)
     {
         invalid_map::iterator it;
@@ -269,7 +292,7 @@ namespace cache
         it = transient_itable.find(id);
         if (it != transient_itable.end()) {
             // inserting into cache
-            std::vector<uint64_t> &nodes = it->second.second;
+            std::unordered_set<uint64_t> &nodes = it->second.second;
             for (uint64_t node: nodes) {
                 put_cache(id, it->second.first, node,
                         transient_prog_cache.at(it->second.first).at(node).at(id), prog_cache, itable);

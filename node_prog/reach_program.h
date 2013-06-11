@@ -204,15 +204,15 @@ namespace node_prog
                     reach_cache_value &rcv = cache_putter();
                     rcv.reachable_node = params.dest;
                 }
-                DEBUG << "done with req " << req_id << " at node " << rn.handle << std::endl;
+                //DEBUG << "done with req " << req_id << " at node " << rn.handle << std::endl;
             } else if ((int)state.out_count < 0) {
                 DEBUG << "ALERT! Bad state value in reach program" << std::endl;
                 while(1);
             }
-            if (!state.reachable && state.out_count > 0) {
-                DEBUG << "still awaiting replies, current count " << state.out_count 
-                    << " for request " << req_id << " at node " << rn.handle << std::endl;
-            }
+            //if (!state.reachable && state.out_count > 0) {
+            //    DEBUG << "still awaiting replies, current count " << state.out_count 
+            //        << " for request " << req_id << " at node " << rn.handle << std::endl;
+            //}
         }
         return next;
     }
