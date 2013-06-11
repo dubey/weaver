@@ -17,7 +17,8 @@
 //#include "cache_test.h"
 //#include "basic_client.h"
 #include "repetitive_reach_program.h"
-#include "multiple_reach_program.h"
+//#include "multiple_reach_program.h"
+#include "line_reach_program.h"
 #include "multiple_widest_path.h"
 //#include "dijkstra_prog_test.h"
 #include "tree_test.h"
@@ -42,7 +43,8 @@ main(int argc, char *argv[])
     //std::cout << "Stress client ok." << std::endl;
     //reach_prog_test();
     //repetitive_reach_prog();
-    multiple_reach_prog();
+    //multiple_reach_prog();
+    line_reach_prog();
     //multiple_wp_prog();
     //delete_prog_test();
     //dijkstra_prog_test();

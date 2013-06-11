@@ -88,6 +88,8 @@ namespace message
         MIGRATED_NBR_UPDATE,
         MIGRATED_NBR_ACK,
         MIGRATION_TOKEN,
+        REQUEST_COUNT,
+        REQUEST_COUNT_ACK,
 
         EXIT_WEAVER,
         ERROR

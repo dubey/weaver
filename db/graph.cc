@@ -436,8 +436,7 @@ migrated_nbr_update(db::graph *G, std::unique_ptr<message::message> msg)
 void
 handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
 {
-    DEBUG << "starting clean up" << std::endl;
-    //std::vector<uint64_t> good, bad;
+    //DEBUG << "starting clean up" << std::endl;
     std::unordered_set<uint64_t> good, bad;
     uint64_t perm_del_id, migr_del_id;
     std::vector<std::pair<uint64_t, node_prog::prog_type>> completed_requests;
@@ -467,7 +466,7 @@ try {
     }
     auto end_it = std::set_intersection(good.begin(), good.end(), bad.begin(), bad.end(), common.begin());
     common.resize(end_it - common.begin());
-    DEBUG << "Done good and bad cache ids, num common = " << common.size() << std::endl;
+    //DEBUG << "Done good and bad cache ids, num common = " << common.size() << std::endl;
     G->print_cache_size();
     
     // remove state corresponding to completed node programs
@@ -477,7 +476,7 @@ try {
     DEBUG << "caught exception here, shard = " << G->myid << std::endl;
     return;
 }
-    DEBUG << "Done add request, size = " << completed_requests.size() << std::endl;
+    //DEBUG << "Done add request, size = " << completed_requests.size() << std::endl;
 
     // permanent deletion of deleted and migrated nodes
 try {
@@ -805,6 +804,7 @@ unpack_update_request(db::graph *G, void *req)
     common::property prop;
     uint32_t key;
     std::unique_ptr<std::vector<uint64_t>> cache;
+    uint64_t request_count, sender;
 
     switch (request->type)
     {
@@ -913,6 +913,18 @@ unpack_update_request(db::graph *G, void *req)
                 G->release_node(n);
             }
             G->migration_mutex.unlock();
+            break;
+        }
+
+        case message::REQUEST_COUNT_ACK: {
+            message::unpack_message(*request->msg, message::REQUEST_COUNT_ACK, request_count, sender);
+            G->msg_count_mutex.lock();
+            G->request_count[sender-1] = request_count;
+            uint64_t reply_cnt = ++G->request_reply_count;
+            G->msg_count_mutex.unlock();
+            if (reply_cnt == NUM_SHARDS) {
+                shard_daemon_begin(G, NULL);
+            }
             break;
         }
 
@@ -1079,6 +1091,7 @@ runner(db::graph *G)
             case message::MIGRATED_NBR_ACK:
             case message::PERMANENT_DELETE_EDGE:
             case message::PERMANENT_DELETE_EDGE_ACK:
+            case message::REQUEST_COUNT_ACK:
                 request = new db::update_request(mtype, 0, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(0, unpack_update_request, G, request);
                 G->thread_pool.add_request(thr);
@@ -1103,10 +1116,12 @@ runner(db::graph *G)
                 G->migration_mutex.unlock();
                 break;
 
-            //case message::REQUEST_COUNT:
-            //    G->msg_count_mutex.lock(();
-            //    G->msg_count_mutex.unlock(();
-            //    break;
+            case message::REQUEST_COUNT:
+                G->msg_count_mutex.lock();
+                message::prepare_message(*rec_msg, message::REQUEST_COUNT_ACK, G->request_count[G->myid-1], G->myid);
+                G->msg_count_mutex.unlock();
+                G->send(sender, rec_msg->buf);
+                break;
 
             case message::EXIT_WEAVER:
                 exit(0);
@@ -1126,6 +1141,7 @@ migration_wrapper(db::graph *G)
         uint64_t max_pos, migr_pos;
         uint64_t prev_loc;
         uint64_t migr_node = G->sorted_nodes.front().first;
+        uint32_t msg_count = G->sorted_nodes.front().second;
         n = G->acquire_node(migr_node);
         if (n == NULL || n->get_del_time() < MAX_TIME || n->dependent_del > 0 ||
             n->state == db::element::node::mode::IN_TRANSIT || n->state == db::element::node::mode::MOVED) {
@@ -1152,7 +1168,12 @@ migration_wrapper(db::graph *G)
         prev_loc = n->prev_loc;
         G->release_node(n);
         G->sorted_nodes.pop_front();
-        if (migr_pos != G->myid && migr_pos != prev_loc) { // no migration to self or previous location
+        double reverse_force = ((double)G->request_count[migr_pos-1])/G->cur_node_count;
+        DEBUG << "reverse force " << reverse_force << ", forward force " << msg_count << std::endl;
+        if (migr_pos != G->myid // no migration to self
+         && migr_pos != prev_loc // no migration previous location
+         //&& (reverse_force > msg_count) // good from load balancing point of view
+           ) {
             migrate_node_step1(G, migr_node, max_pos+1);
             no_migr = false;
             break;
@@ -1168,38 +1189,40 @@ bool agg_count_compare(std::pair<uint64_t, uint32_t> p1, std::pair<uint64_t, uin
     return (p1.second < p2.second);
 }
 
+// sort nodes in order of number of requests propagated
+// and (implicitly) pass sorted deque to migration wrapper
+// also, first update global request statistics from each shard
 void
 shard_daemon_begin(db::graph *G, void*)
 {
-    DEBUG << "Starting shard daemon" << std::endl;
-    //if (G->request_reply_count == 0) {
-    //    message::message msg;
-    //    for (uint64_t i = 1; i <= NUM_SHARDS; i++) {
-    //        message::prepare_message(msg, message::REQUEST_COUNT);
-    //        G->send(i, msg.buf);
-    //    }
-    //    G->msg_count_mutex.unlock();
-    //    return;
-    //} else if (G->request_reply_count < NUM_SHARDS) {
-    //    // still awaiting some counter updates
-    //    G->msg_count_mutex.unlock();
-    //    return;
-    //} else {
-    G->msg_count_mutex.lock();
-    auto agg_msg_count = std::move(G->agg_msg_count);
-    assert(G->agg_msg_count.empty());
-    G->msg_count_mutex.unlock();
-    std::deque<std::pair<uint64_t, uint32_t>> sn;
-    for (auto &p: agg_msg_count) {
-        sn.emplace_back(p);
+    if (G->request_reply_count == 0) {
+        message::message msg;
+        for (uint64_t i = 1; i <= NUM_SHARDS; i++) {
+            message::prepare_message(msg, message::REQUEST_COUNT);
+            G->send(i, msg.buf);
+        }
+        return;
+    } else {
+        DEBUG << "Starting shard daemon" << std::endl;
+        G->msg_count_mutex.lock();
+        assert (G->request_reply_count == NUM_SHARDS);
+        G->request_reply_count = 0;
+        G->request_count_const = G->request_count;
+        auto agg_msg_count = std::move(G->agg_msg_count);
+        assert(G->agg_msg_count.empty());
+        G->cur_node_count = agg_msg_count.size();
+        G->msg_count_mutex.unlock();
+        std::deque<std::pair<uint64_t, uint32_t>> sn;
+        for (auto &p: agg_msg_count) {
+            sn.emplace_back(p);
+        }
+        std::sort(sn.begin(), sn.end(), agg_count_compare);
+        size_t num_nodes = sn.size();
+        sn.erase(sn.begin() + num_nodes/2, sn.end());
+        DEBUG << "Migr nodes size = " << sn.size() << std::endl;
+        G->sorted_nodes = std::move(sn);
+        migration_wrapper(G);
     }
-    std::sort(sn.begin(), sn.end(), agg_count_compare);
-    size_t num_nodes = sn.size();
-    sn.erase(sn.begin() + num_nodes/2, sn.end());
-    DEBUG << "Migr nodes size = " << sn.size() << std::endl;
-    G->sorted_nodes = std::move(sn);
-    migration_wrapper(G);
-    //}
 }
 
 void

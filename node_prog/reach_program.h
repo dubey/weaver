@@ -199,11 +199,11 @@ namespace node_prog
             if (((--state.out_count == 0) || params.reachable) && !state.reachable) {
                 state.reachable |= params.reachable;
                 next.emplace_back(std::make_pair(state.prev_node, params));
-                if (params.reachable) {
-                    // adding to cache
-                    reach_cache_value &rcv = cache_putter();
-                    rcv.reachable_node = params.dest;
-                }
+                //if (params.reachable) {
+                //    // adding to cache
+                //    reach_cache_value &rcv = cache_putter();
+                //    rcv.reachable_node = params.dest;
+                //}
                 //DEBUG << "done with req " << req_id << " at node " << rn.handle << std::endl;
             } else if ((int)state.out_count < 0) {
                 DEBUG << "ALERT! Bad state value in reach program" << std::endl;

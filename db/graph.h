@@ -210,8 +210,9 @@ namespace db
             bool migrated, migr_token;
             timespec migr_time;
             graph_arg_func migr_func;
-            std::vector<uint64_t> request_count;
+            std::vector<uint64_t> request_count, request_count_const;
             uint32_t request_reply_count;
+            uint64_t cur_node_count;
             std::unordered_map<uint64_t, uint32_t> agg_msg_count;
             std::deque<std::pair<uint64_t, uint32_t>> sorted_nodes;
             std::deque<std::unique_ptr<std::pair<uint64_t, uint64_t>>> migrated_nodes; // for permanent deletion later on
