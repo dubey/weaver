@@ -1159,6 +1159,18 @@ migration_wrapper(db::graph *G)
             continue;
         }
         n->updated = false;
+        db::element::edge *e;
+        for (auto &e_iter: n->out_edges) {
+            e = e_iter.second;
+            n->msg_count[e->nbr.loc] += e->msg_count;
+        }
+        for (auto &e_iter: n->in_edges) {
+            e = e_iter.second;
+            n->msg_count[e->nbr.loc] += e->msg_count;
+        }
+        for (size_t j = 0; j < NUM_SHARDS; j++) {
+            n->agg_msg_count[j] += (uint64_t)(0.8 * (double)(n->msg_count[j]));
+        }
         max_pos = 0;
         for (uint64_t j = 0; j < n->agg_msg_count.size(); j++) {
             if (n->agg_msg_count.at(max_pos) < n->agg_msg_count.at(j)) {
@@ -1182,6 +1194,11 @@ migration_wrapper(db::graph *G)
         prev_loc = (n->prev_loc == migr_pos);
         DEBUG << "For node " << migr_node << ", migr pos = " << migr_pos 
             << ", cur loc " << G->myid << ", prev loc " << n->prev_loc << std::endl;
+        //DEBUG << "Agg msg count vector: ";
+        //for (auto x: n->agg_msg_count) {
+        //    std::cerr << x << " ";
+        //}
+        //std::cerr << std::endl;
         G->release_node(n);
         G->sorted_nodes.pop_front();
         double reverse_force = ((double)G->request_count[migr_pos-1])/G->cur_node_count;

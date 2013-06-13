@@ -177,6 +177,7 @@ namespace node_prog
                         }
                         //DEBUG << "Props check give " << traverse_edge << std::endl;
                         if (traverse_edge) {
+                            e->traverse();
                             next.emplace_back(std::make_pair(e->nbr, params)); // propagate reachability request
                             state.out_count++;
                         }
@@ -199,6 +200,14 @@ namespace node_prog
             //DEBUG << "Starting reply, out count is " << state.out_count << std::endl;
             if (((--state.out_count == 0) || params.reachable) && !state.reachable) {
                 state.reachable |= params.reachable;
+                db::element::edge *e;
+                for (auto e_iter: n.in_edges) {
+                    e = e_iter.second;
+                    if (e->nbr == state.prev_node) {
+                        e->traverse();
+                        break;
+                    }
+                }
                 next.emplace_back(std::make_pair(state.prev_node, params));
                 //if (params.reachable) {
                 //    // adding to cache

@@ -17,7 +17,6 @@
 #endif
 #include "common/weaver_constants.h"
 
-#ifdef __ALL_TESTS__
 #include "message_test.h"
 #include "cache_test.h"
 #include "basic_client.h"
@@ -30,10 +29,6 @@
 #include "dijkstra_tree_test.h"
 #include "multiple_widest_path.h"
 //#include "clustering_prog_test.h"
-#endif
-#ifndef __ALL_TESTS__
-#include "line_reach_program.h"
-#endif
 
 int
 main(int argc, char *argv[])
@@ -67,7 +62,7 @@ main(int argc, char *argv[])
     //clustering_prog_test();
 #endif
 #ifndef __ALL_TESTS__
-    line_reach_prog(true);
+    multiple_reach_prog(true);
 #endif
     DEBUG << "All tests completed." << std::endl;
 

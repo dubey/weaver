@@ -33,20 +33,30 @@ namespace element
         
         public:
             remote_node nbr; // out-neighbor for this edge
+            uint32_t msg_count; // number of messages sent on this link
+            void traverse(); // indicate that this edge was traversed; useful for migration statistics
     };
 
     inline
     edge :: edge(uint64_t time, uint64_t remote_loc, uint64_t remote_handle)
         : element(time)
         , nbr(remote_loc, remote_handle)
-    {
-    }
+        , msg_count(0)
+    { }
 
     inline
     edge :: edge(uint64_t time, remote_node rn)
         : element(time)
         , nbr(rn)
+        , msg_count(0)
+    { }
+
+    // caution: should be called with node mutex held
+    // should always be called when an edge is traversed in a node program
+    inline void
+    edge :: traverse()
     {
+        msg_count++;
     }
 }
 }

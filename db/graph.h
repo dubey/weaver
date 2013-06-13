@@ -684,6 +684,7 @@ namespace db
             element::edge *e = n->out_edges.at(edge_handle);
             assert(e->nbr.handle == remote_node);
             n->msg_count[e->nbr.loc-1] = 0;
+            e->msg_count = 0;
             e->nbr.loc = new_loc;
             found = true;
         }
@@ -691,6 +692,7 @@ namespace db
             element::edge *e = n->in_edges.at(edge_handle);
             assert(e->nbr.handle == remote_node);
             n->msg_count[e->nbr.loc-1] = 0;
+            e->msg_count = 0;
             e->nbr.loc = new_loc;
             found = true;
         }
