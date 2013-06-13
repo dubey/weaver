@@ -197,6 +197,7 @@ namespace db
             void permanent_delete(uint64_t req_id, uint64_t migr_del_id);
             void permanent_node_delete(element::node *n);
             void permanent_edge_delete(uint64_t n, uint64_t e);
+            uint64_t get_node_count();
 
             // Node migration
             migrate_request mrequest; // pending migration request object
@@ -210,7 +211,7 @@ namespace db
             bool migrated, migr_token;
             timespec migr_time;
             graph_arg_func migr_func;
-            std::vector<uint64_t> request_count, request_count_const;
+            std::vector<uint64_t> request_count, request_count_const, node_count;
             uint32_t request_reply_count;
             uint64_t cur_node_count;
             std::unordered_map<uint64_t, uint32_t> agg_msg_count;
@@ -276,7 +277,9 @@ namespace db
         , migrated(false)
         , migr_token(false)
         , request_count(NUM_SHARDS, 0)
+        , node_count(NUM_SHARDS, 0)
         , request_reply_count(0)
+        , cur_node_count(0)
 #ifdef __WEAVER_DEBUG__
         , sent_count(0)
         , rec_count(0)
@@ -359,6 +362,7 @@ namespace db
         } else if (n->permanently_deleted) {
             uint64_t node_handle = n->get_creat_time();
             nodes.erase(node_handle);
+            cur_node_count--;
             update_mutex.unlock();
             msg_count_mutex.lock();
             agg_msg_count.erase(node_handle);
@@ -375,7 +379,10 @@ namespace db
     {
         element::node *new_node = new element::node(time, &update_mutex);
         update_mutex.lock();
-        nodes.emplace(time, new_node);
+        if (!nodes.emplace(time, new_node).second) {
+            DEBUG << "node already exists in node map!" << std::endl;
+        }
+        cur_node_count++;
         update_mutex.unlock();
         if (migrate) {
             migration_mutex.lock();
@@ -383,6 +390,10 @@ namespace db
             migration_mutex.unlock();
         } else {
             new_node->state = element::node::mode::STABLE;
+            for (uint64_t i = 0; i < NUM_SHARDS; i++) {
+                new_node->prev_locs.emplace_back(0);
+            }
+            new_node->prev_locs.at(myid-1) = 1;
         }
         release_node(new_node);
     }
@@ -653,6 +664,16 @@ namespace db
         deletion_mutex.unlock();
     }
 
+    inline uint64_t
+    graph :: get_node_count()
+    {
+        uint64_t to_ret;
+        update_mutex.lock();
+        to_ret = cur_node_count;
+        update_mutex.unlock();
+        return to_ret;
+    }
+
     // migration methods
 
     inline void
@@ -662,12 +683,14 @@ namespace db
         if (n->out_edges.find(edge_handle) != n->out_edges.end()) {
             element::edge *e = n->out_edges.at(edge_handle);
             assert(e->nbr.handle == remote_node);
+            n->msg_count[e->nbr.loc-1] = 0;
             e->nbr.loc = new_loc;
             found = true;
         }
         if (n->in_edges.find(edge_handle) != n->in_edges.end()) {
             element::edge *e = n->in_edges.at(edge_handle);
             assert(e->nbr.handle == remote_node);
+            n->msg_count[e->nbr.loc-1] = 0;
             e->nbr.loc = new_loc;
             found = true;
         }

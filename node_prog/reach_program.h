@@ -127,6 +127,7 @@ namespace node_prog
             std::function<reach_cache_value&()> cache_putter,
             std::function<std::vector<std::shared_ptr<reach_cache_value>>()> cached_values_getter)
     {
+        UNUSED(cache_putter);
         //DEBUG << "Starting reach prog, id = " << req_id << "\n";
         reach_node_state &state = state_getter();
         bool false_reply = false;

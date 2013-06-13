@@ -37,6 +37,7 @@ namespace message
             + size(t.out_edges)
             + size(t.in_edges)
             + size(t.update_count)
+            + size(t.prev_locs)
             + size(t.agg_msg_count)
             + prog_state->size(t.get_creat_time());
         return sz;
@@ -58,6 +59,7 @@ namespace message
         pack_buffer(packer, t.out_edges);
         pack_buffer(packer, t.in_edges);
         pack_buffer(packer, t.update_count);
+        pack_buffer(packer, t.prev_locs);
         pack_buffer(packer, t.agg_msg_count);
         prog_state->pack(t.get_creat_time(), packer);
     }
@@ -87,6 +89,7 @@ namespace message
         unpack_buffer(unpacker, t.out_edges);
         unpack_buffer(unpacker, t.in_edges);
         unpack_buffer(unpacker, t.update_count);
+        unpack_buffer(unpacker, t.prev_locs);
         unpack_buffer(unpacker, t.agg_msg_count);
         t.update_creat_time(tc);
         t.update_del_time(td);

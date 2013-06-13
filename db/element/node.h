@@ -95,6 +95,7 @@ namespace element
             // for migration
             uint64_t prev_loc, new_loc;
             uint64_t update_count;
+            std::vector<uint16_t> prev_locs;
             std::vector<uint64_t> agg_msg_count;
             std::vector<uint32_t> msg_count;
             bool updated;

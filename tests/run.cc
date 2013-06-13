@@ -19,7 +19,8 @@
 #include "repetitive_reach_program.h"
 //#include "multiple_reach_program.h"
 #include "line_reach_program.h"
-#include "multiple_widest_path.h"
+//#include "clique_reach_program.h"
+//#include "multiple_widest_path.h"
 //#include "dijkstra_prog_test.h"
 #include "tree_test.h"
 //#include "reach_prog_test.h"
@@ -45,6 +46,7 @@ main(int argc, char *argv[])
     //repetitive_reach_prog();
     //multiple_reach_prog();
     line_reach_prog();
+    //clique_reach_prog();
     //multiple_wp_prog();
     //delete_prog_test();
     //dijkstra_prog_test();

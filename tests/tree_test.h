@@ -100,7 +100,7 @@ tree_test()
         initial_args[0].second.edge_weight_key = weight_label;
         node_prog::dijkstra_params* res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
 
-        uint64_t alternate_route_node = (1 << height - 1)+1;
+        uint64_t alternate_route_node = (1 << (height - 1))+1;
         uint64_t expected_cost = path_cost(1, height-1) + alternate_route_node + path_cost(alternate_route_node, TREE_HEIGHT);
         std::cout << "path of cost " << res->cost <<" wanted " << expected_cost << " though node " << alternate_route_node << std::endl;
         assert(res->cost == expected_cost);
