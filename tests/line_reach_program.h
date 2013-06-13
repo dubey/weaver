@@ -16,7 +16,7 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define REQUESTS 15000
+#define LRP_REQUESTS 15000
 
 void
 line_reach_prog()
@@ -52,7 +52,7 @@ line_reach_prog()
     req_time.open("time.rec");
     clock_gettime(CLOCK_MONOTONIC, &t1);
     start = t1;
-    for (i = 0; i < REQUESTS; i++) {
+    for (i = 0; i < LRP_REQUESTS; i++) {
         clock_gettime(CLOCK_MONOTONIC, &t2);
         dif = diff(t1, t2);
         std::cout << "Test: i = " << i << ", ";

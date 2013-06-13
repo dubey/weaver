@@ -44,6 +44,7 @@ class client
         template <typename ParamsType>
         ParamsType* run_node_program(node_prog::prog_type prog_to_run,
             std::vector<std::pair<uint64_t, ParamsType>> initial_args);
+        uint64_t get_node_loc(uint64_t node);
         void exit_weaver();
 
     private:
@@ -149,6 +150,7 @@ client :: commit_graph()
     send_coord(msg.buf);
 }
 
+// client needs to delete the pointer returned
 template <typename ParamsType>
 inline ParamsType *
 client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args)
@@ -170,6 +172,25 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
 
     ParamsType *toRet = new ParamsType(tempPair.second); // make sure client frees
     return toRet;
+}
+
+// caution: node loc may change as time goes on, the location returned
+// is only correct as of the time the request is processed at the coordinator
+inline uint64_t
+client :: get_node_loc(uint64_t node)
+{
+    busybee_returncode ret;
+    message::message msg;
+    uint64_t sender;
+    uint64_t loc = (uint64_t)(-1);
+    message::prepare_message(msg, message::CLIENT_NODE_LOC_REQ, node);
+    send_coord(msg.buf);
+    if ((ret = client_bb->recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
+        DEBUG << "msg recv error: " << ret << std::endl;
+        return loc;
+    }
+    message::unpack_message(msg, message::CLIENT_NODE_LOC_REPLY, loc);
+    return loc;
 }
 
 inline void

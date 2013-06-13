@@ -1,6 +1,6 @@
 /*
  * ===============================================================
- *    Description:  Run all tests!
+ *    Description:  Run test suite.
  *
  *        Created:  01/21/2013 11:45:25 AM
  *
@@ -13,18 +13,24 @@
 
 #include "common/debug.h"
 
-//#include "message_test.h"
-//#include "cache_test.h"
-//#include "basic_client.h"
+#define __ALL_TESTS__
+#ifdef __ALL_TESTS__
+#include "message_test.h"
+#include "cache_test.h"
+#include "basic_client.h"
 #include "repetitive_reach_program.h"
-//#include "multiple_reach_program.h"
+#include "multiple_reach_program.h"
+#include "basic_migration_test.h"
 #include "line_reach_program.h"
-//#include "clique_reach_program.h"
-//#include "multiple_widest_path.h"
+#include "clique_reach_program.h"
 //#include "dijkstra_prog_test.h"
-#include "tree_test.h"
-//#include "reach_prog_test.h"
+#include "dijkstra_tree_test.h"
+#include "multiple_widest_path.h"
 //#include "clustering_prog_test.h"
+#endif
+#ifndef __ALL_TESTS__
+#include "line_reach_program.h"
+#endif
 
 int
 main(int argc, char *argv[])
@@ -32,31 +38,35 @@ main(int argc, char *argv[])
     UNUSED(argc);
     UNUSED(argv);
 
-    //std::set_terminate(debug_terminate);
-    std::cout << "Starting tests." << std::endl;
-    //message_test();
-    //std::cout << "Message packing/unpacking ok." << std::endl;
-    //cache_test();
-    //std::cout << "Shard cache ok." << std::endl;
-    //basic_client_test();
-    //std::cout << "Basic client ok." << std::endl;
-    //stress_client_test();
-    //std::cout << "Stress client ok." << std::endl;
-    //reach_prog_test();
-    //repetitive_reach_prog();
-    //multiple_reach_prog();
+    DEBUG << "Starting tests." << std::endl;
+#ifdef __ALL_TESTS
+    message_test();
+    DEBUG << "Message packing/unpacking ok." << std::endl;
+    cache_test();
+    DEBUG << "Shard cache ok." << std::endl;
+    basic_client_test();
+    DEBUG << "Basic client ok." << std::endl;
+    repetitive_reach_prog();
+    DEBUG << "Repetitive reach program ok." << std::endl;
+    multiple_reach_prog();
+    DEBUG << "Multiple reach program ok." << std::endl;
+    basic_migration_test();
+    DEBUG << "Basic migration ok." << std::endl;
     line_reach_prog();
-    //clique_reach_prog();
-    //multiple_wp_prog();
-    //delete_prog_test();
+    DEBUG << "Line reach program ok." << std::endl;
+    clique_reach_prog();
+    DEBUG << "Clique reach program ok." << std::endl;
+    multiple_wp_prog();
+    DEBUG << "Widest path program ok." << std::endl;
     //dijkstra_prog_test();
-    //tree_test();
+    dijkstra_tree_test();
+    DEBUG << "Shortest path tree test ok." << std::endl;
     //clustering_prog_test();
-    std::cout << "Node prog tests done." << std::endl;
-    //clustering_test();
-    //std::cout <<"Clustering ok.\n";
-    //dijkstra_test();
-    //std::cout <<"Dijkstra ok.\n";
+#endif
+#ifndef __ALL_TESTS__
+    line_reach_prog();
+#endif
+    DEBUG << "All tests completed." << std::endl;
 
     return 0;
 }

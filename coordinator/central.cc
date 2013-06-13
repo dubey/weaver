@@ -330,6 +330,23 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
     }
 }
 
+inline void
+get_node_loc(coordinator::central *server, std::unique_ptr<message::message> msg, uint64_t sender)
+{
+    uint64_t node_handle, loc;
+    message::unpack_message(*msg, message::CLIENT_NODE_LOC_REQ, node_handle);
+    if (check_elem(server, node_handle, true)) {
+        std::cerr << "node(s) not found or deleted, cannot return loc" << std::endl;
+        loc = -1;
+    } else {
+        server->update_mutex.lock();
+        loc = server->nodes.at(node_handle)->get_loc();
+        server->update_mutex.unlock();
+    }
+    message::prepare_message(*msg, message::CLIENT_NODE_LOC_REPLY, loc);
+    server->send(sender, msg->buf);
+}
+
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> ::
     unpack_and_run_db(db::graph*, message::message&)
@@ -465,6 +482,10 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg,
 
         case message::CLIENT_COMMIT_GRAPH:
             write_graph();
+            break;
+        
+        case message::CLIENT_NODE_LOC_REQ:
+            get_node_loc(server, std::move(msg), crequest->client);
             break;
 
         case message::EXIT_WEAVER:

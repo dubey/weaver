@@ -32,7 +32,6 @@
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
 #include "node_prog/node_prog_type.h" // used for packing Packable objects
-#include "db/request_objects.h"
 
 namespace message
 {
@@ -49,6 +48,8 @@ namespace message
         CLIENT_COMMIT_GRAPH,
         CLIENT_NODE_PROG_REQ,
         CLIENT_NODE_PROG_REPLY,
+        CLIENT_NODE_LOC_REQ,
+        CLIENT_NODE_LOC_REPLY,
         // graph update messages
         NODE_CREATE_REQ,
         EDGE_CREATE_REQ,

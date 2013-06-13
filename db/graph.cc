@@ -783,30 +783,13 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             batched_deleted_nodes[next_loc].clear();
         }
     }
-    // check if migration needs to be initiated
-    //timespec t, dif;
-    //bool to_migrate = false;
-    //G->migration_mutex.lock();
-    //clock_gettime(CLOCK_MONOTONIC, &t);
-    //if (!G->migrated && G->migr_token) {
-    //    dif = diff(G->migr_time, t);
-    //    if (dif.tv_sec > MIGR_FREQ) {
-    //        G->migrated = true;
-    //        to_migrate = true;
-    //    }
-    //}
-    //G->migration_mutex.unlock();
-    //if (to_migrate) {
-    //    shard_daemon_begin(G, NULL);
-    //}
 }
 
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
     unpack_and_start_coord(coordinator::central*, std::shared_ptr<coordinator::pending_req>)
-{
-}
+{ }
 
 // unpack update request and call appropriate function
 void

@@ -16,7 +16,7 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define REQUESTS 4000
+#define CRP_REQUESTS 4000
 #define NUM_CLIQUES NUM_SHARDS
 #define CLIQUE_SIZE 200
 
@@ -70,7 +70,7 @@ clique_reach_prog()
     clock_gettime(CLOCK_MONOTONIC, &t1);
     start = t1;
     // random reachability requests
-    for (i = 0; i < REQUESTS; i++) {
+    for (i = 0; i < CRP_REQUESTS; i++) {
         clock_gettime(CLOCK_MONOTONIC, &t2);
         dif = diff(t1, t2);
         std::cout << "Test: i = " << i << ", ";

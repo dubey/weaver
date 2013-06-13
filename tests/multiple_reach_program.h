@@ -16,7 +16,7 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define REQUESTS 10000
+#define MRP_REQUESTS 10000
 
 void
 multiple_reach_prog()
@@ -61,7 +61,7 @@ multiple_reach_prog()
     req_time.open("time.rec");
     clock_gettime(CLOCK_MONOTONIC, &t1);
     first = t1;
-    for (i = 0; i < REQUESTS; i++) {
+    for (i = 0; i < MRP_REQUESTS; i++) {
         clock_gettime(CLOCK_MONOTONIC, &t2);
         dif = diff(t1, t2);
         std::cout << "Test: i = " << i << ", ";

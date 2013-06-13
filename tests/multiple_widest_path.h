@@ -16,7 +16,7 @@
 #include "node_prog/dijkstra_program.h"
 #include "test_base.h"
 
-#define REQUESTS 100
+#define WP_REQUESTS 100
 
 void
 multiple_wp_prog()
@@ -60,7 +60,7 @@ multiple_wp_prog()
     req_time.open("time.rec");
     clock_gettime(CLOCK_MONOTONIC, &t1);
     first = t1;
-    for (i = 0; i < REQUESTS; i++) {
+    for (i = 0; i < WP_REQUESTS; i++) {
         clock_gettime(CLOCK_MONOTONIC, &t2);
         dif = diff(t1, t2);
         std::cout << "Test: i = " << i << ", ";
