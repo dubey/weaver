@@ -58,8 +58,8 @@ cache_test()
         rcv.reset(new node_prog::reach_cache_value());
         rcv->reachable_node = dst_node;
         c.put_cache(rid, ptype, src_node, rcv);
+        c.commit(rid);
     }
-    c.commit(req_id);
     ignore.emplace(0);
     vec_cvb = c.get_cache(ptype, src_node, 10, dirty_list, ignore);
     assert(vec_cvb.size() == 9);

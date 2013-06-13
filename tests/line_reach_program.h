@@ -19,7 +19,7 @@
 #define LRP_REQUESTS 15000
 
 void
-line_reach_prog()
+line_reach_prog(bool to_exit)
 {
     client c(CLIENT_ID);
     int i, num_nodes;
@@ -32,16 +32,16 @@ line_reach_prog()
     count_in >> num_nodes;
     count_in.close();
     for (i = 0; i < num_nodes; i++) {
-        std::cout << "Creating node " << (i+1) << std::endl;
+        DEBUG << "Creating node " << (i+1) << std::endl;
         nodes.emplace_back(c.create_node());
     }
     for (i = 0; i < num_nodes-1; i++) {
-        std::cout << "Creating edge " << (i+1) << std::endl;
+        DEBUG << "Creating edge " << (i+1) << std::endl;
         edges.emplace_back(c.create_edge(nodes[i], nodes[i+1]));
     }
-    std::cout << "Created graph\n";
+    DEBUG << "Created graph\n";
     c.commit_graph();
-    std::cout << "Committed graph\n";
+    DEBUG << "Committed graph\n";
     node_prog::reach_params rp;
     rp.mode = false;
     rp.reachable = false;
@@ -55,8 +55,8 @@ line_reach_prog()
     for (i = 0; i < LRP_REQUESTS; i++) {
         clock_gettime(CLOCK_MONOTONIC, &t2);
         dif = diff(t1, t2);
-        std::cout << "Test: i = " << i << ", ";
-        std::cout << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
+        DEBUG << "Test: i = " << i << ", ";
+        DEBUG << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
         if (i % 10 == 0) {
             dif = diff(start, t2);
             req_time << dif.tv_sec << '.' << dif.tv_nsec << std::endl;
@@ -75,10 +75,11 @@ line_reach_prog()
     file.close();
     req_time.close();
     dif = diff(start, t2);
-    std::cout << "Total time taken " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
+    DEBUG << "Total time taken " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
     std::ofstream stat_file;
     stat_file.open("stats.rec", std::ios::out | std::ios::app);
     stat_file << num_nodes << " " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
     stat_file.close();
-    c.exit_weaver();
+    if (to_exit)
+        c.exit_weaver();
 }

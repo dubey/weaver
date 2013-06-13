@@ -12,8 +12,11 @@
  */
 
 #include "common/debug.h"
+#ifndef __WEAVER_DEBUG__
+#define __WEAVER_DEBUG__
+#endif
+#include "common/weaver_constants.h"
 
-#define __ALL_TESTS__
 #ifdef __ALL_TESTS__
 #include "message_test.h"
 #include "cache_test.h"
@@ -39,32 +42,32 @@ main(int argc, char *argv[])
     UNUSED(argv);
 
     DEBUG << "Starting tests." << std::endl;
-#ifdef __ALL_TESTS
+#ifdef __ALL_TESTS__
     message_test();
     DEBUG << "Message packing/unpacking ok." << std::endl;
     cache_test();
     DEBUG << "Shard cache ok." << std::endl;
     basic_client_test();
     DEBUG << "Basic client ok." << std::endl;
-    repetitive_reach_prog();
+    repetitive_reach_prog(false);
     DEBUG << "Repetitive reach program ok." << std::endl;
-    multiple_reach_prog();
+    multiple_reach_prog(false);
     DEBUG << "Multiple reach program ok." << std::endl;
     basic_migration_test();
     DEBUG << "Basic migration ok." << std::endl;
-    line_reach_prog();
+    line_reach_prog(false);
     DEBUG << "Line reach program ok." << std::endl;
-    clique_reach_prog();
+    clique_reach_prog(false);
     DEBUG << "Clique reach program ok." << std::endl;
-    multiple_wp_prog();
+    //multiple_wp_prog(false);
     DEBUG << "Widest path program ok." << std::endl;
     //dijkstra_prog_test();
-    dijkstra_tree_test();
+    dijkstra_tree_test(true);
     DEBUG << "Shortest path tree test ok." << std::endl;
     //clustering_prog_test();
 #endif
 #ifndef __ALL_TESTS__
-    line_reach_prog();
+    line_reach_prog(true);
 #endif
     DEBUG << "All tests completed." << std::endl;
 

@@ -23,16 +23,23 @@ basic_migration_test()
     std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args;
     n1 = c.create_node();
     n2 = c.create_node();
+    c.create_edge(n1, n2);
     assert(c.get_node_loc(n1) != c.get_node_loc(n2));
     initial_args.emplace_back(std::make_pair(n1, node_prog::reach_params()));
     initial_args.at(0).second.mode = false;
     initial_args.at(0).second.reachable = false;
     initial_args.at(0).second.prev_node.loc = COORD_ID;
     initial_args.at(0).second.dest = n2;
-    for (int i = 0; i < 10000; i++) {
+    for (int i = 0; i < 100000; i++) {
+        if ((i % 100) == 0)
+            DEBUG << "completed " << i << " requests" << std::endl;
         node_prog::reach_params *res = c.run_node_program(node_prog::REACHABILITY, initial_args);
         assert(res->reachable);
         delete res;
     }
-    assert(c.get_node_loc(n1) == c.get_node_loc(n2));
+    uint64_t loc1 = c.get_node_loc(n1);
+    uint64_t loc2 = c.get_node_loc(n2);
+    assert(loc1 == loc2);
+    c.delete_node(n1);
+    c.delete_node(n2);
 }

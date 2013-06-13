@@ -21,6 +21,8 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
+#define RRP_ITERATIONS 100
+
 static uint64_t repetitive_nodes[10];
 static uint64_t repetitive_edges[10];
 static bool check_reachable = false;
@@ -122,7 +124,7 @@ create_edges(client *c, int num1, int num2, int num3, int num4)
 }
 
 void
-repetitive_reach_prog()
+repetitive_reach_prog(bool to_exit)
 {
     client c(CLIENT_ID);
     int i;
@@ -130,19 +132,19 @@ repetitive_reach_prog()
     timespec t1, t2, dif;
     std::vector<common::property> edge_props;
     for (i = 0; i < 10; i++) {
-        std::cout << "Creating node " << (i+1) << std::endl;
+        DEBUG << "Creating node " << (i+1) << std::endl;
         repetitive_nodes[i] = c.create_node();
     }
-    std::cout << "Created nodes\n";
+    DEBUG << "Created nodes\n";
     t = new std::thread(check_reachability);
     t->detach();
     
     clock_gettime(CLOCK_MONOTONIC, &t1);
-    for (i = 0; i < 10000; i++) {
+    for (i = 0; i < RRP_ITERATIONS; i++) {
         clock_gettime(CLOCK_MONOTONIC, &t2);
         dif = diff(t1, t2);
-        std::cout << "Test: i = " << i << ", ";
-        std::cout << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
+        DEBUG << "Test: i = " << i << ", ";
+        DEBUG << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
         t1 = t2;
         create_edges(&c,0,1,2,3);
         common::property prop(42, 84, 0);
@@ -170,9 +172,12 @@ repetitive_reach_prog()
         delete_edges(&c,0,2);
         signal_reachable(-1,-1,-1,-1); // nothing reachable
     }
-
+    for (i = 0; i < 10; i++) {
+        c.delete_node(repetitive_nodes[i]);
+    }
     // releasing locks, killing all threads
     end_program = true;
     synch_cond.broadcast();
-    c.exit_weaver();
+    if (to_exit)
+        c.exit_weaver();
 }

@@ -16,12 +16,12 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define CRP_REQUESTS 4000
+#define CRP_REQUESTS 400
 #define NUM_CLIQUES NUM_SHARDS
 #define CLIQUE_SIZE 200
 
 void
-clique_reach_prog()
+clique_reach_prog(bool to_exit)
 {
     client c(CLIENT_ID);
     int i, num_nodes;
@@ -30,11 +30,11 @@ clique_reach_prog()
     srand(time(NULL));
     num_nodes = NUM_CLIQUES * CLIQUE_SIZE;
     for (i = 0; i < num_nodes; i++) {
-        std::cout << "Creating node " << (i+1) << std::endl;
+        DEBUG << "Creating node " << (i+1) << std::endl;
         nodes.emplace_back(c.create_node());
     }
     // creating intra-clique edges
-    std::cout << "Going to create edges now" << std::endl;
+    DEBUG << "Going to create edges now" << std::endl;
     for (int clique = 0; clique < NUM_CLIQUES; clique++) {
         int offset = clique * CLIQUE_SIZE;
         for (i = 0; i < CLIQUE_SIZE; i++) {
@@ -56,9 +56,9 @@ clique_reach_prog()
                 nodes[CLIQUE_SIZE/2 + j*CLIQUE_SIZE]));
         }
     }
-    std::cout << "Created graph\n";
+    DEBUG << "Created graph\n";
     c.commit_graph();
-    std::cout << "Committed graph\n";
+    DEBUG << "Committed graph\n";
     node_prog::reach_params rp;
     rp.mode = false;
     rp.reachable = false;
@@ -73,8 +73,8 @@ clique_reach_prog()
     for (i = 0; i < CRP_REQUESTS; i++) {
         clock_gettime(CLOCK_MONOTONIC, &t2);
         dif = diff(t1, t2);
-        std::cout << "Test: i = " << i << ", ";
-        std::cout << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
+        DEBUG << "Test: i = " << i << ", ";
+        DEBUG << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
         if (i % 10 == 0) {
             dif = diff(start, t2);
             req_time << dif.tv_sec << '.' << dif.tv_nsec << std::endl;
@@ -96,10 +96,11 @@ clique_reach_prog()
     file.close();
     req_time.close();
     dif = diff(start, t2);
-    std::cout << "Total time taken " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
+    DEBUG << "Total time taken " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
     std::ofstream stat_file;
     stat_file.open("stats.rec", std::ios::out | std::ios::app);
     stat_file << num_nodes << " " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
     stat_file.close();
-    c.exit_weaver();
+    if (to_exit)
+        c.exit_weaver();
 }

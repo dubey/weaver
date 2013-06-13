@@ -19,7 +19,7 @@
 #define WP_REQUESTS 100
 
 void
-multiple_wp_prog()
+multiple_wp_prog(bool to_exit)
 {
     client c(CLIENT_ID);
     int i, num_nodes, num_edges;
@@ -34,7 +34,7 @@ multiple_wp_prog()
     count_in.close();
     num_edges = (int)(10.0 * (double)num_nodes);
     for (i = 0; i < num_nodes; i++) {
-        std::cout << "Creating node " << (i+1) << std::endl;
+        DEBUG << "Creating node " << (i+1) << std::endl;
         nodes.emplace_back(c.create_node());
     }
     for (i = 0; i < num_edges; i++) {
@@ -43,13 +43,13 @@ multiple_wp_prog()
         while (second == first) {
             second = rand() % num_nodes;
         }
-        std::cout << "Creating edge " << (i+1) << std::endl;
+        DEBUG << "Creating edge " << (i+1) << std::endl;
         edges.emplace_back(c.create_edge(nodes[first], nodes[second]));
         c.add_edge_prop(nodes[first], edges[edges.size()-1], weight_label, rand() % 100);
     }
-    std::cout << "Created graph\n";
+    DEBUG << "Created graph\n";
     c.commit_graph();
-    std::cout << "Committed graph\n";
+    DEBUG << "Committed graph\n";
 
     node_prog::dijkstra_params dp;
     dp.adding_nodes = false;
@@ -63,8 +63,8 @@ multiple_wp_prog()
     for (i = 0; i < WP_REQUESTS; i++) {
         clock_gettime(CLOCK_MONOTONIC, &t2);
         dif = diff(t1, t2);
-        std::cout << "Test: i = " << i << ", ";
-        std::cout << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
+        DEBUG << "Test: i = " << i << ", ";
+        DEBUG << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
         if (i % 10 == 0) {
             dif = diff(first, t2);
             req_time << dif.tv_sec << '.' << dif.tv_nsec << std::endl;
@@ -81,17 +81,18 @@ multiple_wp_prog()
         dp.dst_handle = nodes[second];
         initial_args.emplace_back(std::make_pair(nodes[first], dp));
         node_prog::dijkstra_params *res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
-        std::cout << "Request " << i << ", from source " << nodes[first] << " to dest " << nodes[second];
-        std::cout << ". cost of wp = " << res->cost << std::endl;
+        DEBUG << "Request " << i << ", from source " << nodes[first] << " to dest " << nodes[second];
+        DEBUG << ". cost of wp = " << res->cost << std::endl;
         delete res;
     }
     file.close();
     req_time.close();
     dif = diff(first, t2);
-    std::cout << "Total time taken " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
+    DEBUG << "Total time taken " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
     std::ofstream stat_file;
     stat_file.open("stats.rec", std::ios::out | std::ios::app);
     stat_file << num_nodes << " " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
     stat_file.close();
-    c.exit_weaver();
+    if (to_exit)
+        c.exit_weaver();
 }

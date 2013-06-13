@@ -45,7 +45,7 @@ clustering_prog_test()
     //connect star nodes back to center. Shouldn't change coefficient
     res = c.run_node_program(node_prog::CLUSTERING, initial_args);
     assert(res->clustering_coeff == 0);
-    std::cout << "completed test " << ++testcount << std::endl;
+    DEBUG << "completed test " << ++testcount << std::endl;
     delete res;
 
     for (i = 0; i < num_nodes; i++) {
@@ -53,7 +53,7 @@ clustering_prog_test()
     }
     res = c.run_node_program(node_prog::CLUSTERING, initial_args);
     assert(res->clustering_coeff == 0);
-    std::cout << "completed test " << ++testcount << std::endl;
+    DEBUG << "completed test " << ++testcount << std::endl;
     delete res;
 
     size_t numerator;
@@ -66,11 +66,11 @@ clustering_prog_test()
             numerator = ((node_skip-1)*num_nodes+i+1);
            res = c.run_node_program(node_prog::CLUSTERING, initial_args);
            assert(res->clustering_coeff == (numerator/denominator));
-            std::cout << "completed test " << ++testcount << std::endl;
+            DEBUG << "completed test " << ++testcount << std::endl;
             delete res;
         }
     }
-    std::cout << "starting clustering tests with deletion" <<  std::endl;
+    DEBUG << "starting clustering tests with deletion" <<  std::endl;
     //delete some of the original edges and nodes of star graph
     for (i = 0; i < (num_nodes-edges_per_node); i++) {
         denominator = (double) ((num_nodes-i-1)*(num_nodes-i-2));
@@ -85,11 +85,11 @@ clustering_prog_test()
             c.delete_node(star_nodes[i]);
         }
         res = c.run_node_program(node_prog::CLUSTERING, initial_args);
-        //std::cout << "expected " << numerator << "/" << denominator << " = " << (numerator/denominator) << " but got " << res->clustering_coeff <<  std::endl;
+        //DEBUG << "expected " << numerator << "/" << denominator << " = " << (numerator/denominator) << " but got " << res->clustering_coeff <<  std::endl;
         assert(res->clustering_coeff == (numerator/denominator));
-        std::cout << "completed test " << ++testcount << std::endl;
+        DEBUG << "completed test " << ++testcount << std::endl;
         delete res;
     }
-    std::cout << "completed all clustering tests" <<  std::endl;
+    DEBUG << "completed all clustering tests" <<  std::endl;
 
 }

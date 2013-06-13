@@ -27,6 +27,7 @@ class client
 {
     public:
         client(uint64_t my_id);
+        ~client();
 
     private:
         uint64_t myid;
@@ -56,6 +57,12 @@ client :: client(uint64_t my_id)
     : myid(my_id)
 {
     initialize_busybee(client_bb, myid, myloc);
+}
+
+inline
+client :: ~client()
+{
+    delete client_bb;
 }
 
 inline uint64_t
