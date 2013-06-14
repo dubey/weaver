@@ -25,6 +25,7 @@
 #include <e/buffer.h>
 #include "busybee_constants.h"
 
+#define __WEAVER_DEBUG__
 #include "common/weaver_constants.h"
 #include "common/message_graph_elem.h"
 #include "graph.h"
@@ -229,7 +230,6 @@ migrate_node_step2(db::graph *G, std::unique_ptr<message::message> msg)
         return;
     }
     n->prev_loc = from_loc; // record shard from which we just migrated this node
-    assert(n->prev_locs.size() == NUM_SHARDS);
     n->prev_locs.at(G->myid-1) = 1; // mark this shard as one of the previous locations
     G->release_node(n);
     message::prepare_message(*msg, message::MIGRATE_NODE_STEP2, 0);
@@ -356,6 +356,7 @@ migrate_node_step6(db::graph *G)
     if (G->pending_edge_updates == 0) {
         message::prepare_message(msg, message::MIGRATE_NODE_STEP6b);
         G->send(prev_loc, msg.buf);
+        DEBUG << "~ no edge updates\n";
     }
     G->migration_mutex.unlock();
 }
@@ -373,13 +374,15 @@ migrate_node_step7a(db::graph *G)
     migr_node = G->mrequest.cur_node;
     n = G->acquire_node(migr_node);
     n->state = db::element::node::mode::MOVED;
+    DEBUG << "Step 7a for node " << migr_node << ", marked as MOVED" << std::endl;
     for (auto &r: G->mrequest.pending_requests) {
+        DEBUG << "Now forwarding queued request for migr node " << migr_node
+            << " to loc " << G->mrequest.new_loc << std::endl;
         G->send(G->mrequest.new_loc, r->buf);
     }
     G->release_node(n);
     if (++G->mrequest.start_next_round == 2) {
         call_wrapper = true;
-    } else {
     }
     G->mrequest.mutex.unlock();
     if (call_wrapper) {
@@ -616,7 +619,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                 unpacked_request_id, start_node_params, dirty_cache_ids, invalid_cache_ids, batched_deleted_nodes[G->myid]);
 #ifdef __WEAVER_DEBUG__
         if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_nodes[G->myid].at(0)) == MAX_TIME) {
-            //DEBUG << "Unpacking forwarded request in unpack_and_run\n";
+            DEBUG << "Unpacking forwarded request in unpack_and_run for node "
+                << std::get<0>(start_node_params.at(0)) << std::endl;
             batched_deleted_nodes[G->myid].clear();
         }
 #endif
@@ -695,16 +699,18 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                     unpacked_request_id, fwd_node_params, dirty_cache_ids, invalid_cache_ids, dummy_deleted_nodes);
                 if (node->state == db::element::node::mode::MOVED) {
                     // node set up at new shard, fwd request immediately
+                    uint64_t new_loc = node->new_loc;
                     G->release_node(node);
-                    G->send(node->new_loc, m->buf);
-                    //DEBUG << "MOVED: Forwarding request immed, node handle " << node_handle << std::endl;
+                    G->send(new_loc, m->buf);
+                    DEBUG << "MOVED: Forwarding request immed, node handle " << node_handle
+                        << ", to location " << new_loc << std::endl;
                 } else {
                     // queue request for forwarding later
                     G->release_node(node);
                     G->mrequest.mutex.lock();
                     G->mrequest.pending_requests.emplace_back(std::move(m));
                     G->mrequest.mutex.unlock();
-                    //DEBUG << "IN_TRANSIT: Enqueuing request" << std::endl;
+                    DEBUG << "IN_TRANSIT: Enqueuing request for migr node " << node_handle << std::endl;
                 }
             } else { // node does exist
                 assert(node->state == db::element::node::mode::STABLE);
@@ -1180,20 +1186,20 @@ migration_wrapper(db::graph *G)
         migr_pos = max_pos;
         // among all the shards that are within a fraction of the maximum
         // migrate to the one which has most nodes (locality)
-        //for (uint64_t j = 0; j < NUM_SHARDS; j++) {
-        //    if ((n->agg_msg_count.at(j) > (0.8 * (double)n->agg_msg_count.at(max_pos)))
-        //     && (G->node_count.at(j) > G->node_count.at(migr_pos))) /* more locality, maybe */ {
-        //        migr_pos = j;
-        //    }
-        //}
+        for (uint64_t j = 0; j < NUM_SHARDS; j++) {
+            if ((n->agg_msg_count.at(j) > (0.8 * (double)n->agg_msg_count.at(max_pos)))
+             && (G->node_count.at(j) > G->node_count.at(migr_pos))) /* more locality, maybe */ {
+                migr_pos = j;
+            }
+        }
         migr_pos++; // fixing off-by-one
         for (uint32_t &cnt: n->msg_count) {
             cnt = 0;
         }
         //prev_loc = (n->prev_locs.at(migr_pos-1) == 1);
         prev_loc = (n->prev_loc == migr_pos);
-        DEBUG << "For node " << migr_node << ", migr pos = " << migr_pos 
-            << ", cur loc " << G->myid << ", prev loc " << n->prev_loc << std::endl;
+        //DEBUG << "For node " << migr_node << ", migr pos = " << migr_pos 
+        //    << ", cur loc " << G->myid << ", prev loc " << n->prev_loc << std::endl;
         //DEBUG << "Agg msg count vector: ";
         //for (auto x: n->agg_msg_count) {
         //    std::cerr << x << " ";
@@ -1208,7 +1214,7 @@ migration_wrapper(db::graph *G)
          && !prev_loc) /* no migration previous location */ {
             migrate_node_step1(G, migr_node, migr_pos);
             no_migr = false;
-            DEBUG << "migrating node " << migr_node << " now" << std::endl;
+            DEBUG << "migrating node " << migr_node << " to " << migr_pos << std::endl;
             break;
         }
     }
@@ -1311,6 +1317,7 @@ main(int argc, char* argv[])
     db::graph G(id);
     std::cout << "Weaver: shard instance " << G.myid << std::endl;
 
+    // initialize migration at shard 1
     if (G.myid == 1 && MIGRATION) {
         t = new std::thread(&first_shard_daemon_begin, &G);
         t->detach();

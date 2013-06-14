@@ -21,7 +21,7 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define RRP_ITERATIONS 100
+#define RRP_ITERATIONS 3000
 
 static uint64_t repetitive_nodes[10];
 static uint64_t repetitive_edges[10];

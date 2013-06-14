@@ -51,6 +51,8 @@ void exit_weaver()
         message::prepare_message(msg, message::EXIT_WEAVER);
         cserver->send(s, msg.buf);
     }
+    // record dummy time for a better-looking migration plot
+    record_time(cserver);
     std::ofstream migr_file, shard_file;
     migr_file.open("migrations.rec");
     migr_file.precision(std::numeric_limits<double>::digits10);
