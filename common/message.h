@@ -86,6 +86,8 @@ namespace message
         MIGRATE_NODE_STEP6b,
         COORD_NODE_MIGRATE,
         COORD_NODE_MIGRATE_ACK,
+        COORD_CLOCK_REQ,
+        COORD_CLOCK_REPLY,
         MIGRATED_NBR_UPDATE,
         MIGRATED_NBR_ACK,
         MIGRATION_TOKEN,

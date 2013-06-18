@@ -81,8 +81,7 @@ namespace node_prog
             : visited(false)
             , out_count(0)
             , reachable(false)
-        {
-        }
+        { }
 
         virtual ~reach_node_state() { }
 
@@ -101,6 +100,8 @@ namespace node_prog
             message::pack_buffer(packer, prev_node);
             message::pack_buffer(packer, out_count);
             message::pack_buffer(packer, reachable);
+            DEBUG << "packed out count " << out_count << ", reachable " << reachable
+                << ", prev node = " << prev_node.handle << "," << prev_node.loc << std::endl;
         }
 
         virtual void unpack(e::unpacker& unpacker)
@@ -109,6 +110,8 @@ namespace node_prog
             message::unpack_buffer(unpacker, prev_node);
             message::unpack_buffer(unpacker, out_count);
             message::unpack_buffer(unpacker, reachable);
+            DEBUG << "unpacked out count " << out_count << ", reachable " << reachable
+                << ", prev node = " << prev_node.handle << "," << prev_node.loc << std::endl;
         }
     };
 
@@ -128,7 +131,7 @@ namespace node_prog
             std::function<std::vector<std::shared_ptr<reach_cache_value>>()> cached_values_getter)
     {
         UNUSED(cache_putter);
-        //DEBUG << "Starting reach prog, id = " << req_id << "\n";
+        //DEBUG << "Processing reach prog, id = " << req_id << " at node,loc = " << rn.handle << "," << rn.loc << std::endl;
         reach_node_state &state = state_getter();
         bool false_reply = false;
         db::element::remote_node prev_node = params.prev_node;
@@ -197,7 +200,8 @@ namespace node_prog
                 next.emplace_back(std::make_pair(prev_node, params));
             }
         } else { // reply mode
-            //DEBUG << "Starting reply, out count is " << state.out_count << std::endl;
+            //DEBUG << "Starting reply, out count is " << state.out_count << " at node " << rn.handle
+            //    << " for request " << req_id << std::endl;
             if (((--state.out_count == 0) || params.reachable) && !state.reachable) {
                 state.reachable |= params.reachable;
                 db::element::edge *e;
@@ -214,7 +218,9 @@ namespace node_prog
                 //    reach_cache_value &rcv = cache_putter();
                 //    rcv.reachable_node = params.dest;
                 //}
-                //DEBUG << "done with req " << req_id << " at node " << rn.handle << std::endl;
+                //if (state.prev_node.loc == COORD_ID) {
+                    DEBUG << "done with req " << req_id << " at node " << rn.handle << ", loc " << rn.loc << std::endl;
+                //}
             } else if ((int)state.out_count < 0) {
                 DEBUG << "ALERT! Bad state value in reach program" << std::endl;
                 while(1);

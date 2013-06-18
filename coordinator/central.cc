@@ -23,6 +23,7 @@
 #include "e/buffer.h"
 #include "busybee_constants.h"
 
+#define __WEAVER_DEBUG__
 #include "central.h"
 #include "common/meta_element.h"
 #include "common/message.h"
@@ -295,11 +296,13 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     message::message msg_to_send;
     std::vector<uint64_t> empty_vector;
     std::vector<std::tuple<uint64_t, ParamsType, uint64_t>> empty_tuple_vector;
+    DEBUG << "starting node prog " << request->req_id << ", recd from client\t";
     for (auto &batch_pair : initial_batches) {
         message::prepare_message(msg_to_send, message::NODE_PROG, request->pType, *request->vector_clock, 
                 request->req_id, batch_pair.second, empty_vector, request->ignore_cache, empty_tuple_vector);
         server->send(batch_pair.first, msg_to_send.buf); // TODO later change to send without update mutex lock
     }
+    DEBUG << "sent to shards" << std::endl;
 }
 
 // caution: assuming we hold server->mutex
@@ -328,7 +331,9 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
         server->completed_requests->emplace_back(std::make_pair(req_id, request->pType));
         server->update_mutex.unlock();
         // send same message along to client
+        DEBUG << "going to send msg to end node prog\t";
         server->send(request->client, request->reply_msg->buf);
+        DEBUG << "ended node prog " << req_id << std::endl;
     }
 }
 
@@ -413,6 +418,14 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg,
             record_time(server);
             server->shard_node_count[from_loc-1]--;
             server->shard_node_count[new_loc-1]++;
+            server->update_mutex.unlock();
+            server->send(from_loc, msg->buf);
+            break;
+
+        case message::COORD_CLOCK_REQ:
+            message::unpack_message(*msg, message::COORD_CLOCK_REQ, from_loc);
+            server->update_mutex.lock();
+            message::prepare_message(*msg, message::COORD_CLOCK_REPLY, server->request_id);
             server->update_mutex.unlock();
             server->send(from_loc, msg->buf);
             break;

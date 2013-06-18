@@ -80,10 +80,9 @@ multiple_wp_prog(bool to_exit)
         dp.src_handle = nodes[first];
         dp.dst_handle = nodes[second];
         initial_args.emplace_back(std::make_pair(nodes[first], dp));
-        node_prog::dijkstra_params *res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
+        std::unique_ptr<node_prog::dijkstra_params> res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
         DEBUG << "Request " << i << ", from source " << nodes[first] << " to dest " << nodes[second];
         DEBUG << ". cost of wp = " << res->cost << std::endl;
-        delete res;
     }
     file.close();
     req_time.close();

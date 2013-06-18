@@ -332,4 +332,4 @@ namespace cache
     }
 }
 
-#endif //__CACHE__
+#endif

@@ -16,7 +16,7 @@
 #include "client/client.h"
 
 inline void
-basic_migration_test()
+basic_migration_test(bool to_exit)
 {
     client c(CLIENT_ID);
     uint64_t n1, n2;
@@ -33,13 +33,14 @@ basic_migration_test()
     for (int i = 0; i < 100000; i++) {
         if ((i % 100) == 0)
             DEBUG << "completed " << i << " requests" << std::endl;
-        node_prog::reach_params *res = c.run_node_program(node_prog::REACHABILITY, initial_args);
+        std::unique_ptr<node_prog::reach_params> res = c.run_node_program(node_prog::REACHABILITY, initial_args);
         assert(res->reachable);
-        delete res;
     }
     uint64_t loc1 = c.get_node_loc(n1);
     uint64_t loc2 = c.get_node_loc(n2);
     assert(loc1 == loc2);
     c.delete_node(n1);
     c.delete_node(n2);
+    if (to_exit)
+        c.exit_weaver();
 }

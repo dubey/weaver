@@ -26,6 +26,11 @@
 #include "element.h"
 #include "edge.h"
 
+namespace message
+{
+    class message;
+}
+
 namespace db
 {
 class update_request;
@@ -100,6 +105,10 @@ namespace element
             std::vector<uint32_t> msg_count;
             bool updated;
             uint32_t dependent_del;
+            // queued requests, for the time when the node is marked in transit
+            // but requests cannot yet be forwarded to new location which is still
+            // setting up the node
+            std::vector<std::unique_ptr<message::message>> pending_requests;
 
         public:
             void add_edge(edge *e, bool in_or_out);

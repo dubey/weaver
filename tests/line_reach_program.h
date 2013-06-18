@@ -68,9 +68,8 @@ line_reach_prog(bool to_exit)
         std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args;
         rp.dest = nodes[second];
         initial_args.emplace_back(std::make_pair(nodes[first], rp));
-        node_prog::reach_params *res = c.run_node_program(node_prog::REACHABILITY, initial_args);
+        std::unique_ptr<node_prog::reach_params> res = c.run_node_program(node_prog::REACHABILITY, initial_args);
         assert(res->reachable);
-        delete res;
     }
     file.close();
     req_time.close();

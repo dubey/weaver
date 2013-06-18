@@ -75,7 +75,7 @@ dijkstra_prog_test()
     initial_args[0].second.source_handle = nodes[0];
     initial_args[0].second.dest_handle = nodes[5];
     initial_args[0].second.edge_weight_name = weight_label;
-    node_prog::dijkstra_params* res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
+    std::unique_ptr<node_prog::dijkstra_params> res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
 
     DEBUG << "path of cost " << res->cost <<" is" << std::endl;
     assert(res->cost == 17);
@@ -83,7 +83,6 @@ dijkstra_prog_test()
         DEBUG << label.first << " cost: " << label.second << std::endl;
     }
     DEBUG << "path end" << std::endl;
-    delete res;
     DEBUG << "Shortest path good, checking widest" << std::endl;
 
     initial_args[0].second.is_widest_path = true;
@@ -95,6 +94,5 @@ dijkstra_prog_test()
         DEBUG << label.first << " cost: " << label.second << std::endl;
     }
     DEBUG << "path end" << std::endl;
-    delete res;
     DEBUG << "Widest path good" << std::endl;
 }

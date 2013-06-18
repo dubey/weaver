@@ -143,7 +143,7 @@ namespace db
             uint64_t cur_node, // node being migrated
                 prev_node; // last node which was migrated (used for permanent deletion of migrated nodes)
             uint64_t new_loc; // shard to which this node is being migrated
-            std::vector<std::unique_ptr<message::message>> pending_requests; // queued requests
+            //std::vector<std::unique_ptr<message::message>> pending_requests; // queued requests
             uint64_t migr_clock; // clock at which migration started
             uint64_t other_clock;
             uint8_t start_step4; // step 4 can be started only when both coordinator and other shard
@@ -159,8 +159,7 @@ namespace db
                 , other_clock(0)
                 , start_step4(0)
                 , start_next_round(0)
-            {
-            }
+            { }
     };
 
     class graph;
@@ -172,7 +171,7 @@ namespace db
             graph(uint64_t my_id);
 
         private:
-            po6::threads::mutex clock_mutex, update_mutex, deletion_mutex, prog_mutex;
+            po6::threads::mutex clock_mutex, update_mutex, deletion_mutex;//, prog_mutex;
             uint64_t my_clock;
 
         public:
@@ -284,7 +283,8 @@ namespace db
         , sent_count(0)
         , rec_count(0)
 #endif
-        , node_prog_req_state(&prog_mutex)
+        //, node_prog_req_state(&prog_mutex)
+        , node_prog_req_state()
     {
         initialize_busybee(bb, myid, myloc);
         message::prog_state = &node_prog_req_state;
@@ -333,6 +333,7 @@ namespace db
 
     // find the node corresponding to given handle
     // lock and return the node
+    // return NULL if node does not exists (possibly permanently deleted?)
     inline element::node*
     graph :: acquire_node(uint64_t node_handle)
     {
@@ -348,6 +349,7 @@ namespace db
             n->in_use = true;
         }
         update_mutex.unlock();
+
         return n;
     }
 
@@ -371,7 +373,6 @@ namespace db
         } else {
             update_mutex.unlock();
         }
-        // TODO delete state and cache corresponding to this node
     }
 
     inline void
@@ -443,6 +444,7 @@ namespace db
             send(remote_loc, msg.buf);
             ret = 0;
         }
+        DEBUG << "creating edge, req id = " << time << std::endl;
         return ret;
     }
 
@@ -549,6 +551,7 @@ namespace db
         mrequest.mutex.unlock();
         while (!migrated_nodes_copy.empty()) {
             delete_migrated_node(migrated_nodes_copy.front()->second);
+            DEBUG << "deleting migr node " << migrated_nodes_copy.front()->second << std::endl;
             migrated_nodes_copy.pop_front();
         }
 
@@ -621,6 +624,8 @@ namespace db
     {
         element::edge *e;
         message::message msg;
+        assert(n->waiters == 0);
+        assert(!n->in_use);
         // following 2 loops are no-ops in case of deletion of
         // migrated nodes, since edges have already been deleted
         for (auto &it: n->out_edges) {
@@ -647,7 +652,7 @@ namespace db
         deletion_mutex.lock();
         n = acquire_node(node_handle);
         if (n == NULL) {
-            DEBUG << "Not found node " << node_handle << " in perm_edge_del" << std::endl;
+            DEBUG << "Not found Node " << node_handle << " in perm_edge_del" << std::endl;
             deletion_mutex.unlock();
             return;
         }
@@ -775,6 +780,8 @@ namespace db
         n->out_edges.clear();
         n->in_edges.clear();
         assert(n->waiters == 0); // nobody should try to acquire this node now
+        assert(n->pending_requests.empty()); // should have forwarded all pending requests for this migrated node
+        node_prog_req_state.delete_node_state(migr_node);
         release_node(n);
     }
 
@@ -907,35 +914,38 @@ try {
     inline void
     graph :: add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests)
     {
-        prog_mutex.lock();
-        for (auto &p: completed_requests) {
-            done_ids.emplace(p.first);
-        }
-        for (auto &p: completed_requests) {
-            node_prog_req_state.delete_req_state(p.first, p.second);
-        }
-        prog_mutex.unlock();
+        //prog_mutex.lock();
+        //for (auto &p: completed_requests) {
+        //    done_ids.emplace(p.first);
+        //}
+        //for (auto &p: completed_requests) {
+        //    node_prog_req_state.delete_req_state(p.first, p.second);
+        //}
+        //prog_mutex.unlock();
+        node_prog_req_state.done_requests(completed_requests);
     }
 
     inline bool
     graph :: check_done_request(uint64_t req_id)
     {
-        bool ret;
-        prog_mutex.lock();
-        ret = (done_ids.find(req_id) != done_ids.end());
-        if (!ret) {
-            node_prog_req_state.set_in_use(req_id);
-        }
-        prog_mutex.unlock();
-        return ret;
+        //bool ret;
+        //prog_mutex.lock();
+        //ret = (done_ids.find(req_id) != done_ids.end());
+        //if (!ret) {
+        //    node_prog_req_state.set_in_use(req_id);
+        //}
+        //prog_mutex.unlock();
+        //return ret;
+        return node_prog_req_state.check_done_request(req_id);
     }
 
     inline void
     graph :: clear_req_use(uint64_t req_id)
     {
-        prog_mutex.lock();
+        //prog_mutex.lock();
+        //node_prog_req_state.clear_in_use(req_id);
+        //prog_mutex.unlock();
         node_prog_req_state.clear_in_use(req_id);
-        prog_mutex.unlock();
     }
 
 } //namespace db

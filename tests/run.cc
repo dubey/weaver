@@ -23,6 +23,7 @@
 #include "basic_migration_test.h"
 #include "line_reach_program.h"
 #include "clique_reach_program.h"
+#include "unreachable_reach_program.h"
 //#include "dijkstra_prog_test.h"
 #include "dijkstra_tree_test.h"
 #include "multiple_widest_path.h"
@@ -44,9 +45,10 @@ main(int argc, char *argv[])
     DEBUG << "Basic client ok." << std::endl;
     repetitive_reach_prog(false);
     DEBUG << "Repetitive reach program ok." << std::endl;
-    multiple_reach_prog(false);
+    multiple_sparse_reachability(false);
+    multiple_dense_reachability(false);
     DEBUG << "Multiple reach program ok." << std::endl;
-    basic_migration_test();
+    basic_migration_test(false);
     DEBUG << "Basic migration ok." << std::endl;
     line_reach_prog(false);
     DEBUG << "Line reach program ok." << std::endl;
@@ -60,7 +62,8 @@ main(int argc, char *argv[])
     //clustering_prog_test();
 #endif
 #ifndef __ALL_TESTS__
-    multiple_reach_prog(true);
+    //multiple_dense_reachability(true);
+    unreachable_reach_prog(true);
 #endif
     DEBUG << "All tests completed." << std::endl;
 

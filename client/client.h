@@ -43,13 +43,14 @@ class client
         void del_edge_prop(uint64_t node, uint64_t edge, uint32_t key);
         void commit_graph();
         template <typename ParamsType>
-        ParamsType* run_node_program(node_prog::prog_type prog_to_run,
+        std::unique_ptr<ParamsType> run_node_program(node_prog::prog_type prog_to_run,
             std::vector<std::pair<uint64_t, ParamsType>> initial_args);
         uint64_t get_node_loc(uint64_t node);
         void exit_weaver();
 
     private:
         void send_coord(std::auto_ptr<e::buffer> buf);
+        busybee_returncode recv_coord(std::auto_ptr<e::buffer> *buf);
 };
 
 inline
@@ -68,13 +69,11 @@ client :: ~client()
 inline uint64_t
 client :: create_node()
 {
-    busybee_returncode ret;
-    uint64_t new_node, sender;
+    uint64_t new_node;
     message::message msg(message::CLIENT_NODE_CREATE_REQ);
     message::prepare_message(msg, message::CLIENT_NODE_CREATE_REQ);
     send_coord(msg.buf);
-    if ((ret = client_bb->recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
+    if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
         return 0;
     }
     message::unpack_message(msg, message::CLIENT_REPLY, new_node);
@@ -84,13 +83,11 @@ client :: create_node()
 inline uint64_t
 client :: create_edge(uint64_t node1, uint64_t node2)
 {
-    busybee_returncode ret;
-    uint64_t new_edge, sender;
+    uint64_t new_edge;
     message::message msg(message::CLIENT_EDGE_CREATE_REQ);
     message::prepare_message(msg, message::CLIENT_EDGE_CREATE_REQ, node1, node2);
     send_coord(msg.buf);
-    if ((ret = client_bb->recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
+    if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
         return 0;
     }
     message::unpack_message(msg, message::CLIENT_REPLY, new_edge);
@@ -100,53 +97,37 @@ client :: create_edge(uint64_t node1, uint64_t node2)
 inline void
 client :: delete_node(uint64_t node)
 {
-    busybee_returncode ret;
     message::message msg(message::CLIENT_NODE_DELETE_REQ);
     message::prepare_message(msg, message::CLIENT_NODE_DELETE_REQ, node);
     send_coord(msg.buf);
-    uint64_t sender;
-    if ((ret = client_bb->recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
-    }
+    recv_coord(&msg.buf);
 }
 
 inline void
 client :: delete_edge(uint64_t node, uint64_t edge)
 {
-    busybee_returncode ret;
     message::message msg(message::CLIENT_EDGE_DELETE_REQ);
     message::prepare_message(msg, message::CLIENT_EDGE_DELETE_REQ, node, edge);
     send_coord(msg.buf);
-    uint64_t sender;
-    if ((ret = client_bb->recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
-    }
+    recv_coord(&msg.buf);
 }
 
 inline void
 client :: add_edge_prop(uint64_t node, uint64_t edge, uint32_t key, uint64_t value)
 {
-    busybee_returncode ret;
     message::message msg(message::CLIENT_ADD_EDGE_PROP);
     message::prepare_message(msg, message::CLIENT_ADD_EDGE_PROP, node, edge, key, value);
     send_coord(msg.buf);
-    uint64_t sender;
-    if ((ret = client_bb->recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
-    }
+    recv_coord(&msg.buf);
 }
 
 inline void
 client :: del_edge_prop(uint64_t node, uint64_t edge, uint32_t key)
 {
-    busybee_returncode ret;
     message::message msg(message::CLIENT_DEL_EDGE_PROP);
     message::prepare_message(msg, message::CLIENT_DEL_EDGE_PROP, node, edge, key);
     send_coord(msg.buf);
-    uint64_t sender;
-    if ((ret = client_bb->recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
-    }
+    recv_coord(&msg.buf);
 }
 
 inline void
@@ -159,16 +140,13 @@ client :: commit_graph()
 
 // client needs to delete the pointer returned
 template <typename ParamsType>
-inline ParamsType *
+inline std::unique_ptr<ParamsType>
 client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args)
 {
-    busybee_returncode ret;
     message::message msg;
     message::prepare_message(msg, message::CLIENT_NODE_PROG_REQ, prog_to_run, initial_args);
     send_coord(msg.buf);
-    uint64_t sender;
-    if ((ret = client_bb->recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
+    if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
         return NULL;
     }
     uint64_t ignore_req_id;
@@ -177,8 +155,8 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
     std::pair<uint64_t, ParamsType> tempPair;
     message::unpack_message(msg, message::NODE_PROG, ignore, ignore_req_id, ignore_cache, tempPair);
 
-    ParamsType *toRet = new ParamsType(tempPair.second); // make sure client frees
-    return toRet;
+    std::unique_ptr<ParamsType> toRet(new ParamsType(tempPair.second)); // make sure client frees
+    return std::move(toRet);
 }
 
 // caution: node loc may change as time goes on, the location returned
@@ -186,14 +164,11 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
 inline uint64_t
 client :: get_node_loc(uint64_t node)
 {
-    busybee_returncode ret;
     message::message msg;
-    uint64_t sender;
     uint64_t loc = (uint64_t)(-1);
     message::prepare_message(msg, message::CLIENT_NODE_LOC_REQ, node);
     send_coord(msg.buf);
-    if ((ret = client_bb->recv(&sender, &msg.buf)) != BUSYBEE_SUCCESS) {
-        DEBUG << "msg recv error: " << ret << std::endl;
+    if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
         return loc;
     }
     message::unpack_message(msg, message::CLIENT_NODE_LOC_REPLY, loc);
@@ -213,8 +188,29 @@ client :: send_coord(std::auto_ptr<e::buffer> buf)
 {
     busybee_returncode ret;
     if ((ret = client_bb->send(COORD_ID, buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
+        DEBUG << "msg send error: " << ret << std::endl;
         return;
+    }
+}
+
+inline busybee_returncode
+client :: recv_coord(std::auto_ptr<e::buffer> *buf)
+{
+    busybee_returncode ret;
+    uint64_t sender;
+    while (true) {
+        ret = client_bb->recv(&sender, buf);
+        switch (ret) {
+            case BUSYBEE_SUCCESS:
+                return ret;
+
+            case BUSYBEE_INTERRUPTED:
+                continue;
+
+            default:
+                DEBUG << "msg recv error: " << ret << std::endl;
+                return ret;
+        }
     }
 }
 

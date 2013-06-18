@@ -18,7 +18,8 @@ bool
 execute_request(uint64_t n1, uint64_t n2, client &c)
 {
     bool ret;
-    node_prog::reach_params rp, *res;
+    node_prog::reach_params rp;
+    std::unique_ptr<node_prog::reach_params> res;
     std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args;
     rp.mode = false;
     rp.reachable = false;
@@ -27,7 +28,6 @@ execute_request(uint64_t n1, uint64_t n2, client &c)
     initial_args.emplace_back(std::make_pair(n1, rp));
     res = c.run_node_program(node_prog::REACHABILITY, initial_args);
     ret = res->reachable;
-    delete res;
     return ret;
 }
 

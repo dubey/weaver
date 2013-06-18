@@ -34,7 +34,7 @@ clustering_prog_test()
     initial_args.emplace_back(std::make_pair(central_node, node_prog::clustering_params()));
     initial_args[0].second.is_center = true;
     initial_args[0].second.outgoing = true;
-    node_prog::clustering_params * res;
+    std::unique_ptr<node_prog::clustering_params> res;
 
     for (i = 0; i < num_nodes; i++) {
         star_nodes[i] = c.create_node();
@@ -46,7 +46,6 @@ clustering_prog_test()
     res = c.run_node_program(node_prog::CLUSTERING, initial_args);
     assert(res->clustering_coeff == 0);
     DEBUG << "completed test " << ++testcount << std::endl;
-    delete res;
 
     for (i = 0; i < num_nodes; i++) {
         star_edges[i+num_nodes] = c.create_edge(star_nodes[i], central_node);
@@ -54,7 +53,6 @@ clustering_prog_test()
     res = c.run_node_program(node_prog::CLUSTERING, initial_args);
     assert(res->clustering_coeff == 0);
     DEBUG << "completed test " << ++testcount << std::endl;
-    delete res;
 
     size_t numerator;
     double denominator = (double) ((num_nodes)*(num_nodes-1));
@@ -67,7 +65,6 @@ clustering_prog_test()
            res = c.run_node_program(node_prog::CLUSTERING, initial_args);
            assert(res->clustering_coeff == (numerator/denominator));
             DEBUG << "completed test " << ++testcount << std::endl;
-            delete res;
         }
     }
     DEBUG << "starting clustering tests with deletion" <<  std::endl;
@@ -88,7 +85,6 @@ clustering_prog_test()
         //DEBUG << "expected " << numerator << "/" << denominator << " = " << (numerator/denominator) << " but got " << res->clustering_coeff <<  std::endl;
         assert(res->clustering_coeff == (numerator/denominator));
         DEBUG << "completed test " << ++testcount << std::endl;
-        delete res;
     }
     DEBUG << "completed all clustering tests" <<  std::endl;
 

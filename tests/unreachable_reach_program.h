@@ -1,8 +1,10 @@
 /*
  * ===============================================================
- *    Description:  Multiple reachability requests.
+ *    Description:  Issue multiple queries between two nodes
+ *                  that are not reachable, forcing traversal of
+ *                  entire graph.
  *
- *        Created:  04/30/2013 02:10:39 PM
+ *        Created:  06/17/2013 03:36:55 PM
  *
  *         Author:  Ayush Dubey, dubey@cs.cornell.edu
  *
@@ -16,12 +18,10 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define MRP_REQUESTS 1000
+#define URP_REQUESTS 1000
 
-// issue multiple random reachability requests in a random graph
-// parameter 'dense' decides if the graph is dense (true) or sparse (false)
 void
-multiple_reach_prog(bool dense, bool to_exit)
+unreachable_reach_prog(bool to_exit)
 {
     client c(CLIENT_ID);
     int i, num_nodes, num_edges;
@@ -38,14 +38,10 @@ multiple_reach_prog(bool dense, bool to_exit)
     count_in.open("node_count.rec");
     count_in >> num_nodes;
     count_in.close();
-    if (dense) {
-        num_edges = (int)(5.5 * (double)num_nodes);
-    } else {
-        num_edges = (int)(1.5 * (double)num_nodes);
-    }
-    test_graph g(&c, seed, num_nodes, num_edges, false, to_exit);
+    num_edges = (int)(5.5 * (double)num_nodes); // dense => lots of traversal
+    test_graph g(&c, seed, num_nodes, num_edges, true, to_exit);
 
-    // starting requests
+    // requests
     node_prog::reach_params rp;
     rp.mode = false;
     rp.reachable = false;
@@ -56,28 +52,23 @@ multiple_reach_prog(bool dense, bool to_exit)
     req_time.open("time.rec");
     clock_gettime(CLOCK_MONOTONIC, &t1);
     first = t1;
-    for (i = 0; i < MRP_REQUESTS; i++) {
+    for (i = 0; i < URP_REQUESTS; i++) {
         clock_gettime(CLOCK_MONOTONIC, &t2);
         dif = diff(t1, t2);
-        DEBUG << "Test: i = " << i << ", ";
-        DEBUG << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
+        DEBUG << "Test: i = " << i << ", " << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
         if (i % 10 == 0) {
             dif = diff(first, t2);
             req_time << dif.tv_sec << '.' << dif.tv_nsec << std::endl;
         }
         t1 = t2;
         int first = rand() % num_nodes;
-        int second = rand() % num_nodes;
-        while (second == first) {
-            second = rand() % num_nodes;
-        }
-        file << first << " " << second << std::endl;
+        file << first << " " << num_nodes << std::endl;
         std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args;
-        rp.dest = g.nodes[second];
+        rp.dest = g.nodes[num_nodes];
         initial_args.emplace_back(std::make_pair(g.nodes[first], rp));
+        DEBUG << "Request " << i << ", from source " << g.nodes[first] << " to dest " << g.nodes[num_nodes] << "." << std::endl;
         std::unique_ptr<node_prog::reach_params> res = c.run_node_program(node_prog::REACHABILITY, initial_args);
-        DEBUG << "Request " << i << ", from source " << g.nodes[first] << " to dest " << g.nodes[second]
-            << ". Reachable = " << res->reachable << std::endl;
+        assert(!res->reachable);
     }
     file.close();
     req_time.close();
@@ -88,16 +79,4 @@ multiple_reach_prog(bool dense, bool to_exit)
     stat_file << num_nodes << " " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
     stat_file.close();
     g.end_test();
-}
-
-void
-multiple_sparse_reachability(bool to_exit)
-{
-    multiple_reach_prog(false, to_exit);
-}
-
-void
-multiple_dense_reachability(bool to_exit)
-{
-    multiple_reach_prog(true, to_exit);
 }

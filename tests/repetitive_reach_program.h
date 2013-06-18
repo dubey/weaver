@@ -58,7 +58,7 @@ check_reachability()
                 node_prog::reach_params &params = initial_args[0].second;
                 params.prev_node.loc = COORD_ID;
                 params.dest = repetitive_nodes[j];
-                node_prog::reach_params *res = c.run_node_program(node_prog::REACHABILITY, initial_args);
+                std::unique_ptr<node_prog::reach_params> res = c.run_node_program(node_prog::REACHABILITY, initial_args);
                 if ((i==n1 && j==n2) || (i==n3 && j==n4)) {
                     assert(res->reachable);
                 } else {

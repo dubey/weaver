@@ -36,11 +36,13 @@ namespace state
     {
         prog_map prog_state;
         req_to_nodes node_list;
+        std::unordered_set<uint64_t> done_ids; // TODO clean up of done_ids
         po6::threads::mutex mutex;
+        bool holding;
         po6::threads::cond in_use_cond;
 
         public:
-            program_state(po6::threads::mutex *mtx);
+            program_state();
 
         public:
             bool state_exists(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle);
@@ -52,22 +54,39 @@ namespace state
             void pack(uint64_t node_handle, e::buffer::packer &packer);
             void unpack(uint64_t node_handle, e::unpacker &unpacker);
             void delete_node_state(uint64_t node_handle);
-            void delete_req_state(uint64_t req_id, node_prog::prog_type type);
-            void set_in_use(uint64_t req_id);
+            void done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>>&);
+            bool check_done_request(uint64_t req_id);
             void clear_in_use(uint64_t req_id);
 
         private:
+            void acquire();
+            void release();
             bool state_exists_nolock(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle);
             bool node_entry_exists_nolock(node_prog::prog_type t, uint64_t node_handle);
     };
 
-    program_state :: program_state(po6::threads::mutex *mtx)
-        : in_use_cond(mtx)
+    program_state :: program_state()
+        : holding(false)
+        , in_use_cond(&mutex)
     {
         node_map new_node_map;
         prog_state.emplace(node_prog::REACHABILITY, new_node_map);
         prog_state.emplace(node_prog::DIJKSTRA, new_node_map);
         prog_state.emplace(node_prog::CLUSTERING, new_node_map);
+    }
+
+    inline void
+    program_state :: acquire()
+    {
+        mutex.lock();
+        holding = true;
+    }
+
+    inline void
+    program_state :: release()
+    {
+        holding = false;
+        mutex.unlock();
     }
 
     inline bool
@@ -103,9 +122,9 @@ namespace state
     program_state :: state_exists(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle)
     {
         bool exists;
-        mutex.lock();
+        acquire();
         exists = state_exists_nolock(t, req_id, node_handle);
-        mutex.unlock();
+        release();
         return exists;
     }
 
@@ -113,11 +132,11 @@ namespace state
     program_state :: get_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle)
     {
         node_prog::Packable_Deletable *state = NULL;
-        mutex.lock();
+        acquire();
         if (state_exists_nolock(t, req_id, node_handle)) {
             state = prog_state.at(t).at(node_handle).at(req_id);
         }
-        mutex.unlock();
+        release();
         return state;
     }
 
@@ -125,7 +144,7 @@ namespace state
     program_state :: put_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle,
         node_prog::Packable_Deletable *new_state)
     {
-        mutex.lock();
+        acquire();
         if (state_exists_nolock(t, req_id, node_handle)) {
             node_prog::Packable_Deletable *old_state = prog_state.at(t).at(node_handle).at(req_id);
             delete old_state;
@@ -133,7 +152,7 @@ namespace state
             node_list.at(req_id).second.emplace(node_handle);
         }
         prog_state[t][node_handle][req_id] = new_state;
-        mutex.unlock();
+        release();
     }
     
     inline size_t
@@ -141,7 +160,7 @@ namespace state
     {
         size_t sz = 0;
         uint16_t ptype;
-        mutex.lock();
+        acquire();
         for (auto &t: prog_state) {
             sz += message::size(ptype);
             sz += sizeof(uint64_t);
@@ -173,12 +192,12 @@ namespace state
                         }
 
                         default:
-                            std::cerr << "Bad type in program state pack " << t.first << std::endl;
+                            DEBUG << "Bad type in program state size " << t.first << std::endl;
                     }
                 }
             }
         }
-        mutex.unlock();
+        release();
         return sz;
     }
 
@@ -187,7 +206,7 @@ namespace state
     {
         uint16_t ptype;
         uint64_t size = 0;
-        mutex.lock();
+        acquire();
         for (auto const &t: prog_state) {
             ptype = (uint16_t)t.first;
             message::pack_buffer(packer, ptype);
@@ -220,7 +239,7 @@ namespace state
                         }
 
                         default:
-                            std::cerr << "Bad type in program state pack " << t.first << std::endl;
+                            DEBUG << "Bad type in program state pack " << t.first << std::endl;
                     }
                 }
             } else {
@@ -228,7 +247,7 @@ namespace state
                 message::pack_buffer(packer, size);
             }
         }
-        mutex.unlock();
+        release();
     }
 
     inline void
@@ -236,7 +255,7 @@ namespace state
     {
         uint16_t ptype;
         node_prog::prog_type type;
-        mutex.lock();
+        acquire();
         for (auto &t: prog_state) {
             req_map rmap;
             node_prog::Packable_Deletable *new_entry;
@@ -276,10 +295,10 @@ namespace state
                     }
 
                     default:
-                        std::cerr << "Bad type in program state unpack " << t.first << std::endl;
+                        DEBUG << "Bad type in program state unpack " << t.first << std::endl;
                 }
                 if (!rmap.emplace(key_to_add, new_entry).second) {
-                    std::cerr << "Insertion unsuccessful in state" << std::endl;
+                    DEBUG << "Insertion unsuccessful in state" << std::endl;
                 }
                 if (node_list.find(key_to_add) == node_list.end()) {
                     node_list.emplace(key_to_add, std::make_pair(0, std::unordered_set<uint64_t>()));
@@ -289,16 +308,18 @@ namespace state
             }
 
             if (rmap.size() > 0) {
-                prog_state.at(type).emplace(node, rmap);
+                if (!prog_state.at(type).emplace(node, rmap).second) {
+                    DEBUG << "Bad insertion in prog_state map for node " << node << std::endl;
+                }
             }
         }
-        mutex.unlock();
+        release();
     }
 
     inline void
     program_state :: delete_node_state(uint64_t node_handle)
     {
-        mutex.lock();
+        acquire();
         for (auto &t: prog_state) {
             if (node_entry_exists_nolock(t.first, node_handle)) {
                 for (const std::pair<uint64_t, node_prog::Packable_Deletable*> &r: t.second.at(node_handle)) {
@@ -308,53 +329,61 @@ namespace state
                 t.second.erase(node_handle);
             }
         }
-        mutex.unlock();
+        release();
     }
 
-    // caution: assuming we hold prog_mutex (in_use_cond mutex)
     inline void
-    program_state :: delete_req_state(uint64_t req_id, node_prog::prog_type type)
+    program_state :: done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &reqs)
     {
-        if (node_list.find(req_id) == node_list.end()) {
-            return;
-        }
-        while (node_list.at(req_id).first > 0) {
-            in_use_cond.wait();
-        }
-        mutex.lock();
-        std::unordered_set<uint64_t> &nodes = node_list.at(req_id).second;
-        node_map &nmap = prog_state.at(type);
-        for (uint64_t n: nodes) {
-            delete nmap.at(n).at(req_id);
-            nmap.at(n).erase(req_id);
-            if (nmap.at(n).empty()) {
-                nmap.erase(n);
+        acquire();
+        for (auto &p: reqs) {
+            uint64_t req_id = p.first;
+            node_prog::prog_type type = p.second;
+            done_ids.emplace(req_id);
+            if (node_list.find(req_id) == node_list.end()) {
+                continue;
             }
+            while (node_list.at(req_id).first > 0) {
+                in_use_cond.wait();
+            }
+            std::unordered_set<uint64_t> &nodes = node_list.at(req_id).second;
+            node_map &nmap = prog_state.at(type);
+            for (uint64_t n: nodes) {
+                delete nmap.at(n).at(req_id);
+                nmap.at(n).erase(req_id);
+                if (nmap.at(n).empty()) {
+                    nmap.erase(n);
+                }
+            }
+            node_list.erase(req_id);
         }
-        node_list.erase(req_id);
-        mutex.unlock();
+        release();
     }
             
-    // caution: assuming we hold prog_mutex (in_use_cond mutex)
-    inline void
-    program_state :: set_in_use(uint64_t req_id)
+    inline bool
+    program_state :: check_done_request(uint64_t req_id)
     {
-        mutex.lock();
-        if (node_list.find(req_id) == node_list.end()) {
-            node_list.emplace(req_id, std::make_pair(0, std::unordered_set<uint64_t>()));
+        bool ret;
+        acquire();
+        ret = (done_ids.find(req_id) != done_ids.end());
+        if (!ret) {
+            // increment in use counter to prevent deletion
+            if (node_list.find(req_id) == node_list.end()) {
+                node_list.emplace(req_id, std::make_pair(0, std::unordered_set<uint64_t>()));
+            }
+            node_list.at(req_id).first++;
         }
-        node_list.at(req_id).first++;
-        mutex.unlock();
+        release();
+        return ret;
     }
 
-    // caution: assuming we hold prog_mutex (in_use_cond mutex)
     inline void
     program_state :: clear_in_use(uint64_t req_id)
     {
-        mutex.lock();
+        acquire();
         node_list.at(req_id).first--;
-        mutex.unlock();
         in_use_cond.broadcast();
+        release();
     }
 }
 

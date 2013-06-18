@@ -113,4 +113,4 @@ namespace thread
 } 
 }
 
-#endif //__THREADPOOL__
+#endif

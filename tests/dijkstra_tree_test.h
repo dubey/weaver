@@ -77,13 +77,10 @@ dijkstra_tree_test(bool to_exit)
         initial_args[0].second.dst_handle = super_sink;
         initial_args[0].second.edge_weight_key = weight_label;
         DEBUG << "about to run dijkstra for source " << i << std::endl;
-        node_prog::dijkstra_params* res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
+        std::unique_ptr<node_prog::dijkstra_params> res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
 
         DEBUG << "path of cost " << res->cost <<" wanted" << path_cost(i, TREE_HEIGHT) << std::endl;
         assert(res->cost == path_cost(i, TREE_HEIGHT));
-        if (res != NULL){
-            delete res;
-        }
         initial_args.clear();
     }
 
@@ -99,13 +96,12 @@ dijkstra_tree_test(bool to_exit)
         initial_args[0].second.src_handle = nodes[1];
         initial_args[0].second.dst_handle = super_sink;
         initial_args[0].second.edge_weight_key = weight_label;
-        node_prog::dijkstra_params* res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
+        std::unique_ptr<node_prog::dijkstra_params> res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
 
         uint64_t alternate_route_node = (1 << (height - 1))+1;
         uint64_t expected_cost = path_cost(1, height-1) + alternate_route_node + path_cost(alternate_route_node, TREE_HEIGHT);
         DEBUG << "path of cost " << res->cost <<" wanted " << expected_cost << " though node " << alternate_route_node << std::endl;
         assert(res->cost == expected_cost);
-        delete res;
         initial_args.clear();
     }
     if (to_exit)
