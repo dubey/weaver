@@ -61,7 +61,6 @@ namespace message
         pack_buffer(packer, t.update_count);
         pack_buffer(packer, t.prev_locs);
         pack_buffer(packer, t.agg_msg_count);
-        DEBUG << "packing node " << t.get_creat_time() << std::endl;
         prog_state->pack(t.get_creat_time(), packer);
     }
 
@@ -95,7 +94,6 @@ namespace message
         t.update_creat_time(tc);
         t.update_del_time(td);
         t.set_properties(props);
-        DEBUG << "unpacking node " << t.get_creat_time() << std::endl;
         prog_state->unpack(tc, unpacker);
     }
 }

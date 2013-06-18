@@ -23,7 +23,6 @@
 #include "e/buffer.h"
 #include "busybee_constants.h"
 
-#define __WEAVER_DEBUG__
 #include "central.h"
 #include "common/meta_element.h"
 #include "common/message.h"
@@ -608,7 +607,6 @@ main()
 
     std::cout << "Weaver: coordinator" << std::endl;
     cserver = &server;
-    record_time(&server);
 
     // call periodic cache update function
     t = new std::thread(coord_daemon_initiate, &server);

@@ -551,7 +551,6 @@ namespace db
         mrequest.mutex.unlock();
         while (!migrated_nodes_copy.empty()) {
             delete_migrated_node(migrated_nodes_copy.front()->second);
-            DEBUG << "deleting migr node " << migrated_nodes_copy.front()->second << std::endl;
             migrated_nodes_copy.pop_front();
         }
 
@@ -861,12 +860,12 @@ namespace db
     graph :: fetch_prog_cache(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id,
         std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set)
     {
-try {
-        return node_prog_cache.get_cache(t, local_node_handle, req_id, dirty_list_ptr, ignore_set);
-} catch (const std::out_of_range &e) {
-    DEBUG << "caught exception here" << std::endl;
-    while(1);
-}
+        try {
+            return node_prog_cache.get_cache(t, local_node_handle, req_id, dirty_list_ptr, ignore_set);
+        } catch (const std::out_of_range &e) {
+            DEBUG << "caught exception here" << std::endl;
+            return std::vector<std::shared_ptr<node_prog::CacheValueBase>>();
+        }
     }
 
     inline std::shared_ptr<node_prog::CacheValueBase>
@@ -879,18 +878,18 @@ try {
     graph :: insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle,
         std::shared_ptr<node_prog::CacheValueBase> toAdd, element::node *n)
     {
-try {
-        n->add_cached_req(request_id);
-} catch (const std::out_of_range &e) {
-    DEBUG << "caught exception here" << std::endl;
-    while(1);
-}
-try {
-        node_prog_cache.put_cache(request_id, t, local_node_handle, toAdd);
-} catch (const std::out_of_range &e) {
-    DEBUG << "caught exception here" << std::endl;
-    while(1);
-}
+        try {
+            n->add_cached_req(request_id);
+        } catch (const std::out_of_range &e) {
+            DEBUG << "caught exception here" << std::endl;
+            return;
+        }
+        try {
+            node_prog_cache.put_cache(request_id, t, local_node_handle, toAdd);
+        } catch (const std::out_of_range &e) {
+            DEBUG << "caught exception here" << std::endl;
+            return;
+        }
     }
 
     inline void

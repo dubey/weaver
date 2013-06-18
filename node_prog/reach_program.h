@@ -100,8 +100,6 @@ namespace node_prog
             message::pack_buffer(packer, prev_node);
             message::pack_buffer(packer, out_count);
             message::pack_buffer(packer, reachable);
-            DEBUG << "packed out count " << out_count << ", reachable " << reachable
-                << ", prev node = " << prev_node.handle << "," << prev_node.loc << std::endl;
         }
 
         virtual void unpack(e::unpacker& unpacker)
@@ -110,8 +108,6 @@ namespace node_prog
             message::unpack_buffer(unpacker, prev_node);
             message::unpack_buffer(unpacker, out_count);
             message::unpack_buffer(unpacker, reachable);
-            DEBUG << "unpacked out count " << out_count << ", reachable " << reachable
-                << ", prev node = " << prev_node.handle << "," << prev_node.loc << std::endl;
         }
     };
 
@@ -219,7 +215,7 @@ namespace node_prog
                 //    rcv.reachable_node = params.dest;
                 //}
                 //if (state.prev_node.loc == COORD_ID) {
-                    DEBUG << "done with req " << req_id << " at node " << rn.handle << ", loc " << rn.loc << std::endl;
+                    //DEBUG << "done with req " << req_id << " at node " << rn.handle << ", loc " << rn.loc << std::endl;
                 //}
             } else if ((int)state.out_count < 0) {
                 DEBUG << "ALERT! Bad state value in reach program" << std::endl;

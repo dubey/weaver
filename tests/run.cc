@@ -62,8 +62,9 @@ main(int argc, char *argv[])
     //clustering_prog_test();
 #endif
 #ifndef __ALL_TESTS__
-    //multiple_dense_reachability(true);
-    unreachable_reach_prog(true);
+    multiple_sparse_reachability(true);
+    //unreachable_reach_prog(true);
+    //line_reach_prog(true);
 #endif
     DEBUG << "All tests completed." << std::endl;
 

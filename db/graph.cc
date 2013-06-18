@@ -25,7 +25,6 @@
 #include <e/buffer.h>
 #include "busybee_constants.h"
 
-#define __WEAVER_DEBUG__
 #include "common/weaver_constants.h"
 #include "common/message_graph_elem.h"
 #include "graph.h"
@@ -375,8 +374,8 @@ migrate_node_step7a(db::graph *G)
     n = G->acquire_node(migr_node);
     n->state = db::element::node::mode::MOVED;
     for (auto &r: n->pending_requests) {
-        DEBUG << "Now forwarding queued request for migr node " << migr_node
-            << " to loc " << G->mrequest.new_loc << std::endl;
+        //DEBUG << "Now forwarding queued request for migr node " << migr_node
+        //    << " to loc " << G->mrequest.new_loc << std::endl;
         G->send(G->mrequest.new_loc, r->buf);
     }
     n->pending_requests.clear();
@@ -416,7 +415,6 @@ migrate_node_step7c(db::graph *G, std::unique_ptr<message::message> msg)
     G->mrequest.mutex.lock();
     G->migrated_nodes.emplace_back(std::unique_ptr<std::pair<uint64_t, uint64_t>>(
         new std::pair<uint64_t, uint64_t>(global_clock, G->mrequest.cur_node)));
-    DEBUG << "added migr node " << G->mrequest.cur_node << " with del clock " << global_clock << std::endl;
     if (++G->mrequest.start_next_round == 3) {
         call_wrapper = true;
     }
@@ -505,10 +503,10 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
         DEBUG << "caught exception here, shard = " << G->myid << ", exception " << e.what() << std::endl;
         return;
     }
-    DEBUG << "Permanent delete, id = " << perm_del_id
-        << "\tMigr del id = " << migr_del_id 
-        << "\tNumber of nodes = " << G->nodes.size()
-        << "\tGood size = " << good.size() << ", bad size = " << bad.size() << std::endl;
+    //DEBUG << "Permanent delete, id = " << perm_del_id
+    //    << "\tMigr del id = " << migr_del_id 
+    //    << "\tNumber of nodes = " << G->nodes.size()
+    //    << "\tGood size = " << good.size() << ", bad size = " << bad.size() << std::endl;
 
     // check if migration needs to be initiated
     timespec t, dif;
@@ -536,12 +534,11 @@ NodeStateType& get_node_state(db::graph *G, node_prog::prog_type pType, uint64_t
     if (G->prog_req_state_exists(pType, req_id, node_handle)) {
         toRet = dynamic_cast<NodeStateType *>(G->fetch_prog_req_state(pType, req_id, node_handle));
         if (toRet == NULL) {
-            std::cerr << "NodeStateType needs to extend Deletable" << std::endl;
+            DEBUG << "NodeStateType needs to extend Deletable" << std::endl;
         }
     } else {
         toRet = new NodeStateType();
         G->insert_prog_req_state(pType, req_id, node_handle, toRet);
-        DEBUG << "creating new state for req " << req_id << " for node " << node_handle << std::endl;
     }
     return *toRet;
 }
@@ -556,7 +553,7 @@ std::vector<std::shared_ptr<CacheValueType>> get_cached_values(db::graph *G, nod
         for (std::shared_ptr<node_prog::CacheValueBase> cval : G->fetch_prog_cache(pType, node_handle, req_id, dirty_list_ptr, ignore_set)) {
             cache = std::dynamic_pointer_cast<CacheValueType>(cval);
             if (!cache) {
-                std::cerr << "CacheValueType needs to extend CacheValueBase" << std::endl;
+                DEBUG << "CacheValueType needs to extend CacheValueBase" << std::endl;
             } else {
                 toRet.emplace_back(cache);
             }
@@ -578,7 +575,7 @@ CacheValueType& put_cache_value(db::graph *G, node_prog::prog_type pType, uint64
         toRet = std::dynamic_pointer_cast<CacheValueType>(G->fetch_prog_cache_single(pType, node_handle, req_id));
         if (toRet == NULL) {
             // dynamic_cast failed, CacheValueType needs to extend CacheValueBase
-            std::cerr << "CacheValueType needs to extend CacheValueBase" << std::endl;
+            DEBUG << "CacheValueType needs to extend CacheValueBase" << std::endl;
         }
     } else {
         toRet = std::make_shared<CacheValueType>();
@@ -634,8 +631,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                 unpacked_request_id, start_node_params, dirty_cache_ids, invalid_cache_ids, batched_deleted_nodes[G->myid]);
 #ifdef __WEAVER_DEBUG__
         if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_nodes[G->myid].at(0)) == MAX_TIME) {
-            DEBUG << "Unpacking forwarded request in unpack_and_run for node "
-                << std::get<0>(start_node_params.at(0)) << std::endl;
+            //DEBUG << "Unpacking forwarded request in unpack_and_run for node "
+            //    << std::get<0>(start_node_params.at(0)) << std::endl;
             batched_deleted_nodes[G->myid].clear();
         }
 #endif
@@ -677,13 +674,13 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                     uint64_t new_loc = node->new_loc;
                     G->release_node(node);
                     G->send(new_loc, m->buf);
-                    DEBUG << "MOVED: Forwarding del prog immed, node handle " << node_handle
-                        << ", to location " << new_loc << std::endl;
+                    //DEBUG << "MOVED: Forwarding del prog immed, node handle " << node_handle
+                    //    << ", to location " << new_loc << std::endl;
                 } else {
                     // queue request for forwarding later
                     node->pending_requests.emplace_back(std::move(m));
                     G->release_node(node);
-                    DEBUG << "IN_TRANSIT: Enqueuing del prog for migr node " << node_handle << std::endl;
+                    //DEBUG << "IN_TRANSIT: Enqueuing del prog for migr node " << node_handle << std::endl;
                 }
             } else {
                 DEBUG << "calling delete program" << std::endl;
@@ -743,13 +740,13 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                     uint64_t new_loc = node->new_loc;
                     G->release_node(node);
                     G->send(new_loc, m->buf);
-                    DEBUG << "MOVED: Forwarding request immed, node handle " << node_handle
-                        << ", to location " << new_loc << std::endl;
+                    //DEBUG << "MOVED: Forwarding request immed, node handle " << node_handle
+                    //    << ", to location " << new_loc << std::endl;
                 } else {
                     // queue request for forwarding later
                     node->pending_requests.emplace_back(std::move(m));
                     G->release_node(node);
-                    DEBUG << "IN_TRANSIT: Enqueuing request for migr node " << node_handle << std::endl;
+                    //DEBUG << "IN_TRANSIT: Enqueuing request for migr node " << node_handle << std::endl;
                 }
             } else { // node does exist
                 assert(node->state == db::element::node::mode::STABLE);
@@ -786,7 +783,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                             batched_deleted_nodes[loc].clear();
                             G->send(loc, msg.buf);
                         }
-                        node->msg_count[loc-1]++;
                         G->msg_count_mutex.lock();
                         G->agg_msg_count[node_handle]++;
                         G->request_count[G->myid-1]++;
@@ -991,7 +987,7 @@ unpack_update_request(db::graph *G, void *req)
         }
 
         default:
-            std::cerr << "Bad msg type in unpack_update_request " << request->type << std::endl;
+            DEBUG << "Bad msg type in unpack_update_request " << request->type << std::endl;
     }
     delete request;
 }
@@ -1044,7 +1040,7 @@ unpack_transit_update_request(db::graph *G, db::update_request *request)
             break;
 
         default:
-            std::cerr << "Bad msg type in unpack_transit_update_request" << std::endl;
+            DEBUG << "Bad msg type in unpack_transit_update_request" << std::endl;
     }
 }
 
@@ -1103,7 +1099,7 @@ runner(db::graph *G)
 
     while (true) {
         if ((ret = G->bb->recv(&sender, &rec_msg->buf)) != BUSYBEE_SUCCESS) {
-            std::cerr << "msg recv error: " << ret << " at shard " << G->myid << std::endl;
+            DEBUG << "msg recv error: " << ret << " at shard " << G->myid << std::endl;
             continue;
         }
         rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
@@ -1184,7 +1180,7 @@ runner(db::graph *G)
                 exit(0);
                 
             default:
-                std::cerr << "unexpected msg type " << mtype << std::endl;
+                DEBUG << "unexpected msg type " << mtype << std::endl;
         }
     }
 }
@@ -1196,15 +1192,12 @@ migration_wrapper(db::graph *G)
     while (!G->sorted_nodes.empty()) {
         db::element::node *n;
         uint64_t max_pos, migr_pos;
-        bool prev_loc;
         uint64_t migr_node = G->sorted_nodes.front().first;
         n = G->acquire_node(migr_node);
         if (n == NULL || n->get_del_time() < MAX_TIME || n->dependent_del > 0 ||
             n->state == db::element::node::mode::IN_TRANSIT || n->state == db::element::node::mode::MOVED) {
             if (n != NULL) {
                 G->release_node(n);
-            } else {
-                DEBUG << "Node " << migr_node << " already deleted in migration wrapper" << std::endl;
             }
             G->sorted_nodes.pop_front();
             continue;
@@ -1213,14 +1206,16 @@ migration_wrapper(db::graph *G)
         db::element::edge *e;
         for (auto &e_iter: n->out_edges) {
             e = e_iter.second;
-            n->msg_count[e->nbr.loc] += e->msg_count;
+            n->msg_count.at(e->nbr.loc-1) += e->msg_count;
+            e->msg_count = 0;
         }
         for (auto &e_iter: n->in_edges) {
             e = e_iter.second;
-            n->msg_count[e->nbr.loc] += e->msg_count;
+            n->msg_count.at(e->nbr.loc-1) += e->msg_count;
+            e->msg_count = 0;
         }
         for (size_t j = 0; j < NUM_SHARDS; j++) {
-            n->agg_msg_count[j] += (uint64_t)(0.8 * (double)(n->msg_count[j]));
+            n->agg_msg_count.at(j) += (uint64_t)(0.8 * (double)(n->msg_count.at(j)));
         }
         max_pos = 0;
         for (uint64_t j = 0; j < n->agg_msg_count.size(); j++) {
@@ -1229,28 +1224,18 @@ migration_wrapper(db::graph *G)
             }
         }
         migr_pos = max_pos;
-        // among all the shards that are within a fraction of the maximum
-        // migrate to the one which has most nodes (locality)
-        for (uint64_t j = 0; j < NUM_SHARDS; j++) {
-            if ((n->agg_msg_count.at(j) > (0.8 * (double)n->agg_msg_count.at(max_pos)))
-             && (G->node_count.at(j) > G->node_count.at(migr_pos))) { // more locality, maybe 
-                migr_pos = j;
-            }
-        }
         migr_pos++; // fixing off-by-one
         for (uint32_t &cnt: n->msg_count) {
             cnt = 0;
         } 
-        //prev_loc = (n->prev_locs.at(migr_pos-1) == 1);
-        prev_loc = (n->prev_loc == migr_pos);
         G->release_node(n);
         G->sorted_nodes.pop_front();
         // TODO think of a good metric for reverse force on a migrating node
-        // double reverse_force = ((double)G->request_count[migr_pos-1])/G->cur_node_count;
+        //double reverse_force = ((double)G->request_count[migr_pos-1])/G->cur_node_count;
         //DEBUG << "reverse force " << reverse_force << ", forward force " << msg_count << std::endl;
-        if (migr_pos != G->myid // no migration to self
+        if (migr_pos != G->myid) // no migration to self
          //&& (reverse_force < msg_count) // good from load balancing point of view
-         && !prev_loc) /* no migration previous location */ {
+        {
             migrate_node_step1(G, migr_node, migr_pos);
             no_migr = false;
             DEBUG << "migrating node " << migr_node << " to " << migr_pos << std::endl;
@@ -1319,7 +1304,7 @@ shard_daemon_end(db::graph *G)
 void
 end_program(int param)
 {
-    std::cerr << "Caught SIGINT, ending program, param = " << param << std::endl;
+    DEBUG << "Caught SIGINT, ending program, param = " << param << std::endl;
     exit(1);
 }
 
@@ -1336,7 +1321,7 @@ main(int argc, char* argv[])
     signal(SIGINT, end_program);
     //std::set_terminate(&myterminate);
     if (argc != 2) {
-        std::cerr << "Usage: " << argv[0] << " <myid>" << std::endl;
+        DEBUG << "Usage: " << argv[0] << " <myid>" << std::endl;
         return -1;
     }
     uint64_t id = atoi(argv[1]);
