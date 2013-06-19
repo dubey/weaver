@@ -607,6 +607,7 @@ main()
 
     std::cout << "Weaver: coordinator" << std::endl;
     cserver = &server;
+    record_time(cserver);
 
     // call periodic cache update function
     t = new std::thread(coord_daemon_initiate, &server);

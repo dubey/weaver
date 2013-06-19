@@ -16,7 +16,7 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define CRP_REQUESTS 400
+#define CRP_REQUESTS 6000
 #define NUM_CLIQUES NUM_SHARDS
 #define CLIQUE_SIZE 200
 

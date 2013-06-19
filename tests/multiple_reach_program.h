@@ -16,7 +16,7 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define MRP_REQUESTS 10000
+#define MRP_REQUESTS 500
 
 // issue multiple random reachability requests in a random graph
 // parameter 'dense' decides if the graph is dense (true) or sparse (false)

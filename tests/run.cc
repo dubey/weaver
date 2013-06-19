@@ -64,7 +64,8 @@ main(int argc, char *argv[])
 #ifndef __ALL_TESTS__
     multiple_sparse_reachability(true);
     //unreachable_reach_prog(true);
-    //line_reach_prog(true);
+    //clique_reach_prog(true);
+    //multiple_wp_prog(true);
 #endif
     DEBUG << "All tests completed." << std::endl;
 

@@ -40,6 +40,8 @@
 #define GRAPH_FILE "graph.rec"
 #define DAEMON_PERIOD 2 // frequency in seconds for coordinator daemon to run
 #define MIGR_FREQ 5 // seconds delay between consecutive migrations
+#define INITIAL_MIGR_DELAY 60 // seconds delay for initial migration
+#define MAX_NODES 300
 #define MSG_BATCHING true // whether to batch messages or not
 #define BATCH_MSG_SIZE 100
 #define MIGRATION true // whether to enable migration or not

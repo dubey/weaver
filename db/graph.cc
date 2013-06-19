@@ -785,7 +785,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                         }
                         G->msg_count_mutex.lock();
                         G->agg_msg_count[node_handle]++;
-                        G->request_count[G->myid-1]++;
+                        G->request_count[loc-1]++; // increment count of msges sent to loc
                         G->msg_count_mutex.unlock();
                     }
                 }
@@ -966,8 +966,10 @@ unpack_update_request(db::graph *G, void *req)
             message::message msg;
             uint64_t my_node_count = G->get_node_count();
             G->msg_count_mutex.lock();
-            message::prepare_message(msg, message::REQUEST_COUNT_ACK, G->request_count[G->myid-1], my_node_count, G->myid);
-            G->request_count[G->myid-1] = 0;
+            message::prepare_message(msg, message::REQUEST_COUNT_ACK, G->request_count[sender-1], my_node_count, G->myid);
+            for (auto &c: G->request_count) {
+                c = 0;
+            }
             G->msg_count_mutex.unlock();
             G->send(sender, msg.buf);
             break;
@@ -1193,6 +1195,7 @@ migration_wrapper(db::graph *G)
         db::element::node *n;
         uint64_t max_pos, migr_pos;
         uint64_t migr_node = G->sorted_nodes.front().first;
+        uint32_t msg_count = G->sorted_nodes.front().second;
         n = G->acquire_node(migr_node);
         if (n == NULL || n->get_del_time() < MAX_TIME || n->dependent_del > 0 ||
             n->state == db::element::node::mode::IN_TRANSIT || n->state == db::element::node::mode::MOVED) {
@@ -1230,15 +1233,16 @@ migration_wrapper(db::graph *G)
         } 
         G->release_node(n);
         G->sorted_nodes.pop_front();
-        // TODO think of a good metric for reverse force on a migrating node
-        //double reverse_force = ((double)G->request_count[migr_pos-1])/G->cur_node_count;
+        double reverse_force = 0;//((double)G->request_count_const.at(migr_pos-1))/G->node_count.at(migr_pos-1);
         //DEBUG << "reverse force " << reverse_force << ", forward force " << msg_count << std::endl;
-        if (migr_pos != G->myid) // no migration to self
-         //&& (reverse_force < msg_count) // good from load balancing point of view
+        if (migr_pos != G->myid // no migration to self
+         &&(reverse_force < msg_count))
+         //&&(G->node_count.at(migr_pos-1) < MAX_NODES)) // good from load balancing point of view
         {
-            migrate_node_step1(G, migr_node, migr_pos);
-            no_migr = false;
             DEBUG << "migrating node " << migr_node << " to " << migr_pos << std::endl;
+            migrate_node_step1(G, migr_node, migr_pos);
+            G->node_count.at(migr_pos-1)++;
+            no_migr = false;
             break;
         }
     }
@@ -1335,6 +1339,7 @@ main(int argc, char* argv[])
         G.migr_token = true;
         G.migrated = false;
         clock_gettime(CLOCK_MONOTONIC, &G.migr_time);
+        G.migr_time.tv_sec += INITIAL_MIGR_DELAY;
         G.migration_mutex.unlock();
     }
     runner(&G);
