@@ -20,6 +20,7 @@
 #include "basic_client.h"
 #include "repetitive_reach_program.h"
 #include "multiple_reach_program.h"
+#include "multiple_locality.h"
 #include "basic_migration_test.h"
 #include "line_reach_program.h"
 #include "clique_reach_program.h"
@@ -62,10 +63,11 @@ main(int argc, char *argv[])
     //clustering_prog_test();
 #endif
 #ifndef __ALL_TESTS__
-    multiple_sparse_reachability(true);
+    //multiple_sparse_reachability(true);
     //unreachable_reach_prog(true);
     //clique_reach_prog(true);
     //multiple_wp_prog(true);
+    multiple_sparse_locality(true);
 #endif
     DEBUG << "All tests completed." << std::endl;
 

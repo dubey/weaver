@@ -30,11 +30,14 @@ namespace node_prog
             db::element::remote_node prev_node;
             uint64_t dest;
             std::vector<common::property> edge_props;
+            uint32_t hops;
             bool reachable;
+            std::vector<db::element::remote_node> path;
 
         public:
             reach_params()
                 : mode(false)
+                , hops(0)
                 , reachable(false)
             {
             }
@@ -47,7 +50,9 @@ namespace node_prog
                     + message::size(prev_node)
                     + message::size(dest) 
                     + message::size(edge_props)
-                    + message::size(reachable);
+                    + message::size(hops)
+                    + message::size(reachable)
+                    + message::size(path);
                 return toRet;
             }
 
@@ -57,7 +62,9 @@ namespace node_prog
                 message::pack_buffer(packer, prev_node);
                 message::pack_buffer(packer, dest);
                 message::pack_buffer(packer, edge_props);
+                message::pack_buffer(packer, hops);
                 message::pack_buffer(packer, reachable);
+                message::pack_buffer(packer, path);
             }
 
             virtual void unpack(e::unpacker &unpacker)
@@ -66,7 +73,9 @@ namespace node_prog
                 message::unpack_buffer(unpacker, prev_node);
                 message::unpack_buffer(unpacker, dest);
                 message::unpack_buffer(unpacker, edge_props);
+                message::unpack_buffer(unpacker, hops);
                 message::unpack_buffer(unpacker, reachable);
+                message::unpack_buffer(unpacker, path);
             }
     };
 
@@ -208,6 +217,10 @@ namespace node_prog
                         break;
                     }
                 }
+                if (params.reachable) {
+                    params.hops++;
+                    params.path.emplace_back(rn);
+                }
                 next.emplace_back(std::make_pair(state.prev_node, params));
                 //if (params.reachable) {
                 //    // adding to cache
@@ -215,7 +228,7 @@ namespace node_prog
                 //    rcv.reachable_node = params.dest;
                 //}
                 //if (state.prev_node.loc == COORD_ID) {
-                    //DEBUG << "done with req " << req_id << " at node " << rn.handle << ", loc " << rn.loc << std::endl;
+                //  DEBUG << "done with req " << req_id << " at node " << rn.handle << ", loc " << rn.loc << std::endl;
                 //}
             } else if ((int)state.out_count < 0) {
                 DEBUG << "ALERT! Bad state value in reach program" << std::endl;

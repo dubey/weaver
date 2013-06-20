@@ -12,8 +12,8 @@
  * ===============================================================
  */
 
-#ifndef PO6_NDEBUG_LEAKS
-#define PO6_NDEBUG_LEAKS
+//#ifndef PO6_NDEBUG_LEAKS
+//#define PO6_NDEBUG_LEAKS
 
 #include <cstdlib>
 #include <iostream>
@@ -25,6 +25,7 @@
 #include <e/buffer.h>
 #include "busybee_constants.h"
 
+#define __WEAVER_DEBUG__
 #include "common/weaver_constants.h"
 #include "common/message_graph_elem.h"
 #include "graph.h"
@@ -470,7 +471,7 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
     // invalidations
     for (uint64_t bad_id: bad) {
         try {
-                G->invalidate_prog_cache(bad_id);
+            G->invalidate_prog_cache(bad_id);
         } catch (std::exception &e) {
             DEBUG << "caught exception here, shard = " << G->myid << ", exception " << e.what() << std::endl;
             return;
@@ -480,7 +481,7 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
     // confirmations
     for (uint64_t good_id: good) {
         try {
-                G->commit_prog_cache(good_id);
+            G->commit_prog_cache(good_id);
         } catch (std::exception &e) {
             DEBUG << "caught exception here, shard = " << G->myid << ", exception " << e.what() << std::endl;
             return;
@@ -511,7 +512,7 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
     // check if migration needs to be initiated
     timespec t, dif;
     bool to_migrate = false;
-    G->migration_mutex.lock();
+    G->migr_token_mutex.lock();
     clock_gettime(CLOCK_MONOTONIC, &t);
     if (!G->migrated && G->migr_token) {
         dif = diff(G->migr_time, t);
@@ -521,7 +522,7 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
             DEBUG << "Going to start migration at shard " << G->myid << " at time " << t.tv_sec << std::endl;
         }
     }
-    G->migration_mutex.unlock();
+    G->migr_token_mutex.unlock();
     if (to_migrate) {
         shard_daemon_begin(G, NULL);
     }
@@ -609,6 +610,14 @@ template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
     unpack_and_run_db(db::graph *G, message::message &msg)
 {
+    std::ofstream reqfile;
+    timespec cur;
+    clock_gettime(CLOCK_MONOTONIC, &cur);
+    reqfile.open(std::string("graph_req") + std::to_string(G->myid) + ".rec", std::ios::app);
+    G->test_mutex.lock();
+    reqfile << cur.tv_sec << "." << cur.tv_nsec << std::endl;
+    G->test_mutex.unlock();
+    reqfile.close();
     // unpack some start params from msg:
     std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> start_node_params;
     uint64_t unpacked_request_id;
@@ -1171,11 +1180,11 @@ runner(db::graph *G)
 
             case message::MIGRATION_TOKEN:
                 DEBUG << "Now obtained migration token at shard " << G->myid << std::endl;
-                G->migration_mutex.lock();
+                G->migr_token_mutex.lock();
                 G->migr_token = true;
                 G->migrated = false;
                 clock_gettime(CLOCK_MONOTONIC, &G->migr_time);
-                G->migration_mutex.unlock();
+                G->migr_token_mutex.unlock();
                 break;
 
             case message::EXIT_WEAVER:
@@ -1227,10 +1236,22 @@ migration_wrapper(db::graph *G)
             }
         }
         migr_pos = max_pos;
+        //if ((G->node_count.at(G->myid-1) >= MAX_NODES) && (migr_pos == (G->myid-1))) {
+        //    // if this shard is full to capacity, try to offload to a less populated shard
+        //    double max_count = n->agg_msg_count.at(migr_pos);
+        //    for (uint64_t j = 0; j < NUM_SHARDS; j++) {
+        //        if (n->agg_msg_count.at(j) > (0.8 * max_count) // should be within acceptable limit
+        //         && j != migr_pos
+        //         && G->node_count.at(j) < MAX_NODES) { // capacity != full
+        //            migr_pos = j;
+        //            break;
+        //        }
+        //    }
+        //}
         migr_pos++; // fixing off-by-one
         for (uint32_t &cnt: n->msg_count) {
             cnt = 0;
-        } 
+        }
         G->release_node(n);
         G->sorted_nodes.pop_front();
         double reverse_force = 0;//((double)G->request_count_const.at(migr_pos-1))/G->node_count.at(migr_pos-1);
@@ -1287,8 +1308,8 @@ shard_daemon_begin(db::graph *G, void*)
             sn.emplace_back(p);
         }
         std::sort(sn.begin(), sn.end(), agg_count_compare);
-        DEBUG << "sorted nodes size " << sn.size() << std::endl;
         G->sorted_nodes = std::move(sn);
+        DEBUG << "sorted nodes size " << sn.size() << std::endl;
         migration_wrapper(G);
     }
 }
@@ -1298,9 +1319,9 @@ shard_daemon_end(db::graph *G)
 {
     message::message msg;
     message::prepare_message(msg, message::MIGRATION_TOKEN);
-    G->migration_mutex.lock();
+    G->migr_token_mutex.lock();
     G->migr_token = false;
-    G->migration_mutex.unlock();
+    G->migr_token_mutex.unlock();
     uint64_t next_id = (G->myid + 1) > NUM_SHARDS ? 1 : (G->myid + 1);
     G->send(next_id, msg.buf);
 }
@@ -1334,17 +1355,17 @@ main(int argc, char* argv[])
     std::cout << "Weaver: shard instance " << G.myid << std::endl;
 
     // initialize migration at shard 1
-    if (G.myid == 1 && MIGRATION) {
-        G.migration_mutex.lock();
+    if (G.myid == START_MIGR_ID && MIGRATION) {
+        G.migr_token_mutex.lock();
         G.migr_token = true;
         G.migrated = false;
         clock_gettime(CLOCK_MONOTONIC, &G.migr_time);
         G.migr_time.tv_sec += INITIAL_MIGR_DELAY;
-        G.migration_mutex.unlock();
+        G.migr_token_mutex.unlock();
     }
     runner(&G);
 
     return 0;
 }
 
-#endif
+//#endif

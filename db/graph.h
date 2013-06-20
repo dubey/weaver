@@ -200,7 +200,7 @@ namespace db
 
             // Node migration
             migrate_request mrequest; // pending migration request object
-            po6::threads::mutex migration_mutex, msg_count_mutex;
+            po6::threads::mutex migration_mutex, msg_count_mutex, migr_token_mutex;
             uint64_t migr_node; // newly migrated node
             std::priority_queue<update_request*, std::vector<update_request*>, req_compare> pending_updates;
             uint64_t pending_update_count;
@@ -234,10 +234,10 @@ namespace db
             busybee_mta *bb; // Busybee instance used for sending and receiving messages
             busybee_returncode send(uint64_t loc, std::auto_ptr<e::buffer> buf);
             
-#ifdef __WEAVER_DEBUG__
             // testing
-            std::unordered_map<uint64_t, uint64_t> req_count;
             po6::threads::mutex test_mutex;
+#ifdef __WEAVER_DEBUG__
+            std::unordered_map<uint64_t, uint64_t> req_count;
             uint64_t sent_count, rec_count;
 #endif
 

@@ -46,6 +46,7 @@ class client
         std::unique_ptr<ParamsType> run_node_program(node_prog::prog_type prog_to_run,
             std::vector<std::pair<uint64_t, ParamsType>> initial_args);
         uint64_t get_node_loc(uint64_t node);
+        void start_migration();
         void exit_weaver();
 
     private:
@@ -173,6 +174,14 @@ client :: get_node_loc(uint64_t node)
     }
     message::unpack_message(msg, message::CLIENT_NODE_LOC_REPLY, loc);
     return loc;
+}
+
+inline void
+client :: start_migration()
+{
+    message::message msg;
+    message::prepare_message(msg, message::START_MIGR);
+    send_coord(msg.buf);
 }
 
 inline void

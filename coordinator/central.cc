@@ -44,6 +44,13 @@ record_time(coordinator::central *server)
     server->migr_times.emplace_back(mtime);
 }
 
+void start_migration()
+{
+    message::message msg;
+    message::prepare_message(msg, message::MIGRATION_TOKEN);
+    cserver->send(START_MIGR_ID, msg.buf);
+}
+
 void exit_weaver()
 {
     message::message msg;
@@ -502,8 +509,13 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg,
             get_node_loc(server, std::move(msg), crequest->client);
             break;
 
+        case message::START_MIGR:
+            start_migration();
+            break;
+
         case message::EXIT_WEAVER:
             exit_weaver();
+            break;
 
         default:
             std::cerr << "unexpected msg type " << m_type << std::endl;

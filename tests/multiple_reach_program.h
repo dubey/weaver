@@ -25,7 +25,7 @@ multiple_reach_prog(bool dense, bool to_exit)
 {
     client c(CLIENT_ID);
     int i, num_nodes, num_edges;
-    timespec first, t1, t2, dif;
+    timespec start, t1, t2, dif;
     std::ofstream seed_file;
     uint64_t seed = time(NULL);
     DEBUG << "seed " << seed << std::endl;
@@ -52,21 +52,22 @@ multiple_reach_prog(bool dense, bool to_exit)
     rp.prev_node.loc = COORD_ID;
     
     std::ofstream file, req_time;
+    int first, second;
     file.open("requests.rec");
     req_time.open("time.rec");
     clock_gettime(CLOCK_MONOTONIC, &t1);
-    first = t1;
+    start = t1;
     for (i = 0; i < MRP_REQUESTS; i++) {
         clock_gettime(CLOCK_MONOTONIC, &t2);
         dif = diff(t1, t2);
         DEBUG << "Test: i = " << i << ", " << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
         if (i % 10 == 0) {
-            dif = diff(first, t2);
+            dif = diff(start, t2);
             req_time << dif.tv_sec << '.' << dif.tv_nsec << std::endl;
         }
         t1 = t2;
-        int first = rand() % num_nodes;
-        int second = rand() % num_nodes;
+        first = rand() % num_nodes;
+        second = rand() % num_nodes;
         while (second == first) {
             second = rand() % num_nodes;
         }
@@ -80,7 +81,7 @@ multiple_reach_prog(bool dense, bool to_exit)
     }
     file.close();
     req_time.close();
-    dif = diff(first, t2);
+    dif = diff(start, t2);
     DEBUG << "Total time taken " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
     std::ofstream stat_file;
     stat_file.open("stats.rec", std::ios::out | std::ios::app);

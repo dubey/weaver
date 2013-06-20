@@ -94,6 +94,7 @@ namespace message
         REQUEST_COUNT,
         REQUEST_COUNT_ACK,
 
+        START_MIGR,
         EXIT_WEAVER,
         ERROR
     };
