@@ -23,6 +23,8 @@
 #include "e/buffer.h"
 #include "busybee_constants.h"
 
+#include "common/weaver_constants.h"
+#include "common/clock.h"
 #include "central.h"
 #include "common/meta_element.h"
 #include "common/message.h"
@@ -39,7 +41,8 @@ void
 record_time(coordinator::central *server)
 {
     double mtime;
-    clock_gettime(CLOCK_MONOTONIC, &server->mtime);
+    //clock_gettime(CLOCK_MONOTONIC, &server->mtime);
+    wclock::get_clock(&server->mtime);
     mtime = server->mtime.tv_sec + ((double)server->mtime.tv_nsec)/(1000000000ULL);
     server->migr_times.emplace_back(mtime);
 }

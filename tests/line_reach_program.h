@@ -11,6 +11,7 @@
  * ===============================================================
  */
 
+#include "common/clock.h"
 #include "client/client.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/reach_program.h"
@@ -50,10 +51,10 @@ line_reach_prog(bool to_exit)
     std::ofstream file, req_time;
     file.open("requests.rec");
     req_time.open("time.rec");
-    clock_gettime(CLOCK_MONOTONIC, &t1);
+    wclock::get_clock(&t1);
     start = t1;
     for (i = 0; i < LRP_REQUESTS; i++) {
-        clock_gettime(CLOCK_MONOTONIC, &t2);
+        wclock::get_clock(&t2);
         dif = diff(t1, t2);
         DEBUG << "Test: i = " << i << ", ";
         DEBUG << dif.tv_sec << ":" << dif.tv_nsec << std::endl;

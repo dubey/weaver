@@ -19,7 +19,7 @@
 void
 clustering_prog_test()
 {
-    client c(CLIENT_PORT);
+    client c(CLIENT_ID);
     auto edge_props = std::make_shared<std::vector<common::property>>();
     int i;
     int testcount = 0;

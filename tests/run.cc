@@ -63,7 +63,7 @@ main(int argc, char *argv[])
     //clustering_prog_test();
 #endif
 #ifndef __ALL_TESTS__
-    //multiple_sparse_reachability(true);
+    multiple_sparse_reachability(true);
     //unreachable_reach_prog(true);
     //clique_reach_prog(true);
     //multiple_wp_prog(true);
