@@ -138,7 +138,6 @@ namespace coordinator
             std::shared_ptr<pending_req> get_last_del_req(std::shared_ptr<pending_req> request);
             bool still_pending_del_req(uint64_t req_id);
             void add_deleted_cache(std::shared_ptr<pending_req> request, std::vector<uint64_t> &cached_ids);
-            void add_deleted_cache(uint64_t req_ids, std::vector<uint64_t> &cached_ids);
             bool is_deleted_cache_id(uint64_t id);
             void add_good_cache_id(uint64_t id);
             void add_bad_cache_id(uint64_t id);
@@ -207,7 +206,6 @@ namespace coordinator
     {
         std::vector<std::shared_ptr<pending_req>>::iterator pend_iter;
         for (uint64_t del_iter: cached_ids) {
-            //DEBUG << "Inserting bad cache " << del_iter << std::endl;
             bad_cache_ids->emplace(del_iter);
         }
         for (pend_iter = pending_delete_requests.begin();
@@ -220,7 +218,7 @@ namespace coordinator
         assert(pend_iter != pending_delete_requests.end());
         for (auto &dep_req: (**pend_iter).dependent_traversals) {
             if (dep_req->done) {
-                end_node_prog(this, dep_req); // TODO this is bad, should be processed by different threads.
+                end_node_prog(this, dep_req); // TODO should be processed by different threads.
             }
         }
         pending_delete_requests.erase(pend_iter);

@@ -491,7 +491,7 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
     
     // remove state corresponding to completed node programs
     try {
-        G->add_done_request(completed_requests);
+        G->add_done_request(completed_requests, migr_del_id);
     } catch (std::exception &e) {
         DEBUG << "caught exception here, shard = " << G->myid << ", exception " << e.what() << std::endl;
         return;
@@ -499,15 +499,17 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
 
     // permanent deletion of deleted and migrated nodes
     try {
-        G->permanent_delete(perm_del_id, migr_del_id);
+        G->permanent_delete(migr_del_id, migr_del_id);
+        //G->permanent_delete(perm_del_id, migr_del_id);
     } catch (std::exception &e) {
         DEBUG << "caught exception here, shard = " << G->myid << ", exception " << e.what() << std::endl;
         return;
     }
-    //DEBUG << "Permanent delete, id = " << perm_del_id
-    //    << "\tMigr del id = " << migr_del_id 
-    //    << "\tNumber of nodes = " << G->nodes.size()
-    //    << "\tGood size = " << good.size() << ", bad size = " << bad.size() << std::endl;
+    DEBUG << "Shard: " << G->myid << " Permanent delete, id = " << perm_del_id
+        << " Migr del id = " << migr_del_id 
+        << " Number of nodes = " << G->nodes.size()
+        << " Good size = " << good.size() << ", bad size = " << bad.size()
+        << ", compl ids size " << completed_requests.size() << std::endl;
 
     // check if migration needs to be initiated
     timespec t, dif;
@@ -515,11 +517,15 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
     G->migr_token_mutex.lock();
     clock_gettime(CLOCK_MONOTONIC, &t);
     if (!G->migrated && G->migr_token) {
-        dif = diff(G->migr_time, t);
-        if (dif.tv_sec > MIGR_FREQ) {
+        //dif = diff(G->migr_time, t);
+        //if (dif.tv_sec > MIGR_FREQ) {
+        if (G->migr_chance++ > 2) {
             G->migrated = true;
             to_migrate = true;
+            G->migr_chance = 0;
             DEBUG << "Going to start migration at shard " << G->myid << " at time " << t.tv_sec << std::endl;
+        } else {
+            DEBUG << "Migr chance cntr = " << G->migr_chance << std::endl;
         }
     }
     G->migr_token_mutex.unlock();
@@ -611,13 +617,13 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     unpack_and_run_db(db::graph *G, message::message &msg)
 {
     std::ofstream reqfile;
-    timespec cur;
-    clock_gettime(CLOCK_MONOTONIC, &cur);
-    reqfile.open(std::string("graph_req") + std::to_string(G->myid) + ".rec", std::ios::app);
-    G->test_mutex.lock();
-    reqfile << cur.tv_sec << "." << cur.tv_nsec << std::endl;
-    G->test_mutex.unlock();
-    reqfile.close();
+    //timespec cur;
+    //clock_gettime(CLOCK_MONOTONIC, &cur);
+    //reqfile.open(std::string("graph_req") + std::to_string(G->myid) + ".rec", std::ios::app);
+    //G->test_mutex.lock();
+    //reqfile << cur.tv_sec << "." << cur.tv_nsec << std::endl;
+    //G->test_mutex.unlock();
+    //reqfile.close();
     // unpack some start params from msg:
     std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> start_node_params;
     uint64_t unpacked_request_id;
@@ -1185,6 +1191,7 @@ runner(db::graph *G)
                 G->migrated = false;
                 clock_gettime(CLOCK_MONOTONIC, &G->migr_time);
                 G->migr_token_mutex.unlock();
+                DEBUG << "Ended obtaining token" << std::endl;
                 break;
 
             case message::EXIT_WEAVER:

@@ -208,6 +208,7 @@ namespace db
             uint64_t pending_edge_updates;
             uint64_t target_clock, new_shard_target_clock;
             bool migrated, migr_token;
+            uint16_t migr_chance;
             timespec migr_time;
             graph_arg_func migr_func;
             std::vector<uint64_t> request_count, request_count_const, node_count;
@@ -258,7 +259,7 @@ namespace db
             void print_cache_size();
             // completed node programs
             std::unordered_set<uint64_t> done_ids; // TODO clean up of done_ids
-            void add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
+            void add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests, uint64_t del_id);
             bool check_done_request(uint64_t req_id);
             void clear_req_use(uint64_t req_id);
     };
@@ -275,6 +276,7 @@ namespace db
         , new_shard_target_clock(0)
         , migrated(false)
         , migr_token(false)
+        , migr_chance(0)
         , request_count(NUM_SHARDS, 0)
         , node_count(NUM_SHARDS, 0)
         , request_reply_count(0)
@@ -558,7 +560,8 @@ namespace db
         deletion_mutex.lock();
         del_id = req_id;
         while (!delete_req_ids.empty()) {
-            if (delete_req_ids.front()->req_id <= req_id) {
+            if (delete_req_ids.front()->req_id < req_id) { // XXX for migr_del_id, strict inequality
+            //if (delete_req_ids.front()->req_id <= req_id) { XXX for perm_del_id, <= suffices
                 // can delete this element, place on copy list
                 delete_req_ids_copy.emplace_back(std::move(delete_req_ids.front()));
                 delete_req_ids.pop_front();
@@ -911,39 +914,20 @@ namespace db
     }
 
     inline void
-    graph :: add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests)
+    graph :: add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests, uint64_t del_id)
     {
-        //prog_mutex.lock();
-        //for (auto &p: completed_requests) {
-        //    done_ids.emplace(p.first);
-        //}
-        //for (auto &p: completed_requests) {
-        //    node_prog_req_state.delete_req_state(p.first, p.second);
-        //}
-        //prog_mutex.unlock();
-        node_prog_req_state.done_requests(completed_requests);
+        node_prog_req_state.done_requests(completed_requests, del_id);
     }
 
     inline bool
     graph :: check_done_request(uint64_t req_id)
     {
-        //bool ret;
-        //prog_mutex.lock();
-        //ret = (done_ids.find(req_id) != done_ids.end());
-        //if (!ret) {
-        //    node_prog_req_state.set_in_use(req_id);
-        //}
-        //prog_mutex.unlock();
-        //return ret;
         return node_prog_req_state.check_done_request(req_id);
     }
 
     inline void
     graph :: clear_req_use(uint64_t req_id)
     {
-        //prog_mutex.lock();
-        //node_prog_req_state.clear_in_use(req_id);
-        //prog_mutex.unlock();
         node_prog_req_state.clear_in_use(req_id);
     }
 

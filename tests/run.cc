@@ -68,6 +68,7 @@ main(int argc, char *argv[])
     //clique_reach_prog(true);
     //multiple_wp_prog(true);
     multiple_sparse_locality(true);
+    //repetitive_reach_prog(true);
 #endif
     DEBUG << "All tests completed." << std::endl;
 

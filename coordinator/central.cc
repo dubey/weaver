@@ -249,8 +249,8 @@ delete_end(coordinator::central *server, std::shared_ptr<coordinator::pending_re
     server->update_mutex.lock();
     server->add_deleted_cache(request, *request->cached_req_ids);
     server->pending.erase(request->req_id);
-    server->update_mutex.unlock();
     request->done = true;
+    server->update_mutex.unlock();
 }
 
 void
@@ -268,6 +268,7 @@ write_graph()
     file.close();
 }
 
+// caution: need to hold server->update_mutex throughout
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
     unpack_and_start_coord(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request)
@@ -279,7 +280,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     
     // map from locations to a list of start_node_params to send to that shard
     std::unordered_map<uint64_t, std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>> initial_batches; 
-    server->update_mutex.lock();
 
     for (std::pair<uint64_t, ParamsType> &node_params_pair : initial_args) {
         if (check_elem(server, node_params_pair.first, true)) {
@@ -297,8 +297,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     request->out_count->cnt++;
     request->req_id = ++server->request_id;
     server->pending.emplace(std::make_pair(request->req_id, request));
-    server->update_mutex.unlock();
 
+    // TODO later change to send without update mutex
     message::message msg_to_send;
     std::vector<uint64_t> empty_vector;
     std::vector<std::tuple<uint64_t, ParamsType, uint64_t>> empty_tuple_vector;
@@ -306,12 +306,12 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     for (auto &batch_pair : initial_batches) {
         message::prepare_message(msg_to_send, message::NODE_PROG, request->pType, *request->vector_clock, 
                 request->req_id, batch_pair.second, empty_vector, request->ignore_cache, empty_tuple_vector);
-        server->send(batch_pair.first, msg_to_send.buf); // TODO later change to send without update mutex lock
+        server->send(batch_pair.first, msg_to_send.buf);
     }
     DEBUG << "sent to shards" << std::endl;
 }
 
-// caution: assuming we hold server->mutex
+// caution: need to hold server->update_mutex throughout
 void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request)
 {
     bool done = true;
@@ -327,7 +327,6 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
             request->ignore_cache.emplace(cached_id);
             server->add_bad_cache_id(cached_id);
             request->del_request.reset();
-            server->update_mutex.unlock();
             node_prog::programs.at(request->pType)->unpack_and_start_coord(server, request);
             break;
         }
@@ -335,7 +334,6 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
     server->pending.erase(req_id);
     if (done) {
         server->completed_requests->emplace_back(std::make_pair(req_id, request->pType));
-        server->update_mutex.unlock();
         // send same message along to client
         DEBUG << "going to send msg to end node prog\t";
         server->send(request->client, request->reply_msg->buf);
@@ -455,11 +453,11 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg,
                     end_node_prog(server, request);
                 } else {
                     request->done = true;
-                    server->update_mutex.unlock();
                 }
             } else {
                 end_node_prog(server, request);
             }
+            server->update_mutex.unlock();
             break;
         
 
@@ -498,7 +496,9 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg,
         case message::CLIENT_NODE_PROG_REQ:
             message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, crequest->pType);
             crequest->req_msg = std::move(msg);
+            server->update_mutex.lock();
             node_prog::programs.at(crequest->pType)->unpack_and_start_coord(server, crequest);
+            server->update_mutex.unlock();
             break;
 
         case message::CLIENT_COMMIT_GRAPH:
@@ -566,6 +566,9 @@ coord_daemon_initiate(coordinator::central *server)
         if ((migr_del_id == 0) || (r.first < migr_del_id)) {
             migr_del_id = r.first;
         }
+    }
+    if (migr_del_id == 0) {
+        migr_del_id = server->request_id;
     }
     while (server->first_del->cnt == 0 && server->first_del != server->last_del) {
         perm_del_id = server->first_del->req_id;

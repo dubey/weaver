@@ -36,6 +36,7 @@ namespace state
     {
         prog_map prog_state;
         req_to_nodes node_list;
+        uint64_t completed_id; // all nodes progs with id < completed_id are done
         std::unordered_set<uint64_t> done_ids; // TODO clean up of done_ids
         po6::threads::mutex mutex;
         bool holding;
@@ -54,7 +55,7 @@ namespace state
             void pack(uint64_t node_handle, e::buffer::packer &packer);
             void unpack(uint64_t node_handle, e::unpacker &unpacker);
             void delete_node_state(uint64_t node_handle);
-            void done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>>&);
+            void done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>>&, uint64_t max_done_id);
             bool check_done_request(uint64_t req_id);
             void clear_in_use(uint64_t req_id);
 
@@ -66,7 +67,8 @@ namespace state
     };
 
     program_state :: program_state()
-        : holding(false)
+        : completed_id(0)
+        , holding(false)
         , in_use_cond(&mutex)
     {
         node_map new_node_map;
@@ -333,13 +335,18 @@ namespace state
     }
 
     inline void
-    program_state :: done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &reqs)
+    program_state :: done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &reqs, uint64_t max_done_id)
     {
         acquire();
+        if (max_done_id < completed_id) {
+            DEBUG << "Max done id " << max_done_id << ", completed id " << completed_id << std::endl;
+        }
+        assert(max_done_id >= completed_id);
+        completed_id = max_done_id;
         for (auto &p: reqs) {
             uint64_t req_id = p.first;
             node_prog::prog_type type = p.second;
-            done_ids.emplace(req_id);
+            //done_ids.emplace(req_id);
             if (node_list.find(req_id) == node_list.end()) {
                 continue;
             }
@@ -365,7 +372,8 @@ namespace state
     {
         bool ret;
         acquire();
-        ret = (done_ids.find(req_id) != done_ids.end());
+        ret = (req_id < completed_id);
+        //ret = (done_ids.find(req_id) != done_ids.end());
         if (!ret) {
             // increment in use counter to prevent deletion
             if (node_list.find(req_id) == node_list.end()) {
