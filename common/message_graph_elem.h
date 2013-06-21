@@ -22,17 +22,17 @@ namespace message
     static state::program_state *prog_state;
 
     // size methods
-    inline size_t size(const db::element::edge* const &t)
+    inline uint64_t size(const db::element::edge* const &t)
     {
-        size_t sz = 2*sizeof(uint64_t) + // time stamps
+        uint64_t sz = 2*sizeof(uint64_t) + // time stamps
             size(*t->get_props()) + // properties
             size(t->nbr);
         return sz;
     }
 
-    inline size_t size(const db::element::node &t)
+    inline uint64_t size(const db::element::node &t)
     {
-        size_t sz = 2*sizeof(uint64_t) // time stamps
+        uint64_t sz = 2*sizeof(uint64_t) // time stamps
             + size(*t.get_props())  // properties
             + size(t.out_edges)
             + size(t.in_edges)

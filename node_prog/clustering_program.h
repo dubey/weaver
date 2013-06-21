@@ -29,13 +29,13 @@ namespace node_prog
             bool is_center;
             db::element::remote_node center;
             bool outgoing;
-            std::vector<size_t> neighbors;
+            std::vector<uint64_t> neighbors;
             double clustering_coeff;
 
         public:
-            virtual size_t size() const 
+            virtual uint64_t size() const 
             {
-                size_t toRet = message::size(is_center) + message::size(center);
+                uint64_t toRet = message::size(is_center) + message::size(center);
                 toRet += message::size(outgoing) + message::size(neighbors);
                 toRet += message::size(clustering_coeff);
                 return toRet;
@@ -63,16 +63,13 @@ namespace node_prog
     struct clustering_node_state : Packable_Deletable 
     {
         // map from a node (by its create time) to the number of neighbors who are connected to it
-        std::unordered_map<size_t, int> neighbor_counts;
+        std::unordered_map<uint64_t, int> neighbor_counts;
         int responses_left;
 
 
-        virtual ~clustering_node_state()
-        {
-            /* implement me? XXX */
-        }
+        virtual ~clustering_node_state() { }
 
-        virtual size_t size() const
+        virtual uint64_t size() const
         {
             // TODO
             return 0;

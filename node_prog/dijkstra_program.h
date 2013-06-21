@@ -26,7 +26,7 @@ namespace node_prog
     class dijkstra_queue_elem : public virtual Packable
     {
         public:
-            size_t cost;
+            uint64_t cost;
             db::element::remote_node node;
             uint64_t prev_node_req_id; // used for reconstructing path in coordinator
 
@@ -42,7 +42,7 @@ namespace node_prog
 
             dijkstra_queue_elem() { }
 
-            dijkstra_queue_elem(size_t c, db::element::remote_node n, size_t prev)
+            dijkstra_queue_elem(uint64_t c, db::element::remote_node n, uint64_t prev)
                 : cost(c)
                 , node(n)
                 , prev_node_req_id(prev)
@@ -50,9 +50,9 @@ namespace node_prog
             }
 
         public:
-            virtual size_t size() const
+            virtual uint64_t size() const
             {
-                size_t sz = message::size(cost)
+                uint64_t sz = message::size(cost)
                     + message::size(node)
                     + message::size(prev_node_req_id);
                 return sz;
@@ -92,9 +92,9 @@ namespace node_prog
             virtual ~dijkstra_params() { }
 
         public:
-            virtual size_t size() const 
+            virtual uint64_t size() const 
             {
-                size_t toRet = 0;
+                uint64_t toRet = 0;
                 toRet += message::size(src_handle);
                 toRet += message::size(source_node);
                 toRet += message::size(dst_handle);
@@ -157,9 +157,9 @@ namespace node_prog
 
         virtual ~dijkstra_node_state() { }
 
-        virtual size_t size() const
+        virtual uint64_t size() const
         {
-            size_t sz = message::size(pq_shortest)
+            uint64_t sz = message::size(pq_shortest)
                 + message::size(pq_widest)
                 + message::size(visited);
             return sz;
@@ -190,14 +190,14 @@ namespace node_prog
 
     // caution: assuming we hold n->update_mutex
     template<typename Func>
-    void apply_to_valid_edges(db::element::node *n, std::vector<common::property> &edge_props, size_t req_id, Func func)
+    void apply_to_valid_edges(db::element::node *n, std::vector<common::property> &edge_props, uint64_t req_id, Func func)
     {
         // check the properties of each out-edge, assumes lock for node is held
-        for (const std::pair<size_t, db::element::edge*> &e : n->out_edges) {
+        for (const std::pair<uint64_t, db::element::edge*> &e : n->out_edges) {
             bool use_edge = e.second->get_creat_time() <= req_id  
                 && e.second->get_del_time() > req_id; // edge created and deleted in acceptable timeframe
 
-            for (size_t i = 0; i < edge_props.size() && use_edge; i++) {
+            for (uint64_t i = 0; i < edge_props.size() && use_edge; i++) {
                 // checking edge properties
                 if (!e.second->has_property(edge_props[i])) {
                     use_edge = false;
@@ -210,10 +210,10 @@ namespace node_prog
         }
     }
 
-    inline size_t
-    calculate_priority(size_t current_cost, size_t edge_cost, bool is_widest_path)
+    inline uint64_t
+    calculate_priority(uint64_t current_cost, uint64_t edge_cost, bool is_widest_path)
     {
-        size_t priority;
+        uint64_t priority;
         if (is_widest_path) {
             priority = current_cost < edge_cost ? current_cost : edge_cost;
         } else {
@@ -260,11 +260,11 @@ namespace node_prog
                     params.source_node = rn;
                     params.cost = params.is_widest_path ? MAX_TIME : 0; // don't want source node to be bottleneck in path
                     node_state.visited.emplace(params.src_handle, std::make_pair(params.src_handle, params.cost));
-                    for (const std::pair<size_t, db::element::edge*> &e : n.out_edges) {
+                    for (const std::pair<uint64_t, db::element::edge*> &e : n.out_edges) {
                         // edge created and deleted in acceptable timeframe
                         bool use_edge = e.second->get_creat_time() <= req_id  
                                      && e.second->get_del_time() > req_id; 
-                        for (size_t i = 0; i < params.edge_props.size() && use_edge; i++) {
+                        for (uint64_t i = 0; i < params.edge_props.size() && use_edge; i++) {
                             // checking edge properties
                             if (!e.second->has_property(params.edge_props[i])) {
                                 use_edge = false;
@@ -273,10 +273,10 @@ namespace node_prog
                         }
                         if (use_edge) {
                             // first is whether key exists, second is value
-                            std::pair<bool, size_t> weightpair = 
+                            std::pair<bool, uint64_t> weightpair = 
                                     e.second->get_property_value(params.edge_weight_key, req_id);
                             if (weightpair.first) {
-                                size_t priority = calculate_priority(params.cost, weightpair.second, params.is_widest_path);
+                                uint64_t priority = calculate_priority(params.cost, weightpair.second, params.is_widest_path);
                                 if (params.is_widest_path) {
                                     node_state.pq_widest.emplace(priority, e.second->nbr, params.src_handle); 
                                 } else {
@@ -336,7 +336,7 @@ namespace node_prog
                 } else { // we need to send a prop
                     bool get_neighbors = true;
                     if (node_state.visited.count(params.next_node) > 0) {
-                        size_t old_cost = node_state.visited[params.next_node].second;
+                        uint64_t old_cost = node_state.visited[params.next_node].second;
                         // keep searching if better path exists to that node
                         if (params.is_widest_path ? old_cost >= params.cost : old_cost <= params.cost){
                             get_neighbors = false;
@@ -356,11 +356,11 @@ namespace node_prog
 
         } else { // it is a request to add neighbors
             // check the properties of each out-edge, assumes lock for node is held
-            for (const std::pair<size_t, db::element::edge*> &e : n.out_edges) {
+            for (const std::pair<uint64_t, db::element::edge*> &e : n.out_edges) {
                 bool use_edge = e.second->get_creat_time() <= req_id  
                     && e.second->get_del_time() > req_id; // edge created and deleted in acceptable timeframe
 
-                for (size_t i = 0; i < params.edge_props.size() && use_edge; i++) {
+                for (uint64_t i = 0; i < params.edge_props.size() && use_edge; i++) {
                     // checking edge properties
                     if (!e.second->has_property(params.edge_props[i])) {
                         use_edge = false;
@@ -369,9 +369,9 @@ namespace node_prog
                 }
                 if (use_edge) {
                     // first is whether key exists, second is value
-                    std::pair<bool, size_t> weightpair = e.second->get_property_value(params.edge_weight_key, req_id);
+                    std::pair<bool, uint64_t> weightpair = e.second->get_property_value(params.edge_weight_key, req_id);
                     if (weightpair.first) {
-                        size_t priority = calculate_priority(params.cost, weightpair.second, params.is_widest_path);
+                        uint64_t priority = calculate_priority(params.cost, weightpair.second, params.is_widest_path);
                         params.entries_to_add.emplace_back(std::make_pair(priority, e.second->nbr));
                     }
                 }

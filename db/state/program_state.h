@@ -51,7 +51,7 @@ namespace state
                 uint64_t req_id, uint64_t node_handle);
             void put_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle,
                 node_prog::Packable_Deletable *new_state);
-            size_t size(uint64_t node_handle);
+            uint64_t size(uint64_t node_handle);
             void pack(uint64_t node_handle, e::buffer::packer &packer);
             void unpack(uint64_t node_handle, e::unpacker &unpacker);
             void delete_node_state(uint64_t node_handle);
@@ -157,10 +157,10 @@ namespace state
         release();
     }
     
-    inline size_t
+    inline uint64_t
     program_state :: size(uint64_t node)
     {
-        size_t sz = 0;
+        uint64_t sz = 0;
         uint16_t ptype;
         acquire();
         for (auto &t: prog_state) {

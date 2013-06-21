@@ -120,12 +120,12 @@ namespace message
             void change_type(enum msg_type t);
     };
 
-    template <typename T1, typename T2> inline size_t size(const std::unordered_map<T1, T2>& t);
-    template <typename T> inline size_t size(const std::unordered_set<T>& t);
-    template <typename T> inline size_t size(const std::vector<T>& t);
-    template <typename T1, typename T2, typename T3> size_t size(std::priority_queue<T1, T2, T3>);
-    template <typename T1, typename T2> inline size_t size(const std::pair<T1, T2>& t);
-    template <typename T1, typename T2, typename T3> inline size_t size(const std::tuple<T1, T2, T3>& t);
+    template <typename T1, typename T2> inline uint64_t size(const std::unordered_map<T1, T2>& t);
+    template <typename T> inline uint64_t size(const std::unordered_set<T>& t);
+    template <typename T> inline uint64_t size(const std::vector<T>& t);
+    template <typename T1, typename T2, typename T3> uint64_t size(std::priority_queue<T1, T2, T3>);
+    template <typename T1, typename T2> inline uint64_t size(const std::pair<T1, T2>& t);
+    template <typename T1, typename T2, typename T3> inline uint64_t size(const std::tuple<T1, T2, T3>& t);
 
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T>& t);
@@ -140,8 +140,8 @@ namespace message
     template <typename T1, typename T2, typename T3> void unpack_buffer(e::unpacker&, std::priority_queue<T1, T2, T3>&);
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void unpack_buffer(e::unpacker& unpacker, std::tuple<T1, T2, T3>& t);
-    size_t size(const db::element::edge* const &t);
-    size_t size(const db::element::node &t);
+    uint64_t size(const db::element::edge* const &t);
+    uint64_t size(const db::element::node &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::node &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge *&t);
@@ -173,89 +173,89 @@ namespace message
     }
 
 // size templates
-    inline size_t size(const node_prog::prog_type&)
+    inline uint64_t size(const node_prog::prog_type&)
     {
         return sizeof(uint32_t);
     }
-    inline size_t size(const node_prog::Packable &t)
+    inline uint64_t size(const node_prog::Packable &t)
     {
         return t.size();
     }
-    inline size_t size(const node_prog::Packable_Deletable *&t)
+    inline uint64_t size(const node_prog::Packable_Deletable *&t)
     {
         return t->size();
     }
-    inline size_t size(const bool&)
+    inline uint64_t size(const bool&)
     {
         return sizeof(uint16_t);
     }
-    inline size_t size(const uint16_t&)
+    inline uint64_t size(const uint16_t&)
     {
         return sizeof(uint16_t);
     }
-    inline size_t size(const uint32_t&)
+    inline uint64_t size(const uint32_t&)
     {
         return sizeof(uint32_t);
     }
-    inline size_t size(const uint64_t&)
+    inline uint64_t size(const uint64_t&)
     {
         return sizeof(uint64_t);
     }
-    inline size_t size(const int&)
+    inline uint64_t size(const int&)
     {
         return sizeof(int);
     }
-    inline size_t size(const double&)
+    inline uint64_t size(const double&)
     {
         return sizeof(uint64_t);
     }
-    inline size_t size(const common::property &t)
+    inline uint64_t size(const common::property &t)
     {
         return sizeof(t.key)
             + sizeof(t.value)
             + 2*sizeof(t.creat_time);
     }
-    inline size_t size(const db::element::remote_node &t)
+    inline uint64_t size(const db::element::remote_node &t)
     {
         return size(t.loc) + size(t.handle);
     }
     template <typename T1, typename T2>
-    inline size_t size(const std::pair<T1, T2> &t)
+    inline uint64_t size(const std::pair<T1, T2> &t)
     {
         return size(t.first) + size(t.second);
     }
 
     template <typename T1, typename T2, typename T3>
-    inline size_t size(const std::tuple<T1, T2, T3> &t){
+    inline uint64_t size(const std::tuple<T1, T2, T3> &t){
         return size(std::get<0>(t)) + size(std::get<1>(t)) + size(std::get<2>(t));
     }
 
     template <typename T>
-    inline size_t size(const std::unordered_set<T> &t)
+    inline uint64_t size(const std::unordered_set<T> &t)
     {
         // O(n) size operation can handle elements of differing sizes
-        size_t total_size = 0;
+        uint64_t total_size = 0;
         for(const T &elem : t) {
             total_size += size(elem);
         }
-        return sizeof(size_t)+total_size;
+        return sizeof(uint64_t)+total_size;
     }
 
     template <typename T1, typename T2>
-    inline size_t size(const std::unordered_map<T1, T2> &t)
+    inline uint64_t size(const std::unordered_map<T1, T2> &t)
     {
-        size_t total_size = 0;
+        uint64_t total_size = 0;
         // O(n) size operation can handle keys and values of differing sizes
         for (const std::pair<T1,T2> &pair : t) {
             total_size += size(pair.first) + size(pair.second);
         }
-        return sizeof(size_t)+total_size;
+        return sizeof(uint64_t)+total_size;
     }
 
     template <typename T>
-    inline size_t size(const std::vector<T> &t)
+    inline uint64_t size(const std::vector<T> &t)
     {
-        size_t tot_size = sizeof(size_t);
+        uint64_t tot_size = sizeof(uint64_t);
         for (const T &elem : t) {
             tot_size += size(elem);
         }
@@ -263,9 +263,9 @@ namespace message
     }
 
     template <typename T1, typename T2, typename T3>
-    inline size_t size(std::priority_queue<T1, T2, T3> t)
+    inline uint64_t size(std::priority_queue<T1, T2, T3> t)
     {
-        size_t sz = sizeof(size_t);
+        uint64_t sz = sizeof(uint64_t);
         while (!t.empty()) {
             sz += size(t.top());
             t.pop();
@@ -274,7 +274,7 @@ namespace message
     }
 
     template <typename T, typename... Args>
-    inline size_t size(const T &t, const Args&... args)
+    inline uint64_t size(const T &t, const Args&... args)
     {
         return size(t) + size(args...);
     }
@@ -361,7 +361,7 @@ namespace message
     pack_buffer(e::buffer::packer &packer, const std::vector<T> &t)
     {
         // !assumes constant element size
-        size_t num_elems = t.size();
+        uint64_t num_elems = t.size();
         packer = packer << num_elems;
         if (num_elems > 0){
             for (const T &elem : t) {
@@ -374,7 +374,7 @@ namespace message
     inline void
     pack_buffer(e::buffer::packer &packer, std::priority_queue<T1, T2, T3> t)
     {
-        size_t num_elems = t.size();
+        uint64_t num_elems = t.size();
         packer = packer << num_elems;
         while (!t.empty()) {
             pack_buffer(packer, t.top());
@@ -388,11 +388,11 @@ namespace message
     pack_buffer(e::buffer::packer &packer, const std::vector<T> &t)
     {
         // !assumes constant element size
-        size_t num_elems = t.size();
+        uint64_t num_elems = t.size();
         //std::cout << "pack buffer packed vector of size " << num_elems<< std::endl;
         packer = packer << num_elems;
         if (num_elems > 0){
-            size_t element_size = size(t[0]);
+            uint64_t element_size = size(t[0]);
             for (const T &elem : t) {
                 pack_buffer(packer, elem);
                 assert(element_size == size(elem));//slow
@@ -405,7 +405,7 @@ namespace message
     inline void 
     pack_buffer(e::buffer::packer &packer, const std::unordered_set<T> &t)
     {
-        size_t num_keys = t.size();
+        uint64_t num_keys = t.size();
         packer = packer << num_keys;
         for (const T &elem : t) {
             pack_buffer(packer, elem);
@@ -416,7 +416,7 @@ namespace message
     inline void 
     pack_buffer(e::buffer::packer &packer, const std::unordered_map<T1, T2> &t)
     {
-        size_t num_keys = t.size();
+        uint64_t num_keys = t.size();
         packer = packer << num_keys;
         for (const std::pair<T1, T2> &pair : t) {
             pack_buffer(packer, pair.first);
@@ -446,7 +446,7 @@ namespace message
     inline void
     prepare_message(message &m, const enum msg_type given_type, const Args&... args)
     {
-        size_t bytes_to_pack = size(args...) + sizeof(enum msg_type);
+        uint64_t bytes_to_pack = size(args...) + sizeof(enum msg_type);
         m.type = given_type;
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
@@ -542,7 +542,7 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, std::vector<T> &t)
     {
         assert(t.size() == 0);
-        size_t elements_left;
+        uint64_t elements_left;
         unpacker = unpacker >> elements_left;
 
         t.reserve(elements_left);
@@ -560,7 +560,7 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, std::priority_queue<T1, T2, T3> &t)
     {
         assert(t.size() == 0);
-        size_t elements_left = 0;
+        uint64_t elements_left = 0;
         unpacker = unpacker >> elements_left;
         while (elements_left > 0) {
             T1 to_add;
@@ -575,7 +575,7 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, std::unordered_set<T> &t)
     {
         assert(t.size() == 0);
-        size_t elements_left;
+        uint64_t elements_left;
         unpacker = unpacker >> elements_left;
 
         t.rehash(elements_left*1.25); // set number of buckets to 1.25*elements it will contain
@@ -593,7 +593,7 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, std::unordered_map<T1, T2> &t)
     {
         assert(t.size() == 0);
-        size_t elements_left;
+        uint64_t elements_left;
         unpacker = unpacker >> elements_left;
         // set number of buckets to 1.25*elements it will contain
         // did not use reserve as max_load_factor is default 1

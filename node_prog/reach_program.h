@@ -44,9 +44,9 @@ namespace node_prog
             
             virtual ~reach_params() { }
 
-            virtual size_t size() const 
+            virtual uint64_t size() const 
             {
-                size_t toRet = message::size(mode)
+                uint64_t toRet = message::size(mode)
                     + message::size(prev_node)
                     + message::size(dest) 
                     + message::size(edge_props)
@@ -94,9 +94,9 @@ namespace node_prog
 
         virtual ~reach_node_state() { }
 
-        virtual size_t size() const 
+        virtual uint64_t size() const 
         {
-            size_t toRet = message::size(visited)
+            uint64_t toRet = message::size(visited)
                 + message::size(prev_node)
                 + message::size(out_count)
                 + message::size(reachable);

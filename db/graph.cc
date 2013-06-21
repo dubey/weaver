@@ -512,10 +512,10 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
         << ", compl ids size " << completed_requests.size() << std::endl;
 
     // check if migration needs to be initiated
-    timespec t, dif;
+    //timespec t, dif;
     bool to_migrate = false;
     G->migr_token_mutex.lock();
-    clock_gettime(CLOCK_MONOTONIC, &t);
+    //clock_gettime(CLOCK_MONOTONIC, &t);
     if (!G->migrated && G->migr_token) {
         //dif = diff(G->migr_time, t);
         //if (dif.tv_sec > MIGR_FREQ) {
@@ -523,7 +523,7 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
             G->migrated = true;
             to_migrate = true;
             G->migr_chance = 0;
-            DEBUG << "Going to start migration at shard " << G->myid << " at time " << t.tv_sec << std::endl;
+            DEBUG << "Going to start migration at shard " << G->myid << std::endl;
         } else {
             DEBUG << "Migr chance cntr = " << G->migr_chance << std::endl;
         }
@@ -1189,7 +1189,7 @@ runner(db::graph *G)
                 G->migr_token_mutex.lock();
                 G->migr_token = true;
                 G->migrated = false;
-                clock_gettime(CLOCK_MONOTONIC, &G->migr_time);
+                //clock_gettime(CLOCK_MONOTONIC, &G->migr_time);
                 G->migr_token_mutex.unlock();
                 DEBUG << "Ended obtaining token" << std::endl;
                 break;
@@ -1233,7 +1233,7 @@ migration_wrapper(db::graph *G)
             n->msg_count.at(e->nbr.loc-1) += e->msg_count;
             e->msg_count = 0;
         }
-        for (size_t j = 0; j < NUM_SHARDS; j++) {
+        for (int j = 0; j < NUM_SHARDS; j++) {
             n->agg_msg_count.at(j) += (uint64_t)(0.8 * (double)(n->msg_count.at(j)));
         }
         max_pos = 0;
@@ -1366,8 +1366,8 @@ main(int argc, char* argv[])
         G.migr_token_mutex.lock();
         G.migr_token = true;
         G.migrated = false;
-        clock_gettime(CLOCK_MONOTONIC, &G.migr_time);
-        G.migr_time.tv_sec += INITIAL_MIGR_DELAY;
+        //clock_gettime(CLOCK_MONOTONIC, &G.migr_time);
+        //G.migr_time.tv_sec += INITIAL_MIGR_DELAY;
         G.migr_token_mutex.unlock();
     }
     runner(&G);
