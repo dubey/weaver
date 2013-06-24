@@ -27,6 +27,7 @@
 #include <po6/threads/cond.h>
 
 #include "common/weaver_constants.h"
+#include "common/clock.h"
 #include "common/meta_element.h"
 #include "common/vclock.h"
 #include "common/busybee_infra.h"
@@ -109,6 +110,7 @@ namespace coordinator
             std::unordered_map<uint64_t, common::meta_element*> nodes;
             std::unordered_map<uint64_t, common::meta_element*> edges;
             std::vector<uint64_t> shard_node_count;
+            std::vector<std::vector<uint64_t>> migr_loc_count;
             vclock::vector vc;
             // big mutex
             po6::threads::mutex update_mutex;
@@ -124,6 +126,9 @@ namespace coordinator
             std::shared_ptr<out_counter> last_del; // tail
             std::unique_ptr<std::vector<std::pair<uint64_t, node_prog::prog_type>>> completed_requests;
             // daemon
+            po6::threads::mutex daemon_mutex;
+            timespec daemon_time;
+            bool init_daemon;
             uint32_t cache_acks;
             // testing
             std::default_random_engine generator;
@@ -156,12 +161,15 @@ namespace coordinator
         , first_del(new out_counter())
         , last_del(first_del)
         , completed_requests(new std::vector<std::pair<uint64_t, node_prog::prog_type>>())
+        , init_daemon(true)
         , cache_acks(0)
         , generator((unsigned)42) // fixed seed for deterministic random numbers
         , dist(0.0, 1.0)
     {
         // initialize array of shard server locations
         initialize_busybee(bb, COORD_ID, myloc);
+        // initialized daemon time to current
+        wclock::get_clock(&daemon_time);
     }
 
     inline void

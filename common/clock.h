@@ -39,8 +39,24 @@ void get_clock(timespec *ts)
     ts->tv_sec = mts.tv_sec;
     ts->tv_nsec = mts.tv_nsec;
 #else
+    DEBUG << "getting clock in po6\n";
     clock_gettime(CLOCK_MONOTONIC, ts);
 #endif
+}
+
+double diff(timespec &start, timespec &end)
+{
+    timespec temp;
+    if ((end.tv_nsec-start.tv_nsec)<0) {
+        temp.tv_sec = end.tv_sec-start.tv_sec-1;
+        temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+    } else {
+        temp.tv_sec = end.tv_sec-start.tv_sec;
+        temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+    }
+    double ret = temp.tv_sec;
+    ret += (((double)temp.tv_nsec) / 1000000000UL);
+    return ret;
 }
 
 }

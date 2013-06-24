@@ -538,6 +538,7 @@ namespace db
     inline void
     graph :: permanent_delete(uint64_t req_id, uint64_t migr_del_id)
     {
+        DEBUG << "starting permanent delete at shard " << myid << std::endl;
         std::deque<std::unique_ptr<perm_del>> delete_req_ids_copy;
         std::deque<std::unique_ptr<std::pair<uint64_t, uint64_t>>> migrated_nodes_copy;
         // permanently delete migrated nodes
@@ -618,6 +619,7 @@ namespace db
         message::message msg;
         message::prepare_message(msg, message::CLEAN_UP_ACK); 
         send(COORD_ID, msg.buf);
+        DEBUG << "ending permanent delete at shard " << myid << std::endl;
     }
 
     // caution: assuming caller holds update_mutex
@@ -916,7 +918,9 @@ namespace db
     inline void
     graph :: add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests, uint64_t del_id)
     {
+        DEBUG << "starting done req at shard " << myid << std::endl;
         node_prog_req_state.done_requests(completed_requests, del_id);
+        DEBUG << "ending done req at shard " << myid << std::endl;
     }
 
     inline bool
@@ -931,6 +935,6 @@ namespace db
         node_prog_req_state.clear_in_use(req_id);
     }
 
-} //namespace db
+}
 
 #endif //__GRAPH__

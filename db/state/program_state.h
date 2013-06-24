@@ -337,16 +337,17 @@ namespace state
     inline void
     program_state :: done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &reqs, uint64_t max_done_id)
     {
+        UNUSED(max_done_id);
         acquire();
-        if (max_done_id < completed_id) {
-            DEBUG << "Max done id " << max_done_id << ", completed id " << completed_id << std::endl;
-        }
-        assert(max_done_id >= completed_id);
-        completed_id = max_done_id;
+        //if (max_done_id < completed_id) {
+        //    DEBUG << "Max done id " << max_done_id << ", completed id " << completed_id << std::endl;
+        //}
+        //assert(max_done_id >= completed_id);
+        //completed_id = max_done_id;
         for (auto &p: reqs) {
             uint64_t req_id = p.first;
             node_prog::prog_type type = p.second;
-            //done_ids.emplace(req_id);
+            done_ids.emplace(req_id);
             if (node_list.find(req_id) == node_list.end()) {
                 continue;
             }
@@ -372,8 +373,8 @@ namespace state
     {
         bool ret;
         acquire();
-        ret = (req_id < completed_id);
-        //ret = (done_ids.find(req_id) != done_ids.end());
+        //ret = (req_id < completed_id);
+        ret = (done_ids.find(req_id) != done_ids.end());
         if (!ret) {
             // increment in use counter to prevent deletion
             if (node_list.find(req_id) == node_list.end()) {

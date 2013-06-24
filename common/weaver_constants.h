@@ -35,11 +35,11 @@
 #define CLIENT_ID (11ULL)
 #define SHARDS_DESC_FILE "../common/shards"
 // weaver setup
-#define NUM_SHARDS 2
+#define NUM_SHARDS 8
 #define NUM_THREADS 8
 #define GRAPH_FILE "graph.rec"
-#define DAEMON_PERIOD 2 // frequency in seconds for coordinator daemon to run
-#define MIGR_FREQ 5 // seconds delay between consecutive migrations
+#define DAEMON_PERIOD 1 // frequency in seconds for coordinator daemon to run
+#define MIGR_FREQ 10 // seconds delay between consecutive migrations
 #define INITIAL_MIGR_DELAY 15 // seconds delay for initial migration
 #define START_MIGR_ID 1
 #define MAX_NODES 500

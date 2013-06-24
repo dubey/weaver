@@ -12,9 +12,6 @@
  * ===============================================================
  */
 
-//#ifndef PO6_NDEBUG_LEAKS
-//#define PO6_NDEBUG_LEAKS
-
 #include <cstdlib>
 #include <iostream>
 #include <thread>
@@ -487,7 +484,6 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
             return;
         }
     }
-    //G->print_cache_size();
     
     // remove state corresponding to completed node programs
     try {
@@ -499,8 +495,8 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
 
     // permanent deletion of deleted and migrated nodes
     try {
-        G->permanent_delete(migr_del_id, migr_del_id);
-        //G->permanent_delete(perm_del_id, migr_del_id);
+        //G->permanent_delete(migr_del_id, migr_del_id);
+        G->permanent_delete(perm_del_id, migr_del_id);
     } catch (std::exception &e) {
         DEBUG << "caught exception here, shard = " << G->myid << ", exception " << e.what() << std::endl;
         return;
@@ -1374,5 +1370,3 @@ main(int argc, char* argv[])
 
     return 0;
 }
-
-//#endif

@@ -36,6 +36,7 @@
 static std::unordered_map<uint64_t, std::vector<uint64_t>> graph;
 static coordinator::central *cserver;
 void coord_daemon_end(coordinator::central *server);
+void coord_daemon_initiate(coordinator::central *server);
 
 void
 record_time(coordinator::central *server)
@@ -64,12 +65,24 @@ void exit_weaver()
     // record dummy time for a better-looking migration plot
     record_time(cserver);
     std::ofstream migr_file, shard_file;
-    migr_file.open("migrations.rec");
-    migr_file.precision(std::numeric_limits<double>::digits10);
-    for (double t: cserver->migr_times) {
-        migr_file << t << std::endl;
-    }
-    migr_file.close();
+    //migr_file.open("migrations.rec");
+    //migr_file.precision(std::numeric_limits<double>::digits10);
+    //DEBUG << "starting migr rec loop\n";
+    //for (uint64_t j = 0; j < cserver->migr_times.size(); j++) {
+    //    migr_file << cserver->migr_times.at(j) << ",";
+    //    DEBUG << cserver->migr_times.at(j) << ",";
+    //    std::vector<uint64_t> &migr_locs = cserver->migr_loc_count.at(j);
+    //    for (int i = 0; i < NUM_SHARDS; i++) {
+    //        if (i == (NUM_SHARDS-1)) {
+    //            migr_file << migr_locs.at(i) << std::endl;
+    //            DEBUG << migr_locs.at(i) << std::endl;
+    //        } else {
+    //            migr_file << migr_locs.at(i) << ",";
+    //            DEBUG << migr_locs.at(i) << std::endl;
+    //        }
+    //    }
+    //}
+    //migr_file.close();
     shard_file.open("shard_counts.rec");
     for (int i = 0; i < NUM_SHARDS; i++) {
         shard_file << cserver->shard_node_count[i] << std::endl;
@@ -400,15 +413,16 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg,
             break;
         
         case message::CLEAN_UP_ACK:
-            server->update_mutex.lock();
-            if ((++server->cache_acks) == NUM_SHARDS) {
-                coord_daemon_end(server);
-            } else {
-                server->update_mutex.unlock();
-            }
+            coord_daemon_end(server);
+            //server->update_mutex.lock();
+            //if ((++server->cache_acks) == NUM_SHARDS) {
+            //    coord_daemon_end(server);
+            //} else {
+            //    server->update_mutex.unlock();
+            //}
             break;
 
-        case message::COORD_NODE_MIGRATE:
+        case message::COORD_NODE_MIGRATE: {
             cached_req_ids.reset(new std::vector<uint64_t>());
             message::unpack_message(*msg, message::COORD_NODE_MIGRATE, coord_handle, new_loc, *cached_req_ids);
             server->update_mutex.lock();
@@ -425,9 +439,15 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg,
             record_time(server);
             server->shard_node_count[from_loc-1]--;
             server->shard_node_count[new_loc-1]++;
+            std::vector<uint64_t> cur_counts;
+            for (auto cnt: server->shard_node_count) {
+                cur_counts.emplace_back(cnt);
+            }
+            server->migr_loc_count.emplace_back(cur_counts);
             server->update_mutex.unlock();
             server->send(from_loc, msg->buf);
             break;
+        }
 
         case message::COORD_CLOCK_REQ:
             message::unpack_message(*msg, message::COORD_CLOCK_REQ, from_loc);
@@ -523,6 +543,23 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg,
         default:
             std::cerr << "unexpected msg type " << m_type << std::endl;
     }
+    
+    // check if coordinator daemon needs to be initiated
+    bool to_start = false;
+    server->daemon_mutex.lock();
+    if (server->init_daemon) {
+        timespec cur;
+        wclock::get_clock(&cur);
+        double diff = wclock::diff(server->daemon_time, cur);
+        if (diff > DAEMON_PERIOD) {
+            server->init_daemon = false;
+            to_start = true;
+        }
+    }
+    server->daemon_mutex.unlock();
+    if (to_start) {
+        coord_daemon_initiate(server);
+    }
 }
 
 // handle incoming messages
@@ -559,8 +596,8 @@ coord_daemon_initiate(coordinator::central *server)
     uint64_t perm_del_id = 0;
     uint64_t migr_del_id = 0;
     message::message msg;
-    std::chrono::seconds duration(DAEMON_PERIOD); // execute every DAEMON_PERIOD seconds
-    std::this_thread::sleep_for(duration);
+    //std::chrono::seconds duration(DAEMON_PERIOD); // execute every DAEMON_PERIOD seconds
+    //std::this_thread::sleep_for(duration);
     server->update_mutex.lock();
     auto completed_requests = std::move(server->completed_requests);
     server->completed_requests.reset(new std::vector<std::pair<uint64_t, node_prog::prog_type>>());
@@ -603,10 +640,17 @@ coord_daemon_initiate(coordinator::central *server)
 void
 coord_daemon_end(coordinator::central *server)
 {
-    assert(server->cache_acks == NUM_SHARDS);
-    server->cache_acks = 0; 
-    server->update_mutex.unlock();
-    coord_daemon_initiate(server);
+    server->daemon_mutex.lock();
+    if (++server->cache_acks == NUM_SHARDS) {
+        server->init_daemon = true;
+        server->cache_acks = 0;
+        wclock::get_clock(&server->daemon_time);
+    }
+    server->daemon_mutex.unlock();
+    //assert(server->cache_acks == NUM_SHARDS);
+    //server->cache_acks = 0; 
+    //coord_daemon_initiate(server);
+    //server->update_mutex.unlock();
 }
 
 void
@@ -628,8 +672,8 @@ main()
     record_time(cserver);
 
     // call periodic cache update function
-    t = new std::thread(coord_daemon_initiate, &server);
-    t->detach();
+    //t = new std::thread(coord_daemon_initiate, &server);
+    //t->detach();
 
     // initialize client msg receiving thread
     msg_handler(&server);

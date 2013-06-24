@@ -74,7 +74,7 @@ multiple_locality_prog(bool dense, bool to_exit)
     int i, num_nodes, num_edges;
     timespec start, t1, t2, dif;
     std::ofstream seed_file;
-    uint64_t seed = time(NULL);
+    uint64_t seed = 1372088972;//time(NULL);
     DEBUG << "seed " << seed << std::endl;
     seed_file.open("seed.rec");
     seed_file << seed;
