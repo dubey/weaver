@@ -664,7 +664,6 @@ int
 main()
 {
     coordinator::central server;
-    std::thread *t;
     signal(SIGINT, end_program);
 
     std::cout << "Weaver: coordinator" << std::endl;

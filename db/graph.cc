@@ -531,20 +531,45 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
 }
 
 template <typename NodeStateType>
-NodeStateType& get_node_state(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle)
+std::shared_ptr<NodeStateType> get_node_state(db::graph *G, node_prog::prog_type pType,
+        uint64_t req_id, uint64_t node_handle)
 {
-    NodeStateType *toRet = new NodeStateType();
-    if (G->prog_req_state_exists(pType, req_id, node_handle)) {
-        toRet = dynamic_cast<NodeStateType *>(G->fetch_prog_req_state(pType, req_id, node_handle));
-        if (toRet == NULL) {
-            DEBUG << "NodeStateType needs to extend Deletable" << std::endl;
-        }
-    } else {
-        toRet = new NodeStateType();
-        G->insert_prog_req_state(pType, req_id, node_handle, toRet);
+    std::shared_ptr<NodeStateType> ret;
+    auto state = G->fetch_prog_req_state(pType, req_id, node_handle);
+    if (state) {
+        ret = std::dynamic_pointer_cast<NodeStateType>(state);
     }
-    return *toRet;
+    return ret;
 }
+
+template <typename NodeStateType>
+NodeStateType& return_state(db::graph *G, node_prog::prog_type pType, uint64_t req_id,
+        uint64_t node_handle, std::shared_ptr<NodeStateType> toRet)
+{
+    if (toRet) {
+        return *toRet;
+    } else {
+        std::shared_ptr<NodeStateType> newState(new NodeStateType());
+        G->insert_prog_req_state(pType, req_id, node_handle,
+                std::dynamic_pointer_cast<node_prog::Packable_Deletable>(newState));
+        return *newState;
+    }
+}
+//template <typename NodeStateType>
+//NodeStateType& get_node_state(db::graph *G, node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle)
+//{
+//    NodeStateType *toRet = new NodeStateType();
+//    if (G->prog_req_state_exists(pType, req_id, node_handle)) {
+//        toRet = dynamic_cast<NodeStateType *>(G->fetch_prog_req_state(pType, req_id, node_handle));
+//        if (toRet == NULL) {
+//            DEBUG << "NodeStateType needs to extend Deletable" << std::endl;
+//        }
+//    } else {
+//        toRet = new NodeStateType();
+//        G->insert_prog_req_state(pType, req_id, node_handle, toRet);
+//    }
+//    return *toRet;
+//}
 
 template <typename CacheValueType>
 std::vector<std::shared_ptr<CacheValueType>> get_cached_values(db::graph *G, node_prog::prog_type pType, uint64_t req_id,
@@ -553,7 +578,8 @@ std::vector<std::shared_ptr<CacheValueType>> get_cached_values(db::graph *G, nod
     std::vector<std::shared_ptr<CacheValueType>> toRet;
     std::shared_ptr<CacheValueType> cache;
     try {
-        for (std::shared_ptr<node_prog::CacheValueBase> cval : G->fetch_prog_cache(pType, node_handle, req_id, dirty_list_ptr, ignore_set)) {
+        for (std::shared_ptr<node_prog::CacheValueBase> cval:
+                    G->fetch_prog_cache(pType, node_handle, req_id, dirty_list_ptr, ignore_set)) {
             cache = std::dynamic_pointer_cast<CacheValueType>(cval);
             if (!cache) {
                 DEBUG << "CacheValueType needs to extend CacheValueBase" << std::endl;
@@ -695,8 +721,12 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                 }
             } else {
                 DEBUG << "calling delete program" << std::endl;
-                node_state_getter = std::bind(get_node_state<NodeStateType>, G, prog_type_recvd,
+                std::shared_ptr<NodeStateType> state = get_node_state<NodeStateType>(G, prog_type_recvd,
                         unpacked_request_id, parent_handle);
+                node_state_getter = std::bind(return_state<NodeStateType>, G, prog_type_recvd,
+                        unpacked_request_id, parent_handle, state);
+                //node_state_getter = std::bind(get_node_state<NodeStateType>, G, prog_type_recvd,
+                //        unpacked_request_id, parent_handle);
 
                 auto next_node_params = enclosed_node_deleted_func(unpacked_request_id, *node,
                         deleted_node_handle, del_node_params_given, node_state_getter); 
@@ -717,6 +747,10 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                         batched_node_progs[next_loc].emplace_back(res.first.handle, std::move(res.second), this_node);
                     }
                 }
+            }
+            if (G->check_done_request(unpacked_request_id)) {
+                done_request = true;
+                break;
             }
         }
         batched_deleted_nodes[G->myid].clear(); // we have run programs for this list
@@ -762,8 +796,12 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             } else { // node does exist
                 assert(node->state == db::element::node::mode::STABLE);
                 // bind cache getter and putter function variables to functions
-                node_state_getter = std::bind(get_node_state<NodeStateType>, G,
+                std::shared_ptr<NodeStateType> state = get_node_state<NodeStateType>(G,
                         prog_type_recvd, unpacked_request_id, node_handle);
+                node_state_getter = std::bind(return_state<NodeStateType>, G,
+                        prog_type_recvd, unpacked_request_id, node_handle, state);
+                //node_state_getter = std::bind(get_node_state<NodeStateType>, G,
+                //        prog_type_recvd, unpacked_request_id, node_handle);
                 cache_value_putter = std::bind(put_cache_value<CacheValueType>, G,
                         prog_type_recvd, unpacked_request_id, node_handle, node, &dirty_cache_ids);
                 cached_values_getter = std::bind(get_cached_values<CacheValueType>, G,
@@ -802,6 +840,10 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                 }
                 G->release_node(node);
             }
+            if (G->check_done_request(unpacked_request_id)) {
+                done_request = true;
+                break;
+            }
             if (MSG_BATCHING) {
                 for (uint64_t next_loc = 1; next_loc <= NUM_SHARDS; next_loc++) {
                     if ((   (!batched_node_progs[next_loc].empty() && batched_node_progs[next_loc].size()>BATCH_MSG_SIZE)
@@ -817,11 +859,14 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             }
         }
         start_node_params = std::move(batched_node_progs[G->myid]);
+        if (G->check_done_request(unpacked_request_id)) {
+            done_request = true;
+        }
     }
 
-    if (!done_request) { // mark request state as not in use
-        G->clear_req_use(unpacked_request_id);
-    }
+    //if (!done_request) { // mark request state as not in use
+    //    G->clear_req_use(unpacked_request_id);
+    //}
 
     // propagate all remaining node progs
     for (uint64_t next_loc = 1; next_loc <= NUM_SHARDS && !done_request; next_loc++) {

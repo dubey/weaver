@@ -245,9 +245,11 @@ namespace db
             // Node programs
             // prog_type-> map from request_id to map from node handle to request state for that node
             state::program_state node_prog_req_state; 
-            bool prog_req_state_exists(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
-            node_prog::Packable_Deletable* fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
-            void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, node_prog::Packable_Deletable *toAdd);
+            //bool prog_req_state_exists(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
+            std::shared_ptr<node_prog::Packable_Deletable> fetch_prog_req_state(node_prog::prog_type t,
+                    uint64_t request_id, uint64_t local_node_handle);
+            void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id,
+                    uint64_t local_node_handle, std::shared_ptr<node_prog::Packable_Deletable> toAdd);
             // prog_type-> map from node handle to map from request_id to cache values -- used to do cache read/updates
             cache::program_cache node_prog_cache;
             bool prog_cache_exists(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id);
@@ -261,7 +263,7 @@ namespace db
             std::unordered_set<uint64_t> done_ids; // TODO clean up of done_ids
             void add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests, uint64_t del_id);
             bool check_done_request(uint64_t req_id);
-            void clear_req_use(uint64_t req_id);
+            //void clear_req_use(uint64_t req_id);
     };
 
     inline
@@ -836,21 +838,21 @@ namespace db
     }
 
     // node program
-    inline bool 
-    graph :: prog_req_state_exists(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle)
-    {
-        return node_prog_req_state.state_exists(t, request_id, local_node_handle);
-    }
+//    inline bool 
+//    graph :: prog_req_state_exists(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle)
+//    {
+//        return node_prog_req_state.state_exists(t, request_id, local_node_handle);
+//    }
 
-    inline node_prog::Packable_Deletable*
+    inline std::shared_ptr<node_prog::Packable_Deletable>
     graph :: fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle)
     {
         return node_prog_req_state.get_state(t, request_id, local_node_handle);
     }
 
-    inline void 
+    inline void
     graph :: insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle,
-        node_prog::Packable_Deletable* toAdd)
+        std::shared_ptr<node_prog::Packable_Deletable> toAdd)
     {
         node_prog_req_state.put_state(t, request_id, local_node_handle, toAdd);
     }
@@ -929,11 +931,11 @@ namespace db
         return node_prog_req_state.check_done_request(req_id);
     }
 
-    inline void
-    graph :: clear_req_use(uint64_t req_id)
-    {
-        node_prog_req_state.clear_in_use(req_id);
-    }
+//    inline void
+//    graph :: clear_req_use(uint64_t req_id)
+//    {
+//        node_prog_req_state.clear_in_use(req_id);
+//    }
 
 }
 
