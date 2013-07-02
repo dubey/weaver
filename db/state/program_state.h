@@ -57,7 +57,6 @@ namespace state
             void delete_node_state(uint64_t node_handle);
             void done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>>&, uint64_t max_done_id);
             bool check_done_request(uint64_t req_id);
-            //void clear_in_use(uint64_t req_id);
 
         private:
             void acquire();
@@ -108,25 +107,6 @@ namespace state
         }
     }
     
-//    inline bool
-//    program_state :: node_entry_exists_nolock(node_prog::prog_type t, uint64_t node_handle)
-//    {
-//        node_map &nmap = prog_state.at(t);
-//        node_map::iterator nmap_iter = nmap.find(node_handle);
-//        if (nmap_iter == nmap.end()) {
-//            return false;
-//        } else {
-//            return true;
-//        }
-//    }
-
-    //inline bool
-    //program_state :: req_entry_exists_nolock(node_prog::prog_type t, uint64_t req_id)
-    //{
-    //    req_map &rmap = prog_state.at(t);
-    //    return (rmap.find(req_id) != rmap.end());
-    //}
-
     inline bool
     program_state :: state_exists(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle)
     {
@@ -381,19 +361,6 @@ namespace state
         release();
     }
             
-//    inline std::shared_ptr<nmap>
-//    program_state :: get_req_state(node_prog::prog_type t, uint64_t req_id)
-//    {
-//        std::shared_ptr<nmap> ret;
-//        acquire();
-//        if (done_ids.find(req_id) == done_ids.end()) {
-//            // request not yet completed, return state node map
-//            ret = prog_state.at(t).at(req_id);
-//        }
-//        release();
-//        return ret;
-//    }
-
     inline bool
     program_state :: check_done_request(uint64_t req_id)
     {
@@ -401,25 +368,9 @@ namespace state
         acquire();
         //ret = (req_id < completed_id);
         ret = (done_ids.find(req_id) != done_ids.end());
-        //if (!ret) {
-        //    // increment in use counter to prevent deletion
-        //    if (node_list.find(req_id) == node_list.end()) {
-        //        node_list.emplace(req_id, std::make_pair(0, std::unordered_set<uint64_t>()));
-        //    }
-        //    node_list.at(req_id).first++;
-        //}
         release();
         return ret;
     }
-
-//    inline void
-//    program_state :: clear_in_use(uint64_t req_id)
-//    {
-//        acquire();
-//        node_list.at(req_id).first--;
-//        in_use_cond.broadcast();
-//        release();
-//    }
 }
 
 #endif

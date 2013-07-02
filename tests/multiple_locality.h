@@ -18,8 +18,8 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define ML_REQUESTS 1000000
-#define ML_HOP_TRIES 500
+#define ML_REQUESTS 1000
+#define ML_HOP_TRIES 5
 
 std::pair<uint64_t, uint64_t>
 find_long_hop(test_graph &g)
@@ -46,11 +46,6 @@ find_long_hop(test_graph &g)
         res = g.c->run_node_program(node_prog::REACHABILITY, initial_args);
         npair.emplace_back(std::make_pair(first, second));
         hops.emplace_back(res->hops);
-        //if (res->hops > max_hop && res->reachable) {
-        //    max_hop = res->hops;
-        //    npair.first = first;
-        //    npair.second = second;
-        //}
         DEBUG << "Done request " << i << " of initial src-dest search" << std::endl;
     }
     uint32_t target_hops = (*std::max_element(hops.begin(), hops.end()))/2;
@@ -102,7 +97,7 @@ multiple_locality_prog(bool dense, bool to_exit)
     rp.dest = g.nodes[npair.second];
     
     // enable migration now
-    c.start_migration();
+    // c.start_migration();
 
     // repeatedly perform same request
     std::ofstream file, req_time;

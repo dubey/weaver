@@ -263,7 +263,6 @@ namespace db
             std::unordered_set<uint64_t> done_ids; // TODO clean up of done_ids
             void add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests, uint64_t del_id);
             bool check_done_request(uint64_t req_id);
-            //void clear_req_use(uint64_t req_id);
     };
 
     inline
@@ -838,11 +837,6 @@ namespace db
     }
 
     // node program
-//    inline bool 
-//    graph :: prog_req_state_exists(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle)
-//    {
-//        return node_prog_req_state.state_exists(t, request_id, local_node_handle);
-//    }
 
     inline std::shared_ptr<node_prog::Packable_Deletable>
     graph :: fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle)
@@ -930,13 +924,6 @@ namespace db
     {
         return node_prog_req_state.check_done_request(req_id);
     }
-
-//    inline void
-//    graph :: clear_req_use(uint64_t req_id)
-//    {
-//        node_prog_req_state.clear_in_use(req_id);
-//    }
-
 }
 
-#endif //__GRAPH__
+#endif

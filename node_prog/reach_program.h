@@ -136,7 +136,6 @@ namespace node_prog
             std::function<std::vector<std::shared_ptr<reach_cache_value>>()> cached_values_getter)
     {
         UNUSED(cache_putter);
-        //DEBUG << "Processing reach prog, id = " << req_id << " at node,loc = " << rn.handle << "," << rn.loc << std::endl;
         reach_node_state &state = state_getter();
         bool false_reply = false;
         db::element::remote_node prev_node = params.prev_node;
@@ -144,20 +143,16 @@ namespace node_prog
         std::vector<std::pair<db::element::remote_node, reach_params>> next;
         if (!params.mode) { // request mode
             if (params.dest == rn.handle) {
-                //DEBUG << "Reached\n";
                 // we found the node we are looking for, prepare a reply
                 params.mode = true;
                 params.reachable = true;
                 next.emplace_back(std::make_pair(prev_node, params));
             } else {
                 // have not found it yet, check the cache, then follow all out edges
-                //DEBUG << "Going to get cache\n";
                 bool got_cache = false;
                 std::vector<std::shared_ptr<reach_cache_value>> cache = cached_values_getter();
-                //DEBUG << "Checking cache\n";
                 for (auto &rcv: cache) {
                     if (rcv->reachable_node == params.dest) {
-                        //DEBUG << "GOT CACHE, request no " << req_id << std::endl;
                         rcv->mark();
                         params.mode = true;
                         params.reachable = true;
@@ -167,7 +162,6 @@ namespace node_prog
                     }
                 }
                 if (!state.visited && !got_cache) {
-                    //DEBUG << "Not visited and no cache, traverse edges\n";
                     db::element::edge *e;
                     state.prev_node = prev_node;
                     state.visited = true;
@@ -183,7 +177,6 @@ namespace node_prog
                                 break;
                             }
                         }
-                        //DEBUG << "Props check give " << traverse_edge << std::endl;
                         if (traverse_edge) {
                             e->traverse();
                             next.emplace_back(std::make_pair(e->nbr, params)); // propagate reachability request
@@ -194,19 +187,15 @@ namespace node_prog
                         false_reply = true;
                     }
                 } else if (!got_cache) {
-                    //DEBUG << "No cache and already visited, return false\n";
                     false_reply = true;
                 }
             }
             if (false_reply) {
-                //DEBUG << "No cache, no traversable neighbors\n";
                 params.mode = true;
                 params.reachable = false;
                 next.emplace_back(std::make_pair(prev_node, params));
             }
         } else { // reply mode
-            //DEBUG << "Starting reply, out count is " << state.out_count << " at node " << rn.handle
-            //    << " for request " << req_id << std::endl;
             if (((--state.out_count == 0) || params.reachable) && !state.reachable) {
                 state.reachable |= params.reachable;
                 db::element::edge *e;
@@ -222,22 +211,19 @@ namespace node_prog
                     params.path.emplace_back(rn);
                 }
                 next.emplace_back(std::make_pair(state.prev_node, params));
-                //if (params.reachable) {
-                //    // adding to cache
-                //    reach_cache_value &rcv = cache_putter();
-                //    rcv.reachable_node = params.dest;
-                //}
-                //if (state.prev_node.loc == COORD_ID) {
-                //  DEBUG << "done with req " << req_id << " at node " << rn.handle << ", loc " << rn.loc << std::endl;
-                //}
-            } else if ((int)state.out_count < 0) {
-                DEBUG << "ALERT! Bad state value in reach program for node " << rn.handle << " at loc " << rn.loc << std::endl;
+                // next block of code enables caching
+                if (params.reachable) {
+                    // adding to cache
+                    reach_cache_value &rcv = cache_putter();
+                    rcv.reachable_node = params.dest;
+                }
+            }
+            if ((int)state.out_count < 0) {
+                DEBUG << "ALERT! Bad state value in reach program for node " << rn.handle
+                        << " at loc " << rn.loc << std::endl;
+                next.clear();
                 //while(1);
             }
-            //if (!state.reachable && state.out_count > 0) {
-            //    DEBUG << "still awaiting replies, current count " << state.out_count 
-            //        << " for request " << req_id << " at node " << rn.handle << std::endl;
-            //}
         }
         return next;
     }

@@ -38,7 +38,7 @@
 #define NUM_SHARDS 8
 #define NUM_THREADS 8
 #define GRAPH_FILE "graph.rec"
-#define DAEMON_PERIOD 1 // frequency in seconds for coordinator daemon to run
+#define DAEMON_PERIOD 4 // frequency in seconds for coordinator daemon to run
 #define MIGR_FREQ 10 // seconds delay between consecutive migrations
 #define INITIAL_MIGR_DELAY 15 // seconds delay for initial migration
 #define START_MIGR_ID 1
