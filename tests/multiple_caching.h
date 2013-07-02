@@ -18,7 +18,7 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define MC_REQUESTS 10000
+#define MC_REQUESTS 3000
 
 // parameter 'dense' decides if the graph is dense (true) or sparse (false)
 void
@@ -72,11 +72,11 @@ multiple_caching_prog(bool dense, bool to_exit)
             req_time << dif.tv_sec << '.' << dif.tv_nsec << std::endl;
         }
         t1 = t2;
-        first = rand() % 10;
+        first = rand() % 5;
         first += num_nodes/2;
-        second = rand() % 10;
+        second = rand() % 5;
         while (second == first) {
-            second = rand() % 10;
+            second = rand() % 5;
         }
         file << first << " " << second << std::endl;
         rp.dest = g.nodes[second];
