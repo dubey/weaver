@@ -475,23 +475,14 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
     }
     
     // confirmations
-//    if (G->myid == 1) {
-//        DEBUG << "confirming cache ids: ";
-//    }
     for (uint64_t good_id: good) {
         try {
             G->commit_prog_cache(good_id);
-//            if (G->myid == 1) {
-//                std::cerr << good_id << " ";
-//            }
         } catch (std::exception &e) {
             DEBUG << "caught exception here, shard = " << G->myid << ", exception " << e.what() << std::endl;
             return;
         }
     }
-//    if (G->myid == 1) {
-//        std::cerr << std::endl;
-//    }
     
     // remove state corresponding to completed node programs
     try {
@@ -516,13 +507,9 @@ handle_clean_up(db::graph *G, std::unique_ptr<message::message> msg)
         << ", compl ids size " << completed_requests.size() << std::endl;
 
     // check if migration needs to be initiated
-    //timespec t, dif;
     bool to_migrate = false;
     G->migr_token_mutex.lock();
-    //clock_gettime(CLOCK_MONOTONIC, &t);
     if (!G->migrated && G->migr_token) {
-        //dif = diff(G->migr_time, t);
-        //if (dif.tv_sec > MIGR_FREQ) {
         if (G->migr_chance++ > 2) {
             G->migrated = true;
             to_migrate = true;

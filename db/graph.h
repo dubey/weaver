@@ -270,7 +270,6 @@ namespace db
             void commit_prog_cache(uint64_t req_id);
             void print_cache_size();
             // completed node programs
-            std::unordered_set<uint64_t> done_ids; // TODO clean up of done_ids
             void add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests,
                     uint64_t del_id);
             bool check_done_request(uint64_t req_id);
