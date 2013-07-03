@@ -17,7 +17,7 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define MRP_REQUESTS 500
+#define MRP_REQUESTS 1000
 
 // issue multiple random reachability requests in a random graph
 // parameter 'dense' decides if the graph is dense (true) or sparse (false)
@@ -46,6 +46,9 @@ multiple_reach_prog(bool dense, bool to_exit)
     }
     test_graph g(&c, seed, num_nodes, num_edges, false, to_exit);
 
+    // enable migration
+    c.start_migration();
+
     // starting requests
     node_prog::reach_params rp;
     rp.mode = false;
@@ -59,7 +62,7 @@ multiple_reach_prog(bool dense, bool to_exit)
     wclock::get_clock(&t1);
     start = t1;
     for (i = 0; i < MRP_REQUESTS; i++) {
-        wclock::get_clock(&t1);
+        wclock::get_clock(&t2);
         dif = diff(t1, t2);
         DEBUG << "Test: i = " << i << ", " << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
         if (i % 10 == 0) {

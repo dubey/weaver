@@ -64,13 +64,13 @@ main(int argc, char *argv[])
     //clustering_prog_test();
 #endif
 #ifndef __ALL_TESTS__
-    //multiple_sparse_reachability(true);
+    multiple_sparse_reachability(true);
     //unreachable_reach_prog(true);
     //clique_reach_prog(true);
     //multiple_wp_prog(true);
     //multiple_sparse_locality(true);
     //repetitive_reach_prog(true);
-    multiple_dense_caching(true);
+    //multiple_dense_caching(true);
 #endif
     DEBUG << "All tests completed." << std::endl;
 

@@ -1,7 +1,7 @@
 /*
  * ===============================================================
- *    Description:  The part of a graph stored on a particular 
-                    server
+ *    Description:  The partition of a graph stored on a
+ *                  particular server
  *
  *        Created:  Tuesday 16 October 2012 11:00:03  EDT
  *
@@ -43,14 +43,17 @@ namespace db
             enum message::msg_type type;
             uint64_t req_id;
             union {
-                struct {
+                struct
+                {
                     uint64_t node_handle;
                 } del_node;
-                struct {
+                struct
+                {
                     uint64_t node_handle;
                     uint64_t edge_handle;
                 } del_edge;
-                struct {
+                struct
+                {
                     uint64_t node_handle;
                     uint64_t edge_handle;
                     uint32_t key;
@@ -108,17 +111,16 @@ namespace db
         : type(mt)
         , start_time(st)
         , update_count(uc)
-    {
-    }
+    { }
 
     inline
-    update_request :: update_request(enum message::msg_type mt, uint64_t st, std::unique_ptr<message::message> m, uint64_t uc=0)
+    update_request :: update_request(enum message::msg_type mt, uint64_t st,
+            std::unique_ptr<message::message> m, uint64_t uc=0)
         : type(mt)
         , start_time(st)
         , update_count(uc)
         , msg(std::move(m))
-    {
-    }
+    { }
 
     inline bool
     update_request :: operator>(const update_request &r) const
@@ -188,11 +190,15 @@ namespace db
             db::thread::pool thread_pool;
             void create_node(uint64_t time, bool migrate);
             std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> delete_node(uint64_t node, uint64_t del_time);
-            uint64_t create_edge(uint64_t local_node, uint64_t time, uint64_t remote_node, uint64_t remote_loc, uint64_t remote_time);
-            uint64_t create_reverse_edge(uint64_t time, uint64_t local_node, uint64_t remote_node, uint64_t remote_loc);
-            std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> delete_edge(uint64_t node, uint64_t edge_handle, uint64_t del_time);
+            uint64_t create_edge(uint64_t local_node, uint64_t time, uint64_t remote_node,
+                    uint64_t remote_loc, uint64_t remote_time);
+            uint64_t create_reverse_edge(uint64_t time, uint64_t local_node,
+                    uint64_t remote_node, uint64_t remote_loc);
+            std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> delete_edge(uint64_t node,
+                    uint64_t edge_handle, uint64_t del_time);
             uint64_t add_edge_property(uint64_t n, uint64_t e, common::property &prop);
-            std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> delete_all_edge_property(uint64_t n, uint64_t e, uint32_t key, uint64_t del_time);
+            std::pair<uint64_t, std::unique_ptr<std::vector<uint64_t>>> delete_all_edge_property(uint64_t n,
+                    uint64_t e, uint32_t key, uint64_t del_time);
             void permanent_delete(uint64_t req_id, uint64_t migr_del_id);
             void permanent_node_delete(element::node *n);
             void permanent_edge_delete(uint64_t n, uint64_t e);
@@ -253,15 +259,20 @@ namespace db
             // prog_type-> map from node handle to map from request_id to cache values -- used to do cache read/updates
             cache::program_cache node_prog_cache;
             bool prog_cache_exists(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id);
-            std::vector<std::shared_ptr<node_prog::CacheValueBase>> fetch_prog_cache(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id, std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set);
-            std::shared_ptr<node_prog::CacheValueBase> fetch_prog_cache_single(node_prog::prog_type t, uint64_t local_node_handle, uint64_t req_id);
-            void insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle, std::shared_ptr<node_prog::CacheValueBase> toAdd, element::node *n);
+            std::vector<std::shared_ptr<node_prog::CacheValueBase>> fetch_prog_cache(node_prog::prog_type t,
+                    uint64_t local_node_handle, uint64_t req_id,
+                    std::vector<uint64_t> *dirty_list_ptr, std::unordered_set<uint64_t> &ignore_set);
+            std::shared_ptr<node_prog::CacheValueBase> fetch_prog_cache_single(node_prog::prog_type t,
+                    uint64_t local_node_handle, uint64_t req_id);
+            void insert_prog_cache(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle,
+                    std::shared_ptr<node_prog::CacheValueBase> toAdd, element::node *n);
             void invalidate_prog_cache(uint64_t request_id);
             void commit_prog_cache(uint64_t req_id);
             void print_cache_size();
             // completed node programs
             std::unordered_set<uint64_t> done_ids; // TODO clean up of done_ids
-            void add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests, uint64_t del_id);
+            void add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests,
+                    uint64_t del_id);
             bool check_done_request(uint64_t req_id);
     };
 
@@ -336,7 +347,7 @@ namespace db
 
     // find the node corresponding to given handle
     // lock and return the node
-    // return NULL if node does not exists (possibly permanently deleted?)
+    // return NULL if node does not exist (possibly permanently deleted)
     inline element::node*
     graph :: acquire_node(uint64_t node_handle)
     {
