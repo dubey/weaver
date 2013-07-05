@@ -14,10 +14,11 @@
 #ifndef __CLIENT__
 #define __CLIENT__
 
+#include <fstream>
 #include <po6/net/location.h>
-#include <busybee_sta.h>
 
 #include "common/weaver_constants.h"
+#include "common/busybee_infra.h"
 #include "common/message.h"
 #include "common/property.h"
 #include "node_prog/node_prog_type.h"
@@ -25,72 +26,69 @@
 class client
 {
     public:
-        client(uint16_t myport);
+        client(uint64_t my_id);
+        ~client();
 
     private:
-        po6::net::location myloc, myrecloc, coord_loc;
-        busybee_sta client_bb;
+        uint64_t myid;
+        std::shared_ptr<po6::net::location> myloc;
+        busybee_mta *client_bb;
 
     public:
-        size_t create_node();
-        size_t create_edge(size_t node1, size_t node2);
-        void delete_node(size_t node); 
-        void delete_edge(size_t node, size_t edge);
-        void add_edge_prop(size_t node, size_t edge, uint32_t key, size_t value);
-        void del_edge_prop(size_t node, size_t edge, uint32_t key);
-        bool reachability_request(size_t node1, size_t node2, std::shared_ptr<std::vector<common::property>> edge_props);
-        std::pair<size_t, std::vector<std::pair<size_t, size_t>>> shortest_path_request(size_t node1, size_t node2, uint32_t edge_weight_prop,
-                std::shared_ptr<std::vector<common::property>> edge_props);
-        std::pair<size_t, std::vector<std::pair<size_t, size_t>>> widest_path_request(size_t node1, size_t node2, uint32_t edge_weight_prop, 
-                std::shared_ptr<std::vector<common::property>> edge_props);
-        double local_clustering_coefficient(size_t node,
-                std::shared_ptr<std::vector<common::property>> edge_props);
-
+        uint64_t create_node();
+        uint64_t create_edge(uint64_t node1, uint64_t node2);
+        void delete_node(uint64_t node); 
+        void delete_edge(uint64_t node, uint64_t edge);
+        void add_edge_prop(uint64_t node, uint64_t edge, uint32_t key, uint64_t value);
+        void del_edge_prop(uint64_t node, uint64_t edge, uint32_t key);
+        void commit_graph();
         template <typename ParamsType>
-        ParamsType * run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args);
+        std::unique_ptr<ParamsType> run_node_program(node_prog::prog_type prog_to_run,
+            std::vector<std::pair<uint64_t, ParamsType>> initial_args);
+        uint64_t get_node_loc(uint64_t node);
+        void start_migration();
+        void exit_weaver();
 
     private:
-        std::pair<size_t, std::vector<std::pair<size_t, size_t>>> dijkstra_request(size_t node1, size_t node2, uint32_t edge_weight_prop, bool is_widest,
-                std::shared_ptr<std::vector<common::property>> edge_props);
         void send_coord(std::auto_ptr<e::buffer> buf);
+        busybee_returncode recv_coord(std::auto_ptr<e::buffer> *buf);
 };
 
 inline
-client :: client(uint16_t myport)
-    : myloc(CLIENT_IPADDR, myport)
-    , myrecloc(CLIENT_IPADDR, myport)
-    , coord_loc(COORD_IPADDR, COORD_CLIENT_REC_PORT)
-    , client_bb(myloc.address, myloc.port, 0)
+client :: client(uint64_t my_id)
+    : myid(my_id)
 {
+    initialize_busybee(client_bb, myid, myloc);
 }
 
-inline size_t
+inline
+client :: ~client()
+{
+    delete client_bb;
+}
+
+inline uint64_t
 client :: create_node()
 {
-    busybee_returncode ret;
-    size_t new_node;
+    uint64_t new_node;
     message::message msg(message::CLIENT_NODE_CREATE_REQ);
-    message::prepare_message(msg, message::CLIENT_NODE_CREATE_REQ, myloc.port);
+    message::prepare_message(msg, message::CLIENT_NODE_CREATE_REQ);
     send_coord(msg.buf);
-    if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
+    if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
         return 0;
     }
     message::unpack_message(msg, message::CLIENT_REPLY, new_node);
     return new_node;
 }
 
-inline size_t
-client :: create_edge(size_t node1, size_t node2)
+inline uint64_t
+client :: create_edge(uint64_t node1, uint64_t node2)
 {
-    busybee_returncode ret;
-    size_t new_edge;
+    uint64_t new_edge;
     message::message msg(message::CLIENT_EDGE_CREATE_REQ);
-    message::prepare_message(msg, message::CLIENT_EDGE_CREATE_REQ, myloc.port,
-            node1, node2);
+    message::prepare_message(msg, message::CLIENT_EDGE_CREATE_REQ, node1, node2);
     send_coord(msg.buf);
-    if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
+    if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
         return 0;
     }
     message::unpack_message(msg, message::CLIENT_REPLY, new_edge);
@@ -98,138 +96,58 @@ client :: create_edge(size_t node1, size_t node2)
 }
 
 inline void
-client :: delete_node(size_t node)
+client :: delete_node(uint64_t node)
 {
-    busybee_returncode ret;
     message::message msg(message::CLIENT_NODE_DELETE_REQ);
-    message::prepare_message(msg, message::CLIENT_NODE_DELETE_REQ, myloc.port, node);
+    message::prepare_message(msg, message::CLIENT_NODE_DELETE_REQ, node);
     send_coord(msg.buf);
-    if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
-    }
+    recv_coord(&msg.buf);
 }
 
 inline void
-client :: delete_edge(size_t node, size_t edge)
+client :: delete_edge(uint64_t node, uint64_t edge)
 {
-    busybee_returncode ret;
     message::message msg(message::CLIENT_EDGE_DELETE_REQ);
-    message::prepare_message(msg, message::CLIENT_EDGE_DELETE_REQ, myloc.port,
-            node, edge);
+    message::prepare_message(msg, message::CLIENT_EDGE_DELETE_REQ, node, edge);
     send_coord(msg.buf);
-    if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
-    }
+    recv_coord(&msg.buf);
 }
 
 inline void
-client :: add_edge_prop(size_t node, size_t edge, uint32_t key, size_t value)
+client :: add_edge_prop(uint64_t node, uint64_t edge, uint32_t key, uint64_t value)
 {
-    busybee_returncode ret;
     message::message msg(message::CLIENT_ADD_EDGE_PROP);
-    message::prepare_message(msg, message::CLIENT_ADD_EDGE_PROP, myloc.port, node, edge, key, value);
+    message::prepare_message(msg, message::CLIENT_ADD_EDGE_PROP, node, edge, key, value);
     send_coord(msg.buf);
-    if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
-    }
+    recv_coord(&msg.buf);
 }
 
 inline void
-client :: del_edge_prop(size_t node, size_t edge, uint32_t key)
+client :: del_edge_prop(uint64_t node, uint64_t edge, uint32_t key)
 {
-    busybee_returncode ret;
     message::message msg(message::CLIENT_DEL_EDGE_PROP);
-    message::prepare_message(msg, message::CLIENT_DEL_EDGE_PROP, myloc.port, node, edge, key);
+    message::prepare_message(msg, message::CLIENT_DEL_EDGE_PROP, node, edge, key);
     send_coord(msg.buf);
-    if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
-    }
+    recv_coord(&msg.buf);
 }
 
-inline bool
-client :: reachability_request(size_t node1, size_t node2,
-    std::shared_ptr<std::vector<common::property>> edge_props)
+inline void
+client :: commit_graph()
 {
-    busybee_returncode ret;
-    bool reachable;
-    message::message msg(message::CLIENT_REACHABLE_REQ);
-    message::prepare_message(msg, message::CLIENT_REACHABLE_REQ, myloc.port, node1, node2, *edge_props);
+    message::message msg;
+    message::prepare_message(msg, message::CLIENT_COMMIT_GRAPH);
     send_coord(msg.buf);
-    if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
-        return false;
-    }
-    message::unpack_message(msg, message::CLIENT_REPLY, reachable);
-    return reachable;
 }
 
-inline std::pair<size_t, std::vector<std::pair<size_t, size_t>>>
-client :: shortest_path_request(size_t node1, size_t node2, 
-    uint32_t edge_weight_prop, std::shared_ptr<std::vector<common::property>> edge_props)
-{
-    return dijkstra_request(node1, node2, edge_weight_prop, false, edge_props);
-}
-
-inline std::pair<size_t, std::vector<std::pair<size_t, size_t>>>
-client :: widest_path_request(size_t node1, size_t node2,
-    uint32_t edge_weight_prop, std::shared_ptr<std::vector<common::property>> edge_props)
-{
-    return dijkstra_request(node1, node2, edge_weight_prop, true, edge_props);
-}
-
-inline std::pair<size_t, std::vector<std::pair<size_t, size_t>>>
-client :: dijkstra_request(size_t node1, size_t node2, uint32_t edge_weight_prop, bool is_widest,
-    std::shared_ptr<std::vector<common::property>> edge_props)
-{
-    busybee_returncode ret;
-    std::pair<size_t, std::vector<std::pair<size_t, size_t>>> toRet; // pair of cost and path
-    message::message msg(message::CLIENT_DIJKSTRA_REQ);
-    message::prepare_message(msg, message::CLIENT_DIJKSTRA_REQ, myloc.port, node1, node2, edge_weight_prop, is_widest, *edge_props);
-    send_coord(msg.buf);
-    if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
-        toRet.first = 0;
-        return toRet;
-    }
-    message::unpack_message(msg, message::CLIENT_DIJKSTRA_REPLY,
-            toRet.first, toRet.second);
-    return toRet;
-}
-
-inline double
-client :: local_clustering_coefficient(size_t node, std::shared_ptr<std::vector<common::property>> edge_props)
-{
-    busybee_returncode ret;
-    size_t numerator;
-    size_t denominator;
-    message::message msg(message::CLIENT_CLUSTERING_REQ);
-    message::prepare_message(msg, message::CLIENT_CLUSTERING_REQ, myloc.port, node, *edge_props);
-    send_coord(msg.buf);
-    if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
-        return false;
-    }
-    message::unpack_message(msg, message::CLIENT_CLUSTERING_REPLY, numerator, denominator);
-    if (denominator == 0) {
-        std::cerr << "not possible to compute clustering coefficient: less than two valid neighbors" << std::endl;
-        return 0;
-    }
-    else {
-        std::cerr << "Client got " << numerator << " over " << denominator << std::endl;
-        return (double) numerator/ denominator;
-    }
-}
-
+// client needs to delete the pointer returned
 template <typename ParamsType>
-inline ParamsType *
+inline std::unique_ptr<ParamsType>
 client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args)
 {
-    busybee_returncode ret;
-    message::message msg(message::CLIENT_NODE_PROG_REQ);
-    message::prepare_message(msg, message::CLIENT_NODE_PROG_REQ, myloc.port, prog_to_run, initial_args);
+    message::message msg;
+    message::prepare_message(msg, message::CLIENT_NODE_PROG_REQ, prog_to_run, initial_args);
     send_coord(msg.buf);
-    if ((ret = client_bb.recv(&myrecloc, &msg.buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
+    if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
         return NULL;
     }
     uint64_t ignore_req_id;
@@ -238,17 +156,70 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
     std::pair<uint64_t, ParamsType> tempPair;
     message::unpack_message(msg, message::NODE_PROG, ignore, ignore_req_id, ignore_cache, tempPair);
 
-    ParamsType *toRet = new ParamsType(tempPair.second); // make sure client frees
-    return toRet;
+    std::unique_ptr<ParamsType> toRet(new ParamsType(tempPair.second)); // make sure client frees
+    return std::move(toRet);
+}
+
+// caution: node loc may change as time goes on, the location returned
+// is only correct as of the time the request is processed at the coordinator
+inline uint64_t
+client :: get_node_loc(uint64_t node)
+{
+    message::message msg;
+    uint64_t loc = (uint64_t)(-1);
+    message::prepare_message(msg, message::CLIENT_NODE_LOC_REQ, node);
+    send_coord(msg.buf);
+    if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
+        return loc;
+    }
+    message::unpack_message(msg, message::CLIENT_NODE_LOC_REPLY, loc);
+    return loc;
+}
+
+inline void
+client :: start_migration()
+{
+    message::message msg;
+    message::prepare_message(msg, message::START_MIGR);
+    send_coord(msg.buf);
+}
+
+inline void
+client :: exit_weaver()
+{
+    message::message msg;
+    message::prepare_message(msg, message::EXIT_WEAVER);
+    send_coord(msg.buf);
 }
 
 inline void
 client :: send_coord(std::auto_ptr<e::buffer> buf)
 {
     busybee_returncode ret;
-    if ((ret = client_bb.send(coord_loc, buf)) != BUSYBEE_SUCCESS) {
-        std::cerr << "msg recv error: " << ret << std::endl;
+    if ((ret = client_bb->send(COORD_ID, buf)) != BUSYBEE_SUCCESS) {
+        DEBUG << "msg send error: " << ret << std::endl;
         return;
+    }
+}
+
+inline busybee_returncode
+client :: recv_coord(std::auto_ptr<e::buffer> *buf)
+{
+    busybee_returncode ret;
+    uint64_t sender;
+    while (true) {
+        ret = client_bb->recv(&sender, buf);
+        switch (ret) {
+            case BUSYBEE_SUCCESS:
+                return ret;
+
+            case BUSYBEE_INTERRUPTED:
+                continue;
+
+            default:
+                DEBUG << "msg recv error: " << ret << std::endl;
+                return ret;
+        }
     }
 }
 

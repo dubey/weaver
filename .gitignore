@@ -1,0 +1,13 @@
+*.bin
+*.o
+*.rec
+*.txt
+*.log
+*.profile
+*.sh
+*.depend
+*.out
+*/*.[0-9][0-9]*
+*/*.eps
+*/*.pdf
+*/*.supp

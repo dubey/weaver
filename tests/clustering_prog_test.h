@@ -19,7 +19,7 @@
 void
 clustering_prog_test()
 {
-    client c(CLIENT_PORT);
+    client c(CLIENT_ID);
     auto edge_props = std::make_shared<std::vector<common::property>>();
     int i;
     int testcount = 0;
@@ -34,7 +34,7 @@ clustering_prog_test()
     initial_args.emplace_back(std::make_pair(central_node, node_prog::clustering_params()));
     initial_args[0].second.is_center = true;
     initial_args[0].second.outgoing = true;
-    node_prog::clustering_params * res;
+    std::unique_ptr<node_prog::clustering_params> res;
 
     for (i = 0; i < num_nodes; i++) {
         star_nodes[i] = c.create_node();
@@ -45,16 +45,14 @@ clustering_prog_test()
     //connect star nodes back to center. Shouldn't change coefficient
     res = c.run_node_program(node_prog::CLUSTERING, initial_args);
     assert(res->clustering_coeff == 0);
-    std::cout << "completed test " << ++testcount << std::endl;
-    delete res;
+    DEBUG << "completed test " << ++testcount << std::endl;
 
     for (i = 0; i < num_nodes; i++) {
         star_edges[i+num_nodes] = c.create_edge(star_nodes[i], central_node);
     }
     res = c.run_node_program(node_prog::CLUSTERING, initial_args);
     assert(res->clustering_coeff == 0);
-    std::cout << "completed test " << ++testcount << std::endl;
-    delete res;
+    DEBUG << "completed test " << ++testcount << std::endl;
 
     size_t numerator;
     double denominator = (double) ((num_nodes)*(num_nodes-1));
@@ -66,11 +64,10 @@ clustering_prog_test()
             numerator = ((node_skip-1)*num_nodes+i+1);
            res = c.run_node_program(node_prog::CLUSTERING, initial_args);
            assert(res->clustering_coeff == (numerator/denominator));
-            std::cout << "completed test " << ++testcount << std::endl;
-            delete res;
+            DEBUG << "completed test " << ++testcount << std::endl;
         }
     }
-    std::cout << "starting clustering tests with deletion" <<  std::endl;
+    DEBUG << "starting clustering tests with deletion" <<  std::endl;
     //delete some of the original edges and nodes of star graph
     for (i = 0; i < (num_nodes-edges_per_node); i++) {
         denominator = (double) ((num_nodes-i-1)*(num_nodes-i-2));
@@ -85,11 +82,10 @@ clustering_prog_test()
             c.delete_node(star_nodes[i]);
         }
         res = c.run_node_program(node_prog::CLUSTERING, initial_args);
-        //std::cout << "expected " << numerator << "/" << denominator << " = " << (numerator/denominator) << " but got " << res->clustering_coeff <<  std::endl;
+        //DEBUG << "expected " << numerator << "/" << denominator << " = " << (numerator/denominator) << " but got " << res->clustering_coeff <<  std::endl;
         assert(res->clustering_coeff == (numerator/denominator));
-        std::cout << "completed test " << ++testcount << std::endl;
-        delete res;
+        DEBUG << "completed test " << ++testcount << std::endl;
     }
-    std::cout << "completed all clustering tests" <<  std::endl;
+    DEBUG << "completed all clustering tests" <<  std::endl;
 
 }

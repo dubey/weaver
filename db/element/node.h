@@ -26,6 +26,11 @@
 #include "element.h"
 #include "edge.h"
 
+namespace message
+{
+    class message;
+}
+
 namespace db
 {
 class update_request;
@@ -72,8 +77,7 @@ namespace element
     class node : public element
     {
         public:
-            node();
-            node(uint64_t time);
+            node(uint64_t time, po6::threads::mutex *mtx);
 
         public:
             enum mode
@@ -88,49 +92,47 @@ namespace element
             enum mode state;
             std::unordered_map<uint64_t, edge*> out_edges;
             std::unordered_map<uint64_t, edge*> in_edges;
-            po6::threads::mutex update_mutex;
-            std::unordered_set<uint64_t> seen; // requests which have been seen
+            po6::threads::cond cv; // for locking node
+            bool in_use;
+            uint32_t waiters; // count of number of waiters
+            bool permanently_deleted;
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids; // requests which have been cached
             // for migration
-            uint64_t new_handle;
-            int prev_loc, new_loc;
+            uint64_t prev_loc, new_loc;
+            uint64_t update_count;
+            std::vector<uint16_t> prev_locs;
+            std::vector<uint64_t> agg_msg_count;
             std::vector<uint32_t> msg_count;
-
-        private:
-            uint32_t out_edge_ctr, in_edge_ctr;
+            bool updated;
+            uint32_t dependent_del;
+            // queued requests, for the time when the node is marked in transit
+            // but requests cannot yet be forwarded to new location which is still
+            // setting up the node
+            std::vector<std::unique_ptr<message::message>> pending_requests;
 
         public:
             void add_edge(edge *e, bool in_or_out);
-            bool check_and_add_seen(uint64_t id);
-            void remove_seen(uint64_t id);
-            void set_seen(std::unordered_set<uint64_t> &seen);
             void add_cached_req(uint64_t req_id);
             void remove_cached_req(uint64_t req_id);
             std::unique_ptr<std::vector<uint64_t>> purge_cache();
     };
 
     inline
-    node :: node()
-        : state(mode::NASCENT)
-        , cached_req_ids(new std::vector<uint64_t>)
-        , prev_loc(-1)
-        , new_loc(-1)
-        , msg_count(NUM_SHARDS, 0)
-        , out_edge_ctr(0)
-        , in_edge_ctr(0)
-    {
-    }
-
-    inline
-    node :: node(uint64_t time)
+    node :: node(uint64_t time, po6::threads::mutex *mtx)
         : element(time)
         , state(mode::NASCENT)
+        , cv(mtx)
+        , in_use(true)
+        , waiters(0)
+        , permanently_deleted(false)
         , cached_req_ids(new std::vector<uint64_t>())
         , prev_loc(-1)
         , new_loc(-1)
+        , update_count(1)
+        , agg_msg_count(NUM_SHARDS, 0)
         , msg_count(NUM_SHARDS, 0)
-        , out_edge_ctr(0)
-        , in_edge_ctr(0)
+        , updated(true)
+        , dependent_del(0)
     {
     }
 
@@ -142,29 +144,6 @@ namespace element
         } else {
             in_edges.emplace(e->get_creat_time(), e);
         }
-    }
-
-    inline bool
-    node :: check_and_add_seen(uint64_t id)
-    {
-        if (seen.find(id) != seen.end()) {
-            return true;
-        } else {
-            seen.insert(id);
-            return false;
-        }
-    }
-
-    inline void
-    node :: remove_seen(uint64_t id)
-    {
-        seen.erase(id);
-    }
-
-    inline void
-    node :: set_seen(std::unordered_set<uint64_t> &s)
-    {
-        seen = s;
     }
 
     inline void
@@ -203,4 +182,4 @@ namespace element
 }
 }
 
-#endif //__NODE__
+#endif

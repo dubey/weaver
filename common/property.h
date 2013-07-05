@@ -26,13 +26,13 @@ namespace common
     {
         public:
             property();
-            property(uint32_t, size_t, uint64_t);
+            property(uint32_t, uint64_t, uint64_t);
         
         public:
             char* __key;
             char* __value;
             uint32_t key;
-            size_t value;
+            uint64_t value;
             uint64_t creat_time;
             uint64_t del_time;
 
@@ -55,7 +55,7 @@ namespace common
     }
 
     inline
-    property :: property(uint32_t _key, size_t _value, uint64_t t_creat)
+    property :: property(uint32_t _key, uint64_t _value, uint64_t t_creat)
         : key(_key)
         , value(_value)
         , creat_time(t_creat)

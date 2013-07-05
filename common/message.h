@@ -15,6 +15,10 @@
 #define __MESSAGE__
 
 #include <memory>
+#include <vector>
+#include <unordered_set>
+#include <unordered_map>
+#include <queue>
 #include <string.h>
 #include <e/buffer.h>
 #include <po6/net/location.h>
@@ -24,32 +28,29 @@
 #include "common/property.h"
 #include "common/meta_element.h"
 #include "common/vclock.h"
-#include "unordered_set"
-#include "unordered_map"
 #include "db/element/node.h"
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
 #include "node_prog/node_prog_type.h" // used for packing Packable objects
-#include "db/request_objects.h"
 
 namespace message
 {
     enum msg_type
     {
+        // client messages
         CLIENT_NODE_CREATE_REQ = 0,
         CLIENT_EDGE_CREATE_REQ,
         CLIENT_NODE_DELETE_REQ,
         CLIENT_EDGE_DELETE_REQ,
         CLIENT_ADD_EDGE_PROP,
         CLIENT_DEL_EDGE_PROP,
-        CLIENT_CLUSTERING_REQ,
-        CLIENT_REACHABLE_REQ,
         CLIENT_REPLY,
-        CLIENT_DIJKSTRA_REQ,
-        CLIENT_DIJKSTRA_REPLY,
-        CLIENT_CLUSTERING_REPLY,
-        NODE_REFRESH_REQ,
-        NODE_REFRESH_REPLY,
+        CLIENT_COMMIT_GRAPH,
+        CLIENT_NODE_PROG_REQ,
+        CLIENT_NODE_PROG_REPLY,
+        CLIENT_NODE_LOC_REQ,
+        CLIENT_NODE_LOC_REPLY,
+        // graph update messages
         NODE_CREATE_REQ,
         EDGE_CREATE_REQ,
         TRANSIT_EDGE_CREATE_REQ,
@@ -71,21 +72,30 @@ namespace message
         EDGE_DELETE_PROP,
         TRANSIT_EDGE_DELETE_PROP,
         EDGE_DELETE_PROP_ACK,
+        CLEAN_UP,
+        CLEAN_UP_ACK,
+        // node program messages
+        NODE_PROG,
         CACHE_UPDATE,
         CACHE_UPDATE_ACK,
+        // migration messages
         MIGRATE_NODE_STEP1,
         MIGRATE_NODE_STEP2,
-        MIGRATE_NODE_STEP3,
         MIGRATE_NODE_STEP4,
-        MIGRATE_NODE_STEP5,
+        MIGRATE_NODE_STEP6a,
+        MIGRATE_NODE_STEP6b,
         COORD_NODE_MIGRATE,
         COORD_NODE_MIGRATE_ACK,
+        COORD_CLOCK_REQ,
+        COORD_CLOCK_REPLY,
         MIGRATED_NBR_UPDATE,
+        MIGRATED_NBR_ACK,
+        MIGRATION_TOKEN,
+        REQUEST_COUNT,
+        REQUEST_COUNT_ACK,
 
-        NODE_PROG,
-        CLIENT_NODE_PROG_REQ,
-        CLIENT_NODE_PROG_REPLY,
-
+        START_MIGR,
+        EXIT_WEAVER,
         ERROR
     };
 
@@ -110,23 +120,32 @@ namespace message
             void change_type(enum msg_type t);
     };
 
-    template <typename T1, typename T2> inline size_t size(const std::unordered_map<T1, T2>& t);
-    template <typename T> inline size_t size(const std::unordered_set<T>& t);
-    template <typename T> inline size_t size(const std::vector<T>& t);
-    template <typename T1, typename T2> inline size_t size(const std::pair<T1, T2>& t);
-    template <typename T1, typename T2, typename T3> inline size_t size(const std::tuple<T1, T2, T3>& t);
+    template <typename T1, typename T2> inline uint64_t size(const std::unordered_map<T1, T2>& t);
+    template <typename T> inline uint64_t size(const std::unordered_set<T>& t);
+    template <typename T> inline uint64_t size(const std::vector<T>& t);
+    template <typename T1, typename T2, typename T3> uint64_t size(std::priority_queue<T1, T2, T3>);
+    template <typename T1, typename T2> inline uint64_t size(const std::pair<T1, T2>& t);
+    template <typename T1, typename T2, typename T3> inline uint64_t size(const std::tuple<T1, T2, T3>& t);
 
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::vector<T>& t);
+    template <typename T1, typename T2, typename T3> void pack_buffer(e::buffer::packer&, std::priority_queue<T1, T2, T3>);
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer &packer, const std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3>& t);
 
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::vector<T>& t);
+    template <typename T1, typename T2, typename T3> void unpack_buffer(e::unpacker&, std::priority_queue<T1, T2, T3>&);
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void unpack_buffer(e::unpacker& unpacker, std::tuple<T1, T2, T3>& t);
+    uint64_t size(const db::element::edge* const &t);
+    uint64_t size(const db::element::node &t);
+    void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t);
+    void pack_buffer(e::buffer::packer &packer, const db::element::node &t);
+    void unpack_buffer(e::unpacker &unpacker, db::element::edge *&t);
+    void unpack_buffer(e::unpacker &unpacker, db::element::node &t);
 
     inline
     message :: message()
@@ -154,122 +173,108 @@ namespace message
     }
 
 // size templates
-    inline size_t size(const node_prog::prog_type &t){
+    inline uint64_t size(const node_prog::prog_type&)
+    {
         return sizeof(uint32_t);
     }
-    inline size_t size(const node_prog::Packable &t)
+    inline uint64_t size(const node_prog::Packable &t)
     {
         return t.size();
     }
-    inline size_t size(const bool &t)
+    inline uint64_t size(const node_prog::Packable_Deletable *&t)
+    {
+        return t->size();
+    }
+    inline uint64_t size(const bool&)
     {
         return sizeof(uint16_t);
     }
-    inline size_t size(const uint16_t &t)
+    inline uint64_t size(const uint16_t&)
     {
         return sizeof(uint16_t);
     }
-    inline size_t size(const uint32_t &t)
+    inline uint64_t size(const uint32_t&)
     {
         return sizeof(uint32_t);
     }
-    inline size_t size(const uint64_t &t)
+    inline uint64_t size(const uint64_t&)
     {
         return sizeof(uint64_t);
     }
-    inline size_t size(const int &t)
+    inline uint64_t size(const int&)
     {
         return sizeof(int);
     }
-    inline size_t size(const double &t)
+    inline uint64_t size(const double&)
     {
         return sizeof(uint64_t);
     }
-    inline size_t size(const common::property &t)
+    inline uint64_t size(const common::property &t)
     {
-        return sizeof(uint32_t)+sizeof(size_t)+2*sizeof(uint64_t);
+        return sizeof(t.key)
+            + sizeof(t.value)
+            + 2*sizeof(t.creat_time);
     }
-
-    inline size_t size(const db::element::edge* const &t)
-    {
-        size_t sz = 2*sizeof(uint64_t) + // time stamps
-            size(*t->get_props()) + // properties
-            sizeof(size_t) + // neighbor handle
-            sizeof(int); // neighbor loc
-        return sz;
-    }
-    inline size_t size(const db::element::node &t)
-    {
-        size_t sz = 2*sizeof(uint64_t); // time stamps
-        sz += size(*t.get_props());  // properties
-        sz += size(t.out_edges);
-        sz += size(t.in_edges);
-        sz += size(t.seen);
-        return sz;
-    }
-    inline size_t size(const db::element::remote_node &t)
+    inline uint64_t size(const db::element::remote_node &t)
     {
         return size(t.loc) + size(t.handle);
     }
     template <typename T1, typename T2>
-    inline size_t size(const std::pair<T1, T2> &t)
+    inline uint64_t size(const std::pair<T1, T2> &t)
     {
         return size(t.first) + size(t.second);
     }
 
     template <typename T1, typename T2, typename T3>
-    inline size_t size(const std::tuple<T1, T2, T3>& t){
+    inline uint64_t size(const std::tuple<T1, T2, T3> &t){
         return size(std::get<0>(t)) + size(std::get<1>(t)) + size(std::get<2>(t));
     }
 
     template <typename T>
-    inline size_t size(const std::unordered_set<T> &t)
+    inline uint64_t size(const std::unordered_set<T> &t)
     {
         // O(n) size operation can handle elements of differing sizes
-        size_t total_size = 0;
+        uint64_t total_size = 0;
         for(const T &elem : t) {
             total_size += size(elem);
         }
-        return sizeof(size_t)+total_size;
+        return sizeof(uint64_t)+total_size;
     }
 
     template <typename T1, typename T2>
-    inline size_t size(const std::unordered_map<T1, T2> &t)
+    inline uint64_t size(const std::unordered_map<T1, T2> &t)
     {
-        size_t total_size = 0;
+        uint64_t total_size = 0;
         // O(n) size operation can handle keys and values of differing sizes
         for (const std::pair<T1,T2> &pair : t) {
             total_size += size(pair.first) + size(pair.second);
         }
-        return sizeof(size_t)+total_size;
+        return sizeof(uint64_t)+total_size;
     }
 
     template <typename T>
-    inline size_t size(const std::vector<T> &t)
+    inline uint64_t size(const std::vector<T> &t)
     {
-        size_t tot_size = sizeof(size_t);
+        uint64_t tot_size = sizeof(uint64_t);
         for (const T &elem : t) {
             tot_size += size(elem);
         }
         return tot_size;
     }
 
-    /*
-    template <typename T>
-    inline size_t size(const std::vector<T> &t)
+    template <typename T1, typename T2, typename T3>
+    inline uint64_t size(std::priority_queue<T1, T2, T3> t)
     {
-        // first size_t to record size of vector, assumes constant size elements
-        if (t.size()>0) {
-            return sizeof(size_t) + (t.size()*size(t[0]));
+        uint64_t sz = sizeof(uint64_t);
+        while (!t.empty()) {
+            sz += size(t.top());
+            t.pop();
         }
-        else {
-            return sizeof(size_t);
-        }
+        return sz;
     }
-    */
 
     template <typename T, typename... Args>
-    inline size_t size(const T &t, const Args&... args)
+    inline uint64_t size(const T &t, const Args&... args)
     {
         return size(t) + size(args...);
     }
@@ -278,13 +283,15 @@ namespace message
 
     inline void pack_buffer(e::buffer::packer &packer, const node_prog::Packable &t)
     {
-        //std::cout << "pack buffer called for Packable type!" << std::endl;
         t.pack(packer);
+    }
+    inline void pack_buffer(e::buffer::packer &packer, const node_prog::Packable_Deletable *&t)
+    {
+        t->pack(packer);
     }
     inline void pack_buffer(e::buffer::packer &packer, const node_prog::prog_type &t)
     {
         packer = packer << t;
-    //    std::cout << "pack buffer packed prog_type " << t << " of size " << sizeof(db::prog_type) << std::endl;
     }
 
     inline void pack_buffer(e::buffer::packer &packer, const bool &t)
@@ -328,7 +335,7 @@ namespace message
     }
 
     inline void 
-    pack_buffer(e::buffer::packer &packer, const db::element::remote_node& t)
+    pack_buffer(e::buffer::packer &packer, const db::element::remote_node &t)
     {
         packer = packer << t.loc << t.handle;
     }
@@ -343,26 +350,10 @@ namespace message
     }
 
     template <typename T1, typename T2, typename T3>
-    inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3>& t){
+    inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3> &t){
         pack_buffer(packer, std::get<0>(t));
         pack_buffer(packer, std::get<1>(t));
         pack_buffer(packer, std::get<2>(t));
-    }
-
-    inline void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t)
-    {
-        packer = packer << t->get_creat_time() << t->get_del_time() << t->nbr.handle << t->nbr.loc;
-        pack_buffer(packer, *t->get_props());
-    }
-
-    inline void
-    pack_buffer(e::buffer::packer &packer, const db::element::node &t)
-    {
-        packer = packer << t.get_creat_time() << t.get_del_time();
-        pack_buffer(packer, *t.get_props());
-        pack_buffer(packer, t.out_edges);
-        pack_buffer(packer, t.in_edges);
-        pack_buffer(packer, t.seen);
     }
 
     template <typename T> 
@@ -370,14 +361,24 @@ namespace message
     pack_buffer(e::buffer::packer &packer, const std::vector<T> &t)
     {
         // !assumes constant element size
-        size_t num_elems = t.size();
-        //std::cout << "pack buffer packed vector of size " << num_elems<< std::endl;
+        uint64_t num_elems = t.size();
         packer = packer << num_elems;
         if (num_elems > 0){
-            //size_t element_size = size(t[0]);
             for (const T &elem : t) {
                 pack_buffer(packer, elem);
             }
+        }
+    }
+    
+    template <typename T1, typename T2, typename T3>
+    inline void
+    pack_buffer(e::buffer::packer &packer, std::priority_queue<T1, T2, T3> t)
+    {
+        uint64_t num_elems = t.size();
+        packer = packer << num_elems;
+        while (!t.empty()) {
+            pack_buffer(packer, t.top());
+            t.pop();
         }
     }
 
@@ -387,11 +388,11 @@ namespace message
     pack_buffer(e::buffer::packer &packer, const std::vector<T> &t)
     {
         // !assumes constant element size
-        size_t num_elems = t.size();
+        uint64_t num_elems = t.size();
         //std::cout << "pack buffer packed vector of size " << num_elems<< std::endl;
         packer = packer << num_elems;
         if (num_elems > 0){
-            size_t element_size = size(t[0]);
+            uint64_t element_size = size(t[0]);
             for (const T &elem : t) {
                 pack_buffer(packer, elem);
                 assert(element_size == size(elem));//slow
@@ -400,12 +401,11 @@ namespace message
     }
     */
 
-
     template <typename T>
     inline void 
     pack_buffer(e::buffer::packer &packer, const std::unordered_set<T> &t)
     {
-        size_t num_keys = t.size();
+        uint64_t num_keys = t.size();
         packer = packer << num_keys;
         for (const T &elem : t) {
             pack_buffer(packer, elem);
@@ -416,7 +416,7 @@ namespace message
     inline void 
     pack_buffer(e::buffer::packer &packer, const std::unordered_map<T1, T2> &t)
     {
-        size_t num_keys = t.size();
+        uint64_t num_keys = t.size();
         packer = packer << num_keys;
         for (const std::pair<T1, T2> &pair : t) {
             pack_buffer(packer, pair.first);
@@ -446,12 +446,7 @@ namespace message
     inline void
     prepare_message(message &m, const enum msg_type given_type, const Args&... args)
     {
-        size_t bytes_to_pack = size(args...) + sizeof(enum msg_type);
-        /*
-        if (given_type == NODE_PROG || given_type == CLIENT_NODE_PROG_REQ){
-            std::cout << "preparing message contents of size " << bytes_to_pack << std::endl;
-        }
-        */
+        uint64_t bytes_to_pack = size(args...) + sizeof(enum msg_type);
         m.type = given_type;
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
@@ -464,15 +459,19 @@ namespace message
     inline void
     unpack_buffer(e::unpacker &unpacker, node_prog::Packable &t)
     {
-        //std::cout << "unpack buffer called for Packable type!" << std::endl;
         t.unpack(unpacker);
     }
     inline void
-    unpack_buffer(e::unpacker &unpacker, node_prog::prog_type &t){
+    unpack_buffer(e::unpacker &unpacker, node_prog::Packable_Deletable *&t)
+    {
+        t->unpack(unpacker);
+    }
+    inline void
+    unpack_buffer(e::unpacker &unpacker, node_prog::prog_type &t)
+    {
         uint32_t _type;
         unpacker = unpacker >> _type;
-        //std::cout << "unpack buffer got " << _type << std::endl;
-        t = (enum node_prog::prog_type) _type;
+        t = (enum node_prog::prog_type)_type;
     }
     inline void
     unpack_buffer(e::unpacker &unpacker, bool &t)
@@ -538,41 +537,12 @@ namespace message
         unpack_buffer(unpacker, std::get<2>(t));
     }
 
-    inline void
-    unpack_buffer(e::unpacker &unpacker, db::element::edge *&t)
-    {
-        uint64_t tc, td;
-        std::vector<common::property> props;
-        size_t nbr_handle;
-        int nbr_loc;
-        unpacker = unpacker >> tc >> td >> nbr_handle >> nbr_loc;
-        unpack_buffer(unpacker, props);
-        t = new db::element::edge(tc, nbr_loc, nbr_handle);
-        t->update_del_time(td);
-        t->set_properties(props);
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, db::element::node &t)
-    {
-        uint64_t tc, td;
-        std::vector<common::property> props;
-        unpacker = unpacker >> tc >> td;
-        unpack_buffer(unpacker, props);
-        unpack_buffer(unpacker, t.out_edges);
-        unpack_buffer(unpacker, t.in_edges);
-        unpack_buffer(unpacker, t.seen);
-        t.update_creat_time(tc);
-        t.update_del_time(td);
-        t.set_properties(props);
-    }
-
     template <typename T> 
     inline void 
     unpack_buffer(e::unpacker &unpacker, std::vector<T> &t)
     {
         assert(t.size() == 0);
-        size_t elements_left;
+        uint64_t elements_left;
         unpacker = unpacker >> elements_left;
 
         t.reserve(elements_left);
@@ -580,7 +550,22 @@ namespace message
         while (elements_left > 0) {
             T to_add;
             unpack_buffer(unpacker, to_add);
-            t.push_back(std::move(to_add));
+            t.emplace_back(std::move(to_add));
+            elements_left--;
+        }
+    }
+
+    template <typename T1, typename T2, typename T3>
+    inline void
+    unpack_buffer(e::unpacker &unpacker, std::priority_queue<T1, T2, T3> &t)
+    {
+        assert(t.size() == 0);
+        uint64_t elements_left = 0;
+        unpacker = unpacker >> elements_left;
+        while (elements_left > 0) {
+            T1 to_add;
+            unpack_buffer(unpacker, to_add);
+            t.push(std::move(to_add));
             elements_left--;
         }
     }
@@ -590,7 +575,7 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, std::unordered_set<T> &t)
     {
         assert(t.size() == 0);
-        size_t elements_left;
+        uint64_t elements_left;
         unpacker = unpacker >> elements_left;
 
         t.rehash(elements_left*1.25); // set number of buckets to 1.25*elements it will contain
@@ -598,7 +583,7 @@ namespace message
         while (elements_left > 0) {
             T to_add;
             unpack_buffer(unpacker, to_add);
-            t.insert(std::move(to_add));
+            t.emplace(std::move(to_add));
             elements_left--;
         }
     }
@@ -608,7 +593,7 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, std::unordered_map<T1, T2> &t)
     {
         assert(t.size() == 0);
-        size_t elements_left;
+        uint64_t elements_left;
         unpacker = unpacker >> elements_left;
         // set number of buckets to 1.25*elements it will contain
         // did not use reserve as max_load_factor is default 1
@@ -619,10 +604,8 @@ namespace message
             T2 val_to_add;
 
             unpack_buffer(unpacker, key_to_add);
-
             unpack_buffer(unpacker, val_to_add);
-
-            t[key_to_add] = std::move(val_to_add); // XXX change to insert later to reduce overhead
+            t.emplace(key_to_add, std::move(val_to_add));
             elements_left--;
         }
     }

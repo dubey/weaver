@@ -51,7 +51,7 @@ namespace element
             void update_creat_time(uint64_t creat_time);
             uint64_t get_creat_time() const;
             uint64_t get_del_time() const;
-            std::pair<bool, size_t> get_property_value(uint32_t prop_key, uint64_t at_time);
+            std::pair<bool, uint64_t> get_property_value(uint32_t prop_key, uint64_t at_time);
             const std::vector<common::property>* get_props() const;
     };
 
@@ -181,7 +181,7 @@ namespace element
     }
 
     // this sucks :/
-    std::pair<bool, size_t>
+    std::pair<bool, uint64_t>
     element :: get_property_value(uint32_t prop_key, uint64_t at_time)
     {
         for (common::property& prop : properties)
