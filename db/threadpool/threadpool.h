@@ -37,8 +37,7 @@ namespace thread
         public:
             unstarted_thread(
                 uint64_t s,
-                void (*f)(graph*, void*),
-                graph *g,
+                void (*f)(void*),
                 void *a);
 
         public:
@@ -46,20 +45,17 @@ namespace thread
 
         public:
             uint64_t start_time;
-            void (*func)(graph*, void*);
-            graph *G;
+            void (*func)(void*);
             void *arg;
     };
 
     inline
     unstarted_thread :: unstarted_thread( 
             uint64_t s,
-            void (*f)(graph*, void*),
-            graph *g,
+            void (*f)(void*),
             void *a)
         : start_time(s)
         , func(f)
-        , G(g)
         , arg(a)
     {
     }
@@ -68,7 +64,7 @@ namespace thread
     struct work_thread_compare 
         : std::binary_function<unstarted_thread*, unstarted_thread*, bool>
     {
-        bool operator()(const unstarted_thread* const &r1, const unstarted_thread* const&r2)
+        bool operator()(const unstarted_thread* const &r1, const unstarted_thread* const &r2)
         {
             return (r1->start_time) > (r2->start_time);
         }
@@ -81,6 +77,7 @@ namespace thread
             std::priority_queue<unstarted_thread*, std::vector<unstarted_thread*>, work_thread_compare> work_queue;
             po6::threads::mutex queue_mutex;
             po6::threads::cond work_queue_cond;
+            static db::graph *G;
        
         public:
             void add_request(unstarted_thread*);

@@ -27,8 +27,6 @@
 namespace coordinator
 {
 
-class central;
-
 namespace thread
 {
     class pool;
@@ -38,18 +36,15 @@ namespace thread
     {
         public:
             unstarted_thread(
-                void (*f)(coordinator::central*, std::unique_ptr<message::message>, enum message::msg_type, uint64_t),
-                coordinator::central *s,
+                void (*f)(std::unique_ptr<message::message>, enum message::msg_type, uint64_t),
                 std::unique_ptr<message::message> m,
                 enum message::msg_type mtype,
                 uint64_t l);
 
         public:
-            void (*func)(coordinator::central*,
-                         std::unique_ptr<message::message>, 
+            void (*func)(std::unique_ptr<message::message>, 
                          enum message::msg_type,
                          uint64_t);
-            coordinator::central *server;
             std::unique_ptr<message::message> msg;
             enum message::msg_type m_type;
             uint64_t loc;
@@ -57,16 +52,13 @@ namespace thread
 
     inline
     unstarted_thread :: unstarted_thread( 
-            void (*f)(coordinator::central*, 
-                      std::unique_ptr<message::message>,
+            void (*f)(std::unique_ptr<message::message>,
                       enum message::msg_type,
                       uint64_t),
-            coordinator::central *s,
             std::unique_ptr<message::message> m,
             enum message::msg_type mtype,
             uint64_t l)
         : func(f)
-        , server(s)
         , msg(std::move(m))
         , m_type(mtype)
         , loc(l)
@@ -128,7 +120,7 @@ namespace thread
                 tpool->queue_cond.signal();
             }
             tpool->queue_mutex.unlock();
-            (*(thr->func))(thr->server, std::move(thr->msg), thr->m_type, std::move(thr->loc));
+            (*(thr->func))(std::move(thr->msg), thr->m_type, std::move(thr->loc));
         }
     }
 } 

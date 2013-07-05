@@ -165,7 +165,7 @@ namespace db
     };
 
     class graph;
-    typedef void (*graph_arg_func)(graph*);
+    typedef void (*graph_arg_func)();
 
     class graph
     {
@@ -296,9 +296,9 @@ namespace db
         , sent_count(0)
         , rec_count(0)
 #endif
-        //, node_prog_req_state(&prog_mutex)
         , node_prog_req_state()
     {
+        thread::pool::G = this;
         initialize_busybee(bb, myid, myloc);
         message::prog_state = &node_prog_req_state;
     }
@@ -829,19 +829,19 @@ namespace db
             m.lock();
             if (!tq.empty()) {
                 thr = tq.top();
-                can_start = thr->G->check_clock(thr->start_time); // as priority is equal to the start time of the req
+                can_start = tpool->G->check_clock(thr->start_time); // as priority is equal to the start time of the req
             }
             while (tq.empty() || !can_start) {
                 c.wait();
                 if (!tq.empty()) {
                     thr = tq.top();
-                    can_start = thr->G->check_clock(thr->start_time);
+                    can_start = tpool->G->check_clock(thr->start_time);
                 }
             }
             tq.pop();
             c.broadcast();
             m.unlock();
-            (*thr->func)(thr->G, thr->arg);
+            (*thr->func)(thr->arg);
             delete thr;
         }
     }

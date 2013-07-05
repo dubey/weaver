@@ -34,15 +34,14 @@
 #include "db/element/remote_node.h"
 
 static std::unordered_map<uint64_t, std::vector<uint64_t>> graph;
-static coordinator::central *cserver;
-void coord_daemon_end(coordinator::central *server);
-void coord_daemon_initiate(coordinator::central *server);
+static coordinator::central *server;
+void coord_daemon_end();
+void coord_daemon_initiate();
 
 void
-record_time(coordinator::central *server)
+record_time()
 {
     double mtime;
-    //clock_gettime(CLOCK_MONOTONIC, &server->mtime);
     wclock::get_clock(&server->mtime);
     mtime = server->mtime.tv_sec + ((double)server->mtime.tv_nsec)/(1000000000ULL);
     server->migr_times.emplace_back(mtime);
@@ -52,7 +51,7 @@ void start_migration()
 {
     message::message msg;
     message::prepare_message(msg, message::MIGRATION_TOKEN);
-    cserver->send(START_MIGR_ID, msg.buf);
+    server->send(START_MIGR_ID, msg.buf);
 }
 
 void exit_weaver()
@@ -60,10 +59,10 @@ void exit_weaver()
     message::message msg;
     for (uint64_t s = 1; s <= NUM_SHARDS; s++) {
         message::prepare_message(msg, message::EXIT_WEAVER);
-        cserver->send(s, msg.buf);
+        server->send(s, msg.buf);
     }
     // record dummy time for a better-looking migration plot
-    record_time(cserver);
+    record_time();
     std::ofstream migr_file, shard_file;
     //migr_file.open("migrations.rec");
     //migr_file.precision(std::numeric_limits<double>::digits10);
@@ -85,7 +84,7 @@ void exit_weaver()
     //migr_file.close();
     shard_file.open("shard_counts.rec");
     for (int i = 0; i < NUM_SHARDS; i++) {
-        shard_file << cserver->shard_node_count[i] << std::endl;
+        shard_file << server->shard_node_count[i] << std::endl;
     }
     shard_file.close();
     exit(0);
@@ -93,7 +92,7 @@ void exit_weaver()
 
 // create a node
 void
-create_node(coordinator::central *server, std::shared_ptr<coordinator::pending_req>request)
+create_node(std::shared_ptr<coordinator::pending_req>request)
 {
     message::message msg;
     uint64_t loc;
@@ -118,7 +117,7 @@ create_node(coordinator::central *server, std::shared_ptr<coordinator::pending_r
 
 // create an edge
 void
-create_edge(coordinator::central *server, std::shared_ptr<coordinator::pending_req>request)
+create_edge(std::shared_ptr<coordinator::pending_req>request)
 {
     message::message msg;
     uint64_t req_id;
@@ -156,7 +155,7 @@ create_edge(coordinator::central *server, std::shared_ptr<coordinator::pending_r
 
 // delete a node
 void
-delete_node_initiate(coordinator::central *server, std::shared_ptr<coordinator::pending_req>request)
+delete_node_initiate(std::shared_ptr<coordinator::pending_req>request)
 {
     message::message msg;
     common::meta_element *me;
@@ -183,7 +182,7 @@ delete_node_initiate(coordinator::central *server, std::shared_ptr<coordinator::
 
 // delete an edge
 void
-delete_edge_initiate(coordinator::central *server, std::shared_ptr<coordinator::pending_req>request)
+delete_edge_initiate(std::shared_ptr<coordinator::pending_req>request)
 {
     message::message msg;
     common::meta_element *me1, *me2;
@@ -211,7 +210,7 @@ delete_edge_initiate(coordinator::central *server, std::shared_ptr<coordinator::
 
 // add a property, i.e. a key-value pair to an edge
 void 
-add_edge_property(coordinator::central *server, std::shared_ptr<coordinator::pending_req>request)
+add_edge_property(std::shared_ptr<coordinator::pending_req>request)
 {
     message::message msg;
     common::meta_element *me1;
@@ -235,7 +234,7 @@ add_edge_property(coordinator::central *server, std::shared_ptr<coordinator::pen
 }
 
 void
-delete_edge_property_initiate(coordinator::central *server, std::shared_ptr<coordinator::pending_req>request)
+delete_edge_property_initiate(std::shared_ptr<coordinator::pending_req>request)
 {
     message::message msg;
     common::meta_element *me1;
@@ -260,7 +259,7 @@ delete_edge_property_initiate(coordinator::central *server, std::shared_ptr<coor
 }
 
 void
-delete_end(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request)
+delete_end(std::shared_ptr<coordinator::pending_req> request)
 {
     server->update_mutex.lock();
     server->add_deleted_cache(request, *request->cached_req_ids);
@@ -287,7 +286,7 @@ write_graph()
 // caution: need to hold server->update_mutex throughout
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
-    unpack_and_start_coord(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request)
+    unpack_and_start_coord(std::shared_ptr<coordinator::pending_req> request)
 {
     node_prog::prog_type ignore;
     std::vector<std::pair<uint64_t, ParamsType>> initial_args;
@@ -328,7 +327,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 }
 
 // caution: need to hold server->update_mutex throughout
-void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request)
+void end_node_prog(std::shared_ptr<coordinator::pending_req> request)
 {
     bool done = true;
     uint64_t req_id = request->req_id;
@@ -343,7 +342,7 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
             request->ignore_cache.emplace(cached_id);
             server->add_bad_cache_id(cached_id);
             request->del_request.reset();
-            node_prog::programs.at(request->pType)->unpack_and_start_coord(server, request);
+            node_prog::programs.at(request->pType)->unpack_and_start_coord(request);
             break;
         }
     }
@@ -358,7 +357,7 @@ void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pe
 }
 
 inline void
-get_node_loc(coordinator::central *server, std::unique_ptr<message::message> msg, uint64_t sender)
+get_node_loc(std::unique_ptr<message::message> msg, uint64_t sender)
 {
     uint64_t node_handle, loc;
     message::unpack_message(*msg, message::CLIENT_NODE_LOC_REQ, node_handle);
@@ -376,14 +375,13 @@ get_node_loc(coordinator::central *server, std::unique_ptr<message::message> msg
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> ::
-    unpack_and_run_db(db::graph*, message::message&)
+    unpack_and_run_db(message::message&)
 {
 }
 
 // process incoming message, either from shard or client
 void
-handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg,
-    enum message::msg_type m_type, uint64_t sender)
+handle_msg(std::unique_ptr<message::message> msg, enum message::msg_type m_type, uint64_t sender)
 {
     uint64_t req_id;
     std::shared_ptr<coordinator::pending_req>request;
@@ -408,17 +406,11 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg,
             request = server->pending.at(req_id);
             server->update_mutex.unlock();
             request->cached_req_ids = std::move(cached_req_ids);
-            delete_end(server, request);
+            delete_end(request);
             break;
         
         case message::CLEAN_UP_ACK:
-            coord_daemon_end(server);
-            //server->update_mutex.lock();
-            //if ((++server->cache_acks) == NUM_SHARDS) {
-            //    coord_daemon_end(server);
-            //} else {
-            //    server->update_mutex.unlock();
-            //}
+            coord_daemon_end();
             break;
 
         case message::COORD_NODE_MIGRATE: {
@@ -435,7 +427,7 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg,
             for (uint64_t del_iter: *cached_req_ids) {
                 server->bad_cache_ids->emplace(del_iter);
             }
-            record_time(server);
+            record_time();
             server->shard_node_count[from_loc-1]--;
             server->shard_node_count[new_loc-1]++;
             std::vector<uint64_t> cur_counts;
@@ -472,12 +464,12 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg,
             request->reply_msg = std::move(msg);
             if (request->del_request) {
                 if (request->del_request->done) {
-                    end_node_prog(server, request);
+                    end_node_prog(request);
                 } else {
                     request->done = true;
                 }
             } else {
-                end_node_prog(server, request);
+                end_node_prog(request);
             }
             server->update_mutex.unlock();
             break;
@@ -485,41 +477,41 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg,
 
         // client messages
         case message::CLIENT_NODE_CREATE_REQ:
-            create_node(server, crequest);
+            create_node(crequest);
             break;
 
         case message::CLIENT_EDGE_CREATE_REQ: 
             message::unpack_message(*msg, message::CLIENT_EDGE_CREATE_REQ, crequest->elem1, crequest->elem2);
-            create_edge(server, crequest);
+            create_edge(crequest);
             break;
 
         case message::CLIENT_NODE_DELETE_REQ:
             message::unpack_message(*msg, message::CLIENT_NODE_DELETE_REQ, crequest->elem1);
-            delete_node_initiate(server, crequest);
+            delete_node_initiate(crequest);
             break;
 
         case message::CLIENT_EDGE_DELETE_REQ: 
             message::unpack_message(*msg, message::CLIENT_EDGE_DELETE_REQ, crequest->elem1, crequest->elem2);
-            delete_edge_initiate(server, crequest);
+            delete_edge_initiate(crequest);
             break;
 
         case message::CLIENT_ADD_EDGE_PROP:
             message::unpack_message(*msg, message::CLIENT_ADD_EDGE_PROP,
                 crequest->elem1, crequest->elem2, crequest->key, crequest->value);
-            add_edge_property(server, crequest);
+            add_edge_property(crequest);
             break;
 
         case message::CLIENT_DEL_EDGE_PROP:
             message::unpack_message(*msg, message::CLIENT_DEL_EDGE_PROP,
                 crequest->elem1, crequest->elem2, crequest->key);
-            delete_edge_property_initiate(server, crequest);
+            delete_edge_property_initiate(crequest);
             break;
 
         case message::CLIENT_NODE_PROG_REQ:
             message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, crequest->pType);
             crequest->req_msg = std::move(msg);
             server->update_mutex.lock();
-            node_prog::programs.at(crequest->pType)->unpack_and_start_coord(server, crequest);
+            node_prog::programs.at(crequest->pType)->unpack_and_start_coord(crequest);
             server->update_mutex.unlock();
             break;
 
@@ -528,7 +520,7 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg,
             break;
         
         case message::CLIENT_NODE_LOC_REQ:
-            get_node_loc(server, std::move(msg), crequest->client);
+            get_node_loc(std::move(msg), crequest->client);
             break;
 
         case message::START_MIGR:
@@ -557,13 +549,13 @@ handle_msg(coordinator::central *server, std::unique_ptr<message::message> msg,
     }
     server->daemon_mutex.unlock();
     if (to_start) {
-        coord_daemon_initiate(server);
+        coord_daemon_initiate();
     }
 }
 
 // handle incoming messages
 void
-msg_handler(coordinator::central *server)
+msg_handler()
 {
     busybee_returncode ret;
     uint32_t code;
@@ -581,7 +573,7 @@ msg_handler(coordinator::central *server)
         }
         rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
         mtype = (enum message::msg_type)code;
-        thr.reset(new coordinator::thread::unstarted_thread(handle_msg, server, std::move(rec_msg), mtype, sender));
+        thr.reset(new coordinator::thread::unstarted_thread(handle_msg, std::move(rec_msg), mtype, sender));
         server->thread_pool.add_request(std::move(thr));
     }
 }
@@ -589,14 +581,12 @@ msg_handler(coordinator::central *server)
 // periodically update cache at all shards, permanently delete migrated/deleted nodes,
 // and delete state corresponding to completed node programs
 void
-coord_daemon_initiate(coordinator::central *server)
+coord_daemon_initiate()
 {
     //std::vector<uint64_t> good, bad;
     uint64_t perm_del_id = 0;
     uint64_t migr_del_id = 0;
     message::message msg;
-    //std::chrono::seconds duration(DAEMON_PERIOD); // execute every DAEMON_PERIOD seconds
-    //std::this_thread::sleep_for(duration);
     server->update_mutex.lock();
     auto completed_requests = std::move(server->completed_requests);
     server->completed_requests.reset(new std::vector<std::pair<uint64_t, node_prog::prog_type>>());
@@ -637,7 +627,7 @@ coord_daemon_initiate(coordinator::central *server)
 
 // caution: assuming we hold server->update_mutex
 void
-coord_daemon_end(coordinator::central *server)
+coord_daemon_end()
 {
     server->daemon_mutex.lock();
     if (++server->cache_acks == NUM_SHARDS) {
@@ -646,10 +636,6 @@ coord_daemon_end(coordinator::central *server)
         wclock::get_clock(&server->daemon_time);
     }
     server->daemon_mutex.unlock();
-    //assert(server->cache_acks == NUM_SHARDS);
-    //server->cache_acks = 0; 
-    //coord_daemon_initiate(server);
-    //server->update_mutex.unlock();
 }
 
 void
@@ -662,17 +648,12 @@ end_program(int param)
 int
 main()
 {
-    coordinator::central server;
+    server = new coordinator::central();
     signal(SIGINT, end_program);
 
     std::cout << "Weaver: coordinator" << std::endl;
-    cserver = &server;
-    record_time(cserver);
-
-    // call periodic cache update function
-    //t = new std::thread(coord_daemon_initiate, &server);
-    //t->detach();
+    record_time();
 
     // initialize client msg receiving thread
-    msg_handler(&server);
+    msg_handler();
 }

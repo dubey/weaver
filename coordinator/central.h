@@ -40,7 +40,7 @@ namespace coordinator
     class central;
 }
 
-void end_node_prog(coordinator::central *server, std::shared_ptr<coordinator::pending_req> request);
+void end_node_prog(std::shared_ptr<coordinator::pending_req> request);
 
 namespace coordinator
 {
@@ -226,7 +226,7 @@ namespace coordinator
         assert(pend_iter != pending_delete_requests.end());
         for (auto &dep_req: (**pend_iter).dependent_traversals) {
             if (dep_req->done) {
-                end_node_prog(this, dep_req); // TODO should be processed by different threads.
+                end_node_prog(dep_req); // TODO should be processed by different threads.
             }
         }
         pending_delete_requests.erase(pend_iter);

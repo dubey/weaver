@@ -46,8 +46,9 @@ namespace db
 namespace node_prog
 {
     template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-    void node_program_runner(db::graph *G,
-            typename node_prog::node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type np,
+    void node_program_runner(typename node_prog::node_function_type<ParamsType,
+            NodeStateType,
+            CacheValueType>::value_type np,
             std::vector<std::pair<uint64_t, ParamsType>> &start_node_params,
             node_prog::prog_type program,
             uint64_t request_id)
@@ -56,9 +57,8 @@ namespace node_prog
     class node_program
     {
         public:
-            virtual void unpack_and_run_db(db::graph *g, message::message &msg) = 0;
-            virtual void unpack_and_start_coord(coordinator::central *server,
-                                                std::shared_ptr<coordinator::pending_req> request) = 0;
+            virtual void unpack_and_run_db(message::message &msg) = 0;
+            virtual void unpack_and_start_coord(std::shared_ptr<coordinator::pending_req> request) = 0;
             bool delete_cache;
 
             virtual ~node_program() { }
@@ -86,9 +86,8 @@ namespace node_prog
             }
 
         public:
-            virtual void unpack_and_run_db(db::graph *G, message::message &msg);
-            virtual void unpack_and_start_coord(coordinator::central *server,
-                                                std::shared_ptr<coordinator::pending_req> request);
+            virtual void unpack_and_run_db(message::message &msg);
+            virtual void unpack_and_start_coord(std::shared_ptr<coordinator::pending_req> request);
     };
     
     std::map<prog_type, node_program*> programs = {

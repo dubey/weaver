@@ -19,11 +19,11 @@
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
-    unpack_and_run_db(db::graph*, message::message&)
+    unpack_and_run_db(message::message&)
 { }
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
-    unpack_and_start_coord(coordinator::central*, std::shared_ptr<coordinator::pending_req>)
+    unpack_and_start_coord(std::shared_ptr<coordinator::pending_req>)
 { }
 
 void
