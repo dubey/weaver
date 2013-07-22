@@ -3,11 +3,17 @@ INCLUDE_DIRS=-I.. -I.
 CFLAGS=-O2 -std=c++0x -Wall -Wextra
 LIBS=-lbusybee -le -pthread -lrt
 
-SRCS=central.cc
-OBJS=central.o
-TARGET=coordinator
+COORD_SRC=central.cc
+STATE_SRC=state_manager.cc
+SRCS=$(STATE_SRC) $(COORD_SRC)
+COORD_OBJ=central.o
+STATE_OBJ=state_manager.o
+OBJS=$(STATE_OBJ) $(COORD_OBJ)
+COORD_TARGET=coordinator
+STATE_TARGET=state_manager
+TARGETS=$(STATE_TARGET) $(COORD_TARGET)
 
-all: depend $(TARGET)
+all: depend $(TARGETS)
 
 debug:	CFLAGS += -g -O0
 debug:  all
@@ -20,19 +26,23 @@ depend: .depend
 
 .depend: $(SRCS)
 	rm -f ./.depend
-	$(CC) $(CFLAGS) $(INCLUDE_DIRS) -MM $^ -MF ./.depend;
+	$(CC) $(CFLAGS) $(INCLUDE_DIRS) -MM $(COORD_SRC) -MF ./.depend;
+	$(CC) $(CFLAGS) $(INCLUDE_DIRS) -MM $(STATE_SRC) -MF ./.depend;
 
-$(TARGET):	$(OBJS)
-	$(CC) -o $@ $(OBJS) $(LIBS_DIR) $(LIBS)
+$(COORD_TARGET):	$(COORD_OBJ)
+	$(CC) $(CFLAGS) $(INCLUDE_DIRS) -o $@ $(COORD_OBJ) $(LIBS)
+
+$(STATE_TARGET):	$(STATE_OBJ)
+	$(CC) $(CFLAGS) $(INCLUDE_DIRS) -o $@ $(STATE_OBJ) $(LIBS)
 
 %.o:	%.cc
-	$(CC) $(CFLAGS) $(INCLUDE_DIRS) -c $< -D_GLIBCXX_USE_NANOSLEEP $(CLIBS)
+	$(CC) $(CFLAGS) $(INCLUDE_DIRS) -c $< -D_GLIBCXX_USE_NANOSLEEP -D__STDC_LIMIT_MACROS $(CLIBS)
 
 clean:
 	rm -f *.o
 
 clobber:	clean
-	rm -f $(TARGET)
+	rm -f $(TARGETS)
 
 force:	clobber all
 

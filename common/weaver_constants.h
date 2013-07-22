@@ -11,6 +11,8 @@
  * ===============================================================
  */
 
+#include <stdint.h>
+
 // debugging
 #ifndef DEBUG
 #ifdef __WEAVER_DEBUG__
@@ -32,6 +34,7 @@
 // messaging constants
 #define ID_INCR (1ULL << 32ULL)
 #define COORD_ID (0ULL)
+#define COORD_SM_ID (0ULL)
 #define CLIENT_ID (11ULL)
 #define SHARDS_DESC_FILE "../common/shards"
 // weaver setup

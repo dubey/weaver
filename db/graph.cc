@@ -620,14 +620,6 @@ template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
     unpack_and_run_db(message::message &msg)
 {
-    std::ofstream reqfile;
-    //timespec cur;
-    //clock_gettime(CLOCK_MONOTONIC, &cur);
-    //reqfile.open(std::string("graph_req") + std::to_string(G->myid) + ".rec", std::ios::app);
-    //G->test_mutex.lock();
-    //reqfile << cur.tv_sec << "." << cur.tv_nsec << std::endl;
-    //G->test_mutex.unlock();
-    //reqfile.close();
     // unpack some start params from msg:
     std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> start_node_params;
     uint64_t unpacked_request_id;
@@ -1206,7 +1198,6 @@ runner()
                 G->migr_token_mutex.lock();
                 G->migr_token = true;
                 G->migrated = false;
-                //clock_gettime(CLOCK_MONOTONIC, &G->migr_time);
                 G->migr_token_mutex.unlock();
                 DEBUG << "Ended obtaining token" << std::endl;
                 break;

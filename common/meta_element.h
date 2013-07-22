@@ -37,13 +37,13 @@ namespace common
             uint64_t handle;
         
         public:
-            uint64_t get_creat_time();
-            uint64_t get_del_time();
+            uint64_t get_creat_time() const;
+            uint64_t get_del_time() const;
             void update_del_time(uint64_t _del_time);
             void update_creat_time(uint64_t _creat_time);
-            uint64_t get_handle();
+            uint64_t get_handle() const;
             void update_handle(uint64_t newhandle);
-            uint64_t get_loc();
+            uint64_t get_loc() const;
             void update_loc(uint64_t newloc);
     };
 
@@ -63,13 +63,13 @@ namespace common
     }
 
     inline uint64_t
-    meta_element :: get_creat_time()
+    meta_element :: get_creat_time() const
     {
         return creat_time;
     }
 
     inline uint64_t
-    meta_element :: get_del_time()
+    meta_element :: get_del_time() const
     {
         return del_time;
     }
@@ -87,7 +87,7 @@ namespace common
     }
 
     inline uint64_t
-    meta_element :: get_handle()
+    meta_element :: get_handle() const
     {
         return handle;
     }
@@ -99,7 +99,7 @@ namespace common
     }
 
     inline uint64_t
-    meta_element :: get_loc()
+    meta_element :: get_loc() const
     {
         return myloc;
     }

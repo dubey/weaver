@@ -257,7 +257,7 @@ namespace coordinator
     {
         busybee_returncode ret;
         if ((ret = bb->send(shard_id, buf)) != BUSYBEE_SUCCESS) {
-            std::cerr << "message sending error: " << ret << std::endl;
+            DEBUG << "message sending error: " << ret << std::endl;
         }
         return ret;
     }

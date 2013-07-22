@@ -14,6 +14,7 @@
 #ifndef __BB_INFRA__
 #define __BB_INFRA__
 
+#include <fstream>
 #include <unordered_map>
 #include <busybee_constants.h>
 #include <busybee_mapper.h>
@@ -50,7 +51,7 @@ class weaver_mapper : public busybee_mapper
 };
 
 inline void
-initialize_busybee(busybee_mta *&bb, uint64_t sid, std::shared_ptr<po6::net::location> myloc)
+initialize_busybee(busybee_mta *&bb, uint64_t sid, std::shared_ptr<po6::net::location> myloc, int num_threads=1)
 {
     int inport;
     uint64_t server_id;
@@ -70,7 +71,7 @@ initialize_busybee(busybee_mta *&bb, uint64_t sid, std::shared_ptr<po6::net::loc
     }
     file.close();
     weaver_mapper *wmap = new weaver_mapper(member_list);
-    bb = new busybee_mta(wmap, *myloc, sid+ID_INCR, 1);
+    bb = new busybee_mta(wmap, *myloc, sid+ID_INCR, num_threads);
 }
 
 #endif

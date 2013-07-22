@@ -17,6 +17,7 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdint.h>
 
 #include "common/weaver_constants.h"
 

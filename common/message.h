@@ -93,6 +93,9 @@ namespace message
         MIGRATION_TOKEN,
         REQUEST_COUNT,
         REQUEST_COUNT_ACK,
+        // coordinator group
+        COORD_LOC_REQ,
+        COORD_LOC_REPLY,
 
         START_MIGR,
         EXIT_WEAVER,
@@ -219,6 +222,13 @@ namespace message
     {
         return size(t.loc) + size(t.handle);
     }
+    inline uint64_t size(const common::meta_element &t)
+    {
+        return size(t.get_loc())
+            + size(t.get_creat_time())
+            + size(t.get_del_time())
+            + size(t.get_handle());
+    }
     template <typename T1, typename T2>
     inline uint64_t size(const std::pair<T1, T2> &t)
     {
@@ -338,6 +348,13 @@ namespace message
     pack_buffer(e::buffer::packer &packer, const db::element::remote_node &t)
     {
         packer = packer << t.loc << t.handle;
+    }
+
+    inline void
+    pack_buffer(e::buffer::packer &packer, const common::meta_element &t)
+    {
+        packer = packer << t.get_loc() << t.get_creat_time()
+            << t.get_del_time() << t.get_handle();
     }
 
     template <typename T1, typename T2>
@@ -519,6 +536,17 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, db::element::remote_node& t)
     {
         unpacker = unpacker >> t.loc >> t.handle;
+    }
+
+    inline void
+    unpack_buffer(e::unpacker &unpacker, common::meta_element &t)
+    {
+        uint64_t handle, loc, tc, td;
+        unpacker = unpacker >> loc >> tc >> td >> handle;
+        t.update_creat_time(tc);
+        t.update_del_time(td);
+        t.update_handle(handle);
+        t.update_loc(loc);
     }
 
     template <typename T1, typename T2>
