@@ -33,8 +33,6 @@ namespace message
 
 namespace db
 {
-class update_request;
-
 namespace element
 {
     class edge_iterator
@@ -77,7 +75,7 @@ namespace element
     class node : public element
     {
         public:
-            node(uint64_t time, po6::threads::mutex *mtx);
+            node(vclock::timestamp &ts, po6::threads::mutex *mtx);
 
         public:
             enum mode
@@ -118,8 +116,8 @@ namespace element
     };
 
     inline
-    node :: node(uint64_t time, po6::threads::mutex *mtx)
-        : element(time)
+    node :: node(vclock::timestamp &ts, po6::threads::mutex *mtx)
+        : element(ts)
         , state(mode::NASCENT)
         , cv(mtx)
         , in_use(true)
@@ -133,8 +131,7 @@ namespace element
         , msg_count(NUM_SHARDS, 0)
         , updated(true)
         , dependent_del(0)
-    {
-    }
+    { }
 
     inline void
     node :: add_edge(edge *e, bool in_or_out)

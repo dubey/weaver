@@ -20,6 +20,7 @@
 #include <stdint.h>
 
 #include "common/weaver_constants.h"
+#include "common/vclock.h"
 
 namespace common 
 {
@@ -27,42 +28,43 @@ namespace common
     {
         public:
             property();
-            property(uint32_t, uint64_t, uint64_t);
+            property(uint32_t, uint64_t, vclock::timestamp&);
+            property(uint32_t, uint64_t, uint64_t, uint64_t, uint64_t);
         
         public:
-            char* __key;
-            char* __value;
             uint32_t key;
             uint64_t value;
-            uint64_t creat_time;
-            uint64_t del_time;
+            vclock::timestamp creat_time;
+            vclock::timestamp del_time;
 
         public:
             bool operator==(property const &p2) const;
 
         public:
-            uint64_t get_creat_time() const;
-            uint64_t get_del_time() const;
-            void update_del_time(uint64_t);
+            vclock::timestamp& get_creat_time() const;
+            vclock::timestamp& get_del_time() const;
+            void update_del_time(vclock::timestamp&);
     };
 
     inline
     property :: property()
         : key(0)
         , value(0)
-        , creat_time(0)
-        , del_time(0)
-    {
-    }
+    { }
 
     inline
-    property :: property(uint32_t _key, uint64_t _value, uint64_t t_creat)
-        : key(_key)
-        , value(_value)
-        , creat_time(t_creat)
-        , del_time(MAX_TIME)
-    {
-    }
+    property :: property(uint32_t k, uint64_t v, vclock::timestamp &creat)
+        : key(k)
+        , value(v)
+        , creat_time(creat)
+    { }
+
+    inline
+    property :: property(uint32_t k, uint64_t v, uint64_t rhid, uint64_t sid, uint64_t clk)
+        : key(k)
+        , value(v)
+        , creat_time(rhid, sid, clk)
+    { }
 
     inline bool
     property :: operator==(property const &p2) const
@@ -70,20 +72,20 @@ namespace common
         return ((key == p2.key) && (value == p2.value));
     }
 
-    inline uint64_t
+    inline vclock::timestamp&
     property :: get_creat_time() const
     {
         return creat_time;
     }
 
-    inline uint64_t
+    inline vclock::timestamp&
     property :: get_del_time() const
     {
         return del_time;
     }
 
     inline void
-    property :: update_del_time(uint64_t t_del)
+    property :: update_del_time(vclock::timestamp &tdel)
     {
         del_time = t_del;
     }

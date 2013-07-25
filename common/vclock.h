@@ -22,39 +22,66 @@
 
 namespace vclock
 {
+    struct timestamp
+    {
+        uint64_t rh_id, shard_id, clock;
+
+        timestamp() : rh_id(0), shard_id(0), clock(MAX_TIME) { }
+
+        timestamp(uint64_t rid, uint64_t sid, uint64_t clk)
+            : rh_id(rid)
+            , shard_id(sid)
+            , clock(clk)
+        { }
+
+        inline bool operator<=(timestamp const &ts) const
+        {
+            return ((rh_id == ts.rh_id) && (shard_id == ts.shard_id) && (clock <= ts.clock));
+        }
+    };
+    
+    typedef std::vector<std::vector<uint64_t>> nvc; // nested vector clock
+
     class vector
     {
         uint64_t rhandle_id;
-        std::vector<std::vector<uint64_t>> clocks;
+        nvc clocks;
 
         public:
             vector(uint64_t rh_id);
+            std::vector<uint64_t> get_clock();
             std::vector<uint64_t> get_clock(uint64_t rh_id);
             void increment_clock(uint64_t shard_id);
             void update_clock(uint64_t rh_id, std::vector<uint64_t> &new_clock);
-            std::vector<std::vector<uint64_t>> get_entire_clock();
+            nvc get_entire_clock();
     };
 
     inline
     vector :: vector(uint64_t rh_id)
         : rhandle_id(rh_id)
-        , clocks(std::vector(NUM_RHANDLERS, std::vector(NUM_SHARDS, 0)))
+        , clocks(std::vector<std::vector<uint64_t>>(NUM_RHANDLERS, std::vector<uint64_t>(NUM_SHARDS, 0)))
     {
     }
-
-    std::vector<uint64_t>
-    vector :: get_clock(uint64_t rh_id=rhandle_id)
+    
+    inline std::vector<uint64_t>
+    vector :: get_clock()
     {
-        return clocks(rh_id);
+        return get_clock(rhandle_id);
     }
 
-    void
+    inline std::vector<uint64_t>
+    vector :: get_clock(uint64_t rh_id)
+    {
+        return clocks.at(rh_id);
+    }
+
+    inline void
     vector :: increment_clock(uint64_t shard_id)
     {
         clocks.at(rhandle_id).at(shard_id)++;
     }
 
-    void
+    inline void
     vector :: update_clock(uint64_t rh_id, std::vector<uint64_t> &new_clock)
     {
         for (uint64_t sid = 0; sid < NUM_SHARDS; sid++) {
@@ -62,10 +89,10 @@ namespace vclock
         }
     }
 
-    std::vector<std::vector<uint64_t>>
+    inline nvc
     vector :: get_entire_clock()
     {
-        return clock;
+        return clocks;
     }
 }
 #endif

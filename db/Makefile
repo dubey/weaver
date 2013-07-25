@@ -4,9 +4,9 @@ CFLAGS=-O2 -std=c++0x -Wall -Wextra
 LIBS=-lbusybee -le -pthread -lrt
 CLIBS=
 
-SRCS=graph.cc
-OBJS=graph.o
-TARGET=graph
+SRCS=shard.cc
+OBJS=shard.o
+TARGET=shard
 
 all: depend $(TARGET)
 

@@ -28,8 +28,8 @@ namespace element
     class edge : public element
     {
         public:
-            edge(uint64_t time, uint64_t remote_loc, uint64_t remote_handle);
-            edge(uint64_t time, remote_node rn);
+            edge(vclock::timestamp &ts, uint64_t remote_loc, uint64_t remote_handle);
+            edge(vclock::timestamp &ts, remote_node rn);
         
         public:
             remote_node nbr; // out-neighbor for this edge
@@ -38,15 +38,15 @@ namespace element
     };
 
     inline
-    edge :: edge(uint64_t time, uint64_t remote_loc, uint64_t remote_handle)
-        : element(time)
+    edge :: edge(vclock::timestamp &ts, uint64_t remote_loc, uint64_t remote_handle)
+        : element(ts)
         , nbr(remote_loc, remote_handle)
         , msg_count(0)
     { }
 
     inline
-    edge :: edge(uint64_t time, remote_node rn)
-        : element(time)
+    edge :: edge(vclock::timestamp &ts, remote_node rn)
+        : element(ts)
         , nbr(rn)
         , msg_count(0)
     { }

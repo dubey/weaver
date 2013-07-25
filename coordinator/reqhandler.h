@@ -17,9 +17,11 @@
 #define __COORD_REQHANDLE__
 
 #include <vector>
+#include <unordered_map>
 
 #include "common/busybee_infra.h"
 #include "common/vclock.h"
+#include "common/message.h"
 
 namespace coordinator
 {
@@ -27,7 +29,9 @@ namespace coordinator
     struct pending_update
     {
         message::msg_type type;
-        uint64_t elem1, elem2, sender, key;
+        uint64_t elem1, elem2, sender;
+        uint32_t key;
+        uint64_t value;
     };
 
     class rhandler
@@ -40,7 +44,7 @@ namespace coordinator
             // req handler state
             uint64_t port_ctr, handle_gen;
             vclock::vector vc;
-            std::vector<pending_update> pending_updates;
+            std::unordered_map<uint64_t, pending_update> pending_updates;
             // big mutex
             po6::threads::mutex mutex;
             // caching

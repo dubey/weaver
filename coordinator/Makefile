@@ -3,13 +3,13 @@ INCLUDE_DIRS=-I.. -I.
 CFLAGS=-O2 -std=c++0x -Wall -Wextra
 LIBS=-lbusybee -le -pthread -lrt
 
-COORD_SRC=central.cc
+COORD_SRC=reqhandler.cc
 STATE_SRC=state_manager.cc
 SRCS=$(STATE_SRC) $(COORD_SRC)
-COORD_OBJ=central.o
+COORD_OBJ=reqhandler.o
 STATE_OBJ=state_manager.o
 OBJS=$(STATE_OBJ) $(COORD_OBJ)
-COORD_TARGET=coordinator
+COORD_TARGET=reqhandler
 STATE_TARGET=state_manager
 TARGETS=$(STATE_TARGET) $(COORD_TARGET)
 

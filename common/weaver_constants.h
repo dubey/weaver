@@ -39,7 +39,9 @@
 #define SHARDS_DESC_FILE "../common/shards"
 // weaver setup
 #define NUM_SHARDS 8
+#define NUM_RHANDLERS 4
 #define NUM_THREADS 8
+#define RHID_BITS 8
 #define GRAPH_FILE "graph.rec"
 #define DAEMON_PERIOD 2 // frequency in seconds for coordinator daemon to run
 #define MIGR_FREQ 10 // seconds delay between consecutive migrations

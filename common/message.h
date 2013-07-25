@@ -212,6 +212,12 @@ namespace message
     {
         return sizeof(uint64_t);
     }
+    inline uint64_t size(const vclock::timestamp &t)
+    {
+        return sizeof(t.rh_id)
+            + sizeof(t.shard_id)
+            + sizeof(t.clock);
+    }
     inline uint64_t size(const common::property &t)
     {
         return sizeof(t.key)
@@ -338,10 +344,21 @@ namespace message
         packer = packer << dbl;
     }
 
+    inline void
+    pack_buffer(e::buffer::packer &packer, const vclock::timestamp &t)
+    {
+        pack_buffer(packer, t.rh_id);
+        pack_buffer(packer, t.shard_id);
+        pack_buffer(packer, t.clock);
+    }
+
     inline void 
     pack_buffer(e::buffer::packer &packer, const common::property &t)
     {
-        packer = packer << t.key << t.value << t.creat_time << t.del_time;
+        pack_buffer(packer, t.key);
+        pack_buffer(packer, t.value);
+        pack_buffer(packer, t.creat_time);
+        pack_buffer(packer, t.del_time);
     }
 
     inline void 
@@ -518,10 +535,21 @@ namespace message
         unpacker = unpacker >> t;
     }
 
+    inline void
+    unpack_buffer(e::unpacker &unpacker, vclock::timestamp &t)
+    {
+        unpack_buffer(unpacker, t.rh_id);
+        unpack_buffer(unpacker, t.shard_id);
+        unpack_buffer(unpacker, t.clock);
+    }
+
     inline void 
     unpack_buffer(e::unpacker &unpacker, common::property &t)
     {
-        unpacker = unpacker >> t.key >> t.value >> t.creat_time >> t.del_time;
+        unpack_buffer(unpacker, t.key);
+        unpack_buffer(unpacker, t.value);
+        unpack_buffer(unpacker, t.creat_time);
+        unpack_buffer(unpacker, t.del_time);
     }
 
     inline void 

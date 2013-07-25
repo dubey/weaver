@@ -31,20 +31,18 @@ namespace element
     {
         public:
             element();
-            element(uint64_t time);
+            element(vclock::timestamp &ts);
             
         protected:
             std::vector<common::property> properties;
-            uint64_t creat_time;
-            uint64_t del_time;
-            uint32_t rem_key;
+            vclock::timestamp creat_time;
+            vclock::timestamp del_time;
 
         public:
             void add_property(common::property prop);
-            void delete_property(uint32_t key, uint64_t del_time);
-            void remove_property(uint32_t key, uint64_t del_time);
-            bool has_property(common::property prop);
-            bool has_property(common::property prop, uint64_t req_id);
+            void delete_property(uint32_t key, vclock::timestamp &tdel);
+            void remove_property(uint32_t key, vclock::nvc &clocks);
+            bool has_property(common::property prop, vclock::nvc &clocks);
             bool check_and_add_property(common::property prop);
             void set_properties(std::vector<common::property> &props);
             void update_del_time(uint64_t del_time);
@@ -55,17 +53,9 @@ namespace element
             const std::vector<common::property>* get_props() const;
     };
 
-    inline
-    element :: element()
-    {
-    }
+    inline element :: element() { }
 
-    inline
-    element :: element(uint64_t time)
-        : creat_time(time)
-        , del_time(MAX_TIME)
-    {
-    }
+    inline element :: element(vclock::timestamp &ts) : creat_time(ts) { }
 
     inline void
     element :: add_property(common::property prop)
@@ -74,11 +64,11 @@ namespace element
     }
 
     inline void
-    element :: delete_property(uint32_t key, uint64_t del_time)
+    element :: delete_property(uint32_t key, vclock::timestamp &tdel)
     {
         for (auto &iter: properties) {
             if (iter.key == key) {
-                iter.update_del_time(del_time);
+                iter.update_del_time(tdel);
             }
         }
     }
@@ -87,51 +77,50 @@ namespace element
     {
         public:
             uint32_t key;
-            uint64_t del_time;
+            vclock::nvc clocks;
 
             inline
-            match_key(uint32_t k, uint64_t t)
+            match_key(uint32_t k, vclock::nvc &clks)
                 : key(k)
-                , del_time(t)
-            {
-            }
+                , clocks(clks)
+            { }
 
             bool operator()(common::property const &prop) const
             {
-                return (prop.key == key && prop.get_del_time() <= del_time);
+                if (prop.key == key) {
+                    if (del_time.clock > clocks.at(del_time.rh_id).at(del_time.shard_id)) {
+                        return true;
+                    }
+                }
+                return false;
             }
     };
 
     // remove properties which match key
     inline void
-    element :: remove_property(uint32_t key, uint64_t del_time)
+    element :: remove_property(uint32_t key, vclock::nvs &clocks)
     {
-        auto iter = std::remove_if(properties.begin(), properties.end(), match_key(key, del_time));
+        auto iter = std::remove_if(properties.begin(), properties.end(), match_key(key, clocks));
         properties.erase(iter, properties.end());
     }
 
-    bool
-    element :: has_property(common::property prop, uint64_t req_id)
+    inline bool
+    element :: has_property(common::property prop, vclock::nvc &clocks)
     {
         for (auto &p: properties) {
-            if (prop == p && req_id >= p.get_creat_time() && req_id < p.get_del_time()) {
-                return true;
+            if (prop == p) {
+                vclock::timestamp &tcreat = p.get_creat_time();
+                vclock::timestamp &tdel = p.get_del_time();
+                if (tcreat.clock <= clocks.at(tcreat.rh_id).at(tcreat.shard_id) &&
+                    tdel.clock > clocks.at(tdel.rh_id).at(tdel.shard_id)) {
+                    return true;
+                }
             }
         }
         return false;
     }
 
-    bool
-    element :: has_property(common::property prop)
-    {
-        for (auto &p: properties) {
-            if (prop == p && prop.get_creat_time() >= p.get_creat_time() && prop.get_creat_time() < p.get_del_time()) {
-                return true;
-            } 
-        }
-        return false;
-    }
-
+    // if property with same key-value does not exist, add it
     bool
     element :: check_and_add_property(common::property prop)
     {
@@ -151,24 +140,24 @@ namespace element
     }
 
     inline void
-    element :: update_del_time(uint64_t _del_time)
+    element :: update_del_time(vclock::timestmap &tdel)
     {
-        del_time = _del_time;
+        del_time = tdel;
     }
 
     inline void
-    element :: update_creat_time(uint64_t _creat_time)
+    element :: update_creat_time(vclock::timestamp &tcreat)
     {
-        creat_time = _creat_time;
+        creat_time = tcreat;
     }
 
-    inline uint64_t
+    inline vclock::timestamp&
     element :: get_creat_time() const
     {
         return creat_time;
     }
 
-    inline uint64_t
+    inline vclock::timestamp&
     element :: get_del_time() const
     {
         return del_time;
@@ -180,7 +169,7 @@ namespace element
         return &properties;
     }
 
-    // this sucks :/
+    // return a pair, first is whether prop exists, second is value
     std::pair<bool, uint64_t>
     element :: get_property_value(uint32_t prop_key, uint64_t at_time)
     {
@@ -195,4 +184,4 @@ namespace element
 }
 }
 
-#endif //__ELEMENT__
+#endif

@@ -35,13 +35,9 @@ namespace element
     remote_node :: remote_node(uint64_t l, uint64_t h)
         : loc(l)
         , handle(h)
-    {
-    }
+    { }
 
-    inline
-    remote_node :: remote_node()
-    {
-    }
+    inline remote_node :: remote_node() { }
 
     inline bool
     remote_node :: operator==(const db::element::remote_node &t) const

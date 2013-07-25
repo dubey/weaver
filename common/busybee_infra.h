@@ -20,6 +20,8 @@
 #include <busybee_mapper.h>
 #include <busybee_mta.h>
 
+#include "weaver_constants.h"
+
 // map from server ids -> po6 locs
 class weaver_mapper : public busybee_mapper
 {
