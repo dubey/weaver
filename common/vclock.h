@@ -95,4 +95,5 @@ namespace vclock
         return clocks;
     }
 }
+
 #endif

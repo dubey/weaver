@@ -75,8 +75,10 @@ namespace db
         private:
             po6::threads::mutex update_mutex, edge_map_mutex, migration_mutex;
 
-        public:
             // Consistency
+        private:
+            vclock::nvc my_clock;
+        public:
             element::node* acquire_node(uint64_t node_handle);
             void release_node(element::node *n);
 

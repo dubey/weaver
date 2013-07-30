@@ -685,6 +685,6 @@ namespace message
 
         unpack_buffer(unpacker, args...);
     }
-} //namespace message
+}
 
 #endif //__MESSAGE__
