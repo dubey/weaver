@@ -45,21 +45,21 @@ begin_transaction(coordinator::pending_tx tx)
         switch (upd->type) {
             case message::NODE_CREATE_REQ:
             case message::NODE_DELETE_REQ:
-                vts->qts.increment_clock(upd->loc1 - 1);
+                vts->qts.increment_counter(upd->loc1 - 1);
                 break;
 
             case message::EDGE_CREATE_REQ:
             case message::EDGE_DELETE_REQ:
-                vts->qts.increment_clock(upd->loc1 - 1);
-                vts->qts.increment_clock(upd->loc2 - 1);
+                vts->qts.increment_counter(upd->loc1 - 1);
+                vts->qts.increment_counter(upd->loc2 - 1);
                 break;
 
             default:
                 DEBUG << "bad update type";
         }
-        vts->vclk.increment_clock();
         upd->qts = vts->qts;
     }
+    vts->vclk.increment_clock();
     tx.timestamp = vts->vclk.get_clock();
     vts->mutex.unlock();
     message::prepare_tx_message(msg, vt_id, tx);

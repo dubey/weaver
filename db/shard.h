@@ -113,7 +113,7 @@ namespace db
 
             // Consistency
         private:
-            vc::vclock_t qts; // queue timestamp
+            std::vector<uint64_t> qts; // queue timestamp
         public:
             bool check_qts(uint64_t vt_id, uint64_t timestamp);
             bool increment_qts(uint64_t vt_id);
@@ -404,6 +404,7 @@ namespace db
             uint64_t exec_vt_id = vc::compare_vts(timestamps);
             thr = queues.at(exec_vt_id).top();
             queues.at(exec_vt_id).pop();
+            // TODO check nop
             tpool->queue_mutex.unlock();
             tpool->S->queue_mutex.unlock();
             (*thr->func)(thr->arg);

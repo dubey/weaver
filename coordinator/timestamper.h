@@ -37,7 +37,7 @@ namespace coordinator
             // timestamper state
             uint64_t port_ctr, handle_gen;
             vc::vclock_t vclk; // vector clock
-            vc::vclock_t qts; // queue timestamp
+            std::vector<uint64_t> qts; // queue timestamp
             std::unordered_map<uint64_t, pending_update> pending_updates;
             // big mutex
             po6::threads::mutex mutex;

@@ -26,6 +26,7 @@
 namespace vc
 {
     typedef std::vector<uint64_t> vclock_t;
+    typedef std::vector<uint64_t> qtimestamp_t;
     
     class vclock
     {
