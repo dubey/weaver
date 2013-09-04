@@ -28,36 +28,36 @@
 namespace wclock
 {
 
-void get_clock(timespec *ts)
-{
+    void get_clock(timespec *ts)
+    {
 #ifdef __MACH__ // OS X does not have clock_gettime, use clock_get_time
-    clock_serv_t cclock;
-    mach_timespec_t mts;
-    host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
-    clock_get_time(cclock, &mts);
-    mach_port_deallocate(mach_task_self(), cclock);
-    ts->tv_sec = mts.tv_sec;
-    ts->tv_nsec = mts.tv_nsec;
+        clock_serv_t cclock;
+        mach_timespec_t mts;
+        host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
+        clock_get_time(cclock, &mts);
+        mach_port_deallocate(mach_task_self(), cclock);
+        ts->tv_sec = mts.tv_sec;
+        ts->tv_nsec = mts.tv_nsec;
 #else
-    DEBUG << "getting clock in po6\n";
-    clock_gettime(CLOCK_MONOTONIC, ts);
+        DEBUG << "getting clock in po6\n";
+        clock_gettime(CLOCK_MONOTONIC, ts);
 #endif
-}
-
-double diff(timespec &start, timespec &end)
-{
-    timespec temp;
-    if ((end.tv_nsec-start.tv_nsec)<0) {
-        temp.tv_sec = end.tv_sec-start.tv_sec-1;
-        temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
-    } else {
-        temp.tv_sec = end.tv_sec-start.tv_sec;
-        temp.tv_nsec = end.tv_nsec-start.tv_nsec;
     }
-    double ret = temp.tv_sec;
-    ret += (((double)temp.tv_nsec) / 1000000000UL);
-    return ret;
-}
+
+    double diff(timespec &start, timespec &end)
+    {
+        timespec temp;
+        if ((end.tv_nsec-start.tv_nsec)<0) {
+            temp.tv_sec = end.tv_sec-start.tv_sec-1;
+            temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
+        } else {
+            temp.tv_sec = end.tv_sec-start.tv_sec;
+            temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+        }
+        double ret = temp.tv_sec;
+        ret += (((double)temp.tv_nsec) / 1000000000UL);
+        return ret;
+    }
 
 }
 #endif

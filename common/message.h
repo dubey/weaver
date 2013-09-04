@@ -51,6 +51,8 @@ namespace message
         CLIENT_NODE_LOC_REQ,
         CLIENT_NODE_LOC_REPLY,
         // graph update messages
+        TX_INIT,
+        TX_DONE,
         NODE_CREATE_REQ,
         EDGE_CREATE_REQ,
         TRANSIT_EDGE_CREATE_REQ,
@@ -96,6 +98,7 @@ namespace message
         // coordinator group
         COORD_LOC_REQ,
         COORD_LOC_REPLY,
+        VT_CLOCK_UPDATE,
 
         START_MIGR,
         EXIT_WEAVER,
@@ -211,12 +214,6 @@ namespace message
     inline uint64_t size(const double&)
     {
         return sizeof(uint64_t);
-    }
-    inline uint64_t size(const vclock::timestamp &t)
-    {
-        return sizeof(t.rh_id)
-            + sizeof(t.shard_id)
-            + sizeof(t.clock);
     }
     inline uint64_t size(const common::property &t)
     {
@@ -342,14 +339,6 @@ namespace message
         uint64_t dbl;
         memcpy(&dbl, &t, sizeof(double)); //to avoid casting issues, probably could avoid copy
         packer = packer << dbl;
-    }
-
-    inline void
-    pack_buffer(e::buffer::packer &packer, const vclock::timestamp &t)
-    {
-        pack_buffer(packer, t.rh_id);
-        pack_buffer(packer, t.shard_id);
-        pack_buffer(packer, t.clock);
     }
 
     inline void 
@@ -489,6 +478,18 @@ namespace message
         pack_buffer(packer, args...);
     }
 
+    inline void
+    shift_buffer(message &m, uint32_t shift_off)
+    {
+        m.buf->shift(shift_off);
+    }
+
+    inline bool
+    empty_buffer(message &m)
+    {
+        return m.buf->empty();
+    }
+
     // unpacking templates
     inline void
     unpack_buffer(e::unpacker &unpacker, node_prog::Packable &t)
@@ -533,14 +534,6 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, int &t)
     {
         unpacker = unpacker >> t;
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, vclock::timestamp &t)
-    {
-        unpack_buffer(unpacker, t.rh_id);
-        unpack_buffer(unpacker, t.shard_id);
-        unpack_buffer(unpacker, t.clock);
     }
 
     inline void 

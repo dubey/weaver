@@ -1,6 +1,6 @@
 /*
  * ===============================================================
- *    Description:  Thread pool for all servers except central
+ *    Description:  Thread pool for shard servers
  *
  *        Created:  01/09/2013 12:00:30 PM
  *
@@ -25,7 +25,7 @@
 
 namespace db
 {
-class graph;
+class shard;
 
 namespace thread
 {
@@ -36,7 +36,8 @@ namespace thread
     {
         public:
             unstarted_thread(
-                uint64_t s,
+                uint64_t qts,
+                vc::vclock_t vclk,
                 void (*f)(void*),
                 void *a);
 
@@ -44,21 +45,23 @@ namespace thread
             bool operator>(const unstarted_thread &t) const;
 
         public:
-            uint64_t start_time;
+            uint64_t qtimestamp;
+            vc::vclock_t vclock;
             void (*func)(void*);
             void *arg;
     };
 
     inline
     unstarted_thread :: unstarted_thread( 
-            uint64_t s,
+            uint64_t qts,
+            vc::vclock_t vclk,
             void (*f)(void*),
             void *a)
-        : start_time(s)
+        : qtimestamp(qts)
+        , vclock(vclk)
         , func(f)
         , arg(a)
-    {
-    }
+    { }
 
     // for priority_queue
     struct work_thread_compare 
@@ -66,21 +69,26 @@ namespace thread
     {
         bool operator()(const unstarted_thread* const &r1, const unstarted_thread* const &r2)
         {
-            return (r1->start_time) > (r2->start_time);
+            return (r1->qtimestamp) > (r2->qtimestamp);
         }
     };
+
+    // priority queue type definition
+    // each shard server has one such priority queue for each vector timestamper
+    typedef std::priority_queue<unstarted_thread*, std::vector<unstarted_thread*>, work_thread_compare> pqueue_t;
     
     class pool
     {
         public:
             int num_threads;
-            std::priority_queue<unstarted_thread*, std::vector<unstarted_thread*>, work_thread_compare> work_queue;
+            std::vector<pqueue_t> queues;
+            //std::priority_queue<unstarted_thread*, std::vector<unstarted_thread*>, work_thread_compare> work_queue;
             po6::threads::mutex queue_mutex;
-            po6::threads::cond work_queue_cond;
-            static db::graph *G;
+            po6::threads::cond queue_cond;
+            static db::shard *S;
        
         public:
-            void add_request(unstarted_thread*);
+            void add_request(uint64_t vt_id, unstarted_thread*);
         
         public:
             pool(int n_threads);
@@ -89,7 +97,8 @@ namespace thread
     inline
     pool :: pool(int n_threads)
         : num_threads(n_threads)
-        , work_queue_cond(&queue_mutex)
+        , queues(NUM_VTS, pqueue_t())
+        , queue_cond(&queue_mutex)
     {
         int i;
         std::unique_ptr<std::thread> t;
@@ -100,11 +109,12 @@ namespace thread
     }
 
     inline void
-    pool :: add_request(unstarted_thread *t)
+    pool :: add_request(uint64_t vt_id, unstarted_thread *t)
     {
         queue_mutex.lock();
-        work_queue_cond.broadcast();
-        work_queue.push(t);
+        queue_cond.broadcast();
+        queues.at(vt_id).push(t);
+        //work_queue.push(t);
         queue_mutex.unlock();
     }
 } 

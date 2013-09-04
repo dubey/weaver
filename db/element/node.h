@@ -35,47 +35,10 @@ namespace db
 {
 namespace element
 {
-    class edge_iterator
-    {
-        std::unordered_map<uint64_t, edge*>::iterator iter;
-        std::unordered_map<uint64_t, edge*> &map;
-        uint64_t req_id;
-
-        public:
-            edge_iterator(std::unordered_map<uint64_t, edge*> m, uint64_t id);
-            void next();
-            edge* get_edge();
-    };
-
-    inline
-    edge_iterator :: edge_iterator(std::unordered_map<uint64_t, edge*> m, uint64_t id)
-        : map(m)
-        , req_id(id)
-    {
-        iter = map.begin();
-    }
-
-    inline void 
-    edge_iterator :: next()
-    {
-        while(iter != map.end()) {
-            if (iter->second->get_del_time() > req_id) {
-                break;
-            }
-            iter++;
-        }
-    }
-
-    inline edge*
-    edge_iterator :: get_edge()
-    {
-        return iter->second;
-    }
-
     class node : public element
     {
         public:
-            node(vclock::timestamp &ts, po6::threads::mutex *mtx);
+            node(uint64_t handle, vc::vclock_t &vclk, po6::threads::mutex *mtx);
 
         public:
             enum mode
@@ -116,8 +79,8 @@ namespace element
     };
 
     inline
-    node :: node(vclock::timestamp &ts, po6::threads::mutex *mtx)
-        : element(ts)
+    node :: node(uint64_t handle, vc::vclock_t &vclk, po6::threads::mutex *mtx)
+        : element(handle, vclk)
         , state(mode::NASCENT)
         , cv(mtx)
         , in_use(true)
@@ -137,9 +100,9 @@ namespace element
     node :: add_edge(edge *e, bool in_or_out)
     {
         if (in_or_out) {
-            out_edges.emplace(e->get_creat_time(), e);
+            out_edges.emplace(e->get_handle(), e);
         } else {
-            in_edges.emplace(e->get_creat_time(), e);
+            in_edges.emplace(e->get_handle(), e);
         }
     }
 

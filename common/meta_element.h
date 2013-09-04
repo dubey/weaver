@@ -110,4 +110,4 @@ namespace common
         myloc = newloc;
     }
 }
-#endif //__META_ELEMENT__
+#endif

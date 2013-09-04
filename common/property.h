@@ -28,22 +28,21 @@ namespace common
     {
         public:
             property();
-            property(uint32_t, uint64_t, vclock::timestamp&);
-            property(uint32_t, uint64_t, uint64_t, uint64_t, uint64_t);
+            property(uint32_t, uint64_t, vc::vclock_t&);
         
         public:
             uint32_t key;
             uint64_t value;
-            vclock::timestamp creat_time;
-            vclock::timestamp del_time;
+            vc::vclock_t creat_time;
+            vc::vclock_t del_time;
 
         public:
             bool operator==(property const &p2) const;
 
         public:
-            vclock::timestamp& get_creat_time() const;
-            vclock::timestamp& get_del_time() const;
-            void update_del_time(vclock::timestamp&);
+            vc::vclock_t get_creat_time() const;
+            vc::vclock_t get_del_time() const;
+            void update_del_time(vc::vclock_t&);
     };
 
     inline
@@ -53,17 +52,10 @@ namespace common
     { }
 
     inline
-    property :: property(uint32_t k, uint64_t v, vclock::timestamp &creat)
+    property :: property(uint32_t k, uint64_t v, vc::vclock_t &creat)
         : key(k)
         , value(v)
         , creat_time(creat)
-    { }
-
-    inline
-    property :: property(uint32_t k, uint64_t v, uint64_t rhid, uint64_t sid, uint64_t clk)
-        : key(k)
-        , value(v)
-        , creat_time(rhid, sid, clk)
     { }
 
     inline bool
@@ -72,22 +64,22 @@ namespace common
         return ((key == p2.key) && (value == p2.value));
     }
 
-    inline vclock::timestamp&
+    inline vc::vclock_t
     property :: get_creat_time() const
     {
         return creat_time;
     }
 
-    inline vclock::timestamp&
+    inline vc::vclock_t
     property :: get_del_time() const
     {
         return del_time;
     }
 
     inline void
-    property :: update_del_time(vclock::timestamp &tdel)
+    property :: update_del_time(vc::vclock_t &tdel)
     {
-        del_time = t_del;
+        del_time = tdel;
     }
 }
 
@@ -105,4 +97,4 @@ namespace std
     };
 }
 
-#endif //__PROPERTY__
+#endif

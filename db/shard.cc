@@ -18,35 +18,158 @@
 #include "busybee_constants.h"
 
 #include "common/weaver_constants.h"
-#include "common/message_graph_elem.h"
-#include "graph.h"
-#include "node_prog/node_prog_type.h"
-#include "node_prog/node_program.h"
-#include "node_prog/dijkstra_program.h"
-#include "node_prog/reach_program.h"
-#include "node_prog/clustering_program.h"
+// TODO #include "common/message_graph_elem.h"
+#include "shard.h"
 
 // global static variables
 static uint64_t shard_id;
-static db::shard *G;
-db::shard *db::thread::pool::G = NULL; // reinitialized in graph constructor
+static db::shard *S;
+db::shard *db::thread::pool::S = NULL; // reinitialized in graph constructor
+
+inline void
+create_node(vc::vclock_t &t_creat, uint64_t node_handle)
+{
+    S->create_node(node_handle, t_creat, false);
+}
+
+inline uint64_t
+create_edge(vc::vclock_t &t_creat, uint64_t edge_handle, uint64_t n1, uint64_t n2, uint64_t loc2)
+{
+    return S->create_edge(edge_handle, n1, n2, loc2, t_creat);
+}
+
+inline uint64_t
+delete_node(vc::vclock_t &t_del, uint64_t node_handle)
+{
+    return S->delete_node(node_handle, t_del);
+}
+
+inline uint64_t
+delete_edge(vc::vclock_t &t_del, uint64_t edge_handle)
+{
+    return S->delete_edge(edge_handle, t_del);
+}
+
+inline uint64_t
+create_reverse_edge(vc::vclock_t &vclk, uint64_t edge_handle, uint64_t local_node, uint64_t remote_node, uint64_t remote_loc)
+{
+    return S->create_reverse_edge(edge_handle, local_node, remote_node, remote_loc, vclk);
+}
+
+void
+unpack_update_request(void *req)
+{
+    db::update_request *request = (db::update_request*)req;
+    enum message::msg_type type = message::ERROR;
+    uint64_t vt_id, sid;
+    vc::vclock_t vclk, qts;
+    uint64_t handle, elem1, elem2, loc1, loc2;
+    uint32_t shift_off = 0;
+    uint64_t ret;
+    // TODO increment_qts if successful. What to do if not successful?
+
+    switch (request->type) {
+        case message::NODE_CREATE_REQ:
+            message::unpack_message(*request->msg, type, sid, vt_id, vclk, qts, handle, loc1);
+            create_node(vclk, handle);
+            ret = 0;
+            shift_off += sizeof(enum message::msg_type)
+                       + message::size(vt_id)
+                       + message::size(vclk)
+                       + message::size(qts)
+                       + message::size(handle)
+                       + message::size(loc1);
+            break;
+
+        case message::EDGE_CREATE_REQ:
+            message::unpack_message(*request->msg, type, sid, vt_id, vclk, qts, handle, elem1, elem2, loc1, loc2);
+            ret = create_edge(vclk, handle, elem1, elem2, loc2);
+            shift_off += sizeof(enum message::msg_type)
+                       + message::size(vt_id)
+                       + message::size(vclk)
+                       + message::size(qts)
+                       + message::size(handle)
+                       + message::size(elem1)
+                       + message::size(elem2)
+                       + message::size(loc1)
+                       + message::size(loc2);
+            break;
+
+        case message::NODE_DELETE_REQ:
+            message::unpack_message(*request->msg, type, sid, vt_id, vclk, qts, elem1, loc1);
+            ret = delete_node(vclk, elem1);
+            shift_off += sizeof(enum message::msg_type)
+                       + message::size(vt_id)
+                       + message::size(vclk)
+                       + message::size(qts)
+                       + message::size(elem1)
+                       + message::size(loc1);
+            break;
+
+        case message::EDGE_DELETE_REQ:
+            message::unpack_message(*request->msg, type, sid, vt_id, vclk, qts, elem1, elem2, loc1, loc2);
+            ret = delete_edge(vclk, elem1);
+            shift_off += sizeof(enum message::msg_type)
+                       + message::size(vt_id)
+                       + message::size(vclk)
+                       + message::size(qts)
+                       + message::size(elem1)
+                       + message::size(elem2)
+                       + message::size(loc1)
+                       + message::size(loc2);
+            break;
+
+        case message::REVERSE_EDGE_CREATE:
+            message::unpack_message(*request->msg, type, vclk, handle, elem1, elem2, loc2);
+            ret = create_reverse_edge(vclk, handle, elem1, elem2, loc2);
+            break;
+
+        default:
+            DEBUG << "unknown type" << std::endl;
+    }
+    if (shift_off > 0) {
+        if (ret == 0) {
+            // tx subpart successful
+            message::shift_buffer(*request->msg, shift_off);
+            if (!message::empty_buffer(*request->msg)) {
+                // propagate tx to next shard
+                message::unpack_message(*request->msg, type, sid); // unpack next location
+                S->send(sid, request->msg->buf);
+            } else {
+                // send tx confirmation to coordinator
+                message::message conf_msg;
+                message::prepare_message(conf_msg, message::TX_DONE, vclk);
+                S->send(vt_id, conf_msg.buf);
+            }
+        } else {
+            // node being migrated, tx needs to be forwarded
+            // TODO
+        }
+    } else {
+        if (ret != 0) {
+            // create rev edge not completed as node being migrated, needs to be fwd
+            // TODO
+        }
+    }
+    delete request;
+}
 
 // server msg recv loop for the shard server
 void
 msgrecv_loop()
 {
     busybee_returncode ret;
-    uint64_t sender;
+    uint64_t sender, vt_id;
     uint32_t code;
     enum message::msg_type mtype;
     std::unique_ptr<message::message> rec_msg(new message::message());
     db::thread::unstarted_thread *thr;
     db::update_request *request;
-    std::vector<uint64_t> clk;
+    vc::vclock_t vclk, qts;
 
     while (true) {
-        if ((ret = G->bb->recv(&sender, &rec_msg->buf)) != BUSYBEE_SUCCESS) {
-            DEBUG << "msg recv error: " << ret << " at shard " << G->myid << std::endl;
+        if ((ret = S->bb->recv(&sender, &rec_msg->buf)) != BUSYBEE_SUCCESS) {
+            DEBUG << "msg recv error: " << ret << " at shard " << S->shard_id << std::endl;
             continue;
         }
         rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
@@ -59,15 +182,20 @@ msgrecv_loop()
             case message::NODE_CREATE_REQ:
             case message::NODE_DELETE_REQ:
             case message::EDGE_CREATE_REQ:
-            case message::REVERSE_EDGE_CREATE:
             case message::EDGE_DELETE_REQ:
-            case message::EDGE_ADD_PROP:
-            case message::EDGE_DELETE_PROP:
-                message::unpack_message(*rec_msg, mtype, clk);
-                //request = new db::update_request(mtype, clk, std::move(rec_msg)); TODO continue here
-                request = new db::update_request(mtype, start_time - 1, std::move(rec_msg));
-                thr = new db::thread::unstarted_thread(start_time - 1, unpack_update_request, request);
-                G->thread_pool.add_request(thr);
+                message::unpack_message(*rec_msg, mtype, vt_id, vclk, qts);
+                request = new db::update_request(mtype, std::move(rec_msg));
+                thr = new db::thread::unstarted_thread(qts.at(shard_id), vclk, unpack_update_request, request);
+                S->add_request(vt_id, thr);
+                rec_msg.reset(new message::message());
+                break;
+
+            case message::REVERSE_EDGE_CREATE:
+                //message::unpack_message(*rec_msg, mtype, vclk, handle, elem1, elem2, 
+                message::unpack_message(*rec_msg, mtype, vclk);
+                request = new db::update_request(mtype, std::move(rec_msg));
+                thr = new db::thread::unstarted_thread(0, vclk, unpack_update_request, request);
+                S->add_request(0, thr);
                 rec_msg.reset(new message::message());
                 break;
 
@@ -77,15 +205,6 @@ msgrecv_loop()
             //case message::TRANSIT_EDGE_DELETE_REQ:
             //case message::TRANSIT_EDGE_ADD_PROP:
             //case message::TRANSIT_EDGE_DELETE_PROP:
-            //    rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE + sizeof(mtype)) >> update_count >> start_time;
-            //    request = new db::update_request(mtype, update_count, std::move(rec_msg));
-            //    G->migration_mutex.lock();
-            //    G->pending_updates.emplace(request);
-            //    G->migration_mutex.unlock();
-            //    request = new db::update_request(mtype, 0);
-            //    thr = new db::thread::unstarted_thread(0, process_pending_updates, request);
-            //    G->thread_pool.add_request(thr);
-            //    rec_msg.reset(new message::message());
             //    break;
 
             //case message::CLEAN_UP:
@@ -133,4 +252,24 @@ msgrecv_loop()
                 DEBUG << "unexpected msg type " << mtype << std::endl;
         }
     }
+}
+
+int
+main(int argc, char* argv[])
+{
+    // TODO signal(SIGINT, end_program);
+    if (argc != 2) {
+        DEBUG << "Usage: " << argv[0] << " <myid>" << std::endl;
+        return -1;
+    }
+    uint64_t id = atoi(argv[1]);
+    shard_id = id;
+    S = new db::shard(id);
+    std::cout << "Weaver: shard instance " << S->shard_id << std::endl;
+
+    // TODO migration methods init
+
+    msgrecv_loop();
+
+    return 0;
 }
