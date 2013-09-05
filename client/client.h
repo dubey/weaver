@@ -32,7 +32,7 @@ class client
         ~client();
 
     private:
-        uint64_t myid;
+        uint64_t myid, shifted_id;
         std::shared_ptr<po6::net::location> myloc;
         busybee_mta *client_bb;
         std::unordered_map<uint64_t, client::tx_list_t> tx_map;
@@ -44,18 +44,20 @@ class client
         uint64_t create_edge(uint64_t tx_id, uint64_t node1, uint64_t node2);
         void delete_node(uint64_t tx_id, uint64_t node); 
         void delete_edge(uint64_t tx_id, uint64_t node, uint64_t edge);
-        std::vector<uint64_t> end_tx();
+        uint64_t end_tx(uint64_t tx_id);
         void commit_graph();
         void exit_weaver();
 
     private:
         void send_coord(std::auto_ptr<e::buffer> buf);
         busybee_returncode recv_coord(std::auto_ptr<e::buffer> *buf);
+        uint64_t generate_handle();
 };
 
 inline
 client :: client(uint64_t my_id)
     : myid(my_id)
+    , shifted_id(myid << (64-ID_BITS))
     , tx_id_ctr(0)
     , temp_handle_ctr(0)
 {
@@ -81,12 +83,11 @@ client :: create_node(uint64_t tx_id)
     if (tx_map.find(tx_id) == tx_map.end()) {
         return 0;
     } else {
-        uint64_t new_node = ++temp_handle_ctr;
         auto upd = std::make_shared<client::pending_update>();
         upd->type = message::CLIENT_NODE_CREATE_REQ;
-        upd->temp_handle = new_node;
+        upd->handle = generate_handle();
         tx_map.at(tx_id).push_back(upd);
-        return new_node;
+        return upd->handle;
     }
 }
 
@@ -96,14 +97,13 @@ client :: create_edge(uint64_t tx_id, uint64_t node1, uint64_t node2)
     if (tx_map.find(tx_id) == tx_map.end()) {
         return 0;
     } else {
-        uint64_t new_edge = ++temp_handle_ctr;
         auto upd = std::make_shared<client::pending_update>();
         upd->type = message::CLIENT_EDGE_CREATE_REQ;
+        upd->handle = generate_handle();
         upd->elem1 = node1;
         upd->elem2 = node2;
-        upd->temp_handle = new_edge;
         tx_map.at(tx_id).push_back(upd);
-        return new_edge;
+        return upd->handle;
     }
 }
 
@@ -114,7 +114,6 @@ client :: delete_node(uint64_t tx_id, uint64_t node)
         auto upd = std::make_shared<client::pending_update>();
         upd->type = message::CLIENT_NODE_DELETE_REQ;
         upd->elem1 = node;
-        upd->temp_handle = 0;
         tx_map.at(tx_id).push_back(upd);
     }
 }
@@ -126,15 +125,13 @@ client :: delete_edge(uint64_t tx_id, uint64_t edge)
         auto upd = std::make_shared<client::pending_update>();
         upd->type = message::CLIENT_EDGE_DELETE_REQ;
         upd->elem1 = edge;
-        upd->temp_handle = 0;
         tx_map.at(tx_id).push_back(upd);
     }
 }
 
-inline std::vector<uint64_t>
+inline void
 client :: end_tx(uint64_t tx_id)
 {
-    std::vector<uint64_t> ret;
     if (tx_map.find(tx_id) != tx_map.end()) {
         message::message msg;
         message::prepare_tx_message_client(msg, tx_map.at(tx_id));
@@ -142,9 +139,8 @@ client :: end_tx(uint64_t tx_id)
         if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
             return ret;
         }
-        message::unpack_message(msg, message::CLIENT_TX_DONE, ret);
+        message::unpack_message(msg, message::CLIENT_TX_DONE);
     }
-    return ret;
 }
 
 inline void
@@ -195,4 +191,16 @@ client :: recv_coord(std::auto_ptr<e::buffer> *buf)
     }
 }
 
-#endif // __CLIENT__
+// to generate 64 bit graph element handles
+// assuming no more than 2^(ID_BITS) clients
+// assuming no more than 2^(64-ID_BITS) graph nodes and edges created at this client
+// TODO shift to 128 bit handles? or more client id bits
+inline uint64_t
+client :: generate_handle()
+{
+    uint64_t new_handle = (++temp_handle_ctr) >> ID_BITS;
+    new_handle |= shifted_id;
+    return new_handle;
+}
+
+#endif

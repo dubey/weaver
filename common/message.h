@@ -680,4 +680,4 @@ namespace message
     }
 }
 
-#endif //__MESSAGE__
+#endif

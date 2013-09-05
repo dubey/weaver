@@ -41,7 +41,7 @@
 #define NUM_SHARDS 8
 #define NUM_VTS 4
 #define NUM_THREADS 8
-#define VTID_BITS 8
+#define ID_BITS 8
 #define GRAPH_FILE "graph.rec"
 #define DAEMON_PERIOD 2 // frequency in seconds for coordinator daemon to run
 #define MIGR_FREQ 10 // seconds delay between consecutive migrations
@@ -52,5 +52,8 @@
 #define BATCH_MSG_SIZE 100
 #define MIGRATION false // whether to enable migration at the beginning of the program or not
 #define MAX_CACHE_PER_NODE 10 // max num of cache entries per node per request type
+// hyperdex constants
+#define HYPERDEX_COORD_IPADD "127.0.0.1"
+#define HYPERDEX_COORD_PORT 1982
 
 #endif

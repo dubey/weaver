@@ -107,16 +107,14 @@ unpack_update_request(void *req)
             break;
 
         case message::EDGE_DELETE_REQ:
-            message::unpack_message(*request->msg, type, sid, vt_id, vclk, qts, elem1, elem2, loc1, loc2);
+            message::unpack_message(*request->msg, type, sid, vt_id, vclk, qts, elem1, loc1);
             ret = delete_edge(vclk, elem1);
             shift_off += sizeof(enum message::msg_type)
                        + message::size(vt_id)
                        + message::size(vclk)
                        + message::size(qts)
                        + message::size(elem1)
-                       + message::size(elem2)
-                       + message::size(loc1)
-                       + message::size(loc2);
+                       + message::size(loc1);
             break;
 
         case message::REVERSE_EDGE_CREATE:

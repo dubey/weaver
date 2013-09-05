@@ -24,6 +24,7 @@
 #include "common/vclock.h"
 #include "common/message.h"
 #include "transaction.h"
+#include "nmap_stub.h"
 
 namespace coordinator
 {
@@ -36,9 +37,11 @@ namespace coordinator
             busybee_mta *bb;
             // timestamper state
             uint64_t port_ctr, handle_gen;
-            vc::vclock_t vclk; // vector clock
-            std::vector<uint64_t> qts; // queue timestamp
+            vc::vclock vclk; // vector clock
+            vc::qtimestamp_t qts; // queue timestamp
             std::unordered_map<uint64_t, pending_update> pending_updates;
+            // node map client
+            coordinator::nmap_stub;
             // big mutex
             po6::threads::mutex mutex;
             // migration
@@ -47,7 +50,6 @@ namespace coordinator
 
         public:
             timestamper(uint64_t id);
-            uint64_t generate_handle();
             busybee_returncode send(uint64_t shard_id, std::auto_ptr<e::buffer> buf);
     };
 
@@ -57,21 +59,10 @@ namespace coordinator
         , port_ctr(0)
         , handle_gen(0)
         , vclk(id)
+        , qts(NUM_SHARDS, 0)
     {
         // initialize array of server locations
         initialize_busybee(bb, vt_id, myloc, NUM_THREADS);
-    }
-
-    // to generate 64 bit graph element handles
-    // assuming no more than 2^(VTID_BITS) request handlers
-    // assuming no more than 2^(64-VTID_BITS) graph nodes and edges created at this handler
-    // assuming caller holds mutex
-    inline uint64_t
-    timestamper :: generate_handle()
-    {
-        uint64_t new_handle = (++handle_gen) << VTID_BITS;
-        new_handle |= vt_id;
-        return new_handle;
     }
 
     inline busybee_returncode

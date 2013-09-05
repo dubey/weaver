@@ -11,6 +11,9 @@
  * ===============================================================
  */
 
+#ifndef __MSG_TX_COORD__
+#define __MSG_TX_COORD__
+
 #include "message.h"
 #include "coordinator/transaction.h"
 
@@ -38,7 +41,7 @@ namespace message
                     break;
                 
                 case EDGE_DELETE_REQ:
-                    bytes_to_pack += size(upd->elem1, upd->elem2, upd->loc1, upd->loc2);
+                    bytes_to_pack += size(upd->elem1, upd->loc1);
                     break;
                 
                 default:
@@ -65,7 +68,7 @@ namespace message
                     break;
                 
                 case EDGE_DELETE_REQ:
-                    pack_buffer(packer, upd->elem1, upd->elem2, upd->loc1, upd->loc2);
+                    pack_buffer(packer, upd->elem1, upd->loc1);
                     break;
                 
                 default:
@@ -74,4 +77,49 @@ namespace message
         }
     }
 
+    inline void
+    unpack_client_tx(message &m, coordinator::pending_tx &tx)
+    {
+        uint64_t num_tx;
+        uint32_t type;
+        enum msg_type mtype;
+        e::unpacker unpacker = m.buf->unpack_from(BUSYBEE_HEADER_SIZE);
+        unpacker = unpacker >> type;
+        mtype = (enum msg_type)type;
+        assert(mtype == CLIENT_TX_INIT);
+        unpack_buffer(unpacker, num_tx);
+        while (num_tx-- > 0) {
+            auto upd = std::make_shared<coordintor::pending_update>();
+            tx.writes.emplace_back(upd);
+            unpacker = unpacker >> type;
+            mtype = (enum msg_type)type;
+            switch (type) {
+                case message::CLIENT_NODE_CREATE_REQ:
+                    upd->type = NODE_CREATE_REQ;
+                    unpack_buffer(unpacker, upd->handle); 
+                    break;
+
+                case message::CLIENT_EDGE_CREATE_REQ:
+                    upd->type = EDGE_CREATE_REQ;
+                    unpack_buffer(unpacker, upd->handle, upd->elem1, upd->elem2);
+                    break;
+
+                case message::CLIENT_NODE_DELETE_REQ:
+                    upd->type = NODE_DELETE_REQ;
+                    unpack_buffer(unpacker, upd->elem1);
+                    break;
+
+                case message::CLIENT_EDGE_DELETE_REQ:
+                    upd->type = EDGE_DELETE_REQ;
+                    unpack_buffer(unpacker, upd->elem1);
+                    break;
+
+                default:
+                    DEBUG << "bad msg type" << std::endl;
+            }
+        }
+    }
+
 }
+
+#endif

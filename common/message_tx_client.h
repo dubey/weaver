@@ -11,6 +11,9 @@
  * ===============================================================
  */
 
+#ifndef __MSG_TX_CLIENT__
+#define __MSG_TX_CLIENT__
+
 #include "message.h"
 #include "client/transaction.h"
 
@@ -19,15 +22,17 @@ namespace message
     inline void
     prepare_tx_message_client(message &m, const client::tx_list_t &tx)
     {
-        uint64_t bytes_to_pack = sizeof(enum msg_type) * tx.size();
+        uint64_t num_writes = tx.size();
+        uint64_t bytes_to_pack = sizeof(enum msg_type) * (1 + tx.size())
+                               + size(num_tx);
         for (auto &upd: tx) {
             switch (upd->type) {
                 case message::CLIENT_NODE_CREATE_REQ:
-                    bytes_to_pack += size(upd->temp_handle);
+                    bytes_to_pack += size(upd->handle);
                     break;
 
                 case message::CLIENT_EDGE_CREATE_REQ:
-                    bytes_to_pack += size(upd->temp_handle, upd->elem1, upd->elem2);
+                    bytes_to_pack += size(upd->handle, upd->elem1, upd->elem2);
                     break;
 
                 case message::CLIENT_NODE_DELETE_REQ:
@@ -42,15 +47,17 @@ namespace message
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE);
 
+        packer = packer << CLIENT_TX_INIT;
+        pack_buffer(packer, num_tx);
         for (auto &upd: tx) {
             packer = packer << upd->type;
             switch (upd->type) {
                 case message::CLIENT_NODE_CREATE_REQ:
-                    pack_buffer(packer, upd->temp_handle);
+                    pack_buffer(packer, upd->handle);
                     break;
 
                 case message::CLIENT_EDGE_CREATE_REQ:
-                    pack_buffer(packer, upd->temp_handle, upd->elem1, upd->elem2);
+                    pack_buffer(packer, upd->handle, upd->elem1, upd->elem2);
                     break;
 
                 case message::CLIENT_NODE_DELETE_REQ:
@@ -64,3 +71,5 @@ namespace message
         }
     }
 }
+
+#endif

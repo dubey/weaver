@@ -25,7 +25,7 @@ namespace coordinator
     struct pending_update
     {
         message::msg_type type;
-        vc::vclock_t qts; // queue timestamp
+        vc::qtimestamp_t qts; // queue timestamp
         uint64_t handle, elem1, elem2, loc1, loc2, sender;
         //uint32_t key;
         //uint64_t value;
