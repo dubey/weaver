@@ -33,6 +33,7 @@
 #define MAX_TIME UINT64_MAX
 // messaging constants
 #define ID_INCR (1ULL << 32ULL)
+#define SHARD_ID_INCR 1000
 #define COORD_ID (0ULL)
 #define COORD_SM_ID (0ULL)
 #define CLIENT_ID (11ULL)
@@ -53,7 +54,7 @@
 #define MIGRATION false // whether to enable migration at the beginning of the program or not
 #define MAX_CACHE_PER_NODE 10 // max num of cache entries per node per request type
 // hyperdex constants
-#define HYPERDEX_COORD_IPADD "127.0.0.1"
+#define HYPERDEX_COORD_IPADDR "127.0.0.1"
 #define HYPERDEX_COORD_PORT 1982
 
 #endif

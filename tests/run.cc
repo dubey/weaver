@@ -15,21 +15,23 @@
 #define __WEAVER_DEBUG__
 #include "common/weaver_constants.h"
 
-#include "message_test.h"
-#include "cache_test.h"
-#include "basic_client.h"
-#include "repetitive_reach_program.h"
-#include "multiple_reach_program.h"
-#include "multiple_locality.h"
-#include "multiple_caching.h"
-#include "basic_migration_test.h"
-#include "line_reach_program.h"
-#include "clique_reach_program.h"
-#include "unreachable_reach_program.h"
-//#include "dijkstra_prog_test.h"
-#include "dijkstra_tree_test.h"
-#include "multiple_widest_path.h"
-//#include "clustering_prog_test.h"
+//#include "message_test.h"
+#include "message_tx.h"
+#include "tx_msg_nmap.h"
+//#include "cache_test.h"
+//#include "basic_client.h"
+//#include "repetitive_reach_program.h"
+//#include "multiple_reach_program.h"
+//#include "multiple_locality.h"
+//#include "multiple_caching.h"
+//#include "basic_migration_test.h"
+//#include "line_reach_program.h"
+//#include "clique_reach_program.h"
+//#include "unreachable_reach_program.h"
+////#include "dijkstra_prog_test.h"
+//#include "dijkstra_tree_test.h"
+//#include "multiple_widest_path.h"
+////#include "clustering_prog_test.h"
 
 int
 main(int argc, char *argv[])
@@ -64,13 +66,15 @@ main(int argc, char *argv[])
     //clustering_prog_test();
 #endif
 #ifndef __ALL_TESTS__
-    multiple_sparse_reachability(true);
+    //multiple_sparse_reachability(true);
     //unreachable_reach_prog(true);
     //clique_reach_prog(true);
     //multiple_wp_prog(true);
     //multiple_sparse_locality(true);
     //repetitive_reach_prog(true);
     //multiple_dense_caching(true);
+    message_tx_test();
+    tx_msg_nmap_test();
 #endif
     DEBUG << "All tests completed." << std::endl;
 

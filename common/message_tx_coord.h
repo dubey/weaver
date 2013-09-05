@@ -37,7 +37,7 @@ namespace message
                     break;
                 
                 case NODE_DELETE_REQ:
-                    bytes_to_pack += size(upd->elem1, upd_loc1);
+                    bytes_to_pack += size(upd->elem1, upd->loc1);
                     break;
                 
                 case EDGE_DELETE_REQ:
@@ -64,7 +64,7 @@ namespace message
                     break;
                 
                 case NODE_DELETE_REQ:
-                    pack_buffer(packer, upd->elem1, upd_loc1);
+                    pack_buffer(packer, upd->elem1, upd->loc1);
                     break;
                 
                 case EDGE_DELETE_REQ:
@@ -89,27 +89,27 @@ namespace message
         assert(mtype == CLIENT_TX_INIT);
         unpack_buffer(unpacker, num_tx);
         while (num_tx-- > 0) {
-            auto upd = std::make_shared<coordintor::pending_update>();
+            auto upd = std::make_shared<coordinator::pending_update>();
             tx.writes.emplace_back(upd);
             unpacker = unpacker >> type;
             mtype = (enum msg_type)type;
             switch (type) {
-                case message::CLIENT_NODE_CREATE_REQ:
+                case CLIENT_NODE_CREATE_REQ:
                     upd->type = NODE_CREATE_REQ;
                     unpack_buffer(unpacker, upd->handle); 
                     break;
 
-                case message::CLIENT_EDGE_CREATE_REQ:
+                case CLIENT_EDGE_CREATE_REQ:
                     upd->type = EDGE_CREATE_REQ;
                     unpack_buffer(unpacker, upd->handle, upd->elem1, upd->elem2);
                     break;
 
-                case message::CLIENT_NODE_DELETE_REQ:
+                case CLIENT_NODE_DELETE_REQ:
                     upd->type = NODE_DELETE_REQ;
                     unpack_buffer(unpacker, upd->elem1);
                     break;
 
-                case message::CLIENT_EDGE_DELETE_REQ:
+                case CLIENT_EDGE_DELETE_REQ:
                     upd->type = EDGE_DELETE_REQ;
                     unpack_buffer(unpacker, upd->elem1);
                     break;

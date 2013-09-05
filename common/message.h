@@ -44,6 +44,8 @@ namespace message
         CLIENT_EDGE_DELETE_REQ,
         CLIENT_ADD_EDGE_PROP,
         CLIENT_DEL_EDGE_PROP,
+        CLIENT_TX_INIT,
+        CLIENT_TX_DONE,
         CLIENT_REPLY,
         CLIENT_COMMIT_GRAPH,
         CLIENT_NODE_PROG_REQ,

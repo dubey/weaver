@@ -69,7 +69,79 @@ inline void
 unpack_tx(std::unique_ptr<message::message> msg)
 {
     coordinator::pending_tx tx;
-    message::unpack_client_tx(*msg, tx); // TODO
+    message::unpack_client_tx(*msg, tx);
+
+    // lookup mappings
+    std::vector<std::vector<uint64_t>> get_map;
+    std::unordered_map<uint64_t, uint64_t> requested_map;
+    for (auto upd: tx.writes) {
+        switch (upd->type) {
+            case message::NODE_CREATE_REQ:
+                // assign shard for this node
+                vts->loc_gen_mutex.lock();
+                vts->loc_gen = (vts->loc_gen + 1) % NUM_SHARDS;
+                upd->loc1 = vts->loc_gen + SHARD_ID_INCR; // node will be placed on this shard
+                vts->loc_gen_mutex.unlock();
+                requested_map.emplace(upd->handle, upd->loc1);
+                break;
+
+            case message::EDGE_CREATE_REQ:
+                if (requested_map.find(upd->elem1) != requested_map.end()) {
+                    requested_map.emplace(upd->elem1, 0);
+                    get_map.emplace_back(upd->elem1);
+                }
+                if (requested_map.find(upd->elem2) != requested_map.end()) {
+                    requested_map.emplace(upd->elem2, 0);
+                    get_map.emplace_back(upd->elem2);
+                }
+                break;
+
+            case message::NODE_DELETE_REQ:
+            case message::EDGE_DELETE_REQ:
+                if (requested_map.find(upd->elem1) != requested_map.end()) {
+                    requested_map.emplace(upd->elem1, 0);
+                    get_map.emplace_back(upd->elem1);
+                }
+                break;
+
+            default:
+                DEBUG << "bad type" << std:endl;
+        }
+    }
+    std::vector<uint64_t> get_results = vts->nmap_client.get_mappings(get_map);
+    for (uint64_t i = 0; i < get_map.size(); i++) {
+        uint64_t handle = get_map.at(i);
+        assert(requested_map.find(handle) != requested_map.end());
+        requested_map.at(handle) = get_results.at(i);
+    }
+
+    // insert mappings
+    std::vector<std::pair<uint64_t, uint64_t>> put_map;
+    for (auto upd: tx.writes) {
+        switch (upd->type) {
+            case message::NODE_CREATE_REQ:
+                put_map.emplace(std::make_pair(upd->handle, upd->loc1));
+                break;
+
+            case message::EDGE_CREATE_REQ:
+                assert(requested_map.find(upd->elem1) != requested_map.end());
+                assert(requested_map.find(upd->elem2) != requested_map.end());
+                upd->loc1 = requested_map.at(upd->elem1);
+                upd->loc2 = requested_map.at(upd->elem2);
+                put_map.emplace(std::make_pair(upd->handle, upd->loc1));
+                break;
+
+            case message::NODE_DELETE_REQ:
+            case message::EDGE_DELETE_REQ:
+                assert(requested_map.find(upd->elem1) != requested_map.end());
+                upd->loc1 = requested_map.at(upd->elem1);
+                break;
+
+            default:
+                DEBUG << "bad type" << std:endl;
+        }
+    }
+    vts->nmap_client.put_mappings(put_map);
 }
 
 void

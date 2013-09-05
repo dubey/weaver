@@ -24,19 +24,19 @@ namespace message
     {
         uint64_t num_writes = tx.size();
         uint64_t bytes_to_pack = sizeof(enum msg_type) * (1 + tx.size())
-                               + size(num_tx);
+                               + size(num_writes);
         for (auto &upd: tx) {
             switch (upd->type) {
-                case message::CLIENT_NODE_CREATE_REQ:
+                case CLIENT_NODE_CREATE_REQ:
                     bytes_to_pack += size(upd->handle);
                     break;
 
-                case message::CLIENT_EDGE_CREATE_REQ:
+                case CLIENT_EDGE_CREATE_REQ:
                     bytes_to_pack += size(upd->handle, upd->elem1, upd->elem2);
                     break;
 
-                case message::CLIENT_NODE_DELETE_REQ:
-                case message::CLIENT_EDGE_DELETE_REQ:
+                case CLIENT_NODE_DELETE_REQ:
+                case CLIENT_EDGE_DELETE_REQ:
                     bytes_to_pack += size(upd->elem1);
                     break;
 
@@ -48,20 +48,20 @@ namespace message
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE);
 
         packer = packer << CLIENT_TX_INIT;
-        pack_buffer(packer, num_tx);
+        pack_buffer(packer, num_writes);
         for (auto &upd: tx) {
             packer = packer << upd->type;
             switch (upd->type) {
-                case message::CLIENT_NODE_CREATE_REQ:
+                case CLIENT_NODE_CREATE_REQ:
                     pack_buffer(packer, upd->handle);
                     break;
 
-                case message::CLIENT_EDGE_CREATE_REQ:
+                case CLIENT_EDGE_CREATE_REQ:
                     pack_buffer(packer, upd->handle, upd->elem1, upd->elem2);
                     break;
 
-                case message::CLIENT_NODE_DELETE_REQ:
-                case message::CLIENT_EDGE_DELETE_REQ:
+                case CLIENT_NODE_DELETE_REQ:
+                case CLIENT_EDGE_DELETE_REQ:
                     pack_buffer(packer, upd->elem1);
                     break;
 
