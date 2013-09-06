@@ -16,6 +16,7 @@
 #include <vector>
 #include <hyperclient.h>
 #include <hyperdex.h>
+#include <po6/threads/mutex.h>
 
 #include "common/weaver_constants.h"
 
@@ -32,9 +33,9 @@ namespace coordinator
             const char *host = HYPERDEX_COORD_IPADDR;
             static const int port = HYPERDEX_COORD_PORT;
             hyperclient cl;
+            po6::threads::mutex hyperclientLock;
 
         public:
-            // TODO are these thread-safe?
             void put_mappings(std::vector<std::pair<uint64_t, int64_t>> pairs_to_add);
             std::vector<int64_t> get_mappings(std::vector<uint64_t> handles);
             void clean_up_space();
@@ -49,6 +50,7 @@ namespace coordinator
         int numPairs = pairs_to_add.size();
         hyperclient_attribute* attrs_to_add = (hyperclient_attribute *)malloc(numPairs * sizeof(hyperclient_attribute));
 
+        hyperclientLock.lock();
         for (int i = 0; i < numPairs; i++) {
             attrs_to_add[i].attr = attrName;
             attrs_to_add[i].value = (char *) &pairs_to_add[i].second;
@@ -69,10 +71,12 @@ namespace coordinator
             loop_id = cl.loop(-1, &loop_status);
             if (loop_id < 0) {
                 std::cerr << "\"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
+                hyperclientLock.unlock();
                 free(attrs_to_add);
                 return;
             }
         }
+        hyperclientLock.unlock();
         free(attrs_to_add);
     }
 
@@ -83,6 +87,7 @@ namespace coordinator
         hyperclient_returncode get_status;
         std::vector<std::pair<hyperclient_attribute *, size_t> > results(numNodes);
 
+        hyperclientLock.lock();
         for (uint64_t i = 0; i < numNodes; i++) {
             int64_t op_id = cl.get(space, (char *) &handles[i], sizeof(uint64_t), &get_status, &(results[i].first), &results[i].second);
             if (op_id < 0)
@@ -99,9 +104,11 @@ namespace coordinator
             loop_id = cl.loop(-1, &loop_status);
             if (loop_id < 0) {
                 std::cerr << "\"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
+                hyperclientLock.unlock();
                 return std::vector<int64_t>(); // need to destroy_attrs
             }
         }
+        hyperclientLock.unlock();
 
         std::vector<int64_t> toRet(handles.size());
         for (uint64_t i = 0; i < numNodes; i++) {
