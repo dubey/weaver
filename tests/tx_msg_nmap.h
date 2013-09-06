@@ -87,7 +87,6 @@ void unpack_nmap_tx_b(message::message &m)
     coordinator::timestamper vts(1);
     coordinator::pending_tx tx;
     vts.unpack_tx(m, tx);
-    message::unpack_client_tx(m, tx);
     uint64_t j = 0, loc = 0;
     loc = (loc + 1) % NUM_SHARDS;
     for (uint64_t i = 0; i < 10; i+=2) {
