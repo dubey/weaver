@@ -83,8 +83,8 @@ namespace coordinator
         message::unpack_client_tx(msg, tx);
 
         // lookup mappings
-        std::vector<uint64_t> get_map;
-        std::unordered_map<uint64_t, uint64_t> requested_map;
+        std::unordered_map<uint64_t, uint64_t> request_element_mappings;
+        std::unordered_set<uint64_t> mappings_to_get;
         for (auto upd: tx.writes) {
             switch (upd->type) {
                 case message::NODE_CREATE_REQ:
@@ -93,25 +93,25 @@ namespace coordinator
                     loc_gen = (loc_gen + 1) % NUM_SHARDS;
                     upd->loc1 = loc_gen + SHARD_ID_INCR; // node will be placed on this shard
                     loc_gen_mutex.unlock();
-                    requested_map.emplace(upd->handle, upd->loc1);
+                    request_element_mappings.emplace(upd->handle, upd->loc1);
                     break;
 
                 case message::EDGE_CREATE_REQ:
-                    if (requested_map.find(upd->elem1) == requested_map.end()) {
-                        requested_map.emplace(upd->elem1, 0);
-                        get_map.emplace_back(upd->elem1);
+                    if (request_element_mappings.find(upd->elem1) == request_element_mappings.end()) {
+                        //request_element_mappings.emplace(upd->elem1, 0);
+                        mappings_to_get.insert(upd->elem1);
                     }
-                    if (requested_map.find(upd->elem2) == requested_map.end()) {
-                        requested_map.emplace(upd->elem2, 0);
-                        get_map.emplace_back(upd->elem2);
+                    if (request_element_mappings.find(upd->elem2) == request_element_mappings.end()) {
+                        //request_element_mappings.emplace(upd->elem2, 0);
+                        mappings_to_get.insert(upd->elem2);
                     }
                     break;
 
                 case message::NODE_DELETE_REQ:
                 case message::EDGE_DELETE_REQ:
-                    if (requested_map.find(upd->elem1) == requested_map.end()) {
-                        requested_map.emplace(upd->elem1, 0);
-                        get_map.emplace_back(upd->elem1);
+                    if (request_element_mappings.find(upd->elem1) == request_element_mappings.end()) {
+                        //request_element_mappings.emplace(upd->elem1, 0);
+                        mappings_to_get.insert(upd->elem1);
                     }
                     break;
 
@@ -119,17 +119,12 @@ namespace coordinator
                     DEBUG << "bad type" << std::endl;
             }
         }
-        if (!get_map.empty()) {
-            std::vector<int64_t> get_results = nmap_client.get_mappings(get_map);
-            for (uint64_t i = 0; i < get_map.size(); i++) {
-                uint64_t handle = get_map.at(i);
-                assert(requested_map.find(handle) != requested_map.end());
-                requested_map.at(handle) = (uint64_t)get_results.at(i);
-            }
+        if (!mappings_to_get.empty()) {
+            nmap_client.get_mappings(mappings_to_get, request_element_mappings);
         }
 
         // insert mappings
-        std::vector<std::pair<uint64_t, int64_t>> put_map;
+        std::vector<std::pair<uint64_t, uint64_t>> put_map;
         for (auto upd: tx.writes) {
             switch (upd->type) {
                 case message::NODE_CREATE_REQ:
@@ -137,17 +132,17 @@ namespace coordinator
                     break;
 
                 case message::EDGE_CREATE_REQ:
-                    assert(requested_map.find(upd->elem1) != requested_map.end());
-                    assert(requested_map.find(upd->elem2) != requested_map.end());
-                    upd->loc1 = requested_map.at(upd->elem1);
-                    upd->loc2 = requested_map.at(upd->elem2);
+                    assert(request_element_mappings.find(upd->elem1) != request_element_mappings.end());
+                    assert(request_element_mappings.find(upd->elem2) != request_element_mappings.end());
+                    upd->loc1 = request_element_mappings.at(upd->elem1);
+                    upd->loc2 = request_element_mappings.at(upd->elem2);
                     put_map.emplace_back(std::make_pair(upd->handle, (int64_t)upd->loc1));
                     break;
 
                 case message::NODE_DELETE_REQ:
                 case message::EDGE_DELETE_REQ:
-                    assert(requested_map.find(upd->elem1) != requested_map.end());
-                    upd->loc1 = requested_map.at(upd->elem1);
+                    assert(request_element_mappings.find(upd->elem1) != request_element_mappings.end());
+                    upd->loc1 = request_element_mappings.at(upd->elem1);
                     break;
 
                 default:
