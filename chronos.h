@@ -46,6 +46,9 @@
 // e
 #include <e/intrusive_ptr.h>
 
+// Replicant
+#include <replicant.h>
+
 extern "C" {
 #endif
 
@@ -264,7 +267,7 @@ class chronos_client
                      const char* func, const char* data, size_t data_sz);
 
     private:
-        std::auto_ptr<class replicant> m_replicant;
+        std::auto_ptr<replicant_client> m_replicant;
         pending_map m_pending;
 };
 #endif // __cplusplus

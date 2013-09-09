@@ -40,7 +40,7 @@
 e::buffer::packer
 operator << (e::buffer::packer lhs, const chronos_stats& rhs);
 
-e::buffer::unpacker
-operator >> (e::buffer::unpacker lhs, chronos_stats& rhs);
+e::unpacker
+operator >> (e::unpacker lhs, chronos_stats& rhs);
 
 #endif // chronos_stats_encode_h_

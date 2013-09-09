@@ -37,6 +37,7 @@
 
 // e
 #include <e/endian.h>
+#include <e/error.h>
 
 // Replicant
 #include <replicant.h>
@@ -158,7 +159,7 @@ class chronos_client::pending_get_stats : public pending
 };
 
 chronos_client :: chronos_client(const char* host, uint16_t port)
-    : m_replicant(new replicant(host, port))
+    : m_replicant(new replicant_client(host, port))
     , m_pending()
 {
 }
@@ -315,7 +316,7 @@ int64_t
 chronos_client :: send(e::intrusive_ptr<pending> pend, chronos_returncode* status,
                        const char* func, const char* data, size_t data_sz)
 {
-    int64_t ret = m_replicant->send("chronosd", 8,
+    int64_t ret = m_replicant->send("chronosd",
                                     func, data, data_sz,
                                     &pend->repl_status,
                                     &pend->repl_output,
@@ -329,9 +330,9 @@ chronos_client :: send(e::intrusive_ptr<pending> pend, chronos_returncode* statu
     else
     {
 std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-std::cerr << __FILE__ << ":" << __LINE__ << " " << m_replicant->last_error_desc();
-std::cerr << __FILE__ << ":" << __LINE__ << " " << m_replicant->last_error_file();
-std::cerr << __FILE__ << ":" << __LINE__ << " " << m_replicant->last_error_line();
+e::error send_error = m_replicant->last_error();
+std::cerr << __FILE__ << ":" << __LINE__ << " " << send_error.msg();
+std::cerr << __FILE__ << ":" << __LINE__ << " " << send_error.loc();
         *status = CHRONOS_ERROR;
         return ret;
     }

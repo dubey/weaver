@@ -30,32 +30,32 @@
 #include <replicant_state_machine.h>
 
 void*
-chronosd_create(struct replicant_state_machine_actions*);
+chronosd_create(struct replicant_state_machine_context*);
 void*
-chronosd_recreate(struct replicant_state_machine_actions* actions,
+chronosd_recreate(struct replicant_state_machine_context* ctx,
                   const char*, size_t);
 void
-chronosd_destroy(void* f);
+chronosd_destroy(struct replicant_state_machine_context* ctx, void* f);
 void
-chronosd_snapshot(struct replicant_state_machine_actions* actions,
-                  void*, char** data, size_t* sz);
+chronosd_snapshot(struct replicant_state_machine_context* ctx,
+                  void*, const char** data, size_t* sz);
 void
-chronosd_create_event(struct replicant_state_machine_actions* actions, void* obj,
+chronosd_create_event(struct replicant_state_machine_context* ctx, void* obj,
                           const char* data, size_t data_sz);
 void
-chronosd_acquire_references(struct replicant_state_machine_actions* actions, void* obj,
+chronosd_acquire_references(struct replicant_state_machine_context* ctx, void* obj,
                                 const char* data, size_t data_sz);
 void
-chronosd_release_references(struct replicant_state_machine_actions* actions, void* obj,
+chronosd_release_references(struct replicant_state_machine_context* ctx, void* obj,
                                 const char* data, size_t data_sz);
 void
-chronosd_query_order(struct replicant_state_machine_actions* actions, void* obj,
+chronosd_query_order(struct replicant_state_machine_context* ctx, void* obj,
                          const char* data, size_t data_sz);
 void
-chronosd_assign_order(struct replicant_state_machine_actions* actions, void* obj,
+chronosd_assign_order(struct replicant_state_machine_context* ctx, void* obj,
                           const char* data, size_t data_sz);
 void
-chronosd_get_stats(struct replicant_state_machine_actions* actions, void* obj,
+chronosd_get_stats(struct replicant_state_machine_context* ctx, void* obj,
                        const char* data, size_t data_sz);
 
 struct replicant_state_machine rsm = {

@@ -10,6 +10,8 @@ x = c.create_event()
 y = c.create_event()
 z = c.create_event()
 
+print w,x,y,z
+print c.query_order([(w, x)])
 assert c.query_order([(w, x)]) == [(w, x, '?')]
 assert c.query_order([(w, y)]) == [(w, y, '?')]
 assert c.query_order([(w, z)]) == [(w, z, '?')]

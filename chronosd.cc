@@ -56,17 +56,17 @@ class chronosd
         ~chronosd() throw ();
 
     public:
-        void create_event(struct replicant_state_machine_actions* actions,
+        void create_event(struct replicant_state_machine_context* ctx,
                           const char* data, size_t data_sz);
-        void acquire_references(struct replicant_state_machine_actions* actions,
+        void acquire_references(struct replicant_state_machine_context* ctx,
                                 const char* data, size_t data_sz);
-        void release_references(struct replicant_state_machine_actions* actions,
+        void release_references(struct replicant_state_machine_context* ctx,
                                 const char* data, size_t data_sz);
-        void query_order(struct replicant_state_machine_actions* actions,
+        void query_order(struct replicant_state_machine_context* ctx,
                          const char* data, size_t data_sz);
-        void assign_order(struct replicant_state_machine_actions* actions,
+        void assign_order(struct replicant_state_machine_context* ctx,
                           const char* data, size_t data_sz);
-        void get_stats(struct replicant_state_machine_actions* actions,
+        void get_stats(struct replicant_state_machine_context* ctx,
                        const char* data, size_t data_sz);
 
     private:
@@ -93,19 +93,23 @@ chronosd :: ~chronosd() throw ()
 }
 
 void
-chronosd :: create_event(struct replicant_state_machine_actions* actions,
+chronosd :: create_event(struct replicant_state_machine_context* ctx,
                          const char*, size_t)
 {
     ++m_count_create_event;
     uint64_t event = m_graph.add_vertex();
     /* XXX capture reference */
-    char buf[sizeof(uint64_t)];
+    // XXX no stack, use heap!! TODO have to clean up malloc'ed stuff
+    char *buf = (char*)malloc(sizeof(uint64_t));
+    //char buf[sizeof(uint64_t)];
     e::pack64le(event, buf);
-    actions->set_response(actions->ctx, buf, sizeof(buf));
+    //FILE* log = replicant_state_machine_log_stream(ctx);
+    //fprintf(log, "chronosd create event = %lu, create event count = %lu, buf = %s, sizeof buf = %lu, sizeof uint64_t = %lu\n", event, m_count_create_event, buf, sizeof(buf), sizeof(uint64_t));
+    replicant_state_machine_set_response(ctx, buf, sizeof(buf));
 }
 
 void
-chronosd :: acquire_references(struct replicant_state_machine_actions* actions,
+chronosd :: acquire_references(struct replicant_state_machine_context* ctx,
                                const char* data, size_t data_sz)
 {
     ++m_count_acquire_references;
@@ -155,9 +159,11 @@ chronosd :: acquire_references(struct replicant_state_machine_actions* actions,
     }
 
     // Write the response
-    char buf[sizeof(uint64_t)];
+    // XXX no stack, use heap!! TODO have to clean up malloc'ed stuff
+    char *buf = (char*)malloc(sizeof(uint64_t));
+    //char buf[sizeof(uint64_t)];
     e::pack64le(response, buf);
-    actions->set_response(actions->ctx, buf, sizeof(buf));
+    replicant_state_machine_set_response(ctx, buf, sizeof(buf));
 
     if (response == NUM_EVENTS)
     {
@@ -166,7 +172,7 @@ chronosd :: acquire_references(struct replicant_state_machine_actions* actions,
 }
 
 void
-chronosd :: release_references(struct replicant_state_machine_actions* actions,
+chronosd :: release_references(struct replicant_state_machine_context* ctx,
                                const char* data, size_t data_sz)
 {
     ++m_count_release_references;
@@ -189,18 +195,22 @@ chronosd :: release_references(struct replicant_state_machine_actions* actions,
 
     // Write the response
     uint64_t response = NUM_EVENTS;
-    char buf[sizeof(uint64_t)];
+    // XXX no stack, use heap!! TODO have to clean up malloc'ed stuff
+    char *buf = (char*)malloc(sizeof(uint64_t));
+    //char buf[sizeof(uint64_t)];
     e::pack64le(response, buf);
-    actions->set_response(actions->ctx, buf, sizeof(buf));
+    replicant_state_machine_set_response(ctx, buf, sizeof(buf));
 }
 
 void
-chronosd :: query_order(struct replicant_state_machine_actions* actions,
+chronosd :: query_order(struct replicant_state_machine_context* ctx,
                         const char* data, size_t data_sz)
 {
     ++m_count_query_order;
     const size_t NUM_PAIRS = data_sz / (2 * sizeof(uint64_t) + sizeof(uint32_t));
-    std::vector<uint8_t> response(NUM_PAIRS);
+    // XXX no stack, use heap!! TODO have to clean up malloc'ed stuff
+    uint8_t *response = (uint8_t*)malloc(NUM_PAIRS * sizeof(uint8_t));
+    //std::vector<uint8_t> response(NUM_PAIRS);
     const char* c = data;
 
     for (size_t i = 0; i < NUM_PAIRS; ++i)
@@ -235,19 +245,27 @@ chronosd :: query_order(struct replicant_state_machine_actions* actions,
         }
 
         response[i] = chronos_cmp_to_byte(p.order);
+        //response[i] = chronos_cmp_to_byte(p.order);
     }
 
-    const char* r = reinterpret_cast<const char*>(&response.front());
-    actions->set_response(actions->ctx, r, response.size() * sizeof(uint8_t));
+    const char *r = (char*)response;
+    //const char* r = reinterpret_cast<const char*>(&response.front());
+    replicant_state_machine_set_response(ctx, r, NUM_PAIRS * sizeof(uint8_t));
+    //replicant_state_machine_set_response(ctx, r, response.size() * sizeof(uint8_t));
 }
 
 void
-chronosd :: assign_order(struct replicant_state_machine_actions* actions,
+chronosd :: assign_order(struct replicant_state_machine_context* ctx,
                          const char* data, size_t data_sz)
 {
     ++m_count_assign_order;
     const size_t NUM_PAIRS = data_sz / (2 * sizeof(uint64_t) + sizeof(uint32_t) + sizeof(uint8_t));
-    std::vector<uint8_t> results(NUM_PAIRS, chronos_cmp_to_byte(CHRONOS_WOULDLOOP));
+    // XXX no stack, use heap!! TODO have to clean up malloc'ed stuff
+    uint8_t *results = (uint8_t*)malloc(NUM_PAIRS * sizeof(uint8_t));
+    for (size_t i = 0; i < NUM_PAIRS; i++) {
+        results[i] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
+    }
+    //std::vector<uint8_t> results(NUM_PAIRS, chronos_cmp_to_byte(CHRONOS_WOULDLOOP));
     std::vector<std::pair<uint64_t, uint64_t> > edges;
     edges.reserve(NUM_PAIRS);
     size_t num_pairs = 0;
@@ -329,12 +347,14 @@ chronosd :: assign_order(struct replicant_state_machine_actions* actions,
         }
     }
 
-    const char* r = reinterpret_cast<const char*>(&results.front());
-    actions->set_response(actions->ctx, r, results.size() * sizeof(uint8_t));
+    const char *r = (char*)results;
+    //const char* r = reinterpret_cast<const char*>(&results.front());
+    replicant_state_machine_set_response(ctx, r, NUM_PAIRS * sizeof(uint8_t));
+    //replicant_state_machine_set_response(ctx, r, results.size() * sizeof(uint8_t));
 }
 
 void
-chronosd :: get_stats(struct replicant_state_machine_actions* actions,
+chronosd :: get_stats(struct replicant_state_machine_context* ctx,
                       const char*, size_t)
 {
     chronos_stats st;
@@ -376,7 +396,8 @@ chronosd :: get_stats(struct replicant_state_machine_actions* actions,
     st.count_query_order = m_count_query_order;
     st.count_assign_order = m_count_assign_order;
 
-    char buf[sizeof(uint64_t) * 9 + sizeof(uint32_t)];
+    char *buf = (char*)malloc(sizeof(uint64_t) * 9 + sizeof(uint32_t));
+    //char buf[sizeof(uint64_t) * 9 + sizeof(uint32_t)];
     char* c = buf;
     c = e::pack64le(st.time, c);
     c = e::pack64le(st.utime, c);
@@ -388,29 +409,30 @@ chronosd :: get_stats(struct replicant_state_machine_actions* actions,
     c = e::pack64le(st.count_release_references, c);
     c = e::pack64le(st.count_query_order, c);
     c = e::pack64le(st.count_assign_order, c);
-    actions->set_response(actions->ctx, buf, sizeof(buf));
+    replicant_state_machine_set_response(ctx, buf, sizeof(buf));
 }
 
 extern "C"
 {
 
 void*
-chronosd_create(struct replicant_state_machine_actions*)
+chronosd_create(struct replicant_state_machine_context*)
 {
     return new (std::nothrow) chronosd();
 }
 
 void*
-chronosd_recreate(struct replicant_state_machine_actions* actions,
+chronosd_recreate(struct replicant_state_machine_context* ctx,
                   const char*, size_t)
 {
     // XXX
-    actions->log(actions->ctx, "chronosd does not recreate from snapshots");
+    FILE* log = replicant_state_machine_log_stream(ctx);
+    fprintf(log, "chronosd does not recreate from snapshots");
     abort();
 }
 
 void
-chronosd_destroy(void* f)
+chronosd_destroy(struct replicant_state_machine_context*, void* f)
 {
     if (f)
     {
@@ -419,55 +441,56 @@ chronosd_destroy(void* f)
 }
 
 void
-chronosd_snapshot(struct replicant_state_machine_actions* actions,
-                  void*, char** data, size_t* sz)
+chronosd_snapshot(struct replicant_state_machine_context* ctx,
+                  void*, const char** data, size_t* sz)
 {
     // XXX
-    actions->log(actions->ctx, "chronosd does not take snapshots");
+    FILE* log = replicant_state_machine_log_stream(ctx);
+    fprintf(log, "chronosd does not take snapshots");
     *data = NULL;
     *sz = 0;
 }
 
 void
-chronosd_create_event(struct replicant_state_machine_actions* actions, void* obj,
+chronosd_create_event(struct replicant_state_machine_context* ctx, void* obj,
                           const char* data, size_t data_sz)
 {
-    static_cast<chronosd*>(obj)->create_event(actions, data, data_sz);
+    static_cast<chronosd*>(obj)->create_event(ctx, data, data_sz);
 }
 
 void
-chronosd_acquire_references(struct replicant_state_machine_actions* actions, void* obj,
+chronosd_acquire_references(struct replicant_state_machine_context* ctx, void* obj,
                                 const char* data, size_t data_sz)
 {
-    static_cast<chronosd*>(obj)->acquire_references(actions, data, data_sz);
+    static_cast<chronosd*>(obj)->acquire_references(ctx, data, data_sz);
 }
 
 void
-chronosd_release_references(struct replicant_state_machine_actions* actions, void* obj,
+chronosd_release_references(struct replicant_state_machine_context* ctx, void* obj,
                                 const char* data, size_t data_sz)
 {
-    static_cast<chronosd*>(obj)->release_references(actions, data, data_sz);
+    static_cast<chronosd*>(obj)->release_references(ctx, data, data_sz);
 }
 
 void
-chronosd_query_order(struct replicant_state_machine_actions* actions, void* obj,
+chronosd_query_order(struct replicant_state_machine_context* ctx, void* obj,
                          const char* data, size_t data_sz)
 {
-    static_cast<chronosd*>(obj)->query_order(actions, data, data_sz);
+    static_cast<chronosd*>(obj)->query_order(ctx, data, data_sz);
 }
 
 void
-chronosd_assign_order(struct replicant_state_machine_actions* actions, void* obj,
+chronosd_assign_order(struct replicant_state_machine_context* ctx, void* obj,
                           const char* data, size_t data_sz)
 {
-    static_cast<chronosd*>(obj)->assign_order(actions, data, data_sz);
+    static_cast<chronosd*>(obj)->assign_order(ctx, data, data_sz);
 }
 
 void
-chronosd_get_stats(struct replicant_state_machine_actions* actions, void* obj,
+chronosd_get_stats(struct replicant_state_machine_context* ctx, void* obj,
                        const char* data, size_t data_sz)
 {
-    static_cast<chronosd*>(obj)->get_stats(actions, data, data_sz);
+    static_cast<chronosd*>(obj)->get_stats(ctx, data, data_sz);
 }
 
 } // extern "C"

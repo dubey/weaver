@@ -37,8 +37,8 @@ operator << (e::buffer::packer lhs, const chronos_stats& rhs)
         << rhs.count_assign_order;
 }
 
-e::buffer::unpacker
-operator >> (e::buffer::unpacker lhs, chronos_stats& rhs)
+e::unpacker
+operator >> (e::unpacker lhs, chronos_stats& rhs)
 {
     return lhs >> rhs.time >> rhs.utime >> rhs.stime >> rhs.maxrss >> rhs.events
         >> rhs.count_create_event >> rhs.count_acquire_references
