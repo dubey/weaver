@@ -16,6 +16,7 @@
 #include <vector>
 #include <hyperclient.h>
 #include <hyperdex.h>
+#include <po6/threads/mutex.h>
 
 #include "common/weaver_constants.h"
 
@@ -32,11 +33,11 @@ namespace coordinator
             const char *host = HYPERDEX_COORD_IPADDR;
             static const int port = HYPERDEX_COORD_PORT;
             hyperclient cl;
+            po6::threads::mutex hyperclientLock;
 
         public:
-            // TODO are these thread-safe?
-            void put_mappings(std::vector<std::pair<uint64_t, int64_t>> pairs_to_add);
-            std::vector<int64_t> get_mappings(std::vector<uint64_t> handles);
+            void put_mappings(std::vector<std::pair<uint64_t, uint64_t>> &pairs_to_add);
+            void get_mappings(std::unordered_set<uint64_t> &toGet, std::unordered_map<uint64_t, uint64_t> &toPut);
             void clean_up_space();
     };
 
@@ -44,11 +45,12 @@ namespace coordinator
     nmap_stub :: nmap_stub() : cl(host, port) { }
 
     inline void
-    nmap_stub :: put_mappings(std::vector<std::pair<uint64_t, int64_t>> pairs_to_add)
+    nmap_stub :: put_mappings(std::vector<std::pair<uint64_t, uint64_t>> &pairs_to_add)
     {
         int numPairs = pairs_to_add.size();
         hyperclient_attribute* attrs_to_add = (hyperclient_attribute *)malloc(numPairs * sizeof(hyperclient_attribute));
 
+        hyperclientLock.lock();
         for (int i = 0; i < numPairs; i++) {
             attrs_to_add[i].attr = attrName;
             attrs_to_add[i].value = (char *) &pairs_to_add[i].second;
@@ -59,6 +61,9 @@ namespace coordinator
             int64_t op_id = cl.put(space, (const char *) &pairs_to_add[i].first, sizeof(int64_t), &(attrs_to_add[i]), 1, &put_status);
             if (op_id < 0) {
                 std::cerr << "\"put\" returned " << op_id << " with status " << put_status << std::endl;
+                hyperclientLock.unlock();
+                free(attrs_to_add);
+                return;
             }
         }
 
@@ -68,52 +73,77 @@ namespace coordinator
         for (int i = 0; i < numPairs; i++) {
             loop_id = cl.loop(-1, &loop_status);
             if (loop_id < 0) {
-                std::cerr << "\"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
+                std::cerr << "put \"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
+                hyperclientLock.unlock();
                 free(attrs_to_add);
                 return;
             }
         }
+        hyperclientLock.unlock();
         free(attrs_to_add);
     }
 
-    inline std::vector<int64_t>
-    nmap_stub :: get_mappings(std::vector<uint64_t> handles)
+    void
+    nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet, std::unordered_map<uint64_t, uint64_t> &toPut)
     {
-        uint64_t numNodes = handles.size();
-        hyperclient_returncode get_status;
-        std::vector<std::pair<hyperclient_attribute *, size_t> > results(numNodes);
+        int numNodes = toGet.size();
+        struct async_get {
+            uint64_t key;
+            int64_t op_id;
+            hyperclient_returncode get_status;
+            hyperclient_attribute * attr;
+            size_t attr_size;
+        };
+        std::vector<struct async_get > results(numNodes);
+        auto nextHandle = toGet.begin();
+        for (int i = 0; i < numNodes; i++) {
+            results[i].key = *nextHandle;
+            nextHandle++;
+        }
 
-        for (uint64_t i = 0; i < numNodes; i++) {
-            int64_t op_id = cl.get(space, (char *) &handles[i], sizeof(uint64_t), &get_status, &(results[i].first), &results[i].second);
+        hyperclientLock.lock();
+        for (int i = 0; i < numNodes; i++) {
+            results[i].op_id = cl.get(space, (char *) &(results[i].key), sizeof(uint64_t), 
+                &(results[i].get_status), &(results[i].attr), &(results[i].attr_size));
+            nextHandle++;
+            /*
             if (op_id < 0)
             {
                 std::cerr << "\"get\" returned " << op_id << " with status " << get_status << std::endl;
                 return std::vector<int64_t>(); // need to destroy_attrs
             }
+            */
         }
 
         hyperclient_returncode loop_status;
         int64_t loop_id;
         // call loop once for every get
-        for (uint64_t i = 0; i < numNodes; i++) {
+        for (int i = 0; i < numNodes; i++) {
             loop_id = cl.loop(-1, &loop_status);
             if (loop_id < 0) {
-                std::cerr << "\"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
-                return std::vector<int64_t>(); // need to destroy_attrs
+                std::cerr << "get \"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
+                return; // free previously gotten attrs
             }
-        }
 
-        std::vector<int64_t> toRet(handles.size());
-        for (uint64_t i = 0; i < numNodes; i++) {
-            if (results[i].second != 1) {
-                std::cerr << "\"get\" number " << i << " returned " << results[i].second << " attrs" << std::endl;
-                return std::vector<int64_t>(); // need to destroy_attrs
+            // double check this ID exists
+            bool found = false;
+            for (int i = 0; i < numNodes; i++) {
+                found = found || (results[i].op_id == loop_id);
             }
-            int64_t* raw = (int64_t *) results[i].first->value;
-            toRet[i] = *raw;
-            hyperclient_destroy_attrs(results[i].first, results[i].second);
+            assert(found);
         }
-        return toRet;
+        hyperclientLock.unlock();
+
+        for (int i = 0; i < numNodes; i++) {
+            if (results[i].attr_size != 1) {
+                std::cerr << "\"get\" number " << i << " returned " << results[i].attr_size << " attrs" << std::endl;
+            }
+            uint64_t* shard = (uint64_t *) results[i].attr->value;
+            uint64_t nodeID = results[i].key;
+            assert(toPut.find(nodeID) == toPut.end());
+            toPut.emplace(nodeID, *shard);
+            hyperclient_destroy_attrs(results[i].attr, results[i].attr_size);
+        }
     }
 
     inline void
