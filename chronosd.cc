@@ -30,6 +30,8 @@
 #include <sys/resource.h>
 
 #include <iostream>
+#include <vector>
+#include <tr1/unordered_map>
 
 // e
 #include <e/endian.h>
@@ -49,6 +51,23 @@
 #define ERRORMSG2(X, Y1, Y2) fprintf(stderr, "%s:%i:  " X "\n", __FILE__, __LINE__, Y1, Y2)
 #define ERRNOMSG(CALL) ERRORMSG2(tostr(CALL) " failed:  %s  [ERRNO=%i]", strerror(errno), errno)
 
+// hash function for vector clocks
+namespace std
+{
+namespace tr1
+{
+    template <>
+    struct hash<std::vector<uint64_t> > 
+    {
+        public:
+            size_t operator()(std::vector<uint64_t> v) const throw() 
+            {
+                return v[0]; // TODO improve this!
+            }
+    };
+}
+}
+
 class chronosd
 {
     public:
@@ -66,6 +85,8 @@ class chronosd
                          const char* data, size_t data_sz);
         void assign_order(struct replicant_state_machine_context* ctx,
                           const char* data, size_t data_sz);
+        void weaver_order(struct replicant_state_machine_context* ctx,
+                          const char* data, size_t data_sz);
         void get_stats(struct replicant_state_machine_context* ctx,
                        const char* data, size_t data_sz);
 
@@ -76,6 +97,8 @@ class chronosd
         uint64_t m_count_release_references;
         uint64_t m_count_query_order;
         uint64_t m_count_assign_order;
+        uint64_t m_count_weaver_order;
+        std::tr1::unordered_map<std::vector<uint64_t>, uint64_t> m_vcmap;
 };
 
 chronosd :: chronosd()
@@ -85,6 +108,8 @@ chronosd :: chronosd()
     , m_count_release_references()
     , m_count_query_order()
     , m_count_assign_order()
+    , m_count_weaver_order()
+    , m_vcmap()
 {
 }
 
@@ -353,6 +378,135 @@ chronosd :: assign_order(struct replicant_state_machine_context* ctx,
     //replicant_state_machine_set_response(ctx, r, results.size() * sizeof(uint8_t));
 }
 
+const char*
+unpack_vector_uint64(uint64_t **vec, uint64_t vec_size, const char *c)
+{
+    *vec = (uint64_t*)malloc(sizeof(uint64_t) * vec_size);
+    for (size_t i = 0; i < vec_size; i++) {
+        c = e::unpack64le(c, *vec + i);
+    }
+    return c;
+}
+
+void
+chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
+                         const char* data, size_t data_sz)
+{
+    ++m_count_weaver_order;
+    const size_t NUM_PAIRS = data_sz / (2 * sizeof(uint64_t) * NUM_SHARDS // vector clocks
+            + sizeof(uint32_t) // flags
+            + sizeof(uint8_t)); // preferred order
+    // XXX no stack, use heap!! TODO have to clean up malloc'ed stuff
+    uint8_t *results = (uint8_t*)malloc(NUM_PAIRS * sizeof(uint8_t));
+    for (size_t i = 0; i < NUM_PAIRS; i++) {
+        results[i] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
+    }
+    //std::vector<uint8_t> results(NUM_PAIRS, chronos_cmp_to_byte(CHRONOS_WOULDLOOP));
+    std::vector<std::pair<uint64_t, uint64_t> > edges;
+    edges.reserve(NUM_PAIRS);
+    size_t num_pairs = 0;
+    const char* c = data;
+
+    for (num_pairs = 0; num_pairs < NUM_PAIRS; ++num_pairs)
+    {
+        chronos_pair p;
+        weaver_pair wp;
+        uint8_t o;
+        c = unpack_vector_uint64(&wp.lhs, NUM_SHARDS, c);
+        c = unpack_vector_uint64(&wp.rhs, NUM_SHARDS, c);
+        c = e::unpack32le(c, &p.flags);
+        c = e::unpack8le(c, &o);
+        p.order = byte_to_chronos_cmp(o);
+        std::vector<uint64_t> vc_lhs, vc_rhs;
+        vc_lhs.reserve(NUM_SHARDS);
+        vc_rhs.reserve(NUM_SHARDS);
+        for (size_t i = 0; i < NUM_SHARDS; i++) {
+            vc_lhs.push_back(wp.lhs[i]);
+            vc_rhs.push_back(wp.rhs[i]);
+        }
+        if (m_vcmap.find(vc_lhs) == m_vcmap.end()) {
+            uint64_t ev_lhs = m_graph.add_vertex();
+            m_vcmap[vc_lhs] = ev_lhs;
+        }
+        if (m_vcmap.find(vc_rhs) == m_vcmap.end()) {
+            uint64_t ev_rhs = m_graph.add_vertex();
+            m_vcmap[vc_rhs] = ev_rhs;
+        }
+        p.lhs = m_vcmap[vc_lhs];
+        p.rhs = m_vcmap[vc_rhs];
+
+        if (!m_graph.exists(p.lhs) ||
+            !m_graph.exists(p.rhs))
+        {
+            results[num_pairs] = chronos_cmp_to_byte(CHRONOS_NOEXIST);
+            break;
+        }
+
+        int resolve = m_graph.compute_order(p.lhs, p.rhs);
+
+        if (resolve < 0)
+        {
+            results[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_BEFORE);
+
+            if (p.order != CHRONOS_HAPPENS_BEFORE)
+            {
+                if (!(p.flags & CHRONOS_SOFT_FAIL))
+                {
+                    results[num_pairs] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
+                    break;
+                }
+            }
+        }
+        else if (resolve > 0)
+        {
+            results[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_AFTER);
+
+            if (p.order != CHRONOS_HAPPENS_AFTER)
+            {
+                if (!(p.flags & CHRONOS_SOFT_FAIL))
+                {
+                    results[num_pairs] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
+                    break;
+                }
+            }
+        }
+        else
+        {
+            switch (p.order)
+            {
+                case CHRONOS_HAPPENS_BEFORE:
+                    results[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_BEFORE);
+                    m_graph.add_edge(p.lhs, p.rhs);
+                    edges.push_back(std::make_pair(p.lhs, p.rhs));
+                    break;
+                case CHRONOS_HAPPENS_AFTER:
+                    results[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_AFTER);
+                    m_graph.add_edge(p.rhs, p.lhs);
+                    edges.push_back(std::make_pair(p.rhs, p.lhs));
+                    break;
+                case CHRONOS_CONCURRENT:
+                case CHRONOS_WOULDLOOP:
+                case CHRONOS_NOEXIST:
+                default:
+                    break;
+            }
+        }
+    }
+
+    if (num_pairs != NUM_PAIRS)
+    {
+        for (size_t i = 0; i < edges.size(); ++i)
+        {
+            m_graph.remove_edge(edges[i].first, edges[i].second);
+        }
+    }
+
+    const char *r = (char*)results;
+    //const char* r = reinterpret_cast<const char*>(&results.front());
+    replicant_state_machine_set_response(ctx, r, NUM_PAIRS * sizeof(uint8_t));
+    //replicant_state_machine_set_response(ctx, r, results.size() * sizeof(uint8_t));
+}
+
 void
 chronosd :: get_stats(struct replicant_state_machine_context* ctx,
                       const char*, size_t)
@@ -395,6 +549,7 @@ chronosd :: get_stats(struct replicant_state_machine_context* ctx,
     st.count_release_references = m_count_release_references;
     st.count_query_order = m_count_query_order;
     st.count_assign_order = m_count_assign_order;
+    st.count_weaver_order = m_count_weaver_order;
 
     char *buf = (char*)malloc(sizeof(uint64_t) * 9 + sizeof(uint32_t));
     //char buf[sizeof(uint64_t) * 9 + sizeof(uint32_t)];
@@ -409,6 +564,7 @@ chronosd :: get_stats(struct replicant_state_machine_context* ctx,
     c = e::pack64le(st.count_release_references, c);
     c = e::pack64le(st.count_query_order, c);
     c = e::pack64le(st.count_assign_order, c);
+    c = e::pack64le(st.count_weaver_order, c);
     replicant_state_machine_set_response(ctx, buf, sizeof(buf));
 }
 
@@ -484,6 +640,13 @@ chronosd_assign_order(struct replicant_state_machine_context* ctx, void* obj,
                           const char* data, size_t data_sz)
 {
     static_cast<chronosd*>(obj)->assign_order(ctx, data, data_sz);
+}
+
+void
+chronosd_weaver_order(struct replicant_state_machine_context* ctx, void* obj,
+                          const char* data, size_t data_sz)
+{
+    static_cast<chronosd*>(obj)->weaver_order(ctx, data, data_sz);
 }
 
 void

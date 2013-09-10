@@ -38,6 +38,7 @@
 // STL
 #include <map>
 #include <memory>
+#include <vector>
 
 // po6
 #include <po6/net/location.h>
@@ -48,6 +49,9 @@
 
 // Replicant
 #include <replicant.h>
+
+// Weaver
+#define NUM_SHARDS 4
 
 extern "C" {
 #endif
@@ -78,6 +82,14 @@ struct chronos_pair
     enum chronos_cmp order;
 };
 
+struct weaver_pair
+{
+    uint64_t *lhs;
+    uint64_t *rhs;
+    uint32_t flags;
+    enum chronos_cmp order;
+};
+
 struct chronos_stats
 {
     uint64_t time;
@@ -90,6 +102,7 @@ struct chronos_stats
     uint64_t count_release_references;
     uint64_t count_query_order;
     uint64_t count_assign_order;
+    uint64_t count_weaver_order;
 };
 
 #define CHRONOS_SOFT_FAIL 1
@@ -100,7 +113,7 @@ struct chronos_stats
  * maintain state necessary for the chronos_client.
  */
 struct chronos_client*
-chronos_client_create(const char* host, uint16_t port);
+chronos_client_create(const char* host, uint16_t port, uint64_t num_shards);
 
 /* Destroy an existing client instance.
  */
@@ -183,6 +196,9 @@ int64_t
 chronos_assign_order(struct chronos_client* client, struct chronos_pair* pairs, size_t pairs_sz,
                      enum chronos_returncode* status, ssize_t* ret);
 
+int64_t
+chronos_weaver_order(struct chronos_client* client, struct weaver_pair* pairs, size_t pairs_sz,
+                     enum chronos_returncode* status, ssize_t* ret);
 /* Get statistics from the server.
  *
  * The chronos_stats instance will be filled in.  The fields have the following
@@ -237,7 +253,7 @@ chronos_wait(struct chronos_client* client, int64_t id, int timeout, enum chrono
 class chronos_client
 {
     public:
-        chronos_client(const char* host, uint16_t port);
+        chronos_client(const char* host, uint16_t port, uint64_t num_shards);
         ~chronos_client() throw ();
 
     public:
@@ -250,6 +266,8 @@ class chronos_client
                             chronos_returncode* status, ssize_t* ret);
         int64_t assign_order(chronos_pair* pairs, size_t pairs_sz,
                              chronos_returncode* status, ssize_t* ret);
+        int64_t weaver_order(weaver_pair* pairs, size_t pairs_sz,
+                             chronos_returncode* status, ssize_t* ret);
         int64_t get_stats(chronos_returncode* status, chronos_stats* st, ssize_t* ret);
         int64_t loop(int timeout, chronos_returncode* status);
         int64_t wait(int64_t id, int timeout, chronos_returncode* status);
@@ -259,6 +277,7 @@ class chronos_client
         class pending_create_event;
         class pending_references;
         class pending_order;
+        class pending_weaver_order;
         class pending_get_stats;
         typedef std::map<uint64_t, e::intrusive_ptr<pending> > pending_map;
 
@@ -269,6 +288,7 @@ class chronos_client
     private:
         std::auto_ptr<replicant_client> m_replicant;
         pending_map m_pending;
+        uint64_t m_shards; // number of shards, used as dimension for vector clocks
 };
 #endif // __cplusplus
 

@@ -138,6 +138,27 @@ class chronos_client::pending_order : public pending
         ssize_t* m_ret;
 };
 
+class chronos_client::pending_weaver_order : public pending
+{
+    public:
+        pending_weaver_order(chronos_returncode* status, weaver_pair* pairs, size_t sz, ssize_t* ret);
+        virtual ~pending_weaver_order() throw ();
+
+    public:
+        virtual void parse();
+
+    private:
+        pending_weaver_order(const pending_weaver_order&);
+
+    private:
+        pending_weaver_order& operator = (const pending_weaver_order&);
+
+    private:
+        weaver_pair* m_pairs;
+        size_t m_pairs_sz;
+        ssize_t* m_ret;
+};
+
 class chronos_client::pending_get_stats : public pending
 {
     public:
@@ -158,9 +179,10 @@ class chronos_client::pending_get_stats : public pending
         ssize_t* m_ret;
 };
 
-chronos_client :: chronos_client(const char* host, uint16_t port)
+chronos_client :: chronos_client(const char* host, uint16_t port, uint64_t shards)
     : m_replicant(new replicant_client(host, port))
     , m_pending()
+    , m_shards(shards)
 {
 }
 
@@ -245,6 +267,37 @@ chronos_client :: assign_order(chronos_pair* pairs, size_t pairs_sz,
 
     e::intrusive_ptr<pending> pend(new pending_order(status, pairs, pairs_sz, ret));
     return send(pend, status, "assign_order", &buffer.front(), buffer.size());
+}
+
+char*
+pack_vector_uint64(uint64_t *vec, uint64_t vec_size, char *p)
+{
+    for (size_t i = 0; i < vec_size; i++) {
+       p = e::pack64le(vec[i], p);
+    }
+    return p;
+}
+
+int64_t
+chronos_client :: weaver_order(weaver_pair *pairs, size_t pairs_sz,
+        chronos_returncode *status, ssize_t *ret)
+{
+    std::vector<char> buffer(pairs_sz * (2 * sizeof(uint64_t) * m_shards // vector clocks
+            + sizeof(uint32_t) // flags
+            + sizeof(uint8_t))); // preferred order
+    char *p = &buffer.front();
+
+    // pack weaver pairs
+    for (size_t i = 0; i < pairs_sz; i++) {
+        p = pack_vector_uint64(pairs[i].lhs, m_shards, p);
+        p = pack_vector_uint64(pairs[i].rhs, m_shards, p);
+        p = e::pack32le(pairs[i].flags, p);
+        *p = chronos_cmp_to_byte(pairs[i].order);
+        ++p;
+    }
+
+    e::intrusive_ptr<pending> pend(new pending_weaver_order(status, pairs, pairs_sz, ret));
+    return send(pend, status, "weaver_order", &buffer.front(), buffer.size());
 }
 
 int64_t
@@ -449,6 +502,41 @@ chronos_client :: pending_order :: parse()
     }
 }
 
+////////////////////////////// pending_weaver_order /////////////////////////////
+
+chronos_client :: pending_weaver_order :: pending_weaver_order(chronos_returncode* s, weaver_pair* pairs, size_t sz, ssize_t* ret)
+    : pending(s)
+    , m_pairs(pairs)
+    , m_pairs_sz(sz)
+    , m_ret(ret)
+{
+}
+
+chronos_client :: pending_weaver_order :: ~pending_weaver_order() throw ()
+{
+}
+
+void
+chronos_client :: pending_weaver_order :: parse()
+{
+    if (repl_status != REPLICANT_SUCCESS ||
+        repl_output_sz != m_pairs_sz)
+    {
+        *status = CHRONOS_ERROR;
+        *m_ret = -1;
+    }
+    else
+    {
+        *status = CHRONOS_SUCCESS;
+        *m_ret = repl_output_sz;
+
+        for (size_t i = 0; i < m_pairs_sz; ++i)
+        {
+            m_pairs[i].order = byte_to_chronos_cmp(repl_output[i]);
+        }
+    }
+}
+
 /////////////////////////////// pending_get_stats //////////////////////////////
 
 chronos_client :: pending_get_stats :: pending_get_stats(chronos_returncode* s, chronos_stats* st, ssize_t* ret)
@@ -486,5 +574,6 @@ chronos_client :: pending_get_stats :: parse()
         c = e::unpack64le(c, &m_st->count_release_references);
         c = e::unpack64le(c, &m_st->count_query_order);
         c = e::unpack64le(c, &m_st->count_assign_order);
+        c = e::unpack64le(c, &m_st->count_weaver_order);
     }
 }
