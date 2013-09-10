@@ -22,7 +22,7 @@
 
 #include "common/weaver_constants.h"
 #include "common/property.h"
-#include "common/vclock.h"
+#include "common/event_order.h"
 
 namespace db
 {
@@ -94,7 +94,7 @@ namespace element
             bool operator()(common::property const &prop) const
             {
                 if (prop.key == key) {
-                    int64_t cmp = vc::compare_two_vts(vclk, prop.get_del_time());
+                    int64_t cmp = order::compare_two_vts(vclk, prop.get_del_time());
                     if (cmp >= 1) {
                         return true;
                     }
@@ -118,8 +118,8 @@ namespace element
             if (prop == p) {
                 vc::vclock_t vclk_creat = p.get_creat_time();
                 vc::vclock_t vclk_del = p.get_del_time();
-                int64_t cmp1 = vc::compare_two_vts(vclk, vclk_creat);
-                int64_t cmp2 = vc::compare_two_vts(vclk, vclk_del);
+                int64_t cmp1 = order::compare_two_vts(vclk, vclk_creat);
+                int64_t cmp2 = order::compare_two_vts(vclk, vclk_del);
                 if (cmp1 >= 1 && cmp2 == 0) {
                     return true;
                 }
@@ -185,8 +185,8 @@ namespace element
         {
             vc::vclock_t vclk_creat = prop.get_creat_time();
             vc::vclock_t vclk_del = prop.get_del_time();
-            int64_t cmp1 = vc::compare_two_vts(at_time, vclk_creat);
-            int64_t cmp2 = vc::compare_two_vts(at_time, vclk_del);
+            int64_t cmp1 = order::compare_two_vts(at_time, vclk_creat);
+            int64_t cmp2 = order::compare_two_vts(at_time, vclk_del);
             if (prop_key == prop.key && cmp1 >= 1 && cmp2 == 0) {
                 return std::make_pair(true, prop.value);
             } 

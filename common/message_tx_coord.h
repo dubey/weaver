@@ -24,7 +24,8 @@ namespace message
     {
         uint64_t bytes_to_pack = sizeof(enum msg_type) * tx.writes.size()
                                + size(vt_id) * tx.writes.size()
-                               + size(tx.timestamp) * tx.writes.size();
+                               + size(tx.timestamp) * tx.writes.size()
+                               + size(tx.id) * tx.writes.size();
         for (auto &upd: tx.writes) {
             bytes_to_pack += size(upd->qts);
             switch (upd->type) {
@@ -53,7 +54,7 @@ namespace message
 
         for (auto &upd: tx.writes) {
             packer = packer << upd->type;
-            pack_buffer(packer, vt_id, tx.timestamp, upd->qts);
+            pack_buffer(packer, vt_id, tx.timestamp, upd->qts, tx.id);
             switch (upd->type) {
                 case NODE_CREATE_REQ:
                     pack_buffer(packer, upd->handle, upd->loc1);

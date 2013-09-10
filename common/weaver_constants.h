@@ -56,5 +56,8 @@
 // hyperdex constants
 #define HYPERDEX_COORD_IPADDR "127.0.0.1"
 #define HYPERDEX_COORD_PORT 1982
+// kronos constants
+#define KRONOS_IPADDR "127.0.0.1"
+#define KRONOS_PORT 1992
 
 #endif

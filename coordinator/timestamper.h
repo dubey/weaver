@@ -23,15 +23,22 @@
 #include "common/busybee_infra.h"
 #include "common/vclock.h"
 #include "common/message.h"
+#include "common/message_tx_coord.h"
 #include "transaction.h"
 #include "nmap_stub.h"
 
 namespace coordinator
 {
+    struct tx_reply
+    {
+        uint64_t count;
+        uint64_t client_id;
+    };
+
     class timestamper
     {
         public:
-            uint64_t vt_id; // this vector timestamper's id
+            uint64_t vt_id, shifted_id, id_gen; // this vector timestamper's id
             // messaging
             std::shared_ptr<po6::net::location> myloc;
             busybee_mta *bb;
@@ -39,11 +46,11 @@ namespace coordinator
             uint64_t loc_gen, handle_gen;
             vc::vclock vclk; // vector clock
             vc::qtimestamp_t qts; // queue timestamp
-            std::unordered_map<uint64_t, pending_update> pending_updates;
+            std::unordered_map<uint64_t, tx_reply> tx_replies;
             // node map client
             coordinator::nmap_stub nmap_client;
             // mutexes
-            po6::threads::mutex mutex, loc_gen_mutex;
+            po6::threads::mutex mutex, loc_gen_mutex, id_gen_mutex;
             // migration
             // permanent deletion
             // daemon
@@ -51,13 +58,16 @@ namespace coordinator
         public:
             timestamper(uint64_t id);
             busybee_returncode send(uint64_t shard_id, std::auto_ptr<e::buffer> buf);
-            void unpack_tx(message::message &msg, coordinator::pending_tx &tx);
+            void unpack_tx(message::message &msg, coordinator::pending_tx &tx, uint64_t client_id);
             void clean_nmap_space();
+            uint64_t generate_id();
     };
 
     inline
     timestamper :: timestamper(uint64_t id)
         : vt_id(id)
+        , shifted_id(id << (64-ID_BITS))
+        , id_gen(0)
         , loc_gen(0)
         , handle_gen(0)
         , vclk(id)
@@ -78,9 +88,10 @@ namespace coordinator
     }
 
     inline void
-    timestamper :: unpack_tx(message::message &msg, pending_tx &tx)
+    timestamper :: unpack_tx(message::message &msg, pending_tx &tx, uint64_t client_id)
     {
         message::unpack_client_tx(msg, tx);
+        tx.client_id = client_id;
 
         // lookup mappings
         std::vector<uint64_t> get_map;
@@ -161,6 +172,17 @@ namespace coordinator
     timestamper :: clean_nmap_space()
     {
         nmap_client.clean_up_space();
+    }
+
+    inline uint64_t
+    timestamper :: generate_id()
+    {
+        uint64_t new_id;
+        id_gen_mutex.lock();
+        new_id = (++id_gen) >> ID_BITS;
+        new_id |= shifted_id;
+        id_gen_mutex.unlock();
+        return new_id;
     }
 
  }

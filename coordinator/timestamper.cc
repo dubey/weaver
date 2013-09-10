@@ -40,29 +40,47 @@ begin_transaction(coordinator::pending_tx &tx)
 {
     message::message msg;
     vc::vclock_t clock;
+    std::vector<coordinator::pending_tx> tx_vec(NUM_SHARDS, coordinator::pending_tx());
     vts->mutex.lock();
     for (std::shared_ptr<coordinator::pending_update> upd: tx.writes) {
-        switch (upd->type) {
-            case message::NODE_CREATE_REQ:
-            case message::NODE_DELETE_REQ:
-                vts->qts.at(upd->loc1-1)++;
-                break;
-
-            case message::EDGE_CREATE_REQ:
-            case message::EDGE_DELETE_REQ:
-                vts->qts.at(upd->loc1-1)++;
-                break;
-
-            default:
-                DEBUG << "bad update type";
-        }
+        vts->qts.at(upd->loc1-1)++; // TODO what about edge create requests, loc2?
         upd->qts = vts->qts;
+        tx_vec.at(upd->loc1-1).writes.emplace_back(upd);
     }
     vts->vclk.increment_clock();
     tx.timestamp = vts->vclk.get_clock();
+    tx.id = vts->generate_id();
+    vts->tx_replies.emplace(tx.id, coordinator::tx_reply());
+    vts->tx_replies.at(tx.id).client_id = tx.client_id;
+    // send tx in per shard batches
+    for (uint64_t i = 0; i < NUM_SHARDS; i++) {
+        if (!tx_vec.at(i).writes.empty()) {
+            tx_vec.at(i).timestamp = tx.timestamp;
+            tx_vec.at(i).id = tx.id;
+            message::prepare_tx_message(msg, vt_id, tx_vec.at(i));
+            vts->send(tx_vec.at(i).writes.at(0)->loc1, msg.buf);
+            vts->tx_replies.at(tx.id).count++;
+        }
+    }
     vts->mutex.unlock();
-    message::prepare_tx_message(msg, vt_id, tx);
-    vts->send(tx.writes.at(0).loc1, msg);
+}
+
+// decrement reply count. if all replies have been received, ack to client
+inline void
+end_transaction(uint64_t tx_id)
+{
+    vts->mutex.lock();
+    if (--vts->tx_replies.at(tx_id).count == 0) {
+        // done tx
+        uint64_t client_id = vts->tx_replies.at(tx_id).client_id;
+        vts->tx_replies.erase(tx_id);
+        vts->mutex.unlock();
+        message::message msg;
+        message::prepare_message(msg, message::CLIENT_TX_DONE);
+        vts->send(client_id, msg.buf);
+    } else {
+        vts->mutex.unlock();
+    }
 }
 
 void
@@ -72,7 +90,7 @@ server_loop()
     uint32_t code;
     enum message::msg_type mtype;
     std::unique_ptr<message::message> msg;
-    uint64_t sender;
+    uint64_t sender, tx_id;
 
     while (true)
     {
@@ -86,27 +104,31 @@ server_loop()
         sender -= ID_INCR;
 
         switch (mtype) {
-       
-        // client messages
-        case message::CLIENT_TX_INIT:
-            coordinator::pending_tx tx;
-            vts->unpack_tx(*msg, tx);
-            begin_tx(tx);
-            break;
+            // client messages
+            case message::CLIENT_TX_INIT: {
+                coordinator::pending_tx tx;
+                vts->unpack_tx(*msg, tx, sender);
+                begin_transaction(tx);
+                break;
+            }
 
-        case message::VT_CLOCK_UPDATE: {
-            uint64_t rec_vtid;
-            std::vector<uint64_t> rec_clock;
-            message::unpack_message(*msg, message::VT_CLOCK_UPDATE,
-                rec_vtid, rec_clock);
-            vts->mutex.lock();
-            vts->vc.update_clock(rec_vtid, rec_clock);
-            vts->mutex.unlock();
-            break;
-        }
+            case message::VT_CLOCK_UPDATE: {
+                uint64_t rec_vtid, rec_clock;
+                message::unpack_message(*msg, message::VT_CLOCK_UPDATE, rec_vtid, rec_clock);
+                vts->mutex.lock();
+                vts->vclk.update_clock(rec_vtid, rec_clock);
+                vts->mutex.unlock();
+                break;
+            }
 
-        default:
-            std::cerr << "unexpected msg type " << mtype << std::endl;
+            // shard messages
+            case message::TX_DONE:
+                message::unpack_message(*msg, message::TX_DONE, tx_id);
+                end_transaction(tx_id);
+                break;
+
+            default:
+                std::cerr << "unexpected msg type " << mtype << std::endl;
         }
     }
 }
@@ -117,11 +139,11 @@ inline void
 coord_daemon_initiate()
 {
     message::message msg;
-    vclock::nvc clock;
+    vc::vclock_t clock;
     vts->mutex.lock();
-    clock = vtc->vc.get_clock();
+    clock = vts->vclk.get_clock();
     vts->mutex.unlock();
-    message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, clock);
+    message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, clock.at(vt_id));
     // broadcast updated vector clock
     for (uint64_t i = 0; i < NUM_VTS; i++) {
         if (i == vt_id) {
@@ -141,7 +163,7 @@ main(int argc, char *argv[])
         return -1;
     }
     vt_id = atoi(argv[1]);
-    vts = new coordinator::timestamper(id);
+    vts = new coordinator::timestamper(vt_id);
     for (int i = 0; i < NUM_THREADS-1; i++) {
         thr = new std::thread(server_loop);
         thr->detach();

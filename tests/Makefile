@@ -1,7 +1,7 @@
 CC=g++-4.7
 INCLUDE_DIRS=-I.. -I..
 CFLAGS=-O2 -std=c++0x -Wall -Wextra -D__STDC_LIMIT_MACROS
-LIBS=-lbusybee -le -pthread -lrt -lhyperclient
+LIBS=-lbusybee -le -pthread -lrt -lhyperclient -lchronos
 
 SRCS=run.cc
 OBJS=run.o

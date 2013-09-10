@@ -61,92 +61,96 @@ unpack_update_request(void *req)
 {
     db::update_request *request = (db::update_request*)req;
     enum message::msg_type type = message::ERROR;
-    uint64_t vt_id, sid;
+    uint64_t vt_id, tx_id;
     vc::vclock_t vclk, qts;
     uint64_t handle, elem1, elem2, loc1, loc2;
     uint32_t shift_off = 0;
     uint64_t ret;
+    bool done_tx = false;
     // TODO increment_qts if successful. What to do if not successful?
 
-    switch (request->type) {
-        case message::NODE_CREATE_REQ:
-            message::unpack_message(*request->msg, type, sid, vt_id, vclk, qts, handle, loc1);
-            create_node(vclk, handle);
-            ret = 0;
-            shift_off += sizeof(enum message::msg_type)
-                       + message::size(vt_id)
-                       + message::size(vclk)
-                       + message::size(qts)
-                       + message::size(handle)
-                       + message::size(loc1);
-            break;
+    while (!done_tx) {
+        switch (request->type) {
+            case message::NODE_CREATE_REQ:
+                message::unpack_message(*request->msg, type, vt_id, vclk, qts, tx_id, handle, loc1);
+                S->increment_qts(vt_id);
+                create_node(vclk, handle);
+                ret = 0;
+                shift_off += sizeof(enum message::msg_type)
+                           + message::size(vt_id)
+                           + message::size(vclk)
+                           + message::size(qts)
+                           + message::size(handle)
+                           + message::size(loc1);
+                break;
 
-        case message::EDGE_CREATE_REQ:
-            message::unpack_message(*request->msg, type, sid, vt_id, vclk, qts, handle, elem1, elem2, loc1, loc2);
-            ret = create_edge(vclk, handle, elem1, elem2, loc2);
-            shift_off += sizeof(enum message::msg_type)
-                       + message::size(vt_id)
-                       + message::size(vclk)
-                       + message::size(qts)
-                       + message::size(handle)
-                       + message::size(elem1)
-                       + message::size(elem2)
-                       + message::size(loc1)
-                       + message::size(loc2);
-            break;
+            case message::EDGE_CREATE_REQ:
+                message::unpack_message(*request->msg, type, vt_id, vclk, qts, tx_id, handle, elem1, elem2, loc1, loc2);
+                S->increment_qts(vt_id);
+                ret = create_edge(vclk, handle, elem1, elem2, loc2);
+                shift_off += sizeof(enum message::msg_type)
+                           + message::size(vt_id)
+                           + message::size(vclk)
+                           + message::size(qts)
+                           + message::size(handle)
+                           + message::size(elem1)
+                           + message::size(elem2)
+                           + message::size(loc1)
+                           + message::size(loc2);
+                break;
 
-        case message::NODE_DELETE_REQ:
-            message::unpack_message(*request->msg, type, sid, vt_id, vclk, qts, elem1, loc1);
-            ret = delete_node(vclk, elem1);
-            shift_off += sizeof(enum message::msg_type)
-                       + message::size(vt_id)
-                       + message::size(vclk)
-                       + message::size(qts)
-                       + message::size(elem1)
-                       + message::size(loc1);
-            break;
+            case message::NODE_DELETE_REQ:
+                message::unpack_message(*request->msg, type, vt_id, vclk, qts, tx_id, elem1, loc1);
+                ret = delete_node(vclk, elem1);
+                S->increment_qts(vt_id);
+                shift_off += sizeof(enum message::msg_type)
+                           + message::size(vt_id)
+                           + message::size(vclk)
+                           + message::size(qts)
+                           + message::size(elem1)
+                           + message::size(loc1);
+                break;
 
-        case message::EDGE_DELETE_REQ:
-            message::unpack_message(*request->msg, type, sid, vt_id, vclk, qts, elem1, loc1);
-            ret = delete_edge(vclk, elem1);
-            shift_off += sizeof(enum message::msg_type)
-                       + message::size(vt_id)
-                       + message::size(vclk)
-                       + message::size(qts)
-                       + message::size(elem1)
-                       + message::size(loc1);
-            break;
+            case message::EDGE_DELETE_REQ:
+                message::unpack_message(*request->msg, type, vt_id, vclk, qts, tx_id, elem1, loc1);
+                ret = delete_edge(vclk, elem1);
+                S->increment_qts(vt_id);
+                shift_off += sizeof(enum message::msg_type)
+                           + message::size(vt_id)
+                           + message::size(vclk)
+                           + message::size(qts)
+                           + message::size(elem1)
+                           + message::size(loc1);
+                break;
 
-        case message::REVERSE_EDGE_CREATE:
-            message::unpack_message(*request->msg, type, vclk, handle, elem1, elem2, loc2);
-            ret = create_reverse_edge(vclk, handle, elem1, elem2, loc2);
-            break;
+            case message::REVERSE_EDGE_CREATE:
+                message::unpack_message(*request->msg, type, vclk, handle, elem1, elem2, loc2);
+                ret = create_reverse_edge(vclk, handle, elem1, elem2, loc2);
+                break;
 
-        default:
-            DEBUG << "unknown type" << std::endl;
-    }
-    if (shift_off > 0) {
-        if (ret == 0) {
-            // tx subpart successful
-            message::shift_buffer(*request->msg, shift_off);
-            if (!message::empty_buffer(*request->msg)) {
-                // propagate tx to next shard
-                message::unpack_message(*request->msg, type, sid); // unpack next location
-                S->send(sid, request->msg->buf);
+            default:
+                DEBUG << "unknown type" << std::endl;
+        }
+        if (shift_off > 0) {
+            if (ret == 0) {
+                // tx subpart successful
+                message::shift_buffer(*request->msg, shift_off);
+                if (message::empty_buffer(*request->msg)) {
+                    // send tx confirmation to coordinator
+                    message::message conf_msg;
+                    message::prepare_message(conf_msg, message::TX_DONE, tx_id);
+                    S->send(vt_id, conf_msg.buf);
+                    done_tx = true;
+                }
             } else {
-                // send tx confirmation to coordinator
-                message::message conf_msg;
-                message::prepare_message(conf_msg, message::TX_DONE, vclk);
-                S->send(vt_id, conf_msg.buf);
+                // node being migrated, tx needs to be forwarded
+                // TODO
             }
         } else {
-            // node being migrated, tx needs to be forwarded
-            // TODO
-        }
-    } else {
-        if (ret != 0) {
-            // create rev edge not completed as node being migrated, needs to be fwd
-            // TODO
+            if (ret != 0) {
+                // create rev edge not completed as node being migrated, needs to be fwd
+                // TODO
+            }
         }
     }
     delete request;

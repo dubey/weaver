@@ -24,6 +24,7 @@
 #include "common/vclock.h"
 #include "common/message.h"
 #include "common/busybee_infra.h"
+#include "common/event_order.h"
 #include "element/node.h"
 #include "element/edge.h"
 #include "threadpool/threadpool.h"
@@ -112,11 +113,8 @@ namespace db
             po6::threads::mutex queue_mutex; // exclusive access to thread pool queues
 
             // Consistency
-        private:
-            std::vector<uint64_t> qts; // queue timestamp
         public:
-            bool check_qts(uint64_t vt_id, uint64_t timestamp);
-            bool increment_qts(uint64_t vt_id);
+            void increment_qts(uint64_t vt_id);
             element::node* acquire_node(uint64_t node_handle);
             void release_node(element::node *n);
 
@@ -155,39 +153,22 @@ namespace db
 
     inline
     shard :: shard(uint64_t my_id)
-        : qts(NUM_VTS, 0)
-        , shard_id(my_id)
+        : shard_id(my_id)
         , thread_pool(NUM_THREADS - 1)
         , cur_node_count(0)
     {
         thread::pool::S = this;
         initialize_busybee(bb, shard_id, myloc);
+        order::kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT, KRONOS_NUM_SHARDS);
+        assert(NUM_SHARDS == KRONOS_NUM_SHARDS);
     }
 
     // Consistency methods
 
-    // check if operation on head of queue corresponding to vt_id
-    // is good to go using queue timestamp
-    inline bool
-    shard :: check_qts(uint64_t vt_id, uint64_t timestamp)
-    {
-        bool ret;
-        clock_mutex.lock();
-        ret = (timestamp <= qts.at(vt_id));
-        clock_mutex.unlock();
-        return ret;
-    }
-
-    // increment a queue timestamp after processing request
-    // TODO implement call back mechanism
-    inline bool
+    inline void
     shard :: increment_qts(uint64_t vt_id)
     {
-        bool check;
-        clock_mutex.lock();
-        qts.at(vt_id)++;
-        clock_mutex.unlock();
-        return check;
+        thread_pool.increment_qts(vt_id);
     }
 
     // find the node corresponding to given handle
@@ -393,7 +374,7 @@ namespace db
                 }
                 thr = pq.top();
                 // check for correct ordering of queue timestamp
-                while (!tpool->S->check_qts(vt_id, thr->qtimestamp)) {
+                while (!tpool->check_qts(vt_id, thr->qtimestamp)) {
                     c.wait();
                 }
             }
@@ -401,17 +382,21 @@ namespace db
             for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
                 timestamps.at(vt_id) = queues.at(vt_id).top()->vclock;
             }
-            uint64_t exec_vt_id = vc::compare_vts(timestamps);
+            uint64_t exec_vt_id = order::compare_vts(timestamps);
             thr = queues.at(exec_vt_id).top();
             queues.at(exec_vt_id).pop();
             // TODO check nop
             tpool->queue_mutex.unlock();
             tpool->S->queue_mutex.unlock();
             (*thr->func)(thr->arg);
+            // queue timestamp is incremented by the thread, upon finishing
+            // because the decision to increment or not is based on thread-specific knowledge
+            // moreover, when to increment can also be decided by thread only
+            // this could potentially decrease throughput, because other ops in the
+            // threadpool are blocked, waiting for this thread to increment qts
             delete thr;
         }
     }
-
 }
 
 #endif
