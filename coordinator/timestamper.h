@@ -45,7 +45,7 @@ namespace coordinator
             vc::qtimestamp_t qts; // queue timestamp
             std::unordered_map<uint64_t, tx_reply> tx_replies;
             // node map client
-            //coordinator::nmap_stub nmap_client;
+            coordinator::nmap_stub nmap_client;
             // mutexes
             po6::threads::mutex mutex, loc_gen_mutex, id_gen_mutex;
             // migration
@@ -130,7 +130,7 @@ namespace coordinator
             }
         }
         if (!mappings_to_get.empty()) {
-            //nmap_client.get_mappings(mappings_to_get, request_element_mappings);
+            nmap_client.get_mappings(mappings_to_get, request_element_mappings);
         }
 
         // insert mappings
@@ -159,7 +159,7 @@ namespace coordinator
                     DEBUG << "bad type" << std::endl;
             }
         }
-        //nmap_client.put_mappings(put_map);
+        nmap_client.put_mappings(put_map);
     }
 
     //inline void

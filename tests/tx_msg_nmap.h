@@ -47,7 +47,7 @@ unpack_nmap_tx_a(message::message &m)
 {
     coordinator::timestamper vts(0);
     coordinator::pending_tx tx;
-    vts.unpack_tx(m, tx);
+    vts.unpack_tx(m, tx, 10);
     uint64_t loc = 0;
     for (uint64_t i = 0; i < 10; i++) {
         auto node1 = tx.writes.at(3*i + 0);
@@ -86,7 +86,7 @@ void unpack_nmap_tx_b(message::message &m)
 {
     coordinator::timestamper vts(1);
     coordinator::pending_tx tx;
-    vts.unpack_tx(m, tx);
+    vts.unpack_tx(m, tx, 10);
     uint64_t j = 0, loc = 0;
     loc = (loc + 1) % NUM_SHARDS;
     for (uint64_t i = 0; i < 10; i+=2) {
@@ -101,7 +101,7 @@ void unpack_nmap_tx_b(message::message &m)
         j++;
         loc = (loc + 2) % NUM_SHARDS;
     }
-    vts.clean_nmap_space();
+    //vts.clean_nmap_space();
 }
 
 void

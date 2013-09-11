@@ -14,8 +14,8 @@
  */
 
 #include <vector>
-#include <hyperclient.h>
-#include <hyperdex.h>
+#include <hyperdex/client.hpp>
+#include <hyperdex/datastructures.h>
 #include <po6/threads/mutex.h>
 
 #include "common/weaver_constants.h"
@@ -32,7 +32,7 @@ namespace coordinator
             const char *attrName = "shard"; // we get an attribute named "shard" with integer value correspoding to which shard node is placed on
             const char *host = HYPERDEX_COORD_IPADDR;
             static const int port = HYPERDEX_COORD_PORT;
-            hyperclient cl;
+            hyperdex::Client cl;
             po6::threads::mutex hyperclientLock;
 
         public:
@@ -48,7 +48,9 @@ namespace coordinator
     nmap_stub :: put_mappings(std::vector<std::pair<uint64_t, uint64_t>> &pairs_to_add)
     {
         int numPairs = pairs_to_add.size();
-        hyperclient_attribute* attrs_to_add = (hyperclient_attribute *)malloc(numPairs * sizeof(hyperclient_attribute));
+        hyperdex_ds_arena *arena = hyperdex_ds_arena_create();
+        hyperdex_client_attribute *attrs_to_add = hyperdex_ds_allocate_attribute(arena, numPairs);
+        //hyperclient_attribute* attrs_to_add = (hyperclient_attribute *)malloc(numPairs * sizeof(hyperclient_attribute));
 
         hyperclientLock.lock();
         for (int i = 0; i < numPairs; i++) {
@@ -57,7 +59,7 @@ namespace coordinator
             attrs_to_add[i].value_sz = sizeof(int64_t);
             attrs_to_add[i].datatype = HYPERDATATYPE_INT64;
 
-            hyperclient_returncode put_status;
+            hyperdex_client_returncode put_status;
             int64_t op_id = cl.put(space, (const char *) &pairs_to_add[i].first, sizeof(int64_t), &(attrs_to_add[i]), 1, &put_status);
             if (op_id < 0) {
                 std::cerr << "\"put\" returned " << op_id << " with status " << put_status << std::endl;
@@ -67,7 +69,7 @@ namespace coordinator
             }
         }
 
-        hyperclient_returncode loop_status;
+        hyperdex_client_returncode loop_status;
         int64_t loop_id;
         // call loop once for every put
         for (int i = 0; i < numPairs; i++) {
@@ -80,7 +82,8 @@ namespace coordinator
             }
         }
         hyperclientLock.unlock();
-        free(attrs_to_add);
+        //free(attrs_to_add);
+        hyperdex_ds_arena_destroy(arena);
     }
 
     void
@@ -90,8 +93,8 @@ namespace coordinator
         struct async_get {
             uint64_t key;
             int64_t op_id;
-            hyperclient_returncode get_status;
-            hyperclient_attribute * attr;
+            hyperdex_client_returncode get_status;
+            const hyperdex_client_attribute * attr;
             size_t attr_size;
         };
         std::vector<struct async_get > results(numNodes);
@@ -115,7 +118,7 @@ namespace coordinator
             */
         }
 
-        hyperclient_returncode loop_status;
+        hyperdex_client_returncode loop_status;
         int64_t loop_id;
         // call loop once for every get
         for (int i = 0; i < numNodes; i++) {
@@ -142,14 +145,14 @@ namespace coordinator
             uint64_t nodeID = results[i].key;
             assert(toPut.find(nodeID) == toPut.end());
             toPut.emplace(nodeID, *shard);
-            hyperclient_destroy_attrs(results[i].attr, results[i].attr_size);
+            //hyperclient_destroy_attrs(results[i].attr, results[i].attr_size);
         }
     }
 
     inline void
     nmap_stub :: clean_up_space()
     {
-        cl.rm_space(space);
+        //cl.rm_space(space);
     }
 
 }
