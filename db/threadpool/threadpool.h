@@ -36,7 +36,7 @@ namespace thread
     {
         public:
             unstarted_thread(
-                uint64_t qts,
+                uint64_t prio,
                 vc::vclock_t vclk,
                 void (*f)(void*),
                 void *a);
@@ -45,7 +45,7 @@ namespace thread
             bool operator>(const unstarted_thread &t) const;
 
         public:
-            uint64_t qtimestamp;
+            uint64_t priority;
             vc::vclock_t vclock;
             void (*func)(void*);
             void *arg;
@@ -53,11 +53,11 @@ namespace thread
 
     inline
     unstarted_thread :: unstarted_thread( 
-            uint64_t qts,
+            uint64_t prio,
             vc::vclock_t vclk,
             void (*f)(void*),
             void *a)
-        : qtimestamp(qts)
+        : priority(prio)
         , vclock(vclk)
         , func(f)
         , arg(a)
@@ -69,7 +69,7 @@ namespace thread
     {
         bool operator()(const unstarted_thread* const &r1, const unstarted_thread* const &r2)
         {
-            return (r1->qtimestamp) > (r2->qtimestamp);
+            return (r1->priority) > (r2->priority);
         }
     };
 

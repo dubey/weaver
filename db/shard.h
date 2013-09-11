@@ -375,10 +375,10 @@ namespace db
                     c.wait();
                 }
                 thr = pq.top();
-                // check for correct ordering of queue timestamp
+                // check for correct ordering of queue timestamp (which is priority for thread)
                 DEBUG << "waiting for qts to increment" << std::endl;
-                while (!tpool->check_qts(vt_id, thr->qtimestamp)) {
-                    DEBUG << "sleeping, qts reqd = " << thr->qtimestamp << std::endl;
+                while (!tpool->check_qts(vt_id, thr->priority)) {
+                    DEBUG << "sleeping, qts reqd = " << thr->priority << std::endl;
                     c.wait();
                 }
             }
