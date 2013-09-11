@@ -33,14 +33,14 @@
 #define MAX_TIME UINT64_MAX
 // messaging constants
 #define ID_INCR (1ULL << 32ULL)
-#define SHARD_ID_INCR 1000
+#define SHARD_ID_INCR 1
 #define COORD_ID (0ULL)
 #define COORD_SM_ID (0ULL)
 #define CLIENT_ID (11ULL)
 #define SHARDS_DESC_FILE "../common/shards"
 // weaver setup
-#define NUM_SHARDS 8
-#define NUM_VTS 4
+#define NUM_SHARDS 1
+#define NUM_VTS 1
 #define NUM_THREADS 8
 #define ID_BITS 8
 #define GRAPH_FILE "graph.rec"

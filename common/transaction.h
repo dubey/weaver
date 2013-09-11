@@ -17,14 +17,21 @@
 #include <vector>
 
 #include "common/vclock.h"
-#include "common/message.h"
 
-namespace coordinator
+namespace transaction
 {
+    enum update_type
+    {
+        NODE_CREATE_REQ,
+        EDGE_CREATE_REQ,
+        NODE_DELETE_REQ,
+        EDGE_DELETE_REQ
+    };
+
     // store state for update received from client but not yet completed
     struct pending_update
     {
-        message::msg_type type;
+        update_type type;
         vc::qtimestamp_t qts; // queue timestamp
         uint64_t handle, elem1, elem2, loc1, loc2, sender;
         //uint32_t key;

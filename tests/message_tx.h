@@ -13,10 +13,9 @@
  */
 
 #include "client/transaction.h"
-#include "coordinator/transaction.h"
+#include "common/transaction.h"
 #include "common/message.h"
 #include "common/message_tx_client.h"
-#include "common/message_tx_coord.h"
 
 void
 pack_tx(message::message &m)
@@ -55,29 +54,29 @@ pack_tx(message::message &m)
 void
 unpack_tx(message::message &m)
 {
-    coordinator::pending_tx tx;
+    transaction::pending_tx tx;
     message::unpack_client_tx(m, tx);
     int i = 0;
     for (auto upd: tx.writes) {
         switch (upd->type) {
-            case message::NODE_CREATE_REQ:
+            case transaction::NODE_CREATE_REQ:
                 assert((i % 4) == 0);
                 assert(upd->handle == 42);
                 break;
 
-            case message::EDGE_CREATE_REQ:
+            case transaction::EDGE_CREATE_REQ:
                 assert((i % 4) == 1);
                 assert(upd->handle == 1);
                 assert(upd->elem1 == 20);
                 assert(upd->elem2 == 239872);
                 break;
 
-            case message::NODE_DELETE_REQ:
+            case transaction::NODE_DELETE_REQ:
                 assert((i % 4) == 2);
                 assert(upd->elem1 == 98765);
                 break;
 
-            case message::EDGE_DELETE_REQ:
+            case transaction::EDGE_DELETE_REQ:
                 assert((i % 4) == 3);
                 assert(upd->elem1 == 0xdeadbeef);
                 break;

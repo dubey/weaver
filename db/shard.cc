@@ -17,6 +17,7 @@
 #include <e/buffer.h>
 #include "busybee_constants.h"
 
+#define __WEAVER_DEBUG__
 #include "common/weaver_constants.h"
 // TODO #include "common/message_graph_elem.h"
 #include "shard.h"
@@ -60,97 +61,74 @@ void
 unpack_update_request(void *req)
 {
     db::update_request *request = (db::update_request*)req;
-    enum message::msg_type type = message::ERROR;
-    uint64_t vt_id, tx_id;
     vc::vclock_t vclk, qts;
-    uint64_t handle, elem1, elem2, loc1, loc2;
-    uint32_t shift_off = 0;
-    uint64_t ret;
-    bool done_tx = false;
-    // TODO increment_qts if successful. What to do if not successful?
+    uint64_t handle, elem1, elem2, loc2, ret;
 
-    while (!done_tx) {
-        switch (request->type) {
-            case message::NODE_CREATE_REQ:
-                message::unpack_message(*request->msg, type, vt_id, vclk, qts, tx_id, handle, loc1);
+    switch (request->type) {
+        case message::REVERSE_EDGE_CREATE:
+            DEBUG << "reverse edge create" << std::endl;
+            message::unpack_message(*request->msg, request->type, vclk, handle, elem1, elem2, loc2);
+            ret = create_reverse_edge(vclk, handle, elem1, elem2, loc2);
+            break;
+
+        default:
+            DEBUG << "unknown type" << std::endl;
+    }
+    if (ret == 0) {
+        // update successful
+    } else {
+        // node being migrated, tx needs to be forwarded
+        // TODO
+    }
+    delete request;
+}
+
+void
+unpack_tx_request(void *req)
+{
+    db::update_request *request = (db::update_request*)req;
+    uint64_t vt_id, tx_id, ret;
+    vc::vclock_t vclk, qts;
+    transaction::pending_tx tx;
+    message::unpack_message(*request->msg, message::TX_INIT, vt_id, vclk, qts, tx_id, tx.writes);
+    for (auto upd: tx.writes) {
+        DEBUG << "\tunpacking more tx" << std::endl;
+        switch (upd->type) {
+            case transaction::NODE_CREATE_REQ:
+                DEBUG << "unpacked node create" << std::endl;
                 S->increment_qts(vt_id);
-                create_node(vclk, handle);
+                create_node(vclk, upd->handle);
+                DEBUG << "done node create" << std::endl;
                 ret = 0;
-                shift_off += sizeof(enum message::msg_type)
-                           + message::size(vt_id)
-                           + message::size(vclk)
-                           + message::size(qts)
-                           + message::size(handle)
-                           + message::size(loc1);
                 break;
 
-            case message::EDGE_CREATE_REQ:
-                message::unpack_message(*request->msg, type, vt_id, vclk, qts, tx_id, handle, elem1, elem2, loc1, loc2);
+            case transaction::EDGE_CREATE_REQ:
                 S->increment_qts(vt_id);
-                ret = create_edge(vclk, handle, elem1, elem2, loc2);
-                shift_off += sizeof(enum message::msg_type)
-                           + message::size(vt_id)
-                           + message::size(vclk)
-                           + message::size(qts)
-                           + message::size(handle)
-                           + message::size(elem1)
-                           + message::size(elem2)
-                           + message::size(loc1)
-                           + message::size(loc2);
+                ret = create_edge(vclk, upd->handle, upd->elem1, upd->elem2, upd->loc2);
                 break;
 
-            case message::NODE_DELETE_REQ:
-                message::unpack_message(*request->msg, type, vt_id, vclk, qts, tx_id, elem1, loc1);
-                ret = delete_node(vclk, elem1);
+            case transaction::NODE_DELETE_REQ:
+                ret = delete_node(vclk, upd->elem1);
                 S->increment_qts(vt_id);
-                shift_off += sizeof(enum message::msg_type)
-                           + message::size(vt_id)
-                           + message::size(vclk)
-                           + message::size(qts)
-                           + message::size(elem1)
-                           + message::size(loc1);
                 break;
 
-            case message::EDGE_DELETE_REQ:
-                message::unpack_message(*request->msg, type, vt_id, vclk, qts, tx_id, elem1, loc1);
-                ret = delete_edge(vclk, elem1);
+            case transaction::EDGE_DELETE_REQ:
+                ret = delete_edge(vclk, upd->elem1);
                 S->increment_qts(vt_id);
-                shift_off += sizeof(enum message::msg_type)
-                           + message::size(vt_id)
-                           + message::size(vclk)
-                           + message::size(qts)
-                           + message::size(elem1)
-                           + message::size(loc1);
-                break;
-
-            case message::REVERSE_EDGE_CREATE:
-                message::unpack_message(*request->msg, type, vclk, handle, elem1, elem2, loc2);
-                ret = create_reverse_edge(vclk, handle, elem1, elem2, loc2);
                 break;
 
             default:
                 DEBUG << "unknown type" << std::endl;
         }
-        if (shift_off > 0) {
-            if (ret == 0) {
-                // tx subpart successful
-                message::shift_buffer(*request->msg, shift_off);
-                if (message::empty_buffer(*request->msg)) {
-                    // send tx confirmation to coordinator
-                    message::message conf_msg;
-                    message::prepare_message(conf_msg, message::TX_DONE, tx_id);
-                    S->send(vt_id, conf_msg.buf);
-                    done_tx = true;
-                }
-            } else {
-                // node being migrated, tx needs to be forwarded
-                // TODO
-            }
+        if (ret == 0) {
+            // tx subpart successful
+            // send tx confirmation to coordinator
+            message::message conf_msg;
+            message::prepare_message(conf_msg, message::TX_DONE, tx_id);
+            S->send(vt_id, conf_msg.buf);
         } else {
-            if (ret != 0) {
-                // create rev edge not completed as node being migrated, needs to be fwd
-                // TODO
-            }
+            // node being migrated, tx needs to be forwarded
+            // TODO
         }
     }
     delete request;
@@ -178,17 +156,19 @@ msgrecv_loop()
         mtype = (enum message::msg_type)code;
         rec_msg->change_type(mtype);
         sender -= ID_INCR;
+        vclk.clear();
+        qts.clear();
 
         switch (mtype)
         {
-            case message::NODE_CREATE_REQ:
-            case message::NODE_DELETE_REQ:
-            case message::EDGE_CREATE_REQ:
-            case message::EDGE_DELETE_REQ:
-                message::unpack_message(*rec_msg, mtype, vt_id, vclk, qts);
+            case message::TX_INIT:
+                DEBUG << "got tx_init" << std::endl;
+                message::unpack_message(*rec_msg, message::TX_INIT, vt_id, vclk, qts);
                 request = new db::update_request(mtype, std::move(rec_msg));
-                thr = new db::thread::unstarted_thread(qts.at(shard_id), vclk, unpack_update_request, request);
+                thr = new db::thread::unstarted_thread(qts.at(shard_id-SHARD_ID_INCR), vclk, unpack_tx_request, request);
+                DEBUG << "going to add request to threadpool" << std::endl;
                 S->add_request(vt_id, thr);
+                DEBUG << "added request to threadpool" << std::endl;
                 rec_msg.reset(new message::message());
                 break;
 

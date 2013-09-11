@@ -1,7 +1,7 @@
 CC=g++-4.7
 INCLUDE_DIRS=-I.. -I.
 CFLAGS=-O2 -std=c++0x -Wall -Wextra
-LIBS=-lbusybee -le -pthread -lrt -lhyperclient -lchronos
+LIBS=-lbusybee -le -pthread -lrt -lhyperdex-client -lchronos
 CLIBS=
 
 SRCS=timestamper.cc

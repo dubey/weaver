@@ -246,7 +246,7 @@ namespace db
             for (uint64_t i = 0; i < NUM_SHARDS; i++) {
                 new_node->prev_locs.emplace_back(0);
             }
-            new_node->prev_locs.at(shard_id-1) = 1;
+            new_node->prev_locs.at(shard_id-SHARD_ID_INCR) = 1;
         }
         release_node(new_node);
     }
@@ -362,32 +362,38 @@ namespace db
         po6::threads::cond &c = tpool->queue_cond;
         std::vector<vc::vclock_t> timestamps(NUM_VTS, vc::vclock_t());
         while (true) {
-            tpool->S->queue_mutex.lock(); // only one thread accesses queues
+            tpool->thread_loop_mutex.lock(); // only one thread accesses queues
             // TODO add job method should be non-blocking on this mutex
             tpool->queue_mutex.lock(); // prevent more jobs from being added
             // get next jobs from each queue
+            DEBUG << "going to collect jobs from queues" << std::endl;
             for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
                 thread::pqueue_t &pq = queues.at(vt_id);
                 // wait for queue to receive at least one job
+                DEBUG << "waiting for queue to fill" << std::endl;
                 while (pq.empty()) {
                     c.wait();
                 }
                 thr = pq.top();
                 // check for correct ordering of queue timestamp
+                DEBUG << "waiting for qts to increment" << std::endl;
                 while (!tpool->check_qts(vt_id, thr->qtimestamp)) {
+                    DEBUG << "sleeping, qts reqd = " << thr->qtimestamp << std::endl;
                     c.wait();
                 }
+                DEBUG << "done checks" << std::endl;
             }
             // all queues are good to go, compare timestamps
             for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
                 timestamps.at(vt_id) = queues.at(vt_id).top()->vclock;
             }
-            uint64_t exec_vt_id = order::compare_vts(timestamps);
+            DEBUG << "going to compare vt" << std::endl;
+            uint64_t exec_vt_id = (NUM_VTS==1)? 0:order::compare_vts(timestamps);
             thr = queues.at(exec_vt_id).top();
             queues.at(exec_vt_id).pop();
             // TODO check nop
             tpool->queue_mutex.unlock();
-            tpool->S->queue_mutex.unlock();
+            tpool->thread_loop_mutex.unlock();
             (*thr->func)(thr->arg);
             // queue timestamp is incremented by the thread, upon finishing
             // because the decision to increment or not is based on thread-specific knowledge

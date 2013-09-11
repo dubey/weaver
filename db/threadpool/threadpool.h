@@ -84,7 +84,7 @@ namespace thread
             std::vector<pqueue_t> queues;
             vc::qtimestamp_t qts; // queue timestamps
             //std::priority_queue<unstarted_thread*, std::vector<unstarted_thread*>, work_thread_compare> work_queue;
-            po6::threads::mutex queue_mutex;
+            po6::threads::mutex queue_mutex, thread_loop_mutex;
             po6::threads::cond queue_cond;
             static db::shard *S;
        

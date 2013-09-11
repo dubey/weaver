@@ -28,6 +28,7 @@
 #include "common/property.h"
 #include "common/meta_element.h"
 #include "common/vclock.h"
+#include "common/transaction.h"
 #include "db/element/node.h"
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
@@ -234,6 +235,20 @@ namespace message
             + size(t.get_del_time())
             + size(t.get_handle());
     }
+
+    inline uint64_t
+    size(const std::shared_ptr<transaction::pending_update> &ptr_t)
+    {
+        transaction::pending_update &t = *ptr_t;
+        return sizeof(t.type)
+             + size(t.qts)
+             + size(t.handle)
+             + size(t.elem1)
+             + size(t.elem2)
+             + size(t.loc1)
+             + size(t.loc2);
+    }
+
     template <typename T1, typename T2>
     inline uint64_t size(const std::pair<T1, T2> &t)
     {
@@ -363,6 +378,19 @@ namespace message
     {
         packer = packer << t.get_loc() << t.get_creat_time()
             << t.get_del_time() << t.get_handle();
+    }
+
+    inline void
+    pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::pending_update> &ptr_t)
+    {
+        transaction::pending_update &t = *ptr_t;
+        packer = packer << t.type;
+        pack_buffer(packer, t.qts);
+        pack_buffer(packer, t.handle);
+        pack_buffer(packer, t.elem1);
+        pack_buffer(packer, t.elem2);
+        pack_buffer(packer, t.loc1);
+        pack_buffer(packer, t.loc2);
     }
 
     template <typename T1, typename T2>
@@ -572,6 +600,22 @@ namespace message
         t.update_loc(loc);
     }
 
+    inline void
+    unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::pending_update> &ptr_t)
+    {
+        uint32_t mtype;
+        ptr_t.reset(new transaction::pending_update());
+        transaction::pending_update &t = *ptr_t;
+        unpacker = unpacker >> mtype;
+        t.type = ((enum transaction::update_type)mtype);
+        unpack_buffer(unpacker, t.qts);
+        unpack_buffer(unpacker, t.handle);
+        unpack_buffer(unpacker, t.elem1);
+        unpack_buffer(unpacker, t.elem2);
+        unpack_buffer(unpacker, t.loc1);
+        unpack_buffer(unpacker, t.loc2);
+    }
+
     template <typename T1, typename T2>
     inline void 
     unpack_buffer(e::unpacker &unpacker, std::pair<T1, T2> &t)
@@ -679,6 +723,49 @@ namespace message
         assert((enum msg_type)_type == expected_type);
 
         unpack_buffer(unpacker, args...);
+    }
+
+    inline void
+    unpack_client_tx(message &m, transaction::pending_tx &tx)
+    {
+        uint64_t num_tx;
+        uint32_t type;
+        enum msg_type mtype;
+        e::unpacker unpacker = m.buf->unpack_from(BUSYBEE_HEADER_SIZE);
+        unpacker = unpacker >> type;
+        mtype = (enum msg_type)type;
+        assert(mtype == CLIENT_TX_INIT);
+        unpack_buffer(unpacker, num_tx);
+        while (num_tx-- > 0) {
+            auto upd = std::make_shared<transaction::pending_update>();
+            tx.writes.emplace_back(upd);
+            unpacker = unpacker >> type;
+            mtype = (enum msg_type)type;
+            switch (type) {
+                case CLIENT_NODE_CREATE_REQ:
+                    upd->type = transaction::NODE_CREATE_REQ;
+                    unpack_buffer(unpacker, upd->handle); 
+                    break;
+
+                case CLIENT_EDGE_CREATE_REQ:
+                    upd->type = transaction::EDGE_CREATE_REQ;
+                    unpack_buffer(unpacker, upd->handle, upd->elem1, upd->elem2);
+                    break;
+
+                case CLIENT_NODE_DELETE_REQ:
+                    upd->type = transaction::NODE_DELETE_REQ;
+                    unpack_buffer(unpacker, upd->elem1);
+                    break;
+
+                case CLIENT_EDGE_DELETE_REQ:
+                    upd->type = transaction::EDGE_DELETE_REQ;
+                    unpack_buffer(unpacker, upd->elem1);
+                    break;
+
+                default:
+                    DEBUG << "bad msg type" << std::endl;
+            }
+        }
     }
 }
 
