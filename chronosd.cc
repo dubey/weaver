@@ -33,6 +33,9 @@
 #include <vector>
 #include <tr1/unordered_map>
 
+// po6
+#include <po6/threads/mutex.h>
+
 // e
 #include <e/endian.h>
 
@@ -99,6 +102,7 @@ class chronosd
         uint64_t m_count_assign_order;
         uint64_t m_count_weaver_order;
         std::tr1::unordered_map<std::vector<uint64_t>, uint64_t> m_vcmap;
+        po6::threads::mutex weaver_mutex;
 };
 
 chronosd :: chronosd()
@@ -392,8 +396,9 @@ void
 chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
                          const char* data, size_t data_sz)
 {
+    weaver_mutex.lock();
     ++m_count_weaver_order;
-    const size_t NUM_PAIRS = data_sz / (2 * sizeof(uint64_t) * NUM_SHARDS // vector clocks
+    const size_t NUM_PAIRS = data_sz / (2 * sizeof(uint64_t) * KRONOS_NUM_SHARDS // vector clocks
             + sizeof(uint32_t) // flags
             + sizeof(uint8_t)); // preferred order
     // XXX no stack, use heap!! TODO have to clean up malloc'ed stuff
@@ -412,15 +417,15 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
         chronos_pair p;
         weaver_pair wp;
         uint8_t o;
-        c = unpack_vector_uint64(&wp.lhs, NUM_SHARDS, c);
-        c = unpack_vector_uint64(&wp.rhs, NUM_SHARDS, c);
+        c = unpack_vector_uint64(&wp.lhs, KRONOS_NUM_SHARDS, c);
+        c = unpack_vector_uint64(&wp.rhs, KRONOS_NUM_SHARDS, c);
         c = e::unpack32le(c, &p.flags);
         c = e::unpack8le(c, &o);
         p.order = byte_to_chronos_cmp(o);
         std::vector<uint64_t> vc_lhs, vc_rhs;
-        vc_lhs.reserve(NUM_SHARDS);
-        vc_rhs.reserve(NUM_SHARDS);
-        for (size_t i = 0; i < NUM_SHARDS; i++) {
+        vc_lhs.reserve(KRONOS_NUM_SHARDS);
+        vc_rhs.reserve(KRONOS_NUM_SHARDS);
+        for (size_t i = 0; i < KRONOS_NUM_SHARDS; i++) {
             vc_lhs.push_back(wp.lhs[i]);
             vc_rhs.push_back(wp.rhs[i]);
         }
@@ -500,6 +505,7 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
             m_graph.remove_edge(edges[i].first, edges[i].second);
         }
     }
+    weaver_mutex.unlock();
 
     const char *r = (char*)results;
     //const char* r = reinterpret_cast<const char*>(&results.front());

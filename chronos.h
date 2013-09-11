@@ -51,7 +51,7 @@
 #include <replicant.h>
 
 // Weaver
-#define NUM_SHARDS 4
+#define KRONOS_NUM_SHARDS 8
 
 extern "C" {
 #endif
