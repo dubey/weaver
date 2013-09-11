@@ -17,7 +17,7 @@ int
 main()
 {
     enum chronos_returncode status;
-    chronos_client cl("127.0.0.1", 1982, KRONOS_NUM_SHARDS);
+    chronos_client cl("127.0.0.1", 1992, KRONOS_NUM_SHARDS);
     std::cout << "Kronos orders:" << std::endl 
             << "CHRONOS_HAPPENS_BEFORE " << CHRONOS_HAPPENS_BEFORE << std::endl
             << "CHRONOS_HAPPENS_AFTER " << CHRONOS_HAPPENS_AFTER << std::endl
