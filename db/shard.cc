@@ -90,15 +90,13 @@ unpack_tx_request(void *req)
     uint64_t vt_id, tx_id, ret;
     vc::vclock_t vclk, qts;
     transaction::pending_tx tx;
+    bool ack = true;
     message::unpack_message(*request->msg, message::TX_INIT, vt_id, vclk, qts, tx_id, tx.writes);
     for (auto upd: tx.writes) {
-        DEBUG << "\tunpacking more tx" << std::endl;
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ:
-                DEBUG << "unpacked node create" << std::endl;
                 S->increment_qts(vt_id);
                 create_node(vclk, upd->handle);
-                DEBUG << "done node create" << std::endl;
                 ret = 0;
                 break;
 
@@ -122,16 +120,19 @@ unpack_tx_request(void *req)
         }
         if (ret == 0) {
             // tx subpart successful
-            // send tx confirmation to coordinator
-            message::message conf_msg;
-            message::prepare_message(conf_msg, message::TX_DONE, tx_id);
-            S->send(vt_id, conf_msg.buf);
         } else {
             // node being migrated, tx needs to be forwarded
-            // TODO
+            // TODO also need to maintain DS for tracking when to ack transaction
+            ack = false;
         }
     }
     delete request;
+    if (ack) {
+        // send tx confirmation to coordinator
+        message::message conf_msg;
+        message::prepare_message(conf_msg, message::TX_DONE, tx_id);
+        S->send(vt_id, conf_msg.buf);
+    }
 }
 
 // server msg recv loop for the shard server
@@ -166,7 +167,6 @@ msgrecv_loop()
                 message::unpack_message(*rec_msg, message::TX_INIT, vt_id, vclk, qts);
                 request = new db::update_request(mtype, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(qts.at(shard_id-SHARD_ID_INCR), vclk, unpack_tx_request, request);
-                DEBUG << "going to add request to threadpool" << std::endl;
                 S->add_request(vt_id, thr);
                 DEBUG << "added request to threadpool" << std::endl;
                 rec_msg.reset(new message::message());

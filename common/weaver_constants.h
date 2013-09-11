@@ -33,16 +33,17 @@
 #define MAX_TIME UINT64_MAX
 // messaging constants
 #define ID_INCR (1ULL << 32ULL)
-#define SHARD_ID_INCR 1
 #define COORD_ID (0ULL)
 #define COORD_SM_ID (0ULL)
 #define CLIENT_ID (11ULL)
 #define SHARDS_DESC_FILE "../common/shards"
 // weaver setup
-#define NUM_SHARDS 1
+#define NUM_SHARDS 2
 #define NUM_VTS 1
+#define SHARD_ID_INCR NUM_VTS
 #define NUM_THREADS 8
 #define ID_BITS 8
+#define TOP_MASK (0x0fffffffffffffffULL)
 #define GRAPH_FILE "graph.rec"
 #define DAEMON_PERIOD 2 // frequency in seconds for coordinator daemon to run
 #define MIGR_FREQ 10 // seconds delay between consecutive migrations

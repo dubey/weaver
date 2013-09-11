@@ -50,13 +50,11 @@ begin_transaction(transaction::pending_tx &tx)
         vts->qts.at(upd->loc1-SHARD_ID_INCR)++; // TODO what about edge create requests, loc2?
         tx_vec.at(upd->loc1-SHARD_ID_INCR).writes.emplace_back(upd);
     }
-    DEBUG << "assigned qts" << std::endl;
     vts->vclk.increment_clock();
     tx.timestamp = vts->vclk.get_clock();
     tx.id = vts->generate_id();
     vts->tx_replies.emplace(tx.id, coordinator::tx_reply());
     vts->tx_replies.at(tx.id).client_id = tx.client_id;
-    DEBUG << "going to send tx" << std::endl;
     // send tx in per shard batches
     for (uint64_t i = 0; i < NUM_SHARDS; i++) {
         if (!tx_vec.at(i).writes.empty()) {
@@ -67,7 +65,6 @@ begin_transaction(transaction::pending_tx &tx)
             vts->tx_replies.at(tx.id).count++;
         }
     }
-    DEBUG << "tx sent" << std::endl;
     vts->mutex.unlock();
 }
 

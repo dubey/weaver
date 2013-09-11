@@ -381,7 +381,6 @@ namespace db
                     DEBUG << "sleeping, qts reqd = " << thr->qtimestamp << std::endl;
                     c.wait();
                 }
-                DEBUG << "done checks" << std::endl;
             }
             // all queues are good to go, compare timestamps
             for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {

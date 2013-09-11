@@ -204,7 +204,7 @@ namespace client
     inline uint64_t
     client :: generate_handle()
     {
-        uint64_t new_handle = (++temp_handle_ctr) >> ID_BITS;
+        uint64_t new_handle = (++temp_handle_ctr) & TOP_MASK;
         new_handle |= shifted_id;
         return new_handle;
     }

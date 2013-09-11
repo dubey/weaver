@@ -110,7 +110,6 @@ namespace coordinator
 
                 case transaction::EDGE_CREATE_REQ:
                     if (request_element_mappings.find(upd->elem1) == request_element_mappings.end()) {
-                        //request_element_mappings.emplace(upd->elem1, 0);
                         if (map_cache.find(upd->elem1) != map_cache.end()) {
                             request_element_mappings.emplace(upd->elem1, map_cache.at(upd->elem1));
                         } else {
@@ -118,7 +117,6 @@ namespace coordinator
                         }
                     }
                     if (request_element_mappings.find(upd->elem2) == request_element_mappings.end()) {
-                        //request_element_mappings.emplace(upd->elem2, 0);
                         if (map_cache.find(upd->elem2) != map_cache.end()) {
                             request_element_mappings.emplace(upd->elem2, map_cache.at(upd->elem2));
                         } else {
@@ -130,7 +128,6 @@ namespace coordinator
                 case transaction::NODE_DELETE_REQ:
                 case transaction::EDGE_DELETE_REQ:
                     if (request_element_mappings.find(upd->elem1) == request_element_mappings.end()) {
-                        //request_element_mappings.emplace(upd->elem1, 0);
                         if (map_cache.find(upd->elem1) != map_cache.end()) {
                             request_element_mappings.emplace(upd->elem1, map_cache.at(upd->elem1));
                         } else {
@@ -176,21 +173,15 @@ namespace coordinator
                     DEBUG << "bad type" << std::endl;
             }
         }
-        //nmap_client.put_mappings(put_map);
+        nmap_client.put_mappings(put_map);
     }
-
-    //inline void
-    //timestamper :: clean_nmap_space()
-    //{
-    //    nmap_client.clean_up_space();
-    //}
 
     inline uint64_t
     timestamper :: generate_id()
     {
         uint64_t new_id;
         id_gen_mutex.lock();
-        new_id = (++id_gen) >> ID_BITS;
+        new_id = (++id_gen) & TOP_MASK;
         new_id |= shifted_id;
         id_gen_mutex.unlock();
         return new_id;

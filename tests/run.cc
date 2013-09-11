@@ -76,11 +76,11 @@ main(int argc, char *argv[])
     //multiple_sparse_locality(true);
     //repetitive_reach_prog(true);
     //multiple_dense_caching(true);
-    nmap_unit_tests();
+    //nmap_unit_tests();
     //message_tx_test();
     //tx_msg_nmap_test();
     //vc_ordering_test();
-    //create_graph_test();
+    create_graph_test();
 #endif
     DEBUG << "All tests completed." << std::endl;
 

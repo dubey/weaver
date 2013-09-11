@@ -24,12 +24,22 @@ create_graph_test()
     for (i = 0; i < 10; i++) {
         uint64_t tx_id = c.begin_tx();
         nodes[i] = c.create_node(tx_id);
-        c.end_tx(tx_id);
         DEBUG << "Created node, handle = " << nodes[i] << std::endl;
+        c.end_tx(tx_id);
     }
-    // edge 1
+    // edges
     uint64_t tx_id = c.begin_tx();
-    edges[0] = c.create_edge(tx_id, nodes[0], nodes[1]);
+    for (i = 0; i < 10; i++) {
+        edges[i] = c.create_edge(tx_id, nodes[i], nodes[(i+1)%10]);
+    }
     c.end_tx(tx_id);
+    for (i = 0; i < 10; i+=2) {
+        uint64_t tx_id = c.begin_tx();
+        nodes[i] = c.create_node(tx_id);
+        DEBUG << "Created node, handle = " << nodes[i] << std::endl;
+        nodes[i+1] = c.create_node(tx_id);
+        DEBUG << "Created node, handle = " << nodes[i+1] << std::endl;
+        c.end_tx(tx_id);
+    }
     DEBUG << "Created edge, handle = " << edges[0] << std::endl;
 }
