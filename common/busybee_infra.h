@@ -29,10 +29,8 @@ class weaver_mapper : public busybee_mapper
         std::unordered_map<uint64_t, po6::net::location> mlist;
 
     public:
-        weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &ml)
-            : mlist(ml)
-        {
-        }
+        weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &ml) : mlist(ml) { }
+
         virtual ~weaver_mapper() throw () {}
 
         virtual bool lookup(uint64_t server_id, po6::net::location *loc)

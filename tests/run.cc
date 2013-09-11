@@ -75,8 +75,8 @@ main(int argc, char *argv[])
     //repetitive_reach_prog(true);
     //multiple_dense_caching(true);
     //message_tx_test();
-    //tx_msg_nmap_test();
-    vc_ordering_test();
+    tx_msg_nmap_test();
+    //vc_ordering_test();
 #endif
     DEBUG << "All tests completed." << std::endl;
 

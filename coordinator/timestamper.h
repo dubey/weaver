@@ -39,27 +39,27 @@ namespace coordinator
     {
         public:
             uint64_t vt_id, shifted_id, id_gen; // this vector timestamper's id
-            // messaging
-            std::shared_ptr<po6::net::location> myloc;
-            busybee_mta *bb;
             // timestamper state
-            uint64_t loc_gen, handle_gen;
+            uint64_t loc_gen;
             vc::vclock vclk; // vector clock
             vc::qtimestamp_t qts; // queue timestamp
             std::unordered_map<uint64_t, tx_reply> tx_replies;
             // node map client
-            coordinator::nmap_stub nmap_client;
+            //coordinator::nmap_stub nmap_client;
             // mutexes
             po6::threads::mutex mutex, loc_gen_mutex, id_gen_mutex;
             // migration
             // permanent deletion
             // daemon
+            // messaging
+            std::shared_ptr<po6::net::location> myloc;
+            busybee_mta *bb;
 
         public:
             timestamper(uint64_t id);
             busybee_returncode send(uint64_t shard_id, std::auto_ptr<e::buffer> buf);
             void unpack_tx(message::message &msg, coordinator::pending_tx &tx, uint64_t client_id);
-            void clean_nmap_space();
+            //void clean_nmap_space();
             uint64_t generate_id();
     };
 
@@ -69,7 +69,6 @@ namespace coordinator
         , shifted_id(id << (64-ID_BITS))
         , id_gen(0)
         , loc_gen(0)
-        , handle_gen(0)
         , vclk(id)
         , qts(NUM_SHARDS, 0)
     {
@@ -131,7 +130,7 @@ namespace coordinator
             }
         }
         if (!mappings_to_get.empty()) {
-            nmap_client.get_mappings(mappings_to_get, request_element_mappings);
+            //nmap_client.get_mappings(mappings_to_get, request_element_mappings);
         }
 
         // insert mappings
@@ -160,14 +159,14 @@ namespace coordinator
                     DEBUG << "bad type" << std::endl;
             }
         }
-        nmap_client.put_mappings(put_map);
+        //nmap_client.put_mappings(put_map);
     }
 
-    inline void
-    timestamper :: clean_nmap_space()
-    {
-        nmap_client.clean_up_space();
-    }
+    //inline void
+    //timestamper :: clean_nmap_space()
+    //{
+    //    nmap_client.clean_up_space();
+    //}
 
     inline uint64_t
     timestamper :: generate_id()

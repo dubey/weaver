@@ -150,9 +150,12 @@ namespace order
                             default:
                                 DEBUG << "unexpected Kronos order" << wp->order << std::endl;
                         }
+                        free(wp->lhs);
+                        free(wp->rhs);
                     }
                 }
             }
+            free(wpair);
             for (uint64_t min_pos = 0; min_pos < num_clks; min_pos++) {
                 if (!large_upd.at(min_pos)) {
                     return min_pos;

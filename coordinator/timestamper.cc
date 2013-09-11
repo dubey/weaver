@@ -17,6 +17,7 @@
 #include <vector>
 #include <signal.h>
 
+#define __WEAVER_DEBUG__
 #include "common/vclock.h"
 #include "timestamper.h"
 #include "transaction.h"
