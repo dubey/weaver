@@ -20,6 +20,7 @@
 //#include "tx_msg_nmap.h"
 #include "vc_ordering.h"
 #include "create_graph.h"
+#include "nmap_unit_tests.h"
 //#include "cache_test.h"
 //#include "basic_client.h"
 //#include "repetitive_reach_program.h"
@@ -75,10 +76,11 @@ main(int argc, char *argv[])
     //multiple_sparse_locality(true);
     //repetitive_reach_prog(true);
     //multiple_dense_caching(true);
+    nmap_unit_tests();
     //message_tx_test();
     //tx_msg_nmap_test();
     //vc_ordering_test();
-    create_graph_test();
+    //create_graph_test();
 #endif
     DEBUG << "All tests completed." << std::endl;
 

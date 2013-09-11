@@ -37,7 +37,8 @@ namespace coordinator
 
         public:
             void put_mappings(std::vector<std::pair<uint64_t, uint64_t>> &pairs_to_add);
-            void get_mappings(std::unordered_set<uint64_t> &toGet, std::unordered_map<uint64_t, uint64_t> &toPut);
+            std::vector<std::pair<uint64_t, uint64_t>> get_mappings(std::unordered_set<uint64_t> &toGet);
+            void del_mappings(std::vector<uint64_t> &toDel);
             void clean_up_space();
     };
 
@@ -48,9 +49,9 @@ namespace coordinator
     nmap_stub :: put_mappings(std::vector<std::pair<uint64_t, uint64_t>> &pairs_to_add)
     {
         int numPairs = pairs_to_add.size();
-        hyperdex_ds_arena *arena = hyperdex_ds_arena_create();
-        hyperdex_client_attribute *attrs_to_add = hyperdex_ds_allocate_attribute(arena, numPairs);
-        //hyperclient_attribute* attrs_to_add = (hyperclient_attribute *)malloc(numPairs * sizeof(hyperclient_attribute));
+        //hyperdex_ds_arena *arena = hyperdex_ds_arena_create();
+        //hyperdex_client_attribute *attrs_to_add = hyperdex_ds_allocate_attribute(arena, numPairs);
+        hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute *) malloc(numPairs * sizeof(hyperdex_client_attribute));
 
         hyperclientLock.lock();
         for (int i = 0; i < numPairs; i++) {
@@ -82,12 +83,12 @@ namespace coordinator
             }
         }
         hyperclientLock.unlock();
-        //free(attrs_to_add);
-        hyperdex_ds_arena_destroy(arena);
+        free(attrs_to_add);
+        //hyperdex_ds_arena_destroy(arena);
     }
 
-    void
-    nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet, std::unordered_map<uint64_t, uint64_t> &toPut)
+    std::vector<std::pair<uint64_t, uint64_t>>
+    nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
     {
         int numNodes = toGet.size();
         struct async_get {
@@ -125,7 +126,8 @@ namespace coordinator
             loop_id = cl.loop(-1, &loop_status);
             if (loop_id < 0) {
                 std::cerr << "get \"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
-                return; // free previously gotten attrs
+                std::vector<std::pair<uint64_t, uint64_t>> empty(0);
+                return empty; // free previously gotten attrs
             }
 
             // double check this ID exists
@@ -137,16 +139,61 @@ namespace coordinator
         }
         hyperclientLock.unlock();
 
+        std::vector<std::pair<uint64_t, uint64_t>> toRet;//numNodes);
         for (int i = 0; i < numNodes; i++) {
-            if (results[i].attr_size != 1) {
+            if (results[i].attr_size == 0) {
+                std::cerr << "Key " << results[i].key << " did not exist in hyperdex" << std::endl;
+            } else if (results[i].attr_size > 1) {
                 std::cerr << "\"get\" number " << i << " returned " << results[i].attr_size << " attrs" << std::endl;
+            } else {
+                uint64_t* shard = (uint64_t *) results[i].attr->value;
+                uint64_t nodeID = results[i].key;
+                toRet.emplace_back(nodeID, *shard);
+                /*
+                toRet[i].first = nodeID;
+                toRet[i].second = *shard;
+                */
             }
-            uint64_t* shard = (uint64_t *) results[i].attr->value;
-            uint64_t nodeID = results[i].key;
-            assert(toPut.find(nodeID) == toPut.end());
-            toPut.emplace(nodeID, *shard);
-            //hyperclient_destroy_attrs(results[i].attr, results[i].attr_size);
+            hyperdex_client_destroy_attrs(results[i].attr, results[i].attr_size);
         }
+        return toRet;
+    }
+
+    void
+    nmap_stub :: del_mappings(std::vector<uint64_t> &toDel)
+    {
+        int numNodes = toDel.size();
+        std::vector<int64_t> results(numNodes);
+        hyperdex_client_returncode get_status;
+
+        hyperclientLock.lock();
+        for (int i = 0; i < numNodes; i++) {
+            results[i] = cl.del(space, (char *) &(toDel[i]), sizeof(uint64_t), &get_status);
+            if (results[i] < 0)
+            {
+                std::cerr << "\"del\" returned " << results[i] << " with status " << get_status << std::endl;
+                return;
+            }
+        }
+
+        hyperdex_client_returncode loop_status;
+        int64_t loop_id;
+        // call loop once for every get
+        for (int i = 0; i < numNodes; i++) {
+            loop_id = cl.loop(-1, &loop_status);
+            if (loop_id < 0) {
+                std::cerr << "get \"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
+                return;
+            }
+
+            // double check this ID exists
+            bool found = false;
+            for (int i = 0; i < numNodes; i++) {
+                found = found || (results[i] == loop_id);
+            }
+            assert(found);
+        }
+        hyperclientLock.unlock();
     }
 
     inline void

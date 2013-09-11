@@ -44,7 +44,7 @@ namespace coordinator
             vc::qtimestamp_t qts; // queue timestamp
             std::unordered_map<uint64_t, tx_reply> tx_replies;
             // node map client
-            //coordinator::nmap_stub nmap_client;
+            coordinator::nmap_stub nmap_client;
             std::unordered_map<uint64_t, uint64_t> map_cache; // TODO remove after migration
             // mutexes
             po6::threads::mutex mutex, loc_gen_mutex, id_gen_mutex, map_cache_mutex;
@@ -145,7 +145,9 @@ namespace coordinator
         }
         map_cache_mutex.unlock();
         if (!mappings_to_get.empty()) {
-            //nmap_client.get_mappings(mappings_to_get, request_element_mappings);
+            for (auto &toAdd : nmap_client.get_mappings(mappings_to_get)) {
+                request_element_mappings.emplace(toAdd);
+            }
         }
 
         // insert mappings
