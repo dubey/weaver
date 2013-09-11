@@ -130,7 +130,9 @@ namespace coordinator
             }
         }
         if (!mappings_to_get.empty()) {
-            nmap_client.get_mappings(mappings_to_get, request_element_mappings);
+            for (auto &toAdd : nmap_client.get_mappings(mappings_to_get)) {
+                request_element_mappings.emplace(toAdd);
+            }
         }
 
         // insert mappings
