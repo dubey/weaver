@@ -49,9 +49,9 @@ namespace coordinator
     nmap_stub :: put_mappings(std::vector<std::pair<uint64_t, uint64_t>> &pairs_to_add)
     {
         int numPairs = pairs_to_add.size();
-        hyperdex_ds_arena *arena = hyperdex_ds_arena_create();
-        hyperdex_client_attribute *attrs_to_add = hyperdex_ds_allocate_attribute(arena, numPairs);
-        //hyperclient_attribute* attrs_to_add = (hyperclient_attribute *)malloc(numPairs * sizeof(hyperclient_attribute));
+        //hyperdex_ds_arena *arena = hyperdex_ds_arena_create();
+        //hyperdex_client_attribute *attrs_to_add = hyperdex_ds_allocate_attribute(arena, numPairs);
+        hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute *) malloc(numPairs * sizeof(hyperdex_client_attribute));
 
         hyperclientLock.lock();
         for (int i = 0; i < numPairs; i++) {
@@ -83,8 +83,8 @@ namespace coordinator
             }
         }
         hyperclientLock.unlock();
-        //free(attrs_to_add);
-        hyperdex_ds_arena_destroy(arena);
+        free(attrs_to_add);
+        //hyperdex_ds_arena_destroy(arena);
     }
 
     std::vector<std::pair<uint64_t, uint64_t>>
@@ -154,7 +154,7 @@ namespace coordinator
                 toRet[i].second = *shard;
                 */
             }
-            hyperclient_destroy_attrs(results[i].attr, results[i].attr_size);
+            hyperdex_client_destroy_attrs(results[i].attr, results[i].attr_size);
         }
         return toRet;
     }
@@ -164,7 +164,7 @@ namespace coordinator
     {
         int numNodes = toDel.size();
         std::vector<int64_t> results(numNodes);
-        hyperclient_returncode get_status;
+        hyperdex_client_returncode get_status;
 
         hyperclientLock.lock();
         for (int i = 0; i < numNodes; i++) {
@@ -176,7 +176,7 @@ namespace coordinator
             }
         }
 
-        hyperclient_returncode loop_status;
+        hyperdex_client_returncode loop_status;
         int64_t loop_id;
         // call loop once for every get
         for (int i = 0; i < numNodes; i++) {
