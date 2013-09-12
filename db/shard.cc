@@ -398,7 +398,7 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
             }
             if (MSG_BATCHING) {
                 for (uint64_t next_loc = 1; next_loc <= NUM_SHARDS; next_loc++) {
-                    if ((   (!batched_node_progs[next_loc].empty() && batched_node_progs[next_loc].size()>BATCH_MSG_SIZE)
+                    if (((!batched_node_progs[next_loc].empty() && batched_node_progs[next_loc].size()>BATCH_MSG_SIZE)
                          /*|| (!batched_deleted_nodes[next_loc].empty())*/)
                         && next_loc != S->shard_id) {
                         message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id,
