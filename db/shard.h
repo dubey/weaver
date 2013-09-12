@@ -114,7 +114,7 @@ namespace db
 
             // Consistency
         public:
-            void increment_qts(uint64_t vt_id);
+            void record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id);
             element::node* acquire_node(uint64_t node_handle);
             void release_node(element::node *n);
 
@@ -125,7 +125,7 @@ namespace db
             std::unordered_map<uint64_t, uint64_t> edges; // edge handle -> node handle
             db::thread::pool thread_pool;
         public:
-            void add_request(uint64_t vt_id, thread::unstarted_thread *thr);
+            void add_write_request(uint64_t vt_id, thread::unstarted_thread *thr);
             void create_node(uint64_t node_handle, vc::vclock_t &vclk, bool migrate);
             uint64_t delete_node(uint64_t node_handle, vc::vclock_t &vclk);
             uint64_t create_edge(uint64_t edge_handle, uint64_t local_node,
@@ -166,9 +166,9 @@ namespace db
     // Consistency methods
 
     inline void
-    shard :: increment_qts(uint64_t vt_id)
+    shard :: record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id)
     {
-        thread_pool.increment_qts(vt_id);
+        thread_pool.record_completed_transaction(vt_id, transaction_completed_id);
     }
 
     // find the node corresponding to given handle
@@ -221,9 +221,9 @@ namespace db
     // Graph state update methods
 
     inline void
-    shard :: add_request(uint64_t vt_id, thread::unstarted_thread *thr)
+    shard :: add_write_request(uint64_t vt_id, thread::unstarted_thread *thr)
     {
-        thread_pool.add_request(vt_id, thr);
+        thread_pool.add_write_request(vt_id, thr);
     }
 
     inline void
@@ -358,42 +358,61 @@ namespace db
     thread :: worker_thread_loop(thread::pool *tpool)
     {
         thread::unstarted_thread *thr = NULL;
-        std::vector<thread::pqueue_t> &queues = tpool->queues;
+        std::vector<thread::pqueue_t> &read_queues = tpool->read_queues;
+        std::vector<thread::pqueue_t> &write_queues = tpool->write_queues;
         po6::threads::cond &c = tpool->queue_cond;
         std::vector<vc::vclock_t> timestamps(NUM_VTS, vc::vclock_t());
+        std::vector<uint64_t> &last_ids = tpool->last_ids;
+        bool read = false;
         while (true) {
             tpool->thread_loop_mutex.lock(); // only one thread accesses queues
             // TODO add job method should be non-blocking on this mutex
             tpool->queue_mutex.lock(); // prevent more jobs from being added
-            // get next jobs from each queue
-            DEBUG << "going to collect jobs from queues" << std::endl;
+            // first check reads, TODO: maybe change to prevent starvation (note reads never have to go to kronos or wait for full queues)
+            DEBUG << "checking read queues" << std::endl;
             for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
-                thread::pqueue_t &pq = queues.at(vt_id);
-                // wait for queue to receive at least one job
-                DEBUG << "waiting for queue to fill" << std::endl;
-                while (pq.empty()) {
-                    c.wait();
-                }
-                thr = pq.top();
-                // check for correct ordering of queue timestamp (which is priority for thread)
-                DEBUG << "waiting for qts to increment" << std::endl;
-                while (!tpool->check_qts(vt_id, thr->priority)) {
-                    DEBUG << "sleeping, qts reqd = " << thr->priority << std::endl;
-                    c.wait();
+                thread::pqueue_t &pq = read_queues.at(vt_id);
+                if (!pq.empty() && pq.top()->priority < last_ids.at(vt_id)) {
+                    DEBUG << "read queue " << vt_id << " has node prog that can be run" << std::endl;
+                    thr = read_queues.at(vt_id).top();
+                    read_queues.at(vt_id).pop();
+                    read = true;
+                    break;
                 }
             }
-            // all queues are good to go, compare timestamps
-            for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
-                timestamps.at(vt_id) = queues.at(vt_id).top()->vclock;
+            if (!read) {
+                // get next jobs from each queue
+                DEBUG << "going to collect jobs from write queues" << std::endl;
+                for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
+                    thread::pqueue_t &pq = write_queues.at(vt_id);
+                    // wait for queue to receive at least one job
+                    DEBUG << "waiting for queue to fill" << std::endl;
+                    while (pq.empty()) {
+                        c.wait();
+                    }
+                    thr = pq.top();
+                    // check for correct ordering of queue timestamp (which is priority for thread)
+                    DEBUG << "waiting for qts to increment" << std::endl;
+                    while (!tpool->check_qts(vt_id, thr->priority)) {
+                        DEBUG << "sleeping, qts reqd = " << thr->priority << std::endl;
+                        c.wait();
+                    }
+                    DEBUG << "done checks" << std::endl;
+                }
+                // all write queues are good to go, compare timestamps
+                for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
+                    timestamps.at(vt_id) = write_queues.at(vt_id).top()->vclock;
+                }
+                DEBUG << "going to compare vt" << std::endl;
+                uint64_t exec_vt_id = (NUM_VTS==1)? 0:order::compare_vts(timestamps);
+                thr = write_queues.at(exec_vt_id).top();
+                write_queues.at(exec_vt_id).pop();
+                // TODO check nop
             }
-            DEBUG << "going to compare vt" << std::endl;
-            uint64_t exec_vt_id = (NUM_VTS==1)? 0:order::compare_vts(timestamps);
-            thr = queues.at(exec_vt_id).top();
-            queues.at(exec_vt_id).pop();
-            // TODO check nop
             tpool->queue_mutex.unlock();
             tpool->thread_loop_mutex.unlock();
             (*thr->func)(thr->arg);
+            read = false;
             // queue timestamp is incremented by the thread, upon finishing
             // because the decision to increment or not is based on thread-specific knowledge
             // moreover, when to increment can also be decided by thread only

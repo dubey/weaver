@@ -81,7 +81,9 @@ namespace thread
     {
         public:
             int num_threads;
-            std::vector<pqueue_t> queues;
+            std::vector<pqueue_t> read_queues;
+            std::vector<pqueue_t> write_queues;
+            std::vector<uint64_t> last_ids; // records last transaction id pulled of threadpool for that vector timestamper
             vc::qtimestamp_t qts; // queue timestamps
             //std::priority_queue<unstarted_thread*, std::vector<unstarted_thread*>, work_thread_compare> work_queue;
             po6::threads::mutex queue_mutex, thread_loop_mutex;
@@ -89,10 +91,11 @@ namespace thread
             static db::shard *S;
        
         public:
-            void add_request(uint64_t vt_id, unstarted_thread*);
+            void add_read_request(uint64_t vt_id, unstarted_thread*);
+            void add_write_request(uint64_t vt_id, unstarted_thread*);
             bool check_qts(uint64_t vt_id, uint64_t qts);
-            void increment_qts(uint64_t vt_id);
-        
+            void record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id);
+
         public:
             pool(int n_threads);
     };
@@ -100,7 +103,9 @@ namespace thread
     inline
     pool :: pool(int n_threads)
         : num_threads(n_threads)
-        , queues(NUM_VTS, pqueue_t())
+        , read_queues(NUM_VTS, pqueue_t())
+        , write_queues(NUM_VTS, pqueue_t())
+        , last_ids(NUM_VTS, 0)
         , qts(NUM_VTS, 0)
         , queue_cond(&queue_mutex)
     {
@@ -113,11 +118,20 @@ namespace thread
     }
 
     inline void
-    pool :: add_request(uint64_t vt_id, unstarted_thread *t)
+    pool :: add_read_request(uint64_t vt_id, unstarted_thread *t)
     {
         queue_mutex.lock();
         queue_cond.broadcast();
-        queues.at(vt_id).push(t);
+        read_queues.at(vt_id).push(t);
+        queue_mutex.unlock();
+    }
+
+    inline void
+    pool :: add_write_request(uint64_t vt_id, unstarted_thread *t)
+    {
+        queue_mutex.lock();
+        queue_cond.broadcast();
+        write_queues.at(vt_id).push(t);
         queue_mutex.unlock();
     }
 
@@ -130,12 +144,13 @@ namespace thread
         return (timestamp <= qts.at(vt_id));
     }
 
-    // increment a queue timestamp after processing request
+    // increment a queue timestamp and most recent transation id after processing request
     inline void
-    pool :: increment_qts(uint64_t vt_id)
+    pool :: record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id)
     {
         queue_mutex.lock();
         qts.at(vt_id)++;
+        last_ids.at(vt_id) = transaction_completed_id;
         queue_cond.broadcast();
         queue_mutex.unlock();
     }

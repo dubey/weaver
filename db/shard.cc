@@ -95,24 +95,26 @@ unpack_tx_request(void *req)
     for (auto upd: tx.writes) {
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ:
-                S->increment_qts(vt_id);
+                DEBUG << "unpacked node create" << std::endl;
                 create_node(vclk, upd->handle);
+                S->record_completed_transaction(vt_id, tx_id);
+                DEBUG << "done node create" << std::endl;
                 ret = 0;
                 break;
 
             case transaction::EDGE_CREATE_REQ:
-                S->increment_qts(vt_id);
                 ret = create_edge(vclk, upd->handle, upd->elem1, upd->elem2, upd->loc2);
+                S->record_completed_transaction(vt_id, tx_id);
                 break;
 
             case transaction::NODE_DELETE_REQ:
                 ret = delete_node(vclk, upd->elem1);
-                S->increment_qts(vt_id);
+                S->record_completed_transaction(vt_id, tx_id);
                 break;
 
             case transaction::EDGE_DELETE_REQ:
                 ret = delete_edge(vclk, upd->elem1);
-                S->increment_qts(vt_id);
+                S->record_completed_transaction(vt_id, tx_id);
                 break;
 
             default:
@@ -167,8 +169,9 @@ msgrecv_loop()
                 message::unpack_message(*rec_msg, message::TX_INIT, vt_id, vclk, qts);
                 request = new db::update_request(mtype, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(qts.at(shard_id-SHARD_ID_INCR), vclk, unpack_tx_request, request);
-                S->add_request(vt_id, thr);
-                DEBUG << "added request to threadpool" << std::endl;
+                //DEBUG << "going to add request to threadpool" << std::endl;
+                S->add_write_request(vt_id, thr);
+                //DEBUG << "added request to threadpool" << std::endl;
                 rec_msg.reset(new message::message());
                 break;
 
@@ -177,7 +180,7 @@ msgrecv_loop()
                 message::unpack_message(*rec_msg, mtype, vclk);
                 request = new db::update_request(mtype, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(0, vclk, unpack_update_request, request);
-                S->add_request(0, thr);
+                S->add_write_request(0, thr);
                 rec_msg.reset(new message::message());
                 break;
 
