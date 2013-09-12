@@ -371,7 +371,8 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
                 for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                     uint64_t loc = res.first.loc;
                     if (loc == COORD_ID) {
-                        // signal to send back to coordinator TODO: send to appropriate vector timestamper
+                        // signal to send back to vector timestamper that issued request
+                        // TODO mark done
                         // XXX get rid of pair, without pair it is not working for some reason
                         std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
                         message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock,
@@ -433,8 +434,11 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
 
 template <typename ParamsType, typename NodeStateType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType> :: 
-    unpack_and_start_coord(std::shared_ptr<coordinator::pending_req>)
-{ }
+    unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID)
+{
+    UNUSED(msg);
+    UNUSED(clientID);
+}
 
 // server msg recv loop for the shard server
 void
