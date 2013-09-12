@@ -99,7 +99,7 @@ unpack_tx_request(void *req)
             case transaction::NODE_CREATE_REQ:
                 DEBUG << "unpacked node create" << std::endl;
                 create_node(vclk, upd->handle);
-                S->record_completed_transaction(vt_id, tx_id);
+                S->record_completed_transaction(vt_id, tx_id); // TODO: only do this once per transaction
                 DEBUG << "done node create" << std::endl;
                 ret = 0;
                 break;
