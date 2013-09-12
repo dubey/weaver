@@ -171,6 +171,7 @@ unpack_node_program(void *req) {
     db::graph_request *request = (db::graph_request *) req;
     node_prog::prog_type pType;
 
+    DEBUG << "node program got of priority queue to run!" << std::endl;
     message::unpack_message(*request->msg, message::NODE_PROG, pType);
     node_prog::programs.at(pType)->unpack_and_run_db(*request->msg); // std::move me!
     delete request;
@@ -180,6 +181,7 @@ template <typename ParamsType, typename NodeStateType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType> :: 
     unpack_and_run_db(message::message &msg)
 {
+    DEBUG << "node program runing in templated function!" << std::endl;
     // unpack some start params from msg:
     std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> start_node_params;
     uint64_t vt_id;

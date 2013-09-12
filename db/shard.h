@@ -360,6 +360,7 @@ namespace db
     inline std::shared_ptr<node_prog::Packable_Deletable>
     shard :: fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle)
     {
+        DEBUG << "trying to fetch node program state" << std::endl;
         return node_prog_req_state.get_state(t, request_id, local_node_handle);
     }
 
@@ -401,7 +402,11 @@ namespace db
         DEBUG << "checking read queues" << std::endl;
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
             thread::pqueue_t &pq = read_queues.at(vt_id);
-            if (!pq.empty() && pq.top()->priority < last_ids.at(vt_id)) {
+            if (!pq.empty()){
+                DEBUG << "read queue " << vt_id << " not empty. has top id " << pq.top()->priority 
+                    << " and needs less than " << last_ids[vt_id] << " to p    op" << std::endl;
+            }
+            if (!pq.empty() ){ // XXX for correctness: && pq.top()->priority < last_ids[vt_id)) {
                 DEBUG << "read queue " << vt_id << " has node prog that can be run" << std::endl;
                 thr = read_queues.at(vt_id).top();
                 read_queues.at(vt_id).pop();
