@@ -126,6 +126,7 @@ namespace db
             db::thread::pool thread_pool;
         public:
             void add_write_request(uint64_t vt_id, thread::unstarted_thread *thr);
+            void add_read_request(uint64_t vt_id, thread::unstarted_thread *thr);
             void create_node(uint64_t node_handle, vc::vclock_t &vclk, bool migrate);
             uint64_t delete_node(uint64_t node_handle, vc::vclock_t &vclk);
             uint64_t create_edge(uint64_t edge_handle, uint64_t local_node,
@@ -224,6 +225,12 @@ namespace db
     shard :: add_write_request(uint64_t vt_id, thread::unstarted_thread *thr)
     {
         thread_pool.add_write_request(vt_id, thr);
+    }
+
+    inline void
+    shard :: add_read_request(uint64_t vt_id, thread::unstarted_thread *thr)
+    {
+        thread_pool.add_read_request(vt_id, thr);
     }
 
     inline void
