@@ -102,7 +102,7 @@ namespace order
         } else {
             // need to call Kronos
             uint64_t num_pairs = ((num_clks - num_large) * (num_clks - num_large - 1)) / 2;
-            std::cout << "num pairs = " << num_pairs << std::endl;
+            DEBUG << "num pairs = " << num_pairs << std::endl;
             weaver_pair *wpair = (weaver_pair*)malloc(sizeof(weaver_pair) * num_pairs);
             weaver_pair *wp = wpair;
             for (uint64_t i = 0; i < num_clks; i++) {
@@ -113,12 +113,12 @@ namespace order
                         for (uint64_t k = 0; k < NUM_SHARDS; k++) {
                             wp->lhs[k] = clocks.at(i).at(k);
                             wp->rhs[k] = clocks.at(j).at(k);
-                            std::cout << wp->lhs[k] << " " << wp->rhs[k] << std::endl;
+                            DEBUG << wp->lhs[k] << " " << wp->rhs[k] << std::endl;
                         }
                         wp->flags = CHRONOS_SOFT_FAIL;
                         if (i == 0) {
                             wp->order = CHRONOS_HAPPENS_BEFORE;
-                            std::cout << "assigning preference of happens before to (" << i << "," << j << ")\n";
+                            DEBUG << "assigning preference of happens before to (" << i << "," << j << ")\n";
                         } else {
                             wp->order = CHRONOS_CONCURRENT;
                         }

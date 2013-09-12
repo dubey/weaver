@@ -102,6 +102,7 @@ namespace message
         COORD_LOC_REQ,
         COORD_LOC_REPLY,
         VT_CLOCK_UPDATE,
+        VT_NOP,
 
         START_MIGR,
         EXIT_WEAVER,

@@ -366,19 +366,15 @@ namespace db
             // TODO add job method should be non-blocking on this mutex
             tpool->queue_mutex.lock(); // prevent more jobs from being added
             // get next jobs from each queue
-            DEBUG << "going to collect jobs from queues" << std::endl;
             for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
                 thread::pqueue_t &pq = queues.at(vt_id);
                 // wait for queue to receive at least one job
-                DEBUG << "waiting for queue to fill" << std::endl;
                 while (pq.empty()) {
                     c.wait();
                 }
                 thr = pq.top();
                 // check for correct ordering of queue timestamp
-                DEBUG << "waiting for qts to increment" << std::endl;
                 while (!tpool->check_qts(vt_id, thr->qtimestamp)) {
-                    DEBUG << "sleeping, qts reqd = " << thr->qtimestamp << std::endl;
                     c.wait();
                 }
             }
@@ -386,7 +382,6 @@ namespace db
             for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
                 timestamps.at(vt_id) = queues.at(vt_id).top()->vclock;
             }
-            DEBUG << "going to compare vt" << std::endl;
             uint64_t exec_vt_id = (NUM_VTS==1)? 0:order::compare_vts(timestamps);
             thr = queues.at(exec_vt_id).top();
             queues.at(exec_vt_id).pop();

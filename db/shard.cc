@@ -92,17 +92,18 @@ unpack_tx_request(void *req)
     transaction::pending_tx tx;
     bool ack = true;
     message::unpack_message(*request->msg, message::TX_INIT, vt_id, vclk, qts, tx_id, tx.writes);
+    ret = 0;
     for (auto upd: tx.writes) {
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ:
-                S->increment_qts(vt_id);
                 create_node(vclk, upd->handle);
+                S->increment_qts(vt_id);
                 ret = 0;
                 break;
 
             case transaction::EDGE_CREATE_REQ:
-                S->increment_qts(vt_id);
                 ret = create_edge(vclk, upd->handle, upd->elem1, upd->elem2, upd->loc2);
+                S->increment_qts(vt_id);
                 break;
 
             case transaction::NODE_DELETE_REQ:
@@ -135,6 +136,14 @@ unpack_tx_request(void *req)
     }
 }
 
+inline void
+nop(void *vtid_arg)
+{
+    uint64_t *vt_id = (uint64_t*)vtid_arg;
+    S->increment_qts(*vt_id);
+    free(vt_id);
+}
+
 // server msg recv loop for the shard server
 void
 msgrecv_loop()
@@ -147,6 +156,7 @@ msgrecv_loop()
     db::thread::unstarted_thread *thr;
     db::update_request *request;
     vc::vclock_t vclk, qts;
+    uint64_t *vtid_arg;
 
     while (true) {
         if ((ret = S->bb->recv(&sender, &rec_msg->buf)) != BUSYBEE_SUCCESS) {
@@ -173,7 +183,6 @@ msgrecv_loop()
                 break;
 
             case message::REVERSE_EDGE_CREATE:
-                //message::unpack_message(*rec_msg, mtype, vclk, handle, elem1, elem2, 
                 message::unpack_message(*rec_msg, mtype, vclk);
                 request = new db::update_request(mtype, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(0, vclk, unpack_update_request, request);
@@ -181,6 +190,14 @@ msgrecv_loop()
                 rec_msg.reset(new message::message());
                 break;
 
+            case message::VT_NOP:
+                message::unpack_message(*rec_msg, mtype, vt_id, vclk, qts);
+                vtid_arg = (uint64_t*)malloc(sizeof(uint64_t));
+                *vtid_arg = vt_id;
+                thr = new db::thread::unstarted_thread(qts.at(shard_id-SHARD_ID_INCR), vclk, nop, (void*)vtid_arg);
+                S->add_request(vt_id, thr);
+                rec_msg.reset(new message::message());
+                break;
             //case message::TRANSIT_NODE_DELETE_REQ:
             //case message::TRANSIT_EDGE_CREATE_REQ:
             //case message::TRANSIT_REVERSE_EDGE_CREATE:

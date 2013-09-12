@@ -86,8 +86,42 @@ end_transaction(uint64_t tx_id)
     }
 }
 
+// periodically send nops to shards to keep queues moving
+// also send vector clock updates to other timestampers
+inline void
+periodic_update()
+{
+    vts->mutex.lock();
+    uint64_t cur_time = wclock::get_time_elapsed(vts->tspec);
+    if (cur_time > (vts->nop_time + VT_NOP_TIMEOUT)) {
+        // send nops to each shard
+        vts->nop_time = cur_time;
+        vc::qtimestamp_t new_qts = vts->qts;
+        for (auto &qts: vts->qts) {
+            qts++;
+        }
+        vts->vclk.increment_clock();
+        vc::vclock_t vclk = vts->vclk.get_clock();
+        vts->mutex.unlock();
+        message::message msg;
+        for (uint64_t i = 0; i < NUM_SHARDS; i++) {
+            message::prepare_message(msg, message::VT_NOP, vt_id, vclk, new_qts);
+            vts->send(i + SHARD_ID_INCR, msg.buf);
+        }
+        for (uint64_t i = 0; i < NUM_VTS; i++) {
+            if (i == vt_id) {
+                continue;
+            }
+            message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, vclk.at(vt_id));
+            vts->send(i, msg.buf);
+        }
+    } else {
+        vts->mutex.unlock();
+    }
+}
+
 void
-server_loop()
+server_loop(int thread_id)
 {
     busybee_returncode ret;
     uint32_t code;
@@ -95,43 +129,53 @@ server_loop()
     std::unique_ptr<message::message> msg;
     uint64_t sender, tx_id;
 
-    while (true)
-    {
+    while (true) {
         msg.reset(new message::message());
-        if ((ret = vts->bb->recv(&sender, &msg->buf)) != BUSYBEE_SUCCESS) {
-            std::cerr << "msg recv error: " << ret << std::endl;
+        ret = vts->bb->recv(&sender, &msg->buf);
+        if (ret != BUSYBEE_SUCCESS && ret != BUSYBEE_TIMEOUT) {
+            DEBUG << "msg recv error: " << ret << std::endl;
             continue;
-        }
-        msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
-        mtype = (enum message::msg_type)code;
-        sender -= ID_INCR;
-
-        switch (mtype) {
-            // client messages
-            case message::CLIENT_TX_INIT: {
-                transaction::pending_tx tx;
-                vts->unpack_tx(*msg, tx, sender);
-                begin_transaction(tx);
-                break;
+        } else if (ret == BUSYBEE_TIMEOUT) {
+            if (thread_id == 0) {
+                periodic_update();
             }
+            continue;
+        } else {
+            // good to go, unpack msg
+            msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
+            mtype = (enum message::msg_type)code;
+            sender -= ID_INCR;
 
-            case message::VT_CLOCK_UPDATE: {
-                uint64_t rec_vtid, rec_clock;
-                message::unpack_message(*msg, message::VT_CLOCK_UPDATE, rec_vtid, rec_clock);
-                vts->mutex.lock();
-                vts->vclk.update_clock(rec_vtid, rec_clock);
-                vts->mutex.unlock();
-                break;
+            switch (mtype) {
+                // client messages
+                case message::CLIENT_TX_INIT: {
+                    transaction::pending_tx tx;
+                    vts->unpack_tx(*msg, tx, sender);
+                    begin_transaction(tx);
+                    break;
+                }
+
+                case message::VT_CLOCK_UPDATE: {
+                    uint64_t rec_vtid, rec_clock;
+                    message::unpack_message(*msg, message::VT_CLOCK_UPDATE, rec_vtid, rec_clock);
+                    vts->mutex.lock();
+                    vts->vclk.update_clock(rec_vtid, rec_clock);
+                    vts->mutex.unlock();
+                    break;
+                }
+
+                // shard messages
+                case message::TX_DONE:
+                    message::unpack_message(*msg, message::TX_DONE, tx_id);
+                    end_transaction(tx_id);
+                    break;
+
+                default:
+                    std::cerr << "unexpected msg type " << mtype << std::endl;
             }
-
-            // shard messages
-            case message::TX_DONE:
-                message::unpack_message(*msg, message::TX_DONE, tx_id);
-                end_transaction(tx_id);
-                break;
-
-            default:
-                std::cerr << "unexpected msg type " << mtype << std::endl;
+            if (thread_id == 0) {
+                periodic_update();
+            }
         }
     }
 }
@@ -169,8 +213,8 @@ main(int argc, char *argv[])
     vts = new coordinator::timestamper(vt_id);
     DEBUG << "Vector timestamper " << vt_id << std::endl;
     for (int i = 0; i < NUM_THREADS-1; i++) {
-        thr = new std::thread(server_loop);
+        thr = new std::thread(server_loop, i);
         thr->detach();
     }
-    server_loop();
+    server_loop(NUM_THREADS-1);
 }

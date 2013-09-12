@@ -35,11 +35,11 @@
 #define ID_INCR (1ULL << 32ULL)
 #define COORD_ID (0ULL)
 #define COORD_SM_ID (0ULL)
-#define CLIENT_ID (11ULL)
+#define CLIENT_ID (100ULL)
 #define SHARDS_DESC_FILE "../common/shards"
 // weaver setup
 #define NUM_SHARDS 2
-#define NUM_VTS 1
+#define NUM_VTS 2
 #define SHARD_ID_INCR NUM_VTS
 #define NUM_THREADS 8
 #define ID_BITS 8
@@ -54,6 +54,7 @@
 #define BATCH_MSG_SIZE 100
 #define MIGRATION false // whether to enable migration at the beginning of the program or not
 #define MAX_CACHE_PER_NODE 10 // max num of cache entries per node per request type
+#define VT_NOP_TIMEOUT 10 // number of milliseconds between successive nops
 // hyperdex constants
 #define HYPERDEX_COORD_IPADDR "127.0.0.1"
 #define HYPERDEX_COORD_PORT 1982

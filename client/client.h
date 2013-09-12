@@ -31,11 +31,11 @@ namespace client
     class client
     {
         public:
-            client(uint64_t my_id);
+            client(uint64_t my_id, uint64_t vt_id);
             ~client();
 
         private:
-            uint64_t myid, shifted_id;
+            uint64_t myid, shifted_id, vtid;
             std::shared_ptr<po6::net::location> myloc;
             busybee_mta *client_bb;
             std::unordered_map<uint64_t, tx_list_t> tx_map;
@@ -58,9 +58,10 @@ namespace client
     };
 
     inline
-    client :: client(uint64_t my_id)
+    client :: client(uint64_t my_id, uint64_t vt_id)
         : myid(my_id)
         , shifted_id(myid << (64-ID_BITS))
+        , vtid(vt_id)
         , tx_id_ctr(0)
         , temp_handle_ctr(0)
     {
@@ -170,7 +171,7 @@ namespace client
     client :: send_coord(std::auto_ptr<e::buffer> buf)
     {
         busybee_returncode ret;
-        if ((ret = client_bb->send(COORD_ID, buf)) != BUSYBEE_SUCCESS) {
+        if ((ret = client_bb->send(vtid, buf)) != BUSYBEE_SUCCESS) {
             DEBUG << "msg send error: " << ret << std::endl;
             return;
         }

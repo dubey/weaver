@@ -24,6 +24,7 @@
 #include "common/vclock.h"
 #include "common/message.h"
 #include "common/transaction.h"
+#include "common/clock.h"
 #include "nmap_stub.h"
 
 namespace coordinator
@@ -43,6 +44,8 @@ namespace coordinator
             vc::vclock vclk; // vector clock
             vc::qtimestamp_t qts; // queue timestamp
             std::unordered_map<uint64_t, tx_reply> tx_replies;
+            timespec tspec;
+            uint64_t nop_time;
             // node map client
             coordinator::nmap_stub nmap_client;
             std::unordered_map<uint64_t, uint64_t> map_cache; // TODO remove after migration
@@ -74,6 +77,8 @@ namespace coordinator
     {
         // initialize array of server locations
         initialize_busybee(bb, vt_id, myloc, NUM_THREADS);
+        bb->set_timeout(VT_NOP_TIMEOUT);
+        nop_time = wclock::get_time_elapsed(tspec);
     }
 
     inline busybee_returncode
