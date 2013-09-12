@@ -376,7 +376,7 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
                         std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
                         message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock,
                             req_id, /*dirty_cache_ids,*/ temppair);
-                        S->send(COORD_ID, msg.buf);
+                        S->send(vt_id, msg.buf);
                     } else {
                         batched_node_progs[loc].emplace_back(res.first.handle, std::move(res.second), this_node);
                         if (!MSG_BATCHING && (loc != S->shard_id)) {
