@@ -66,7 +66,7 @@ begin_transaction(transaction::pending_tx &tx)
         }
     }
     vts->prev_write = true;
-    vts->mutex.unlock();
+    vts->mutex.unlock(); // TODO: move sending out of critical section
 }
 
 // decrement reply count. if all replies have been received, ack to client
@@ -90,7 +90,7 @@ end_transaction(uint64_t tx_id)
 // node program stuff
 template <typename ParamsType, typename NodeStateType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType> :: 
-    unpack_and_start_coord(std::shared_ptr<coordinator::pending_req> request)
+    unpack_and_start_coord(std::unique_ptr<message::message> msg)
 {
     node_prog::prog_type ignore;
     std::vector<std::pair<uint64_t, ParamsType>> initial_args;
@@ -110,14 +110,16 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         initial_batches[me->get_loc()].emplace_back(std::make_tuple(node_params_pair.first,
             std::move(node_params_pair.second), db::element::remote_node())); // constructor
     }
-    request->vector_clock.reset(new std::vector<uint64_t>(*server->vc.clocks));
-    request->del_request = server->get_last_del_req(request);
-    request->out_count = server->last_del;
-    request->out_count->cnt++;
-    request->req_id = ++server->request_id;
-    server->pending.emplace(std::make_pair(request->req_id, request));
+    if (vts->prev_write) {
+        vts->vclk.increment_clock();
+    }
+    vc::vclock_t req_timestamp =  vts->vclk.get_clock();
+    uint64_t req_id = vts->generate_id();
 
-    // TODO later change to send without update mutex
+    server->mutex.lock();
+    server->pending.emplace(std::make_pair(request->req_id, request));
+    server->mutex.
+
     message::message msg_to_send;
     std::vector<uint64_t> empty_vector;
     std::vector<std::tuple<uint64_t, ParamsType, uint64_t>> empty_tuple_vector;
@@ -174,6 +176,7 @@ server_loop()
     enum message::msg_type mtype;
     std::unique_ptr<message::message> msg;
     uint64_t sender, tx_id;
+    node_prog::prog_type pType;
 
     while (true)
     {
@@ -196,14 +199,13 @@ server_loop()
             }
 
         case message::CLIENT_NODE_PROG_REQ:
-            message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, crequest->pType);
-            crequest->req_msg = std::move(msg);
-            server->update_mutex.lock();
-            node_prog::programs.at(crequest->pType)->unpack_and_start_coord(crequest);
-            server->update_mutex.unlock();
+            message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, pType);
+            //server->update_mutex.lock();
+            node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg));
+            //server->update_mutex.unlock();
             break;
 
-// other timestamper messages
+            // other timestamper messages
             case message::VT_CLOCK_UPDATE: {
                 uint64_t rec_vtid, rec_clock;
                 message::unpack_message(*msg, message::VT_CLOCK_UPDATE, rec_vtid, rec_clock);

@@ -44,6 +44,10 @@ namespace coordinator
             vc::qtimestamp_t qts; // queue timestamp
             bool prev_write;
             std::unordered_map<uint64_t, tx_reply> tx_replies;
+            // node prog
+            // map from req_id to client_id that ensures a single response to a node program
+            std::unordered_map<uint64_t, uint64_t> outstanding_node_progs;
+
             // node map client
             coordinator::nmap_stub nmap_client;
             std::unordered_map<uint64_t, uint64_t> map_cache; // TODO remove after migration
