@@ -42,6 +42,7 @@ namespace coordinator
             uint64_t loc_gen;
             vc::vclock vclk; // vector clock
             vc::qtimestamp_t qts; // queue timestamp
+            bool prev_write;
             std::unordered_map<uint64_t, tx_reply> tx_replies;
             // node map client
             coordinator::nmap_stub nmap_client;
@@ -71,6 +72,7 @@ namespace coordinator
         , loc_gen(0)
         , vclk(id)
         , qts(NUM_SHARDS, 0)
+        , prev_write(true)
     {
         // initialize array of server locations
         initialize_busybee(bb, vt_id, myloc, NUM_THREADS);
