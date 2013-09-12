@@ -29,7 +29,7 @@
 
 #include "node_prog_type.h"
 //#include "dijkstra_program.h"
-//#include "reach_program.h"
+#include "reach_program.h"
 //#include "clustering_program.h"
 
 namespace coordinator
@@ -85,12 +85,10 @@ namespace node_prog
             virtual void unpack_and_start_coord(std::shared_ptr<coordinator::pending_req> request);
     };
     
-    std::map<prog_type, node_program*> programs ;/*= {
+    std::map<prog_type, node_program*> programs = {
         { REACHABILITY,
-          new particular_node_program<node_prog::reach_params, node_prog::reach_node_state,
-                node_prog::reach_cache_value>(REACHABILITY, node_prog::reach_node_program,
-                node_prog::reach_node_deleted_program,
-                INVALIDATE_HEAD) },
+          new particular_node_program<node_prog::reach_params, node_prog::reach_node_state>(REACHABILITY, node_prog::reach_node_program,
+                node_prog::reach_node_deleted_program) }};/*,
         { DIJKSTRA,
           new particular_node_program<node_prog::dijkstra_params, node_prog::dijkstra_node_state,
                 node_prog::dijkstra_cache_value>(DIJKSTRA, node_prog::dijkstra_node_program,

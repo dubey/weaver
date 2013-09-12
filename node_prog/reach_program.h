@@ -120,22 +120,24 @@ namespace node_prog
         }
     };
 
+/*
     struct reach_cache_value : CacheValueBase 
     {
         uint64_t reachable_node;
         virtual ~reach_cache_value() { }
     };
+    */
 
     std::vector<std::pair<db::element::remote_node, reach_params>> 
     reach_node_program(uint64_t req_id,
             db::element::node &n,
             db::element::remote_node &rn,
             reach_params &params,
-            std::function<reach_node_state&()> state_getter,
-            std::function<reach_cache_value&()> cache_putter,
-            std::function<std::vector<std::shared_ptr<reach_cache_value>>()> cached_values_getter)
+            std::function<reach_node_state&()> state_getter)
+            //std::function<reach_cache_value&()> cache_putter,
+            //std::function<std::vector<std::shared_ptr<reach_cache_value>>()> cached_values_getter)
     {
-        UNUSED(cache_putter);
+        //UNUSED(cache_putter);
         reach_node_state &state = state_getter();
         bool false_reply = false;
         db::element::remote_node prev_node = params.prev_node;
@@ -150,6 +152,7 @@ namespace node_prog
             } else {
                 // have not found it yet, check the cache, then follow all out edges
                 bool got_cache = false;
+                /*
                 std::vector<std::shared_ptr<reach_cache_value>> cache = cached_values_getter();
                 for (auto &rcv: cache) {
                     if (rcv->reachable_node == params.dest) {
@@ -161,6 +164,7 @@ namespace node_prog
                         break;
                     }
                 }
+                */
                 if (!state.visited && !got_cache) {
                     db::element::edge *e;
                     state.prev_node = prev_node;
@@ -211,12 +215,14 @@ namespace node_prog
                     params.path.emplace_back(rn);
                 }
                 next.emplace_back(std::make_pair(state.prev_node, params));
+                /*
                 // next block of code enables caching
                 if (params.reachable) {
                     // adding to cache
                     reach_cache_value &rcv = cache_putter();
                     rcv.reachable_node = params.dest;
                 }
+                */
             }
             if ((int)state.out_count < 0) {
                 DEBUG << "ALERT! Bad state value in reach program for node " << rn.handle

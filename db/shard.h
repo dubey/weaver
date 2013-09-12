@@ -27,6 +27,7 @@
 #include "common/event_order.h"
 #include "element/node.h"
 #include "element/edge.h"
+#include "state/program_state.h"
 #include "threadpool/threadpool.h"
 
 namespace db
@@ -144,6 +145,14 @@ namespace db
         public:
             uint64_t cur_node_count;
             std::unordered_map<uint64_t, uint32_t> agg_msg_count;
+
+            // node programs
+            std::shared_ptr<node_prog::Packable_Deletable> 
+                fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
+            void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle,
+                    std::shared_ptr<node_prog::Packable_Deletable> toAdd);
+            void add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests, uint64_t del_id);
+            bool check_done_request(uint64_t req_id);
 
             // Messaging infrastructure
         public:
@@ -343,6 +352,36 @@ namespace db
         release_node(n);
         // TODO permanent deletion
         return ret;
+    }
+
+    // node program
+    state::program_state node_prog_req_state; 
+
+    inline std::shared_ptr<node_prog::Packable_Deletable>
+    shard :: fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle)
+    {
+        return node_prog_req_state.get_state(t, request_id, local_node_handle);
+    }
+
+    inline void
+    shard :: insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle,
+        std::shared_ptr<node_prog::Packable_Deletable> toAdd)
+    {
+        node_prog_req_state.put_state(t, request_id, local_node_handle, toAdd);
+    }
+
+    inline void
+    shard :: add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests, uint64_t del_id)
+    {
+        DEBUG << "starting done req at shard " << shard_id << std::endl;
+        node_prog_req_state.done_requests(completed_requests, del_id);
+        DEBUG << "ending done req at shard " << shard_id << std::endl;
+    }
+
+    inline bool
+    shard :: check_done_request(uint64_t req_id)
+    {
+        return node_prog_req_state.check_done_request(req_id);
     }
 
     // messaging methods
