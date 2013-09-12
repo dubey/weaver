@@ -170,7 +170,7 @@ namespace client
         std::pair<uint64_t, ParamsType> tempPair;
         message::unpack_message(msg, message::NODE_PROG_RETURN, ignore_req_id, tempPair);
 
-        std::unique_ptr<ParamsType> toRet(tempPair.second);
+        std::unique_ptr<ParamsType> toRet(new ParamsType(tempPair.second));
         return std::move(toRet);
     }
 

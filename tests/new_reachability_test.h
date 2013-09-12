@@ -12,6 +12,8 @@
  */
 
 #include "client/client.h"
+#include "node_prog/node_prog_type.h"
+#include "node_prog/reach_program.h"
 
 void
 new_reachability_test()
@@ -20,7 +22,7 @@ new_reachability_test()
     uint64_t tx_id = c.begin_tx();
     size_t node1 = c.create_node(tx_id);
     size_t node2 = c.create_node(tx_id);
-    size_t edge = c.create_node(tx_id, node1, node2);
+    size_t edge = c.create_edge(tx_id, node1, node2);
     DEBUG << "Created node1 " << node1 << ", node1 " << node2 << ", and edge from node1 to node2 " << edge << std::endl;
     c.end_tx(tx_id);
 
