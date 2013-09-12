@@ -50,8 +50,8 @@ namespace client
             void end_tx(uint64_t tx_id);
 
             template <typename ParamsType>
-            inline std::unique_ptr<ParamsType>
-            run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args)
+            std::unique_ptr<ParamsType> 
+            run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args);
 
             void commit_graph();
             void exit_weaver();
@@ -173,7 +173,7 @@ namespace client
         message::unpack_message(msg, message::NODE_PROG, ignore, ignore_vt_id, ignore_vclock, ignore_req_id, tempTuple);
         assert(tempTuple.size() == 1);
 
-        std::unique_ptr<ParamsType> toRet(new ParamsType(std::get<1>(tempTuple)));
+        std::unique_ptr<ParamsType> toRet(std::get<1>(tempTuple));
         return std::move(toRet);
     }
 
