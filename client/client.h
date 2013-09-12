@@ -165,15 +165,12 @@ namespace client
             DEBUG << "node prog return msg fail" << std::endl;
             return NULL;
         }
-        node_prog::prog_type ignore;
-        uint64_t ignore_vt_id;
-        uint64_t ignore_req_id;
-        vc::vclock_t ignore_vclock;
-        std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> tempTuple;
-        message::unpack_message(msg, message::NODE_PROG, ignore, ignore_vt_id, ignore_vclock, ignore_req_id, tempTuple);
-        assert(tempTuple.size() == 1);
 
-        std::unique_ptr<ParamsType> toRet(std::get<1>(tempTuple));
+        uint64_t ignore_req_id;
+        std::pair<uint64_t, ParamsType> tempPair;
+        message::unpack_message(msg, message::NODE_PROG_RETURN, ignore_req_id, tempPair);
+
+        std::unique_ptr<ParamsType> toRet(tempPair.second);
         return std::move(toRet);
     }
 

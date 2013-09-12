@@ -208,21 +208,19 @@ server_loop()
                 end_transaction(tx_id);
                 break;
 
-                // response from a shard
-            case message::NODE_PROG:
-                {
-                    uint64_t ignore_vt_id;
-                    uint64_t req_id;
-                    vc::vclock_t ignore_vclock;
-                    message::unpack_message(*msg, message::NODE_PROG, pType, ignore_vt_id, ignore_vclock, req_id); // don't unpack rest
-                    vts->mutex.lock();
-                    if (vts->outstanding_node_progs.find(req_id) != vts->outstanding_node_progs.end()) {
-                        uint64_t client_to_ret = vts->outstanding_node_progs.at(req_id);
-                        vts->send(client_to_ret, msg->buf);
-                        vts->outstanding_node_progs.erase(req_id);
-                    }
-                    vts->mutex.unlock();
+            // response from a shard
+            case message::NODE_PROG_RETURN:
+                uint64_t req_id;
+                message::unpack_message(*msg, message::NODE_PROG_RETURN, req_id); // don't unpack rest
+                vts->mutex.lock();
+                if (vts->outstanding_node_progs.find(req_id) != vts->outstanding_node_progs.end()) {
+                    uint64_t client_to_ret = vts->outstanding_node_progs.at(req_id);
+                    vts->send(client_to_ret, msg->buf);
+                    vts->outstanding_node_progs.erase(req_id);
+                } else {
+                    std::cerr << "node prog return for already completed ornever existed req id" << std::endl;
                 }
+                vts->mutex.unlock();
                 break;
 
             default:

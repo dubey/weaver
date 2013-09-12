@@ -375,8 +375,7 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
                         // TODO mark done
                         // XXX get rid of pair, without pair it is not working for some reason
                         std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
-                        message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock,
-                            req_id, /*dirty_cache_ids,*/ temppair);
+                        message::prepare_message(msg, message::NODE_PROG_RETURN, req_id, temppair);
                         S->send(vt_id, msg.buf);
                     } else {
                         batched_node_progs[loc].emplace_back(res.first.handle, std::move(res.second), this_node);
