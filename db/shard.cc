@@ -18,6 +18,7 @@
 #include "busybee_constants.h"
 
 #define __WEAVER_DEBUG__
+#include "common/event_order.h"
 #include "common/weaver_constants.h"
 // TODO #include "common/message_graph_elem.h"
 #include "shard.h"
@@ -301,13 +302,13 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
             this_node.handle = node_handle;
             // XXX maybe use a try-lock later so forward progress can continue on other nodes in list
             db::element::node *node = S->acquire_node(node_handle);
-            if (node == NULL || node->get_del_time() <= req_vclock) { // TODO: TIMESTAMP
+            if (node == NULL || order::compare_two_vts(node->get_del_time(), req_vclock)==0) { // TODO: TIMESTAMP
                 if (node != NULL) {
                     S->release_node(node);
                 }
 
-                db::element::remote_node parent = std::get<2>(handle_params);
                 /*
+                db::element::remote_node parent = std::get<2>(handle_params);
                 batched_deleted_nodes[parent.loc].emplace_back(std::make_tuple(node_handle, params, parent.handle));
                 */
                 DEBUG << "Node " << node_handle << " deleted, cur request num " << req_id << std::endl;
@@ -360,7 +361,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
                 // call node program
                 auto next_node_params = enclosed_node_prog_func(req_id, *node, this_node,
                         params, // actual parameters for this node program
-                        node_state_getter);
+                        node_state_getter, req_vclock);
                 /*
                         cache_value_putter,
                         cached_values_getter);

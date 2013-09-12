@@ -39,9 +39,11 @@ namespace node_prog
                 db::element::node&, // this node
                 db::element::remote_node&, // this remote node
                 params_type&,
-                std::function<node_state_type&()>);
+                std::function<node_state_type&()>,
+                vc::vclock_t &req_vlock);
     };
 
+/*
     template <typename params_type, typename node_state_type>
     struct deleted_node_function_type
     {
@@ -52,6 +54,7 @@ namespace node_prog
                 params_type&, // params we had sent to deleted node
                 std::function<node_state_type&()>);
     };
+    */
 
     class Packable 
     {

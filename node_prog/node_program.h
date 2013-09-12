@@ -87,8 +87,8 @@ namespace node_prog
     
     std::map<prog_type, node_program*> programs = {
         { REACHABILITY,
-          new particular_node_program<node_prog::reach_params, node_prog::reach_node_state>(REACHABILITY, node_prog::reach_node_program,
-                node_prog::reach_node_deleted_program) }};/*,
+          new particular_node_program<node_prog::reach_params, node_prog::reach_node_state>(REACHABILITY, node_prog::reach_node_program/*,
+                node_prog::reach_node_deleted_program*/) }};/*,
         { DIJKSTRA,
           new particular_node_program<node_prog::dijkstra_params, node_prog::dijkstra_node_state,
                 node_prog::dijkstra_cache_value>(DIJKSTRA, node_prog::dijkstra_node_program,

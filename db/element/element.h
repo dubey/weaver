@@ -50,7 +50,7 @@ namespace element
             void update_del_time(vc::vclock_t &del_time);
             void update_creat_time(vc::vclock_t &creat_time);
             vc::vclock_t get_creat_time() const;
-            vc::vclock_t get_del_time() const;
+            vc::vclock_t get_del_time() const; // TODO change to reference?
             std::pair<bool, uint64_t> get_property_value(uint32_t prop_key, vc::vclock_t &at_time);
             const std::vector<common::property>* get_props() const;
             uint64_t get_handle() const;
