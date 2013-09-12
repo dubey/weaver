@@ -28,9 +28,9 @@
 #include "db/element/remote_node.h"
 
 #include "node_prog_type.h"
-#include "dijkstra_program.h"
-#include "reach_program.h"
-#include "clustering_program.h"
+//#include "dijkstra_program.h"
+//#include "reach_program.h"
+//#include "clustering_program.h"
 
 namespace coordinator
 {
@@ -45,10 +45,9 @@ namespace db
 
 namespace node_prog
 {
-    template <typename ParamsType, typename NodeStateType, typename CacheValueType>
+    template <typename ParamsType, typename NodeStateType>
     void node_program_runner(typename node_prog::node_function_type<ParamsType,
-            NodeStateType,
-            CacheValueType>::value_type np,
+            NodeStateType>::value_type np,
             std::vector<std::pair<uint64_t, ParamsType>> &start_node_params,
             node_prog::prog_type program,
             uint64_t request_id)
@@ -59,30 +58,26 @@ namespace node_prog
         public:
             virtual void unpack_and_run_db(message::message &msg) = 0;
             virtual void unpack_and_start_coord(std::shared_ptr<coordinator::pending_req> request) = 0;
-            bool delete_cache;
 
             virtual ~node_program() { }
     };
 
-    template <typename ParamsType, typename NodeStateType, typename CacheValueType>
+    template <typename ParamsType, typename NodeStateType>
     class particular_node_program : public virtual node_program 
     {
         public:
-            typedef typename node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type func;
-            typedef typename deleted_node_function_type<ParamsType, NodeStateType>::value_type dfunc;
+            typedef typename node_function_type<ParamsType, NodeStateType>::value_type func;
+            //typedef typename deleted_node_function_type<ParamsType, NodeStateType>::value_type dfunc; TODO: NEEDED?
             func enclosed_node_prog_func;
-            dfunc enclosed_node_deleted_func;
+            //dfunc enclosed_node_deleted_func;
             prog_type type;
-            cache_inv_rule cache_rule;
 
         public:
-            particular_node_program(prog_type _type, func prog_func, dfunc del_func, cache_inv_rule crule)
+            particular_node_program(prog_type _type, func prog_func)//, dfunc del_func)
                 : enclosed_node_prog_func(prog_func)
-                , enclosed_node_deleted_func(del_func)
+              //  , enclosed_node_deleted_func(del_func)
                 , type(_type)
-                , cache_rule(crule)
             {
-                delete_cache = (crule != INVALIDATE_TAIL);
             }
 
         public:
@@ -90,7 +85,7 @@ namespace node_prog
             virtual void unpack_and_start_coord(std::shared_ptr<coordinator::pending_req> request);
     };
     
-    std::map<prog_type, node_program*> programs = {
+    std::map<prog_type, node_program*> programs ;/*= {
         { REACHABILITY,
           new particular_node_program<node_prog::reach_params, node_prog::reach_node_state,
                 node_prog::reach_cache_value>(REACHABILITY, node_prog::reach_node_program,
@@ -107,6 +102,7 @@ namespace node_prog
                 clustering_node_deleted_program,
                 INVALIDATE_BOTH) }
     };
+    */
 
 }
 #endif //__NODE_PROG__
