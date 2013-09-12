@@ -97,15 +97,15 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     node_prog::prog_type pType;
     std::vector<std::pair<uint64_t, ParamsType>> initial_args;
 
-    message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, ignore, initial_args);
+    message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, pType, initial_args);
     
     // map from locations to a list of start_node_params to send to that shard
     std::unordered_map<uint64_t, std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>> initial_batches; 
 
-        // lookup mappings
-        std::unordered_map<uint64_t, uint64_t> request_element_mappings;
-        std::unordered_set<uint64_t> mappings_to_get;
-        vts->map_cache_mutex.lock();
+    // lookup mappings
+    std::unordered_map<uint64_t, uint64_t> request_element_mappings;
+    std::unordered_set<uint64_t> mappings_to_get;
+    vts->map_cache_mutex.lock();
     for (auto &initial_arg : initial_args) {
         uint64_t c_id = initial_arg.first;
         if (vts->map_cache.find(c_id) != vts->map_cache.end()) {
@@ -145,7 +145,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     }
     DEBUG << "sent to shards" << std::endl;
     vts->prev_write = false;
-    vts->pending.emplace(std::make_pair(req_id, clientID);
+    vts->outstanding_node_progs.emplace(std::make_pair(req_id, clientID));
     vts->mutex.unlock();
 }
 
@@ -188,7 +188,7 @@ server_loop()
         case message::CLIENT_NODE_PROG_REQ:
             message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, pType);
             //server->update_mutex.lock();
-            node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg));
+            node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), sender);
             //server->update_mutex.unlock();
             break;
 
@@ -210,12 +210,19 @@ server_loop()
 
                 // response from a shard
             case message::NODE_PROG:
-            uint64_t ignore_vt_id;
-            vc::vector_clock_t ignore_vclock;
-                message::unpack_message(*msg, message::NODE_PROG, pType, ignore_vt_id, ignore_vclock, req_id); // don't unpack rest
-                vts->mutex.lock();
-                vts->outstanding_node_progs.get
-                //send back XXX
+                {
+                    uint64_t ignore_vt_id;
+                    uint64_t req_id;
+                    vc::vclock_t ignore_vclock;
+                    message::unpack_message(*msg, message::NODE_PROG, pType, ignore_vt_id, ignore_vclock, req_id); // don't unpack rest
+                    vts->mutex.lock();
+                    if (vts->outstanding_node_progs.find(req_id) != vts->outstanding_node_progs.end()) {
+                        uint64_t client_to_ret = vts->outstanding_node_progs.at(req_id);
+                        vts->send(client_to_ret, msg->buf);
+                        vts->outstanding_node_progs.erase(req_id);
+                    }
+                    vts->mutex.unlock();
+                }
                 break;
 
             default:
