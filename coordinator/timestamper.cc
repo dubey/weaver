@@ -123,7 +123,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         }
     }
 
-    for (std::pair<uint64_t, ParamsType> &node_params_pair : initial_args) {
+    for (std::pair<uint64_t, ParamsType> &node_params_pair : initial_args) { // TODO: change to params pointer so we can avoid potential copy?
         initial_batches[request_element_mappings[node_params_pair.first]].emplace_back(std::make_tuple(node_params_pair.first,
             std::move(node_params_pair.second), db::element::remote_node())); // constructor
     }
@@ -141,7 +141,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     for (auto &batch_pair : initial_batches) {
         message::prepare_message(msg_to_send, message::NODE_PROG, pType, vt_id, req_timestamp, 
                 req_id, batch_pair.second, empty_tuple_vector);
-        vts->send(batch_pair.first, msg_to_send.buf);
+        vts->send(batch_pair.first, msg_to_send.buf); // TODO: can we send out of critical section?
     }
     DEBUG << "sent to shards" << std::endl;
     vts->prev_write = false;
@@ -187,7 +187,7 @@ server_loop()
 
         case message::CLIENT_NODE_PROG_REQ:
             message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, pType);
-            //server->update_mutex.lock();
+            //server->update_mutex.lock(); //TODO do we need to mutex here?
             node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), sender);
             //server->update_mutex.unlock();
             break;
