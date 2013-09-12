@@ -172,7 +172,7 @@ unpack_node_program(void *req) {
     node_prog::prog_type pType;
 
     message::unpack_message(*request->msg, message::NODE_PROG, pType);
-    node_prog::programs.at(pType)->unpack_and_run_db(*request->msg); // move me!
+    node_prog::programs.at(pType)->unpack_and_run_db(*request->msg); // std::move me!
     delete request;
 }
 
@@ -182,6 +182,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
 {
     // unpack some start params from msg:
     std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> start_node_params;
+    uint64_t vt_id;
     uint64_t req_id;
     vc::vclock_t req_vclock;
     //std::vector<uint64_t> vclocks; //needed to pass to next message
@@ -202,17 +203,17 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
 
     // unpack the node program
     try {
-        message::unpack_message(msg, message::NODE_PROG, prog_type_recvd, req_vclock,
-                req_id, start_node_params);//, dirty_cache_ids, invalid_cache_ids, batched_deleted_nodes[G->myid]);
+        message::unpack_message(msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, start_node_params);
+        //, dirty_cache_ids, invalid_cache_ids, batched_deleted_nodes[G->myid]);
         /*
 #ifdef __WEAVER_DEBUG__
-        if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_nodes[G->myid].at(0)) == MAX_TIME) {
-            //DEBUG << "Unpacking forwarded request in unpack_and_run for node "
-            //    << std::get<0>(start_node_params.at(0)) << std::endl;
-            batched_deleted_nodes[G->myid].clear();
+if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_nodes[G->myid].at(0)) == MAX_TIME) {
+        //DEBUG << "Unpacking forwarded request in unpack_and_run for node "
+        //    << std::get<0>(start_node_params.at(0)) << std::endl;
+        batched_deleted_nodes[G->myid].clear();
         }
 #endif
-        */
+         */
     } catch (std::bad_alloc& ba) {
         DEBUG << "bad_alloc caught " << ba.what() << '\n';
         return;
@@ -231,21 +232,21 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         /*
         // deleted nodes loop
         for (std::tuple<uint64_t, ParamsType, uint64_t> del_node_params: batched_deleted_nodes[G->myid]) {
-            uint64_t deleted_node_handle = std::get<0>(del_node_params);
-            ParamsType del_node_params_given = std::get<1>(del_node_params);
-            uint64_t parent_handle = std::get<2>(del_node_params);
+        uint64_t deleted_node_handle = std::get<0>(del_node_params);
+        ParamsType del_node_params_given = std::get<1>(del_node_params);
+        uint64_t parent_handle = std::get<2>(del_node_params);
 
-            db::element::node *node = G->acquire_node(parent_handle);
-            // parent should definitely not be deleted
-            assert(node != NULL && node->get_del_time() > req_vclock);
-            if (node->state == db::element::node::mode::IN_TRANSIT
-             || node->state == db::element::node::mode::MOVED) {
-                // queueing/forwarding delete program
-                std::unique_ptr<message::message> m(new message::message());
-                std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> dummy_node_params;
-                std::vector<std::tuple<uint64_t, ParamsType, uint64_t>> fwd_deleted_nodes; 
-                fwd_deleted_nodes.emplace_back(del_node_params);
-                message::prepare_message(*m, message::NODE_PROG, prog_type_recvd, req_vclock,
+        db::element::node *node = G->acquire_node(parent_handle);
+        // parent should definitely not be deleted
+        assert(node != NULL && node->get_del_time() > req_vclock);
+        if (node->state == db::element::node::mode::IN_TRANSIT
+        || node->state == db::element::node::mode::MOVED) {
+        // queueing/forwarding delete program
+        std::unique_ptr<message::message> m(new message::message());
+        std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> dummy_node_params;
+        std::vector<std::tuple<uint64_t, ParamsType, uint64_t>> fwd_deleted_nodes; 
+        fwd_deleted_nodes.emplace_back(del_node_params);
+        message::prepare_message(*m, message::NODE_PROG, prog_type_recvd, req_vclock,
                     req_id, dummy_node_params, dirty_cache_ids, invalid_cache_ids, fwd_deleted_nodes);
                 if (node->state == db::element::node::mode::MOVED) {
                     // node set up at new shard, fwd request immediately
@@ -373,13 +374,13 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
                         // signal to send back to coordinator TODO: send to appropriate vector timestamper
                         // XXX get rid of pair, without pair it is not working for some reason
                         std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
-                        message::prepare_message(msg, message::NODE_PROG, prog_type_recvd,
+                        message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock,
                             req_id, /*dirty_cache_ids,*/ temppair);
                         S->send(COORD_ID, msg.buf);
                     } else {
                         batched_node_progs[loc].emplace_back(res.first.handle, std::move(res.second), this_node);
                         if (!MSG_BATCHING && (loc != S->shard_id)) {
-                            message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, req_vclock, req_id,
+                            message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id,
                                 batched_node_progs[loc] /*,dirty_cache_ids, invalid_cache_ids, batched_deleted_nodes[loc]*/);
                             batched_node_progs[loc].clear();
                             //batched_deleted_nodes[loc].clear();
@@ -400,7 +401,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
                     if ((   (!batched_node_progs[next_loc].empty() && batched_node_progs[next_loc].size()>BATCH_MSG_SIZE)
                          /*|| (!batched_deleted_nodes[next_loc].empty())*/)
                         && next_loc != S->shard_id) {
-                        message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, req_vclock, req_id,
+                        message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id,
                             batched_node_progs[next_loc]/*, dirty_cache_ids, invalid_cache_ids, batched_deleted_nodes[next_loc]*/);
                         S->send(next_loc, msg.buf);
                         batched_node_progs[next_loc].clear();
@@ -420,7 +421,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         if (((!batched_node_progs[next_loc].empty())
           /*|| (!batched_deleted_nodes[next_loc].empty())*/)
             && next_loc != S->shard_id) {
-            message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, req_vclock, req_id,
+            message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id,
                 batched_node_progs[next_loc]/*, dirty_cache_ids, invalid_cache_ids, batched_deleted_nodes[next_loc]*/);
             S->send(next_loc, msg.buf);
             batched_node_progs[next_loc].clear();
@@ -446,6 +447,7 @@ msgrecv_loop()
     std::unique_ptr<message::message> rec_msg(new message::message());
     db::thread::unstarted_thread *thr;
     db::graph_request *request;
+    node_prog::prog_type pType;
     vc::vclock_t vclk, qts;
 
     while (true) {
@@ -484,7 +486,7 @@ msgrecv_loop()
 
             case message::NODE_PROG:
                 DEBUG << "got node_prog" << std::endl;
-                message::unpack_message(*rec_msg, message::NODE_PROG, vt_id, vclk, req_id);
+                message::unpack_message(*rec_msg, message::NODE_PROG, pType, vt_id, vclk, req_id);
                 request = new db::graph_request(mtype, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(req_id, vclk, unpack_node_program, request);
                 DEBUG << "going to add node prog to threadpool" << std::endl;
