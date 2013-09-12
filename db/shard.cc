@@ -181,7 +181,7 @@ template <typename ParamsType, typename NodeStateType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType> :: 
     unpack_and_run_db(message::message &msg)
 {
-    DEBUG << "node program runing in templated function!" << std::endl;
+    DEBUG << "node program running in templated function!" << std::endl;
     // unpack some start params from msg:
     std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> start_node_params;
     uint64_t vt_id;
@@ -206,6 +206,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     // unpack the node program
     try {
         message::unpack_message(msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, start_node_params);
+        DEBUG << "node program unpacked" << std::endl;
         //, dirty_cache_ids, invalid_cache_ids, batched_deleted_nodes[G->myid]);
         /*
 #ifdef __WEAVER_DEBUG__
@@ -231,6 +232,7 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
         done_request = true;
     }
     while ((!start_node_params.empty() /*|| !batched_deleted_nodes[G->myid].empty()*/) && !done_request) {
+        DEBUG << "node program main loop" << std::endl;
         /*
         // deleted nodes loop
         for (std::tuple<uint64_t, ParamsType, uint64_t> del_node_params: batched_deleted_nodes[G->myid]) {
@@ -305,7 +307,9 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
             this_node.handle = node_handle;
             // XXX maybe use a try-lock later so forward progress can continue on other nodes in list
             db::element::node *node = S->acquire_node(node_handle);
+            DEBUG << "node acquired!" << std::endl;
             if (node == NULL || order::compare_two_vts(node->get_del_time(), req_vclock)==0) { // TODO: TIMESTAMP
+                DEBUG << "shouldnt be here?" << std::endl;
                 if (node != NULL) {
                     S->release_node(node);
                 }
@@ -343,12 +347,14 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
                 }
                 */
             } else { // node does exist
-                assert(node->state == db::element::node::mode::STABLE);
+                DEBUG << "getting state" << std::endl;
+                //XXX assert(node->state == db::element::node::mode::STABLE);
                 // bind cache getter and putter function variables to functions
                 std::shared_ptr<NodeStateType> state = get_node_state<NodeStateType>(prog_type_recvd,
                         req_id, node_handle);
                 node_state_getter = std::bind(return_state<NodeStateType>,
                         prog_type_recvd, req_id, node_handle, state);
+                DEBUG << "state gotten" << std::endl;
                 /*
                 cache_value_putter = std::bind(put_cache_value<CacheValueType>,
                         prog_type_recvd, req_id, node_handle, node, &dirty_cache_ids);

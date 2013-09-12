@@ -94,6 +94,7 @@ template <typename ParamsType, typename NodeStateType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType> :: 
     unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID)
 {
+    DEBUG << "starting node program on timestamper" << std::endl;
     node_prog::prog_type pType;
     std::vector<std::pair<uint64_t, ParamsType>> initial_args;
 
@@ -122,6 +123,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
             request_element_mappings.emplace(toAdd);
         }
     }
+    DEBUG << "timestamper done looking up element mappings for node program" << std::endl;
 
     for (std::pair<uint64_t, ParamsType> &node_params_pair : initial_args) { // TODO: change to params pointer so we can avoid potential copy?
         initial_batches[request_element_mappings[node_params_pair.first]].emplace_back(std::make_tuple(node_params_pair.first,
@@ -137,7 +139,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     message::message msg_to_send;
     std::vector<uint64_t> empty_vector;
     std::vector<std::tuple<uint64_t, ParamsType, uint64_t>> empty_tuple_vector;
-    DEBUG << "starting node prog " << req_id << ", recd from client\t";
+    DEBUG << "starting node prog " << req_id << ", recd from client\t" << std::endl;
     for (auto &batch_pair : initial_batches) {
         message::prepare_message(msg_to_send, message::NODE_PROG, pType, vt_id, req_timestamp, 
                 req_id, batch_pair.second, empty_tuple_vector);
