@@ -80,10 +80,10 @@ namespace db
     };
 
     // Pending update request
-    class update_request
+    class graph_request
     {
         public:
-            update_request(enum message::msg_type, std::unique_ptr<message::message>);
+            graph_request(enum message::msg_type, std::unique_ptr<message::message>);
 
         public:
             enum message::msg_type type;
@@ -91,7 +91,7 @@ namespace db
     };
 
     inline
-    update_request :: update_request(enum message::msg_type mt, std::unique_ptr<message::message> m)
+    graph_request :: graph_request(enum message::msg_type mt, std::unique_ptr<message::message> m)
         : type(mt)
         , msg(std::move(m))
     { }

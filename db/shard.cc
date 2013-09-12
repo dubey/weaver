@@ -60,7 +60,7 @@ create_reverse_edge(vc::vclock_t &vclk, uint64_t edge_handle, uint64_t local_nod
 void
 unpack_update_request(void *req)
 {
-    db::update_request *request = (db::update_request*)req;
+    db::graph_request *request = (db::graph_request*)req;
     vc::vclock_t vclk, qts;
     uint64_t handle, elem1, elem2, loc2, ret;
 
@@ -86,7 +86,7 @@ unpack_update_request(void *req)
 void
 unpack_tx_request(void *req)
 {
-    db::update_request *request = (db::update_request*)req;
+    db::graph_request *request = (db::graph_request*)req;
     uint64_t vt_id, tx_id, ret;
     vc::vclock_t vclk, qts;
     transaction::pending_tx tx;
@@ -137,17 +137,22 @@ unpack_tx_request(void *req)
     }
 }
 
+void
+unpack_and_run_node_program(void *req) {
+
+}
+
 // server msg recv loop for the shard server
 void
 msgrecv_loop()
 {
     busybee_returncode ret;
-    uint64_t sender, vt_id;
+    uint64_t sender, vt_id, req_id;
     uint32_t code;
     enum message::msg_type mtype;
     std::unique_ptr<message::message> rec_msg(new message::message());
     db::thread::unstarted_thread *thr;
-    db::update_request *request;
+    db::graph_request *request;
     vc::vclock_t vclk, qts;
 
     while (true) {
@@ -167,7 +172,7 @@ msgrecv_loop()
             case message::TX_INIT:
                 DEBUG << "got tx_init" << std::endl;
                 message::unpack_message(*rec_msg, message::TX_INIT, vt_id, vclk, qts);
-                request = new db::update_request(mtype, std::move(rec_msg));
+                request = new db::graph_request(mtype, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(qts.at(shard_id-SHARD_ID_INCR), vclk, unpack_tx_request, request);
                 //DEBUG << "going to add request to threadpool" << std::endl;
                 S->add_write_request(vt_id, thr);
@@ -178,9 +183,20 @@ msgrecv_loop()
             case message::REVERSE_EDGE_CREATE:
                 //message::unpack_message(*rec_msg, mtype, vclk, handle, elem1, elem2, 
                 message::unpack_message(*rec_msg, mtype, vclk);
-                request = new db::update_request(mtype, std::move(rec_msg));
+                request = new db::graph_request(mtype, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(0, vclk, unpack_update_request, request);
                 S->add_write_request(0, thr);
+                rec_msg.reset(new message::message());
+                break;
+
+            case message::NODE_PROG:
+                DEBUG << "got node_prog" << std::endl;
+                message::unpack_message(*rec_msg, message::NODE_PROG, vt_id, vclk, req_id);
+                request = new db::graph_request(mtype, std::move(rec_msg));
+                thr = new db::thread::unstarted_thread(req_id, vclk, unpack_and_run_node_program, request);
+                DEBUG << "going to add node prog to threadpool" << std::endl;
+                S->add_read_request(vt_id, thr);
+                DEBUG << "added node prog to threadpool" << std::endl;
                 rec_msg.reset(new message::message());
                 break;
 
