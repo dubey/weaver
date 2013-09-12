@@ -20,6 +20,8 @@
 #define __WEAVER_DEBUG__
 #include "common/vclock.h"
 #include "common/transaction.h"
+#include "node_prog/node_prog_type.h"
+#include "node_prog/node_program.h"
 #include "timestamper.h"
 
 static coordinator::timestamper *vts;
@@ -90,76 +92,61 @@ end_transaction(uint64_t tx_id)
 // node program stuff
 template <typename ParamsType, typename NodeStateType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType> :: 
-    unpack_and_start_coord(std::unique_ptr<message::message> msg)
+    unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID)
 {
-    node_prog::prog_type ignore;
+    node_prog::prog_type pType;
     std::vector<std::pair<uint64_t, ParamsType>> initial_args;
 
-    message::unpack_message(*request->req_msg, message::CLIENT_NODE_PROG_REQ, ignore, initial_args);
+    message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, ignore, initial_args);
     
     // map from locations to a list of start_node_params to send to that shard
     std::unordered_map<uint64_t, std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>> initial_batches; 
 
-    for (std::pair<uint64_t, ParamsType> &node_params_pair : initial_args) {
-        if (check_elem(server, node_params_pair.first, true)) {
-            std::cerr << "one of the arg nodes has been deleted, cannot perform request" << std::endl;
-            /* TODO send back error msg */
-            return;
+        // lookup mappings
+        std::unordered_map<uint64_t, uint64_t> request_element_mappings;
+        std::unordered_set<uint64_t> mappings_to_get;
+        vts->map_cache_mutex.lock();
+    for (auto &initial_arg : initial_args) {
+        uint64_t c_id = initial_arg.first;
+        if (vts->map_cache.find(c_id) != vts->map_cache.end()) {
+            request_element_mappings.emplace(c_id, vts->map_cache.at(c_id));
+        } else {
+            mappings_to_get.insert(c_id);
         }
-        common::meta_element *me = server->nodes.at(node_params_pair.first);
-        initial_batches[me->get_loc()].emplace_back(std::make_tuple(node_params_pair.first,
+    }
+    vts->map_cache_mutex.unlock();
+    if (!mappings_to_get.empty()) {
+        auto results = vts->nmap_client.get_mappings(mappings_to_get);
+        assert(results.size() == mappings_to_get.size());
+        for (auto &toAdd : results) {
+            request_element_mappings.emplace(toAdd);
+        }
+    }
+
+    for (std::pair<uint64_t, ParamsType> &node_params_pair : initial_args) {
+        initial_batches[request_element_mappings[node_params_pair.first]].emplace_back(std::make_tuple(node_params_pair.first,
             std::move(node_params_pair.second), db::element::remote_node())); // constructor
     }
+    vts->mutex.lock();
     if (vts->prev_write) {
         vts->vclk.increment_clock();
     }
     vc::vclock_t req_timestamp =  vts->vclk.get_clock();
     uint64_t req_id = vts->generate_id();
 
-    server->mutex.lock();
-    server->pending.emplace(std::make_pair(request->req_id, request));
-    server->mutex.
-
     message::message msg_to_send;
     std::vector<uint64_t> empty_vector;
     std::vector<std::tuple<uint64_t, ParamsType, uint64_t>> empty_tuple_vector;
-    DEBUG << "starting node prog " << request->req_id << ", recd from client\t";
+    DEBUG << "starting node prog " << req_id << ", recd from client\t";
     for (auto &batch_pair : initial_batches) {
-        message::prepare_message(msg_to_send, message::NODE_PROG, request->pType, *request->vector_clock, 
-                request->req_id, batch_pair.second, empty_vector, request->ignore_cache, empty_tuple_vector);
-        server->send(batch_pair.first, msg_to_send.buf);
+        message::prepare_message(msg_to_send, message::NODE_PROG, pType, vt_id, req_timestamp, 
+                req_id, batch_pair.second, empty_tuple_vector);
+        vts->send(batch_pair.first, msg_to_send.buf);
     }
     DEBUG << "sent to shards" << std::endl;
-}
-
-// caution: need to hold server->update_mutex throughout
-void end_node_prog(std::shared_ptr<coordinator::pending_req> request)
-{
-    bool done = true;
-    uint64_t req_id = request->req_id;
-    request->out_count->cnt--;
-    for (uint64_t cached_id: *request->cached_req_ids) {
-        if (!server->is_deleted_cache_id(cached_id)) {
-            server->add_good_cache_id(cached_id);
-        } else {
-            // request was served based on cache value that should be
-            // invalidated; restarting request
-            done = false;
-            request->ignore_cache.emplace(cached_id);
-            server->add_bad_cache_id(cached_id);
-            request->del_request.reset();
-            node_prog::programs.at(request->pType)->unpack_and_start_coord(request);
-            break;
-        }
-    }
-    server->pending.erase(req_id);
-    if (done) {
-        server->completed_requests->emplace_back(std::make_pair(req_id, request->pType));
-        // send same message along to client
-        DEBUG << "going to send msg to end node prog\t";
-        server->send(request->client, request->reply_msg->buf);
-        DEBUG << "ended node prog " << req_id << std::endl;
-    }
+    vts->prev_write = false;
+    vts->pending.emplace(std::make_pair(req_id, clientID);
+    vts->mutex.unlock();
 }
 
 template <typename ParamsType, typename NodeStateType>
@@ -223,28 +210,12 @@ server_loop()
 
                 // response from a shard
             case message::NODE_PROG:
-                cached_req_ids.reset(new std::vector<uint64_t>());
-                message::unpack_message(*msg, message::NODE_PROG, pType, req_id, *cached_req_ids); // don't unpack rest
-                server->update_mutex.lock();
-                if (server->pending.count(req_id) == 0){
-                    // XXX anything else we need to do?
-                    server->update_mutex.unlock();
-                    std::cerr << "got response for request " << req_id << ", which does not exist anymore" << std::endl;
-                    return;
-                }
-                request = server->pending.at(req_id);
-                request->cached_req_ids = std::move(cached_req_ids);
-                request->reply_msg = std::move(msg);
-                if (request->del_request) {
-                    if (request->del_request->done) {
-                        end_node_prog(request);
-                    } else {
-                        request->done = true;
-                    }
-                } else {
-                    end_node_prog(request);
-                }
-                server->update_mutex.unlock();
+            uint64_t ignore_vt_id;
+            vc::vector_clock_t ignore_vclock;
+                message::unpack_message(*msg, message::NODE_PROG, pType, ignore_vt_id, ignore_vclock, req_id); // don't unpack rest
+                vts->mutex.lock();
+                vts->outstanding_node_progs.get
+                //send back XXX
                 break;
 
             default:
