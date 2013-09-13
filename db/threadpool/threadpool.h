@@ -36,8 +36,8 @@ namespace thread
     {
         public:
             unstarted_thread(
-                vc::vclock vclk,
                 uint64_t prio,
+                vc::vclock vclk,
                 void (*f)(void*),
                 void *a);
 
@@ -45,16 +45,16 @@ namespace thread
             bool operator>(const unstarted_thread &t) const;
 
         public:
-            vc::vclock vclock;
             uint64_t priority;
+            vc::vclock vclock;
             void (*func)(void*);
             void *arg;
     };
 
     inline
     unstarted_thread :: unstarted_thread( 
-            vc::vclock vclk,
             uint64_t prio,
+            vc::vclock vclk,
             void (*f)(void*),
             void *a)
         : priority(prio)
@@ -150,6 +150,7 @@ namespace thread
     pool :: record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id)
     {
         queue_mutex.lock();
+        DEBUG << "incrementing qts for vt " << vt_id << std::endl;
         qts.at(vt_id)++;
         last_ids.at(vt_id) = transaction_completed_id;
         queue_cond.broadcast();

@@ -185,8 +185,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     if (vts->prev_write) {
         vts->vclk.increment_clock();
     }
-    vc::vclock_t req_timestamp =  vts->vclk.get_clock();
-    assert(req_timestamp.size() == NUM_VTS);
+    vc::vclock req_timestamp =  vts->vclk;
+    assert(req_timestamp.clock.size() == NUM_VTS);
     uint64_t req_id = vts->generate_id();
 
     message::message msg_to_send;

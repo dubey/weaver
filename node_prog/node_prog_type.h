@@ -40,7 +40,7 @@ namespace node_prog
                 db::element::remote_node&, // this remote node
                 params_type&,
                 std::function<node_state_type&()>,
-                vc::vclock_t &req_vlock);
+                vc::vclock &req_vlock);
     };
 
 /*

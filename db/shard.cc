@@ -96,7 +96,9 @@ unpack_tx_request(void *req)
     vc::qtimestamp_t qts;
     transaction::pending_tx tx;
     bool ack = true;
+    DEBUG << "going to unpack tx%$%$%$%$%$%$%$%" << std::endl;
     message::unpack_message(*request->msg, message::TX_INIT, vt_id, vclk, qts, tx_id, tx.writes);
+    DEBUG << "unpacked tx!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
     ret = 0;
     for (auto upd: tx.writes) {
         switch (upd->type) {
@@ -104,6 +106,7 @@ unpack_tx_request(void *req)
                 DEBUG << "unpacked node create" << std::endl;
                 create_node(vclk, upd->handle);
                 S->record_completed_transaction(vt_id, tx_id); // TODO: only do this once per transaction
+                DEBUG << "node create vt_id " << vt_id << std::endl;
                 DEBUG << "done node create" << std::endl;
                 ret = 0;
                 break;
@@ -111,21 +114,25 @@ unpack_tx_request(void *req)
             case transaction::EDGE_CREATE_REQ:
                 ret = create_edge(vclk, upd->handle, upd->elem1, upd->elem2, upd->loc2);
                 S->record_completed_transaction(vt_id, tx_id);
+                DEBUG << "edge create vt_id " << vt_id << std::endl;
                 break;
 
             case transaction::NODE_DELETE_REQ:
                 ret = delete_node(vclk, upd->elem1);
                 S->record_completed_transaction(vt_id, tx_id);
+                DEBUG << "node delete vt_id " << vt_id << std::endl;
                 break;
 
             case transaction::EDGE_DELETE_REQ:
                 ret = delete_edge(vclk, upd->elem1);
                 S->record_completed_transaction(vt_id, tx_id);
+                DEBUG << "edge delete vt_id " << vt_id << std::endl;
                 break;
 
             default:
                 DEBUG << "unknown type" << std::endl;
         }
+        DEBUG << "done tx subpart\n";
         if (ret == 0) {
             // tx subpart successful
         } else {
@@ -147,6 +154,7 @@ inline void
 nop(void *noparg)
 {
     std::pair<uint64_t, uint64_t> *nop_arg = (std::pair<uint64_t, uint64_t>*)noparg;
+    DEBUG << "nop vt_id " << nop_arg->first << ", qts " << nop_arg->second << std::endl;
     S->record_completed_transaction(nop_arg->first, nop_arg->second);
     free(nop_arg);
 }
@@ -197,7 +205,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> start_node_params;
     uint64_t vt_id;
     uint64_t req_id;
-    vc::vclock_t req_vclock;
+    vc::vclock req_vclock;
     //std::vector<uint64_t> vclocks; //needed to pass to next message
     prog_type prog_type_recvd;
     bool done_request = false;
@@ -218,7 +226,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     try {
         message::unpack_message(msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, start_node_params);
         DEBUG << "node program unpacked" << std::endl;
-        assert(req_vclock.size() == NUM_VTS);
+        assert(req_vclock.clock.size() == NUM_VTS);
         //, dirty_cache_ids, invalid_cache_ids, batched_deleted_nodes[G->myid]);
         /*
 #ifdef __WEAVER_DEBUG__
@@ -527,8 +535,9 @@ msgrecv_loop()
                 nop_arg = (std::pair<uint64_t, uint64_t>*)malloc(sizeof(std::pair<uint64_t, uint64_t>));
                 nop_arg->first = vt_id;
                 nop_arg->second = req_id;
+                DEBUG << "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$after unpacking nop, vt_id = " << vt_id << std::endl;
                 thr = new db::thread::unstarted_thread(qts.at(shard_id-SHARD_ID_INCR), vclk, nop, (void*)nop_arg);
-                S->add_request(vt_id, thr);
+                S->add_write_request(vt_id, thr);
                 DEBUG << "added request to threadpool" << std::endl;
                 rec_msg.reset(new message::message());
                 break;

@@ -25,6 +25,7 @@
 #include "common/message.h"
 #include "common/busybee_infra.h"
 #include "common/event_order.h"
+#include "element/element.h"
 #include "element/node.h"
 #include "element/edge.h"
 #include "state/program_state.h"
@@ -168,6 +169,10 @@ namespace db
         , cur_node_count(0)
     {
         thread::pool::S = this;
+        // TODO make this damned static thing work
+        //element::element::static_del_time.vt_id = MAX_UINT64;
+        //vc::vclock_t empty_clk(NUM_VTS, MAX_UINT64);
+        //element::element::static_del_time.clock = empty_clk;
         initialize_busybee(bb, shard_id, myloc);
         order::kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT, KRONOS_NUM_SHARDS);
         assert(NUM_SHARDS == KRONOS_NUM_SHARDS);
@@ -178,7 +183,9 @@ namespace db
     inline void
     shard :: record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id)
     {
+        DEBUG << " going to record tx" << std::endl;
         thread_pool.record_completed_transaction(vt_id, transaction_completed_id);
+        DEBUG << "done record tx" << std::endl;
     }
 
     // find the node corresponding to given handle
@@ -397,12 +404,14 @@ namespace db
         return ret;
     }
 
-    inline thread::unstarted_thread * get_read_thr(std::vector<thread::pqueue_t> &read_queues, std::vector<uint64_t> &last_ids) {
+    inline thread::unstarted_thread*
+    get_read_thr(std::vector<thread::pqueue_t> &read_queues, std::vector<uint64_t> &last_ids)
+    {
         thread::unstarted_thread * thr = NULL;
         DEBUG << "checking read queues" << std::endl;
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
             thread::pqueue_t &pq = read_queues.at(vt_id);
-            if (!pq.empty()){
+            if (!pq.empty()) {
                 DEBUG << "read queue " << vt_id << " not empty. has top id " << pq.top()->priority 
                     << " and needs less than " << last_ids[vt_id] << " to p    op" << std::endl;
             }
@@ -416,8 +425,10 @@ namespace db
         return thr;
     }
 
-    inline thread::unstarted_thread * get_write_thr(thread::pool *tpool) {
-        thread::unstarted_thread * thr = NULL;
+    inline thread::unstarted_thread*
+    get_write_thr(thread::pool *tpool)
+    {
+        thread::unstarted_thread *thr = NULL;
         std::vector<vc::vclock> timestamps(NUM_VTS, vc::vclock(MAX_UINT64));
         std::vector<thread::pqueue_t> &write_queues = tpool->write_queues;
         // get next jobs from each queue
@@ -427,13 +438,13 @@ namespace db
             // wait for queue to receive at least one job
             if (pq.empty()) { // can't write if one of the pq's is empty
                 DEBUG << "waiting for queue to fill" << std::endl;
-                return thr;
+                return NULL;
             } else {
                 thr = pq.top();
                 // check for correct ordering of queue timestamp (which is priority for thread)
                 DEBUG << "waiting for qts to increment" << std::endl;
                 if (!tpool->check_qts(vt_id, thr->priority)) {
-                    return thr;
+                    return NULL;
                 }
             }
         }
@@ -444,7 +455,9 @@ namespace db
         DEBUG << "going to compare vt" << std::endl;
         uint64_t exec_vt_id = (NUM_VTS==1)? 0:order::compare_vts(timestamps);
         thr = write_queues.at(exec_vt_id).top();
+        DEBUG << "got thr, num_vts = " << NUM_VTS << std::endl;
         write_queues.at(exec_vt_id).pop();
+        DEBUG << "going to return\n";
         // TODO check nop
         return thr;
     }

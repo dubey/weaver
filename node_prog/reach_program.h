@@ -131,12 +131,12 @@ namespace node_prog
     */
 
     std::vector<std::pair<db::element::remote_node, reach_params>> 
-    reach_node_program(uint64_t req_id,
+    reach_node_program(uint64_t, // TODO used to be req_id, now replaced by vclock
             db::element::node &n,
             db::element::remote_node &rn,
             reach_params &params,
             std::function<reach_node_state&()> state_getter,
-            vc::vclock_t &req_vclock)
+            vc::vclock &req_vclock)
             //std::function<reach_cache_value&()> cache_putter,
             //std::function<std::vector<std::shared_ptr<reach_cache_value>>()> cached_values_getter)
     {

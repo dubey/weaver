@@ -116,7 +116,7 @@ void clique_reachability(client::client &c) {
 void
 new_reachability_test()
 {
-    client::client c(CLIENT_ID);
+    client::client c(CLIENT_ID, 0);
     line_reachability(c);
     clique_reachability(c);
 }

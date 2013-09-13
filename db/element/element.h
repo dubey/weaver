@@ -41,6 +41,9 @@ namespace element
             vc::vclock del_time;
 
         public:
+            static vc::vclock static_del_time;
+
+        public:
             void add_property(common::property prop);
             void delete_property(uint32_t key, vc::vclock &tdel);
             void remove_property(uint32_t key, vc::vclock &vclk);
@@ -56,12 +59,21 @@ namespace element
             uint64_t get_handle() const;
     };
 
-    inline element :: element() { }
+    inline element :: element()
+    {
+        del_time.vt_id = MAX_UINT64;
+        vc::vclock_t empty_clk(NUM_VTS, MAX_UINT64);
+        del_time.clock = empty_clk;
+    }
 
     inline element :: element(uint64_t hndl, vc::vclock &vclk)
         : handle(hndl)
         , creat_time(vclk)
-    { }
+    {
+        del_time.vt_id = MAX_UINT64;
+        vc::vclock_t empty_clk(NUM_VTS, MAX_UINT64);
+        del_time.clock = empty_clk;
+    }
 
     inline void
     element :: add_property(common::property prop)
