@@ -51,7 +51,7 @@
 #include <replicant.h>
 
 // Weaver
-#define KRONOS_NUM_SHARDS 2
+#define KRONOS_NUM_VTS 2
 
 extern "C" {
 #endif
@@ -86,6 +86,8 @@ struct weaver_pair
 {
     uint64_t *lhs;
     uint64_t *rhs;
+    uint64_t lhs_id;
+    uint64_t rhs_id;
     uint32_t flags;
     enum chronos_cmp order;
 };

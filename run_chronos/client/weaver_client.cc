@@ -39,7 +39,10 @@ main()
                 p.rhs[j] = 0;
             }
         }
+        p.lhs_id = 0;
+        p.rhs_id = 0;
         p.order = CHRONOS_HAPPENS_BEFORE;
+        std::cerr << "calling weaver order" << std::endl;
         int64_t ret = cl.weaver_order(&p, 1, &status, &cret);
         ret = cl.wait(ret, 1000000, &status);
         std::cout << "for query pair (" << i << "," << (i+1) << "), got ret " << ret
