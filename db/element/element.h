@@ -52,28 +52,21 @@ namespace element
             void set_properties(std::vector<common::property> &props);
             void update_del_time(vc::vclock &del_time);
             void update_creat_time(vc::vclock &creat_time);
-            vc::vclock get_creat_time() const;
-            vc::vclock get_del_time() const; // TODO change to reference?
+            const vc::vclock& get_creat_time() const;
+            const vc::vclock& get_del_time() const;
             std::pair<bool, uint64_t> get_property_value(uint32_t prop_key, vc::vclock &at_time);
             const std::vector<common::property>* get_props() const;
+            void set_handle(uint64_t handle);
             uint64_t get_handle() const;
     };
 
-    inline element :: element()
-    {
-        del_time.vt_id = MAX_UINT64;
-        vc::vclock_t empty_clk(NUM_VTS, MAX_UINT64);
-        del_time.clock = empty_clk;
-    }
+    inline element :: element() { }
 
     inline element :: element(uint64_t hndl, vc::vclock &vclk)
         : handle(hndl)
         , creat_time(vclk)
-    {
-        del_time.vt_id = MAX_UINT64;
-        vc::vclock_t empty_clk(NUM_VTS, MAX_UINT64);
-        del_time.clock = empty_clk;
-    }
+        , del_time(MAX_UINT64, MAX_UINT64)
+    { }
 
     inline void
     element :: add_property(common::property prop)
@@ -171,13 +164,13 @@ namespace element
         creat_time = tcreat;
     }
 
-    inline vc::vclock
+    inline const vc::vclock&
     element :: get_creat_time() const
     {
         return creat_time;
     }
 
-    inline vc::vclock
+    inline const vc::vclock&
     element :: get_del_time() const
     {
         return del_time;
@@ -204,6 +197,12 @@ namespace element
             } 
         }
         return std::make_pair(false, 0xDEADBEEF);
+    }
+
+    inline void
+    element :: set_handle(uint64_t hndl)
+    {
+        handle = hndl;
     }
 
     inline uint64_t

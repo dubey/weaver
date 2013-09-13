@@ -63,7 +63,7 @@ namespace coordinator
             hyperdex_client_returncode put_status;
             int64_t op_id = cl.put(space, (const char *) &pairs_to_add[i].first, sizeof(int64_t), &(attrs_to_add[i]), 1, &put_status);
             if (op_id < 0) {
-                std::cerr << "\"put\" returned " << op_id << " with status " << put_status << std::endl;
+                DEBUG << "\"put\" returned " << op_id << " with status " << put_status << std::endl;
                 hyperclientLock.unlock();
                 free(attrs_to_add);
                 return;
@@ -76,7 +76,7 @@ namespace coordinator
         for (int i = 0; i < numPairs; i++) {
             loop_id = cl.loop(-1, &loop_status);
             if (loop_id < 0) {
-                std::cerr << "put \"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
+                DEBUG << "put \"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
                 hyperclientLock.unlock();
                 free(attrs_to_add);
                 return;
@@ -109,14 +109,6 @@ namespace coordinator
         for (int i = 0; i < numNodes; i++) {
             results[i].op_id = cl.get(space, (char *) &(results[i].key), sizeof(uint64_t), 
                 &(results[i].get_status), &(results[i].attr), &(results[i].attr_size));
-            nextHandle++;
-            /*
-            if (op_id < 0)
-            {
-                std::cerr << "\"get\" returned " << op_id << " with status " << get_status << std::endl;
-                return std::vector<int64_t>(); // need to destroy_attrs
-            }
-            */
         }
 
         hyperdex_client_returncode loop_status;
@@ -125,7 +117,7 @@ namespace coordinator
         for (int i = 0; i < numNodes; i++) {
             loop_id = cl.loop(-1, &loop_status);
             if (loop_id < 0) {
-                std::cerr << "get \"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
+                DEBUG << "get \"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
                 std::vector<std::pair<uint64_t, uint64_t>> empty(0);
                 return empty; // free previously gotten attrs
             }
@@ -142,17 +134,13 @@ namespace coordinator
         std::vector<std::pair<uint64_t, uint64_t>> toRet;//numNodes);
         for (int i = 0; i < numNodes; i++) {
             if (results[i].attr_size == 0) {
-                std::cerr << "Key " << results[i].key << " did not exist in hyperdex" << std::endl;
+                DEBUG << "Key " << results[i].key << " did not exist in hyperdex" << std::endl;
             } else if (results[i].attr_size > 1) {
-                std::cerr << "\"get\" number " << i << " returned " << results[i].attr_size << " attrs" << std::endl;
+                DEBUG << "\"get\" number " << i << " returned " << results[i].attr_size << " attrs" << std::endl;
             } else {
                 uint64_t* shard = (uint64_t *) results[i].attr->value;
                 uint64_t nodeID = results[i].key;
                 toRet.emplace_back(nodeID, *shard);
-                /*
-                toRet[i].first = nodeID;
-                toRet[i].second = *shard;
-                */
             }
             hyperdex_client_destroy_attrs(results[i].attr, results[i].attr_size);
         }
@@ -171,7 +159,7 @@ namespace coordinator
             results[i] = cl.del(space, (char *) &(toDel[i]), sizeof(uint64_t), &get_status);
             if (results[i] < 0)
             {
-                std::cerr << "\"del\" returned " << results[i] << " with status " << get_status << std::endl;
+                DEBUG << "\"del\" returned " << results[i] << " with status " << get_status << std::endl;
                 return;
             }
         }
@@ -182,7 +170,7 @@ namespace coordinator
         for (int i = 0; i < numNodes; i++) {
             loop_id = cl.loop(-1, &loop_status);
             if (loop_id < 0) {
-                std::cerr << "get \"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
+                DEBUG << "get \"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
                 return;
             }
 

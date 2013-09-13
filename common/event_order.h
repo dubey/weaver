@@ -104,25 +104,25 @@ namespace order
         } else {
             // need to call Kronos
             uint64_t num_pairs = ((num_clks - num_large) * (num_clks - num_large - 1)) / 2;
-            DEBUG << "num pairs = " << num_pairs << std::endl;
+            //DEBUG << "num pairs = " << num_pairs << std::endl;
             weaver_pair *wpair = (weaver_pair*)malloc(sizeof(weaver_pair) * num_pairs);
             weaver_pair *wp = wpair;
             for (uint64_t i = 0; i < num_clks; i++) {
                 for (uint64_t j = i+1; j < num_clks; j++) {
                     if (!large.at(i) && !large.at(j)) {
-                        wp->lhs = (uint64_t*)malloc(sizeof(uint64_t) * NUM_SHARDS);
-                        wp->rhs = (uint64_t*)malloc(sizeof(uint64_t) * NUM_SHARDS);
-                        for (uint64_t k = 0; k < NUM_SHARDS; k++) {
+                        wp->lhs = (uint64_t*)malloc(sizeof(uint64_t) * NUM_VTS);
+                        wp->rhs = (uint64_t*)malloc(sizeof(uint64_t) * NUM_VTS);
+                        for (uint64_t k = 0; k < NUM_VTS; k++) {
                             wp->lhs[k] = clocks.at(i).clock.at(k);
                             wp->rhs[k] = clocks.at(j).clock.at(k);
-                            DEBUG << wp->lhs[k] << " " << wp->rhs[k] << std::endl;
+                            //DEBUG << wp->lhs[k] << " " << wp->rhs[k] << std::endl;
                         }
                         wp->lhs_id = clocks.at(i).vt_id;
                         wp->rhs_id = clocks.at(j).vt_id;
                         wp->flags = CHRONOS_SOFT_FAIL;
                         if (i == 0) {
                             wp->order = CHRONOS_HAPPENS_BEFORE;
-                            DEBUG << "assigning preference of happens before to (" << i << "," << j << ")\n";
+                            //DEBUG << "assigning preference of happens before to (" << i << "," << j << ")\n";
                         } else {
                             wp->order = CHRONOS_CONCURRENT;
                         }
@@ -160,7 +160,7 @@ namespace order
                 }
             }
             free(wpair);
-            DEBUG << "done Kronos call, going to return now\n";
+            //DEBUG << "done Kronos call, going to return now\n";
             for (uint64_t min_pos = 0; min_pos < num_clks; min_pos++) {
                 if (!large_upd.at(min_pos)) {
                     return min_pos;

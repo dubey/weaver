@@ -20,7 +20,6 @@ create_elems(client::client *c)
 {
     int i;
     size_t nodes[10];
-    size_t edges[10];
     // create nodes
     for (i = 0; i < 10; i++) {
         uint64_t tx_id = c->begin_tx();
@@ -31,7 +30,7 @@ create_elems(client::client *c)
     // edges
     uint64_t tx_id = c->begin_tx();
     for (i = 0; i < 10; i++) {
-        edges[i] = c->create_edge(tx_id, nodes[i], nodes[(i+1)%10]);
+        c->create_edge(tx_id, nodes[i], nodes[(i+1)%10]);
     }
     c->end_tx(tx_id);
     for (i = 0; i < 10; i+=2) {

@@ -96,10 +96,11 @@ periodic_update()
 {
     vts->periodic_update_mutex.lock();
     vts->mutex.lock();
+    uint64_t req_id;
     uint64_t cur_time_millis = wclock::get_time_elapsed_millis(vts->tspec);
     uint64_t diff = cur_time_millis - vts->nop_time;
     uint64_t first_diff = cur_time_millis - vts->first_nop_time;
-    if (diff >  VT_NOP_TIMEOUT) {
+    if (diff > VT_NOP_TIMEOUT) {
         // send nops to each shard
         vts->nop_time = cur_time_millis;
         vc::qtimestamp_t new_qts = vts->qts;
@@ -108,9 +109,9 @@ periodic_update()
         }
         vts->vclk.increment_clock();
         vc::vclock vclk = vts->vclk;
+        req_id = vts->generate_id();
         vts->mutex.unlock();
         message::message msg;
-        uint64_t req_id = vts->generate_id();
         for (uint64_t i = 0; i < NUM_SHARDS; i++) {
             message::prepare_message(msg, message::VT_NOP, vt_id, vclk, new_qts, req_id);
             vts->send(i + SHARD_ID_INCR, msg.buf);
@@ -158,16 +159,10 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     // lookup mappings
     std::unordered_map<uint64_t, uint64_t> request_element_mappings;
     std::unordered_set<uint64_t> mappings_to_get;
-    vts->map_cache_mutex.lock();
     for (auto &initial_arg : initial_args) {
         uint64_t c_id = initial_arg.first;
-        if (vts->map_cache.find(c_id) != vts->map_cache.end()) {
-            request_element_mappings.emplace(c_id, vts->map_cache.at(c_id));
-        } else {
-            mappings_to_get.insert(c_id);
-        }
+        mappings_to_get.insert(c_id);
     }
-    vts->map_cache_mutex.unlock();
     if (!mappings_to_get.empty()) {
         auto results = vts->nmap_client.get_mappings(mappings_to_get);
         assert(results.size() == mappings_to_get.size());

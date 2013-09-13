@@ -49,8 +49,8 @@ namespace common
     property :: property()
         : key(0)
         , value(0)
-        , creat_time(MAX_UINT64)
-        , del_time(MAX_UINT64)
+        , creat_time(MAX_UINT64, MAX_UINT64)
+        , del_time(MAX_UINT64, MAX_UINT64)
     { }
 
     inline
@@ -58,7 +58,7 @@ namespace common
         : key(k)
         , value(v)
         , creat_time(creat)
-        , del_time(MAX_UINT64)
+        , del_time(MAX_UINT64, MAX_UINT64)
     { }
 
     inline bool

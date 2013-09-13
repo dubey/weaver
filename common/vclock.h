@@ -34,7 +34,7 @@ namespace vc
             vclock_t clock;
 
             vclock();
-            vclock(uint64_t vt_id);
+            vclock(uint64_t vt_id, uint64_t clk_init);
             vclock(uint64_t vt_id, vclock_t &vclk);
             vclock_t get_clock();
             void increment_clock();
@@ -46,9 +46,9 @@ namespace vc
     vclock :: vclock() { }
 
     inline
-    vclock :: vclock(uint64_t vtid)
+    vclock :: vclock(uint64_t vtid, uint64_t clk_init)
         : vt_id(vtid)
-        , clock(std::vector<uint64_t>(NUM_VTS, 0))
+        , clock(std::vector<uint64_t>(NUM_VTS, clk_init))
     { }
 
     inline

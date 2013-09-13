@@ -169,13 +169,9 @@ namespace db
         , cur_node_count(0)
     {
         thread::pool::S = this;
-        // TODO make this damned static thing work
-        //element::element::static_del_time.vt_id = MAX_UINT64;
-        //vc::vclock_t empty_clk(NUM_VTS, MAX_UINT64);
-        //element::element::static_del_time.clock = empty_clk;
         initialize_busybee(bb, shard_id, myloc);
-        order::kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT, KRONOS_NUM_SHARDS);
-        assert(NUM_SHARDS == KRONOS_NUM_SHARDS);
+        order::kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT, KRONOS_NUM_VTS);
+        assert(NUM_VTS == KRONOS_NUM_VTS);
     }
 
     // Consistency methods
@@ -183,9 +179,9 @@ namespace db
     inline void
     shard :: record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id)
     {
-        DEBUG << " going to record tx" << std::endl;
+        //DEBUG << " going to record tx" << std::endl;
         thread_pool.record_completed_transaction(vt_id, transaction_completed_id);
-        DEBUG << "done record tx" << std::endl;
+        //DEBUG << "done record tx" << std::endl;
     }
 
     // find the node corresponding to given handle
@@ -220,7 +216,7 @@ namespace db
             n->cv.signal();
             update_mutex.unlock();
         } else if (n->permanently_deleted) {
-            // TODO
+            // TODO permanent deletion code check
             uint64_t node_handle = n->get_handle();
             nodes.erase(node_handle);
             cur_node_count--;
@@ -266,6 +262,7 @@ namespace db
             migration_mutex.unlock();
         } else {
             new_node->state = element::node::mode::STABLE;
+            new_node->prev_locs.reserve(NUM_SHARDS);
             for (uint64_t i = 0; i < NUM_SHARDS; i++) {
                 new_node->prev_locs.emplace_back(0);
             }
@@ -408,12 +405,12 @@ namespace db
     get_read_thr(std::vector<thread::pqueue_t> &read_queues, std::vector<uint64_t> &last_ids)
     {
         thread::unstarted_thread * thr = NULL;
-        DEBUG << "checking read queues" << std::endl;
+        //DEBUG << "checking read queues" << std::endl;
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
             thread::pqueue_t &pq = read_queues.at(vt_id);
             if (!pq.empty()) {
                 DEBUG << "read queue " << vt_id << " not empty. has top id " << pq.top()->priority 
-                    << " and needs less than " << last_ids[vt_id] << " to p    op" << std::endl;
+                    << " and needs less than " << last_ids[vt_id] << " to pop" << std::endl;
             }
             if (!pq.empty() && pq.top()->priority < last_ids[vt_id]) {
                 DEBUG << "read queue " << vt_id << " has node prog that can be run" << std::endl;
@@ -429,20 +426,21 @@ namespace db
     get_write_thr(thread::pool *tpool)
     {
         thread::unstarted_thread *thr = NULL;
-        std::vector<vc::vclock> timestamps(NUM_VTS, vc::vclock(MAX_UINT64));
+        std::vector<vc::vclock> timestamps;
+        timestamps.reserve(NUM_VTS);
         std::vector<thread::pqueue_t> &write_queues = tpool->write_queues;
         // get next jobs from each queue
-        DEBUG << "going to collect jobs from write queues" << std::endl;
+        //DEBUG << "going to collect jobs from write queues" << std::endl;
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
             thread::pqueue_t &pq = write_queues.at(vt_id);
             // wait for queue to receive at least one job
             if (pq.empty()) { // can't write if one of the pq's is empty
-                DEBUG << "waiting for queue to fill" << std::endl;
+                //DEBUG << "waiting for queue to fill" << std::endl;
                 return NULL;
             } else {
                 thr = pq.top();
                 // check for correct ordering of queue timestamp (which is priority for thread)
-                DEBUG << "waiting for qts to increment" << std::endl;
+                //DEBUG << "waiting for qts to increment" << std::endl;
                 if (!tpool->check_qts(vt_id, thr->priority)) {
                     return NULL;
                 }
@@ -450,19 +448,19 @@ namespace db
         }
         // all write queues are good to go, compare timestamps
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
-            timestamps.at(vt_id) = write_queues.at(vt_id).top()->vclock;
+            timestamps.emplace_back(write_queues.at(vt_id).top()->vclock);
         }
-        DEBUG << "going to compare vt" << std::endl;
-        uint64_t exec_vt_id = (NUM_VTS==1)? 0:order::compare_vts(timestamps);
+        //DEBUG << "going to compare vt" << std::endl;
+        uint64_t exec_vt_id = (NUM_VTS == 1) ? 0 : order::compare_vts(timestamps);
         thr = write_queues.at(exec_vt_id).top();
-        DEBUG << "got thr, num_vts = " << NUM_VTS << std::endl;
         write_queues.at(exec_vt_id).pop();
-        DEBUG << "going to return\n";
-        // TODO check nop
+        //DEBUG << "going to return\n";
         return thr;
     }
 
-    inline thread::unstarted_thread * get_read_or_write(thread::pool *tpool) {
+    inline thread::unstarted_thread*
+    get_read_or_write(thread::pool *tpool)
+    {
         thread::unstarted_thread *thr = get_read_thr(tpool->read_queues, tpool->last_ids);
         if (thr == NULL) {
             thr = get_write_thr(tpool);
@@ -480,7 +478,7 @@ namespace db
         thread::unstarted_thread *thr = NULL;
         po6::threads::cond &c = tpool->queue_cond;
         while (true) {
-            DEBUG << "worker thread loop begin" << std::endl;
+            //DEBUG << "worker thread loop begin" << std::endl;
             // TODO better queue locking needed
             tpool->thread_loop_mutex.lock(); // only one thread accesses queues
             // TODO add job method should be non-blocking on this mutex

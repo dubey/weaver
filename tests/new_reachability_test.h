@@ -26,10 +26,9 @@ void line_reachability(client::client &c) {
     }
     c.end_tx(tx_id);
 
-    size_t edges[LINE_LENGTH-1];
     tx_id = c.begin_tx();
     for (int i = 0; i < LINE_LENGTH-1; i++) {
-        edges[i] = c.create_edge(tx_id, nodes[i], nodes[i+1]);
+        c.create_edge(tx_id, nodes[i], nodes[i+1]);
     }
     c.end_tx(tx_id);
 

@@ -54,12 +54,9 @@ namespace coordinator
             std::unordered_map<uint64_t, uint64_t> outstanding_node_progs;
             // node map client
             coordinator::nmap_stub nmap_client;
-            std::unordered_map<uint64_t, uint64_t> map_cache; // TODO remove after migration
             // mutexes
             po6::threads::mutex mutex // big mutex for clock and timestamper DS
                     , loc_gen_mutex
-                    , id_gen_mutex
-                    , map_cache_mutex
                     , periodic_update_mutex; // make sure to not send out clock update before getting ack from other VTs
             // migration
             // permanent deletion
@@ -82,7 +79,7 @@ namespace coordinator
         , shifted_id(id << (64-ID_BITS))
         , id_gen(0)
         , loc_gen(0)
-        , vclk(id)
+        , vclk(id, 0)
         , qts(NUM_SHARDS, 0)
         , prev_write(true)
         , clock_update_acks(NUM_VTS-1)
@@ -114,7 +111,6 @@ namespace coordinator
         // lookup mappings
         std::unordered_map<uint64_t, uint64_t> request_element_mappings;
         std::unordered_set<uint64_t> mappings_to_get;
-        map_cache_mutex.lock();
         for (auto upd: tx.writes) {
             switch (upd->type) {
                 case transaction::NODE_CREATE_REQ:
@@ -124,34 +120,21 @@ namespace coordinator
                     upd->loc1 = loc_gen + SHARD_ID_INCR; // node will be placed on this shard
                     loc_gen_mutex.unlock();
                     request_element_mappings.emplace(upd->handle, upd->loc1);
-                    map_cache.emplace(upd->handle, upd->loc1);
                     break;
 
                 case transaction::EDGE_CREATE_REQ:
                     if (request_element_mappings.find(upd->elem1) == request_element_mappings.end()) {
-                        if (map_cache.find(upd->elem1) != map_cache.end()) {
-                            request_element_mappings.emplace(upd->elem1, map_cache.at(upd->elem1));
-                        } else {
-                            mappings_to_get.insert(upd->elem1);
-                        }
+                        mappings_to_get.insert(upd->elem1);
                     }
                     if (request_element_mappings.find(upd->elem2) == request_element_mappings.end()) {
-                        if (map_cache.find(upd->elem2) != map_cache.end()) {
-                            request_element_mappings.emplace(upd->elem2, map_cache.at(upd->elem2));
-                        } else {
-                            mappings_to_get.insert(upd->elem2);
-                        }
+                        mappings_to_get.insert(upd->elem2);
                     }
                     break;
 
                 case transaction::NODE_DELETE_REQ:
                 case transaction::EDGE_DELETE_REQ:
                     if (request_element_mappings.find(upd->elem1) == request_element_mappings.end()) {
-                        if (map_cache.find(upd->elem1) != map_cache.end()) {
-                            request_element_mappings.emplace(upd->elem1, map_cache.at(upd->elem1));
-                        } else {
-                            mappings_to_get.insert(upd->elem1);
-                        }
+                        mappings_to_get.insert(upd->elem1);
                     }
                     break;
 
@@ -159,7 +142,6 @@ namespace coordinator
                     DEBUG << "bad type" << std::endl;
             }
         }
-        map_cache_mutex.unlock();
         if (!mappings_to_get.empty()) {
             for (auto &toAdd : nmap_client.get_mappings(mappings_to_get)) {
                 request_element_mappings.emplace(toAdd);
@@ -195,15 +177,13 @@ namespace coordinator
         nmap_client.put_mappings(put_map);
     }
 
-    // TODO need separate lock?
+    // caution: assuming caller holds mutex
     inline uint64_t
     timestamper :: generate_id()
     {
         uint64_t new_id;
-        id_gen_mutex.lock();
         new_id = (++id_gen) & TOP_MASK;
         new_id |= shifted_id;
-        id_gen_mutex.unlock();
         return new_id;
     }
 

@@ -20,7 +20,7 @@
 #define __WEAVER_DEBUG__
 #include "common/event_order.h"
 #include "common/weaver_constants.h"
-// TODO #include "common/message_graph_elem.h"
+#include "common/message_graph_elem.h"
 #include "shard.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
@@ -96,9 +96,7 @@ unpack_tx_request(void *req)
     vc::qtimestamp_t qts;
     transaction::pending_tx tx;
     bool ack = true;
-    DEBUG << "going to unpack tx%$%$%$%$%$%$%$%" << std::endl;
     message::unpack_message(*request->msg, message::TX_INIT, vt_id, vclk, qts, tx_id, tx.writes);
-    DEBUG << "unpacked tx!!!!!!!!!!!!!!!!!!!!!!!!!" << std::endl;
     ret = 0;
     for (auto upd: tx.writes) {
         switch (upd->type) {
@@ -137,7 +135,7 @@ unpack_tx_request(void *req)
             // tx subpart successful
         } else {
             // node being migrated, tx needs to be forwarded
-            // TODO also need to maintain DS for tracking when to ack transaction
+            // TODO also need to maintain DS for tracking when to ack transaction, in case of migration
             ack = false;
         }
     }
@@ -154,7 +152,7 @@ inline void
 nop(void *noparg)
 {
     std::pair<uint64_t, uint64_t> *nop_arg = (std::pair<uint64_t, uint64_t>*)noparg;
-    DEBUG << "nop vt_id " << nop_arg->first << ", qts " << nop_arg->second << std::endl;
+    //DEBUG << "nop vt_id " << nop_arg->first << ", qts " << nop_arg->second << std::endl;
     S->record_completed_transaction(nop_arg->first, nop_arg->second);
     free(nop_arg);
 }
@@ -186,7 +184,8 @@ NodeStateType& return_state(node_prog::prog_type pType, uint64_t req_id,
 }
 
 void
-unpack_node_program(void *req) {
+unpack_node_program(void *req)
+{
     db::graph_request *request = (db::graph_request *) req;
     node_prog::prog_type pType;
 
@@ -397,7 +396,8 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
                 // batch the newly generated node programs for onward propagation
                 for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                     uint64_t loc = res.first.loc;
-                    if (loc == COORD_ID) {
+                    DEBUG << "Node prog has to be sent to loc " << loc << std::endl;
+                    if (loc == vt_id) {
                         // signal to send back to vector timestamper that issued request
                         // TODO mark done
                         // XXX get rid of pair, without pair it is not working for some reason
@@ -405,6 +405,7 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
                         message::prepare_message(msg, message::NODE_PROG_RETURN, req_id, temppair);
                         S->send(vt_id, msg.buf);
                     } else {
+                        DEBUG << "forwarding node prog to shard " << loc << std::endl;
                         batched_node_progs[loc].emplace_back(res.first.handle, std::move(res.second), this_node);
                         if (!MSG_BATCHING && (loc != S->shard_id)) {
                             message::prepare_message(msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id,
@@ -424,7 +425,7 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
                 S->release_node(node);
             }
             if (MSG_BATCHING) {
-                for (uint64_t next_loc = 1; next_loc <= NUM_SHARDS; next_loc++) {
+                for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR; next_loc++) {
                     if (((!batched_node_progs[next_loc].empty() && batched_node_progs[next_loc].size()>BATCH_MSG_SIZE)
                          /*|| (!batched_deleted_nodes[next_loc].empty())*/)
                         && next_loc != S->shard_id) {
@@ -444,7 +445,7 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
     }
 
     // propagate all remaining node progs
-    for (uint64_t next_loc = 1; next_loc <= NUM_SHARDS && !done_request; next_loc++) {
+    for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR && !done_request; next_loc++) {
         if (((!batched_node_progs[next_loc].empty())
           /*|| (!batched_deleted_nodes[next_loc].empty())*/)
             && next_loc != S->shard_id) {
@@ -510,7 +511,7 @@ msgrecv_loop()
 
             case message::REVERSE_EDGE_CREATE:
                 message::unpack_message(*rec_msg, mtype, vclk);
-                DEBUG << "unpacked message" << std::endl;
+                DEBUG << "unpacked reverse edge create message" << std::endl;
                 request = new db::graph_request(mtype, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(0, vclk, unpack_update_request, request);
                 S->add_write_request(0, thr);
@@ -523,7 +524,7 @@ msgrecv_loop()
                 message::unpack_message(*rec_msg, message::NODE_PROG, pType, vt_id, vclk, req_id);
                 request = new db::graph_request(mtype, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(req_id, vclk, unpack_node_program, request);
-                DEBUG << "going to add node prog to threadpool" << std::endl;
+                DEBUG << "going to add node prog to queue for vt " << vt_id << std::endl;
                 S->add_read_request(vt_id, thr);
                 DEBUG << "added node prog to threadpool" << std::endl;
                 rec_msg.reset(new message::message());
@@ -531,14 +532,14 @@ msgrecv_loop()
 
             case message::VT_NOP:
                 message::unpack_message(*rec_msg, mtype, vt_id, vclk, qts, req_id);
-                DEBUG << "unpacked message" << std::endl;
+                //DEBUG << "unpacked message" << std::endl;
                 nop_arg = (std::pair<uint64_t, uint64_t>*)malloc(sizeof(std::pair<uint64_t, uint64_t>));
                 nop_arg->first = vt_id;
                 nop_arg->second = req_id;
-                DEBUG << "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$after unpacking nop, vt_id = " << vt_id << std::endl;
+                //DEBUG << "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$after unpacking nop, vt_id = " << vt_id << std::endl;
                 thr = new db::thread::unstarted_thread(qts.at(shard_id-SHARD_ID_INCR), vclk, nop, (void*)nop_arg);
                 S->add_write_request(vt_id, thr);
-                DEBUG << "added request to threadpool" << std::endl;
+                //DEBUG << "added request to threadpool" << std::endl;
                 rec_msg.reset(new message::message());
                 break;
             //case message::TRANSIT_NODE_DELETE_REQ:
@@ -593,6 +594,7 @@ msgrecv_loop()
             default:
                 DEBUG << "unexpected msg type " << mtype << std::endl;
         }
+        assert(vclk.clock.size() == NUM_VTS);
     }
 }
 
