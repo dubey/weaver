@@ -207,6 +207,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     try {
         message::unpack_message(msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, start_node_params);
         DEBUG << "node program unpacked" << std::endl;
+        assert(req_vclock.size() == NUM_VTS);
         //, dirty_cache_ids, invalid_cache_ids, batched_deleted_nodes[G->myid]);
         /*
 #ifdef __WEAVER_DEBUG__
