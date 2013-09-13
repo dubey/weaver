@@ -17,7 +17,6 @@
 #include <e/buffer.h>
 #include "busybee_constants.h"
 
-#define __WEAVER_DEBUG__
 #include "common/event_order.h"
 #include "common/weaver_constants.h"
 #include "common/message_graph_elem.h"
