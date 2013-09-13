@@ -33,7 +33,6 @@ namespace order
     static inline int
     compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
     {
-            DEBUG << "clk1 size " << clk1.size() << " and clk2 size " << clk2.size() << std::endl;
         int ret = 2;
         assert(clk1.size() == NUM_VTS);
         assert(clk2.size() == NUM_VTS);
@@ -54,7 +53,6 @@ namespace order
                 }
             }
         }
-            DEBUG << "her3" << std::endl;
         return ret;
     }
 
@@ -175,16 +173,13 @@ namespace order
     static inline int64_t
     compare_two_vts(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
     {
-        DEBUG << "comparing two vector timestamps" << std::endl;
         int cmp = compare_two_clocks(clk1, clk2);
         if (cmp == -1) {
             std::vector<vc::vclock_t> compare_vclks;
             compare_vclks.push_back(clk1);
             compare_vclks.push_back(clk2);
-            DEBUG << "here" << std::endl;
             cmp = compare_vts(compare_vclks);
         }
-        DEBUG << "done comparing timestamps" << std::endl;
         return cmp;
     }
 }
