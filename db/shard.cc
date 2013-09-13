@@ -355,7 +355,6 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
                         req_id, node_handle);
                 node_state_getter = std::bind(return_state<NodeStateType>,
                         prog_type_recvd, req_id, node_handle, state);
-                DEBUG << "state gotten" << std::endl;
                 /*
                 cache_value_putter = std::bind(put_cache_value<CacheValueType>,
                         prog_type_recvd, req_id, node_handle, node, &dirty_cache_ids);

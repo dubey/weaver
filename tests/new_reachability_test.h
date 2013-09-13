@@ -14,27 +14,46 @@
 #include "client/client.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/reach_program.h"
+#define LINE_LENGTH 10000
+
 
 void
 new_reachability_test()
 {
+    // make line of length line_length
     client::client c(CLIENT_ID);
     uint64_t tx_id = c.begin_tx();
-    size_t node1 = c.create_node(tx_id);
-    size_t node2 = c.create_node(tx_id);
-    size_t edge = c.create_edge(tx_id, node1, node2);
-    DEBUG << "Created node1 " << node1 << ", node1 " << node2 << ", and edge from node1 to node2 " << edge << std::endl;
+    size_t nodes[LINE_LENGTH];
+    for (int i = 0; i < LINE_LENGTH; i++) {
+        nodes[i] = c.create_node(tx_id);
+    }
+    c.end_tx(tx_id);
+
+    size_t edges[LINE_LENGTH-1];
+    tx_id = c.begin_tx();
+    for (int i = 0; i < LINE_LENGTH-1; i++) {
+        edges[i] = c.create_edge(tx_id, nodes[i], nodes[i+1]);
+    }
     c.end_tx(tx_id);
 
     node_prog::reach_params rp;
     rp.mode = false;
     rp.reachable = false;
     rp.prev_node.loc = COORD_ID;
-    rp.dest = node2;
+    rp.dest = nodes[LINE_LENGTH-1];
 
     std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args;
-    initial_args.emplace_back(std::make_pair(node1, rp));
+    initial_args.emplace_back(std::make_pair(nodes[0], rp));
+    DEBUG << "starting line reachability" << std::endl;
     std::unique_ptr<node_prog::reach_params> res = c.run_node_program(node_prog::REACHABILITY, initial_args);
     assert(res->reachable);
+
+    DEBUG << "finished positive line reachability" << std::endl;
+    // try to go from second node in line back to first (not possible because singly linked)
+    rp.dest = nodes[0];
+    initial_args.clear();
+    initial_args.emplace_back(std::make_pair(nodes[1], rp));
+     res = c.run_node_program(node_prog::REACHABILITY, initial_args);
     assert(!res->reachable);
+    DEBUG << "finished negative line reachability" << std::endl;
 }
