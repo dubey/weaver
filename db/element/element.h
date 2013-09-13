@@ -61,6 +61,7 @@ namespace element
     inline element :: element(uint64_t hndl, vc::vclock_t &vclk)
         : handle(hndl)
         , creat_time(vclk)
+        , del_time(NUM_VTS, MAX_TIME)
     { }
 
     inline void

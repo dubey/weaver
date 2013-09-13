@@ -35,9 +35,9 @@ namespace order
     {
             DEBUG << "clk1 size " << clk1.size() << " and clk2 size " << clk2.size() << std::endl;
         int ret = 2;
-        assert(clk1.size() == NUM_SHARDS);
-        assert(clk2.size() == NUM_SHARDS);
-        for (uint64_t i = 0; i < NUM_SHARDS; i++) {
+        assert(clk1.size() == NUM_VTS);
+        assert(clk2.size() == NUM_VTS);
+        for (uint64_t i = 0; i < NUM_VTS; i++) {
             if ((clk1.at(i) < clk2.at(i)) && (ret != 0)) {
                 if (ret == 2) {
                     ret = 0;

@@ -36,4 +36,5 @@ new_reachability_test()
     initial_args.emplace_back(std::make_pair(node1, rp));
     std::unique_ptr<node_prog::reach_params> res = c.run_node_program(node_prog::REACHABILITY, initial_args);
     assert(res->reachable);
+    assert(!res->reachable);
 }
