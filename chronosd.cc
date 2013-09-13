@@ -54,6 +54,12 @@
 #define ERRORMSG2(X, Y1, Y2) fprintf(stderr, "%s:%i:  " X "\n", __FILE__, __LINE__, Y1, Y2)
 #define ERRNOMSG(CALL) ERRORMSG2(tostr(CALL) " failed:  %s  [ERRNO=%i]", strerror(errno), errno)
 
+size_t
+hash_uint64(uint64_t key)
+{
+    return std::tr1::hash<uint64_t>()(key);
+}
+
 // hash function for vector clocks
 namespace std
 {
@@ -65,7 +71,12 @@ namespace tr1
         public:
             size_t operator()(std::vector<uint64_t> v) const throw() 
             {
-                return v[0]; // TODO improve this!
+                size_t hash = hash_uint64(v[0]);
+                for (size_t i = 1; i < v.size(); i++) {
+                    hash = hash ^ v[i];
+                    hash = hash_uint64(hash);
+                }
+                return hash;
             }
     };
 }
