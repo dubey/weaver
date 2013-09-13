@@ -27,6 +27,7 @@
 #include "common/event_order.h"
 #include "element/node.h"
 #include "element/edge.h"
+#include "state/program_state.h"
 #include "threadpool/threadpool.h"
 
 namespace db
@@ -80,10 +81,10 @@ namespace db
     };
 
     // Pending update request
-    class update_request
+    class graph_request
     {
         public:
-            update_request(enum message::msg_type, std::unique_ptr<message::message>);
+            graph_request(enum message::msg_type, std::unique_ptr<message::message>);
 
         public:
             enum message::msg_type type;
@@ -91,7 +92,7 @@ namespace db
     };
 
     inline
-    update_request :: update_request(enum message::msg_type mt, std::unique_ptr<message::message> m)
+    graph_request :: graph_request(enum message::msg_type mt, std::unique_ptr<message::message> m)
         : type(mt)
         , msg(std::move(m))
     { }
@@ -114,7 +115,7 @@ namespace db
 
             // Consistency
         public:
-            void increment_qts(uint64_t vt_id);
+            void record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id);
             element::node* acquire_node(uint64_t node_handle);
             void release_node(element::node *n);
 
@@ -125,7 +126,8 @@ namespace db
             std::unordered_map<uint64_t, uint64_t> edges; // edge handle -> node handle
             db::thread::pool thread_pool;
         public:
-            void add_request(uint64_t vt_id, thread::unstarted_thread *thr);
+            void add_write_request(uint64_t vt_id, thread::unstarted_thread *thr);
+            void add_read_request(uint64_t vt_id, thread::unstarted_thread *thr);
             void create_node(uint64_t node_handle, vc::vclock &vclk, bool migrate);
             uint64_t delete_node(uint64_t node_handle, vc::vclock &vclk);
             uint64_t create_edge(uint64_t edge_handle, uint64_t local_node,
@@ -143,6 +145,14 @@ namespace db
         public:
             uint64_t cur_node_count;
             std::unordered_map<uint64_t, uint32_t> agg_msg_count;
+
+            // node programs
+            std::shared_ptr<node_prog::Packable_Deletable> 
+                fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
+            void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle,
+                    std::shared_ptr<node_prog::Packable_Deletable> toAdd);
+            void add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests, uint64_t del_id);
+            bool check_done_request(uint64_t req_id);
 
             // Messaging infrastructure
         public:
@@ -166,9 +176,9 @@ namespace db
     // Consistency methods
 
     inline void
-    shard :: increment_qts(uint64_t vt_id)
+    shard :: record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id)
     {
-        thread_pool.increment_qts(vt_id);
+        thread_pool.record_completed_transaction(vt_id, transaction_completed_id);
     }
 
     // find the node corresponding to given handle
@@ -221,9 +231,15 @@ namespace db
     // Graph state update methods
 
     inline void
-    shard :: add_request(uint64_t vt_id, thread::unstarted_thread *thr)
+    shard :: add_write_request(uint64_t vt_id, thread::unstarted_thread *thr)
     {
-        thread_pool.add_request(vt_id, thr);
+        thread_pool.add_write_request(vt_id, thr);
+    }
+
+    inline void
+    shard :: add_read_request(uint64_t vt_id, thread::unstarted_thread *thr)
+    {
+        thread_pool.add_read_request(vt_id, thr);
     }
 
     inline void
@@ -338,6 +354,37 @@ namespace db
         return ret;
     }
 
+    // node program
+    state::program_state node_prog_req_state; 
+
+    inline std::shared_ptr<node_prog::Packable_Deletable>
+    shard :: fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle)
+    {
+        DEBUG << "trying to fetch node program state" << std::endl;
+        return node_prog_req_state.get_state(t, request_id, local_node_handle);
+    }
+
+    inline void
+    shard :: insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle,
+        std::shared_ptr<node_prog::Packable_Deletable> toAdd)
+    {
+        node_prog_req_state.put_state(t, request_id, local_node_handle, toAdd);
+    }
+
+    inline void
+    shard :: add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests, uint64_t del_id)
+    {
+        DEBUG << "starting done req at shard " << shard_id << std::endl;
+        node_prog_req_state.done_requests(completed_requests, del_id);
+        DEBUG << "ending done req at shard " << shard_id << std::endl;
+    }
+
+    inline bool
+    shard :: check_done_request(uint64_t req_id)
+    {
+        return node_prog_req_state.check_done_request(req_id);
+    }
+
     // messaging methods
 
     inline busybee_returncode
@@ -350,6 +397,66 @@ namespace db
         return ret;
     }
 
+    inline thread::unstarted_thread * get_read_thr(std::vector<thread::pqueue_t> &read_queues, std::vector<uint64_t> &last_ids) {
+        thread::unstarted_thread * thr = NULL;
+        DEBUG << "checking read queues" << std::endl;
+        for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
+            thread::pqueue_t &pq = read_queues.at(vt_id);
+            if (!pq.empty()){
+                DEBUG << "read queue " << vt_id << " not empty. has top id " << pq.top()->priority 
+                    << " and needs less than " << last_ids[vt_id] << " to p    op" << std::endl;
+            }
+            if (!pq.empty() && pq.top()->priority < last_ids[vt_id]) {
+                DEBUG << "read queue " << vt_id << " has node prog that can be run" << std::endl;
+                thr = read_queues.at(vt_id).top();
+                read_queues.at(vt_id).pop();
+                return thr;
+            }
+        }
+        return thr;
+    }
+
+    inline thread::unstarted_thread * get_write_thr(thread::pool *tpool) {
+        thread::unstarted_thread * thr = NULL;
+        std::vector<vc::vclock> timestamps(NUM_VTS, vc::vclock(MAX_UINT64));
+        std::vector<thread::pqueue_t> &write_queues = tpool->write_queues;
+        // get next jobs from each queue
+        DEBUG << "going to collect jobs from write queues" << std::endl;
+        for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
+            thread::pqueue_t &pq = write_queues.at(vt_id);
+            // wait for queue to receive at least one job
+            if (pq.empty()) { // can't write if one of the pq's is empty
+                DEBUG << "waiting for queue to fill" << std::endl;
+                return thr;
+            } else {
+                thr = pq.top();
+                // check for correct ordering of queue timestamp (which is priority for thread)
+                DEBUG << "waiting for qts to increment" << std::endl;
+                if (!tpool->check_qts(vt_id, thr->priority)) {
+                    return thr;
+                }
+            }
+        }
+        // all write queues are good to go, compare timestamps
+        for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
+            timestamps.at(vt_id) = write_queues.at(vt_id).top()->vclock;
+        }
+        DEBUG << "going to compare vt" << std::endl;
+        uint64_t exec_vt_id = (NUM_VTS==1)? 0:order::compare_vts(timestamps);
+        thr = write_queues.at(exec_vt_id).top();
+        write_queues.at(exec_vt_id).pop();
+        // TODO check nop
+        return thr;
+    }
+
+    inline thread::unstarted_thread * get_read_or_write(thread::pool *tpool) {
+        thread::unstarted_thread *thr = get_read_thr(tpool->read_queues, tpool->last_ids);
+        if (thr == NULL) {
+            thr = get_write_thr(tpool);
+        }
+        return thr;
+    }
+
     // work loop for threads in thread pool
     // check all queues are ready to go
     // if yes, execute the earliest job, else sleep and wait for incoming jobs
@@ -358,39 +465,16 @@ namespace db
     thread :: worker_thread_loop(thread::pool *tpool)
     {
         thread::unstarted_thread *thr = NULL;
-        std::vector<thread::pqueue_t> &queues = tpool->queues;
         po6::threads::cond &c = tpool->queue_cond;
-        std::vector<vc::vclock> timestamps(NUM_VTS, vc::vclock(MAX_UINT64));
         while (true) {
             DEBUG << "worker thread loop begin" << std::endl;
+            // TODO better queue locking needed
             tpool->thread_loop_mutex.lock(); // only one thread accesses queues
             // TODO add job method should be non-blocking on this mutex
             tpool->queue_mutex.lock(); // prevent more jobs from being added
-            // get next jobs from each queue
-            for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
-                thread::pqueue_t &pq = queues.at(vt_id);
-                // wait for queue to receive at least one job
-                while (pq.empty()) {
-                    DEBUG << "wait queue fill" << std::endl;
-                    c.wait();
-                }
-                thr = pq.top();
-                // check for correct ordering of queue timestamp
-                while (!tpool->check_qts(vt_id, thr->qtimestamp)) {
-                    DEBUG << "wait qts\n";
-                    c.wait();
-                }
+            while((thr = get_read_or_write(tpool)) == NULL) {
+                c.wait();
             }
-            // all queues are good to go, compare timestamps
-            for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
-                timestamps.at(vt_id) = queues.at(vt_id).top()->vclock;
-            }
-            DEBUG << "going to compare vts now" << std::endl;
-            uint64_t exec_vt_id = (NUM_VTS==1)? 0 : order::compare_vts(timestamps);
-            DEBUG << "done compare vts" << std::endl;
-            thr = queues.at(exec_vt_id).top();
-            queues.at(exec_vt_id).pop();
-            // TODO check nop
             tpool->queue_mutex.unlock();
             tpool->thread_loop_mutex.unlock();
             (*thr->func)(thr->arg);

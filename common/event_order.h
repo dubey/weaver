@@ -34,7 +34,9 @@ namespace order
     compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
     {
         int ret = 2;
-        for (uint64_t i = 0; i < NUM_SHARDS; i++) {
+        assert(clk1.size() == NUM_VTS);
+        assert(clk2.size() == NUM_VTS);
+        for (uint64_t i = 0; i < NUM_VTS; i++) {
             if ((clk1.at(i) < clk2.at(i)) && (ret != 0)) {
                 if (ret == 2) {
                     ret = 0;

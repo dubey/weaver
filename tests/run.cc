@@ -24,6 +24,7 @@
 //#include "cache_test.h"
 //#include "basic_client.h"
 //#include "repetitive_reach_program.h"
+#include "new_reachability_test.h"
 //#include "multiple_reach_program.h"
 //#include "multiple_locality.h"
 //#include "multiple_caching.h"
@@ -80,7 +81,9 @@ main(int argc, char *argv[])
     //message_tx_test();
     //tx_msg_nmap_test();
     //vc_ordering_test();
-    create_graph_test();
+    //create_graph_test();
+    new_reachability_test();
+
 #endif
     DEBUG << "All tests completed." << std::endl;
 

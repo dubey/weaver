@@ -43,7 +43,10 @@ namespace vc
     };
 
     inline
-    vclock :: vclock() { }
+    vclock :: vclock()
+        : vt_id(MAX_UINT64)
+        , clock(NUM_VTS, MAX_UINT64)
+    { }
 
     inline
     vclock :: vclock(uint64_t vtid)

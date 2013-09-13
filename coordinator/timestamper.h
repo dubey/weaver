@@ -44,10 +44,14 @@ namespace coordinator
             uint64_t loc_gen;
             vc::vclock vclk; // vector clock
             vc::qtimestamp_t qts; // queue timestamp
+            bool prev_write;
             std::unordered_map<uint64_t, tx_reply> tx_replies;
             timespec tspec;
             uint64_t nop_time, first_nop_time, clock_update_acks;
             bool first_clock_update;
+            // node prog
+            // map from req_id to client_id that ensures a single response to a node program
+            std::unordered_map<uint64_t, uint64_t> outstanding_node_progs;
             // node map client
             coordinator::nmap_stub nmap_client;
             std::unordered_map<uint64_t, uint64_t> map_cache; // TODO remove after migration
@@ -80,6 +84,7 @@ namespace coordinator
         , loc_gen(0)
         , vclk(id)
         , qts(NUM_SHARDS, 0)
+        , prev_write(true)
         , clock_update_acks(NUM_VTS-1)
         , first_clock_update(true)
     {
@@ -190,6 +195,7 @@ namespace coordinator
         nmap_client.put_mappings(put_map);
     }
 
+    // TODO need separate lock?
     inline uint64_t
     timestamper :: generate_id()
     {

@@ -50,21 +50,17 @@ namespace element
             void update_del_time(vc::vclock &del_time);
             void update_creat_time(vc::vclock &creat_time);
             vc::vclock get_creat_time() const;
-            vc::vclock get_del_time() const;
+            vc::vclock get_del_time() const; // TODO change to reference?
             std::pair<bool, uint64_t> get_property_value(uint32_t prop_key, vc::vclock &at_time);
             const std::vector<common::property>* get_props() const;
             uint64_t get_handle() const;
     };
 
-    inline element :: element()
-        : creat_time(MAX_UINT64)
-        , del_time(MAX_UINT64)
-    { }
+    inline element :: element() { }
 
     inline element :: element(uint64_t hndl, vc::vclock &vclk)
         : handle(hndl)
         , creat_time(vclk)
-        , del_time(MAX_UINT64)
     { }
 
     inline void

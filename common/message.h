@@ -81,6 +81,7 @@ namespace message
         CLEAN_UP_ACK,
         // node program messages
         NODE_PROG,
+        NODE_PROG_RETURN,
         CACHE_UPDATE,
         CACHE_UPDATE_ACK,
         // migration messages

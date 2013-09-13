@@ -48,6 +48,11 @@ namespace client
             void delete_node(uint64_t tx_id, uint64_t node); 
             void delete_edge(uint64_t tx_id, uint64_t edge);
             void end_tx(uint64_t tx_id);
+
+            template <typename ParamsType>
+            std::unique_ptr<ParamsType> 
+            run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args);
+
             void commit_graph();
             void exit_weaver();
 
@@ -148,6 +153,26 @@ namespace client
             msg.buf->unpack_from(BUSYBEE_HEADER_SIZE) >> mtype;
             assert(mtype == message::CLIENT_TX_DONE);
         }
+    }
+
+    template <typename ParamsType>
+    inline std::unique_ptr<ParamsType>
+    client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args)
+    {
+        message::message msg;
+        message::prepare_message(msg, message::CLIENT_NODE_PROG_REQ, prog_to_run, initial_args);
+        send_coord(msg.buf);
+        if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
+            DEBUG << "node prog return msg fail" << std::endl;
+            return NULL;
+        }
+
+        uint64_t ignore_req_id;
+        std::pair<uint64_t, ParamsType> tempPair;
+        message::unpack_message(msg, message::NODE_PROG_RETURN, ignore_req_id, tempPair);
+
+        std::unique_ptr<ParamsType> toRet(new ParamsType(tempPair.second));
+        return std::move(toRet);
     }
 
     inline void

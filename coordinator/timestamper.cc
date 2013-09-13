@@ -20,6 +20,8 @@
 #define __WEAVER_DEBUG__
 #include "common/vclock.h"
 #include "common/transaction.h"
+#include "node_prog/node_prog_type.h"
+#include "node_prog/node_program.h"
 #include "timestamper.h"
 
 static coordinator::timestamper *vts;
@@ -65,7 +67,8 @@ begin_transaction(transaction::pending_tx &tx)
             vts->tx_replies.at(tx.id).count++;
         }
     }
-    vts->mutex.unlock();
+    vts->prev_write = true;
+    vts->mutex.unlock(); // TODO: move sending out of critical section
 }
 
 // decrement reply count. if all replies have been received, ack to client
@@ -107,8 +110,9 @@ periodic_update()
         vc::vclock vclk = vts->vclk;
         vts->mutex.unlock();
         message::message msg;
+        uint64_t req_id = vts->generate_id();
         for (uint64_t i = 0; i < NUM_SHARDS; i++) {
-            message::prepare_message(msg, message::VT_NOP, vt_id, vclk, new_qts);
+            message::prepare_message(msg, message::VT_NOP, vt_id, vclk, new_qts, req_id);
             vts->send(i + SHARD_ID_INCR, msg.buf);
         }
         if (vts->first_clock_update) {
@@ -137,6 +141,74 @@ periodic_update()
     vts->periodic_update_mutex.unlock();
 }
 
+// node program stuff
+template <typename ParamsType, typename NodeStateType>
+void node_prog :: particular_node_program<ParamsType, NodeStateType> :: 
+    unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID)
+{
+    DEBUG << "starting node program on timestamper" << std::endl;
+    node_prog::prog_type pType;
+    std::vector<std::pair<uint64_t, ParamsType>> initial_args;
+
+    message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, pType, initial_args);
+    
+    // map from locations to a list of start_node_params to send to that shard
+    std::unordered_map<uint64_t, std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>> initial_batches; 
+
+    // lookup mappings
+    std::unordered_map<uint64_t, uint64_t> request_element_mappings;
+    std::unordered_set<uint64_t> mappings_to_get;
+    vts->map_cache_mutex.lock();
+    for (auto &initial_arg : initial_args) {
+        uint64_t c_id = initial_arg.first;
+        if (vts->map_cache.find(c_id) != vts->map_cache.end()) {
+            request_element_mappings.emplace(c_id, vts->map_cache.at(c_id));
+        } else {
+            mappings_to_get.insert(c_id);
+        }
+    }
+    vts->map_cache_mutex.unlock();
+    if (!mappings_to_get.empty()) {
+        auto results = vts->nmap_client.get_mappings(mappings_to_get);
+        assert(results.size() == mappings_to_get.size());
+        for (auto &toAdd : results) {
+            request_element_mappings.emplace(toAdd);
+        }
+    }
+    DEBUG << "timestamper done looking up element mappings for node program" << std::endl;
+
+    for (std::pair<uint64_t, ParamsType> &node_params_pair : initial_args) { // TODO: change to params pointer so we can avoid potential copy?
+        initial_batches[request_element_mappings[node_params_pair.first]].emplace_back(std::make_tuple(node_params_pair.first,
+            std::move(node_params_pair.second), db::element::remote_node())); // constructor
+    }
+    vts->mutex.lock();
+    if (vts->prev_write) {
+        vts->vclk.increment_clock();
+    }
+    vc::vclock_t req_timestamp =  vts->vclk.get_clock();
+    assert(req_timestamp.size() == NUM_VTS);
+    uint64_t req_id = vts->generate_id();
+
+    message::message msg_to_send;
+    std::vector<uint64_t> empty_vector;
+    std::vector<std::tuple<uint64_t, ParamsType, uint64_t>> empty_tuple_vector;
+    DEBUG << "starting node prog " << req_id << ", recd from client\t" << std::endl;
+    for (auto &batch_pair : initial_batches) {
+        message::prepare_message(msg_to_send, message::NODE_PROG, pType, vt_id, req_timestamp, 
+                req_id, batch_pair.second, empty_tuple_vector);
+        vts->send(batch_pair.first, msg_to_send.buf); // TODO: can we send out of critical section?
+    }
+    DEBUG << "sent to shards" << std::endl;
+    vts->prev_write = false;
+    vts->outstanding_node_progs.emplace(std::make_pair(req_id, clientID));
+    vts->mutex.unlock();
+}
+
+template <typename ParamsType, typename NodeStateType>
+void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
+    unpack_and_run_db(message::message&)
+{ }
+
 void
 server_loop(int thread_id)
 {
@@ -145,6 +217,7 @@ server_loop(int thread_id)
     enum message::msg_type mtype;
     std::unique_ptr<message::message> msg;
     uint64_t sender, tx_id;
+    node_prog::prog_type pType;
 
     while (true) {
         msg.reset(new message::message());
@@ -196,6 +269,28 @@ server_loop(int thread_id)
                     end_transaction(tx_id);
                     break;
 
+                case message::CLIENT_NODE_PROG_REQ:
+                    message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, pType);
+                    //server->update_mutex.lock(); //TODO do we need to mutex here?
+                    node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), sender);
+                    //server->update_mutex.unlock();
+                    break;
+
+                // response from a shard
+                case message::NODE_PROG_RETURN:
+                    uint64_t req_id;
+                    message::unpack_message(*msg, message::NODE_PROG_RETURN, req_id); // don't unpack rest
+                    vts->mutex.lock();
+                    if (vts->outstanding_node_progs.find(req_id) != vts->outstanding_node_progs.end()) {
+                        uint64_t client_to_ret = vts->outstanding_node_progs.at(req_id);
+                        vts->send(client_to_ret, msg->buf);
+                        vts->outstanding_node_progs.erase(req_id);
+                    } else {
+                        std::cerr << "node prog return for already completed ornever existed req id" << std::endl;
+                    }
+                    vts->mutex.unlock();
+                    break;
+
                 default:
                     std::cerr << "unexpected msg type " << mtype << std::endl;
             }
@@ -206,12 +301,10 @@ server_loop(int thread_id)
     }
 }
 
-// periodically share local vector clock with other timestampers
 // TODO permanent deletion of deleted and migrated nodes and state for completed node progs
 inline void
 coord_daemon_initiate()
-{
-}
+{ }
 
 int
 main(int argc, char *argv[])

@@ -31,19 +31,7 @@ namespace node_prog
         CLUSTERING
     };
 
-    // on deletion of an edge (tail -> head) in the graph, node program
-    // needs to specify which cache to invalidate:
-    //      at the head,
-    //      at the tail,
-    //      both head and tail
-    enum cache_inv_rule
-    {
-        INVALIDATE_HEAD,
-        INVALIDATE_TAIL,
-        INVALIDATE_BOTH
-    };
-
-    template <typename params_type, typename node_state_type, typename cache_value_type>
+    template <typename params_type, typename node_state_type>
     struct node_function_type
     {
         public:
@@ -52,10 +40,10 @@ namespace node_prog
                 db::element::remote_node&, // this remote node
                 params_type&,
                 std::function<node_state_type&()>,
-                std::function<cache_value_type&()>,
-                std::function<std::vector<std::shared_ptr<cache_value_type>>()>);
+                vc::vclock_t &req_vlock);
     };
 
+/*
     template <typename params_type, typename node_state_type>
     struct deleted_node_function_type
     {
@@ -66,6 +54,7 @@ namespace node_prog
                 params_type&, // params we had sent to deleted node
                 std::function<node_state_type&()>);
     };
+    */
 
     class Packable 
     {
@@ -87,33 +76,6 @@ namespace node_prog
     }
 
     class Packable_Deletable : public Packable, public Deletable { };
-
-    class CacheValueBase : Deletable
-    {
-        private:
-            uint64_t req_id;
-            std::vector<uint64_t>* dirty_list;
-        
-        public:
-        CacheValueBase()
-        {
-        }
-
-        void set_dirty_list_ptr(std::vector<uint64_t>* lst)
-        {
-            dirty_list = lst;
-        }
-
-        void set_req_id(uint64_t id)
-        {
-            req_id = id;
-        }
-
-        void mark()
-        {
-            dirty_list->push_back(req_id);
-        }
-    };
 }
 
 namespace std
