@@ -32,35 +32,39 @@ namespace element
     {
         public:
             element();
-            element(uint64_t handle, vc::vclock_t &vclk);
+            element(uint64_t handle, vc::vclock &vclk);
             
         protected:
             uint64_t handle;
             std::vector<common::property> properties;
-            vc::vclock_t creat_time;
-            vc::vclock_t del_time;
+            vc::vclock creat_time;
+            vc::vclock del_time;
 
         public:
             void add_property(common::property prop);
-            void delete_property(uint32_t key, vc::vclock_t &tdel);
-            void remove_property(uint32_t key, vc::vclock_t &vclk);
-            bool has_property(common::property prop, vc::vclock_t &vclk);
+            void delete_property(uint32_t key, vc::vclock &tdel);
+            void remove_property(uint32_t key, vc::vclock &vclk);
+            bool has_property(common::property prop, vc::vclock &vclk);
             bool check_and_add_property(common::property prop);
             void set_properties(std::vector<common::property> &props);
-            void update_del_time(vc::vclock_t &del_time);
-            void update_creat_time(vc::vclock_t &creat_time);
-            vc::vclock_t get_creat_time() const;
-            vc::vclock_t get_del_time() const;
-            std::pair<bool, uint64_t> get_property_value(uint32_t prop_key, vc::vclock_t &at_time);
+            void update_del_time(vc::vclock &del_time);
+            void update_creat_time(vc::vclock &creat_time);
+            vc::vclock get_creat_time() const;
+            vc::vclock get_del_time() const;
+            std::pair<bool, uint64_t> get_property_value(uint32_t prop_key, vc::vclock &at_time);
             const std::vector<common::property>* get_props() const;
             uint64_t get_handle() const;
     };
 
-    inline element :: element() { }
+    inline element :: element()
+        : creat_time(MAX_UINT64)
+        , del_time(MAX_UINT64)
+    { }
 
-    inline element :: element(uint64_t hndl, vc::vclock_t &vclk)
+    inline element :: element(uint64_t hndl, vc::vclock &vclk)
         : handle(hndl)
         , creat_time(vclk)
+        , del_time(MAX_UINT64)
     { }
 
     inline void
@@ -70,7 +74,7 @@ namespace element
     }
 
     inline void
-    element :: delete_property(uint32_t key, vc::vclock_t &tdel)
+    element :: delete_property(uint32_t key, vc::vclock &tdel)
     {
         for (auto &iter: properties) {
             if (iter.key == key) {
@@ -83,10 +87,10 @@ namespace element
     {
         public:
             uint32_t key;
-            vc::vclock_t vclk;
+            vc::vclock vclk;
 
             inline
-            match_key(uint32_t k, vc::vclock_t &vclock)
+            match_key(uint32_t k, vc::vclock &vclock)
                 : key(k)
                 , vclk(vclock)
             { }
@@ -105,19 +109,19 @@ namespace element
 
     // remove properties which match key
     inline void
-    element :: remove_property(uint32_t key, vc::vclock_t &vclk)
+    element :: remove_property(uint32_t key, vc::vclock &vclk)
     {
         auto iter = std::remove_if(properties.begin(), properties.end(), match_key(key, vclk));
         properties.erase(iter, properties.end());
     }
 
     inline bool
-    element :: has_property(common::property prop, vc::vclock_t &vclk)
+    element :: has_property(common::property prop, vc::vclock &vclk)
     {
         for (auto &p: properties) {
             if (prop == p) {
-                vc::vclock_t vclk_creat = p.get_creat_time();
-                vc::vclock_t vclk_del = p.get_del_time();
+                vc::vclock vclk_creat = p.get_creat_time();
+                vc::vclock vclk_del = p.get_del_time();
                 int64_t cmp1 = order::compare_two_vts(vclk, vclk_creat);
                 int64_t cmp2 = order::compare_two_vts(vclk, vclk_del);
                 if (cmp1 >= 1 && cmp2 == 0) {
@@ -148,24 +152,24 @@ namespace element
     }
 
     inline void
-    element :: update_del_time(vc::vclock_t &tdel)
+    element :: update_del_time(vc::vclock &tdel)
     {
         del_time = tdel;
     }
 
     inline void
-    element :: update_creat_time(vc::vclock_t &tcreat)
+    element :: update_creat_time(vc::vclock &tcreat)
     {
         creat_time = tcreat;
     }
 
-    inline vc::vclock_t
+    inline vc::vclock
     element :: get_creat_time() const
     {
         return creat_time;
     }
 
-    inline vc::vclock_t
+    inline vc::vclock
     element :: get_del_time() const
     {
         return del_time;
@@ -179,12 +183,12 @@ namespace element
 
     // return a pair, first is whether prop exists, second is value
     std::pair<bool, uint64_t>
-    element :: get_property_value(uint32_t prop_key, vc::vclock_t &at_time)
+    element :: get_property_value(uint32_t prop_key, vc::vclock &at_time)
     {
         for (common::property& prop : properties)
         {
-            vc::vclock_t vclk_creat = prop.get_creat_time();
-            vc::vclock_t vclk_del = prop.get_del_time();
+            vc::vclock vclk_creat = prop.get_creat_time();
+            vc::vclock vclk_del = prop.get_del_time();
             int64_t cmp1 = order::compare_two_vts(at_time, vclk_creat);
             int64_t cmp2 = order::compare_two_vts(at_time, vclk_del);
             if (prop_key == prop.key && cmp1 >= 1 && cmp2 == 0) {

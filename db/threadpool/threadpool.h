@@ -37,7 +37,7 @@ namespace thread
         public:
             unstarted_thread(
                 uint64_t qts,
-                vc::vclock_t vclk,
+                vc::vclock vclk,
                 void (*f)(void*),
                 void *a);
 
@@ -46,7 +46,7 @@ namespace thread
 
         public:
             uint64_t qtimestamp;
-            vc::vclock_t vclock;
+            vc::vclock vclock;
             void (*func)(void*);
             void *arg;
     };
@@ -54,7 +54,7 @@ namespace thread
     inline
     unstarted_thread :: unstarted_thread( 
             uint64_t qts,
-            vc::vclock_t vclk,
+            vc::vclock vclk,
             void (*f)(void*),
             void *a)
         : qtimestamp(qts)

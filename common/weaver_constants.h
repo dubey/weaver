@@ -31,6 +31,7 @@
 #include "stdint.h"
 
 #define MAX_TIME UINT64_MAX
+#define MAX_UINT64 UINT64_MAX
 // messaging constants
 #define ID_INCR (1ULL << 32ULL)
 #define COORD_ID (0ULL)
@@ -54,7 +55,8 @@
 #define BATCH_MSG_SIZE 100
 #define MIGRATION false // whether to enable migration at the beginning of the program or not
 #define MAX_CACHE_PER_NODE 10 // max num of cache entries per node per request type
-#define VT_NOP_TIMEOUT 10 // number of milliseconds between successive nops
+#define VT_NOP_TIMEOUT 20 // number of milliseconds between successive nops
+#define VT_INITIAL_CLKUPDATE_DELAY 2000 // number of millis delay to ensure all timestampers are running
 // hyperdex constants
 #define HYPERDEX_COORD_IPADDR "127.0.0.1"
 #define HYPERDEX_COORD_PORT 1982

@@ -35,7 +35,7 @@ namespace db
     struct perm_del
     {
         enum message::msg_type type;
-        vc::vclock_t tdel;
+        vc::vclock tdel;
         union {
             struct {
                 uint64_t node_handle;
@@ -52,7 +52,7 @@ namespace db
         } request;
 
         inline
-        perm_del(enum message::msg_type t, vc::vclock_t &td, uint64_t node)
+        perm_del(enum message::msg_type t, vc::vclock &td, uint64_t node)
             : type(t)
             , tdel(td)
         {
@@ -60,7 +60,7 @@ namespace db
         }
 
         inline
-        perm_del(enum message::msg_type t, vc::vclock_t &td, uint64_t node, uint64_t edge)
+        perm_del(enum message::msg_type t, vc::vclock &td, uint64_t node, uint64_t edge)
             : type(t)
             , tdel(td)
         {
@@ -69,7 +69,7 @@ namespace db
         }
         
         inline
-        perm_del(enum message::msg_type t, vc::vclock_t &td, uint64_t node, uint64_t edge, uint32_t k)
+        perm_del(enum message::msg_type t, vc::vclock &td, uint64_t node, uint64_t edge, uint32_t k)
             : type(t)
             , tdel(td)
         {
@@ -126,13 +126,13 @@ namespace db
             db::thread::pool thread_pool;
         public:
             void add_request(uint64_t vt_id, thread::unstarted_thread *thr);
-            void create_node(uint64_t node_handle, vc::vclock_t &vclk, bool migrate);
-            uint64_t delete_node(uint64_t node_handle, vc::vclock_t &vclk);
+            void create_node(uint64_t node_handle, vc::vclock &vclk, bool migrate);
+            uint64_t delete_node(uint64_t node_handle, vc::vclock &vclk);
             uint64_t create_edge(uint64_t edge_handle, uint64_t local_node,
-                    uint64_t remote_node, uint64_t remote_loc, vc::vclock_t &vclk);
+                    uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk);
             uint64_t create_reverse_edge(uint64_t edge_handle, uint64_t local_node,
-                    uint64_t remote_node, uint64_t remote_loc, vc::vclock_t &vclk);
-            uint64_t delete_edge(uint64_t edge_handle, vc::vclock_t &vclk);
+                    uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk);
+            uint64_t delete_edge(uint64_t edge_handle, vc::vclock &vclk);
             uint64_t get_node_count();
 
             // Permanent deletion
@@ -227,7 +227,7 @@ namespace db
     }
 
     inline void
-    shard :: create_node(uint64_t node_handle, vc::vclock_t &vclk, bool migrate)
+    shard :: create_node(uint64_t node_handle, vc::vclock &vclk, bool migrate)
     {
         element::node *new_node = new element::node(node_handle, vclk, &update_mutex);
         update_mutex.lock();
@@ -252,7 +252,7 @@ namespace db
     }
 
     inline uint64_t
-    shard :: delete_node(uint64_t node_handle, vc::vclock_t &tdel)
+    shard :: delete_node(uint64_t node_handle, vc::vclock &tdel)
     {
         uint64_t ret;
         element::node *n = acquire_node(node_handle);
@@ -269,7 +269,7 @@ namespace db
 
     inline uint64_t
     shard :: create_edge(uint64_t edge_handle, uint64_t local_node,
-            uint64_t remote_node, uint64_t remote_loc, vc::vclock_t &vclk)
+            uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk)
     {
         uint64_t ret;
         element::node *n = acquire_node(local_node);
@@ -296,7 +296,7 @@ namespace db
 
     inline uint64_t
     shard :: create_reverse_edge(uint64_t edge_handle, uint64_t local_node,
-            uint64_t remote_node, uint64_t remote_loc, vc::vclock_t &vclk)
+            uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk)
     {
         uint64_t ret;
         element::node *n = acquire_node(local_node);
@@ -318,7 +318,7 @@ namespace db
     }
 
     inline uint64_t
-    shard :: delete_edge(uint64_t edge_handle, vc::vclock_t &tdel)
+    shard :: delete_edge(uint64_t edge_handle, vc::vclock &tdel)
     {
         uint64_t ret;
         edge_map_mutex.lock();
@@ -360,8 +360,9 @@ namespace db
         thread::unstarted_thread *thr = NULL;
         std::vector<thread::pqueue_t> &queues = tpool->queues;
         po6::threads::cond &c = tpool->queue_cond;
-        std::vector<vc::vclock_t> timestamps(NUM_VTS, vc::vclock_t());
+        std::vector<vc::vclock> timestamps(NUM_VTS, vc::vclock(MAX_UINT64));
         while (true) {
+            DEBUG << "worker thread loop begin" << std::endl;
             tpool->thread_loop_mutex.lock(); // only one thread accesses queues
             // TODO add job method should be non-blocking on this mutex
             tpool->queue_mutex.lock(); // prevent more jobs from being added
@@ -370,11 +371,13 @@ namespace db
                 thread::pqueue_t &pq = queues.at(vt_id);
                 // wait for queue to receive at least one job
                 while (pq.empty()) {
+                    DEBUG << "wait queue fill" << std::endl;
                     c.wait();
                 }
                 thr = pq.top();
                 // check for correct ordering of queue timestamp
                 while (!tpool->check_qts(vt_id, thr->qtimestamp)) {
+                    DEBUG << "wait qts\n";
                     c.wait();
                 }
             }
@@ -382,7 +385,9 @@ namespace db
             for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
                 timestamps.at(vt_id) = queues.at(vt_id).top()->vclock;
             }
-            uint64_t exec_vt_id = (NUM_VTS==1)? 0:order::compare_vts(timestamps);
+            DEBUG << "going to compare vts now" << std::endl;
+            uint64_t exec_vt_id = (NUM_VTS==1)? 0 : order::compare_vts(timestamps);
+            DEBUG << "done compare vts" << std::endl;
             thr = queues.at(exec_vt_id).top();
             queues.at(exec_vt_id).pop();
             // TODO check nop

@@ -26,6 +26,7 @@
 #include "weaver_constants.h"
 
 #define GIGA (1000000000UL)
+#define MEGA (1000000UL)
 
 namespace wclock
 {
@@ -45,11 +46,19 @@ namespace wclock
 #endif
     }
 
+    // return nanosecs elapsed since some fixed time
     uint64_t get_time_elapsed(timespec &ts)
     {
         uint64_t ret = 0;
         get_clock(&ts);
         ret += ts.tv_sec * GIGA + ts.tv_nsec;
+        return ret;
+    }
+
+    // get_time_elapsed / 1000000
+    uint64_t get_time_elapsed_millis(timespec &ts)
+    {
+        uint64_t ret = get_time_elapsed(ts) / MEGA;
         return ret;
     }
 

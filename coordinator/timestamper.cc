@@ -41,7 +41,7 @@ begin_transaction(transaction::pending_tx &tx)
 {
     DEBUG << "beginning tx " << std::endl;
     message::message msg;
-    vc::vclock_t clock;
+    //vc::vclock clock;
     std::vector<transaction::pending_tx> tx_vec(NUM_SHARDS, transaction::pending_tx());
     vts->mutex.lock();
     for (std::shared_ptr<transaction::pending_update> upd: tx.writes) {
@@ -51,7 +51,7 @@ begin_transaction(transaction::pending_tx &tx)
         tx_vec.at(upd->loc1-SHARD_ID_INCR).writes.emplace_back(upd);
     }
     vts->vclk.increment_clock();
-    tx.timestamp = vts->vclk.get_clock();
+    tx.timestamp = vts->vclk;
     tx.id = vts->generate_id();
     vts->tx_replies.emplace(tx.id, coordinator::tx_reply());
     vts->tx_replies.at(tx.id).client_id = tx.client_id;
@@ -91,33 +91,50 @@ end_transaction(uint64_t tx_id)
 inline void
 periodic_update()
 {
+    vts->periodic_update_mutex.lock();
     vts->mutex.lock();
-    uint64_t cur_time = wclock::get_time_elapsed(vts->tspec);
-    if (cur_time > (vts->nop_time + VT_NOP_TIMEOUT)) {
+    uint64_t cur_time_millis = wclock::get_time_elapsed_millis(vts->tspec);
+    uint64_t diff = cur_time_millis - vts->nop_time;
+    uint64_t first_diff = cur_time_millis - vts->first_nop_time;
+    if (diff >  VT_NOP_TIMEOUT) {
         // send nops to each shard
-        vts->nop_time = cur_time;
+        vts->nop_time = cur_time_millis;
         vc::qtimestamp_t new_qts = vts->qts;
         for (auto &qts: vts->qts) {
             qts++;
         }
         vts->vclk.increment_clock();
-        vc::vclock_t vclk = vts->vclk.get_clock();
+        vc::vclock vclk = vts->vclk;
         vts->mutex.unlock();
         message::message msg;
         for (uint64_t i = 0; i < NUM_SHARDS; i++) {
             message::prepare_message(msg, message::VT_NOP, vt_id, vclk, new_qts);
             vts->send(i + SHARD_ID_INCR, msg.buf);
         }
-        for (uint64_t i = 0; i < NUM_VTS; i++) {
-            if (i == vt_id) {
-                continue;
+        if (vts->first_clock_update) {
+            DEBUG << "clock update acks " << vts->clock_update_acks << std::endl;
+            DEBUG << "diff " << diff << ", initial clock update delay " << VT_INITIAL_CLKUPDATE_DELAY << std::endl;
+            DEBUG << "first diff " << first_diff << ", initial clock update delay " << VT_INITIAL_CLKUPDATE_DELAY << std::endl;
+        }
+        // first check is an ugly hack to make sure all VTs are up before sending out clock updates
+        // second check is to ensure all VTs acked previous update before sending out new update
+        if (((vts->first_clock_update && first_diff > VT_INITIAL_CLKUPDATE_DELAY) || !vts->first_clock_update)
+        && (vts->clock_update_acks == (NUM_VTS-1))) {
+            vts->first_clock_update = false;
+            DEBUG << "sending clock update now, clock update acks " << vts->clock_update_acks << std::endl;
+            vts->clock_update_acks = 0;
+            for (uint64_t i = 0; i < NUM_VTS; i++) {
+                if (i == vt_id) {
+                    continue;
+                }
+                message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, vclk.clock.at(vt_id));
+                vts->send(i, msg.buf);
             }
-            message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, vclk.at(vt_id));
-            vts->send(i, msg.buf);
         }
     } else {
         vts->mutex.unlock();
     }
+    vts->periodic_update_mutex.unlock();
 }
 
 void
@@ -161,8 +178,17 @@ server_loop(int thread_id)
                     vts->mutex.lock();
                     vts->vclk.update_clock(rec_vtid, rec_clock);
                     vts->mutex.unlock();
+                    message::prepare_message(*msg, message::VT_CLOCK_UPDATE_ACK);
+                    vts->send(rec_vtid, msg->buf);
                     break;
                 }
+
+                case message::VT_CLOCK_UPDATE_ACK:
+                    vts->periodic_update_mutex.lock();
+                    vts->clock_update_acks++;
+                    assert(vts->clock_update_acks < NUM_VTS);
+                    vts->periodic_update_mutex.unlock();
+                    break;
 
                 // shard messages
                 case message::TX_DONE:
@@ -185,19 +211,6 @@ server_loop(int thread_id)
 inline void
 coord_daemon_initiate()
 {
-    message::message msg;
-    vc::vclock_t clock;
-    vts->mutex.lock();
-    clock = vts->vclk.get_clock();
-    vts->mutex.unlock();
-    message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, clock.at(vt_id));
-    // broadcast updated vector clock
-    for (uint64_t i = 0; i < NUM_VTS; i++) {
-        if (i == vt_id) {
-            continue;
-        }
-        vts->send(i, msg.buf);
-    }
 }
 
 int

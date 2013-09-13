@@ -45,7 +45,7 @@ namespace transaction
         uint64_t id // unique tx id
             , client_id; // client to which we need to reply
         tx_list_t writes;
-        vc::vclock_t timestamp; // vector timestamp
+        vc::vclock timestamp; // vector timestamp
     };
 }
 

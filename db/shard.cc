@@ -28,31 +28,31 @@ static db::shard *S;
 db::shard *db::thread::pool::S = NULL; // reinitialized in graph constructor
 
 inline void
-create_node(vc::vclock_t &t_creat, uint64_t node_handle)
+create_node(vc::vclock &t_creat, uint64_t node_handle)
 {
     S->create_node(node_handle, t_creat, false);
 }
 
 inline uint64_t
-create_edge(vc::vclock_t &t_creat, uint64_t edge_handle, uint64_t n1, uint64_t n2, uint64_t loc2)
+create_edge(vc::vclock &t_creat, uint64_t edge_handle, uint64_t n1, uint64_t n2, uint64_t loc2)
 {
     return S->create_edge(edge_handle, n1, n2, loc2, t_creat);
 }
 
 inline uint64_t
-delete_node(vc::vclock_t &t_del, uint64_t node_handle)
+delete_node(vc::vclock &t_del, uint64_t node_handle)
 {
     return S->delete_node(node_handle, t_del);
 }
 
 inline uint64_t
-delete_edge(vc::vclock_t &t_del, uint64_t edge_handle)
+delete_edge(vc::vclock &t_del, uint64_t edge_handle)
 {
     return S->delete_edge(edge_handle, t_del);
 }
 
 inline uint64_t
-create_reverse_edge(vc::vclock_t &vclk, uint64_t edge_handle, uint64_t local_node, uint64_t remote_node, uint64_t remote_loc)
+create_reverse_edge(vc::vclock &vclk, uint64_t edge_handle, uint64_t local_node, uint64_t remote_node, uint64_t remote_loc)
 {
     return S->create_reverse_edge(edge_handle, local_node, remote_node, remote_loc, vclk);
 }
@@ -61,7 +61,8 @@ void
 unpack_update_request(void *req)
 {
     db::update_request *request = (db::update_request*)req;
-    vc::vclock_t vclk, qts;
+    vc::vclock vclk;
+    vc::qtimestamp_t qts;
     uint64_t handle, elem1, elem2, loc2, ret;
 
     switch (request->type) {
@@ -88,7 +89,8 @@ unpack_tx_request(void *req)
 {
     db::update_request *request = (db::update_request*)req;
     uint64_t vt_id, tx_id, ret;
-    vc::vclock_t vclk, qts;
+    vc::vclock vclk;
+    vc::qtimestamp_t qts;
     transaction::pending_tx tx;
     bool ack = true;
     message::unpack_message(*request->msg, message::TX_INIT, vt_id, vclk, qts, tx_id, tx.writes);
@@ -155,7 +157,8 @@ msgrecv_loop()
     std::unique_ptr<message::message> rec_msg(new message::message());
     db::thread::unstarted_thread *thr;
     db::update_request *request;
-    vc::vclock_t vclk, qts;
+    vc::vclock vclk;
+    vc::qtimestamp_t qts;
     uint64_t *vtid_arg;
 
     while (true) {
@@ -167,7 +170,7 @@ msgrecv_loop()
         mtype = (enum message::msg_type)code;
         rec_msg->change_type(mtype);
         sender -= ID_INCR;
-        vclk.clear();
+        vclk.clock.clear();
         qts.clear();
 
         switch (mtype)
@@ -175,8 +178,10 @@ msgrecv_loop()
             case message::TX_INIT:
                 DEBUG << "got tx_init" << std::endl;
                 message::unpack_message(*rec_msg, message::TX_INIT, vt_id, vclk, qts);
+                DEBUG << "unpacked message" << std::endl;
                 request = new db::update_request(mtype, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(qts.at(shard_id-SHARD_ID_INCR), vclk, unpack_tx_request, request);
+                DEBUG << "going to add request" << std::endl;
                 S->add_request(vt_id, thr);
                 DEBUG << "added request to threadpool" << std::endl;
                 rec_msg.reset(new message::message());
@@ -184,18 +189,22 @@ msgrecv_loop()
 
             case message::REVERSE_EDGE_CREATE:
                 message::unpack_message(*rec_msg, mtype, vclk);
+                DEBUG << "unpacked message" << std::endl;
                 request = new db::update_request(mtype, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(0, vclk, unpack_update_request, request);
                 S->add_request(0, thr);
+                DEBUG << "added request to threadpool" << std::endl;
                 rec_msg.reset(new message::message());
                 break;
 
             case message::VT_NOP:
                 message::unpack_message(*rec_msg, mtype, vt_id, vclk, qts);
+                DEBUG << "unpacked message" << std::endl;
                 vtid_arg = (uint64_t*)malloc(sizeof(uint64_t));
                 *vtid_arg = vt_id;
                 thr = new db::thread::unstarted_thread(qts.at(shard_id-SHARD_ID_INCR), vclk, nop, (void*)vtid_arg);
                 S->add_request(vt_id, thr);
+                DEBUG << "added request to threadpool" << std::endl;
                 rec_msg.reset(new message::message());
                 break;
             //case message::TRANSIT_NODE_DELETE_REQ:

@@ -38,7 +38,7 @@ namespace element
     class node : public element
     {
         public:
-            node(uint64_t handle, vc::vclock_t &vclk, po6::threads::mutex *mtx);
+            node(uint64_t handle, vc::vclock &vclk, po6::threads::mutex *mtx);
 
         public:
             enum mode
@@ -79,7 +79,7 @@ namespace element
     };
 
     inline
-    node :: node(uint64_t handle, vc::vclock_t &vclk, po6::threads::mutex *mtx)
+    node :: node(uint64_t handle, vc::vclock &vclk, po6::threads::mutex *mtx)
         : element(handle, vclk)
         , state(mode::NASCENT)
         , cv(mtx)

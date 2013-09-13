@@ -19,6 +19,7 @@
 
 #include <vector>
 #include <unordered_map>
+#include <po6/threads/mutex.h>
 
 #include "common/busybee_infra.h"
 #include "common/vclock.h"
@@ -45,12 +46,17 @@ namespace coordinator
             vc::qtimestamp_t qts; // queue timestamp
             std::unordered_map<uint64_t, tx_reply> tx_replies;
             timespec tspec;
-            uint64_t nop_time;
+            uint64_t nop_time, first_nop_time, clock_update_acks;
+            bool first_clock_update;
             // node map client
             coordinator::nmap_stub nmap_client;
             std::unordered_map<uint64_t, uint64_t> map_cache; // TODO remove after migration
             // mutexes
-            po6::threads::mutex mutex, loc_gen_mutex, id_gen_mutex, map_cache_mutex;
+            po6::threads::mutex mutex // big mutex for clock and timestamper DS
+                    , loc_gen_mutex
+                    , id_gen_mutex
+                    , map_cache_mutex
+                    , periodic_update_mutex; // make sure to not send out clock update before getting ack from other VTs
             // migration
             // permanent deletion
             // daemon
@@ -74,11 +80,14 @@ namespace coordinator
         , loc_gen(0)
         , vclk(id)
         , qts(NUM_SHARDS, 0)
+        , clock_update_acks(NUM_VTS-1)
+        , first_clock_update(true)
     {
         // initialize array of server locations
         initialize_busybee(bb, vt_id, myloc, NUM_THREADS);
         bb->set_timeout(VT_NOP_TIMEOUT);
-        nop_time = wclock::get_time_elapsed(tspec);
+        nop_time = wclock::get_time_elapsed_millis(tspec);
+        first_nop_time = nop_time;
     }
 
     inline busybee_returncode

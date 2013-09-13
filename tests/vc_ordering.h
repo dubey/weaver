@@ -17,20 +17,22 @@
 void
 vc_ordering_test()
 {
-    vc::vclock_t clk1, clk2;
+    vc::vclock clk1, clk2;
+    clk1.vt_id = 0;
+    clk2.vt_id = 1;
     for (uint64_t i = 0; i < NUM_SHARDS; i++) {
-        clk1.push_back(1);
-        clk2.push_back(0);
+        clk1.clock.push_back(1);
+        clk2.clock.push_back(0);
     }
-    assert(order::compare_two_clocks(clk1, clk2) == 1);
-    assert(order::compare_two_clocks(clk2, clk1) == 0);
-    assert(order::compare_two_clocks(clk2, clk2) == 2);
+    assert(order::compare_two_clocks(clk1.clock, clk2.clock) == 1);
+    assert(order::compare_two_clocks(clk2.clock, clk1.clock) == 0);
+    assert(order::compare_two_clocks(clk2.clock, clk2.clock) == 2);
     assert(order::compare_two_vts(clk1, clk2) == 1);
     assert(order::compare_two_vts(clk2, clk1) == 0);
     assert(order::compare_two_vts(clk2, clk2) == 2);
-    clk2.at(0) = 2;
-    assert(order::compare_two_clocks(clk1, clk2) == -1);
-    assert(order::compare_two_clocks(clk2, clk1) == -1);
+    clk2.clock.at(0) = 2;
+    assert(order::compare_two_clocks(clk1.clock, clk2.clock) == -1);
+    assert(order::compare_two_clocks(clk2.clock, clk1.clock) == -1);
     order::kronos_cl = new chronos_client(KRONOS_IPADDR, KRONOS_PORT, NUM_SHARDS);
     assert(NUM_SHARDS == KRONOS_NUM_SHARDS);
     std::cout << order::compare_two_vts(clk1, clk2) << std::endl;

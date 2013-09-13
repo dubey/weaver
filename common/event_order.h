@@ -57,14 +57,14 @@ namespace order
     // static method which only compares vector clocks
     // returns bool vector, with i'th entry as true if that clock is definitely larger than some other clock
     static inline std::vector<bool>
-    compare_vector_clocks(const std::vector<vc::vclock_t> &clocks)
+    compare_vector_clocks(const std::vector<vc::vclock> &clocks)
     {
         uint64_t num_clks = clocks.size();
         std::vector<bool> large(num_clks, false); // keep track of clocks which are definitely not smallest
         uint64_t num_large = 0; // number of true values in previous vector
         for (uint64_t i = 0; i < (num_clks-1); i++) {
             for (uint64_t j = (i+1); j < num_clks; j++) {
-                int cmp = compare_two_clocks(clocks.at(i), clocks.at(j));
+                int cmp = compare_two_clocks(clocks.at(i).clock, clocks.at(j).clock);
                 if ((cmp == 0) && !large.at(j)) {
                     large.at(j) = true;
                     num_large++;
@@ -85,7 +85,7 @@ namespace order
     // will call Kronos daemon if clocks are incomparable
     // returns index of earliest clock
     static inline int64_t
-    compare_vts(const std::vector<vc::vclock_t> &clocks)
+    compare_vts(const std::vector<vc::vclock> &clocks)
     {
         uint64_t min_pos;
         uint64_t num_clks = clocks.size();
@@ -111,10 +111,12 @@ namespace order
                         wp->lhs = (uint64_t*)malloc(sizeof(uint64_t) * NUM_SHARDS);
                         wp->rhs = (uint64_t*)malloc(sizeof(uint64_t) * NUM_SHARDS);
                         for (uint64_t k = 0; k < NUM_SHARDS; k++) {
-                            wp->lhs[k] = clocks.at(i).at(k);
-                            wp->rhs[k] = clocks.at(j).at(k);
+                            wp->lhs[k] = clocks.at(i).clock.at(k);
+                            wp->rhs[k] = clocks.at(j).clock.at(k);
                             DEBUG << wp->lhs[k] << " " << wp->rhs[k] << std::endl;
                         }
+                        wp->lhs_id = clocks.at(i).vt_id;
+                        wp->rhs_id = clocks.at(j).vt_id;
                         wp->flags = CHRONOS_SOFT_FAIL;
                         if (i == 0) {
                             wp->order = CHRONOS_HAPPENS_BEFORE;
@@ -156,6 +158,7 @@ namespace order
                 }
             }
             free(wpair);
+            DEBUG << "done Kronos call, going to return now\n";
             for (uint64_t min_pos = 0; min_pos < num_clks; min_pos++) {
                 if (!large_upd.at(min_pos)) {
                     return min_pos;
@@ -169,11 +172,11 @@ namespace order
     // compare two vector clocks
     // return 0 if first is smaller, 1 if second is smaller, 2 if identical
     static inline int64_t
-    compare_two_vts(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
+    compare_two_vts(const vc::vclock &clk1, const vc::vclock &clk2)
     {
-        int cmp = compare_two_clocks(clk1, clk2);
+        int cmp = compare_two_clocks(clk1.clock, clk2.clock);
         if (cmp == -1) {
-            std::vector<vc::vclock_t> compare_vclks;
+            std::vector<vc::vclock> compare_vclks;
             compare_vclks.push_back(clk1);
             compare_vclks.push_back(clk2);
             cmp = compare_vts(compare_vclks);

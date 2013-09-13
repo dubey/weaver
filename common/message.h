@@ -102,6 +102,7 @@ namespace message
         COORD_LOC_REQ,
         COORD_LOC_REPLY,
         VT_CLOCK_UPDATE,
+        VT_CLOCK_UPDATE_ACK,
         VT_NOP,
 
         START_MIGR,
@@ -218,6 +219,11 @@ namespace message
     inline uint64_t size(const double&)
     {
         return sizeof(uint64_t);
+    }
+    inline uint64_t size(const vc::vclock &t)
+    {
+        return size(t.vt_id)
+            + size(t.clock);
     }
     inline uint64_t size(const common::property &t)
     {
@@ -357,6 +363,13 @@ namespace message
         uint64_t dbl;
         memcpy(&dbl, &t, sizeof(double)); //to avoid casting issues, probably could avoid copy
         packer = packer << dbl;
+    }
+
+    inline void
+    pack_buffer(e::buffer::packer &packer, const vc::vclock &t)
+    {
+        pack_buffer(packer, t.vt_id);
+        pack_buffer(packer, t.clock);
     }
 
     inline void 
@@ -565,6 +578,13 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, int &t)
     {
         unpacker = unpacker >> t;
+    }
+
+    inline void
+    unpack_buffer(e::unpacker &unpacker, vc::vclock &t)
+    {
+        unpack_buffer(unpacker, t.vt_id);
+        unpack_buffer(unpacker, t.clock);
     }
 
     inline void 

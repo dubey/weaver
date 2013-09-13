@@ -28,34 +28,37 @@ namespace common
     {
         public:
             property();
-            property(uint32_t, uint64_t, vc::vclock_t&);
+            property(uint32_t, uint64_t, vc::vclock&);
         
         public:
             uint32_t key;
             uint64_t value;
-            vc::vclock_t creat_time;
-            vc::vclock_t del_time;
+            vc::vclock creat_time;
+            vc::vclock del_time;
 
         public:
             bool operator==(property const &p2) const;
 
         public:
-            vc::vclock_t get_creat_time() const;
-            vc::vclock_t get_del_time() const;
-            void update_del_time(vc::vclock_t&);
+            vc::vclock get_creat_time() const;
+            vc::vclock get_del_time() const;
+            void update_del_time(vc::vclock&);
     };
 
     inline
     property :: property()
         : key(0)
         , value(0)
+        , creat_time(MAX_UINT64)
+        , del_time(MAX_UINT64)
     { }
 
     inline
-    property :: property(uint32_t k, uint64_t v, vc::vclock_t &creat)
+    property :: property(uint32_t k, uint64_t v, vc::vclock &creat)
         : key(k)
         , value(v)
         , creat_time(creat)
+        , del_time(MAX_UINT64)
     { }
 
     inline bool
@@ -64,20 +67,20 @@ namespace common
         return ((key == p2.key) && (value == p2.value));
     }
 
-    inline vc::vclock_t
+    inline vc::vclock
     property :: get_creat_time() const
     {
         return creat_time;
     }
 
-    inline vc::vclock_t
+    inline vc::vclock
     property :: get_del_time() const
     {
         return del_time;
     }
 
     inline void
-    property :: update_del_time(vc::vclock_t &tdel)
+    property :: update_del_time(vc::vclock &tdel)
     {
         del_time = tdel;
     }

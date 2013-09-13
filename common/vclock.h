@@ -29,11 +29,13 @@ namespace vc
     
     class vclock
     {
-        uint64_t vt_id;
-        vclock_t clock;
-
         public:
+            uint64_t vt_id;
+            vclock_t clock;
+
+            vclock();
             vclock(uint64_t vt_id);
+            vclock(uint64_t vt_id, vclock_t &vclk);
             vclock_t get_clock();
             void increment_clock();
             void increment_counter(uint64_t index);
@@ -41,9 +43,18 @@ namespace vc
     };
 
     inline
+    vclock :: vclock() { }
+
+    inline
     vclock :: vclock(uint64_t vtid)
         : vt_id(vtid)
         , clock(std::vector<uint64_t>(NUM_VTS, 0))
+    { }
+
+    inline
+    vclock :: vclock(uint64_t vtid, vclock_t &vclk)
+        : vt_id(vtid)
+        , clock(vclk)
     { }
 
     inline vclock_t
