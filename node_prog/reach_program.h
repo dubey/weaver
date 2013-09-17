@@ -137,10 +137,7 @@ namespace node_prog
             reach_params &params,
             std::function<reach_node_state&()> state_getter,
             vc::vclock &req_vclock)
-            //std::function<reach_cache_value&()> cache_putter,
-            //std::function<std::vector<std::shared_ptr<reach_cache_value>>()> cached_values_getter)
     {
-        //UNUSED(cache_putter);
         reach_node_state &state = state_getter();
         bool false_reply = false;
         db::element::remote_node prev_node = params.prev_node;
@@ -154,20 +151,7 @@ namespace node_prog
                 next.emplace_back(std::make_pair(prev_node, params));
             } else {
                 // have not found it yet, check the cache, then follow all out edges
-                bool got_cache = false;
-                /*
-                std::vector<std::shared_ptr<reach_cache_value>> cache = cached_values_getter();
-                for (auto &rcv: cache) {
-                    if (rcv->reachable_node == params.dest) {
-                        rcv->mark();
-                        params.mode = true;
-                        params.reachable = true;
-                        next.emplace_back(std::make_pair(prev_node, params));
-                        got_cache = true;
-                        break;
-                    }
-                }
-                */
+                bool got_cache = false; // TODO
                 if (!state.visited && !got_cache) {
                     db::element::edge *e;
                     state.prev_node = prev_node;
@@ -184,7 +168,7 @@ namespace node_prog
                             assert(cmp_2 != 2);
                             traverse_edge = (cmp_2 == 1);
                         }
-                            /*
+                        /*
                         // checking edge properties
                         for (auto &prop: params.edge_props) {
                             if (!e->has_property(prop, req_id)) {
@@ -240,14 +224,14 @@ namespace node_prog
                 DEBUG << "ALERT! Bad state value in reach program for node " << rn.handle
                         << " at loc " << rn.loc << std::endl;
                 next.clear();
-                //while(1);
+                while(1);
             }
         }
         DEBUG << "done reach prog\n";
         return next;
     }
 
-/*
+    /*
     std::vector<std::pair<db::element::remote_node, reach_params>> 
     reach_node_deleted_program(uint64_t req_id,
                 db::element::node &n, // node who asked to go to deleted node

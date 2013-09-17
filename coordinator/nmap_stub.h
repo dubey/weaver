@@ -28,17 +28,21 @@ namespace coordinator
             nmap_stub();
 
         private:
-            const char *space = "weaver_node_mapping";
-            const char *attrName = "shard"; // we get an attribute named "shard" with integer value correspoding to which shard node is placed on
+            const char *loc_space = "weaver_loc_mapping";
+            const char *edge_space = "weaver_edge_mapping";
+            const char *loc_attrName = "shard"; // we get an attribute named "shard" with integer value correspoding to which shard node is placed on
+            const char *updcnt_attrName = "update_count"; // we get an attribute named "update_count" with integer value correspoding to number of updates for this node
+            const char *edge_attrName = "node"; // we get an attribute named "node" with integer value which tells us the source vertex of the edge
             const char *host = HYPERDEX_COORD_IPADDR;
             static const int port = HYPERDEX_COORD_PORT;
             hyperdex::Client cl;
             po6::threads::mutex hyperclientLock;
 
         public:
-            void put_mappings(std::vector<std::pair<uint64_t, uint64_t>> &pairs_to_add);
-            std::vector<std::pair<uint64_t, uint64_t>> get_mappings(std::unordered_set<uint64_t> &toGet);
-            void del_mappings(std::vector<uint64_t> &toDel);
+            void put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add, bool space);
+            std::vector<std::pair<uint64_t, uint64_t>> get_mappings(std::unordered_set<uint64_t> &toGet, bool space);
+            void del_mappings(std::vector<uint64_t> &toDel, bool space);
+            //void increment_update_count(std::pair<uint64_t, uint64_t> &updates);
             void clean_up_space();
     };
 
@@ -46,34 +50,40 @@ namespace coordinator
     nmap_stub :: nmap_stub() : cl(host, port) { }
 
     inline void
-    nmap_stub :: put_mappings(std::vector<std::pair<uint64_t, uint64_t>> &pairs_to_add)
+    nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add, bool sel_space)
     {
+        const char *space = sel_space ? loc_space : edge_space;
+        const char *attrName = sel_space ? loc_attrName : edge_attrName;
         int numPairs = pairs_to_add.size();
-        //hyperdex_ds_arena *arena = hyperdex_ds_arena_create();
-        //hyperdex_client_attribute *attrs_to_add = hyperdex_ds_allocate_attribute(arena, numPairs);
+        int i;
         hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute *) malloc(numPairs * sizeof(hyperdex_client_attribute));
 
         hyperclientLock.lock();
-        for (int i = 0; i < numPairs; i++) {
+        i = 0;
+        for (auto &entry: pairs_to_add) {
+        //for (int i = 0; i < numPairs; i++) {
             attrs_to_add[i].attr = attrName;
-            attrs_to_add[i].value = (char *) &pairs_to_add[i].second;
+            //attrs_to_add[i].value = (char *) &pairs_to_add[i].second;
+            attrs_to_add[i].value = (char *) &entry.second;
             attrs_to_add[i].value_sz = sizeof(int64_t);
             attrs_to_add[i].datatype = HYPERDATATYPE_INT64;
 
             hyperdex_client_returncode put_status;
-            int64_t op_id = cl.put(space, (const char *) &pairs_to_add[i].first, sizeof(int64_t), &(attrs_to_add[i]), 1, &put_status);
+            //int64_t op_id = cl.put(space, (const char *) &pairs_to_add[i].first, sizeof(int64_t), &(attrs_to_add[i]), 1, &put_status);
+            int64_t op_id = cl.put(space, (const char *) &entry.first, sizeof(int64_t), &(attrs_to_add[i]), 1, &put_status);
             if (op_id < 0) {
                 DEBUG << "\"put\" returned " << op_id << " with status " << put_status << std::endl;
                 hyperclientLock.unlock();
                 free(attrs_to_add);
                 return;
             }
+            i++;
         }
 
         hyperdex_client_returncode loop_status;
         int64_t loop_id;
         // call loop once for every put
-        for (int i = 0; i < numPairs; i++) {
+        for (i = 0; i < numPairs; i++) {
             loop_id = cl.loop(-1, &loop_status);
             if (loop_id < 0) {
                 DEBUG << "put \"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
@@ -84,12 +94,12 @@ namespace coordinator
         }
         hyperclientLock.unlock();
         free(attrs_to_add);
-        //hyperdex_ds_arena_destroy(arena);
     }
 
     std::vector<std::pair<uint64_t, uint64_t>>
-    nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
+    nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet, bool sel_space)
     {
+        const char *space = sel_space ? loc_space : edge_space;
         int numNodes = toGet.size();
         struct async_get {
             uint64_t key;
@@ -148,8 +158,9 @@ namespace coordinator
     }
 
     void
-    nmap_stub :: del_mappings(std::vector<uint64_t> &toDel)
+    nmap_stub :: del_mappings(std::vector<uint64_t> &toDel, bool sel_space)
     {
+        const char *space = sel_space ? loc_space : edge_space;
         int numNodes = toDel.size();
         std::vector<int64_t> results(numNodes);
         hyperdex_client_returncode get_status;
@@ -183,6 +194,45 @@ namespace coordinator
         }
         hyperclientLock.unlock();
     }
+
+    //inline void
+    //nmap_stub :: increment_update_count(std::pair<uint64_t, uint64_t> &updates)
+    //{
+    //    int numPairs = updates.size();
+    //    hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute *) malloc(numPairs * sizeof(hyperdex_client_attribute));
+
+    //    hyperclientLock.lock();
+    //    for (int i = 0; i < numPairs; i++) {
+    //        attrs_to_add[i].attr = updcnt_attrName;
+    //        attrs_to_add[i].value = (char *)&updates[i].second;
+    //        attrs_to_add[i].value_sz = sizeof(int64_t);
+    //        attrs_to_add[i].datatype = HYPERDATATYPE_INT64;
+
+    //        hyperdex_client_returncode put_status;
+    //        int64_t op_id = cl.atomic_add(space, (const char *)&updates[i].first, sizeof(int64_t), &(attrs_to_add[i]), 1, &put_status);
+    //        if (op_id < 0) {
+    //            DEBUG << "\"put\" returned " << op_id << " with status " << put_status << std::endl;
+    //            hyperclientLock.unlock();
+    //            free(attrs_to_add);
+    //            return;
+    //        }
+    //    }
+
+    //    hyperdex_client_returncode loop_status;
+    //    int64_t loop_id;
+    //    // call loop once for every put
+    //    for (int i = 0; i < numPairs; i++) {
+    //        loop_id = cl.loop(-1, &loop_status);
+    //        if (loop_id < 0) {
+    //            DEBUG << "put \"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
+    //            hyperclientLock.unlock();
+    //            free(attrs_to_add);
+    //            return;
+    //        }
+    //    }
+    //    hyperclientLock.unlock();
+    //    free(attrs_to_add);
+    //}
 
     inline void
     nmap_stub :: clean_up_space()

@@ -85,13 +85,8 @@ namespace message
         CACHE_UPDATE,
         CACHE_UPDATE_ACK,
         // migration messages
-        MIGRATE_NODE_STEP1,
-        MIGRATE_NODE_STEP2,
-        MIGRATE_NODE_STEP4,
-        MIGRATE_NODE_STEP6a,
-        MIGRATE_NODE_STEP6b,
-        COORD_NODE_MIGRATE,
-        COORD_NODE_MIGRATE_ACK,
+        MIGRATE_SEND_NODE,
+        MIGRATE_DONE,
         COORD_CLOCK_REQ,
         COORD_CLOCK_REPLY,
         MIGRATED_NBR_UPDATE,
@@ -105,6 +100,7 @@ namespace message
         VT_CLOCK_UPDATE,
         VT_CLOCK_UPDATE_ACK,
         VT_NOP,
+        VT_NOP_ACK,
 
         START_MIGR,
         EXIT_WEAVER,

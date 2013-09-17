@@ -103,17 +103,22 @@ periodic_update()
         // send nops to each shard
         vts->nop_time = cur_time_millis;
         vc::qtimestamp_t new_qts = vts->qts;
-        for (auto &qts: vts->qts) {
-            qts++;
+        if (vts->nop_acks == NUM_SHARDS) {
+            for (auto &qts: vts->qts) {
+                qts++;
+            }
         }
         vts->vclk.increment_clock();
         vc::vclock vclk = vts->vclk;
         req_id = vts->generate_id();
         vts->mutex.unlock();
         message::message msg;
-        for (uint64_t i = 0; i < NUM_SHARDS; i++) {
-            message::prepare_message(msg, message::VT_NOP, vt_id, vclk, new_qts, req_id);
-            vts->send(i + SHARD_ID_INCR, msg.buf);
+        if (vts->nop_acks == NUM_SHARDS) {
+            for (uint64_t i = 0; i < NUM_SHARDS; i++) {
+                message::prepare_message(msg, message::VT_NOP, vt_id, vclk, new_qts, req_id);
+                vts->send(i + SHARD_ID_INCR, msg.buf);
+            }
+            vts->nop_acks = 0;
         }
         if (vts->first_clock_update) {
             DEBUG << "clock update acks " << vts->clock_update_acks << std::endl;
@@ -163,7 +168,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         mappings_to_get.insert(c_id);
     }
     if (!mappings_to_get.empty()) {
-        auto results = vts->nmap_client.get_mappings(mappings_to_get);
+        auto results = vts->nmap_client.get_mappings(mappings_to_get, true);
         assert(results.size() == mappings_to_get.size());
         for (auto &toAdd : results) {
             request_element_mappings.emplace(toAdd);
@@ -200,7 +205,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
 
 template <typename ParamsType, typename NodeStateType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
-    unpack_and_run_db(message::message&)
+    unpack_and_run_db(std::unique_ptr<message::message>)
 { }
 
 void
@@ -254,6 +259,13 @@ server_loop(int thread_id)
                     vts->periodic_update_mutex.lock();
                     vts->clock_update_acks++;
                     assert(vts->clock_update_acks < NUM_VTS);
+                    vts->periodic_update_mutex.unlock();
+                    break;
+
+                case message::VT_NOP_ACK:
+                    vts->periodic_update_mutex.lock();
+                    vts->nop_acks++;
+                    assert(vts->nop_acks <= NUM_SHARDS);
                     vts->periodic_update_mutex.unlock();
                     break;
 

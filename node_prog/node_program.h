@@ -56,7 +56,7 @@ namespace node_prog
     class node_program
     {
         public:
-            virtual void unpack_and_run_db(message::message &msg) = 0;
+            virtual void unpack_and_run_db(std::unique_ptr<message::message> msg) = 0;
             virtual void unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID) = 0;
 
             virtual ~node_program() { }
@@ -81,7 +81,7 @@ namespace node_prog
             }
 
         public:
-            virtual void unpack_and_run_db(message::message &msg);
+            virtual void unpack_and_run_db(std::unique_ptr<message::message> msg);
             virtual void unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID);
     };
     

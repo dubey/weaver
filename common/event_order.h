@@ -121,8 +121,7 @@ namespace order
                         wp->rhs_id = clocks.at(j).vt_id;
                         wp->flags = CHRONOS_SOFT_FAIL;
                         if (i == 0) {
-                            wp->order = CHRONOS_HAPPENS_BEFORE;
-                            //DEBUG << "assigning preference of happens before to (" << i << "," << j << ")\n";
+                            wp->order = CHRONOS_HAPPENS_BEFORE; // assign a preference of the first to happen before all others
                         } else {
                             wp->order = CHRONOS_CONCURRENT;
                         }
@@ -153,6 +152,7 @@ namespace order
 
                             default:
                                 DEBUG << "unexpected Kronos order" << wp->order << std::endl;
+                                assert(false); // shouldn't reach here
                         }
                         free(wp->lhs);
                         free(wp->rhs);

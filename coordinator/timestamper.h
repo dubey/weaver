@@ -47,7 +47,7 @@ namespace coordinator
             bool prev_write;
             std::unordered_map<uint64_t, tx_reply> tx_replies;
             timespec tspec;
-            uint64_t nop_time, first_nop_time, clock_update_acks;
+            uint64_t nop_time, first_nop_time, clock_update_acks, nop_acks;
             bool first_clock_update;
             // node prog
             // map from req_id to client_id that ensures a single response to a node program
@@ -83,6 +83,7 @@ namespace coordinator
         , qts(NUM_SHARDS, 0)
         , prev_write(true)
         , clock_update_acks(NUM_VTS-1)
+        , nop_acks(NUM_SHARDS)
         , first_clock_update(true)
     {
         // initialize array of server locations
@@ -109,8 +110,8 @@ namespace coordinator
         tx.client_id = client_id;
 
         // lookup mappings
-        std::unordered_map<uint64_t, uint64_t> request_element_mappings;
-        std::unordered_set<uint64_t> mappings_to_get;
+        std::unordered_map<uint64_t, uint64_t> request_element_mappings, request_edge_mappings;
+        std::unordered_set<uint64_t> mappings_to_get, edge_mappings_to_get;
         for (auto upd: tx.writes) {
             switch (upd->type) {
                 case transaction::NODE_CREATE_REQ:
@@ -129,12 +130,17 @@ namespace coordinator
                     if (request_element_mappings.find(upd->elem2) == request_element_mappings.end()) {
                         mappings_to_get.insert(upd->elem2);
                     }
+                    request_element_mappings.emplace(upd->handle, upd->loc1);
+                    request_edge_mappings.emplace(upd->handle, upd->elem1);
                     break;
 
                 case transaction::NODE_DELETE_REQ:
                 case transaction::EDGE_DELETE_REQ:
                     if (request_element_mappings.find(upd->elem1) == request_element_mappings.end()) {
                         mappings_to_get.insert(upd->elem1);
+                        if (upd->type == transaction::EDGE_DELETE_REQ) {
+                            edge_mappings_to_get.insert(upd->elem1);
+                        }
                     }
                     break;
 
@@ -142,18 +148,28 @@ namespace coordinator
                     DEBUG << "bad type" << std::endl;
             }
         }
+        std::unordered_map<uint64_t, uint64_t> put_map = request_element_mappings;
+        std::unordered_map<uint64_t, uint64_t> put_edge_map = request_edge_mappings;
         if (!mappings_to_get.empty()) {
-            for (auto &toAdd : nmap_client.get_mappings(mappings_to_get)) {
+            for (auto &toAdd : nmap_client.get_mappings(mappings_to_get, true)) {
                 request_element_mappings.emplace(toAdd);
+            }
+        }
+        if (!edge_mappings_to_get.empty()) {
+            for (auto &toAdd: nmap_client.get_mappings(edge_mappings_to_get, false)) {
+                request_edge_mappings.emplace(toAdd);
             }
         }
 
         // insert mappings
-        std::vector<std::pair<uint64_t, uint64_t>> put_map;
+        nmap_client.put_mappings(put_map, true);
+        nmap_client.put_mappings(put_edge_map, false);
+
+        // unpack get responses from hyperdex
         for (auto upd: tx.writes) {
             switch (upd->type) {
                 case transaction::NODE_CREATE_REQ:
-                    put_map.emplace_back(std::make_pair(upd->handle, (int64_t)upd->loc1));
+                    //put_map.emplace_back(std::make_pair(upd->handle, (int64_t)upd->loc1));
                     break;
 
                 case transaction::EDGE_CREATE_REQ:
@@ -161,20 +177,24 @@ namespace coordinator
                     assert(request_element_mappings.find(upd->elem2) != request_element_mappings.end());
                     upd->loc1 = request_element_mappings.at(upd->elem1);
                     upd->loc2 = request_element_mappings.at(upd->elem2);
-                    put_map.emplace_back(std::make_pair(upd->handle, (int64_t)upd->loc1));
+                    //put_map.emplace_back(std::make_pair(upd->handle, (int64_t)upd->loc1));
+                    //put_edge_map.emplace_back(std::make_pair(upd->handle, (int64_t)upd->elem1));
                     break;
 
                 case transaction::NODE_DELETE_REQ:
                 case transaction::EDGE_DELETE_REQ:
                     assert(request_element_mappings.find(upd->elem1) != request_element_mappings.end());
                     upd->loc1 = request_element_mappings.at(upd->elem1);
+                    if (upd->type == transaction::EDGE_DELETE_REQ) {
+                        assert(request_edge_mappings.find(upd->elem1) != request_edge_mappings.end());
+                        upd->elem2 = request_edge_mappings.at(upd->elem1);
+                    }
                     break;
 
                 default:
                     DEBUG << "bad type" << std::endl;
             }
         }
-        nmap_client.put_mappings(put_map);
     }
 
     // caution: assuming caller holds mutex
