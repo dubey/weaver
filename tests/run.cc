@@ -82,8 +82,8 @@ main(int argc, char *argv[])
     //tx_msg_nmap_test();
     //vc_ordering_test();
     //create_graph_test();
-    //new_reachability_test();
-    line_reach_prog(true);
+    new_reachability_test();
+    //line_reach_prog(true);
 
 #endif
     DEBUG << "All tests completed." << std::endl;
