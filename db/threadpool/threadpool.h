@@ -122,7 +122,6 @@ namespace thread
         queue_mutex.lock();
         queue_cond.broadcast();
         read_queues.at(vt_id).push(t);
-        DEBUG << "threadpool added read request" << std::endl;
         queue_mutex.unlock();
     }
 
@@ -132,7 +131,6 @@ namespace thread
         queue_mutex.lock();
         queue_cond.broadcast();
         write_queues.at(vt_id).push(t);
-        //DEBUG << "threadpool added write request" << std::endl;
         queue_mutex.unlock();
     }
 

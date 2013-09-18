@@ -75,6 +75,9 @@ void clique_reachability(client::client &c) {
     }
     DEBUG << "created clique edges" << std::endl;
 
+    // start migration
+    c.start_migration();
+
     node_prog::reach_params rp;
     rp.mode = false;
     rp.reachable = false;

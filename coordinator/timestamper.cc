@@ -276,6 +276,11 @@ server_loop(int thread_id)
                     end_transaction(tx_id);
                     break;
 
+                case message::START_MIGR:
+                    message::prepare_message(*msg, message::MIGRATION_TOKEN);
+                    vts->send(START_MIGR_ID, msg->buf); 
+                    break; 
+
                 case message::CLIENT_NODE_PROG_REQ:
                     message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, pType);
                     //server->update_mutex.lock(); //TODO do we need to mutex here?

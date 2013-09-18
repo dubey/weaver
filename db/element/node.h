@@ -54,6 +54,7 @@ namespace element
             std::unordered_map<uint64_t, edge*> out_edges;
             std::unordered_map<uint64_t, edge*> in_edges;
             po6::threads::cond cv; // for locking node
+            po6::threads::cond migr_cv; // make reads/writes wait while node is being migrated
             bool in_use;
             uint32_t waiters; // count of number of waiters
             bool permanently_deleted;
@@ -83,6 +84,7 @@ namespace element
         : element(handle, vclk)
         , state(mode::NASCENT)
         , cv(mtx)
+        , migr_cv(mtx)
         , in_use(true)
         , waiters(0)
         , permanently_deleted(false)

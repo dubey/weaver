@@ -33,8 +33,6 @@ namespace coordinator
             const char *loc_attrName = "shard"; // we get an attribute named "shard" with integer value correspoding to which shard node is placed on
             const char *updcnt_attrName = "update_count"; // we get an attribute named "update_count" with integer value correspoding to number of updates for this node
             const char *edge_attrName = "node"; // we get an attribute named "node" with integer value which tells us the source vertex of the edge
-            const char *host = HYPERDEX_COORD_IPADDR;
-            static const int port = HYPERDEX_COORD_PORT;
             hyperdex::Client cl;
             po6::threads::mutex hyperclientLock;
 
@@ -47,7 +45,7 @@ namespace coordinator
     };
 
     inline
-    nmap_stub :: nmap_stub() : cl(host, port) { }
+    nmap_stub :: nmap_stub() : cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT) { }
 
     inline void
     nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add, bool sel_space)

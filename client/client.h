@@ -53,6 +53,7 @@ namespace client
             std::unique_ptr<ParamsType> 
             run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args);
 
+            void start_migration();
             void commit_graph();
             void exit_weaver();
 
@@ -173,6 +174,15 @@ namespace client
 
         std::unique_ptr<ParamsType> toRet(new ParamsType(tempPair.second));
         return std::move(toRet);
+    }
+
+
+    inline void
+    client :: start_migration()
+    {
+        message::message msg;
+        message::prepare_message(msg, message::START_MIGR);
+        send_coord(msg.buf);
     }
 
     inline void

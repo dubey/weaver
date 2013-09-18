@@ -49,7 +49,7 @@
 #define DAEMON_PERIOD 2 // frequency in seconds for coordinator daemon to run
 #define MIGR_FREQ 10 // seconds delay between consecutive migrations
 #define INITIAL_MIGR_DELAY 15 // seconds delay for initial migration
-#define START_MIGR_ID 1
+#define START_MIGR_ID SHARD_ID_INCR
 #define MAX_NODES 500
 #define MSG_BATCHING true // whether to batch messages or not
 #define BATCH_MSG_SIZE 100

@@ -20,6 +20,8 @@
 #include <deque>
 #include <po6/threads/mutex.h>
 #include <po6/net/location.h>
+#include <hyperdex/client.hpp>
+#include <hyperdex/datastructures.h>
 
 #include "common/weaver_constants.h"
 #include "common/vclock.h"
@@ -72,7 +74,8 @@ namespace db
         public:
             void record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id);
             element::node* acquire_node(uint64_t node_handle);
-            void release_node(element::node *n);
+            void release_node(element::node *n, bool migr_node);
+            void wait_node(element::node *n);
 
             // Graph state
             uint64_t shard_id;
@@ -84,12 +87,16 @@ namespace db
             void add_write_request(uint64_t vt_id, thread::unstarted_thread *thr);
             void add_read_request(uint64_t vt_id, thread::unstarted_thread *thr);
             void create_node(uint64_t node_handle, vc::vclock &vclk, bool migrate);
-            uint64_t delete_node(uint64_t node_handle, vc::vclock &vclk);
+            void delete_node_nonlocking(element::node *n, vc::vclock &tdel);
+            uint64_t delete_node(uint64_t node_handle, vc::vclock &vclk, bool wait);
+            void create_edge_nonlocking(element::node *n, uint64_t edge, uint64_t local_node,
+                    uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, bool fwd);
             uint64_t create_edge(uint64_t edge_handle, uint64_t local_node,
-                    uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk);
+                    uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, bool wait);
             uint64_t create_reverse_edge(uint64_t edge_handle, uint64_t local_node,
-                    uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk);
-            uint64_t delete_edge(uint64_t edge_handle, uint64_t node_handle, vc::vclock &vclk);
+                    uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, bool wait);
+            void delete_edge_nonlocking(element::node *n, uint64_t edge, vc::vclock &tdel);
+            uint64_t delete_edge(uint64_t edge_handle, uint64_t node_handle, vc::vclock &vclk, bool wait);
             uint64_t get_node_count();
 
             // Permanent deletion
@@ -108,10 +115,15 @@ namespace db
             std::vector<uint64_t> nop_count;
             vc::vclock max_clk // to compare against for checking if node is deleted
                 , zero_clk; // all zero clock for migration thread in queue
+            const char *loc_space = "weaver_loc_mapping";
+            const char *loc_attrName = "shard";
+            hyperdex::Client cl;
             void update_migrated_nbr_nonlocking(element::node *n, uint64_t edge, uint64_t rnode, uint64_t new_loc);
             void update_migrated_nbr(uint64_t lnode, uint64_t edge, uint64_t rnode, uint64_t new_loc);
+            void update_node_mapping(uint64_t node, uint64_t shard);
 
             // node programs
+            state::program_state node_prog_req_state; 
             std::shared_ptr<node_prog::Packable_Deletable> 
                 fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
             void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle,
@@ -138,11 +150,14 @@ namespace db
         , nop_count(NUM_VTS, 0)
         , max_clk(MAX_UINT64, MAX_UINT64)
         , zero_clk(0, 0)
+        , cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT)
+        , node_prog_req_state()
     {
         thread::pool::S = this;
         initialize_busybee(bb, shard_id, myloc);
         order::kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT, KRONOS_NUM_VTS);
         assert(NUM_VTS == KRONOS_NUM_VTS);
+        message::prog_state = &node_prog_req_state;
     }
 
     // Consistency methods
@@ -179,10 +194,13 @@ namespace db
 
     // unlock the previously acquired node, and wake any waiting threads
     inline void
-    shard :: release_node(element::node *n)
+    shard :: release_node(element::node *n, bool migr_done=false)
     {
         update_mutex.lock();
         n->in_use = false;
+        if (migr_done) {
+            n->migr_cv.broadcast();
+        }
         if (n->waiters > 0) {
             n->cv.signal();
             update_mutex.unlock();
@@ -199,6 +217,19 @@ namespace db
         } else {
             update_mutex.unlock();
         }
+    }
+
+    inline void
+    shard :: wait_node(element::node *n)
+    {
+        assert(false);
+        update_mutex.lock();
+        n->in_use = false;
+        while (n->state != element::node::mode::STABLE) {
+            n->migr_cv.wait();
+        }
+        n->in_use = true;
+        update_mutex.unlock();
     }
 
 
@@ -242,8 +273,15 @@ namespace db
         release_node(new_node);
     }
 
+    inline void
+    shard :: delete_node_nonlocking(element::node *n, vc::vclock &tdel)
+    {
+        n->update_del_time(tdel);
+        n->updated = true;
+    }
+
     inline uint64_t
-    shard :: delete_node(uint64_t node_handle, vc::vclock &tdel)
+    shard :: delete_node(uint64_t node_handle, vc::vclock &tdel, bool wait=true)
     {
         uint64_t ret;
         element::node *n = acquire_node(node_handle);
@@ -255,10 +293,11 @@ namespace db
             }
             deferred_writes.at(node_handle).emplace_back(deferred_write(message::NODE_DELETE_REQ, tdel, node_handle));
             migration_mutex.unlock();
+        } else if (n->state == element::node::mode::NASCENT && wait) {
+            wait_node(n);
         } else {
             ret = ++n->update_count;
-            n->update_del_time(tdel);
-            n->updated = true;
+            delete_node_nonlocking(n, tdel);
             ret = 0;
             release_node(n);
         }
@@ -266,9 +305,28 @@ namespace db
         return ret;
     }
 
+    inline void
+    shard :: create_edge_nonlocking(element::node *n, uint64_t edge, uint64_t local_node,
+            uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, bool fwd)
+    {
+        element::edge *new_edge = new element::edge(edge, vclk,
+                remote_loc, remote_node);
+        n->add_edge(new_edge, fwd);
+        n->updated = true;
+        //edge_map_mutex.lock();
+        //edges.emplace(edge_handle, local_node);
+        //edge_map_mutex.unlock();
+        if (fwd) {
+            message::message msg;
+            message::prepare_message(msg, message::REVERSE_EDGE_CREATE,
+                vclk, edge, remote_node, local_node, shard_id);
+            send(remote_loc, msg.buf);
+        }
+    }
+
     inline uint64_t
     shard :: create_edge(uint64_t edge_handle, uint64_t local_node,
-            uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk)
+            uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, bool wait=true)
     {
         uint64_t ret;
         element::node *n = acquire_node(local_node);
@@ -281,28 +339,20 @@ namespace db
             deferred_writes.at(local_node).emplace_back(deferred_write(message::EDGE_CREATE_REQ, vclk,
                     edge_handle, local_node, remote_node, remote_loc));
             migration_mutex.unlock();
+        } else if (n->state == element::node::mode::NASCENT && wait) {
+            wait_node(n);
         } else {
             ret = ++n->update_count;
-            element::edge *new_edge = new element::edge(edge_handle, vclk,
-                    remote_loc, remote_node);
-            n->add_edge(new_edge, true);
-            n->updated = true;
-            release_node(n);
-            //edge_map_mutex.lock();
-            //edges.emplace(edge_handle, local_node);
-            //edge_map_mutex.unlock();
-            message::message msg;
-            message::prepare_message(msg, message::REVERSE_EDGE_CREATE,
-                vclk, edge_handle, remote_node, local_node, shard_id);
-            send(remote_loc, msg.buf);
+            create_edge_nonlocking(n, edge_handle, local_node, remote_node, remote_loc, vclk, true);
             ret = 0;
+            release_node(n);
         }
         return ret;
     }
 
     inline uint64_t
     shard :: create_reverse_edge(uint64_t edge_handle, uint64_t local_node,
-            uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk)
+            uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, bool wait=true)
     {
         uint64_t ret;
         element::node *n = acquire_node(local_node);
@@ -315,12 +365,11 @@ namespace db
             deferred_writes.at(local_node).emplace_back(deferred_write(message::REVERSE_EDGE_CREATE, vclk,
                     edge_handle, local_node, remote_node, remote_loc));
             migration_mutex.unlock();
+        } else if (n->state == element::node::mode::NASCENT && wait) {
+            wait_node(n);
         } else {
             ret = ++n->update_count;
-            element::edge *new_edge = new element::edge(edge_handle, vclk,
-                    remote_loc, remote_node);
-            n->add_edge(new_edge, false);
-            n->updated = true;
+            create_edge_nonlocking(n, edge_handle, local_node, remote_node, remote_loc, vclk, false);
             ret = 0;
             release_node(n);
         }
@@ -332,8 +381,17 @@ namespace db
         return ret;
     }
 
+    inline void
+    shard :: delete_edge_nonlocking(element::node *n, uint64_t edge, vc::vclock &tdel)
+    {
+        element::edge *e = n->out_edges.at(edge);
+        e->update_del_time(tdel);
+        n->updated = true;
+        n->dependent_del++;
+    }
+
     inline uint64_t
-    shard :: delete_edge(uint64_t edge_handle, uint64_t node_handle, vc::vclock &tdel)
+    shard :: delete_edge(uint64_t edge_handle, uint64_t node_handle, vc::vclock &tdel, bool wait=true)
     {
         uint64_t ret;
         //edge_map_mutex.lock();
@@ -348,12 +406,11 @@ namespace db
             }
             deferred_writes.at(node_handle).emplace_back(deferred_write(message::EDGE_DELETE_REQ, tdel, node_handle));
             migration_mutex.unlock();
+        } else if (n->state == element::node::mode::NASCENT && wait) {
+            wait_node(n);
         } else {
             ret = ++n->update_count;
-            element::edge *e = n->out_edges.at(edge_handle);
-            e->update_del_time(tdel);
-            n->updated = true;
-            n->dependent_del++;
+            delete_edge_nonlocking(n, edge_handle, tdel);
             ret = 0;
             release_node(n);
         }
@@ -396,13 +453,38 @@ namespace db
         release_node(n);
     }
 
+    // caution: assuming we hold migration_mutex, for hyperdex client
+    inline void
+    shard :: update_node_mapping(uint64_t node, uint64_t shard)
+    {
+        const char *space = loc_space;
+        const char *attrName = loc_attrName;
+        hyperdex_client_attribute attrs_to_add;
+        hyperdex_client_returncode status;
+
+        attrs_to_add.attr = attrName;
+        attrs_to_add.value = (char*)&shard;
+        attrs_to_add.value_sz = sizeof(int64_t);
+        attrs_to_add.datatype = HYPERDATATYPE_INT64;
+
+        int64_t op_id = cl.put(space, (const char*)&node, sizeof(int64_t), &attrs_to_add, 1, &status);
+        if (op_id < 0) {
+            DEBUG << "\"put\" returned " << op_id << " with status " << status << std::endl;
+            return;
+        }
+
+        int64_t loop_id = cl.loop(-1, &status);
+        if (loop_id < 0) {
+            DEBUG << "put \"loop\" returned " << loop_id << " with status " << status << std::endl;
+        }
+    }
+
     // node program
-    state::program_state node_prog_req_state; 
 
     inline std::shared_ptr<node_prog::Packable_Deletable>
     shard :: fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle)
     {
-        DEBUG << "trying to fetch node program state" << std::endl;
+        //DEBUG << "trying to fetch node program state" << std::endl;
         return node_prog_req_state.get_state(t, request_id, local_node_handle);
     }
 
@@ -416,9 +498,9 @@ namespace db
     inline void
     shard :: add_done_request(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests, uint64_t del_id)
     {
-        DEBUG << "starting done req at shard " << shard_id << std::endl;
+        //DEBUG << "starting done req at shard " << shard_id << std::endl;
         node_prog_req_state.done_requests(completed_requests, del_id);
-        DEBUG << "ending done req at shard " << shard_id << std::endl;
+        //DEBUG << "ending done req at shard " << shard_id << std::endl;
     }
 
     inline bool
@@ -434,7 +516,7 @@ namespace db
     {
         busybee_returncode ret;
         if ((ret = bb->send(loc, msg)) != BUSYBEE_SUCCESS) {
-            std::cerr << "msg send error: " << ret << std::endl;
+            DEBUG << "msg send error: " << ret << std::endl;
         }
         return ret;
     }
@@ -447,11 +529,11 @@ namespace db
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
             thread::pqueue_t &pq = read_queues.at(vt_id);
             if (!pq.empty()) {
-                DEBUG << "read queue " << vt_id << " not empty. has top id " << pq.top()->priority 
-                    << " and needs less than " << last_ids[vt_id] << " to pop" << std::endl;
+                //DEBUG << "read queue " << vt_id << " not empty. has top id " << pq.top()->priority 
+                //    << " and needs less than " << last_ids[vt_id] << " to pop" << std::endl;
             }
             if (!pq.empty() && pq.top()->priority < last_ids[vt_id]) {
-                DEBUG << "read queue " << vt_id << " has node prog that can be run" << std::endl;
+                //DEBUG << "read queue " << vt_id << " has node prog that can be run" << std::endl;
                 thr = read_queues.at(vt_id).top();
                 read_queues.at(vt_id).pop();
                 return thr;
