@@ -44,7 +44,6 @@ namespace coordinator
             uint64_t loc_gen;
             vc::vclock vclk; // vector clock
             vc::qtimestamp_t qts; // queue timestamp
-            bool prev_write;
             std::unordered_map<uint64_t, tx_reply> tx_replies;
             timespec tspec;
             uint64_t nop_time, first_nop_time, clock_update_acks, nop_acks;
@@ -81,7 +80,6 @@ namespace coordinator
         , loc_gen(0)
         , vclk(id, 0)
         , qts(NUM_SHARDS, 0)
-        , prev_write(true)
         , clock_update_acks(NUM_VTS-1)
         , nop_acks(NUM_SHARDS)
         , first_clock_update(true)

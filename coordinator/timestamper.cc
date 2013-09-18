@@ -67,7 +67,6 @@ begin_transaction(transaction::pending_tx &tx)
             vts->tx_replies.at(tx.id).count++;
         }
     }
-    vts->prev_write = true;
     vts->mutex.unlock(); // TODO: move sending out of critical section
 }
 
@@ -182,9 +181,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
             std::move(node_params_pair.second), db::element::remote_node())); // constructor
     }
     vts->mutex.lock();
-    if (vts->prev_write) {
-        vts->vclk.increment_clock();
-    }
+    vts->vclk.increment_clock();
     vc::vclock req_timestamp =  vts->vclk;
     assert(req_timestamp.clock.size() == NUM_VTS);
     uint64_t req_id = vts->generate_id();
@@ -199,7 +196,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         vts->send(batch_pair.first, msg_to_send.buf); // TODO: can we send out of critical section?
     }
     DEBUG << "sent to shards" << std::endl;
-    vts->prev_write = false;
     vts->outstanding_node_progs.emplace(std::make_pair(req_id, clientID));
     vts->mutex.unlock();
 }
