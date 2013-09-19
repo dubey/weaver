@@ -144,6 +144,10 @@ namespace db
             std::shared_ptr<po6::net::location> myloc;
             busybee_mta *bb; // Busybee instance used for sending and receiving messages
             busybee_returncode send(uint64_t loc, std::auto_ptr<e::buffer> buf);
+
+            // Testing:
+        public:
+            uint64_t num_nodes();
     };
 
     inline
@@ -603,6 +607,13 @@ namespace db
             DEBUG << "msg send error: " << ret << std::endl;
         }
         return ret;
+    }
+
+    // testing methods
+    inline uint64_t
+    shard :: num_nodes()
+    {
+        return nodes.size();
     }
 
     inline thread::unstarted_thread*

@@ -971,6 +971,7 @@ shard_daemon_begin()
     }
     std::sort(sn.begin(), sn.end(), agg_count_compare);
     DEBUG << "sorted nodes size " << sn.size() << std::endl;
+    DEBUG << "total num nodes " << S->num_nodes() << std::endl;
     S->sorted_nodes = std::move(sn);
     migration_wrapper();
 }
