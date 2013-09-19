@@ -17,7 +17,7 @@
 #include <e/buffer.h>
 #include "busybee_constants.h"
 
-#define __WEAVER_DEBUG__
+//#define __WEAVER_DEBUG__
 #include "common/event_order.h"
 #include "common/weaver_constants.h"
 #include "common/message_graph_elem.h"
@@ -178,6 +178,7 @@ unpack_tx_request(void *req)
     transaction::pending_tx tx;
     bool ack = true;
     message::unpack_message(*request->msg, message::TX_INIT, vt_id, vclk, qts, tx_id, tx.writes);
+    DEBUG << "starting tx\n";
     //ret = 0;
     for (auto upd: tx.writes) {
         switch (upd->type) {
@@ -219,6 +220,7 @@ unpack_tx_request(void *req)
         message::message conf_msg;
         message::prepare_message(conf_msg, message::TX_DONE, tx_id);
         S->send(vt_id, conf_msg.buf);
+        DEBUG << "done tx\n";
     }
 }
 
@@ -228,7 +230,7 @@ inline void
 nop(void *noparg)
 {
     std::pair<uint64_t, uint64_t> *nop_arg = (std::pair<uint64_t, uint64_t>*)noparg;
-    //DEBUG << "nop vt_id " << nop_arg->first << ", qts " << nop_arg->second << std::endl;
+    DEBUG << "nop vt_id " << nop_arg->first << ", qts " << nop_arg->second << std::endl;
     S->record_completed_transaction(nop_arg->first, nop_arg->second);
     message::message msg;
     message::prepare_message(msg, message::VT_NOP_ACK);
@@ -666,8 +668,8 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
     // create a new node, unpack the message
     vc::vclock dummy_clock;
     message::unpack_message(*msg, message::MIGRATE_SEND_NODE, node_handle);
-    S->create_node(node_handle, dummy_clock, true);
-    n = S->acquire_node(node_handle);
+    n = S->create_node(node_handle, dummy_clock, true);
+    //n = S->acquire_node(node_handle);
     std::vector<uint64_t>().swap(n->agg_msg_count);
     try {
         message::unpack_message(*msg, message::MIGRATE_SEND_NODE, node_handle, from_loc, *n);
