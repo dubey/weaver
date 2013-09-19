@@ -18,7 +18,7 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define ML_REQUESTS 4000
+#define ML_REQUESTS 10000
 #define ML_HOP_TRIES 20
 
 std::pair<uint64_t, uint64_t>

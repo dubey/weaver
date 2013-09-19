@@ -131,7 +131,9 @@ namespace db
             std::vector<std::list<uint64_t>> outstanding_read_qts; // per shard reads window, helpful in permanent deletion of migr nodes
             
             // node programs
+        private:
             state::program_state node_prog_req_state; 
+        public:
             std::shared_ptr<node_prog::Packable_Deletable> 
                 fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
             void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle,

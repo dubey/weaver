@@ -355,9 +355,9 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
     std::function<NodeStateType&()> node_state_getter;
 
     // check if request completed
-    if (S->check_done_request(req_id)) {
-        done_request = true;
-    }
+    //if (S->check_done_request(req_id)) {
+    //    done_request = true;
+    //}
     while ((!start_node_params.empty() /*|| !batched_deleted_nodes[G->myid].empty()*/) && !done_request) {
         //DEBUG << "node program main loop" << std::endl;
         /*
@@ -427,11 +427,11 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
                         prog_type_recvd, req_id, node_handle, &dirty_cache_ids, std::ref(invalid_cache_ids));
                 */
 
-                if (S->check_done_request(req_id)) {
-                    done_request = true;
-                    S->release_node(node);
-                    break;
-                }
+                //if (S->check_done_request(req_id)) {
+                //    done_request = true;
+                //    S->release_node(node);
+                //    break;
+                //}
                 // call node program
                 auto next_node_params = enclosed_node_prog_func(req_id, *node, this_node,
                         params, // actual parameters for this node program
@@ -486,9 +486,9 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
             }
         }
         start_node_params = std::move(batched_node_progs[S->shard_id]);
-        if (S->check_done_request(req_id)) {
-            done_request = true;
-        }
+        //if (S->check_done_request(req_id)) {
+        //    done_request = true;
+        //}
     }
 
     // propagate all remaining node progs
