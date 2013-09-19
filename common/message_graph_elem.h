@@ -86,6 +86,7 @@ namespace message
         t = new db::element::edge(handle, creat_time, rn);
         t->update_del_time(del_time);
         t->set_properties(props);
+        t->migr_edge = true; // need ack from nbr when updated
     }
 
     inline void

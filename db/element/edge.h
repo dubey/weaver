@@ -34,6 +34,7 @@ namespace element
         public:
             remote_node nbr; // out-neighbor for this edge
             uint32_t msg_count; // number of messages sent on this link
+            bool migr_edge; // true if this edge was migrated along with parent node
             void traverse(); // indicate that this edge was traversed; useful for migration statistics
     };
 
@@ -42,6 +43,7 @@ namespace element
         : element(handle, vclk)
         , nbr(remote_loc, remote_handle)
         , msg_count(0)
+        , migr_edge(false)
     { }
 
     inline
@@ -49,6 +51,7 @@ namespace element
         : element(handle, vclk)
         , nbr(rn)
         , msg_count(0)
+        , migr_edge(false)
     { }
 
     // caution: should be called with node mutex held

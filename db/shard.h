@@ -15,6 +15,7 @@
 #ifndef __SHARD_SERVER__
 #define __SHARD_SERVER__
 
+#include <list>
 #include <vector>
 #include <unordered_map>
 #include <deque>
@@ -68,7 +69,8 @@ namespace db
         public:
             po6::threads::mutex queue_mutex // exclusive access to thread pool queues
                 , msg_count_mutex
-                , migration_mutex;
+                , migration_mutex
+                , read_qts_mutex;
 
             // Consistency
         public:
@@ -100,8 +102,10 @@ namespace db
             uint64_t get_node_count();
 
             // Permanent deletion
+        public:
+            void delete_migrated_node(uint64_t migr_node);
         private:
-            //std::deque<perm_del> pending_deletes;
+            void permanent_node_delete(element::node *n);
 
             // Migration
         public:
@@ -118,10 +122,14 @@ namespace db
             const char *loc_space = "weaver_loc_mapping";
             const char *loc_attrName = "shard";
             hyperdex::Client cl;
-            void update_migrated_nbr_nonlocking(element::node *n, uint64_t edge, uint64_t rnode, uint64_t new_loc);
-            void update_migrated_nbr(uint64_t lnode, uint64_t edge, uint64_t rnode, uint64_t new_loc);
+            //bool node_migrated;
+            uint64_t migr_edge_acks; // num of edge acks expected for migrated node
+            uint64_t update_migrated_nbr_nonlocking(element::node *n, uint64_t edge, uint64_t rnode, uint64_t new_loc);
+            uint64_t update_migrated_nbr(uint64_t rnode, uint64_t new_loc, std::vector<std::tuple<uint64_t, uint64_t, bool>> &updates);
             void update_node_mapping(uint64_t node, uint64_t shard);
-
+            std::vector<uint64_t> read_qts, target_read_qts; // per hop qts for reads crossing shards, helpful in permanent deletion of migr nodes
+            std::vector<std::list<uint64_t>> outstanding_read_qts; // per shard reads window, helpful in permanent deletion of migr nodes
+            
             // node programs
             state::program_state node_prog_req_state; 
             std::shared_ptr<node_prog::Packable_Deletable> 
@@ -151,6 +159,10 @@ namespace db
         , max_clk(MAX_UINT64, MAX_UINT64)
         , zero_clk(0, 0)
         , cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT)
+        , migr_edge_acks(0)
+        , read_qts(NUM_SHARDS, 0)
+        , target_read_qts(NUM_SHARDS, MAX_UINT64)
+        , outstanding_read_qts(NUM_SHARDS, std::list<uint64_t>())
         , node_prog_req_state()
     {
         thread::pool::S = this;
@@ -213,7 +225,7 @@ namespace db
             msg_count_mutex.lock();
             agg_msg_count.erase(node_handle);
             msg_count_mutex.unlock();
-            //permanent_node_delete(n);
+            permanent_node_delete(n);
         } else {
             update_mutex.unlock();
         }
@@ -418,17 +430,66 @@ namespace db
         return ret;
     }
 
-    // migration methods
+    // permanent deletion
+    inline void
+    shard :: delete_migrated_node(uint64_t migr_node)
+    {
+        element::node *n;
+        n = acquire_node(migr_node);
+        n->permanently_deleted = true;
+        // deleting edges now so as to prevent sending messages to neighbors for permanent edge deletion
+        // rest of deletion happens in release_node()
+        for (auto &e: n->out_edges) {
+            delete e.second;
+        }
+        for (auto &e: n->in_edges) {
+            delete e.second;
+        }
+        n->out_edges.clear();
+        n->in_edges.clear();
+        assert(n->waiters == 0); // nobody should try to acquire this node now
+        node_prog_req_state.delete_node_state(migr_node);
+        release_node(n);
+    }
 
     inline void
+    shard :: permanent_node_delete(element::node *n)
+    {
+        element::edge *e;
+        message::message msg;
+        assert(n->waiters == 0);
+        assert(!n->in_use);
+        // following 2 loops are no-ops in case of deletion of
+        // migrated nodes, since edges have already been deleted
+        for (auto &it: n->out_edges) {
+            e = it.second;
+            message::prepare_message(msg, message::PERMANENT_DELETE_EDGE, e->nbr.handle, it.first);
+            send(e->nbr.loc, msg.buf);
+            delete e;
+        }
+        for (auto &it: n->in_edges) {
+            e = it.second;
+            message::prepare_message(msg, message::PERMANENT_DELETE_EDGE, e->nbr.handle, it.first);
+            send(e->nbr.loc, msg.buf);
+            delete e;
+        }
+        delete n;
+    }
+
+
+    // migration methods
+
+    inline uint64_t
     shard :: update_migrated_nbr_nonlocking(element::node *n, uint64_t edge_handle, uint64_t remote_node, uint64_t new_loc)
     {
         bool found = false;
+        uint64_t old_loc = 0;
         if (n->out_edges.find(edge_handle) != n->out_edges.end()) {
             element::edge *e = n->out_edges.at(edge_handle);
             assert(e->nbr.handle == remote_node);
             n->msg_count[e->nbr.loc-1] = 0;
             e->msg_count = 0;
+            old_loc = e->nbr.loc;
             e->nbr.loc = new_loc;
             found = true;
         }
@@ -437,20 +498,43 @@ namespace db
             assert(e->nbr.handle == remote_node);
             n->msg_count[e->nbr.loc-1] = 0;
             e->msg_count = 0;
+            old_loc = e->nbr.loc;
             e->nbr.loc = new_loc;
             found = true;
         }
         if (!found) {
             DEBUG << "Neighbor not found for migrated node " << remote_node << std::endl;
         }
+        return old_loc;
     }
 
-    inline void
-    shard :: update_migrated_nbr(uint64_t local_node, uint64_t edge_handle, uint64_t remote_node, uint64_t new_loc)
+    inline uint64_t
+    shard :: update_migrated_nbr(uint64_t rnode, uint64_t new_loc, std::vector<std::tuple<uint64_t, uint64_t, bool>> &updates)
     {
-        element::node *n = acquire_node(local_node);
-        update_migrated_nbr_nonlocking(n, edge_handle, remote_node, new_loc);
-        release_node(n);
+        uint64_t old_loc = 0;
+        bool migr_edge = true;
+        uint64_t l;
+        element::node *n;
+        for (auto &x: updates) {
+            n = acquire_node(std::get<0>(x));
+            l = update_migrated_nbr_nonlocking(n, std::get<1>(x), rnode, new_loc);
+            release_node(n);
+            assert(l != 0);
+            if (old_loc == 0) {
+                old_loc = l;
+            } else {
+                assert(old_loc == l);
+            }
+            migr_edge = migr_edge && std::get<2>(x);
+        }
+        if (old_loc != shard_id) {
+            read_qts_mutex.lock();
+            message::message msg;
+            message::prepare_message(msg, message::MIGRATED_NBR_ACK, shard_id, read_qts.at(old_loc - SHARD_ID_INCR));
+            read_qts_mutex.unlock();
+            send(old_loc, msg.buf);
+        }
+        return old_loc;
     }
 
     // caution: assuming we hold migration_mutex, for hyperdex client

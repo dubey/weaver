@@ -59,6 +59,7 @@ namespace element
             uint32_t waiters; // count of number of waiters
             bool permanently_deleted;
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids; // requests which have been cached
+
             // for migration
             uint64_t prev_loc, new_loc;
             uint64_t update_count;

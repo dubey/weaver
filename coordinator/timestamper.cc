@@ -190,9 +190,10 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     std::vector<uint64_t> empty_vector;
     std::vector<std::tuple<uint64_t, ParamsType, uint64_t>> empty_tuple_vector;
     DEBUG << "starting node prog " << req_id << ", recd from client\t" << std::endl;
+    uint64_t zero = 0;
     for (auto &batch_pair : initial_batches) {
         message::prepare_message(msg_to_send, message::NODE_PROG, pType, vt_id, req_timestamp, 
-                req_id, batch_pair.second, empty_tuple_vector);
+                req_id, batch_pair.second, /*empty_tuple_vector,*/ zero, zero);
         vts->send(batch_pair.first, msg_to_send.buf); // TODO: can we send out of critical section?
     }
     DEBUG << "sent to shards" << std::endl;

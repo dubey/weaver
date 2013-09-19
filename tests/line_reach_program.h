@@ -16,7 +16,7 @@
 #include "node_prog/node_prog_type.h"
 #include "node_prog/reach_program.h"
 
-#define LRP_REQUESTS 15000
+#define LRP_REQUESTS 2000
 
 void
 line_reach_prog(bool to_exit)
@@ -52,13 +52,16 @@ line_reach_prog(bool to_exit)
     rp.reachable = false;
     rp.prev_node.loc = COORD_ID;
     
-    //std::ofstream file, req_time;
+    //std::ofstream file;
+    std::ofstream req_time;
     //file.open("requests.rec");
-    //req_time.open("time.rec");
+    req_time.open("time.rec");
     timespec t;
     uint64_t start, t1, t2, diff;
     start = wclock::get_time_elapsed(t);
     t1 = start;
+    // start migration
+    c.start_migration();
     for (i = 0; i < LRP_REQUESTS; i++) {
         t2 = wclock::get_time_elapsed(t);
         diff = t2 - start;
@@ -66,6 +69,7 @@ line_reach_prog(bool to_exit)
         if (i % 10 == 0) {
             //dif = diff(start, t2);
             //req_time << dif.tv_sec << '.' << dif.tv_nsec << std::endl;
+            req_time << diff << std::endl;
         }
         t1 = t2;
         int first = 0;
@@ -78,7 +82,7 @@ line_reach_prog(bool to_exit)
         assert(res->reachable);
     }
     //file.close();
-    //req_time.close();
+    req_time.close();
     DEBUG << "Total time taken " << diff << std::endl;
     //std::ofstream stat_file;
     //stat_file.open("stats.rec", std::ios::out | std::ios::app);

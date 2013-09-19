@@ -18,8 +18,8 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define ML_REQUESTS 1000
-#define ML_HOP_TRIES 5
+#define ML_REQUESTS 10000
+#define ML_HOP_TRIES 20
 
 std::pair<uint64_t, uint64_t>
 find_long_hop(test_graph &g)
@@ -65,15 +65,15 @@ find_long_hop(test_graph &g)
 void
 multiple_locality_prog(bool dense, bool to_exit)
 {
-    client c(CLIENT_ID);
+    client::client c(CLIENT_ID, 0);
     int i, num_nodes, num_edges;
-    timespec start, t1, t2, dif;
-    std::ofstream seed_file;
+    timespec t;
     uint64_t seed = 1372088972;//time(NULL);
-    DEBUG << "seed " << seed << std::endl;
-    seed_file.open("seed.rec");
-    seed_file << seed;
-    seed_file.close();
+    //std::ofstream seed_file;
+    //DEBUG << "seed " << seed << std::endl;
+    //seed_file.open("seed.rec");
+    //seed_file << seed;
+    //seed_file.close();
 
     // creating graph
     std::ifstream count_in;
@@ -97,38 +97,39 @@ multiple_locality_prog(bool dense, bool to_exit)
     rp.dest = g.nodes[npair.second];
     
     // enable migration now
-    // c.start_migration();
+     c.start_migration();
 
     // repeatedly perform same request
     std::ofstream file, req_time;
-    file.open("requests.rec");
+    //file.open("requests.rec");
     req_time.open("time.rec");
-    clock_gettime(CLOCK_MONOTONIC, &t1);
-    start = t1;
+    uint64_t start, cur, prev, diff;
+    start = wclock::get_time_elapsed(t);
+    prev = start;
     for (i = 0; i < ML_REQUESTS; i++) {
-        clock_gettime(CLOCK_MONOTONIC, &t2);
-        dif = diff(t1, t2);
-        DEBUG << "Test: i = " << i << ", " << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
+        cur = wclock::get_time_elapsed(t);
+        diff = cur - prev;
+        DEBUG << "Test: i = " << i << ", " << diff << std::endl;
         if (i % 10 == 0) {
-            dif = diff(start, t2);
-            req_time << dif.tv_sec << '.' << dif.tv_nsec << std::endl;
+            diff = cur - start;
+            req_time << diff << std::endl;
         }
-        t1 = t2;
-        file << npair.first << " " << npair.second << std::endl;
+        prev = cur;
+        //file << npair.first << " " << npair.second << std::endl;
         std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args;
         initial_args.emplace_back(std::make_pair(g.nodes[npair.first], rp));
         std::unique_ptr<node_prog::reach_params> res = c.run_node_program(node_prog::REACHABILITY, initial_args);
         assert(res->reachable);
     }
-    file.close();
+    //file.close();
     req_time.close();
-    dif = diff(start, t2);
-    DEBUG << "Total time taken " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
-    std::ofstream stat_file;
-    stat_file.open("stats.rec", std::ios::out | std::ios::app);
-    stat_file << num_nodes << " " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
-    stat_file.close();
-    g.end_test();
+    diff = cur - start;
+    DEBUG << "Total time taken " << diff << std::endl;
+    //std::ofstream stat_file;
+    //stat_file.open("stats.rec", std::ios::out | std::ios::app);
+    //stat_file << num_nodes << " " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
+    //stat_file.close();
+    //g.end_test();
 }
 
 void

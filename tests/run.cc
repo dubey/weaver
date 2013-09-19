@@ -26,7 +26,7 @@
 //#include "repetitive_reach_program.h"
 #include "new_reachability_test.h"
 //#include "multiple_reach_program.h"
-//#include "multiple_locality.h"
+#include "multiple_locality.h"
 //#include "multiple_caching.h"
 //#include "basic_migration_test.h"
 #include "line_reach_program.h"
@@ -36,6 +36,7 @@
 //#include "dijkstra_tree_test.h"
 //#include "multiple_widest_path.h"
 ////#include "clustering_prog_test.h"
+#include "scalability.h"
 
 int
 main(int argc, char *argv[])
@@ -74,7 +75,7 @@ main(int argc, char *argv[])
     //unreachable_reach_prog(true);
     //clique_reach_prog(true);
     //multiple_wp_prog(true);
-    //multiple_sparse_locality(true);
+    multiple_sparse_locality(true);
     //repetitive_reach_prog(true);
     //multiple_dense_caching(true);
     //nmap_unit_tests();
@@ -82,7 +83,7 @@ main(int argc, char *argv[])
     //tx_msg_nmap_test();
     //vc_ordering_test();
     //create_graph_test();
-    new_reachability_test();
+    //new_reachability_test();
     //line_reach_prog(true);
 
 #endif
