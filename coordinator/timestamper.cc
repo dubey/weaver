@@ -130,7 +130,7 @@ periodic_update()
         if (((vts->first_clock_update && first_diff > VT_INITIAL_CLKUPDATE_DELAY) || !vts->first_clock_update)
         && (vts->clock_update_acks == (NUM_VTS-1))) {
             vts->first_clock_update = false;
-            DEBUG << "sending clock update now, clock update acks " << vts->clock_update_acks << std::endl;
+            //DEBUG << "sending clock update now, clock update acks " << vts->clock_update_acks << std::endl;
             vts->clock_update_acks = 0;
             for (uint64_t i = 0; i < NUM_VTS; i++) {
                 if (i == vt_id) {
@@ -326,7 +326,7 @@ main(int argc, char *argv[])
     }
     vt_id = atoi(argv[1]);
     vts = new coordinator::timestamper(vt_id);
-    DEBUG << "Vector timestamper " << vt_id << std::endl;
+    std::cout << "Vector timestamper " << vt_id << std::endl;
     for (int i = 0; i < NUM_THREADS-1; i++) {
         thr = new std::thread(server_loop, i);
         thr->detach();

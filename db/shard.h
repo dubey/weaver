@@ -88,7 +88,7 @@ namespace db
         public:
             void add_write_request(uint64_t vt_id, thread::unstarted_thread *thr);
             void add_read_request(uint64_t vt_id, thread::unstarted_thread *thr);
-            void create_node(uint64_t node_handle, vc::vclock &vclk, bool migrate);
+            element::node* create_node(uint64_t node_handle, vc::vclock &vclk, bool migrate);
             void delete_node_nonlocking(element::node *n, vc::vclock &tdel);
             uint64_t delete_node(uint64_t node_handle, vc::vclock &vclk, bool wait);
             void create_edge_nonlocking(element::node *n, uint64_t edge, uint64_t local_node,
@@ -131,7 +131,9 @@ namespace db
             std::vector<std::list<uint64_t>> outstanding_read_qts; // per shard reads window, helpful in permanent deletion of migr nodes
             
             // node programs
+        private:
             state::program_state node_prog_req_state; 
+        public:
             std::shared_ptr<node_prog::Packable_Deletable> 
                 fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
             void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle,
@@ -263,18 +265,15 @@ namespace db
         thread_pool.add_read_request(vt_id, thr);
     }
 
-    inline void
+    inline element::node*
     shard :: create_node(uint64_t node_handle, vc::vclock &vclk, bool migrate)
     {
         element::node *new_node = new element::node(node_handle, vclk, &update_mutex);
         update_mutex.lock();
-        if (!nodes.emplace(node_handle, new_node).second) {
-            DEBUG << "node already exists in node map!" << std::endl;
-        }
+        assert(nodes.emplace(node_handle, new_node).second);
         cur_node_count++;
         update_mutex.unlock();
         if (migrate) {
-            // TODO
             migration_mutex.lock();
             migr_node = node_handle;
             migration_mutex.unlock();
@@ -285,8 +284,9 @@ namespace db
                 new_node->prev_locs.emplace_back(0);
             }
             new_node->prev_locs.at(shard_id-SHARD_ID_INCR) = 1;
+            release_node(new_node);
         }
-        release_node(new_node);
+        return new_node;
     }
 
     inline void
