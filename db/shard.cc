@@ -35,9 +35,6 @@ void migrated_nbr_update(std::unique_ptr<message::message> msg);
 void migrated_nbr_ack();
 void migrate_node_step1(uint64_t node_handle, uint64_t shard);
 void migrate_node_step2_req();
-//void initiate_nbr_update(std::pair<const uint64_t, db::element::edge*> &nbr,
-//    uint64_t migr_node, std::vector<std::pair<uint64_t, uint64_t>> &local_nbr_updates,
-//    uint64_t &pending_edge_updates, message::message &msg);
 void migrate_node_step2_resp(std::unique_ptr<message::message> msg);
 void migrate_node_step3();
 void migration_wrapper();
@@ -146,19 +143,6 @@ unpack_update_request(void *req)
         case message::MIGRATE_SEND_NODE:
             migrate_node_step2_resp(std::move(request->msg));
             break;
-
-        //case message::MIGRATE_DONE:
-        //    message::unpack_message(*request->msg, request->type, handle);
-        //    assert(handle == S->migr_node);
-        //    bool step3;
-        //    S->migration_mutex.lock();
-        //    S->node_migrated = true;
-        //    step3 = (S->migr_edge_acks == 0);
-        //    S->migration_mutex.unlock();
-        //    if (step3) {
-        //        migrate_node_step3();
-        //    }
-        //    break;
 
         case message::MIGRATED_NBR_ACK:
             message::unpack_message(*request->msg, request->type, from_loc, target_qts);
@@ -650,22 +634,6 @@ migrate_node_step2_req()
     S->send(S->migr_shard, msg.buf);
 }
 
-//void
-//initiate_nbr_update(std::pair<const uint64_t, db::element::edge*> &nbr, uint64_t migr_node,
-//    std::unordered_map<uint64_t, std::vector<std::tuple<uint64_t, uint64_t, bool>>> &nbr_updates,
-//    uint64_t &pending_edge_updates, message::message &msg)
-//{
-//    if (nbr.second->nbr.loc == shard_id) {
-//        local_nbr_updates.emplace_back(std::make_tuple(nbr.second->nbr.handle, nbr.first, nbr.second->migr_edge));
-//    } else {
-//        // remote node, need to send msg
-//        message::prepare_message(msg, message::MIGRATED_NBR_UPDATE,
-//            nbr.second->nbr.handle, nbr.first, migr_node, shard_id, nbr.second->migr_edge);
-//        S->send(nbr.second->nbr.loc, msg.buf);
-//        pending_edge_updates++;
-//    }
-//}
-
 // receive and place node which has been migrated to this shard
 // apply buffered reads and writes to node
 // update nbrs of migrated nbrs
@@ -738,13 +706,11 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
         auto &remote_node = nbr.second->nbr;
         nbr_updates[remote_node.loc].emplace_back(std::make_tuple(remote_node.handle,
                 nbr.first, nbr.second->migr_edge));
-        //initiate_nbr_update(nbr, node_handle, local_nbr_updates, pending_edge_updates, *msg);
     }
     for (auto &nbr: n->out_edges) {
         auto &remote_node = nbr.second->nbr;
         nbr_updates[remote_node.loc].emplace_back(std::make_tuple(remote_node.handle,
                 nbr.first, nbr.second->migr_edge));
-        //initiate_nbr_update(nbr, node_handle, local_nbr_updates, pending_edge_updates, *msg);
     }
     for (auto &x: nbr_updates) {
         if (x.first != shard_id) {
@@ -778,19 +744,12 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
         node_prog::programs.at(pType)->unpack_and_run_db(std::move(m));
     }
     DEBUG << "done applying buffered reads\n";
-
-    //// ack to prev loc
-    //message::prepare_message(*msg, message::MIGRATE_DONE, node_handle);
-    //S->send(from_loc, msg->buf);
 }
 
 // successfully migrated node to new location, continue migration process
 void
 migrate_node_step3()
 {
-    //S->migration_mutex.lock();
-    //S->node_migrated = false;
-    //S->migration_mutex.unlock();
     DEBUG << "deleting migr node\n";
     S->delete_migrated_node(S->migr_node);
     DEBUG << "done deleting migr node\n";
@@ -937,7 +896,6 @@ msgrecv_loop()
             }
 
             case message::MIGRATE_SEND_NODE:
-            case message::MIGRATE_DONE:
             case message::MIGRATED_NBR_UPDATE:
             case message::MIGRATED_NBR_ACK:
                 request = new db::graph_request(mtype, std::move(rec_msg));

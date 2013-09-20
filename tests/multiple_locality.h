@@ -18,8 +18,8 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define ML_REQUESTS 5000
-#define ML_HOP_TRIES 20
+#define ML_REQUESTS 7000
+#define ML_HOP_TRIES 200
 
 std::pair<uint64_t, uint64_t>
 find_long_hop(test_graph &g)

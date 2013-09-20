@@ -39,8 +39,8 @@ namespace state
         prog_map prog_state;
         node_to_reqs req_list;
         uint64_t completed_id; // all nodes progs with id < completed_id are done
-        //std::unordered_set<uint64_t> done_ids; // TODO clean up of done_ids
-        uint64_t last_done_id; // testing
+        std::unordered_set<uint64_t> done_ids; // TODO clean up of done_ids
+        std::unordered_set<uint64_t> done_ids_last; // TODO clean up of done_ids
         po6::threads::mutex mutex;
         bool holding;
         po6::threads::cond in_use_cond;
@@ -66,16 +66,18 @@ namespace state
             void release();
             bool state_exists_nolock(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle);
             bool node_entry_exists_nolock(node_prog::prog_type t, uint64_t node_handle);
+            bool check_done_nolock(uint64_t req_id);
             // testing
             uint64_t print_cnt;
+            int clean_counter;
     };
 
     program_state :: program_state()
         : completed_id(0)
-        , last_done_id(0)
         , holding(false)
         , in_use_cond(&mutex)
         , print_cnt(0)
+        , clean_counter(0)
     {
         req_map new_req_map;
         prog_state.emplace(node_prog::REACHABILITY, new_req_map);
@@ -147,7 +149,7 @@ namespace state
         std::shared_ptr<node_prog::Packable_Deletable> new_state)
     {
         acquire();
-        if (/*done_ids.find(req_id) == done_ids.end()*/ req_id <= last_done_id) { // check request not done yet
+        if (!check_done_nolock(req_id)) { // check request not done yet
             req_map &rmap = prog_state.at(t);
             if (rmap.find(req_id) != rmap.end()) {
                 (*prog_state.at(t).at(req_id))[node_handle] = new_state;
@@ -352,12 +354,14 @@ namespace state
     {
         acquire();
         if (reqs.size() > 0 && (print_cnt++ % 1000 == 0)) {
-            std::cout << "Prog state size = " << prog_state[reqs[0].second].size() << /*", done ids size = " << done_ids.size() <<*/ std::endl;
+            std::cout << "Got done reqs of size " << reqs.size() << "   ";
+            std::cout << "Prog state size = " << prog_state[reqs[0].second].size() << ", done ids size = " << done_ids.size();
+            std::cout << ", clean counter = " << clean_counter << std::endl;
         }
         for (auto &p: reqs) {
             uint64_t req_id = p.first;
             node_prog::prog_type type = p.second;
-            /*done_ids.emplace(req_id)*/if (req_id > last_done_id) last_done_id = req_id; //assert(req_id >= last_done_id);
+            done_ids.emplace(req_id);
             req_map &rmap = prog_state.at(type);
             if (rmap.find(req_id) != rmap.end()) {
                 for (auto &p: *rmap.at(req_id)) {
@@ -370,7 +374,19 @@ namespace state
                 rmap.erase(req_id);
             }
         }
+        // TODO this is a hack which does not absolutely guarantee that we won't miss a request, need proper clean up later on
+        if (++clean_counter % 400 == 0) {
+            clean_counter = 0;
+            done_ids_last = std::move(done_ids);
+            assert(done_ids.size() == 0);
+        }
         release();
+    }
+
+    inline bool
+    program_state :: check_done_nolock(uint64_t req_id)
+    {
+        return (done_ids.find(req_id) != done_ids.end() || done_ids_last.find(req_id) != done_ids_last.end());
     }
             
     inline bool
@@ -378,7 +394,7 @@ namespace state
     {
         bool ret;
         acquire();
-        ret = /*(done_ids.find(req_id) != done_ids.end())*/(req_id < last_done_id);
+        ret = check_done_nolock(req_id);//(req_id < last_done_id);
         release();
         return ret;
     }

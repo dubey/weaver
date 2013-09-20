@@ -86,7 +86,6 @@ namespace message
         CACHE_UPDATE_ACK,
         // migration messages
         MIGRATE_SEND_NODE,
-        MIGRATE_DONE,
         COORD_CLOCK_REQ,
         COORD_CLOCK_REPLY,
         MIGRATED_NBR_UPDATE,

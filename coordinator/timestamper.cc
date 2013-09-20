@@ -112,7 +112,7 @@ periodic_update()
         vc::vclock vclk = vts->vclk;
         req_id = vts->generate_id();
         std::vector<std::pair<uint64_t, node_prog::prog_type>> done_reqs;
-        for (auto x: vts->done_reqs) {
+        for (auto &x: vts->done_reqs) {
             node_prog::prog_type type = x.first;
             for (uint64_t id: x.second) {
                 done_reqs.emplace_back(std::make_pair(id, type));
