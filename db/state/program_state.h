@@ -57,7 +57,7 @@ namespace state
             void pack(uint64_t node_handle, e::buffer::packer &packer);
             void unpack(uint64_t node_handle, e::unpacker &unpacker);
             void delete_node_state(uint64_t node_handle);
-            void done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>>&, uint64_t max_done_id);
+            void done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>>&);
             bool check_done_request(uint64_t req_id);
 
         private:
@@ -343,9 +343,9 @@ namespace state
     }
 
     inline void
-    program_state :: done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &reqs, uint64_t max_done_id)
+    program_state :: done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &reqs)
     {
-        UNUSED(max_done_id);
+        //UNUSED(max_done_id);
         acquire();
         //if (max_done_id < completed_id) {
         //    DEBUG << "Max done id " << max_done_id << ", completed id " << completed_id << std::endl;
