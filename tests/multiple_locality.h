@@ -18,7 +18,7 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define ML_REQUESTS 10000
+#define ML_REQUESTS 5000
 #define ML_HOP_TRIES 20
 
 std::pair<uint64_t, uint64_t>
@@ -68,7 +68,7 @@ multiple_locality_prog(bool dense, bool to_exit)
     client::client c(CLIENT_ID, 0);
     int i, num_nodes, num_edges;
     timespec t;
-    uint64_t seed = 1372088972;//time(NULL);
+    uint64_t seed = time(NULL);
     //std::ofstream seed_file;
     //DEBUG << "seed " << seed << std::endl;
     //seed_file.open("seed.rec");
@@ -97,7 +97,7 @@ multiple_locality_prog(bool dense, bool to_exit)
     rp.dest = g.nodes[npair.second];
     
     // enable migration now
-     c.start_migration();
+    //c.start_migration();
 
     // repeatedly perform same request
     std::ofstream file, req_time;

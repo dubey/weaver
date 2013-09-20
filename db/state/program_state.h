@@ -39,7 +39,8 @@ namespace state
         prog_map prog_state;
         node_to_reqs req_list;
         uint64_t completed_id; // all nodes progs with id < completed_id are done
-        std::unordered_set<uint64_t> done_ids; // TODO clean up of done_ids
+        //std::unordered_set<uint64_t> done_ids; // TODO clean up of done_ids
+        uint64_t last_done_id; // testing
         po6::threads::mutex mutex;
         bool holding;
         po6::threads::cond in_use_cond;
@@ -65,12 +66,16 @@ namespace state
             void release();
             bool state_exists_nolock(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle);
             bool node_entry_exists_nolock(node_prog::prog_type t, uint64_t node_handle);
+            // testing
+            uint64_t print_cnt;
     };
 
     program_state :: program_state()
         : completed_id(0)
+        , last_done_id(0)
         , holding(false)
         , in_use_cond(&mutex)
+        , print_cnt(0)
     {
         req_map new_req_map;
         prog_state.emplace(node_prog::REACHABILITY, new_req_map);
@@ -142,7 +147,7 @@ namespace state
         std::shared_ptr<node_prog::Packable_Deletable> new_state)
     {
         acquire();
-        if (done_ids.find(req_id) == done_ids.end()) { // check request not done yet
+        if (/*done_ids.find(req_id) == done_ids.end()*/ req_id <= last_done_id) { // check request not done yet
             req_map &rmap = prog_state.at(t);
             if (rmap.find(req_id) != rmap.end()) {
                 (*prog_state.at(t).at(req_id))[node_handle] = new_state;
@@ -346,10 +351,13 @@ namespace state
     program_state :: done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &reqs)
     {
         acquire();
+        if (reqs.size() > 0 && (print_cnt++ % 1000 == 0)) {
+            std::cout << "Prog state size = " << prog_state[reqs[0].second].size() << /*", done ids size = " << done_ids.size() <<*/ std::endl;
+        }
         for (auto &p: reqs) {
             uint64_t req_id = p.first;
             node_prog::prog_type type = p.second;
-            done_ids.emplace(req_id);
+            /*done_ids.emplace(req_id)*/if (req_id > last_done_id) last_done_id = req_id; //assert(req_id >= last_done_id);
             req_map &rmap = prog_state.at(type);
             if (rmap.find(req_id) != rmap.end()) {
                 for (auto &p: *rmap.at(req_id)) {
@@ -370,7 +378,7 @@ namespace state
     {
         bool ret;
         acquire();
-        ret = (done_ids.find(req_id) != done_ids.end());
+        ret = /*(done_ids.find(req_id) != done_ids.end())*/(req_id < last_done_id);
         release();
         return ret;
     }

@@ -17,7 +17,7 @@
 #include <e/buffer.h>
 #include "busybee_constants.h"
 
-#define __WEAVER_DEBUG__
+//#define __WEAVER_DEBUG__
 #include "common/event_order.h"
 #include "common/weaver_constants.h"
 #include "common/message_graph_elem.h"
@@ -43,6 +43,14 @@ void migrate_node_step3();
 void migration_wrapper();
 void shard_daemon_begin();
 void shard_daemon_end();
+
+// SIGINT handler
+void
+end_program(int param)
+{
+    std::cerr << "Ending program, param = " << param << std::endl;
+    exit(0);
+}
 
 
 inline void
@@ -510,6 +518,7 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
     }
 
     // check if migrated node ready to delete
+    /*
     bool init_step3 = true;
     if (from_shard >= SHARD_ID_INCR) {
         //DEBUG << "starting check for step3, from loc = " << from_shard << ", rqts " << from_qts << std::endl;
@@ -559,6 +568,7 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
             migrate_node_step3();
         }
     }
+    */
 }
 
 template <typename ParamsType, typename NodeStateType>
@@ -995,7 +1005,7 @@ shard_daemon_end()
 int
 main(int argc, char* argv[])
 {
-    // TODO signal(SIGINT, end_program);
+    signal(SIGINT, end_program);
     if (argc != 2) {
         DEBUG << "Usage: " << argv[0] << " <myid>" << std::endl;
         return -1;
