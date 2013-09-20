@@ -36,6 +36,7 @@ void migrated_nbr_ack();
 void migrate_node_step1(uint64_t node_handle, uint64_t shard);
 void migrate_node_step2_req();
 void migrate_node_step2_resp(std::unique_ptr<message::message> msg);
+bool check_step3();
 void migrate_node_step3();
 void migration_wrapper();
 void shard_daemon_begin();
@@ -86,10 +87,15 @@ migrated_nbr_update(std::unique_ptr<message::message> msg)
     uint64_t remote_node, new_loc;
     std::vector<std::tuple<uint64_t, uint64_t, bool>> nbr_updates;
     message::unpack_message(*msg, message::MIGRATED_NBR_UPDATE, remote_node, new_loc, nbr_updates);
-    S->update_migrated_nbr(remote_node, new_loc, nbr_updates);
-    //if (S->update_migrated_nbr(local_node, edge, remote_node, new_loc, migr_edge) == shard_id && migr_edge) {
-    //    migrated_nbr_ack();
-    //}
+    if (S->update_migrated_nbr(remote_node, new_loc, nbr_updates) == shard_id) {
+        S->read_qts_mutex.lock();
+        S->target_read_qts.at(shard_id) = 0;
+        bool step3 = check_step3();
+        S->read_qts_mutex.unlock();
+        if (step3) {
+            migrate_node_step3();
+        }
+    }
 }
 
 void
@@ -101,20 +107,7 @@ migrated_nbr_ack(uint64_t from_loc, uint64_t target_qts)
     S->migration_mutex.unlock();
     S->read_qts_mutex.lock();
     S->target_read_qts.at(from_loc - SHARD_ID_INCR) = target_qts;
-    for (uint64_t s = 0; s < NUM_SHARDS; s++) {
-        auto &lst = S->outstanding_read_qts.at(s);
-        if (lst.front() >= S->target_read_qts.at(s)) {
-            continue;
-        } else {
-            step3 = false;
-            break;
-        }
-    }
-    if (step3) {
-        for (auto &x: S->target_read_qts) {
-            x = MAX_UINT64;
-        }
-    }
+    step3 = check_step3();
     S->read_qts_mutex.unlock();
     if (step3) {
         migrate_node_step3();
@@ -223,7 +216,7 @@ inline void
 nop(void *noparg)
 {
     db::nop_data *nop_arg = (db::nop_data*)noparg;
-    DEBUG << "nop vt_id " << nop_arg->vt_id << ", qts " << nop_arg->req_id << std::endl;
+    //DEBUG << "nop vt_id " << nop_arg->vt_id << ", qts " << nop_arg->req_id << std::endl;
     S->record_completed_transaction(nop_arg->vt_id, nop_arg->req_id);
     S->add_done_requests(nop_arg->done_reqs);
     message::message msg;
@@ -502,8 +495,6 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
     }
 
     // check if migrated node ready to delete
-    /*
-    bool init_step3 = true;
     if (from_shard >= SHARD_ID_INCR) {
         //DEBUG << "starting check for step3, from loc = " << from_shard << ", rqts " << from_qts << std::endl;
         S->read_qts_mutex.lock();
@@ -517,7 +508,6 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
             }
         }
         lst.insert(iter, from_qts); // qts now at correct position
-        //DEBUG << "inserted list\n";
         while (lst.size() > 1) {
             iter = lst.begin();
             next_iter = lst.begin();
@@ -525,34 +515,16 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
             if ((*iter + 1) == *next_iter) {
                 lst.pop_front();
             } else {
-                //DEBUG << "can't compress list, front = " << *iter << ", next = " << *next_iter << std::endl;
                 break;
             }
         }
-        //DEBUG << "compressed list, size = " << lst.size() << std::endl;
         // now checking
-        for (uint64_t s = 0; s < NUM_SHARDS; s++) {
-            auto &lst = S->outstanding_read_qts.at(s);
-            if (lst.front() >= S->target_read_qts.at(s)) {
-                continue;
-            } else {
-                init_step3 = false;
-                break;
-            }
-        }
-        //DEBUG << "checked list\n";
-        if (init_step3) {
-            for (auto &x: S->target_read_qts) {
-                x = MAX_UINT64;
-            }
-        }
+        bool init_step3 = check_step3();
         S->read_qts_mutex.unlock();
-        //DEBUG << "ending check for step3\n";
         if (init_step3) {
             migrate_node_step3();
         }
     }
-    */
 }
 
 template <typename ParamsType, typename NodeStateType>
@@ -611,25 +583,24 @@ migrate_node_step2_req()
     assert(S->migr_edge_acks == 0);
     std::vector<bool> edge_acks(NUM_SHARDS, false);
     for (auto &x: n->in_edges) {
-        if (x.second->nbr.loc != shard_id) {
-            edge_acks[x.second->nbr.loc - SHARD_ID_INCR] = true;
-        }
+        edge_acks[x.second->nbr.loc - SHARD_ID_INCR] = true;
     }
     for (auto &x: n->out_edges) {
-        if (x.second->nbr.loc != shard_id) {
-            edge_acks[x.second->nbr.loc - SHARD_ID_INCR] = true;
-        }
+        edge_acks[x.second->nbr.loc - SHARD_ID_INCR] = true;
     }
     S->migr_edge_acks = std::count(edge_acks.begin(), edge_acks.end(), true);
     S->migration_mutex.unlock();
     S->release_node(n);
     S->read_qts_mutex.lock();
+    uint64_t num_edge_upd = NUM_SHARDS;
     for (uint64_t i = 0; i < NUM_SHARDS; i++) {
         assert(S->target_read_qts.at(i) == MAX_UINT64);
         if (!edge_acks[i]) {
             S->target_read_qts.at(i) = 0;
+            num_edge_upd--;
         }
     }
+    DEBUG << "Num of edge updates expected = " << num_edge_upd << std::endl;
     S->read_qts_mutex.unlock();
     S->send(S->migr_shard, msg.buf);
 }
@@ -744,6 +715,29 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
         node_prog::programs.at(pType)->unpack_and_run_db(std::move(m));
     }
     DEBUG << "done applying buffered reads\n";
+}
+
+// check if all nbrs updated, if so call step3
+// caution: assuming caller holds S->read_qts_mutex
+bool
+check_step3()
+{
+    bool init_step3 = true;
+    for (uint64_t s = 0; s < NUM_SHARDS; s++) {
+        auto &lst = S->outstanding_read_qts.at(s);
+        if (lst.front() >= S->target_read_qts.at(s)) {
+            continue;
+        } else {
+            init_step3 = false;
+            break;
+        }
+    }
+    if (init_step3) {
+        for (auto &x: S->target_read_qts) {
+            x = MAX_UINT64;
+        }
+    }
+    return init_step3;
 }
 
 // successfully migrated node to new location, continue migration process

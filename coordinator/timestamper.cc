@@ -117,16 +117,21 @@ periodic_update()
             for (uint64_t id: x.second) {
                 done_reqs.emplace_back(std::make_pair(id, type));
             }
-            x.second.clear();
+            //x.second.clear();
         }
-        vts->mutex.unlock();
         message::message msg;
         if (vts->nop_acks == NUM_SHARDS) {
+            for (auto &x: vts->done_reqs) {
+                x.second.clear();
+            }
+            vts->mutex.unlock();
             for (uint64_t i = 0; i < NUM_SHARDS; i++) {
                 message::prepare_message(msg, message::VT_NOP, vt_id, vclk, new_qts, req_id, done_reqs);
                 vts->send(i + SHARD_ID_INCR, msg.buf);
             }
             vts->nop_acks = 0;
+        } else {
+            vts->mutex.unlock();
         }
         if (vts->first_clock_update) {
             DEBUG << "clock update acks " << vts->clock_update_acks << std::endl;

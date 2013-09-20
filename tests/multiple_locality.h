@@ -18,7 +18,7 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define ML_REQUESTS 7000
+#define ML_REQUESTS 15000
 #define ML_HOP_TRIES 200
 
 std::pair<uint64_t, uint64_t>
@@ -97,7 +97,7 @@ multiple_locality_prog(bool dense, bool to_exit)
     rp.dest = g.nodes[npair.second];
     
     // enable migration now
-    //c.start_migration();
+    c.start_migration();
 
     // repeatedly perform same request
     std::ofstream file, req_time;

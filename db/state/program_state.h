@@ -375,11 +375,11 @@ namespace state
             }
         }
         // TODO this is a hack which does not absolutely guarantee that we won't miss a request, need proper clean up later on
-        if (++clean_counter % 400 == 0) {
-            clean_counter = 0;
-            done_ids_last = std::move(done_ids);
-            assert(done_ids.size() == 0);
-        }
+        //if (++clean_counter % 4000 == 0) {
+        //    clean_counter = 0;
+        //    done_ids_last = std::move(done_ids);
+        //    assert(done_ids.size() == 0);
+        //}
         release();
     }
 
