@@ -19,6 +19,7 @@
 
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <po6/threads/mutex.h>
 
 #include "common/busybee_infra.h"
@@ -51,6 +52,7 @@ namespace coordinator
             // node prog
             // map from req_id to client_id that ensures a single response to a node program
             std::unordered_map<uint64_t, uint64_t> outstanding_node_progs;
+            std::unordered_map<node_prog::prog_type, std::unordered_set<uint64_t>> done_reqs;
             // node map client
             coordinator::nmap_stub nmap_client;
             // mutexes
@@ -89,6 +91,11 @@ namespace coordinator
         bb->set_timeout(VT_NOP_TIMEOUT);
         nop_time = wclock::get_time_elapsed_millis(tspec);
         first_nop_time = nop_time;
+        // initialize empty vector of done reqs for each prog type
+        std::unordered_set<uint64_t> empty_set;
+        done_reqs.emplace(node_prog::REACHABILITY, empty_set);
+        done_reqs.emplace(node_prog::DIJKSTRA, empty_set);
+        done_reqs.emplace(node_prog::CLUSTERING, empty_set);
     }
 
     inline busybee_returncode

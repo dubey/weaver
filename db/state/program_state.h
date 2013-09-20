@@ -345,13 +345,7 @@ namespace state
     inline void
     program_state :: done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &reqs)
     {
-        //UNUSED(max_done_id);
         acquire();
-        //if (max_done_id < completed_id) {
-        //    DEBUG << "Max done id " << max_done_id << ", completed id " << completed_id << std::endl;
-        //}
-        //assert(max_done_id >= completed_id);
-        //completed_id = max_done_id;
         for (auto &p: reqs) {
             uint64_t req_id = p.first;
             node_prog::prog_type type = p.second;
@@ -376,7 +370,6 @@ namespace state
     {
         bool ret;
         acquire();
-        //ret = (req_id < completed_id);
         ret = (done_ids.find(req_id) != done_ids.end());
         release();
         return ret;

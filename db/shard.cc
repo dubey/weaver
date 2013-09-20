@@ -17,11 +17,12 @@
 #include <e/buffer.h>
 #include "busybee_constants.h"
 
-//#define __WEAVER_DEBUG__
+#define __WEAVER_DEBUG__
 #include "common/event_order.h"
 #include "common/weaver_constants.h"
 #include "common/message_graph_elem.h"
 #include "shard.h"
+#include "nop_data.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
 
@@ -229,18 +230,19 @@ unpack_tx_request(void *req)
 inline void
 nop(void *noparg)
 {
-    std::pair<uint64_t, uint64_t> *nop_arg = (std::pair<uint64_t, uint64_t>*)noparg;
-    DEBUG << "nop vt_id " << nop_arg->first << ", qts " << nop_arg->second << std::endl;
-    S->record_completed_transaction(nop_arg->first, nop_arg->second);
+    db::nop_data *nop_arg = (db::nop_data*)noparg;
+    DEBUG << "nop vt_id " << nop_arg->vt_id << ", qts " << nop_arg->req_id << std::endl;
+    S->record_completed_transaction(nop_arg->vt_id, nop_arg->req_id);
+    S->add_done_requests(nop_arg->done_reqs);
     message::message msg;
     message::prepare_message(msg, message::VT_NOP_ACK);
-    S->send(nop_arg->first, msg.buf);
+    S->send(nop_arg->vt_id, msg.buf);
     // increment nop count, trigger migration step 2 after check
     bool move_migr_node = true;
     bool initiate_migration = false;
     S->migration_mutex.lock();
     if (S->current_migr) {
-        S->nop_count.at(nop_arg->first)++;
+        S->nop_count.at(nop_arg->vt_id)++;
         for (uint64_t &x: S->nop_count) {
             move_migr_node = move_migr_node && (x == 2);
         }
@@ -355,9 +357,9 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
     std::function<NodeStateType&()> node_state_getter;
 
     // check if request completed
-    //if (S->check_done_request(req_id)) {
-    //    done_request = true;
-    //}
+    if (S->check_done_request(req_id)) {
+        done_request = true;
+    }
     while ((!start_node_params.empty() /*|| !batched_deleted_nodes[G->myid].empty()*/) && !done_request) {
         //DEBUG << "node program main loop" << std::endl;
         /*
@@ -427,11 +429,11 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
                         prog_type_recvd, req_id, node_handle, &dirty_cache_ids, std::ref(invalid_cache_ids));
                 */
 
-                //if (S->check_done_request(req_id)) {
-                //    done_request = true;
-                //    S->release_node(node);
-                //    break;
-                //}
+                if (S->check_done_request(req_id)) {
+                    done_request = true;
+                    S->release_node(node);
+                    break;
+                }
                 // call node program
                 auto next_node_params = enclosed_node_prog_func(req_id, *node, this_node,
                         params, // actual parameters for this node program
@@ -449,7 +451,7 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
                         // TODO mark done
                         // XXX get rid of pair, without pair it is not working for some reason
                         std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
-                        message::prepare_message(*msg, message::NODE_PROG_RETURN, req_id, temppair);
+                        message::prepare_message(*msg, message::NODE_PROG_RETURN, prog_type_recvd, req_id, temppair);
                         S->send(vt_id, msg->buf);
                     } else {
                         //DEBUG << "forwarding node prog to shard " << loc << std::endl;
@@ -486,9 +488,9 @@ if (batched_deleted_nodes[G->myid].size() == 1 && std::get<0>(batched_deleted_no
             }
         }
         start_node_params = std::move(batched_node_progs[S->shard_id]);
-        //if (S->check_done_request(req_id)) {
-        //    done_request = true;
-        //}
+        if (S->check_done_request(req_id)) {
+            done_request = true;
+        }
     }
 
     // propagate all remaining node progs
@@ -858,7 +860,6 @@ msgrecv_loop()
     node_prog::prog_type pType;
     vc::vclock vclk;
     vc::qtimestamp_t qts;
-    std::pair<uint64_t, uint64_t> *nop_arg;
 
     while (true) {
         if ((ret = S->bb->recv(&sender, &rec_msg->buf)) != BUSYBEE_SUCCESS) {
@@ -910,12 +911,12 @@ msgrecv_loop()
                 assert(vclk.clock.size() == NUM_VTS);
                 break;
 
-            case message::VT_NOP:
-                message::unpack_message(*rec_msg, mtype, vt_id, vclk, qts, req_id);
+            case message::VT_NOP: {
+                db::nop_data *nop_arg = new db::nop_data();
+                message::unpack_message(*rec_msg, mtype, vt_id, vclk, qts, req_id, nop_arg->done_reqs);
                 //DEBUG << "unpacked message" << std::endl;
-                nop_arg = (std::pair<uint64_t, uint64_t>*)malloc(sizeof(std::pair<uint64_t, uint64_t>));
-                nop_arg->first = vt_id;
-                nop_arg->second = req_id;
+                nop_arg->vt_id = vt_id;
+                nop_arg->req_id = req_id;
                 //DEBUG << "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$after unpacking nop, vt_id = " << vt_id << std::endl;
                 thr = new db::thread::unstarted_thread(qts.at(shard_id-SHARD_ID_INCR), vclk, nop, (void*)nop_arg);
                 S->add_write_request(vt_id, thr);
@@ -923,6 +924,7 @@ msgrecv_loop()
                 rec_msg.reset(new message::message());
                 assert(vclk.clock.size() == NUM_VTS);
                 break;
+            }
 
             case message::MIGRATE_SEND_NODE:
             case message::MIGRATE_DONE:

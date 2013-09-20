@@ -15,9 +15,12 @@
 
 #include "node_prog/node_prog_type.h"
 
-struct nop_data
+namespace db
 {
-    uint64_t vt_id;
-    uint64_t req_id;
-    std::vector<std::pair<uint64_t, node_prog::prog_type>> done_reqs;
-};
+    struct nop_data
+    {
+        uint64_t vt_id;
+        uint64_t req_id;
+        std::vector<std::pair<uint64_t, node_prog::prog_type>> done_reqs;
+    };
+}

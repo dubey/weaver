@@ -17,7 +17,7 @@
 #include <vector>
 #include <signal.h>
 
-//#define __WEAVER_DEBUG__
+#define __WEAVER_DEBUG__
 #include "common/vclock.h"
 #include "common/transaction.h"
 #include "node_prog/node_prog_type.h"
@@ -111,11 +111,19 @@ periodic_update()
         vts->vclk.increment_clock();
         vc::vclock vclk = vts->vclk;
         req_id = vts->generate_id();
+        std::vector<std::pair<uint64_t, node_prog::prog_type>> done_reqs;
+        for (auto x: vts->done_reqs) {
+            node_prog::prog_type type = x.first;
+            for (uint64_t id: x.second) {
+                done_reqs.emplace_back(std::make_pair(id, type));
+            }
+            x.second.clear();
+        }
         vts->mutex.unlock();
         message::message msg;
         if (vts->nop_acks == NUM_SHARDS) {
             for (uint64_t i = 0; i < NUM_SHARDS; i++) {
-                message::prepare_message(msg, message::VT_NOP, vt_id, vclk, new_qts, req_id);
+                message::prepare_message(msg, message::VT_NOP, vt_id, vclk, new_qts, req_id, done_reqs);
                 vts->send(i + SHARD_ID_INCR, msg.buf);
             }
             vts->nop_acks = 0;
@@ -288,14 +296,16 @@ server_loop(int thread_id)
                 // response from a shard
                 case message::NODE_PROG_RETURN:
                     uint64_t req_id;
-                    message::unpack_message(*msg, message::NODE_PROG_RETURN, req_id); // don't unpack rest
+                    node_prog::prog_type type;
+                    message::unpack_message(*msg, message::NODE_PROG_RETURN, type, req_id); // don't unpack rest
                     vts->mutex.lock();
+                    vts->done_reqs[type].emplace(req_id);
                     if (vts->outstanding_node_progs.find(req_id) != vts->outstanding_node_progs.end()) {
                         uint64_t client_to_ret = vts->outstanding_node_progs.at(req_id);
                         vts->send(client_to_ret, msg->buf);
                         vts->outstanding_node_progs.erase(req_id);
                     } else {
-                        std::cerr << "node prog return for already completed ornever existed req id" << std::endl;
+                        DEBUG << "node prog return for already completed ornever existed req id" << std::endl;
                     }
                     vts->mutex.unlock();
                     break;
