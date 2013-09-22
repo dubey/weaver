@@ -156,7 +156,7 @@ namespace node_prog
                     for (auto &x: n.in_edges) {
                         if (x.second->nbr.handle == prev_node.handle) {
                             next_node = &x.second->nbr;
-                            //x.second->traverse();
+                            x.second->traverse();
                             break;
                         }
                     }
@@ -192,7 +192,7 @@ namespace node_prog
                         }
                         */
                         if (traverse_edge) {
-                            //e->traverse();
+                            e->traverse();
                             next.emplace_back(std::make_pair(e->nbr, params)); // propagate reachability request
                             state.out_count++;
                         }
@@ -213,7 +213,7 @@ namespace node_prog
                     for (auto &x: n.in_edges) {
                         if (x.second->nbr.handle == prev_node.handle) {
                             next_node = &x.second->nbr;
-                            //x.second->traverse();
+                            x.second->traverse();
                             break;
                         }
                     }

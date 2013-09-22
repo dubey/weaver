@@ -117,6 +117,7 @@ periodic_update()
         message::message msg;
         if (vts->nop_acks == NUM_SHARDS) {
             std::vector<std::pair<uint64_t, node_prog::prog_type>> done_reqs;
+            uint64_t max_done_id = vts->max_done_id;
             for (auto &x: vts->done_reqs) {
                 node_prog::prog_type type = x.first;
                 for (uint64_t id: x.second) {
@@ -126,7 +127,7 @@ periodic_update()
             }
             vts->mutex.unlock();
             for (uint64_t i = 0; i < NUM_SHARDS; i++) {
-                message::prepare_message(msg, message::VT_NOP, vt_id, vclk, new_qts, req_id, done_reqs);
+                message::prepare_message(msg, message::VT_NOP, vt_id, vclk, new_qts, req_id, done_reqs, max_done_id);
                 vts->send(i + SHARD_ID_INCR, msg.buf);
             }
             vts->nop_acks = 0;
@@ -211,6 +212,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     }
     DEBUG << "sent to shards" << std::endl;
     vts->outstanding_node_progs.emplace(std::make_pair(req_id, clientID));
+    vts->outstanding_req_ids.emplace(req_id);
     vts->mutex.unlock();
 }
 
@@ -293,9 +295,7 @@ server_loop(int thread_id)
 
                 case message::CLIENT_NODE_PROG_REQ:
                     message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, pType);
-                    //server->update_mutex.lock(); //TODO do we need to mutex here?
                     node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), sender);
-                    //server->update_mutex.unlock();
                     break;
 
                 // response from a shard
@@ -309,6 +309,20 @@ server_loop(int thread_id)
                         uint64_t client_to_ret = vts->outstanding_node_progs.at(req_id);
                         vts->send(client_to_ret, msg->buf);
                         vts->outstanding_node_progs.erase(req_id);
+                        if (vts->outstanding_req_ids.top() == req_id) {
+                            assert(vts->max_done_id < vts->outstanding_req_ids.top());
+                            vts->max_done_id = req_id;
+                            vts->outstanding_req_ids.pop();
+                            while (!vts->outstanding_req_ids.empty()
+                                && vts->outstanding_req_ids.top() == vts->done_req_ids.top()) {
+                                assert(vts->max_done_id < vts->outstanding_req_ids.top());
+                                vts->max_done_id = vts->outstanding_req_ids.top();
+                                vts->outstanding_req_ids.pop();
+                                vts->done_req_ids.pop();
+                            }
+                        } else {
+                            vts->done_req_ids.emplace(req_id);
+                        }
                     } else {
                         DEBUG << "node prog return for already completed ornever existed req id" << std::endl;
                     }

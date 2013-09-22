@@ -52,6 +52,9 @@ namespace coordinator
             // node prog
             // map from req_id to client_id that ensures a single response to a node program
             std::unordered_map<uint64_t, uint64_t> outstanding_node_progs;
+            std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> outstanding_req_ids;
+            std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> done_req_ids;
+            uint64_t max_done_id;
             std::unordered_map<node_prog::prog_type, std::unordered_set<uint64_t>> done_reqs;
             // node map client
             coordinator::nmap_stub nmap_client;
@@ -85,6 +88,7 @@ namespace coordinator
         , clock_update_acks(NUM_VTS-1)
         , nop_acks(NUM_SHARDS)
         , first_clock_update(true)
+        , max_done_id(0)
     {
         // initialize array of server locations
         initialize_busybee(bb, vt_id, myloc, NUM_THREADS);

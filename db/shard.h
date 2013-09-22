@@ -15,7 +15,7 @@
 #ifndef __SHARD_SERVER__
 #define __SHARD_SERVER__
 
-#include <list>
+#include <set>
 #include <vector>
 #include <unordered_map>
 #include <deque>
@@ -69,9 +69,7 @@ namespace db
         public:
             po6::threads::mutex queue_mutex // exclusive access to thread pool queues
                 , msg_count_mutex
-                , migration_mutex
-                , read_qts_mutex
-                , ongoing_prog_mutex;
+                , migration_mutex;
 
             // Consistency
         public:
@@ -124,13 +122,13 @@ namespace db
             const char *loc_attrName = "shard";
             hyperdex::Client cl;
             //bool node_migrated;
-            uint64_t migr_edge_acks; // num of edge acks expected for migrated node
             uint64_t update_migrated_nbr_nonlocking(element::node *n, uint64_t edge, uint64_t rnode, uint64_t new_loc);
             uint64_t update_migrated_nbr(uint64_t rnode, uint64_t new_loc, std::vector<std::tuple<uint64_t, uint64_t, bool>> &updates);
             void update_node_mapping(uint64_t node, uint64_t shard);
-            std::vector<uint64_t> read_qts, target_read_qts; // per hop qts for reads crossing shards, helpful in permanent deletion of migr nodes
-            std::vector<std::list<uint64_t>> outstanding_read_qts; // per shard reads window, helpful in permanent deletion of migr nodes
-            int ongoing_prog; // no. of threads currently executing node progs on this shard
+            std::vector<uint64_t> max_prog_id // max prog id seen from each vector timestamper
+                , target_prog_id
+                , max_done_id; // max id done from each VT
+            std::vector<bool> migr_edge_acks;
             
             // node programs
         private:
@@ -167,11 +165,10 @@ namespace db
         , max_clk(MAX_UINT64, MAX_UINT64)
         , zero_clk(0, 0)
         , cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT)
-        , migr_edge_acks(0)
-        , read_qts(NUM_SHARDS, 0)
-        , target_read_qts(NUM_SHARDS, MAX_UINT64)
-        , outstanding_read_qts(NUM_SHARDS, std::list<uint64_t>(1,0))
-        , ongoing_prog(0)
+        , max_prog_id(NUM_VTS, 0)
+        , target_prog_id(NUM_VTS, 0)
+        , max_done_id(NUM_VTS, 0)
+        , migr_edge_acks(NUM_SHARDS, true)
         , node_prog_req_state()
     {
         thread::pool::S = this;
@@ -186,9 +183,7 @@ namespace db
     inline void
     shard :: record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id)
     {
-        //DEBUG << " going to record tx" << std::endl;
         thread_pool.record_completed_transaction(vt_id, transaction_completed_id);
-        //DEBUG << "done record tx" << std::endl;
     }
 
     // find the node corresponding to given handle
@@ -332,9 +327,6 @@ namespace db
                 remote_loc, remote_node);
         n->add_edge(new_edge, fwd);
         n->updated = true;
-        //edge_map_mutex.lock();
-        //edges.emplace(edge_handle, local_node);
-        //edge_map_mutex.unlock();
         if (fwd) {
             message::message msg;
             message::prepare_message(msg, message::REVERSE_EDGE_CREATE,
@@ -392,11 +384,6 @@ namespace db
             ret = 0;
             release_node(n);
         }
-        //if (ret == 0) {
-        //    edge_map_mutex.lock();
-        //    edges.emplace(edge_handle, local_node);
-        //    edge_map_mutex.unlock();
-        //}
         return ret;
     }
 
@@ -413,9 +400,6 @@ namespace db
     shard :: delete_edge(uint64_t edge_handle, uint64_t node_handle, vc::vclock &tdel, bool wait=true)
     {
         uint64_t ret;
-        //edge_map_mutex.lock();
-        //node_handle = (edges.find(edge_handle) == edges.end()) ? 0 : edges.at(edge_handle);
-        //edge_map_mutex.unlock();
         element::node *n = acquire_node(node_handle);
         if (n == NULL) {
             // node is being migrated XXX don't know node handle!
@@ -535,14 +519,21 @@ namespace db
             }
             migr_edge = migr_edge && std::get<2>(x);
         }
+        migration_mutex.lock();
         if (old_loc != shard_id) {
-            read_qts_mutex.lock();
             message::message msg;
-            message::prepare_message(msg, message::MIGRATED_NBR_ACK, shard_id, read_qts.at(old_loc - SHARD_ID_INCR));
-            DEBUG << "Migr nbr ack, read qts = " << read_qts.at(old_loc - SHARD_ID_INCR) << std::endl;
-            read_qts_mutex.unlock();
+            message::prepare_message(msg, message::MIGRATED_NBR_ACK, shard_id, max_prog_id);
             send(old_loc, msg.buf);
+        } else {
+            for (int i = 0; i < NUM_VTS; i++) {
+                if (target_prog_id[i] < max_prog_id[i]) {
+                    target_prog_id[i] = max_prog_id[i];
+                }
+            }
+            migr_edge_acks[shard_id - SHARD_ID_INCR] = false;
+            DEBUG << "Got edge ack from " << shard_id << std::endl;
         }
+        migration_mutex.unlock();
         return old_loc;
     }
 
@@ -625,10 +616,6 @@ namespace db
         //DEBUG << "checking read queues" << std::endl;
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
             thread::pqueue_t &pq = read_queues.at(vt_id);
-            if (!pq.empty()) {
-                //DEBUG << "read queue " << vt_id << " not empty. has top id " << pq.top()->priority 
-                //    << " and needs less than " << last_ids[vt_id] << " to pop" << std::endl;
-            }
             if (!pq.empty() && pq.top()->priority < last_ids[vt_id]) {
                 //DEBUG << "read queue " << vt_id << " has node prog that can be run" << std::endl;
                 thr = read_queues.at(vt_id).top();

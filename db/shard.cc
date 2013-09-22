@@ -36,7 +36,6 @@ void migrated_nbr_ack();
 void migrate_node_step1(uint64_t node_handle, uint64_t shard);
 void migrate_node_step2_req();
 void migrate_node_step2_resp(std::unique_ptr<message::message> msg);
-void update_outstanding_read_qts(uint64_t from_shard, uint64_t from_qts);
 bool check_step3();
 void migrate_node_step3();
 void migration_wrapper();
@@ -88,29 +87,21 @@ migrated_nbr_update(std::unique_ptr<message::message> msg)
     uint64_t remote_node, new_loc;
     std::vector<std::tuple<uint64_t, uint64_t, bool>> nbr_updates;
     message::unpack_message(*msg, message::MIGRATED_NBR_UPDATE, remote_node, new_loc, nbr_updates);
-    if (S->update_migrated_nbr(remote_node, new_loc, nbr_updates) == shard_id) {
-        S->read_qts_mutex.lock();
-        S->target_read_qts.at(shard_id - SHARD_ID_INCR) = 0;
-        bool step3 = check_step3();
-        S->read_qts_mutex.unlock();
-        if (step3) {
-            migrate_node_step3();
-        }
-    }
+    S->update_migrated_nbr(remote_node, new_loc, nbr_updates);
 }
 
 void
-migrated_nbr_ack(uint64_t from_loc, uint64_t target_qts)
+migrated_nbr_ack(uint64_t from_loc, std::vector<uint64_t> &target_req_id)
 {
-    bool step3;
-    S->read_qts_mutex.lock();
-    S->target_read_qts.at(from_loc - SHARD_ID_INCR) = target_qts;
-    DEBUG << "Got edge ack for node " << S->migr_node << " from " << from_loc << ", target qts " << target_qts << std::endl;
-    step3 = check_step3();
-    S->read_qts_mutex.unlock();
-    if (step3) {
-        migrate_node_step3();
+    S->migration_mutex.lock();
+    for (int i = 0; i < NUM_VTS; i++) {
+        if (target_req_id[i] > S->target_prog_id[i]) {
+            S->target_prog_id[i] = target_req_id[i];
+        }
     }
+    S->migr_edge_acks[from_loc - SHARD_ID_INCR] = false;
+    DEBUG << "Got edge ack from " << from_loc << std::endl;
+    S->migration_mutex.unlock();
 }
 
 void
@@ -120,7 +111,8 @@ unpack_update_request(void *req)
     vc::vclock vclk;
     vc::qtimestamp_t qts;
     uint64_t handle, elem1, elem2, loc2;
-    uint64_t from_loc, target_qts;
+    uint64_t from_loc;
+    std::vector<uint64_t> done_ids;
 
     switch (request->type) {
         case message::REVERSE_EDGE_CREATE:
@@ -137,19 +129,13 @@ unpack_update_request(void *req)
             break;
 
         case message::MIGRATED_NBR_ACK:
-            message::unpack_message(*request->msg, request->type, from_loc, target_qts);
-            migrated_nbr_ack(from_loc, target_qts);
+            message::unpack_message(*request->msg, request->type, from_loc, done_ids);
+            migrated_nbr_ack(from_loc, done_ids);
             break;
 
         default:
             DEBUG << "unknown type" << std::endl;
     }
-    //if (ret == 0) {
-    //    // update successful
-    //} else {
-    //    // node being migrated, tx needs to be forwarded
-    //    // TODO
-    //}
     delete request;
 }
 
@@ -191,13 +177,6 @@ unpack_tx_request(void *req)
             default:
                 DEBUG << "unknown type" << std::endl;
         }
-        //if (ret == 0) {
-        //    // tx subpart successful
-        //} else {
-        //    // node being migrated, tx needs to be forwarded
-        //    // TODO also need to maintain DS for tracking when to ack transaction, in case of migration
-        //    ack = false;
-        //}
     }
     delete request;
     if (ack) {
@@ -238,18 +217,22 @@ nop(void *noparg)
             S->migrated = true;
             initiate_migration = true;
             S->migr_chance = 0;
-            //DEBUG << "Going to start migration at shard " << shard_id << std::endl;
-        } else {
-            //DEBUG << "Migr chance cntr = " << S->migr_chance << std::endl;
         }
     }
+    assert(S->max_done_id[nop_arg->vt_id] <= nop_arg->max_done_id);
+    S->max_done_id[nop_arg->vt_id] = nop_arg->max_done_id;
+    bool step3 = check_step3();
     S->migration_mutex.unlock();
     free(nop_arg);
     assert(!(move_migr_node && initiate_migration));
+    assert(!(step3 && initiate_migration));
+    assert(!(move_migr_node && step3));
     if (move_migr_node) {
         migrate_node_step2_req();
     } else if (initiate_migration) {
         shard_daemon_begin();
+    } else if (step3) {
+        migrate_node_step3();
     }
 }
 
@@ -302,20 +285,16 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     vc::vclock req_vclock;
     prog_type prog_type_recvd;
     bool done_request = false;
-    uint64_t from_shard, from_qts;
-    from_shard = 123456780000 + shard_id;
-    from_qts = from_shard;
 
     // map from location to send to next to tuple of handle and params to send to next, and node that sent them
     // these are the node programs that will be propagated onwards
     std::unordered_map<uint64_t, std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>> batched_node_progs;
-    //std::vector<uint64_t> hop_read_qts(NUM_SHARDS, 0);
     db::element::remote_node this_node(S->shard_id, 0);
     uint64_t node_handle;
 
     // unpack the node program
     try {
-        message::unpack_message(*msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, start_node_params, from_shard, from_qts);
+        message::unpack_message(*msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, start_node_params);//, from_shard, from_qts);
         //DEBUG << "node program unpacked" << std::endl;
         assert(req_vclock.clock.size() == NUM_VTS);
     } catch (std::bad_alloc& ba) {
@@ -323,6 +302,13 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         assert(false);
         return;
     }
+    
+    // update max prog id
+    S->migration_mutex.lock();
+    if (S->max_prog_id[vt_id] < req_id) {
+        S->max_prog_id[vt_id] = req_id;
+    }
+    S->migration_mutex.unlock();
 
     // node state and cache functions
     std::function<NodeStateType&()> node_state_getter;
@@ -331,9 +317,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     if (S->check_done_request(req_id)) {
         done_request = true;
     }
-    S->ongoing_prog_mutex.lock();
-    S->ongoing_prog++;
-    S->ongoing_prog_mutex.unlock();
     while (!start_node_params.empty() && !done_request) {
 
         for (auto &handle_params : start_node_params) {
@@ -353,9 +336,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
                     std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> buf_node_params;
                     buf_node_params.emplace_back(handle_params);
                     std::unique_ptr<message::message> m(new message::message());
-                    uint64_t zero = 0;
-                    message::prepare_message(*m, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, buf_node_params,
-                            zero, zero);
+                    message::prepare_message(*m, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, buf_node_params);
                     S->migration_mutex.lock();
                     if (S->deferred_reads.find(node_handle) == S->deferred_reads.end()) {
                         S->deferred_reads.emplace(node_handle, std::vector<std::unique_ptr<message::message>>());
@@ -363,16 +344,13 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
                     S->deferred_reads.at(node_handle).emplace_back(std::move(m));
                     S->migration_mutex.unlock();
                 }
-
             } else if (node->state == db::element::node::mode::IN_TRANSIT
                     || node->state == db::element::node::mode::MOVED) {
                 // queueing/forwarding node program
-                DEBUG << "Forwarding node prog for node " << node_handle << std::endl;
+                //DEBUG << "Forwarding node prog for node " << node_handle << std::endl;
                 std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> fwd_node_params;
                 fwd_node_params.emplace_back(handle_params);
-                uint64_t zero = 0;
-                message::prepare_message(*msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, fwd_node_params,
-                        zero, zero);
+                message::prepare_message(*msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, fwd_node_params);
                 uint64_t new_loc = node->new_loc;
                 S->release_node(node);
                 S->send(new_loc, msg->buf);
@@ -411,36 +389,20 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
                         batched_node_progs[loc].emplace_back(res.first.handle, std::move(res.second), this_node);
                         S->agg_msg_count[node_handle]++;
                         S->request_count[loc]++; // increment count of msges sent to loc
-                        if (loc != shard_id) {
-                            DEBUG << "Forwarding node prog for handle " << res.first.handle << " to shard " << loc << std::endl;
-                        } else {
-                            DEBUG << "Continuing node prog for handle " << res.first.handle << " to shard " << loc << std::endl;
-                        }
                     }
                 }
                 S->msg_count_mutex.unlock();
+                S->release_node(node);
 
                 // Only per hop batching now
-                S->read_qts_mutex.lock();
-                //for (auto &x: batched_node_progs) {
-                //    if (!x.second.empty() && x.first != shard_id) {
-                //        uint64_t s_index = x.first - SHARD_ID_INCR;
-                //        assert(hop_read_qts.at(s_index) == 0);
-                //        hop_read_qts.at(s_index) = ++S->read_qts.at(s_index);
-                //    }
-                //}
                 for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR; next_loc++) {
                     if ((batched_node_progs.find(next_loc) != batched_node_progs.end() && !batched_node_progs[next_loc].empty())
                         && next_loc != S->shard_id) {
-                        message::prepare_message(*msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, batched_node_progs[next_loc],
-                                shard_id, ++S->read_qts.at(next_loc - SHARD_ID_INCR));
+                        message::prepare_message(*msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, batched_node_progs[next_loc]);
                         S->send(next_loc, msg->buf);
                         batched_node_progs[next_loc].clear();
-                        //hop_read_qts.at(next_loc - SHARD_ID_INCR) = 0;
                     }
                 }
-                S->read_qts_mutex.unlock();
-                S->release_node(node);
             }
         }
         start_node_params = std::move(batched_node_progs[S->shard_id]);
@@ -449,36 +411,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         }
     }
 
-    // propagate all remaining node progs
-    // not needed with per hop batching
-    //for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR && !done_request; next_loc++) {
-    //    if (((!batched_node_progs[next_loc].empty()) /*|| (!batched_deleted_nodes[next_loc].empty())*/)
-    //        && next_loc != S->shard_id) {
-    //        S->read_qts_mutex.lock();
-    //        message::prepare_message(*msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, batched_node_progs[next_loc],
-    //                shard_id, ++S->read_qts.at(next_loc - SHARD_ID_INCR));
-    //        S->read_qts_mutex.unlock();
-    //        S->send(next_loc, msg->buf);
-    //        batched_node_progs[next_loc].clear();
-    //        //batched_deleted_nodes[next_loc].clear();
-    //    }
-    //}
-
-    S->ongoing_prog_mutex.lock();
-    S->ongoing_prog--;
-    S->ongoing_prog_mutex.unlock();
-
-    // check if migrated node ready to delete
-    if (from_shard >= SHARD_ID_INCR) {
-        update_outstanding_read_qts(from_shard, from_qts);
-        DEBUG << "Got read with qts " << from_qts << " from shard " << from_shard << std::endl;
-        S->read_qts_mutex.lock();
-        bool init_step3 = check_step3();
-        S->read_qts_mutex.unlock();
-        if (init_step3) {
-            migrate_node_step3();
-        }
-    }
 }
 
 template <typename ParamsType, typename NodeStateType>
@@ -516,8 +448,6 @@ migrate_node_step1(uint64_t node_handle, uint64_t shard)
         S->migr_shard = shard;
         // TODO send new loc information to coordinator map
         S->update_node_mapping(node_handle, shard);
-        //message::prepare_message(msg, message::COORD_NODE_MIGRATE, S->mrequest.cur_node, n->new_loc);
-        //S->send(COORD_ID, msg.buf);
         S->release_node(n);
         S->migration_mutex.unlock();
     }
@@ -541,22 +471,20 @@ migrate_node_step2_req()
     for (auto &x: n->out_edges) {
         edge_acks[x.second->nbr.loc - SHARD_ID_INCR] = true;
     }
-    S->migration_mutex.unlock();
     S->release_node(n);
-    S->read_qts_mutex.lock();
     DEBUG << "Migrating node " << S->migr_node << " to shard " << S->migr_shard << std::endl;
-    uint64_t num_edge_upd = NUM_SHARDS;
-    for (uint64_t i = 0; i < NUM_SHARDS; i++) {
-        assert(S->target_read_qts.at(i) == MAX_UINT64);
-        if (!edge_acks[i]) {
-            S->target_read_qts.at(i) = 0;
-            num_edge_upd--;
-        } else {
-            DEBUG << "Edge ack expected from shard " << (i + SHARD_ID_INCR) << std::endl;
+    S->migr_edge_acks = edge_acks;
+#ifdef __WEAVER_DEBUG__
+    for (int i = 0; i < NUM_SHARDS; i++) {
+        if (S->migr_edge_acks[i]) {
+            DEBUG << "Expecting edge ack from " << (i+SHARD_ID_INCR) << std::endl;
         }
     }
-    //DEBUG << "Num of edge updates expected = " << num_edge_upd << std::endl;
-    S->read_qts_mutex.unlock();
+#endif
+    for (auto &x: S->target_prog_id) {
+        x = 0;
+    }
+    S->migration_mutex.unlock();
     S->send(S->migr_shard, msg.buf);
 }
 
@@ -575,7 +503,7 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
     vc::vclock dummy_clock;
     message::unpack_message(*msg, message::MIGRATE_SEND_NODE, node_handle);
     n = S->create_node(node_handle, dummy_clock, true);
-    DEBUG << "Created and acquired migr node " << node_handle << std::endl;
+    //DEBUG << "Created and acquired migr node " << node_handle << std::endl;
     //n = S->acquire_node(node_handle);
     std::vector<uint64_t>().swap(n->agg_msg_count);
     try {
@@ -644,9 +572,6 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
             S->send(x.first, msg->buf);
         }
     }
-    if (nbr_updates.find(shard_id) != nbr_updates.end()) {
-        S->update_migrated_nbr(node_handle, shard_id, nbr_updates[shard_id]);
-    }
     //DEBUG << "done updating nbrs\n";
     n->state = db::element::node::mode::STABLE;
 
@@ -662,6 +587,10 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
     }
     S->migration_mutex.unlock();
 
+    if (nbr_updates.find(shard_id) != nbr_updates.end()) {
+        S->update_migrated_nbr(node_handle, shard_id, nbr_updates[shard_id]);
+    }
+
     // apply buffered reads
     for (auto &m: deferred_reads) {
         node_prog::prog_type pType;
@@ -672,54 +601,28 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
     //DEBUG << "done applying buffered reads\n";
 }
 
-void
-update_outstanding_read_qts(uint64_t from_shard, uint64_t from_qts)
-{
-    S->read_qts_mutex.lock();
-    auto &lst = S->outstanding_read_qts.at(from_shard - SHARD_ID_INCR);
-    auto iter = lst.begin();
-    auto next_iter = iter;
-    for (; iter != lst.end(); iter++) {
-        assert(*iter != from_qts);
-        if (*iter > from_qts) {
-            break;
-        }
-    }
-    lst.insert(iter, from_qts); // qts now at correct position
-    while (lst.size() > 1) {
-        iter = lst.begin();
-        next_iter = lst.begin();
-        next_iter++;
-        if ((*iter + 1) == *next_iter) {
-            lst.pop_front();
-        } else {
-            break;
-        }
-    }
-    DEBUG << "outstanding qts for shard " << from_shard << " is now " << lst.front() << std::endl;
-    S->read_qts_mutex.unlock();
-}
-
 // check if all nbrs updated, if so call step3
-// caution: assuming caller holds S->read_qts_mutex
+// caution: assuming caller holds S->migration_mutex
 bool
 check_step3()
 {
-    bool init_step3;
-    S->ongoing_prog_mutex.lock();
-    init_step3 = (S->ongoing_prog == 0);
-    S->ongoing_prog_mutex.unlock();
-    for (uint64_t s = 0; init_step3 && s < NUM_SHARDS; s++) {
-        auto &lst = S->outstanding_read_qts.at(s);
-        if (lst.front() >= S->target_read_qts.at(s)) {
-            continue;
-        } else {
+    bool init_step3 = true;
+    for (int i = 0; i < NUM_SHARDS; i++) {
+        if (S->migr_edge_acks[i]) {
             init_step3 = false;
+            break;
         }
     }
+    if (init_step3)
+        DEBUG << "Check pass1\n";
+    for (int i = 0; i < NUM_VTS && init_step3; i++) {
+        init_step3 = init_step3 && (S->target_prog_id[i] >= S->max_done_id[i]);
+        DEBUG << "In check 2, for vt " << i << ", target " << S->target_prog_id[i] << ", cur max done " << S->max_done_id[i] << std::endl;
+    }
     if (init_step3) {
-        for (auto &x: S->target_read_qts) {
-            x = MAX_UINT64;
+        DEBUG << "yes check3 passes\n";
+        for (int i = 0; i < NUM_SHARDS; i++) {
+            S->migr_edge_acks[i] = true;
         }
     }
     return init_step3;
@@ -729,16 +632,10 @@ check_step3()
 void
 migrate_node_step3()
 {
-    //DEBUG << "deleting migr node\n";
     S->delete_migrated_node(S->migr_node);
+#ifdef __WEAVER_DEBUG__
     DEBUG << "done deleting migr node " << S->migr_node << std::endl;
-    DEBUG << "current outstanding qts ";
-    S->read_qts_mutex.lock();
-    for (auto &x: S->outstanding_read_qts) {
-        DEBUG << x.front() << " ";
-    }
-    DEBUG << std::endl;
-    S->read_qts_mutex.unlock();
+#endif
     migration_wrapper();
 }
 
@@ -868,7 +765,7 @@ msgrecv_loop()
 
             case message::VT_NOP: {
                 db::nop_data *nop_arg = new db::nop_data();
-                message::unpack_message(*rec_msg, mtype, vt_id, vclk, qts, req_id, nop_arg->done_reqs);
+                message::unpack_message(*rec_msg, mtype, vt_id, vclk, qts, req_id, nop_arg->done_reqs, nop_arg->max_done_id);
                 //DEBUG << "unpacked message" << std::endl;
                 nop_arg->vt_id = vt_id;
                 nop_arg->req_id = req_id;
