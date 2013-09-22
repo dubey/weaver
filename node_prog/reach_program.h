@@ -17,6 +17,7 @@
 
 #include <vector>
 
+#include "common/weaver_constants.h"
 #include "db/element/node.h"
 #include "db/element/remote_node.h"
 #include "common/message.h"
@@ -141,6 +142,7 @@ namespace node_prog
         reach_node_state &state = state_getter();
         bool false_reply = false;
         db::element::remote_node prev_node = params.prev_node;
+        db::element::remote_node *next_node = NULL;
         params.prev_node = rn;
         std::vector<std::pair<db::element::remote_node, reach_params>> next;
         if (!params.mode) { // request mode
@@ -148,7 +150,19 @@ namespace node_prog
                 // we found the node we are looking for, prepare a reply
                 params.mode = true;
                 params.reachable = true;
-                next.emplace_back(std::make_pair(prev_node, params));
+                if (prev_node.loc < NUM_VTS) { // sending back to vt
+                    next_node = &prev_node;
+                } else {
+                    for (auto &x: n.in_edges) {
+                        if (x.second->nbr.handle == prev_node.handle) {
+                            next_node = &x.second->nbr;
+                            //x.second->traverse();
+                            break;
+                        }
+                    }
+                }
+                next.emplace_back(std::make_pair(*next_node, params));
+                next_node = NULL;
             } else {
                 // have not found it yet, check the cache, then follow all out edges
                 bool got_cache = false; // TODO
@@ -178,7 +192,7 @@ namespace node_prog
                         }
                         */
                         if (traverse_edge) {
-                            e->traverse();
+                            //e->traverse();
                             next.emplace_back(std::make_pair(e->nbr, params)); // propagate reachability request
                             state.out_count++;
                         }
@@ -193,32 +207,42 @@ namespace node_prog
             if (false_reply) {
                 params.mode = true;
                 params.reachable = false;
-                next.emplace_back(std::make_pair(prev_node, params));
+                if (prev_node.loc < NUM_VTS) { // sending back to vt
+                    next_node = &prev_node;
+                } else {
+                    for (auto &x: n.in_edges) {
+                        if (x.second->nbr.handle == prev_node.handle) {
+                            next_node = &x.second->nbr;
+                            //x.second->traverse();
+                            break;
+                        }
+                    }
+                }
+                next.emplace_back(std::make_pair(*next_node, params));
+                next_node = NULL;
             }
         } else { // reply mode
             if (((--state.out_count == 0) || params.reachable) && !state.reachable) {
                 state.reachable |= params.reachable;
-                db::element::edge *e;
-                for (auto e_iter: n.in_edges) {
-                    e = e_iter.second;
-                    if (e->nbr == state.prev_node) {
-                        e->traverse();
-                        break;
+                if (state.prev_node.loc < NUM_VTS) { // sending back to vt
+                    next_node = &state.prev_node;
+                } else {
+                    for (auto &x: n.in_edges) {
+                        if (x.second->nbr.handle == state.prev_node.handle) {
+                            next_node = &x.second->nbr;
+                            if (state.reachable) {
+                                x.second->traverse();
+                            }
+                            break;
+                        }
                     }
                 }
                 if (params.reachable) {
                     params.hops++;
                     params.path.emplace_back(rn);
                 }
-                next.emplace_back(std::make_pair(state.prev_node, params));
-                /*
-                // next block of code enables caching
-                if (params.reachable) {
-                    // adding to cache
-                    reach_cache_value &rcv = cache_putter();
-                    rcv.reachable_node = params.dest;
-                }
-                */
+                next.emplace_back(std::make_pair(*next_node, params));
+                next_node = NULL;
             }
             if ((int)state.out_count < 0) {
                 DEBUG << "ALERT! Bad state value in reach program for node " << rn.handle

@@ -18,8 +18,8 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define ML_REQUESTS 15000
-#define ML_HOP_TRIES 200
+#define ML_REQUESTS 5000
+#define ML_TRIES_FACTOR 200
 
 std::pair<uint64_t, uint64_t>
 find_long_hop(test_graph &g)
@@ -33,7 +33,8 @@ find_long_hop(test_graph &g)
     rp.reachable = false;
     rp.prev_node.loc = COORD_ID;
     rp.hops = 0;
-    for (int i = 0; i < ML_HOP_TRIES; i++)
+    int num_tries = g.nodes.size() / ML_TRIES_FACTOR;
+    for (int i = 0; i < num_tries; i++)
     {
         first = rand() % g.num_nodes;
         second = rand() % g.num_nodes;
@@ -50,7 +51,7 @@ find_long_hop(test_graph &g)
     }
     uint32_t target_hops = (*std::max_element(hops.begin(), hops.end()))/2;
     int ret_index = 0, i;
-    for (i = 1; i < ML_HOP_TRIES; i++) {
+    for (i = 1; i < num_tries; i++) {
         if (hops.at(i) > hops.at(ret_index)
          && hops.at(i) < target_hops) {
             ret_index = i;

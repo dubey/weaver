@@ -97,11 +97,14 @@ periodic_update()
     vts->mutex.lock();
     uint64_t req_id;
     uint64_t cur_time_millis = wclock::get_time_elapsed_millis(vts->tspec);
-    uint64_t diff = cur_time_millis - vts->nop_time;
-    uint64_t first_diff = cur_time_millis - vts->first_nop_time;
-    if (diff > VT_NOP_TIMEOUT) {
+    uint64_t first_diff_millis = cur_time_millis - vts->first_nop_time_millis;
+    uint64_t cur_time_nanos = wclock::get_time_elapsed(vts->tspec);
+    uint64_t diff_nanos = cur_time_nanos - vts->nop_time_nanos;
+    if (diff_nanos > VT_NOP_TIMEOUT) {
+        //std::cout << "cur time nano = " << cur_time_nanos << ", nop_time_nanos " << vts->nop_time_nanos << ", diff nanos " << diff_nanos << ", TIMEOUT " << VT_NOP_TIMEOUT << std::endl;
         // send nops to each shard
-        vts->nop_time = cur_time_millis;
+        vts->nop_time_millis = cur_time_millis;
+        vts->nop_time_nanos = cur_time_nanos;
         vc::qtimestamp_t new_qts = vts->qts;
         if (vts->nop_acks == NUM_SHARDS) {
             for (auto &qts: vts->qts) {
@@ -111,17 +114,14 @@ periodic_update()
         vts->vclk.increment_clock();
         vc::vclock vclk = vts->vclk;
         req_id = vts->generate_id();
-        std::vector<std::pair<uint64_t, node_prog::prog_type>> done_reqs;
-        for (auto &x: vts->done_reqs) {
-            node_prog::prog_type type = x.first;
-            for (uint64_t id: x.second) {
-                done_reqs.emplace_back(std::make_pair(id, type));
-            }
-            //x.second.clear();
-        }
         message::message msg;
         if (vts->nop_acks == NUM_SHARDS) {
+            std::vector<std::pair<uint64_t, node_prog::prog_type>> done_reqs;
             for (auto &x: vts->done_reqs) {
+                node_prog::prog_type type = x.first;
+                for (uint64_t id: x.second) {
+                    done_reqs.emplace_back(std::make_pair(id, type));
+                }
                 x.second.clear();
             }
             vts->mutex.unlock();
@@ -133,14 +133,14 @@ periodic_update()
         } else {
             vts->mutex.unlock();
         }
-        if (vts->first_clock_update) {
-            DEBUG << "clock update acks " << vts->clock_update_acks << std::endl;
-            DEBUG << "diff " << diff << ", initial clock update delay " << VT_INITIAL_CLKUPDATE_DELAY << std::endl;
-            DEBUG << "first diff " << first_diff << ", initial clock update delay " << VT_INITIAL_CLKUPDATE_DELAY << std::endl;
-        }
+        //if (vts->first_clock_update) {
+        //    DEBUG << "clock update acks " << vts->clock_update_acks << std::endl;
+        //    DEBUG << "diff " << diff << ", initial clock update delay " << VT_INITIAL_CLKUPDATE_DELAY << std::endl;
+        //    DEBUG << "first diff " << first_diff << ", initial clock update delay " << VT_INITIAL_CLKUPDATE_DELAY << std::endl;
+        //}
         // first check is an ugly hack to make sure all VTs are up before sending out clock updates
         // second check is to ensure all VTs acked previous update before sending out new update
-        if (((vts->first_clock_update && first_diff > VT_INITIAL_CLKUPDATE_DELAY) || !vts->first_clock_update)
+        if (((vts->first_clock_update && first_diff_millis > VT_INITIAL_CLKUPDATE_DELAY) || !vts->first_clock_update)
         && (vts->clock_update_acks == (NUM_VTS-1))) {
             vts->first_clock_update = false;
             //DEBUG << "sending clock update now, clock update acks " << vts->clock_update_acks << std::endl;

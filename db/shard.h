@@ -70,7 +70,8 @@ namespace db
             po6::threads::mutex queue_mutex // exclusive access to thread pool queues
                 , msg_count_mutex
                 , migration_mutex
-                , read_qts_mutex;
+                , read_qts_mutex
+                , ongoing_prog_mutex;
 
             // Consistency
         public:
@@ -129,6 +130,7 @@ namespace db
             void update_node_mapping(uint64_t node, uint64_t shard);
             std::vector<uint64_t> read_qts, target_read_qts; // per hop qts for reads crossing shards, helpful in permanent deletion of migr nodes
             std::vector<std::list<uint64_t>> outstanding_read_qts; // per shard reads window, helpful in permanent deletion of migr nodes
+            int ongoing_prog; // no. of threads currently executing node progs on this shard
             
             // node programs
         private:
@@ -168,7 +170,8 @@ namespace db
         , migr_edge_acks(0)
         , read_qts(NUM_SHARDS, 0)
         , target_read_qts(NUM_SHARDS, MAX_UINT64)
-        , outstanding_read_qts(NUM_SHARDS, std::list<uint64_t>())
+        , outstanding_read_qts(NUM_SHARDS, std::list<uint64_t>(1,0))
+        , ongoing_prog(0)
         , node_prog_req_state()
     {
         thread::pool::S = this;
@@ -491,16 +494,17 @@ namespace db
         if (n->out_edges.find(edge_handle) != n->out_edges.end()) {
             element::edge *e = n->out_edges.at(edge_handle);
             assert(e->nbr.handle == remote_node);
-            n->msg_count[e->nbr.loc-1] = 0;
+            n->msg_count[e->nbr.loc-SHARD_ID_INCR] = 0;
             e->msg_count = 0;
             old_loc = e->nbr.loc;
             e->nbr.loc = new_loc;
             found = true;
+            DEBUG << "Updating outnbr " << e->nbr.handle << " to new loc " << new_loc << "," << e->nbr.loc << std::endl;
         }
         if (n->in_edges.find(edge_handle) != n->in_edges.end()) {
             element::edge *e = n->in_edges.at(edge_handle);
             assert(e->nbr.handle == remote_node);
-            n->msg_count[e->nbr.loc-1] = 0;
+            n->msg_count[e->nbr.loc-SHARD_ID_INCR] = 0;
             e->msg_count = 0;
             old_loc = e->nbr.loc;
             e->nbr.loc = new_loc;
@@ -535,6 +539,7 @@ namespace db
             read_qts_mutex.lock();
             message::message msg;
             message::prepare_message(msg, message::MIGRATED_NBR_ACK, shard_id, read_qts.at(old_loc - SHARD_ID_INCR));
+            DEBUG << "Migr nbr ack, read qts = " << read_qts.at(old_loc - SHARD_ID_INCR) << std::endl;
             read_qts_mutex.unlock();
             send(old_loc, msg.buf);
         }

@@ -19,19 +19,18 @@
 #define LRP_REQUESTS 2000
 
 void
-line_reach_prog(bool to_exit)
+line_reach_prog(bool)
 {
     client::client c(CLIENT_ID, 0);
     int i, num_nodes;
     std::vector<uint64_t> nodes, edges;
     srand(time(NULL));
-    //std::ifstream count_in;
+    std::ifstream count_in;
     //std::ofstream count_out;
-    //count_in.open("node_count.rec");
-    //count_in >> num_nodes;
-    //count_in.close();
+    count_in.open("node_count.rec");
+    count_in >> num_nodes;
+    count_in.close();
     uint64_t tx_id;
-    num_nodes = 1000;
     for (i = 0; i < num_nodes; i++) {
         DEBUG << "Creating node " << (i+1) << std::endl;
         tx_id = c.begin_tx();
@@ -64,11 +63,10 @@ line_reach_prog(bool to_exit)
     c.start_migration();
     for (i = 0; i < LRP_REQUESTS; i++) {
         t2 = wclock::get_time_elapsed(t);
-        diff = t2 - start;
+        diff = t2 - t1;
         DEBUG << "Test: i = " << i << ", " << diff << std::endl;
         if (i % 10 == 0) {
-            //dif = diff(start, t2);
-            //req_time << dif.tv_sec << '.' << dif.tv_nsec << std::endl;
+            diff = t2 - start;
             req_time << diff << std::endl;
         }
         t1 = t2;

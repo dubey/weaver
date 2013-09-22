@@ -47,7 +47,7 @@ namespace coordinator
             vc::qtimestamp_t qts; // queue timestamp
             std::unordered_map<uint64_t, tx_reply> tx_replies;
             timespec tspec;
-            uint64_t nop_time, first_nop_time, clock_update_acks, nop_acks;
+            uint64_t nop_time_millis, nop_time_nanos, first_nop_time_millis, clock_update_acks, nop_acks;
             bool first_clock_update;
             // node prog
             // map from req_id to client_id that ensures a single response to a node program
@@ -88,9 +88,10 @@ namespace coordinator
     {
         // initialize array of server locations
         initialize_busybee(bb, vt_id, myloc, NUM_THREADS);
-        bb->set_timeout(VT_NOP_TIMEOUT);
-        nop_time = wclock::get_time_elapsed_millis(tspec);
-        first_nop_time = nop_time;
+        bb->set_timeout(VT_BB_TIMEOUT);
+        nop_time_millis = wclock::get_time_elapsed_millis(tspec);
+        nop_time_nanos = wclock::get_time_elapsed(tspec);
+        first_nop_time_millis = nop_time_millis;
         // initialize empty vector of done reqs for each prog type
         std::unordered_set<uint64_t> empty_set;
         done_reqs.emplace(node_prog::REACHABILITY, empty_set);
