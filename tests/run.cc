@@ -27,6 +27,7 @@
 #include "new_reachability_test.h"
 //#include "multiple_reach_program.h"
 #include "multiple_locality.h"
+#include "multiple_nhop_locality.h"
 //#include "multiple_caching.h"
 //#include "basic_migration_test.h"
 #include "line_reach_program.h"
@@ -75,7 +76,7 @@ main(int argc, char *argv[])
     //unreachable_reach_prog(true);
     //clique_reach_prog(true);
     //multiple_wp_prog(true);
-    multiple_sparse_locality(true);
+    multiple_nhop_sparse_locality(true);
     //repetitive_reach_prog(true);
     //multiple_dense_caching(true);
     //nmap_unit_tests();

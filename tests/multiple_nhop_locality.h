@@ -19,12 +19,12 @@
 
 #define ML_NHOP_REQUESTS 5000
 #define NUM_NHOP_PAIRS 1
-#define HOP_COUNT 5
+#define MAX_HOP_COUNT 10
 
 std::vector<std::pair<uint64_t, uint64_t>>
 find_n_hop(test_graph &g, uint64_t hop_count, int num_pairs)
 {
-    int first, second;
+    int first, second, i;
     node_prog::reach_params rp;
     std::unique_ptr<node_prog::reach_params> res;
     std::vector<std::pair<uint64_t, uint64_t>> ret;
@@ -32,6 +32,7 @@ find_n_hop(test_graph &g, uint64_t hop_count, int num_pairs)
     rp.reachable = false;
     rp.prev_node.loc = COORD_ID;
     rp.hops = 0;
+    i = 0;
     while (true) {
         first = rand() % g.num_nodes;
         second = rand() % g.num_nodes;
@@ -42,12 +43,12 @@ find_n_hop(test_graph &g, uint64_t hop_count, int num_pairs)
         rp.dest = g.nodes[second];
         initial_args.emplace_back(std::make_pair(g.nodes[first], rp));
         res = g.c->run_node_program(node_prog::REACHABILITY, initial_args);
-        DEBUG << "Done request " << i << " of initial src-dest search" << std::endl;
-        if (res->hops == hop_count) {
+        DEBUG << "Done request " << ++i << " of initial src-dest search" << std::endl;
+        if (res->hops < hop_count && res->hops > 0 && res->reachable) {
             ret.emplace_back(std::make_pair(first, second));
-        }
-        if (--num_pairs == 0) {
-            break;
+            if (--num_pairs == 0) {
+                break;
+            }
         }
     }
     DEBUG << "Going to start n hop locality" << std::endl;
@@ -76,7 +77,8 @@ multiple_nhop_locality_prog(bool dense, bool to_exit)
     test_graph g(&c, seed, num_nodes, num_edges, false, to_exit);
 
     // find a suitable src-dest pair which has a long(ish) path
-    auto pairs = find_n_hop(g, HOP_COUNT, NUM_NHOP_PAIRS);
+    auto pairs = find_n_hop(g, MAX_HOP_COUNT, NUM_NHOP_PAIRS);
+    DEBUG << "Got " << pairs.size() << " pairs\n";
     assert(pairs.size() == NUM_NHOP_PAIRS);
     node_prog::reach_params rp;
     rp.mode = false;
@@ -87,7 +89,7 @@ multiple_nhop_locality_prog(bool dense, bool to_exit)
     // enable migration now
     c.start_migration();
 
-    // repeatedly perform same request
+    // repeatedly perform same set of requests
     std::ofstream file, req_time;
     //file.open("requests.rec");
     req_time.open("time.rec");
@@ -123,13 +125,13 @@ multiple_nhop_locality_prog(bool dense, bool to_exit)
 }
 
 void
-multiple_sparse_locality(bool to_exit)
+multiple_nhop_sparse_locality(bool to_exit)
 {
-    multiple_locality_prog(false, to_exit);
+    multiple_nhop_locality_prog(false, to_exit);
 }
 
 void
-multiple_dense_locality(bool to_exit)
+multiple_nhop_dense_locality(bool to_exit)
 {
-    multiple_locality_prog(true, to_exit);
+    multiple_nhop_locality_prog(true, to_exit);
 }

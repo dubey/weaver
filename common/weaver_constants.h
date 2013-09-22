@@ -39,10 +39,10 @@
 #define CLIENT_ID (100ULL)
 #define SHARDS_DESC_FILE "../common/shards"
 // weaver setup
-#define NUM_SHARDS 8
+#define NUM_SHARDS 2
 #define NUM_VTS 1
 #define SHARD_ID_INCR NUM_VTS
-#define NUM_THREADS 8
+#define NUM_THREADS 2
 #define ID_BITS 8
 #define TOP_MASK (0x0fffffffffffffffULL)
 #define GRAPH_FILE "graph.rec"

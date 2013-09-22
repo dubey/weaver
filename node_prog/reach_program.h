@@ -230,9 +230,9 @@ namespace node_prog
                     for (auto &x: n.in_edges) {
                         if (x.second->nbr.handle == state.prev_node.handle) {
                             next_node = &x.second->nbr;
-                            if (state.reachable) {
-                                x.second->traverse();
-                            }
+                            x.second->traverse();
+                            //if (state.reachable) {
+                            //}
                             break;
                         }
                     }
