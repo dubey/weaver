@@ -77,8 +77,8 @@ main(int argc, char *argv[])
     //clique_reach_prog(true);
     //multiple_wp_prog(true);
     //multiple_sparse_locality(true);
-    multiple_dense_locality(true);
-    //scale_test();
+    //multiple_dense_locality(true);
+    scale_test();
     //multiple_nhop_sparse_locality(true);
     //multiple_nhop_dense_locality(true);
     //repetitive_reach_prog(true);

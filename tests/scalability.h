@@ -19,7 +19,7 @@
 //static uint64_t sc_num_clients;
 #define SC_CLIENT_OFF 100
 //#define SC_NUM_NODES 1000
-#define OPS_PER_CLIENT 10000
+#define OPS_PER_CLIENT 1000
 #define PERCENT_READS 0
 #define NUM_CLIENTS 10
 #define NUM_NEW_EDGES 10
@@ -51,6 +51,7 @@ static void getRandomNodes(size_t num, std::vector<uint64_t>& toFill) {
     }
     for(auto i : idxs)
         toFill.push_back(nodes.at(i));
+    monitor.unlock();
 }
 
 void
@@ -58,13 +59,6 @@ scale_client(int client_id, std::vector<uint64_t>* tx_times)
 {
     client::client c(client_id + SC_CLIENT_OFF, client_id % NUM_VTS);
     uint64_t tx_id, n1;
-    if (client_id == 0) {
-        tx_id = c.begin_tx();
-        for(int i = 0; i < NUM_NEW_EDGES ; i++) {
-            add_node(c.create_node(tx_id));
-        }
-        c.end_tx(tx_id);
-    }
     timespec t;
     uint64_t start, cur;
     int num_ops = 0;
@@ -101,12 +95,21 @@ scale_client(int client_id, std::vector<uint64_t>* tx_times)
 void
 scale_test()
 {
-    std::ifstream ncli;
     /*
+    std::ifstream ncli;
     ncli.open("sc_num_clients.rec");
     ncli >> sc_num_clients;
     ncli.close();
     */
+    client::client c(NUM_CLIENTS + SC_CLIENT_OFF, 0);
+    uint64_t tx_id;
+    // make first 10 nodes
+    tx_id = c.begin_tx();
+    for(int i = 0; i < NUM_NEW_EDGES ; i++) {
+        add_node(c.create_node(tx_id));
+    }
+    c.end_tx(tx_id);
+
     std::vector<uint64_t> tx_times[NUM_CLIENTS];
     std::thread *t[NUM_CLIENTS];
     for (uint64_t i = 0; i < NUM_CLIENTS; i++) {
@@ -121,7 +124,7 @@ scale_test()
     stats.open("throughputlatency.rec");
     for (uint64_t i = 0; i < NUM_CLIENTS; i++) {
         for (uint64_t j = 0; j < OPS_PER_CLIENT; j++) {
-            stats <<  tx_times[i][j] << std::endl;
+            stats <<  tx_times[i][j]/1e6 << std::endl;
         }
     }
     stats.close();
