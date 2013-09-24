@@ -31,27 +31,36 @@ static std::vector<uint64_t> nodes = std::vector<uint64_t>();
 static void add_node(uint64_t n) {
     monitor.lock();
     nodes.emplace_back(n);
+//    std::cout << nodes.size() << " is size of nodes" << std::endl;
     monitor.unlock();
 }
 
-static void getRandomNodes(size_t num, std::vector<uint64_t>& toFill) {
-    std::vector<size_t> idxs = std::vector<size_t>(num);
+static void getRandomNodes(const size_t num, std::vector<uint64_t>& toFill) {
+    std::vector<size_t> idxs = std::vector<size_t>();
     monitor.lock();
     assert(nodes.size() >= num);
     assert(toFill.empty());
+    assert(idxs.empty());
     while (idxs.size() < num) {
         size_t toAdd = rand() % nodes.size();
         // don't have duplicates
         bool add = true;
-        for (auto i : idxs)
-            add = add && (i != toAdd);
-
-        if (add)
+        for (auto i : idxs) {
+            if (toAdd == i) {
+                add = false;
+                break;
+            }
+        }
+        if (add) {
+            //std::cout << "randomly picked node " << toAdd << std::endl;
             idxs.push_back(toAdd);
+        }
     }
-    for(auto i : idxs)
+    for(auto i : idxs) {
         toFill.push_back(nodes.at(i));
+    }
     monitor.unlock();
+    assert(toFill.size() == num);
 }
 
 void
@@ -71,13 +80,22 @@ scale_client(int client_id, std::vector<uint64_t>* tx_times)
             std::vector<uint64_t> in_nbrs = std::vector<uint64_t>();
             getRandomNodes(NUM_NEW_EDGES/2, in_nbrs);
 
+            //std::ostringstream towrite;
             start = wclock::get_time_elapsed(t);
             tx_id = c.begin_tx();
             n1 = c.create_node(tx_id);
-            for (uint64_t nbr : out_nbrs)
+            //towrite << n1 << " has neighbors:";
+            for (uint64_t nbr : out_nbrs) {
                 c.create_edge(tx_id, n1, nbr);
-            for (uint64_t nbr : in_nbrs)
+                //towrite << " " << nbr;
+            }
+            //towrite << " out and in ";
+            for (uint64_t nbr : in_nbrs) {
                 c.create_edge(tx_id, nbr, n1);
+                //towrite <<  " " <<  nbr;
+            }
+            //towrite << "\n";
+            //std::cout << towrite.str();
             c.end_tx(tx_id);
             cur = wclock::get_time_elapsed(t);
             tx_times->emplace_back(cur-start);
