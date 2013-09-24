@@ -47,12 +47,12 @@
 #define TOP_MASK (0x0fffffffffffffffULL)
 #define GRAPH_FILE "graph.rec"
 // node programs
-#define BATCH_MSG_SIZE 1 // 1 == no batching
+#define BATCH_MSG_SIZE 5 // 1 == no batching
 // migration
 #define START_MIGR_ID SHARD_ID_INCR // first shard to get migration token
 // coordinator
 #define VT_BB_TIMEOUT 1 // epoll timeout in ms
-#define VT_NOP_TIMEOUT 10 // number of nanoseconds between successive nops
+#define VT_NOP_TIMEOUT 100 // number of nanoseconds between successive nops
 #define VT_INITIAL_CLKUPDATE_DELAY 2000 // number of millis delay to ensure all timestampers are running
 // hyperdex
 //#define HYPERDEX_COORD_IPADDR "127.0.0.1"
