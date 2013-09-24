@@ -17,9 +17,9 @@
 #include "node_prog/reach_program.h"
 #include "test_base.h"
 
-#define ML_NHOP_REQUESTS 5000
-#define NUM_NHOP_PAIRS 1
-#define MAX_HOP_COUNT 10
+#define ML_NHOP_REQUESTS 200
+#define NUM_NHOP_PAIRS 10
+#define MAX_HOP_COUNT 100
 
 std::vector<std::pair<uint64_t, uint64_t>>
 find_n_hop(test_graph &g, uint64_t hop_count, int num_pairs)
@@ -70,7 +70,7 @@ multiple_nhop_locality_prog(bool dense, bool to_exit)
     count_in >> num_nodes;
     count_in.close();
     if (dense) {
-        num_edges = (int)(5.5 * (double)num_nodes);
+        num_edges = (int)(10 * (double)num_nodes);
     } else {
         num_edges = (int)(1.5 * (double)num_nodes);
     }
@@ -87,12 +87,12 @@ multiple_nhop_locality_prog(bool dense, bool to_exit)
     rp.hops = 0;
     
     // enable migration now
-    c.start_migration();
+    //c.start_migration();
 
     // repeatedly perform same set of requests
     std::ofstream file, req_time;
     //file.open("requests.rec");
-    req_time.open("time.rec");
+    req_time.open("time_weaver.rec");
     uint64_t start, cur, prev, diff;
     start = wclock::get_time_elapsed(t);
     prev = start;
@@ -100,10 +100,11 @@ multiple_nhop_locality_prog(bool dense, bool to_exit)
         cur = wclock::get_time_elapsed(t);
         diff = cur - prev;
         DEBUG << "Test: i = " << i << ", " << diff << std::endl;
-        if (i % 10 == 0) {
-            diff = cur - start;
-            req_time << diff << std::endl;
-        }
+        req_time << diff << std::endl;
+        //if (i % 10 == 0) {
+        //    diff = cur - start;
+        //    req_time << diff << std::endl;
+        //}
         prev = cur;
         for (auto &p: pairs) {
             rp.dest = g.nodes[p.second];

@@ -88,11 +88,13 @@ namespace node_prog
         db::element::remote_node prev_node; // previous node
         uint32_t out_count; // number of requests propagated
         bool reachable;
+        uint64_t hops;
 
         reach_node_state()
             : visited(false)
             , out_count(0)
             , reachable(false)
+            , hops(MAX_UINT64)
         { }
 
         virtual ~reach_node_state() { }
@@ -102,7 +104,8 @@ namespace node_prog
             uint64_t toRet = message::size(visited)
                 + message::size(prev_node)
                 + message::size(out_count)
-                + message::size(reachable);
+                + message::size(reachable)
+                + message::size(hops);
             return toRet;
         }
 
@@ -112,6 +115,7 @@ namespace node_prog
             message::pack_buffer(packer, prev_node);
             message::pack_buffer(packer, out_count);
             message::pack_buffer(packer, reachable);
+            message::pack_buffer(packer, hops);
         }
 
         virtual void unpack(e::unpacker& unpacker)
@@ -120,6 +124,7 @@ namespace node_prog
             message::unpack_buffer(unpacker, prev_node);
             message::unpack_buffer(unpacker, out_count);
             message::unpack_buffer(unpacker, reachable);
+            message::unpack_buffer(unpacker, hops);
         }
     };
 
@@ -222,6 +227,11 @@ namespace node_prog
                 next_node = NULL;
             }
         } else { // reply mode
+            if (params.reachable) {
+                if (state.hops > params.hops) {
+                    state.hops = params.hops;
+                }
+            }
             if (((--state.out_count == 0) || params.reachable) && !state.reachable) {
                 state.reachable |= params.reachable;
                 if (state.prev_node.loc < NUM_VTS) { // sending back to vt
@@ -238,7 +248,7 @@ namespace node_prog
                     }
                 }
                 if (params.reachable) {
-                    params.hops++;
+                    params.hops = state.hops + 1;
                     params.path.emplace_back(rn);
                 }
                 next.emplace_back(std::make_pair(*next_node, params));

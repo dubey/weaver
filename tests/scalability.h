@@ -15,22 +15,21 @@
 #include "client/client.h"
 #include "test_base.h"
 
-#define SC_NUM_CLIENTS 3
 static uint64_t sc_num_clients;
 #define SC_CLIENT_OFF 100
 #define SC_NUM_NODES 1000
-#define SC_NUM_EDGES (10*SC_NUM_NODES)
 
 void
 scale_client(int client_id, std::vector<uint64_t> *tx_times)
 {
-    client::client c(client_id + SC_CLIENT_OFF, client_id);
+    client::client c(client_id + SC_CLIENT_OFF, client_id % NUM_VTS);
     uint64_t tx_id, n1, n2;
     //uint64_t first, second;
     uint64_t start, cur, prev, diff;
     timespec t;
     start = wclock::get_time_elapsed(t);
     prev = start;
+    DEBUG << "Client " << client_id << " starting" << std::endl;
     for (int i = 0; i < SC_NUM_NODES; i++) {
         tx_id = c.begin_tx();
         n1 = c.create_node(tx_id);
@@ -41,6 +40,7 @@ scale_client(int client_id, std::vector<uint64_t> *tx_times)
         diff = cur - prev;
         tx_times->emplace_back(diff);
     }
+    DEBUG << "Client " << client_id << " finishing" << std::endl;
     //for (int i = 0; i < SC_NUM_EDGES) {
     //    first = rand() % SC_NUM_NODES;
     //    second = rand() % SC_NUM_NODES;
@@ -76,4 +76,5 @@ scale_test()
         }
     }
     avg_tx_time /= (SC_NUM_NODES * sc_num_clients);
+    DEBUG << "Average tx time " << avg_tx_time << std::endl;
 }
