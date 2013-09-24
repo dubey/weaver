@@ -13,45 +13,51 @@
  */
 
 #include "client/client.h"
+#include <po6/threads/mutex.h>
 #include "test_base.h"
 
 //static uint64_t sc_num_clients;
-//#define SC_CLIENT_OFF 100
+#define SC_CLIENT_OFF 100
 //#define SC_NUM_NODES 1000
-#define OPS_PER_CLIENT = 10000
-#define PERCENT_READS = 0
-#define NUM_CLIENTS = 10
-#define NUM_NEW_EDGES = 10
+#define OPS_PER_CLIENT 10000
+#define PERCENT_READS 0
+#define NUM_CLIENTS 10
+#define NUM_NEW_EDGES 10
 
-static double[][] stats = double[OPS_PER_CLIENT][NUM_CLIENTS]
-static po6::threads::mutex monitor();
+static double stats[OPS_PER_CLIENT][NUM_CLIENTS];
+static po6::threads::mutex monitor;
 static std::vector<uint64_t> nodes = std::vector<uint64_t>();
 
-static int add_node(uint64_t n) {
+static void add_node(uint64_t n) {
     monitor.lock();
     nodes.emplace_back(n);
     monitor.unlock();
 }
 
-static void getRandomNodes(int num, std::vector<uint64_t>& toFill) {
+static void getRandomNodes(size_t num, std::vector<uint64_t>& toFill) {
     std::vector<size_t> idxs = std::vector<size_t>(num);
     monitor.lock();
     assert(nodes.size() >= num);
-    assert(toFill.isEmpty());
+    assert(toFill.empty());
     while (idxs.size() < num) {
-        Integer toAdd = rand.nextInt(nodes.size());
-        if (!idxs.contains(toAdd))
-            idxs.add(toAdd);
+        size_t toAdd = rand() % nodes.size();
+        // don't have duplicates
+        bool add = true;
+        for (auto i : idxs)
+            add = add && (i != toAdd);
+
+        if (add)
+            idxs.push_back(toAdd);
     }
     for(auto i : idxs)
-        toFill.add(vertex_ids.get(i));
+        toFill.push_back(nodes.at(i));
 }
 
 void
 scale_client(int client_id, std::vector<uint64_t>& tx_times)
 {
     client::client c(client_id + SC_CLIENT_OFF, client_id % NUM_VTS);
-    uint64_t tx_id, n1, n2;
+    uint64_t tx_id, n1;
     if (client_id == 0) {
         tx_id = c.begin_tx();
         for(int i = 0; i < NUM_NEW_EDGES ; i++) {
@@ -62,7 +68,7 @@ scale_client(int client_id, std::vector<uint64_t>& tx_times)
     //uint64_t first, second;
     int num_ops = 0;
     while (num_ops < OPS_PER_CLIENT) {
-        System.out.println("proc " + client_id + " done " + num_ops + " ops");
+        DEBUG << "Client " << client_id << " finished " << num_ops << " ops" << std::endl;
         // do writes
         for (int j = 0; j < 100-PERCENT_READS; j++) {
             std::vector<uint64_t> out_nbrs = std::vector<uint64_t>();
