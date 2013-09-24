@@ -400,10 +400,24 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
 
                 // Only per hop batching now
                 for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR; next_loc++) {
-                    if ((batched_node_progs.find(next_loc) != batched_node_progs.end() && !batched_node_progs[next_loc].empty())
-                        && next_loc != S->shard_id) {
-                        message::prepare_message(*msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, batched_node_progs[next_loc]);
-                        S->send(next_loc, msg->buf);
+                    if ((batched_node_progs.find(next_loc) != batched_node_progs.end() && !batched_node_progs[next_loc].empty())) {
+                        //&& next_loc != S->shard_id) {
+                        auto &cur_vec = batched_node_progs[next_loc];
+                        uint64_t num_progs = cur_vec.size();//batches = (cur_vec.size() - 1) / BATCH_MSG_SIZE;
+                        auto beg_iter = cur_vec.begin();
+                        auto end_iter = num_progs > BATCH_MSG_SIZE ? beg_iter + BATCH_MSG_SIZE : cur_vec.end();
+                        std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> cur_batch;
+                        while (beg_iter != cur_vec.end()) {
+                            cur_batch.insert(cur_batch.end(), std::make_move_iterator(beg_iter), std::make_move_iterator(end_iter));
+                            message::prepare_message(*msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, cur_batch);
+                            S->send(next_loc, msg->buf);
+                            beg_iter = end_iter;
+                            num_progs -= BATCH_MSG_SIZE;
+                            end_iter = num_progs > BATCH_MSG_SIZE ? beg_iter + BATCH_MSG_SIZE : cur_vec.end();
+                            cur_batch.clear();
+                        }
+                        //message::prepare_message(*msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, batched_node_progs[next_loc]);
+                        //S->send(next_loc, msg->buf);
                         batched_node_progs[next_loc].clear();
                     }
                 }
