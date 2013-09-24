@@ -24,7 +24,7 @@
 #define NUM_CLIENTS 10
 #define NUM_NEW_EDGES 10
 
-static double stats[OPS_PER_CLIENT][NUM_CLIENTS];
+//static double stats[OPS_PER_CLIENT][NUM_CLIENTS];
 static po6::threads::mutex monitor;
 static std::vector<uint64_t> nodes = std::vector<uint64_t>();
 
@@ -54,7 +54,7 @@ static void getRandomNodes(size_t num, std::vector<uint64_t>& toFill) {
 }
 
 void
-scale_client(int client_id, std::vector<uint64_t>& tx_times)
+scale_client(int client_id, std::vector<uint64_t>* tx_times)
 {
     client::client c(client_id + SC_CLIENT_OFF, client_id % NUM_VTS);
     uint64_t tx_id, n1;
@@ -65,7 +65,8 @@ scale_client(int client_id, std::vector<uint64_t>& tx_times)
         }
         c.end_tx(tx_id);
     }
-    //uint64_t first, second;
+    timespec t;
+    uint64_t start, cur;
     int num_ops = 0;
     while (num_ops < OPS_PER_CLIENT) {
         DEBUG << "Client " << client_id << " finished " << num_ops << " ops" << std::endl;
@@ -76,8 +77,7 @@ scale_client(int client_id, std::vector<uint64_t>& tx_times)
             std::vector<uint64_t> in_nbrs = std::vector<uint64_t>();
             getRandomNodes(NUM_NEW_EDGES/2, in_nbrs);
 
-            //System.out.println("node " + node + " with nieghbors " + out_nbrs + " and " + in_nbrs);
-           // long start = System.nanoTime();
+            start = wclock::get_time_elapsed(t);
             tx_id = c.begin_tx();
             n1 = c.create_node(tx_id);
             for (uint64_t nbr : out_nbrs)
@@ -85,9 +85,9 @@ scale_client(int client_id, std::vector<uint64_t>& tx_times)
             for (uint64_t nbr : in_nbrs)
                 c.create_edge(tx_id, nbr, n1);
             c.end_tx(tx_id);
+            cur = wclock::get_time_elapsed(t);
+            tx_times->emplace_back(cur-start);
 
-            //long end = System.nanoTime();
-            //stats[num_ops][proc] = (end-start) / 1e6;
             num_ops++;
             add_node(n1);
         }
@@ -96,35 +96,6 @@ scale_client(int client_id, std::vector<uint64_t>& tx_times)
             std::cerr << "reads not implemented yet" << std::endl;
         }
     }
-
-/*
-    uint64_t start, cur, prev, diff;
-    timespec t;
-    start = wclock::get_time_elapsed(t);
-    prev = start;
-    DEBUG << "Client " << client_id << " starting" << std::endl;
-    for (int i = 0; i < SC_NUM_NODES; i++) {
-        tx_id = c.begin_tx();
-        n1 = c.create_node(tx_id);
-        n2 = c.create_node(tx_id);
-        c.create_edge(tx_id, n1, n2);
-        c.end_tx(tx_id);
-        cur = wclock::get_time_elapsed(t);
-        diff = cur - prev;
-        tx_times->emplace_back(diff);
-    }
-    DEBUG << "Client " << client_id << " finishing" << std::endl;
-    //for (int i = 0; i < SC_NUM_EDGES) {
-    //    first = rand() % SC_NUM_NODES;
-    //    second = rand() % SC_NUM_NODES;
-    //    while (second == first) {
-    //        second = rand() % SC_NUM_NODES;
-    //    }
-    //    tx_id = c.begin_tx();
-    //    c.create_(tx_id);
-    //    c.end_tx(tx_id);
-    //}
-    */
 }
 
 void
