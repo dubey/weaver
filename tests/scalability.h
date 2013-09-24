@@ -116,12 +116,13 @@ scale_test()
         t[i]->join();
         assert(tx_times[i].size() == OPS_PER_CLIENT);
     }
-    /*
-    double avg_tx_time = 0;
+
+    std::ofstream stats;
+    stats.open("throughputlatency.rec");
     for (uint64_t i = 0; i < NUM_CLIENTS; i++) {
-        for (uint64_t j = 0; j < SC_NUM_NODES-1; j++) {
-            avg_tx_time += tx_times[i][j];
+        for (uint64_t j = 0; j < OPS_PER_CLIENT; j++) {
+            stats <<  tx_times[i][j] << std::endl;
         }
     }
-    */
+    stats.close();
 }
