@@ -47,7 +47,7 @@ find_long_hop(test_graph &g)
         //res = g.c->run_node_program(node_prog::REACHABILITY, initial_args);
         npair.emplace_back(std::make_pair(first, second));
         //hops.emplace_back(res->hops);
-        DEBUG << "Found request pair " << i << " of initial src-dest search" << std::endl;
+        DEBUG << "Done request " << i << " of initial src-dest search" << std::endl;
     }
     return npair;
     //uint32_t target_hops = (*std::max_element(hops.begin(), hops.end()))/2;

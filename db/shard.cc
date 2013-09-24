@@ -149,39 +149,35 @@ unpack_tx_request(void *req)
     transaction::pending_tx tx;
     bool ack = true;
     message::unpack_message(*request->msg, message::TX_INIT, vt_id, vclk, qts, tx_id, tx.writes);
-    uint64_t incr = 0;
     DEBUG << "starting tx\n";
     //ret = 0;
     for (auto upd: tx.writes) {
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ:
                 create_node(vclk, upd->handle);
-                //S->record_completed_transaction(vt_id, tx_id); // TODO: only do this once per transaction
+                S->record_completed_transaction(vt_id, tx_id); // TODO: only do this once per transaction
                 //ret = 0;
                 break;
 
             case transaction::EDGE_CREATE_REQ:
                 create_edge(vclk, upd->handle, upd->elem1, upd->elem2, upd->loc2);
-                //S->record_completed_transaction(vt_id, tx_id);
+                S->record_completed_transaction(vt_id, tx_id);
                 break;
 
             case transaction::NODE_DELETE_REQ:
                 delete_node(vclk, upd->elem1);
-                //S->record_completed_transaction(vt_id, tx_id);
+                S->record_completed_transaction(vt_id, tx_id);
                 break;
 
             case transaction::EDGE_DELETE_REQ:
                 delete_edge(vclk, upd->elem1, upd->elem2);
-                //S->record_completed_transaction(vt_id, tx_id);
+                S->record_completed_transaction(vt_id, tx_id);
                 break;
 
             default:
                 DEBUG << "unknown type" << std::endl;
         }
-        incr++;
     }
-    assert(incr == tx.writes.size());
-    S->record_completed_transaction(vt_id, tx_id, incr);
     delete request;
     if (ack) {
         // send tx confirmation to coordinator
@@ -199,7 +195,7 @@ nop(void *noparg)
 {
     db::nop_data *nop_arg = (db::nop_data*)noparg;
     //DEBUG << "nop vt_id " << nop_arg->vt_id << ", qts " << nop_arg->req_id << std::endl;
-    S->record_completed_transaction(nop_arg->vt_id, nop_arg->req_id, 1);
+    S->record_completed_transaction(nop_arg->vt_id, nop_arg->req_id);
     S->add_done_requests(nop_arg->done_reqs);
     message::message msg;
     message::prepare_message(msg, message::VT_NOP_ACK);
@@ -400,8 +396,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
 
                 // Only per hop batching now
                 for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR; next_loc++) {
-                    if ((batched_node_progs.find(next_loc) != batched_node_progs.end() && !batched_node_progs[next_loc].empty())) {
-                        //&& next_loc != S->shard_id) {
+                    if ((batched_node_progs.find(next_loc) != batched_node_progs.end() && !batched_node_progs[next_loc].empty())
+                        && next_loc != S->shard_id) {
                         auto &cur_vec = batched_node_progs[next_loc];
                         uint64_t num_progs = cur_vec.size();//batches = (cur_vec.size() - 1) / BATCH_MSG_SIZE;
                         auto beg_iter = cur_vec.begin();

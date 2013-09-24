@@ -73,7 +73,7 @@ namespace db
 
             // Consistency
         public:
-            void record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id, uint64_t incr);
+            void record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id);
             element::node* acquire_node(uint64_t node_handle);
             void release_node(element::node *n, bool migr_node);
             void wait_node(element::node *n);
@@ -181,9 +181,9 @@ namespace db
     // Consistency methods
 
     inline void
-    shard :: record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id, uint64_t incr)
+    shard :: record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id)
     {
-        thread_pool.record_completed_transaction(vt_id, transaction_completed_id, incr);
+        thread_pool.record_completed_transaction(vt_id, transaction_completed_id);
     }
 
     // find the node corresponding to given handle

@@ -49,7 +49,7 @@ struct test_graph
             }
             uint64_t n = c->create_node(tx);
             nodes.emplace_back(n);
-            edge_list.emplace(i, empty_vector);
+            edge_list.emplace(n, empty_vector);
             if (i % TX_SIZE == (TX_SIZE-1)) {
                 c->end_tx(tx);
             }
