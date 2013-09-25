@@ -56,7 +56,7 @@ namespace coordinator
         int i;
         hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute *) malloc(numPairs * sizeof(hyperdex_client_attribute));
 
-        hyperclientLock.lock();
+        //hyperclientLock.lock();
         i = 0;
         for (auto &entry: pairs_to_add) {
         //for (int i = 0; i < numPairs; i++) {
@@ -71,7 +71,7 @@ namespace coordinator
             int64_t op_id = cl.put(space, (const char *) &entry.first, sizeof(int64_t), &(attrs_to_add[i]), 1, &put_status);
             if (op_id < 0) {
                 DEBUG << "\"put\" returned " << op_id << " with status " << put_status << std::endl;
-                hyperclientLock.unlock();
+                //hyperclientLock.unlock();
                 free(attrs_to_add);
                 return;
             }
@@ -85,12 +85,12 @@ namespace coordinator
             loop_id = cl.loop(-1, &loop_status);
             if (loop_id < 0) {
                 DEBUG << "put \"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
-                hyperclientLock.unlock();
+                //hyperclientLock.unlock();
                 free(attrs_to_add);
                 return;
             }
         }
-        hyperclientLock.unlock();
+        //hyperclientLock.unlock();
         free(attrs_to_add);
     }
 
@@ -113,7 +113,7 @@ namespace coordinator
             nextHandle++;
         }
 
-        hyperclientLock.lock();
+        //hyperclientLock.lock();
         for (int i = 0; i < numNodes; i++) {
             results[i].op_id = cl.get(space, (char *) &(results[i].key), sizeof(uint64_t), 
                 &(results[i].get_status), &(results[i].attr), &(results[i].attr_size));
@@ -137,7 +137,7 @@ namespace coordinator
             }
             assert(found);
         }
-        hyperclientLock.unlock();
+        //hyperclientLock.unlock();
 
         std::vector<std::pair<uint64_t, uint64_t>> toRet;//numNodes);
         for (int i = 0; i < numNodes; i++) {
@@ -163,7 +163,7 @@ namespace coordinator
         std::vector<int64_t> results(numNodes);
         hyperdex_client_returncode get_status;
 
-        hyperclientLock.lock();
+        //hyperclientLock.lock();
         for (int i = 0; i < numNodes; i++) {
             results[i] = cl.del(space, (char *) &(toDel[i]), sizeof(uint64_t), &get_status);
             if (results[i] < 0)
@@ -190,7 +190,7 @@ namespace coordinator
             }
             assert(found);
         }
-        hyperclientLock.unlock();
+        //hyperclientLock.unlock();
     }
 
     //inline void

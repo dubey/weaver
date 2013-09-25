@@ -111,7 +111,6 @@ namespace order
             //DEBUG << "num pairs = " << num_pairs << std::endl;
             weaver_pair *wpair = (weaver_pair*)malloc(sizeof(weaver_pair) * num_pairs);
             weaver_pair *wp = wpair;
-            int cntr = 0;
             for (uint64_t i = 0; i < num_clks; i++) {
                 for (uint64_t j = i+1; j < num_clks; j++) {
                     if (!large.at(i) && !large.at(j)) {

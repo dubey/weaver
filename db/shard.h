@@ -329,10 +329,11 @@ namespace db
         n->add_edge(new_edge, fwd);
         n->updated = true;
         if (fwd) {
-            message::message msg;
-            message::prepare_message(msg, message::REVERSE_EDGE_CREATE,
-                vclk, edge, remote_node, local_node, shard_id);
-            send(remote_loc, msg.buf);
+            // TODO no reverse edges for now
+            //message::message msg;
+            //message::prepare_message(msg, message::REVERSE_EDGE_CREATE,
+            //    vclk, edge, remote_node, local_node, shard_id);
+            //send(remote_loc, msg.buf);
         }
     }
 

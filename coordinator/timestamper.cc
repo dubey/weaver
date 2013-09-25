@@ -48,8 +48,8 @@ begin_transaction(transaction::pending_tx &tx)
     vts->mutex.lock();
     for (std::shared_ptr<transaction::pending_update> upd: tx.writes) {
         //DEBUG << "updating qts for shard " << (upd->loc1-SHARD_ID_INCR) << std::endl;
-        upd->qts = vts->qts;
         vts->qts.at(upd->loc1-SHARD_ID_INCR)++; // TODO what about edge create requests, loc2?
+        upd->qts = vts->qts;
         tx_vec.at(upd->loc1-SHARD_ID_INCR).writes.emplace_back(upd);
     }
     vts->vclk.increment_clock();
@@ -108,17 +108,24 @@ periodic_update()
         // send nops to each shard
         vts->nop_time_millis = cur_time_millis;
         vts->nop_time_nanos = cur_time_nanos;
-        vc::qtimestamp_t new_qts = vts->qts;
-        if (vts->nop_acks == NUM_SHARDS) {
-            for (auto &qts: vts->qts) {
-                qts++;
+        std::vector<bool> to_nop = vts->to_nop;
+        for (uint64_t i = 0; i < NUM_SHARDS; i++) {
+            if (vts->to_nop[i]) {
+                vts->qts[i]++;
+                vts->to_nop[i] = false;
             }
         }
+        vc::qtimestamp_t new_qts = vts->qts;
+        //if (vts->nop_acks == NUM_SHARDS) {
+        //    for (auto &qts: vts->qts) {
+        //        qts++;
+        //    }
+        //}
         vts->vclk.increment_clock();
         vc::vclock vclk = vts->vclk;
         req_id = vts->generate_id();
         message::message msg;
-        if (vts->nop_acks == NUM_SHARDS) {
+        //if (vts->nop_acks == NUM_SHARDS) {
             std::vector<std::pair<uint64_t, node_prog::prog_type>> done_reqs;
             uint64_t max_done_id = vts->max_done_id;
             for (auto &x: vts->done_reqs) {
@@ -130,13 +137,15 @@ periodic_update()
             }
             vts->mutex.unlock();
             for (uint64_t i = 0; i < NUM_SHARDS; i++) {
-                message::prepare_message(msg, message::VT_NOP, vt_id, vclk, new_qts, req_id, done_reqs, max_done_id);
-                vts->send(i + SHARD_ID_INCR, msg.buf);
+                if (to_nop[i]) {
+                    message::prepare_message(msg, message::VT_NOP, vt_id, vclk, new_qts, req_id, done_reqs, max_done_id);
+                    vts->send(i + SHARD_ID_INCR, msg.buf);
+                }
             }
-            vts->nop_acks = 0;
-        } else {
-            vts->mutex.unlock();
-        }
+            //vts->nop_acks = 0;
+        //} else {
+        //    vts->mutex.unlock();
+        //}
         //if (vts->first_clock_update) {
         //    DEBUG << "clock update acks " << vts->clock_update_acks << std::endl;
         //    DEBUG << "diff " << diff << ", initial clock update delay " << VT_INITIAL_CLKUPDATE_DELAY << std::endl;
@@ -166,7 +175,7 @@ periodic_update()
 // node program stuff
 template <typename ParamsType, typename NodeStateType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType> :: 
-    unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID)
+    unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, int thread_id)
 {
     DEBUG << "starting node program on timestamper" << std::endl;
     node_prog::prog_type pType;
@@ -185,7 +194,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         mappings_to_get.insert(c_id);
     }
     if (!mappings_to_get.empty()) {
-        auto results = vts->nmap_client.get_mappings(mappings_to_get, true);
+        auto results = vts->nmap_client[thread_id]->get_mappings(mappings_to_get, true);
         assert(results.size() == mappings_to_get.size());
         for (auto &toAdd : results) {
             request_element_mappings.emplace(toAdd);
@@ -255,7 +264,7 @@ server_loop(int thread_id)
                 // client messages
                 case message::CLIENT_TX_INIT: {
                     transaction::pending_tx tx;
-                    vts->unpack_tx(*msg, tx, sender);
+                    vts->unpack_tx(*msg, tx, sender, thread_id);
                     begin_transaction(tx);
                     break;
                 }
@@ -279,9 +288,11 @@ server_loop(int thread_id)
                     break;
 
                 case message::VT_NOP_ACK:
+                    message::unpack_message(*msg, message::VT_NOP_ACK, sender);
                     vts->periodic_update_mutex.lock();
-                    vts->nop_acks++;
-                    assert(vts->nop_acks <= NUM_SHARDS);
+                    vts->to_nop.at(sender-SHARD_ID_INCR) = true;
+                    //vts->nop_acks++;
+                    //assert(vts->nop_acks <= NUM_SHARDS);
                     vts->periodic_update_mutex.unlock();
                     break;
 
@@ -298,7 +309,7 @@ server_loop(int thread_id)
 
                 case message::CLIENT_NODE_PROG_REQ:
                     message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, pType);
-                    node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), sender);
+                    node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), sender, thread_id);
                     break;
 
                 // response from a shard

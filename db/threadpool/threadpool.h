@@ -140,7 +140,7 @@ namespace thread
     inline bool
     pool :: check_qts(uint64_t vt_id, uint64_t timestamp)
     {
-        return (timestamp <= qts.at(vt_id));
+        return (timestamp == (qts.at(vt_id)+1));
     }
 
     // increment a queue timestamp and most recent transation id after processing request
