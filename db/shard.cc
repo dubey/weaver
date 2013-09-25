@@ -199,7 +199,7 @@ unpack_tx_request(void *req)
 inline void
 nop(void *noparg)
 {
-    static uint64_t call_count = 0;
+    //static uint64_t call_count = 0;
     db::nop_data *nop_arg = (db::nop_data*)noparg;
     //if (shard_id == SHARD_ID_INCR) {
     //    std::cout << "Processing NOP " << call_count++ << " from vt " << nop_arg->vt_id << std::endl;
@@ -208,7 +208,7 @@ nop(void *noparg)
     S->record_completed_transaction(nop_arg->vt_id, nop_arg->req_id);
     S->add_done_requests(nop_arg->done_reqs);
     message::message msg;
-    message::prepare_message(msg, message::VT_NOP_ACK);
+    message::prepare_message(msg, message::VT_NOP_ACK, shard_id);
     S->send(nop_arg->vt_id, msg.buf);
     // increment nop count, trigger migration step 2 after check
     bool move_migr_node = true;
@@ -793,7 +793,7 @@ msgrecv_loop()
             case message::MIGRATED_NBR_ACK:
                 request = new db::graph_request(mtype, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(0, S->zero_clk, unpack_update_request, request);
-                S->add_write_request(vt_id, thr);
+                S->add_write_request(rand() % NUM_VTS, thr);
                 rec_msg.reset(new message::message());
                 break;
 

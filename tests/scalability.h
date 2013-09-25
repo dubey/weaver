@@ -101,6 +101,7 @@ scale_client(int client_id, std::vector<uint64_t>*)
 
             num_ops++;
             add_node(n1);
+            DEBUG << "Client " << client_id << " finished " << num_ops << " ops" << std::endl;
         }
         // do reads
         for (int j = 0; j < PERCENT_READS; j++) {

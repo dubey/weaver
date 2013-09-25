@@ -48,6 +48,7 @@ namespace coordinator
             std::unordered_map<uint64_t, tx_reply> tx_replies;
             timespec tspec;
             uint64_t nop_time_millis, nop_time_nanos, first_nop_time_millis, clock_update_acks, nop_acks;
+            std::vector<bool> to_nop;
             bool first_clock_update;
             // node prog
             // map from req_id to client_id that ensures a single response to a node program
@@ -87,6 +88,7 @@ namespace coordinator
         , qts(NUM_SHARDS, 0)
         , clock_update_acks(NUM_VTS-1)
         , nop_acks(NUM_SHARDS)
+        , to_nop(NUM_SHARDS, true)
         , first_clock_update(true)
         , max_done_id(0)
     {
@@ -163,6 +165,7 @@ namespace coordinator
         }
         std::unordered_map<uint64_t, uint64_t> put_map = request_element_mappings;
         std::unordered_map<uint64_t, uint64_t> put_edge_map = request_edge_mappings;
+        DEBUG << "NMAP client for thread " << thread_id << std::endl;
         if (!mappings_to_get.empty()) {
             for (auto &toAdd : nmap_client[thread_id]->get_mappings(mappings_to_get, true)) {
                 request_element_mappings.emplace(toAdd);
