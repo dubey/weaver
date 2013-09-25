@@ -57,7 +57,7 @@ namespace coordinator
             uint64_t max_done_id;
             std::unordered_map<node_prog::prog_type, std::unordered_set<uint64_t>> done_reqs;
             // node map client
-            coordinator::nmap_stub nmap_client;
+            std::vector<coordinator::nmap_stub*> nmap_client;
             // mutexes
             po6::threads::mutex mutex // big mutex for clock and timestamper DS
                     , loc_gen_mutex
@@ -72,7 +72,7 @@ namespace coordinator
         public:
             timestamper(uint64_t id);
             busybee_returncode send(uint64_t shard_id, std::auto_ptr<e::buffer> buf);
-            void unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id);
+            void unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id, int tid);
             //void clean_nmap_space();
             uint64_t generate_id();
     };
@@ -101,6 +101,9 @@ namespace coordinator
         done_reqs.emplace(node_prog::REACHABILITY, empty_set);
         done_reqs.emplace(node_prog::DIJKSTRA, empty_set);
         done_reqs.emplace(node_prog::CLUSTERING, empty_set);
+        for (int i = 0; i < NUM_THREADS; i++) {
+            nmap_client.push_back(new coordinator::nmap_stub());
+        }
     }
 
     inline busybee_returncode
@@ -114,7 +117,7 @@ namespace coordinator
     }
 
     inline void
-    timestamper :: unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id)
+    timestamper :: unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id, int thread_id)
     {
         message::unpack_client_tx(msg, tx);
         tx.client_id = client_id;
@@ -161,19 +164,19 @@ namespace coordinator
         std::unordered_map<uint64_t, uint64_t> put_map = request_element_mappings;
         std::unordered_map<uint64_t, uint64_t> put_edge_map = request_edge_mappings;
         if (!mappings_to_get.empty()) {
-            for (auto &toAdd : nmap_client.get_mappings(mappings_to_get, true)) {
+            for (auto &toAdd : nmap_client[thread_id]->get_mappings(mappings_to_get, true)) {
                 request_element_mappings.emplace(toAdd);
             }
         }
         if (!edge_mappings_to_get.empty()) {
-            for (auto &toAdd: nmap_client.get_mappings(edge_mappings_to_get, false)) {
+            for (auto &toAdd: nmap_client[thread_id]->get_mappings(edge_mappings_to_get, false)) {
                 request_edge_mappings.emplace(toAdd);
             }
         }
 
         // insert mappings
-        nmap_client.put_mappings(put_map, true);
-        nmap_client.put_mappings(put_edge_map, false);
+        nmap_client[thread_id]->put_mappings(put_map, true);
+        nmap_client[thread_id]->put_mappings(put_edge_map, false);
 
         // unpack get responses from hyperdex
         for (auto upd: tx.writes) {

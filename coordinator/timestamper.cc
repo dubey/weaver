@@ -166,7 +166,7 @@ periodic_update()
 // node program stuff
 template <typename ParamsType, typename NodeStateType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType> :: 
-    unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID)
+    unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, int thread_id)
 {
     DEBUG << "starting node program on timestamper" << std::endl;
     node_prog::prog_type pType;
@@ -185,7 +185,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         mappings_to_get.insert(c_id);
     }
     if (!mappings_to_get.empty()) {
-        auto results = vts->nmap_client.get_mappings(mappings_to_get, true);
+        auto results = vts->nmap_client[thread_id]->get_mappings(mappings_to_get, true);
         assert(results.size() == mappings_to_get.size());
         for (auto &toAdd : results) {
             request_element_mappings.emplace(toAdd);
@@ -255,7 +255,7 @@ server_loop(int thread_id)
                 // client messages
                 case message::CLIENT_TX_INIT: {
                     transaction::pending_tx tx;
-                    vts->unpack_tx(*msg, tx, sender);
+                    vts->unpack_tx(*msg, tx, sender, thread_id);
                     begin_transaction(tx);
                     break;
                 }
@@ -298,7 +298,7 @@ server_loop(int thread_id)
 
                 case message::CLIENT_NODE_PROG_REQ:
                     message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, pType);
-                    node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), sender);
+                    node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), sender, thread_id);
                     break;
 
                 // response from a shard

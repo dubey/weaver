@@ -425,7 +425,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
 
 template <typename ParamsType, typename NodeStateType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType> :: 
-    unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID)
+    unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, int)
 {
     UNUSED(msg);
     UNUSED(clientID);
