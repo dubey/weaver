@@ -46,7 +46,12 @@ void shard_daemon_end();
 void
 end_program(int param)
 {
-    std::cerr << "Ending program, param = " << param << std::endl;
+    std::cerr << "Ending program, param = " << param << ", kronos num calls " << order::call_times->size() << std::endl;
+    std::ofstream ktime("kronos_time.rec");
+    for (auto x: *order::call_times) {
+        ktime << x << std::endl;
+    }
+    ktime.close();
     exit(0);
 }
 
@@ -100,7 +105,7 @@ migrated_nbr_ack(uint64_t from_loc, std::vector<uint64_t> &target_req_id)
         }
     }
     S->migr_edge_acks[from_loc - SHARD_ID_INCR] = false;
-    DEBUG << "Got edge ack from " << from_loc << std::endl;
+    //DEBUG << "Got edge ack from " << from_loc << std::endl;
     S->migration_mutex.unlock();
 }
 
@@ -149,7 +154,7 @@ unpack_tx_request(void *req)
     transaction::pending_tx tx;
     bool ack = true;
     message::unpack_message(*request->msg, message::TX_INIT, vt_id, vclk, qts, tx_id, tx.writes);
-    DEBUG << "starting tx\n";
+    DEBUG << "starting tx at shard " << shard_id << "\n";
     //ret = 0;
     for (auto upd: tx.writes) {
         switch (upd->type) {
@@ -178,13 +183,14 @@ unpack_tx_request(void *req)
                 DEBUG << "unknown type" << std::endl;
         }
     }
+    //S->record_completed_transaction(vt_id, tx_id, tx.writes.size());
     delete request;
     if (ack) {
         // send tx confirmation to coordinator
         message::message conf_msg;
         message::prepare_message(conf_msg, message::TX_DONE, tx_id);
         S->send(vt_id, conf_msg.buf);
-        DEBUG << "done tx\n";
+        DEBUG << "done tx at shard " << shard_id << "\n";
     }
 }
 
@@ -193,7 +199,11 @@ unpack_tx_request(void *req)
 inline void
 nop(void *noparg)
 {
+    static uint64_t call_count = 0;
     db::nop_data *nop_arg = (db::nop_data*)noparg;
+    //if (shard_id == SHARD_ID_INCR) {
+    //    std::cout << "Processing NOP " << call_count++ << " from vt " << nop_arg->vt_id << std::endl;
+    //}
     //DEBUG << "nop vt_id " << nop_arg->vt_id << ", qts " << nop_arg->req_id << std::endl;
     S->record_completed_transaction(nop_arg->vt_id, nop_arg->req_id);
     S->add_done_requests(nop_arg->done_reqs);

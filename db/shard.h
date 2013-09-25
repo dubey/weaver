@@ -73,7 +73,7 @@ namespace db
 
             // Consistency
         public:
-            void record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id);
+            void record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id, uint64_t incr);
             element::node* acquire_node(uint64_t node_handle);
             void release_node(element::node *n, bool migr_node);
             void wait_node(element::node *n);
@@ -174,6 +174,7 @@ namespace db
         thread::pool::S = this;
         initialize_busybee(bb, shard_id, myloc);
         order::kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT, KRONOS_NUM_VTS);
+        order::call_times = new std::list<uint64_t>();
         assert(NUM_VTS == KRONOS_NUM_VTS);
         message::prog_state = &node_prog_req_state;
     }
@@ -181,9 +182,9 @@ namespace db
     // Consistency methods
 
     inline void
-    shard :: record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id)
+    shard :: record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id, uint64_t incr=1)
     {
-        thread_pool.record_completed_transaction(vt_id, transaction_completed_id);
+        thread_pool.record_completed_transaction(vt_id, transaction_completed_id, incr);
     }
 
     // find the node corresponding to given handle

@@ -15,17 +15,20 @@
 #ifndef __WEAVER_ORDERING__
 #define __WEAVER_ORDERING__
 
+#include <list>
 #include <chronos.h>
 #include <po6/threads/mutex.h>
 
 #include "common/weaver_constants.h"
 #include "common/vclock.h"
+#include "common/clock.h"
 
 namespace order
 {
     // static chronos client (and assoc. mutex), which ensures only one client per shard
     static chronos_client *kronos_cl;
     static po6::threads::mutex kronos_mutex;
+    static std::list<uint64_t> *call_times;
 
     // return the smaller of the two clocks
     // return -1 if clocks cannot be compared
@@ -104,9 +107,11 @@ namespace order
         } else {
             // need to call Kronos
             uint64_t num_pairs = ((num_clks - num_large) * (num_clks - num_large - 1)) / 2;
+            //std::cout << "Num clks " << num_clks << " num_large " << num_large << " num pairs " << num_pairs << std::endl;
             //DEBUG << "num pairs = " << num_pairs << std::endl;
             weaver_pair *wpair = (weaver_pair*)malloc(sizeof(weaver_pair) * num_pairs);
             weaver_pair *wp = wpair;
+            int cntr = 0;
             for (uint64_t i = 0; i < num_clks; i++) {
                 for (uint64_t j = i+1; j < num_clks; j++) {
                     if (!large.at(i) && !large.at(j)) {
@@ -116,24 +121,31 @@ namespace order
                             wp->lhs[k] = clocks.at(i).clock.at(k);
                             wp->rhs[k] = clocks.at(j).clock.at(k);
                             //DEBUG << wp->lhs[k] << " " << wp->rhs[k] << std::endl;
+                            //std::cout << wp->lhs[k] << " " << clocks.at(i).clock.at(k) << "," << wp->rhs[k] << " " << clocks.at(j).clock.at(k) << std::endl;
                         }
                         wp->lhs_id = clocks.at(i).vt_id;
                         wp->rhs_id = clocks.at(j).vt_id;
                         wp->flags = CHRONOS_SOFT_FAIL;
-                        if (i == 0) {
-                            wp->order = CHRONOS_HAPPENS_BEFORE; // assign a preference of the first to happen before all others
-                        } else {
-                            wp->order = CHRONOS_CONCURRENT;
-                        }
+                        wp->order = CHRONOS_HAPPENS_BEFORE;
+                        //if (i == 0) {
+                        //    wp->order = CHRONOS_HAPPENS_BEFORE; // assign a preference of the first to happen before all others
+                        //} else {
+                        //    wp->order = CHRONOS_CONCURRENT;
+                        //}
                         wp++;
+                        //std::cout << "In event order, num_pairs = " << num_pairs << ", counter = " << ++cntr << std::endl;
                     }
                 }
             }
             chronos_returncode status;
             ssize_t cret;
             kronos_mutex.lock();
+            timespec ts;
+            uint64_t start_time = wclock::get_time_elapsed(ts);
             int64_t ret = kronos_cl->weaver_order(wpair, 1, &status, &cret);
             ret = kronos_cl->wait(ret, 100000, &status);
+            uint64_t end_time = wclock::get_time_elapsed(ts);
+            call_times->emplace_back(end_time-start_time);
             kronos_mutex.unlock();
             wp = wpair;
             std::vector<bool> large_upd = large;
@@ -154,12 +166,12 @@ namespace order
                                 DEBUG << "unexpected Kronos order" << wp->order << std::endl;
                                 assert(false); // shouldn't reach here
                         }
-                        free(wp->lhs);
-                        free(wp->rhs);
+                        //free(wp->lhs);
+                        //free(wp->rhs);
                     }
                 }
             }
-            free(wpair);
+            //free(wpair);
             //DEBUG << "done Kronos call, going to return now\n";
             for (uint64_t min_pos = 0; min_pos < num_clks; min_pos++) {
                 if (!large_upd.at(min_pos)) {

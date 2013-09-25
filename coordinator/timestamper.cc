@@ -17,7 +17,7 @@
 #include <vector>
 #include <signal.h>
 
-//#define __WEAVER_DEBUG__
+#define __WEAVER_DEBUG__
 #include "common/vclock.h"
 #include "common/transaction.h"
 #include "node_prog/node_prog_type.h"
@@ -47,7 +47,7 @@ begin_transaction(transaction::pending_tx &tx)
     std::vector<transaction::pending_tx> tx_vec(NUM_SHARDS, transaction::pending_tx());
     vts->mutex.lock();
     for (std::shared_ptr<transaction::pending_update> upd: tx.writes) {
-        DEBUG << "updating qts for shard " << (upd->loc1-SHARD_ID_INCR) << std::endl;
+        //DEBUG << "updating qts for shard " << (upd->loc1-SHARD_ID_INCR) << std::endl;
         upd->qts = vts->qts;
         vts->qts.at(upd->loc1-SHARD_ID_INCR)++; // TODO what about edge create requests, loc2?
         tx_vec.at(upd->loc1-SHARD_ID_INCR).writes.emplace_back(upd);
@@ -67,6 +67,7 @@ begin_transaction(transaction::pending_tx &tx)
             vts->tx_replies.at(tx.id).count++;
         }
     }
+    DEBUG << "sent tx\n";
     vts->mutex.unlock(); // TODO: move sending out of critical section
 }
 
@@ -75,8 +76,10 @@ inline void
 end_transaction(uint64_t tx_id)
 {
     vts->mutex.lock();
+    DEBUG << "Got end tx\n";
     if (--vts->tx_replies.at(tx_id).count == 0) {
         // done tx
+        DEBUG << "Actually ending tx\n";
         uint64_t client_id = vts->tx_replies.at(tx_id).client_id;
         vts->tx_replies.erase(tx_id);
         vts->mutex.unlock();

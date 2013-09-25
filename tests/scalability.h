@@ -64,15 +64,14 @@ static void getRandomNodes(const size_t num, std::vector<uint64_t>& toFill) {
 }
 
 void
-scale_client(int client_id, std::vector<uint64_t>* tx_times)
+scale_client(int client_id, std::vector<uint64_t>*)
 {
     client::client c(client_id + SC_CLIENT_OFF, client_id % NUM_VTS);
     uint64_t tx_id, n1;
-    timespec t;
-    uint64_t start, cur;
+    //timespec t;
+    //uint64_t start, cur;
     int num_ops = 0;
     while (num_ops < OPS_PER_CLIENT) {
-        DEBUG << "Client " << client_id << " finished " << num_ops << " ops" << std::endl;
         // do writes
         for (int j = 0; j < 100-PERCENT_READS; j++) {
             std::vector<uint64_t> out_nbrs = std::vector<uint64_t>();
@@ -81,7 +80,7 @@ scale_client(int client_id, std::vector<uint64_t>* tx_times)
             getRandomNodes(NUM_NEW_EDGES/2, in_nbrs);
 
             //std::ostringstream towrite;
-            start = wclock::get_time_elapsed(t);
+            //start = wclock::get_time_elapsed(t);
             tx_id = c.begin_tx();
             n1 = c.create_node(tx_id);
             //towrite << n1 << " has neighbors:";
@@ -97,8 +96,8 @@ scale_client(int client_id, std::vector<uint64_t>* tx_times)
             //towrite << "\n";
             //std::cout << towrite.str();
             c.end_tx(tx_id);
-            cur = wclock::get_time_elapsed(t);
-            tx_times->emplace_back(cur-start);
+            //cur = wclock::get_time_elapsed(t);
+            //tx_times->emplace_back(cur-start);
 
             num_ops++;
             add_node(n1);
@@ -107,6 +106,7 @@ scale_client(int client_id, std::vector<uint64_t>* tx_times)
         for (int j = 0; j < PERCENT_READS; j++) {
             std::cerr << "reads not implemented yet" << std::endl;
         }
+        DEBUG << "Client " << client_id << " finished " << num_ops << " ops" << std::endl;
     }
 }
 
@@ -130,20 +130,23 @@ scale_test()
 
     std::vector<uint64_t> tx_times[NUM_CLIENTS];
     std::thread *t[NUM_CLIENTS];
+    timespec ts;
+    uint64_t start = wclock::get_time_elapsed_millis(ts);
     for (uint64_t i = 0; i < NUM_CLIENTS; i++) {
         t[i] = new std::thread(scale_client, i, &tx_times[i]);
     }
     for (uint64_t i = 0; i < NUM_CLIENTS; i++) {
         t[i]->join();
-        assert(tx_times[i].size() == OPS_PER_CLIENT);
+        //assert(tx_times[i].size() == OPS_PER_CLIENT);
     }
-
-    std::ofstream stats;
-    stats.open("throughputlatency.rec");
-    for (uint64_t i = 0; i < NUM_CLIENTS; i++) {
-        for (uint64_t j = 0; j < OPS_PER_CLIENT; j++) {
-            stats <<  tx_times[i][j]/1e6 << std::endl;
-        }
-    }
-    stats.close();
+    uint64_t end = wclock::get_time_elapsed_millis(ts);
+    DEBUG << "Time taken = " << (end - start) << std::endl;
+    //std::ofstream stats;
+    //stats.open("throughputlatency.rec");
+    //for (uint64_t i = 0; i < NUM_CLIENTS; i++) {
+    //    for (uint64_t j = 0; j < OPS_PER_CLIENT; j++) {
+    //        stats <<  tx_times[i][j]/1e6 << std::endl;
+    //    }
+    //}
+    //stats.close();
 }

@@ -93,7 +93,7 @@ namespace thread
             void add_read_request(uint64_t vt_id, unstarted_thread*);
             void add_write_request(uint64_t vt_id, unstarted_thread*);
             bool check_qts(uint64_t vt_id, uint64_t qts);
-            void record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id);
+            void record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id, uint64_t incr);
 
         public:
             pool(int n_threads);
@@ -145,11 +145,11 @@ namespace thread
 
     // increment a queue timestamp and most recent transation id after processing request
     inline void
-    pool :: record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id)
+    pool :: record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id, uint64_t incr)
     {
         queue_mutex.lock();
         //DEBUG << "incrementing qts for vt " << vt_id << std::endl;
-        qts.at(vt_id)++;
+        qts.at(vt_id) += incr;
         last_ids.at(vt_id) = transaction_completed_id;
         queue_cond.broadcast();
         queue_mutex.unlock();
