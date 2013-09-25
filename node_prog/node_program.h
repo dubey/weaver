@@ -30,6 +30,7 @@
 #include "node_prog_type.h"
 //#include "dijkstra_program.h"
 #include "reach_program.h"
+#include "n_hop_reach_program.h"
 //#include "clustering_program.h"
 
 namespace coordinator
