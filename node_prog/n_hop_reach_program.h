@@ -219,6 +219,8 @@ namespace node_prog
                         DEBUG << "no more nodes to traverse\n";
                         false_reply = true;
                     }
+                } else {
+                    false_reply = true;
                 }
             }
             if (false_reply) {
