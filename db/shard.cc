@@ -17,7 +17,7 @@
 #include <e/buffer.h>
 #include "busybee_constants.h"
 
-//#define __WEAVER_DEBUG__
+#define __WEAVER_DEBUG__
 #include "common/event_order.h"
 #include "common/weaver_constants.h"
 #include "common/message_graph_elem.h"
@@ -199,7 +199,7 @@ unpack_tx_request(void *req)
 inline void
 nop(void *noparg)
 {
-    //static uint64_t call_count = 0;
+    static uint64_t call_count = 0;
     db::nop_data *nop_arg = (db::nop_data*)noparg;
     //if (shard_id == SHARD_ID_INCR) {
     //    std::cout << "Processing NOP " << call_count++ << " from vt " << nop_arg->vt_id << std::endl;
@@ -207,9 +207,6 @@ nop(void *noparg)
     //DEBUG << "nop vt_id " << nop_arg->vt_id << ", qts " << nop_arg->req_id << std::endl;
     S->record_completed_transaction(nop_arg->vt_id, nop_arg->req_id);
     S->add_done_requests(nop_arg->done_reqs);
-    message::message msg;
-    message::prepare_message(msg, message::VT_NOP_ACK, shard_id);
-    S->send(nop_arg->vt_id, msg.buf);
     // increment nop count, trigger migration step 2 after check
     bool move_migr_node = true;
     bool initiate_migration = false;
@@ -229,11 +226,11 @@ nop(void *noparg)
             S->migr_chance = 0;
         }
     }
+    std::cout << "Nop cnt " << call_count++ << ", done ids: " << S->max_done_id[nop_arg->vt_id] <<" and " << nop_arg->max_done_id<< std::endl;
     assert(S->max_done_id[nop_arg->vt_id] <= nop_arg->max_done_id);
     S->max_done_id[nop_arg->vt_id] = nop_arg->max_done_id;
     bool step3 = check_step3();
     S->migration_mutex.unlock();
-    free(nop_arg);
     assert(!(move_migr_node && initiate_migration));
     assert(!(step3 && initiate_migration));
     assert(!(move_migr_node && step3));
@@ -244,6 +241,10 @@ nop(void *noparg)
     } else if (step3) {
         migrate_node_step3();
     }
+    message::message msg;
+    message::prepare_message(msg, message::VT_NOP_ACK, shard_id);
+    S->send(nop_arg->vt_id, msg.buf);
+    free(nop_arg);
 }
 
 template <typename NodeStateType>
@@ -278,8 +279,9 @@ unpack_node_program(void *req)
     db::graph_request *request = (db::graph_request *) req;
     node_prog::prog_type pType;
 
-    //DEBUG << "node program got of priority queue to run!" << std::endl;
+    DEBUG << "node program got of priority queue to run!" << std::endl;
     message::unpack_message(*request->msg, message::NODE_PROG, pType);
+    DEBUG << "got prog type " << pType << std::endl;
     node_prog::programs.at(pType)->unpack_and_run_db(std::move(request->msg));
     delete request;
 }
@@ -305,7 +307,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     // unpack the node program
     try {
         message::unpack_message(*msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, start_node_params);//, from_shard, from_qts);
-        //DEBUG << "node program unpacked" << std::endl;
+        DEBUG << "node program unpacked" << std::endl;
         assert(req_vclock.clock.size() == NUM_VTS);
     } catch (std::bad_alloc& ba) {
         DEBUG << "bad_alloc caught " << ba.what() << std::endl;
@@ -335,7 +337,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
             this_node.handle = node_handle;
             // TODO maybe use a try-lock later so forward progress can continue on other nodes in list
             db::element::node *node = S->acquire_node(node_handle);
-            //DEBUG << "node acquired!" << std::endl;
+            DEBUG << "node acquired!" << std::endl;
             if (node == NULL || order::compare_two_vts(node->get_del_time(), req_vclock)==0) { // TODO: TIMESTAMP
                 DEBUG << "\tBUFFERING migr node read for node " << node_handle << std::endl;
                 if (node != NULL) {
@@ -365,7 +367,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
                 S->release_node(node);
                 S->send(new_loc, msg->buf);
             } else { // node does exist
-                //DEBUG << "getting state" << std::endl;
+                DEBUG << "getting state" << std::endl;
                 //XXX assert(node->state == db::element::node::mode::STABLE);
                 // bind cache getter and putter function variables to functions
                 std::shared_ptr<NodeStateType> state = get_node_state<NodeStateType>(prog_type_recvd,
@@ -379,14 +381,16 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
                     break;
                 }
                 // call node program
+                DEBUG << "calling program for node with " << node->out_edges.size() << " neighbors" << std::endl;
                 auto next_node_params = enclosed_node_prog_func(req_id, *node, this_node,
                         params, // actual parameters for this node program
                         node_state_getter, req_vclock);
+                DEBUG << "finished calling program, " << next_node_params.size() << "next nodes" << std::endl;
                 // batch the newly generated node programs for onward propagation
                 S->msg_count_mutex.lock();
                 for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                     uint64_t loc = res.first.loc;
-                    //DEBUG << "Node prog has to be sent to loc " << loc << std::endl;
+                    DEBUG << "Node prog has to be sent to loc " << loc << std::endl;
                     if (loc == vt_id) {
                         // signal to send back to vector timestamper that issued request
                         // TODO mark done
@@ -395,7 +399,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
                         message::prepare_message(*msg, message::NODE_PROG_RETURN, prog_type_recvd, req_id, temppair);
                         S->send(vt_id, msg->buf);
                     } else {
-                        //DEBUG << "forwarding node prog to shard " << loc << std::endl;
+                        DEBUG << "forwarding node prog to shard " << loc << std::endl;
                         batched_node_progs[loc].emplace_back(res.first.handle, std::move(res.second), this_node);
                         S->agg_msg_count[node_handle]++;
                         S->request_count[loc]++; // increment count of msges sent to loc
@@ -413,6 +417,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
                         batched_node_progs[next_loc].clear();
                     }
                 }
+                DEBUG << "done one round of node prog\n";
             }
         }
         start_node_params = std::move(batched_node_progs[S->shard_id]);

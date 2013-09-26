@@ -15,16 +15,16 @@
 #include "client/client.h"
 #include <po6/threads/mutex.h>
 #include "test_base.h"
+#include "node_prog/n_hop_reach_program.h"
 
 //static uint64_t sc_num_clients;
 #define SC_CLIENT_OFF 100
 //#define SC_NUM_NODES 1000
 #define OPS_PER_CLIENT 1000
-#define PERCENT_READS 0
-#define NUM_CLIENTS 10
-#define NUM_NEW_EDGES 10
+#define PERCENT_READS 50
+#define NUM_CLIENTS 5
+#define NUM_NEW_EDGES 2
 
-//static double stats[OPS_PER_CLIENT][NUM_CLIENTS];
 static po6::threads::mutex monitor;
 static std::vector<uint64_t> nodes = std::vector<uint64_t>();
 
@@ -64,12 +64,10 @@ static void getRandomNodes(const size_t num, std::vector<uint64_t>& toFill) {
 }
 
 void
-scale_client(int client_id, std::vector<uint64_t>*)
+scale_client(int client_id)
 {
     client::client c(client_id + SC_CLIENT_OFF, client_id % NUM_VTS);
     uint64_t tx_id, n1;
-    //timespec t;
-    //uint64_t start, cur;
     int num_ops = 0;
     while (num_ops < OPS_PER_CLIENT) {
         // do writes
@@ -105,9 +103,22 @@ scale_client(int client_id, std::vector<uint64_t>*)
         }
         // do reads
         for (int j = 0; j < PERCENT_READS; j++) {
-            std::cerr << "reads not implemented yet" << std::endl;
+            // pick two random nodes to do reachability for
+            std::vector<uint64_t> sourcedest;
+            getRandomNodes(2, sourcedest);
+            node_prog::n_hop_reach_params rp;
+            std::vector<std::pair<uint64_t, node_prog::n_hop_reach_params>> initial_args;
+            rp.returning = false;
+            rp.reachable = false;
+            rp.prev_node.loc = COORD_ID;
+            rp.hops = 0;
+            rp.max_hops = 2;
+            rp.dest = sourcedest[1];
+            initial_args.emplace_back(std::make_pair(sourcedest[0], rp));
+            std::unique_ptr<node_prog::n_hop_reach_params> res = c.run_node_program(node_prog::N_HOP_REACHABILITY, initial_args);
+            num_ops++;
+            DEBUG << "Client " << client_id << " finished " << num_ops << " ops" << std::endl;
         }
-        DEBUG << "Client " << client_id << " finished " << num_ops << " ops" << std::endl;
     }
 }
 
@@ -120,7 +131,10 @@ scale_test()
     ncli >> sc_num_clients;
     ncli.close();
     */
+
+    DEBUG << "creating initial client" << std::endl;
     client::client c(NUM_CLIENTS + SC_CLIENT_OFF, 0);
+    DEBUG << "initial client created" << std::endl;
     uint64_t tx_id;
     // make first 10 nodes
     tx_id = c.begin_tx();
@@ -129,19 +143,22 @@ scale_test()
     }
     c.end_tx(tx_id);
 
-    std::vector<uint64_t> tx_times[NUM_CLIENTS];
     std::thread *t[NUM_CLIENTS];
+    DEBUG << "starting threads" << std::endl;
     timespec ts;
     uint64_t start = wclock::get_time_elapsed_millis(ts);
     for (uint64_t i = 0; i < NUM_CLIENTS; i++) {
-        t[i] = new std::thread(scale_client, i, &tx_times[i]);
+        t[i] = new std::thread(scale_client, i);
     }
     for (uint64_t i = 0; i < NUM_CLIENTS; i++) {
         t[i]->join();
-        //assert(tx_times[i].size() == OPS_PER_CLIENT);
     }
+
     uint64_t end = wclock::get_time_elapsed_millis(ts);
-    DEBUG << "Time taken = " << (end - start) << std::endl;
+    DEBUG << "Time taken = " << (end-start) << std::endl;
+    //double op_mult = (PERCENT_READS + (100-PERCENT_READS)*(1+NUM_NEW_EDGES)) /100.;
+    double div = NUM_CLIENTS * OPS_PER_CLIENT;
+    DEBUG << "Per op = " << (end-start)/div << std::endl;
     //std::ofstream stats;
     //stats.open("throughputlatency.rec");
     //for (uint64_t i = 0; i < NUM_CLIENTS; i++) {

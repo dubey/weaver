@@ -27,6 +27,7 @@ namespace node_prog
     {
         DEFAULT,
         REACHABILITY,
+        N_HOP_REACHABILITY,
         DIJKSTRA,
         CLUSTERING
     };
