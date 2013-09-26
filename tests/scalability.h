@@ -25,7 +25,6 @@
 #define NUM_CLIENTS 5
 #define NUM_NEW_EDGES 2
 
-static uint64_t stats[NUM_CLIENTS];
 static po6::threads::mutex monitor;
 static std::vector<uint64_t> nodes = std::vector<uint64_t>();
 
@@ -159,7 +158,7 @@ scale_test()
     DEBUG << "Time taken = " << (end-start) << std::endl;
     //double op_mult = (PERCENT_READS + (100-PERCENT_READS)*(1+NUM_NEW_EDGES)) /100.;
     double div = NUM_CLIENTS * OPS_PER_CLIENT;
-    DEBUG << "Per op = " << total_time/div << std::endl;
+    DEBUG << "Per op = " << (end-start)/div << std::endl;
     //std::ofstream stats;
     //stats.open("throughputlatency.rec");
     //for (uint64_t i = 0; i < NUM_CLIENTS; i++) {
