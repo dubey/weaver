@@ -160,30 +160,30 @@ unpack_tx_request(void *req)
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ:
                 create_node(vclk, upd->handle);
-                S->record_completed_transaction(vt_id, tx_id); // TODO: only do this once per transaction
+                //S->record_completed_transaction(vt_id, tx_id); // TODO: only do this once per transaction
                 //ret = 0;
                 break;
 
             case transaction::EDGE_CREATE_REQ:
                 create_edge(vclk, upd->handle, upd->elem1, upd->elem2, upd->loc2);
-                S->record_completed_transaction(vt_id, tx_id);
+                //S->record_completed_transaction(vt_id, tx_id);
                 break;
 
             case transaction::NODE_DELETE_REQ:
                 delete_node(vclk, upd->elem1);
-                S->record_completed_transaction(vt_id, tx_id);
+                //S->record_completed_transaction(vt_id, tx_id);
                 break;
 
             case transaction::EDGE_DELETE_REQ:
                 delete_edge(vclk, upd->elem1, upd->elem2);
-                S->record_completed_transaction(vt_id, tx_id);
+                //S->record_completed_transaction(vt_id, tx_id);
                 break;
 
             default:
-                DEBUG << "unknown type" << std::endl;
+                std::cout << "unknown type" << std::endl;
         }
     }
-    //S->record_completed_transaction(vt_id, tx_id, tx.writes.size());
+    S->record_completed_transaction(vt_id, tx_id, tx.writes.size());
     delete request;
     if (ack) {
         // send tx confirmation to coordinator

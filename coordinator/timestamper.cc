@@ -250,9 +250,9 @@ server_loop(int thread_id)
             DEBUG << "msg recv error: " << ret << std::endl;
             continue;
         } else if (ret == BUSYBEE_TIMEOUT) {
-            if (thread_id == 0) {
+            //if (thread_id == 0) {
                 periodic_update();
-            }
+            //}
             continue;
         } else {
             // good to go, unpack msg
@@ -346,9 +346,9 @@ server_loop(int thread_id)
                 default:
                     std::cerr << "unexpected msg type " << mtype << std::endl;
             }
-            if (thread_id == 0) {
+            //if (thread_id == 0) {
                 periodic_update();
-            }
+            //}
         }
     }
 }

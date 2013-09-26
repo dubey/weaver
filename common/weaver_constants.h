@@ -40,7 +40,7 @@
 #define SHARDS_DESC_FILE "../common/shards"
 // weaver setup
 #define NUM_SHARDS 8
-#define NUM_VTS 4
+#define NUM_VTS 1
 #define SHARD_ID_INCR NUM_VTS
 #define NUM_THREADS 6
 #define ID_BITS 8
@@ -52,15 +52,15 @@
 #define START_MIGR_ID SHARD_ID_INCR // first shard to get migration token
 // coordinator
 #define VT_BB_TIMEOUT 1 // epoll timeout in ms
-#define VT_NOP_TIMEOUT 1000 // number of nanoseconds between successive nops
+#define VT_NOP_TIMEOUT 1000000 // number of nanoseconds between successive nops
 #define VT_INITIAL_CLKUPDATE_DELAY 5000 // number of millis delay to ensure all timestampers are running
 // hyperdex
 //#define HYPERDEX_COORD_IPADDR "127.0.0.1"
-#define HYPERDEX_COORD_IPADDR "128.84.227.113"
+#define HYPERDEX_COORD_IPADDR "128.84.227.101"
 #define HYPERDEX_COORD_PORT 1982
 // kronos
 //#define KRONOS_IPADDR "127.0.0.1"
-#define KRONOS_IPADDR "128.84.227.114"
+#define KRONOS_IPADDR "128.84.227.101"
 #define KRONOS_PORT 1992
 
 #endif
