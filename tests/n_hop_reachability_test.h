@@ -14,7 +14,7 @@
 #include "client/client.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/n_hop_reach_program.h"
-#define LINE_LENGTH 100
+#define LINE_LENGTH 42
 
 void line_n_hop_reachability(client::client &c) {
     // make line of length line_length
@@ -34,7 +34,7 @@ void line_n_hop_reachability(client::client &c) {
     }
     c.end_tx(tx_id);
 
-    for (int max_hops = 2; max_hops < LINE_LENGTH-1; max_hops++) {
+    for (int max_hops = 1; max_hops < LINE_LENGTH-1; max_hops++) {
         for (int dist = 1; dist < LINE_LENGTH-1; dist++) {
             node_prog::n_hop_reach_params rp;
             std::vector<std::pair<uint64_t, node_prog::n_hop_reach_params>> initial_args;
