@@ -89,7 +89,10 @@ namespace node_prog
     std::map<prog_type, node_program*> programs = {
         { REACHABILITY,
           new particular_node_program<node_prog::reach_params, node_prog::reach_node_state>(REACHABILITY, node_prog::reach_node_program/*,
-                node_prog::reach_node_deleted_program*/) }};/*,
+                node_prog::reach_node_deleted_program*/) },
+        { N_HOP_REACHABILITY,
+          new particular_node_program<node_prog::n_hop_reach_params, node_prog::n_hop_reach_node_state>(N_HOP_REACHABILITY, node_prog::n_hop_reach_node_program/*,
+                node_prog::reach_node_deleted_program*/) }/*,
         { DIJKSTRA,
           new particular_node_program<node_prog::dijkstra_params, node_prog::dijkstra_node_state,
                 node_prog::dijkstra_cache_value>(DIJKSTRA, node_prog::dijkstra_node_program,
@@ -100,8 +103,8 @@ namespace node_prog
                 node_prog::clustering_cache_value>(CLUSTERING, node_prog::clustering_node_program,
                 clustering_node_deleted_program,
                 INVALIDATE_BOTH) }
-    };
     */
+    };
 
 }
 #endif //__NODE_PROG__
