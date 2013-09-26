@@ -31,8 +31,19 @@ void line_n_hop_reachability(client::client &c) {
     tx_id = c.begin_tx();
     for (int i = 0; i < LENGTH-1; i++) {
         c.create_edge(tx_id, nodes[i], nodes[i+1]);
+        c.create_edge(tx_id, nodes[i+1], nodes[i]); // temp to see if things break
     }
     c.end_tx(tx_id);
+    // make paralell line above connecting at every node
+    /*
+    tx_id = c.begin_tx();
+    for (int i = 0; i < LENGTH; i++) {
+        size_t temp = c.create_node(tx_id);
+        c.create_edge(tx_id, nodes[i], temp);
+        c.create_edge(tx_id, temp, nodes[i]);
+    }
+    c.end_tx(tx_id);
+    */
 
     for (int max_hops = 1; max_hops < LENGTH-1; max_hops++) {
         for (int dist = 1; dist < LENGTH-1; dist++) {
