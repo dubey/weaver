@@ -20,7 +20,7 @@
 //static uint64_t sc_num_clients;
 #define SC_CLIENT_OFF 100
 //#define SC_NUM_NODES 1000
-#define OPS_PER_CLIENT 10000
+#define OPS_PER_CLIENT 1000
 #define PERCENT_READS 50
 #define NUM_CLIENTS 5
 #define NUM_NEW_EDGES 2
@@ -107,18 +107,21 @@ scale_client(int client_id)
             //add_node(n1);
         }
         // do reads
+        std::vector<uint64_t> sourcedest;
+        node_prog::n_hop_reach_params rp;
+        std::vector<std::pair<uint64_t, node_prog::n_hop_reach_params>> initial_args(1);
         for (int j = 0; j < PERCENT_READS; j++) {
             // pick two random nodes to do reachability for
-            std::vector<uint64_t> sourcedest;
             getRandomNodes(2, sourcedest);
-            //node_prog::n_hop_reach_params rp;
-            //std::vector<std::pair<uint64_t, node_prog::n_hop_reach_params>> initial_args;
-            //rp.returning = false;
-            //rp.reachable = false;
-            //rp.prev_node.loc = COORD_ID;
-            //rp.hops = 0;
-            //rp.max_hops = 2;
-            //rp.dest = sourcedest[1];
+            initial_args[0].first = sourcedest[0];
+            initial_args[0].second.returning = false;
+            initial_args[0].second.reachable = false;
+            initial_args[0].second.prev_node.loc = COORD_ID;
+            initial_args[0].second.hops = 0;
+            initial_args[0].second.max_hops = 2;
+            initial_args[0].second.dest = sourcedest[1];
+            initial_args[0].second.path.clear();
+            /*
             node_prog::reach_params rp;
             std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args;
             rp.mode = false;
@@ -126,9 +129,13 @@ scale_client(int client_id)
             rp.prev_node.loc = (client_id % NUM_VTS);
             rp.hops = 2;
             rp.dest = sourcedest[1];
+            */
+            /*
             initial_args.emplace_back(std::make_pair(sourcedest[0], rp));
-            std::unique_ptr<node_prog::reach_params> res = c.run_node_program(node_prog::REACHABILITY, initial_args);
+            */
+            std::unique_ptr<node_prog::n_hop_reach_params> res = c.run_node_program(node_prog::N_HOP_REACHABILITY, initial_args);
             num_ops++;
+            sourcedest.clear();
         }
         DEBUG << "Client " << client_id << " finished " << num_ops << " ops" << std::endl;
     }
