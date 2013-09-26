@@ -186,6 +186,9 @@ namespace node_prog
                     state.already_visited_hops = params.hops;
                     for (auto &iter: n.out_edges) {
                         e = iter.second;
+                        if (params.hops == 0 && e->nbr.handle != params.dest) { // this is the last hop, ignore all but those that could be dest
+                            continue;
+                        }
                         // TODO change this so that the user does not see invalid edges
                         // check edge created and deleted in acceptable timeframe
                         int64_t cmp_1 = order::compare_two_vts(e->get_creat_time(), req_vclock);

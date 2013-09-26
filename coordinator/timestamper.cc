@@ -327,7 +327,7 @@ server_loop(int thread_id)
                             assert(vts->max_done_id < vts->outstanding_req_ids.top());
                             vts->max_done_id = req_id;
                             vts->outstanding_req_ids.pop();
-                            while (!vts->outstanding_req_ids.empty()
+                            while (!vts->outstanding_req_ids.empty() && !vts->done_req_ids.empty()
                                 && vts->outstanding_req_ids.top() == vts->done_req_ids.top()) {
                                 assert(vts->max_done_id < vts->outstanding_req_ids.top());
                                 vts->max_done_id = vts->outstanding_req_ids.top();
