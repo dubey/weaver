@@ -20,7 +20,6 @@ namespace node_prog
             bool returning;
             std::vector<uint64_t> neighbors;
             db::element::remote_node super_node;
-            db::element::remote_node vts_node;
 
         public:
             triangle_params()
@@ -29,7 +28,6 @@ namespace node_prog
             , returning(false)
             , neighbors()
             , super_node()
-            , vts_node()
             {
             }
             
@@ -41,8 +39,7 @@ namespace node_prog
                     + message::size(num_edges)
                     + message::size(returning) 
                     + message::size(neighbors) 
-                    + message::size(super_node) 
-                    + message::size(vts_node);
+                    + message::size(super_node);
                     return toRet;
             }
 
@@ -53,7 +50,6 @@ namespace node_prog
                 message::pack_buffer(packer, returning);
                 message::pack_buffer(packer, neighbors);
                 message::pack_buffer(packer, super_node);
-                message::pack_buffer(packer, vts_node);
             }
 
             virtual void unpack(e::unpacker &unpacker)
@@ -63,7 +59,6 @@ namespace node_prog
                 message::unpack_buffer(unpacker, returning);
                 message::unpack_buffer(unpacker, neighbors);
                 message::unpack_buffer(unpacker, super_node);
-                message::unpack_buffer(unpacker, vts_node);
             }
     };
 
@@ -146,7 +141,8 @@ namespace node_prog
             // at end, send total for this shard to coordinator
             if (--state.responses_left == 0) {
                 params.num_edges = state.total;
-                next.emplace_back(std::make_pair(params.vts_node, params));
+                params.super_node.loc = COORD_ID;
+                next.emplace_back(std::make_pair(params.super_node, params));
             }
         } else {  // not at super node
             params.num_edges = get_num_edges(n, req_vclock);
