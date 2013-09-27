@@ -304,9 +304,9 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     db::element::remote_node this_node(S->shard_id, 0);
     uint64_t node_handle;
 
+    bool global_req;
     // unpack the node program
     try {
-        bool global_req; // XXX
         message::unpack_message(*msg, message::NODE_PROG, prog_type_recvd, global_req, vt_id, req_vclock, req_id, start_node_params);//, from_shard, from_qts);
         DEBUG << "node program unpacked" << std::endl;
         assert(req_vclock.clock.size() == NUM_VTS);
@@ -330,11 +330,51 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     if (S->check_done_request(req_id)) {
         done_request = true;
     }
+    if (global_req) {
+        assert(start_node_params.size() == 1);
+        ParamsType& params_copy = std::get<1>(start_node_params[0]); // send this all over
+
+        std::vector<uint64_t> handles_to_send_to;
+        S->update_mutex.lock();
+        for (auto& n : S->nodes) {
+            bool creat_before = order::compare_two_vts(n.second->get_del_time(), req_vclock) == 0;
+            bool del_after = order::compare_two_vts(req_vclock, n.second->get_creat_time()) == 0;
+            if (creat_before && del_after) {
+                handles_to_send_to.emplace_back(n.first);
+            }
+        }
+        S->update_mutex.unlock();
+        global_req = false; // for batched messages to execute normally
+        int idx = 0;
+        size_t batch_size = handles_to_send_to.size() / (NUM_THREADS-1);
+        db::thread::unstarted_thread *thr;
+        db::graph_request *request;
+        std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> next_batch;
+        while (idx < handles_to_send_to.size()) {
+            next_batch.emplace_back(std::make_tuple(handles_to_send_to[idx], params_copy, db::element::remote_node()));
+            if (next_batch.size() % batch_size == 0) {
+                message::prepare_message(*msg, message::NODE_PROG, prog_type_recvd, global_req, vt_id, req_vclock, req_id, next_batch);
+                request = new db::graph_request(message::NODE_PROG, std::move(msg));
+                thr = new db::thread::unstarted_thread(req_id, req_vclock, unpack_node_program, request);
+                S->add_read_request(vt_id, thr);
+                msg.reset(new message::message());
+                next_batch.clear();
+            }
+            idx++;
+        }
+        if (next_batch.size() > 0) { // get leftovers
+            message::prepare_message(*msg, message::NODE_PROG, prog_type_recvd, global_req, vt_id, req_vclock, req_id, next_batch);
+            request = new db::graph_request(message::NODE_PROG, std::move(msg));
+            thr = new db::thread::unstarted_thread(req_id, req_vclock, unpack_node_program, request);
+            S->add_read_request(vt_id, thr);
+        }
+        return;
+    }
     while (!start_node_params.empty() && !done_request) {
 
         for (auto &handle_params : start_node_params) {
             node_handle = std::get<0>(handle_params);
-            ParamsType params = std::get<1>(handle_params);
+            ParamsType& params = std::get<1>(handle_params);
             this_node.handle = node_handle;
             // TODO maybe use a try-lock later so forward progress can continue on other nodes in list
             db::element::node *node = S->acquire_node(node_handle);
@@ -426,7 +466,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
             done_request = true;
         }
     }
-
 }
 
 template <typename ParamsType, typename NodeStateType>

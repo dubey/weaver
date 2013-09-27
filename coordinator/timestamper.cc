@@ -22,6 +22,7 @@
 #include "common/transaction.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
+#include "node_prog/triangle_program.h"
 #include "timestamper.h"
 
 static coordinator::timestamper *vts;
@@ -238,10 +239,9 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     }
     DEBUG << "sent to shards" << std::endl;
     if (global_req) {
-        vts->outstanding_triangle_progs.emplace(std::make_pair(req_id, clientID));
-    } else {
-        vts->outstanding_node_progs.emplace(std::make_pair(req_id, clientID));
+        vts->outstanding_triangle_progs.emplace(std::make_pair(req_id, std::make_pair(NUM_SHARDS, node_prog::triangle_params())));
     }
+    vts->outstanding_node_progs.emplace(std::make_pair(req_id, clientID));
     vts->outstanding_req_ids.emplace(req_id);
     vts->mutex.unlock();
 }
@@ -356,20 +356,33 @@ server_loop(int thread_id)
                     vts->done_reqs[type].emplace(req_id);
                     if (vts->outstanding_node_progs.find(req_id) != vts->outstanding_node_progs.end()) { // TODO: change to .count
                         uint64_t client_to_ret = vts->outstanding_node_progs.at(req_id);
-                        vts->send(client_to_ret, msg->buf);
-                        vts->outstanding_node_progs.erase(req_id);
-                        mark_req_finished(req_id);
-                    } else if (vts->outstanding_triangle_progs.count(req_id) > 0) {
-                        std::pair<int, node_prog::triangle_params>& p =vts->outstanding_triangle_progs.at(req_id);
-                        p.first--;
-                        uint64_t ignore_req_id;
-                        node_prog::prog_type ignore_type;
-                        std::pair<uint64_t, node_prog::triangle_params> tempPair;
-                        message::unpack_message(msg, message::NODE_PROG_RETURN, ignore_type, ignore_req_id, tempPair);
-                        p.second.num_edges += temp.Pair.second.num_edges;
-                        if (p.first == 0) { // all shards responded
-                        // send back
-                        mark_req_finished(req_id);
+
+                        if (vts->outstanding_triangle_progs.count(req_id) > 0) { // a triangle prog response
+                            std::pair<int, node_prog::triangle_params>& p = vts->outstanding_triangle_progs.at(req_id);
+                            p.first--; // count of shards responded
+
+                            // unpack whole thing
+                            std::pair<uint64_t, node_prog::triangle_params> tempPair;
+                            message::unpack_message(*msg, message::NODE_PROG_RETURN, type, req_id, tempPair);
+
+                            uint64_t oldval = p.second.num_edges;
+                            p.second.num_edges += tempPair.second.num_edges;
+
+                            // XXX temp make sure reference worked
+                            assert(vts->outstanding_triangle_progs.at(req_id).second.num_edges - tempPair.second.num_edges == oldval); 
+
+                            if (p.first == 0) { // all shards responded
+                                // send back to client
+                                tempPair.second.num_edges = p.second.num_edges;
+                                message::prepare_message(*msg, message::NODE_PROG_RETURN, type, req_id, tempPair);
+                                vts->send(client_to_ret, msg->buf);
+                                vts->outstanding_node_progs.erase(req_id);
+                                mark_req_finished(req_id);
+                            }
+                        } else { // just a normal node program
+                            vts->send(client_to_ret, msg->buf);
+                            vts->outstanding_node_progs.erase(req_id);
+                            mark_req_finished(req_id);
                         }
                     } else {
                         DEBUG << "node prog return for already completed ornever existed req id" << std::endl;
