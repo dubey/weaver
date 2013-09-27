@@ -21,6 +21,7 @@
 #include "node_prog/node_prog_type.h"
 #include "node_prog/reach_program.h"
 #include "node_prog/n_hop_reach_program.h"
+#include "node_prog/triangle_program.h"
 /*
 #include "node_prog/dijkstra_program.h"
 #include "node_prog/clustering_program.h"
@@ -83,6 +84,7 @@ namespace state
         req_map new_req_map;
         prog_state.emplace(node_prog::REACHABILITY, new_req_map);
         prog_state.emplace(node_prog::N_HOP_REACHABILITY, new_req_map);
+        prog_state.emplace(node_prog::TRIANGLE_COUNT, new_req_map);
         /*
         prog_state.emplace(node_prog::DIJKSTRA, new_req_map);
         prog_state.emplace(node_prog::CLUSTERING, new_req_map);
@@ -194,7 +196,12 @@ namespace state
                                 sz += rns->size();
                                 break;
                             }
-
+                            case node_prog::TRIANGLE_COUNT: {
+                                std::shared_ptr<node_prog::triangle_node_state> rns = 
+                                    std::dynamic_pointer_cast<node_prog::triangle_node_state>(rmap.at(req_id)->at(node_handle));
+                                sz += rns->size();
+                                break;
+                            }
                             case node_prog::N_HOP_REACHABILITY: {
                                 std::shared_ptr<node_prog::n_hop_reach_node_state> rns = 
                                     std::dynamic_pointer_cast<node_prog::n_hop_reach_node_state>(rmap.at(req_id)->at(node_handle));

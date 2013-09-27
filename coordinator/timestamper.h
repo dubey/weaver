@@ -27,6 +27,7 @@
 #include "common/message.h"
 #include "common/transaction.h"
 #include "common/clock.h"
+#include "node_prog/triangle_program.h"
 #include "nmap_stub.h"
 
 namespace coordinator
@@ -53,6 +54,7 @@ namespace coordinator
             // node prog
             // map from req_id to client_id that ensures a single response to a node program
             std::unordered_map<uint64_t, uint64_t> outstanding_node_progs;
+            std::unordered_map<uint64_t, std::pair<int,node_prog::triangle_params>> outstanding_triangle_progs;
             std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> outstanding_req_ids;
             std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> done_req_ids;
             uint64_t max_done_id;

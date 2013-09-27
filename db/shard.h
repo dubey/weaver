@@ -62,9 +62,9 @@ namespace db
             shard(uint64_t my_id);
 
             // Mutexes
+            po6::threads::mutex update_mutex; // shard update mutex
         private:
-            po6::threads::mutex update_mutex // shard update mutex
-                , clock_mutex // vector clock/queue timestamp mutex
+            po6::threads::mutex clock_mutex // vector clock/queue timestamp mutex
                 , edge_map_mutex;
         public:
             po6::threads::mutex queue_mutex // exclusive access to thread pool queues
@@ -80,8 +80,8 @@ namespace db
 
             // Graph state
             uint64_t shard_id;
+            std::unordered_map<uint64_t, element::node*> nodes; // node handle -> ptr to node object XXX NO LONGER PRIVATE
         private:
-            std::unordered_map<uint64_t, element::node*> nodes; // node handle -> ptr to node object
             std::unordered_map<uint64_t, uint64_t> edges; // edge handle -> node handle
             db::thread::pool thread_pool;
         public:
@@ -589,7 +589,11 @@ namespace db
     inline bool
     shard :: check_done_request(uint64_t req_id)
     {
-        return node_prog_req_state.check_done_request(req_id);
+        bool done = node_prog_req_state.check_done_request(req_id);
+        if (done) {
+            DEBUG << "checked state was DONE" << std::endl;
+        }
+        return done;
     }
 
     // messaging methods
