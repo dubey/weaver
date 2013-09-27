@@ -27,6 +27,7 @@
 #include "common/message.h"
 #include "common/transaction.h"
 #include "common/clock.h"
+#include "node_prog/triangle_program.h"
 #include "nmap_stub.h"
 
 namespace coordinator

@@ -24,10 +24,12 @@ namespace node_prog
 
         public:
             triangle_params()
-                : returning(false)
-                , reachable(false)
-                , hops(0)
-                , max_hops(0)
+            : responses_left(0)
+            , num_edges(0)
+            , returning(false)
+            , neighbors()
+            , super_node()
+            , vts_node()
             {
             }
             
@@ -35,91 +37,71 @@ namespace node_prog
 
             virtual uint64_t size() const 
             {
-                uint64_t toRet = message::size(returning)
-                    + message::size(prev_node)
-                    + message::size(dest) 
-                    //+ message::size(edge_props)
-                    + message::size(hops)
-                    + message::size(max_hops)
-                    + message::size(reachable)
-                    + message::size(path);
-                return toRet;
+                uint64_t toRet = message::size(responses_left)
+                    + message::size(num_edges)
+                    + message::size(returning) 
+                    + message::size(neighbors) 
+                    + message::size(super_node) 
+                    + message::size(vts_node);
+                    return toRet;
             }
 
             virtual void pack(e::buffer::packer &packer) const 
             {
+                message::pack_buffer(packer, responses_left);
+                message::pack_buffer(packer, num_edges);
                 message::pack_buffer(packer, returning);
-                message::pack_buffer(packer, prev_node);
-                message::pack_buffer(packer, dest);
-                //message::pack_buffer(packer, edge_props);
-                message::pack_buffer(packer, hops);
-                message::pack_buffer(packer, max_hops);
-                message::pack_buffer(packer, reachable);
-                message::pack_buffer(packer, path);
+                message::pack_buffer(packer, neighbors);
+                message::pack_buffer(packer, super_node);
+                message::pack_buffer(packer, vts_node);
             }
 
             virtual void unpack(e::unpacker &unpacker)
             {
+                message::unpack_buffer(unpacker, responses_left);
+                message::unpack_buffer(unpacker, num_edges);
                 message::unpack_buffer(unpacker, returning);
-                message::unpack_buffer(unpacker, prev_node);
-                message::unpack_buffer(unpacker, dest);
-                //message::unpack_buffer(unpacker, edge_props);
-                message::unpack_buffer(unpacker, hops);
-                message::unpack_buffer(unpacker, max_hops);
-                message::unpack_buffer(unpacker, reachable);
-                message::unpack_buffer(unpacker, path);
+                message::unpack_buffer(unpacker, neighbors);
+                message::unpack_buffer(unpacker, super_node);
+                message::unpack_buffer(unpacker, vts_node);
             }
     };
 
     struct triangle_node_state : Packable_Deletable
     {
-        //bool visited;
-        uint64_t already_visited_hops; // number of hops for a traversal that has alraedy visited this node
-        db::element::remote_node prev_node; // previous node
-        uint32_t out_count; // number of requests propagated
-        bool reachable;
-        uint64_t hops;
+            uint64_t responses_left;
+            uint64_t total;
 
         triangle_node_state()
-            : already_visited_hops(0)
-            , out_count(0)
-            , reachable(false)
-            , hops(MAX_UINT64)
+            : responses_left(0)
+            , total(0)
         { }
 
         virtual ~triangle_node_state() { }
 
         virtual uint64_t size() const 
         {
-            uint64_t toRet = message::size(already_visited_hops)
-                + message::size(prev_node)
-                + message::size(out_count)
-                + message::size(reachable)
-                + message::size(hops);
+            uint64_t toRet = message::size(responses_left)
+                + message::size(total);
             return toRet;
         }
 
         virtual void pack(e::buffer::packer& packer) const 
         {
-            message::pack_buffer(packer, already_visited_hops);
-            message::pack_buffer(packer, prev_node);
-            message::pack_buffer(packer, out_count);
-            message::pack_buffer(packer, reachable);
-            message::pack_buffer(packer, hops);
+            message::pack_buffer(packer, responses_left);
+            message::pack_buffer(packer, total);
         }
 
         virtual void unpack(e::unpacker& unpacker)
         {
-            message::unpack_buffer(unpacker, already_visited_hops);
-            message::unpack_buffer(unpacker, prev_node);
-            message::unpack_buffer(unpacker, out_count);
-            message::unpack_buffer(unpacker, reachable);
-            message::unpack_buffer(unpacker, hops);
+            message::unpack_buffer(unpacker, responses_left);
+            message::unpack_buffer(unpacker, total);
         }
     };
 
     inline int get_num_edges(db::element::node &n, vc::vclock &req_vclock) {
         int toRet = 0;
+        db::element::edge *e;
         for (auto &iter: n.out_edges) {
             e = iter.second;
             // check edge created and deleted in acceptable timeframe
@@ -148,14 +130,14 @@ namespace node_prog
     {
         DEBUG << "inside node prog!\n";
         std::vector<std::pair<db::element::remote_node, triangle_params>> next;
-        if (rn.handle == super_node.handle) {
+        if (rn.handle == params.super_node.handle) {
             triangle_node_state &state = state_getter();
 
             if (state.responses_left == 0) { // this only happens when state is not yet initialized
                 state.responses_left = params.responses_left;
                 state.total = 0;
             }
-            if (!returning) { // this is the prog to count for the super node, happens once
+            if (!params.returning) { // this is the prog to count for the super node, happens once
                 state.total += get_num_edges(n, req_vclock);
 
             } else {
@@ -170,7 +152,7 @@ namespace node_prog
             params.num_edges = get_num_edges(n, req_vclock);
             params.returning = true;
             // send to canonical node
-            next.emplace_back(std::make_pair(super_node, params));
+            next.emplace_back(std::make_pair(params.super_node, params));
         }
         return next;
     }
