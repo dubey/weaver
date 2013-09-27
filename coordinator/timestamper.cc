@@ -194,6 +194,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     for (auto &initial_arg : initial_args) {
         uint64_t c_id = initial_arg.first;
         if (c_id == -1) { // max uint64_t means its a global thing like triangle count
+            DEBUG << "timestamper GOIN GLOBAL" << std::endl;
             assert(mappings_to_get.empty()); // dont mix global req with normal nodes
             assert(initial_args.size() == 1);
             global_req = true;
@@ -353,7 +354,6 @@ server_loop(int thread_id)
                     node_prog::prog_type type;
                     message::unpack_message(*msg, message::NODE_PROG_RETURN, type, req_id); // don't unpack rest
                     vts->mutex.lock();
-                    vts->done_reqs[type].emplace(req_id);
                     if (vts->outstanding_node_progs.find(req_id) != vts->outstanding_node_progs.end()) { // TODO: change to .count
                         uint64_t client_to_ret = vts->outstanding_node_progs.at(req_id);
 
@@ -373,6 +373,7 @@ server_loop(int thread_id)
 
                             if (p.first == 0) { // all shards responded
                                 // send back to client
+                                vts->done_reqs[type].emplace(req_id);
                                 tempPair.second.num_edges = p.second.num_edges;
                                 message::prepare_message(*msg, message::NODE_PROG_RETURN, type, req_id, tempPair);
                                 vts->send(client_to_ret, msg->buf);
@@ -380,6 +381,7 @@ server_loop(int thread_id)
                                 mark_req_finished(req_id);
                             }
                         } else { // just a normal node program
+                            vts->done_reqs[type].emplace(req_id);
                             vts->send(client_to_ret, msg->buf);
                             vts->outstanding_node_progs.erase(req_id);
                             mark_req_finished(req_id);

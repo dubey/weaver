@@ -227,7 +227,7 @@ nop(void *noparg)
             S->migr_chance = 0;
         }
     }
-    std::cout << "Nop cnt " << call_count++ << ", done ids: " << S->max_done_id[nop_arg->vt_id] <<" and " << nop_arg->max_done_id<< std::endl;
+    //std::cout << "Nop cnt " << call_count++ << ", done ids: " << S->max_done_id[nop_arg->vt_id] <<" and " << nop_arg->max_done_id<< std::endl;
     assert(S->max_done_id[nop_arg->vt_id] <= nop_arg->max_done_id);
     S->max_done_id[nop_arg->vt_id] = nop_arg->max_done_id;
     bool step3 = check_step3();
@@ -338,13 +338,15 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         done_request = true;
     }
     if (global_req) {
+        DEBUG << "WE GOIN GLOBAL" << std::endl;
         assert(start_node_params.size() == 1);
 
         std::vector<uint64_t> handles_to_send_to;
         S->update_mutex.lock();
         for (auto& n : S->nodes) {
-            bool creat_before = order::compare_two_vts(n.second->get_del_time(), req_vclock) == 0;
-            bool del_after = order::compare_two_vts(req_vclock, n.second->get_creat_time()) == 0;
+            bool creat_before = order::compare_two_vts(n.second->get_del_time(), req_vclock) != 0;
+            bool del_after = order::compare_two_vts(req_vclock, n.second->get_creat_time()) != 0;
+            DEBUG << "creat before " << creat_before << " and del after " << del_after << std::endl;
             if (creat_before && del_after) {
                 handles_to_send_to.emplace_back(n.first);
             }

@@ -589,7 +589,11 @@ namespace db
     inline bool
     shard :: check_done_request(uint64_t req_id)
     {
-        return node_prog_req_state.check_done_request(req_id);
+        bool done = node_prog_req_state.check_done_request(req_id);
+        if (done) {
+            DEBUG << "checked state was DONE" << std::endl;
+        }
+        return done;
     }
 
     // messaging methods
