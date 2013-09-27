@@ -306,7 +306,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
 
     // unpack the node program
     try {
-        message::unpack_message(*msg, message::NODE_PROG, prog_type_recvd, vt_id, req_vclock, req_id, start_node_params);//, from_shard, from_qts);
+        bool global_req; // XXX
+        message::unpack_message(*msg, message::NODE_PROG, prog_type_recvd, global_req, vt_id, req_vclock, req_id, start_node_params);//, from_shard, from_qts);
         DEBUG << "node program unpacked" << std::endl;
         assert(req_vclock.clock.size() == NUM_VTS);
     } catch (std::bad_alloc& ba) {
@@ -768,7 +769,8 @@ msgrecv_loop()
 
             case message::NODE_PROG:
                 //DEBUG << "got node_prog" << std::endl;
-                message::unpack_message(*rec_msg, message::NODE_PROG, pType, vt_id, vclk, req_id);
+                bool global_req;
+                message::unpack_message(*rec_msg, message::NODE_PROG, pType, global_req, vt_id, vclk, req_id);
                 request = new db::graph_request(mtype, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(req_id, vclk, unpack_node_program, request);
                 //DEBUG << "going to add node prog to queue for vt " << vt_id << std::endl;

@@ -28,6 +28,7 @@ namespace node_prog
         DEFAULT,
         REACHABILITY,
         N_HOP_REACHABILITY,
+        TRIANGLE_COUNT,
         DIJKSTRA,
         CLUSTERING
     };

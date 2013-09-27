@@ -185,12 +185,19 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     
     // map from locations to a list of start_node_params to send to that shard
     std::unordered_map<uint64_t, std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>> initial_batches; 
+    bool global_req = false;
 
     // lookup mappings
     std::unordered_map<uint64_t, uint64_t> request_element_mappings;
     std::unordered_set<uint64_t> mappings_to_get;
     for (auto &initial_arg : initial_args) {
         uint64_t c_id = initial_arg.first;
+        if (c_id == -1) { // max uint64_t means its a global thing like triangle count
+            assert(mappings_to_get.empty()); // dont mix global req with normal nodes
+            assert(initial_args.size() == 1);
+            global_req = true;
+            break;
+        }
         mappings_to_get.insert(c_id);
     }
     if (!mappings_to_get.empty()) {
@@ -202,9 +209,16 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     }
     DEBUG << "timestamper done looking up element mappings for node program" << std::endl;
 
-    for (std::pair<uint64_t, ParamsType> &node_params_pair : initial_args) { // TODO: change to params pointer so we can avoid potential copy?
-        initial_batches[request_element_mappings[node_params_pair.first]].emplace_back(std::make_tuple(node_params_pair.first,
-            std::move(node_params_pair.second), db::element::remote_node())); // constructor
+    if (global_req) {
+        // send copy of params to each shard
+        for (int i = 0; i < NUM_SHARDS; i++) {
+            initial_batches[i + SHARD_ID_INCR].emplace_back(std::make_tuple(initial_args[0].first, initial_args[0].second, db::element::remote_node()));
+        }
+    } else { // regular style node program
+        for (std::pair<uint64_t, ParamsType> &node_params_pair : initial_args) { // TODO: change to params pointer so we can avoid potential copy?
+            initial_batches[request_element_mappings[node_params_pair.first]].emplace_back(std::make_tuple(node_params_pair.first,
+                        std::move(node_params_pair.second), db::element::remote_node())); // constructor
+        }
     }
     vts->mutex.lock();
     vts->vclk.increment_clock();
@@ -218,12 +232,16 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     DEBUG << "starting node prog " << req_id << ", recd from client\t" << std::endl;
     uint64_t zero = 0;
     for (auto &batch_pair : initial_batches) {
-        message::prepare_message(msg_to_send, message::NODE_PROG, pType, vt_id, req_timestamp, 
+        message::prepare_message(msg_to_send, message::NODE_PROG, pType, global_req, vt_id, req_timestamp, 
                 req_id, batch_pair.second, /*empty_tuple_vector,*/ zero, zero);
         vts->send(batch_pair.first, msg_to_send.buf); // TODO: can we send out of critical section?
     }
     DEBUG << "sent to shards" << std::endl;
-    vts->outstanding_node_progs.emplace(std::make_pair(req_id, clientID));
+    if (global_req) {
+        vts->outstanding_triangle_progs.emplace(std::make_pair(req_id, clientID));
+    } else {
+        vts->outstanding_node_progs.emplace(std::make_pair(req_id, clientID));
+    }
     vts->outstanding_req_ids.emplace(req_id);
     vts->mutex.unlock();
 }
@@ -232,6 +250,23 @@ template <typename ParamsType, typename NodeStateType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     unpack_and_run_db(std::unique_ptr<message::message>)
 { }
+
+inline void mark_req_finished(uint64_t req_id) {
+    if (vts->outstanding_req_ids.top() == req_id) {
+        assert(vts->max_done_id < vts->outstanding_req_ids.top());
+        vts->max_done_id = req_id;
+        vts->outstanding_req_ids.pop();
+        while (!vts->outstanding_req_ids.empty() && !vts->done_req_ids.empty()
+                && vts->outstanding_req_ids.top() == vts->done_req_ids.top()) {
+            assert(vts->max_done_id < vts->outstanding_req_ids.top());
+            vts->max_done_id = vts->outstanding_req_ids.top();
+            vts->outstanding_req_ids.pop();
+            vts->done_req_ids.pop();
+        }
+    } else {
+        vts->done_req_ids.emplace(req_id);
+    }
+}
 
 void
 server_loop(int thread_id)
@@ -319,23 +354,22 @@ server_loop(int thread_id)
                     message::unpack_message(*msg, message::NODE_PROG_RETURN, type, req_id); // don't unpack rest
                     vts->mutex.lock();
                     vts->done_reqs[type].emplace(req_id);
-                    if (vts->outstanding_node_progs.find(req_id) != vts->outstanding_node_progs.end()) {
+                    if (vts->outstanding_node_progs.find(req_id) != vts->outstanding_node_progs.end()) { // TODO: change to .count
                         uint64_t client_to_ret = vts->outstanding_node_progs.at(req_id);
                         vts->send(client_to_ret, msg->buf);
                         vts->outstanding_node_progs.erase(req_id);
-                        if (vts->outstanding_req_ids.top() == req_id) {
-                            assert(vts->max_done_id < vts->outstanding_req_ids.top());
-                            vts->max_done_id = req_id;
-                            vts->outstanding_req_ids.pop();
-                            while (!vts->outstanding_req_ids.empty() && !vts->done_req_ids.empty()
-                                && vts->outstanding_req_ids.top() == vts->done_req_ids.top()) {
-                                assert(vts->max_done_id < vts->outstanding_req_ids.top());
-                                vts->max_done_id = vts->outstanding_req_ids.top();
-                                vts->outstanding_req_ids.pop();
-                                vts->done_req_ids.pop();
-                            }
-                        } else {
-                            vts->done_req_ids.emplace(req_id);
+                        mark_req_finished(req_id);
+                    } else if (vts->outstanding_triangle_progs.count(req_id) > 0) {
+                        std::pair<int, node_prog::triangle_params>& p =vts->outstanding_triangle_progs.at(req_id);
+                        p.first--;
+                        uint64_t ignore_req_id;
+                        node_prog::prog_type ignore_type;
+                        std::pair<uint64_t, node_prog::triangle_params> tempPair;
+                        message::unpack_message(msg, message::NODE_PROG_RETURN, ignore_type, ignore_req_id, tempPair);
+                        p.second.num_edges += temp.Pair.second.num_edges;
+                        if (p.first == 0) { // all shards responded
+                        // send back
+                        mark_req_finished(req_id);
                         }
                     } else {
                         DEBUG << "node prog return for already completed ornever existed req id" << std::endl;

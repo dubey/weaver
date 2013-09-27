@@ -30,6 +30,7 @@
 #include "node_prog_type.h"
 //#include "dijkstra_program.h"
 #include "reach_program.h"
+#include "triangle_program.h"
 #include "n_hop_reach_program.h"
 //#include "clustering_program.h"
 
@@ -88,11 +89,11 @@ namespace node_prog
     
     std::map<prog_type, node_program*> programs = {
         { REACHABILITY,
-          new particular_node_program<node_prog::reach_params, node_prog::reach_node_state>(REACHABILITY, node_prog::reach_node_program/*,
-                node_prog::reach_node_deleted_program*/) },
+        new particular_node_program<node_prog::reach_params, node_prog::reach_node_state>(REACHABILITY, node_prog::reach_node_program) },
+        { TRIANGLE_COUNT,
+        new particular_node_program<node_prog::triangle_params, node_prog::triangle_node_state>(TRIANGLE_COUNT, node_prog::triangle_node_program) },
         { N_HOP_REACHABILITY,
-          new particular_node_program<node_prog::n_hop_reach_params, node_prog::n_hop_reach_node_state>(N_HOP_REACHABILITY, node_prog::n_hop_reach_node_program/*,
-                node_prog::reach_node_deleted_program*/) }/*,
+          new particular_node_program<node_prog::n_hop_reach_params, node_prog::n_hop_reach_node_state>(N_HOP_REACHABILITY, node_prog::n_hop_reach_node_program) }/*,
         { DIJKSTRA,
           new particular_node_program<node_prog::dijkstra_params, node_prog::dijkstra_node_state,
                 node_prog::dijkstra_cache_value>(DIJKSTRA, node_prog::dijkstra_node_program,
