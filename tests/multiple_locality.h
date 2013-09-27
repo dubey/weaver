@@ -16,6 +16,7 @@
 #include "client/client.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/reach_program.h"
+#include "node_prog/n_hop_reach_program.h"
 #include "test_base.h"
 
 #define ML_REQUESTS 100
@@ -90,12 +91,20 @@ multiple_locality_prog(bool dense, bool to_exit)
     test_graph g(&c, seed, num_nodes, num_edges, false, to_exit);
 
     // find a suitable src-dest pair which has a long(ish) path
-    auto npair = find_long_hop(g);
-    node_prog::reach_params rp;
-    rp.mode = false;
-    rp.reachable = false;
-    rp.prev_node.loc = COORD_ID;
-    rp.hops = 0;
+    //auto npair = find_long_hop(g);
+    //node_prog::reach_params rp;
+    //rp.mode = false;
+    //rp.reachable = false;
+    //rp.prev_node.loc = COORD_ID;
+    //rp.hops = 0;
+    node_prog::n_hop_reach_params rp;
+    std::vector<std::pair<uint64_t, node_prog::n_hop_reach_params>> initial_args(1);
+    initial_args[0].second.returning = false;
+    initial_args[0].second.reachable = false;
+    initial_args[0].second.prev_node.loc = COORD_ID;
+    initial_args[0].second.hops = 0;
+    initial_args[0].second.max_hops = 2;
+    initial_args[0].second.dest = g.nodes[0];
     
     // enable migration now
     //c.start_migration();
@@ -113,12 +122,9 @@ multiple_locality_prog(bool dense, bool to_exit)
         DEBUG << "Test: i = " << i << ", " << diff << std::endl;
         req_time << diff << std::endl;
         prev = cur;
-        file << npair[i].first << " " << npair[i].second << std::endl;
-        std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args;
-        rp.dest = g.nodes[npair[i].second];
-        initial_args.emplace_back(std::make_pair(g.nodes[npair[i].first], rp));
-        std::unique_ptr<node_prog::reach_params> res = c.run_node_program(node_prog::REACHABILITY, initial_args);
-        assert(res->reachable);
+        initial_args[0].first = g.nodes[(rand() % 5) + 1];
+        initial_args[0].second.path.clear();
+        std::unique_ptr<node_prog::n_hop_reach_params> res = c.run_node_program(node_prog::N_HOP_REACHABILITY, initial_args);
     }
     file.close();
     req_time.close();

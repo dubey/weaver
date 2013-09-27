@@ -226,7 +226,7 @@ nop(void *noparg)
             S->migr_chance = 0;
         }
     }
-    std::cout << "Nop cnt " << call_count++ << ", done ids: " << S->max_done_id[nop_arg->vt_id] <<" and " << nop_arg->max_done_id<< std::endl;
+    //std::cout << "Nop cnt " << call_count++ << ", done ids: " << S->max_done_id[nop_arg->vt_id] <<" and " << nop_arg->max_done_id<< std::endl;
     assert(S->max_done_id[nop_arg->vt_id] <= nop_arg->max_done_id);
     S->max_done_id[nop_arg->vt_id] = nop_arg->max_done_id;
     bool step3 = check_step3();

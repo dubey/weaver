@@ -14,7 +14,7 @@
 #ifndef __TEST_BASE__
 #define __TEST_BASE__
 
-#define TX_SIZE 1000
+#define TX_SIZE 1
 
 #include "common/clock.h"
 #include "client/client.h"
@@ -50,7 +50,7 @@ struct test_graph
             uint64_t n = c->create_node(tx);
             nodes.emplace_back(n);
             edge_list.emplace(n, empty_vector);
-            if (i % TX_SIZE == (TX_SIZE-1)) {
+            if (i % TX_SIZE == (TX_SIZE-1) || TX_SIZE == 1) {
                 c->end_tx(tx);
             }
         }
@@ -69,7 +69,7 @@ struct test_graph
             if (i % TX_SIZE == 0) {
                 DEBUG << "Creating edge " << (i+1) << std::endl;
             }
-            if (i % TX_SIZE == 0) {
+            if (i % TX_SIZE == 0 || TX_SIZE == 1) {
                 tx = c->begin_tx();
             }
             c->create_edge(tx, nodes[first], nodes[second]);
