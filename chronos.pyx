@@ -80,7 +80,7 @@ cdef extern from "chronos.h":
         uint64_t count_query_order
         uint64_t count_assign_order
 
-    chronos_client* chronos_client_create(char* host, uint16_t port, uint64_t num_shards)
+    chronos_client* chronos_client_create(char* host, uint16_t port)
     void chronos_client_destroy(chronos_client* client)
 
     int64_t chronos_create_event(chronos_client* client, chronos_returncode* status, uint64_t* event) nogil
@@ -298,8 +298,8 @@ cdef class Client:
     cdef chronos_client* _client
     cdef dict _ops
 
-    def __cinit__(self, host, port, num_shards):
-        self._client = chronos_client_create(host, port, num_shards)
+    def __cinit__(self, host, port):
+        self._client = chronos_client_create(host, port)
         self._ops = {}
         if self._client == NULL:
             raise OSError("Could not connect")

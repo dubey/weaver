@@ -179,10 +179,9 @@ class chronos_client::pending_get_stats : public pending
         ssize_t* m_ret;
 };
 
-chronos_client :: chronos_client(const char* host, uint16_t port, uint64_t shards)
+chronos_client :: chronos_client(const char* host, uint16_t port)
     : m_replicant(new replicant_client(host, port))
     , m_pending()
-    , m_shards(shards)
 {
 }
 
@@ -282,7 +281,7 @@ int64_t
 chronos_client :: weaver_order(weaver_pair *pairs, size_t pairs_sz,
         chronos_returncode *status, ssize_t *ret)
 {
-    std::vector<char> buffer(pairs_sz * (2 * sizeof(uint64_t) * m_shards // vector clocks
+    std::vector<char> buffer(pairs_sz * (2 * sizeof(uint64_t) * KRONOS_NUM_VTS // vector clocks
             + 2 * sizeof(uint64_t) // vt_ids
             + sizeof(uint32_t) // flags
             + sizeof(uint8_t))); // preferred order
@@ -290,8 +289,8 @@ chronos_client :: weaver_order(weaver_pair *pairs, size_t pairs_sz,
 
     // pack weaver pairs
     for (size_t i = 0; i < pairs_sz; i++) {
-        p = pack_vector_uint64(pairs[i].lhs, m_shards, p);
-        p = pack_vector_uint64(pairs[i].rhs, m_shards, p);
+        p = pack_vector_uint64(pairs[i].lhs, KRONOS_NUM_VTS, p);
+        p = pack_vector_uint64(pairs[i].rhs, KRONOS_NUM_VTS, p);
         p = e::pack64le(pairs[i].lhs_id, p);
         p = e::pack64le(pairs[i].rhs_id, p);
         p = e::pack32le(pairs[i].flags, p);
@@ -385,10 +384,10 @@ chronos_client :: send(e::intrusive_ptr<pending> pend, chronos_returncode* statu
     }
     else
     {
-std::cerr << __FILE__ << ":" << __LINE__ << std::endl;
-e::error send_error = m_replicant->last_error();
-std::cerr << __FILE__ << ":" << __LINE__ << " " << send_error.msg();
-std::cerr << __FILE__ << ":" << __LINE__ << " " << send_error.loc();
+        DEBUG << std::endl;
+        e::error send_error = m_replicant->last_error();
+        DEBUG << send_error.msg();
+        DEBUG << send_error.loc();
         *status = CHRONOS_ERROR;
         return ret;
     }

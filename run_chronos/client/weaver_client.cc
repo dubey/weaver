@@ -17,7 +17,7 @@ int
 main()
 {
     enum chronos_returncode status;
-    chronos_client cl("127.0.0.1", 1992, KRONOS_NUM_SHARDS);
+    chronos_client cl("127.0.0.1", 1992);
     std::cout << "Kronos orders:" << std::endl 
             << "CHRONOS_HAPPENS_BEFORE " << CHRONOS_HAPPENS_BEFORE << std::endl
             << "CHRONOS_HAPPENS_AFTER " << CHRONOS_HAPPENS_AFTER << std::endl
@@ -25,12 +25,12 @@ main()
             << "CHRONOS_WOULDLOOP " << CHRONOS_WOULDLOOP << std::endl
             << "CHRONOS_NOEXIST " << CHRONOS_NOEXIST << std::endl;
     weaver_pair p;
-    p.lhs = (uint64_t*)malloc(sizeof(uint64_t) * KRONOS_NUM_SHARDS);
-    p.rhs = (uint64_t*)malloc(sizeof(uint64_t) * KRONOS_NUM_SHARDS);
+    p.lhs = (uint64_t*)malloc(sizeof(uint64_t) * KRONOS_NUM_VTS);
+    p.rhs = (uint64_t*)malloc(sizeof(uint64_t) * KRONOS_NUM_VTS);
     p.flags = CHRONOS_SOFT_FAIL;
     ssize_t cret;
     for (int i = 0; i < 9; i++) {
-        for (int j = 0 ; j < KRONOS_NUM_SHARDS; j++) {
+        for (int j = 0 ; j < KRONOS_NUM_VTS; j++) {
             if (j == 0) {
                 p.lhs[j] = i;
                 p.rhs[j] = i+1;
@@ -49,7 +49,7 @@ main()
                 << " and order " << p.order << std::endl;
     }
     for (int i = 0; i < 9; i++) {
-        for (int j = 0 ; j < KRONOS_NUM_SHARDS; j++) {
+        for (int j = 0 ; j < KRONOS_NUM_VTS; j++) {
             if (j == 0) {
                 p.lhs[j] = i+1;
                 p.rhs[j] = i;
@@ -70,9 +70,9 @@ main()
     weaver_pair *wp = wpair;
     for (int i = 0; i < 9; i++) {
         for (int k = i+1; k <= 9; k++) {
-            wp->lhs = (uint64_t*)malloc(sizeof(uint64_t) * KRONOS_NUM_SHARDS);
-            wp->rhs = (uint64_t*)malloc(sizeof(uint64_t) * KRONOS_NUM_SHARDS);
-            for (int j = 0 ; j < KRONOS_NUM_SHARDS; j++) {
+            wp->lhs = (uint64_t*)malloc(sizeof(uint64_t) * KRONOS_NUM_VTS);
+            wp->rhs = (uint64_t*)malloc(sizeof(uint64_t) * KRONOS_NUM_VTS);
+            for (int j = 0 ; j < KRONOS_NUM_VTS; j++) {
                 if (j == 0) {
                     wp->lhs[j] = i;
                     wp->rhs[j] = k;

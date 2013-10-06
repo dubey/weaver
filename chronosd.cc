@@ -31,7 +31,8 @@
 
 #include <iostream>
 #include <vector>
-#include <tr1/unordered_map>
+#include <set>
+#include <unordered_map>
 
 // po6
 #include <po6/threads/mutex.h>
@@ -54,19 +55,18 @@
 #define ERRORMSG2(X, Y1, Y2) fprintf(stderr, "%s:%i:  " X "\n", __FILE__, __LINE__, Y1, Y2)
 #define ERRNOMSG(CALL) ERRORMSG2(tostr(CALL) " failed:  %s  [ERRNO=%i]", strerror(errno), errno)
 
+// hash function for uint64
 size_t
 hash_uint64(uint64_t key)
 {
-    return std::tr1::hash<uint64_t>()(key);
+    return std::hash<uint64_t>()(key);
 }
 
 // hash function for vector clocks
 namespace std
 {
-namespace tr1
-{
     template <>
-    struct hash<std::vector<uint64_t> > 
+    struct hash<std::vector<uint64_t>> 
     {
         public:
             size_t operator()(std::vector<uint64_t> v) const throw() 
@@ -80,7 +80,14 @@ namespace tr1
             }
     };
 }
+
+// comparator for uint64 pair, on the basis of first entry of the pair
+bool
+pair_comp(std::pair<uint64_t, uint64_t> p1, std::pair<uint64_t, uint64_t> p2)
+{
+    return p1.first < p2.first;
 }
+
 
 class chronosd
 {
@@ -111,11 +118,18 @@ class chronosd
         uint64_t m_count_release_references;
         uint64_t m_count_query_order;
         uint64_t m_count_assign_order;
+        char *m_repl_resp; // buffer for setting replicant response
+
+    // Weaver
+    public:
+        typedef std::set<std::pair<uint64_t, uint64_t>,
+                bool(*)(std::pair<uint64_t, uint64_t>, std::pair<uint64_t, uint64_t>)> pair_set_t;
+    private:
         uint64_t m_count_weaver_order;
-        std::tr1::unordered_map<std::vector<uint64_t>, uint64_t> m_vcmap; // vclk -> kronos id
-        std::tr1::unordered_map<uint64_t, std::vector<std::pair<uint64_t, uint64_t> > > m_vtlist; // vt id -> vclks seen from that id
+        std::unordered_map<std::vector<uint64_t>, uint64_t> m_vcmap; // vclk -> kronos id
+        bool (*pair_comp_ptr)(std::pair<uint64_t, uint64_t>, std::pair<uint64_t, uint64_t>);
+        std::unordered_map<uint64_t, pair_set_t> m_vtlist; // vt id -> (vclk, corresponding kronos id) seen from that vt
         po6::threads::mutex weaver_mutex;
-        void make_vt_edges(std::vector<std::pair<uint64_t, uint64_t> > &vec, uint64_t mid, uint64_t key);
         void assign_vt_dependencies(std::vector<uint64_t> &vclk, uint64_t vt_id);
 };
 
@@ -127,8 +141,13 @@ chronosd :: chronosd()
     , m_count_query_order()
     , m_count_assign_order()
     , m_count_weaver_order()
-    , m_vcmap()
+    , m_repl_resp(NULL)
+    , pair_comp_ptr(&pair_comp)
 {
+    pair_set_t empty_set(pair_comp_ptr);
+    for (uint64_t vt_id = 0; vt_id < KRONOS_NUM_VTS; vt_id++) {
+        m_vtlist.emplace(vt_id, empty_set);
+    }
 }
 
 chronosd :: ~chronosd() throw ()
@@ -141,11 +160,12 @@ chronosd :: create_event(struct replicant_state_machine_context* ctx,
 {
     ++m_count_create_event;
     uint64_t event = m_graph.add_vertex();
-    /* XXX capture reference */
-    // XXX no stack, use heap!! TODO have to clean up malloc'ed stuff
-    char *buf = (char*)malloc(sizeof(uint64_t));
-    e::pack64le(event, buf);
-    replicant_state_machine_set_response(ctx, buf, sizeof(buf));
+    if (m_repl_resp) {
+        free(m_repl_resp);
+    }
+    m_repl_resp = (char*)malloc(sizeof(uint64_t));
+    e::pack64le(event, m_repl_resp);
+    replicant_state_machine_set_response(ctx, m_repl_resp, sizeof(m_repl_resp));
 }
 
 void
@@ -199,10 +219,12 @@ chronosd :: acquire_references(struct replicant_state_machine_context* ctx,
     }
 
     // Write the response
-    // XXX no stack, use heap!! TODO have to clean up malloc'ed stuff
-    char *buf = (char*)malloc(sizeof(uint64_t));
-    e::pack64le(response, buf);
-    replicant_state_machine_set_response(ctx, buf, sizeof(buf));
+    if (m_repl_resp) {
+        free(m_repl_resp);
+    }
+    m_repl_resp = (char*)malloc(sizeof(uint64_t));
+    e::pack64le(response, m_repl_resp);
+    replicant_state_machine_set_response(ctx, m_repl_resp, sizeof(m_repl_resp));
 
     if (response == NUM_EVENTS)
     {
@@ -234,10 +256,12 @@ chronosd :: release_references(struct replicant_state_machine_context* ctx,
 
     // Write the response
     uint64_t response = NUM_EVENTS;
-    // XXX no stack, use heap!! TODO have to clean up malloc'ed stuff
-    char *buf = (char*)malloc(sizeof(uint64_t));
-    e::pack64le(response, buf);
-    replicant_state_machine_set_response(ctx, buf, sizeof(buf));
+    if (m_repl_resp) {
+        free(m_repl_resp);
+    }
+    m_repl_resp = (char*)malloc(sizeof(uint64_t));
+    e::pack64le(response, m_repl_resp);
+    replicant_state_machine_set_response(ctx, m_repl_resp, sizeof(m_repl_resp));
 }
 
 void
@@ -246,7 +270,6 @@ chronosd :: query_order(struct replicant_state_machine_context* ctx,
 {
     ++m_count_query_order;
     const size_t NUM_PAIRS = data_sz / (2 * sizeof(uint64_t) + sizeof(uint32_t));
-    // XXX no stack, use heap!! TODO have to clean up malloc'ed stuff
     uint8_t *response = (uint8_t*)malloc(NUM_PAIRS * sizeof(uint8_t));
     const char* c = data;
 
@@ -284,8 +307,11 @@ chronosd :: query_order(struct replicant_state_machine_context* ctx,
         response[i] = chronos_cmp_to_byte(p.order);
     }
 
-    const char *r = (char*)response;
-    replicant_state_machine_set_response(ctx, r, NUM_PAIRS * sizeof(uint8_t));
+    if (m_repl_resp) {
+        free(m_repl_resp);
+    }
+    m_repl_resp = (char*)response;
+    replicant_state_machine_set_response(ctx, m_repl_resp, NUM_PAIRS * sizeof(uint8_t));
 }
 
 void
@@ -294,7 +320,6 @@ chronosd :: assign_order(struct replicant_state_machine_context* ctx,
 {
     ++m_count_assign_order;
     const size_t NUM_PAIRS = data_sz / (2 * sizeof(uint64_t) + sizeof(uint32_t) + sizeof(uint8_t));
-    // XXX no stack, use heap!! TODO have to clean up malloc'ed stuff
     uint8_t *results = (uint8_t*)malloc(NUM_PAIRS * sizeof(uint8_t));
     for (size_t i = 0; i < NUM_PAIRS; i++) {
         results[i] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
@@ -380,68 +405,35 @@ chronosd :: assign_order(struct replicant_state_machine_context* ctx,
         }
     }
 
-    const char *r = (char*)results;
-    replicant_state_machine_set_response(ctx, r, NUM_PAIRS * sizeof(uint8_t));
-}
-
-// binary search among the first element of the pair
-int64_t
-vtlist_binary_search(std::vector<std::pair<uint64_t, uint64_t> > &vec, uint64_t key)
-{
-    int64_t first = 0;
-    int64_t last = vec.size() - 1;
-    int64_t mid;
-    while (last >= first) {
-        mid = (first + last) / 2;
-        if (vec.at(mid).first == key) {
-            break;
-        } else if (vec.at(mid).first > key) {
-            last = mid - 1;
-        } else {
-            first = mid + 1;
-        }
+    if (m_repl_resp) {
+        free(m_repl_resp);
     }
-    return mid;
+    m_repl_resp = (char*)results;
+    replicant_state_machine_set_response(ctx, m_repl_resp, NUM_PAIRS * sizeof(uint8_t));
 }
 
 // this method makes edges in the event dependency graph to record
 // dependencies between events from the same vector timestamper
-// given input vt list (vec)
-// mid is the position of the clk which is just smaller or greater than key
-void
-chronosd :: make_vt_edges(std::vector<std::pair<uint64_t, uint64_t> > &vec, uint64_t mid, uint64_t key)
-{
-    uint64_t cmp = vec.at(mid).first;
-    if (key > cmp) {
-        m_graph.add_edge(vec.at(mid).second, key);
-        if (mid < (vec.size()-1)) {
-            uint64_t cmp1 = vec.at(mid+1).first;
-            assert(cmp1 > key);
-            m_graph.add_edge(key, vec.at(mid+1).second);
-        }
-    } else {
-        m_graph.add_edge(key, vec.at(mid).second);
-        if (mid > 0) {
-            uint64_t cmp1 = vec.at(mid-1).first;
-            assert(cmp1 < key);
-            m_graph.add_edge(vec.at(mid-1).second, key);
-        }
-    }
-}
-
 void
 chronosd :: assign_vt_dependencies(std::vector<uint64_t> &vclk, uint64_t vt_id)
 {
-    if (m_vtlist.find(vt_id) == m_vtlist.end()) {
-        // first clk from this timestamper
-        std::vector<std::pair<uint64_t, uint64_t> > new_vec(1, std::make_pair(vclk.at(vt_id), m_vcmap[vclk]));
-        m_vtlist[vt_id] = new_vec;
+    uint64_t clk_val = vclk.at(vt_id);
+    uint64_t ev_id = m_vcmap[vclk];
+    assert(m_vtlist.find(vt_id) != m_vtlist.end());
+    pair_set_t &vtlist = m_vtlist[vt_id];
+    auto res = vtlist.insert(std::make_pair(clk_val, ev_id));
+    assert(res.second);
+    auto iter = res.first;
+    // make fwd edge
+    iter++; // iter is now element succeeding newly inserted element
+    if (iter != vtlist.end()) {
+        m_graph.add_edge(ev_id, iter->second);
     }
-    int64_t pos = vtlist_binary_search(m_vtlist[vt_id], vclk.at(vt_id));
-    if (vclk.at(vt_id) != m_vtlist[vt_id].at(pos).first) {
-        make_vt_edges(m_vtlist[vt_id], pos, vclk.at(vt_id));
-        m_vtlist[vt_id].push_back(std::make_pair(vclk.at(vt_id), m_vcmap[vclk]));
-        std::sort(m_vtlist[vt_id].begin(), m_vtlist[vt_id].end());
+    iter--;
+    // make reverse edge
+    if (iter != vtlist.begin()) {
+        iter--; // iter is now element preceding newly inserted element
+        m_graph.add_edge(iter->second, ev_id);
     }
 }
 
@@ -465,18 +457,14 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
             + 2 * sizeof(uint64_t) // vt_ids
             + sizeof(uint32_t) // flags
             + sizeof(uint8_t)); // preferred order
-    // XXX no stack, use heap!! TODO have to clean up malloc'ed stuff
     uint8_t *results = (uint8_t*)malloc(NUM_PAIRS * sizeof(uint8_t));
     for (size_t i = 0; i < NUM_PAIRS; i++) {
         results[i] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
     }
-    std::vector<std::pair<uint64_t, uint64_t> > edges;
-    edges.reserve(NUM_PAIRS);
     size_t num_pairs = 0;
     const char* c = data;
 
-    for (num_pairs = 0; num_pairs < NUM_PAIRS; ++num_pairs)
-    {
+    for (num_pairs = 0; num_pairs < NUM_PAIRS; ++num_pairs) {
         chronos_pair p;
         weaver_pair wp;
         uint8_t o;
@@ -487,6 +475,13 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
         c = e::unpack32le(c, &p.flags);
         c = e::unpack8le(c, &o);
         p.order = byte_to_chronos_cmp(o);
+
+        // Bunch of sanity checks for Weaver provided vector clocks
+        // some order should have been provided
+        assert((p.order == CHRONOS_HAPPENS_BEFORE) || (p.order == CHRONOS_HAPPENS_AFTER));
+        // CHRONOS_SOFT_FAIL should have been enabled
+        assert(p.flags & CHRONOS_SOFT_FAIL);
+
         std::vector<uint64_t> vc_lhs, vc_rhs;
         vc_lhs.reserve(KRONOS_NUM_VTS);
         vc_rhs.reserve(KRONOS_NUM_VTS);
@@ -497,85 +492,52 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
         if (m_vcmap.find(vc_lhs) == m_vcmap.end()) {
             uint64_t ev_lhs = m_graph.add_vertex();
             m_vcmap[vc_lhs] = ev_lhs;
-            //assign_vt_dependencies(vc_lhs, wp.lhs_id);
+            assign_vt_dependencies(vc_lhs, wp.lhs_id);
         }
         if (m_vcmap.find(vc_rhs) == m_vcmap.end()) {
             uint64_t ev_rhs = m_graph.add_vertex();
             m_vcmap[vc_rhs] = ev_rhs;
-            //assign_vt_dependencies(vc_rhs, wp.rhs_id);
+            assign_vt_dependencies(vc_rhs, wp.rhs_id);
         }
         p.lhs = m_vcmap[vc_lhs];
         p.rhs = m_vcmap[vc_rhs];
 
-        if (!m_graph.exists(p.lhs) ||
-            !m_graph.exists(p.rhs))
-        {
-            results[num_pairs] = chronos_cmp_to_byte(CHRONOS_NOEXIST);
-            break;
-        }
+        assert(m_graph.exists(p.lhs) && m_graph.exists(p.rhs));
 
         int resolve = m_graph.compute_order(p.lhs, p.rhs);
 
-        if (resolve < 0)
-        {
+        if (resolve < 0) {
             results[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_BEFORE);
-
-            if (p.order != CHRONOS_HAPPENS_BEFORE)
-            {
-                if (!(p.flags & CHRONOS_SOFT_FAIL))
-                {
-                    results[num_pairs] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
-                    break;
-                }
-            }
-        }
-        else if (resolve > 0)
-        {
+        } else if (resolve > 0) {
             results[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_AFTER);
-
-            if (p.order != CHRONOS_HAPPENS_AFTER)
-            {
-                if (!(p.flags & CHRONOS_SOFT_FAIL))
-                {
-                    results[num_pairs] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
-                    break;
-                }
-            }
-        }
-        else
-        {
-            switch (p.order)
-            {
+        } else {
+            switch (p.order) {
                 case CHRONOS_HAPPENS_BEFORE:
                     results[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_BEFORE);
                     m_graph.add_edge(p.lhs, p.rhs);
-                    edges.push_back(std::make_pair(p.lhs, p.rhs));
                     break;
+
                 case CHRONOS_HAPPENS_AFTER:
                     results[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_AFTER);
                     m_graph.add_edge(p.rhs, p.lhs);
-                    edges.push_back(std::make_pair(p.rhs, p.lhs));
                     break;
-                case CHRONOS_CONCURRENT:
-                case CHRONOS_WOULDLOOP:
-                case CHRONOS_NOEXIST:
+
                 default:
+                    DEBUG << "should not reach here" << std::endl;
+                    assert(false);
                     break;
             }
         }
     }
 
-    if (num_pairs != NUM_PAIRS)
-    {
-        for (size_t i = 0; i < edges.size(); ++i)
-        {
-            m_graph.remove_edge(edges[i].first, edges[i].second);
-        }
-    }
+    assert(num_pairs == NUM_PAIRS);
     weaver_mutex.unlock();
 
-    const char *r = (char*)results;
-    replicant_state_machine_set_response(ctx, r, NUM_PAIRS * sizeof(uint8_t));
+    if (m_repl_resp) {
+        free(m_repl_resp);
+    }
+    m_repl_resp = (char*)results;
+    replicant_state_machine_set_response(ctx, m_repl_resp, NUM_PAIRS * sizeof(uint8_t));
 }
 
 void

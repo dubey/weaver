@@ -13,6 +13,7 @@ AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 
 # Checks for programs.
+CXXFLAGS='-std=c++0x'
 AC_PROG_CXX
 AC_PROG_CC
 AC_LANG(C++)

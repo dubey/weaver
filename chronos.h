@@ -50,8 +50,15 @@
 // Replicant
 #include <replicant.h>
 
+#define __KRONOS_DEBUG__
+#ifdef __KRONOS_DEBUG__
+#define DEBUG std::cerr << __FILE__ << ":" << __LINE__ << " "
+#else
+#define DEBUG if (0) std::cerr << __FILE__ << ":" << __LINE__ << " "
+#endif
+
 // Weaver
-#define KRONOS_NUM_VTS 2
+#define KRONOS_NUM_VTS 1
 
 extern "C" {
 #endif
@@ -115,7 +122,7 @@ struct chronos_stats
  * maintain state necessary for the chronos_client.
  */
 struct chronos_client*
-chronos_client_create(const char* host, uint16_t port, uint64_t num_shards);
+chronos_client_create(const char* host, uint16_t port);
 
 /* Destroy an existing client instance.
  */
@@ -198,6 +205,19 @@ int64_t
 chronos_assign_order(struct chronos_client* client, struct chronos_pair* pairs, size_t pairs_sz,
                      enum chronos_returncode* status, ssize_t* ret);
 
+/* For each weaver_pair, create a relationship between the two events.
+ *
+ * If there is no happens-before relationship between pairs[x].lhs and
+ * pairs[x].rhs, then a relationship between pairs[x].lhs and pairs[x].rhs will
+ * be created according to pairs[x].order.
+ *
+ * EOS_SOFT_FAIL needs to be set in pairs[x].flags.  A preexisting happens-before
+ * relationship will not cause failure.  Instead, pairs[x].order will be set to
+ * indicate the existing relationship.
+ *
+ * Returns: 0 on success, -1 on error, or index of non-existent event + 1.
+ * Error:   errno will indicate the error.
+ */
 int64_t
 chronos_weaver_order(struct chronos_client* client, struct weaver_pair* pairs, size_t pairs_sz,
                      enum chronos_returncode* status, ssize_t* ret);
@@ -255,7 +275,7 @@ chronos_wait(struct chronos_client* client, int64_t id, int timeout, enum chrono
 class chronos_client
 {
     public:
-        chronos_client(const char* host, uint16_t port, uint64_t num_shards);
+        chronos_client(const char* host, uint16_t port);
         ~chronos_client() throw ();
 
     public:
@@ -290,7 +310,6 @@ class chronos_client
     private:
         std::auto_ptr<replicant_client> m_replicant;
         pending_map m_pending;
-        uint64_t m_shards; // number of shards, used as dimension for vector clocks
 };
 #endif // __cplusplus
 
