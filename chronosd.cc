@@ -421,7 +421,7 @@ chronosd :: assign_vt_dependencies(std::vector<uint64_t> &vclk, uint64_t vt_id)
     uint64_t ev_id = m_vcmap[vclk];
     assert(m_vtlist.find(vt_id) != m_vtlist.end());
     pair_set_t &vtlist = m_vtlist[vt_id];
-    auto res = vtlist.insert(std::make_pair(clk_val, ev_id));
+    auto res = vtlist.emplace(std::make_pair(clk_val, ev_id));
     assert(res.second);
     auto iter = res.first;
     // make fwd edge
