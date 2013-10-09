@@ -283,4 +283,4 @@ namespace node_prog
     */
 }
 
-#endif //__DIKJSTRA_PROG__
+#endif

@@ -173,7 +173,7 @@ namespace db
     {
         thread::pool::S = this;
         initialize_busybee(bb, shard_id, myloc);
-        order::kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT, KRONOS_NUM_VTS);
+        order::kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT);
         order::call_times = new std::list<uint64_t>();
         assert(NUM_VTS == KRONOS_NUM_VTS);
         message::prog_state = &node_prog_req_state;

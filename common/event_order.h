@@ -70,6 +70,7 @@ namespace order
         for (uint64_t i = 0; i < (num_clks-1); i++) {
             for (uint64_t j = (i+1); j < num_clks; j++) {
                 int cmp = compare_two_clocks(clocks.at(i).clock, clocks.at(j).clock);
+                assert(cmp != 2);
                 if ((cmp == 0) && !large.at(j)) {
                     large.at(j) = true;
                     num_large++;
@@ -87,7 +88,7 @@ namespace order
     }
 
     // static vector clock comparison method
-    // will call Kronos daemon if clocks are incomparable
+    // will call Kronos if clocks are incomparable
     // returns index of earliest clock
     static inline int64_t
     compare_vts(const std::vector<vc::vclock> &clocks)
@@ -107,8 +108,6 @@ namespace order
         } else {
             // need to call Kronos
             uint64_t num_pairs = ((num_clks - num_large) * (num_clks - num_large - 1)) / 2;
-            //std::cout << "Num clks " << num_clks << " num_large " << num_large << " num pairs " << num_pairs << std::endl;
-            //DEBUG << "num pairs = " << num_pairs << std::endl;
             weaver_pair *wpair = (weaver_pair*)malloc(sizeof(weaver_pair) * num_pairs);
             weaver_pair *wp = wpair;
             for (uint64_t i = 0; i < num_clks; i++) {
@@ -119,20 +118,12 @@ namespace order
                         for (uint64_t k = 0; k < NUM_VTS; k++) {
                             wp->lhs[k] = clocks.at(i).clock.at(k);
                             wp->rhs[k] = clocks.at(j).clock.at(k);
-                            //DEBUG << wp->lhs[k] << " " << wp->rhs[k] << std::endl;
-                            //std::cout << wp->lhs[k] << " " << clocks.at(i).clock.at(k) << "," << wp->rhs[k] << " " << clocks.at(j).clock.at(k) << std::endl;
                         }
                         wp->lhs_id = clocks.at(i).vt_id;
                         wp->rhs_id = clocks.at(j).vt_id;
                         wp->flags = CHRONOS_SOFT_FAIL;
                         wp->order = CHRONOS_HAPPENS_BEFORE;
-                        //if (i == 0) {
-                        //    wp->order = CHRONOS_HAPPENS_BEFORE; // assign a preference of the first to happen before all others
-                        //} else {
-                        //    wp->order = CHRONOS_CONCURRENT;
-                        //}
                         wp++;
-                        //std::cout << "In event order, num_pairs = " << num_pairs << ", counter = " << ++cntr << std::endl;
                     }
                 }
             }
@@ -141,7 +132,7 @@ namespace order
             kronos_mutex.lock();
             timespec ts;
             uint64_t start_time = wclock::get_time_elapsed(ts);
-            int64_t ret = kronos_cl->weaver_order(wpair, 1, &status, &cret);
+            int64_t ret = kronos_cl->weaver_order(wpair, num_pairs, &status, &cret);
             ret = kronos_cl->wait(ret, 100000, &status);
             uint64_t end_time = wclock::get_time_elapsed(ts);
             call_times->emplace_back(end_time-start_time);
@@ -152,6 +143,7 @@ namespace order
                 for (uint64_t j = i+1; j < num_clks; j++) {
                     if (!large.at(i) && !large.at(j)) {
                         // retrieve and set order
+                        assert((wp->order == CHRONOS_HAPPENS_BEFORE) || (wp->order == CHRONOS_HAPPENS_AFTER));
                         switch (wp->order) {
                             case CHRONOS_HAPPENS_BEFORE:
                                 large_upd.at(j) = true;
@@ -162,7 +154,7 @@ namespace order
                                 break;
 
                             default:
-                                DEBUG << "unexpected Kronos order" << wp->order << std::endl;
+                                DEBUG << "cannot reach here" << std::endl;
                                 assert(false); // shouldn't reach here
                         }
                         //free(wp->lhs);
@@ -178,6 +170,7 @@ namespace order
                 }
             }
             // should never reach here
+            assert(false);
             return num_clks;
         }
     }

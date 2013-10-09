@@ -20,7 +20,7 @@ vc_ordering_test()
     vc::vclock clk1, clk2;
     clk1.vt_id = 0;
     clk2.vt_id = 1;
-    for (uint64_t i = 0; i < NUM_SHARDS; i++) {
+    for (uint64_t i = 0; i < NUM_VTS; i++) {
         clk1.clock.push_back(1);
         clk2.clock.push_back(0);
     }
@@ -33,7 +33,7 @@ vc_ordering_test()
     clk2.clock.at(0) = 2;
     assert(order::compare_two_clocks(clk1.clock, clk2.clock) == -1);
     assert(order::compare_two_clocks(clk2.clock, clk1.clock) == -1);
-    order::kronos_cl = new chronos_client(KRONOS_IPADDR, KRONOS_PORT, NUM_SHARDS);
+    order::kronos_cl = new chronos_client(KRONOS_IPADDR, KRONOS_PORT);
     assert(NUM_VTS == KRONOS_NUM_VTS);
     std::cout << order::compare_two_vts(clk1, clk2) << std::endl;
     std::cout << order::compare_two_vts(clk2, clk1) << std::endl;

@@ -85,9 +85,9 @@ namespace state
         prog_state.emplace(node_prog::REACHABILITY, new_req_map);
         prog_state.emplace(node_prog::N_HOP_REACHABILITY, new_req_map);
         prog_state.emplace(node_prog::TRIANGLE_COUNT, new_req_map);
+        prog_state.emplace(node_prog::CLUSTERING, new_req_map);
         /*
         prog_state.emplace(node_prog::DIJKSTRA, new_req_map);
-        prog_state.emplace(node_prog::CLUSTERING, new_req_map);
         */
     }
 

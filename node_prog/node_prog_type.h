@@ -45,7 +45,7 @@ namespace node_prog
                 vc::vclock &req_vlock);
     };
 
-/*
+    /*
     template <typename params_type, typename node_state_type>
     struct deleted_node_function_type
     {
@@ -94,4 +94,4 @@ namespace std
     };
 }
 
-#endif //__NODE_PROG_TYPE__
+#endif

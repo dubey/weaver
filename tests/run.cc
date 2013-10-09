@@ -36,7 +36,7 @@
 ////#include "dijkstra_prog_test.h"
 //#include "dijkstra_tree_test.h"
 //#include "multiple_widest_path.h"
-////#include "clustering_prog_test.h"
+#include "clustering_prog_test.h"
 #include "scalability.h"
 
 int
@@ -76,7 +76,7 @@ main(int argc, char *argv[])
     //unreachable_reach_prog(true);
     //clique_reach_prog(true);
     //multiple_wp_prog(true);
-    multiple_sparse_locality(true);
+    //multiple_sparse_locality(true);
     //multiple_dense_locality(true);
     //scale_test();
     //multiple_nhop_sparse_locality(true);
@@ -90,6 +90,7 @@ main(int argc, char *argv[])
     //create_graph_test();
     //new_reachability_test();
     //line_reach_prog(true);
+    clustering_prog_test();
 
 #endif
     DEBUG << "All tests completed." << std::endl;
