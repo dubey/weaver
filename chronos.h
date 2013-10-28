@@ -58,7 +58,7 @@
 #endif
 
 // Weaver
-#define KRONOS_NUM_VTS 3
+#define KRONOS_NUM_VTS 2
 
 extern "C" {
 #endif

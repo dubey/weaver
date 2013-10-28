@@ -4,14 +4,12 @@ sys.path.append(".libs/")
 
 import chronos
 
-c = chronos.Client('127.0.0.1', 1982, 1)
+c = chronos.Client('127.0.0.1', 1992)
 w = c.create_event()
 x = c.create_event()
 y = c.create_event()
 z = c.create_event()
 
-print w,x,y,z
-print c.query_order([(w, x)])
 assert c.query_order([(w, x)]) == [(w, x, '?')]
 assert c.query_order([(w, y)]) == [(w, y, '?')]
 assert c.query_order([(w, z)]) == [(w, z, '?')]

@@ -34,9 +34,6 @@
 #include <set>
 #include <unordered_map>
 
-// po6
-#include <po6/threads/mutex.h>
-
 // e
 #include <e/endian.h>
 
@@ -129,7 +126,6 @@ class chronosd
         std::unordered_map<std::vector<uint64_t>, uint64_t> m_vcmap; // vclk -> kronos id
         bool (*pair_comp_ptr)(std::pair<uint64_t, uint64_t>, std::pair<uint64_t, uint64_t>);
         std::unordered_map<uint64_t, pair_set_t> m_vtlist; // vt id -> (vclk, corresponding kronos id) seen from that vt
-        po6::threads::mutex weaver_mutex;
         void assign_vt_dependencies(std::vector<uint64_t> &vclk, uint64_t vt_id);
 };
 
@@ -451,7 +447,6 @@ void
 chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
                          const char* data, size_t data_sz)
 {
-    weaver_mutex.lock();
     ++m_count_weaver_order;
     const size_t NUM_PAIRS = data_sz / (2 * sizeof(uint64_t) * KRONOS_NUM_VTS // vector clocks
             + 2 * sizeof(uint64_t) // vt_ids
@@ -531,7 +526,6 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
     }
 
     assert(num_pairs == NUM_PAIRS);
-    weaver_mutex.unlock();
 
     if (m_repl_resp) {
         free(m_repl_resp);
