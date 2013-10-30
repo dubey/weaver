@@ -44,7 +44,6 @@ begin_transaction(transaction::pending_tx &tx)
 {
     DEBUG << "beginning tx " << std::endl;
     message::message msg;
-    //vc::vclock clock;
     std::vector<transaction::pending_tx> tx_vec(NUM_SHARDS, transaction::pending_tx());
     vts->mutex.lock();
     for (std::shared_ptr<transaction::pending_update> upd: tx.writes) {

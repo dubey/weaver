@@ -157,13 +157,13 @@ namespace order
                                 DEBUG << "cannot reach here" << std::endl;
                                 assert(false); // shouldn't reach here
                         }
-                        //free(wp->lhs);
-                        //free(wp->rhs);
+                        free(wp->lhs);
+                        free(wp->rhs);
+                        wp++;
                     }
                 }
             }
-            //free(wpair);
-            //DEBUG << "done Kronos call, going to return now\n";
+            free(wpair);
             for (uint64_t min_pos = 0; min_pos < num_clks; min_pos++) {
                 if (!large_upd.at(min_pos)) {
                     return min_pos;

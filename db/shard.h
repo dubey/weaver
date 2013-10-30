@@ -76,28 +76,27 @@ namespace db
             void record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id, uint64_t incr);
             element::node* acquire_node(uint64_t node_handle);
             void release_node(element::node *n, bool migr_node);
-            void wait_node(element::node *n);
 
             // Graph state
             uint64_t shard_id;
             std::unordered_map<uint64_t, element::node*> nodes; // node handle -> ptr to node object XXX NO LONGER PRIVATE
         private:
-            std::unordered_map<uint64_t, uint64_t> edges; // edge handle -> node handle
+            std::unordered_map<uint64_t, // shard id s ->
+                                std::unordered_map<uint64_t, // node handle n ->
+                                    std::unordered_set<uint64_t>>> edge_map; // set of nodes which have (s,n) as out-neighbor
             db::thread::pool thread_pool;
         public:
             void add_write_request(uint64_t vt_id, thread::unstarted_thread *thr);
             void add_read_request(uint64_t vt_id, thread::unstarted_thread *thr);
             element::node* create_node(uint64_t node_handle, vc::vclock &vclk, bool migrate);
             void delete_node_nonlocking(element::node *n, vc::vclock &tdel);
-            uint64_t delete_node(uint64_t node_handle, vc::vclock &vclk, bool wait);
-            void create_edge_nonlocking(element::node *n, uint64_t edge, uint64_t local_node,
-                    uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, bool fwd);
-            uint64_t create_edge(uint64_t edge_handle, uint64_t local_node,
-                    uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, bool wait);
-            uint64_t create_reverse_edge(uint64_t edge_handle, uint64_t local_node,
-                    uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, bool wait);
+            void delete_node(uint64_t node_handle, vc::vclock &vclk);
+            void create_edge_nonlocking(element::node *n, uint64_t edge, uint64_t remote_node,
+                    uint64_t remote_loc, vc::vclock &vclk);
+            void create_edge(uint64_t edge_handle, uint64_t local_node,
+                    uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk);
             void delete_edge_nonlocking(element::node *n, uint64_t edge, vc::vclock &tdel);
-            uint64_t delete_edge(uint64_t edge_handle, uint64_t node_handle, vc::vclock &vclk, bool wait);
+            void delete_edge(uint64_t edge_handle, uint64_t node_handle, vc::vclock &vclk);
             uint64_t get_node_count();
 
             // Permanent deletion
@@ -122,8 +121,8 @@ namespace db
             const char *loc_attrName = "shard";
             hyperdex::Client cl;
             //bool node_migrated;
-            uint64_t update_migrated_nbr_nonlocking(element::node *n, uint64_t edge, uint64_t rnode, uint64_t new_loc);
-            uint64_t update_migrated_nbr(uint64_t rnode, uint64_t new_loc, std::vector<std::tuple<uint64_t, uint64_t, bool>> &updates);
+            void update_migrated_nbr_nonlocking(element::node *n, uint64_t migr_node, uint64_t old_loc, uint64_t new_loc);
+            void update_migrated_nbr(uint64_t node, uint64_t old_loc, uint64_t new_loc);
             void update_node_mapping(uint64_t node, uint64_t shard);
             std::vector<uint64_t> max_prog_id // max prog id seen from each vector timestamper
                 , target_prog_id
@@ -168,7 +167,7 @@ namespace db
         , max_prog_id(NUM_VTS, 0)
         , target_prog_id(NUM_VTS, 0)
         , max_done_id(NUM_VTS, 0)
-        , migr_edge_acks(NUM_SHARDS, true)
+        , migr_edge_acks(NUM_SHARDS, false)
         , node_prog_req_state()
     {
         thread::pool::S = this;
@@ -236,19 +235,6 @@ namespace db
         }
     }
 
-    inline void
-    shard :: wait_node(element::node *n)
-    {
-        assert(false);
-        update_mutex.lock();
-        n->in_use = false;
-        while (n->state != element::node::mode::STABLE) {
-            n->migr_cv.wait();
-        }
-        n->in_use = true;
-        update_mutex.unlock();
-    }
-
 
     // Graph state update methods
 
@@ -295,10 +281,9 @@ namespace db
         n->updated = true;
     }
 
-    inline uint64_t
-    shard :: delete_node(uint64_t node_handle, vc::vclock &tdel, bool wait=true)
+    inline void
+    shard :: delete_node(uint64_t node_handle, vc::vclock &tdel)
     {
-        uint64_t ret;
         element::node *n = acquire_node(node_handle);
         if (n == NULL) {
             // node is being migrated
@@ -308,40 +293,30 @@ namespace db
             }
             deferred_writes.at(node_handle).emplace_back(deferred_write(message::NODE_DELETE_REQ, tdel, node_handle));
             migration_mutex.unlock();
-        } else if (n->state == element::node::mode::NASCENT && wait) {
-            wait_node(n);
         } else {
-            ret = ++n->update_count;
             delete_node_nonlocking(n, tdel);
-            ret = 0;
             release_node(n);
         }
         // TODO permanent deletion
-        return ret;
     }
 
     inline void
-    shard :: create_edge_nonlocking(element::node *n, uint64_t edge, uint64_t local_node,
-            uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, bool fwd)
+    shard :: create_edge_nonlocking(element::node *n, uint64_t edge, uint64_t remote_node,
+            uint64_t remote_loc, vc::vclock &vclk)
     {
-        element::edge *new_edge = new element::edge(edge, vclk,
-                remote_loc, remote_node);
-        n->add_edge(new_edge, fwd);
+        element::edge *new_edge = new element::edge(edge, vclk, remote_loc, remote_node);
+        n->add_edge(new_edge);
         n->updated = true;
-        if (fwd) {
-            // TODO no reverse edges for now
-            //message::message msg;
-            //message::prepare_message(msg, message::REVERSE_EDGE_CREATE,
-            //    vclk, edge, remote_node, local_node, shard_id);
-            //send(remote_loc, msg.buf);
-        }
+        // update edge map
+        edge_map_mutex.lock();
+        edge_map[remote_loc][remote_node].emplace(n->get_handle());
+        edge_map_mutex.unlock();
     }
 
-    inline uint64_t
+    inline void
     shard :: create_edge(uint64_t edge_handle, uint64_t local_node,
-            uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, bool wait=true)
+            uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk)
     {
-        uint64_t ret;
         element::node *n = acquire_node(local_node);
         if (n == NULL) {
             // node is being migrated
@@ -352,41 +327,10 @@ namespace db
             deferred_writes.at(local_node).emplace_back(deferred_write(message::EDGE_CREATE_REQ, vclk,
                     edge_handle, local_node, remote_node, remote_loc));
             migration_mutex.unlock();
-        } else if (n->state == element::node::mode::NASCENT && wait) {
-            wait_node(n);
         } else {
-            ret = ++n->update_count;
-            create_edge_nonlocking(n, edge_handle, local_node, remote_node, remote_loc, vclk, true);
-            ret = 0;
+            create_edge_nonlocking(n, edge_handle, remote_node, remote_loc, vclk);
             release_node(n);
         }
-        return ret;
-    }
-
-    inline uint64_t
-    shard :: create_reverse_edge(uint64_t edge_handle, uint64_t local_node,
-            uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, bool wait=true)
-    {
-        uint64_t ret;
-        element::node *n = acquire_node(local_node);
-        if (n == NULL) {
-            // node is being migrated
-            migration_mutex.lock();
-            if (deferred_writes.find(local_node) == deferred_writes.end()) {
-                deferred_writes.emplace(local_node, def_write_lst());
-            }
-            deferred_writes.at(local_node).emplace_back(deferred_write(message::REVERSE_EDGE_CREATE, vclk,
-                    edge_handle, local_node, remote_node, remote_loc));
-            migration_mutex.unlock();
-        } else if (n->state == element::node::mode::NASCENT && wait) {
-            wait_node(n);
-        } else {
-            ret = ++n->update_count;
-            create_edge_nonlocking(n, edge_handle, local_node, remote_node, remote_loc, vclk, false);
-            ret = 0;
-            release_node(n);
-        }
-        return ret;
     }
 
     inline void
@@ -398,32 +342,27 @@ namespace db
         n->dependent_del++;
     }
 
-    inline uint64_t
-    shard :: delete_edge(uint64_t edge_handle, uint64_t node_handle, vc::vclock &tdel, bool wait=true)
+    inline void
+    shard :: delete_edge(uint64_t edge_handle, uint64_t node_handle, vc::vclock &tdel)
     {
-        uint64_t ret;
         element::node *n = acquire_node(node_handle);
         if (n == NULL) {
-            // node is being migrated XXX don't know node handle!
             migration_mutex.lock();
             if (deferred_writes.find(node_handle) == deferred_writes.end()) {
                 deferred_writes.emplace(node_handle, def_write_lst());
             }
             deferred_writes.at(node_handle).emplace_back(deferred_write(message::EDGE_DELETE_REQ, tdel, node_handle));
             migration_mutex.unlock();
-        } else if (n->state == element::node::mode::NASCENT && wait) {
-            wait_node(n);
         } else {
-            ret = ++n->update_count;
             delete_edge_nonlocking(n, edge_handle, tdel);
-            ret = 0;
             release_node(n);
         }
         // TODO permanent deletion
-        return ret;
     }
 
+
     // permanent deletion
+
     inline void
     shard :: delete_migrated_node(uint64_t migr_node)
     {
@@ -435,11 +374,7 @@ namespace db
         for (auto &e: n->out_edges) {
             delete e.second;
         }
-        for (auto &e: n->in_edges) {
-            delete e.second;
-        }
         n->out_edges.clear();
-        n->in_edges.clear();
         assert(n->waiters == 0); // nobody should try to acquire this node now
         node_prog_req_state.delete_node_state(migr_node);
         release_node(n);
@@ -460,66 +395,44 @@ namespace db
             send(e->nbr.loc, msg.buf);
             delete e;
         }
-        for (auto &it: n->in_edges) {
-            e = it.second;
-            message::prepare_message(msg, message::PERMANENT_DELETE_EDGE, e->nbr.handle, it.first);
-            send(e->nbr.loc, msg.buf);
-            delete e;
-        }
         delete n;
     }
 
 
     // migration methods
 
-    inline uint64_t
-    shard :: update_migrated_nbr_nonlocking(element::node *n, uint64_t edge_handle, uint64_t remote_node, uint64_t new_loc)
+    inline void
+    shard :: update_migrated_nbr_nonlocking(element::node *n, uint64_t migr_node, uint64_t old_loc, uint64_t new_loc)
     {
         bool found = false;
-        uint64_t old_loc = 0;
-        if (n->out_edges.find(edge_handle) != n->out_edges.end()) {
-            element::edge *e = n->out_edges.at(edge_handle);
-            assert(e->nbr.handle == remote_node);
-            n->msg_count[e->nbr.loc-SHARD_ID_INCR] = 0;
-            e->msg_count = 0;
-            old_loc = e->nbr.loc;
-            e->nbr.loc = new_loc;
-            found = true;
-            DEBUG << "Updating outnbr " << e->nbr.handle << " to new loc " << new_loc << "," << e->nbr.loc << std::endl;
-        }
-        if (n->in_edges.find(edge_handle) != n->in_edges.end()) {
-            element::edge *e = n->in_edges.at(edge_handle);
-            assert(e->nbr.handle == remote_node);
-            n->msg_count[e->nbr.loc-SHARD_ID_INCR] = 0;
-            e->msg_count = 0;
-            old_loc = e->nbr.loc;
-            e->nbr.loc = new_loc;
-            found = true;
+        element::edge *e;
+        for (auto &x: n->out_edges) {
+            e = x.second;
+            if (e->nbr.handle == migr_node && e->nbr.loc == old_loc) {
+                // XXX why zero out counters?
+                //n->msg_count[e->nbr.loc-SHARD_ID_INCR] = 0;
+                //e->msg_count = 0;
+                found = true;
+                DEBUG << "Updating outnbr " << e->nbr.handle << " to new loc " << new_loc << "," << e->nbr.loc << std::endl;
+            }
         }
         if (!found) {
-            DEBUG << "Neighbor not found for migrated node " << remote_node << std::endl;
+            DEBUG << "Neighbor not found for migrated node " << migr_node << std::endl;
         }
-        return old_loc;
     }
 
-    inline uint64_t
-    shard :: update_migrated_nbr(uint64_t rnode, uint64_t new_loc, std::vector<std::tuple<uint64_t, uint64_t, bool>> &updates)
+    inline void
+    shard :: update_migrated_nbr(uint64_t node, uint64_t old_loc, uint64_t new_loc)
     {
-        uint64_t old_loc = 0;
-        bool migr_edge = true;
-        uint64_t l;
+        std::unordered_set<uint64_t> nbrs;
         element::node *n;
-        for (auto &x: updates) {
-            n = acquire_node(std::get<0>(x));
-            l = update_migrated_nbr_nonlocking(n, std::get<1>(x), rnode, new_loc);
+        edge_map_mutex.lock();
+        nbrs = std::move(edge_map[old_loc][node]);
+        edge_map_mutex.unlock();
+        for (uint64_t nbr: nbrs) {
+            n = acquire_node(nbr);
+            update_migrated_nbr_nonlocking(n, node, old_loc, new_loc);
             release_node(n);
-            assert(l != 0);
-            if (old_loc == 0) {
-                old_loc = l;
-            } else {
-                assert(old_loc == l);
-            }
-            migr_edge = migr_edge && std::get<2>(x);
         }
         migration_mutex.lock();
         if (old_loc != shard_id) {
@@ -533,10 +446,8 @@ namespace db
                 }
             }
             migr_edge_acks[shard_id - SHARD_ID_INCR] = false;
-            DEBUG << "Got edge ack from " << shard_id << std::endl;
         }
         migration_mutex.unlock();
-        return old_loc;
     }
 
     // caution: assuming we hold migration_mutex, for hyperdex client

@@ -42,8 +42,7 @@ namespace node_prog
                 : mode(false)
                 , hops(0)
                 , reachable(false)
-            {
-            }
+            { }
             
             virtual ~reach_params() { }
 
@@ -147,7 +146,6 @@ namespace node_prog
         reach_node_state &state = state_getter();
         bool false_reply = false;
         db::element::remote_node prev_node = params.prev_node;
-        db::element::remote_node *next_node = NULL;
         params.prev_node = rn;
         std::vector<std::pair<db::element::remote_node, reach_params>> next;
         if (!params.mode) { // request mode
@@ -155,19 +153,7 @@ namespace node_prog
                 // we found the node we are looking for, prepare a reply
                 params.mode = true;
                 params.reachable = true;
-                if (prev_node.loc < NUM_VTS) { // sending back to vt
-                    next_node = &prev_node;
-                } else {
-                    for (auto &x: n.in_edges) {
-                        if (x.second->nbr.handle == prev_node.handle) {
-                            next_node = &x.second->nbr;
-                            x.second->traverse();
-                            break;
-                        }
-                    }
-                }
-                next.emplace_back(std::make_pair(*next_node, params));
-                next_node = NULL;
+                next.emplace_back(std::make_pair(prev_node, params));
             } else {
                 // have not found it yet, check the cache, then follow all out edges
                 bool got_cache = false; // TODO
@@ -212,19 +198,7 @@ namespace node_prog
             if (false_reply) {
                 params.mode = true;
                 params.reachable = false;
-                if (prev_node.loc < NUM_VTS) { // sending back to vt
-                    next_node = &prev_node;
-                } else {
-                    for (auto &x: n.in_edges) {
-                        if (x.second->nbr.handle == prev_node.handle) {
-                            next_node = &x.second->nbr;
-                            x.second->traverse();
-                            break;
-                        }
-                    }
-                }
-                next.emplace_back(std::make_pair(*next_node, params));
-                next_node = NULL;
+                next.emplace_back(std::make_pair(prev_node, params));
             }
         } else { // reply mode
             if (params.reachable) {
@@ -234,25 +208,11 @@ namespace node_prog
             }
             if (((--state.out_count == 0) || params.reachable) && !state.reachable) {
                 state.reachable |= params.reachable;
-                if (state.prev_node.loc < NUM_VTS) { // sending back to vt
-                    next_node = &state.prev_node;
-                } else {
-                    for (auto &x: n.in_edges) {
-                        if (x.second->nbr.handle == state.prev_node.handle) {
-                            next_node = &x.second->nbr;
-                            x.second->traverse();
-                            //if (state.reachable) {
-                            //}
-                            break;
-                        }
-                    }
-                }
                 if (params.reachable) {
                     params.hops = state.hops + 1;
                     params.path.emplace_back(rn);
                 }
-                next.emplace_back(std::make_pair(*next_node, params));
-                next_node = NULL;
+                next.emplace_back(std::make_pair(state.prev_node, params));
             }
             if ((int)state.out_count < 0) {
                 DEBUG << "ALERT! Bad state value in reach program for node " << rn.handle
@@ -261,7 +221,6 @@ namespace node_prog
                 while(1);
             }
         }
-        //DEBUG << "done reach prog\n";
         return next;
     }
 

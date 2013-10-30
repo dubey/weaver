@@ -52,7 +52,6 @@ namespace element
         public:
             enum mode state;
             std::unordered_map<uint64_t, edge*> out_edges;
-            std::unordered_map<uint64_t, edge*> in_edges;
             po6::threads::cond cv; // for locking node
             po6::threads::cond migr_cv; // make reads/writes wait while node is being migrated
             bool in_use;
@@ -74,7 +73,7 @@ namespace element
             std::vector<std::unique_ptr<message::message>> pending_requests;
 
         public:
-            void add_edge(edge *e, bool in_or_out);
+            void add_edge(edge *e);
             void add_cached_req(uint64_t req_id);
             void remove_cached_req(uint64_t req_id);
             std::unique_ptr<std::vector<uint64_t>> purge_cache();
@@ -100,13 +99,9 @@ namespace element
     { }
 
     inline void
-    node :: add_edge(edge *e, bool in_or_out)
+    node :: add_edge(edge *e)
     {
-        if (in_or_out) {
-            out_edges.emplace(e->get_handle(), e);
-        } else {
-            in_edges.emplace(e->get_handle(), e);
-        }
+        out_edges.emplace(e->get_handle(), e);
     }
 
     inline void

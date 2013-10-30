@@ -37,7 +37,6 @@ namespace message
             + size(t.get_creat_time()) + size(t.get_del_time()) // time stamps
             + size(*t.get_props())  // properties
             + size(t.out_edges)
-            + size(t.in_edges)
             + size(t.update_count)
             + size(t.prev_locs)
             + size(t.agg_msg_count)
@@ -63,7 +62,6 @@ namespace message
         pack_buffer(packer, t.get_del_time());
         pack_buffer(packer, *t.get_props());
         pack_buffer(packer, t.out_edges);
-        pack_buffer(packer, t.in_edges);
         pack_buffer(packer, t.update_count);
         pack_buffer(packer, t.prev_locs);
         pack_buffer(packer, t.agg_msg_count);
@@ -100,7 +98,6 @@ namespace message
         unpack_buffer(unpacker, del_time);
         unpack_buffer(unpacker, props);
         unpack_buffer(unpacker, t.out_edges);
-        unpack_buffer(unpacker, t.in_edges);
         unpack_buffer(unpacker, t.update_count);
         unpack_buffer(unpacker, t.prev_locs);
         unpack_buffer(unpacker, t.agg_msg_count);
