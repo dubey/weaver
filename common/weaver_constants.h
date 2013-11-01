@@ -14,11 +14,11 @@
 #include <stdint.h>
 
 // debugging
-#ifndef DEBUG
+#ifndef WDEBUG
 #ifdef __WEAVER_DEBUG__
-#define DEBUG std::cerr << __FILE__ << ":" << __LINE__ << " "
+#define WDEBUG std::cerr << __FILE__ << ":" << __LINE__ << " "
 #else
-#define DEBUG if (0) std::cerr << __FILE__ << ":" << __LINE__ << " "
+#define WDEBUG if (0) std::cerr << __FILE__ << ":" << __LINE__ << " "
 #endif
 #endif
 
@@ -40,7 +40,7 @@
 #define SHARDS_DESC_FILE "../common/shards"
 // weaver setup
 #define NUM_SHARDS 2
-#define NUM_VTS 2
+#define NUM_VTS 1
 #define SHARD_ID_INCR NUM_VTS
 #define NUM_THREADS 6
 #define ID_BITS 8

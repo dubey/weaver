@@ -40,18 +40,18 @@ void line_reachability(client::client &c) {
 
     std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args;
     initial_args.emplace_back(std::make_pair(nodes[0], rp));
-    DEBUG << "starting line reachability" << std::endl;
+    WDEBUG << "starting line reachability" << std::endl;
     std::unique_ptr<node_prog::reach_params> res = c.run_node_program(node_prog::REACHABILITY, initial_args);
     assert(res->reachable);
 
-    DEBUG << "finished positive line reachability" << std::endl;
+    WDEBUG << "finished positive line reachability" << std::endl;
     // try to go from second node in line back to first (not possible because singly linked)
     rp.dest = nodes[0];
     initial_args.clear();
     initial_args.emplace_back(std::make_pair(nodes[1], rp));
      res = c.run_node_program(node_prog::REACHABILITY, initial_args);
     assert(!res->reachable);
-    DEBUG << "finished negative line reachability" << std::endl;
+    WDEBUG << "finished negative line reachability" << std::endl;
 }
 
 void clique_reachability(client::client &c) {
@@ -63,7 +63,7 @@ void clique_reachability(client::client &c) {
     }
     c.end_tx(tx_id);
 
-    DEBUG << "created clique nodes" << std::endl;
+    WDEBUG << "created clique nodes" << std::endl;
     for (int i = 0; i < CLIQUE_SIZE; i++) {
         tx_id = c.begin_tx();
         for (int j = 0; j < CLIQUE_SIZE; j++) {
@@ -73,7 +73,7 @@ void clique_reachability(client::client &c) {
         }
         c.end_tx(tx_id);
     }
-    DEBUG << "created clique edges" << std::endl;
+    WDEBUG << "created clique edges" << std::endl;
 
     // start migration
     c.start_migration();
@@ -92,14 +92,14 @@ void clique_reachability(client::client &c) {
             if (i != j) {
             initial_args[0].first = nodes[i];
             initial_args[0].second.dest = nodes[j];
-            DEBUG << "running clique reachability from " << i << " to " << j << std::endl;
+            WDEBUG << "running clique reachability from " << i << " to " << j << std::endl;
             std::unique_ptr<node_prog::reach_params> res = c.run_node_program(node_prog::REACHABILITY, initial_args);
             assert(res->reachable);
             }
         }
     }
 
-    DEBUG << "adding extra node and edge for negative reachability test" << std::endl;
+    WDEBUG << "adding extra node and edge for negative reachability test" << std::endl;
     tx_id = c.begin_tx();
     uint64_t extra_node = c.create_node(tx_id);
     c.create_edge(tx_id, extra_node, nodes[0]);

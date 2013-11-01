@@ -141,43 +141,43 @@ namespace node_prog
             std::function<n_hop_reach_node_state&()> state_getter,
             vc::vclock &req_vclock)
     {
-        DEBUG << "inside node prog!\n";
+        WDEBUG << "inside node prog!\n";
         n_hop_reach_node_state &state = state_getter();
-        DEBUG << "got state\n";
+        WDEBUG << "got state\n";
         bool false_reply = false;
         db::element::remote_node prev_node = params.prev_node;
         //db::element::remote_node *next_node = NULL;
         params.prev_node = rn;
         std::vector<std::pair<db::element::remote_node, n_hop_reach_params>> next;
         if (!params.returning) { // request mode
-            DEBUG << "outgoing mode\n";
+            WDEBUG << "outgoing mode\n";
             if (params.dest == rn.handle) {
-                DEBUG << "found dest node\n";
+                WDEBUG << "found dest node\n";
                 // we found the node we are looking for, prepare a reply
                 params.returning = true;
                 params.reachable = true;
         //        if (prev_node.loc < NUM_VTS) { // sending back to vt
         // XXX THIS BREAKS MIGRATION
          //           next_node = &prev_node;
-                    DEBUG << "returning to vt\n";
+                    WDEBUG << "returning to vt\n";
                     /*
                 } else {
-                    DEBUG << "checking return edges\n";
+                    WDEBUG << "checking return edges\n";
                     for (auto &x: n.in_edges) { // return back on path taken to get to dest
-                        DEBUG << "edge\n";
+                        WDEBUG << "edge\n";
                         if (x.second->nbr.handle == prev_node.handle) {
                             next_node = &x.second->nbr;
                             x.second->traverse();
                             break;
                         }
                     }
-                    DEBUG << "done checking return edges\n";
+                    WDEBUG << "done checking return edges\n";
                 }
                 */
                 next.emplace_back(std::make_pair(prev_node, params));
             } else {
                 false_reply = params.hops == params.max_hops;
-                DEBUG << params.max_hops - params.hops << " hops left\n";
+                WDEBUG << params.max_hops - params.hops << " hops left\n";
                 params.hops++;
                 // have not found it yet or previously found it with longer path and don't not maxed out hops yet
                 if (!false_reply && (state.already_visited_hops == 0 || (state.already_visited_hops > params.hops))) {
@@ -214,9 +214,9 @@ namespace node_prog
                             state.out_count++;
                         }
                     }
-                    DEBUG << state.out_count << " nodes next\n";
+                    WDEBUG << state.out_count << " nodes next\n";
                     if (state.out_count == 0) {  // return false reply if there are no more nodes to traverse
-                        DEBUG << "no more nodes to traverse\n";
+                        WDEBUG << "no more nodes to traverse\n";
                         false_reply = true;
                     }
                 } else {
@@ -225,7 +225,7 @@ namespace node_prog
             }
             if (false_reply) {
                 params.returning = true;
-                DEBUG << "returning negative reply\n";
+                WDEBUG << "returning negative reply\n";
                 params.reachable = false;
                 /*
                 if (prev_node.loc < NUM_VTS) { // never got out of source node, sending back to vt
@@ -243,7 +243,7 @@ namespace node_prog
                 next.emplace_back(std::make_pair(prev_node, params));
             }
         } else { // reply mode
-            DEBUG << "got reachable reply\n";
+            WDEBUG << "got reachable reply\n";
             if (params.reachable) {
                 if (state.hops > params.hops) {
                     state.hops = params.hops;
@@ -273,13 +273,13 @@ namespace node_prog
                 next.emplace_back(std::make_pair(state.prev_node, params));
             }
             if ((int)state.out_count < 0) {
-                DEBUG << "ALERT! Bad state value in reach program for node " << rn.handle
+                WDEBUG << "ALERT! Bad state value in reach program for node " << rn.handle
                         << " at loc " << rn.loc << std::endl;
                 next.clear();
                 while(1);
             }
         }
-        //DEBUG << "done reach prog\n";
+        //WDEBUG << "done reach prog\n";
         return next;
     }
 

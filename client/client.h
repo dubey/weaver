@@ -148,7 +148,7 @@ namespace client
             message::prepare_tx_message_client(msg, tx_map.at(tx_id));
             send_coord(msg.buf);
             if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
-                DEBUG << "tx msg recv fail" << std::endl;
+                WDEBUG << "tx msg recv fail" << std::endl;
             }
             uint32_t mtype;
             msg.buf->unpack_from(BUSYBEE_HEADER_SIZE) >> mtype;
@@ -164,7 +164,7 @@ namespace client
         message::prepare_message(msg, message::CLIENT_NODE_PROG_REQ, prog_to_run, initial_args);
         send_coord(msg.buf);
         if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
-            DEBUG << "node prog return msg fail" << std::endl;
+            WDEBUG << "node prog return msg fail" << std::endl;
             return NULL;
         }
 
@@ -208,7 +208,7 @@ namespace client
     {
         busybee_returncode ret;
         if ((ret = client_bb->send(vtid, buf)) != BUSYBEE_SUCCESS) {
-            DEBUG << "msg send error: " << ret << std::endl;
+            WDEBUG << "msg send error: " << ret << std::endl;
             return;
         }
     }
@@ -228,7 +228,7 @@ namespace client
                     continue;
 
                 default:
-                    DEBUG << "msg recv error: " << ret << std::endl;
+                    WDEBUG << "msg recv error: " << ret << std::endl;
                     return ret;
             }
         }

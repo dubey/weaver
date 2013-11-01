@@ -168,7 +168,7 @@ namespace state
             }
             req_list.at(node_handle).emplace(req_id);
         } else {
-            DEBUG << "not putting state, request " << req_id << " completed" << std::endl;
+            WDEBUG << "not putting state, request " << req_id << " completed" << std::endl;
         }
         release();
     }
@@ -226,7 +226,7 @@ namespace state
                             */
 
                             default:
-                                DEBUG << "Bad type in program state size " << t.first << std::endl;
+                                WDEBUG << "Bad type in program state size " << t.first << std::endl;
                         }
                         break;
                     }
@@ -280,7 +280,7 @@ namespace state
                             */
 
                             default:
-                                DEBUG << "Bad type in program state pack " << t.first << std::endl;
+                                WDEBUG << "Bad type in program state pack " << t.first << std::endl;
                         }
                         break;
                     }
@@ -332,14 +332,14 @@ namespace state
                 */
 
                 default:
-                    DEBUG << "Bad type in program state unpack " << type << std::endl;
+                    WDEBUG << "Bad type in program state unpack " << type << std::endl;
             }
             req_map &rmap = prog_state.at(type);
             if (rmap.find(req_id) == rmap.end()) {
                 rmap.emplace(req_id, std::shared_ptr<node_map>(new node_map()));
             }
             if (!rmap.at(req_id)->emplace(node_handle, new_entry).second) {
-                DEBUG << "state already exists for node " << node_handle << " and req id " << req_id << std::endl;
+                WDEBUG << "state already exists for node " << node_handle << " and req id " << req_id << std::endl;
             }
             req_list.at(node_handle).emplace(req_id);
         }
@@ -371,9 +371,9 @@ namespace state
     {
         acquire();
         if (reqs.size() > 0 && (print_cnt++ % 1000 == 0)) {
-            std::cout << "Got done reqs of size " << reqs.size() << "   ";
-            std::cout << "Prog state size = " << prog_state[reqs[0].second].size() << ", done ids size = " << done_ids.size();
-            std::cout << ", clean counter = " << clean_counter << std::endl;
+            WDEBUG << "Got done reqs of size " << reqs.size() << "   "
+                   << "Prog state size = " << prog_state[reqs[0].second].size() << ", done ids size = " << done_ids.size()
+                   << ", clean counter = " << clean_counter << std::endl;
         }
         for (auto &p: reqs) {
             uint64_t req_id = p.first;

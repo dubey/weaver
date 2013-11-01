@@ -215,7 +215,7 @@ namespace node_prog
                 next.emplace_back(std::make_pair(state.prev_node, params));
             }
             if ((int)state.out_count < 0) {
-                DEBUG << "ALERT! Bad state value in reach program for node " << rn.handle
+                WDEBUG << "ALERT! Bad state value in reach program for node " << rn.handle
                         << " at loc " << rn.loc << std::endl;
                 next.clear();
                 while(1);

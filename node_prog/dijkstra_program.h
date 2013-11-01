@@ -237,7 +237,7 @@ namespace node_prog
         std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
         if (n.get_creat_time() == params.src_handle) {
             dijkstra_node_state &node_state = state_getter();
-            DEBUG << "Dijkstra program: at source" <<  std::endl;
+            WDEBUG << "Dijkstra program: at source" <<  std::endl;
             if (params.adding_nodes == true) { 
                 // response from a propagation, add nodes it could potentially reach to priority queue
                 if (params.is_widest_path) {
@@ -393,7 +393,7 @@ namespace node_prog
         UNUSED(n);
         UNUSED(state_getter);
 
-        DEBUG << "DELETED PROGRAM " << deleted_handle << std::endl;
+        WDEBUG << "DELETED PROGRAM " << deleted_handle << std::endl;
         params_given.adding_nodes = false;
         std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
         next.emplace_back(std::make_pair(params_given.source_node, params_given));

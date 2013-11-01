@@ -154,7 +154,7 @@ namespace order
                                 break;
 
                             default:
-                                DEBUG << "cannot reach here" << std::endl;
+                                WDEBUG << "cannot reach here" << std::endl;
                                 assert(false); // shouldn't reach here
                         }
                         free(wp->lhs);

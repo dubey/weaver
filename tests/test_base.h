@@ -42,7 +42,7 @@ struct test_graph
         nodes.reserve(num_nodes);
         for (i = 0; i < num_nodes; i++) {
             if (i % TX_SIZE == 0) {
-                DEBUG << "Creating node " << (i+1) << std::endl;
+                WDEBUG << "Creating node " << (i+1) << std::endl;
             }
             if (i % TX_SIZE == 0) {
                 tx = c->begin_tx();
@@ -67,7 +67,7 @@ struct test_graph
                 second = rand() % num_nodes;
             }
             if (i % TX_SIZE == 0) {
-                DEBUG << "Creating edge " << (i+1) << std::endl;
+                WDEBUG << "Creating edge " << (i+1) << std::endl;
             }
             if (i % TX_SIZE == 0 || TX_SIZE == 1) {
                 tx = c->begin_tx();
@@ -78,7 +78,7 @@ struct test_graph
                 c->end_tx(tx);
             }
         }
-        DEBUG << "Created graph" << std::endl;
+        WDEBUG << "Created graph" << std::endl;
         std::ofstream graph_out;
         graph_out.open("graph.rec");
         for (auto &x: edge_list) {

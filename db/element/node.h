@@ -92,8 +92,6 @@ namespace element
         , prev_loc(-1)
         , new_loc(-1)
         , update_count(1)
-        , agg_msg_count(NUM_SHARDS, 0)
-        , msg_count(NUM_SHARDS, 0)
         , updated(true)
         , dependent_del(0)
     { }

@@ -26,15 +26,15 @@ dijkstra_prog_test()
 
     size_t nodes[6];
     size_t edges[8];
-    DEBUG << "adding first node " << std::endl;
+    WDEBUG << "adding first node " << std::endl;
     for (i = 0; i < 6; i++) {
         nodes[i] = c.create_node();
-        DEBUG << "added node " << i<< std::endl;
+        WDEBUG << "added node " << i<< std::endl;
     }
 
-    DEBUG << "adding first edge " << std::endl;
+    WDEBUG << "adding first edge " << std::endl;
     edges[0] = c.create_edge(nodes[0], nodes[1]);
-    DEBUG << "adding first prop " << std::endl;
+    WDEBUG << "adding first prop " << std::endl;
     c.add_edge_prop(nodes[0], edges[0], weight_label, 6);
 
     edges[1] = c.create_edge(nodes[0], nodes[2]);
@@ -58,16 +58,16 @@ dijkstra_prog_test()
     edges[7] = c.create_edge(nodes[4], nodes[5]);
     c.add_edge_prop(nodes[4], edges[7], weight_label, 6);
 
-    DEBUG << " starting path requests " << std::endl;
+    WDEBUG << " starting path requests " << std::endl;
 
-    DEBUG << "nodes[0] = " << nodes[0] <<std::endl;
-    DEBUG << "nodes[1] = " << nodes[1] <<std::endl;
-    DEBUG << "nodes[2] = " << nodes[2] <<std::endl;
-    DEBUG << "nodes[3] = " << nodes[3] <<std::endl;
-    DEBUG << "nodes[4] = " << nodes[4] <<std::endl;
-    DEBUG << "nodes[5] = " << nodes[5] <<std::endl;
+    WDEBUG << "nodes[0] = " << nodes[0] <<std::endl;
+    WDEBUG << "nodes[1] = " << nodes[1] <<std::endl;
+    WDEBUG << "nodes[2] = " << nodes[2] <<std::endl;
+    WDEBUG << "nodes[3] = " << nodes[3] <<std::endl;
+    WDEBUG << "nodes[4] = " << nodes[4] <<std::endl;
+    WDEBUG << "nodes[5] = " << nodes[5] <<std::endl;
 
-    DEBUG << "want shortest path from node " << nodes[0] << " to " << nodes[5] << std::endl;
+    WDEBUG << "want shortest path from node " << nodes[0] << " to " << nodes[5] << std::endl;
     std::vector<std::pair<uint64_t, node_prog::dijkstra_params>> initial_args;
     initial_args.emplace_back(std::make_pair(nodes[0], node_prog::dijkstra_params()));
     initial_args[0].second.adding_nodes = false;
@@ -77,22 +77,22 @@ dijkstra_prog_test()
     initial_args[0].second.edge_weight_name = weight_label;
     std::unique_ptr<node_prog::dijkstra_params> res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
 
-    DEBUG << "path of cost " << res->cost <<" is" << std::endl;
+    WDEBUG << "path of cost " << res->cost <<" is" << std::endl;
     assert(res->cost == 17);
     for (auto label : res->final_path){
-        DEBUG << label.first << " cost: " << label.second << std::endl;
+        WDEBUG << label.first << " cost: " << label.second << std::endl;
     }
-    DEBUG << "path end" << std::endl;
-    DEBUG << "Shortest path good, checking widest" << std::endl;
+    WDEBUG << "path end" << std::endl;
+    WDEBUG << "Shortest path good, checking widest" << std::endl;
 
     initial_args[0].second.is_widest_path = true;
     res = c.run_node_program(node_prog::DIJKSTRA, initial_args);
 
-    DEBUG << "path of width " << res->cost <<" is" << std::endl;
+    WDEBUG << "path of width " << res->cost <<" is" << std::endl;
     assert(res->cost == 6);
     for (auto label : res->final_path){
-        DEBUG << label.first << " cost: " << label.second << std::endl;
+        WDEBUG << label.first << " cost: " << label.second << std::endl;
     }
-    DEBUG << "path end" << std::endl;
-    DEBUG << "Widest path good" << std::endl;
+    WDEBUG << "path end" << std::endl;
+    WDEBUG << "Widest path good" << std::endl;
 }

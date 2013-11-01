@@ -82,7 +82,7 @@ unpack_tx(message::message &m)
                 break;
 
             default:
-                DEBUG << "bad type" << std::endl;
+                WDEBUG << "bad type" << std::endl;
         }
         i++;
     }

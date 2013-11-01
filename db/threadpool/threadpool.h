@@ -148,7 +148,7 @@ namespace thread
     pool :: record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id, uint64_t incr)
     {
         queue_mutex.lock();
-        //DEBUG << "incrementing qts for vt " << vt_id << std::endl;
+        //WDEBUG << "incrementing qts for vt " << vt_id << std::endl;
         qts.at(vt_id) += incr;
         last_ids.at(vt_id) = transaction_completed_id;
         queue_cond.broadcast();

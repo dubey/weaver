@@ -123,7 +123,7 @@ namespace node_prog
             std::function<triangle_node_state&()> state_getter,
             vc::vclock &req_vclock)
     {
-        DEBUG << "inside node prog!\n";
+        WDEBUG << "inside node prog!\n";
         std::vector<std::pair<db::element::remote_node, triangle_params>> next;
         if (rn.handle == params.super_node.handle) {
             triangle_node_state &state = state_getter();

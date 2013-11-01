@@ -780,7 +780,7 @@ namespace message
                     break;
 
                 default:
-                    DEBUG << "bad msg type" << std::endl;
+                    WDEBUG << "bad msg type" << std::endl;
             }
         }
     }

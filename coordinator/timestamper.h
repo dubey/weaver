@@ -115,7 +115,7 @@ namespace coordinator
     {
         busybee_returncode ret;
         if ((ret = bb->send(shard_id, buf)) != BUSYBEE_SUCCESS) {
-            DEBUG << "message sending error: " << ret << std::endl;
+            WDEBUG << "message sending error: " << ret << std::endl;
         }
         return ret;
     }
@@ -162,12 +162,12 @@ namespace coordinator
                     break;
 
                 default:
-                    DEBUG << "bad type" << std::endl;
+                    WDEBUG << "bad type" << std::endl;
             }
         }
         std::unordered_map<uint64_t, uint64_t> put_map = request_element_mappings;
         std::unordered_map<uint64_t, uint64_t> put_edge_map = request_edge_mappings;
-        DEBUG << "NMAP client for thread " << thread_id << std::endl;
+        WDEBUG << "NMAP client for thread " << thread_id << std::endl;
         if (!mappings_to_get.empty()) {
             for (auto &toAdd : nmap_client[thread_id]->get_mappings(mappings_to_get, true)) {
                 request_element_mappings.emplace(toAdd);
@@ -210,7 +210,7 @@ namespace coordinator
                     break;
 
                 default:
-                    DEBUG << "bad type" << std::endl;
+                    WDEBUG << "bad type" << std::endl;
             }
         }
     }

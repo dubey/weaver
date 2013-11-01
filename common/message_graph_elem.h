@@ -40,6 +40,7 @@ namespace message
             + size(t.update_count)
             + size(t.prev_locs)
             + size(t.agg_msg_count)
+            + size(t.msg_count)
             + prog_state->size(t.get_handle());
         return sz;
     }
@@ -65,6 +66,7 @@ namespace message
         pack_buffer(packer, t.update_count);
         pack_buffer(packer, t.prev_locs);
         pack_buffer(packer, t.agg_msg_count);
+        pack_buffer(packer, t.msg_count);
         prog_state->pack(t.get_handle(), packer);
     }
 
@@ -101,6 +103,7 @@ namespace message
         unpack_buffer(unpacker, t.update_count);
         unpack_buffer(unpacker, t.prev_locs);
         unpack_buffer(unpacker, t.agg_msg_count);
+        unpack_buffer(unpacker, t.msg_count);
         t.set_handle(handle);
         t.update_creat_time(creat_time);
         t.update_del_time(del_time);

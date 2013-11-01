@@ -42,12 +42,12 @@ end_program(int param)
 inline void
 begin_transaction(transaction::pending_tx &tx)
 {
-    DEBUG << "beginning tx " << std::endl;
+    WDEBUG << "beginning tx " << std::endl;
     message::message msg;
     std::vector<transaction::pending_tx> tx_vec(NUM_SHARDS, transaction::pending_tx());
     vts->mutex.lock();
     for (std::shared_ptr<transaction::pending_update> upd: tx.writes) {
-        //DEBUG << "updating qts for shard " << (upd->loc1-SHARD_ID_INCR) << std::endl;
+        //WDEBUG << "updating qts for shard " << (upd->loc1-SHARD_ID_INCR) << std::endl;
         vts->qts.at(upd->loc1-SHARD_ID_INCR)++; // TODO what about edge create requests, loc2?
         upd->qts = vts->qts;
         tx_vec.at(upd->loc1-SHARD_ID_INCR).writes.emplace_back(upd);
@@ -67,7 +67,7 @@ begin_transaction(transaction::pending_tx &tx)
             vts->tx_replies.at(tx.id).count++;
         }
     }
-    DEBUG << "sent tx\n";
+    WDEBUG << "sent tx\n";
     vts->mutex.unlock(); // TODO: move sending out of critical section
 }
 
@@ -76,10 +76,10 @@ inline void
 end_transaction(uint64_t tx_id)
 {
     vts->mutex.lock();
-    DEBUG << "Got end tx\n";
+    WDEBUG << "Got end tx\n";
     if (--vts->tx_replies.at(tx_id).count == 0) {
         // done tx
-        DEBUG << "Actually ending tx\n";
+        WDEBUG << "Actually ending tx\n";
         uint64_t client_id = vts->tx_replies.at(tx_id).client_id;
         vts->tx_replies.erase(tx_id);
         vts->mutex.unlock();
@@ -147,16 +147,16 @@ periodic_update()
         //    vts->mutex.unlock();
         //}
         //if (vts->first_clock_update) {
-        //    DEBUG << "clock update acks " << vts->clock_update_acks << std::endl;
-        //    DEBUG << "diff " << diff << ", initial clock update delay " << VT_INITIAL_CLKUPDATE_DELAY << std::endl;
-        //    DEBUG << "first diff " << first_diff << ", initial clock update delay " << VT_INITIAL_CLKUPDATE_DELAY << std::endl;
+        //    WDEBUG << "clock update acks " << vts->clock_update_acks << std::endl;
+        //    WDEBUG << "diff " << diff << ", initial clock update delay " << VT_INITIAL_CLKUPDATE_DELAY << std::endl;
+        //    WDEBUG << "first diff " << first_diff << ", initial clock update delay " << VT_INITIAL_CLKUPDATE_DELAY << std::endl;
         //}
         // first check is an ugly hack to make sure all VTs are up before sending out clock updates
         // second check is to ensure all VTs acked previous update before sending out new update
         if (((vts->first_clock_update && first_diff_millis > VT_INITIAL_CLKUPDATE_DELAY) || !vts->first_clock_update)
         && (vts->clock_update_acks == (NUM_VTS-1))) {
             vts->first_clock_update = false;
-            //DEBUG << "sending clock update now, clock update acks " << vts->clock_update_acks << std::endl;
+            //WDEBUG << "sending clock update now, clock update acks " << vts->clock_update_acks << std::endl;
             vts->clock_update_acks = 0;
             for (uint64_t i = 0; i < NUM_VTS; i++) {
                 if (i == vt_id) {
@@ -177,7 +177,7 @@ template <typename ParamsType, typename NodeStateType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType> :: 
     unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, int thread_id)
 {
-    DEBUG << "starting node program on timestamper" << std::endl;
+    WDEBUG << "starting node program on timestamper" << std::endl;
     node_prog::prog_type pType;
     std::vector<std::pair<uint64_t, ParamsType>> initial_args;
 
@@ -193,7 +193,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     for (auto &initial_arg : initial_args) {
         uint64_t c_id = initial_arg.first;
         if (c_id == -1) { // max uint64_t means its a global thing like triangle count
-            DEBUG << "timestamper GOIN GLOBAL" << std::endl;
+            WDEBUG << "timestamper GOIN GLOBAL" << std::endl;
             assert(mappings_to_get.empty()); // dont mix global req with normal nodes
             assert(initial_args.size() == 1);
             global_req = true;
@@ -208,7 +208,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
             request_element_mappings.emplace(toAdd);
         }
     }
-    DEBUG << "timestamper done looking up element mappings for node program" << std::endl;
+    WDEBUG << "timestamper done looking up element mappings for node program" << std::endl;
 
     if (global_req) {
         // send copy of params to each shard
@@ -230,14 +230,14 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     message::message msg_to_send;
     std::vector<uint64_t> empty_vector;
     std::vector<std::tuple<uint64_t, ParamsType, uint64_t>> empty_tuple_vector;
-    DEBUG << "starting node prog " << req_id << ", recd from client\t" << std::endl;
+    WDEBUG << "starting node prog " << req_id << ", recd from client\t" << std::endl;
     uint64_t zero = 0;
     for (auto &batch_pair : initial_batches) {
         message::prepare_message(msg_to_send, message::NODE_PROG, pType, global_req, vt_id, req_timestamp, 
                 req_id, batch_pair.second, /*empty_tuple_vector,*/ zero, zero);
         vts->send(batch_pair.first, msg_to_send.buf); // TODO: can we send out of critical section?
     }
-    DEBUG << "sent to shards" << std::endl;
+    WDEBUG << "sent to shards" << std::endl;
     if (global_req) {
         vts->outstanding_triangle_progs.emplace(std::make_pair(req_id, std::make_pair(NUM_SHARDS, node_prog::triangle_params())));
     }
@@ -282,7 +282,7 @@ server_loop(int thread_id)
         msg.reset(new message::message());
         ret = vts->bb->recv(&sender, &msg->buf);
         if (ret != BUSYBEE_SUCCESS && ret != BUSYBEE_TIMEOUT) {
-            DEBUG << "msg recv error: " << ret << std::endl;
+            WDEBUG << "msg recv error: " << ret << std::endl;
             continue;
         } else if (ret == BUSYBEE_TIMEOUT) {
             //if (thread_id == 0) {
@@ -386,7 +386,7 @@ server_loop(int thread_id)
                             mark_req_finished(req_id);
                         }
                     } else {
-                        DEBUG << "node prog return for already completed ornever existed req id" << std::endl;
+                        WDEBUG << "node prog return for already completed ornever existed req id" << std::endl;
                     }
                     vts->mutex.unlock();
                     break;
@@ -412,7 +412,7 @@ main(int argc, char *argv[])
     std::thread *thr;
     signal(SIGINT, end_program);
     if (argc != 2) {
-        DEBUG << "Usage: " << argv[0] << " <vector_timestamper_id>" << std::endl;
+        WDEBUG << "Usage: " << argv[0] << " <vector_timestamper_id>" << std::endl;
         return -1;
     }
     vt_id = atoi(argv[1]);

@@ -32,7 +32,7 @@ basic_migration_test(bool to_exit)
     initial_args.at(0).second.dest = n2;
     for (int i = 0; i < 100000; i++) {
         if ((i % 100) == 0)
-            DEBUG << "completed " << i << " requests" << std::endl;
+            WDEBUG << "completed " << i << " requests" << std::endl;
         std::unique_ptr<node_prog::reach_params> res = c.run_node_program(node_prog::REACHABILITY, initial_args);
         assert(res->reachable);
     }

@@ -43,7 +43,7 @@ find_n_hop(test_graph &g, uint64_t hop_count, int num_pairs)
         rp.dest = g.nodes[second];
         initial_args.emplace_back(std::make_pair(g.nodes[first], rp));
         res = g.c->run_node_program(node_prog::REACHABILITY, initial_args);
-        DEBUG << "Done request " << ++i << " of initial src-dest search" << std::endl;
+        WDEBUG << "Done request " << ++i << " of initial src-dest search" << std::endl;
         if (res->hops < hop_count && res->hops > 0 && res->reachable) {
             ret.emplace_back(std::make_pair(first, second));
             if (--num_pairs == 0) {
@@ -51,7 +51,7 @@ find_n_hop(test_graph &g, uint64_t hop_count, int num_pairs)
             }
         }
     }
-    DEBUG << "Going to start n hop locality" << std::endl;
+    WDEBUG << "Going to start n hop locality" << std::endl;
     return ret;
 }
 
@@ -78,7 +78,7 @@ multiple_nhop_locality_prog(bool dense, bool to_exit)
 
     // find a suitable src-dest pair which has a long(ish) path
     auto pairs = find_n_hop(g, MAX_HOP_COUNT, NUM_NHOP_PAIRS);
-    DEBUG << "Got " << pairs.size() << " pairs\n";
+    WDEBUG << "Got " << pairs.size() << " pairs\n";
     assert(pairs.size() == NUM_NHOP_PAIRS);
     node_prog::reach_params rp;
     rp.mode = false;
@@ -99,7 +99,7 @@ multiple_nhop_locality_prog(bool dense, bool to_exit)
     for (i = 0; i < ML_REQUESTS; i++) {
         cur = wclock::get_time_elapsed(t);
         diff = cur - prev;
-        DEBUG << "Test: i = " << i << ", " << diff << std::endl;
+        WDEBUG << "Test: i = " << i << ", " << diff << std::endl;
         req_time << diff << std::endl;
         //if (i % 10 == 0) {
         //    diff = cur - start;
@@ -117,7 +117,7 @@ multiple_nhop_locality_prog(bool dense, bool to_exit)
     //file.close();
     req_time.close();
     diff = cur - start;
-    DEBUG << "Total time taken " << diff << std::endl;
+    WDEBUG << "Total time taken " << diff << std::endl;
     //std::ofstream stat_file;
     //stat_file.open("stats.rec", std::ios::out | std::ios::app);
     //stat_file << num_nodes << " " << dif.tv_sec << "." << dif.tv_nsec << std::endl;

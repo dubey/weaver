@@ -133,10 +133,10 @@ repetitive_reach_prog(bool to_exit)
     timespec t1, t2, dif;
     std::vector<common::property> edge_props;
     for (i = 0; i < 10; i++) {
-        DEBUG << "Creating node " << (i+1) << std::endl;
+        WDEBUG << "Creating node " << (i+1) << std::endl;
         repetitive_nodes[i] = c.create_node();
     }
-    DEBUG << "Created nodes\n";
+    WDEBUG << "Created nodes\n";
     t = new std::thread(check_reachability);
     t->detach();
     
@@ -144,8 +144,8 @@ repetitive_reach_prog(bool to_exit)
     for (i = 0; i < RRP_ITERATIONS; i++) {
         wclock::get_clock(&t2);
         dif = diff(t1, t2);
-        DEBUG << "Test: i = " << i << ", ";
-        DEBUG << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
+        WDEBUG << "Test: i = " << i << ", ";
+        WDEBUG << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
         t1 = t2;
         create_edges(&c,0,1,2,3);
         common::property prop(42, 84, 0);

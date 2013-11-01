@@ -41,7 +41,7 @@ namespace message
                     break;
 
                 default:
-                    DEBUG << "bad msg type" << std::endl;
+                    WDEBUG << "bad msg type" << std::endl;
             }
         }
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
@@ -66,7 +66,7 @@ namespace message
                     break;
 
                 default:
-                    DEBUG << "bad msg type" << std::endl;
+                    WDEBUG << "bad msg type" << std::endl;
             }
         }
     }

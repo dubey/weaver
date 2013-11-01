@@ -49,14 +49,14 @@ clustering_prog_test()
     //connect star nodes back to center. Shouldn't change coefficient
     res = c.run_node_program(node_prog::CLUSTERING, initial_args);
     assert(res->clustering_coeff == 0);
-    DEBUG << "completed test " << ++testcount << std::endl;
+    WDEBUG << "completed test " << ++testcount << std::endl;
 
     for (i = 0; i < num_nodes; i++) {
         star_edges[i+num_nodes] = c.create_edge(tx, star_nodes[i], central_node);
     }
     res = c.run_node_program(node_prog::CLUSTERING, initial_args);
     assert(res->clustering_coeff == 0);
-    DEBUG << "completed test " << ++testcount << std::endl;
+    WDEBUG << "completed test " << ++testcount << std::endl;
 
     uint64_t numerator;
     double denominator = (double) ((num_nodes)*(num_nodes-1));
@@ -69,10 +69,10 @@ clustering_prog_test()
             numerator = ((node_skip-1)*num_nodes+i+1);
            res = c.run_node_program(node_prog::CLUSTERING, initial_args);
            assert(res->clustering_coeff == (numerator/denominator));
-            DEBUG << "completed test " << ++testcount << std::endl;
+            WDEBUG << "completed test " << ++testcount << std::endl;
         }
     }
-    //DEBUG << "starting clustering tests with deletion" <<  std::endl;
+    //WDEBUG << "starting clustering tests with deletion" <<  std::endl;
     ////delete some of the original edges and nodes of star graph
     //for (i = 0; i < (num_nodes-edges_per_node); i++) {
     //    denominator = (double) ((num_nodes-i-1)*(num_nodes-i-2));
@@ -87,10 +87,10 @@ clustering_prog_test()
     //        c.delete_node(star_nodes[i]);
     //    }
     //    res = c.run_node_program(node_prog::CLUSTERING, initial_args);
-    //    //DEBUG << "expected " << numerator << "/" << denominator << " = " << (numerator/denominator) << " but got " << res->clustering_coeff <<  std::endl;
+    //    //WDEBUG << "expected " << numerator << "/" << denominator << " = " << (numerator/denominator) << " but got " << res->clustering_coeff <<  std::endl;
     //    assert(res->clustering_coeff == (numerator/denominator));
-    //    DEBUG << "completed test " << ++testcount << std::endl;
+    //    WDEBUG << "completed test " << ++testcount << std::endl;
     //}
-    DEBUG << "completed all clustering tests" <<  std::endl;
+    WDEBUG << "completed all clustering tests" <<  std::endl;
 
 }

@@ -33,7 +33,7 @@ void create_clique(client::client &c)
         nodes[i] = c.create_node(tx_id);
     }
     c.end_tx(tx_id);
-    DEBUG << "created clique nodes" << std::endl;
+    WDEBUG << "created clique nodes" << std::endl;
     tx_id = c.begin_tx();
     for (int i = 0; i < CLIQUE_SIZE; i++) {
         for (int j = 0; j < CLIQUE_SIZE; j++) {
@@ -47,7 +47,7 @@ void create_clique(client::client &c)
     edge_cond.signal();
     edge_mutex.unlock();
     c.end_tx(tx_id);
-    DEBUG << "created clique edges" << std::endl;
+    WDEBUG << "created clique edges" << std::endl;
 
 }
 
@@ -67,7 +67,7 @@ void clique_reachability(client::client &c, bool reachable)
             if (i != j) {
             initial_args[0].first = nodes[i];
             initial_args[0].second.dest = nodes[j];
-            DEBUG << "running clique reachability from " << i << " to " << j << std::endl;
+            WDEBUG << "running clique reachability from " << i << " to " << j << std::endl;
             std::unique_ptr<node_prog::reach_params> res = c.run_node_program(node_prog::REACHABILITY, initial_args);
             assert(res->reachable == reachable);
             }

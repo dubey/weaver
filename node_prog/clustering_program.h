@@ -149,13 +149,13 @@ namespace node_prog
                         if (check_nbr(possible_nbr.second, req_vclock)) {
                             next.emplace_back(std::make_pair(possible_nbr.second->nbr, params));
                             cstate.neighbor_counts.insert(std::make_pair(possible_nbr.second->nbr.handle, 0));
-                            //DEBUG << "center adding neighbor:" << possible_nbr.second->nbr.handle << std::endl;
+                            //WDEBUG << "center adding neighbor:" << possible_nbr.second->nbr.handle << std::endl;
                             cstate.responses_left++;
                         }
                     }
          //           std::cout << "@@@@is center, outgoign" << n.out_edges.size()<< " responses left " << cstate.responses_left << std::endl;
             } else {
-                //DEBUG << "is center, incoming: " <<params.neighbors.size()<< std::endl;
+                //WDEBUG << "is center, incoming: " <<params.neighbors.size()<< std::endl;
                 for (uint64_t poss_nbr : params.neighbors) {
                     if (cstate.neighbor_counts.count(poss_nbr) > 0) {
                         cstate.neighbor_counts[poss_nbr]++;
@@ -164,10 +164,10 @@ namespace node_prog
                 if (--cstate.responses_left == 0){
                     calculate_response(cstate, next, params);
                 }
-                //DEBUG << "still waiting on " << cstate.responses_left << " responses" << std::endl;
+                //WDEBUG << "still waiting on " << cstate.responses_left << " responses" << std::endl;
             }
         } else { // not center
-                //DEBUG << "is not center" << std::endl;
+                //WDEBUG << "is not center" << std::endl;
             for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
                 if (check_nbr(possible_nbr.second, req_vclock)) {
                     params.neighbors.push_back(possible_nbr.second->nbr.handle);

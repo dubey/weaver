@@ -69,7 +69,7 @@ void
 scale_client(int client_id)
 {
     client::client c(client_id + SC_CLIENT_OFF, client_id % NUM_VTS);
-    DEBUG << "Started client " << client_id << " at vt " << (client_id % NUM_VTS) << std::endl;
+    WDEBUG << "Started client " << client_id << " at vt " << (client_id % NUM_VTS) << std::endl;
     uint64_t tx_id, n1, n2;
     int num_ops = 0;
     while (num_ops < OPS_PER_CLIENT) {
@@ -137,7 +137,7 @@ scale_client(int client_id)
             num_ops++;
             sourcedest.clear();
         }
-        DEBUG << "Client " << client_id << " finished " << num_ops << " ops" << std::endl;
+        WDEBUG << "Client " << client_id << " finished " << num_ops << " ops" << std::endl;
     }
 }
 
@@ -151,9 +151,9 @@ scale_test()
     ncli.close();
     */
 
-    DEBUG << "creating initial client" << std::endl;
+    WDEBUG << "creating initial client" << std::endl;
     client::client c(NUM_CLIENTS + SC_CLIENT_OFF, 0);
-    DEBUG << "initial client created" << std::endl;
+    WDEBUG << "initial client created" << std::endl;
     //uint64_t tx_id;
     //// make first 10 nodes
     //tx_id = c.begin_tx();
@@ -162,12 +162,12 @@ scale_test()
     //}
     //c.end_tx(tx_id);
     g = new test_graph(&c, time(NULL), INIT_NODES, 10 * INIT_NODES, false, false);
-    DEBUG << "Going to sleep in client now.\n";
+    WDEBUG << "Going to sleep in client now.\n";
     sleep(4);
-    DEBUG << "Done sleeping, starting test.\n";
+    WDEBUG << "Done sleeping, starting test.\n";
 
     std::thread *t[NUM_CLIENTS];
-    DEBUG << "starting threads" << std::endl;
+    WDEBUG << "starting threads" << std::endl;
     timespec ts;
     uint64_t start = wclock::get_time_elapsed_millis(ts);
     for (uint64_t i = 0; i < NUM_CLIENTS; i++) {
@@ -178,10 +178,10 @@ scale_test()
     }
 
     uint64_t end = wclock::get_time_elapsed_millis(ts);
-    DEBUG << "Time taken = " << (end-start) << std::endl;
+    WDEBUG << "Time taken = " << (end-start) << std::endl;
     //double op_mult = (PERCENT_READS + (100-PERCENT_READS)*(1+NUM_NEW_EDGES)) /100.;
     double div = NUM_CLIENTS * OPS_PER_CLIENT;
-    DEBUG << "Per op = " << (end-start)/div << std::endl;
+    WDEBUG << "Per op = " << (end-start)/div << std::endl;
     //std::ofstream stats;
     //stats.open("throughputlatency.rec");
     //for (uint64_t i = 0; i < NUM_CLIENTS; i++) {

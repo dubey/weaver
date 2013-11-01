@@ -29,7 +29,7 @@ unreachable_reach_prog(bool to_exit)
     timespec first, t1, t2, dif;
     std::ofstream seed_file;
     uint64_t seed = time(NULL);
-    DEBUG << "seed " << seed << std::endl;
+    WDEBUG << "seed " << seed << std::endl;
     seed_file.open("seed.rec");
     seed_file << seed;
     seed_file.close();
@@ -56,7 +56,7 @@ unreachable_reach_prog(bool to_exit)
     for (i = 0; i < URP_REQUESTS; i++) {
         wclock::get_clock(&t2);
         dif = diff(t1, t2);
-        DEBUG << "Test: i = " << i << ", " << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
+        WDEBUG << "Test: i = " << i << ", " << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
         if (i % 10 == 0) {
             dif = diff(first, t2);
             req_time << dif.tv_sec << '.' << dif.tv_nsec << std::endl;
@@ -67,14 +67,14 @@ unreachable_reach_prog(bool to_exit)
         std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args;
         rp.dest = g.nodes[num_nodes];
         initial_args.emplace_back(std::make_pair(g.nodes[first], rp));
-        DEBUG << "Request " << i << ", from source " << g.nodes[first] << " to dest " << g.nodes[num_nodes] << "." << std::endl;
+        WDEBUG << "Request " << i << ", from source " << g.nodes[first] << " to dest " << g.nodes[num_nodes] << "." << std::endl;
         std::unique_ptr<node_prog::reach_params> res = c.run_node_program(node_prog::REACHABILITY, initial_args);
         assert(!res->reachable);
     }
     file.close();
     req_time.close();
     dif = diff(first, t2);
-    DEBUG << "Total time taken " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
+    WDEBUG << "Total time taken " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
     std::ofstream stat_file;
     stat_file.open("stats.rec", std::ios::out | std::ios::app);
     stat_file << num_nodes << " " << dif.tv_sec << "." << dif.tv_nsec << std::endl;

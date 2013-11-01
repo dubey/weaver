@@ -62,10 +62,10 @@ namespace db
             shard(uint64_t my_id);
 
             // Mutexes
-            po6::threads::mutex update_mutex; // shard update mutex
-        private:
-            po6::threads::mutex clock_mutex // vector clock/queue timestamp mutex
+            po6::threads::mutex update_mutex // shard update mutex
                 , edge_map_mutex;
+        private:
+            po6::threads::mutex clock_mutex; // vector clock/queue timestamp mutex
         public:
             po6::threads::mutex queue_mutex // exclusive access to thread pool queues
                 , msg_count_mutex
@@ -79,11 +79,11 @@ namespace db
 
             // Graph state
             uint64_t shard_id;
-            std::unordered_map<uint64_t, element::node*> nodes; // node handle -> ptr to node object XXX NO LONGER PRIVATE
-        private:
+            std::unordered_map<uint64_t, element::node*> nodes; // node handle -> ptr to node object
             std::unordered_map<uint64_t, // shard id s ->
                                 std::unordered_map<uint64_t, // node handle n ->
                                     std::unordered_set<uint64_t>>> edge_map; // set of nodes which have (s,n) as out-neighbor
+        private:
             db::thread::pool thread_pool;
         public:
             void add_write_request(uint64_t vt_id, thread::unstarted_thread *thr);
@@ -265,6 +265,8 @@ namespace db
         } else {
             new_node->state = element::node::mode::STABLE;
             new_node->prev_locs.reserve(NUM_SHARDS);
+            new_node->agg_msg_count.resize(NUM_SHARDS, 0);
+            new_node->msg_count.resize(NUM_SHARDS, 0);
             for (uint64_t i = 0; i < NUM_SHARDS; i++) {
                 new_node->prev_locs.emplace_back(0);
             }
@@ -328,6 +330,7 @@ namespace db
                     edge_handle, local_node, remote_node, remote_loc));
             migration_mutex.unlock();
         } else {
+            assert(n->get_handle() == local_node);
             create_edge_nonlocking(n, edge_handle, remote_node, remote_loc, vclk);
             release_node(n);
         }
@@ -412,12 +415,12 @@ namespace db
                 // XXX why zero out counters?
                 //n->msg_count[e->nbr.loc-SHARD_ID_INCR] = 0;
                 //e->msg_count = 0;
+                e->nbr.loc = new_loc;
                 found = true;
-                DEBUG << "Updating outnbr " << e->nbr.handle << " to new loc " << new_loc << "," << e->nbr.loc << std::endl;
             }
         }
         if (!found) {
-            DEBUG << "Neighbor not found for migrated node " << migr_node << std::endl;
+            WDEBUG << "Neighbor not found for migrated node " << migr_node << std::endl;
         }
     }
 
@@ -428,6 +431,8 @@ namespace db
         element::node *n;
         edge_map_mutex.lock();
         nbrs = std::move(edge_map[old_loc][node]);
+        edge_map[old_loc].erase(node);
+        edge_map[new_loc][node] = nbrs;
         edge_map_mutex.unlock();
         for (uint64_t nbr: nbrs) {
             n = acquire_node(nbr);
@@ -445,7 +450,7 @@ namespace db
                     target_prog_id[i] = max_prog_id[i];
                 }
             }
-            migr_edge_acks[shard_id - SHARD_ID_INCR] = false;
+            migr_edge_acks[shard_id - SHARD_ID_INCR] = true;
         }
         migration_mutex.unlock();
     }
@@ -466,13 +471,13 @@ namespace db
 
         int64_t op_id = cl.put(space, (const char*)&node, sizeof(int64_t), &attrs_to_add, 1, &status);
         if (op_id < 0) {
-            DEBUG << "\"put\" returned " << op_id << " with status " << status << std::endl;
+            WDEBUG << "\"put\" returned " << op_id << " with status " << status << std::endl;
             return;
         }
 
         int64_t loop_id = cl.loop(-1, &status);
         if (loop_id < 0) {
-            DEBUG << "put \"loop\" returned " << loop_id << " with status " << status << std::endl;
+            WDEBUG << "put \"loop\" returned " << loop_id << " with status " << status << std::endl;
         }
     }
 
@@ -501,9 +506,9 @@ namespace db
     shard :: check_done_request(uint64_t req_id)
     {
         bool done = node_prog_req_state.check_done_request(req_id);
-        if (done) {
-            DEBUG << "checked state was DONE" << std::endl;
-        }
+        //if (done) {
+        //    WDEBUG << "checked state for req " << req_id << " was DONE" << std::endl;
+        //}
         return done;
     }
 
@@ -514,7 +519,7 @@ namespace db
     {
         busybee_returncode ret;
         if ((ret = bb->send(loc, msg)) != BUSYBEE_SUCCESS) {
-            DEBUG << "msg send error: " << ret << std::endl;
+            WDEBUG << "msg send error: " << ret << std::endl;
         }
         return ret;
     }
@@ -530,11 +535,10 @@ namespace db
     get_read_thr(std::vector<thread::pqueue_t> &read_queues, std::vector<uint64_t> &last_ids)
     {
         thread::unstarted_thread * thr = NULL;
-        //DEBUG << "checking read queues" << std::endl;
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
             thread::pqueue_t &pq = read_queues.at(vt_id);
+            // execute read request after subsequent write request from same vt has been executed
             if (!pq.empty() && pq.top()->priority < last_ids[vt_id]) {
-                //DEBUG << "read queue " << vt_id << " has node prog that can be run" << std::endl;
                 thr = read_queues.at(vt_id).top();
                 read_queues.at(vt_id).pop();
                 return thr;
@@ -551,18 +555,17 @@ namespace db
         timestamps.reserve(NUM_VTS);
         std::vector<thread::pqueue_t> &write_queues = tpool->write_queues;
         // get next jobs from each queue
-        //DEBUG << "going to collect jobs from write queues" << std::endl;
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
             thread::pqueue_t &pq = write_queues.at(vt_id);
             // wait for queue to receive at least one job
             if (pq.empty()) { // can't write if one of the pq's is empty
-                //DEBUG << "waiting for queue to fill" << std::endl;
                 return NULL;
             } else {
                 thr = pq.top();
                 // check for correct ordering of queue timestamp (which is priority for thread)
-                //DEBUG << "waiting for qts to increment" << std::endl;
                 if (!tpool->check_qts(vt_id, thr->priority)) {
+                    //WDEBUG << "waiting for qts to increment for vt " << vt_id << ", current qts "
+                    //       << tpool->qts.at(vt_id) << ", thr prio " << thr->priority << std::endl;
                     return NULL;
                 }
             }
@@ -571,11 +574,9 @@ namespace db
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
             timestamps.emplace_back(write_queues.at(vt_id).top()->vclock);
         }
-        //DEBUG << "going to compare vt" << std::endl;
         uint64_t exec_vt_id = (NUM_VTS == 1) ? 0 : order::compare_vts(timestamps);
         thr = write_queues.at(exec_vt_id).top();
         write_queues.at(exec_vt_id).pop();
-        //DEBUG << "going to return\n";
         return thr;
     }
 
@@ -599,7 +600,6 @@ namespace db
         thread::unstarted_thread *thr = NULL;
         po6::threads::cond &c = tpool->queue_cond;
         while (true) {
-            //DEBUG << "worker thread loop begin" << std::endl;
             // TODO better queue locking needed
             tpool->thread_loop_mutex.lock(); // only one thread accesses queues
             // TODO add job method should be non-blocking on this mutex
