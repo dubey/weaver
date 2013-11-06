@@ -1,6 +1,6 @@
 CC=g++-4.8
 INCLUDE_DIRS=-I.. -I.
-CFLAGS=-O2 -std=c++0x -Wall -Wextra
+CFLAGS=-std=c++0x -Wall -Wextra
 LIBS=-lbusybee -le -pthread -lrt -lhyperdex-client -lchronos
 CLIBS=
 
@@ -10,12 +10,15 @@ TARGET=timestamper
 
 all: depend $(TARGET)
 
-debug:	CFLAGS += -g -O0
+debug:	CFLAGS += -g -Og
 debug:  all
 
 profile:	LIBS += -pg
 profile:	CLIBS += -pg
 profile:	debug
+
+opt:	CFLAGS += -O2
+opt:  all
 
 depend: .depend
 

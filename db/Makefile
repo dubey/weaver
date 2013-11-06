@@ -10,7 +10,7 @@ TARGET=shard
 
 all: depend $(TARGET)
 
-debug:	CFLAGS += -g
+debug:	CFLAGS += -Og -g
 debug:  all
 
 profile:	LIBS += -pg

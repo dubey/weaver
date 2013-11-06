@@ -753,29 +753,22 @@ msgrecv_loop()
                 break;
 
             case message::NODE_PROG:
-                //WDEBUG << "got node_prog" << std::endl;
                 bool global_req;
                 message::unpack_message(*rec_msg, message::NODE_PROG, pType, global_req, vt_id, vclk, req_id);
                 request = new db::graph_request(mtype, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(req_id, vclk, unpack_node_program, request);
-                //WDEBUG << "going to add node prog to queue for vt " << vt_id << std::endl;
                 S->add_read_request(vt_id, thr);
-                //WDEBUG << "added node prog to threadpool" << std::endl;
                 rec_msg.reset(new message::message());
-                //WDEBUG << "vclock size " << vclk.clock.size() << std::endl;
                 assert(vclk.clock.size() == NUM_VTS);
                 break;
 
             case message::VT_NOP: {
                 db::nop_data *nop_arg = new db::nop_data();
                 message::unpack_message(*rec_msg, mtype, vt_id, vclk, qts, req_id, nop_arg->done_reqs, nop_arg->max_done_id);
-                //WDEBUG << "unpacked message" << std::endl;
                 nop_arg->vt_id = vt_id;
                 nop_arg->req_id = req_id;
-                //WDEBUG << "$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$$after unpacking nop, vt_id = " << vt_id << std::endl;
                 thr = new db::thread::unstarted_thread(qts.at(shard_id-SHARD_ID_INCR), vclk, nop, (void*)nop_arg);
                 S->add_write_request(vt_id, thr);
-                //WDEBUG << "added request to threadpool" << std::endl;
                 rec_msg.reset(new message::message());
                 assert(vclk.clock.size() == NUM_VTS);
                 break;
