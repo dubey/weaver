@@ -1,2 +1,0 @@
-1. Freeing buffers malloc'ed for replicant responses.
-2. Mutex for Weaver order chronosd method (and possibly all other chronosd methods?)
