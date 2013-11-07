@@ -434,7 +434,7 @@ chronosd :: assign_vt_dependencies(std::vector<uint64_t> &vclk, uint64_t vt_id)
 }
 
 const char*
-unpack_vector_uint64(uint64_t **vec, uint64_t vec_size, const char *c)
+unpack_vector_uint64(const char *c, uint64_t **vec, uint64_t vec_size)
 {
     *vec = (uint64_t*)malloc(sizeof(uint64_t) * vec_size);
     for (size_t i = 0; i < vec_size; i++) {
@@ -463,8 +463,8 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
         chronos_pair p;
         weaver_pair wp;
         uint8_t o;
-        c = unpack_vector_uint64(&wp.lhs, KRONOS_NUM_VTS, c);
-        c = unpack_vector_uint64(&wp.rhs, KRONOS_NUM_VTS, c);
+        c = unpack_vector_uint64(c, &wp.lhs, KRONOS_NUM_VTS);
+        c = unpack_vector_uint64(c, &wp.rhs, KRONOS_NUM_VTS);
         c = e::unpack64le(c, &wp.lhs_id);
         c = e::unpack64le(c, &wp.rhs_id);
         c = e::unpack32le(c, &p.flags);
@@ -518,7 +518,7 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
                     break;
 
                 default:
-                    DEBUG << "should not reach here" << std::endl;
+                    KDEBUG << "should not reach here" << std::endl;
                     assert(false);
                     break;
             }

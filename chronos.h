@@ -52,13 +52,13 @@
 
 #define __KRONOS_DEBUG__
 #ifdef __KRONOS_DEBUG__
-#define DEBUG std::cerr << __FILE__ << ":" << __LINE__ << " "
+#define KDEBUG std::cerr << __FILE__ << ":" << __LINE__ << " "
 #else
-#define DEBUG if (0) std::cerr << __FILE__ << ":" << __LINE__ << " "
+#define KDEBUG if (0) std::cerr << __FILE__ << ":" << __LINE__ << " "
 #endif
 
 // Weaver
-#define KRONOS_NUM_VTS 2
+#define KRONOS_NUM_VTS 1
 
 extern "C" {
 #endif

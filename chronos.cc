@@ -384,10 +384,10 @@ chronos_client :: send(e::intrusive_ptr<pending> pend, chronos_returncode* statu
     }
     else
     {
-        DEBUG << std::endl;
+        KDEBUG << std::endl;
         e::error send_error = m_replicant->last_error();
-        DEBUG << send_error.msg();
-        DEBUG << send_error.loc();
+        KDEBUG << send_error.msg();
+        KDEBUG << send_error.loc();
         *status = CHRONOS_ERROR;
         return ret;
     }
