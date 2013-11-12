@@ -52,7 +52,7 @@ find_long_hop(test_graph &g)
 void
 multiple_locality_prog(bool dense, bool to_exit)
 {
-    client::client c(CLIENT_ID, 0);
+    client::client c(CLIENT_ID+2, 0);
     int i, num_nodes, num_edges;
     timespec t;
     uint64_t seed = time(NULL);
@@ -105,9 +105,7 @@ multiple_locality_prog(bool dense, bool to_exit)
         initial_args[0].first = npair[i].first;
         initial_args[0].second.dest = npair[i].second;
         initial_args[0].second.path.clear();
-        std::unique_ptr<node_prog::reach_params> res = c.run_node_program(node_prog::REACHABILITY, initial_args);
-        //initial_args[0].first = g.nodes[(rand() % 5) + 1];
-        //std::unique_ptr<node_prog::n_hop_reach_params> res = c.run_node_program(node_prog::N_HOP_REACHABILITY, initial_args);
+        node_prog::reach_params res = c.run_reach_program(initial_args);
     }
     file.close();
     req_time.close();

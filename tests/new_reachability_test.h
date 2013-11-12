@@ -49,7 +49,7 @@ void line_reachability(client::client &c) {
     rp.dest = nodes[0];
     initial_args.clear();
     initial_args.emplace_back(std::make_pair(nodes[1], rp));
-     res = c.run_node_program(node_prog::REACHABILITY, initial_args);
+    res = c.run_node_program(node_prog::REACHABILITY, initial_args);
     assert(!res->reachable);
     WDEBUG << "finished negative line reachability" << std::endl;
 }

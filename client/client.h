@@ -25,6 +25,7 @@
 #include "common/property.h"
 #include "transaction.h"
 #include "node_prog/node_prog_type.h"
+#include "node_prog/reach_program.h"
 
 namespace client
 {
@@ -52,6 +53,7 @@ namespace client
             template <typename ParamsType>
             std::unique_ptr<ParamsType> 
             run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args);
+            node_prog::reach_params run_reach_program(std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args);
 
             void start_migration();
             void commit_graph();
@@ -175,6 +177,12 @@ namespace client
 // XXX fix this crap, why not unpack into unique_ptr?
         std::unique_ptr<ParamsType> toRet(new ParamsType(tempPair.second));
         return std::move(toRet);
+    }
+
+    inline node_prog::reach_params
+    client :: run_reach_program(std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args)
+    {
+        return *run_node_program(node_prog::REACHABILITY, initial_args);
     }
 
 

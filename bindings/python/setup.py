@@ -7,7 +7,7 @@ sourcefiles = ['client.pyx']
 
 extensions = [Extension('client',
                 sourcefiles,
-                include_dirs = ['../../client/', '../../'],
+                include_dirs = ['../../','../../../'],
                 libraries = ['busybee', 'e', 'pthread', 'rt', 'chronos', 'hyperdex-client'],
                 extra_compile_args = ['-std=c++0x']
              )]

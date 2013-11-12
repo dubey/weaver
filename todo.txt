@@ -1,7 +1,5 @@
 TODO
 Clean up, tackle TODO/XXX.
-    Kronos:
-        Free malloc()ed buffers
     event_order.h
         Clean up unused vars
         Test Kronos
@@ -15,13 +13,14 @@ Clean up, tackle TODO/XXX.
         reverse edges
         Kronos result caching
         migrate_step 2 & 3 - rename, optimize (batch?)
-Permanent deletion.
+Test serializability of transactions.
+Node/edge properties.
 Python API.
-    Test serializability of transactions.
+    - Mostly done, pending wrappers for other node progs.
 Analytics API - global requests
     Find out why triangle counting is slow.
     RW node program
-Node/edge properties
+Permanent deletion.
 Fault tolerant (chain replicated) coordinator and shards.
 
 BUGS
