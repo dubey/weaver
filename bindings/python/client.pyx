@@ -14,8 +14,6 @@
 # 
 
 # begin <stolen from Hyperdex/bindings/client.pyx>
-from cpython cimport bool
-
 cdef extern from 'stdint.h':
 
     ctypedef short int int16_t

@@ -104,59 +104,43 @@ periodic_update()
     uint64_t cur_time_nanos = wclock::get_time_elapsed(vts->tspec);
     uint64_t diff_nanos = cur_time_nanos - vts->nop_time_nanos;
     if (diff_nanos > VT_NOP_TIMEOUT) {
-        //std::cout << "cur time nano = " << cur_time_nanos << ", nop_time_nanos " << vts->nop_time_nanos << ", diff nanos " << diff_nanos << ", TIMEOUT " << VT_NOP_TIMEOUT << std::endl;
         // send nops to each shard
         vts->nop_time_millis = cur_time_millis;
         vts->nop_time_nanos = cur_time_nanos;
         std::vector<bool> to_nop = vts->to_nop;
         for (uint64_t i = 0; i < NUM_SHARDS; i++) {
-            if (vts->to_nop[i]) {
+            if (vts->to_nop[i] && (vts->nop_last_qts[i] == vts->qts[i])) {
                 vts->qts[i]++;
                 vts->to_nop[i] = false;
+            } else if (vts->nop_last_qts[i] != vts->qts[i]) {
+                WDEBUG << i << " Not sending nop, cur_qts = " << vts->qts[i] << ", nop last qts " << vts->nop_last_qts[i] << std::endl;
             }
+            vts->nop_last_qts[i] = vts->qts[i];
         }
         vc::qtimestamp_t new_qts = vts->qts;
-        //if (vts->nop_acks == NUM_SHARDS) {
-        //    for (auto &qts: vts->qts) {
-        //        qts++;
-        //    }
-        //}
         vts->vclk.increment_clock();
         vc::vclock vclk = vts->vclk;
         req_id = vts->generate_id();
         message::message msg;
-        //if (vts->nop_acks == NUM_SHARDS) {
-            std::vector<std::pair<uint64_t, node_prog::prog_type>> done_reqs;
-            uint64_t max_done_id = vts->max_done_id;
-            for (auto &x: vts->done_reqs) {
-                node_prog::prog_type type = x.first;
-                for (uint64_t id: x.second) {
-                    done_reqs.emplace_back(std::make_pair(id, type));
-                }
-                x.second.clear();
+        std::vector<std::pair<uint64_t, node_prog::prog_type>> done_reqs;
+        uint64_t max_done_id = vts->max_done_id;
+        for (auto &x: vts->done_reqs) {
+            node_prog::prog_type type = x.first;
+            for (uint64_t id: x.second) {
+                done_reqs.emplace_back(std::make_pair(id, type));
             }
-            vts->mutex.unlock();
-            for (uint64_t i = 0; i < NUM_SHARDS; i++) {
-                if (to_nop[i]) {
-                    message::prepare_message(msg, message::VT_NOP, vt_id, vclk, new_qts, req_id, done_reqs, max_done_id);
-                    vts->send(i + SHARD_ID_INCR, msg.buf);
-                }
+            x.second.clear();
+        }
+        vts->mutex.unlock();
+        for (uint64_t i = 0; i < NUM_SHARDS; i++) {
+            if (to_nop[i]) {
+                message::prepare_message(msg, message::VT_NOP, vt_id, vclk, new_qts, req_id, done_reqs, max_done_id);
+                vts->send(i + SHARD_ID_INCR, msg.buf);
             }
-            //vts->nop_acks = 0;
-        //} else {
-        //    vts->mutex.unlock();
-        //}
-        //if (vts->first_clock_update) {
-        //    WDEBUG << "clock update acks " << vts->clock_update_acks << std::endl;
-        //    WDEBUG << "diff " << diff << ", initial clock update delay " << VT_INITIAL_CLKUPDATE_DELAY << std::endl;
-        //    WDEBUG << "first diff " << first_diff << ", initial clock update delay " << VT_INITIAL_CLKUPDATE_DELAY << std::endl;
-        //}
-        // first check is an ugly hack to make sure all VTs are up before sending out clock updates
-        // second check is to ensure all VTs acked previous update before sending out new update
+        }
         if (((vts->first_clock_update && first_diff_millis > VT_INITIAL_CLKUPDATE_DELAY) || !vts->first_clock_update)
         && (vts->clock_update_acks == (NUM_VTS-1))) {
             vts->first_clock_update = false;
-            //WDEBUG << "sending clock update now, clock update acks " << vts->clock_update_acks << std::endl;
             vts->clock_update_acks = 0;
             for (uint64_t i = 0; i < NUM_VTS; i++) {
                 if (i == vt_id) {

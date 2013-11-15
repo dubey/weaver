@@ -1,10 +1,12 @@
 TODO
 Clean up, tackle TODO/XXX.
+    Fast bulk loading.
     event_order.h
         Clean up unused vars
         Test Kronos
     Coordinator
         Review nops
+            Frequency tradeoff - possibly dynamically change the frequency?
         Node mapper mutex for Hyperdex
         Periodic update - one thread or all
     Shards
@@ -27,5 +29,5 @@ BUGS
 -
 
 WISHLIST
-Failing transactions
+?Failing transactions
 Kronos events clean up

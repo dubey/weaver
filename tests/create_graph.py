@@ -15,23 +15,18 @@ import sys
 sys.path.append('../bindings/python')
 
 import client
+import time
 from test_base import test_graph
 
 # creating line graph
 nodes = []
-num_nodes = 100
-print client._CLIENT_ID
-c = client.Client(client._CLIENT_ID+1, 0)
+num_nodes = 100000
+num_clients = 2
+clients = []
+for i in range(num_clients):
+    clients.append(client.Client(client._CLIENT_ID+i, i % client._NUM_VTS))
 print 'Created client'
-tg = test_graph(c, num_nodes, 2*num_nodes)
-#for i in range(num_nodes):
-#    tx_id = c.begin_tx()
-#    nodes.append(c.create_node(tx_id))
-#    c.end_tx(tx_id)
-#    print 'Created node ' + str(i)
-#for i in range(num_nodes-1):
-#    tx_id = c.begin_tx()
-#    c.create_edge(tx_id, nodes[i], nodes[i+1])
-#    c.end_tx(tx_id)
-#    print 'Created edge ' + str(i)
-print 'Created graph'
+start = time.time()
+tg = test_graph(clients, num_nodes, 2*num_nodes)
+end = time.time()
+print 'Created graph in ' + str(end-start) + ' seconds'

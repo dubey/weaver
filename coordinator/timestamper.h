@@ -50,6 +50,7 @@ namespace coordinator
             timespec tspec;
             uint64_t nop_time_millis, nop_time_nanos, first_nop_time_millis, clock_update_acks, nop_acks;
             std::vector<bool> to_nop;
+            std::vector<uint64_t> nop_last_qts;
             bool first_clock_update;
             // node prog
             // map from req_id to client_id that ensures a single response to a node program
@@ -91,6 +92,7 @@ namespace coordinator
         , clock_update_acks(NUM_VTS-1)
         , nop_acks(NUM_SHARDS)
         , to_nop(NUM_SHARDS, true)
+        , nop_last_qts(NUM_SHARDS, 0)
         , first_clock_update(true)
         , max_done_id(0)
     {
