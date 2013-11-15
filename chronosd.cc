@@ -115,7 +115,7 @@ class chronosd
         uint64_t m_count_release_references;
         uint64_t m_count_query_order;
         uint64_t m_count_assign_order;
-        char *m_repl_resp; // buffer for setting replicant response
+        std::vector<char> m_repl_resp; // buffer for setting replicant response
 
     // Weaver
     public:
@@ -137,7 +137,6 @@ chronosd :: chronosd()
     , m_count_query_order()
     , m_count_assign_order()
     , m_count_weaver_order()
-    , m_repl_resp(NULL)
     , pair_comp_ptr(&pair_comp)
 {
     pair_set_t empty_set(pair_comp_ptr);
@@ -156,12 +155,11 @@ chronosd :: create_event(struct replicant_state_machine_context* ctx,
 {
     ++m_count_create_event;
     uint64_t event = m_graph.add_vertex();
-    if (m_repl_resp) {
-        free(m_repl_resp);
-    }
-    m_repl_resp = (char*)malloc(sizeof(uint64_t));
-    e::pack64le(event, m_repl_resp);
-    replicant_state_machine_set_response(ctx, m_repl_resp, sizeof(m_repl_resp));
+    const size_t resp_sz = sizeof(uint64_t);
+    m_repl_resp.resize(resp_sz);
+    char *resp_ptr = &m_repl_resp.front();
+    e::pack64le(event, resp_ptr);
+    replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
 }
 
 void
@@ -173,14 +171,14 @@ chronosd :: acquire_references(struct replicant_state_machine_context* ctx,
     std::vector<uint64_t> events;
     std::vector<uint64_t> event_offsets;
     events.reserve(NUM_EVENTS);
-    const char* c = data;
+    const char *data_ptr = data;
 
     // Capture only those events that need a refcount; skip those we already
     // refer to
     for (size_t i = 0; i < NUM_EVENTS; ++i)
     {
         uint64_t e;
-        c = e::unpack64le(c, &e);
+        data_ptr = e::unpack64le(data_ptr, &e);
 
         // XXX if not already referenced
         {
@@ -215,12 +213,11 @@ chronosd :: acquire_references(struct replicant_state_machine_context* ctx,
     }
 
     // Write the response
-    if (m_repl_resp) {
-        free(m_repl_resp);
-    }
-    m_repl_resp = (char*)malloc(sizeof(uint64_t));
-    e::pack64le(response, m_repl_resp);
-    replicant_state_machine_set_response(ctx, m_repl_resp, sizeof(m_repl_resp));
+    const size_t resp_sz = sizeof(uint64_t);
+    m_repl_resp.resize(resp_sz);
+    char *resp_ptr = &m_repl_resp.front();
+    e::pack64le(response, resp_ptr);
+    replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
 
     if (response == NUM_EVENTS)
     {
@@ -234,14 +231,14 @@ chronosd :: release_references(struct replicant_state_machine_context* ctx,
 {
     ++m_count_release_references;
     const size_t NUM_EVENTS = data_sz / sizeof(uint64_t);
-    const char* c = data;
+    const char *data_ptr = data;
 
     // Capture only those events that need a refcount; skip those we already
     // refer to
     for (size_t i = 0; i < NUM_EVENTS; ++i)
     {
         uint64_t e;
-        c = e::unpack64le(c, &e);
+        data_ptr = e::unpack64le(data_ptr, &e);
 
         // XXX if already referenced
         {
@@ -252,12 +249,11 @@ chronosd :: release_references(struct replicant_state_machine_context* ctx,
 
     // Write the response
     uint64_t response = NUM_EVENTS;
-    if (m_repl_resp) {
-        free(m_repl_resp);
-    }
-    m_repl_resp = (char*)malloc(sizeof(uint64_t));
-    e::pack64le(response, m_repl_resp);
-    replicant_state_machine_set_response(ctx, m_repl_resp, sizeof(m_repl_resp));
+    const size_t resp_sz = sizeof(uint64_t);
+    m_repl_resp.resize(resp_sz);
+    char *resp_ptr = &m_repl_resp.front();
+    e::pack64le(response, resp_ptr);
+    replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
 }
 
 void
@@ -266,15 +262,16 @@ chronosd :: query_order(struct replicant_state_machine_context* ctx,
 {
     ++m_count_query_order;
     const size_t NUM_PAIRS = data_sz / (2 * sizeof(uint64_t) + sizeof(uint32_t));
-    uint8_t *response = (uint8_t*)malloc(NUM_PAIRS * sizeof(uint8_t));
-    const char* c = data;
+    const size_t resp_sz = NUM_PAIRS;
+    m_repl_resp.resize(resp_sz);
+    const char *data_ptr = data;
 
     for (size_t i = 0; i < NUM_PAIRS; ++i)
     {
         chronos_pair p;
-        c = e::unpack64le(c, &p.lhs);
-        c = e::unpack64le(c, &p.rhs);
-        c = e::unpack32le(c, &p.flags);
+        data_ptr = e::unpack64le(data_ptr, &p.lhs);
+        data_ptr = e::unpack64le(data_ptr, &p.rhs);
+        data_ptr = e::unpack32le(data_ptr, &p.flags);
         p.order = CHRONOS_CONCURRENT;
 
         if (!m_graph.exists(p.lhs) ||
@@ -300,14 +297,11 @@ chronosd :: query_order(struct replicant_state_machine_context* ctx,
             }
         }
 
-        response[i] = chronos_cmp_to_byte(p.order);
+        m_repl_resp[i] = chronos_cmp_to_byte(p.order);
     }
 
-    if (m_repl_resp) {
-        free(m_repl_resp);
-    }
-    m_repl_resp = (char*)response;
-    replicant_state_machine_set_response(ctx, m_repl_resp, NUM_PAIRS * sizeof(uint8_t));
+    char *resp_ptr = &m_repl_resp.front();
+    replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
 }
 
 void
@@ -316,29 +310,30 @@ chronosd :: assign_order(struct replicant_state_machine_context* ctx,
 {
     ++m_count_assign_order;
     const size_t NUM_PAIRS = data_sz / (2 * sizeof(uint64_t) + sizeof(uint32_t) + sizeof(uint8_t));
-    uint8_t *results = (uint8_t*)malloc(NUM_PAIRS * sizeof(uint8_t));
+    const size_t resp_sz = NUM_PAIRS;
+    m_repl_resp.resize(resp_sz);
     for (size_t i = 0; i < NUM_PAIRS; i++) {
-        results[i] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
+        m_repl_resp[i] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
     }
     std::vector<std::pair<uint64_t, uint64_t> > edges;
     edges.reserve(NUM_PAIRS);
     size_t num_pairs = 0;
-    const char* c = data;
+    const char *data_ptr = data;
 
     for (num_pairs = 0; num_pairs < NUM_PAIRS; ++num_pairs)
     {
         chronos_pair p;
         uint8_t o;
-        c = e::unpack64le(c, &p.lhs);
-        c = e::unpack64le(c, &p.rhs);
-        c = e::unpack32le(c, &p.flags);
-        c = e::unpack8le(c, &o);
+        data_ptr = e::unpack64le(data_ptr, &p.lhs);
+        data_ptr = e::unpack64le(data_ptr, &p.rhs);
+        data_ptr = e::unpack32le(data_ptr, &p.flags);
+        data_ptr = e::unpack8le(data_ptr, &o);
         p.order = byte_to_chronos_cmp(o);
 
         if (!m_graph.exists(p.lhs) ||
             !m_graph.exists(p.rhs))
         {
-            results[num_pairs] = chronos_cmp_to_byte(CHRONOS_NOEXIST);
+            m_repl_resp[num_pairs] = chronos_cmp_to_byte(CHRONOS_NOEXIST);
             break;
         }
 
@@ -346,26 +341,26 @@ chronosd :: assign_order(struct replicant_state_machine_context* ctx,
 
         if (resolve < 0)
         {
-            results[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_BEFORE);
+            m_repl_resp[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_BEFORE);
 
             if (p.order != CHRONOS_HAPPENS_BEFORE)
             {
                 if (!(p.flags & CHRONOS_SOFT_FAIL))
                 {
-                    results[num_pairs] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
+                    m_repl_resp[num_pairs] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
                     break;
                 }
             }
         }
         else if (resolve > 0)
         {
-            results[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_AFTER);
+            m_repl_resp[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_AFTER);
 
             if (p.order != CHRONOS_HAPPENS_AFTER)
             {
                 if (!(p.flags & CHRONOS_SOFT_FAIL))
                 {
-                    results[num_pairs] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
+                    m_repl_resp[num_pairs] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
                     break;
                 }
             }
@@ -375,12 +370,12 @@ chronosd :: assign_order(struct replicant_state_machine_context* ctx,
             switch (p.order)
             {
                 case CHRONOS_HAPPENS_BEFORE:
-                    results[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_BEFORE);
+                    m_repl_resp[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_BEFORE);
                     m_graph.add_edge(p.lhs, p.rhs);
                     edges.push_back(std::make_pair(p.lhs, p.rhs));
                     break;
                 case CHRONOS_HAPPENS_AFTER:
-                    results[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_AFTER);
+                    m_repl_resp[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_AFTER);
                     m_graph.add_edge(p.rhs, p.lhs);
                     edges.push_back(std::make_pair(p.rhs, p.lhs));
                     break;
@@ -401,11 +396,8 @@ chronosd :: assign_order(struct replicant_state_machine_context* ctx,
         }
     }
 
-    if (m_repl_resp) {
-        free(m_repl_resp);
-    }
-    m_repl_resp = (char*)results;
-    replicant_state_machine_set_response(ctx, m_repl_resp, NUM_PAIRS * sizeof(uint8_t));
+    char *resp_ptr = &m_repl_resp.front();
+    replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
 }
 
 // this method makes edges in the event dependency graph to record
@@ -452,23 +444,24 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
             + 2 * sizeof(uint64_t) // vt_ids
             + sizeof(uint32_t) // flags
             + sizeof(uint8_t)); // preferred order
-    uint8_t *results = (uint8_t*)malloc(NUM_PAIRS * sizeof(uint8_t));
+    const size_t resp_sz = NUM_PAIRS;
+    m_repl_resp.resize(resp_sz);
     for (size_t i = 0; i < NUM_PAIRS; i++) {
-        results[i] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
+        m_repl_resp[i] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
     }
     size_t num_pairs = 0;
-    const char* c = data;
+    const char *data_ptr = data;
 
     for (num_pairs = 0; num_pairs < NUM_PAIRS; ++num_pairs) {
         chronos_pair p;
         weaver_pair wp;
         uint8_t o;
-        c = unpack_vector_uint64(c, &wp.lhs, KRONOS_NUM_VTS);
-        c = unpack_vector_uint64(c, &wp.rhs, KRONOS_NUM_VTS);
-        c = e::unpack64le(c, &wp.lhs_id);
-        c = e::unpack64le(c, &wp.rhs_id);
-        c = e::unpack32le(c, &p.flags);
-        c = e::unpack8le(c, &o);
+        data_ptr = unpack_vector_uint64(data_ptr, &wp.lhs, KRONOS_NUM_VTS);
+        data_ptr = unpack_vector_uint64(data_ptr, &wp.rhs, KRONOS_NUM_VTS);
+        data_ptr = e::unpack64le(data_ptr, &wp.lhs_id);
+        data_ptr = e::unpack64le(data_ptr, &wp.rhs_id);
+        data_ptr = e::unpack32le(data_ptr, &p.flags);
+        data_ptr = e::unpack8le(data_ptr, &o);
         p.order = byte_to_chronos_cmp(o);
 
         // Bunch of sanity checks for Weaver provided vector clocks
@@ -502,18 +495,18 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
         int resolve = m_graph.compute_order(p.lhs, p.rhs);
 
         if (resolve < 0) {
-            results[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_BEFORE);
+            m_repl_resp[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_BEFORE);
         } else if (resolve > 0) {
-            results[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_AFTER);
+            m_repl_resp[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_AFTER);
         } else {
             switch (p.order) {
                 case CHRONOS_HAPPENS_BEFORE:
-                    results[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_BEFORE);
+                    m_repl_resp[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_BEFORE);
                     m_graph.add_edge(p.lhs, p.rhs);
                     break;
 
                 case CHRONOS_HAPPENS_AFTER:
-                    results[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_AFTER);
+                    m_repl_resp[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_AFTER);
                     m_graph.add_edge(p.rhs, p.lhs);
                     break;
 
@@ -527,11 +520,8 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
 
     assert(num_pairs == NUM_PAIRS);
 
-    if (m_repl_resp) {
-        free(m_repl_resp);
-    }
-    m_repl_resp = (char*)results;
-    replicant_state_machine_set_response(ctx, m_repl_resp, NUM_PAIRS * sizeof(uint8_t));
+    char *resp_ptr = &m_repl_resp.front();
+    replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
 }
 
 void
@@ -578,20 +568,22 @@ chronosd :: get_stats(struct replicant_state_machine_context* ctx,
     st.count_assign_order = m_count_assign_order;
     st.count_weaver_order = m_count_weaver_order;
 
-    char *buf = (char*)malloc(sizeof(uint64_t) * 9 + sizeof(uint32_t));
-    char* c = buf;
-    c = e::pack64le(st.time, c);
-    c = e::pack64le(st.utime, c);
-    c = e::pack64le(st.stime, c);
-    c = e::pack32le(st.maxrss, c);
-    c = e::pack64le(st.events, c);
-    c = e::pack64le(st.count_create_event, c);
-    c = e::pack64le(st.count_acquire_references, c);
-    c = e::pack64le(st.count_release_references, c);
-    c = e::pack64le(st.count_query_order, c);
-    c = e::pack64le(st.count_assign_order, c);
-    c = e::pack64le(st.count_weaver_order, c);
-    replicant_state_machine_set_response(ctx, buf, sizeof(buf));
+    const size_t resp_sz = sizeof(uint64_t) * 9 + sizeof(uint32_t);
+    m_repl_resp.resize(resp_sz);
+    char *resp_ptr = &m_repl_resp.front();
+    resp_ptr = e::pack64le(st.time, resp_ptr);
+    resp_ptr = e::pack64le(st.utime, resp_ptr);
+    resp_ptr = e::pack64le(st.stime, resp_ptr);
+    resp_ptr = e::pack32le(st.maxrss, resp_ptr);
+    resp_ptr = e::pack64le(st.events, resp_ptr);
+    resp_ptr = e::pack64le(st.count_create_event, resp_ptr);
+    resp_ptr = e::pack64le(st.count_acquire_references, resp_ptr);
+    resp_ptr = e::pack64le(st.count_release_references, resp_ptr);
+    resp_ptr = e::pack64le(st.count_query_order, resp_ptr);
+    resp_ptr = e::pack64le(st.count_assign_order, resp_ptr);
+    resp_ptr = e::pack64le(st.count_weaver_order, resp_ptr);
+    resp_ptr = &m_repl_resp.front();
+    replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
 }
 
 extern "C"
