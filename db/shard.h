@@ -75,7 +75,8 @@ namespace db
         public:
             po6::threads::mutex queue_mutex // exclusive access to thread pool queues
                 , msg_count_mutex
-                , migration_mutex;
+                , migration_mutex
+                , graph_load_mutex; // gather load times from all shards
 
             // Consistency
         public:
@@ -104,7 +105,11 @@ namespace db
             void delete_edge_nonlocking(element::node *n, uint64_t edge, vc::vclock &tdel);
             void delete_edge(uint64_t edge_handle, uint64_t node_handle, vc::vclock &vclk);
             uint64_t get_node_count();
+            bool node_exists_nonlocking(uint64_t node_handle);
 
+            // Initial graph loading
+            uint64_t max_load_time;
+            uint32_t load_count;
             // Permanent deletion
         public:
             void delete_migrated_node(uint64_t migr_node);
@@ -377,6 +382,12 @@ namespace db
         // TODO permanent deletion
     }
 
+    // return true if node already created
+    inline bool
+    shard :: node_exists_nonlocking(uint64_t node_handle)
+    {
+        return (nodes.find(node_handle) != nodes.end());
+    }
 
     // permanent deletion
 
