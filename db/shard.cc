@@ -195,14 +195,17 @@ load_graph(db::graph_file_format format, const char *graph_file)
                         return;
                     } else {
                         if (((edge[0] % NUM_SHARDS) + SHARD_ID_INCR) == shard_id) {
+                            if (graph.find(edge[0]) == graph.end()) {
+                                graph.emplace(edge[1], std::vector<std::pair<uint64_t, uint64_t>>());
+                                node_map[edge[0]] = shard_id;
+                            }
                             graph[edge[0]].emplace_back(std::make_pair(edge_count++, edge[1]));
-                            node_map[edge[0]] = shard_id;
                         }
                         if (((edge[1] % NUM_SHARDS) + SHARD_ID_INCR) == shard_id) {
                             if (graph.find(edge[1]) == graph.end()) {
                                 graph.emplace(edge[1], std::vector<std::pair<uint64_t, uint64_t>>());
+                                node_map[edge[1]] = shard_id;
                             }
-                            node_map[edge[1]] = shard_id;
                         }
                         if (node_map.size() > 1000) {
                             init_mutex.lock();
@@ -210,6 +213,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                             init_cv.signal();
                             init_mutex.unlock();
                             node_map.clear();
+                            WDEBUG << "Adding nodes to nmap, read " << line_count << " edges" << std::endl;
                         }
                     }
                 }
@@ -248,6 +252,8 @@ load_graph(db::graph_file_format format, const char *graph_file)
         }
         if (++node_cnt % 1000 == 0) {
             WDEBUG << "Created " << node_cnt << " nodes" << std::endl;
+        }
+        if (edge_map.size() > 10000) {
             init_mutex.lock();
             init_edge_maps.emplace_back(std::move(edge_map));
             init_cv.signal();
@@ -278,7 +284,9 @@ init_nmap()
         } else {
             while (!init_node_maps.empty()) {
                 auto &node_map = init_node_maps.front();
+                init_mutex.unlock();
                 node_mapper.put_mappings(node_map, true);
+                init_mutex.lock();
                 init_node_maps.pop_front();
             }
         }
@@ -289,12 +297,15 @@ init_nmap()
         } else {
             while (!init_edge_maps.empty()) {
                 auto &edge_map = init_edge_maps.front();
+                init_mutex.unlock();
                 node_mapper.put_mappings(edge_map, false);
+                init_mutex.lock();
                 init_edge_maps.pop_front();
             }
         }
     }
     init_mutex.unlock();
+    WDEBUG << "Done init nmap thread, exiting now" << std::endl;
 }
 
 void
@@ -1077,6 +1088,8 @@ main(int argc, char *argv[])
         }
         init_nodes = false;
         init_edges = false;
+        std::thread thr(init_nmap);
+        thr.detach();
         load_graph(format, argv[3]);
     }
     std::cout << "Weaver: shard instance " << S->shard_id << std::endl;
