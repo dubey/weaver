@@ -65,7 +65,11 @@ namespace coordinator
             // mutexes
             po6::threads::mutex mutex // big mutex for clock and timestamper DS
                     , loc_gen_mutex
-                    , periodic_update_mutex; // make sure to not send out clock update before getting ack from other VTs
+                    , periodic_update_mutex // make sure to not send out clock update before getting ack from other VTs
+                    , graph_load_mutex;
+            // initial graph loading
+            uint32_t load_count;
+            uint64_t max_load_time;
             // migration
             // permanent deletion
             // daemon
@@ -95,6 +99,8 @@ namespace coordinator
         , nop_last_qts(NUM_SHARDS, 0)
         , first_clock_update(true)
         , max_done_id(0)
+        , load_count(0)
+        , max_load_time(0)
     {
         // initialize array of server locations
         initialize_busybee(bb, vt_id, myloc, NUM_THREADS);

@@ -316,6 +316,20 @@ server_loop(int thread_id)
                     break;
 
                 // shard messages
+                case message::LOADED_GRAPH: {
+                    uint64_t load_time;
+                    message::unpack_message(*msg, message::LOADED_GRAPH, load_time);
+                    graph_load_mutex.lock();
+                    if (load_time > vts->max_load_time) {
+                        vts->max_load_time = load_time;
+                    }
+                    if (++vts->load_count == NUM_SHARDS) {
+                        WDEBUG << "Graph loaded on all machines, time taken = " << vts->max_load_time << " nanosecs." << std::endl;
+                    }
+                    graph_load_mutex.unlock();
+                    break;
+                }
+
                 case message::TX_DONE:
                     message::unpack_message(*msg, message::TX_DONE, tx_id);
                     end_transaction(tx_id);
