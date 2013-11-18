@@ -1089,8 +1089,15 @@ main(int argc, char *argv[])
         init_nodes = false;
         init_edges = false;
         std::thread thr(init_nmap);
-        thr.detach();
+
+        timespec ts;
+        uint64_t load_time = wclock::get_time_elapsed(ts);
         load_graph(format, argv[3]);
+        thr.join();
+        load_time = wclock::get_time_elapsed(ts) - load_time;
+        message::message msg;
+        message::prepare_message(msg, message::LOADED_GRAPH, load_time);
+        S->send(0, msg.buf);
     }
     std::cout << "Weaver: shard instance " << S->shard_id << std::endl;
 

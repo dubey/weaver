@@ -39,10 +39,10 @@
 #define CLIENT_ID (100ULL)
 #define SHARDS_DESC_FILE "../common/shards"
 // weaver setup
-#define NUM_SHARDS 1
-#define NUM_VTS 2
+#define NUM_SHARDS 10
+#define NUM_VTS 1
 #define SHARD_ID_INCR NUM_VTS
-#define NUM_THREADS 6
+#define NUM_THREADS 8
 #define ID_BITS 8
 #define TOP_MASK (0x0fffffffffffffffULL)
 #define GRAPH_FILE "graph.rec"
@@ -55,8 +55,8 @@
 #define VT_NOP_TIMEOUT 1000000 // number of nanoseconds between successive nops
 #define VT_INITIAL_CLKUPDATE_DELAY 5000 // number of millis delay to ensure all timestampers are running
 // hyperdex
-#define HYPERDEX_COORD_IPADDR "127.0.0.1"
-//#define HYPERDEX_COORD_IPADDR "128.84.227.101"
+//#define HYPERDEX_COORD_IPADDR "127.0.0.1"
+#define HYPERDEX_COORD_IPADDR "128.84.227.101"
 #define HYPERDEX_COORD_PORT 1982
 // kronos
 #define KRONOS_IPADDR "127.0.0.1"

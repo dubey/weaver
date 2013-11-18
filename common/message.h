@@ -93,6 +93,8 @@ namespace message
         MIGRATION_TOKEN,
         REQUEST_COUNT,
         REQUEST_COUNT_ACK,
+        // initial graph loading
+        LOADED_GRAPH,
         // coordinator group
         COORD_LOC_REQ,
         COORD_LOC_REPLY,
