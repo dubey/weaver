@@ -27,8 +27,8 @@
 #include "common/message.h"
 #include "common/transaction.h"
 #include "common/clock.h"
+#include "common/nmap_stub.h"
 #include "node_prog/triangle_program.h"
-#include "nmap_stub.h"
 
 namespace coordinator
 {
@@ -61,7 +61,7 @@ namespace coordinator
             uint64_t max_done_id;
             std::unordered_map<node_prog::prog_type, std::unordered_set<uint64_t>> done_reqs;
             // node map client
-            std::vector<coordinator::nmap_stub*> nmap_client;
+            std::vector<nmap::nmap_stub*> nmap_client;
             // mutexes
             po6::threads::mutex mutex // big mutex for clock and timestamper DS
                     , loc_gen_mutex
@@ -108,7 +108,7 @@ namespace coordinator
         done_reqs.emplace(node_prog::DIJKSTRA, empty_set);
         done_reqs.emplace(node_prog::CLUSTERING, empty_set);
         for (int i = 0; i < NUM_THREADS; i++) {
-            nmap_client.push_back(new coordinator::nmap_stub());
+            nmap_client.push_back(new nmap::nmap_stub());
         }
     }
 

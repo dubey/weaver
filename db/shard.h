@@ -55,6 +55,12 @@ namespace db
         , msg(std::move(m))
     { }
 
+    enum graph_file_format
+    {
+        TSV, // edge list
+        SNAP // edge list, ignore comment lines beginning with "#"
+    };
+
     // graph partition state and associated data structures
     class shard
     {
@@ -88,11 +94,11 @@ namespace db
         public:
             void add_write_request(uint64_t vt_id, thread::unstarted_thread *thr);
             void add_read_request(uint64_t vt_id, thread::unstarted_thread *thr);
-            element::node* create_node(uint64_t node_handle, vc::vclock &vclk, bool migrate);
+            element::node* create_node(uint64_t node_handle, vc::vclock &vclk, bool migrate, bool init_load);
             void delete_node_nonlocking(element::node *n, vc::vclock &tdel);
             void delete_node(uint64_t node_handle, vc::vclock &vclk);
             void create_edge_nonlocking(element::node *n, uint64_t edge, uint64_t remote_node,
-                    uint64_t remote_loc, vc::vclock &vclk);
+                    uint64_t remote_loc, vc::vclock &vclk, bool init_load);
             void create_edge(uint64_t edge_handle, uint64_t local_node,
                     uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk);
             void delete_edge_nonlocking(element::node *n, uint64_t edge, vc::vclock &tdel);
@@ -251,13 +257,17 @@ namespace db
     }
 
     inline element::node*
-    shard :: create_node(uint64_t node_handle, vc::vclock &vclk, bool migrate)
+    shard :: create_node(uint64_t node_handle, vc::vclock &vclk, bool migrate, bool init_load=false)
     {
         element::node *new_node = new element::node(node_handle, vclk, &update_mutex);
-        update_mutex.lock();
+        if (!init_load) {
+            update_mutex.lock();
+        }
         assert(nodes.emplace(node_handle, new_node).second);
         cur_node_count++;
-        update_mutex.unlock();
+        if (!init_load) {
+            update_mutex.unlock();
+        }
         if (migrate) {
             migration_mutex.lock();
             migr_node = node_handle;
@@ -304,15 +314,19 @@ namespace db
 
     inline void
     shard :: create_edge_nonlocking(element::node *n, uint64_t edge, uint64_t remote_node,
-            uint64_t remote_loc, vc::vclock &vclk)
+            uint64_t remote_loc, vc::vclock &vclk, bool init_load=false)
     {
         element::edge *new_edge = new element::edge(edge, vclk, remote_loc, remote_node);
         n->add_edge(new_edge);
         n->updated = true;
         // update edge map
-        edge_map_mutex.lock();
+        if (!init_load) {
+            edge_map_mutex.lock();
+        }
         edge_map[remote_loc][remote_node].emplace(n->get_handle());
-        edge_map_mutex.unlock();
+        if (!init_load) {
+            edge_map_mutex.unlock();
+        }
     }
 
     inline void

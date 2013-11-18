@@ -13,6 +13,7 @@
  */
 
 #include <iostream>
+#include <string>
 #include <signal.h>
 #include <e/buffer.h>
 #include "busybee_constants.h"
@@ -21,6 +22,7 @@
 #include "common/weaver_constants.h"
 #include "common/event_order.h"
 #include "common/message_graph_elem.h"
+#include "common/nmap_stub.h"
 #include "shard.h"
 #include "nop_data.h"
 #include "node_prog/node_prog_type.h"
@@ -30,6 +32,12 @@
 // global static variables
 static uint64_t shard_id;
 static db::shard *S;
+// for Hyperdex entries while loading graph from file
+static po6::threads::mutex init_mutex;
+static po6::threads::cond init_cv(&init_mutex);
+static std::deque<std::unordered_map<uint64_t, uint64_t>> init_node_maps, init_edge_maps;
+static bool init_nodes, init_edges;
+// global shard pointer
 db::shard *db::thread::pool::S = NULL; // reinitialized in graph constructor
 
 void migrated_nbr_update(std::unique_ptr<message::message> msg);
@@ -79,6 +87,214 @@ inline void
 delete_edge(vc::vclock &t_del, uint64_t edge_handle, uint64_t node_handle)
 {
     S->delete_edge(edge_handle, node_handle, t_del);
+}
+
+inline bool
+check_graph_file(db::graph_file_format format, const char *graph_file)
+{
+    std::ifstream file;
+    uint64_t node;
+    std::string line, str_node;
+    std::vector<uint64_t> edge;
+
+    file.open(graph_file, std::ifstream::in);
+    if (!file) {
+        WDEBUG << "File not found" << std::endl;
+        return false;
+    }
+    
+    // read and validate graph
+    uint64_t line_count = 0;
+    switch(format) {
+        case db::SNAP: {
+            while (std::getline(file, line)) {
+                line_count++;
+                if ((line.length() == 0) || (line[0] == '#')) {
+                    continue;
+                } else {
+                    std::stringstream stream(line);
+                    edge.clear();
+                    while (stream >> str_node) {
+                        try {
+                            node = std::stoull(str_node);
+                        } catch (std::exception e) {
+                            WDEBUG << "Error in graph file at line " << line_count << std::endl;
+                            WDEBUG << line << std::endl;
+                            WDEBUG << e.what() << std::endl;
+                            return false;
+                        }
+                        edge.emplace_back(node);
+                    }
+                    if (edge.size() != 2) {
+                        WDEBUG << "Error in graph file at line " << line_count
+                            << ", got " << edge.size() << " entries in this line, expected 2." << std::endl;
+                        WDEBUG << line << std::endl;
+                        return false;
+                    }
+                }
+            }
+            break;
+        }
+
+        default:
+            WDEBUG << "Unknown graph file format " << std::endl;
+            return false;
+    }
+    file.close();
+
+    return true;
+}
+
+inline void
+load_graph(db::graph_file_format format, const char *graph_file)
+{
+    std::ifstream file;
+    uint64_t node;
+    std::string line, str_node;
+    std::vector<uint64_t> edge;
+    std::unordered_map<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>> graph;
+
+    file.open(graph_file, std::ifstream::in);
+    if (!file) {
+        WDEBUG << "File not found" << std::endl;
+        return;
+    }
+    
+    // read and validate graph
+    uint64_t line_count = 0;
+    uint64_t edge_count = 1;
+    uint64_t max_node_handle = 0;
+    std::unordered_map<uint64_t, uint64_t> node_map;
+    switch(format) {
+        case db::SNAP: {
+            while (std::getline(file, line)) {
+                line_count++;
+                if ((line.length() == 0) || (line[0] == '#')) {
+                    continue;
+                } else {
+                    std::stringstream stream(line);
+                    edge.clear();
+                    while (stream >> str_node) {
+                        try {
+                            node = std::stoull(str_node);
+                        } catch (std::exception e) {
+                            WDEBUG << "Error in graph file at line " << line_count << std::endl;
+                            WDEBUG << line << std::endl;
+                            WDEBUG << e.what() << std::endl;
+                            return;
+                        }
+                        edge.emplace_back(node);
+                        if (node > max_node_handle) {
+                            max_node_handle = node;
+                        }
+                    }
+                    if (edge.size() != 2) {
+                        WDEBUG << "Error in graph file at line " << line_count
+                            << ", got " << edge.size() << " entries in this line, expected 2." << std::endl;
+                        WDEBUG << line << std::endl;
+                        return;
+                    } else {
+                        if (((edge[0] % NUM_SHARDS) + SHARD_ID_INCR) == shard_id) {
+                            graph[edge[0]].emplace_back(std::make_pair(edge_count++, edge[1]));
+                            node_map[edge[0]] = shard_id;
+                        }
+                        if (((edge[1] % NUM_SHARDS) + SHARD_ID_INCR) == shard_id) {
+                            if (graph.find(edge[1]) == graph.end()) {
+                                graph.emplace(edge[1], std::vector<std::pair<uint64_t, uint64_t>>());
+                            }
+                            node_map[edge[1]] = shard_id;
+                        }
+                        if (node_map.size() > 1000) {
+                            init_mutex.lock();
+                            init_node_maps.emplace_back(std::move(node_map));
+                            init_cv.signal();
+                            init_mutex.unlock();
+                            node_map.clear();
+                        }
+                    }
+                }
+            }
+            init_mutex.lock();
+            init_node_maps.emplace_back(std::move(node_map));
+            init_nodes = true;
+            init_cv.signal();
+            init_mutex.unlock();
+            break;
+        }
+
+        default:
+            WDEBUG << "Unknown graph file format " << std::endl;
+            return;
+    }
+    file.close();
+
+    // create graph objects
+    uint64_t node_cnt = 0;
+    uint64_t edge_cnt = 0;
+    vc::vclock zero_clk(0, 0);
+    std::unordered_map<uint64_t, uint64_t> edge_map; // for Hyperdex entries
+    for (auto &adj_list: graph) {
+        // node_handle = adj_list.first
+        db::element::node *n = S->create_node(adj_list.first, zero_clk, false, true);
+        node_map.emplace(adj_list.first, shard_id);
+        for (auto &edge: adj_list.second) {
+            uint64_t edge_handle = edge.first + max_node_handle;
+            // remote node handle = edge.second
+            // remote node loc = edge.second % NUM_SHARDS + SHARD_ID_INCR
+            S->create_edge_nonlocking(n, edge_handle, edge.second,
+                (edge.second % NUM_SHARDS) + SHARD_ID_INCR, zero_clk, true);
+            edge_cnt++;
+            edge_map.emplace(edge_handle, adj_list.first);
+        }
+        if (++node_cnt % 1000 == 0) {
+            WDEBUG << "Created " << node_cnt << " nodes" << std::endl;
+            init_mutex.lock();
+            init_edge_maps.emplace_back(std::move(edge_map));
+            init_cv.signal();
+            init_mutex.unlock();
+            edge_map.clear();
+        }
+    }
+    graph.clear();
+    init_mutex.lock();
+    init_edges = true;
+    init_cv.signal();
+    init_mutex.unlock();
+
+    // insert node mapper entries
+    nmap::nmap_stub node_mapper;
+    node_mapper.put_mappings(edge_map, false);
+    WDEBUG << "Loaded graph with " << S->num_nodes() << " nodes and " << edge_cnt << " edges" << std::endl;
+}
+
+inline void
+init_nmap()
+{
+    nmap::nmap_stub node_mapper;
+    init_mutex.lock();
+    while (!init_nodes) {
+        if (init_node_maps.empty()) {
+            init_cv.wait();
+        } else {
+            while (!init_node_maps.empty()) {
+                auto &node_map = init_node_maps.front();
+                node_mapper.put_mappings(node_map, true);
+                init_node_maps.pop_front();
+            }
+        }
+    }
+    while (!init_edges) {
+        if (init_edge_maps.empty()) {
+            init_cv.wait();
+        } else {
+            while (!init_edge_maps.empty()) {
+                auto &edge_map = init_edge_maps.front();
+                node_mapper.put_mappings(edge_map, false);
+                init_edge_maps.pop_front();
+            }
+        }
+    }
+    init_mutex.unlock();
 }
 
 void
@@ -840,19 +1056,30 @@ shard_daemon_end()
 }
 
 int
-main(int argc, char* argv[])
+main(int argc, char *argv[])
 {
     signal(SIGINT, end_program);
-    if (argc != 2) {
-        WDEBUG << "Usage: " << argv[0] << " <myid>" << std::endl;
+    if (argc != 2 && argc != 4) {
+        WDEBUG << "Usage: " << argv[0] << " <myid> [<graph_file_format> <graph_file_name>]" << std::endl;
         return -1;
     }
     uint64_t id = atoi(argv[1]);
     shard_id = id;
     S = new db::shard(id);
+    if (argc == 4) {
+        db::graph_file_format format = db::SNAP;
+        if (strcmp(argv[2], "tsv") == 0) {
+            format = db::TSV;
+        } else if (strcmp(argv[2], "snap") == 0) {
+            format = db::SNAP;
+        } else {
+            WDEBUG << "Invalid graph file format" << std::endl;
+        }
+        init_nodes = false;
+        init_edges = false;
+        load_graph(format, argv[3]);
+    }
     std::cout << "Weaver: shard instance " << S->shard_id << std::endl;
-
-    // TODO migration methods init
 
     msgrecv_loop();
 
