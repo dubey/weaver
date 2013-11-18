@@ -319,14 +319,14 @@ server_loop(int thread_id)
                 case message::LOADED_GRAPH: {
                     uint64_t load_time;
                     message::unpack_message(*msg, message::LOADED_GRAPH, load_time);
-                    graph_load_mutex.lock();
+                    vts->graph_load_mutex.lock();
                     if (load_time > vts->max_load_time) {
                         vts->max_load_time = load_time;
                     }
                     if (++vts->load_count == NUM_SHARDS) {
                         WDEBUG << "Graph loaded on all machines, time taken = " << vts->max_load_time << " nanosecs." << std::endl;
                     }
-                    graph_load_mutex.unlock();
+                    vts->graph_load_mutex.unlock();
                     break;
                 }
 
