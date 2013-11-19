@@ -161,28 +161,15 @@ check_graph_file(db::graph_file_format format, const char *graph_file)
     return true;
 }
 
-inline uint32_t
-single_digit_log(uint64_t digit)
-{
-    if (digit == 0) {
-        return 0;
-    } else if (digit < 2) {
-        return 1;
-    } else if (digit < 4) {
-        return 2;
-    } else if (digit < 8) {
-        return 3;
-    } else {
-        return 4;
-    }
-}
-
+// parse the string 'line' as a uint64_t starting at index 'idx' till the first whitespace or end of string
+// store result in 'n'
+// if overflow occurs or unexpected char encountered, store true in 'bad'
 inline void
 parse_single_uint64(std::string &line, size_t &idx, uint64_t &n, bool &bad)
 {
     uint64_t next_digit;
-    uint64_t zero = '0';
-    uint32_t log = 0;
+    static uint64_t zero = '0';
+    static uint64_t max64_div10 = MAX_UINT64 / 10;
     n = 0;
     while (line[idx] != ' '
         && line[idx] != '\t'
@@ -196,13 +183,16 @@ parse_single_uint64(std::string &line, size_t &idx, uint64_t &n, bool &bad)
                 << " in parsing int, num currently is " << n << std::endl;
             break;
         }
-        n = (n * 10) + next_digit;
-        log += single_digit_log(next_digit);
-        if (log > 64) { // overflow
+        if (n > max64_div10) { // multiplication overflow
             bad = true;
-            WDEBUG << "Overflow in parsing int" << std::endl;
             break;
         }
+        n *= 10;
+        if ((n + next_digit) < n) { // addition overflow
+            bad = true;
+            break;
+        }
+        n += next_digit;
         ++idx;
     }
 }
