@@ -82,6 +82,7 @@ namespace db
         public:
             void record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id, uint64_t incr);
             element::node* acquire_node(uint64_t node_handle);
+            element::node* acquire_node_nonlocking(uint64_t node_handle);
             void release_node(element::node *n, bool migr_node);
 
             // Graph state
@@ -206,7 +207,7 @@ namespace db
         element::node *n = NULL;
         update_mutex.lock();
         if (nodes.find(node_handle) != nodes.end()) {
-            n = nodes.at(node_handle);
+            n = nodes[node_handle];
             n->waiters++;
             while (n->in_use) {
                 n->cv.wait();
@@ -216,6 +217,16 @@ namespace db
         }
         update_mutex.unlock();
 
+        return n;
+    }
+
+    inline element::node*
+    shard :: acquire_node_nonlocking(uint64_t node_handle)
+    {
+        element::node *n = NULL;
+        if (nodes.find(node_handle) != nodes.end()) {
+            n = nodes[node_handle];
+        }
         return n;
     }
 
