@@ -244,6 +244,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
     uint64_t line_count = 0;
     uint64_t edge_count = 1;
     uint64_t max_node_handle = 0;
+    std::unordered_set<uint64_t> seen_nodes;
     std::unordered_map<uint64_t, uint64_t> node_map, edge_map;
     vc::vclock zero_clk(0, 0);
     switch(format) {
@@ -282,17 +283,21 @@ load_graph(db::graph_file_format format, const char *graph_file)
                             node_map[node1] = shard_id;
                         }
                     }
-                    //if (shard_id == SHARD_ID_INCR) {
-                    //    // this shard is responsible for putting nmap entries
-                    //    if (seen_nodes.find(node0) == seen_nodes.end()) {
-                    //        seen_nodes.emplace(node0);
-                    //        node_map[node0] = loc0;
-                    //    }
-                    //    if (seen_nodes.find(node1) == seen_nodes.end()) {
-                    //        seen_nodes.emplace(node0);
-                    //        node_map[node1] = loc1;
-                    //    }
-                    //}
+                    /* Test - single shard which does all Hyperdex work
+                    if (shard_id == SHARD_ID_INCR) {
+                        uint64_t edge_handle = max_node_handle + (edge_count++);
+                        // this shard is responsible for putting nmap entries
+                        if (seen_nodes.find(node0) == seen_nodes.end()) {
+                            seen_nodes.emplace(node0);
+                            node_map[node0] = loc0;
+                        }
+                        if (seen_nodes.find(node1) == seen_nodes.end()) {
+                            seen_nodes.emplace(node0);
+                            node_map[node1] = loc1;
+                        }
+                        edge_map[edge_handle] = node0;
+                    }
+                    */
                     if (edge_map.size() > 10000) {
                         init_mutex.lock();
                         init_edge_maps.emplace_back(std::move(edge_map));
@@ -339,6 +344,14 @@ init_nmap()
         if (init_node_maps.empty()) {
             init_cv.wait();
         } else {
+            //std::unordered_map<uint64_t, uint64_t> node_map;
+            //while (!init_node_maps.empty()) {
+            //    auto &next_map = init_node_maps.front();
+            //    for (auto &entry: next_map) {
+            //        node_map.emplace(entry.first, entry.second);
+            //    }
+            //    init_node_maps.pop_front();
+            //}
             auto &node_map = init_node_maps.front();
             WDEBUG << "NMAP init node map at shard " << shard_id << ", map size = " << node_map.size() << std::endl;
             init_mutex.unlock();
@@ -355,6 +368,9 @@ inline void
 init_emap()
 {
     nmap::nmap_stub node_mapper;
+    uint64_t edge_count = 0;
+    timespec ts;
+    uint64_t time;
     init_mutex.lock();
     start_load++;
     start_load_cv.signal();
@@ -363,16 +379,19 @@ init_emap()
             init_cv.wait();
         } else {
             auto &edge_map = init_edge_maps.front();
-            WDEBUG << "NMAP init edge map at shard " << shard_id << ", map size = " << edge_map.size() << std::endl;
+            WDEBUG << "EMAP init edge map at shard " << shard_id << ", map size = " << edge_map.size() << std::endl;
+            edge_count += edge_map.size();
             init_mutex.unlock();
+            time = wclock::get_time_elapsed(ts);
             node_mapper.put_mappings(edge_map, false);
+            time = wclock::get_time_elapsed(ts) - time;
             init_mutex.lock();
-            WDEBUG << "NMAP done init edge map at shard " << shard_id << std::endl;
+            WDEBUG << "EMAP done init edge map at shard " << shard_id << ", time taken = " << time/MEGA << " ms." << std::endl;
             init_edge_maps.pop_front();
         }
     }
     init_mutex.unlock();
-    WDEBUG << "Done init emap thread, exiting now" << std::endl;
+    WDEBUG << "Done init emap thread, edge processed = " << edge_count << " at shard " << shard_id << std::endl;
 }
 
 void

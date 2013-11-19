@@ -73,6 +73,7 @@ namespace nmap
         hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute *) malloc(numPairs * sizeof(hyperdex_client_attribute));
 
         i = 0;
+        uint32_t num_div10 = numPairs / 10;
         for (auto &entry: pairs_to_add) {
             attrs_to_add[i].attr = attrName;
             attrs_to_add[i].value = (char *) &entry.second;
@@ -87,6 +88,9 @@ namespace nmap
                 return;
             }
             i++;
+            if (i % num_div10 == 0) {
+                WDEBUG << "Put map completed " << i << " puts" << std::endl;
+            }
         }
 
         hyperdex_client_returncode loop_status;
@@ -98,6 +102,9 @@ namespace nmap
                 WDEBUG << "put \"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
                 free(attrs_to_add);
                 return;
+            }
+            if (i % num_div10 == 0) {
+                WDEBUG << "LOOP in Put map completed " << i << " loops" << std::endl;
             }
         }
         free(attrs_to_add);
