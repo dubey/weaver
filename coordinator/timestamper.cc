@@ -17,7 +17,7 @@
 #include <vector>
 #include <signal.h>
 
-#define __WEAVER_DEBUG__
+//#define __WEAVER_DEBUG__
 #include "common/vclock.h"
 #include "common/transaction.h"
 #include "node_prog/node_prog_type.h"
@@ -42,33 +42,33 @@ end_program(int param)
 inline void
 begin_transaction(transaction::pending_tx &tx)
 {
-    WDEBUG << "beginning tx " << std::endl;
     message::message msg;
     std::vector<transaction::pending_tx> tx_vec(NUM_SHARDS, transaction::pending_tx());
     vts->mutex.lock();
     for (std::shared_ptr<transaction::pending_update> upd: tx.writes) {
-        //WDEBUG << "updating qts for shard " << (upd->loc1-SHARD_ID_INCR) << std::endl;
-        vts->qts.at(upd->loc1-SHARD_ID_INCR)++; // TODO what about edge create requests, loc2?
+        vts->qts.at(upd->loc1-SHARD_ID_INCR)++;
         upd->qts = vts->qts;
-        tx_vec.at(upd->loc1-SHARD_ID_INCR).writes.emplace_back(upd);
+        tx_vec[upd->loc1-SHARD_ID_INCR].writes.emplace_back(upd);
     }
     vts->vclk.increment_clock();
     tx.timestamp = vts->vclk;
     tx.id = vts->generate_id();
-    vts->tx_replies.emplace(tx.id, coordinator::tx_reply());
-    vts->tx_replies.at(tx.id).client_id = tx.client_id;
+    vts->tx_replies[tx.id].client_id = tx.client_id;
     // send tx in per shard batches
     for (uint64_t i = 0; i < NUM_SHARDS; i++) {
-        if (!tx_vec.at(i).writes.empty()) {
-            tx_vec.at(i).timestamp = tx.timestamp;
-            tx_vec.at(i).id = tx.id;
-            message::prepare_message(msg, message::TX_INIT, vt_id, tx.timestamp, tx_vec.at(i).writes.at(0)->qts, tx.id, tx_vec.at(i).writes);
-            vts->send(tx_vec.at(i).writes.at(0)->loc1, msg.buf);
-            vts->tx_replies.at(tx.id).count++;
+        if (!tx_vec[i].writes.empty()) {
+            vts->tx_replies[tx.id].count++;
         }
     }
-    WDEBUG << "sent tx\n";
-    vts->mutex.unlock(); // TODO: move sending out of critical section
+    vts->mutex.unlock();
+    for (uint64_t i = 0; i < NUM_SHARDS; i++) {
+        if (!tx_vec[i].writes.empty()) {
+            tx_vec[i].timestamp = tx.timestamp;
+            tx_vec[i].id = tx.id;
+            message::prepare_message(msg, message::TX_INIT, vt_id, tx.timestamp, tx_vec[i].writes.at(0)->qts, tx.id, tx_vec[i].writes);
+            vts->send(tx_vec[i].writes.at(0)->loc1, msg.buf);
+        }
+    }
 }
 
 // decrement reply count. if all replies have been received, ack to client
@@ -76,11 +76,9 @@ inline void
 end_transaction(uint64_t tx_id)
 {
     vts->mutex.lock();
-    WDEBUG << "Got end tx\n";
     if (--vts->tx_replies.at(tx_id).count == 0) {
         // done tx
-        WDEBUG << "Actually ending tx\n";
-        uint64_t client_id = vts->tx_replies.at(tx_id).client_id;
+        uint64_t client_id = vts->tx_replies[tx_id].client_id;
         vts->tx_replies.erase(tx_id);
         vts->mutex.unlock();
         message::message msg;
@@ -91,18 +89,92 @@ end_transaction(uint64_t tx_id)
     }
 }
 
-// periodically send nops to shards to keep queues moving
-// also send vector clock updates to other timestampers
+inline void
+nop(uint64_t shard_id)
+{
+    vts->mutex.lock();
+    vts->vclk.increment_clock();
+    vts->qts[shard_id - SHARD_ID_INCR]++;
+    vc::qtimestamp_t new_qts(vts->qts);
+    vc::vclock vclk(vt_id, vts->vclk.clock);
+    uint64_t req_id = vts->generate_id();
+    uint64_t max_done_id = vts->max_done_id;
+    std::vector<std::pair<uint64_t, node_prog::prog_type>> done_reqs;
+    std::vector<uint64_t> del_done_reqs;
+    uint64_t shard_idx = shard_id - SHARD_ID_INCR;
+    for (auto &x: vts->done_reqs) {
+        // x.first = node prog type
+        // x.second = unordered_map <req_id -> bitset<NUM_SHARDS>>
+        for (auto &reply: x.second) {
+            // reply.first = req_id
+            // reply.second = bitset<NUM_SHARDS>
+            if (!reply.second[shard_idx]) {
+                reply.second.set(shard_idx);
+                done_reqs.emplace_back(std::make_pair(reply.first, x.first));
+            }
+            if (reply.second.all()) {
+                del_done_reqs.emplace_back(reply.first);
+            }
+        }
+        for (auto &del: del_done_reqs) {
+            x.second.erase(del);
+        }
+    }
+    vts->mutex.unlock();
+
+    message::message msg;
+    message::prepare_message(msg, message::VT_NOP, vt_id, vclk,
+            new_qts, req_id, done_reqs, max_done_id);
+    vts->send(shard_id, msg.buf);
+}
+
 inline void
 periodic_update()
+{
+    bool first_update = true;
+    vts->periodic_update_mutex.lock();
+    uint64_t cur_time_millis = wclock::get_time_elapsed_millis(vts->tspec);
+    uint64_t diff_millis = cur_time_millis - vts->nop_time_millis;
+    if (diff_millis > VT_NOP_TIMEOUT) {
+        vts->nop_time_millis = cur_time_millis;
+        if (vts->first_clock_update) {
+            uint64_t first_diff_millis = cur_time_millis - vts->first_nop_time_millis;
+            first_update = first_diff_millis > VT_INITIAL_CLKUPDATE_DELAY;
+        }
+        if (first_update && vts->clock_update_acks == (NUM_VTS-1)) {
+            vts->first_clock_update = false;
+            vts->clock_update_acks = 0;
+            vts->mutex.lock();
+            uint64_t my_clock = vts->vclk.clock[vt_id];
+            vts->mutex.unlock();
+            message::message msg;
+            for (uint64_t i = 0; i < NUM_VTS; i++) {
+                if (i == vt_id) {
+                    continue;
+                }
+                message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, my_clock);
+                vts->send(i, msg.buf);
+            }
+        }
+    }
+    vts->periodic_update_mutex.unlock();
+}
+
+
+// periodically send nops to shards to keep queues moving
+// also send vector clock updates to other timestampers
+// NOT IN USE currently
+/*
+inline void
+periodic_update_old()
 {
     vts->periodic_update_mutex.lock();
     vts->mutex.lock();
     uint64_t req_id;
-    uint64_t cur_time_millis = wclock::get_time_elapsed_millis(vts->tspec);
-    uint64_t first_diff_millis = cur_time_millis - vts->first_nop_time_millis;
     uint64_t cur_time_nanos = wclock::get_time_elapsed(vts->tspec);
     uint64_t diff_nanos = cur_time_nanos - vts->nop_time_nanos;
+    uint64_t cur_time_millis = wclock::get_time_elapsed_millis(vts->tspec);
+    uint64_t diff_millis = cur_time_millis - vts->nop_time_millis;
     if (diff_nanos > VT_NOP_TIMEOUT) {
         // send nops to each shard
         vts->nop_time_millis = cur_time_millis;
@@ -155,13 +227,13 @@ periodic_update()
     }
     vts->periodic_update_mutex.unlock();
 }
+*/
 
 // node program stuff
 template <typename ParamsType, typename NodeStateType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType> :: 
     unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, int thread_id)
 {
-    WDEBUG << "starting node program on timestamper" << std::endl;
     node_prog::prog_type pType;
     std::vector<std::pair<uint64_t, ParamsType>> initial_args;
 
@@ -192,42 +264,39 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
             request_element_mappings.emplace(toAdd);
         }
     }
-    WDEBUG << "timestamper done looking up element mappings for node program" << std::endl;
 
     if (global_req) {
         // send copy of params to each shard
         for (int i = 0; i < NUM_SHARDS; i++) {
-            initial_batches[i + SHARD_ID_INCR].emplace_back(std::make_tuple(initial_args[0].first, initial_args[0].second, db::element::remote_node()));
+            initial_batches[i + SHARD_ID_INCR].emplace_back(std::make_tuple(initial_args[0].first,
+                    initial_args[0].second, db::element::remote_node()));
         }
     } else { // regular style node program
-        for (std::pair<uint64_t, ParamsType> &node_params_pair : initial_args) { // TODO: change to params pointer so we can avoid potential copy?
-            initial_batches[request_element_mappings[node_params_pair.first]].emplace_back(std::make_tuple(node_params_pair.first,
-                        std::move(node_params_pair.second), db::element::remote_node())); // constructor
+        for (std::pair<uint64_t, ParamsType> &node_params_pair: initial_args) {
+            uint64_t loc = request_element_mappings[node_params_pair.first];
+            initial_batches[loc].emplace_back(std::make_tuple(node_params_pair.first,
+                    std::move(node_params_pair.second), db::element::remote_node()));
         }
     }
+    
     vts->mutex.lock();
     vts->vclk.increment_clock();
-    vc::vclock req_timestamp =  vts->vclk;
+    vc::vclock req_timestamp = vts->vclk;
     assert(req_timestamp.clock.size() == NUM_VTS);
     uint64_t req_id = vts->generate_id();
 
-    message::message msg_to_send;
-    std::vector<uint64_t> empty_vector;
-    std::vector<std::tuple<uint64_t, ParamsType, uint64_t>> empty_tuple_vector;
-    WDEBUG << "starting node prog " << req_id << ", recd from client\t" << std::endl;
-    uint64_t zero = 0;
-    for (auto &batch_pair : initial_batches) {
-        message::prepare_message(msg_to_send, message::NODE_PROG, pType, global_req, vt_id, req_timestamp, 
-                req_id, batch_pair.second, /*empty_tuple_vector,*/ zero, zero);
-        vts->send(batch_pair.first, msg_to_send.buf); // TODO: can we send out of critical section?
-    }
-    WDEBUG << "sent to shards" << std::endl;
     if (global_req) {
-        vts->outstanding_triangle_progs.emplace(std::make_pair(req_id, std::make_pair(NUM_SHARDS, node_prog::triangle_params())));
+        vts->outstanding_triangle_progs.emplace(req_id, std::make_pair(NUM_SHARDS, node_prog::triangle_params()));
     }
-    vts->outstanding_node_progs.emplace(std::make_pair(req_id, clientID));
+    vts->outstanding_node_progs.emplace(req_id, clientID);
     vts->outstanding_req_ids.emplace(req_id);
     vts->mutex.unlock();
+
+    message::message msg_to_send;
+    for (auto &batch_pair : initial_batches) {
+        message::prepare_message(msg_to_send, message::NODE_PROG, pType, global_req, vt_id, req_timestamp, req_id, batch_pair.second);
+        vts->send(batch_pair.first, msg_to_send.buf);
+    }
 }
 
 template <typename ParamsType, typename NodeStateType>
@@ -269,9 +338,7 @@ server_loop(int thread_id)
             WDEBUG << "msg recv error: " << ret << std::endl;
             continue;
         } else if (ret == BUSYBEE_TIMEOUT) {
-            //if (thread_id == 0) {
-                periodic_update();
-            //}
+            periodic_update();
             continue;
         } else {
             // good to go, unpack msg
@@ -308,11 +375,7 @@ server_loop(int thread_id)
 
                 case message::VT_NOP_ACK:
                     message::unpack_message(*msg, message::VT_NOP_ACK, sender);
-                    vts->periodic_update_mutex.lock();
-                    vts->to_nop.at(sender-SHARD_ID_INCR) = true;
-                    //vts->nop_acks++;
-                    //assert(vts->nop_acks <= NUM_SHARDS);
-                    vts->periodic_update_mutex.unlock();
+                    nop(sender);
                     break;
 
                 // shard messages
@@ -370,7 +433,7 @@ server_loop(int thread_id)
 
                             if (p.first == 0) { // all shards responded
                                 // send back to client
-                                vts->done_reqs[type].emplace(req_id);
+                                vts->done_reqs[type].emplace(req_id, std::bitset<NUM_SHARDS>());
                                 tempPair.second.num_edges = p.second.num_edges;
                                 message::prepare_message(*msg, message::NODE_PROG_RETURN, type, req_id, tempPair);
                                 vts->send(client_to_ret, msg->buf);
@@ -378,7 +441,7 @@ server_loop(int thread_id)
                                 mark_req_finished(req_id);
                             }
                         } else { // just a normal node program
-                            vts->done_reqs[type].emplace(req_id);
+                            vts->done_reqs[type].emplace(req_id, std::bitset<NUM_SHARDS>());
                             vts->send(client_to_ret, msg->buf);
                             vts->outstanding_node_progs.erase(req_id);
                             mark_req_finished(req_id);
@@ -392,9 +455,7 @@ server_loop(int thread_id)
                 default:
                     std::cerr << "unexpected msg type " << mtype << std::endl;
             }
-            //if (thread_id == 0) {
-                periodic_update();
-            //}
+            periodic_update();
         }
     }
 }
@@ -419,6 +480,9 @@ main(int argc, char *argv[])
     for (int i = 0; i < NUM_THREADS-1; i++) {
         thr = new std::thread(server_loop, i);
         thr->detach();
+    }
+    for (uint64_t shard = 0; shard < NUM_SHARDS; shard++) {
+        nop(shard + SHARD_ID_INCR);
     }
     server_loop(NUM_THREADS-1);
 }

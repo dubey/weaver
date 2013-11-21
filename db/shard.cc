@@ -298,7 +298,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                         edge_map[edge_handle] = node0;
                     }
                     */
-                    if (edge_map.size() > 10000) {
+                    if (edge_map.size() > 100000) {
                         init_mutex.lock();
                         init_edge_maps.emplace_back(std::move(edge_map));
                         init_node_maps.emplace_back(std::move(node_map));
@@ -1165,7 +1165,12 @@ shard_daemon_end()
     S->migration_mutex.lock();
     S->migr_token = false;
     S->migration_mutex.unlock();
-    uint64_t next_id = (shard_id + 1 - SHARD_ID_INCR) >= NUM_SHARDS ? SHARD_ID_INCR : (shard_id + 1);
+    uint64_t next_id; 
+    if ((shard_id + 1 - SHARD_ID_INCR) >= NUM_SHARDS) {
+        next_id = SHARD_ID_INCR;
+    } else {
+        next_id = shard_id + 1;
+    }
     S->send(next_id, msg.buf);
 }
 
@@ -1206,6 +1211,7 @@ main(int argc, char *argv[])
         S->send(SHARD_ID_INCR, msg.buf);
     }
     std::cout << "Weaver: shard instance " << S->shard_id << std::endl;
+    WDEBUG << "Weaver: shard instance " << S->shard_id << std::endl;
 
     msgrecv_loop();
 

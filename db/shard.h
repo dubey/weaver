@@ -448,9 +448,6 @@ namespace db
         for (auto &x: n->out_edges) {
             e = x.second;
             if (e->nbr.handle == migr_node && e->nbr.loc == old_loc) {
-                // XXX why zero out counters?
-                //n->msg_count[e->nbr.loc-SHARD_ID_INCR] = 0;
-                //e->msg_count = 0;
                 e->nbr.loc = new_loc;
                 found = true;
             }
@@ -542,9 +539,6 @@ namespace db
     shard :: check_done_request(uint64_t req_id)
     {
         bool done = node_prog_req_state.check_done_request(req_id);
-        //if (done) {
-        //    WDEBUG << "checked state for req " << req_id << " was DONE" << std::endl;
-        //}
         return done;
     }
 
@@ -600,8 +594,6 @@ namespace db
                 thr = pq.top();
                 // check for correct ordering of queue timestamp (which is priority for thread)
                 if (!tpool->check_qts(vt_id, thr->priority)) {
-                    //WDEBUG << "waiting for qts to increment for vt " << vt_id << ", current qts "
-                    //       << tpool->qts.at(vt_id) << ", thr prio " << thr->priority << std::endl;
                     return NULL;
                 }
             }

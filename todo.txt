@@ -1,9 +1,7 @@
 TODO
 Clean up, tackle TODO/XXX.
     Fast bulk loading.
-    event_order.h
-        Clean up unused vars
-        Test Kronos
+        Pending Hyperdex speedup.
     Coordinator
         Review nops
             Frequency tradeoff - possibly dynamically change the frequency?
@@ -15,10 +13,8 @@ Clean up, tackle TODO/XXX.
         reverse edges
         Kronos result caching
         migrate_step 2 & 3 - rename, optimize (batch?)
-Test serializability of transactions.
 Node/edge properties.
-Python API.
-    - Mostly done, pending wrappers for other node progs.
+Test serializability of transactions.
 Analytics API - global requests
     Find out why triangle counting is slow.
     RW node program

@@ -18,6 +18,7 @@
 #define __COORD_VT__
 
 #include <vector>
+#include <bitset>
 #include <unordered_map>
 #include <unordered_set>
 #include <po6/threads/mutex.h>
@@ -38,6 +39,32 @@ namespace coordinator
         uint64_t client_id;
     };
 
+    class prog_reply
+    {
+        public:
+            uint64_t req_id;
+            std::bitset<NUM_SHARDS> replied;
+
+            prog_reply(uint64_t rid) : req_id(rid) { }
+
+            bool operator==(const prog_reply &rp) const { return req_id == rp.req_id; }
+    };
+}
+
+namespace std
+{
+    template <>
+    struct hash<coordinator::prog_reply>
+    {
+        size_t operator()(const coordinator::prog_reply &pr) const
+        {
+            return std::hash<uint64_t>()(pr.req_id);
+        }
+    };
+}
+
+namespace coordinator
+{
     class timestamper
     {
         public:
@@ -59,7 +86,8 @@ namespace coordinator
             std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> outstanding_req_ids;
             std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> done_req_ids;
             uint64_t max_done_id;
-            std::unordered_map<node_prog::prog_type, std::unordered_set<uint64_t>> done_reqs;
+            std::unordered_map<node_prog::prog_type,
+                    std::unordered_map<uint64_t, std::bitset<NUM_SHARDS>>> done_reqs;
             // node map client
             std::vector<nmap::nmap_stub*> nmap_client;
             // mutexes
@@ -109,10 +137,10 @@ namespace coordinator
         nop_time_nanos = wclock::get_time_elapsed(tspec);
         first_nop_time_millis = nop_time_millis;
         // initialize empty vector of done reqs for each prog type
-        std::unordered_set<uint64_t> empty_set;
-        done_reqs.emplace(node_prog::REACHABILITY, empty_set);
-        done_reqs.emplace(node_prog::DIJKSTRA, empty_set);
-        done_reqs.emplace(node_prog::CLUSTERING, empty_set);
+        std::unordered_map<uint64_t, std::bitset<NUM_SHARDS>> empty_map;
+        done_reqs.emplace(node_prog::REACHABILITY, empty_map);
+        done_reqs.emplace(node_prog::DIJKSTRA, empty_map);
+        done_reqs.emplace(node_prog::CLUSTERING, empty_map);
         for (int i = 0; i < NUM_THREADS; i++) {
             nmap_client.push_back(new nmap::nmap_stub());
         }
@@ -233,6 +261,6 @@ namespace coordinator
         return new_id;
     }
 
- }
+}
 
 #endif
