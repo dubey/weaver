@@ -44,6 +44,7 @@ begin_transaction(transaction::pending_tx &tx)
 {
     message::message msg;
     std::vector<transaction::pending_tx> tx_vec(NUM_SHARDS, transaction::pending_tx());
+
     vts->mutex.lock();
     for (std::shared_ptr<transaction::pending_update> upd: tx.writes) {
         vts->qts.at(upd->loc1-SHARD_ID_INCR)++;
@@ -54,13 +55,15 @@ begin_transaction(transaction::pending_tx &tx)
     tx.timestamp = vts->vclk;
     tx.id = vts->generate_id();
     vts->tx_replies[tx.id].client_id = tx.client_id;
-    // send tx in per shard batches
+    // record txs as outstanding for reply bookkeeping
     for (uint64_t i = 0; i < NUM_SHARDS; i++) {
         if (!tx_vec[i].writes.empty()) {
             vts->tx_replies[tx.id].count++;
         }
     }
     vts->mutex.unlock();
+
+    // send tx batches
     for (uint64_t i = 0; i < NUM_SHARDS; i++) {
         if (!tx_vec[i].writes.empty()) {
             tx_vec[i].timestamp = tx.timestamp;
@@ -89,6 +92,10 @@ end_transaction(uint64_t tx_id)
     }
 }
 
+// send nop to shard which has id 'shard_id'
+// nops also include state cleanup related info:
+// 'max_done_id' is the maximum request id timestamped by this VT which has completed
+// 'done_reqs' is a list of request ids timestamped by this VT which have completed
 inline void
 nop(uint64_t shard_id)
 {
@@ -128,13 +135,17 @@ nop(uint64_t shard_id)
     vts->send(shard_id, msg.buf);
 }
 
+// method to update vector clock at other VTs
+// called periodically from server_loop()
 inline void
 periodic_update()
 {
     bool first_update = true;
+    
     vts->periodic_update_mutex.lock();
     uint64_t cur_time_millis = wclock::get_time_elapsed_millis(vts->tspec);
     uint64_t diff_millis = cur_time_millis - vts->nop_time_millis;
+
     if (diff_millis > VT_NOP_TIMEOUT) {
         vts->nop_time_millis = cur_time_millis;
         if (vts->first_clock_update) {
@@ -144,9 +155,11 @@ periodic_update()
         if (first_update && vts->clock_update_acks == (NUM_VTS-1)) {
             vts->first_clock_update = false;
             vts->clock_update_acks = 0;
+
             vts->mutex.lock();
             uint64_t my_clock = vts->vclk.clock[vt_id];
             vts->mutex.unlock();
+
             message::message msg;
             for (uint64_t i = 0; i < NUM_VTS; i++) {
                 if (i == vt_id) {
@@ -157,11 +170,11 @@ periodic_update()
             }
         }
     }
+
     vts->periodic_update_mutex.unlock();
 }
 
-
-// node program stuff
+// unpack client message for a node program, prepare shard msges, and send out
 template <typename ParamsType, typename NodeStateType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType> :: 
     unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, int thread_id)
@@ -236,6 +249,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     unpack_and_run_db(std::unique_ptr<message::message>)
 { }
 
+// remove a completed node program from outstanding requests data structure
+// update 'max_done_id' accordingly
 inline void mark_req_finished(uint64_t req_id) {
     if (vts->outstanding_req_ids.top() == req_id) {
         assert(vts->max_done_id < vts->outstanding_req_ids.top());
@@ -340,13 +355,13 @@ server_loop(int thread_id)
                     node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), sender, thread_id);
                     break;
 
-                // response from a shard
+                // node program response from a shard
                 case message::NODE_PROG_RETURN:
                     uint64_t req_id;
                     node_prog::prog_type type;
                     message::unpack_message(*msg, message::NODE_PROG_RETURN, type, req_id); // don't unpack rest
                     vts->mutex.lock();
-                    if (vts->outstanding_node_progs.find(req_id) != vts->outstanding_node_progs.end()) { // TODO: change to .count
+                    if (vts->outstanding_node_progs.find(req_id) != vts->outstanding_node_progs.end()) { // TODO: change to .count (AD: why?)
                         uint64_t client_to_ret = vts->outstanding_node_progs.at(req_id);
 
                         if (vts->outstanding_triangle_progs.count(req_id) > 0) { // a triangle prog response
@@ -360,7 +375,7 @@ server_loop(int thread_id)
                             uint64_t oldval = p.second.num_edges;
                             p.second.num_edges += tempPair.second.num_edges;
 
-                            // XXX temp make sure reference worked
+                            // XXX temp make sure reference worked (AD: let's fix this)
                             assert(vts->outstanding_triangle_progs.at(req_id).second.num_edges - tempPair.second.num_edges == oldval); 
 
                             if (p.first == 0) { // all shards responded
@@ -392,10 +407,6 @@ server_loop(int thread_id)
     }
 }
 
-// TODO permanent deletion of deleted and migrated nodes and state for completed node progs
-inline void
-coord_daemon_initiate()
-{ }
 
 int
 main(int argc, char *argv[])
@@ -413,6 +424,8 @@ main(int argc, char *argv[])
         thr = new std::thread(server_loop, i);
         thr->detach();
     }
+
+    // send out nops to each shard
     for (uint64_t shard = 0; shard < NUM_SHARDS; shard++) {
         nop(shard + SHARD_ID_INCR);
     }

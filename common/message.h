@@ -760,7 +760,7 @@ namespace message
             tx.writes.emplace_back(upd);
             unpacker = unpacker >> type;
             mtype = (enum msg_type)type;
-            switch (type) {
+            switch (mtype) {
                 case CLIENT_NODE_CREATE_REQ:
                     upd->type = transaction::NODE_CREATE_REQ;
                     unpack_buffer(unpacker, upd->handle); 
@@ -778,7 +778,7 @@ namespace message
 
                 case CLIENT_EDGE_DELETE_REQ:
                     upd->type = transaction::EDGE_DELETE_REQ;
-                    unpack_buffer(unpacker, upd->elem1);
+                    unpack_buffer(unpacker, upd->elem1, upd->elem2);
                     break;
 
                 default:

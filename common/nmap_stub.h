@@ -16,7 +16,6 @@
 #include <vector>
 #include <hyperdex/client.hpp>
 #include <hyperdex/datastructures.h>
-#include <po6/threads/mutex.h>
 
 #include "common/weaver_constants.h"
 

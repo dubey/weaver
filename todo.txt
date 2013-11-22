@@ -1,16 +1,14 @@
 TODO
 Clean up, tackle TODO/XXX.
     Fast bulk loading.
+        Change so that edge map is not stored in Hyperdex
         Pending Hyperdex speedup.
-    Coordinator
-        Review nops
-            Frequency tradeoff - possibly dynamically change the frequency?
-        Node mapper mutex for Hyperdex
-        Periodic update - one thread or all
     Shards
-        qts increment correctness
+        review prog state clean up
+        review migrated node clean up
         free() nop_arg
         reverse edges
+            traverse edge to node which doesn't exist - require that all in-edges are deleted
         Kronos result caching
         migrate_step 2 & 3 - rename, optimize (batch?)
 Node/edge properties.

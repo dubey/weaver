@@ -20,7 +20,7 @@ from test_base import test_graph
 
 # creating line graph
 nodes = []
-num_nodes = 100000
+num_nodes = 1000
 num_clients = 2
 clients = []
 for i in range(num_clients):
@@ -28,5 +28,10 @@ for i in range(num_clients):
 print 'Created client'
 start = time.time()
 tg = test_graph(clients, num_nodes, 2*num_nodes)
+print 'Node = ' + str(tg.nodes[0])
+print 'Edge to del = ' + str(tg.edge_handles[tg.nodes[0]][0])
+tx_id = clients[0].begin_tx()
+clients[0].delete_edge(tx_id, tg.edge_handles[tg.nodes[0]][0], tg.nodes[0])
+clients[0].end_tx(tx_id)
 end = time.time()
 print 'Created graph in ' + str(end-start) + ' seconds'

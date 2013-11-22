@@ -147,7 +147,7 @@ cdef extern from 'client/client.h' namespace 'client':
         uint64_t create_node(uint64_t tx_id)
         uint64_t create_edge(uint64_t tx_id, uint64_t node1, uint64_t node2)
         void delete_node(uint64_t tx_id, uint64_t node)
-        void delete_edge(uint64_t tx_id, uint64_t edge)
+        void delete_edge(uint64_t tx_id, uint64_t edge, uint64_t node)
         void end_tx(uint64_t tx_id)
         reach_params run_reach_program(vector[pair[uint64_t, reach_params]] initial_args)
         void start_migration()
@@ -168,8 +168,8 @@ cdef class Client:
         return self.thisptr.create_edge(tx_id, node1, node2)
     def delete_node(self, tx_id, node):
         self.thisptr.delete_node(tx_id, node)
-    def delete_edge(self, tx_id, edge):
-        self.thisptr.delete_edge(tx_id, edge)
+    def delete_edge(self, tx_id, edge, node):
+        self.thisptr.delete_edge(tx_id, edge, node)
     def end_tx(self, tx_id):
         self.thisptr.end_tx(tx_id)
     def run_reach_program(self, init_args):

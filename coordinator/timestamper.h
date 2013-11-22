@@ -163,8 +163,8 @@ namespace coordinator
         tx.client_id = client_id;
 
         // lookup mappings
-        std::unordered_map<uint64_t, uint64_t> request_element_mappings, request_edge_mappings;
-        std::unordered_set<uint64_t> mappings_to_get, edge_mappings_to_get;
+        std::unordered_map<uint64_t, uint64_t> mappings_to_put;
+        std::unordered_set<uint64_t> mappings_to_get;
         for (auto upd: tx.writes) {
             switch (upd->type) {
                 case transaction::NODE_CREATE_REQ:
@@ -173,80 +173,68 @@ namespace coordinator
                     loc_gen = (loc_gen + 1) % NUM_SHARDS;
                     upd->loc1 = loc_gen + SHARD_ID_INCR; // node will be placed on this shard
                     loc_gen_mutex.unlock();
-                    request_element_mappings.emplace(upd->handle, upd->loc1);
+                    mappings_to_put.emplace(upd->handle, upd->loc1);
                     break;
 
                 case transaction::EDGE_CREATE_REQ:
-                    if (request_element_mappings.find(upd->elem1) == request_element_mappings.end()) {
+                    if (mappings_to_put.find(upd->elem1) == mappings_to_put.end()) {
                         mappings_to_get.insert(upd->elem1);
                     }
-                    if (request_element_mappings.find(upd->elem2) == request_element_mappings.end()) {
+                    if (mappings_to_put.find(upd->elem2) == mappings_to_put.end()) {
                         mappings_to_get.insert(upd->elem2);
                     }
-                    request_element_mappings.emplace(upd->handle, upd->loc1);
-                    request_edge_mappings.emplace(upd->handle, upd->elem1);
                     break;
 
                 case transaction::NODE_DELETE_REQ:
-                case transaction::EDGE_DELETE_REQ:
-                    if (request_element_mappings.find(upd->elem1) == request_element_mappings.end()) {
+                    if (mappings_to_put.find(upd->elem1) == mappings_to_put.end()) {
                         mappings_to_get.insert(upd->elem1);
-                        if (upd->type == transaction::EDGE_DELETE_REQ) {
-                            edge_mappings_to_get.insert(upd->elem1);
-                        }
+                    }
+                    break;
+
+                case transaction::EDGE_DELETE_REQ:
+                    if (mappings_to_put.find(upd->elem2) == mappings_to_put.end()) {
+                        mappings_to_get.insert(upd->elem2);
                     }
                     break;
 
                 default:
                     WDEBUG << "bad type" << std::endl;
-            }
-        }
-        std::unordered_map<uint64_t, uint64_t> put_map = request_element_mappings;
-        std::unordered_map<uint64_t, uint64_t> put_edge_map = request_edge_mappings;
-        WDEBUG << "NMAP client for thread " << thread_id << std::endl;
-        if (!mappings_to_get.empty()) {
-            for (auto &toAdd : nmap_client[thread_id]->get_mappings(mappings_to_get, true)) {
-                request_element_mappings.emplace(toAdd);
-            }
-        }
-        if (!edge_mappings_to_get.empty()) {
-            for (auto &toAdd: nmap_client[thread_id]->get_mappings(edge_mappings_to_get, false)) {
-                request_edge_mappings.emplace(toAdd);
             }
         }
 
         // insert mappings
-        nmap_client[thread_id]->put_mappings(put_map, true);
-        nmap_client[thread_id]->put_mappings(put_edge_map, false);
+        nmap_client[thread_id]->put_mappings(mappings_to_put, true);
+
+        // get mappings
+        if (!mappings_to_get.empty()) {
+            for (auto &toAdd: nmap_client[thread_id]->get_mappings(mappings_to_get, true)) {
+                mappings_to_put.emplace(toAdd);
+            }
+        }
 
         // unpack get responses from hyperdex
         for (auto upd: tx.writes) {
             switch (upd->type) {
-                case transaction::NODE_CREATE_REQ:
-                    //put_map.emplace_back(std::make_pair(upd->handle, (int64_t)upd->loc1));
-                    break;
 
                 case transaction::EDGE_CREATE_REQ:
-                    assert(request_element_mappings.find(upd->elem1) != request_element_mappings.end());
-                    assert(request_element_mappings.find(upd->elem2) != request_element_mappings.end());
-                    upd->loc1 = request_element_mappings.at(upd->elem1);
-                    upd->loc2 = request_element_mappings.at(upd->elem2);
-                    //put_map.emplace_back(std::make_pair(upd->handle, (int64_t)upd->loc1));
-                    //put_edge_map.emplace_back(std::make_pair(upd->handle, (int64_t)upd->elem1));
+                    assert(mappings_to_put.find(upd->elem1) != mappings_to_put.end());
+                    assert(mappings_to_put.find(upd->elem2) != mappings_to_put.end());
+                    upd->loc1 = mappings_to_put.at(upd->elem1);
+                    upd->loc2 = mappings_to_put.at(upd->elem2);
                     break;
 
                 case transaction::NODE_DELETE_REQ:
+                    assert(mappings_to_put.find(upd->elem1) != mappings_to_put.end());
+                    upd->loc1 = mappings_to_put.at(upd->elem1);
+                    break;
+
                 case transaction::EDGE_DELETE_REQ:
-                    assert(request_element_mappings.find(upd->elem1) != request_element_mappings.end());
-                    upd->loc1 = request_element_mappings.at(upd->elem1);
-                    if (upd->type == transaction::EDGE_DELETE_REQ) {
-                        assert(request_edge_mappings.find(upd->elem1) != request_edge_mappings.end());
-                        upd->elem2 = request_edge_mappings.at(upd->elem1);
-                    }
+                    assert(mappings_to_put.find(upd->elem2) != mappings_to_put.end());
+                    upd->loc1 = mappings_to_put.at(upd->elem2);
                     break;
 
                 default:
-                    WDEBUG << "bad type" << std::endl;
+                    continue;
             }
         }
     }

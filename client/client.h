@@ -47,7 +47,7 @@ namespace client
             uint64_t create_node(uint64_t tx_id);
             uint64_t create_edge(uint64_t tx_id, uint64_t node1, uint64_t node2);
             void delete_node(uint64_t tx_id, uint64_t node); 
-            void delete_edge(uint64_t tx_id, uint64_t edge);
+            void delete_edge(uint64_t tx_id, uint64_t edge, uint64_t node);
             void end_tx(uint64_t tx_id);
 
             template <typename ParamsType>
@@ -132,12 +132,13 @@ namespace client
     }
 
     inline void
-    client :: delete_edge(uint64_t tx_id, uint64_t edge)
+    client :: delete_edge(uint64_t tx_id, uint64_t edge, uint64_t node)
     {
         if (tx_map.find(tx_id) != tx_map.end()) {
             auto upd = std::make_shared<pending_update>();
             upd->type = message::CLIENT_EDGE_DELETE_REQ;
             upd->elem1 = edge;
+            upd->elem2 = node;
             tx_map.at(tx_id).push_back(upd);
         }
     }

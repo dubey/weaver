@@ -31,15 +31,16 @@
 
 // global static variables
 static uint64_t shard_id;
+// shard pointer for shard.cc
 static db::shard *S;
 // for Hyperdex entries while loading graph from file
 static po6::threads::mutex init_mutex;
 static po6::threads::cond init_cv(&init_mutex);
 static po6::threads::cond start_load_cv(&init_mutex);
-static std::deque<std::unordered_map<uint64_t, uint64_t>> init_node_maps, init_edge_maps;
-static bool init_nodes, init_edges;
+static std::deque<std::unordered_map<uint64_t, uint64_t>> init_node_maps;
+static bool init_nodes;
 static uint16_t start_load;
-// global shard pointer
+// threadpool shard pointer
 db::shard *db::thread::pool::S = NULL; // reinitialized in graph constructor
 
 void migrated_nbr_update(std::unique_ptr<message::message> msg);
@@ -91,76 +92,6 @@ delete_edge(vc::vclock &t_del, uint64_t edge_handle, uint64_t node_handle)
     S->delete_edge(edge_handle, node_handle, t_del);
 }
 
-inline bool
-check_graph_file(db::graph_file_format format, const char *graph_file)
-{
-    std::ifstream file;
-    uint64_t node;
-    std::string line, str_node;
-    std::vector<uint64_t> edge;
-
-    file.open(graph_file, std::ifstream::in);
-    if (!file) {
-        WDEBUG << "File not found" << std::endl;
-        return false;
-    }
-    
-    // read and validate graph
-    uint64_t line_count = 0;
-    switch(format) {
-        case db::SNAP: {
-            while (std::getline(file, line)) {
-                line_count++;
-                if ((line.length() == 0) || (line[0] == '#')) {
-                    continue;
-                } else {
-                    //char *node1_str = line.c_str();
-                    //char *node2_str;
-                    //node1 = strtoull(node1_str, &node2_str);
-                    //if (node1 == 0 || node1 == MAX_UINT64 || node2_str == NULL) {
-                    //    WDEBUG << "Error in graph file at line " << line_count << std::endl;
-                    //    WDEBUG << line << std::endl;
-                    //    return false;
-                    //}
-                    //node2 = strtoull(node2_str, NULL);
-                    //if (node2 == 0 || node2 == MAX_UINT64) {
-                    //    WDEBUG << "Error in graph file at line " << line_count << std::endl;
-                    //    WDEBUG << line << std::endl;
-                    //    return false;
-                    //}
-                    std::stringstream stream(line);
-                    edge.clear();
-                    while (stream >> str_node) {
-                        try {
-                            node = std::stoull(str_node);
-                        } catch (std::exception e) {
-                            WDEBUG << "Error in graph file at line " << line_count << std::endl;
-                            WDEBUG << line << std::endl;
-                            WDEBUG << e.what() << std::endl;
-                            return false;
-                        }
-                        edge.emplace_back(node);
-                    }
-                    if (edge.size() != 2) {
-                        WDEBUG << "Error in graph file at line " << line_count
-                            << ", got " << edge.size() << " entries in this line, expected 2." << std::endl;
-                        WDEBUG << line << std::endl;
-                        return false;
-                    }
-                }
-            }
-            break;
-        }
-
-        default:
-            WDEBUG << "Unknown graph file format " << std::endl;
-            return false;
-    }
-    file.close();
-
-    return true;
-}
-
 // parse the string 'line' as a uint64_t starting at index 'idx' till the first whitespace or end of string
 // store result in 'n'
 // if overflow occurs or unexpected char encountered, store true in 'bad'
@@ -197,6 +128,10 @@ parse_single_uint64(std::string &line, size_t &idx, uint64_t &n, bool &bad)
     }
 }
 
+// parse the string 'line' as '<unsigned int> <unsigned int> '
+// there can be arbitrary whitespace between the two ints, and after the second int
+// store the two parsed ints in 'n1' and 'n2'
+// if there is overflow or unexpected char is encountered, return n1 = n2 = 0
 inline void
 parse_two_uint64(std::string &line, uint64_t &n1, uint64_t &n2)
 {
@@ -226,6 +161,9 @@ parse_two_uint64(std::string &line, uint64_t &n1, uint64_t &n2)
     }
 }
 
+// initial bulk graph loading method
+// 'format' stores the format of the graph file (currently only SNAP format supported - basically edge list)
+// 'graph_file' stores the full path filename of the graph file
 inline void
 load_graph(db::graph_file_format format, const char *graph_file)
 {
@@ -240,12 +178,12 @@ load_graph(db::graph_file_format format, const char *graph_file)
         return;
     }
     
-    // read and validate graph
+    // read, validate, and create graph
     uint64_t line_count = 0;
     uint64_t edge_count = 1;
     uint64_t max_node_handle = 0;
     std::unordered_set<uint64_t> seen_nodes;
-    std::unordered_map<uint64_t, uint64_t> node_map, edge_map;
+    std::unordered_map<uint64_t, uint64_t> node_map;
     vc::vclock zero_clk(0, 0);
     switch(format) {
         case db::SNAP: {
@@ -260,10 +198,6 @@ load_graph(db::graph_file_format format, const char *graph_file)
                     continue;
                 } else {
                     parse_two_uint64(line, node0, node1);
-                    //WDEBUG << "Parsed ints " << node0 << " " << node1 << std::endl;
-                    //if (line_count == 10) {
-                    //    break;
-                    //}
                     uint64_t loc0 = ((node0 % NUM_SHARDS) + SHARD_ID_INCR);
                     uint64_t loc1 = ((node1 % NUM_SHARDS) + SHARD_ID_INCR);
                     db::element::node *n;
@@ -275,7 +209,6 @@ load_graph(db::graph_file_format format, const char *graph_file)
                             node_map[node0] = shard_id;
                         }
                         S->create_edge_nonlocking(n, edge_handle, node1, loc1, zero_clk, true);
-                        edge_map[edge_handle] = node0;
                     }
                     if (loc1 == shard_id) {
                         if (!S->node_exists_nonlocking(node1)) {
@@ -283,41 +216,21 @@ load_graph(db::graph_file_format format, const char *graph_file)
                             node_map[node1] = shard_id;
                         }
                     }
-                    /* Test - single shard which does all Hyperdex work
-                    if (shard_id == SHARD_ID_INCR) {
-                        uint64_t edge_handle = max_node_handle + (edge_count++);
-                        // this shard is responsible for putting nmap entries
-                        if (seen_nodes.find(node0) == seen_nodes.end()) {
-                            seen_nodes.emplace(node0);
-                            node_map[node0] = loc0;
-                        }
-                        if (seen_nodes.find(node1) == seen_nodes.end()) {
-                            seen_nodes.emplace(node0);
-                            node_map[node1] = loc1;
-                        }
-                        edge_map[edge_handle] = node0;
-                    }
-                    */
-                    if (edge_map.size() > 100000) {
+                    if (node_map.size() > 100000) {
                         init_mutex.lock();
-                        init_edge_maps.emplace_back(std::move(edge_map));
                         init_node_maps.emplace_back(std::move(node_map));
                         init_cv.broadcast();
                         init_mutex.unlock();
                         node_map.clear();
-                        edge_map.clear();
                     }
                 }
             }
             init_mutex.lock();
-            while (start_load < 2) {
+            while (start_load < 1) {
                 start_load_cv.wait();
             }
-            WDEBUG << "Leftover emap size " << edge_map.size() << std::endl;
-            init_edge_maps.emplace_back(std::move(edge_map));
             init_node_maps.emplace_back(std::move(node_map));
             init_nodes = true;
-            init_edges = true;
             init_cv.broadcast();
             init_mutex.unlock();
             break;
@@ -333,6 +246,8 @@ load_graph(db::graph_file_format format, const char *graph_file)
             << " nodes and " << edge_count << " edges" << std::endl;
 }
 
+// called on a separate thread during bulk graph loading process
+// issues Hyperdex calls to store the node map
 inline void
 init_nmap()
 {
@@ -344,14 +259,6 @@ init_nmap()
         if (init_node_maps.empty()) {
             init_cv.wait();
         } else {
-            //std::unordered_map<uint64_t, uint64_t> node_map;
-            //while (!init_node_maps.empty()) {
-            //    auto &next_map = init_node_maps.front();
-            //    for (auto &entry: next_map) {
-            //        node_map.emplace(entry.first, entry.second);
-            //    }
-            //    init_node_maps.pop_front();
-            //}
             auto &node_map = init_node_maps.front();
             WDEBUG << "NMAP init node map at shard " << shard_id << ", map size = " << node_map.size() << std::endl;
             init_mutex.unlock();
@@ -364,35 +271,37 @@ init_nmap()
     WDEBUG << "Done init nmap thread, exiting now" << std::endl;
 }
 
-inline void
-init_emap()
-{
-    nmap::nmap_stub node_mapper;
-    uint64_t edge_count = 0;
-    timespec ts;
-    uint64_t time;
-    init_mutex.lock();
-    start_load++;
-    start_load_cv.signal();
-    while (!init_edges || !init_edge_maps.empty()) {
-        if (init_edge_maps.empty()) {
-            init_cv.wait();
-        } else {
-            auto &edge_map = init_edge_maps.front();
-            WDEBUG << "EMAP init edge map at shard " << shard_id << ", map size = " << edge_map.size() << std::endl;
-            edge_count += edge_map.size();
-            init_mutex.unlock();
-            time = wclock::get_time_elapsed(ts);
-            node_mapper.put_mappings(edge_map, false);
-            time = wclock::get_time_elapsed(ts) - time;
-            init_mutex.lock();
-            WDEBUG << "EMAP done init edge map at shard " << shard_id << ", time taken = " << time/MEGA << " ms." << std::endl;
-            init_edge_maps.pop_front();
-        }
-    }
-    init_mutex.unlock();
-    WDEBUG << "Done init emap thread, edge processed = " << edge_count << " at shard " << shard_id << std::endl;
-}
+// called on a separate thread during bulk graph loading process
+// issues Hyperdex calls to store the edge map
+//inline void
+//init_emap()
+//{
+//    nmap::nmap_stub node_mapper;
+//    uint64_t edge_count = 0;
+//    timespec ts;
+//    uint64_t time;
+//    init_mutex.lock();
+//    start_load++;
+//    start_load_cv.signal();
+//    while (!init_edges || !init_edge_maps.empty()) {
+//        if (init_edge_maps.empty()) {
+//            init_cv.wait();
+//        } else {
+//            auto &edge_map = init_edge_maps.front();
+//            WDEBUG << "EMAP init edge map at shard " << shard_id << ", map size = " << edge_map.size() << std::endl;
+//            edge_count += edge_map.size();
+//            init_mutex.unlock();
+//            time = wclock::get_time_elapsed(ts);
+//            node_mapper.put_mappings(edge_map, false);
+//            time = wclock::get_time_elapsed(ts) - time;
+//            init_mutex.lock();
+//            WDEBUG << "EMAP done init edge map at shard " << shard_id << ", time taken = " << time/MEGA << " ms." << std::endl;
+//            init_edge_maps.pop_front();
+//        }
+//    }
+//    init_mutex.unlock();
+//    WDEBUG << "Done init emap thread, edge processed = " << edge_count << " at shard " << shard_id << std::endl;
+//}
 
 void
 migrated_nbr_update(std::unique_ptr<message::message> msg)
@@ -1195,23 +1104,19 @@ main(int argc, char *argv[])
             WDEBUG << "Invalid graph file format" << std::endl;
         }
         init_nodes = false;
-        init_edges = false;
         start_load = 0;
         std::thread nmap_thr(init_nmap);
-        std::thread emap_thr(init_emap);
 
         timespec ts;
         uint64_t load_time = wclock::get_time_elapsed(ts);
         load_graph(format, argv[3]);
         nmap_thr.join();
-        emap_thr.join();
         load_time = wclock::get_time_elapsed(ts) - load_time;
         message::message msg;
         message::prepare_message(msg, message::LOADED_GRAPH, load_time);
         S->send(SHARD_ID_INCR, msg.buf);
     }
     std::cout << "Weaver: shard instance " << S->shard_id << std::endl;
-    WDEBUG << "Weaver: shard instance " << S->shard_id << std::endl;
 
     msgrecv_loop();
 

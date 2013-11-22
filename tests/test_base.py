@@ -37,6 +37,7 @@ class test_graph:
     def __init__(self, clients, n, m, num_vts=1, gen_alg='gnm', seed=int(time.time())):
         self.nodes = [0 for i in range(n)]
         self.edges = {}
+        self.edge_handles = {}
         self.lock = threading.Lock()
         self.cv = threading.Condition(self.lock)
         self.startThread = False
@@ -85,7 +86,6 @@ class test_graph:
         del nx_nodes[:]
         print 'Added nodes'
         print 'Node map:'
-        #print self.node_map
 
         # adding edges
         nx_edges = self.nxgraph.edges()
@@ -139,9 +139,10 @@ class test_graph:
             cntr += 1
         with self.lock:
             for i in range(len(nx_nodes)):
-                self.nodes.append(w_nodes[i])
+                self.nodes[i] = w_nodes[i]
                 self.node_map[nx_nodes[i]] = w_nodes[i]
                 self.edges[w_nodes[i]] = []
+                self.edge_handles[w_nodes[i]] = []
 
     def create_edges(self, nx_edges, client, client_id, node_map):
         with self.lock:
@@ -153,8 +154,7 @@ class test_graph:
         for edge in nx_edges:
             if cntr % TX_SIZE == 0:
                 tx_id = client.begin_tx()
-            #print 'creating edge ' + str(node_map[edge[0]]) + ',' + str(node_map[edge[1]])
-            client.create_edge(tx_id, node_map[edge[0]], node_map[edge[1]])
+            self.edge_handles[node_map[edge[0]]].append(client.create_edge(tx_id, node_map[edge[0]], node_map[edge[1]]))
             if node_map[edge[0]] not in edges:
                 edges[node_map[edge[0]]] = []
             edges[node_map[edge[0]]].append(node_map[edge[1]])

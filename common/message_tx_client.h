@@ -36,8 +36,11 @@ namespace message
                     break;
 
                 case CLIENT_NODE_DELETE_REQ:
-                case CLIENT_EDGE_DELETE_REQ:
                     bytes_to_pack += size(upd->elem1);
+                    break;
+
+                case CLIENT_EDGE_DELETE_REQ:
+                    bytes_to_pack += size(upd->elem1, upd->elem2);
                     break;
 
                 default:
@@ -61,8 +64,11 @@ namespace message
                     break;
 
                 case CLIENT_NODE_DELETE_REQ:
-                case CLIENT_EDGE_DELETE_REQ:
                     pack_buffer(packer, upd->elem1);
+                    break;
+
+                case CLIENT_EDGE_DELETE_REQ:
+                    pack_buffer(packer, upd->elem1, upd->elem2);
                     break;
 
                 default:
