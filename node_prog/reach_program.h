@@ -30,6 +30,8 @@ namespace node_prog
     class reach_params : public virtual Node_Parameters_Base  
     {
         public:
+            bool _search_cache;
+            uint64_t _cache_key;
             bool mode; // false = request, true = reply
             db::element::remote_node prev_node;
             uint64_t dest;
@@ -47,9 +49,19 @@ namespace node_prog
             
             virtual ~reach_params() { }
 
+            virtual bool search_cache() {
+                return _search_cache;
+            }
+
+            virtual uint64_t cache_key() {
+                return _cache_key;
+            }
+
             virtual uint64_t size() const 
             {
-                uint64_t toRet = message::size(mode)
+                uint64_t toRet = message::size(_search_cache)
+                    + message::size(_cache_key)
+                    + message::size(mode)
                     + message::size(prev_node)
                     + message::size(dest) 
                     //+ message::size(edge_props)
@@ -61,6 +73,8 @@ namespace node_prog
 
             virtual void pack(e::buffer::packer &packer) const 
             {
+                message::pack_buffer(packer, _search_cache);
+                message::pack_buffer(packer, _cache_key);
                 message::pack_buffer(packer, mode);
                 message::pack_buffer(packer, prev_node);
                 message::pack_buffer(packer, dest);
@@ -72,6 +86,8 @@ namespace node_prog
 
             virtual void unpack(e::unpacker &unpacker)
             {
+                message::unpack_buffer(unpacker, _search_cache);
+                message::unpack_buffer(unpacker, _cache_key);
                 message::unpack_buffer(unpacker, mode);
                 message::unpack_buffer(unpacker, prev_node);
                 message::unpack_buffer(unpacker, dest);

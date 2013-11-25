@@ -117,6 +117,8 @@ class RemoteNode:
 cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
     cdef cppclass reach_params:
         reach_params()
+        bint _search_cache
+        uint64_t _cache_key
         bint mode
         remote_node prev_node
         uint64_t dest
@@ -125,19 +127,21 @@ cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
 
 class ReachParams:
     def __init__(self, mode=False, prev_node=RemoteNode(), dest=0, hops=0, reachable=False):
+        self._search_cache = False # add caching to parameters for python later!
+        self._cache_key = 0
         self.mode = mode
         self.prev_node = prev_node
         self.dest = dest
         self.hops = hops
         self.reachable = reachable
 
-cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
-    cdef cppclass clustering_params:
-        pass
+#cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
+    #cdef cppclass clustering_params:
+        #pass
 
 ctypedef fused ParamsType:
     reach_params
-    clustering_params
+    #clustering_params
 
 cdef extern from 'client/client.h' namespace 'client':
     cdef cppclass client:

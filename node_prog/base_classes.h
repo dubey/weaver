@@ -28,8 +28,8 @@ namespace node_prog
 
     class Node_Parameters_Base : public virtual Packable
     {
-//        virtual bool search_cache() = 0; // how is this packabale?
- //       virtual uint64_t cache_key() = 0;
+        virtual bool search_cache() = 0; // how is this packabale?
+        virtual uint64_t cache_key() = 0;
     };
 
     class Node_State_Base : public virtual Packable, public virtual Deletable 
