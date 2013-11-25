@@ -57,7 +57,11 @@ namespace node_prog
                 db::element::remote_node&, // this remote node
                 params_type&,
                 std::function<node_state_type&()>,
-                vc::vclock &req_vlock);
+                vc::vclock &req_vlock,
+                std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
+                    std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
+                    db::caching::cache_response *cache_response);
+
     };
 
     template <typename ParamsType, typename NodeStateType>
@@ -93,6 +97,9 @@ namespace node_prog
               //  , enclosed_node_deleted_func(del_func)
                 , type(_type)
             {
+                static_assert(std::is_base_of<Node_Parameters_Base, ParamsType>::value, "Params type must be derived from Node_Parameters_Base");
+                static_assert(std::is_base_of<Node_State_Base, NodeStateType>::value, "Params type must be derived from Node_Parameters_Base");
+
             }
 
         public:

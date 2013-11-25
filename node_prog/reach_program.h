@@ -42,7 +42,9 @@ namespace node_prog
 
         public:
             reach_params()
-                : mode(false)
+                : _search_cache(false)
+                , _cache_key(0)
+                , mode(false)
                 , hops(0)
                 , reachable(false)
             { }
@@ -158,7 +160,10 @@ namespace node_prog
             db::element::remote_node &rn,
             reach_params &params,
             std::function<reach_node_state&()> state_getter,
-            vc::vclock &req_vclock)
+            vc::vclock &req_vclock,
+            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
+                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
+            db::caching::cache_response *cache_response)
     {
         reach_node_state &state = state_getter();
         bool false_reply = false;

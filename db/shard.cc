@@ -489,6 +489,13 @@ NodeStateType& return_state(node_prog::prog_type pType, uint64_t req_id,
     }
 }
 
+//template <typename CacheValueType>
+void add_cache_value(node_prog::prog_type pType, db::element::node* node, std::shared_ptr<node_prog::Cache_Value_Base> cache_value,
+        std::shared_ptr<std::vector<db::element::remote_node>> watch_set, uint64_t cache_key, vc::vclock& req_vclock)
+{
+    node->cache.add_cache_value(pType, cache_value, watch_set, cache_key, req_vclock);
+}
+
 /*
 inline void modify_triangle_params(void * triangle_params, size_t num_nodes, db::element::remote_node& node) {
     node_prog::triangle_params * params = (node_prog::triangle_params *) triangle_params;
@@ -525,6 +532,9 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     std::unordered_map<uint64_t, std::vector<node_params_t>> batched_node_progs;
     // node state function
     std::function<NodeStateType&()> node_state_getter;
+    std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
+            std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)> add_cache_func;
+
     bool done_request = false;
 
     // unpack the node program
@@ -630,6 +640,11 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
                 S->send(new_loc, msg->buf);
             } else { // node does exist
                 //XXX assert(node->state == db::element::node::mode::STABLE);
+                if (params.search_cache()){
+                    WDEBUG << "OMG WE GOT SEARCH CACHE" << std::endl;
+                    //handle_caching(
+                }
+
                 // bind cache getter and putter function variables to functions
                 std::shared_ptr<NodeStateType> state = get_node_state<NodeStateType>(prog_type_recvd,
                         req_id, node_handle);
@@ -642,9 +657,12 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
                     break;
                 }
                 // call node program
+                using namespace std::placeholders;
+                add_cache_func = std::bind(add_cache_value, prog_type_recvd, node, _1, _2, _3, req_vclock); // 1 is cache value, 2 is watch set, 3 is key
+
                 auto next_node_params = enclosed_node_prog_func(req_id, *node, this_node,
                         params, // actual parameters for this node program
-                        node_state_getter, req_vclock);
+                        node_state_getter, req_vclock, add_cache_func, NULL);
                 // batch the newly generated node programs for onward propagation
                 S->msg_count_mutex.lock();
                 for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
