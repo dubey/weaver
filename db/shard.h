@@ -19,6 +19,7 @@
 #include <vector>
 #include <unordered_map>
 #include <deque>
+#include <bitset>
 #include <po6/threads/mutex.h>
 #include <po6/net/location.h>
 #include <hyperdex/client.hpp>
@@ -139,11 +140,11 @@ namespace db
             std::vector<uint64_t> max_prog_id // max prog id seen from each vector timestamper
                 , target_prog_id
                 , max_done_id; // max id done from each VT
-            std::vector<bool> migr_edge_acks;
+            std::bitset<NUM_SHARDS> migr_edge_acks;
             
             // node programs
         private:
-            state::program_state node_prog_req_state; 
+            state::program_state prog_state; 
         public:
             std::shared_ptr<node_prog::Packable_Deletable> 
                 fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
@@ -179,15 +180,14 @@ namespace db
         , max_prog_id(NUM_VTS, 0)
         , target_prog_id(NUM_VTS, 0)
         , max_done_id(NUM_VTS, 0)
-        , migr_edge_acks(NUM_SHARDS, false)
-        , node_prog_req_state()
+        , prog_state()
     {
         thread::pool::S = this;
         initialize_busybee(bb, shard_id, myloc);
         order::kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT);
         order::call_times = new std::list<uint64_t>();
         assert(NUM_VTS == KRONOS_NUM_VTS);
-        message::prog_state = &node_prog_req_state;
+        message::prog_state = &prog_state;
     }
 
     // Consistency methods
@@ -415,7 +415,7 @@ namespace db
         }
         n->out_edges.clear();
         assert(n->waiters == 0); // nobody should try to acquire this node now
-        node_prog_req_state.delete_node_state(migr_node);
+        prog_state.delete_node_state(migr_node);
         release_node(n);
     }
 
@@ -483,7 +483,7 @@ namespace db
                     target_prog_id[i] = max_prog_id[i];
                 }
             }
-            migr_edge_acks[shard_id - SHARD_ID_INCR] = true;
+            migr_edge_acks.set(shard_id - SHARD_ID_INCR);
         }
         migration_mutex.unlock();
     }
@@ -519,26 +519,26 @@ namespace db
     inline std::shared_ptr<node_prog::Packable_Deletable>
     shard :: fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle)
     {
-        return node_prog_req_state.get_state(t, request_id, local_node_handle);
+        return prog_state.get_state(t, request_id, local_node_handle);
     }
 
     inline void
     shard :: insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle,
         std::shared_ptr<node_prog::Packable_Deletable> toAdd)
     {
-        node_prog_req_state.put_state(t, request_id, local_node_handle, toAdd);
+        prog_state.put_state(t, request_id, local_node_handle, toAdd);
     }
 
     inline void
     shard :: add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests)
     {
-        node_prog_req_state.done_requests(completed_requests);
+        prog_state.done_requests(completed_requests);
     }
 
     inline bool
     shard :: check_done_request(uint64_t req_id)
     {
-        bool done = node_prog_req_state.check_done_request(req_id);
+        bool done = prog_state.check_done_request(req_id);
         return done;
     }
 

@@ -316,11 +316,11 @@ migrated_nbr_ack(uint64_t from_loc, std::vector<uint64_t> &target_req_id)
 {
     S->migration_mutex.lock();
     for (int i = 0; i < NUM_VTS; i++) {
-        if (target_req_id[i] > S->target_prog_id[i]) {
+        if (S->target_prog_id[i] < target_req_id[i]) {
             S->target_prog_id[i] = target_req_id[i];
         }
     }
-    S->migr_edge_acks[from_loc - SHARD_ID_INCR] = true;
+    S->migr_edge_acks.set(from_loc - SHARD_ID_INCR);
     S->migration_mutex.unlock();
 }
 
@@ -855,21 +855,13 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
 bool
 check_step3()
 {
-    bool init_step3 = true;
-    for (int i = 0; i < NUM_SHARDS; i++) {
-        if (!S->migr_edge_acks[i]) {
-            init_step3 = false;
-            break;
-        }
-    }
+    bool init_step3 = S->migr_edge_acks.all(); // all shards must have responded for edge updates
     for (int i = 0; i < NUM_VTS && init_step3; i++) {
         // XXX check following condition
-        init_step3 = init_step3 && (S->target_prog_id[i] <= S->max_done_id[i]);
+        init_step3 = (S->target_prog_id[i] <= S->max_done_id[i]);
     }
     if (init_step3) {
-      for (uint64_t idx = 0; idx < NUM_SHARDS; idx++) {
-          S->migr_edge_acks[idx] = false;
-      }
+        S->migr_edge_acks.reset();
     }
     return init_step3;
 }
@@ -882,6 +874,8 @@ migrate_node_step3()
     migration_wrapper();
 }
 
+// stream list of nodes, decide where to migrate each node
+// graph partitioning logic here
 void
 migration_wrapper()
 {
@@ -905,7 +899,7 @@ migration_wrapper()
         for (auto &e_iter: n->out_edges) {
             e = e_iter.second;
             n->msg_count.at(e->nbr.loc-SHARD_ID_INCR) += e->msg_count;
-            e->msg_count = 0;
+            //e->msg_count = 0;
         }
         for (int j = 0; j < NUM_SHARDS; j++) {
             n->agg_msg_count.at(j) += (uint64_t)(0.8 * (double)(n->msg_count.at(j)));
@@ -925,7 +919,6 @@ migration_wrapper()
         S->sorted_nodes.pop_front();
         // no migration to self
         if (migr_pos != shard_id) {
-            //WDEBUG << "migrating node " << migr_node << " to " << migr_pos << std::endl;
             migrate_node_step1(migr_node, migr_pos);
             no_migr = false;
             break;
@@ -934,6 +927,51 @@ migration_wrapper()
     if (no_migr) {
         shard_daemon_end();
     }
+}
+
+// method to sort pairs based on second coordinate
+bool agg_count_compare(std::pair<uint64_t, uint32_t> p1, std::pair<uint64_t, uint32_t> p2)
+{
+    return (p1.second > p2.second);
+}
+
+// sort nodes in order of number of requests propagated
+// and (implicitly) pass sorted deque to migration wrapper
+void
+shard_daemon_begin()
+{
+    WDEBUG << "Starting shard daemon" << std::endl;
+    S->msg_count_mutex.lock();
+    auto agg_msg_count = std::move(S->agg_msg_count);
+    assert(S->agg_msg_count.empty());
+    S->msg_count_mutex.unlock();
+    std::deque<std::pair<uint64_t, uint32_t>> sn;
+    for (auto &p: agg_msg_count) {
+        sn.emplace_back(p);
+    }
+    std::sort(sn.begin(), sn.end(), agg_count_compare);
+    WDEBUG << "sorted nodes size " << sn.size() << std::endl;
+    WDEBUG << "total num nodes " << S->num_nodes() << std::endl;
+    S->sorted_nodes = std::move(sn);
+    migration_wrapper();
+}
+
+// pass migration token to next shard
+void
+shard_daemon_end()
+{
+    message::message msg;
+    message::prepare_message(msg, message::MIGRATION_TOKEN);
+    S->migration_mutex.lock();
+    S->migr_token = false;
+    S->migration_mutex.unlock();
+    uint64_t next_id; 
+    if ((shard_id + 1 - SHARD_ID_INCR) >= NUM_SHARDS) {
+        next_id = SHARD_ID_INCR;
+    } else {
+        next_id = shard_id + 1;
+    }
+    S->send(next_id, msg.buf);
 }
 
 // server msg recv loop for the shard server
@@ -1038,49 +1076,6 @@ msgrecv_loop()
                 WDEBUG << "unexpected msg type " << mtype << std::endl;
         }
     }
-}
-
-bool agg_count_compare(std::pair<uint64_t, uint32_t> p1, std::pair<uint64_t, uint32_t> p2)
-{
-    return (p1.second > p2.second);
-}
-
-// sort nodes in order of number of requests propagated
-// and (implicitly) pass sorted deque to migration wrapper
-void
-shard_daemon_begin()
-{
-    WDEBUG << "Starting shard daemon" << std::endl;
-    S->msg_count_mutex.lock();
-    auto agg_msg_count = std::move(S->agg_msg_count);
-    assert(S->agg_msg_count.empty());
-    S->msg_count_mutex.unlock();
-    std::deque<std::pair<uint64_t, uint32_t>> sn;
-    for (auto &p: agg_msg_count) {
-        sn.emplace_back(p);
-    }
-    std::sort(sn.begin(), sn.end(), agg_count_compare);
-    WDEBUG << "sorted nodes size " << sn.size() << std::endl;
-    WDEBUG << "total num nodes " << S->num_nodes() << std::endl;
-    S->sorted_nodes = std::move(sn);
-    migration_wrapper();
-}
-
-void
-shard_daemon_end()
-{
-    message::message msg;
-    message::prepare_message(msg, message::MIGRATION_TOKEN);
-    S->migration_mutex.lock();
-    S->migr_token = false;
-    S->migration_mutex.unlock();
-    uint64_t next_id; 
-    if ((shard_id + 1 - SHARD_ID_INCR) >= NUM_SHARDS) {
-        next_id = SHARD_ID_INCR;
-    } else {
-        next_id = shard_id + 1;
-    }
-    S->send(next_id, msg.buf);
 }
 
 int

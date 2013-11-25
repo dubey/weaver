@@ -41,8 +41,7 @@ namespace state
         prog_map prog_state;
         node_to_reqs req_list;
         uint64_t completed_id; // all nodes progs with id < completed_id are done
-        std::unordered_set<uint64_t> done_ids; // TODO clean up of done_ids
-        std::unordered_set<uint64_t> done_ids_last; // TODO clean up of done_ids
+        std::unordered_set<uint64_t> done_ids;
         po6::threads::mutex mutex;
         bool holding;
         po6::threads::cond in_use_cond;
@@ -69,26 +68,18 @@ namespace state
             bool state_exists_nolock(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle);
             bool node_entry_exists_nolock(node_prog::prog_type t, uint64_t node_handle);
             bool check_done_nolock(uint64_t req_id);
-            // testing
-            uint64_t print_cnt;
-            int clean_counter;
     };
 
     program_state :: program_state()
         : completed_id(0)
         , holding(false)
         , in_use_cond(&mutex)
-        , print_cnt(0)
-        , clean_counter(0)
     {
         req_map new_req_map;
         prog_state.emplace(node_prog::REACHABILITY, new_req_map);
         prog_state.emplace(node_prog::N_HOP_REACHABILITY, new_req_map);
         prog_state.emplace(node_prog::TRIANGLE_COUNT, new_req_map);
         prog_state.emplace(node_prog::CLUSTERING, new_req_map);
-        /*
-        prog_state.emplace(node_prog::DIJKSTRA, new_req_map);
-        */
     }
 
     inline void
@@ -370,11 +361,6 @@ namespace state
     program_state :: done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &reqs)
     {
         acquire();
-        if (reqs.size() > 0 && (print_cnt++ % 1000 == 0)) {
-            WDEBUG << "Got done reqs of size " << reqs.size() << "   "
-                   << "Prog state size = " << prog_state[reqs[0].second].size() << ", done ids size = " << done_ids.size()
-                   << ", clean counter = " << clean_counter << std::endl;
-        }
         for (auto &p: reqs) {
             uint64_t req_id = p.first;
             node_prog::prog_type type = p.second;
@@ -391,19 +377,13 @@ namespace state
                 rmap.erase(req_id);
             }
         }
-        // TODO this is a hack which does not absolutely guarantee that we won't miss a request, need proper clean up later on
-        //if (++clean_counter % 4000 == 0) {
-        //    clean_counter = 0;
-        //    done_ids_last = std::move(done_ids);
-        //    assert(done_ids.size() == 0);
-        //}
         release();
     }
 
     inline bool
     program_state :: check_done_nolock(uint64_t req_id)
     {
-        return (done_ids.find(req_id) != done_ids.end() || done_ids_last.find(req_id) != done_ids_last.end());
+        return (done_ids.find(req_id) != done_ids.end());
     }
             
     inline bool
@@ -411,7 +391,7 @@ namespace state
     {
         bool ret;
         acquire();
-        ret = check_done_nolock(req_id);//(req_id < last_done_id);
+        ret = check_done_nolock(req_id);
         release();
         return ret;
     }
