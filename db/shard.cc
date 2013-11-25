@@ -27,7 +27,7 @@
 #include "nop_data.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
-#include "node_prog/triangle_program.h"
+//#include "node_prog/triangle_program.h"
 
 // global static variables
 static uint64_t shard_id;
@@ -484,16 +484,18 @@ NodeStateType& return_state(node_prog::prog_type pType, uint64_t req_id,
     } else {
         std::shared_ptr<NodeStateType> newState(new NodeStateType());
         S->insert_prog_req_state(pType, req_id, node_handle,
-                std::dynamic_pointer_cast<node_prog::Packable_Deletable>(newState));
+                std::dynamic_pointer_cast<node_prog::Node_State_Base>(newState));
         return *newState;
     }
 }
 
+/*
 inline void modify_triangle_params(void * triangle_params, size_t num_nodes, db::element::remote_node& node) {
     node_prog::triangle_params * params = (node_prog::triangle_params *) triangle_params;
     params->responses_left = num_nodes;
     params->super_node = node;
 }
+*/
 
 void
 unpack_node_program(void *req)
@@ -564,7 +566,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         ParamsType& params_copy = std::get<1>(start_node_params[0]); // send this all over
         assert(handles_to_send_to.size() > 0);
         this_node.handle = handles_to_send_to[0];
-        modify_triangle_params((void *) &params_copy, handles_to_send_to.size(), this_node);
+        //modify_triangle_params((void *) &params_copy, handles_to_send_to.size(), this_node);
         global_req = false; // for batched messages to execute normally
         uint64_t idx = 0;
         size_t batch_size = handles_to_send_to.size() / (NUM_THREADS-1);

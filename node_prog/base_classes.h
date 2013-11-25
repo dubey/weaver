@@ -24,7 +24,7 @@ namespace node_prog
         /* destructor must be defined */ 
     }
 
-    class Packable_Deletable : public virtual Packable, public virtual Deletable { };
+//    class Packable_Deletable : public virtual Packable, public virtual Deletable { };
 
     class Node_Parameters_Base : public virtual Packable
     {

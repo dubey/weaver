@@ -32,7 +32,7 @@
 #include "db/element/node.h"
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
-#include "node_prog/node_prog_type.h" // used for packing Packable objects
+#include "node_prog/base_classes.h" // used for packing Packable objects
 
 namespace message
 {
@@ -186,13 +186,17 @@ namespace message
     {
         return sizeof(uint32_t);
     }
-    inline uint64_t size(const node_prog::Packable &t)
+    inline uint64_t size(const node_prog::Node_Parameters_Base &t)
     {
         return t.size();
     }
-    inline uint64_t size(const node_prog::Packable_Deletable *&t)
+    inline uint64_t size(const node_prog::Node_State_Base &t)
     {
-        return t->size();
+        return t.size();
+    }
+    inline uint64_t size(const node_prog::Cache_Value_Base &t)
+    {
+        return t.size();
     }
     inline uint64_t size(const bool&)
     {
@@ -316,11 +320,15 @@ namespace message
 
     // packing templates
 
-    inline void pack_buffer(e::buffer::packer &packer, const node_prog::Packable &t)
+    inline void pack_buffer(e::buffer::packer &packer, const node_prog::Node_Parameters_Base &t)
     {
         t.pack(packer);
     }
-    inline void pack_buffer(e::buffer::packer &packer, const node_prog::Packable_Deletable *&t)
+    inline void pack_buffer(e::buffer::packer &packer, const node_prog::Node_State_Base &t)
+    {
+        t.pack(packer);
+    }
+    inline void pack_buffer(e::buffer::packer &packer, const node_prog::Cache_Value_Base *&t)
     {
         t->pack(packer);
     }
@@ -534,14 +542,19 @@ namespace message
 
     // unpacking templates
     inline void
-    unpack_buffer(e::unpacker &unpacker, node_prog::Packable &t)
+    unpack_buffer(e::unpacker &unpacker, node_prog::Node_Parameters_Base &t)
     {
         t.unpack(unpacker);
     }
     inline void
-    unpack_buffer(e::unpacker &unpacker, node_prog::Packable_Deletable *&t)
+    unpack_buffer(e::unpacker &unpacker, node_prog::Node_State_Base &t)
     {
-        t->unpack(unpacker);
+        t.unpack(unpacker);
+    }
+    inline void
+    unpack_buffer(e::unpacker &unpacker, node_prog::Cache_Value_Base &t)
+    {
+        t.unpack(unpacker);
     }
     inline void
     unpack_buffer(e::unpacker &unpacker, node_prog::prog_type &t)

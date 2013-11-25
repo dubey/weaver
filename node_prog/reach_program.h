@@ -17,6 +17,7 @@
 
 #include <vector>
 
+#include "node_prog/base_classes.h"
 #include "common/weaver_constants.h"
 #include "db/element/node.h"
 #include "db/element/remote_node.h"
@@ -26,7 +27,7 @@
 
 namespace node_prog
 {
-    class reach_params : public virtual Packable 
+    class reach_params : public virtual Node_Parameters_Base  
     {
         public:
             bool mode; // false = request, true = reply
@@ -81,7 +82,7 @@ namespace node_prog
             }
     };
 
-    struct reach_node_state : Packable_Deletable
+    struct reach_node_state : public virtual Node_State_Base 
     {
         bool visited;
         db::element::remote_node prev_node; // previous node
