@@ -73,6 +73,7 @@ namespace caching
     {
         // TODO: use prog_type
         cache.emplace(key, std::make_tuple(cache_value, vc, watch_set));
+        WDEBUG << "OMG WE EMPLACED" << std::endl;
     }
 
     inline std::unique_ptr<cache_response>

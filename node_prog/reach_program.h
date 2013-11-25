@@ -146,13 +146,29 @@ namespace node_prog
         }
     };
 
-/*
-    struct reach_cache_value : CacheValueBase 
+    struct reach_cache_value : public virtual Cache_Value_Base 
     {
-        uint64_t reachable_node;
-        virtual ~reach_cache_value() { }
+        public:
+            std::vector<db::element::remote_node> path;
+
+        virtual ~reach_cache_value () { }
+
+        virtual uint64_t size() const 
+        {
+            uint64_t toRet = message::size(path);
+            return toRet;
+        }
+
+        virtual void pack(e::buffer::packer& packer) const 
+        {
+            message::pack_buffer(packer, path);
+        }
+
+        virtual void unpack(e::unpacker& unpacker)
+        {
+            message::unpack_buffer(unpacker, path);
+        }
     };
-    */
 
     std::vector<std::pair<db::element::remote_node, reach_params>> 
     reach_node_program(uint64_t, // TODO used to be req_id, now replaced by vclock
@@ -165,6 +181,13 @@ namespace node_prog
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
             db::caching::cache_response *cache_response)
     {
+        std::shared_ptr<node_prog::reach_cache_value > toCache(new reach_cache_value());
+        std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<db::element::remote_node>());
+        toCache->path.push_back(rn);
+        watch_set->push_back(rn);
+        uint64_t cache_key = 1337;
+        add_cache_func(toCache,watch_set, cache_key);
+
         reach_node_state &state = state_getter();
         bool false_reply = false;
         db::element::remote_node prev_node = params.prev_node;
