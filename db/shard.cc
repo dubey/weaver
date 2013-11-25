@@ -504,24 +504,48 @@ inline void modify_triangle_params(void * triangle_params, size_t num_nodes, db:
 }
 */
 
-/*
-    inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, ParamsType> >
-            (*&func)(uint64_t, db::element::node&, db::element::remote_node&, ParamsType&, std::function<NodeStateType&()>), 
-            node_prog::prog_type prog_type_recvd, bool global_req, uint64_t vt_id, vc::vclock& req_vclock, uint64_t req_id,
-            std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>& start_node_params)
-    */
+// node_to_check is locked when called, at end it is unlocked if false, 
+template <typename ParamsType, typename NodeStateType>
+inline bool cache_lookup(db::element::node& node_to_check, uint64_t cache_key,
+        std::vector<std::pair<db::element::remote_node, ParamsType>> (*func)(uint64_t, 
+            db::element::node&, 
+            db::element::remote_node&, 
+            ParamsType&,
+            std::function<NodeStateType&()>,
+            vc::vclock &,
+            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
+                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
+            db::caching::cache_response*),
+        node_prog::prog_type prog_type_recvd, bool global_req, uint64_t vt_id, vc::vclock& req_vclock, uint64_t req_id,
+        std::tuple<uint64_t, ParamsType, db::element::remote_node>& node_params,
+        db::caching::cache_response*& cache_value)
+{
+    if (node_to_check.cache.cache.count(cache_key) > 0){
+        auto entry = node_to_check.cache.cache.at(cache_key);
+        std::shared_ptr<node_prog::Cache_Value_Base>& cval = std::get<0>(entry);
+        vc::vclock& entry_time = std::get<1>(entry);
+        std::shared_ptr<std::vector<db::element::remote_node>>& watch_set = std::get<2>(entry);
+
+        //if (std::get<
+        return false;
+    } else {
+        return false;
+    }
+}
+
 template <typename ParamsType, typename NodeStateType>
 inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, ParamsType>> (*func)(uint64_t, 
             db::element::node&, 
             db::element::remote_node&, 
             ParamsType&,
             std::function<NodeStateType&()>,
-            vc::vclock &req_vlock,
+            vc::vclock &,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
-            db::caching::cache_response *cache_response),
+                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
+            db::caching::cache_response*),
         node_prog::prog_type prog_type_recvd, bool global_req, uint64_t vt_id, vc::vclock& req_vclock, uint64_t req_id,
-        std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>& start_node_params)
+        std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>& start_node_params,
+        db::caching::cache_response* cache_value)
 {
     // tuple of (node handle, node prog params, prev node)
     typedef std::tuple<uint64_t, ParamsType, db::element::remote_node> node_params_t;
@@ -573,9 +597,18 @@ inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, Param
                 S->send(new_loc, m->buf);
             } else { // node does exist
                 //XXX assert(node->state == db::element::node::mode::STABLE);
+
                 if (params.search_cache()){
                     WDEBUG << "OMG WE GOT SEARCH CACHE" << std::endl;
-                    //handle_caching(
+                    if (cache_value == NULL) {
+                        bool run_prog_now = cache_lookup(*node, params.cache_key(), func, prog_type_recvd, global_req, vt_id, req_vclock, req_id, handle_params, cache_value); 
+                        // go to next node while we fetch cache context for this one, cache_lookup releases node if false
+                        if (!run_prog_now) {
+                            continue;
+                        }
+                    } // else cache came passed in
+                } else {
+                    assert(cache_value == NULL); // cache value should only be passed if first prog wanted it
                 }
 
                 // bind cache getter and putter function variables to functions
@@ -595,7 +628,7 @@ inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, Param
 
                 auto next_node_params = func(req_id, *node, this_node,
                         params, // actual parameters for this node program
-                        node_state_getter, req_vclock, add_cache_func, NULL);
+                        node_state_getter, req_vclock, add_cache_func, cache_value);
                 // batch the newly generated node programs for onward propagation
                 S->msg_count_mutex.lock();
                 for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
@@ -628,8 +661,12 @@ inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, Param
                     }
                 }
             }
+            if (cache_value != NULL){
+                delete cache_value; // we can only have cached value for first one 
+            }
         }
         start_node_params = std::move(batched_node_progs[S->shard_id]);
+
         if (S->check_done_request(req_id)) {
             done_request = true;
         }
@@ -685,7 +722,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         return;
     }
 
-    node_prog_loop<ParamsType, NodeStateType>(enclosed_node_prog_func, prog_type_recvd, global_req, vt_id, req_vclock, req_id, start_node_params);
+    node_prog_loop<ParamsType, NodeStateType>(enclosed_node_prog_func, prog_type_recvd, global_req, vt_id, req_vclock, req_id, start_node_params, NULL);
 /*
     // TODO needs work
     if (global_req) {

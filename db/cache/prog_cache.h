@@ -46,7 +46,7 @@ namespace caching
             const std::vector<node_cache_context>& get_context();
             void invalidate();
             cache_response(std::tuple<std::shared_ptr<node_prog::Cache_Value_Base>, vc::vclock, std::shared_ptr<std::vector<db::element::remote_node>>>& cache_val);
-            ~cache_response();
+//            ~cache_response(); // XXX mem leak?
     };
 
     cache_response :: cache_response(
@@ -62,8 +62,9 @@ namespace caching
 
     class program_cache 
     {
-        std::unordered_map<uint64_t, std::tuple<std::shared_ptr<node_prog::Cache_Value_Base>, vc::vclock, std::shared_ptr<std::vector<db::element::remote_node>>>> cache;
         public:
+        std::unordered_map<uint64_t, std::tuple<std::shared_ptr<node_prog::Cache_Value_Base>, vc::vclock, std::shared_ptr<std::vector<db::element::remote_node>>>> cache;
+
         void add_cache_value(node_prog::prog_type& ptype, std::shared_ptr<node_prog::Cache_Value_Base> cache_value, std::shared_ptr<std::vector<db::element::remote_node>> watch_set, uint64_t key, vc::vclock& vc); // TODO shared_ptr for vclock
         std::unique_ptr<cache_response> get_cached_value(node_prog::prog_type& ptype, uint64_t key, vc::vclock& vc);
     };
