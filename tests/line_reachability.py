@@ -40,3 +40,11 @@ for i in range(num_nodes):
     prog_args = [(nodes[i], rp)]
     response = c.run_reach_program(prog_args)
     print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(response.reachable)
+    assert(response.reachable)
+
+rp.dest=nodes[0]
+for i in range(1, num_nodes):
+    prog_args = [(nodes[i], rp)]
+    response = c.run_reach_program(prog_args)
+    print 'From node ' + str(i) + ' to node ' + str(0) + ', reachable = ' + str(response.reachable)
+    assert(not response.reachable)
