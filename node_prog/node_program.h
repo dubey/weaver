@@ -47,6 +47,19 @@ namespace db
 
 namespace node_prog
 {
+
+    template <typename params_type, typename node_state_type>
+    struct node_function_type
+    {
+        public:
+            typedef std::vector<std::pair<db::element::remote_node, params_type>> (*value_type)(uint64_t, // req_id
+                db::element::node&, // this node
+                db::element::remote_node&, // this remote node
+                params_type&,
+                std::function<node_state_type&()>,
+                vc::vclock &req_vlock);
+    };
+
     template <typename ParamsType, typename NodeStateType>
     void node_program_runner(typename node_prog::node_function_type<ParamsType,
             NodeStateType>::value_type np,

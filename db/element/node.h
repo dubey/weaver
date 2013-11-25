@@ -23,6 +23,7 @@
 #include <po6/threads/cond.h>
 
 #include "common/weaver_constants.h"
+#include "db/cache/prog_cache.h"
 #include "element.h"
 #include "edge.h"
 
@@ -71,6 +72,10 @@ namespace element
             // but requests cannot yet be forwarded to new location which is still
             // setting up the node
             std::vector<std::unique_ptr<message::message>> pending_requests;
+
+            // for node prog caching
+            caching::program_cache cache; // TODO init me
+
 
         public:
             void add_edge(edge *e);
