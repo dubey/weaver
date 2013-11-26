@@ -25,6 +25,7 @@
 #include "common/nmap_stub.h"
 #include "shard.h"
 #include "nop_data.h"
+#include "db/cache/prog_cache.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
 //#include "node_prog/triangle_program.h"
@@ -504,9 +505,40 @@ inline void modify_triangle_params(void * triangle_params, size_t num_nodes, db:
 }
 */
 
-// node_to_check is locked when called, at end it is unlocked if false, 
+/* fill changes since time on node
+ */
+inline void
+fill_node_cache_context(db::caching::node_cache_context& context, db::element::node& node, vc::vclock& after_time, vc::vclock& cur_time)
+{
+    context.node_deleted = (order::compare_two_vts(node.get_del_time(), cur_time) == 0);
+    for (auto &iter: node.out_edges) {
+        db::element::edge* e = iter.second;
+        assert(e != NULL);
+
+        bool del_after_cached = (order::compare_two_vts(e->get_del_time(), after_time) == 1);
+        bool creat_after_cached = (order::compare_two_vts(e->get_creat_time(), after_time) == 1);
+
+        bool del_before_cur = (order::compare_two_vts(e->get_del_time(), cur_time) == 0);
+        bool creat_before_cur = (order::compare_two_vts(e->get_creat_time(), cur_time) == 0);
+
+        assert(creat_before_cur);
+        assert(del_after_cached);
+
+        if (creat_after_cached && creat_before_cur && !del_before_cur){
+            context.edges_added.push_back(*e);
+        }
+        if (del_after_cached && del_before_cur) {
+            context.edges_deleted.push_back(*e);
+        }
+    }
+}
+
+/* precondition: node_to_check is locked when called
+   returns true if it has updated cached value or there is no valid one and the node prog loop should continue
+   returns false and frees node if it needs to fetch context on other shards
+ */
 template <typename ParamsType, typename NodeStateType>
-inline bool cache_lookup(db::element::node& node_to_check, uint64_t cache_key,
+inline bool cache_lookup(db::element::node* node_to_check, uint64_t cache_key,
         std::vector<std::pair<db::element::remote_node, ParamsType>> (*func)(uint64_t, 
             db::element::node&, 
             db::element::remote_node&, 
@@ -520,17 +552,64 @@ inline bool cache_lookup(db::element::node& node_to_check, uint64_t cache_key,
         std::tuple<uint64_t, ParamsType, db::element::remote_node>& node_params,
         db::caching::cache_response*& cache_value)
 {
-    if (node_to_check.cache.cache.count(cache_key) > 0){
-        auto entry = node_to_check.cache.cache.at(cache_key);
+    assert(node_to_check != NULL);
+    assert(cache_value == NULL);
+    if (node_to_check->cache.cache.count(cache_key) == 0){
+        WDEBUG << "no cache entry exists" << std::endl;
+        return true;
+    } else {
+        auto entry = node_to_check->cache.cache.at(cache_key);
         std::shared_ptr<node_prog::Cache_Value_Base>& cval = std::get<0>(entry);
         vc::vclock& entry_time = std::get<1>(entry);
         std::shared_ptr<std::vector<db::element::remote_node>>& watch_set = std::get<2>(entry);
 
-        //if (std::get<
+        int64_t cmp_1 = order::compare_two_vts(entry_time, req_vclock);
+        assert(cmp_1 != 2);
+        if (cmp_1 == 1){
+            WDEBUG << "cached value is newer, no cached value for this prog" << std::endl;
+            return true;
+        }
+        assert(cmp_1 == 0);
+
+        cache_value = new db::caching::cache_response();
+        cache_value->value = cval;
+        if (watch_set->empty()){
+            //something about invalidate
+            return true;
+        }
+
+        S->release_node(node_to_check);
+        bool other_shards_fetch = false;
+        for (db::element::remote_node& watch_node : *watch_set)
+        {
+            if (watch_node.loc == vt_id) {
+                db::element::node *node = S->acquire_node(watch_node.handle);
+                if (node == NULL || order::compare_two_vts(node->get_del_time(), req_vclock)==0) { // TODO: TIMESTAMP
+                    assert(node != NULL);
+                    // node is being migrated here, but not yet completed
+                    WDEBUG << "cache dont support this yet" << std::endl;
+                } else if (node->state == db::element::node::mode::IN_TRANSIT
+                        || node->state == db::element::node::mode::MOVED) {
+                    WDEBUG << "cache dont support this yet either" << std::endl;
+                } else { // node exists
+        //            cache_value->context.emplace()
+                    cache_value->context.emplace_back();
+                    cache_value->context.back().first = watch_node;
+                    fill_node_cache_context(cache_value->context.back().second, *node, entry_time, req_vclock);
+                }
+                S->release_node(node);
+            } else { // on another shard
+                other_shards_fetch = true;
+                WDEBUG << "lalalala" << std::endl;
+            } 
+        }
+        if (!other_shards_fetch){
+            WDEBUG << "returning context" << std::endl;
+            return true;
+        }
+        WDEBUG << "caching waiting for rest of context to be fetched" << std::endl;
         return false;
-    } else {
-        return false;
-    }
+    } 
 }
 
 template <typename ParamsType, typename NodeStateType>
@@ -601,7 +680,7 @@ inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, Param
                 if (params.search_cache()){
                     WDEBUG << "OMG WE GOT SEARCH CACHE" << std::endl;
                     if (cache_value == NULL) {
-                        bool run_prog_now = cache_lookup(*node, params.cache_key(), func, prog_type_recvd, global_req, vt_id, req_vclock, req_id, handle_params, cache_value); 
+                        bool run_prog_now = cache_lookup(node, params.cache_key(), func, prog_type_recvd, global_req, vt_id, req_vclock, req_id, handle_params, cache_value); 
                         // go to next node while we fetch cache context for this one, cache_lookup releases node if false
                         if (!run_prog_now) {
                             continue;
@@ -663,6 +742,7 @@ inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, Param
             }
             if (cache_value != NULL){
                 delete cache_value; // we can only have cached value for first one 
+                cache_value = NULL; // needed?
             }
         }
         start_node_params = std::move(batched_node_progs[S->shard_id]);
