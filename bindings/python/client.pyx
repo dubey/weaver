@@ -126,9 +126,9 @@ cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
         bint reachable
 
 class ReachParams:
-    def __init__(self, mode=False, prev_node=RemoteNode(), dest=0, hops=0, reachable=False):
-        self._search_cache = False # add caching to parameters for python later!
-        self._cache_key = 0
+    def __init__(self, mode=False, prev_node=RemoteNode(), dest=0, hops=0, reachable=False, caching=False):
+        self._search_cache = caching
+        self._cache_key = dest
         self.mode = mode
         self.prev_node = prev_node
         self.dest = dest
@@ -181,6 +181,8 @@ cdef class Client:
         cdef pair[uint64_t, reach_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
+            arg_pair.second._search_cache = rp[1]._search_cache 
+            arg_pair.second._cache_key = rp[1].dest
             arg_pair.second.mode = rp[1].mode
             arg_pair.second.dest = rp[1].dest
             arg_pair.second.reachable = rp[1].reachable

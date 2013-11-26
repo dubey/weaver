@@ -34,7 +34,7 @@ for i in range(num_nodes-1):
 c.end_tx(tx_id)
 print 'Created graph'
 
-rp = client.ReachParams(dest=nodes[num_nodes-1])
+rp = client.ReachParams(dest=nodes[num_nodes-1], caching=True)
 print 'Created reach param: mode = ' + str(rp.mode) + ', reachable = ' + str(rp.reachable)
 for i in range(num_nodes):
     prog_args = [(nodes[i], rp)]

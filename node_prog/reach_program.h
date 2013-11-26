@@ -181,18 +181,21 @@ namespace node_prog
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
             db::caching::cache_response *cache_response)
     {
-        std::shared_ptr<node_prog::reach_cache_value > toCache(new reach_cache_value());
-        std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<db::element::remote_node>());
-        toCache->path.push_back(rn);
-        watch_set->push_back(rn);
-        uint64_t cache_key = 1337;
-        add_cache_func(toCache,watch_set, cache_key);
+        std::vector<std::pair<db::element::remote_node, reach_params>> next;
+        if (params._search_cache && cache_response != NULL){
+            std::cout << "WEEE GOT A CACHE RESPONSE, short circuit" << std::endl;
+            // check context, update cache
+            params.mode = true;
+            params.reachable = true;
+            next.emplace_back(std::make_pair(params.prev_node, params));
+            return next;
+        }
+        params._search_cache = false; // only search cache for first of req
 
         reach_node_state &state = state_getter();
         bool false_reply = false;
         db::element::remote_node prev_node = params.prev_node;
         params.prev_node = rn;
-        std::vector<std::pair<db::element::remote_node, reach_params>> next;
         if (!params.mode) { // request mode
             if (params.dest == rn.handle) {
                 // we found the node we are looking for, prepare a reply
@@ -250,6 +253,12 @@ namespace node_prog
                 if (state.hops > params.hops) {
                     state.hops = params.hops;
                 }
+                std::shared_ptr<node_prog::reach_cache_value > toCache(new reach_cache_value());
+                std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<db::element::remote_node>());
+                toCache->path.push_back(rn);
+                watch_set->push_back(rn);
+                uint64_t cache_key = params.dest;
+                add_cache_func(toCache,watch_set, cache_key);
             }
             if (((--state.out_count == 0) || params.reachable) && !state.reachable) {
                 state.reachable |= params.reachable;

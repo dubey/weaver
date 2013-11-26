@@ -554,6 +554,7 @@ inline bool cache_lookup(db::element::node* node_to_check, uint64_t cache_key,
 {
     assert(node_to_check != NULL);
     assert(cache_value == NULL);
+    WDEBUG << "cache search for " << cache_key << " on node " << node_to_check->get_handle() << std::endl;
     if (node_to_check->cache.cache.count(cache_key) == 0){
         WDEBUG << "no cache entry exists" << std::endl;
         return true;
