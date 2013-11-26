@@ -173,7 +173,7 @@ cdef class Client:
     def delete_node(self, tx_id, node):
         self.thisptr.delete_node(tx_id, node)
     def delete_edge(self, tx_id, edge, node):
-        self.thisptr.delete_edge(tx_id, edge, node)
+        self.thisptr.delete_edge(tx_id, node, edge)
     def end_tx(self, tx_id):
         self.thisptr.end_tx(tx_id)
     def run_reach_program(self, init_args):
