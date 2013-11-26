@@ -1,6 +1,6 @@
 # 
 # ===============================================================
-#    Description:  Line reachability program in Python.
+#    Description:  Cache testing with Line reachability program in Python.
 # 
 #        Created:  11/11/2013 03:17:55 PM
 # 
@@ -18,7 +18,7 @@ import client
 
 # creating line graph
 nodes = []
-num_nodes = 1000
+num_nodes = 100
 coord_id = 0
 c = client.Client(client._CLIENT_ID+1, coord_id)
 
@@ -29,12 +29,16 @@ for i in range(num_nodes):
 c.end_tx(tx_id)
 tx_id = c.begin_tx()
 for i in range(num_nodes-1):
-    c.create_edge(tx_id, nodes[i], nodes[i+1])
+    if i == num_nodes/2:
+        break_edge = c.create_edge(tx_id, nodes[i], nodes[i+1])
+    else:
+        c.create_edge(tx_id, nodes[i], nodes[i+1])
+
     print 'Created edge ' + str(i)
 c.end_tx(tx_id)
 print 'Created graph'
 
-rp = client.ReachParams(dest=nodes[num_nodes-1], caching=True)
+rp = client.ReachParams(dest=nodes[num_nodes-1], caching=False)
 print 'Created reach param: mode = ' + str(rp.mode) + ', reachable = ' + str(rp.reachable)
 for i in range(num_nodes):
     prog_args = [(nodes[i], rp)]
@@ -42,9 +46,16 @@ for i in range(num_nodes):
     print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(response.reachable)
     assert(response.reachable)
 
-rp.dest=nodes[0]
-for i in range(1, num_nodes):
+print 'deleting middle edge ' + str(break_edge) + ' and retry'
+tx_id = c.begin_tx()
+c.delete_edge(tx_id, nodes[num_nodes/2], break_edge)
+c.end_tx(tx_id)
+
+for i in range(num_nodes):
+    if i == num_nodes/2:
+        print 'past broken chain point'
+
     prog_args = [(nodes[i], rp)]
     response = c.run_reach_program(prog_args)
-    print 'From node ' + str(i) + ' to node ' + str(0) + ', reachable = ' + str(response.reachable)
-    assert(not response.reachable)
+    print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(response.reachable)
+    assert(response.reachable == i > num_nodes/2)

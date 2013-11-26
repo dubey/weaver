@@ -90,6 +90,7 @@ delete_node(vc::vclock &t_del, uint64_t node_handle)
 inline void
 delete_edge(vc::vclock &t_del, uint64_t edge_handle, uint64_t node_handle)
 {
+    WDEBUG << "Deleting edge " << edge_handle << " on node " << node_handle << std::endl;
     S->delete_edge(edge_handle, node_handle, t_del);
 }
 
@@ -508,15 +509,15 @@ inline void modify_triangle_params(void * triangle_params, size_t num_nodes, db:
 /* fill changes since time on node
  */
 inline void
-fill_node_cache_context(db::caching::node_cache_context& context, db::element::node& node, vc::vclock& after_time, vc::vclock& cur_time)
+fill_node_cache_context(db::caching::node_cache_context& context, db::element::node& node, vc::vclock& cache_time, vc::vclock& cur_time)
 {
     context.node_deleted = (order::compare_two_vts(node.get_del_time(), cur_time) == 0);
     for (auto &iter: node.out_edges) {
         db::element::edge* e = iter.second;
         assert(e != NULL);
 
-        bool del_after_cached = (order::compare_two_vts(e->get_del_time(), after_time) == 1);
-        bool creat_after_cached = (order::compare_two_vts(e->get_creat_time(), after_time) == 1);
+        bool del_after_cached = (order::compare_two_vts(e->get_del_time(), cache_time) == 1);
+        bool creat_after_cached = (order::compare_two_vts(e->get_creat_time(), cache_time) == 1);
 
         bool del_before_cur = (order::compare_two_vts(e->get_del_time(), cur_time) == 0);
         bool creat_before_cur = (order::compare_two_vts(e->get_creat_time(), cur_time) == 0);
@@ -526,9 +527,14 @@ fill_node_cache_context(db::caching::node_cache_context& context, db::element::n
 
         if (creat_after_cached && creat_before_cur && !del_before_cur){
             context.edges_added.push_back(*e);
+            WDEBUG << "&&&&&&&&&&&&&&&&&&&1" << std::endl;
+        }
+        if (creat_after_cached){
+            WDEBUG << "&&&&&&&&&&&&&&&&&&&0" << std::endl;
         }
         if (del_after_cached && del_before_cur) {
             context.edges_deleted.push_back(*e);
+            WDEBUG << "&&&&&&&&&&&&&&&&&&&2" << std::endl;
         }
     }
 }
@@ -585,13 +591,10 @@ inline bool cache_lookup(db::element::node* node_to_check, uint64_t cache_key,
         {
             if (watch_node.loc == S->shard_id) { 
                 db::element::node *node = S->acquire_node(watch_node.handle);
-                if (node == NULL || order::compare_two_vts(node->get_del_time(), req_vclock)==0) { // TODO: TIMESTAMP
-                    assert(node != NULL);
-                    // node is being migrated here, but not yet completed
-                    WDEBUG << "cache dont support this yet" << std::endl;
-                } else if (node->state == db::element::node::mode::IN_TRANSIT
+                assert(node != NULL); // TODO could be garbage collected, or migrated but not completed?
+                if (node->state == db::element::node::mode::IN_TRANSIT
                         || node->state == db::element::node::mode::MOVED) {
-                    WDEBUG << "cache dont support this yet either" << std::endl;
+                    WDEBUG << "cache dont support this yet" << std::endl;
                 } else { // node exists
         //            cache_value->context.emplace()
                     cache_value->context.emplace_back();
@@ -709,6 +712,7 @@ inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, Param
                 auto next_node_params = func(req_id, *node, this_node,
                         params, // actual parameters for this node program
                         node_state_getter, req_vclock, add_cache_func, cache_value);
+               // WDEBUG << "1 got new params count" << next_node_params.size() << std::endl;
                 // batch the newly generated node programs for onward propagation
                 S->msg_count_mutex.lock();
                 for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
@@ -742,6 +746,7 @@ inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, Param
                 }
             }
             if (cache_value != NULL){
+                WDEBUG << "2 cache value deleted" << std::endl;
                 delete cache_value; // we can only have cached value for first one 
                 cache_value = NULL; // needed?
             }

@@ -19,9 +19,9 @@
 
 #include "node_prog/base_classes.h"
 #include "common/weaver_constants.h"
-#include "db/cache/prog_cache.h"
 #include "db/element/node.h"
 #include "db/element/remote_node.h"
+#include "db/cache/prog_cache.h"
 #include "common/message.h"
 #include "common/vclock.h"
 #include "common/event_order.h"
@@ -188,6 +188,7 @@ namespace node_prog
             }
             if (prev != NULL){
                 for(auto edge : prev->edges_deleted){ // edge deletion
+                        WDEBUG  << "@@@@@@@edge deletion" << std::endl;
                     if (edge.nbr.handle == pair.first.handle){
                         WDEBUG  << "Cache entry invalid because of edge deletion" << std::endl;
                         return false;
@@ -212,13 +213,16 @@ namespace node_prog
     {
         std::vector<std::pair<db::element::remote_node, reach_params>> next;
         if (params._search_cache && cache_response != NULL){
-            WDEBUG  << "WEEE GOT A CACHE RESPONSE, short circuit" << std::endl;
             // check context, update cache
             bool valid = check_context(cache_response->context);
-            params.mode = true;
-            params.reachable = true;
-            next.emplace_back(std::make_pair(params.prev_node, params));
-            return next;
+            if (valid) {
+                WDEBUG  << "WEEE GOT A valid CACHE RESPONSE, short circuit" << std::endl;
+                params.mode = true;
+                params.reachable = true;
+                next.emplace_back(std::make_pair(params.prev_node, params));
+                return next;
+            }
+            WDEBUG  << "#####cache invalid, continue search" << std::endl;
         }
         params._search_cache = false; // only search cache for first of req
 
