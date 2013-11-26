@@ -582,7 +582,7 @@ inline bool cache_lookup(db::element::node* node_to_check, uint64_t cache_key,
         bool other_shards_fetch = false;
         for (db::element::remote_node& watch_node : *watch_set)
         {
-            if (watch_node.loc == vt_id) {
+            if (watch_node.loc == S->shard_id) { 
                 db::element::node *node = S->acquire_node(watch_node.handle);
                 if (node == NULL || order::compare_two_vts(node->get_del_time(), req_vclock)==0) { // TODO: TIMESTAMP
                     assert(node != NULL);
