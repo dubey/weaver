@@ -51,6 +51,7 @@
 // migration
 #define START_MIGR_ID SHARD_ID_INCR // first shard to get migration token
 // coordinator
+#define VT_NANO (1000000000ULL)
 #define VT_BB_TIMEOUT 1 // epoll timeout in ms
 #define VT_NOP_TIMEOUT 1000000 // number of nanoseconds between successive nops
 #define VT_INITIAL_CLKUPDATE_DELAY 5000 // number of millis delay to ensure all timestampers are running

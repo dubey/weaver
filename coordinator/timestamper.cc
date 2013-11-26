@@ -17,7 +17,7 @@
 #include <vector>
 #include <signal.h>
 
-//#define __WEAVER_DEBUG__
+#define __WEAVER_DEBUG__
 #include "common/vclock.h"
 #include "common/transaction.h"
 #include "node_prog/node_prog_type.h"
@@ -174,6 +174,101 @@ periodic_update()
     vts->periodic_update_mutex.unlock();
 }
 
+// alternate nop/periodic update implementation
+// single dedicated thread which wakes up after given timeout, sends updates, and sleeps
+inline void
+timer_function()
+{
+    timespec sleep_time;
+    int sleep_ret;
+    int sleep_flags = 0;
+    vc::vclock vclk(vt_id, 0);
+    vc::qtimestamp_t qts;
+    uint64_t req_id, max_done_id;
+    typedef std::vector<std::pair<uint64_t, node_prog::prog_type>> done_req_t;
+    std::vector<done_req_t> done_reqs(NUM_SHARDS, done_req_t());
+    std::vector<uint64_t> del_done_reqs;
+    message::message msg;
+    sleep_time.tv_sec = VT_NOP_TIMEOUT / VT_NANO;
+    sleep_time.tv_nsec = VT_NOP_TIMEOUT % VT_NANO;
+
+    vts->periodic_update_mutex.lock();
+    while (true) {
+        //WDEBUG << "loop in timer function()\n";
+        sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, NULL);
+        assert(sleep_ret == 0 || sleep_ret == EINTR);
+
+        // update vclock at other timestampers
+        if (vts->clock_update_acks == (NUM_VTS-1) && NUM_VTS > 1) {
+            vts->clock_update_acks = 0;
+            vts->mutex.lock();
+            vclk.clock = vts->vclk.clock;
+            vts->mutex.unlock();
+            for (uint64_t i = 0; i < NUM_VTS; i++) {
+                if (i == vt_id) {
+                    continue;
+                }
+                message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, vclk.clock[vt_id]);
+                vts->send(i, msg.buf);
+            }
+            WDEBUG << "updating vector clock at other shards\n";
+        } else if (NUM_VTS > 1) {
+            vts->periodic_cond.wait();
+        }
+
+        // send nops and state cleanup info to shards
+        if (vts->to_nop.any()) {
+            vts->mutex.lock();
+            vts->vclk.increment_clock();
+            vclk.clock = vts->vclk.clock;
+            req_id = vts->generate_id();
+            max_done_id = vts->max_done_id;
+            del_done_reqs.clear();
+            for (uint64_t shard_id = 0; shard_id < NUM_SHARDS; shard_id++) {
+                if (vts->to_nop[shard_id]) {
+                    vts->qts[shard_id]++;
+                    done_reqs[shard_id].clear();
+                }
+            }
+            qts = vts->qts;
+            for (auto &x: vts->done_reqs) {
+                // x.first = node prog type
+                // x.second = unordered_map <req_id -> bitset<NUM_SHARDS>>
+                for (auto &reply: x.second) {
+                    // reply.first = req_id
+                    // reply.second = bitset<NUM_SHARDS>
+                    for (uint64_t shard_id = 0; shard_id < NUM_SHARDS; shard_id++) {
+                        if (vts->to_nop[shard_id] && !reply.second[shard_id]) {
+                            reply.second.set(shard_id);
+                            done_reqs[shard_id].emplace_back(std::make_pair(reply.first, x.first));
+                        }
+                    }
+                    if (reply.second.all()) {
+                        del_done_reqs.emplace_back(reply.first);
+                    }
+                }
+                for (auto &del: del_done_reqs) {
+                    x.second.erase(del);
+                }
+            }
+            vts->mutex.unlock();
+
+            for (uint64_t shard_id = 0; shard_id < NUM_SHARDS; shard_id++) {
+                if (vts->to_nop[shard_id]) {
+                    message::message msg;
+                    message::prepare_message(msg, message::VT_NOP, vt_id, vclk,
+                            qts, req_id, done_reqs[shard_id], max_done_id);
+                    vts->send(shard_id + SHARD_ID_INCR, msg.buf);
+                }
+            }
+            vts->to_nop.reset();
+        } else {
+            vts->periodic_cond.wait();
+        }
+    }
+    vts->periodic_update_mutex.unlock();
+}
+
 // unpack client message for a node program, prepare shard msges, and send out
 template <typename ParamsType, typename NodeStateType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType> :: 
@@ -284,9 +379,9 @@ server_loop(int thread_id)
         if (ret != BUSYBEE_SUCCESS && ret != BUSYBEE_TIMEOUT) {
             WDEBUG << "msg recv error: " << ret << std::endl;
             continue;
-        } else if (ret == BUSYBEE_TIMEOUT) {
-            periodic_update();
-            continue;
+        //} else if (ret == BUSYBEE_TIMEOUT) {
+        //    periodic_update();
+        //    continue;
         } else {
             // good to go, unpack msg
             msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
@@ -317,12 +412,17 @@ server_loop(int thread_id)
                     vts->periodic_update_mutex.lock();
                     vts->clock_update_acks++;
                     assert(vts->clock_update_acks < NUM_VTS);
+                    vts->periodic_cond.signal();
                     vts->periodic_update_mutex.unlock();
                     break;
 
                 case message::VT_NOP_ACK:
                     message::unpack_message(*msg, message::VT_NOP_ACK, sender);
-                    nop(sender);
+                    vts->periodic_update_mutex.lock();
+                    vts->to_nop.set(sender - SHARD_ID_INCR);
+                    vts->periodic_cond.signal();
+                    vts->periodic_update_mutex.unlock();
+                    //nop(sender);
                     break;
 
                 // shard messages
@@ -402,7 +502,7 @@ server_loop(int thread_id)
                 default:
                     std::cerr << "unexpected msg type " << mtype << std::endl;
             }
-            periodic_update();
+            //periodic_update();
         }
     }
 }
@@ -426,8 +526,11 @@ main(int argc, char *argv[])
     }
 
     // send out nops to each shard
-    for (uint64_t shard = 0; shard < NUM_SHARDS; shard++) {
-        nop(shard + SHARD_ID_INCR);
-    }
-    server_loop(NUM_THREADS-1);
+    //for (uint64_t shard = 0; shard < NUM_SHARDS; shard++) {
+    //    nop(shard + SHARD_ID_INCR);
+    //}
+    //server_loop(NUM_THREADS-1);
+
+    // call periodic thread function
+    timer_function();
 }

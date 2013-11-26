@@ -22,6 +22,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <po6/threads/mutex.h>
+#include <po6/threads/cond.h>
 
 #include "common/busybee_infra.h"
 #include "common/vclock.h"
@@ -76,7 +77,7 @@ namespace coordinator
             std::unordered_map<uint64_t, tx_reply> tx_replies;
             timespec tspec;
             uint64_t nop_time_millis, nop_time_nanos, first_nop_time_millis, clock_update_acks, nop_acks;
-            std::vector<bool> to_nop;
+            std::bitset<NUM_SHARDS> to_nop;
             std::vector<uint64_t> nop_last_qts;
             bool first_clock_update;
             // node prog
@@ -95,6 +96,7 @@ namespace coordinator
                     , loc_gen_mutex
                     , periodic_update_mutex // make sure to not send out clock update before getting ack from other VTs
                     , graph_load_mutex;
+            po6::threads::cond periodic_cond;
             // initial graph loading
             uint32_t load_count;
             uint64_t max_load_time;
@@ -123,16 +125,16 @@ namespace coordinator
         , qts(NUM_SHARDS, 0)
         , clock_update_acks(NUM_VTS-1)
         , nop_acks(NUM_SHARDS)
-        , to_nop(NUM_SHARDS, true)
         , nop_last_qts(NUM_SHARDS, 0)
         , first_clock_update(true)
         , max_done_id(0)
+        , periodic_cond(&periodic_update_mutex)
         , load_count(0)
         , max_load_time(0)
     {
         // initialize array of server locations
         initialize_busybee(bb, vt_id, myloc, NUM_THREADS);
-        bb->set_timeout(VT_BB_TIMEOUT);
+        //bb->set_timeout(VT_BB_TIMEOUT);
         nop_time_millis = wclock::get_time_elapsed_millis(tspec);
         nop_time_nanos = wclock::get_time_elapsed(tspec);
         first_nop_time_millis = nop_time_millis;
@@ -144,6 +146,7 @@ namespace coordinator
         for (int i = 0; i < NUM_THREADS; i++) {
             nmap_client.push_back(new nmap::nmap_stub());
         }
+        to_nop.set(); // set to_nop to 1 for each shard
     }
 
     inline busybee_returncode
