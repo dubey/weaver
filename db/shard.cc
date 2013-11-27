@@ -1295,7 +1295,7 @@ msgrecv_loop()
             case message::NODE_CONTEXT_REPLY:
                 message::unpack_message(*rec_msg, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, vclk);
                 request = new db::graph_request(mtype, std::move(rec_msg));
-                //req id? thr = new db::thread::unstarted_thread(req_id, vclk, unpack_context_reply, request);
+                thr = new db::thread::unstarted_thread(req_id, vclk, unpack_context_reply, request);
                 S->add_read_request(vt_id, thr);
                 rec_msg.reset(new message::message());
                 assert(vclk.clock.size() == NUM_VTS);
