@@ -539,6 +539,41 @@ fill_node_cache_context(db::caching::node_cache_context& context, db::element::n
     }
 }
 
+inline void
+fetch_node_cache_context(uint64_t loc, uint64_t handle, std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& toFill,
+        vc::vclock& cache_entry_time, vc::vclock& req_vclock)
+{
+    db::element::node *node = S->acquire_node(handle);
+    assert(node != NULL); // TODO could be garbage collected, or migrated but not completed?
+    if (node->state == db::element::node::mode::IN_TRANSIT
+            || node->state == db::element::node::mode::MOVED) {
+        WDEBUG << "cache dont support this yet" << std::endl;
+    } else { // node exists
+        toFill.emplace_back();
+        toFill.back().first.loc = loc;
+        toFill.back().first.handle = handle;
+        fill_node_cache_context(toFill.back().second, *node, cache_entry_time, req_vclock);
+    }
+    S->release_node(node);
+}
+
+void
+unpack_and_fetch_context(void *req)
+{
+    db::graph_request *request = (db::graph_request *) req;
+    std::vector<uint64_t> handles;
+    vc::vclock req_vclock, cache_entry_time;
+    uint64_t vt_id, req_id;
+
+//    message::unpack_message(*request->msg, message::NODE_CONTEXT_FETCH, vt_id, req_vclock, cache_entry_time, req_id, handles);
+    std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>> contexts;//(handles.size());
+
+    for (uint64_t handle : handles){
+        fetch_node_cache_context(S->shard_id, handle, contexts, cache_entry_time, req_vclock);
+    }
+    delete request;
+}
+
 /* precondition: node_to_check is locked when called
    returns true if it has updated cached value or there is no valid one and the node prog loop should continue
    returns false and frees node if it needs to fetch context on other shards
@@ -567,10 +602,10 @@ inline bool cache_lookup(db::element::node* node_to_check, uint64_t cache_key,
     } else {
         auto entry = node_to_check->cache.cache.at(cache_key);
         std::shared_ptr<node_prog::Cache_Value_Base>& cval = std::get<0>(entry);
-        vc::vclock& entry_time = std::get<1>(entry);
+        vc::vclock& cache_entry_time = std::get<1>(entry);
         std::shared_ptr<std::vector<db::element::remote_node>>& watch_set = std::get<2>(entry);
 
-        int64_t cmp_1 = order::compare_two_vts(entry_time, req_vclock);
+        int64_t cmp_1 = order::compare_two_vts(cache_entry_time, req_vclock);
         assert(cmp_1 != 2);
         if (cmp_1 == 1){
             WDEBUG << "cached value is newer, no cached value for this prog" << std::endl;
@@ -586,32 +621,34 @@ inline bool cache_lookup(db::element::node* node_to_check, uint64_t cache_key,
         }
 
         S->release_node(node_to_check);
-        bool other_shards_fetch = false;
+
+        // map from loc to list of handles on that shard we need context from for this request
+        std::unordered_map<uint64_t, std::vector<uint64_t>> contexts_to_fetch; 
         for (db::element::remote_node& watch_node : *watch_set)
         {
             if (watch_node.loc == S->shard_id) { 
-                db::element::node *node = S->acquire_node(watch_node.handle);
-                assert(node != NULL); // TODO could be garbage collected, or migrated but not completed?
-                if (node->state == db::element::node::mode::IN_TRANSIT
-                        || node->state == db::element::node::mode::MOVED) {
-                    WDEBUG << "cache dont support this yet" << std::endl;
-                } else { // node exists
-        //            cache_value->context.emplace()
-                    cache_value->context.emplace_back();
-                    cache_value->context.back().first = watch_node;
-                    fill_node_cache_context(cache_value->context.back().second, *node, entry_time, req_vclock);
-                }
-                S->release_node(node);
+                fetch_node_cache_context(watch_node.loc, watch_node.handle, cache_value->context, cache_entry_time, req_vclock);
             } else { // on another shard
-                other_shards_fetch = true;
-                WDEBUG << "lalalala" << std::endl;
+                contexts_to_fetch[watch_node.loc].emplace_back(watch_node.handle);
             } 
         }
-        if (!other_shards_fetch){
-            WDEBUG << "returning context" << std::endl;
+        if (contexts_to_fetch.empty()){
+            WDEBUG << "returning context right away" << std::endl;
             return true;
         }
+
         WDEBUG << "caching waiting for rest of context to be fetched" << std::endl;
+        // add waiting stuff to shard global structure
+
+        for (auto& shard_list_pair : contexts_to_fetch){
+            // get UID
+            /*
+            std::unique_ptr<message::message> m(new message::message()); // XXX can we re-use messages?
+            message::prepare_message(*m, message::NODE_CONTEXT_FETCH, vt_id, req_vclock, cache_entry_time, req_id, shard_list_pair.second);
+            S->send(shard_list_pair.first, m->buf);
+            */
+        }
+
         return false;
     } 
 }
@@ -1159,6 +1196,17 @@ msgrecv_loop()
                 rec_msg.reset(new message::message());
                 assert(vclk.clock.size() == NUM_VTS);
                 break;
+
+/*
+            case message::NODE_CONTEXT_FETCH:
+                message::unpack_message(*rec_msg, message::NODE_CONTEXT_FETCH, vt_id, req_vclock);
+                request = new db::graph_request(mtype, std::move(rec_msg));
+                thr = new db::thread::unstarted_thread(req_id, vclk, unpack_and_fetch_context, request);
+                S->add_read_request(vt_id, thr);
+                rec_msg.reset(new message::message());
+                assert(vclk.clock.size() == NUM_VTS);
+                break;
+                */
 
             case message::VT_NOP: {
                 db::nop_data *nop_arg = new db::nop_data();
