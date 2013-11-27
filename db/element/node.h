@@ -74,7 +74,7 @@ namespace element
             std::vector<std::unique_ptr<message::message>> pending_requests;
 
             // for node prog caching
-            caching::program_cache cache; // TODO init me
+            caching::program_cache cache; // TODO init me, also XXX migrate me
 
 
         public:

@@ -21,6 +21,7 @@
 #define __WEAVER_DEBUG__
 #include "common/weaver_constants.h"
 #include "common/event_order.h"
+#include "common/message_cache_context.h"
 #include "common/message_graph_elem.h"
 #include "common/nmap_stub.h"
 #include "shard.h"
@@ -563,14 +564,18 @@ unpack_and_fetch_context(void *req)
     db::graph_request *request = (db::graph_request *) req;
     std::vector<uint64_t> handles;
     vc::vclock req_vclock, cache_entry_time;
-    uint64_t vt_id, req_id;
+    uint64_t vt_id, req_id, lookup_uid, from_shard;
 
-//    message::unpack_message(*request->msg, message::NODE_CONTEXT_FETCH, vt_id, req_vclock, cache_entry_time, req_id, handles);
-    std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>> contexts;//(handles.size());
+    message::unpack_message(*request->msg, message::NODE_CONTEXT_FETCH, vt_id, req_vclock, cache_entry_time, req_id, lookup_uid, handles, from_shard);
+    std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>> contexts;
 
+    WDEBUG << "fetching cache contexts on remote shard" << std::endl;
     for (uint64_t handle : handles){
         fetch_node_cache_context(S->shard_id, handle, contexts, cache_entry_time, req_vclock);
     }
+    message::message m;
+    message::prepare_message(m, message::NODE_CONTEXT_REPLY, vt_id, req_vclock, req_id, lookup_uid, contexts);
+    S->send(from_shard, m.buf);
     delete request;
 }
 
@@ -640,18 +645,38 @@ inline bool cache_lookup(db::element::node* node_to_check, uint64_t cache_key,
         WDEBUG << "caching waiting for rest of context to be fetched" << std::endl;
         // add waiting stuff to shard global structure
 
+        uint64_t lookup_uid = node_to_check->cache.gen_uid();
+        // map from node_handle, lookup_id to node_prog_running_state
+
         for (auto& shard_list_pair : contexts_to_fetch){
-            // get UID
-            /*
             std::unique_ptr<message::message> m(new message::message()); // XXX can we re-use messages?
-            message::prepare_message(*m, message::NODE_CONTEXT_FETCH, vt_id, req_vclock, cache_entry_time, req_id, shard_list_pair.second);
+            message::prepare_message(*m, message::NODE_CONTEXT_FETCH, vt_id, req_vclock, cache_entry_time, req_id, lookup_uid, shard_list_pair.second, S->shard_id);
             S->send(shard_list_pair.first, m->buf);
-            */
         }
 
         return false;
     } 
 }
+
+template <typename ParamsType, typename NodeStateType>
+class node_prog_running_state {
+    std::vector<std::pair<db::element::remote_node, ParamsType>> (*func)(uint64_t, 
+            db::element::node&, 
+            db::element::remote_node&, 
+            ParamsType&,
+            std::function<NodeStateType&()>,
+            vc::vclock &,
+            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
+                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
+            db::caching::cache_response*);
+        node_prog::prog_type prog_type_recvd;
+        bool global_req;
+        uint64_t vt_id;
+        vc::vclock& req_vclock;
+        uint64_t req_id;
+        std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>& start_node_params;
+        db::caching::cache_response *cache_value;
+};
 
 template <typename ParamsType, typename NodeStateType>
 inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, ParamsType>> (*func)(uint64_t, 
@@ -1197,16 +1222,23 @@ msgrecv_loop()
                 assert(vclk.clock.size() == NUM_VTS);
                 break;
 
-/*
             case message::NODE_CONTEXT_FETCH:
-                message::unpack_message(*rec_msg, message::NODE_CONTEXT_FETCH, vt_id, req_vclock);
+                message::unpack_message(*rec_msg, message::NODE_CONTEXT_FETCH, vt_id, vclk);
                 request = new db::graph_request(mtype, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(req_id, vclk, unpack_and_fetch_context, request);
                 S->add_read_request(vt_id, thr);
                 rec_msg.reset(new message::message());
                 assert(vclk.clock.size() == NUM_VTS);
                 break;
-                */
+
+            case message::NODE_CONTEXT_REPLY:
+                message::unpack_message(*rec_msg, message::NODE_CONTEXT_REPLY, vt_id, vclk);
+                request = new db::graph_request(mtype, std::move(rec_msg));
+                thr = new db::thread::unstarted_thread(req_id, vclk, unpack_and_fetch_context, request);
+                S->add_read_request(vt_id, thr);
+                rec_msg.reset(new message::message());
+                assert(vclk.clock.size() == NUM_VTS);
+                break;
 
             case message::VT_NOP: {
                 db::nop_data *nop_arg = new db::nop_data();

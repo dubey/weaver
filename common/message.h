@@ -29,10 +29,10 @@
 #include "common/meta_element.h"
 #include "common/vclock.h"
 #include "common/transaction.h"
+#include "node_prog/base_classes.h" // used for packing Packable objects
 #include "db/element/node.h"
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
-#include "node_prog/base_classes.h" // used for packing Packable objects
 
 namespace message
 {
@@ -82,6 +82,8 @@ namespace message
         // node program messages
         NODE_PROG,
         NODE_PROG_RETURN,
+        NODE_CONTEXT_FETCH,
+        NODE_CONTEXT_REPLY,
         CACHE_UPDATE,
         CACHE_UPDATE_ACK,
         // migration messages
@@ -149,11 +151,21 @@ namespace message
     template <typename T1, typename T2, typename T3> void unpack_buffer(e::unpacker&, std::priority_queue<T1, T2, T3>&);
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void unpack_buffer(e::unpacker& unpacker, std::tuple<T1, T2, T3>& t);
+
+    uint64_t size(const db::caching::node_cache_context &t);
+    uint64_t size(const db::element::edge &t);
     uint64_t size(const db::element::edge* const &t);
+    uint64_t size(const std::vector<db::element::edge> &t);
     uint64_t size(const db::element::node &t);
+    void pack_buffer(e::buffer::packer &packer, const db::caching::node_cache_context &t);
+    void pack_buffer(e::buffer::packer &packer, const db::element::edge &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t);
+    void pack_buffer(e::buffer::packer &packer, const std::vector<db::element::edge> &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::node &t);
+    void unpack_buffer(e::unpacker &unpacker, db::caching::node_cache_context &t);
+    void unpack_buffer(e::unpacker &unpacker, db::element::edge &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge *&t);
+    void unpack_buffer(e::unpacker &unpacker, std::vector<db::element::edge> &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::node &t);
 
     inline
@@ -186,6 +198,12 @@ namespace message
     {
         return sizeof(uint32_t);
     }
+    /*
+    inline uint64_t size(const node_prog::Packable &t)
+    {
+        return t.size();
+    }
+    */
     inline uint64_t size(const node_prog::Node_Parameters_Base &t)
     {
         return t.size();
@@ -320,6 +338,12 @@ namespace message
 
     // packing templates
 
+    /*
+    inline void pack_buffer(e::buffer::packer &packer, const node_prog::Packable &t)
+    {
+        t.pack(packer);
+    }
+    */
     inline void pack_buffer(e::buffer::packer &packer, const node_prog::Node_Parameters_Base &t)
     {
         t.pack(packer);
@@ -541,6 +565,13 @@ namespace message
     }
 
     // unpacking templates
+    /*
+    inline void
+    unpack_buffer(e::unpacker &unpacker, node_prog::Packable &t)
+    {
+        t.unpack(unpacker);
+    }
+    */
     inline void
     unpack_buffer(e::unpacker &unpacker, node_prog::Node_Parameters_Base &t)
     {

@@ -48,10 +48,12 @@ namespace caching
 
     class program_cache 
     {
+        uint64_t uid = 0;
         public:
         std::unordered_map<uint64_t, std::tuple<std::shared_ptr<node_prog::Cache_Value_Base>, vc::vclock, std::shared_ptr<std::vector<db::element::remote_node>>>> cache;
 
         void add_cache_value(node_prog::prog_type& ptype, std::shared_ptr<node_prog::Cache_Value_Base> cache_value, std::shared_ptr<std::vector<db::element::remote_node>> watch_set, uint64_t key, vc::vclock& vc); // TODO shared_ptr for vclock
+        uint64_t gen_uid();
         //std::unique_ptr<cache_response> get_cached_value(node_prog::prog_type& ptype, uint64_t key, vc::vclock& vc);
     };
 
@@ -61,6 +63,10 @@ namespace caching
         // TODO: use prog_type
         cache.emplace(key, std::make_tuple(cache_value, vc, watch_set));
         //WDEBUG << "OMG WE EMPLACED" << std::endl;
+    }
+    inline uint64_t
+    program_cache :: gen_uid(){
+        return ++uid;
     }
 }
 }
