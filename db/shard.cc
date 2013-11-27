@@ -528,14 +528,14 @@ fill_node_cache_context(db::caching::node_cache_context& context, db::element::n
 
         if (creat_after_cached && creat_before_cur && !del_before_cur){
             context.edges_added.push_back(*e);
-            WDEBUG << "&&&&&&&&&&&&&&&&&&&1" << std::endl;
+            //WDEBUG << "&&&&&&&&&&&&&&&&&&&1" << std::endl;
         }
         if (creat_after_cached){
-            WDEBUG << "&&&&&&&&&&&&&&&&&&&0" << std::endl;
+            //WDEBUG << "&&&&&&&&&&&&&&&&&&&0" << std::endl;
         }
         if (del_after_cached && del_before_cur) {
             context.edges_deleted.push_back(*e);
-            WDEBUG << "&&&&&&&&&&&&&&&&&&&2" << std::endl;
+            //WDEBUG << "&&&&&&&&&&&&&&&&&&&2" << std::endl;
         }
     }
 }
@@ -762,9 +762,10 @@ inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, Param
                 S->send(new_loc, m->buf);
             } else { // node does exist
                 //XXX assert(node->state == db::element::node::mode::STABLE);
-
+                if (NODE_PROG_CACHING)
+                {
                 if (params.search_cache()){
-                    WDEBUG << "OMG WE GOT SEARCH CACHE" << std::endl;
+                    //WDEBUG << "GOT SEARCH CACHE" << std::endl;
                     if (cache_value == NULL) {
                         bool run_prog_now = cache_lookup(node, params.cache_key(), func, prog_type_recvd, global_req, vt_id, req_vclock, req_id, handle_params, cache_value); 
                         // go to next node while we fetch cache context for this one, cache_lookup releases node if false
@@ -774,6 +775,7 @@ inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, Param
                     } // else cache came passed in
                 } else {
                     assert(cache_value == NULL); // cache value should only be passed if first prog wanted it
+                }
                 }
 
                 // bind cache getter and putter function variables to functions
@@ -787,9 +789,12 @@ inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, Param
                     S->release_node(node);
                     break;
                 }
+                if (NODE_PROG_CACHING)
+                {
                 // call node program
                 using namespace std::placeholders;
                 add_cache_func = std::bind(add_cache_value, prog_type_recvd, node, _1, _2, _3, req_vclock); // 1 is cache value, 2 is watch set, 3 is key
+                }
 
                 auto next_node_params = func(req_id, *node, this_node,
                         params, // actual parameters for this node program
@@ -827,10 +832,13 @@ inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, Param
                     }
                 }
             }
+            if (NODE_PROG_CACHING)
+            {
             if (cache_value != NULL){
                 WDEBUG << "2 cache value deleted" << std::endl;
                 delete cache_value; // we can only have cached value for first one 
                 cache_value = NULL; // needed?
+            }
             }
         }
         start_node_params = std::move(batched_node_progs[S->shard_id]);
@@ -873,6 +881,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>> contexts_to_add; // TODO extra copy, later unpack into cache_response object itself
     message::unpack_message(*msg, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_id, contexts_to_add);
 
+    WDEBUG << "unpacking context reply" << std::endl;
     S->node_prog_running_states_mutex.lock();
     assert(S->node_prog_running_states.count(lookup_id) > 0);
     struct fetch_state<ParamsType, NodeStateType> *fstate = (struct fetch_state<ParamsType, NodeStateType> *) S->node_prog_running_states[lookup_id];
@@ -884,6 +893,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     fstate->replies_left--;
     fstate->counter_mutex.unlock();
     if (fstate->replies_left == 0){
+        WDEBUG << "running node prog from context reply" << std::endl;
         node_prog_loop<ParamsType, NodeStateType>(fstate->prog_state.func, fstate->prog_state.prog_type_recvd, fstate->prog_state.global_req, fstate->prog_state.vt_id, fstate->prog_state.req_vclock, fstate->prog_state.req_id, fstate->prog_state.start_node_params, fstate->prog_state.cache_value);
         //remove from map
         S->node_prog_running_states_mutex.lock();

@@ -48,6 +48,7 @@
 #define GRAPH_FILE "graph.rec"
 // node programs
 #define BATCH_MSG_SIZE 1 // 1 == no batching
+#define NODE_PROG_CACHING 0
 // migration
 #define START_MIGR_ID SHARD_ID_INCR // first shard to get migration token
 // coordinator

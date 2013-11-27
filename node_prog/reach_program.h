@@ -213,6 +213,8 @@ namespace node_prog
             db::caching::cache_response *cache_response)
     {
         std::vector<std::pair<db::element::remote_node, reach_params>> next;
+        if (NODE_PROG_CACHING)
+        {
         if (params._search_cache && cache_response != NULL){
             // check context, update cache
             bool valid = check_context(cache_response->context);
@@ -226,6 +228,7 @@ namespace node_prog
             WDEBUG  << "#####cache invalid, continue search" << std::endl;
         }
         params._search_cache = false; // only search cache for first of req
+        }
 
         reach_node_state &state = state_getter();
         bool false_reply = false;
@@ -295,11 +298,14 @@ namespace node_prog
                 if (params.reachable) {
                     params.hops = state.hops + 1;
                     params.path.emplace_back(rn);
+                    if (NODE_PROG_CACHING)
+                    {
                     // now add to cache
                     std::shared_ptr<node_prog::reach_cache_value > toCache(new reach_cache_value());
                     std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<db::element::remote_node>(params.path)); // copy return path from params
                     uint64_t cache_key = params.dest;
                     add_cache_func(toCache, watch_set, cache_key);
+                    }
                 }
                 next.emplace_back(std::make_pair(state.prev_node, params));
             }
