@@ -179,6 +179,7 @@ namespace node_prog
     {
         WDEBUG  << "$$$$$ checking context of size "<< context.size() << std::endl;
         db::caching::node_cache_context* prev = NULL;
+        uint64_t prev_handle = 0; 
         // path not valid if broken by:
         for (auto& pair : context)
         {
@@ -186,16 +187,14 @@ namespace node_prog
                 WDEBUG  << "Cache entry invalid because of node deletion" << std::endl;
                 return false;
             }
-            if (prev != NULL){
-                for(auto edge : prev->edges_deleted){ // edge deletion
-                        WDEBUG  << "@@@@@@@edge deletion" << std::endl;
-                    if (edge.nbr.handle == pair.first.handle){
-                        WDEBUG  << "Cache entry invalid because of edge deletion" << std::endl;
-                        return false;
-                    }
+            // edge deletion, path to dest is stored backwards so see if edge to previous node has been deleted
+            for(auto edge :  pair.second.edges_deleted){
+                if (edge.nbr.handle == prev_handle){
+                    WDEBUG  << "Cache entry invalid because of edge deletion" << std::endl;
+                    return false;
                 }
             }
-            prev = &pair.second;
+            prev_handle = pair.first.handle;
         }
         return true;
     }

@@ -18,7 +18,7 @@ import client
 
 # creating line graph
 nodes = []
-num_nodes = 100
+num_nodes = 1000
 coord_id = 0
 c = client.Client(client._CLIENT_ID+1, coord_id)
 
@@ -38,7 +38,7 @@ for i in range(num_nodes-1):
 c.end_tx(tx_id)
 print 'Created graph'
 
-rp = client.ReachParams(dest=nodes[num_nodes-1], caching=False)
+rp = client.ReachParams(dest=nodes[num_nodes-1], caching=True)
 print 'Created reach param: mode = ' + str(rp.mode) + ', reachable = ' + str(rp.reachable)
 for i in range(num_nodes):
     prog_args = [(nodes[i], rp)]
@@ -52,10 +52,10 @@ c.delete_edge(tx_id, nodes[num_nodes/2], break_edge)
 c.end_tx(tx_id)
 
 for i in range(num_nodes):
-    if i == num_nodes/2:
+    if i == num_nodes/2 + 1:
         print 'past broken chain point'
 
     prog_args = [(nodes[i], rp)]
     response = c.run_reach_program(prog_args)
     print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(response.reachable)
-    assert(response.reachable == i > num_nodes/2)
+    assert(response.reachable is (i > num_nodes/2))
