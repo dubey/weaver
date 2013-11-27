@@ -251,6 +251,11 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     unpack_and_run_db(std::unique_ptr<message::message>)
 { }
 
+template <typename ParamsType, typename NodeStateType>
+void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
+    unpack_context_reply_db(std::unique_ptr<message::message>)
+{ }
+
 // remove a completed node program from outstanding requests data structure
 // update 'max_done_id' accordingly
 inline void mark_req_finished(uint64_t req_id) {

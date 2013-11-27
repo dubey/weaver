@@ -50,6 +50,7 @@ namespace db
             std::unique_ptr<message::message> msg;
     };
 
+
     inline
     graph_request :: graph_request(enum message::msg_type mt, std::unique_ptr<message::message> m)
         : type(mt)
@@ -152,6 +153,10 @@ namespace db
                     std::shared_ptr<node_prog::Node_State_Base> toAdd);
             void add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
             bool check_done_request(uint64_t req_id);
+
+            
+            std::unordered_map<uint64_t, void *> node_prog_running_states; // used for fetching cache contexts
+            po6::threads::mutex node_prog_running_states_mutex;
 
             // Messaging infrastructure
         public:

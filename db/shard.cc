@@ -565,8 +565,9 @@ unpack_and_fetch_context(void *req)
     std::vector<uint64_t> handles;
     vc::vclock req_vclock, cache_entry_time;
     uint64_t vt_id, req_id, lookup_uid, from_shard;
+    node_prog::prog_type pType;
 
-    message::unpack_message(*request->msg, message::NODE_CONTEXT_FETCH, vt_id, req_vclock, cache_entry_time, req_id, lookup_uid, handles, from_shard);
+    message::unpack_message(*request->msg, message::NODE_CONTEXT_FETCH, pType, req_id, vt_id, req_vclock, cache_entry_time, lookup_uid, handles, from_shard);
     std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>> contexts;
 
     WDEBUG << "fetching cache contexts on remote shard" << std::endl;
@@ -574,10 +575,37 @@ unpack_and_fetch_context(void *req)
         fetch_node_cache_context(S->shard_id, handle, contexts, cache_entry_time, req_vclock);
     }
     message::message m;
-    message::prepare_message(m, message::NODE_CONTEXT_REPLY, vt_id, req_vclock, req_id, lookup_uid, contexts);
+    message::prepare_message(m, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_uid, contexts);
     S->send(from_shard, m.buf);
     delete request;
 }
+
+template <typename ParamsType, typename NodeStateType>
+struct node_prog_running_state {
+    std::vector<std::pair<db::element::remote_node, ParamsType>> (*func)(uint64_t, 
+            db::element::node&, 
+            db::element::remote_node&, 
+            ParamsType&,
+            std::function<NodeStateType&()>,
+            vc::vclock &,
+            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
+                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
+            db::caching::cache_response*);
+    node_prog::prog_type prog_type_recvd;
+    bool global_req;
+    uint64_t vt_id;
+    vc::vclock req_vclock;
+    uint64_t req_id;
+    std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> start_node_params;
+    db::caching::cache_response *cache_value;
+};
+
+template <typename ParamsType, typename NodeStateType>
+struct fetch_state{
+    node_prog_running_state<ParamsType, NodeStateType> prog_state;
+    po6::threads::mutex counter_mutex;
+    uint64_t replies_left;
+};
 
 /* precondition: node_to_check is locked when called
    returns true if it has updated cached value or there is no valid one and the node prog loop should continue
@@ -645,38 +673,30 @@ inline bool cache_lookup(db::element::node* node_to_check, uint64_t cache_key,
         WDEBUG << "caching waiting for rest of context to be fetched" << std::endl;
         // add waiting stuff to shard global structure
 
-        uint64_t lookup_uid = node_to_check->cache.gen_uid();
+        uint64_t lookup_id = node_to_check->cache.gen_uid() ^ node_to_check->get_handle(); // for now we just xoring a counter and the node handle
         // map from node_handle, lookup_id to node_prog_running_state
+        fetch_state<ParamsType, NodeStateType> *fstate = new fetch_state<ParamsType, NodeStateType>();
+        fstate->replies_left = contexts_to_fetch.size();
 
+        fstate->prog_state.func = func;
+        fstate->prog_state.prog_type_recvd = prog_type_recvd;
+        fstate->prog_state.global_req = global_req;
+        fstate->prog_state.vt_id = vt_id;
+        fstate->prog_state.req_vclock = req_vclock;
+        fstate->prog_state.req_id = req_id;
+        fstate->prog_state.start_node_params.emplace_back(node_params);
+        fstate->prog_state.cache_value = cache_value;
+
+        S->node_prog_running_states[lookup_id] = fstate; 
         for (auto& shard_list_pair : contexts_to_fetch){
             std::unique_ptr<message::message> m(new message::message()); // XXX can we re-use messages?
-            message::prepare_message(*m, message::NODE_CONTEXT_FETCH, vt_id, req_vclock, cache_entry_time, req_id, lookup_uid, shard_list_pair.second, S->shard_id);
+            message::prepare_message(*m, message::NODE_CONTEXT_FETCH, prog_type_recvd, req_id, vt_id, req_vclock, cache_entry_time, lookup_id, shard_list_pair.second, S->shard_id);
             S->send(shard_list_pair.first, m->buf);
         }
 
         return false;
     } 
 }
-
-template <typename ParamsType, typename NodeStateType>
-class node_prog_running_state {
-    std::vector<std::pair<db::element::remote_node, ParamsType>> (*func)(uint64_t, 
-            db::element::node&, 
-            db::element::remote_node&, 
-            ParamsType&,
-            std::function<NodeStateType&()>,
-            vc::vclock &,
-            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
-            db::caching::cache_response*);
-        node_prog::prog_type prog_type_recvd;
-        bool global_req;
-        uint64_t vt_id;
-        vc::vclock& req_vclock;
-        uint64_t req_id;
-        std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>& start_node_params;
-        db::caching::cache_response *cache_value;
-};
 
 template <typename ParamsType, typename NodeStateType>
 inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, ParamsType>> (*func)(uint64_t, 
@@ -830,6 +850,47 @@ unpack_node_program(void *req)
     message::unpack_message(*request->msg, message::NODE_PROG, pType);
     node_prog::programs.at(pType)->unpack_and_run_db(std::move(request->msg));
     delete request;
+}
+
+void
+unpack_context_reply(void *req)
+{
+    db::graph_request *request = (db::graph_request *) req;
+    node_prog::prog_type pType;
+
+    message::unpack_message(*request->msg, message::NODE_CONTEXT_REPLY, pType);
+    node_prog::programs.at(pType)->unpack_context_reply_db(std::move(request->msg));
+    delete request;
+}
+
+template <typename ParamsType, typename NodeStateType>
+void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
+    unpack_context_reply_db(std::unique_ptr<message::message> msg)
+{
+    vc::vclock req_vclock;
+    node_prog::prog_type pType;
+    uint64_t req_id, vt_id, lookup_id;
+    std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>> contexts_to_add; // TODO extra copy, later unpack into cache_response object itself
+    message::unpack_message(*msg, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_id, contexts_to_add);
+
+    S->node_prog_running_states_mutex.lock();
+    assert(S->node_prog_running_states.count(lookup_id) > 0);
+    struct fetch_state<ParamsType, NodeStateType> *fstate = (struct fetch_state<ParamsType, NodeStateType> *) S->node_prog_running_states[lookup_id];
+    S->node_prog_running_states_mutex.unlock();
+
+    fstate->counter_mutex.lock();
+    std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& existing_context = fstate->prog_state.cache_value->context;
+    existing_context.insert(existing_context.end(), contexts_to_add.begin(), contexts_to_add.end());
+    fstate->replies_left--;
+    fstate->counter_mutex.unlock();
+    if (fstate->replies_left == 0){
+        node_prog_loop<ParamsType, NodeStateType>(fstate->prog_state.func, fstate->prog_state.prog_type_recvd, fstate->prog_state.global_req, fstate->prog_state.vt_id, fstate->prog_state.req_vclock, fstate->prog_state.req_id, fstate->prog_state.start_node_params, fstate->prog_state.cache_value);
+        //remove from map
+        S->node_prog_running_states_mutex.lock();
+        S->node_prog_running_states.erase(lookup_id);
+        S->node_prog_running_states_mutex.unlock();
+        delete fstate; // XXX did we delete prog_state, cache_value?
+    }
 }
 
 template <typename ParamsType, typename NodeStateType>
@@ -1223,7 +1284,7 @@ msgrecv_loop()
                 break;
 
             case message::NODE_CONTEXT_FETCH:
-                message::unpack_message(*rec_msg, message::NODE_CONTEXT_FETCH, vt_id, vclk);
+                message::unpack_message(*rec_msg, message::NODE_CONTEXT_FETCH, pType, req_id, vt_id, vclk);
                 request = new db::graph_request(mtype, std::move(rec_msg));
                 thr = new db::thread::unstarted_thread(req_id, vclk, unpack_and_fetch_context, request);
                 S->add_read_request(vt_id, thr);
@@ -1232,9 +1293,9 @@ msgrecv_loop()
                 break;
 
             case message::NODE_CONTEXT_REPLY:
-                message::unpack_message(*rec_msg, message::NODE_CONTEXT_REPLY, vt_id, vclk);
+                message::unpack_message(*rec_msg, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, vclk);
                 request = new db::graph_request(mtype, std::move(rec_msg));
-                thr = new db::thread::unstarted_thread(req_id, vclk, unpack_and_fetch_context, request);
+                //req id? thr = new db::thread::unstarted_thread(req_id, vclk, unpack_context_reply, request);
                 S->add_read_request(vt_id, thr);
                 rec_msg.reset(new message::message());
                 assert(vclk.clock.size() == NUM_VTS);
