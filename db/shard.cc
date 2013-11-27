@@ -762,7 +762,7 @@ inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, Param
                 S->send(new_loc, m->buf);
             } else { // node does exist
                 //XXX assert(node->state == db::element::node::mode::STABLE);
-                if (NODE_PROG_CACHING)
+                if (MAX_CACHE_ENTRIES)
                 {
                 if (params.search_cache()){
                     //WDEBUG << "GOT SEARCH CACHE" << std::endl;
@@ -789,7 +789,7 @@ inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, Param
                     S->release_node(node);
                     break;
                 }
-                if (NODE_PROG_CACHING)
+                if (MAX_CACHE_ENTRIES)
                 {
                 // call node program
                 using namespace std::placeholders;
@@ -832,12 +832,11 @@ inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, Param
                     }
                 }
             }
-            if (NODE_PROG_CACHING)
+            if (MAX_CACHE_ENTRIES)
             {
             if (cache_value != NULL){
-                WDEBUG << "2 cache value deleted" << std::endl;
                 delete cache_value; // we can only have cached value for first one 
-                cache_value = NULL; // needed?
+                cache_value = NULL;
             }
             }
         }

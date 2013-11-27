@@ -213,7 +213,7 @@ namespace node_prog
             db::caching::cache_response *cache_response)
     {
         std::vector<std::pair<db::element::remote_node, reach_params>> next;
-        if (NODE_PROG_CACHING)
+        if (MAX_CACHE_ENTRIES)
         {
         if (params._search_cache && cache_response != NULL){
             // check context, update cache
@@ -298,7 +298,7 @@ namespace node_prog
                 if (params.reachable) {
                     params.hops = state.hops + 1;
                     params.path.emplace_back(rn);
-                    if (NODE_PROG_CACHING)
+                    if (MAX_CACHE_ENTRIES)
                     {
                     // now add to cache
                     std::shared_ptr<node_prog::reach_cache_value > toCache(new reach_cache_value());

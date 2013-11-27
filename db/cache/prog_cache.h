@@ -42,6 +42,7 @@ namespace caching
             std::shared_ptr<node_prog::Cache_Value_Base> value;
             std::vector<std::pair<db::element::remote_node, node_cache_context>> context;
             void invalidate();
+//            cache_response((uint64t)()*invalidate_fun
 //            ~cache_response(); // XXX mem leak?
     };
 
@@ -62,7 +63,20 @@ namespace caching
     {
         // TODO: use prog_type
         cache.emplace(key, std::make_tuple(cache_value, vc, watch_set));
-        //WDEBUG << "OMG WE EMPLACED" << std::endl;
+        WDEBUG << "OMG WE EMPLACED, cache size "<< cache.size() << std::endl;
+        if (cache.size() > MAX_CACHE_ENTRIES){
+            vc::vclock& oldest = vc;
+            uint64_t key_to_del = key;
+            for (auto& kvpair : cache) 
+            {
+                vc::vclock& to_cmp = std::get<1>(kvpair.second);
+                if (order::compare_two_vts(to_cmp, oldest) == 0){
+                    key_to_del =kvpair.first;
+                    oldest = to_cmp;
+                }
+            }
+            cache.erase(key_to_del);
+        }
     }
     inline uint64_t
     program_cache :: gen_uid(){
