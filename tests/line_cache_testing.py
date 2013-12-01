@@ -40,7 +40,7 @@ c.end_tx(tx_id)
 print 'Created graph'
 
 start = time.time()
-rp = client.ReachParams(dest=nodes[num_nodes-1], caching=True)
+rp = client.ReachParams(dest=nodes[num_nodes-1], caching=False)
 #print 'Created reach param: mode = ' + str(rp.mode) + ', reachable = ' + str(rp.reachable)
 for i in range(num_nodes):
     prog_args = [(nodes[i], rp)]
