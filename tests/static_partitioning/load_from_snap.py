@@ -14,7 +14,3 @@ def load(argv):
         print(edge)
         G.add_edge(int(edge[0]),int(edge[1]))
     return G
-
-G = load(sys.argv)
-nx.draw(G)
-plt.show()
