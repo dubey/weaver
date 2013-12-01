@@ -58,8 +58,14 @@ namespace db
 
     enum graph_file_format
     {
-        TSV, // edge list
-        SNAP // edge list, ignore comment lines beginning with "#"
+        // edge list
+        TSV,
+        // edge list, ignore comment lines beginning with "#"
+        // first line must be a comment with number of nodes, e.g. "#42"
+        SNAP,
+        // list of node handles with corresponding shard ids, then edge list
+        // first line must be of format "#<num_nodes>", e.g. "#42"
+        WEAVER
     };
 
     // graph partition state and associated data structures

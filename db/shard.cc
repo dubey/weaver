@@ -162,13 +162,13 @@ parse_two_uint64(std::string &line, uint64_t &n1, uint64_t &n2)
 }
 
 // initial bulk graph loading method
-// 'format' stores the format of the graph file (currently only SNAP format supported - basically edge list)
+// 'format' stores the format of the graph file
 // 'graph_file' stores the full path filename of the graph file
 inline void
 load_graph(db::graph_file_format format, const char *graph_file)
 {
     std::ifstream file;
-    uint64_t node0, node1;
+    uint64_t node0, node1, loc, edge_handle;
     std::string line, str_node;
     std::unordered_map<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>> graph;
 
@@ -179,13 +179,16 @@ load_graph(db::graph_file_format format, const char *graph_file)
     }
     
     // read, validate, and create graph
+    db::element::node *n;
     uint64_t line_count = 0;
     uint64_t edge_count = 1;
     uint64_t max_node_handle = 0;
     std::unordered_set<uint64_t> seen_nodes;
     std::unordered_map<uint64_t, uint64_t> node_map;
     vc::vclock zero_clk(0, 0);
+
     switch(format) {
+
         case db::SNAP: {
             std::getline(file, line);
             assert(line.length() > 0 && line[0] == '#');
@@ -198,11 +201,10 @@ load_graph(db::graph_file_format format, const char *graph_file)
                     continue;
                 } else {
                     parse_two_uint64(line, node0, node1);
+                    edge_handle = max_node_handle + (edge_count++);
                     uint64_t loc0 = ((node0 % NUM_SHARDS) + SHARD_ID_INCR);
                     uint64_t loc1 = ((node1 % NUM_SHARDS) + SHARD_ID_INCR);
-                    db::element::node *n;
                     if (loc0 == shard_id) {
-                        uint64_t edge_handle = max_node_handle + (edge_count++);
                         n = S->acquire_node_nonlocking(node0);
                         if (n == NULL) {
                             n = S->create_node(node0, zero_clk, false, true);
@@ -233,6 +235,58 @@ load_graph(db::graph_file_format format, const char *graph_file)
             init_nodes = true;
             init_cv.broadcast();
             init_mutex.unlock();
+            break;
+        }
+
+        case db::WEAVER: {
+            std::unordered_map<uint64_t, uint64_t> all_node_map;
+            std::getline(file, line);
+            assert(line.length() > 0 && line[0] == '#');
+            char *max_node_ptr = new char[line.length()+1];
+            std::strcpy(max_node_ptr, line.c_str());
+            max_node_handle = strtoull(++max_node_ptr, NULL, 10);
+            // nodes
+            while (std::getline(file, line)) {
+                parse_two_uint64(line, node0, loc);
+                all_node_map[node0] = loc;
+                if (loc == shard_id) {
+                    n = S->acquire_node_nonlocking(node0);
+                    if (n == NULL) {
+                        n = S->create_node(node0, zero_clk, false, true);
+                        node_map[node0] = shard_id;
+                    }
+                }
+                if (node_map.size() > 100000) {
+                    init_mutex.lock();
+                    init_node_maps.emplace_back(std::move(node_map));
+                    init_cv.broadcast();
+                    init_mutex.unlock();
+                    node_map.clear();
+                }
+                if (++line_count == max_node_handle) {
+                    break;
+                }
+            }
+            init_mutex.lock();
+            while (start_load < 1) {
+                start_load_cv.wait();
+            }
+            init_node_maps.emplace_back(std::move(node_map));
+            init_nodes = true;
+            init_cv.broadcast();
+            init_mutex.unlock();
+            // edges
+            while (std::getline(file, line)) {
+                parse_two_uint64(line, node0, node1);
+                edge_handle = max_node_handle + (edge_count++);
+                uint64_t loc0 = all_node_map[node0];
+                uint64_t loc1 = all_node_map[node1];
+                if (loc0 == shard_id) {
+                    n = S->acquire_node_nonlocking(node0);
+                    assert(n != NULL);
+                    S->create_edge_nonlocking(n, edge_handle, node1, loc1, zero_clk, true);
+                }
+            }
             break;
         }
 
@@ -1095,6 +1149,8 @@ main(int argc, char *argv[])
             format = db::TSV;
         } else if (strcmp(argv[2], "snap") == 0) {
             format = db::SNAP;
+        } else if (strcmp(argv[2], "weaver") == 0) {
+            format = db::WEAVER;
         } else {
             WDEBUG << "Invalid graph file format" << std::endl;
         }
