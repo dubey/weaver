@@ -131,7 +131,6 @@ namespace message
             void change_type(enum msg_type t);
     };
 
-    template <typename T> inline uint64_t size(const T& t);
     template <typename T1, typename T2> inline uint64_t size(const std::unordered_map<T1, T2>& t);
     template <typename T> inline uint64_t size(const std::unordered_set<T>& t);
     template <typename T> inline uint64_t size(const std::vector<T>& t);
@@ -139,7 +138,6 @@ namespace message
     template <typename T1, typename T2> inline uint64_t size(const std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline uint64_t size(const std::tuple<T1, T2, T3>& t);
 
-    template <typename T> inline void pack_buffer(e::buffer::packer& packer, const T& t);
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::vector<T>& t);
@@ -147,7 +145,6 @@ namespace message
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer &packer, const std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3>& t);
 
-    template <typename T> inline void unpack_buffer(e::unpacker& unpacker, T& t);
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::vector<T>& t);
@@ -201,6 +198,12 @@ namespace message
     {
         return sizeof(uint32_t);
     }
+    /*
+    inline uint64_t size(const node_prog::Packable &t)
+    {
+        return t.size();
+    }
+    */
     inline uint64_t size(const node_prog::Node_Parameters_Base &t)
     {
         return t.size();
@@ -273,12 +276,6 @@ namespace message
              + size(t.loc2);
     }
 
-    template <typename T>
-    inline uint64_t size(const T& t)
-    {
-        return size(t);
-    }
-
     template <typename T1, typename T2>
     inline uint64_t size(const std::pair<T1, T2> &t)
     {
@@ -341,6 +338,12 @@ namespace message
 
     // packing templates
 
+    /*
+    inline void pack_buffer(e::buffer::packer &packer, const node_prog::Packable &t)
+    {
+        t.pack(packer);
+    }
+    */
     inline void pack_buffer(e::buffer::packer &packer, const node_prog::Node_Parameters_Base &t)
     {
         t.pack(packer);
@@ -432,12 +435,6 @@ namespace message
         pack_buffer(packer, t.elem2);
         pack_buffer(packer, t.loc1);
         pack_buffer(packer, t.loc2);
-    }
-
-    template <typename T>
-    inline void pack_buffer(e::buffer::packer& packer, const T& t)
-    {
-        pack_buffer(packer, t);
     }
 
     template <typename T1, typename T2>
@@ -568,6 +565,13 @@ namespace message
     }
 
     // unpacking templates
+    /*
+    inline void
+    unpack_buffer(e::unpacker &unpacker, node_prog::Packable &t)
+    {
+        t.unpack(unpacker);
+    }
+    */
     inline void
     unpack_buffer(e::unpacker &unpacker, node_prog::Node_Parameters_Base &t)
     {
@@ -673,11 +677,6 @@ namespace message
         unpack_buffer(unpacker, t.elem2);
         unpack_buffer(unpacker, t.loc1);
         unpack_buffer(unpacker, t.loc2);
-    }
-
-    template <typename T> inline void unpack_buffer(e::unpacker& unpacker, T& t)
-    {
-        unpack_buffer(unpacker, t);
     }
 
     template <typename T1, typename T2>
