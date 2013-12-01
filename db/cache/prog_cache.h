@@ -63,7 +63,7 @@ namespace caching
     {
         // TODO: use prog_type
         cache.emplace(key, std::make_tuple(cache_value, vc, watch_set));
-        WDEBUG << "OMG WE EMPLACED, cache size "<< cache.size() << std::endl;
+        //WDEBUG << "OMG WE EMPLACED, cache size "<< cache.size() << std::endl;
         if (cache.size() > MAX_CACHE_ENTRIES){
             vc::vclock& oldest = vc;
             uint64_t key_to_del = key;

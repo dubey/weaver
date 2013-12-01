@@ -126,5 +126,50 @@ namespace node_prog
         */
     };
 
+    template <typename ParamsType, typename NodeStateType>
+        struct node_prog_running_state : public virtual node_prog::Packable
+    {
+        node_prog::prog_type prog_type_recvd;
+        bool global_req;
+        uint64_t vt_id;
+        vc::vclock req_vclock;
+        uint64_t req_id;
+        std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> start_node_params;
+        db::caching::cache_response *cache_value;
+
+        node_prog_running_state() : cache_value(NULL){};
+
+        virtual uint64_t size() const 
+        {
+            uint64_t toRet = message::size(prog_type_recvd)
+                + message::size(global_req)
+                + message::size(vt_id)
+                + message::size(req_vclock)
+                + message::size(req_id) 
+                + message::size(start_node_params);
+            return toRet;
+        }
+
+        virtual void pack(e::buffer::packer &packer) const 
+        {
+            message::pack_buffer(packer, prog_type_recvd);
+            message::pack_buffer(packer, global_req);
+            message::pack_buffer(packer, vt_id);
+            message::pack_buffer(packer, req_vclock);
+            message::pack_buffer(packer, req_id);
+            message::pack_buffer(packer, start_node_params);
+        }
+
+        virtual void unpack(e::unpacker &unpacker)
+        {
+            message::unpack_buffer(unpacker, prog_type_recvd);
+            message::unpack_buffer(unpacker, global_req);
+            message::unpack_buffer(unpacker, vt_id);
+            message::unpack_buffer(unpacker, req_vclock);
+            message::unpack_buffer(unpacker, req_id);
+            message::unpack_buffer(unpacker, start_node_params);
+        }
+};
+
 }
 #endif //__NODE_PROG__

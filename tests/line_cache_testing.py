@@ -15,17 +15,18 @@ import sys
 sys.path.append('../bindings/python')
 
 import client
+import time
 
 # creating line graph
 nodes = []
-num_nodes = 400
+num_nodes = 300
 coord_id = 0
 c = client.Client(client._CLIENT_ID+1, coord_id)
 
 tx_id = c.begin_tx()
 for i in range(num_nodes):
     nodes.append(c.create_node(tx_id))
-    print 'Created node ' + str(i)
+    #print 'Created node ' + str(i)
 c.end_tx(tx_id)
 tx_id = c.begin_tx()
 for i in range(num_nodes-1):
@@ -34,28 +35,30 @@ for i in range(num_nodes-1):
     else:
         c.create_edge(tx_id, nodes[i], nodes[i+1])
 
-    print 'Created edge ' + str(i)
+    #print 'Created edge ' + str(i)
 c.end_tx(tx_id)
 print 'Created graph'
 
+start = time.time()
 rp = client.ReachParams(dest=nodes[num_nodes-1], caching=True)
-print 'Created reach param: mode = ' + str(rp.mode) + ', reachable = ' + str(rp.reachable)
+#print 'Created reach param: mode = ' + str(rp.mode) + ', reachable = ' + str(rp.reachable)
 for i in range(num_nodes):
     prog_args = [(nodes[i], rp)]
     response = c.run_reach_program(prog_args)
-    print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(response.reachable)
+    #print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(response.reachable)
     assert(response.reachable)
 
-print 'deleting middle edge ' + str(break_edge) + ' and retry'
+#print 'deleting middle edge ' + str(break_edge) + ' and retry'
 tx_id = c.begin_tx()
 c.delete_edge(tx_id, nodes[num_nodes/2], break_edge)
 c.end_tx(tx_id)
 
 for i in range(num_nodes):
-    if i == num_nodes/2 + 1:
-        print 'past broken chain point'
+    #if i == num_nodes/2 + 1:
+        #print 'past broken chain point'
 
     prog_args = [(nodes[i], rp)]
     response = c.run_reach_program(prog_args)
-    print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(response.reachable)
+    #print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(response.reachable)
     assert(response.reachable is (i > num_nodes/2))
+print 'Ran reachability in ' + str(time.time()-start) + ' seconds'
