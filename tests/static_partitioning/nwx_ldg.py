@@ -61,6 +61,17 @@ for n,nbrdict in G.adjacency_iter():
 print assignments
 colors = [float(assignments[n])/float(num_shards) for n in G.nodes()] 
 
+'''
 print 'trying to draw graph...'
 nx.draw_circular(G, node_color=colors)
 plt.show()
+'''
+
+fname = sys.argv[1].rsplit('.',1)
+if len(fname) == 1:
+    fileout = open(fname[0] + '-partitioned.', 'w')
+else:
+    fileout = open(fname[0] + '-partitioned.' + fname[1], 'w')
+fileout.write('# ' + str(len(assignments)) + '\n')
+for (k,v) in assignments.iteritems():
+    fileout.write(str(k) + ' '  + str(v) + '\n')

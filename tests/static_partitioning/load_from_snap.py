@@ -6,7 +6,7 @@ def load(argv):
     assert(len(argv) == 2)
     print 'loading graph from file'
     G=nx.Graph()
-    inputfile = open(argv[1])
+    inputfile = open(argv[1], 'r')
     for line in inputfile:
         edge = line.split()
         if edge[0] is '#': # ignore comments
