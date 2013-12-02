@@ -13,4 +13,5 @@ def load(argv):
             continue
         assert(len(edge) == 2) 
         G.add_edge(int(edge[0]),int(edge[1]))
+    inputfile.close()
     return G

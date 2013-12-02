@@ -52,13 +52,13 @@ def get_ldg_assignment(nbr_iter):
 
 
 
+print 'partitioning graph onto ' + str(num_shards) + ' shards using LDG with a capacity constant of ' + str(capacity)
 G = load_from_snap.load(sys.argv)
 for n,nbrdict in G.adjacency_iter():
     put_on_shard = get_ldg_assignment(nbrdict.iterkeys())
     assignments[n] = put_on_shard 
     shard_sizes[put_on_shard] += 1
 
-print assignments
 colors = [float(assignments[n])/float(num_shards) for n in G.nodes()] 
 
 '''
@@ -75,3 +75,5 @@ else:
 fileout.write('# ' + str(len(assignments)) + '\n')
 for (k,v) in assignments.iteritems():
     fileout.write(str(k) + ' '  + str(v) + '\n')
+fileout.close()
+print 'finshed writing assignments'
