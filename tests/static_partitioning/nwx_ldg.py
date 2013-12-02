@@ -6,13 +6,13 @@ import random
 
 # adds node attribute of which shard node should be placed on
 num_shards = 5
-capacity = 2
+capacity = 20000
 assignments = dict()
 shard_sizes = [0] * num_shards
 
 
 def get_balanced_assignment(tied_shards):
-    min_size = shard_sizes[0]
+    min_size = shard_sizes[tied_shards[0]] #pick one as min
     min_indices = []
     for s in tied_shards:
         if shard_sizes[s] < min_size:
@@ -21,6 +21,7 @@ def get_balanced_assignment(tied_shards):
         elif shard_sizes[s] == min_size:
             min_indices.append(s)
 
+    assert(len(min_indices) > 0)
     return random.choice(min_indices)
 
 
@@ -42,6 +43,8 @@ def get_ldg_assignment(nbr_iter):
             max_indices = [i]
         elif arg_max == val:
             max_indices.append(i)
+
+    assert(len(max_indices) > 0)
     if len(max_indices) is 1:
         return max_indices[0]
     else:
@@ -56,9 +59,8 @@ for n,nbrdict in G.adjacency_iter():
     shard_sizes[put_on_shard] += 1
 
 print assignments
-colors = [0.0]*len(assignments)
-for (n,shard) in assignments.iteritems():
-    print n
-    colors[n-1] = float(shard)/float(num_shards)
-nx.draw(G, node_color=colors)
+colors = [float(assignments[n])/float(num_shards) for n in G.nodes()] 
+
+print 'trying to draw graph...'
+nx.draw_circular(G, node_color=colors)
 plt.show()

@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 
 def load(argv):
     assert(len(argv) == 2)
+    print 'loading graph from file'
     G=nx.Graph()
     inputfile = open(argv[1])
     for line in inputfile:
@@ -11,6 +12,5 @@ def load(argv):
         if edge[0] is '#': # ignore comments
             continue
         assert(len(edge) == 2) 
-        print(edge)
         G.add_edge(int(edge[0]),int(edge[1]))
     return G
