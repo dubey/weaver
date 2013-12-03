@@ -19,7 +19,7 @@ import time
 
 # creating line graph
 nodes = []
-num_nodes = 300
+num_nodes = 200
 coord_id = 0
 c = client.Client(client._CLIENT_ID+1, coord_id)
 
@@ -40,15 +40,18 @@ c.end_tx(tx_id)
 print 'Created graph'
 
 start = time.time()
-rp = client.ReachParams(dest=nodes[num_nodes-1], caching=False)
-#print 'Created reach param: mode = ' + str(rp.mode) + ', reachable = ' + str(rp.reachable)
+rp = client.ReachParams(dest=nodes[num_nodes-1], caching=True)
+print 'Created reach param: mode = ' + str(rp.mode) + ', reachable = ' + str(rp.reachable)
+print('Running rechability from node: '),
 for i in range(num_nodes):
     prog_args = [(nodes[i], rp)]
     response = c.run_reach_program(prog_args)
     #print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(response.reachable)
+    print(str(i) + ','),
+    sys.stdout.flush()
     assert(response.reachable)
-
-#print 'deleting middle edge ' + str(break_edge) + ' and retry'
+print 'successful'
+print('deleting middle edge ' + str(break_edge) + ' and retry from node: '),
 tx_id = c.begin_tx()
 c.delete_edge(tx_id, nodes[num_nodes/2], break_edge)
 c.end_tx(tx_id)
@@ -60,5 +63,8 @@ for i in range(num_nodes):
     prog_args = [(nodes[i], rp)]
     response = c.run_reach_program(prog_args)
     #print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(response.reachable)
+    print(str(i) + ','),
+    sys.stdout.flush()
     assert(response.reachable is (i > num_nodes/2))
+print 'successful'
 print 'Ran reachability in ' + str(time.time()-start) + ' seconds'
