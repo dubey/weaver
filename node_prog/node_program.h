@@ -73,7 +73,7 @@ namespace node_prog
     { }
 
     template <typename ParamsType, typename NodeStateType>
-        struct node_prog_running_state : public virtual node_prog::Packable
+        struct node_prog_running_state //: public virtual node_prog::Packable XXX can't get making this packable to work
     {
         node_prog::prog_type prog_type_recvd;
         bool global_req;
@@ -84,7 +84,7 @@ namespace node_prog
         db::caching::cache_response *cache_value;
 
         node_prog_running_state() : cache_value(NULL){};
-
+        /*
         virtual uint64_t size() const 
         {
             uint64_t toRet = message::size(prog_type_recvd)
@@ -117,6 +117,7 @@ namespace node_prog
             message::unpack_buffer(unpacker, req_id);
             message::unpack_buffer(unpacker, start_node_params);
         }
+        */
     };
 
     class node_program
