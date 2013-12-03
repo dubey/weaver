@@ -659,16 +659,9 @@ inline bool cache_lookup(db::element::node* node_to_check, uint64_t cache_key, n
 }
 
 template <typename ParamsType, typename NodeStateType>
-inline void node_prog_loop(std::vector<std::pair<db::element::remote_node, ParamsType>> (*func)(uint64_t, 
-            db::element::node&, 
-            db::element::remote_node&, 
-            ParamsType&,
-            std::function<NodeStateType&()>,
-            vc::vclock &,
-            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
-            db::caching::cache_response*),
-            node_prog::node_prog_running_state<ParamsType, NodeStateType> np)
+inline void node_prog_loop(
+        typename node_prog::node_function_type<ParamsType, NodeStateType>::value_type func,
+        node_prog::node_prog_running_state<ParamsType, NodeStateType> np)
 {
     // tuple of (node handle, node prog params, prev node)
     typedef std::tuple<uint64_t, ParamsType, db::element::remote_node> node_params_t;
