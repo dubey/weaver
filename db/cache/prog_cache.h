@@ -36,17 +36,6 @@ namespace caching
         std::vector<db::element::edge> edges_deleted;
     };
 
-    struct cache_response
-    {
-        public:
-            std::shared_ptr<node_prog::Cache_Value_Base> value;
-            std::vector<std::pair<db::element::remote_node, node_cache_context>> context;
-            void invalidate();
-//            cache_response((uint64t)()*invalidate_fun
-//            ~cache_response(); // XXX mem leak?
-    };
-
-
     class program_cache 
     {
         uint64_t uid = 0;
@@ -81,6 +70,24 @@ namespace caching
     inline uint64_t
     program_cache :: gen_uid(){
         return ++uid;
+    }
+
+    struct cache_response
+    {
+        private:
+            program_cache &from;
+            uint64_t key;
+
+        public:
+            std::shared_ptr<node_prog::Cache_Value_Base> value;
+            std::vector<std::pair<db::element::remote_node, node_cache_context>> context;
+            void invalidate();
+            cache_response(program_cache &came_from, uint64_t key_used) : from(came_from), key(key_used) {};
+    };
+
+    inline void
+    cache_response :: invalidate(){
+        from.cache.erase(key);
     }
 }
 }

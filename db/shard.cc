@@ -614,8 +614,7 @@ inline bool cache_lookup(db::element::node* node_to_check, uint64_t cache_key, n
             return true;
         }
         assert(cmp_1 == 0);
-
-        np.cache_value = new db::caching::cache_response();
+        np.cache_value = new db::caching::cache_response(node_to_check->cache, cache_key);
         np.cache_value->value = cval;
         if (watch_set->empty()){
             //something about invalidate
