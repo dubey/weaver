@@ -101,6 +101,7 @@ namespace coordinator
             uint32_t load_count;
             uint64_t max_load_time;
             // migration
+            uint64_t migr_client;
             // permanent deletion
             // daemon
             // messaging

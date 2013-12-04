@@ -56,6 +56,7 @@ namespace client
             node_prog::reach_params run_reach_program(std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args);
 
             void start_migration();
+            void single_stream_migration();
             void commit_graph();
             void exit_weaver();
 
@@ -193,6 +194,18 @@ namespace client
         message::message msg;
         message::prepare_message(msg, message::START_MIGR);
         send_coord(msg.buf);
+    }
+
+    inline void
+    client :: single_stream_migration()
+    {
+        message::message msg;
+        message::prepare_message(msg, message::ONE_STREAM_MIGR);
+        send_coord(msg.buf);
+
+        if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
+            WDEBUG << "single stream migration return msg fail" << std::endl;
+        }
     }
 
     inline void

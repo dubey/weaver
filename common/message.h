@@ -53,6 +53,9 @@ namespace message
         CLIENT_NODE_PROG_REPLY,
         CLIENT_NODE_LOC_REQ,
         CLIENT_NODE_LOC_REPLY,
+        START_MIGR,
+        ONE_STREAM_MIGR,
+        EXIT_WEAVER,
         // graph update messages
         TX_INIT,
         TX_DONE,
@@ -102,9 +105,8 @@ namespace message
         VT_CLOCK_UPDATE_ACK,
         VT_NOP,
         VT_NOP_ACK,
+        DONE_MIGR,
 
-        START_MIGR,
-        EXIT_WEAVER,
         ERROR
     };
 

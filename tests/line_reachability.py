@@ -18,7 +18,7 @@ import client
 
 # creating line graph
 nodes = []
-num_nodes = 100
+num_nodes = 1000
 coord_id = 0
 c = client.Client(client._CLIENT_ID+1, coord_id)
 
@@ -40,3 +40,5 @@ for i in range(num_nodes):
     prog_args = [(nodes[i], rp)]
     response = c.run_reach_program(prog_args)
     print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(response.reachable)
+    if i == num_nodes/10:
+        c.start_migration()

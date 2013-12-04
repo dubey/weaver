@@ -96,8 +96,8 @@ namespace db
             uint64_t shard_id;
             std::unordered_map<uint64_t, element::node*> nodes; // node handle -> ptr to node object
             std::unordered_map<uint64_t, // shard id s ->
-                                std::unordered_map<uint64_t, // node handle n ->
-                                    std::unordered_set<uint64_t>>> edge_map; // set of nodes which have (s,n) as out-neighbor
+                std::unordered_map<uint64_t, // node handle n ->
+                    std::unordered_set<uint64_t>>> edge_map; // set of nodes which have (s,n) as out-neighbor
         private:
             db::thread::pool thread_pool;
         public:
@@ -127,10 +127,10 @@ namespace db
             // Migration
         public:
             bool current_migr, migr_token, migrated;
-            uint64_t migr_chance, cur_node_count, prev_migr_node, migr_node, migr_shard;
+            uint64_t migr_chance, migr_node, migr_shard, migr_token_hops, migr_vt;
             std::unordered_map<uint64_t, uint32_t> agg_msg_count;
             std::deque<std::pair<uint64_t, uint32_t>> sorted_nodes;
-            std::unordered_map<uint64_t, uint64_t> request_count;
+            std::vector<uint64_t> shard_node_count;
             std::unordered_map<uint64_t, def_write_lst> deferred_writes; // for migrating nodes
             std::unordered_map<uint64_t, std::vector<std::unique_ptr<message::message>>> deferred_reads; // for migrating nodes
             std::vector<uint64_t> nop_count;
@@ -165,9 +165,6 @@ namespace db
             busybee_mta *bb; // Busybee instance used for sending and receiving messages
             busybee_returncode send(uint64_t loc, std::auto_ptr<e::buffer> buf);
 
-            // Testing:
-        public:
-            uint64_t num_nodes();
     };
 
     inline
@@ -178,7 +175,7 @@ namespace db
         , migr_token(false)
         , migrated(false)
         , migr_chance(0)
-        , cur_node_count(0)
+        , shard_node_count(NUM_SHARDS, 0)
         , nop_count(NUM_VTS, 0)
         , max_clk(MAX_UINT64, MAX_UINT64)
         , zero_clk(0, 0)
@@ -252,11 +249,16 @@ namespace db
             // TODO permanent deletion code check
             uint64_t node_handle = n->get_handle();
             nodes.erase(node_handle);
-            cur_node_count--;
             update_mutex.unlock();
+
+            migration_mutex.lock();
+            shard_node_count[shard_id - SHARD_ID_INCR]--;
+            migration_mutex.unlock();
+            
             msg_count_mutex.lock();
             agg_msg_count.erase(node_handle);
             msg_count_mutex.unlock();
+            
             permanent_node_delete(n);
         } else {
             update_mutex.unlock();
@@ -282,27 +284,26 @@ namespace db
     shard :: create_node(uint64_t node_handle, vc::vclock &vclk, bool migrate, bool init_load=false)
     {
         element::node *new_node = new element::node(node_handle, vclk, &update_mutex);
+        
         if (!init_load) {
             update_mutex.lock();
         }
         assert(nodes.emplace(node_handle, new_node).second);
-        cur_node_count++;
         if (!init_load) {
             update_mutex.unlock();
         }
-        if (migrate) {
+
+        if (!init_load) {
             migration_mutex.lock();
-            migr_node = node_handle;
+        }
+        shard_node_count[shard_id - SHARD_ID_INCR]++;
+        if (!init_load) {
             migration_mutex.unlock();
-        } else {
+        }
+        
+        if (!migrate) {
             new_node->state = element::node::mode::STABLE;
-            new_node->prev_locs.reserve(NUM_SHARDS);
-            new_node->agg_msg_count.resize(NUM_SHARDS, 0);
             new_node->msg_count.resize(NUM_SHARDS, 0);
-            for (uint64_t i = 0; i < NUM_SHARDS; i++) {
-                new_node->prev_locs.emplace_back(0);
-            }
-            new_node->prev_locs.at(shard_id-SHARD_ID_INCR) = 1;
             release_node(new_node);
         }
         return new_node;
@@ -420,7 +421,6 @@ namespace db
             delete e.second;
         }
         n->out_edges.clear();
-        assert(n->waiters == 0); // nobody should try to acquire this node now
         prog_state.delete_node_state(migr_node);
         release_node(n);
     }
@@ -432,8 +432,9 @@ namespace db
         message::message msg;
         assert(n->waiters == 0);
         assert(!n->in_use);
-        // following 2 loops are no-ops in case of deletion of
+        // following loop is a no-op in case of deletion of
         // migrated nodes, since edges have already been deleted
+        // TODO fix permanent deletion, no back-edges now
         for (auto &it: n->out_edges) {
             e = it.second;
             message::prepare_message(msg, message::PERMANENT_DELETE_EDGE, e->nbr.handle, it.first);
@@ -481,7 +482,8 @@ namespace db
         migration_mutex.lock();
         if (old_loc != shard_id) {
             message::message msg;
-            message::prepare_message(msg, message::MIGRATED_NBR_ACK, shard_id, max_prog_id);
+            message::prepare_message(msg, message::MIGRATED_NBR_ACK, shard_id, max_prog_id,
+                    shard_node_count[shard_id-SHARD_ID_INCR]);
             send(old_loc, msg.buf);
         } else {
             for (int i = 0; i < NUM_VTS; i++) {
@@ -494,7 +496,6 @@ namespace db
         migration_mutex.unlock();
     }
 
-    // caution: assuming we hold migration_mutex, for hyperdex client
     inline void
     shard :: update_node_mapping(uint64_t node, uint64_t shard)
     {
@@ -558,13 +559,6 @@ namespace db
             WDEBUG << "msg send error: " << ret << std::endl;
         }
         return ret;
-    }
-
-    // testing methods
-    inline uint64_t
-    shard :: num_nodes()
-    {
-        return nodes.size();
     }
 
     inline thread::unstarted_thread*

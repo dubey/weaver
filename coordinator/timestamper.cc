@@ -422,7 +422,6 @@ server_loop(int thread_id)
                     vts->to_nop.set(sender - SHARD_ID_INCR);
                     vts->periodic_cond.signal();
                     vts->periodic_update_mutex.unlock();
-                    //nop(sender);
                     break;
 
                 // shard messages
@@ -445,10 +444,31 @@ server_loop(int thread_id)
                     end_transaction(tx_id);
                     break;
 
-                case message::START_MIGR:
-                    message::prepare_message(*msg, message::MIGRATION_TOKEN);
+                case message::START_MIGR: {
+                    uint64_t hops = MAX_UINT64;
+                    message::prepare_message(*msg, message::MIGRATION_TOKEN, hops, vt_id);
                     vts->send(START_MIGR_ID, msg->buf); 
-                    break; 
+                    break;
+                }
+
+                case message::ONE_STREAM_MIGR: {
+                    uint64_t hops = NUM_SHARDS;
+                    vts->mutex.lock();
+                    vts->migr_client = sender;
+                    vts->mutex.unlock();
+                    message::prepare_message(*msg, message::MIGRATION_TOKEN, hops, vt_id);
+                    vts->send(START_MIGR_ID, msg->buf);
+                    break;
+                }
+
+                case message::MIGRATION_TOKEN: {
+                    vts->mutex.lock();
+                    uint64_t client = vts->migr_client;
+                    vts->mutex.unlock();
+                    message::prepare_message(*msg, message::DONE_MIGR);
+                    vts->send(client, msg->buf);
+                    break;
+                }
 
                 case message::CLIENT_NODE_PROG_REQ:
                     message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, pType);

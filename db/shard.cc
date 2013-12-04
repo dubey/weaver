@@ -44,7 +44,6 @@ static uint16_t start_load;
 db::shard *db::thread::pool::S = NULL; // reinitialized in graph constructor
 
 void migrated_nbr_update(std::unique_ptr<message::message> msg);
-void migrated_nbr_ack();
 void migrate_node_step1(uint64_t node_handle, uint64_t shard);
 void migrate_node_step2_req();
 void migrate_node_step2_resp(std::unique_ptr<message::message> msg);
@@ -296,7 +295,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
     }
     file.close();
 
-    WDEBUG << "Loaded graph at shard " << shard_id << " with " << S->num_nodes()
+    WDEBUG << "Loaded graph at shard " << shard_id << " with " << S->shard_node_count[shard_id - SHARD_ID_INCR]
             << " nodes and " << edge_count << " edges" << std::endl;
 }
 
@@ -325,38 +324,6 @@ init_nmap()
     WDEBUG << "Done init nmap thread, exiting now" << std::endl;
 }
 
-// called on a separate thread during bulk graph loading process
-// issues Hyperdex calls to store the edge map
-//inline void
-//init_emap()
-//{
-//    nmap::nmap_stub node_mapper;
-//    uint64_t edge_count = 0;
-//    timespec ts;
-//    uint64_t time;
-//    init_mutex.lock();
-//    start_load++;
-//    start_load_cv.signal();
-//    while (!init_edges || !init_edge_maps.empty()) {
-//        if (init_edge_maps.empty()) {
-//            init_cv.wait();
-//        } else {
-//            auto &edge_map = init_edge_maps.front();
-//            WDEBUG << "EMAP init edge map at shard " << shard_id << ", map size = " << edge_map.size() << std::endl;
-//            edge_count += edge_map.size();
-//            init_mutex.unlock();
-//            time = wclock::get_time_elapsed(ts);
-//            node_mapper.put_mappings(edge_map, false);
-//            time = wclock::get_time_elapsed(ts) - time;
-//            init_mutex.lock();
-//            WDEBUG << "EMAP done init edge map at shard " << shard_id << ", time taken = " << time/MEGA << " ms." << std::endl;
-//            init_edge_maps.pop_front();
-//        }
-//    }
-//    init_mutex.unlock();
-//    WDEBUG << "Done init emap thread, edge processed = " << edge_count << " at shard " << shard_id << std::endl;
-//}
-
 void
 migrated_nbr_update(std::unique_ptr<message::message> msg)
 {
@@ -366,7 +333,7 @@ migrated_nbr_update(std::unique_ptr<message::message> msg)
 }
 
 void
-migrated_nbr_ack(uint64_t from_loc, std::vector<uint64_t> &target_req_id)
+migrated_nbr_ack(uint64_t from_loc, std::vector<uint64_t> &target_req_id, uint64_t node_count)
 {
     S->migration_mutex.lock();
     for (int i = 0; i < NUM_VTS; i++) {
@@ -375,6 +342,7 @@ migrated_nbr_ack(uint64_t from_loc, std::vector<uint64_t> &target_req_id)
         }
     }
     S->migr_edge_acks.set(from_loc - SHARD_ID_INCR);
+    S->shard_node_count[from_loc - SHARD_ID_INCR] = node_count;
     S->migration_mutex.unlock();
 }
 
@@ -382,10 +350,6 @@ void
 unpack_migrate_request(void *req)
 {
     db::graph_request *request = (db::graph_request*)req;
-    vc::vclock vclk;
-    vc::qtimestamp_t qts;
-    uint64_t from_loc;
-    std::vector<uint64_t> done_ids;
 
     switch (request->type) {
         case message::MIGRATED_NBR_UPDATE:
@@ -396,10 +360,13 @@ unpack_migrate_request(void *req)
             migrate_node_step2_resp(std::move(request->msg));
             break;
 
-        case message::MIGRATED_NBR_ACK:
-            message::unpack_message(*request->msg, request->type, from_loc, done_ids);
-            migrated_nbr_ack(from_loc, done_ids);
+        case message::MIGRATED_NBR_ACK: {
+            uint64_t from_loc, node_count;
+            std::vector<uint64_t> done_ids;
+            message::unpack_message(*request->msg, request->type, from_loc, done_ids, node_count);
+            migrated_nbr_ack(from_loc, done_ids, node_count);
             break;
+        }
 
         default:
             WDEBUG << "unknown type" << std::endl;
@@ -456,6 +423,7 @@ unpack_tx_request(void *req)
 inline void
 nop(void *noparg)
 {
+    message::message msg;
     db::nop_data *nop_arg = (db::nop_data*)noparg;
     bool check_move_migr, check_init_migr, check_migr_step3;
     
@@ -479,10 +447,18 @@ nop(void *noparg)
         check_move_migr = false;
     }
     if (!S->migrated && S->migr_token) {
-        if (S->migr_chance++ > 2) {
+        if (S->migr_token_hops == 0) {
+            // return token to vt
+            WDEBUG << "Returning token to VT " << S->migr_vt << std::endl;
+            message::prepare_message(msg, message::MIGRATION_TOKEN);
+            S->send(S->migr_vt, msg.buf);
+            S->migrated = true;
+            S->migr_token = false;
+        } else if (S->migr_chance++ > 2) {
             S->migrated = true;
             check_init_migr = true;
             S->migr_chance = 0;
+            WDEBUG << "Got token at shard " << shard_id << ", migr hops = " << S->migr_token_hops << std::endl;
         }
     }
 
@@ -491,9 +467,6 @@ nop(void *noparg)
     S->max_done_id[nop_arg->vt_id] = nop_arg->max_done_id;
     check_migr_step3 = check_step3();
     
-    //std::cout << "Check move migr " << check_move_migr
-    //          << ", check init migr " << check_init_migr
-    //          << ", check migr step3 " << check_migr_step3 << std::endl;
     // atmost one check should be true
     assert(!(check_move_migr && check_init_migr)
         && !(check_init_migr && check_migr_step3)
@@ -511,7 +484,6 @@ nop(void *noparg)
     }
 
     // ack to VT
-    message::message msg;
     message::prepare_message(msg, message::VT_NOP_ACK, shard_id);
     S->send(nop_arg->vt_id, msg.buf);
     free(nop_arg);
@@ -711,7 +683,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
                     } else {
                         batched_node_progs[loc].emplace_back(res.first.handle, std::move(res.second), this_node);
                         S->agg_msg_count[node_handle]++;
-                        S->request_count[loc]++; // increment count of msges sent to loc
                     }
                 }
                 S->msg_count_mutex.unlock();
@@ -758,25 +729,22 @@ migrate_node_step1(uint64_t node_handle, uint64_t shard)
         for (uint64_t &x: S->nop_count) {
             x = 0;
         }
+        S->migration_mutex.unlock();
+
         // mark node as "in transit"
         n->state = db::element::node::mode::IN_TRANSIT;
         n->new_loc = shard;
-        S->prev_migr_node = S->migr_node;
         S->migr_node = node_handle;
         S->migr_shard = shard;
+
         // updating edge map
         S->edge_map_mutex.lock();
-        std::unordered_set<uint64_t> seen_nodes;
         for (auto &e: n->out_edges) {
             uint64_t node = e.second->nbr.handle;
             uint64_t loc = e.second->nbr.loc;
             assert(S->edge_map.find(loc) != S->edge_map.end());
             assert(S->edge_map[loc].find(node) != S->edge_map[loc].end());
             auto &node_set = S->edge_map[loc][node];
-            if (seen_nodes.find(node_handle) == seen_nodes.end()) {
-                assert(node_set.find(node_handle) != node_set.end());
-            }
-            seen_nodes.emplace(node_handle);
             node_set.erase(node_handle);
             if (node_set.empty()) {
                 S->edge_map[loc].erase(node);
@@ -784,8 +752,9 @@ migrate_node_step1(uint64_t node_handle, uint64_t shard)
         }
         S->edge_map_mutex.unlock();
         S->release_node(n);
+
+        // update Hyperdex map for this node
         S->update_node_mapping(node_handle, shard);
-        S->migration_mutex.unlock();
     }
 }
 
@@ -795,16 +764,18 @@ migrate_node_step2_req()
 {
     db::element::node *n;
     message::message msg;
-    n = S->acquire_node(S->migr_node);
-    assert(n != NULL);
+
     S->migration_mutex.lock();
     S->current_migr = false;
-    message::prepare_message(msg, message::MIGRATE_SEND_NODE, S->migr_node, shard_id, *n);
-    S->release_node(n);
     for (uint64_t idx = 0; idx < NUM_VTS; idx++) {
         S->target_prog_id[idx] = 0;
     }
     S->migration_mutex.unlock();
+
+    n = S->acquire_node(S->migr_node);
+    assert(n != NULL);
+    message::prepare_message(msg, message::MIGRATE_SEND_NODE, S->migr_node, shard_id, *n);
+    S->release_node(n);
     S->send(S->migr_shard, msg.buf);
     WDEBUG << "Migrating node " << S->migr_node << " to shard " << S->migr_shard << std::endl;
 }
@@ -830,8 +801,6 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
         WDEBUG << "bad_alloc caught " << ba.what() << std::endl;
         return;
     }
-    n->prev_loc = from_loc; // record shard from which we just migrated this node
-    n->prev_locs.at(shard_id - SHARD_ID_INCR) = 1; // mark this shard as one of the previous locations
     
     // updating edge map
     S->edge_map_mutex.lock();
@@ -911,7 +880,6 @@ check_step3()
 {
     bool init_step3 = S->migr_edge_acks.all(); // all shards must have responded for edge updates
     for (int i = 0; i < NUM_VTS && init_step3; i++) {
-        // XXX check following condition
         init_step3 = (S->target_prog_id[i] <= S->max_done_id[i]);
     }
     if (init_step3) {
@@ -934,43 +902,60 @@ void
 migration_wrapper()
 {
     bool no_migr = true;
+    S->migration_mutex.lock();
+    std::vector<uint64_t> shard_node_count = S->shard_node_count;
+    S->migration_mutex.unlock();
     while (!S->sorted_nodes.empty()) {
         db::element::node *n;
         uint64_t max_pos, migr_pos;
         uint64_t migr_node = S->sorted_nodes.front().first;
         n = S->acquire_node(migr_node);
+
+        // check if okay to migrate
         if (n == NULL || order::compare_two_clocks(n->get_del_time().clock, S->max_clk.clock) != 2 ||
             n->state == db::element::node::mode::IN_TRANSIT ||
-            n->state == db::element::node::mode::MOVED) {
+            n->state == db::element::node::mode::MOVED ||
+            n->already_migr) {
             if (n != NULL) {
+                WDEBUG << "Skipping already migrated node\n";
+                n->already_migr = false;
                 S->release_node(n);
             }
             S->sorted_nodes.pop_front();
             continue;
         }
         n->updated = false;
+
         db::element::edge *e;
+        // get aggregate msg counts per shard
+        std::vector<uint64_t> msg_count(NUM_SHARDS, 0);
         for (auto &e_iter: n->out_edges) {
             e = e_iter.second;
-            n->msg_count.at(e->nbr.loc-SHARD_ID_INCR) += e->msg_count;
-            //e->msg_count = 0;
+            msg_count[e->nbr.loc - SHARD_ID_INCR] += e->msg_count;
         }
+        // EWMA update to msg count
+        for (uint64_t i = 0; i < NUM_SHARDS; i++) {
+            double new_val = 0.4 * n->msg_count[i] + 0.6 * msg_count[i];
+            n->msg_count[i] = new_val;
+        }
+        // update migration score based on CLDG
         for (int j = 0; j < NUM_SHARDS; j++) {
-            n->agg_msg_count.at(j) += (uint64_t)(0.8 * (double)(n->msg_count.at(j)));
+            n->migr_score[j] = n->msg_count[j] * (1 - ((double)shard_node_count[j])/SHARD_CAP);
         }
-        max_pos = 0;
-        for (uint64_t j = 0; j < n->agg_msg_count.size(); j++) {
-            if (n->agg_msg_count.at(max_pos) < n->agg_msg_count.at(j)) {
+        // find arg max
+        max_pos = shard_id - SHARD_ID_INCR; // don't migrate if all equal
+        for (int j = 0; j < NUM_SHARDS; j++) {
+            if (n->migr_score[max_pos] < n->migr_score[j]) {
                 max_pos = j;
             }
         }
-        migr_pos = max_pos;
-        migr_pos += SHARD_ID_INCR; // fixing index
-        for (uint32_t &cnt: n->msg_count) {
-            cnt = 0;
+        migr_pos = max_pos + SHARD_ID_INCR; // fixing index
+        if (migr_pos > shard_id) {
+            n->already_migr = true;
         }
         S->release_node(n);
         S->sorted_nodes.pop_front();
+        
         // no migration to self
         if (migr_pos != shard_id) {
             migrate_node_step1(migr_node, migr_pos);
@@ -994,7 +979,7 @@ bool agg_count_compare(std::pair<uint64_t, uint32_t> p1, std::pair<uint64_t, uin
 void
 shard_daemon_begin()
 {
-    WDEBUG << "Starting shard daemon" << std::endl;
+    /*
     S->msg_count_mutex.lock();
     auto agg_msg_count = std::move(S->agg_msg_count);
     assert(S->agg_msg_count.empty());
@@ -1004,9 +989,14 @@ shard_daemon_begin()
         sn.emplace_back(p);
     }
     std::sort(sn.begin(), sn.end(), agg_count_compare);
-    WDEBUG << "sorted nodes size " << sn.size() << std::endl;
-    WDEBUG << "total num nodes " << S->num_nodes() << std::endl;
     S->sorted_nodes = std::move(sn);
+    */
+    S->update_mutex.lock();
+    for (auto &entry: S->nodes) {
+        S->sorted_nodes.emplace_back(std::make_pair(entry.first, 0));
+    }
+    S->update_mutex.unlock();
+
     migration_wrapper();
 }
 
@@ -1015,9 +1005,9 @@ void
 shard_daemon_end()
 {
     message::message msg;
-    message::prepare_message(msg, message::MIGRATION_TOKEN);
     S->migration_mutex.lock();
     S->migr_token = false;
+    message::prepare_message(msg, message::MIGRATION_TOKEN, --S->migr_token_hops, S->migr_vt);
     S->migration_mutex.unlock();
     uint64_t next_id; 
     if ((shard_id + 1 - SHARD_ID_INCR) >= NUM_SHARDS) {
@@ -1098,12 +1088,11 @@ msgrecv_loop()
                 break;
 
             case message::MIGRATION_TOKEN:
-                WDEBUG << "Now obtained migration token at shard " << shard_id << std::endl;
                 S->migration_mutex.lock();
+                message::unpack_message(*rec_msg, mtype, S->migr_token_hops, S->migr_vt);
                 S->migr_token = true;
                 S->migrated = false;
                 S->migration_mutex.unlock();
-                WDEBUG << "Ended obtaining token" << std::endl;
                 break;
 
             case message::LOADED_GRAPH: {

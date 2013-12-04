@@ -60,12 +60,11 @@ namespace element
             std::unique_ptr<std::vector<uint64_t>> cached_req_ids; // requests which have been cached
 
             // for migration
-            uint64_t prev_loc, new_loc;
+            uint64_t new_loc;
             uint64_t update_count;
-            std::vector<uint16_t> prev_locs;
-            std::vector<uint64_t> agg_msg_count;
+            std::vector<double> migr_score;
             std::vector<uint32_t> msg_count;
-            bool updated;
+            bool updated, already_migr;
             uint32_t dependent_del;
             // queued requests, for the time when the node is marked in transit
             // but requests cannot yet be forwarded to new location which is still
@@ -89,10 +88,11 @@ namespace element
         , waiters(0)
         , permanently_deleted(false)
         , cached_req_ids(new std::vector<uint64_t>())
-        , prev_loc(-1)
         , new_loc(-1)
         , update_count(1)
+        , migr_score(NUM_SHARDS, 0)
         , updated(true)
+        , already_migr(false)
         , dependent_del(0)
     { }
 

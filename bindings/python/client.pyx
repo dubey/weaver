@@ -151,6 +151,7 @@ cdef extern from 'client/client.h' namespace 'client':
         void end_tx(uint64_t tx_id)
         reach_params run_reach_program(vector[pair[uint64_t, reach_params]] initial_args)
         void start_migration()
+        void single_stream_migration()
         void commit_graph()
         void exit_weaver()
 
@@ -188,6 +189,8 @@ cdef class Client:
         return response
     def start_migration(self):
         self.thisptr.start_migration()
+    def single_stream_migration(self):
+        self.thisptr.single_stream_migration()
     def commit_graph(self):
         self.thisptr.commit_graph()
     def exit_weaver(self):

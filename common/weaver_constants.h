@@ -50,6 +50,7 @@
 #define BATCH_MSG_SIZE 1 // 1 == no batching
 // migration
 #define START_MIGR_ID SHARD_ID_INCR // first shard to get migration token
+#define SHARD_CAP (100000ULL)
 // coordinator
 #define VT_NANO (1000000000ULL)
 #define VT_BB_TIMEOUT 1 // epoll timeout in ms
