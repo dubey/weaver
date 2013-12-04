@@ -743,7 +743,7 @@ inline void node_prog_loop(
 
                 auto next_node_params = func(np.req_id, *node, this_node,
                         params, // actual parameters for this node program
-                        node_state_getter, *np.req_vclock, add_cache_func, np.cache_value); //XXX
+                        node_state_getter, np.req_vclock, add_cache_func, np.cache_value); //XXX
                // WDEBUG << "1 got new params count" << next_node_params.size() << std::endl;
                 // batch the newly generated node programs for onward propagation
                 S->msg_count_mutex.lock();

@@ -207,7 +207,7 @@ namespace node_prog
             db::element::remote_node &rn,
             reach_params &params,
             std::function<reach_node_state&()> state_getter,
-            vc::vclock &req_vclock,
+            std::shared_ptr<vc::vclock> &req_vclock,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
             db::caching::cache_response *cache_response)
@@ -253,11 +253,11 @@ namespace node_prog
                         e = iter.second;
                         // TODO change this so that the user does not see invalid edges
                         // check edge created and deleted in acceptable timeframe
-                        int64_t cmp_1 = order::compare_two_vts(e->get_creat_time(), req_vclock);
+                        int64_t cmp_1 = order::compare_two_vts(e->get_creat_time(), *req_vclock);
                         assert(cmp_1 != 2);
                         bool traverse_edge = (cmp_1 == 0);
                         if (traverse_edge) {
-                            int64_t cmp_2 = order::compare_two_vts(e->get_del_time(), req_vclock);
+                            int64_t cmp_2 = order::compare_two_vts(e->get_del_time(), *req_vclock);
                             assert(cmp_2 != 2);
                             traverse_edge = (cmp_2 == 1);
                         }

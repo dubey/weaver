@@ -57,7 +57,7 @@ namespace node_prog
                 db::element::remote_node&, // this remote node
                 params_type&,
                 std::function<node_state_type&()>,
-                vc::vclock &req_vlock,
+                std::shared_ptr<vc::vclock> &req_vlock,
                 std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
                     std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
                     db::caching::cache_response *cache_response);
