@@ -20,6 +20,8 @@ import time
 # creating line graph
 nodes = []
 num_nodes = 700
+cut_idx = 100
+assert(cut_idx < num_nodes)
 coord_id = 0
 c = client.Client(client._CLIENT_ID+1, coord_id)
 
@@ -30,7 +32,7 @@ for i in range(num_nodes):
 c.end_tx(tx_id)
 tx_id = c.begin_tx()
 for i in range(num_nodes-1):
-    if i == num_nodes/2:
+    if i == cut_idx:
         break_edge = c.create_edge(tx_id, nodes[i], nodes[i+1])
     else:
         c.create_edge(tx_id, nodes[i], nodes[i+1])
@@ -51,9 +53,10 @@ for i in range(num_nodes):
     sys.stdout.flush()
     assert(response.reachable)
 print 'successful'
-print('deleting middle edge ' + str(break_edge) + ' and retry from node: '),
+print('deleting edge ' + str(break_edge) + ' and retry from node: '),
+sys.stdout.flush()
 tx_id = c.begin_tx()
-c.delete_edge(tx_id, nodes[num_nodes/2], break_edge)
+c.delete_edge(tx_id, nodes[cut_idx], break_edge)
 c.end_tx(tx_id)
 
 for i in range(num_nodes):
@@ -65,6 +68,6 @@ for i in range(num_nodes):
     #print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(response.reachable)
     print(str(i) + ','),
     sys.stdout.flush()
-    assert(response.reachable is (i > num_nodes/2))
+    assert(response.reachable is (i > cut_idx));
 print 'successful'
 print 'Ran reachability in ' + str(time.time()-start) + ' seconds'
