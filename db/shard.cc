@@ -535,7 +535,7 @@ fill_node_cache_context(db::caching::node_cache_context& context, db::element::n
 
 inline void
 fetch_node_cache_context(uint64_t loc, uint64_t handle, std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& toFill,
-        vc::vclock& cache_entry_time, vc::vclock& req_vclock) //XXX
+        vc::vclock& cache_entry_time, vc::vclock& req_vclock)
 {
     db::element::node *node = S->acquire_node(handle);
     assert(node != NULL); // TODO could be garbage collected, or migrated but not completed?
@@ -598,7 +598,7 @@ inline bool cache_lookup(db::element::node* node_to_check, uint64_t cache_key, n
     } else {
         auto entry = node_to_check->cache.cache.at(cache_key);
         std::shared_ptr<node_prog::Cache_Value_Base>& cval = std::get<0>(entry);
-        vc::vclock& cache_entry_time = std::get<1>(entry);
+        vc::vclock& cache_entry_time = *std::get<1>(entry);
         std::shared_ptr<std::vector<db::element::remote_node>>& watch_set = std::get<2>(entry);
 
         int64_t cmp_1 = order::compare_two_vts(cache_entry_time, *np.req_vclock);
@@ -637,7 +637,7 @@ inline bool cache_lookup(db::element::node* node_to_check, uint64_t cache_key, n
 
         uint64_t lookup_id = node_to_check->cache.gen_uid() ^ node_to_check->get_handle(); // for now we just xoring a counter and the node handle
         // map from node_handle, lookup_id to node_prog_running_state
-        fetch_state<ParamsType, NodeStateType> *fstate = new fetch_state<ParamsType, NodeStateType>(np); // we dont need start_node_params
+        fetch_state<ParamsType, NodeStateType> *fstate = new fetch_state<ParamsType, NodeStateType>(np); // XXX we dont need start_node_params
         fstate->replies_left = contexts_to_fetch.size();
 
         S->node_prog_running_states[lookup_id] = fstate; 
@@ -738,12 +738,12 @@ inline void node_prog_loop(
                 // call node program
                 using namespace std::placeholders;
                 add_cache_func = std::bind(&db::caching::program_cache::add_cache_value, &(node->cache),
-                        np.prog_type_recvd, _1, _2, _3, *np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key XXX change back to shared ptr
+                        np.prog_type_recvd, _1, _2, _3, np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key
                 }
 
                 auto next_node_params = func(np.req_id, *node, this_node,
                         params, // actual parameters for this node program
-                        node_state_getter, np.req_vclock, add_cache_func, np.cache_value); //XXX
+                        node_state_getter, np.req_vclock, add_cache_func, np.cache_value);
                // WDEBUG << "1 got new params count" << next_node_params.size() << std::endl;
                 // batch the newly generated node programs for onward propagation
                 S->msg_count_mutex.lock();
