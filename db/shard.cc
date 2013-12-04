@@ -737,7 +737,8 @@ inline void node_prog_loop(
                 {
                 // call node program
                 using namespace std::placeholders;
-                add_cache_func = std::bind(&db::caching::program_cache::add_cache_value, &(node->cache), np.prog_type_recvd, _1, _2, _3, np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key
+                add_cache_func = std::bind(&db::caching::program_cache::add_cache_value, &(node->cache),
+                        np.prog_type_recvd, _1, _2, _3, np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key
                 }
 
                 auto next_node_params = func(np.req_id, *node, this_node,
