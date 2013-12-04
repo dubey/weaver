@@ -19,8 +19,8 @@ import time
 
 # creating line graph
 nodes = []
-num_nodes = 700
-cut_idx = 100
+num_nodes = 1400
+cut_idx = 200
 assert(cut_idx < num_nodes)
 coord_id = 0
 c = client.Client(client._CLIENT_ID+1, coord_id)
@@ -42,7 +42,7 @@ c.end_tx(tx_id)
 print 'Created graph'
 
 start = time.time()
-rp = client.ReachParams(dest=nodes[num_nodes-1], caching=True)
+rp = client.ReachParams(dest=nodes[num_nodes-1], caching=False)
 print 'Created reach param: mode = ' + str(rp.mode) + ', reachable = ' + str(rp.reachable)
 print('Running rechability from node: '),
 for i in range(num_nodes):

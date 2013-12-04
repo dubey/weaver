@@ -467,16 +467,27 @@ nop(void *noparg)
 }
 
 template <typename NodeStateType>
-NodeStateType& return_state(node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle)
+std::shared_ptr<NodeStateType> get_node_state(node_prog::prog_type pType,
+        uint64_t req_id, uint64_t node_handle)
 {
-    auto state_exists = S->fetch_prog_req_state(pType, req_id, node_handle);
-    if (state_exists) {
-        std::shared_ptr<NodeStateType> ret = std::dynamic_pointer_cast<NodeStateType>(state_exists);
-        return *ret;
+    std::shared_ptr<NodeStateType> ret;
+    auto state = S->fetch_prog_req_state(pType, req_id, node_handle);
+    if (state) {
+        ret = std::dynamic_pointer_cast<NodeStateType>(state);
+    }
+    return ret;
+}
+
+template <typename NodeStateType>
+NodeStateType& return_state(node_prog::prog_type pType, uint64_t req_id,
+        uint64_t node_handle, std::shared_ptr<NodeStateType> toRet)
+{
+    if (toRet) {
+        return *toRet;
     } else {
         std::shared_ptr<NodeStateType> newState(new NodeStateType());
         S->insert_prog_req_state(pType, req_id, node_handle,
-                std::static_pointer_cast<node_prog::Node_State_Base>(newState));
+                std::dynamic_pointer_cast<node_prog::Node_State_Base>(newState));
         return *newState;
     }
 }
@@ -719,7 +730,10 @@ inline void node_prog_loop(
                 }
 
                 // bind cache getter and putter function variables to functions
-                node_state_getter = std::bind(return_state<NodeStateType>, np.prog_type_recvd, np.req_id, node_handle);
+                std::shared_ptr<NodeStateType> state = get_node_state<NodeStateType>(np.prog_type_recvd,
+                        np.req_id, node_handle);
+                node_state_getter = std::bind(return_state<NodeStateType>,
+                        np.prog_type_recvd, np.req_id, node_handle, state);
 
                 if (S->check_done_request(np.req_id)) {
                     done_request = true;
