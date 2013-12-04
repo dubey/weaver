@@ -1,8 +1,8 @@
 #!/usr/bin/python
 # 
 # ===============================================================
-#    Description:  Convert graph files in SNAP format to WEAVER
-#                  format.
+#    Description:  Tranform SNAP graph files so that node handles
+#                  are range(0, num_nodes).
 # 
 #        Created:  12/03/2013 02:17:15 PM
 # 
