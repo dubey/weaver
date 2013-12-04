@@ -566,6 +566,7 @@ unpack_and_fetch_context(void *req)
 
     //WDEBUG << "fetching cache contexts on remote shard" << std::endl;
     for (uint64_t handle : handles){
+        // TODO maybe make this skip over locked nodes and retry fetching later
         fetch_node_cache_context(S->shard_id, handle, contexts, cache_entry_time, req_vclock);
     }
     message::message m;
