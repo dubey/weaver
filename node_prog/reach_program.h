@@ -225,7 +225,6 @@ namespace node_prog
                 next.emplace_back(std::make_pair(params.prev_node, params));
                 return next;
             }
-            WDEBUG  << "#####cache invalid, continue search" << std::endl;
             cache_response->invalidate();
         }
         params._search_cache = false; // only search cache for first of req
