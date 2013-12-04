@@ -549,6 +549,7 @@ fetch_node_cache_context(uint64_t loc, uint64_t handle, std::vector<std::pair<db
     if (node->state == db::element::node::mode::IN_TRANSIT
             || node->state == db::element::node::mode::MOVED) {
         WDEBUG << "cache dont support this yet" << std::endl;
+        assert(false);
     } else { // node exists
         toFill.emplace_back();
         toFill.back().first.loc = loc;
@@ -570,7 +571,7 @@ unpack_and_fetch_context(void *req)
     message::unpack_message(*request->msg, message::NODE_CONTEXT_FETCH, pType, req_id, vt_id, req_vclock, cache_entry_time, lookup_uid, handles, from_shard);
     std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>> contexts;
 
-    WDEBUG << "fetching cache contexts on remote shard" << std::endl;
+    //WDEBUG << "fetching cache contexts on remote shard" << std::endl;
     for (uint64_t handle : handles){
         fetch_node_cache_context(S->shard_id, handle, contexts, cache_entry_time, req_vclock);
     }
@@ -597,9 +598,9 @@ inline bool cache_lookup(db::element::node* node_to_check, uint64_t cache_key, n
 {
     assert(node_to_check != NULL);
     assert(np.cache_value == NULL);
-    WDEBUG << "cache search for " << cache_key << " on node " << node_to_check->get_handle() << std::endl;
+    //WDEBUG << "cache search for " << cache_key << " on node " << node_to_check->get_handle() << std::endl;
     if (node_to_check->cache.cache.count(cache_key) == 0){
-        WDEBUG << "no cache entry exists" << std::endl;
+        //WDEBUG << "no cache entry exists" << std::endl;
         return true;
     } else {
         auto entry = node_to_check->cache.cache.at(cache_key);
@@ -610,7 +611,7 @@ inline bool cache_lookup(db::element::node* node_to_check, uint64_t cache_key, n
         int64_t cmp_1 = order::compare_two_vts(cache_entry_time, np.req_vclock);
         assert(cmp_1 != 2);
         if (cmp_1 == 1){
-            WDEBUG << "cached value is newer, no cached value for this prog" << std::endl;
+            //WDEBUG << "cached value is newer, no cached value for this prog" << std::endl;
             return true;
         }
         assert(cmp_1 == 0);
@@ -634,11 +635,11 @@ inline bool cache_lookup(db::element::node* node_to_check, uint64_t cache_key, n
             } 
         }
         if (contexts_to_fetch.empty()){
-            WDEBUG << "returning context right away" << std::endl;
+            //WDEBUG << "returning context right away" << std::endl;
             return true;
         }
 
-        WDEBUG << "caching waiting for rest of context to be fetched" << std::endl;
+        //WDEBUG << "caching waiting for rest of context to be fetched" << std::endl;
         // add waiting stuff to shard global structure
 
         uint64_t lookup_id = node_to_check->cache.gen_uid() ^ node_to_check->get_handle(); // for now we just xoring a counter and the node handle
@@ -830,7 +831,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>> contexts_to_add; // TODO extra copy, later unpack into cache_response object itself
     message::unpack_message(*msg, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_id, contexts_to_add);
 
-    WDEBUG << "unpacking context reply" << std::endl;
+    //WDEBUG << "unpacking context reply" << std::endl;
     S->node_prog_running_states_mutex.lock();
     assert(S->node_prog_running_states.count(lookup_id) > 0);
     struct fetch_state<ParamsType, NodeStateType> *fstate = (struct fetch_state<ParamsType, NodeStateType> *) S->node_prog_running_states[lookup_id];
@@ -842,7 +843,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     fstate->replies_left--;
     fstate->counter_mutex.unlock();
     if (fstate->replies_left == 0){
-        WDEBUG << "running node prog from context reply" << std::endl;
+        //WDEBUG << "running node prog from context reply" << std::endl;
         node_prog_loop<ParamsType, NodeStateType>(enclosed_node_prog_func, fstate->prog_state);
         //remove from map
         S->node_prog_running_states_mutex.lock();
@@ -856,12 +857,7 @@ template <typename ParamsType, typename NodeStateType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType> :: 
     unpack_and_run_db(std::unique_ptr<message::message> msg)
 {
-    // tuple of (node handle, node prog params, prev node)
-    typedef std::tuple<uint64_t, ParamsType, db::element::remote_node> node_params_t;
-    // unpack some start params from msg:
     node_prog::node_prog_running_state<ParamsType, NodeStateType> np;
-
-    bool done_request = false;
 
     // unpack the node program
     try {
@@ -882,8 +878,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
 
     // check if request completed
     if (S->check_done_request(np.req_id)) {
-        done_request = true;
-        return;
+        return; // done request
     }
 
     node_prog_loop<ParamsType, NodeStateType>(enclosed_node_prog_func, np);

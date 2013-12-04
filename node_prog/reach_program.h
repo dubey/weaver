@@ -177,7 +177,7 @@ namespace node_prog
     inline bool
     check_context(std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& context)
     {
-        WDEBUG  << "$$$$$ checking context of size "<< context.size() << std::endl;
+        //WDEBUG  << "$$$$$ checking context of size "<< context.size() << std::endl;
         // path not valid if broken by:
         for (auto& pair : context)
         {
@@ -219,13 +219,14 @@ namespace node_prog
             // check context, update cache
             bool valid = check_context(cache_response->context);
             if (valid) {
-                WDEBUG  << "WEEE GOT A valid CACHE RESPONSE, short circuit" << std::endl;
+                //WDEBUG  << "WEEE GOT A valid CACHE RESPONSE, short circuit" << std::endl;
                 params.mode = true;
                 params.reachable = true;
                 next.emplace_back(std::make_pair(params.prev_node, params));
                 return next;
             }
             WDEBUG  << "#####cache invalid, continue search" << std::endl;
+            cache_response->invalidate();
         }
         params._search_cache = false; // only search cache for first of req
         }

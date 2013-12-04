@@ -87,7 +87,10 @@ namespace caching
 
     inline void
     cache_response :: invalidate(){
+        size_t before = from.cache.size();
         from.cache.erase(key);
+        assert(before-1 == from.cache.size());
+        WDEBUG << "asserty worked ~~~~~~~~~" << std::endl;
     }
 }
 }
