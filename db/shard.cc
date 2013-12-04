@@ -467,8 +467,7 @@ nop(void *noparg)
 }
 
 template <typename NodeStateType>
-NodeStateType& return_state(node_prog::prog_type pType, uint64_t req_id,
-        uint64_t node_handle)
+NodeStateType& return_state(node_prog::prog_type pType, uint64_t req_id, uint64_t node_handle)
 {
     auto state_exists = S->fetch_prog_req_state(pType, req_id, node_handle);
     if (state_exists) {
