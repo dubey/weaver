@@ -19,7 +19,7 @@ import time
 
 # creating line graph
 nodes = []
-num_nodes = 200
+num_nodes = 700
 coord_id = 0
 c = client.Client(client._CLIENT_ID+1, coord_id)
 
