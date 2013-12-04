@@ -492,13 +492,6 @@ NodeStateType& return_state(node_prog::prog_type pType, uint64_t req_id,
     }
 }
 
-//template <typename CacheValueType>
-void add_cache_value(node_prog::prog_type pType, db::element::node* node, std::shared_ptr<node_prog::Cache_Value_Base> cache_value,
-        std::shared_ptr<std::vector<db::element::remote_node>> watch_set, uint64_t cache_key, vc::vclock& req_vclock)
-{
-    node->cache.add_cache_value(pType, cache_value, watch_set, cache_key, req_vclock);
-}
-
 /*
 inline void modify_triangle_params(void * triangle_params, size_t num_nodes, db::element::remote_node& node) {
     node_prog::triangle_params * params = (node_prog::triangle_params *) triangle_params;
@@ -744,7 +737,7 @@ inline void node_prog_loop(
                 {
                 // call node program
                 using namespace std::placeholders;
-                add_cache_func = std::bind(add_cache_value, np.prog_type_recvd, node, _1, _2, _3, np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key
+                add_cache_func = std::bind(&db::caching::program_cache::add_cache_value, &(node->cache), np.prog_type_recvd, _1, _2, _3, np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key
                 }
 
                 auto next_node_params = func(np.req_id, *node, this_node,

@@ -26,7 +26,7 @@ print 'Created graph'
 start = time.time()
 print('Running rechability from node: '),
 for i in range(num_nodes):
-    rp = client.ReachParams(dest=nodes[i], caching=True)
+    rp = client.ReachParams(dest=nodes[i], caching=False)
     prog_args = [(center, rp)]
     response = c.run_reach_program(prog_args)
     print(str(i) + ','),
