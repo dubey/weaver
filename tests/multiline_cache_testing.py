@@ -28,7 +28,7 @@ print '    |_____________________cut4_______|'
 print ''
 
 # creating line graph
-nodes_per_line = 200
+nodes_per_line = 400
 line1 = []
 line2 = []
 line3 = []
