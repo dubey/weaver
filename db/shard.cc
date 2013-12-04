@@ -535,7 +535,7 @@ fill_node_cache_context(db::caching::node_cache_context& context, db::element::n
 
 inline void
 fetch_node_cache_context(uint64_t loc, uint64_t handle, std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& toFill,
-        vc::vclock& cache_entry_time, vc::vclock& req_vclock)
+        vc::vclock& cache_entry_time, vc::vclock& req_vclock) //XXX
 {
     db::element::node *node = S->acquire_node(handle);
     assert(node != NULL); // TODO could be garbage collected, or migrated but not completed?
@@ -601,7 +601,7 @@ inline bool cache_lookup(db::element::node* node_to_check, uint64_t cache_key, n
         vc::vclock& cache_entry_time = std::get<1>(entry);
         std::shared_ptr<std::vector<db::element::remote_node>>& watch_set = std::get<2>(entry);
 
-        int64_t cmp_1 = order::compare_two_vts(cache_entry_time, np.req_vclock);
+        int64_t cmp_1 = order::compare_two_vts(cache_entry_time, *np.req_vclock);
         assert(cmp_1 != 2);
         if (cmp_1 == 1){
             //WDEBUG << "cached value is newer, no cached value for this prog" << std::endl;
@@ -622,7 +622,7 @@ inline bool cache_lookup(db::element::node* node_to_check, uint64_t cache_key, n
         for (db::element::remote_node& watch_node : *watch_set)
         {
             if (watch_node.loc == S->shard_id) { 
-                fetch_node_cache_context(watch_node.loc, watch_node.handle, np.cache_value->context, cache_entry_time, np.req_vclock);
+                fetch_node_cache_context(watch_node.loc, watch_node.handle, np.cache_value->context, cache_entry_time, *np.req_vclock);
             } else { // on another shard
                 contexts_to_fetch[watch_node.loc].emplace_back(watch_node.handle);
             } 
@@ -676,7 +676,7 @@ inline void node_prog_loop(
             this_node.handle = node_handle;
             // TODO maybe use a try-lock later so forward progress can continue on other nodes in list
             db::element::node *node = S->acquire_node(node_handle);
-            if (node == NULL || order::compare_two_vts(node->get_del_time(), np.req_vclock)==0) { // TODO: TIMESTAMP
+            if (node == NULL || order::compare_two_vts(node->get_del_time(), *np.req_vclock)==0) { // TODO: TIMESTAMP
                 if (node != NULL) {
                     S->release_node(node);
                 } else {
@@ -738,12 +738,12 @@ inline void node_prog_loop(
                 // call node program
                 using namespace std::placeholders;
                 add_cache_func = std::bind(&db::caching::program_cache::add_cache_value, &(node->cache),
-                        np.prog_type_recvd, _1, _2, _3, np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key
+                        np.prog_type_recvd, _1, _2, _3, *np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key XXX change back to shared ptr
                 }
 
                 auto next_node_params = func(np.req_id, *node, this_node,
                         params, // actual parameters for this node program
-                        node_state_getter, np.req_vclock, add_cache_func, np.cache_value);
+                        node_state_getter, *np.req_vclock, add_cache_func, np.cache_value); //XXX
                // WDEBUG << "1 got new params count" << next_node_params.size() << std::endl;
                 // batch the newly generated node programs for onward propagation
                 S->msg_count_mutex.lock();
@@ -856,7 +856,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     // unpack the node program
     try {
         message::unpack_message(*msg, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, np.start_node_params);
-        assert(np.req_vclock.clock.size() == NUM_VTS);
+        assert(np.req_vclock->clock.size() == NUM_VTS);
     } catch (std::bad_alloc& ba) {
         WDEBUG << "bad_alloc caught " << ba.what() << std::endl;
         assert(false);

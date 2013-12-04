@@ -78,7 +78,7 @@ namespace node_prog
         node_prog::prog_type prog_type_recvd;
         bool global_req;
         uint64_t vt_id;
-        vc::vclock req_vclock;
+        std::shared_ptr<vc::vclock> req_vclock;
         uint64_t req_id;
         std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> start_node_params;
         db::caching::cache_response *cache_value;

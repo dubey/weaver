@@ -137,6 +137,7 @@ namespace message
     template <typename T1, typename T2, typename T3> uint64_t size(std::priority_queue<T1, T2, T3>);
     template <typename T1, typename T2> inline uint64_t size(const std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline uint64_t size(const std::tuple<T1, T2, T3>& t);
+    template <typename T> inline uint64_t size(const std::shared_ptr<T> &ptr_t);
 
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T>& t);
@@ -144,6 +145,7 @@ namespace message
     template <typename T1, typename T2, typename T3> void pack_buffer(e::buffer::packer&, std::priority_queue<T1, T2, T3>);
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer &packer, const std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3>& t);
+    template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::shared_ptr<T> &ptr_t);
 
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
@@ -151,6 +153,7 @@ namespace message
     template <typename T1, typename T2, typename T3> void unpack_buffer(e::unpacker&, std::priority_queue<T1, T2, T3>&);
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void unpack_buffer(e::unpacker& unpacker, std::tuple<T1, T2, T3>& t);
+    template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::shared_ptr<T> &ptr_t);
 
     uint64_t size(const db::caching::node_cache_context &t);
     uint64_t size(const db::element::edge &t);
@@ -285,6 +288,14 @@ namespace message
     template <typename T1, typename T2, typename T3>
     inline uint64_t size(const std::tuple<T1, T2, T3> &t){
         return size(std::get<0>(t)) + size(std::get<1>(t)) + size(std::get<2>(t));
+    }
+
+    template <typename T> inline uint64_t size(const std::shared_ptr<T> &ptr_t){
+        if (ptr_t.get() == NULL){
+            return 0;
+        } else {
+            return size(*ptr_t);
+        }
     }
 
     template <typename T>
@@ -451,6 +462,12 @@ namespace message
         pack_buffer(packer, std::get<0>(t));
         pack_buffer(packer, std::get<1>(t));
         pack_buffer(packer, std::get<2>(t));
+    }
+
+    template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::shared_ptr<T> &ptr_t){
+        if (ptr_t.get() != NULL) {
+            pack_buffer(packer, *ptr_t);
+        }
     }
 
     template <typename T> 
@@ -693,6 +710,11 @@ namespace message
         unpack_buffer(unpacker, std::get<0>(t));
         unpack_buffer(unpacker, std::get<1>(t));
         unpack_buffer(unpacker, std::get<2>(t));
+    }
+
+    template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::shared_ptr<T> &ptr_t){
+        ptr_t.reset(new T());
+        unpack_buffer(unpacker, *ptr_t);
     }
 
     template <typename T> 
