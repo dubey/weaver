@@ -60,9 +60,6 @@ c.delete_edge(tx_id, nodes[cut_idx], break_edge)
 c.end_tx(tx_id)
 
 for i in range(num_nodes):
-    #if i == num_nodes/2 + 1:
-        #print 'past broken chain point'
-
     prog_args = [(nodes[i], rp)]
     response = c.run_reach_program(prog_args)
     #print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(response.reachable)
