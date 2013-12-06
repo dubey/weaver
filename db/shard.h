@@ -95,9 +95,8 @@ namespace db
             // Graph state
             uint64_t shard_id;
             std::unordered_map<uint64_t, element::node*> nodes; // node handle -> ptr to node object
-            std::unordered_map<uint64_t, // shard id s ->
-                std::unordered_map<uint64_t, // node handle n ->
-                    std::unordered_set<uint64_t>>> edge_map; // set of nodes which have (s,n) as out-neighbor
+            std::unordered_map<uint64_t, // node handle n ->
+                std::unordered_set<uint64_t>> edge_map; // in-neighbors of n
         private:
             db::thread::pool thread_pool;
         public:
@@ -346,7 +345,7 @@ namespace db
         if (!init_load) {
             edge_map_mutex.lock();
         }
-        edge_map[remote_loc][remote_node].emplace(n->get_handle());
+        edge_map[remote_node].emplace(n->get_handle());
         if (!init_load) {
             edge_map_mutex.unlock();
         }
@@ -470,9 +469,7 @@ namespace db
         std::unordered_set<uint64_t> nbrs;
         element::node *n;
         edge_map_mutex.lock();
-        nbrs = std::move(edge_map[old_loc][node]);
-        edge_map[old_loc].erase(node);
-        edge_map[new_loc][node] = nbrs;
+        nbrs = edge_map[node];
         edge_map_mutex.unlock();
         for (uint64_t nbr: nbrs) {
             n = acquire_node(nbr);

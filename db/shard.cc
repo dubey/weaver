@@ -758,13 +758,11 @@ migrate_node_step1(uint64_t node_handle, uint64_t shard)
         S->edge_map_mutex.lock();
         for (auto &e: n->out_edges) {
             uint64_t node = e.second->nbr.handle;
-            uint64_t loc = e.second->nbr.loc;
-            assert(S->edge_map.find(loc) != S->edge_map.end());
-            assert(S->edge_map[loc].find(node) != S->edge_map[loc].end());
-            auto &node_set = S->edge_map[loc][node];
+            assert(S->edge_map.find(node) != S->edge_map.end());
+            auto &node_set = S->edge_map[node];
             node_set.erase(node_handle);
             if (node_set.empty()) {
-                S->edge_map[loc].erase(node);
+                S->edge_map.erase(node);
             }
         }
         S->edge_map_mutex.unlock();
@@ -823,8 +821,7 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
     S->edge_map_mutex.lock();
     for (auto &e: n->out_edges) {
         uint64_t node = e.second->nbr.handle;
-        uint64_t loc = e.second->nbr.loc;
-        S->edge_map[loc][node].emplace(node_handle);
+        S->edge_map[node].emplace(node_handle);
     }
     S->edge_map_mutex.unlock();
 

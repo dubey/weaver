@@ -14,6 +14,7 @@
 # 
 
 import sys
+from sets import Set
 
 def snap_to_weaver(snap_file):
     path = snap_file.split('/')
@@ -37,13 +38,13 @@ def snap_to_weaver(snap_file):
         n2 = int(split[1])
         if not n1 in nmap:
             nmap[n1] = handle
-            edges[handle] = []
+            edges[handle] = Set([])
             handle += 1
         if not n2 in nmap:
             nmap[n2] = handle
-            edges[handle] = []
+            edges[handle] = Set([])
             handle += 1
-        edges[nmap[n1]].append(nmap[n2])
+        edges[nmap[n1]].add(nmap[n2])
     sfile.close()
 
     wfile = open(weaver_file, 'w')

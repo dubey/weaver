@@ -10,7 +10,8 @@ TARGET=shard
 
 all: depend $(TARGET)
 
-debug:	CFLAGS += -Og -g
+#gdwarf-2 flag necessary for gdb 7.4 with gcc4.8
+debug:	CFLAGS += -g -gdwarf-2
 debug:  all
 
 profile:	LIBS += -pg
