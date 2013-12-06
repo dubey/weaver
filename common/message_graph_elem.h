@@ -27,6 +27,7 @@ namespace message
         uint64_t sz = sizeof(uint64_t) // handle
             + size(t->get_creat_time()) + size(t->get_del_time()) // time stamps
             + size(*t->get_props()) // properties
+            + size(t->msg_count)
             + size(t->nbr);
         return sz;
     }
@@ -51,6 +52,7 @@ namespace message
         pack_buffer(packer, t->get_creat_time());
         pack_buffer(packer, t->get_del_time());
         pack_buffer(packer, *t->get_props());
+        pack_buffer(packer, t->msg_count);
         pack_buffer(packer, t->nbr);
     }
 
@@ -73,6 +75,7 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, db::element::edge *&t)
     {
         uint64_t handle;
+        uint32_t msg_count;
         vc::vclock creat_time, del_time;
         std::vector<common::property> props;
         db::element::remote_node rn;
@@ -80,10 +83,12 @@ namespace message
         unpack_buffer(unpacker, creat_time);
         unpack_buffer(unpacker, del_time);
         unpack_buffer(unpacker, props);
+        unpack_buffer(unpacker, msg_count);
         unpack_buffer(unpacker, rn);
         t = new db::element::edge(handle, creat_time, rn);
         t->update_del_time(del_time);
         t->set_properties(props);
+        t->msg_count = msg_count;
         t->migr_edge = true; // need ack from nbr when updated
     }
 

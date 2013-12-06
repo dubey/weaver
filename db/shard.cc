@@ -247,6 +247,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
             // nodes
             while (std::getline(file, line)) {
                 parse_two_uint64(line, node0, loc);
+                loc += SHARD_ID_INCR;
                 all_node_map[node0] = loc;
                 if (loc == shard_id) {
                     n = S->acquire_node_nonlocking(node0);
@@ -263,6 +264,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                     node_map.clear();
                 }
                 if (++line_count == max_node_handle) {
+                    WDEBUG << "Last node pos line: " << line << std::endl;
                     break;
                 }
             }
@@ -282,6 +284,9 @@ load_graph(db::graph_file_format format, const char *graph_file)
                 uint64_t loc1 = all_node_map[node1];
                 if (loc0 == shard_id) {
                     n = S->acquire_node_nonlocking(node0);
+                    if (n == NULL) {
+                        WDEBUG << "Not found node " << node0 << std::endl;
+                    }
                     assert(n != NULL);
                     S->create_edge_nonlocking(n, edge_handle, node1, loc1, zero_clk, true);
                 }
@@ -450,6 +455,11 @@ nop(void *noparg)
         if (S->migr_token_hops == 0) {
             // return token to vt
             WDEBUG << "Returning token to VT " << S->migr_vt << std::endl;
+            WDEBUG << "Shard node counts: ";
+            for (auto &x: S->shard_node_count) {
+                std::cerr << " " << x;
+            }
+            std::cerr << std::endl;
             message::prepare_message(msg, message::MIGRATION_TOKEN);
             S->send(S->migr_vt, msg.buf);
             S->migrated = true;
@@ -472,6 +482,13 @@ nop(void *noparg)
         && !(check_init_migr && check_migr_step3)
         && !(check_move_migr && check_migr_step3));
 
+    uint64_t cur_node_count = S->shard_node_count[shard_id - SHARD_ID_INCR];
+    for (uint64_t shrd = 0; shrd < NUM_SHARDS; shrd++) {
+        if ((shrd + SHARD_ID_INCR) == shard_id) {
+            continue;
+        }
+        S->shard_node_count[shrd] = nop_arg->shard_node_count[shrd];
+    }
     S->migration_mutex.unlock();
 
     // call appropriate function based on check
@@ -484,7 +501,7 @@ nop(void *noparg)
     }
 
     // ack to VT
-    message::prepare_message(msg, message::VT_NOP_ACK, shard_id);
+    message::prepare_message(msg, message::VT_NOP_ACK, shard_id, cur_node_count);
     S->send(nop_arg->vt_id, msg.buf);
     free(nop_arg);
 }
@@ -896,6 +913,23 @@ migrate_node_step3()
     migration_wrapper();
 }
 
+inline uint64_t
+get_balanced_assignment(std::vector<uint64_t> &shard_node_count, std::vector<uint32_t> &max_indices)
+{
+    uint64_t min_cap = shard_node_count[max_indices[0]];
+    std::vector<uint32_t> min_indices;
+    for (uint32_t &idx: max_indices) {
+        if (shard_node_count[idx] < min_cap) {
+            min_indices.clear();
+            min_indices.emplace_back(idx);
+        } else if (shard_node_count[idx] == min_cap) {
+            min_indices.emplace_back(idx);
+        }
+    }
+    int ret_idx = rand() % min_indices.size();
+    return min_indices[ret_idx];
+}
+
 // stream list of nodes, decide where to migrate each node
 // graph partitioning logic here
 void
@@ -927,29 +961,56 @@ migration_wrapper()
         n->updated = false;
 
         db::element::edge *e;
-        // get aggregate msg counts per shard
-        std::vector<uint64_t> msg_count(NUM_SHARDS, 0);
-        for (auto &e_iter: n->out_edges) {
-            e = e_iter.second;
-            msg_count[e->nbr.loc - SHARD_ID_INCR] += e->msg_count;
+        for (double &x: n->migr_score) {
+            x = 0;
         }
-        // EWMA update to msg count
-        for (uint64_t i = 0; i < NUM_SHARDS; i++) {
-            double new_val = 0.4 * n->msg_count[i] + 0.6 * msg_count[i];
-            n->msg_count[i] = new_val;
-        }
-        // update migration score based on CLDG
-        for (int j = 0; j < NUM_SHARDS; j++) {
-            n->migr_score[j] = n->msg_count[j] * (1 - ((double)shard_node_count[j])/SHARD_CAP);
+        if (CLDG) {
+            // communication-LDG
+            // get aggregate msg counts per shard
+            //std::vector<uint64_t> msg_count(NUM_SHARDS, 0);
+            for (auto &e_iter: n->out_edges) {
+                e = e_iter.second;
+                //msg_count[e->nbr.loc - SHARD_ID_INCR] += e->msg_count;
+                n->msg_count[e->nbr.loc - SHARD_ID_INCR] += e->msg_count;
+            }
+            // EWMA update to msg count
+            //for (uint64_t i = 0; i < NUM_SHARDS; i++) {
+            //    double new_val = 0.4 * n->msg_count[i] + 0.6 * msg_count[i];
+            //    n->msg_count[i] = new_val;
+            //}
+            // update migration score based on CLDG
+            for (int j = 0; j < NUM_SHARDS; j++) {
+                double penalty = 1.0 - ((double)shard_node_count[j])/SHARD_CAP;
+                n->migr_score[j] = n->msg_count[j] * penalty;
+                WDEBUG << "Shard " << (j+SHARD_ID_INCR) << ", score = " << n->migr_score[j] << ", penalty " << penalty << std::endl;
+            }
+        } else {
+            // regular LDG
+            for (auto &e_iter: n->out_edges) {
+                e = e_iter.second;
+                n->migr_score[e->nbr.loc - SHARD_ID_INCR] += 1;
+            }
+            for (int j = 0; j < NUM_SHARDS; j++) {
+                n->migr_score[j] *= (1 - ((double)shard_node_count[j])/SHARD_CAP);
+            }
         }
         // find arg max
         max_pos = shard_id - SHARD_ID_INCR; // don't migrate if all equal
-        for (int j = 0; j < NUM_SHARDS; j++) {
+        std::vector<uint32_t> max_indices(1, max_pos);
+        for (uint32_t j = 0; j < NUM_SHARDS; j++) {
+            if (j == (shard_id - SHARD_ID_INCR)) {
+                continue;
+            }
             if (n->migr_score[max_pos] < n->migr_score[j]) {
                 max_pos = j;
+                max_indices.clear();
+                max_indices.emplace_back(j);
+            } else if (n->migr_score[max_pos] == n->migr_score[j]) {
+                max_indices.emplace_back(j);
             }
         }
-        migr_pos = max_pos + SHARD_ID_INCR; // fixing index
+        migr_pos = get_balanced_assignment(shard_node_count, max_indices) + SHARD_ID_INCR;
+        //migr_pos = max_pos + SHARD_ID_INCR; // fixing index
         if (migr_pos > shard_id) {
             n->already_migr = true;
         }
@@ -957,6 +1018,7 @@ migration_wrapper()
         S->sorted_nodes.pop_front();
         
         // no migration to self
+        //WDEBUG << "Hoping to migr node " << migr_node << " to shard " << migr_pos << std::endl;
         if (migr_pos != shard_id) {
             migrate_node_step1(migr_node, migr_pos);
             no_migr = false;
@@ -1068,7 +1130,8 @@ msgrecv_loop()
 
             case message::VT_NOP: {
                 db::nop_data *nop_arg = new db::nop_data();
-                message::unpack_message(*rec_msg, mtype, vt_id, vclk, qts, req_id, nop_arg->done_reqs, nop_arg->max_done_id);
+                message::unpack_message(*rec_msg, mtype, vt_id, vclk, qts, req_id, nop_arg->done_reqs, nop_arg->max_done_id,
+                        nop_arg->shard_node_count);
                 nop_arg->vt_id = vt_id;
                 nop_arg->req_id = req_id;
                 thr = new db::thread::unstarted_thread(qts.at(shard_id-SHARD_ID_INCR), vclk, nop, (void*)nop_arg);
