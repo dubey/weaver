@@ -102,6 +102,7 @@ namespace coordinator
             uint64_t max_load_time;
             // migration
             uint64_t migr_client;
+            std::vector<uint64_t> shard_node_count;
             // permanent deletion
             // daemon
             // messaging
@@ -132,6 +133,7 @@ namespace coordinator
         , periodic_cond(&periodic_update_mutex)
         , load_count(0)
         , max_load_time(0)
+        , shard_node_count(NUM_SHARDS, 0)
     {
         // initialize array of server locations
         initialize_busybee(bb, vt_id, myloc, NUM_THREADS);

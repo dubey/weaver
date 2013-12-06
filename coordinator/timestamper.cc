@@ -257,7 +257,7 @@ timer_function()
                 if (vts->to_nop[shard_id]) {
                     message::message msg;
                     message::prepare_message(msg, message::VT_NOP, vt_id, vclk,
-                            qts, req_id, done_reqs[shard_id], max_done_id);
+                            qts, req_id, done_reqs[shard_id], max_done_id, vts->shard_node_count);
                     vts->send(shard_id + SHARD_ID_INCR, msg.buf);
                 }
             }
@@ -416,13 +416,16 @@ server_loop(int thread_id)
                     vts->periodic_update_mutex.unlock();
                     break;
 
-                case message::VT_NOP_ACK:
-                    message::unpack_message(*msg, message::VT_NOP_ACK, sender);
+                case message::VT_NOP_ACK: {
+                    uint64_t shard_node_count;
+                    message::unpack_message(*msg, message::VT_NOP_ACK, sender, shard_node_count);
                     vts->periodic_update_mutex.lock();
+                    vts->shard_node_count[sender - SHARD_ID_INCR] = shard_node_count;
                     vts->to_nop.set(sender - SHARD_ID_INCR);
                     vts->periodic_cond.signal();
                     vts->periodic_update_mutex.unlock();
                     break;
+                }
 
                 // shard messages
                 case message::LOADED_GRAPH: {
@@ -467,6 +470,11 @@ server_loop(int thread_id)
                     vts->mutex.unlock();
                     message::prepare_message(*msg, message::DONE_MIGR);
                     vts->send(client, msg->buf);
+                    WDEBUG << "Shard node counts are:";
+                    for (uint64_t &x: vts->shard_node_count) {
+                        std::cerr << " " << x;
+                    }
+                    std::cerr << std::endl;
                     break;
                 }
 
