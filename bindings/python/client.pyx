@@ -135,10 +135,6 @@ cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
     cdef cppclass clustering_params:
         pass
 
-ctypedef fused ParamsType:
-    reach_params
-    clustering_params
-
 cdef extern from 'client/client.h' namespace 'client':
     cdef cppclass client:
         client(uint64_t my_id, uint64_t vt_id)

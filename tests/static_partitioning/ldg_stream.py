@@ -1,15 +1,32 @@
+#! /usr/bin/env python
+
 import sys
-import load_from_snap
-import networkx as nx
-import matplotlib.pyplot as plt
 import random
 
 # adds node attribute of which shard node should be placed on
-num_shards = 5
-capacity = 20000
+num_shards = 2
+capacity = 45000
 assignments = dict()
 shard_sizes = [0] * num_shards
+G = {}
 
+def load(argv):
+    assert(len(argv) == 2)
+    print 'loading graph from file'
+    inputfile = open(argv[1], 'r')
+    for line in inputfile:
+        edge = line.split()
+        if edge[0] is '#': # ignore comments
+            continue
+        assert(len(edge) == 2) 
+        n0 = int(edge[0])
+        n1 = int(edge[1])
+        if n0 not in G:
+            G[n0] = []
+        if n1 not in G:
+            G[n1] = []
+        G[n0].append(n1)
+    inputfile.close()
 
 def get_balanced_assignment(tied_shards):
     min_size = shard_sizes[tied_shards[0]] #pick one as min
@@ -53,15 +70,14 @@ def get_ldg_assignment(nbr_iter):
 
 
 print 'partitioning graph onto ' + str(num_shards) + ' shards using LDG with a capacity constant of ' + str(capacity)
-G = load_from_snap.load(sys.argv)
-for n,nbrdict in G.adjacency_iter():
-    put_on_shard = get_ldg_assignment(nbrdict.iterkeys())
+load(sys.argv)
+for n in G:
+    put_on_shard = get_ldg_assignment(G[n])
     assignments[n] = put_on_shard 
     shard_sizes[put_on_shard] += 1
 
-colors = [float(assignments[n])/float(num_shards) for n in G.nodes()] 
-
 '''
+colors = [float(assignments[n])/float(num_shards) for n in G.nodes()] 
 print 'trying to draw graph...'
 nx.draw_circular(G, node_color=colors)
 plt.show()
@@ -72,7 +88,7 @@ if len(fname) == 1:
     fileout = open(fname[0] + '-partitioned.', 'w')
 else:
     fileout = open(fname[0] + '-partitioned.' + fname[1], 'w')
-fileout.write('# ' + str(len(assignments)) + '\n')
+fileout.write('#' + str(len(assignments)) + '\n')
 for (k,v) in assignments.iteritems():
     fileout.write(str(k) + ' '  + str(v) + '\n')
 fileout.close()

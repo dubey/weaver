@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#! /usr/bin/env python
 # 
 # ===============================================================
 #    Description:  Tranform SNAP graph files so that node handles
