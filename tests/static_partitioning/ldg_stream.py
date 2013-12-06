@@ -4,6 +4,7 @@ import sys
 import random
 
 # adds node attribute of which shard node should be placed on
+num_vts = 1
 num_shards = 2
 capacity = 45000
 assignments = dict()
@@ -90,6 +91,6 @@ else:
     fileout = open(fname[0] + '-partitioned.' + fname[1], 'w')
 fileout.write('#' + str(len(assignments)) + '\n')
 for (k,v) in assignments.iteritems():
-    fileout.write(str(k) + ' '  + str(v) + '\n')
+    fileout.write(str(k) + ' '  + str(v+num_vts) + '\n')
 fileout.close()
 print 'finshed writing assignments'

@@ -57,8 +57,8 @@
 #define VT_NOP_TIMEOUT 1000000 // number of nanoseconds between successive nops
 #define VT_INITIAL_CLKUPDATE_DELAY 5000 // number of millis delay to ensure all timestampers are running
 // hyperdex
-#define HYPERDEX_COORD_IPADDR "127.0.0.1"
-//#define HYPERDEX_COORD_IPADDR "128.84.227.101"
+//#define HYPERDEX_COORD_IPADDR "127.0.0.1"
+#define HYPERDEX_COORD_IPADDR "128.84.227.101"
 #define HYPERDEX_COORD_PORT 1982
 // kronos
 #define KRONOS_IPADDR "127.0.0.1"
