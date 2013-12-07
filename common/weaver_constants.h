@@ -39,7 +39,7 @@
 #define CLIENT_ID (100ULL)
 #define SHARDS_DESC_FILE "../common/shards"
 // weaver setup
-#define NUM_SHARDS 2
+#define NUM_SHARDS 8
 #define NUM_VTS 1
 #define SHARD_ID_INCR NUM_VTS
 #define NUM_THREADS 8
@@ -50,8 +50,8 @@
 #define BATCH_MSG_SIZE 1 // 1 == no batching
 // migration
 #define START_MIGR_ID SHARD_ID_INCR // first shard to get migration token
-#define SHARD_CAP (60000ULL)
-#define CLDG false // true if communication-based LDG, false otherwise
+#define SHARD_CAP (12000ULL)
+#define CLDG true // true if communication-based LDG, false otherwise
 // coordinator
 #define VT_NANO (1000000000ULL)
 #define VT_BB_TIMEOUT 1 // epoll timeout in ms

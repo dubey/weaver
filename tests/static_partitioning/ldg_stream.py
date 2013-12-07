@@ -4,8 +4,8 @@ import sys
 import random
 
 # adds node attribute of which shard node should be placed on
-num_shards = 2
-capacity = 45000
+num_shards = 8
+capacity = 12000
 assignments = dict()
 shard_sizes = [0] * num_shards
 G = {}
@@ -15,9 +15,9 @@ def load(argv):
     print 'loading graph from file'
     inputfile = open(argv[1], 'r')
     for line in inputfile:
-        edge = line.split()
-        if edge[0] is '#': # ignore comments
+        if line[0] == '#': # ignore comments
             continue
+        edge = line.split()
         assert(len(edge) == 2) 
         n0 = int(edge[0])
         n1 = int(edge[1])

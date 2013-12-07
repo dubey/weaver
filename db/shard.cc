@@ -662,7 +662,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
             } else if (node->state == db::element::node::mode::IN_TRANSIT
                     || node->state == db::element::node::mode::MOVED) {
                 // queueing/forwarding node program
-                //WDEBUG << "Forwarding node prog for node " << node_handle << std::endl;
                 std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> fwd_node_params;
                 fwd_node_params.emplace_back(handle_params);
                 message::prepare_message(*msg, message::NODE_PROG, prog_type_recvd, global_req, vt_id, req_vclock, req_id, fwd_node_params);
@@ -792,7 +791,7 @@ migrate_node_step2_req()
     message::prepare_message(msg, message::MIGRATE_SEND_NODE, S->migr_node, shard_id, *n);
     S->release_node(n);
     S->send(S->migr_shard, msg.buf);
-    WDEBUG << "Migrating node " << S->migr_node << " to shard " << S->migr_shard << std::endl;
+    //WDEBUG << "Migrating node " << S->migr_node << " to shard " << S->migr_shard << std::endl;
 }
 
 // receive and place node which has been migrated to this shard
@@ -948,7 +947,7 @@ migration_wrapper()
             n->state == db::element::node::mode::MOVED ||
             n->already_migr) {
             if (n != NULL) {
-                WDEBUG << "Skipping already migrated node\n";
+                //WDEBUG << "Skipping already migrated node\n";
                 n->already_migr = false;
                 S->release_node(n);
             }
@@ -979,7 +978,7 @@ migration_wrapper()
             for (int j = 0; j < NUM_SHARDS; j++) {
                 double penalty = 1.0 - ((double)shard_node_count[j])/SHARD_CAP;
                 n->migr_score[j] = n->msg_count[j] * penalty;
-                WDEBUG << "Shard " << (j+SHARD_ID_INCR) << ", score = " << n->migr_score[j] << ", penalty " << penalty << std::endl;
+                //WDEBUG << "Shard " << (j+SHARD_ID_INCR) << ", score = " << n->migr_score[j] << ", penalty " << penalty << std::endl;
             }
         } else {
             // regular LDG

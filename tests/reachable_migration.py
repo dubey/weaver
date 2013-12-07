@@ -28,14 +28,14 @@ def exec_traversals(reqs, cl):
         rp.dest = r[1]
         prog_args = [(r[0], rp)]
         response = cl.run_reach_program(prog_args)
-        if cnt % 10 == 0:
+        if cnt % 1 == 0:
             sys.stdout.write('.')
             sys.stdout.flush()
     print ' done'
     end = time.time()
     return (end-start)
 
-num_requests = 1000
+num_requests = 20
 #num_nodes = 82168 # snap soc-Slashdot0902
 #num_nodes = 10876 # snap p2pgnutella04
 num_nodes = 81306 # snap twitter-combined
@@ -49,12 +49,10 @@ random.seed(42)
 for numr in range(num_requests):
     reqs.append((random.randint(0, num_nodes-1), random.randint(0, num_nodes-1)))
 
-#print 'Before streaming rounds, time taken: ' + str(exec_traversals(reqs, c))
-#print 'Before streaming rounds, time taken: ' + str(exec_traversals(reqs, c))
-#print 'Before streaming rounds, time taken: ' + str(exec_traversals(reqs, c))
+print 'Before streaming rounds, time taken: ' + str(exec_traversals(reqs, c))
+print 'Before streaming rounds, time taken: ' + str(exec_traversals(reqs, c))
 for mrun in range(1,6):
     c.single_stream_migration()
     print 'Done repartitioning stream ' + str(mrun)
-print 'After streaming rounds, time taken: ' + str(exec_traversals(reqs, c))
 print 'After streaming rounds, time taken: ' + str(exec_traversals(reqs, c))
 print 'After streaming rounds, time taken: ' + str(exec_traversals(reqs, c))
