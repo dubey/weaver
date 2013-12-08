@@ -54,6 +54,7 @@ namespace client
             std::unique_ptr<ParamsType> 
             run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args);
             node_prog::reach_params run_reach_program(std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args);
+            node_prog::clustering_params run_clustering_program(std::vector<std::pair<uint64_t, node_prog::clustering_params>> initial_args);
 
             void start_migration();
             void single_stream_migration();
@@ -185,6 +186,12 @@ namespace client
     client :: run_reach_program(std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args)
     {
         return *run_node_program(node_prog::REACHABILITY, initial_args);
+    }
+
+    inline node_prog::clustering_params
+    client :: run_clustering_program(std::vector<std::pair<uint64_t, node_prog::clustering_params>> initial_args)
+    {
+        return *run_node_program(node_prog::CLUSTERING, initial_args);
     }
 
 

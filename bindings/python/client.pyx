@@ -133,7 +133,19 @@ class ReachParams:
 
 cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
     cdef cppclass clustering_params:
-        pass
+        bint is_center
+        remote_node center
+        bint outgoing
+        vector[uint64_t] neighbors
+        double clustering_coeff
+        uint64_t vt_id
+
+class ClusteringParams:
+    def __init__(self, is_center=True, outgoing=True, vt_id=0, clustering_coeff=0.0):
+        self.is_center = is_center
+        self.outgoing = outgoing
+        self.vt_id = vt_id
+        self.clustering_coeff = clustering_coeff
 
 cdef extern from 'client/client.h' namespace 'client':
     cdef cppclass client:
@@ -146,6 +158,7 @@ cdef extern from 'client/client.h' namespace 'client':
         void delete_edge(uint64_t tx_id, uint64_t edge, uint64_t node)
         void end_tx(uint64_t tx_id)
         reach_params run_reach_program(vector[pair[uint64_t, reach_params]] initial_args)
+        clustering_params run_clustering_program(vector[pair[uint64_t, clustering_params]] initial_args)
         void start_migration()
         void single_stream_migration()
         void commit_graph()
@@ -182,6 +195,18 @@ cdef class Client:
             c_args.push_back(arg_pair)
         c_rp = self.thisptr.run_reach_program(c_args)
         response = ReachParams(hops=c_rp.hops, reachable=c_rp.reachable)
+        return response
+    def run_clustering_program(self, init_args):
+        cdef vector[pair[uint64_t, clustering_params]] c_args
+        cdef pair[uint64_t, clustering_params] arg_pair
+        for cp in init_args:
+            arg_pair.first = cp[0]
+            is_center = cp[0].is_center
+            outgoing = cp[0].outgoing
+            vt_id = cp[0].vt_id
+            c_args.push_back(arg_pair)
+        c_cp = self.thisptr.run_clustering_program(c_args)
+        response = ClusteringParams(clustering_coeff=c_cp.clustering_coeff)
         return response
     def start_migration(self):
         self.thisptr.start_migration()

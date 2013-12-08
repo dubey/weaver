@@ -77,30 +77,20 @@ namespace node_prog
 
         virtual uint64_t size() const
         {
-            // TODO
-            return 0;
+            return message::size(neighbor_counts)
+                + message::size(responses_left);
         }
         virtual void pack(e::buffer::packer& packer) const 
         {
-            // TODO
-            UNUSED(packer);
+            message::pack_buffer(packer, neighbor_counts);
+            message::pack_buffer(packer, responses_left);
         }
         virtual void unpack(e::unpacker& unpacker)
         {
-            // TODO
-            UNUSED(unpacker);
+            message::unpack_buffer(unpacker, neighbor_counts);
+            message::unpack_buffer(unpacker, responses_left);
         }
     };
-
-    //struct clustering_cache_value : CacheValueBase 
-    //{
-    //    int dummy;
-
-    //    virtual ~clustering_cache_value()
-    //    {
-    //        /* implement me? XXX */
-    //    }
-    //};
 
     void calculate_response(clustering_node_state &cstate, 
             std::vector<std::pair<db::element::remote_node, clustering_params>> &next,
@@ -111,7 +101,6 @@ namespace node_prog
         for (std::pair<const uint64_t, int> nbr_count : cstate.neighbor_counts){
             numerator += nbr_count.second;
         }
-        //std::cout << "!!!!!!!!!!calculating response, numerator:" << numerator << " denominator:" << denominator<< std::endl;
         params.clustering_coeff = (double) numerator / denominator;
         db::element::remote_node coord(params.vt_id, 1337);
         next.emplace_back(std::make_pair(db::element::remote_node(params.vt_id, 1337), params));
@@ -149,13 +138,10 @@ namespace node_prog
                         if (check_nbr(possible_nbr.second, req_vclock)) {
                             next.emplace_back(std::make_pair(possible_nbr.second->nbr, params));
                             cstate.neighbor_counts.insert(std::make_pair(possible_nbr.second->nbr.handle, 0));
-                            //WDEBUG << "center adding neighbor:" << possible_nbr.second->nbr.handle << std::endl;
                             cstate.responses_left++;
                         }
                     }
-         //           std::cout << "@@@@is center, outgoign" << n.out_edges.size()<< " responses left " << cstate.responses_left << std::endl;
             } else {
-                //WDEBUG << "is center, incoming: " <<params.neighbors.size()<< std::endl;
                 for (uint64_t poss_nbr : params.neighbors) {
                     if (cstate.neighbor_counts.count(poss_nbr) > 0) {
                         cstate.neighbor_counts[poss_nbr]++;
@@ -164,10 +150,8 @@ namespace node_prog
                 if (--cstate.responses_left == 0){
                     calculate_response(cstate, next, params);
                 }
-                //WDEBUG << "still waiting on " << cstate.responses_left << " responses" << std::endl;
             }
         } else { // not center
-                //WDEBUG << "is not center" << std::endl;
             for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
                 if (check_nbr(possible_nbr.second, req_vclock)) {
                     params.neighbors.push_back(possible_nbr.second->nbr.handle);
@@ -180,24 +164,6 @@ namespace node_prog
         return next;
     }
 
-    //std::vector<std::pair<db::element::remote_node, clustering_params>> 
-    //clustering_node_deleted_program(uint64_t,
-    //    db::element::node &n, // node who asked to go to deleted node
-    //    uint64_t deleted_handle, // handle of node that didn't exist
-    //    clustering_params &params_given, // params we had sent to deleted node
-    //    std::function<clustering_node_state&()> state_getter)
-    //{
-    //    UNUSED(n);
-
-    //    node_prog::clustering_node_state &cstate = state_getter();
-    //    std::vector<std::pair<db::element::remote_node, clustering_params>> next;
-
-    //    cstate.neighbor_counts.erase(deleted_handle);
-    //    if (--cstate.responses_left == 0){
-    //        calculate_response(cstate, next, params_given);
-    //    }
-    //    return next;
-    //}
 }
 
 
