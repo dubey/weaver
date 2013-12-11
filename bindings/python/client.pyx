@@ -117,6 +117,8 @@ class RemoteNode:
 cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
     cdef cppclass reach_params:
         reach_params()
+        bint _search_cache
+        uint64_t _cache_key
         bint mode
         remote_node prev_node
         uint64_t dest
@@ -124,7 +126,9 @@ cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
         bint reachable
 
 class ReachParams:
-    def __init__(self, mode=False, prev_node=RemoteNode(), dest=0, hops=0, reachable=False):
+    def __init__(self, mode=False, prev_node=RemoteNode(), dest=0, hops=0, reachable=False, caching=False):
+        self._search_cache = caching
+        self._cache_key = dest
         self.mode = mode
         self.prev_node = prev_node
         self.dest = dest
@@ -146,6 +150,10 @@ class ClusteringParams:
         self.outgoing = outgoing
         self.vt_id = vt_id
         self.clustering_coeff = clustering_coeff
+
+#ctypedef fused ParamsType: XXX uh do we need this?
+#    reach_params
+#    #clustering_params
 
 cdef extern from 'client/client.h' namespace 'client':
     cdef cppclass client:
@@ -179,7 +187,7 @@ cdef class Client:
     def delete_node(self, tx_id, node):
         self.thisptr.delete_node(tx_id, node)
     def delete_edge(self, tx_id, edge, node):
-        self.thisptr.delete_edge(tx_id, edge, node)
+        self.thisptr.delete_edge(tx_id, node, edge)
     def end_tx(self, tx_id):
         self.thisptr.end_tx(tx_id)
     def run_reach_program(self, init_args):
@@ -187,6 +195,8 @@ cdef class Client:
         cdef pair[uint64_t, reach_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
+            arg_pair.second._search_cache = rp[1]._search_cache 
+            arg_pair.second._cache_key = rp[1].dest
             arg_pair.second.mode = rp[1].mode
             arg_pair.second.dest = rp[1].dest
             arg_pair.second.reachable = rp[1].reachable

@@ -16,20 +16,25 @@
 
 #include "message.h"
 #include "state/program_state.h"
+#include "common/vclock.h"
 
 namespace message
 {
     static state::program_state *prog_state;
 
     // size methods
-    inline uint64_t size(const db::element::edge* const &t)
+    inline uint64_t size(const db::element::edge &t)
     {
         uint64_t sz = sizeof(uint64_t) // handle
-            + size(t->get_creat_time()) + size(t->get_del_time()) // time stamps
-            + size(*t->get_props()) // properties
-            + size(t->msg_count)
-            + size(t->nbr);
+            + size(t.get_creat_time()) + size(t.get_del_time()) // time stamps
+            + size(*t.get_props()) // properties
+            + size(t.msg_count)
+            + size(t.nbr);
         return sz;
+    }
+    inline uint64_t size(const db::element::edge* const &t)
+    {
+        size(*t);
     }
 
     inline uint64_t size(const db::element::node &t)
@@ -46,14 +51,18 @@ namespace message
     }
 
     // packing methods
+    inline void pack_buffer(e::buffer::packer &packer, const db::element::edge &t)
+    {
+        packer = packer << t.get_handle();
+        pack_buffer(packer, t.get_creat_time());
+        pack_buffer(packer, t.get_del_time());
+        pack_buffer(packer, *t.get_props());
+        pack_buffer(packer, t.msg_count);
+        pack_buffer(packer, t.nbr);
+    }
     inline void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t)
     {
-        packer = packer << t->get_handle();
-        pack_buffer(packer, t->get_creat_time());
-        pack_buffer(packer, t->get_del_time());
-        pack_buffer(packer, *t->get_props());
-        pack_buffer(packer, t->msg_count);
-        pack_buffer(packer, t->nbr);
+        pack_buffer(packer, *t);
     }
 
     inline void
@@ -72,24 +81,36 @@ namespace message
 
     // unpacking methods
     inline void
-    unpack_buffer(e::unpacker &unpacker, db::element::edge *&t)
+    unpack_buffer(e::unpacker &unpacker, db::element::edge &t)
     {
         uint64_t handle;
         uint32_t msg_count;
         vc::vclock creat_time, del_time;
         std::vector<common::property> props;
-        db::element::remote_node rn;
+
         unpacker = unpacker >> handle;
+        t.set_handle(handle);
+
         unpack_buffer(unpacker, creat_time);
+        t.update_creat_time(creat_time);
+
         unpack_buffer(unpacker, del_time);
+        t.update_del_time(del_time);
+
         unpack_buffer(unpacker, props);
-        unpack_buffer(unpacker, msg_count);
-        unpack_buffer(unpacker, rn);
-        t = new db::element::edge(handle, creat_time, rn);
-        t->update_del_time(del_time);
-        t->set_properties(props);
-        t->msg_count = msg_count;
-        t->migr_edge = true; // need ack from nbr when updated
+        t.set_properties(props);
+
+        unpack_buffer(unpacker, t.msg_count);
+        unpack_buffer(unpacker, t.nbr);
+
+        t.migr_edge = true; // need ack from nbr when updated
+    }
+    inline void
+    unpack_buffer(e::unpacker &unpacker, db::element::edge *&t)
+    {
+        vc::vclock junk;
+        t = new db::element::edge(0, junk, 0, 0);
+        unpack_buffer(unpacker, *t);
     }
 
     inline void

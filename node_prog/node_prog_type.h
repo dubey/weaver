@@ -18,8 +18,6 @@
 #include <vector>
 #include <map>
 #include <unordered_map>
-#include "db/element/node.h"
-#include "db/element/remote_node.h"
 
 namespace node_prog
 {
@@ -31,18 +29,6 @@ namespace node_prog
         TRIANGLE_COUNT,
         DIJKSTRA,
         CLUSTERING
-    };
-
-    template <typename params_type, typename node_state_type>
-    struct node_function_type
-    {
-        public:
-            typedef std::vector<std::pair<db::element::remote_node, params_type>> (*value_type)(uint64_t, // req_id
-                db::element::node&, // this node
-                db::element::remote_node&, // this remote node
-                params_type&,
-                std::function<node_state_type&()>,
-                vc::vclock &req_vlock);
     };
 
     /*
@@ -58,26 +44,6 @@ namespace node_prog
     };
     */
 
-    class Packable 
-    {
-        public:
-            virtual uint64_t size() const  = 0;
-            virtual void pack(e::buffer::packer& packer) const = 0;
-            virtual void unpack(e::unpacker& unpacker) = 0;
-    };
-
-    class Deletable 
-    {
-        public:
-            virtual ~Deletable() = 0;
-    };
-
-    Deletable::~Deletable() 
-    { 
-        /* destructor must be defined */ 
-    }
-
-    class Packable_Deletable : public Packable, public Deletable { };
 }
 
 namespace std

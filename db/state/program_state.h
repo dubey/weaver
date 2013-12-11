@@ -20,8 +20,8 @@
 
 #include "node_prog/node_prog_type.h"
 #include "node_prog/reach_program.h"
-#include "node_prog/n_hop_reach_program.h"
-#include "node_prog/triangle_program.h"
+//#include "node_prog/n_hop_reach_program.h"
+//#include "node_prog/triangle_program.h"
 /*
 #include "node_prog/dijkstra_program.h"
 #include "node_prog/clustering_program.h"
@@ -30,7 +30,7 @@
 
 namespace state
 {
-    typedef std::unordered_map<uint64_t, std::shared_ptr<node_prog::Packable_Deletable>> node_map;
+    typedef std::unordered_map<uint64_t, std::shared_ptr<node_prog::Node_State_Base>> node_map;
     typedef std::unordered_map<uint64_t, std::shared_ptr<node_map>> req_map;
     typedef std::unordered_map<node_prog::prog_type, req_map> prog_map;
     // for permanent deletion
@@ -51,10 +51,10 @@ namespace state
 
         public:
             bool state_exists(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle);
-            std::shared_ptr<node_prog::Packable_Deletable> get_state(node_prog::prog_type t,
+            std::shared_ptr<node_prog::Node_State_Base> get_state(node_prog::prog_type t,
                     uint64_t req_id, uint64_t node_handle);
             void put_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle,
-                    std::shared_ptr<node_prog::Packable_Deletable> new_state);
+                    std::shared_ptr<node_prog::Node_State_Base> new_state);
             uint64_t size(uint64_t node_handle);
             void pack(uint64_t node_handle, e::buffer::packer &packer);
             void unpack(uint64_t node_handle, e::unpacker &unpacker);
@@ -126,10 +126,10 @@ namespace state
 
     // if state exists, return a shared_ptr to the state
     // else return a null shared_ptr
-    inline std::shared_ptr<node_prog::Packable_Deletable>
+    inline std::shared_ptr<node_prog::Node_State_Base>
     program_state :: get_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle)
     {
-        std::shared_ptr<node_prog::Packable_Deletable> state;
+        std::shared_ptr<node_prog::Node_State_Base> state;
         acquire();
         if (state_exists_nolock(t, req_id, node_handle)) {
             state = prog_state.at(t).at(req_id)->at(node_handle);
@@ -142,7 +142,7 @@ namespace state
     // if request completed, no-op
     inline void
     program_state :: put_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle,
-        std::shared_ptr<node_prog::Packable_Deletable> new_state)
+        std::shared_ptr<node_prog::Node_State_Base> new_state)
     {
         acquire();
         if (!check_done_nolock(req_id)) { // check request not done yet
@@ -187,6 +187,7 @@ namespace state
                                 sz += rns->size();
                                 break;
                             }
+                            /*
                             case node_prog::TRIANGLE_COUNT: {
                                 std::shared_ptr<node_prog::triangle_node_state> rns = 
                                     std::dynamic_pointer_cast<node_prog::triangle_node_state>(rmap.at(req_id)->at(node_handle));
@@ -200,6 +201,7 @@ namespace state
                                 break;
                             }
 
+*/
                             /*
                             case node_prog::DIJKSTRA: {
                                 std::shared_ptr<node_prog::dijkstra_node_state> dns =
@@ -289,7 +291,7 @@ namespace state
         uint16_t ptype;
         uint64_t num_entries, req_id;
         node_prog::prog_type type;
-        std::shared_ptr<node_prog::Packable_Deletable> new_entry;
+        std::shared_ptr<node_prog::Node_State_Base> new_entry;
         acquire();
         assert(req_list.find(node_handle) == req_list.end()); // state for this node definitely does not exist already
         req_list.emplace(node_handle, std::unordered_set<uint64_t>());
@@ -302,7 +304,7 @@ namespace state
                 case node_prog::REACHABILITY: {
                     std::shared_ptr<node_prog::reach_node_state> rns(new node_prog::reach_node_state());
                     rns->unpack(unpacker);
-                    new_entry = std::dynamic_pointer_cast<node_prog::Packable_Deletable>(rns);
+                    new_entry = std::dynamic_pointer_cast<node_prog::Node_State_Base>(rns);
                     break;
                 }
                 /*

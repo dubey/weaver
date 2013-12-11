@@ -28,6 +28,7 @@ namespace element
     class edge : public element
     {
         public:
+            edge();
             edge(uint64_t handle, vc::vclock &vclk, uint64_t remote_loc, uint64_t remote_handle);
             edge(uint64_t handle, vc::vclock &vclk, remote_node &rn);
         
@@ -37,6 +38,14 @@ namespace element
             bool migr_edge; // true if this edge was migrated along with parent node
             void traverse(); // indicate that this edge was traversed; useful for migration statistics
     };
+
+    // empty constructor for unpacking
+    inline
+    edge :: edge()
+        : element()
+        , msg_count(0)
+        , migr_edge(false)
+    { }
 
     inline
     edge :: edge(uint64_t handle, vc::vclock &vclk, uint64_t remote_loc, uint64_t remote_handle)

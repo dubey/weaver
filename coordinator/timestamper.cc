@@ -22,7 +22,7 @@
 #include "common/transaction.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
-#include "node_prog/triangle_program.h"
+//#include "node_prog/triangle_program.h"
 #include "timestamper.h"
 
 static coordinator::timestamper *vts;
@@ -325,9 +325,11 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     assert(req_timestamp.clock.size() == NUM_VTS);
     uint64_t req_id = vts->generate_id();
 
+/*
     if (global_req) {
         vts->outstanding_triangle_progs.emplace(req_id, std::make_pair(NUM_SHARDS, node_prog::triangle_params()));
     }
+    */
     vts->outstanding_node_progs.emplace(req_id, clientID);
     vts->outstanding_req_ids.emplace(req_id);
     vts->mutex.unlock();
@@ -342,6 +344,11 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
 template <typename ParamsType, typename NodeStateType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     unpack_and_run_db(std::unique_ptr<message::message>)
+{ }
+
+template <typename ParamsType, typename NodeStateType>
+void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
+    unpack_context_reply_db(std::unique_ptr<message::message>)
 { }
 
 // remove a completed node program from outstanding requests data structure
@@ -492,6 +499,7 @@ server_loop(int thread_id)
                     if (vts->outstanding_node_progs.find(req_id) != vts->outstanding_node_progs.end()) { // TODO: change to .count (AD: why?)
                         uint64_t client_to_ret = vts->outstanding_node_progs.at(req_id);
 
+/*
                         if (vts->outstanding_triangle_progs.count(req_id) > 0) { // a triangle prog response
                             std::pair<int, node_prog::triangle_params>& p = vts->outstanding_triangle_progs.at(req_id);
                             p.first--; // count of shards responded
@@ -515,12 +523,12 @@ server_loop(int thread_id)
                                 vts->outstanding_node_progs.erase(req_id);
                                 mark_req_finished(req_id);
                             }
-                        } else { // just a normal node program
+                        } else {*/ // just a normal node program
                             vts->done_reqs[type].emplace(req_id, std::bitset<NUM_SHARDS>());
                             vts->send(client_to_ret, msg->buf);
                             vts->outstanding_node_progs.erase(req_id);
                             mark_req_finished(req_id);
-                        }
+                        //}
                     } else {
                         WDEBUG << "node prog return for already completed ornever existed req id" << std::endl;
                     }

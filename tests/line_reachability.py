@@ -34,11 +34,19 @@ for i in range(num_nodes-1):
 c.end_tx(tx_id)
 print 'Created graph'
 
-rp = client.ReachParams(dest=nodes[num_nodes-1])
+rp = client.ReachParams(dest=nodes[num_nodes-1], caching=True)
 print 'Created reach param: mode = ' + str(rp.mode) + ', reachable = ' + str(rp.reachable)
 for i in range(num_nodes):
     prog_args = [(nodes[i], rp)]
     response = c.run_reach_program(prog_args)
     print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(response.reachable)
-    if i == num_nodes/10:
-        c.start_migration()
+    #if i == num_nodes/10:
+    #    c.start_migration()
+    assert(response.reachable)
+
+rp.dest=nodes[0]
+for i in range(1, num_nodes):
+    prog_args = [(nodes[i], rp)]
+    response = c.run_reach_program(prog_args)
+    print 'From node ' + str(i) + ' to node ' + str(0) + ', reachable = ' + str(response.reachable)
+    assert(not response.reachable)

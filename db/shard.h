@@ -25,6 +25,7 @@
 #include <hyperdex/client.hpp>
 #include <hyperdex/datastructures.h>
 
+#include "node_prog/base_classes.h"
 #include "common/weaver_constants.h"
 #include "common/vclock.h"
 #include "common/message.h"
@@ -49,6 +50,7 @@ namespace db
             enum message::msg_type type;
             std::unique_ptr<message::message> msg;
     };
+
 
     inline
     graph_request :: graph_request(enum message::msg_type mt, std::unique_ptr<message::message> m)
@@ -151,12 +153,16 @@ namespace db
         private:
             state::program_state prog_state; 
         public:
-            std::shared_ptr<node_prog::Packable_Deletable> 
+            std::shared_ptr<node_prog::Node_State_Base> 
                 fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle);
             void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle,
-                    std::shared_ptr<node_prog::Packable_Deletable> toAdd);
+                    std::shared_ptr<node_prog::Node_State_Base> toAdd);
             void add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
             bool check_done_request(uint64_t req_id);
+
+            
+            std::unordered_map<uint64_t, void *> node_prog_running_states; // used for fetching cache contexts
+            po6::threads::mutex node_prog_running_states_mutex;
 
             // Messaging infrastructure
         public:
@@ -520,7 +526,7 @@ namespace db
 
     // node program
 
-    inline std::shared_ptr<node_prog::Packable_Deletable>
+    inline std::shared_ptr<node_prog::Node_State_Base>
     shard :: fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle)
     {
         return prog_state.get_state(t, request_id, local_node_handle);
@@ -528,7 +534,7 @@ namespace db
 
     inline void
     shard :: insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_handle,
-        std::shared_ptr<node_prog::Packable_Deletable> toAdd)
+        std::shared_ptr<node_prog::Node_State_Base> toAdd)
     {
         prog_state.put_state(t, request_id, local_node_handle, toAdd);
     }

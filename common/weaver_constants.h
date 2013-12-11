@@ -48,6 +48,7 @@
 #define GRAPH_FILE "graph.rec"
 // node programs
 #define BATCH_MSG_SIZE 1 // 1 == no batching
+#define MAX_CACHE_ENTRIES 8 // 0 to turn off caching
 // migration
 #define START_MIGR_ID SHARD_ID_INCR // first shard to get migration token
 #define SHARD_CAP (82000ULL/NUM_SHARDS)
