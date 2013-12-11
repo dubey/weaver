@@ -36,16 +36,6 @@ namespace message
         size(*t);
     }
 
-    // vector stuff is hack for cache context to work
-    inline uint64_t size(const std::vector<db::element::edge> &t)
-    {
-        uint64_t tot_size = sizeof(uint64_t);
-        for (const auto &elem : t) {
-            tot_size += size(elem);
-        }
-        return tot_size;
-    }
-
     inline uint64_t size(const db::element::node &t)
     {
         uint64_t sz = sizeof(uint64_t) // handle
@@ -72,18 +62,6 @@ namespace message
     inline void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t)
     {
         pack_buffer(packer, *t);
-    }
-
-    inline void 
-    pack_buffer(e::buffer::packer &packer, const std::vector<db::element::edge> &t)
-    {
-        uint64_t num_elems = t.size();
-        packer = packer << num_elems;
-        if (num_elems > 0){
-            for (const auto &elem : t) {
-                pack_buffer(packer, elem);
-            }
-        }
     }
 
     inline void
@@ -131,24 +109,6 @@ namespace message
         vc::vclock junk;
         t = new db::element::edge(0, junk, 0, 0);
         unpack_buffer(unpacker, *t);
-    }
-
-    inline void 
-    unpack_buffer(e::unpacker &unpacker, std::vector<db::element::edge> &t)
-    {
-        assert(t.size() == 0);
-        uint64_t elements_left;
-        unpacker = unpacker >> elements_left;
-
-        t.reserve(elements_left);
-
-        while (elements_left > 0) {
-            vc::vclock junk;
-            db::element::edge to_add(0, junk, 0, 0);
-            unpack_buffer(unpacker, to_add);
-            t.emplace_back(std::move(to_add));
-            elements_left--;
-        }
     }
 
     inline void

@@ -26,7 +26,6 @@ namespace message
         uint64_t toRet = size(t.node_deleted)
             + size(t.edges_added)
             + size(t.edges_deleted);
- ;
         return toRet;
     }
 

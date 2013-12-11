@@ -158,17 +158,14 @@ namespace message
     uint64_t size(const db::caching::node_cache_context &t);
     uint64_t size(const db::element::edge &t);
     uint64_t size(const db::element::edge* const &t);
-    uint64_t size(const std::vector<db::element::edge> &t);
     uint64_t size(const db::element::node &t);
     void pack_buffer(e::buffer::packer &packer, const db::caching::node_cache_context &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::edge &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t);
-    void pack_buffer(e::buffer::packer &packer, const std::vector<db::element::edge> &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::node &t);
     void unpack_buffer(e::unpacker &unpacker, db::caching::node_cache_context &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge *&t);
-    void unpack_buffer(e::unpacker &unpacker, std::vector<db::element::edge> &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::node &t);
 
     inline
