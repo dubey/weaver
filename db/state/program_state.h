@@ -22,10 +22,8 @@
 #include "node_prog/reach_program.h"
 //#include "node_prog/n_hop_reach_program.h"
 //#include "node_prog/triangle_program.h"
-/*
-#include "node_prog/dijkstra_program.h"
+//#include "node_prog/dijkstra_program.h"
 #include "node_prog/clustering_program.h"
-*/
 #include "common/message.h"
 
 namespace state
@@ -210,13 +208,13 @@ namespace state
                                 break;
                             }
 
+                            */
                             case node_prog::CLUSTERING: {
                                 std::shared_ptr<node_prog::clustering_node_state> cns =
                                     std::dynamic_pointer_cast<node_prog::clustering_node_state>(rmap.at(req_id)->at(node_handle));
                                 sz += cns->size();
                                 break;
                             }
-                            */
 
                             default:
                                 WDEBUG << "Bad type in program state size " << t.first << std::endl;
@@ -312,17 +310,17 @@ namespace state
                 case node_prog::DIJKSTRA: {
                     std::shared_ptr<node_prog::dijkstra_node_state> dns(new node_prog::dijkstra_node_state());
                     dns->unpack(unpacker);
-                    new_entry = std::dynamic_pointer_cast<node_prog::Packable_Deletable>(dns);
+                    new_entry = std::dynamic_pointer_cast<node_prog::Node_State_Base>(dns);
                     break;
                 }
 
+                */
                 case node_prog::CLUSTERING: {
                     std::shared_ptr<node_prog::clustering_node_state> cns(new node_prog::clustering_node_state());
                     cns->unpack(unpacker);
-                    new_entry = std::dynamic_pointer_cast<node_prog::Packable_Deletable>(cns);
+                    new_entry = std::dynamic_pointer_cast<node_prog::Node_State_Base>(cns);
                     break;
                 }
-                */
 
                 default:
                     WDEBUG << "Bad type in program state unpack " << type << std::endl;

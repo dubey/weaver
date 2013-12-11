@@ -32,7 +32,7 @@
 #include "reach_program.h"
 //#include "triangle_program.h"
 //#include "n_hop_reach_program.h"
-//#include "clustering_program.h"
+#include "clustering_program.h"
 
 namespace coordinator
 {
@@ -159,7 +159,8 @@ namespace node_prog
     
     std::map<prog_type, node_program*> programs = {
         { REACHABILITY,
-        new particular_node_program<node_prog::reach_params, node_prog::reach_node_state>(REACHABILITY, node_prog::reach_node_program) }/*,
+        new particular_node_program<node_prog::reach_params, node_prog::reach_node_state>(REACHABILITY, node_prog::reach_node_program) },
+        /*
         { TRIANGLE_COUNT,
         new particular_node_program<node_prog::triangle_params, node_prog::triangle_node_state>(TRIANGLE_COUNT, node_prog::triangle_node_program) },
         { N_HOP_REACHABILITY,
@@ -169,9 +170,9 @@ namespace node_prog
                 node_prog::dijkstra_cache_value>(DIJKSTRA, node_prog::dijkstra_node_program, // KEEP DIJKSTRA OUT
                 dijkstra_node_deleted_program,
                 INVALIDATE_TAIL) },
+        */
         { CLUSTERING,
           new particular_node_program<node_prog::clustering_params, node_prog::clustering_node_state>(CLUSTERING, node_prog::clustering_node_program) }
-        */
     };
 }
 #endif //__NODE_PROG__

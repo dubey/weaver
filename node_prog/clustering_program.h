@@ -25,7 +25,7 @@
 
 namespace node_prog
 {
-    class clustering_params : public virtual Packable 
+    class clustering_params : public virtual Node_Parameters_Base 
     {
         public:
             bool is_center;
@@ -36,6 +36,14 @@ namespace node_prog
             uint64_t vt_id;
 
         public:
+            virtual bool search_cache() {
+                return false;
+            }
+
+            virtual uint64_t cache_key() {
+                return 0;
+            }
+
             virtual uint64_t size() const 
             {
                 uint64_t toRet = message::size(is_center) + message::size(center);
@@ -66,7 +74,7 @@ namespace node_prog
             }
     };
 
-    struct clustering_node_state : Packable_Deletable 
+    struct clustering_node_state : public virtual Node_State_Base
     {
         // map from a node (by its create time) to the number of neighbors who are connected to it
         std::unordered_map<uint64_t, int> neighbor_counts;
@@ -89,6 +97,26 @@ namespace node_prog
         {
             message::unpack_buffer(unpacker, neighbor_counts);
             message::unpack_buffer(unpacker, responses_left);
+        }
+    };
+
+    struct clustering_cache_value : public virtual Cache_Value_Base 
+    {
+        public:
+
+        virtual ~clustering_cache_value () { }
+
+        virtual uint64_t size() const 
+        {
+            return 0;
+        }
+
+        virtual void pack(e::buffer::packer& packer) const 
+        {
+        }
+
+        virtual void unpack(e::unpacker& unpacker)
+        {
         }
     };
 
@@ -130,7 +158,10 @@ namespace node_prog
             db::element::remote_node &rn,
             clustering_params &params,
             std::function<clustering_node_state&()> state_getter,
-            vc::vclock &req_vclock)
+            std::shared_ptr<vc::vclock> &req_vclock,
+            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
+                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
+            db::caching::cache_response *cache_response)
     {
         std::vector<std::pair<db::element::remote_node, clustering_params>> next;
         if (params.is_center) {
@@ -141,7 +172,7 @@ namespace node_prog
                     db::element::edge *e;
                     for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
                         e = possible_nbr.second;
-                        if (check_nbr(e, req_vclock)) {
+                        if (check_nbr(e, *req_vclock)) {
                             next.emplace_back(std::make_pair(possible_nbr.second->nbr, params));
                             cstate.neighbor_counts.insert(std::make_pair(possible_nbr.second->nbr.handle, 0));
                             cstate.responses_left++;
@@ -163,7 +194,7 @@ namespace node_prog
             }
         } else { // not center
             for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
-                if (check_nbr(possible_nbr.second, req_vclock)) {
+                if (check_nbr(possible_nbr.second, *req_vclock)) {
                     params.neighbors.push_back(possible_nbr.second->nbr.handle);
                 }
             }
