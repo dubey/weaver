@@ -65,6 +65,7 @@ namespace db
         SNAP,
         // list of node handles with corresponding shard ids, then edge list
         // first line must be of format "#<num_nodes>", e.g. "#42"
+        // each edge followed by list of props (list of key-value pairs)
         WEAVER
     };
 
@@ -111,6 +112,15 @@ namespace db
                     uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk);
             void delete_edge_nonlocking(element::node *n, uint64_t edge, vc::vclock &tdel);
             void delete_edge(uint64_t edge_handle, uint64_t node_handle, vc::vclock &vclk);
+            // properties
+            void set_node_property_nonlocking(element::node *n,
+                    std::string &key, std::string &value, vc::vclock &vclk);
+            void set_node_property(uint64_t node_handle,
+                    std::string &key, std::string &value, vc::vclock &vclk);
+            void set_edge_property_nonlocking(element::node *n, uint64_t edge_handle,
+                    std::string &key, std::string &value, vc::vclock &vclk);
+            void set_edge_property(uint64_t node_handle, uint64_t edge_handle,
+                    std::string &key, std::string &value, vc::vclock &vclk);
             uint64_t get_node_count();
             bool node_exists_nonlocking(uint64_t node_handle);
 
@@ -397,6 +407,51 @@ namespace db
             release_node(n);
         }
         // TODO permanent deletion
+    }
+
+    inline void
+    shard :: set_node_property_nonlocking(element::node *n,
+            std::string &key, std::string &value, vc::vclock &vclk)
+    {
+        common::property p(key, value, vclk);
+        n->check_and_add_property(p);
+    }
+
+    inline void
+    shard :: set_node_property(uint64_t node_handle,
+            std::string &key, std::string &value, vc::vclock &vclk)
+    {
+        element::node *n = acquire_node(node_handle);
+        if (n == NULL) {
+            // node is being migrated
+            // TODO
+        } else {
+            set_node_property_nonlocking(n, key, value, vclk);
+            release_node(n);
+        }
+    }
+
+    inline void
+    shard :: set_edge_property_nonlocking(element::node *n, uint64_t edge_handle,
+            std::string &key, std::string &value, vc::vclock &vclk)
+    {
+        db::element::edge *e = n->out_edges[edge_handle];
+        common::property p(key, value, vclk);
+        e->check_and_add_property(p);
+    }
+
+    inline void
+    shard :: set_edge_property(uint64_t node_handle, uint64_t edge_handle,
+            std::string &key, std::string &value, vc::vclock &vclk)
+    {
+        element::node *n = acquire_node(node_handle);
+        if (n == NULL) {
+            // node is being migrated
+            // TODO
+        } else {
+            set_edge_property_nonlocking(n, edge_handle, key, value, vclk);
+            release_node(n);
+        }
     }
 
     // return true if node already created

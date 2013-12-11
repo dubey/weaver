@@ -19,7 +19,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <queue>
-#include <string.h>
+#include <string>
 #include <e/buffer.h>
 #include <po6/net/location.h>
 #include <busybee_constants.h>
@@ -200,6 +200,10 @@ namespace message
     {
         return sizeof(uint16_t);
     }
+    inline uint64_t size(const char&)
+    {
+        return sizeof(uint8_t);
+    }
     inline uint64_t size(const uint16_t&)
     {
         return sizeof(uint16_t);
@@ -219,6 +223,10 @@ namespace message
     inline uint64_t size(const double&)
     {
         return sizeof(uint64_t);
+    }
+    inline uint64_t size(const std::string &t)
+    {
+        return t.size() + sizeof(uint64_t);
     }
     inline uint64_t size(const vc::vclock &t)
     {
@@ -337,6 +345,11 @@ namespace message
         packer = packer << to_pack;
     }
     inline void 
+    pack_buffer(e::buffer::packer &packer, const uint8_t &t)
+    {
+        packer = packer << t;
+    }
+    inline void 
     pack_buffer(e::buffer::packer &packer, const uint16_t &t)
     {
         packer = packer << t;
@@ -363,6 +376,18 @@ namespace message
         uint64_t dbl;
         memcpy(&dbl, &t, sizeof(double)); //to avoid casting issues, probably could avoid copy
         packer = packer << dbl;
+    }
+
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const std::string &t)
+    {
+        uint8_t strchar;
+        uint64_t strlen = t.size();
+        pack_buffer(packer, strlen);
+        for (uint64_t i = 0; i < strlen; i++) {
+            strchar = (uint8_t)t[i];
+            pack_buffer(packer, strchar);
+        }
     }
 
     inline void
@@ -560,6 +585,11 @@ namespace message
         t = (temp != 0);
     }
     inline void
+    unpack_buffer(e::unpacker &unpacker, uint8_t &t)
+    {
+        unpacker = unpacker >> t;
+    }
+    inline void
     unpack_buffer(e::unpacker &unpacker, uint16_t &t)
     {
         unpacker = unpacker >> t;
@@ -580,6 +610,27 @@ namespace message
         unpacker = unpacker >> t;
     }
 
+    inline void 
+    unpack_buffer(e::unpacker &unpacker, double &t)
+    {
+        uint64_t dbl;
+        unpacker = unpacker >> dbl;
+        memcpy(&t, &dbl, sizeof(double)); //to avoid casting issues, probably could avoid copy
+    }
+
+    inline void 
+    unpack_buffer(e::unpacker &unpacker, std::string &t)
+    {
+        uint64_t strlen;
+        uint8_t strchar;
+        unpack_buffer(unpacker, strlen);
+        t.resize(strlen);
+        for (uint64_t i = 0; i < strlen; i++) {
+            unpack_buffer(unpacker, strchar);
+            t[i] = (char)strchar;
+        }
+    }
+
     inline void
     unpack_buffer(e::unpacker &unpacker, vc::vclock &t)
     {
@@ -594,14 +645,6 @@ namespace message
         unpack_buffer(unpacker, t.value);
         unpack_buffer(unpacker, t.creat_time);
         unpack_buffer(unpacker, t.del_time);
-    }
-
-    inline void 
-    unpack_buffer(e::unpacker &unpacker, double &t)
-    {
-        uint64_t dbl;
-        unpacker = unpacker >> dbl;
-        memcpy(&t, &dbl, sizeof(double)); //to avoid casting issues, probably could avoid copy
     }
 
     inline void 

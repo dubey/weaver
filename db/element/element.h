@@ -45,8 +45,8 @@ namespace element
 
         public:
             void add_property(common::property prop);
-            void delete_property(uint32_t key, vc::vclock &tdel);
-            void remove_property(uint32_t key, vc::vclock &vclk);
+            void delete_property(std::string key, vc::vclock &tdel);
+            void remove_property(std::string key, vc::vclock &vclk);
             bool has_property(common::property prop, vc::vclock &vclk);
             bool check_and_add_property(common::property prop);
             void set_properties(std::vector<common::property> &props);
@@ -54,7 +54,7 @@ namespace element
             void update_creat_time(vc::vclock &creat_time);
             const vc::vclock& get_creat_time() const;
             const vc::vclock& get_del_time() const;
-            std::pair<bool, uint64_t> get_property_value(uint32_t prop_key, vc::vclock &at_time);
+            std::pair<bool, std::string> get_property_value(std::string prop_key, vc::vclock &at_time);
             const std::vector<common::property>* get_props() const;
             void set_handle(uint64_t handle);
             uint64_t get_handle() const;
@@ -75,7 +75,7 @@ namespace element
     }
 
     inline void
-    element :: delete_property(uint32_t key, vc::vclock &tdel)
+    element :: delete_property(std::string key, vc::vclock &tdel)
     {
         for (auto &iter: properties) {
             if (iter.key == key) {
@@ -87,11 +87,11 @@ namespace element
     class match_key
     {
         public:
-            uint32_t key;
+            std::string key;
             vc::vclock vclk;
 
             inline
-            match_key(uint32_t k, vc::vclock &vclock)
+            match_key(std::string k, vc::vclock &vclock)
                 : key(k)
                 , vclk(vclock)
             { }
@@ -110,7 +110,7 @@ namespace element
 
     // remove properties which match key
     inline void
-    element :: remove_property(uint32_t key, vc::vclock &vclk)
+    element :: remove_property(std::string key, vc::vclock &vclk)
     {
         auto iter = std::remove_if(properties.begin(), properties.end(), match_key(key, vclk));
         properties.erase(iter, properties.end());
@@ -183,8 +183,8 @@ namespace element
     }
 
     // return a pair, first is whether prop exists, second is value
-    std::pair<bool, uint64_t>
-    element :: get_property_value(uint32_t prop_key, vc::vclock &at_time)
+    std::pair<bool, std::string>
+    element :: get_property_value(std::string prop_key, vc::vclock &at_time)
     {
         for (common::property& prop : properties)
         {
@@ -196,7 +196,7 @@ namespace element
                 return std::make_pair(true, prop.value);
             } 
         }
-        return std::make_pair(false, 0xDEADBEEF);
+        return std::make_pair(false, std::string(""));
     }
 
     inline void

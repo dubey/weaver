@@ -29,6 +29,8 @@ MAX_UINT64 = UINT64_MAX
 
 # end <stolen from Hyperdex/bindings/client.pyx>
 
+from libcpp.string cimport string
+
 cdef extern from '<utility>' namespace 'std':
     cdef cppclass pair[T1, T2]:
         T1 first
@@ -114,22 +116,30 @@ class RemoteNode:
         self.loc = loc
         self.handle = handle
 
+cdef extern from 'common/property.h' namespace 'common':
+    cdef cppclass property:
+        property()
+        string key
+        string value
+
 cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
     cdef cppclass reach_params:
         reach_params()
         bint mode
         remote_node prev_node
         uint64_t dest
+        vector[property] edge_props
         uint32_t hops
         bint reachable
 
 class ReachParams:
-    def __init__(self, mode=False, prev_node=RemoteNode(), dest=0, hops=0, reachable=False):
+    def __init__(self, mode=False, prev_node=RemoteNode(), dest=0, hops=0, reachable=False, edge_props=[]):
         self.mode = mode
         self.prev_node = prev_node
         self.dest = dest
         self.hops = hops
         self.reachable = reachable
+        self.edge_props = edge_props
 
 cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
     cdef cppclass clustering_params:
@@ -185,6 +195,7 @@ cdef class Client:
     def run_reach_program(self, init_args):
         cdef vector[pair[uint64_t, reach_params]] c_args
         cdef pair[uint64_t, reach_params] arg_pair
+        cdef property prop
         for rp in init_args:
             arg_pair.first = rp[0]
             arg_pair.second.mode = rp[1].mode
@@ -192,6 +203,10 @@ cdef class Client:
             arg_pair.second.reachable = rp[1].reachable
             arg_pair.second.prev_node.loc = rp[1].prev_node.loc
             arg_pair.second.prev_node.handle = rp[1].prev_node.handle
+            for p in rp[1].edge_props:
+                prop.key = string(p[0])
+                prop.value = string(p[1])
+                arg_pair.second.edge_props.push_back(prop)
             c_args.push_back(arg_pair)
         c_rp = self.thisptr.run_reach_program(c_args)
         response = ReachParams(hops=c_rp.hops, reachable=c_rp.reachable)

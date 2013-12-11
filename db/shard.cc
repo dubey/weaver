@@ -127,11 +127,22 @@ parse_single_uint64(std::string &line, size_t &idx, uint64_t &n, bool &bad)
     }
 }
 
+inline void
+skip_whitespace(std::string &line, size_t &i)
+{
+    while (i < line.length() && (line[i] == ' '
+        || line[i] == '\r'
+        || line[i] == '\n'
+        || line[i] == '\t')) {
+        ++i;
+    }
+}
+
 // parse the string 'line' as '<unsigned int> <unsigned int> '
 // there can be arbitrary whitespace between the two ints, and after the second int
 // store the two parsed ints in 'n1' and 'n2'
 // if there is overflow or unexpected char is encountered, return n1 = n2 = 0
-inline void
+inline size_t
 parse_two_uint64(std::string &line, uint64_t &n1, uint64_t &n2)
 {
     size_t i = 0;
@@ -142,21 +153,45 @@ parse_two_uint64(std::string &line, uint64_t &n1, uint64_t &n2)
         n1 = 0;
         n2 = 0;
         WDEBUG << "Parsing error" << std::endl;
-        return;
+        return -1;
     }
 
-    while (line[i] == ' '
-        || line[i] == '\r'
-        || line[i] == '\n'
-        || line[i] == '\t') {
-        ++i;
-    }
+    skip_whitespace(line, i);
 
     parse_single_uint64(line, i, n2, bad);
     if (bad) {
         n1 = 0;
         n2 = 0;
         WDEBUG << "Parsing error" << std::endl;
+    }
+
+    skip_whitespace(line, i);
+
+    return i;
+}
+
+inline void
+parse_weaver_edge(std::string &line, uint64_t &n1, uint64_t &n2,
+        std::vector<std::pair<std::string, std::string>> &props)
+{
+    size_t i = parse_two_uint64(line, n1, n2);
+    while (i < line.length()) {
+        size_t start1 = i;
+        while (line[i] != ' ' && line[i] != '\t') {
+            i++;
+        }
+        size_t len1 = i - start1;
+        skip_whitespace(line, i);
+        size_t start2 = i;
+        while (i < line.length() && (line[i] != ' '
+            && line[i] != '\t'
+            && line[i] != '\n'
+            && line[i] != '\r')) {
+            i++;
+        }
+        size_t len2 = i - start2;
+        skip_whitespace(line, i);
+        props.emplace_back(std::make_pair(line.substr(start1, len1), line.substr(start2, len2)));
     }
 }
 
@@ -263,10 +298,6 @@ load_graph(db::graph_file_format format, const char *graph_file)
                     init_mutex.unlock();
                     node_map.clear();
                 }
-                if (++line_count == max_node_handle) {
-                    WDEBUG << "Last node pos line: " << line << std::endl;
-                    break;
-                }
             }
             init_mutex.lock();
             while (start_load < 1) {
@@ -277,8 +308,11 @@ load_graph(db::graph_file_format format, const char *graph_file)
             init_cv.broadcast();
             init_mutex.unlock();
             // edges
+            std::vector<std::pair<std::string, std::string>> props;
             while (std::getline(file, line)) {
-                parse_two_uint64(line, node0, node1);
+                props.clear();
+                //parse_two_uint64(line, node0, node1);
+                parse_weaver_edge(line, node0, node1, props);
                 edge_handle = max_node_handle + (edge_count++);
                 uint64_t loc0 = all_node_map[node0];
                 uint64_t loc1 = all_node_map[node1];
@@ -289,6 +323,10 @@ load_graph(db::graph_file_format format, const char *graph_file)
                     }
                     assert(n != NULL);
                     S->create_edge_nonlocking(n, edge_handle, node1, loc1, zero_clk, true);
+                    for (auto &p: props) {
+                        WDEBUG << "Edge prop " << p.first << ": " << p.second << std::endl;
+                        S->set_edge_property_nonlocking(n, edge_handle, p.first, p.second, zero_clk);
+                    }
                 }
             }
             break;
