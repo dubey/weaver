@@ -30,8 +30,8 @@ def exec_clusterings(reqs, cl):
     end = time.time()
     return (end-start)
 
-num_requests = 1500
-num_runs = 10
+num_requests = 10000
+num_runs = 5
 #num_nodes = 82168 # snap soc-Slashdot0902
 #num_nodes = 10876 # snap p2pgnutella04
 num_nodes = 81306 # snap twitter-combined
@@ -52,15 +52,15 @@ for runs in range(num_runs):
         sys.stdout.write('.')
         sys.stdout.flush()
 print ' done'
-print 'Before time ' + str(t1)
-for mrun in range(1,4):
-    c.single_stream_migration()
-    print 'Done repartitioning stream ' + str(mrun)
-t2 = 0
-for runs in range(num_runs):
-    t2 += exec_clusterings(reqs, c)
-    if runs % 1 == 0:
-        sys.stdout.write('.')
-        sys.stdout.flush()
-print ' done'
-print 'After time ' + str(t2)
+print 'time ' + str(t1)
+#for mrun in range(1,4):
+#    c.single_stream_migration()
+#    print 'Done repartitioning stream ' + str(mrun)
+#t2 = 0
+#for runs in range(num_runs):
+#    t2 += exec_clusterings(reqs, c)
+#    if runs % 1 == 0:
+#        sys.stdout.write('.')
+#        sys.stdout.flush()
+#print ' done'
+#print 'After time ' + str(t2)
