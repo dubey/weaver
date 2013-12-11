@@ -204,8 +204,8 @@ cdef class Client:
             arg_pair.second.prev_node.loc = rp[1].prev_node.loc
             arg_pair.second.prev_node.handle = rp[1].prev_node.handle
             for p in rp[1].edge_props:
-                prop.key = string(p[0])
-                prop.value = string(p[1])
+                prop.key = p[0].encode('UTF-8')
+                prop.value = p[1].encode('UTF-8')
                 arg_pair.second.edge_props.push_back(prop)
             c_args.push_back(arg_pair)
         c_rp = self.thisptr.run_reach_program(c_args)
