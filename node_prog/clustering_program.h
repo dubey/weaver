@@ -96,12 +96,16 @@ namespace node_prog
             std::vector<std::pair<db::element::remote_node, clustering_params>> &next,
             clustering_params &params) 
     {
-        double denominator = (double) (cstate.neighbor_counts.size() * (cstate.neighbor_counts.size() - 1));
-        int numerator = 0;
-        for (std::pair<const uint64_t, int> nbr_count : cstate.neighbor_counts){
-            numerator += nbr_count.second;
+        if (cstate.neighbor_counts.size() > 1) {
+            double denominator = (double) (cstate.neighbor_counts.size() * (cstate.neighbor_counts.size() - 1));
+            int numerator = 0;
+            for (std::pair<const uint64_t, int> nbr_count : cstate.neighbor_counts){
+                numerator += nbr_count.second;
+            }
+            params.clustering_coeff = (double) numerator / denominator;
+        } else {
+            params.clustering_coeff = 0;
         }
-        params.clustering_coeff = (double) numerator / denominator;
         db::element::remote_node coord(params.vt_id, 1337);
         next.emplace_back(std::make_pair(db::element::remote_node(params.vt_id, 1337), params));
     }
@@ -134,12 +138,18 @@ namespace node_prog
             if (params.outgoing) {
                     params.is_center = false;
                     params.center = rn;
+                    db::element::edge *e;
                     for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
-                        if (check_nbr(possible_nbr.second, req_vclock)) {
+                        e = possible_nbr.second;
+                        if (check_nbr(e, req_vclock)) {
                             next.emplace_back(std::make_pair(possible_nbr.second->nbr, params));
                             cstate.neighbor_counts.insert(std::make_pair(possible_nbr.second->nbr.handle, 0));
                             cstate.responses_left++;
+                            e->traverse();
                         }
+                    }
+                    if (cstate.responses_left == 0) {
+                        calculate_response(cstate, next, params);
                     }
             } else {
                 for (uint64_t poss_nbr : params.neighbors) {

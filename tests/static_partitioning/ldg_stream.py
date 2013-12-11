@@ -5,7 +5,7 @@ import random
 
 # adds node attribute of which shard node should be placed on
 num_shards = 8
-capacity = 12000
+capacity = 84000/num_shards
 assignments = dict()
 shard_sizes = [0] * num_shards
 G = {}

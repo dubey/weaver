@@ -201,9 +201,9 @@ cdef class Client:
         cdef pair[uint64_t, clustering_params] arg_pair
         for cp in init_args:
             arg_pair.first = cp[0]
-            is_center = cp[0].is_center
-            outgoing = cp[0].outgoing
-            vt_id = cp[0].vt_id
+            arg_pair.second.is_center = cp[1].is_center
+            arg_pair.second.outgoing = cp[1].outgoing
+            arg_pair.second.vt_id = cp[1].vt_id
             c_args.push_back(arg_pair)
         c_cp = self.thisptr.run_clustering_program(c_args)
         response = ClusteringParams(clustering_coeff=c_cp.clustering_coeff)

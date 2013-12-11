@@ -978,7 +978,6 @@ migration_wrapper()
             for (int j = 0; j < NUM_SHARDS; j++) {
                 double penalty = 1.0 - ((double)shard_node_count[j])/SHARD_CAP;
                 n->migr_score[j] = n->msg_count[j] * penalty;
-                //WDEBUG << "Shard " << (j+SHARD_ID_INCR) << ", score = " << n->migr_score[j] << ", penalty " << penalty << std::endl;
             }
         } else {
             // regular LDG
@@ -1004,9 +1003,9 @@ migration_wrapper()
             } else if (n->migr_score[max_pos] == n->migr_score[j]) {
                 max_indices.emplace_back(j);
             }
+            n->msg_count[j] = 0;
         }
         migr_pos = get_balanced_assignment(shard_node_count, max_indices) + SHARD_ID_INCR;
-        //migr_pos = max_pos + SHARD_ID_INCR; // fixing index
         if (migr_pos > shard_id) {
             n->already_migr = true;
         }
@@ -1014,7 +1013,6 @@ migration_wrapper()
         S->sorted_nodes.pop_front();
         
         // no migration to self
-        //WDEBUG << "Hoping to migr node " << migr_node << " to shard " << migr_pos << std::endl;
         if (migr_pos != shard_id) {
             migrate_node_step1(migr_node, migr_pos);
             no_migr = false;
@@ -1037,23 +1035,31 @@ bool agg_count_compare(std::pair<uint64_t, uint32_t> p1, std::pair<uint64_t, uin
 void
 shard_daemon_begin()
 {
-    /*
     S->msg_count_mutex.lock();
     auto agg_msg_count = std::move(S->agg_msg_count);
-    assert(S->agg_msg_count.empty());
     S->msg_count_mutex.unlock();
-    std::deque<std::pair<uint64_t, uint32_t>> sn;
-    for (auto &p: agg_msg_count) {
-        sn.emplace_back(p);
-    }
-    std::sort(sn.begin(), sn.end(), agg_count_compare);
-    S->sorted_nodes = std::move(sn);
+    /*
+    if (CLDG) {
+        std::deque<std::pair<uint64_t, uint32_t>> sn;
+        for (auto &p: agg_msg_count) {
+            sn.emplace_back(p);
+        }
+        std::sort(sn.begin(), sn.end(), agg_count_compare);
+        S->sorted_nodes = std::move(sn);
+    } else {
     */
     S->update_mutex.lock();
-    for (auto &entry: S->nodes) {
-        S->sorted_nodes.emplace_back(std::make_pair(entry.first, 0));
+    if (CLDG) {
+        for (auto &entry: S->nodes) {
+            S->sorted_nodes.emplace_back(std::make_pair(entry.first, agg_msg_count[entry.first]));
+        }
+    } else {
+        for (auto &entry: S->nodes) {
+            S->sorted_nodes.emplace_back(std::make_pair(entry.first, 0));
+        }
     }
     S->update_mutex.unlock();
+    //}
 
     migration_wrapper();
 }

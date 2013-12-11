@@ -25,17 +25,13 @@ def exec_clusterings(reqs, cl):
     cnt = 0
     for r in reqs:
         cnt += 1
-        prog_args = [(r[0], cp)]
+        prog_args = [(r, cp)]
         response = cl.run_clustering_program(prog_args)
-        print 'Got clustering response ' + str(response.clustering_coeff)
-        #if cnt % 1 == 0:
-        #    sys.stdout.write('.')
-        #    sys.stdout.flush()
-    print ' done'
     end = time.time()
     return (end-start)
 
-num_requests = 20
+num_requests = 1500
+num_runs = 10
 #num_nodes = 82168 # snap soc-Slashdot0902
 #num_nodes = 10876 # snap p2pgnutella04
 num_nodes = 81306 # snap twitter-combined
@@ -49,10 +45,22 @@ random.seed(42)
 for numr in range(num_requests):
     reqs.append(random.randint(0, num_nodes-1))
 
-print 'Before streaming rounds, time taken: ' + str(exec_traversals(reqs, c))
-print 'Before streaming rounds, time taken: ' + str(exec_traversals(reqs, c))
-for mrun in range(1,6):
+t1 = 0
+for runs in range(num_runs):
+    t1 += exec_clusterings(reqs, c)
+    if runs % 1 == 0:
+        sys.stdout.write('.')
+        sys.stdout.flush()
+print ' done'
+print 'Before time ' + str(t1)
+for mrun in range(1,4):
     c.single_stream_migration()
     print 'Done repartitioning stream ' + str(mrun)
-print 'After streaming rounds, time taken: ' + str(exec_traversals(reqs, c))
-print 'After streaming rounds, time taken: ' + str(exec_traversals(reqs, c))
+t2 = 0
+for runs in range(num_runs):
+    t2 += exec_clusterings(reqs, c)
+    if runs % 1 == 0:
+        sys.stdout.write('.')
+        sys.stdout.flush()
+print ' done'
+print 'After time ' + str(t2)
