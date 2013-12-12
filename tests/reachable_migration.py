@@ -54,7 +54,7 @@ t1 = 0
 for run in range(num_runs):
     t1 += exec_traversals(reqs, c)
 print 'Before streaming rounds, time taken: ' + str(t1)
-for mrun in range(1,6):
+for mrun in range(4):
     c.single_stream_migration()
     print 'Done repartitioning stream ' + str(mrun)
 t2 = 0

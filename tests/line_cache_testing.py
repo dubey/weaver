@@ -23,7 +23,7 @@ num_nodes = 600
 cut_idx = 200
 assert(cut_idx < num_nodes)
 coord_id = 0
-c = client.Client(client._CLIENT_ID+1, coord_id)
+c = client.Client(client._CLIENT_ID, coord_id)
 
 tx_id = c.begin_tx()
 for i in range(num_nodes):

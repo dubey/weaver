@@ -48,10 +48,10 @@
 #define GRAPH_FILE "graph.rec"
 // node programs
 #define BATCH_MSG_SIZE 1 // 1 == no batching
-#define MAX_CACHE_ENTRIES 8 // 0 to turn off caching
+#define MAX_CACHE_ENTRIES 0 // 0 to turn off caching
 // migration
 #define START_MIGR_ID SHARD_ID_INCR // first shard to get migration token
-#define SHARD_CAP (82000ULL/NUM_SHARDS)
+#define SHARD_CAP (84000ULL/NUM_SHARDS)
 #define CLDG true // true if communication-based LDG, false otherwise
 // coordinator
 #define VT_NANO (1000000000ULL)
