@@ -96,6 +96,8 @@ namespace message
         MIGRATION_TOKEN,
         REQUEST_COUNT,
         REQUEST_COUNT_ACK,
+        MSG_COUNT,
+        CLIENT_MSG_COUNT,
         // initial graph loading
         LOADED_GRAPH,
         // coordinator group

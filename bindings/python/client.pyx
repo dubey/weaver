@@ -173,6 +173,7 @@ cdef extern from 'client/client.h' namespace 'client':
         void single_stream_migration()
         void commit_graph()
         void exit_weaver()
+        void print_msgcount()
 
 cdef class Client:
     cdef client *thisptr
@@ -231,3 +232,5 @@ cdef class Client:
         self.thisptr.commit_graph()
     def exit_weaver(self):
         self.thisptr.exit_weaver()
+    def print_msgcount(self):
+        self.thisptr.print_msgcount()

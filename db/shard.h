@@ -156,6 +156,7 @@ namespace db
                 , target_prog_id
                 , max_done_id; // max id done from each VT
             std::bitset<NUM_SHARDS> migr_edge_acks;
+            uint64_t msg_count;
             
             // node programs
         private:
@@ -192,6 +193,7 @@ namespace db
         , max_prog_id(NUM_VTS, 0)
         , target_prog_id(NUM_VTS, 0)
         , max_done_id(NUM_VTS, 0)
+        , msg_count(0)
         , prog_state()
     {
         thread::pool::S = this;

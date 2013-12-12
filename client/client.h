@@ -60,6 +60,7 @@ namespace client
             void single_stream_migration();
             void commit_graph();
             void exit_weaver();
+            void print_msgcount();
 
         private:
             void send_coord(std::auto_ptr<e::buffer> buf);
@@ -229,6 +230,14 @@ namespace client
     {
         message::message msg;
         message::prepare_message(msg, message::EXIT_WEAVER);
+        send_coord(msg.buf);
+    }
+
+    inline void
+    client :: print_msgcount()
+    {
+        message::message msg;
+        message::prepare_message(msg, message::CLIENT_MSG_COUNT);
         send_coord(msg.buf);
     }
 

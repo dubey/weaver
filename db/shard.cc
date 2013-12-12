@@ -676,6 +676,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         return;
     }
 
+    uint64_t msg_count = 0;
     while (!start_node_params.empty() && !done_request) {
         for (auto &handle_params : start_node_params) {
             node_handle = std::get<0>(handle_params);
@@ -752,6 +753,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
                         message::prepare_message(*msg, message::NODE_PROG, prog_type_recvd, global_req, vt_id, req_vclock, req_id, batched_node_progs[next_loc]);
                         S->send(next_loc, msg->buf);
                         batched_node_progs[next_loc].clear();
+                        msg_count++;
                     }
                 }
             }
@@ -761,6 +763,9 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
             done_request = true;
         }
     }
+    S->update_mutex.lock();
+    S->msg_count += msg_count;
+    S->update_mutex.unlock();
 }
 
 template <typename ParamsType, typename NodeStateType>
@@ -1092,7 +1097,11 @@ shard_daemon_begin()
     S->update_mutex.lock();
     if (CLDG) {
         for (auto &entry: S->nodes) {
-            S->sorted_nodes.emplace_back(std::make_pair(entry.first, agg_msg_count[entry.first]));
+            if (agg_msg_count.find(entry.first) != agg_msg_count.end()) {
+                S->sorted_nodes.emplace_back(std::make_pair(entry.first, agg_msg_count[entry.first]));
+            } else {
+                S->sorted_nodes.emplace_back(std::make_pair(entry.first, 0));
+            }
         }
     } else {
         for (auto &entry: S->nodes) {
@@ -1215,6 +1224,16 @@ msgrecv_loop()
                             << (S->max_load_time/MEGA) << "ms." << std::endl;
                 }
                 S->graph_load_mutex.unlock();
+                break;
+            }
+
+            case message::MSG_COUNT: {
+                message::unpack_message(*rec_msg, message::MSG_COUNT, vt_id);
+                S->update_mutex.lock();
+                message::prepare_message(*rec_msg, message::MSG_COUNT, shard_id, S->msg_count);
+                S->msg_count = 0;
+                S->update_mutex.unlock();
+                S->send(vt_id, rec_msg->buf);
                 break;
             }
 

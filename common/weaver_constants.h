@@ -50,7 +50,8 @@
 #define BATCH_MSG_SIZE 1 // 1 == no batching
 // migration
 #define START_MIGR_ID SHARD_ID_INCR // first shard to get migration token
-#define SHARD_CAP (82000ULL/NUM_SHARDS)
+//#define SHARD_CAP (100000ULL/NUM_SHARDS)
+#define SHARD_CAP (360000ULL/NUM_SHARDS)
 #define CLDG true // true if communication-based LDG, false otherwise
 // coordinator
 #define VT_NANO (1000000000ULL)

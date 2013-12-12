@@ -427,6 +427,17 @@ server_loop(int thread_id)
                     break;
                 }
 
+                case message::CLIENT_MSG_COUNT: {
+                    vts->mutex.lock();
+                    vts->msg_count = 0;
+                    vts->mutex.unlock();
+                    for (uint64_t i = SHARD_ID_INCR; i < (SHARD_ID_INCR + NUM_SHARDS); i++) {
+                        message::prepare_message(*msg, message::MSG_COUNT, vt_id);
+                        vts->send(i, msg->buf);
+                    }
+                    break;
+                }
+
                 // shard messages
                 case message::LOADED_GRAPH: {
                     uint64_t load_time;
@@ -526,6 +537,19 @@ server_loop(int thread_id)
                     }
                     vts->mutex.unlock();
                     break;
+
+                case message::MSG_COUNT: {
+                    uint64_t shard, msg_count;
+                    message::unpack_message(*msg, message::MSG_COUNT, shard, msg_count);
+                    vts->mutex.lock();
+                    vts->msg_count += msg_count;
+                    if (++vts->msg_count_acks == NUM_SHARDS) {
+                        WDEBUG << "Msg count = " << vts->msg_count << std::endl;
+                        vts->msg_count_acks = 0;
+                    }
+                    vts->mutex.unlock();
+                    break;
+                }
 
                 default:
                     std::cerr << "unexpected msg type " << mtype << std::endl;

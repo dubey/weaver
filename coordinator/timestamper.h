@@ -103,6 +103,7 @@ namespace coordinator
             // migration
             uint64_t migr_client;
             std::vector<uint64_t> shard_node_count;
+            uint64_t msg_count, msg_count_acks;
             // permanent deletion
             // daemon
             // messaging
@@ -134,6 +135,8 @@ namespace coordinator
         , load_count(0)
         , max_load_time(0)
         , shard_node_count(NUM_SHARDS, 0)
+        , msg_count(0)
+        , msg_count_acks(0)
     {
         // initialize array of server locations
         initialize_busybee(bb, vt_id, myloc, NUM_THREADS);

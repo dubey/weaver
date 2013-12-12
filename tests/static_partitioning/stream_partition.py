@@ -8,7 +8,8 @@ from sets import Set
 # adds node attribute of which shard node should be placed on
 num_shards = 8
 num_runs = 10
-capacity = 84000/num_shards
+#capacity = 84000/num_shards
+capacity = 333000/num_shards
 assignments = dict()
 shard_sizes = [0] * num_shards
 LDG = True
@@ -131,7 +132,7 @@ for (k,v) in assignments.iteritems():
 for n in G:
     for nbr in G[n]:
         line = str(n) + ' ' + str(nbr)
-        if random.random() > 0.8:
+        if random.random() > 2:
             line += ' color blue\n'
         else:
             line += '\n'
