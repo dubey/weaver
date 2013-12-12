@@ -46,8 +46,8 @@ namespace common
 
     inline
     property :: property()
-        : key(0)
-        , value(0)
+        : key("")
+        , value("")
         , creat_time(MAX_UINT64, MAX_UINT64)
         , del_time(MAX_UINT64, MAX_UINT64)
     { }

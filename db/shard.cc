@@ -298,6 +298,10 @@ load_graph(db::graph_file_format format, const char *graph_file)
                     init_mutex.unlock();
                     node_map.clear();
                 }
+                if (++line_count == max_node_handle) {
+                     WDEBUG << "Last node pos line: " << line << std::endl;
+                     break;
+                }
             }
             init_mutex.lock();
             while (start_load < 1) {
