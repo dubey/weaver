@@ -44,15 +44,13 @@ namespace order
                 if (ret == 2) {
                     ret = 0;
                 } else {
-                    ret = -1;
-                    break;
+                    return -1;
                 }
             } else if ((clk1.at(i) > clk2.at(i)) && (ret != 1)) {
                 if (ret == 2) {
                     ret = 1;
                 } else {
-                    ret = -1;
-                    break;
+                    return -1;
                 }
             }
         }

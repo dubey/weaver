@@ -36,7 +36,7 @@ namespace node_prog
             bool mode; // false = request, true = reply
             db::element::remote_node prev_node;
             uint64_t dest;
-            //std::vector<common::property> edge_props;
+            std::vector<common::property> edge_props;
             uint32_t hops;
             bool reachable;
             std::vector<db::element::remote_node> path;
@@ -67,7 +67,7 @@ namespace node_prog
                     + message::size(mode)
                     + message::size(prev_node)
                     + message::size(dest) 
-                    //+ message::size(edge_props)
+                    + message::size(edge_props)
                     + message::size(hops)
                     + message::size(reachable)
                     + message::size(path);
@@ -81,7 +81,7 @@ namespace node_prog
                 message::pack_buffer(packer, mode);
                 message::pack_buffer(packer, prev_node);
                 message::pack_buffer(packer, dest);
-                //message::pack_buffer(packer, edge_props);
+                message::pack_buffer(packer, edge_props);
                 message::pack_buffer(packer, hops);
                 message::pack_buffer(packer, reachable);
                 message::pack_buffer(packer, path);
@@ -94,7 +94,7 @@ namespace node_prog
                 message::unpack_buffer(unpacker, mode);
                 message::unpack_buffer(unpacker, prev_node);
                 message::unpack_buffer(unpacker, dest);
-                //message::unpack_buffer(unpacker, edge_props);
+                message::unpack_buffer(unpacker, edge_props);
                 message::unpack_buffer(unpacker, hops);
                 message::unpack_buffer(unpacker, reachable);
                 message::unpack_buffer(unpacker, path);
@@ -253,10 +253,11 @@ namespace node_prog
                         // TODO change this so that the user does not see invalid edges
                         // check edge created and deleted in acceptable timeframe
                         bool traverse_edge = order::clock_creat_before_del_after(*req_vclock, e->get_creat_time(), e->get_del_time());
+
                         /*
                         // checking edge properties
                         for (auto &prop: params.edge_props) {
-                            if (!e->has_property(prop, req_id)) {
+                            if (!e->has_property(prop, req_vclock)) {
                                 traverse_edge = false;
                                 break;
                             }

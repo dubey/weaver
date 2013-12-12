@@ -92,6 +92,8 @@ def get_ldg_assignment(node):
     else:
         return get_balanced_assignment(max_indices)
 
+def get_hash_assignment(node):
+    return node % num_shards
 
 print 'partitioning graph onto ' + str(num_shards) + ' shards using LDG with a capacity constant of ' + str(capacity)
 load(sys.argv)
@@ -102,7 +104,8 @@ for run in range(num_runs):
         if n in assignments:
             shard_sizes[assignments[n]] -= 1
             orig_loc = assignments[n]
-        put_on_shard = get_ldg_assignment(n)
+        #put_on_shard = get_ldg_assignment(n)
+        put_on_shard = get_hash_assignment(n)
         assignments[n] = put_on_shard 
         shard_sizes[put_on_shard] += 1
         if orig_loc != -1 and orig_loc != put_on_shard:
@@ -127,6 +130,11 @@ for (k,v) in assignments.iteritems():
     fileout.write(str(k) + ' '  + str(v) + '\n')
 for n in G:
     for nbr in G[n]:
-        fileout.write(str(n) + ' ' + str(nbr) + '\n')
+        line = str(n) + ' ' + str(nbr)
+        if random.random() > 0.8:
+            line += ' color blue\n'
+        else:
+            line += '\n'
+        fileout.write(line)
 fileout.close()
 print 'finshed writing assignments'

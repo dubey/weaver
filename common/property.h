@@ -15,9 +15,7 @@
 #ifndef __PROPERTY__
 #define __PROPERTY__
 
-#include <stdlib.h>
-#include <string.h>
-#include <stdint.h>
+#include <string>
 
 #include "common/weaver_constants.h"
 #include "common/vclock.h"
@@ -28,11 +26,12 @@ namespace common
     {
         public:
             property();
-            property(uint32_t, uint64_t, vc::vclock&);
+            property(std::string&, std::string&);
+            property(std::string&, std::string&, vc::vclock&);
         
         public:
-            uint32_t key;
-            uint64_t value;
+            std::string key;
+            std::string value;
             vc::vclock creat_time;
             vc::vclock del_time;
 
@@ -47,14 +46,21 @@ namespace common
 
     inline
     property :: property()
-        : key(0)
-        , value(0)
+        : key("")
+        , value("")
         , creat_time(MAX_UINT64, MAX_UINT64)
         , del_time(MAX_UINT64, MAX_UINT64)
     { }
 
     inline
-    property :: property(uint32_t k, uint64_t v, vc::vclock &creat)
+    property :: property(std::string &k, std::string &v)
+        : key(k)
+        , value(v)
+    {
+    }
+
+    inline
+    property :: property(std::string &k, std::string &v, vc::vclock &creat)
         : key(k)
         , value(v)
         , creat_time(creat)
@@ -94,8 +100,10 @@ namespace std
         public:
             size_t operator()(common::property p) const throw() 
             {
-                std::hash<uint32_t> int_hasher;
-                return ((int_hasher(p.key) + 0x9e3779b9 + (p.value<<6) + (p.value>>2)) ^ p.value);
+                std::hash<std::string> string_hasher;
+                size_t hkey = string_hasher(p.key);
+                size_t hvalue = string_hasher(p.value);
+                return ((hkey + 0x9e3779b9 + (hvalue<<6) + (hvalue>>2)) ^ hvalue);
             }
     };
 }
