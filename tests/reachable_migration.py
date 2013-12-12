@@ -20,7 +20,7 @@ sys.path.append('../bindings/python')
 import client
 
 def exec_traversals(reqs, cl):
-    rp = client.ReachParams()
+    rp = client.ReachParams(edge_props=[('color','blue')])
     start = time.time()
     cnt = 0
     for r in reqs:

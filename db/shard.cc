@@ -328,7 +328,6 @@ load_graph(db::graph_file_format format, const char *graph_file)
                     assert(n != NULL);
                     S->create_edge_nonlocking(n, edge_handle, node1, loc1, zero_clk, true);
                     for (auto &p: props) {
-                        WDEBUG << "Edge prop " << p.first << ": " << p.second << std::endl;
                         S->set_edge_property_nonlocking(n, edge_handle, p.first, p.second, zero_clk);
                     }
                 }

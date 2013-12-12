@@ -643,6 +643,8 @@ namespace message
     {
         unpack_buffer(unpacker, t.key);
         unpack_buffer(unpacker, t.value);
+        t.creat_time.clock.clear();
+        t.del_time.clock.clear();
         unpack_buffer(unpacker, t.creat_time);
         unpack_buffer(unpacker, t.del_time);
     }
