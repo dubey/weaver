@@ -23,7 +23,7 @@
 
 namespace node_prog
 {
-    class dijkstra_queue_elem : public virtual Packable
+    class dijkstra_queue_elem : public virtual Node_State_Base 
     {
         public:
             uint64_t cost;
@@ -73,7 +73,7 @@ namespace node_prog
             }
     };
 
-    class dijkstra_params : public virtual Packable 
+    class dijkstra_params : public virtual Node_Parameters_Base  
     {
         public:
             uint64_t src_handle;
@@ -92,6 +92,14 @@ namespace node_prog
             virtual ~dijkstra_params() { }
 
         public:
+            virtual bool search_cache() {
+                return false;
+            }
+
+            virtual uint64_t cache_key() {
+                return 0;
+            }
+
             virtual uint64_t size() const 
             {
                 uint64_t toRet = 0;
@@ -143,7 +151,7 @@ namespace node_prog
             }
     };
 
-    struct dijkstra_node_state : Packable_Deletable 
+    struct dijkstra_node_state : public virtual Node_State_Base 
     {
         std::priority_queue<dijkstra_queue_elem,
                             std::vector<dijkstra_queue_elem>,
@@ -178,37 +186,17 @@ namespace node_prog
         }
     };
 
-    struct dijkstra_cache_value : CacheValueBase 
+    struct dijkstra_cache_value : public virtual Cache_Value_Base 
     {
+        /*
         uint32_t edge_key; // edge weight key
         uint64_t dst_node;
         uint64_t cost;
         bool is_widest;
         
+        */
         virtual ~dijkstra_cache_value() { }
     };
-
-    // caution: assuming we hold n->update_mutex
-    template<typename Func>
-    void apply_to_valid_edges(db::element::node *n, std::vector<common::property> &edge_props, uint64_t req_id, Func func)
-    {
-        // check the properties of each out-edge, assumes lock for node is held
-        for (const std::pair<uint64_t, db::element::edge*> &e : n->out_edges) {
-            bool use_edge = e.second->get_creat_time() <= req_id  
-                && e.second->get_del_time() > req_id; // edge created and deleted in acceptable timeframe
-
-            for (uint64_t i = 0; i < edge_props.size() && use_edge; i++) {
-                // checking edge properties
-                if (!e.second->has_property(edge_props[i])) {
-                    use_edge = false;
-                    break;
-                }
-            }
-            if (use_edge) {
-                func(e.second);
-            }
-        }
-    }
 
     inline uint64_t
     calculate_priority(uint64_t current_cost, uint64_t edge_cost, bool is_widest_path)
@@ -223,19 +211,18 @@ namespace node_prog
     }
 
     std::vector<std::pair<db::element::remote_node, dijkstra_params>> 
-    dijkstra_node_program(uint64_t req_id,
+    dijkstra_node_program(uint64_t,
             db::element::node &n,
             db::element::remote_node &rn,
             dijkstra_params &params,
             std::function<dijkstra_node_state&()> state_getter,
-            std::function<dijkstra_cache_value&()> cache_value_putter,
-            std::function<std::vector<std::shared_ptr<dijkstra_cache_value>>()> cached_values_getter)
+            std::shared_ptr<vc::vclock> &req_vclock,
+            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
+                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
+            db::caching::cache_response *cache_response)
     {
-        UNUSED(cache_value_putter);
-        UNUSED(cached_values_getter);
-
         std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
-        if (n.get_creat_time() == params.src_handle) {
+        if (n.get_handle() == params.src_handle) {
             dijkstra_node_state &node_state = state_getter();
             WDEBUG << "Dijkstra program: at source" <<  std::endl;
             if (params.adding_nodes == true) { 
@@ -260,17 +247,21 @@ namespace node_prog
                     params.source_node = rn;
                     params.cost = params.is_widest_path ? MAX_TIME : 0; // don't want source node to be bottleneck in path
                     node_state.visited.emplace(params.src_handle, std::make_pair(params.src_handle, params.cost));
-                    for (const std::pair<uint64_t, db::element::edge*> &e : n.out_edges) {
+
+                    db::element::edge *e;
+                    for (auto &iter: n.out_edges) {
+                        e = iter.second;
                         // edge created and deleted in acceptable timeframe
-                        bool use_edge = e.second->get_creat_time() <= req_id  
-                                     && e.second->get_del_time() > req_id; 
+                        bool use_edge = order::clock_creat_before_del_after(*req_vclock, e->get_creat_time(), e->get_del_time());
+                        /*
                         for (uint64_t i = 0; i < params.edge_props.size() && use_edge; i++) {
                             // checking edge properties
-                            if (!e.second->has_property(params.edge_props[i])) {
+                            if (!e->has_property(params.edge_props[i])) {
                                 use_edge = false;
                                 break; 
                             }
                         }
+                        */
                         if (use_edge) {
                             // first is whether key exists, second is value
                             std::pair<bool, uint64_t> weightpair = 
@@ -278,9 +269,9 @@ namespace node_prog
                             if (weightpair.first) {
                                 uint64_t priority = calculate_priority(params.cost, weightpair.second, params.is_widest_path);
                                 if (params.is_widest_path) {
-                                    node_state.pq_widest.emplace(priority, e.second->nbr, params.src_handle); 
+                                    node_state.pq_widest.emplace(priority, e->nbr, params.src_handle); 
                                 } else {
-                                    node_state.pq_shortest.emplace(priority, e.second->nbr, params.src_handle);
+                                    node_state.pq_shortest.emplace(priority, e->nbr, params.src_handle);
                                 }
                             }
                         }
@@ -356,23 +347,18 @@ namespace node_prog
 
         } else { // it is a request to add neighbors
             // check the properties of each out-edge, assumes lock for node is held
-            for (const std::pair<uint64_t, db::element::edge*> &e : n.out_edges) {
-                bool use_edge = e.second->get_creat_time() <= req_id  
-                    && e.second->get_del_time() > req_id; // edge created and deleted in acceptable timeframe
+            db::element::edge *e;
+            for (auto &iter: n.out_edges) {
+                e = iter.second;
+                // edge created and deleted in acceptable timeframe
+                bool use_edge = order::clock_creat_before_del_after(*req_vclock, e->get_creat_time(), e->get_del_time());
 
-                for (uint64_t i = 0; i < params.edge_props.size() && use_edge; i++) {
-                    // checking edge properties
-                    if (!e.second->has_property(params.edge_props[i])) {
-                        use_edge = false;
-                        break;
-                    }
-                }
                 if (use_edge) {
                     // first is whether key exists, second is value
-                    std::pair<bool, uint64_t> weightpair = e.second->get_property_value(params.edge_weight_key, req_id);
+                    std::pair<bool, uint64_t> weightpair = e->get_property_value(params.edge_weight_key, req_id);
                     if (weightpair.first) {
                         uint64_t priority = calculate_priority(params.cost, weightpair.second, params.is_widest_path);
-                        params.entries_to_add.emplace_back(std::make_pair(priority, e.second->nbr));
+                        params.entries_to_add.emplace_back(std::make_pair(priority, e->nbr));
                     }
                 }
             }
@@ -382,6 +368,7 @@ namespace node_prog
         return next;
     }
 
+    /*
     std::vector<std::pair<db::element::remote_node, dijkstra_params>> 
     dijkstra_node_deleted_program(uint64_t req_id,
         db::element::node &n, // node who asked to go to deleted node
@@ -399,6 +386,7 @@ namespace node_prog
         next.emplace_back(std::make_pair(params_given.source_node, params_given));
         return next;
     }
+    */
 }
 
 #endif //__DIKJSTRA_PROG__

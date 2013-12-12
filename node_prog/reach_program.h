@@ -252,14 +252,7 @@ namespace node_prog
                         e = iter.second;
                         // TODO change this so that the user does not see invalid edges
                         // check edge created and deleted in acceptable timeframe
-                        int64_t cmp_1 = order::compare_two_vts(e->get_creat_time(), *req_vclock);
-                        assert(cmp_1 != 2);
-                        bool traverse_edge = (cmp_1 == 0);
-                        if (traverse_edge) {
-                            int64_t cmp_2 = order::compare_two_vts(e->get_del_time(), *req_vclock);
-                            assert(cmp_2 != 2);
-                            traverse_edge = (cmp_2 == 1);
-                        }
+                        bool traverse_edge = order::clock_creat_before_del_after(*req_vclock, e->get_creat_time(), e->get_del_time());
                         /*
                         // checking edge properties
                         for (auto &prop: params.edge_props) {

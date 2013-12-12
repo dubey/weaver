@@ -189,6 +189,21 @@ namespace order
         }
         return cmp;
     }
+
+    // return true if the first clock occurred between the second two
+    static inline bool
+    clock_creat_before_del_after(const vc::vclock &req_vclock, const vc::vclock &creat_time, const vc::vclock &del_time)
+    {
+        int64_t cmp_1 = compare_two_vts(del_time, req_vclock);
+        assert(cmp_1 != 2);
+        bool toRet = (cmp_1 == 1);
+        if (toRet) {
+            int64_t cmp_2 = compare_two_vts(creat_time, req_vclock);
+            assert(cmp_2 != 2);
+            toRet = (cmp_2 == 0);
+        }
+        return toRet;
+    }
 }
 
 #endif

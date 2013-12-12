@@ -145,15 +145,13 @@ cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
         uint64_t vt_id
 
 class ClusteringParams:
-    def __init__(self, is_center=True, outgoing=True, vt_id=0, clustering_coeff=0.0):
+    def __init__(self, is_center=True, outgoing=True, vt_id=0, clustering_coeff=0.0, caching=False):
+        self._search_cache = caching
+        self._cache_key = 0
         self.is_center = is_center
         self.outgoing = outgoing
         self.vt_id = vt_id
         self.clustering_coeff = clustering_coeff
-
-#ctypedef fused ParamsType: XXX uh do we need this?
-#    reach_params
-#    #clustering_params
 
 cdef extern from 'client/client.h' namespace 'client':
     cdef cppclass client:
