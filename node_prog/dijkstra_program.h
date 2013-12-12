@@ -227,6 +227,7 @@ namespace node_prog
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
             db::caching::cache_response *cache_response)
     {
+        WDEBUG << "DIJKSTRAAAAA" << std::endl;
         std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
         if (n.get_handle() == params.src_handle) {
             dijkstra_node_state &node_state = state_getter();
@@ -345,6 +346,7 @@ namespace node_prog
                         }
                     }
                     if (get_neighbors) {
+                        WDEBUG << "DIJKSTRA sending to node "<< next_to_add.node.handle << " on shard " <<  next_to_add.node.loc << std::endl;
                         next.emplace_back(std::make_pair(next_to_add.node, params));
                         return next;
                     }
@@ -373,6 +375,8 @@ namespace node_prog
                         std::stringstream(weightpair.second) >> edge_weight;
                         WDEBUG << "got edge weight " << edge_weight << " from string " << weightpair.second << std::endl;
                         uint64_t priority = calculate_priority(params.cost, edge_weight, params.is_widest_path);
+                        WDEBUG << " trying to add edge with nbr loc " << e->nbr.loc << " and nbr handle " << e->nbr.handle << std::endl;
+                        assert(e->nbr.loc < NUM_SHARDS + SHARD_ID_INCR); //XXX
                         params.entries_to_add.emplace_back(std::make_pair(priority, e->nbr));
                     }
                 }

@@ -241,6 +241,8 @@ load_graph(db::graph_file_format format, const char *graph_file)
                     edge_handle = max_node_handle + (edge_count++);
                     uint64_t loc0 = ((node0 % NUM_SHARDS) + SHARD_ID_INCR);
                     uint64_t loc1 = ((node1 % NUM_SHARDS) + SHARD_ID_INCR);
+                    assert(loc0 < NUM_SHARDS + SHARD_ID_INCR);
+                    assert(loc1 < NUM_SHARDS + SHARD_ID_INCR);
                     if (loc0 == shard_id) {
                         n = S->acquire_node_nonlocking(node0);
                         if (n == NULL) {
@@ -287,6 +289,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                 parse_two_uint64(line, node0, loc);
                 loc += SHARD_ID_INCR;
                 all_node_map[node0] = loc;
+                assert(loc < NUM_SHARDS + SHARD_ID_INCR);
                 if (loc == shard_id) {
                     n = S->acquire_node_nonlocking(node0);
                     if (n == NULL) {
@@ -833,6 +836,7 @@ inline void node_prog_loop(
                 S->msg_count_mutex.lock();
                 for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                     uint64_t loc = res.first.loc;
+                    assert(loc < NUM_SHARDS + SHARD_ID_INCR);
                     if (loc == np.vt_id) {
                         // signal to send back to vector timestamper that issued request
                         // TODO mark done
