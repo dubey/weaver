@@ -90,6 +90,7 @@ namespace node_prog
             uint64_t next_node;
             std::vector<std::pair<uint64_t, uint64_t>> final_path;
             uint64_t cost;
+            uint64_t vt_id;
 
             virtual ~dijkstra_params() { }
 
@@ -117,6 +118,7 @@ namespace node_prog
                 toRet += message::size(next_node);
                 toRet += message::size(final_path);
                 toRet += message::size(cost);
+                toRet += message::size(vt_id);
                 return toRet;
             }
 
@@ -134,6 +136,7 @@ namespace node_prog
                 message::pack_buffer(packer, next_node);
                 message::pack_buffer(packer, final_path);
                 message::pack_buffer(packer, cost);
+                message::pack_buffer(packer, vt_id);
             }
 
             virtual void unpack(e::unpacker& unpacker)
@@ -150,6 +153,7 @@ namespace node_prog
                 message::unpack_buffer(unpacker, next_node);
                 message::unpack_buffer(unpacker, final_path);
                 message::unpack_buffer(unpacker, cost);
+                message::unpack_buffer(unpacker, vt_id);
             }
     };
 
@@ -248,7 +252,7 @@ namespace node_prog
                     // starting the request, add source neighbors to priority queue
                     params.source_node = rn;
                     params.cost = params.is_widest_path ? MAX_TIME : 0; // don't want source node to be bottleneck in path
-                    node_state.visited.emplace(params.src_handle, std::make_pair(params.src_handle, params.cost)); // XXX should handles be the same??
+                    node_state.visited.emplace(params.src_handle, std::make_pair(params.src_handle, params.cost)); // handles same at source
 
                     db::element::edge *e;
                     for (auto &iter: n.out_edges) {
@@ -287,6 +291,7 @@ namespace node_prog
             // select which node to visit next based on priority queue
             dijkstra_queue_elem next_to_add; //XXX change to reference, maybe need const
 
+            WDEBUG << "DIJKSTRA SHORTEST PQ SIZE "<< node_state.pq_shortest.size() << " WIDEST PQ SIZE " << node_state.pq_widest.size() << std::endl;
             while (!node_state.pq_shortest.empty() || !node_state.pq_widest.empty()) {
                 if (params.is_widest_path) {
                     next_to_add = node_state.pq_widest.top();
@@ -299,6 +304,7 @@ namespace node_prog
                 params.next_node = next_to_add.node.handle;
                 params.prev_node = next_to_add.prev_node_req_id;
                 if (params.next_node == params.dst_handle) {
+                    WDEBUG << "DIJKSTRA found dest" << std::endl;
                     // we have found destination! We know it was not deleted as coord checked
                     std::pair<uint64_t, uint64_t> visited_entry;
                     // rebuild path based on req_id's in visited
@@ -327,7 +333,7 @@ namespace node_prog
                             cur_node = visited_entry.first;
                         }
                     }
-                    next.emplace_back(std::make_pair(db::element::remote_node(COORD_ID, 1337), params));
+                    next.emplace_back(std::make_pair(db::element::remote_node(params.vt_id, 1337), params));
                     return next;
                 } else { // we need to send a prop
                     bool get_neighbors = true;
@@ -352,6 +358,7 @@ namespace node_prog
 
         } else { // it is a request to add neighbors
             // check the properties of each out-edge, assumes lock for node is held
+            WDEBUG << "Dijkstra program: NOT source" <<  std::endl;
             db::element::edge *e;
             for (auto &iter: n.out_edges) {
                 e = iter.second;

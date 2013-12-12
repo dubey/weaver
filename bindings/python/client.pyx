@@ -174,11 +174,12 @@ cdef extern from 'node_prog/dijkstra_program.h' namespace 'node_prog':
         uint64_t next_node
         vector[pair[uint64_t, uint64_t]] final_path
         uint64_t cost
+        uint64_t vt_id
 
 class DijkstraParams:
-    def __init__(self, src_node=0, source_node=RemoteNode(), dst_handle=0, edge_weight_name="weight", is_widest_path=False,
-            adding_nodes=False, prev_node=RemoteNode(), entries_to_add=[], next_node=0, final_path=[], cost=0):
-        self.src_node = src_node
+    def __init__(self, src_handle=0, source_node=RemoteNode(), dst_handle=0, edge_weight_name="weight", is_widest_path=False,
+            adding_nodes=False, prev_node=RemoteNode(), entries_to_add=[], next_node=0, final_path=[], cost=0, vt_id=0):
+        self.src_handle = src_handle
         self.source_node = source_node
         self.dst_handle = dst_handle
         self.edge_weight_name = edge_weight_name
@@ -189,6 +190,7 @@ class DijkstraParams:
         self.next_node = next_node
         self.final_path = final_path
         self.cost = cost
+        self.vt_id = vt_id
 
 cdef extern from 'client/client.h' namespace 'client':
     cdef cppclass client:
@@ -268,6 +270,7 @@ cdef class Client:
             arg_pair.second.src_handle = cp[1].src_handle;
             arg_pair.second.dst_handle = cp[1].dst_handle;
             arg_pair.second.edge_weight_name = cp[1].edge_weight_name;
+            arg_pair.second.vt_id = cp[1].vt_id
             c_args.push_back(arg_pair)
         c_dp = self.thisptr.run_dijkstra_program(c_args)
         response = DijkstraParams(final_path=c_dp.final_path, cost=c_dp.cost)

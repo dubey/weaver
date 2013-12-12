@@ -73,6 +73,8 @@ namespace nmap
 
         i = 0;
         uint32_t num_div10 = numPairs / 10;
+        num_div10 = num_div10 < 1 ? 1 : num_div10;
+
         for (auto &entry: pairs_to_add) {
             attrs_to_add[i].attr = attrName;
             attrs_to_add[i].value = (char *) &entry.second;
