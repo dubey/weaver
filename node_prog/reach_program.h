@@ -175,7 +175,7 @@ namespace node_prog
                         }
                         // checking edge properties
                         for (auto &prop: params.edge_props) {
-                            if (!e->has_property(prop, req_vclock)) {
+                            if (!e->has_property(prop, *req_vclock)) {
                                 traverse_edge = false;
                                 break;
                             }
@@ -221,23 +221,6 @@ namespace node_prog
         }
         return next;
     }
-
-    /*
-    std::vector<std::pair<db::element::remote_node, reach_params>> 
-    reach_node_deleted_program(uint64_t req_id,
-                db::element::node &n, // node who asked to go to deleted node
-                uint64_t deleted_handle, // handle of node that didn't exist
-            reach_params &params_given, // params we had sent to deleted node
-            std::function<reach_node_state&()> state_getter)
-    {
-        UNUSED(req_id);
-        UNUSED(n);
-        UNUSED(deleted_handle);
-        UNUSED(params_given);
-        UNUSED(state_getter);
-        return std::vector<std::pair<db::element::remote_node, reach_params>>(); 
-    }
-    */
 }
 
 #endif
