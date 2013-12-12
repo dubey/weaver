@@ -263,6 +263,7 @@ namespace node_prog
                             }
                         }
                         */
+
                         if (traverse_edge) {
                             e->traverse();
                             next.emplace_back(std::make_pair(e->nbr, params)); // propagate reachability request

@@ -16,6 +16,8 @@
 #define __DIJKSTRA_PROG__
 
 #include <vector>
+#include <string.h>
+#include <sstream>
 
 #include "common/message.h"
 #include "db/element/node.h"
@@ -23,7 +25,7 @@
 
 namespace node_prog
 {
-    class dijkstra_queue_elem : public virtual Node_State_Base 
+    class dijkstra_queue_elem : public virtual Node_State_Base // inherits this so its packable, inheriting packable directly might not work
     {
         public:
             uint64_t cost;
@@ -79,7 +81,7 @@ namespace node_prog
             uint64_t src_handle;
             db::element::remote_node source_node;
             uint64_t dst_handle;
-            uint32_t edge_weight_key; // the key of the property which holds the weight of an an edge
+            std::string edge_weight_name; // the name of the property which holds the weight of an an edge
             std::vector<common::property> edge_props;
             bool is_widest_path;
             bool adding_nodes;
@@ -106,7 +108,7 @@ namespace node_prog
                 toRet += message::size(src_handle);
                 toRet += message::size(source_node);
                 toRet += message::size(dst_handle);
-                toRet += message::size(edge_weight_key);
+                toRet += message::size(edge_weight_name);
                 toRet += message::size(edge_props);
                 toRet += message::size(is_widest_path);
                 toRet += message::size(adding_nodes);
@@ -123,7 +125,7 @@ namespace node_prog
                 message::pack_buffer(packer, src_handle);
                 message::pack_buffer(packer, source_node);
                 message::pack_buffer(packer, dst_handle);
-                message::pack_buffer(packer, edge_weight_key);
+                message::pack_buffer(packer, edge_weight_name);
                 message::pack_buffer(packer, edge_props);
                 message::pack_buffer(packer, is_widest_path);
                 message::pack_buffer(packer, adding_nodes);
@@ -139,7 +141,7 @@ namespace node_prog
                 message::unpack_buffer(unpacker, src_handle);
                 message::unpack_buffer(unpacker, source_node);
                 message::unpack_buffer(unpacker, dst_handle);
-                message::unpack_buffer(unpacker, edge_weight_key);
+                message::unpack_buffer(unpacker, edge_weight_name);
                 message::unpack_buffer(unpacker, edge_props);
                 message::unpack_buffer(unpacker, is_widest_path);
                 message::unpack_buffer(unpacker, adding_nodes);
@@ -246,7 +248,7 @@ namespace node_prog
                     // starting the request, add source neighbors to priority queue
                     params.source_node = rn;
                     params.cost = params.is_widest_path ? MAX_TIME : 0; // don't want source node to be bottleneck in path
-                    node_state.visited.emplace(params.src_handle, std::make_pair(params.src_handle, params.cost));
+                    node_state.visited.emplace(params.src_handle, std::make_pair(params.src_handle, params.cost)); // XXX should handles be the same??
 
                     db::element::edge *e;
                     for (auto &iter: n.out_edges) {
@@ -264,10 +266,13 @@ namespace node_prog
                         */
                         if (use_edge) {
                             // first is whether key exists, second is value
-                            std::pair<bool, uint64_t> weightpair = 
-                                    e.second->get_property_value(params.edge_weight_key, req_id);
+                            std::pair<bool, std::string> weightpair = 
+                                    e->get_property_value(params.edge_weight_name, *req_vclock);
                             if (weightpair.first) {
-                                uint64_t priority = calculate_priority(params.cost, weightpair.second, params.is_widest_path);
+                                uint64_t edge_weight;
+                                std::stringstream(weightpair.second) >> edge_weight;
+                                WDEBUG << "got edge weight " << edge_weight << " from string " << weightpair.second << std::endl;
+                                uint64_t priority = calculate_priority(params.cost, edge_weight, params.is_widest_path);
                                 if (params.is_widest_path) {
                                     node_state.pq_widest.emplace(priority, e->nbr, params.src_handle); 
                                 } else {
@@ -355,9 +360,12 @@ namespace node_prog
 
                 if (use_edge) {
                     // first is whether key exists, second is value
-                    std::pair<bool, uint64_t> weightpair = e->get_property_value(params.edge_weight_key, req_id);
+                    std::pair<bool, std::string> weightpair = e->get_property_value(params.edge_weight_name, *req_vclock);
                     if (weightpair.first) {
-                        uint64_t priority = calculate_priority(params.cost, weightpair.second, params.is_widest_path);
+                        uint64_t edge_weight;
+                        std::stringstream(weightpair.second) >> edge_weight;
+                        WDEBUG << "got edge weight " << edge_weight << " from string " << weightpair.second << std::endl;
+                        uint64_t priority = calculate_priority(params.cost, edge_weight, params.is_widest_path);
                         params.entries_to_add.emplace_back(std::make_pair(priority, e->nbr));
                     }
                 }

@@ -155,13 +155,40 @@ cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
         uint64_t vt_id
 
 class ClusteringParams:
-    def __init__(self, is_center=True, outgoing=True, vt_id=0, clustering_coeff=0.0, caching=False):
-        self._search_cache = caching
-        self._cache_key = 0
+    def __init__(self, is_center=True, outgoing=True, vt_id=0, clustering_coeff=0.0):
         self.is_center = is_center
         self.outgoing = outgoing
         self.vt_id = vt_id
         self.clustering_coeff = clustering_coeff
+
+cdef extern from 'node_prog/dijkstra_program.h' namespace 'node_prog':
+    cdef cppclass dijkstra_params:
+        uint64_t src_handle
+        remote_node source_node
+        uint64_t dst_handle
+        string edge_weight_name
+        bint is_widest_path
+        bint adding_nodes
+        uint64_t prev_node
+        vector[pair[uint64_t, remote_node]] entries_to_add
+        uint64_t next_node
+        vector[pair[uint64_t, uint64_t]] final_path
+        uint64_t cost
+
+class DijkstraParams:
+    def __init__(self, src_node=0, source_node=RemoteNode(), dst_handle=0, edge_weight_name="weight", is_widest_path=False,
+            adding_nodes=False, prev_node=RemoteNode(), entries_to_add=[], next_node=0, final_path=[], cost=0):
+        self.src_node = src_node
+        self.source_node = source_node
+        self.dst_handle = dst_handle
+        self.edge_weight_name = edge_weight_name
+        self.is_widest_path = is_widest_path
+        self.adding_nodes = adding_nodes
+        self.prev_node = prev_node
+        self.entries_to_add = entries_to_add
+        self.next_node = next_node
+        self.final_path = final_path
+        self.cost = cost
 
 cdef extern from 'client/client.h' namespace 'client':
     cdef cppclass client:
@@ -175,6 +202,7 @@ cdef extern from 'client/client.h' namespace 'client':
         void end_tx(uint64_t tx_id)
         reach_params run_reach_program(vector[pair[uint64_t, reach_params]] initial_args)
         clustering_params run_clustering_program(vector[pair[uint64_t, clustering_params]] initial_args)
+        dijkstra_params run_dijkstra_program(vector[pair[uint64_t, dijkstra_params]] initial_args)
         void start_migration()
         void single_stream_migration()
         void commit_graph()
@@ -231,6 +259,20 @@ cdef class Client:
         c_cp = self.thisptr.run_clustering_program(c_args)
         response = ClusteringParams(clustering_coeff=c_cp.clustering_coeff)
         return response
+    def run_dijkstra_program(self, init_args):
+        cdef vector[pair[uint64_t, dijkstra_params]] c_args
+        cdef pair[uint64_t, dijkstra_params] arg_pair
+        for cp in init_args:
+            arg_pair.first = cp[0]
+            arg_pair.second.is_widest_path = cp[1].is_widest_path;
+            arg_pair.second.src_handle = cp[1].src_handle;
+            arg_pair.second.dst_handle = cp[1].dst_handle;
+            arg_pair.second.edge_weight_name = cp[1].edge_weight_name;
+            c_args.push_back(arg_pair)
+        c_dp = self.thisptr.run_dijkstra_program(c_args)
+        response = DijkstraParams(final_path=c_dp.final_path, cost=c_dp.cost)
+        return response
+
     def start_migration(self):
         self.thisptr.start_migration()
     def single_stream_migration(self):
