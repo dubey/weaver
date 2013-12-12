@@ -254,15 +254,13 @@ namespace node_prog
                         // check edge created and deleted in acceptable timeframe
                         bool traverse_edge = order::clock_creat_before_del_after(*req_vclock, e->get_creat_time(), e->get_del_time());
 
-                        /*
                         // checking edge properties
                         for (auto &prop: params.edge_props) {
-                            if (!e->has_property(prop, req_vclock)) {
+                            if (!e->has_property(prop, *req_vclock)) {
                                 traverse_edge = false;
                                 break;
                             }
                         }
-                        */
 
                         if (traverse_edge) {
                             e->traverse();
