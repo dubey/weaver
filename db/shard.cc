@@ -91,6 +91,20 @@ delete_edge(vc::vclock &t_del, uint64_t edge_handle, uint64_t node_handle)
     S->delete_edge(edge_handle, node_handle, t_del);
 }
 
+inline void
+set_node_property(vc::vclock &vclk, uint64_t node_handle, std::unique_ptr<std::string> key,
+    std::unique_ptr<std::string> value)
+{
+    S->set_node_property(node_handle, std::move(key), std::move(value), vclk);
+}
+
+inline void
+set_edge_property(vc::vclock &vclk, uint64_t node_handle, uint64_t edge_handle,
+    std::unique_ptr<std::string> key, std::unique_ptr<std::string> value)
+{
+    S->set_edge_property(node_handle, edge_handle, std::move(key), std::move(value), vclk);
+}
+
 // parse the string 'line' as a uint64_t starting at index 'idx' till the first whitespace or end of string
 // store result in 'n'
 // if overflow occurs or unexpected char encountered, store true in 'bad'
@@ -447,6 +461,14 @@ unpack_tx_request(void *req)
 
             case transaction::EDGE_DELETE_REQ:
                 delete_edge(vclk, upd->elem1, upd->elem2);
+                break;
+
+            case transaction::NODE_SET_PROPERTY:
+                set_node_property(vclk, upd->elem1, std::move(upd->key), std::move(upd->value));
+                break;
+
+            case transaction::EDGE_SET_PROPERTY:
+                set_edge_property(vclk, upd->elem1, upd->elem2, std::move(upd->key), std::move(upd->value));
                 break;
 
             default:
@@ -873,23 +895,18 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
     S->migration_mutex.lock();
     // apply buffered writes
     if (S->deferred_writes.find(node_handle) != S->deferred_writes.end()) {
-        for (auto &def_wr: S->deferred_writes.at(node_handle)) {
-            auto &write = def_wr.request;
-            switch (def_wr.type) {
+        for (auto &dw: S->deferred_writes.at(node_handle)) {
+            switch (dw.type) {
                 case message::NODE_DELETE_REQ:
-                    assert(write.del_node.node == node_handle);
-                    S->delete_node_nonlocking(n, def_wr.vclk);
+                    S->delete_node_nonlocking(n, dw.vclk);
                     break;
 
                 case message::EDGE_CREATE_REQ:
-                    assert(write.cr_edge.n1 == node_handle);
-                    S->create_edge_nonlocking(n, write.cr_edge.edge, write.cr_edge.n2,
-                            write.cr_edge.loc2, def_wr.vclk);
+                    S->create_edge_nonlocking(n, dw.edge, dw.remote_node, dw.remote_loc, dw.vclk);
                     break;
 
                 case message::EDGE_DELETE_REQ:
-                    assert(write.del_edge.node == node_handle);
-                    S->delete_edge_nonlocking(n, write.del_edge.edge, def_wr.vclk);
+                    S->delete_edge_nonlocking(n, dw.edge, dw.vclk);
                     break;
 
                 default:

@@ -166,6 +166,8 @@ cdef extern from 'client/client.h' namespace 'client':
         uint64_t create_edge(uint64_t tx_id, uint64_t node1, uint64_t node2)
         void delete_node(uint64_t tx_id, uint64_t node)
         void delete_edge(uint64_t tx_id, uint64_t edge, uint64_t node)
+        void set_node_property(uint64_t tx_id, uint64_t node, string &key, string &value)
+        void set_edge_property(uint64_t tx_id, uint64_t node, uint64_t edge, string &key, string &value)
         void end_tx(uint64_t tx_id)
         reach_params run_reach_program(vector[pair[uint64_t, reach_params]] initial_args)
         clustering_params run_clustering_program(vector[pair[uint64_t, clustering_params]] initial_args)
@@ -191,6 +193,10 @@ cdef class Client:
         self.thisptr.delete_node(tx_id, node)
     def delete_edge(self, tx_id, edge, node):
         self.thisptr.delete_edge(tx_id, edge, node)
+    def set_node_property(self, tx_id, node, key, value):
+        self.thisptr.set_node_property(tx_id, node, key, value)
+    def set_edge_property(self, tx_id, node, edge, key, value):
+        self.thisptr.set_edge_property(tx_id, node, edge, key, value)
     def end_tx(self, tx_id):
         self.thisptr.end_tx(tx_id)
     def run_reach_program(self, init_args):

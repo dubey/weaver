@@ -24,6 +24,7 @@ namespace client
     {
         message::msg_type type;
         uint64_t elem1, elem2, handle;
+        std::string key, value;
     };
 
     typedef std::vector<std::shared_ptr<pending_update>> tx_list_t;

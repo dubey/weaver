@@ -116,11 +116,11 @@ namespace db
             void set_node_property_nonlocking(element::node *n,
                     std::string &key, std::string &value, vc::vclock &vclk);
             void set_node_property(uint64_t node_handle,
-                    std::string &key, std::string &value, vc::vclock &vclk);
+                    std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk);
             void set_edge_property_nonlocking(element::node *n, uint64_t edge_handle,
                     std::string &key, std::string &value, vc::vclock &vclk);
             void set_edge_property(uint64_t node_handle, uint64_t edge_handle,
-                    std::string &key, std::string &value, vc::vclock &vclk);
+                    std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk);
             uint64_t get_node_count();
             bool node_exists_nonlocking(uint64_t node_handle);
 
@@ -334,10 +334,7 @@ namespace db
         if (n == NULL) {
             // node is being migrated
             migration_mutex.lock();
-            if (deferred_writes.find(node_handle) == deferred_writes.end()) {
-                deferred_writes.emplace(node_handle, def_write_lst());
-            }
-            deferred_writes.at(node_handle).emplace_back(deferred_write(message::NODE_DELETE_REQ, tdel, node_handle));
+            deferred_writes[node_handle].emplace_back(deferred_write(message::NODE_DELETE_REQ, tdel));
             migration_mutex.unlock();
         } else {
             delete_node_nonlocking(n, tdel);
@@ -371,11 +368,12 @@ namespace db
         if (n == NULL) {
             // node is being migrated
             migration_mutex.lock();
-            if (deferred_writes.find(local_node) == deferred_writes.end()) {
-                deferred_writes.emplace(local_node, def_write_lst());
-            }
-            deferred_writes.at(local_node).emplace_back(deferred_write(message::EDGE_CREATE_REQ, vclk,
-                    edge_handle, local_node, remote_node, remote_loc));
+            def_write_lst &dwl = deferred_writes[local_node];
+            dwl.emplace_back(deferred_write(message::EDGE_CREATE_REQ, vclk));
+            deferred_write &dw = dwl[dwl.size()-1];
+            dw.edge = edge_handle;
+            dw.remote_node = remote_node;
+            dw.remote_loc = remote_loc; 
             migration_mutex.unlock();
         } else {
             assert(n->get_handle() == local_node);
@@ -399,10 +397,10 @@ namespace db
         element::node *n = acquire_node(node_handle);
         if (n == NULL) {
             migration_mutex.lock();
-            if (deferred_writes.find(node_handle) == deferred_writes.end()) {
-                deferred_writes.emplace(node_handle, def_write_lst());
-            }
-            deferred_writes.at(node_handle).emplace_back(deferred_write(message::EDGE_DELETE_REQ, tdel, node_handle));
+            def_write_lst &dwl = deferred_writes[node_handle];
+            dwl.emplace_back(deferred_write(message::EDGE_DELETE_REQ, tdel));
+            deferred_write &dw = dwl[dwl.size()-1];
+            dw.edge = edge_handle;
             migration_mutex.unlock();
         } else {
             delete_edge_nonlocking(n, edge_handle, tdel);
@@ -421,14 +419,19 @@ namespace db
 
     inline void
     shard :: set_node_property(uint64_t node_handle,
-            std::string &key, std::string &value, vc::vclock &vclk)
+            std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk)
     {
         element::node *n = acquire_node(node_handle);
         if (n == NULL) {
-            // node is being migrated
-            // TODO
+            migration_mutex.lock();
+            def_write_lst &dwl = deferred_writes[node_handle];
+            dwl.emplace_back(deferred_write(message::NODE_SET_PROP, vclk));
+            deferred_write &dw = dwl[dwl.size()-1];
+            dw.key = std::move(key);
+            dw.value = std::move(value);
+            migration_mutex.unlock();
         } else {
-            set_node_property_nonlocking(n, key, value, vclk);
+            set_node_property_nonlocking(n, *key, *value, vclk);
             release_node(n);
         }
     }
@@ -444,14 +447,20 @@ namespace db
 
     inline void
     shard :: set_edge_property(uint64_t node_handle, uint64_t edge_handle,
-            std::string &key, std::string &value, vc::vclock &vclk)
+            std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk)
     {
         element::node *n = acquire_node(node_handle);
         if (n == NULL) {
-            // node is being migrated
-            // TODO
+            migration_mutex.lock();
+            def_write_lst &dwl = deferred_writes[node_handle];
+            dwl.emplace_back(deferred_write(message::EDGE_SET_PROP, vclk));
+            deferred_write &dw = dwl[dwl.size()-1];
+            dw.edge = edge_handle;
+            dw.key = std::move(key);
+            dw.value = std::move(value);
+            migration_mutex.unlock();
         } else {
-            set_edge_property_nonlocking(n, edge_handle, key, value, vclk);
+            set_edge_property_nonlocking(n, edge_handle, *key, *value, vclk);
             release_node(n);
         }
     }

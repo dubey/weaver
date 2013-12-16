@@ -43,8 +43,8 @@ namespace message
         CLIENT_EDGE_CREATE_REQ,
         CLIENT_NODE_DELETE_REQ,
         CLIENT_EDGE_DELETE_REQ,
-        CLIENT_ADD_EDGE_PROP,
-        CLIENT_DEL_EDGE_PROP,
+        CLIENT_NODE_SET_PROP,
+        CLIENT_EDGE_SET_PROP,
         CLIENT_TX_INIT,
         CLIENT_TX_DONE,
         CLIENT_REPLY,
@@ -61,27 +61,12 @@ namespace message
         TX_DONE,
         NODE_CREATE_REQ,
         EDGE_CREATE_REQ,
-        TRANSIT_EDGE_CREATE_REQ,
-        REVERSE_EDGE_CREATE,
-        TRANSIT_REVERSE_EDGE_CREATE,
-        NODE_CREATE_ACK,
-        EDGE_CREATE_ACK,
-        TRANSIT_EDGE_CREATE_ACK,
         NODE_DELETE_REQ,
-        TRANSIT_NODE_DELETE_REQ,
         EDGE_DELETE_REQ,
-        TRANSIT_EDGE_DELETE_REQ,
         PERMANENT_DELETE_EDGE,
         PERMANENT_DELETE_EDGE_ACK,
-        NODE_DELETE_ACK,
-        EDGE_DELETE_ACK,
-        EDGE_ADD_PROP,
-        TRANSIT_EDGE_ADD_PROP,
-        EDGE_DELETE_PROP,
-        TRANSIT_EDGE_DELETE_PROP,
-        EDGE_DELETE_PROP_ACK,
-        CLEAN_UP,
-        CLEAN_UP_ACK,
+        NODE_SET_PROP,
+        EDGE_SET_PROP,
         // node program messages
         NODE_PROG,
         NODE_PROG_RETURN,
@@ -257,13 +242,19 @@ namespace message
     size(const std::shared_ptr<transaction::pending_update> &ptr_t)
     {
         transaction::pending_update &t = *ptr_t;
-        return sizeof(t.type)
+        uint64_t sz = sizeof(t.type)
              + size(t.qts)
              + size(t.handle)
              + size(t.elem1)
              + size(t.elem2)
              + size(t.loc1)
              + size(t.loc2);
+        if (t.type == transaction::NODE_SET_PROPERTY
+         || t.type == transaction::EDGE_SET_PROPERTY) {
+            sz += size(*t.key)
+             + size(*t.value);
+        }
+        return sz;
     }
 
     template <typename T1, typename T2>
@@ -432,6 +423,11 @@ namespace message
         pack_buffer(packer, t.elem2);
         pack_buffer(packer, t.loc1);
         pack_buffer(packer, t.loc2);
+        if (t.type == transaction::NODE_SET_PROPERTY
+         || t.type == transaction::EDGE_SET_PROPERTY) {
+            pack_buffer(packer, *t.key);
+            pack_buffer(packer, *t.value);
+        }
     }
 
     template <typename T1, typename T2>
@@ -682,6 +678,13 @@ namespace message
         unpack_buffer(unpacker, t.elem2);
         unpack_buffer(unpacker, t.loc1);
         unpack_buffer(unpacker, t.loc2);
+        if (t.type == transaction::NODE_SET_PROPERTY
+         || t.type == transaction::EDGE_SET_PROPERTY) {
+            t.key.reset(new std::string());
+            t.value.reset(new std::string());
+            unpack_buffer(unpacker, *t.key);
+            unpack_buffer(unpacker, *t.value);
+        }
     }
 
     template <typename T1, typename T2>
@@ -828,6 +831,20 @@ namespace message
                 case CLIENT_EDGE_DELETE_REQ:
                     upd->type = transaction::EDGE_DELETE_REQ;
                     unpack_buffer(unpacker, upd->elem1, upd->elem2);
+                    break;
+
+                case CLIENT_NODE_SET_PROP:
+                    upd->type = transaction::NODE_SET_PROPERTY;
+                    upd->key.reset(new std::string());
+                    upd->value.reset(new std::string());
+                    unpack_buffer(unpacker, upd->elem1, *upd->key, *upd->value);
+                    break;
+
+                case CLIENT_EDGE_SET_PROP:
+                    upd->type = transaction::EDGE_SET_PROPERTY;
+                    upd->key.reset(new std::string());
+                    upd->value.reset(new std::string());
+                    unpack_buffer(unpacker, upd->elem1, upd->elem2, *upd->key, *upd->value);
                     break;
 
                 default:

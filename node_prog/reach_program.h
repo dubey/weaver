@@ -175,7 +175,7 @@ namespace node_prog
                         }
                         // checking edge properties
                         for (auto &prop: params.edge_props) {
-                            if (!e->has_property(prop, *req_vclock)) {
+                            if (!e->has_property(prop, req_vclock)) {
                                 traverse_edge = false;
                                 break;
                             }

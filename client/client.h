@@ -48,6 +48,8 @@ namespace client
             uint64_t create_edge(uint64_t tx_id, uint64_t node1, uint64_t node2);
             void delete_node(uint64_t tx_id, uint64_t node); 
             void delete_edge(uint64_t tx_id, uint64_t edge, uint64_t node);
+            void set_node_property(uint64_t tx_id, uint64_t node, std::string &key, std::string &value);
+            void set_edge_property(uint64_t tx_id, uint64_t node, uint64_t edge, std::string &key, std::string &value);
             void end_tx(uint64_t tx_id);
 
             template <typename ParamsType>
@@ -97,12 +99,13 @@ namespace client
     client :: create_node(uint64_t tx_id)
     {
         if (tx_map.find(tx_id) == tx_map.end()) {
+            WDEBUG << "transaction id " << tx_id << " not found" << std::endl;
             return 0;
         } else {
             auto upd = std::make_shared<pending_update>();
             upd->type = message::CLIENT_NODE_CREATE_REQ;
             upd->handle = generate_handle();
-            tx_map.at(tx_id).push_back(upd);
+            tx_map[tx_id].emplace_back(upd);
             return upd->handle;
         }
     }
@@ -111,6 +114,7 @@ namespace client
     client :: create_edge(uint64_t tx_id, uint64_t node1, uint64_t node2)
     {
         if (tx_map.find(tx_id) == tx_map.end()) {
+            WDEBUG << "transaction id " << tx_id << " not found" << std::endl;
             return 0;
         } else {
             auto upd = std::make_shared<pending_update>();
@@ -118,7 +122,7 @@ namespace client
             upd->handle = generate_handle();
             upd->elem1 = node1;
             upd->elem2 = node2;
-            tx_map.at(tx_id).push_back(upd);
+            tx_map[tx_id].emplace_back(upd);
             return upd->handle;
         }
     }
@@ -130,7 +134,9 @@ namespace client
             auto upd = std::make_shared<pending_update>();
             upd->type = message::CLIENT_NODE_DELETE_REQ;
             upd->elem1 = node;
-            tx_map.at(tx_id).push_back(upd);
+            tx_map[tx_id].emplace_back(upd);
+        } else {
+            WDEBUG << "transaction id " << tx_id << " not found" << std::endl;
         }
     }
 
@@ -142,7 +148,42 @@ namespace client
             upd->type = message::CLIENT_EDGE_DELETE_REQ;
             upd->elem1 = edge;
             upd->elem2 = node;
-            tx_map.at(tx_id).push_back(upd);
+            tx_map[tx_id].emplace_back(upd);
+        } else {
+            WDEBUG << "transaction id " << tx_id << " not found" << std::endl;
+        }
+    }
+
+    inline void
+    client :: set_node_property(uint64_t tx_id, uint64_t node,
+        std::string &key, std::string &value)
+    {
+        if (tx_map.find(tx_id) != tx_map.end()) {
+            auto upd = std::make_shared<pending_update>();
+            upd->type = message::CLIENT_NODE_SET_PROP;
+            upd->elem1 = node;
+            upd->key = std::move(key);
+            upd->value = std::move(value);
+            tx_map[tx_id].emplace_back(upd);
+        } else {
+            WDEBUG << "transaction id " << tx_id << " not found" << std::endl;
+        }
+    }
+
+    inline void
+    client :: set_edge_property(uint64_t tx_id, uint64_t node, uint64_t edge,
+        std::string &key, std::string &value)
+    {
+        if (tx_map.find(tx_id) != tx_map.end()) {
+            auto upd = std::make_shared<pending_update>();
+            upd->type = message::CLIENT_NODE_SET_PROP;
+            upd->elem1 = node;
+            upd->elem2 = edge;
+            upd->key = std::move(key);
+            upd->value = std::move(value);
+            tx_map[tx_id].emplace_back(upd);
+        } else {
+            WDEBUG << "transaction id " << tx_id << " not found" << std::endl;
         }
     }
 
@@ -151,7 +192,7 @@ namespace client
     {
         if (tx_map.find(tx_id) != tx_map.end()) {
             message::message msg;
-            message::prepare_tx_message_client(msg, tx_map.at(tx_id));
+            message::prepare_tx_message_client(msg, tx_map[tx_id]);
             send_coord(msg.buf);
             if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
                 WDEBUG << "tx msg recv fail" << std::endl;
@@ -159,6 +200,8 @@ namespace client
             uint32_t mtype;
             msg.buf->unpack_from(BUSYBEE_HEADER_SIZE) >> mtype;
             assert(mtype == message::CLIENT_TX_DONE);
+        } else {
+            WDEBUG << "transaction id " << tx_id << " not found" << std::endl;
         }
     }
 

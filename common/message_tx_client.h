@@ -43,6 +43,14 @@ namespace message
                     bytes_to_pack += size(upd->elem1, upd->elem2);
                     break;
 
+                case CLIENT_NODE_SET_PROP:
+                    bytes_to_pack += size(upd->elem1, upd->key, upd->value);
+                    break;
+
+                case CLIENT_EDGE_SET_PROP:
+                    bytes_to_pack += size(upd->elem1, upd->elem2, upd->key, upd->value);
+                    break;
+
                 default:
                     WDEBUG << "bad msg type" << std::endl;
             }
@@ -69,6 +77,14 @@ namespace message
 
                 case CLIENT_EDGE_DELETE_REQ:
                     pack_buffer(packer, upd->elem1, upd->elem2);
+                    break;
+
+                case CLIENT_NODE_SET_PROP:
+                    pack_buffer(packer, upd->elem1, upd->key, upd->value);
+                    break;
+
+                case CLIENT_EDGE_SET_PROP:
+                    pack_buffer(packer, upd->elem1, upd->elem2, upd->key, upd->value);
                     break;
 
                 default:
