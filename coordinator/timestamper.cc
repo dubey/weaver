@@ -391,7 +391,8 @@ server_loop(int thread_id)
         //    continue;
         } else {
             // good to go, unpack msg
-            msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
+            uint64_t _size;
+            msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code >> _size;
             mtype = (enum message::msg_type)code;
             sender -= ID_INCR;
 
@@ -486,7 +487,7 @@ server_loop(int thread_id)
                 }
 
                 case message::CLIENT_NODE_PROG_REQ:
-                    message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, pType);
+                    message::unpack_partial_message(*msg, message::CLIENT_NODE_PROG_REQ, pType);
                     node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), sender, thread_id);
                     break;
 
@@ -494,7 +495,7 @@ server_loop(int thread_id)
                 case message::NODE_PROG_RETURN:
                     uint64_t req_id;
                     node_prog::prog_type type;
-                    message::unpack_message(*msg, message::NODE_PROG_RETURN, type, req_id); // don't unpack rest
+                    message::unpack_partial_message(*msg, message::NODE_PROG_RETURN, type, req_id); // don't unpack rest
                     vts->mutex.lock();
                     if (vts->outstanding_node_progs.find(req_id) != vts->outstanding_node_progs.end()) { // TODO: change to .count (AD: why?)
                         uint64_t client_to_ret = vts->outstanding_node_progs.at(req_id);

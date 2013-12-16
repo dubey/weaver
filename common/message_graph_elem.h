@@ -14,7 +14,6 @@
 #ifndef __MESSAGE_GRAPH_ELEM__
 #define __MESSAGE_GRAPH_ELEM__
 
-#include "message.h"
 #include "state/program_state.h"
 #include "common/vclock.h"
 

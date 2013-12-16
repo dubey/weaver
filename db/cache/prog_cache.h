@@ -84,7 +84,7 @@ namespace caching
             std::shared_ptr<node_prog::Cache_Value_Base> value;
             std::vector<std::pair<db::element::remote_node, node_cache_context>> context;
             void invalidate();
-            cache_response(program_cache &came_from, uint64_t key_used) : from(came_from), key(key_used) {};
+            cache_response(program_cache &came_from, uint64_t key_used, std::shared_ptr<node_prog::Cache_Value_Base> &val) : from(came_from), key(key_used), value(val) {};
     };
 
     inline void

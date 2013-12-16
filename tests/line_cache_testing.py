@@ -19,7 +19,7 @@ import time
 
 # creating line graph
 nodes = []
-num_nodes = 600
+num_nodes = 1000
 cut_idx = 200
 assert(cut_idx < num_nodes)
 coord_id = 0

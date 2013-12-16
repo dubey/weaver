@@ -23,7 +23,7 @@ namespace message
     prepare_tx_message_client(message &m, const client::tx_list_t &tx)
     {
         uint64_t num_writes = tx.size();
-        uint64_t bytes_to_pack = sizeof(enum msg_type) * (1 + tx.size())
+        uint64_t bytes_to_pack = sizeof(enum msg_type) + sizeof(uint64_t) * (1 + tx.size())
                                + size(num_writes);
         for (auto &upd: tx) {
             switch (upd->type) {
@@ -51,6 +51,7 @@ namespace message
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE);
 
         packer = packer << CLIENT_TX_INIT;
+        packer = packer << bytes_to_pack;
         pack_buffer(packer, num_writes);
         for (auto &upd: tx) {
             packer = packer << upd->type;
