@@ -99,7 +99,7 @@ set_node_property(vc::vclock &vclk, uint64_t node_handle, std::unique_ptr<std::s
 }
 
 inline void
-set_edge_property(vc::vclock &vclk, uint64_t node_handle, uint64_t edge_handle,
+set_edge_property(vc::vclock &vclk, uint64_t edge_handle, uint64_t node_handle,
     std::unique_ptr<std::string> key, std::unique_ptr<std::string> value)
 {
     S->set_edge_property(node_handle, edge_handle, std::move(key), std::move(value), vclk);

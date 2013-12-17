@@ -195,12 +195,14 @@ namespace coordinator
                     break;
 
                 case transaction::NODE_DELETE_REQ:
+                case transaction::NODE_SET_PROPERTY:
                     if (mappings_to_put.find(upd->elem1) == mappings_to_put.end()) {
                         mappings_to_get.insert(upd->elem1);
                     }
                     break;
 
                 case transaction::EDGE_DELETE_REQ:
+                case transaction::EDGE_SET_PROPERTY:
                     if (mappings_to_put.find(upd->elem2) == mappings_to_put.end()) {
                         mappings_to_get.insert(upd->elem2);
                     }
@@ -233,11 +235,13 @@ namespace coordinator
                     break;
 
                 case transaction::NODE_DELETE_REQ:
+                case transaction::NODE_SET_PROPERTY:
                     assert(mappings_to_put.find(upd->elem1) != mappings_to_put.end());
                     upd->loc1 = mappings_to_put.at(upd->elem1);
                     break;
 
                 case transaction::EDGE_DELETE_REQ:
+                case transaction::EDGE_SET_PROPERTY:
                     assert(mappings_to_put.find(upd->elem2) != mappings_to_put.end());
                     upd->loc1 = mappings_to_put.at(upd->elem2);
                     break;

@@ -176,9 +176,9 @@ namespace client
     {
         if (tx_map.find(tx_id) != tx_map.end()) {
             auto upd = std::make_shared<pending_update>();
-            upd->type = message::CLIENT_NODE_SET_PROP;
-            upd->elem1 = node;
-            upd->elem2 = edge;
+            upd->type = message::CLIENT_EDGE_SET_PROP;
+            upd->elem1 = edge;
+            upd->elem2 = node;
             upd->key = std::move(key);
             upd->value = std::move(value);
             tx_map[tx_id].emplace_back(upd);

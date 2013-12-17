@@ -46,8 +46,8 @@ namespace element
         public:
             void add_property(common::property prop);
             void delete_property(std::string key, vc::vclock &tdel);
-            void remove_property(std::string key, vc::vclock &vclk);
-            bool has_property(common::property prop, vc::vclock &vclk);
+            //void remove_property(std::string key, vc::vclock &vclk);
+            bool has_property(common::property &prop, vc::vclock &vclk);
             bool check_and_add_property(common::property prop);
             void set_properties(std::vector<common::property> &props);
             void update_del_time(vc::vclock &del_time);
@@ -84,45 +84,45 @@ namespace element
         }
     }
 
-    class match_key
-    {
-        public:
-            std::string key;
-            vc::vclock vclk;
+    //class match_key
+    //{
+    //    public:
+    //        std::string key;
+    //        vc::vclock vclk;
 
-            inline
-            match_key(std::string k, vc::vclock &vclock)
-                : key(k)
-                , vclk(vclock)
-            { }
+    //        inline
+    //        match_key(std::string k, vc::vclock &vclock)
+    //            : key(k)
+    //            , vclk(vclock)
+    //        { }
 
-            bool operator()(common::property const &prop) const
-            {
-                if (prop.key == key) {
-                    int64_t cmp = order::compare_two_vts(vclk, prop.get_del_time());
-                    if (cmp >= 1) {
-                        return true;
-                    }
-                }
-                return false;
-            }
-    };
+    //        bool operator()(common::property const &prop) const
+    //        {
+    //            if (prop.key == key) {
+    //                int64_t cmp = order::compare_two_vts(vclk, prop.get_del_time());
+    //                if (cmp >= 1) {
+    //                    return true;
+    //                }
+    //            }
+    //            return false;
+    //        }
+    //};
 
     // remove properties which match key
-    inline void
-    element :: remove_property(std::string key, vc::vclock &vclk)
-    {
-        auto iter = std::remove_if(properties.begin(), properties.end(), match_key(key, vclk));
-        properties.erase(iter, properties.end());
-    }
+    //inline void
+    //element :: remove_property(std::string key, vc::vclock &vclk)
+    //{
+    //    auto iter = std::remove_if(properties.begin(), properties.end(), match_key(key, vclk));
+    //    properties.erase(iter, properties.end());
+    //}
 
     inline bool
-    element :: has_property(common::property prop, vc::vclock &vclk)
+    element :: has_property(common::property &prop, vc::vclock &vclk)
     {
         for (auto &p: properties) {
             if (prop == p) {
-                vc::vclock vclk_creat = p.get_creat_time();
-                vc::vclock vclk_del = p.get_del_time();
+                const vc::vclock& vclk_creat = p.get_creat_time();
+                const vc::vclock& vclk_del = p.get_del_time();
                 int64_t cmp1 = order::compare_two_vts(vclk, vclk_creat);
                 int64_t cmp2 = order::compare_two_vts(vclk, vclk_del);
                 if (cmp1 >= 1 && cmp2 == 0) {
@@ -188,8 +188,8 @@ namespace element
     {
         for (common::property& prop : properties)
         {
-            vc::vclock vclk_creat = prop.get_creat_time();
-            vc::vclock vclk_del = prop.get_del_time();
+            const vc::vclock& vclk_creat = prop.get_creat_time();
+            const vc::vclock& vclk_del = prop.get_del_time();
             int64_t cmp1 = order::compare_two_vts(at_time, vclk_creat);
             int64_t cmp2 = order::compare_two_vts(at_time, vclk_del);
             if (prop_key == prop.key && cmp1 >= 1 && cmp2 == 0) {
