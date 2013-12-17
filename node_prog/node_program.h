@@ -60,7 +60,7 @@ namespace node_prog
                 std::shared_ptr<vc::vclock> &req_vlock,
                 std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
                     std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
-                    db::caching::cache_response *cache_response);
+                    std::unique_ptr<db::caching::cache_response> cache_response);
 
     };
 
@@ -75,50 +75,43 @@ namespace node_prog
     template <typename ParamsType, typename NodeStateType>
         struct node_prog_running_state //: public virtual node_prog::Packable XXX can't get making this packable to work
     {
+        private:
+        /* constructs a clone without start_node_params or cache_value */
+        node_prog_running_state(node_prog::prog_type _prog_type_recvd, bool _global_req, uint64_t _vt_id, std::shared_ptr<vc::vclock> _req_vclock, uint64_t _req_id)
+            : prog_type_recvd(_prog_type_recvd)
+              , global_req(_global_req)
+              , vt_id(_vt_id)
+              , req_vclock(_req_vclock)
+              , req_id(_req_id) {};
+        public:
         node_prog::prog_type prog_type_recvd;
         bool global_req;
         uint64_t vt_id;
         std::shared_ptr<vc::vclock> req_vclock;
         uint64_t req_id;
         std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> start_node_params;
-        db::caching::cache_response *cache_value;
+        std::unique_ptr<db::caching::cache_response> cache_value;
 
-        node_prog_running_state() : cache_value(NULL){};
-        /*
-        virtual uint64_t size() const 
+        node_prog_running_state() {};
+        // delete standard copy onstructors
+        node_prog_running_state (const node_prog_running_state &) = delete;
+        node_prog_running_state& operator=(node_prog_running_state const&) = delete;
+        //node_prog_running_state(const node_prog_running_state &)  = delete;
+
+        node_prog_running_state clone_without_start_node_params()
         {
-            uint64_t toRet = message::size(prog_type_recvd)
-                + message::size(global_req)
-                + message::size(vt_id)
-                + message::size(req_vclock)
-                + message::size(req_id) 
-                + message::size(start_node_params);
-            return toRet;
+            return node_prog_running_state(prog_type_recvd, global_req, vt_id, req_vclock, req_id);
         }
 
-        virtual void pack(e::buffer::packer &packer) const 
-        {
-            // XXX do not change order, non-templated request handling code in shard depends on this
-            message::pack_buffer(packer, prog_type_recvd);
-            message::pack_buffer(packer, global_req);
-            message::pack_buffer(packer, vt_id);
-            message::pack_buffer(packer, req_vclock);
-            message::pack_buffer(packer, req_id);
-            message::pack_buffer(packer, start_node_params);
-        }
-
-        virtual void unpack(e::unpacker &unpacker)
-        {
-            // XXX do not change order, non-templated request handling code in shard depends on this
-            message::unpack_buffer(unpacker, prog_type_recvd);
-            message::unpack_buffer(unpacker, global_req);
-            message::unpack_buffer(unpacker, vt_id);
-            message::unpack_buffer(unpacker, req_vclock);
-            message::unpack_buffer(unpacker, req_id);
-            message::unpack_buffer(unpacker, start_node_params);
-        }
-        */
-    };
+        node_prog_running_state(node_prog_running_state&& copy_from)
+            : prog_type_recvd(copy_from.prog_type_recvd)
+              , global_req(copy_from.global_req)
+              , vt_id(copy_from.vt_id)
+              , req_vclock(copy_from.req_vclock)
+              , req_id(copy_from.req_id)
+              , start_node_params(copy_from.start_node_params)
+              , cache_value(std::move(copy_from.cache_value)){};
+   };
 
     class node_program
     {

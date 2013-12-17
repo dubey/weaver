@@ -210,7 +210,7 @@ namespace node_prog
             std::shared_ptr<vc::vclock> &req_vclock,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
-            db::caching::cache_response *cache_response)
+            std::unique_ptr<db::caching::cache_response> cache_response)
     {
         std::vector<std::pair<db::element::remote_node, reach_params>> next;
         if (MAX_CACHE_ENTRIES)
