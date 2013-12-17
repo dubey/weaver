@@ -34,6 +34,10 @@ namespace caching
         bool node_deleted;
         std::vector<db::element::edge> edges_added;
         std::vector<db::element::edge> edges_deleted;
+
+        // delete standard copy onstructors TODO
+        //node_cache_context(const node_cache_context&) = delete;
+        //node_cache_context& operator=(node_cache_context const&) = delete;
     };
 
     class program_cache 
@@ -45,6 +49,12 @@ namespace caching
         void add_cache_value(node_prog::prog_type& ptype, std::shared_ptr<node_prog::Cache_Value_Base> cache_value,
                 std::shared_ptr<std::vector<db::element::remote_node>> watch_set, uint64_t key, std::shared_ptr<vc::vclock>& vc);
         uint64_t gen_uid();
+
+        program_cache() : cache(MAX_CACHE_ENTRIES) {}; // reserve size of max cache
+
+        // delete standard copy onstructors
+        program_cache (const program_cache &) = delete;
+        program_cache& operator=(program_cache const&) = delete;
     };
 
     inline void
@@ -85,6 +95,10 @@ namespace caching
             std::vector<std::pair<db::element::remote_node, node_cache_context>> context;
             void invalidate();
             cache_response(program_cache &came_from, uint64_t key_used, std::shared_ptr<node_prog::Cache_Value_Base> &val) : from(came_from), key(key_used), value(val) {};
+
+            // delete standard copy onstructors
+            cache_response (const cache_response &) = delete;
+            cache_response& operator=(cache_response const&) = delete;
     };
 
     inline void

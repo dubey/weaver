@@ -607,14 +607,9 @@ fill_node_cache_context(db::caching::node_cache_context& context, db::element::n
 
         if (creat_after_cached && creat_before_cur && !del_before_cur){
             context.edges_added.push_back(*e);
-            //WDEBUG << "&&&&&&&&&&&&&&&&&&&1" << std::endl;
-        }
-        if (creat_after_cached){
-            //WDEBUG << "&&&&&&&&&&&&&&&&&&&0" << std::endl;
         }
         if (del_after_cached && del_before_cur) {
             context.edges_deleted.push_back(*e);
-            //WDEBUG << "&&&&&&&&&&&&&&&&&&&2" << std::endl;
         }
     }
 }
@@ -669,6 +664,10 @@ struct fetch_state{
     uint64_t replies_left;
     fetch_state(node_prog::node_prog_running_state<ParamsType, NodeStateType> & copy_from)
         : prog_state(copy_from.clone_without_start_node_params()) {};
+
+    // delete standard copy onstructors
+    fetch_state (const fetch_state&) = delete;
+    fetch_state& operator=(fetch_state const&) = delete;
 };
 
 /* precondition: node_to_check is locked when called
@@ -938,7 +937,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
 
     fstate->counter_mutex.lock();
     auto& existing_context = fstate->prog_state.cache_value->context;
-    existing_context.insert(existing_context.end(), contexts_to_add.begin(), contexts_to_add.end());
+    existing_context.insert(existing_context.end(), contexts_to_add.begin(), contexts_to_add.end()); // XXX avoid copy here
     fstate->replies_left--;
     if (fstate->replies_left == 0){
         node_prog_loop<ParamsType, NodeStateType>(enclosed_node_prog_func, fstate->prog_state);

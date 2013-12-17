@@ -99,6 +99,7 @@ namespace element
         , updated(true)
         , already_migr(false)
         , dependent_del(0)
+        , cache()
     { }
 
     inline void
