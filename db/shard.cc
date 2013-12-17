@@ -72,7 +72,6 @@ end_program(int param)
 inline void
 create_node(vc::vclock &t_creat, uint64_t node_handle)
 {
-    WDEBUG << "Creating node " << node_handle << " on shard " << shard_id << std::endl;
     S->create_node(node_handle, t_creat, false);
 }
 
@@ -91,7 +90,6 @@ delete_node(vc::vclock &t_del, uint64_t node_handle)
 inline void
 delete_edge(vc::vclock &t_del, uint64_t edge_handle, uint64_t node_handle)
 {
-    WDEBUG << "Deleting edge " << edge_handle << " on node " << node_handle << std::endl;
     S->delete_edge(edge_handle, node_handle, t_del);
 }
 
@@ -858,7 +856,6 @@ inline void node_prog_loop(
                 for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                     uint64_t loc = res.first.loc;
                     if (res.first.handle < 151) 
-                        WDEBUG << "WTF handle: " << res.first.handle << " and loc: " << loc << std::endl;
                     assert(res.first.handle > 150 || loc == np.vt_id);
                     assert(loc < NUM_SHARDS + SHARD_ID_INCR);
                     if (loc == np.vt_id) {
@@ -869,7 +866,6 @@ inline void node_prog_loop(
                         std::unique_ptr<message::message> m(new message::message());
                         message::prepare_message(*m, message::NODE_PROG_RETURN, np.prog_type_recvd, np.req_id, temppair);
                         S->send(np.vt_id, m->buf);
-                        WDEBUG << "sent to coord " << std::endl;
                     } else {
                         batched_node_progs[loc].emplace_back(res.first.handle, std::move(res.second), this_node);
                         S->agg_msg_count[node_handle]++;
@@ -934,7 +930,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>> contexts_to_add; // TODO extra copy, later unpack into cache_response object itself
     message::unpack_message(*msg, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_id, contexts_to_add);
 
-    WDEBUG << "unpacking context reply" << std::endl;
+    //WDEBUG << "unpacking context reply" << std::endl;
     S->node_prog_running_states_mutex.lock();
     assert(S->node_prog_running_states.count(lookup_id) > 0);
     struct fetch_state<ParamsType, NodeStateType> *fstate = (struct fetch_state<ParamsType, NodeStateType> *) S->node_prog_running_states[lookup_id];
@@ -945,14 +941,12 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     existing_context.insert(existing_context.end(), contexts_to_add.begin(), contexts_to_add.end());
     fstate->replies_left--;
     if (fstate->replies_left == 0){
-        WDEBUG << "running node prog from context reply" << std::endl;
         node_prog_loop<ParamsType, NodeStateType>(enclosed_node_prog_func, fstate->prog_state);
         fstate->counter_mutex.unlock();
         //remove from map
         S->node_prog_running_states_mutex.lock();
         S->node_prog_running_states.erase(lookup_id);
         S->node_prog_running_states_mutex.unlock();
-        WDEBUG << "about to del fstate" << std::endl;
         delete fstate; // XXX did we delete prog_state, cache_value?
     }
     else { // wait for more replies
