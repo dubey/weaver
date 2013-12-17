@@ -921,9 +921,7 @@ unpack_context_reply(void *req)
 
     message::unpack_partial_message(*request->msg, message::NODE_CONTEXT_REPLY, pType);
     node_prog::programs.at(pType)->unpack_context_reply_db(std::move(request->msg));
-    WDEBUG << "HERE" << std::endl;
     delete request;
-    WDEBUG << " not HERE" << std::endl;
 }
 
 template <typename ParamsType, typename NodeStateType>
@@ -946,16 +944,19 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     auto& existing_context = fstate->prog_state.cache_value->context;
     existing_context.insert(existing_context.end(), contexts_to_add.begin(), contexts_to_add.end());
     fstate->replies_left--;
-    fstate->counter_mutex.unlock();
     if (fstate->replies_left == 0){
         WDEBUG << "running node prog from context reply" << std::endl;
         node_prog_loop<ParamsType, NodeStateType>(enclosed_node_prog_func, fstate->prog_state);
+        fstate->counter_mutex.unlock();
         //remove from map
         S->node_prog_running_states_mutex.lock();
         S->node_prog_running_states.erase(lookup_id);
         S->node_prog_running_states_mutex.unlock();
         WDEBUG << "about to del fstate" << std::endl;
         delete fstate; // XXX did we delete prog_state, cache_value?
+    }
+    else { // wait for more replies
+        fstate->counter_mutex.unlock();
     }
 }
 
