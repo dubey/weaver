@@ -48,15 +48,21 @@ namespace node_prog
 
             virtual uint64_t size() const 
             {
-                uint64_t toRet = message::size(is_center) + message::size(center);
-                toRet += message::size(outgoing) + message::size(neighbors);
-                toRet += message::size(clustering_coeff);
-                toRet += message::size(vt_id);
+                uint64_t toRet = message::size(_search_cache)
+                    + message::size(_cache_key)
+                    + message::size(is_center)
+                    + message::size(center)
+                    + message::size(outgoing)
+                    + message::size(neighbors)
+                    + message::size(clustering_coeff)
+                    + message::size(vt_id);
                 return toRet;
             }
 
             virtual void pack(e::buffer::packer& packer) const 
             {
+                message::pack_buffer(packer, _search_cache);
+                message::pack_buffer(packer, _cache_key);
                 message::pack_buffer(packer, is_center);
                 message::pack_buffer(packer, center);
                 message::pack_buffer(packer, outgoing);
@@ -67,6 +73,8 @@ namespace node_prog
 
             virtual void unpack(e::unpacker& unpacker)
             {
+                message::unpack_buffer(unpacker, _search_cache);
+                message::unpack_buffer(unpacker, _cache_key);
                 message::unpack_buffer(unpacker, is_center);
                 message::unpack_buffer(unpacker, center);
                 message::unpack_buffer(unpacker, outgoing);
@@ -107,6 +115,8 @@ namespace node_prog
         public:
         uint64_t numerator;
 
+        clustering_cache_value(uint64_t num) : numerator(num) {}; 
+
         virtual ~clustering_cache_value () { }
 
         virtual uint64_t size() const 
@@ -125,36 +135,47 @@ namespace node_prog
         }
     };
 
-    void calculate_response(clustering_node_state &cstate, 
+    inline void
+    add_to_cache(uint64_t numerator, db::element::node &n, db::element::remote_node &rn, vc::vclock &req_vclock,
+            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
+                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func)
+    {
+        std::shared_ptr<node_prog::clustering_cache_value> toCache(new clustering_cache_value(numerator));
+        std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<db::element::remote_node>());
+        // add center node and valid neighbors to watch set XXX re-use old list for re-caching
+        watch_set->emplace_back(rn);
+        for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
+            if (order::clock_creat_before_del_after(req_vclock, possible_nbr.second->get_creat_time(), possible_nbr.second->get_del_time()))
+            {
+                watch_set->emplace_back(possible_nbr.second->nbr);
+            }
+        }
+        uint64_t cache_key = rn.handle;
+        add_cache_func(toCache, watch_set, cache_key);
+    }
+
+    inline uint64_t
+    calculate_response(clustering_node_state &cstate, db::element::node &n, db::element::remote_node &rn, vc::vclock &req_vclock,
             std::vector<std::pair<db::element::remote_node, clustering_params>> &next,
-            clustering_params &params) 
+            clustering_params &params, std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
+                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func)
     {
         if (cstate.neighbor_counts.size() > 1) {
             double denominator = (double) (cstate.neighbor_counts.size() * (cstate.neighbor_counts.size() - 1));
-            int numerator = 0;
+            uint64_t numerator = 0;
             for (std::pair<const uint64_t, int> nbr_count : cstate.neighbor_counts){
                 numerator += nbr_count.second;
             }
             params.clustering_coeff = (double) numerator / denominator;
+            if (MAX_CACHE_ENTRIES)
+            {
+                add_to_cache(numerator, n, rn, req_vclock, add_cache_func);
+            }
         } else {
             params.clustering_coeff = 0;
         }
         db::element::remote_node coord(params.vt_id, 1337);
         next.emplace_back(std::make_pair(db::element::remote_node(params.vt_id, 1337), params));
-    }
-
-    bool
-    check_nbr(db::element::edge *e, vc::vclock &vclk)
-    {
-        int64_t cmp_1 = order::compare_two_vts(e->get_creat_time(), vclk);
-        assert(cmp_1 != 2);
-        bool traverse_edge = (cmp_1 == 0);
-        if (traverse_edge) {
-            int64_t cmp_2 = order::compare_two_vts(e->get_del_time(), vclk);
-            assert(cmp_2 != 2);
-            traverse_edge = (cmp_2 == 1);
-        }
-        return traverse_edge;
     }
 
     inline bool
@@ -180,7 +201,10 @@ namespace node_prog
 
     inline double
     calculate_from_cached(std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& context,
-        std::vector<db::element::remote_node>& watch_set, db::element::remote_node& center, uint64_t numerator)
+            std::vector<db::element::remote_node>& watch_set, db::element::remote_node& center, uint64_t numerator,
+            vc::vclock &req_vclock, db::element::node &n, db::element::remote_node &rn,
+            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
+                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func)
     {
         if (watch_set.size() <= 2){
             return 0;
@@ -204,6 +228,8 @@ namespace node_prog
                 }
             }
         }
+        WDEBUG << "updating cached value from another" << std::endl;
+        add_to_cache(numerator, n, rn, req_vclock, add_cache_func);
         return (double) numerator / denominator;
     }
 
@@ -223,13 +249,16 @@ namespace node_prog
         {
         if (params._search_cache && cache_response != NULL){
             // check context, update cache
+            WDEBUG  << "checking clustering cache context" << std::endl;
             bool valid = check_cache_context(cache_response->context, params.center);
             if (valid) {
-                //WDEBUG  << "WEEE GOT A valid CACHE RESPONSE, short circuit" << std::endl;
+                WDEBUG  << "WEEE GOT A valid CACHE RESPONSE, short circuit" << std::endl;
                 std::shared_ptr<clustering_cache_value> val = std::dynamic_pointer_cast<clustering_cache_value>(cache_response->value);
-                params.clustering_coeff = calculate_from_cached(cache_response->context, *cache_response->watch_set, params.center, val->numerator);
+                params.clustering_coeff = calculate_from_cached(cache_response->context, *cache_response->watch_set,
+                        params.center, val->numerator, *req_vclock, n, rn, add_cache_func);
                 db::element::remote_node coord(params.vt_id, 1337);
                 next.emplace_back(std::make_pair(coord, params));
+
                 return next;
             }
             cache_response->invalidate();
@@ -244,7 +273,8 @@ namespace node_prog
                     db::element::edge *e;
                     for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
                         e = possible_nbr.second;
-                        if (check_nbr(e, *req_vclock)) {
+                        if (order::clock_creat_before_del_after(*req_vclock, e->get_creat_time(), e->get_del_time()))
+                        {
                             next.emplace_back(std::make_pair(possible_nbr.second->nbr, params));
                             cstate.neighbor_counts.insert(std::make_pair(possible_nbr.second->nbr.handle, 0));
                             cstate.responses_left++;
@@ -252,7 +282,7 @@ namespace node_prog
                         }
                     }
                     if (cstate.responses_left == 0) {
-                        calculate_response(cstate, next, params);
+                        calculate_response(cstate, n, rn, *req_vclock, next, params, add_cache_func);
                     }
             } else {
                 for (uint64_t poss_nbr : params.neighbors) {
@@ -261,12 +291,14 @@ namespace node_prog
                     }
                 }
                 if (--cstate.responses_left == 0){
-                    calculate_response(cstate, next, params);
+                    calculate_response(cstate, n, rn, *req_vclock, next, params, add_cache_func);
                 }
             }
         } else { // not center
             for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
-                if (check_nbr(possible_nbr.second, *req_vclock)) {
+                if (order::clock_creat_before_del_after(
+                            *req_vclock, possible_nbr.second->get_creat_time(), possible_nbr.second->get_del_time()))
+                {
                     params.neighbors.push_back(possible_nbr.second->nbr.handle);
                 }
             }

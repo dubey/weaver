@@ -814,7 +814,7 @@ inline void node_prog_loop(
                 if (MAX_CACHE_ENTRIES)
                 {
                 if (params.search_cache()){
-                    //WDEBUG << "GOT SEARCH CACHE" << std::endl;
+                //    WDEBUG << "GOT SEARCH CACHE for key: " << params.cache_key() << std::endl;
                     if (np.cache_value == NULL) {
                         bool run_prog_now = cache_lookup<ParamsType, NodeStateType>(node, params.cache_key(), np, handle_params);
                         // go to next node while we fetch cache context for this one, cache_lookup releases node if false
@@ -854,8 +854,6 @@ inline void node_prog_loop(
                 S->msg_count_mutex.lock();
                 for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                     uint64_t loc = res.first.loc;
-                    if (res.first.handle < 151) 
-                    assert(res.first.handle > 150 || loc == np.vt_id);
                     assert(loc < NUM_SHARDS + SHARD_ID_INCR);
                     if (loc == np.vt_id) {
                         // signal to send back to vector timestamper that issued request

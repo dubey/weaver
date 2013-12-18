@@ -147,6 +147,8 @@ class ReachParams:
 
 cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
     cdef cppclass clustering_params:
+        bint _search_cache
+        uint64_t _cache_key
         bint is_center
         remote_node center
         bint outgoing
@@ -155,7 +157,8 @@ cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
         uint64_t vt_id
 
 class ClusteringParams:
-    def __init__(self, is_center=True, outgoing=True, vt_id=0, clustering_coeff=0.0):
+    def __init__(self, is_center=True, outgoing=True, vt_id=0, caching=False, clustering_coeff=0.0):
+        self._search_cache = caching
         self.is_center = is_center
         self.outgoing = outgoing
         self.vt_id = vt_id
@@ -254,6 +257,9 @@ cdef class Client:
         cdef pair[uint64_t, clustering_params] arg_pair
         for cp in init_args:
             arg_pair.first = cp[0]
+            arg_pair.second._search_cache = cp[1]._search_cache 
+            arg_pair.second._cache_key = cp[0] # cache key is center node handle
+            print cp[0]
             arg_pair.second.is_center = cp[1].is_center
             arg_pair.second.outgoing = cp[1].outgoing
             arg_pair.second.vt_id = cp[1].vt_id

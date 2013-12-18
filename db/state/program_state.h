@@ -98,9 +98,6 @@ namespace state
     inline bool
     program_state :: state_exists_nolock(node_prog::prog_type t, uint64_t req_id, uint64_t node_handle)
     {
-        if (t != 1){
-        WDEBUG << "TEMP type was not 1 but instead: " << t  << " on node handle: " << node_handle << " and req_id: " << req_id << std::endl;
-        }
         assert(prog_state.count(t) > 0); // make sure we can store this prog_type
         req_map &rmap = prog_state.at(t);
         req_map::iterator rmap_iter = rmap.find(req_id);
