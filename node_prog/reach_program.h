@@ -219,15 +219,19 @@ namespace node_prog
             // check context, update cache
             bool valid = check_cache_context(cache_response->context);
             if (valid) {
-                //WDEBUG  << "WEEE GOT A valid CACHE RESPONSE, short circuit" << std::endl;
+                WDEBUG  << "WEEE GOT A valid CACHE RESPONSE, short circuit" << std::endl;
+                // we found the node we are looking for, prepare a reply
                 params.mode = true;
                 params.reachable = true;
+                params._search_cache = false; // don't search on way back
+                params.path.emplace_back(rn); // XXX bogus, missing full path
                 next.emplace_back(std::make_pair(params.prev_node, params));
                 return next;
+            } else {
+                cache_response->invalidate();
             }
-            cache_response->invalidate();
         }
-        params._search_cache = false; // only search cache for first of req
+        //params._search_cache = false; // only search cache for first of req
         }
 
         reach_node_state &state = state_getter();
