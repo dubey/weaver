@@ -17,7 +17,8 @@ sys.path.append('../bindings/python')
 
 import client
 
-num_requests = 100
+num_dests = 4
+requests_per_dest = 40
 
 def exec_traversals(reqs, cl):
     rp = client.ReachParams(caching=True)
@@ -28,7 +29,7 @@ def exec_traversals(reqs, cl):
         rp.dest = r[1]
         prog_args = [(r[0], rp)]
         response = cl.run_reach_program(prog_args)
-        if cnt % (num_requests/100) == 0:
+        if cnt % ((num_dests * requests_per_dest)/100) == 0:
             sys.stdout.write('.')
             sys.stdout.flush()
     print ' done'
@@ -45,9 +46,11 @@ c = client.Client(client._CLIENT_ID, coord_id)
 
 reqs = []
 random.seed(42)
-for numr in range(num_requests):
-    reqs.append((random.randint(0, num_nodes-1), random.randint(0, num_nodes-1)))
+for _ in range(num_dests):
+    dest = random.randint(0, num_nodes-1)
+    for _ in range(requests_per_dest):
+        reqs.append((random.randint(0, num_nodes-1), dest))
 
 print "starting traversals"
 t = exec_traversals(reqs, c)
-print "time taken for " + str(num_requests) + " random reachability requests over " + str(num_nodes) + " nodes was: " + str(t)
+print "time taken for " + str(num_dests * requests_per_dest) + " random reachability requests over " + str(num_nodes) + " nodes was: " + str(t)
