@@ -175,7 +175,7 @@ namespace node_prog
     };
 
     inline bool
-    check_context(std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& context)
+    check_cache_context(std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& context)
     {
         //WDEBUG  << "$$$$$ checking context of size "<< context.size() << std::endl;
         // path not valid if broken by:
@@ -217,7 +217,7 @@ namespace node_prog
         {
         if (params._search_cache && cache_response != NULL){
             // check context, update cache
-            bool valid = check_context(cache_response->context);
+            bool valid = check_cache_context(cache_response->context);
             if (valid) {
                 //WDEBUG  << "WEEE GOT A valid CACHE RESPONSE, short circuit" << std::endl;
                 params.mode = true;
@@ -294,7 +294,7 @@ namespace node_prog
                     if (MAX_CACHE_ENTRIES)
                     {
                     // now add to cache
-                    std::shared_ptr<node_prog::reach_cache_value > toCache(new reach_cache_value());
+                    std::shared_ptr<node_prog::reach_cache_value> toCache(new reach_cache_value());
                     std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<db::element::remote_node>(params.path)); // copy return path from params
                     uint64_t cache_key = params.dest;
                     add_cache_func(toCache, watch_set, cache_key);

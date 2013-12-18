@@ -699,7 +699,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         }
         assert(cmp_1 == 0);
 
-        std::unique_ptr<db::caching::cache_response> cache_response(new db::caching::cache_response(node_to_check->cache, cache_key, cval));
+        std::unique_ptr<db::caching::cache_response> cache_response(new db::caching::cache_response(node_to_check->cache, cache_key, cval, watch_set));
 
         if (watch_set->empty()){ // no context needs to be fetched
             np.cache_value = std::move(cache_response);

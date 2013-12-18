@@ -28,6 +28,8 @@ namespace node_prog
     class clustering_params : public virtual Node_Parameters_Base 
     {
         public:
+            bool _search_cache;
+            uint64_t _cache_key;
             bool is_center;
             db::element::remote_node center;
             bool outgoing;
@@ -37,11 +39,11 @@ namespace node_prog
 
         public:
             virtual bool search_cache() {
-                return false;
+                return _search_cache;
             }
 
             virtual uint64_t cache_key() {
-                return 0;
+                return _cache_key;
             }
 
             virtual uint64_t size() const 
@@ -103,20 +105,23 @@ namespace node_prog
     struct clustering_cache_value : public virtual Cache_Value_Base 
     {
         public:
+        uint64_t numerator;
 
         virtual ~clustering_cache_value () { }
 
         virtual uint64_t size() const 
         {
-            return 0;
+            return message::size(numerator);
         }
 
         virtual void pack(e::buffer::packer& packer) const 
         {
+            message::pack_buffer(packer, numerator);
         }
 
         virtual void unpack(e::unpacker& unpacker)
         {
+            message::unpack_buffer(unpacker, numerator);
         }
     };
 
@@ -152,6 +157,56 @@ namespace node_prog
         return traverse_edge;
     }
 
+    inline bool
+    check_cache_context(std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& context, db::element::remote_node& center)
+    {
+        // if center unchanged and no neighbor was deleted cache is valid
+        for (auto& pair : context)
+        {
+            if (pair.first == center){
+                assert(!pair.second.node_deleted);
+                if (!pair.second.edges_added.empty() || !pair.second.edges_deleted.empty()){
+                    return false;
+                }
+            }
+            else {
+                if (pair.second.node_deleted){
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    inline double
+    calculate_from_cached(std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& context,
+        std::vector<db::element::remote_node>& watch_set, db::element::remote_node& center, uint64_t numerator)
+    {
+        if (watch_set.size() <= 2){
+            return 0;
+        }
+        double denominator = (watch_set.size()-1)*(watch_set.size()-2);
+
+        for (auto& pair : context)
+        {
+            assert(!pair.second.node_deleted);
+            if (pair.first == center){
+                continue;
+            }
+            for (auto& e : pair.second.edges_added){
+                if (e.nbr != center && std::find(watch_set.begin(), watch_set.end(), e.nbr) != watch_set.end()){
+                    numerator++;
+                }
+            }
+            for (auto& e : pair.second.edges_deleted){
+                if (e.nbr != center && std::find(watch_set.begin(), watch_set.end(), e.nbr) != watch_set.end()){
+                    numerator--;
+                }
+            }
+        }
+        return (double) numerator / denominator;
+    }
+
     std::vector<std::pair<db::element::remote_node, clustering_params>> 
     clustering_node_program(uint64_t,
             db::element::node &n,
@@ -164,6 +219,23 @@ namespace node_prog
             std::unique_ptr<db::caching::cache_response> cache_response)
     {
         std::vector<std::pair<db::element::remote_node, clustering_params>> next;
+        if (MAX_CACHE_ENTRIES)
+        {
+        if (params._search_cache && cache_response != NULL){
+            // check context, update cache
+            bool valid = check_cache_context(cache_response->context, params.center);
+            if (valid) {
+                //WDEBUG  << "WEEE GOT A valid CACHE RESPONSE, short circuit" << std::endl;
+                std::shared_ptr<clustering_cache_value> val = std::dynamic_pointer_cast<clustering_cache_value>(cache_response->value);
+                params.clustering_coeff = calculate_from_cached(cache_response->context, *cache_response->watch_set, params.center, val->numerator);
+                db::element::remote_node coord(params.vt_id, 1337);
+                next.emplace_back(std::make_pair(coord, params));
+                return next;
+            }
+            cache_response->invalidate();
+        }
+        params._search_cache = false; // only search cache for first of req
+        }
         if (params.is_center) {
             node_prog::clustering_node_state &cstate = state_getter();
             if (params.outgoing) {
