@@ -215,11 +215,11 @@ namespace node_prog
         std::vector<std::pair<db::element::remote_node, reach_params>> next;
         if (MAX_CACHE_ENTRIES)
         {
-        if (params._search_cache && cache_response != NULL){
+        if (params._search_cache  && !params.mode && cache_response){
             // check context, update cache
             bool valid = check_cache_context(cache_response->context);
             if (valid) {
-                WDEBUG  << "WEEE GOT A valid CACHE RESPONSE, short circuit" << std::endl;
+                //WDEBUG  << "valid CACHE RESPONSE node handle: " << rn.handle << std::endl;
                 // we found the node we are looking for, prepare a reply
                 params.mode = true;
                 params.reachable = true;
