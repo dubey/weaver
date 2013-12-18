@@ -27,9 +27,7 @@ def exec_traversals(reqs, cl):
         cnt += 1
         rp.dest = r[1]
         prog_args = [(r[0], rp)]
-        print 'about to do a req'
         response = cl.run_reach_program(prog_args)
-        print 'did a req'
         if cnt % (num_requests/100) == 0:
             sys.stdout.write('.')
             sys.stdout.flush()
