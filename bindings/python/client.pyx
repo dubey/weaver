@@ -259,7 +259,6 @@ cdef class Client:
             arg_pair.first = cp[0]
             arg_pair.second._search_cache = cp[1]._search_cache 
             arg_pair.second._cache_key = cp[0] # cache key is center node handle
-            print cp[0]
             arg_pair.second.is_center = cp[1].is_center
             arg_pair.second.outgoing = cp[1].outgoing
             arg_pair.second.vt_id = cp[1].vt_id

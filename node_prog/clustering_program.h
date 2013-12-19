@@ -189,11 +189,8 @@ namespace node_prog
                 if (!pair.second.edges_added.empty() || !pair.second.edges_deleted.empty()){
                     return false;
                 }
-            }
-            else {
-                if (pair.second.node_deleted){
+            } else if (pair.second.node_deleted){
                     return false;
-                }
             }
         }
         return true;
@@ -228,7 +225,6 @@ namespace node_prog
                 }
             }
         }
-        WDEBUG << "updating cached value from another" << std::endl;
         add_to_cache(numerator, n, rn, req_vclock, add_cache_func);
         return (double) numerator / denominator;
     }
@@ -249,13 +245,12 @@ namespace node_prog
         {
         if (params._search_cache && cache_response != NULL){
             // check context, update cache
-            WDEBUG  << "checking clustering cache context" << std::endl;
-            bool valid = check_cache_context(cache_response->context, params.center);
+            bool valid = check_cache_context(cache_response->context, rn);
             if (valid) {
-                WDEBUG  << "WEEE GOT A valid CACHE RESPONSE, short circuit" << std::endl;
+                //WDEBUG  << "WEEE GOT A valid CACHE RESPONSE, short circuit" << std::endl;
                 std::shared_ptr<clustering_cache_value> val = std::dynamic_pointer_cast<clustering_cache_value>(cache_response->value);
                 params.clustering_coeff = calculate_from_cached(cache_response->context, *cache_response->watch_set,
-                        params.center, val->numerator, *req_vclock, n, rn, add_cache_func);
+                        rn, val->numerator, *req_vclock, n, rn, add_cache_func);
                 db::element::remote_node coord(params.vt_id, 1337);
                 next.emplace_back(std::make_pair(coord, params));
 
