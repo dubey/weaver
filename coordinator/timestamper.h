@@ -113,7 +113,7 @@ namespace coordinator
         public:
             timestamper(uint64_t id);
             busybee_returncode send(uint64_t shard_id, std::auto_ptr<e::buffer> buf);
-            void unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id, int tid);
+            bool unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id, int tid);
             //void clean_nmap_space();
             uint64_t generate_id();
     };
@@ -165,7 +165,10 @@ namespace coordinator
         return ret;
     }
 
-    inline void
+    // return false if the main node in the transaction is not found in node map
+    // this is not a complete sanity check, e.g. create_edge(n1, n2) will succeed even if n2 is garbage
+    // similarly edge handles are not checked
+    inline bool
     timestamper :: unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id, int thread_id)
     {
         message::unpack_client_tx(msg, tx);
@@ -177,7 +180,7 @@ namespace coordinator
         for (auto upd: tx.writes) {
             switch (upd->type) {
                 case transaction::NODE_CREATE_REQ:
-                    // assign shard for this node
+                    // randomly assign shard for this node
                     loc_gen_mutex.lock();
                     loc_gen = (loc_gen + 1) % NUM_SHARDS;
                     upd->loc1 = loc_gen + SHARD_ID_INCR; // node will be placed on this shard
@@ -228,21 +231,29 @@ namespace coordinator
             switch (upd->type) {
 
                 case transaction::EDGE_CREATE_REQ:
-                    assert(mappings_to_put.find(upd->elem1) != mappings_to_put.end());
-                    assert(mappings_to_put.find(upd->elem2) != mappings_to_put.end());
+                    if (mappings_to_put.find(upd->elem1) == mappings_to_put.end()) {
+                        return false;
+                    }
+                    if (mappings_to_put.find(upd->elem2) == mappings_to_put.end()) {
+                        return false;
+                    }
                     upd->loc1 = mappings_to_put.at(upd->elem1);
                     upd->loc2 = mappings_to_put.at(upd->elem2);
                     break;
 
                 case transaction::NODE_DELETE_REQ:
                 case transaction::NODE_SET_PROPERTY:
-                    assert(mappings_to_put.find(upd->elem1) != mappings_to_put.end());
+                    if (mappings_to_put.find(upd->elem1) == mappings_to_put.end()) {
+                        return false;
+                    }
                     upd->loc1 = mappings_to_put.at(upd->elem1);
                     break;
 
                 case transaction::EDGE_DELETE_REQ:
                 case transaction::EDGE_SET_PROPERTY:
-                    assert(mappings_to_put.find(upd->elem2) != mappings_to_put.end());
+                    if (mappings_to_put.find(upd->elem2) == mappings_to_put.end()) {
+                        return false;
+                    }
                     upd->loc1 = mappings_to_put.at(upd->elem2);
                     break;
 
@@ -250,6 +261,7 @@ namespace coordinator
                     continue;
             }
         }
+        return true;
     }
 
     // caution: assuming caller holds mutex

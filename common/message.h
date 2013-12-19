@@ -47,6 +47,7 @@ namespace message
         CLIENT_EDGE_SET_PROP,
         CLIENT_TX_INIT,
         CLIENT_TX_DONE,
+        CLIENT_TX_FAIL,
         CLIENT_REPLY,
         CLIENT_COMMIT_GRAPH,
         CLIENT_NODE_PROG_REQ,

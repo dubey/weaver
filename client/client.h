@@ -50,7 +50,7 @@ namespace client
             void delete_edge(uint64_t tx_id, uint64_t edge, uint64_t node);
             void set_node_property(uint64_t tx_id, uint64_t node, std::string &key, std::string &value);
             void set_edge_property(uint64_t tx_id, uint64_t node, uint64_t edge, std::string &key, std::string &value);
-            void end_tx(uint64_t tx_id);
+            bool end_tx(uint64_t tx_id);
 
             template <typename ParamsType>
             std::unique_ptr<ParamsType> 
@@ -187,7 +187,7 @@ namespace client
         }
     }
 
-    inline void
+    inline bool
     client :: end_tx(uint64_t tx_id)
     {
         if (tx_map.find(tx_id) != tx_map.end()) {
@@ -199,9 +199,16 @@ namespace client
             }
             uint32_t mtype;
             msg.buf->unpack_from(BUSYBEE_HEADER_SIZE) >> mtype;
-            assert(mtype == message::CLIENT_TX_DONE);
+            assert(mtype == message::CLIENT_TX_DONE
+                || mtype == message::CLIENT_TX_FAIL);
+            if (mtype == message::CLIENT_TX_DONE) {
+                return true;
+            } else {
+                return false;
+            }
         } else {
             WDEBUG << "transaction id " << tx_id << " not found" << std::endl;
+            return false;
         }
     }
 

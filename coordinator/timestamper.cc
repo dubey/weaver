@@ -392,8 +392,12 @@ server_loop(int thread_id)
                 // client messages
                 case message::CLIENT_TX_INIT: {
                     transaction::pending_tx tx;
-                    vts->unpack_tx(*msg, tx, sender, thread_id);
-                    begin_transaction(tx);
+                    if (!vts->unpack_tx(*msg, tx, sender, thread_id)) {
+                        message::prepare_message(*msg, message::CLIENT_TX_FAIL);
+                        vts->send(sender, msg->buf);
+                    } else {
+                        begin_transaction(tx);
+                    }
                     break;
                 }
 

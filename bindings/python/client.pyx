@@ -168,7 +168,7 @@ cdef extern from 'client/client.h' namespace 'client':
         void delete_edge(uint64_t tx_id, uint64_t edge, uint64_t node)
         void set_node_property(uint64_t tx_id, uint64_t node, string &key, string &value)
         void set_edge_property(uint64_t tx_id, uint64_t node, uint64_t edge, string &key, string &value)
-        void end_tx(uint64_t tx_id)
+        bint end_tx(uint64_t tx_id)
         reach_params run_reach_program(vector[pair[uint64_t, reach_params]] initial_args)
         clustering_params run_clustering_program(vector[pair[uint64_t, clustering_params]] initial_args)
         void start_migration()
@@ -198,7 +198,7 @@ cdef class Client:
     def set_edge_property(self, tx_id, node, edge, key, value):
         self.thisptr.set_edge_property(tx_id, node, edge, key, value)
     def end_tx(self, tx_id):
-        self.thisptr.end_tx(tx_id)
+        return self.thisptr.end_tx(tx_id)
     def run_reach_program(self, init_args):
         cdef vector[pair[uint64_t, reach_params]] c_args
         cdef pair[uint64_t, reach_params] arg_pair
