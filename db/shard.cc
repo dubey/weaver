@@ -57,12 +57,13 @@ void shard_daemon_end();
 void
 end_program(int param)
 {
-    WDEBUG << "Ending program, param = " << param << ", kronos num calls " << order::call_times->size() << std::endl;
-    std::ofstream ktime("kronos_time.rec");
-    for (auto x: *order::call_times) {
-        ktime << x << std::endl;
-    }
-    ktime.close();
+    WDEBUG << "Ending program, param = " << param << ", kronos num calls " << order::call_times->size()
+        << ", kronos num cache hits = " << order::cache_hits << std::endl;
+    //std::ofstream ktime("kronos_time.rec");
+    //for (auto x: *order::call_times) {
+    //    ktime << x << std::endl;
+    //}
+    //ktime.close();
     exit(0);
 }
 

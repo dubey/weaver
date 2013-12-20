@@ -50,15 +50,18 @@ namespace order
                  && id_map.find(clk2) != id_map.end()) {
                     uint64_t id1 = id_map[clk1];
                     uint64_t id2 = id_map[clk2];
+                    WDEBUG << "possible Kronos cache, looking up now\n";
                     if (happens_before_list.find(id1) != happens_before_list.end()) {
                         if (happens_before_list[id1].find(id2) != happens_before_list[id1].end()) {
                             mutex.unlock();
+                            WDEBUG << "Kronos cache hit!\n";
                             return 0;
                         }
                     }
                     if (happens_before_list.find(id2) != happens_before_list.end()) {
                         if (happens_before_list[id2].find(id1) != happens_before_list[id2].end()) {
                             mutex.unlock();
+                            WDEBUG << "Kronos cache hit!\n";
                             return 1;
                         }
                     }
@@ -106,6 +109,7 @@ namespace order
     static chronos_client *kronos_cl;
     static po6::threads::mutex kronos_mutex;
     static std::list<uint64_t> *call_times;
+    static uint64_t cache_hits = 0;
     static kronos_cache kcache;
 
     // return the smaller of the two clocks
@@ -197,8 +201,10 @@ namespace order
                         int cmp = kcache.compare(clocks[i].clock, clocks[j].clock);
                         if (cmp == 0) {
                             large[j] = true;
+                            cache_hits++;
                         } else if (cmp == 1) {
                             large[i] = true;
+                            cache_hits++;
                         } else {
                             assert(cmp == -1);
                         }

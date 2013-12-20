@@ -41,7 +41,7 @@
 #define CLIENT_SHARDS_FILE "shards"
 // weaver setup
 #define NUM_SHARDS 2
-#define NUM_VTS 1
+#define NUM_VTS 2
 #define SHARD_ID_INCR NUM_VTS
 #define NUM_THREADS 8
 #define ID_BITS 8
