@@ -104,7 +104,6 @@ namespace common
             }
         }
         return true;
-        //return ((key == p2.key) && (value == p2.value));
     }
 
     inline const vc::vclock&
@@ -131,10 +130,14 @@ namespace std
     template <>
     struct hash<common::property> 
     {
+        private:
+            std::function<size_t(const std::string&)> string_hasher;
+
         public:
-            size_t operator()(common::property p) const throw() 
+            hash<common::property>() : string_hasher(std::hash<std::string>()) { }
+
+            size_t operator()(const common::property &p) const throw() 
             {
-                std::hash<std::string> string_hasher;
                 size_t hkey = string_hasher(p.key);
                 size_t hvalue = string_hasher(p.value);
                 return ((hkey + 0x9e3779b9 + (hvalue<<6) + (hvalue>>2)) ^ hvalue);

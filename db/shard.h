@@ -665,7 +665,12 @@ namespace db
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
             timestamps.emplace_back(write_queues.at(vt_id).top()->vclock);
         }
-        uint64_t exec_vt_id = (NUM_VTS == 1) ? 0 : order::compare_vts(timestamps);
+        uint64_t exec_vt_id;
+        if (NUM_VTS == 1) {
+            exec_vt_id = 0; // only one timestamper
+        } else {
+            exec_vt_id = order::compare_vts(timestamps);
+        }
         thr = write_queues.at(exec_vt_id).top();
         write_queues.at(exec_vt_id).pop();
         return thr;
