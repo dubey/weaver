@@ -52,13 +52,6 @@
 #define ERRORMSG2(X, Y1, Y2) fprintf(stderr, "%s:%i:  " X "\n", __FILE__, __LINE__, Y1, Y2)
 #define ERRNOMSG(CALL) ERRORMSG2(tostr(CALL) " failed:  %s  [ERRNO=%i]", strerror(errno), errno)
 
-// hash function for uint64
-size_t
-hash_uint64(uint64_t key)
-{
-    return std::hash<uint64_t>()(key);
-}
-
 // hash function for vector clocks
 namespace std
 {
@@ -66,12 +59,11 @@ namespace std
     struct hash<std::vector<uint64_t>> 
     {
         public:
-            size_t operator()(std::vector<uint64_t> v) const throw() 
+            size_t operator()(const std::vector<uint64_t> &v) const throw() 
             {
-                size_t hash = hash_uint64(v[0]);
+                size_t hash = std::hash<uint64_t>()(v[0]);
                 for (size_t i = 1; i < v.size(); i++) {
-                    hash = hash ^ v[i];
-                    hash = hash_uint64(hash);
+                    hash ^= std::hash<uint64_t>()(v[i]) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
                 }
                 return hash;
             }
