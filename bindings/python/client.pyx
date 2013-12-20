@@ -50,7 +50,6 @@ cdef extern from 'common/weaver_constants.h':
     cdef uint64_t COORD_ID
     cdef uint64_t COORD_SM_ID
     cdef uint64_t CLIENT_ID
-    cdef char *SHARDS_DESC_FILE
     # weaver setup
     cdef uint64_t NUM_SHARDS
     cdef uint64_t NUM_VTS
@@ -78,7 +77,6 @@ _ID_INCR                    = ID_INCR
 _COORD_ID                   = COORD_ID
 _COORD_SM_ID                = COORD_SM_ID
 _CLIENT_ID                  = CLIENT_ID
-_SHARDS_DESC_FILE           = SHARDS_DESC_FILE
 _NUM_SHARDS                 = NUM_SHARDS
 _NUM_VTS                    = NUM_VTS
 _SHARD_ID_INCR              = SHARD_ID_INCR

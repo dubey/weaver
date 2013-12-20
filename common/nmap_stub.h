@@ -43,24 +43,6 @@ namespace nmap
     inline
     nmap_stub :: nmap_stub() : cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT) { }
 
-    //inline bool
-    //nmap_stub :: put_single_mapping(uint64_t key, uint64_t value, hyperdex_client_attribute &attrib,
-    //        const char *space, const char *attrName)
-    //{
-    //    attrib.attr = attrName;
-    //    attrib.value = (char*)&value;
-    //    attrib.value_sz = sizeof(int64_t);
-    //    attrib.datatype = HYPERDATATYPE_INT64;
-    //    
-    //    hyperdex_client_returncode put_status;
-    //    int64_t op_id = cl.put(space, (const char *)&key, sizeof(int64_t), &attrib, 1, &put_status);
-    //    if (op_id < 0) {
-    //        WDEBUG << "\"put\" returned " << op_id << " with status " << put_status << std::endl;
-    //        return false;
-    //    }
-    //    return true;
-    //}
-    
     // sel_space: true = node map, false = edge_map
     inline void
     nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add, bool sel_space)
@@ -152,7 +134,7 @@ namespace nmap
             assert(found);
         }
 
-        std::vector<std::pair<uint64_t, uint64_t>> toRet;//numNodes);
+        std::vector<std::pair<uint64_t, uint64_t>> toRet;
         for (int i = 0; i < numNodes; i++) {
             if (results[i].attr_size == 0) {
                 WDEBUG << "Key " << results[i].key << " did not exist in hyperdex" << std::endl;
