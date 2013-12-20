@@ -24,6 +24,17 @@
 #include "common/property.h"
 #include "common/event_order.h"
 
+bool
+check_remove_prop(std::string &key, vc::vclock &vclk, common::property &prop)
+{
+    if (prop.key == key) {
+        if (order::compare_two_vts(vclk, prop.get_del_time()) >= 1) {
+            return true;
+        }
+    }
+    return false;
+}
+
 namespace db
 {
 namespace element
@@ -45,8 +56,8 @@ namespace element
 
         public:
             void add_property(common::property prop);
-            void delete_property(std::string key, vc::vclock &tdel);
-            //void remove_property(std::string key, vc::vclock &vclk);
+            void delete_property(std::string &key, vc::vclock &tdel);
+            void remove_property(std::string &key, vc::vclock &vclk);
             bool has_property(common::property &prop, vc::vclock &vclk);
             bool check_and_add_property(common::property prop);
             void set_properties(std::vector<common::property> &props);
@@ -75,7 +86,7 @@ namespace element
     }
 
     inline void
-    element :: delete_property(std::string key, vc::vclock &tdel)
+    element :: delete_property(std::string &key, vc::vclock &tdel)
     {
         for (auto &iter: properties) {
             if (iter.key == key) {
@@ -84,37 +95,17 @@ namespace element
         }
     }
 
-    //class match_key
-    //{
-    //    public:
-    //        std::string key;
-    //        vc::vclock vclk;
-
-    //        inline
-    //        match_key(std::string k, vc::vclock &vclock)
-    //            : key(k)
-    //            , vclk(vclock)
-    //        { }
-
-    //        bool operator()(common::property const &prop) const
-    //        {
-    //            if (prop.key == key) {
-    //                int64_t cmp = order::compare_two_vts(vclk, prop.get_del_time());
-    //                if (cmp >= 1) {
-    //                    return true;
-    //                }
-    //            }
-    //            return false;
-    //        }
-    //};
-
-    // remove properties which match key
-    //inline void
-    //element :: remove_property(std::string key, vc::vclock &vclk)
-    //{
-    //    auto iter = std::remove_if(properties.begin(), properties.end(), match_key(key, vclk));
-    //    properties.erase(iter, properties.end());
-    //}
+    // caution: assuming mutex access to this element
+    inline void
+    element :: remove_property(std::string &key, vc::vclock &vclk)
+    {
+        auto iter = std::remove_if(properties.begin(), properties.end(),
+                // lambda function to check if property can be removed
+                [&key, &vclk](common::property &prop) {
+                    return check_remove_prop(key, vclk, prop);
+                });
+        properties.erase(iter, properties.end());
+    }
 
     inline bool
     element :: has_property(common::property &prop, vc::vclock &vclk)
