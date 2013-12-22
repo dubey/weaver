@@ -18,7 +18,6 @@
 #include <set>
 #include <vector>
 #include <unordered_map>
-#include <deque>
 #include <bitset>
 #include <po6/threads/mutex.h>
 #include <po6/net/location.h>
@@ -95,6 +94,7 @@ namespace db
 
             // Graph state
             uint64_t shard_id;
+            std::unordered_set<uint64_t> node_list; // list of node handles currently on this shard
             std::unordered_map<uint64_t, element::node*> nodes; // node handle -> ptr to node object
             std::unordered_map<uint64_t, // node handle n ->
                 std::unordered_set<uint64_t>> edge_map; // in-neighbors of n
@@ -138,7 +138,10 @@ namespace db
             bool current_migr, migr_token, migrated;
             uint64_t migr_chance, migr_node, migr_shard, migr_token_hops, migr_vt;
             std::unordered_map<uint64_t, uint32_t> agg_msg_count;
-            std::deque<std::pair<uint64_t, uint32_t>> sorted_nodes;
+            std::vector<std::pair<uint64_t, uint32_t>> cldg_nodes;
+            std::vector<std::pair<uint64_t, uint32_t>>::iterator cldg_iter;
+            std::unordered_set<uint64_t> ldg_nodes;
+            std::unordered_set<uint64_t>::iterator ldg_iter;
             std::vector<uint64_t> shard_node_count;
             std::unordered_map<uint64_t, def_write_lst> deferred_writes; // for migrating nodes
             std::unordered_map<uint64_t, std::vector<std::unique_ptr<message::message>>> deferred_reads; // for migrating nodes
@@ -260,6 +263,7 @@ namespace db
             // TODO permanent deletion code check
             uint64_t node_handle = n->get_handle();
             nodes.erase(node_handle);
+            node_list.erase(node_handle);
             update_mutex.unlock();
 
             migration_mutex.lock();
@@ -300,6 +304,7 @@ namespace db
             update_mutex.lock();
         }
         assert(nodes.emplace(node_handle, new_node).second);
+        node_list.emplace(node_handle);
         if (!init_load) {
             update_mutex.unlock();
         }
