@@ -18,7 +18,7 @@ profile:	LIBS += -pg
 profile:	CLIBS += -pg
 profile:	debug
 
-opt:	CFLAGS += -O2
+opt:	CFLAGS += -O2 -DNDEBUG
 opt:  all
 
 depend: .depend
