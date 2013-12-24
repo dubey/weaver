@@ -224,7 +224,11 @@ namespace node_prog
                 params.mode = true;
                 params.reachable = true;
                 params._search_cache = false; // don't search on way back
-                params.path.emplace_back(rn); // XXX bogus, missing full path
+
+                // context for cached value contains the nodes in the path to the destination from this node
+                for (auto& context_pair : cache_response->context) { 
+                    params.path.emplace_back(context_pair.first);
+                }
                 next.emplace_back(std::make_pair(params.prev_node, params));
                 return next;
             } else {
