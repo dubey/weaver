@@ -748,7 +748,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         // map from node_handle, lookup_pair to node_prog_running_state
         S->node_prog_running_states_mutex.lock();
         S->node_prog_running_states[lookup_pair] = fstate; 
-        WDEBUG << "Inserting prog state with lookup pair where local_node_handle is " << local_node_handle << std::endl;
+        //WDEBUG << "Inserting prog state with lookup pair where local_node_handle is " << local_node_handle << std::endl;
         S->node_prog_running_states_mutex.unlock();
         for (auto& shard_list_pair : contexts_to_fetch){
             std::unique_ptr<message::message> m(new message::message()); // XXX can we re-use messages?
@@ -937,7 +937,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     message::unpack_message(*msg, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_pair, contexts_to_add);
 
     S->node_prog_running_states_mutex.lock();
-    WDEBUG << "unpacking context reply for node: " << lookup_pair.second << " where exists is " << (S->node_prog_running_states.count(lookup_pair) > 0) << std::endl;
+    //WDEBUG << "unpacking context reply for node: " << lookup_pair.second << " where exists is " << (S->node_prog_running_states.count(lookup_pair) > 0) << std::endl;
     struct fetch_state<ParamsType, NodeStateType> *fstate = (struct fetch_state<ParamsType, NodeStateType> *) S->node_prog_running_states.at(lookup_pair);
     S->node_prog_running_states_mutex.unlock();
 
@@ -949,7 +949,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         assert(fstate->prog_state.cache_value); // cache value should exist
         node_prog_loop<ParamsType, NodeStateType>(enclosed_node_prog_func, fstate->prog_state);
         fstate->counter_mutex.unlock();
-        WDEBUG << "deleting lookup pair for node: " << lookup_pair.second << std::endl;
+        //WDEBUG << "deleting lookup pair for node: " << lookup_pair.second << std::endl;
         //remove from map
         S->node_prog_running_states_mutex.lock();
         size_t num_erased = S->node_prog_running_states.erase(lookup_pair);
