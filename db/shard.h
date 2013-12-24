@@ -38,6 +38,19 @@
 #include "threadpool/threadpool.h"
 #include "deferred_write.h"
 
+namespace std {
+
+    template <typename T1, typename T2>
+        struct hash<std::pair<T1, T2>>
+        {
+            size_t operator()(const std::pair<T1, T2>& k) const
+            {
+                using std::hash;
+                return hash<T1>()(k.first) ^ (hash<T2>()(k.second) + 1);
+            }
+        };
+}
+
 namespace db
 {
     // Pending update request
@@ -171,7 +184,7 @@ namespace db
             bool check_done_request(uint64_t req_id);
 
             
-            std::unordered_map<uint64_t, void *> node_prog_running_states; // used for fetching cache contexts
+            std::unordered_map<std::pair<uint64_t, uint64_t>, void *> node_prog_running_states; // used for fetching cache contexts
             po6::threads::mutex node_prog_running_states_mutex;
 
             // Messaging infrastructure

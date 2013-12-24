@@ -602,7 +602,7 @@ fill_node_cache_context(db::caching::node_cache_context& context, db::element::n
         bool del_before_cur = (order::compare_two_vts(e->get_del_time(), cur_time) == 0);
         bool creat_before_cur = (order::compare_two_vts(e->get_creat_time(), cur_time) == 0);
 
-        assert(creat_before_cur);
+        assert(creat_before_cur); // TODO: is this check needed/valid
         assert(del_after_cached);
 
         if (creat_after_cached && creat_before_cur && !del_before_cur){
@@ -615,7 +615,7 @@ fill_node_cache_context(db::caching::node_cache_context& context, db::element::n
 }
 
 inline void
-fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t> handles, std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& toFill,
+fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& handles, std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& toFill,
         vc::vclock& cache_entry_time, vc::vclock& req_vclock)
 {
     // TODO maybe make this skip over locked nodes and retry fetching later
@@ -736,7 +736,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         //WDEBUG << "caching waiting for rest of context to be fetched" << std::endl;
         // add waiting stuff to shard global structure
 
-        uint64_t lookup_id =  (MAX_UINT64-uid) ^ local_node_handle; // for now we just xoring a counter and the node handle TODO improve this
+        std::pair<uint64_t, uint64_t> lookup_pair(uid, local_node_handle);
         // saving copying node_prog_running_state np for later
         fetch_state<ParamsType, NodeStateType> *fstate = new fetch_state<ParamsType, NodeStateType>(np);
         fstate->replies_left = contexts_to_fetch.size();
@@ -746,13 +746,14 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         fstate->counter_mutex.lock();
 
 
-        // map from node_handle, lookup_id to node_prog_running_state
+        // map from node_handle, lookup_pair to node_prog_running_state
         S->node_prog_running_states_mutex.lock();
-        S->node_prog_running_states[lookup_id] = fstate; 
+        S->node_prog_running_states[lookup_pair] = fstate; 
+        WDEBUG << "Inserting prog state with lookup pair where local_node_handle is " << local_node_handle << std::endl;
         S->node_prog_running_states_mutex.unlock();
         for (auto& shard_list_pair : contexts_to_fetch){
             std::unique_ptr<message::message> m(new message::message()); // XXX can we re-use messages?
-            message::prepare_message(*m, message::NODE_CONTEXT_FETCH, np.prog_type_recvd, np.req_id, np.vt_id, np.req_vclock, *cache_entry_time, lookup_id, shard_list_pair.second, S->shard_id);
+            message::prepare_message(*m, message::NODE_CONTEXT_FETCH, np.prog_type_recvd, np.req_id, np.vt_id, np.req_vclock, *cache_entry_time, lookup_pair, shard_list_pair.second, S->shard_id);
             S->send(shard_list_pair.first, m->buf);
         }
 
@@ -931,13 +932,14 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
 {
     vc::vclock req_vclock;
     node_prog::prog_type pType;
-    uint64_t req_id, vt_id, lookup_id;
+    uint64_t req_id, vt_id;
+    std::pair<uint64_t, uint64_t> lookup_pair;
     std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>> contexts_to_add; // TODO extra copy, later unpack into cache_response object itself
-    message::unpack_message(*msg, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_id, contexts_to_add);
+    message::unpack_message(*msg, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_pair, contexts_to_add);
 
-    //WDEBUG << "unpacking context reply" << std::endl;
     S->node_prog_running_states_mutex.lock();
-    struct fetch_state<ParamsType, NodeStateType> *fstate = (struct fetch_state<ParamsType, NodeStateType> *) S->node_prog_running_states[lookup_id];
+    WDEBUG << "unpacking context reply for node: " << lookup_pair.second << " where exists is " << (S->node_prog_running_states.count(lookup_pair) > 0) << std::endl;
+    struct fetch_state<ParamsType, NodeStateType> *fstate = (struct fetch_state<ParamsType, NodeStateType> *) S->node_prog_running_states.at(lookup_pair);
     S->node_prog_running_states_mutex.unlock();
 
     fstate->counter_mutex.lock();
@@ -947,10 +949,12 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     if (fstate->replies_left == 0){
         node_prog_loop<ParamsType, NodeStateType>(enclosed_node_prog_func, fstate->prog_state, true);
         fstate->counter_mutex.unlock();
+        WDEBUG << "deleting lookup pair for node: " << lookup_pair.second << std::endl;
         //remove from map
         S->node_prog_running_states_mutex.lock();
-        S->node_prog_running_states.erase(lookup_id);
+        size_t num_erased = S->node_prog_running_states.erase(lookup_pair);
         S->node_prog_running_states_mutex.unlock();
+        assert(num_erased == 1);
         delete fstate; // XXX did we delete prog_state, cache_value?
     }
     else { // wait for more replies
@@ -970,7 +974,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         assert(np.req_vclock->clock.size() == NUM_VTS);
     } catch (std::bad_alloc& ba) {
         WDEBUG << "bad_alloc caught " << ba.what() << std::endl;
-        assert(false);
+        assert(false); // TODO better way to do this?
         return;
     }
     
