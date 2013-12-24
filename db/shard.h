@@ -303,7 +303,8 @@ namespace db
         if (!init_load) {
             update_mutex.lock();
         }
-        assert(nodes.emplace(node_handle, new_node).second);
+        bool success = nodes.emplace(node_handle, new_node).second;
+        assert(success);
         if (!init_load) {
             update_mutex.unlock();
         }
