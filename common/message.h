@@ -574,25 +574,25 @@ namespace message
     prepare_message(message &m, enum msg_type given_type)
     {
         uint32_t index = BUSYBEE_HEADER_SIZE;
-        uint64_t bytes_to_pack =  sizeof(enum msg_type) + sizeof(uint64_t);
+        uint64_t bytes_to_pack =  sizeof(enum msg_type);
         m.type = given_type;
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
 
-        m.buf->pack_at(index) << given_type << bytes_to_pack;
+        m.buf->pack_at(index) << given_type;
     }
 
     template <typename... Args>
     inline void
     prepare_message(message &m, const enum msg_type given_type, const Args&... args)
     {
-        uint64_t bytes_to_pack = size(args...) + sizeof(enum msg_type) + sizeof(uint64_t);
+        uint64_t bytes_to_pack = size(args...) + sizeof(enum msg_type);
         m.type = given_type;
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
 
-        packer = packer << given_type << bytes_to_pack;
+        packer = packer << given_type;
         pack_buffer(packer, args...);
-        assert(packer.remain() == 0); // make sure reserved size() was the same size as bytes packed
+        assert(packer.remain() == 0); // make sure reserved size() was the same size as bytes actually packed
     }
 
     inline void
@@ -849,12 +849,14 @@ namespace message
     unpack_message_internal(bool check_empty, const message &m, const enum msg_type expected_type, Args&... args)
     {
         uint32_t _type;
-        uint64_t _size;
         e::unpacker unpacker = m.buf->unpack_from(BUSYBEE_HEADER_SIZE);
-        unpacker = unpacker >> _type >> _size;
+        assert(!unpacker.error());
+
+        unpacker = unpacker >> _type;
         assert((enum msg_type)_type == expected_type);
 
         unpack_buffer(unpacker, args...);
+        assert(!unpacker.error());
         if (check_empty) {
             assert(unpacker.empty()); // assert whole message was unpacked
         }
@@ -879,10 +881,9 @@ namespace message
     {
         uint64_t num_tx;
         uint32_t type;
-        uint64_t _size;
         enum msg_type mtype;
         e::unpacker unpacker = m.buf->unpack_from(BUSYBEE_HEADER_SIZE);
-        unpacker = unpacker >> type >> _size;
+        unpacker = unpacker >> type;
         mtype = (enum msg_type)type;
         assert(mtype == CLIENT_TX_INIT);
         unpack_buffer(unpacker, num_tx);

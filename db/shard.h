@@ -39,7 +39,7 @@
 #include "deferred_write.h"
 
 namespace std {
-
+// so we can use a pair as key to unordered_map TODO move me??
     template <typename T1, typename T2>
         struct hash<std::pair<T1, T2>>
         {

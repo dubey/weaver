@@ -706,7 +706,6 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
             return true;
         }
 
-        node_to_check->checking_cache = true; // TODO get rid of this hack
         // save node info for re-aquirining node if needed
         db::element::node *local_node_ptr = node_to_check;
         uint64_t local_node_handle = node_to_check->get_handle();
@@ -730,7 +729,6 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
             np.cache_value = std::move(cache_response);
             node_to_check = S->acquire_node(local_node_handle);
             assert(node_to_check == local_node_ptr && "migration not supported yet");
-            node_to_check->checking_cache = false;
             return true;
         }
 
@@ -767,9 +765,9 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
 template <typename ParamsType, typename NodeStateType>
 inline void node_prog_loop(
         typename node_prog::node_function_type<ParamsType, NodeStateType>::value_type func,
-        node_prog::node_prog_running_state<ParamsType, NodeStateType>& np, bool clear_checking_cache)
+        node_prog::node_prog_running_state<ParamsType, NodeStateType>& np)
 {
-    assert(np.start_node_params.size() == 1 || !clear_checking_cache); // if clear checking cache set the start node params should be size 1 XXX temp
+    assert(np.start_node_params.size() == 1 || !np.cache_value); // if cache value passed in the start node params should be size 1
     // tuple of (node handle, node prog params, prev node)
     typedef std::tuple<uint64_t, ParamsType, db::element::remote_node> node_params_t;
     // these are the node programs that will be propagated onwards
@@ -821,18 +819,18 @@ inline void node_prog_loop(
                 assert(node->state == db::element::node::mode::STABLE);
                 if (MAX_CACHE_ENTRIES)
                 {
-                if (params.search_cache() && !node->checking_cache){
+                if (params.search_cache()){ // && !node->checking_cache){
                 //    WDEBUG << "GOT SEARCH CACHE for key: " << params.cache_key() << std::endl;
-                    if (!np.cache_value) {
-                        assert(!clear_checking_cache);
+                    if (np.cache_value) { // cache value already found (from a fetch)
+                        node->checking_cache = false;
+                    } else if (!node->checking_cache) { // lookup cache value if another prog isnt already
+                        node->checking_cache = true;
                         bool run_prog_now = cache_lookup<ParamsType, NodeStateType>(node, params.cache_key(), np, handle_params);
-                        // go to next node while we fetch cache context for this one, cache_lookup releases node if false
-                        if (!run_prog_now) {
+                        if (run_prog_now) { // we fetched context and will give it to node program
+                            node->checking_cache = false;
+                        } else { // go to next node while we fetch cache context for this one, cache_lookup releases node if false
                             continue;
                         }
-                    } // else cache came passed in
-                    else if (clear_checking_cache) {
-                        node->checking_cache = false;
                     }
                 }
                 }
@@ -948,7 +946,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     existing_context.insert(existing_context.end(), contexts_to_add.begin(), contexts_to_add.end()); // XXX avoid copy here
     fstate->replies_left--;
     if (fstate->replies_left == 0){
-        node_prog_loop<ParamsType, NodeStateType>(enclosed_node_prog_func, fstate->prog_state, true);
+        assert(fstate->prog_state.cache_value); // cache value should exist
+        node_prog_loop<ParamsType, NodeStateType>(enclosed_node_prog_func, fstate->prog_state);
         fstate->counter_mutex.unlock();
         WDEBUG << "deleting lookup pair for node: " << lookup_pair.second << std::endl;
         //remove from map
@@ -991,7 +990,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         return; // done request
     }
 
-    node_prog_loop<ParamsType, NodeStateType>(enclosed_node_prog_func, np, false);
+    assert(!np.cache_value); // a cache value should not be allocated yet
+    node_prog_loop<ParamsType, NodeStateType>(enclosed_node_prog_func, np);
 /*
     // TODO needs work
     if (global_req) {

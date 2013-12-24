@@ -17,8 +17,8 @@ sys.path.append('../bindings/python')
 
 import client
 
-num_dests = 1
-requests_per_dest = 50
+num_dests = 10
+requests_per_dest = 5
 
 def exec_traversals(reqs, cl):
     rp = client.ReachParams(caching=True)
@@ -29,9 +29,8 @@ def exec_traversals(reqs, cl):
         rp.dest = r[1]
         prog_args = [(r[0], rp)]
         response = cl.run_reach_program(prog_args)
-        if cnt % ((num_dests * requests_per_dest)/50) == 0:
-            sys.stdout.write('.')
-            sys.stdout.flush()
+        sys.stdout.write('.')
+        sys.stdout.flush()
     print ' done'
     end = time.time()
     return (end-start)
