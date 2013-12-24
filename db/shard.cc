@@ -642,17 +642,18 @@ unpack_and_fetch_context(void *req)
     db::graph_request *request = (db::graph_request *) req;
     std::vector<uint64_t> handles;
     vc::vclock req_vclock, cache_entry_time;
-    uint64_t vt_id, req_id, lookup_uid, from_shard;
+    uint64_t vt_id, req_id, from_shard;
+    std::pair<uint64_t, uint64_t> lookup_pair;
     node_prog::prog_type pType;
 
-    message::unpack_message(*request->msg, message::NODE_CONTEXT_FETCH, pType, req_id, vt_id, req_vclock, cache_entry_time, lookup_uid, handles, from_shard);
+    message::unpack_message(*request->msg, message::NODE_CONTEXT_FETCH, pType, req_id, vt_id, req_vclock, cache_entry_time, lookup_pair, handles, from_shard);
     std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>> contexts;
 
     //WDEBUG << "fetching cache contexts on remote shard" << std::endl;
     fetch_node_cache_contexts(S->shard_id, handles, contexts, cache_entry_time, req_vclock);
 
     message::message m;
-    message::prepare_message(m, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_uid, contexts);
+    message::prepare_message(m, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_pair, contexts);
     S->send(from_shard, m.buf);
     delete request;
 }
