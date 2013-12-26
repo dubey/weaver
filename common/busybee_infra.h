@@ -57,17 +57,19 @@ initialize_busybee(busybee_mta *&bb, uint64_t sid, std::shared_ptr<po6::net::loc
     uint64_t server_id;
     std::string ipaddr;
     std::unordered_map<uint64_t, po6::net::location> member_list;
-    std::ifstream file(SHARDS_DESC_FILE);
-    if (file != NULL) {
-        while (file >> server_id >> ipaddr >> inport) {
-            uint64_t incr_id = ID_INCR + server_id;
-            member_list.emplace(incr_id, po6::net::location(ipaddr.c_str(), inport));
-            if (server_id == sid) {
-                myloc.reset(new po6::net::location(ipaddr.c_str(), inport));
-            }
+#ifdef __CLIENT__
+    std::ifstream file(CLIENT_SHARDS_FILE);
+    assert(file != NULL);
+#else
+    std::ifstream file(SHARDS_FILE);
+    assert(file != NULL);
+#endif
+    while (file >> server_id >> ipaddr >> inport) {
+        uint64_t incr_id = ID_INCR + server_id;
+        member_list.emplace(incr_id, po6::net::location(ipaddr.c_str(), inport));
+        if (server_id == sid) {
+            myloc.reset(new po6::net::location(ipaddr.c_str(), inport));
         }
-    } else {
-        std::cerr << "File " << SHARDS_DESC_FILE << " not found." << std::endl;
     }
     file.close();
     weaver_mapper *wmap = new weaver_mapper(member_list);

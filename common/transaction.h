@@ -25,7 +25,9 @@ namespace transaction
         NODE_CREATE_REQ,
         EDGE_CREATE_REQ,
         NODE_DELETE_REQ,
-        EDGE_DELETE_REQ
+        EDGE_DELETE_REQ,
+        NODE_SET_PROPERTY,
+        EDGE_SET_PROPERTY
     };
 
     // store state for update received from client but not yet completed
@@ -34,8 +36,7 @@ namespace transaction
         update_type type;
         vc::qtimestamp_t qts; // queue timestamp
         uint64_t handle, elem1, elem2, loc1, loc2, sender;
-        //uint32_t key;
-        //uint64_t value;
+        std::unique_ptr<std::string> key, value;
     };
 
     typedef std::vector<std::shared_ptr<pending_update>> tx_list_t;

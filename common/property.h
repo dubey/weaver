@@ -39,8 +39,8 @@ namespace common
             bool operator==(property const &p2) const;
 
         public:
-            vc::vclock get_creat_time() const;
-            vc::vclock get_del_time() const;
+            const vc::vclock& get_creat_time() const;
+            const vc::vclock& get_del_time() const;
             void update_del_time(vc::vclock&);
     };
 
@@ -70,16 +70,49 @@ namespace common
     inline bool
     property :: operator==(property const &p2) const
     {
-        return ((key == p2.key) && (value == p2.value));
+        if (key.length() != p2.key.length()
+         || value.length() != p2.value.length()) {
+            return false;
+        }
+        uint64_t smaller, larger;
+        if (key.length() < value.length()) {
+            smaller = key.length();
+            larger = value.length();
+        } else {
+            smaller = value.length();
+            larger = key.length();
+        }
+        uint64_t i;
+        for (i = 0; i < smaller; i++) {
+            if (key[i] != p2.key[i]) {
+                return false;
+            } else if (value[i] != p2.value[i]) {
+                return false;
+            }
+        }
+        if (larger == key.length()) {
+            for (; i < larger; i++) {
+                if (key[i] != p2.key[i]) {
+                    return false;
+                }
+            }
+        } else {
+            for (; i < larger; i++) {
+                if (value[i] != p2.value[i]) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
-    inline vc::vclock
+    inline const vc::vclock&
     property :: get_creat_time() const
     {
         return creat_time;
     }
 
-    inline vc::vclock
+    inline const vc::vclock&
     property :: get_del_time() const
     {
         return del_time;
@@ -97,10 +130,14 @@ namespace std
     template <>
     struct hash<common::property> 
     {
+        private:
+            std::function<size_t(const std::string&)> string_hasher;
+
         public:
-            size_t operator()(common::property p) const throw() 
+            hash<common::property>() : string_hasher(std::hash<std::string>()) { }
+
+            size_t operator()(const common::property &p) const throw() 
             {
-                std::hash<std::string> string_hasher;
                 size_t hkey = string_hasher(p.key);
                 size_t hvalue = string_hasher(p.value);
                 return ((hkey + 0x9e3779b9 + (hvalue<<6) + (hvalue>>2)) ^ hvalue);

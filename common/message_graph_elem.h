@@ -33,7 +33,7 @@ namespace message
     }
     inline uint64_t size(const db::element::edge* const &t)
     {
-        size(*t);
+        return size(*t);
     }
 
     inline uint64_t size(const db::element::node &t)
@@ -83,7 +83,6 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, db::element::edge &t)
     {
         uint64_t handle;
-        uint32_t msg_count;
         vc::vclock creat_time, del_time;
         std::vector<common::property> props;
 

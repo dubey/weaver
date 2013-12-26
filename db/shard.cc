@@ -46,7 +46,7 @@ static uint16_t start_load;
 db::shard *db::thread::pool::S = NULL; // reinitialized in graph constructor
 
 void migrated_nbr_update(std::unique_ptr<message::message> msg);
-void migrate_node_step1(uint64_t node_handle, uint64_t shard);
+bool migrate_node_step1(db::element::node*, std::vector<uint64_t>&);
 void migrate_node_step2_req();
 void migrate_node_step2_resp(std::unique_ptr<message::message> msg);
 bool check_step3();
@@ -59,12 +59,13 @@ void shard_daemon_end();
 void
 end_program(int param)
 {
-    WDEBUG << "Ending program, param = " << param << ", kronos num calls " << order::call_times->size() << std::endl;
-    std::ofstream ktime("kronos_time.rec");
-    for (auto x: *order::call_times) {
-        ktime << x << std::endl;
-    }
-    ktime.close();
+    WDEBUG << "Ending program, param = " << param << ", kronos num calls " << order::call_times->size()
+        << ", kronos num cache hits = " << order::cache_hits << std::endl;
+    //std::ofstream ktime("kronos_time.rec");
+    //for (auto x: *order::call_times) {
+    //    ktime << x << std::endl;
+    //}
+    //ktime.close();
     exit(0);
 }
 
@@ -91,6 +92,20 @@ inline void
 delete_edge(vc::vclock &t_del, uint64_t edge_handle, uint64_t node_handle)
 {
     S->delete_edge(edge_handle, node_handle, t_del);
+}
+
+inline void
+set_node_property(vc::vclock &vclk, uint64_t node_handle, std::unique_ptr<std::string> key,
+    std::unique_ptr<std::string> value)
+{
+    S->set_node_property(node_handle, std::move(key), std::move(value), vclk);
+}
+
+inline void
+set_edge_property(vc::vclock &vclk, uint64_t edge_handle, uint64_t node_handle,
+    std::unique_ptr<std::string> key, std::unique_ptr<std::string> value)
+{
+    S->set_edge_property(node_handle, edge_handle, std::move(key), std::move(value), vclk);
 }
 
 // parse the string 'line' as a uint64_t starting at index 'idx' till the first whitespace or end of string
@@ -454,6 +469,14 @@ unpack_tx_request(void *req)
                 delete_edge(vclk, upd->elem1, upd->elem2);
                 break;
 
+            case transaction::NODE_SET_PROPERTY:
+                set_node_property(vclk, upd->elem1, std::move(upd->key), std::move(upd->value));
+                break;
+
+            case transaction::EDGE_SET_PROPERTY:
+                set_edge_property(vclk, upd->elem1, upd->elem2, std::move(upd->key), std::move(upd->value));
+                break;
+
             default:
                 WDEBUG << "unknown type" << std::endl;
         }
@@ -729,6 +752,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
             np.cache_value = std::move(cache_response);
             node_to_check = S->acquire_node(local_node_handle);
             assert(node_to_check == local_node_ptr && "migration not supported yet");
+            UNUSED(local_node_ptr);
             return true;
         }
 
@@ -859,7 +883,9 @@ inline void node_prog_loop(
                         node_state_getter, np.req_vclock, add_cache_func, std::move(np.cache_value));
                // WDEBUG << "1 got new params count" << next_node_params.size() << std::endl;
                 // batch the newly generated node programs for onward propagation
-                S->msg_count_mutex.lock();
+#ifdef WEAVER_CLDG
+                std::unordered_map<uint64_t, uint32_t> agg_msg_count;
+#endif
                 for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                     uint64_t loc = res.first.loc;
                     assert(loc < NUM_SHARDS + SHARD_ID_INCR);
@@ -873,13 +899,21 @@ inline void node_prog_loop(
                         S->send(np.vt_id, m->buf);
                     } else {
                         batched_node_progs[loc].emplace_back(res.first.handle, std::move(res.second), this_node);
-                        S->agg_msg_count[node_handle]++;
+#ifdef WEAVER_CLDG
+                        agg_msg_count[node_handle]++;
+#endif
                     }
                 }
-                S->msg_count_mutex.unlock();
                 S->release_node(node);
-
-                // Only per hop batching now
+#ifdef WEAVER_CLDG
+                S->msg_count_mutex.lock();
+                for (auto &p: agg_msg_count) {
+                    S->agg_msg_count[p.first] += p.second;
+                }
+                S->msg_count_mutex.unlock();
+#endif
+                uint64_t msg_count = 0;
+                // Only per hop batching
                 for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR; next_loc++) {
                     if ((batched_node_progs.find(next_loc) != batched_node_progs.end() && !batched_node_progs[next_loc].empty())
                         && next_loc != S->shard_id) {
@@ -887,6 +921,7 @@ inline void node_prog_loop(
                         message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, batched_node_progs[next_loc]);
                         S->send(next_loc, m->buf);
                         batched_node_progs[next_loc].clear();
+                        msg_count++;
                     }
                 }
             }
@@ -901,6 +936,11 @@ inline void node_prog_loop(
             done_request = true;
         }
     }
+#ifdef WEAVER_MSG_COUNT
+    S->update_mutex.lock();
+    S->msg_count += msg_count;
+    S->update_mutex.unlock();
+#endif
 }
 
 void
@@ -955,6 +995,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         size_t num_erased = S->node_prog_running_states.erase(lookup_pair);
         S->node_prog_running_states_mutex.unlock();
         assert(num_erased == 1);
+        UNUSED(num_erased);
         delete fstate; // XXX did we delete prog_state, cache_value?
     }
     else { // wait for more replies
@@ -1045,49 +1086,88 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     unpack_and_start_coord(std::unique_ptr<message::message>, uint64_t, int)
 { }
 
+inline uint64_t
+get_balanced_assignment(std::vector<uint64_t> &shard_node_count, std::vector<uint32_t> &max_indices)
+{
+    uint64_t min_cap = shard_node_count[max_indices[0]];
+    std::vector<uint32_t> min_indices;
+    for (uint32_t &idx: max_indices) {
+        if (shard_node_count[idx] < min_cap) {
+            min_indices.clear();
+            min_indices.emplace_back(idx);
+        } else if (shard_node_count[idx] == min_cap) {
+            min_indices.emplace_back(idx);
+        }
+    }
+    int ret_idx = rand() % min_indices.size();
+    return min_indices[ret_idx];
+}
+
+// decide node migration shard based on migration score
 // mark node as "in transit" so that subsequent requests are queued up
 // send migration information to coordinator mapper
-void
-migrate_node_step1(uint64_t node_handle, uint64_t shard)
+// return false if no migration happens (max migr score = this shard), else return true
+bool
+migrate_node_step1(db::element::node *n, std::vector<uint64_t> &shard_node_count)
 {
-    db::element::node *n;
-    n = S->acquire_node(node_handle);
-    S->migration_mutex.lock();
-    if (n->updated) {
-        S->release_node(n);
-        S->migration_mutex.unlock();
-        WDEBUG << "canceling migration for node " << node_handle << " at shard " << shard_id << std::endl;
-        migration_wrapper();
-    } else {
-        S->current_migr = true;
-        for (uint64_t &x: S->nop_count) {
-            x = 0;
+    // find arg max migr score
+    uint64_t max_pos = shard_id - SHARD_ID_INCR; // don't migrate if all equal
+    std::vector<uint32_t> max_indices(1, max_pos);
+    for (uint32_t j = 0; j < NUM_SHARDS; j++) {
+        if (j == (shard_id - SHARD_ID_INCR)) {
+            continue;
         }
-        S->migration_mutex.unlock();
-
-        // mark node as "in transit"
-        n->state = db::element::node::mode::IN_TRANSIT;
-        n->new_loc = shard;
-        S->migr_node = node_handle;
-        S->migr_shard = shard;
-
-        // updating edge map
-        S->edge_map_mutex.lock();
-        for (auto &e: n->out_edges) {
-            uint64_t node = e.second->nbr.handle;
-            assert(S->edge_map.find(node) != S->edge_map.end());
-            auto &node_set = S->edge_map[node];
-            node_set.erase(node_handle);
-            if (node_set.empty()) {
-                S->edge_map.erase(node);
-            }
+        if (n->migr_score[max_pos] < n->migr_score[j]) {
+            max_pos = j;
+            max_indices.clear();
+            max_indices.emplace_back(j);
+        } else if (n->migr_score[max_pos] == n->migr_score[j]) {
+            max_indices.emplace_back(j);
         }
-        S->edge_map_mutex.unlock();
-        S->release_node(n);
-
-        // update Hyperdex map for this node
-        S->update_node_mapping(node_handle, shard);
+        n->msg_count[j] = 0;
     }
+    uint64_t migr_loc = get_balanced_assignment(shard_node_count, max_indices) + SHARD_ID_INCR;
+    if (migr_loc > shard_id) {
+        n->already_migr = true;
+    }
+    
+    // no migration to self
+    if (migr_loc == shard_id) {
+        return false;
+    }
+
+    // begin migration
+    S->migration_mutex.lock();
+    S->current_migr = true;
+    for (uint64_t &x: S->nop_count) {
+        x = 0;
+    }
+    S->migration_mutex.unlock();
+
+    // mark node as "in transit"
+    n->state = db::element::node::mode::IN_TRANSIT;
+    n->new_loc = migr_loc;
+    S->migr_node = n->get_handle();
+    S->migr_shard = migr_loc;
+
+    // updating edge map
+    S->edge_map_mutex.lock();
+    for (auto &e: n->out_edges) {
+        uint64_t node = e.second->nbr.handle;
+        assert(S->edge_map.find(node) != S->edge_map.end());
+        auto &node_set = S->edge_map[node];
+        node_set.erase(S->migr_node);
+        if (node_set.empty()) {
+            S->edge_map.erase(node);
+        }
+    }
+    S->edge_map_mutex.unlock();
+    S->release_node(n);
+
+    // update Hyperdex map for this node
+    S->update_node_mapping(S->migr_node, migr_loc);
+
+    return true;
 }
 
 // pack node in big message and send to new location
@@ -1145,23 +1225,18 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
     S->migration_mutex.lock();
     // apply buffered writes
     if (S->deferred_writes.find(node_handle) != S->deferred_writes.end()) {
-        for (auto &def_wr: S->deferred_writes.at(node_handle)) {
-            auto &write = def_wr.request;
-            switch (def_wr.type) {
+        for (auto &dw: S->deferred_writes.at(node_handle)) {
+            switch (dw.type) {
                 case message::NODE_DELETE_REQ:
-                    assert(write.del_node.node == node_handle);
-                    S->delete_node_nonlocking(n, def_wr.vclk);
+                    S->delete_node_nonlocking(n, dw.vclk);
                     break;
 
                 case message::EDGE_CREATE_REQ:
-                    assert(write.cr_edge.n1 == node_handle);
-                    S->create_edge_nonlocking(n, write.cr_edge.edge, write.cr_edge.n2,
-                            write.cr_edge.loc2, def_wr.vclk);
+                    S->create_edge_nonlocking(n, dw.edge, dw.remote_node, dw.remote_loc, dw.vclk);
                     break;
 
                 case message::EDGE_DELETE_REQ:
-                    assert(write.del_edge.node == node_handle);
-                    S->delete_edge_nonlocking(n, write.del_edge.edge, def_wr.vclk);
+                    S->delete_edge_nonlocking(n, dw.edge, dw.vclk);
                     break;
 
                 default:
@@ -1227,112 +1302,62 @@ migrate_node_step3()
     migration_wrapper();
 }
 
-inline uint64_t
-get_balanced_assignment(std::vector<uint64_t> &shard_node_count, std::vector<uint32_t> &max_indices)
+inline bool
+check_migr_node(db::element::node *n)
 {
-    uint64_t min_cap = shard_node_count[max_indices[0]];
-    std::vector<uint32_t> min_indices;
-    for (uint32_t &idx: max_indices) {
-        if (shard_node_count[idx] < min_cap) {
-            min_indices.clear();
-            min_indices.emplace_back(idx);
-        } else if (shard_node_count[idx] == min_cap) {
-            min_indices.emplace_back(idx);
+    if (n == NULL || order::compare_two_clocks(n->get_del_time().clock, S->max_clk.clock) != 2 ||
+        n->state == db::element::node::mode::IN_TRANSIT ||
+        n->state == db::element::node::mode::MOVED ||
+        n->already_migr) {
+        if (n != NULL) {
+            n->already_migr = false;
+            S->release_node(n);
         }
-    }
-    int ret_idx = rand() % min_indices.size();
-    return min_indices[ret_idx];
-}
-
-// stream list of nodes, decide where to migrate each node
-// graph partitioning logic here
-void
-migration_wrapper()
-{
-    bool no_migr = true;
-    S->migration_mutex.lock();
-    std::vector<uint64_t> shard_node_count = S->shard_node_count;
-    S->migration_mutex.unlock();
-    while (!S->sorted_nodes.empty()) {
-        db::element::node *n;
-        uint64_t max_pos, migr_pos;
-        uint64_t migr_node = S->sorted_nodes.front().first;
-        n = S->acquire_node(migr_node);
-
-        // check if okay to migrate
-        if (n == NULL || order::compare_two_clocks(n->get_del_time().clock, S->max_clk.clock) != 2 ||
-            n->state == db::element::node::mode::IN_TRANSIT ||
-            n->state == db::element::node::mode::MOVED ||
-            n->already_migr) {
-            if (n != NULL) {
-                //WDEBUG << "Skipping already migrated node\n";
-                n->already_migr = false;
-                S->release_node(n);
-            }
-            S->sorted_nodes.pop_front();
-            continue;
-        }
-        n->updated = false;
-
-        db::element::edge *e;
+        return false;
+    } else {
         for (double &x: n->migr_score) {
             x = 0;
         }
-        if (CLDG) {
-            // communication-LDG
-            // get aggregate msg counts per shard
-            //std::vector<uint64_t> msg_count(NUM_SHARDS, 0);
-            for (auto &e_iter: n->out_edges) {
-                e = e_iter.second;
-                //msg_count[e->nbr.loc - SHARD_ID_INCR] += e->msg_count;
-                n->msg_count[e->nbr.loc - SHARD_ID_INCR] += e->msg_count;
-            }
-            // EWMA update to msg count
-            //for (uint64_t i = 0; i < NUM_SHARDS; i++) {
-            //    double new_val = 0.4 * n->msg_count[i] + 0.6 * msg_count[i];
-            //    n->msg_count[i] = new_val;
-            //}
-            // update migration score based on CLDG
-            for (int j = 0; j < NUM_SHARDS; j++) {
-                double penalty = 1.0 - ((double)shard_node_count[j])/SHARD_CAP;
-                n->migr_score[j] = n->msg_count[j] * penalty;
-            }
-        } else {
-            // regular LDG
-            for (auto &e_iter: n->out_edges) {
-                e = e_iter.second;
-                n->migr_score[e->nbr.loc - SHARD_ID_INCR] += 1;
-            }
-            for (int j = 0; j < NUM_SHARDS; j++) {
-                n->migr_score[j] *= (1 - ((double)shard_node_count[j])/SHARD_CAP);
-            }
+        return true;
+    }
+}
+
+inline void
+cldg_migration_wrapper(std::vector<uint64_t> &shard_node_count)
+{
+    bool no_migr = true;
+    while (S->cldg_iter != S->cldg_nodes.end()) {
+        db::element::node *n;
+        uint64_t migr_node = S->cldg_iter->first;
+        S->cldg_iter++;
+        n = S->acquire_node(migr_node);
+
+        // check if okay to migrate
+        if (!check_migr_node(n)) {
+            continue;
         }
-        // find arg max
-        max_pos = shard_id - SHARD_ID_INCR; // don't migrate if all equal
-        std::vector<uint32_t> max_indices(1, max_pos);
-        for (uint32_t j = 0; j < NUM_SHARDS; j++) {
-            if (j == (shard_id - SHARD_ID_INCR)) {
-                continue;
-            }
-            if (n->migr_score[max_pos] < n->migr_score[j]) {
-                max_pos = j;
-                max_indices.clear();
-                max_indices.emplace_back(j);
-            } else if (n->migr_score[max_pos] == n->migr_score[j]) {
-                max_indices.emplace_back(j);
-            }
-            n->msg_count[j] = 0;
+
+        // communication-LDG
+        db::element::edge *e;
+        // get aggregate msg counts per shard
+        //std::vector<uint64_t> msg_count(NUM_SHARDS, 0);
+        for (auto &e_iter: n->out_edges) {
+            e = e_iter.second;
+            //msg_count[e->nbr.loc - SHARD_ID_INCR] += e->msg_count;
+            n->msg_count[e->nbr.loc - SHARD_ID_INCR] += e->msg_count;
         }
-        migr_pos = get_balanced_assignment(shard_node_count, max_indices) + SHARD_ID_INCR;
-        if (migr_pos > shard_id) {
-            n->already_migr = true;
+        // EWMA update to msg count
+        //for (uint64_t i = 0; i < NUM_SHARDS; i++) {
+        //    double new_val = 0.4 * n->msg_count[i] + 0.6 * msg_count[i];
+        //    n->msg_count[i] = new_val;
+        //}
+        // update migration score based on CLDG
+        for (int j = 0; j < NUM_SHARDS; j++) {
+            double penalty = 1.0 - ((double)shard_node_count[j])/SHARD_CAP;
+            n->migr_score[j] = n->msg_count[j] * penalty;
         }
-        S->release_node(n);
-        S->sorted_nodes.pop_front();
-        
-        // no migration to self
-        if (migr_pos != shard_id) {
-            migrate_node_step1(migr_node, migr_pos);
+
+        if (migrate_node_step1(n, shard_node_count)) {
             no_migr = false;
             break;
         }
@@ -1340,6 +1365,57 @@ migration_wrapper()
     if (no_migr) {
         shard_daemon_end();
     }
+}
+
+inline void
+ldg_migration_wrapper(std::vector<uint64_t> &shard_node_count)
+{
+    bool no_migr = true;
+    while (S->ldg_iter != S->ldg_nodes.end()) {
+        db::element::node *n;
+        uint64_t migr_node = *S->ldg_iter;
+        S->ldg_iter++;
+        n = S->acquire_node(migr_node);
+
+        // check if okay to migrate
+        if (!check_migr_node(n)) {
+            continue;
+        }
+
+        // regular LDG
+        db::element::edge *e;
+        for (auto &e_iter: n->out_edges) {
+            e = e_iter.second;
+            n->migr_score[e->nbr.loc - SHARD_ID_INCR] += 1;
+        }
+        for (int j = 0; j < NUM_SHARDS; j++) {
+            n->migr_score[j] *= (1 - ((double)shard_node_count[j])/SHARD_CAP);
+        }
+
+        if (migrate_node_step1(n, shard_node_count)) {
+            no_migr = false;
+            break;
+        }
+    }
+    if (no_migr) {
+        shard_daemon_end();
+    }
+}
+
+// stream list of nodes, decide where to migrate each node
+// graph partitioning logic here
+void
+migration_wrapper()
+{
+    S->migration_mutex.lock();
+    std::vector<uint64_t> shard_node_count = S->shard_node_count;
+    S->migration_mutex.unlock();
+
+#ifdef WEAVER_CLDG
+    cldg_migration_wrapper(shard_node_count);
+#else
+    ldg_migration_wrapper(shard_node_count);
+#endif
 }
 
 // method to sort pairs based on second coordinate
@@ -1353,31 +1429,28 @@ bool agg_count_compare(std::pair<uint64_t, uint32_t> p1, std::pair<uint64_t, uin
 void
 shard_daemon_begin()
 {
+    S->update_mutex.lock();
+    S->ldg_nodes = S->node_list;
+    S->update_mutex.unlock();
+
+#ifdef WEAVER_CLDG
     S->msg_count_mutex.lock();
     auto agg_msg_count = std::move(S->agg_msg_count);
     S->msg_count_mutex.unlock();
-    /*
-    if (CLDG) {
-        std::deque<std::pair<uint64_t, uint32_t>> sn;
-        for (auto &p: agg_msg_count) {
-            sn.emplace_back(p);
-        }
-        std::sort(sn.begin(), sn.end(), agg_count_compare);
-        S->sorted_nodes = std::move(sn);
-    } else {
-    */
-    S->update_mutex.lock();
-    if (CLDG) {
-        for (auto &entry: S->nodes) {
-            S->sorted_nodes.emplace_back(std::make_pair(entry.first, agg_msg_count[entry.first]));
-        }
-    } else {
-        for (auto &entry: S->nodes) {
-            S->sorted_nodes.emplace_back(std::make_pair(entry.first, 0));
+    std::vector<std::pair<uint64_t, uint32_t>> sorted_nodes;
+    for (uint64_t n: S->ldg_nodes) {
+        if (agg_msg_count.find(n) != agg_msg_count.end()) {
+            sorted_nodes.emplace_back(std::make_pair(n, agg_msg_count[n]));
+        } else {
+            sorted_nodes.emplace_back(std::make_pair(n, 0));
         }
     }
-    S->update_mutex.unlock();
-    //}
+    std::sort(sorted_nodes.begin(), sorted_nodes.end(), agg_count_compare);
+    S->cldg_nodes = std::move(sorted_nodes);
+    S->cldg_iter = S->cldg_nodes.begin();
+#else
+    S->ldg_iter = S->ldg_nodes.begin();
+#endif
 
     migration_wrapper();
 }
@@ -1510,6 +1583,16 @@ msgrecv_loop()
                             << (S->max_load_time/MEGA) << "ms." << std::endl;
                 }
                 S->graph_load_mutex.unlock();
+                break;
+            }
+
+            case message::MSG_COUNT: {
+                message::unpack_message(*rec_msg, message::MSG_COUNT, vt_id);
+                S->update_mutex.lock();
+                message::prepare_message(*rec_msg, message::MSG_COUNT, shard_id, S->msg_count);
+                S->msg_count = 0;
+                S->update_mutex.unlock();
+                S->send(vt_id, rec_msg->buf);
                 break;
             }
 

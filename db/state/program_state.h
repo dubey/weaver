@@ -41,8 +41,10 @@ namespace state
         uint64_t completed_id; // all nodes progs with id < completed_id are done
         std::unordered_set<uint64_t> done_ids;
         po6::threads::mutex mutex;
-        bool holding;
         po6::threads::cond in_use_cond;
+#ifdef __WEAVER_DEBUG__
+        bool holding;
+#endif
 
         public:
             program_state();
@@ -70,8 +72,10 @@ namespace state
 
     program_state :: program_state()
         : completed_id(0)
-        , holding(false)
         , in_use_cond(&mutex)
+#ifdef __WEAVER_DEBUG__
+        , holding(false)
+#endif
     {
         req_map new_req_map;
         prog_state.emplace(node_prog::REACHABILITY, new_req_map);
@@ -85,13 +89,17 @@ namespace state
     program_state :: acquire()
     {
         mutex.lock();
+#ifdef __WEAVER_DEBUG__
         holding = true;
+#endif
     }
 
     inline void
     program_state :: release()
     {
+#ifdef __WEAVER_DEBUG__
         holding = false;
+#endif
         mutex.unlock();
     }
 

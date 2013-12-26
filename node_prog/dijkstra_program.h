@@ -223,9 +223,8 @@ namespace node_prog
             dijkstra_params &params,
             std::function<dijkstra_node_state&()> state_getter,
             std::shared_ptr<vc::vclock> &req_vclock,
-            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
-            std::unique_ptr<db::caching::cache_response> cache_response)
+            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
+            std::unique_ptr<db::caching::cache_response>)
     {
         WDEBUG << "DIJKSTRAAAAA" << std::endl;
         std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;

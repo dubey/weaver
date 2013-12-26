@@ -154,7 +154,7 @@ namespace node_prog
         add_cache_func(toCache, watch_set, cache_key);
     }
 
-    inline uint64_t
+    inline void
     calculate_response(clustering_node_state &cstate, db::element::node &n, db::element::remote_node &rn, vc::vclock &req_vclock,
             std::vector<std::pair<db::element::remote_node, clustering_params>> &next,
             clustering_params &params, std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,

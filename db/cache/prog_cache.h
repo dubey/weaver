@@ -16,7 +16,6 @@
 
 #include <stdint.h>
 #include <vector>
-//#include <po6/net/location.h>
 
 #include "node_prog/node_prog_type.h"
 #include "node_prog/base_classes.h"
@@ -62,7 +61,7 @@ namespace caching
             std::shared_ptr<std::vector<db::element::remote_node>> watch_set, uint64_t key, std::shared_ptr<vc::vclock>& vc)
     {
         //WDEBUG << "OMG WE EMPLACED, cache size "<< cache.size() << std::endl;
-        if (cache.size() >= MAX_CACHE_ENTRIES){
+        if (MAX_CACHE_ENTRIES > 0 && cache.size() >= MAX_CACHE_ENTRIES){
             //WDEBUG << "cache is full!" << std::endl;
             vc::vclock& oldest = *vc;
             uint64_t key_to_del = key;

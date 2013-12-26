@@ -50,7 +50,6 @@ cdef extern from 'common/weaver_constants.h':
     cdef uint64_t COORD_ID
     cdef uint64_t COORD_SM_ID
     cdef uint64_t CLIENT_ID
-    cdef char *SHARDS_DESC_FILE
     # weaver setup
     cdef uint64_t NUM_SHARDS
     cdef uint64_t NUM_VTS
@@ -78,7 +77,6 @@ _ID_INCR                    = ID_INCR
 _COORD_ID                   = COORD_ID
 _COORD_SM_ID                = COORD_SM_ID
 _CLIENT_ID                  = CLIENT_ID
-_SHARDS_DESC_FILE           = SHARDS_DESC_FILE
 _NUM_SHARDS                 = NUM_SHARDS
 _NUM_VTS                    = NUM_VTS
 _SHARD_ID_INCR              = SHARD_ID_INCR
@@ -204,7 +202,9 @@ cdef extern from 'client/client.h' namespace 'client':
         uint64_t create_edge(uint64_t tx_id, uint64_t node1, uint64_t node2)
         void delete_node(uint64_t tx_id, uint64_t node)
         void delete_edge(uint64_t tx_id, uint64_t edge, uint64_t node)
-        void end_tx(uint64_t tx_id)
+        void set_node_property(uint64_t tx_id, uint64_t node, string &key, string &value)
+        void set_edge_property(uint64_t tx_id, uint64_t node, uint64_t edge, string &key, string &value)
+        bint end_tx(uint64_t tx_id)
         reach_params run_reach_program(vector[pair[uint64_t, reach_params]] initial_args)
         clustering_params run_clustering_program(vector[pair[uint64_t, clustering_params]] initial_args)
         dijkstra_params run_dijkstra_program(vector[pair[uint64_t, dijkstra_params]] initial_args)
@@ -212,6 +212,7 @@ cdef extern from 'client/client.h' namespace 'client':
         void single_stream_migration()
         void commit_graph()
         void exit_weaver()
+        void print_msgcount()
 
 cdef class Client:
     cdef client *thisptr
@@ -228,9 +229,13 @@ cdef class Client:
     def delete_node(self, tx_id, node):
         self.thisptr.delete_node(tx_id, node)
     def delete_edge(self, tx_id, edge, node):
-        self.thisptr.delete_edge(tx_id, node, edge)
+        self.thisptr.delete_edge(tx_id, edge, node)
+    def set_node_property(self, tx_id, node, key, value):
+        self.thisptr.set_node_property(tx_id, node, key, value)
+    def set_edge_property(self, tx_id, node, edge, key, value):
+        self.thisptr.set_edge_property(tx_id, node, edge, key, value)
     def end_tx(self, tx_id):
-        self.thisptr.end_tx(tx_id)
+        return self.thisptr.end_tx(tx_id)
     def run_reach_program(self, init_args):
         cdef vector[pair[uint64_t, reach_params]] c_args
         cdef pair[uint64_t, reach_params] arg_pair
@@ -289,3 +294,5 @@ cdef class Client:
         self.thisptr.commit_graph()
     def exit_weaver(self):
         self.thisptr.exit_weaver()
+    def print_msgcount(self):
+        self.thisptr.print_msgcount()

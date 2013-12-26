@@ -18,7 +18,6 @@
 #include <set>
 #include <vector>
 #include <unordered_map>
-#include <deque>
 #include <bitset>
 #include <po6/threads/mutex.h>
 #include <po6/net/location.h>
@@ -110,6 +109,7 @@ namespace db
 
             // Graph state
             uint64_t shard_id;
+            std::unordered_set<uint64_t> node_list; // list of node handles currently on this shard
             std::unordered_map<uint64_t, element::node*> nodes; // node handle -> ptr to node object
             std::unordered_map<uint64_t, // node handle n ->
                 std::unordered_set<uint64_t>> edge_map; // in-neighbors of n
@@ -131,11 +131,11 @@ namespace db
             void set_node_property_nonlocking(element::node *n,
                     std::string &key, std::string &value, vc::vclock &vclk);
             void set_node_property(uint64_t node_handle,
-                    std::string &key, std::string &value, vc::vclock &vclk);
+                    std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk);
             void set_edge_property_nonlocking(element::node *n, uint64_t edge_handle,
                     std::string &key, std::string &value, vc::vclock &vclk);
             void set_edge_property(uint64_t node_handle, uint64_t edge_handle,
-                    std::string &key, std::string &value, vc::vclock &vclk);
+                    std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk);
             uint64_t get_node_count();
             bool node_exists_nonlocking(uint64_t node_handle);
 
@@ -153,7 +153,10 @@ namespace db
             bool current_migr, migr_token, migrated;
             uint64_t migr_chance, migr_node, migr_shard, migr_token_hops, migr_vt;
             std::unordered_map<uint64_t, uint32_t> agg_msg_count;
-            std::deque<std::pair<uint64_t, uint32_t>> sorted_nodes;
+            std::vector<std::pair<uint64_t, uint32_t>> cldg_nodes;
+            std::vector<std::pair<uint64_t, uint32_t>>::iterator cldg_iter;
+            std::unordered_set<uint64_t> ldg_nodes;
+            std::unordered_set<uint64_t>::iterator ldg_iter;
             std::vector<uint64_t> shard_node_count;
             std::unordered_map<uint64_t, def_write_lst> deferred_writes; // for migrating nodes
             std::unordered_map<uint64_t, std::vector<std::unique_ptr<message::message>>> deferred_reads; // for migrating nodes
@@ -171,6 +174,7 @@ namespace db
                 , target_prog_id
                 , max_done_id; // max id done from each VT
             std::bitset<NUM_SHARDS> migr_edge_acks;
+            uint64_t msg_count;
             
             // node programs
         private:
@@ -211,6 +215,7 @@ namespace db
         , max_prog_id(NUM_VTS, 0)
         , target_prog_id(NUM_VTS, 0)
         , max_done_id(NUM_VTS, 0)
+        , msg_count(0)
         , prog_state()
     {
         thread::pool::S = this;
@@ -277,6 +282,7 @@ namespace db
             // TODO permanent deletion code check
             uint64_t node_handle = n->get_handle();
             nodes.erase(node_handle);
+            node_list.erase(node_handle);
             update_mutex.unlock();
 
             migration_mutex.lock();
@@ -318,6 +324,8 @@ namespace db
         }
         bool success = nodes.emplace(node_handle, new_node).second;
         assert(success);
+        UNUSED(success);
+        node_list.emplace(node_handle);
         if (!init_load) {
             update_mutex.unlock();
         }
@@ -352,10 +360,7 @@ namespace db
         if (n == NULL) {
             // node is being migrated
             migration_mutex.lock();
-            if (deferred_writes.find(node_handle) == deferred_writes.end()) {
-                deferred_writes.emplace(node_handle, def_write_lst());
-            }
-            deferred_writes.at(node_handle).emplace_back(deferred_write(message::NODE_DELETE_REQ, tdel, node_handle));
+            deferred_writes[node_handle].emplace_back(deferred_write(message::NODE_DELETE_REQ, tdel));
             migration_mutex.unlock();
         } else {
             delete_node_nonlocking(n, tdel);
@@ -389,11 +394,12 @@ namespace db
         if (n == NULL) {
             // node is being migrated
             migration_mutex.lock();
-            if (deferred_writes.find(local_node) == deferred_writes.end()) {
-                deferred_writes.emplace(local_node, def_write_lst());
-            }
-            deferred_writes.at(local_node).emplace_back(deferred_write(message::EDGE_CREATE_REQ, vclk,
-                    edge_handle, local_node, remote_node, remote_loc));
+            def_write_lst &dwl = deferred_writes[local_node];
+            dwl.emplace_back(deferred_write(message::EDGE_CREATE_REQ, vclk));
+            deferred_write &dw = dwl[dwl.size()-1];
+            dw.edge = edge_handle;
+            dw.remote_node = remote_node;
+            dw.remote_loc = remote_loc; 
             migration_mutex.unlock();
         } else {
             assert(n->get_handle() == local_node);
@@ -417,10 +423,10 @@ namespace db
         element::node *n = acquire_node(node_handle);
         if (n == NULL) {
             migration_mutex.lock();
-            if (deferred_writes.find(node_handle) == deferred_writes.end()) {
-                deferred_writes.emplace(node_handle, def_write_lst());
-            }
-            deferred_writes.at(node_handle).emplace_back(deferred_write(message::EDGE_DELETE_REQ, tdel, node_handle));
+            def_write_lst &dwl = deferred_writes[node_handle];
+            dwl.emplace_back(deferred_write(message::EDGE_DELETE_REQ, tdel));
+            deferred_write &dw = dwl[dwl.size()-1];
+            dw.edge = edge_handle;
             migration_mutex.unlock();
         } else {
             delete_edge_nonlocking(n, edge_handle, tdel);
@@ -439,14 +445,19 @@ namespace db
 
     inline void
     shard :: set_node_property(uint64_t node_handle,
-            std::string &key, std::string &value, vc::vclock &vclk)
+            std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk)
     {
         element::node *n = acquire_node(node_handle);
         if (n == NULL) {
-            // node is being migrated
-            // TODO
+            migration_mutex.lock();
+            def_write_lst &dwl = deferred_writes[node_handle];
+            dwl.emplace_back(deferred_write(message::NODE_SET_PROP, vclk));
+            deferred_write &dw = dwl[dwl.size()-1];
+            dw.key = std::move(key);
+            dw.value = std::move(value);
+            migration_mutex.unlock();
         } else {
-            set_node_property_nonlocking(n, key, value, vclk);
+            set_node_property_nonlocking(n, *key, *value, vclk);
             release_node(n);
         }
     }
@@ -462,14 +473,20 @@ namespace db
 
     inline void
     shard :: set_edge_property(uint64_t node_handle, uint64_t edge_handle,
-            std::string &key, std::string &value, vc::vclock &vclk)
+            std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk)
     {
         element::node *n = acquire_node(node_handle);
         if (n == NULL) {
-            // node is being migrated
-            // TODO
+            migration_mutex.lock();
+            def_write_lst &dwl = deferred_writes[node_handle];
+            dwl.emplace_back(deferred_write(message::EDGE_SET_PROP, vclk));
+            deferred_write &dw = dwl[dwl.size()-1];
+            dw.edge = edge_handle;
+            dw.key = std::move(key);
+            dw.value = std::move(value);
+            migration_mutex.unlock();
         } else {
-            set_edge_property_nonlocking(n, edge_handle, key, value, vclk);
+            set_edge_property_nonlocking(n, edge_handle, *key, *value, vclk);
             release_node(n);
         }
     }
@@ -674,7 +691,12 @@ namespace db
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
             timestamps.emplace_back(write_queues.at(vt_id).top()->vclock);
         }
-        uint64_t exec_vt_id = (NUM_VTS == 1) ? 0 : order::compare_vts(timestamps);
+        uint64_t exec_vt_id;
+        if (NUM_VTS == 1) {
+            exec_vt_id = 0; // only one timestamper
+        } else {
+            exec_vt_id = order::compare_vts(timestamps);
+        }
         thr = write_queues.at(exec_vt_id).top();
         write_queues.at(exec_vt_id).pop();
         return thr;

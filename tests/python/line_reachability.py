@@ -20,7 +20,7 @@ import client
 nodes = []
 num_nodes = 1000
 coord_id = 0
-c = client.Client(client._CLIENT_ID+1, coord_id)
+c = client.Client(client._CLIENT_ID, coord_id)
 
 tx_id = c.begin_tx()
 for i in range(num_nodes):

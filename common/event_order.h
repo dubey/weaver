@@ -16,6 +16,8 @@
 #define __WEAVER_ORDERING__
 
 #include <list>
+#include <unordered_map>
+#include <unordered_set>
 #include <chronos.h>
 #include <po6/threads/mutex.h>
 
@@ -25,10 +27,90 @@
 
 namespace order
 {
+    class kronos_cache
+    {
+        private:
+            // vclock -> id which represents the clock. Space saving optimization
+            std::unordered_map<vc::vclock_t, uint64_t> id_map;
+            // unique clock id generating counter
+            uint64_t id_gen;
+            // vclock -> set of vclocks that happen after it
+            std::unordered_map<uint64_t, std::unordered_set<uint64_t>> happens_before_list;
+            po6::threads::mutex mutex;
+
+        public:
+            kronos_cache() : id_gen(0) { }
+
+            // return the index (0 or 1) of smaller clock if exists in cache
+            // return -1 if doesn't exist
+            int compare(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
+            {
+                mutex.lock();
+                if (id_map.find(clk1) != id_map.end()
+                 && id_map.find(clk2) != id_map.end()) {
+                    uint64_t id1 = id_map[clk1];
+                    uint64_t id2 = id_map[clk2];
+                    WDEBUG << "possible Kronos cache, looking up now\n";
+                    if (happens_before_list.find(id1) != happens_before_list.end()) {
+                        if (happens_before_list[id1].find(id2) != happens_before_list[id1].end()) {
+                            mutex.unlock();
+                            WDEBUG << "Kronos cache hit!\n";
+                            return 0;
+                        }
+                    }
+                    if (happens_before_list.find(id2) != happens_before_list.end()) {
+                        if (happens_before_list[id2].find(id1) != happens_before_list[id2].end()) {
+                            mutex.unlock();
+                            WDEBUG << "Kronos cache hit!\n";
+                            return 1;
+                        }
+                    }
+                }
+                mutex.unlock();
+                return -1;
+            }
+
+            // clk1 happens before clk2
+            void add(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
+            {
+                mutex.lock();
+                uint64_t id1, id2;
+
+                if (id_map.find(clk1) != id_map.end()) {
+                    id1 = id_map[clk1];
+                } else {
+                    id1 = id_gen++;
+                    id_map[clk1] = id1;
+                }
+
+                if (id_map.find(clk2) != id_map.end()) {
+                    id2 = id_map[clk2];
+                } else {
+                    id2 = id_gen++;
+                    id_map[clk2] = id2;
+                }
+
+                happens_before_list[id1].emplace(id2);
+                mutex.unlock();
+            }
+
+            void remove(const vc::vclock_t &clk)
+            {
+                mutex.lock();
+                if (id_map.find(clk) != id_map.end()) {
+                    happens_before_list.erase(id_map[clk]);
+                    id_map.erase(clk);
+                }
+                mutex.unlock();
+            }
+    };
+
     // static chronos client (and assoc. mutex), which ensures only one client per shard
     static chronos_client *kronos_cl;
     static po6::threads::mutex kronos_mutex;
     static std::list<uint64_t> *call_times;
+    static uint64_t cache_hits = 0;
+    static kronos_cache kcache;
 
     // return the smaller of the two clocks
     // return -1 if clocks cannot be compared
@@ -85,25 +167,56 @@ namespace order
         return large;
     }
 
+    // return the index of the (only) 'false' in a bool vector
+    inline uint64_t
+    get_false_position(std::vector<bool> &large)
+    {
+        for (uint64_t min_pos = 0; min_pos < large.size(); min_pos++) {
+            if (!large[min_pos]) {
+                return min_pos;
+            }
+        }
+        assert(false);
+        return UINT64_MAX;
+    }
+
     // static vector clock comparison method
     // will call Kronos if clocks are incomparable
     // returns index of earliest clock
     static inline int64_t
     compare_vts(const std::vector<vc::vclock> &clocks)
     {
-        uint64_t min_pos;
         uint64_t num_clks = clocks.size();
         std::vector<bool> large = compare_vector_clocks(clocks);
         uint64_t num_large = std::count(large.begin(), large.end(), true);
+
         if (num_large == (num_clks-1)) {
-            for (min_pos = 0; min_pos < num_clks; min_pos++) {
-                if (!large.at(min_pos)) {
-                    break;
+            // Kronos not required
+            return get_false_position(large);
+        } else {
+            // check cache
+            for (uint64_t i = 0; i < num_clks; i++) {
+                for (uint64_t j = i+1; j < num_clks; j++) {
+                    if (!large.at(i) && !large.at(j)) {
+                        int cmp = kcache.compare(clocks[i].clock, clocks[j].clock);
+                        if (cmp == 0) {
+                            large[j] = true;
+                            cache_hits++;
+                        } else if (cmp == 1) {
+                            large[i] = true;
+                            cache_hits++;
+                        } else {
+                            assert(cmp == -1);
+                        }
+                    }
                 }
             }
-            assert(min_pos < num_clks);
-            return min_pos;
-        } else {
+            num_large = std::count(large.begin(), large.end(), true);
+            if (num_large == (num_clks-1)) {
+                // Kronos not required
+                return get_false_position(large);
+            }
+
             // need to call Kronos
             uint64_t num_pairs = ((num_clks - num_large) * (num_clks - num_large - 1)) / 2;
             weaver_pair *wpair = (weaver_pair*)malloc(sizeof(weaver_pair) * num_pairs);
@@ -127,6 +240,7 @@ namespace order
             }
             chronos_returncode status;
             ssize_t cret;
+
             kronos_mutex.lock();
             timespec ts;
             uint64_t start_time = wclock::get_time_elapsed(ts);
@@ -135,6 +249,7 @@ namespace order
             uint64_t end_time = wclock::get_time_elapsed(ts);
             call_times->emplace_back(end_time-start_time);
             kronos_mutex.unlock();
+
             wp = wpair;
             std::vector<bool> large_upd = large;
             for (uint64_t i = 0; i < num_clks; i++) {
@@ -142,18 +257,21 @@ namespace order
                     if (!large.at(i) && !large.at(j)) {
                         // retrieve and set order
                         assert((wp->order == CHRONOS_HAPPENS_BEFORE) || (wp->order == CHRONOS_HAPPENS_AFTER));
+                        // fine-grained locking for cache.add() so that other requests are not blocked for a long time
                         switch (wp->order) {
                             case CHRONOS_HAPPENS_BEFORE:
                                 large_upd.at(j) = true;
+                                kcache.add(clocks[i].clock, clocks[j].clock);
                                 break;
 
                             case CHRONOS_HAPPENS_AFTER:
                                 large_upd.at(i) = true;
+                                kcache.add(clocks[j].clock, clocks[i].clock);
                                 break;
 
                             default:
                                 WDEBUG << "cannot reach here" << std::endl;
-                                assert(false); // shouldn't reach here
+                                assert(false);
                         }
                         free(wp->lhs);
                         free(wp->rhs);
@@ -162,6 +280,7 @@ namespace order
                 }
             }
             free(wpair);
+
             for (uint64_t min_pos = 0; min_pos < num_clks; min_pos++) {
                 if (!large_upd.at(min_pos)) {
                     return min_pos;
@@ -169,7 +288,7 @@ namespace order
             }
             // should never reach here
             assert(false);
-            return num_clks;
+            return INT64_MAX;
         }
     }
 

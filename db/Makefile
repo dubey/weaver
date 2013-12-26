@@ -1,6 +1,6 @@
 CC=g++-4.8
 INCLUDE_DIRS=-I.. -I.
-CFLAGS=-std=c++0x #-Wall -Wextra
+CFLAGS=-std=c++0x -Wall -Wextra
 LIBS=-lbusybee -le -pthread -lrt -lchronos -lhyperdex-client
 CLIBS=
 

@@ -37,9 +37,10 @@
 #define COORD_ID (0ULL)
 #define COORD_SM_ID (0ULL)
 #define CLIENT_ID (100ULL)
-#define SHARDS_DESC_FILE "../common/shards"
+#define SHARDS_FILE "../common/shards"
+#define CLIENT_SHARDS_FILE "shards"
 // weaver setup
-#define NUM_SHARDS 8
+#define NUM_SHARDS 2
 #define NUM_VTS 1
 #define SHARD_ID_INCR NUM_VTS
 #define NUM_THREADS 8
@@ -51,16 +52,17 @@
 #define MAX_CACHE_ENTRIES 0 // 0 to turn off caching
 // migration
 #define START_MIGR_ID SHARD_ID_INCR // first shard to get migration token
-#define SHARD_CAP (84000ULL/NUM_SHARDS)
-#define CLDG true // true if communication-based LDG, false otherwise
+#define SHARD_CAP (360000ULL/NUM_SHARDS)
+//#define WEAVER_CLDG // defined if communication-based LDG, false otherwise
+//#define WEAVER_MSG_COUNT // defined if client msg count call will take place
 // coordinator
 #define VT_NANO (1000000000ULL)
 #define VT_BB_TIMEOUT 1 // epoll timeout in ms
 #define VT_NOP_TIMEOUT 10000 // number of nanoseconds between successive nops
 #define VT_INITIAL_CLKUPDATE_DELAY 5000 // number of millis delay to ensure all timestampers are running
 // hyperdex
-//#define HYPERDEX_COORD_IPADDR "127.0.0.1"
-#define HYPERDEX_COORD_IPADDR "128.84.227.101"
+#define HYPERDEX_COORD_IPADDR "127.0.0.1"
+//#define HYPERDEX_COORD_IPADDR "128.84.227.101"
 #define HYPERDEX_COORD_PORT 1982
 // kronos
 #define KRONOS_IPADDR "127.0.0.1"

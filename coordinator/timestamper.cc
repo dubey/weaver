@@ -196,7 +196,9 @@ timer_function()
     while (true) {
         //WDEBUG << "loop in timer function()\n";
         sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, NULL);
-        assert(sleep_ret == 0 || sleep_ret == EINTR);
+        if (sleep_ret == 0 || sleep_ret == EINTR) {
+            assert(false);
+        }
 
         // update vclock at other timestampers
         if (vts->clock_update_acks == (NUM_VTS-1) && NUM_VTS > 1) {
@@ -400,8 +402,12 @@ server_loop(int thread_id)
                 // client messages
                 case message::CLIENT_TX_INIT: {
                     transaction::pending_tx tx;
-                    vts->unpack_tx(*msg, tx, sender, thread_id);
-                    begin_transaction(tx);
+                    if (!vts->unpack_tx(*msg, tx, sender, thread_id)) {
+                        message::prepare_message(*msg, message::CLIENT_TX_FAIL);
+                        vts->send(sender, msg->buf);
+                    } else {
+                        begin_transaction(tx);
+                    }
                     break;
                 }
 
@@ -432,6 +438,17 @@ server_loop(int thread_id)
                     vts->to_nop.set(sender - SHARD_ID_INCR);
                     vts->periodic_cond.signal();
                     vts->periodic_update_mutex.unlock();
+                    break;
+                }
+
+                case message::CLIENT_MSG_COUNT: {
+                    vts->mutex.lock();
+                    vts->msg_count = 0;
+                    vts->mutex.unlock();
+                    for (uint64_t i = SHARD_ID_INCR; i < (SHARD_ID_INCR + NUM_SHARDS); i++) {
+                        message::prepare_message(*msg, message::MSG_COUNT, vt_id);
+                        vts->send(i, msg->buf);
+                    }
                     break;
                 }
 
@@ -535,6 +552,19 @@ server_loop(int thread_id)
                     }
                     vts->mutex.unlock();
                     break;
+
+                case message::MSG_COUNT: {
+                    uint64_t shard, msg_count;
+                    message::unpack_message(*msg, message::MSG_COUNT, shard, msg_count);
+                    vts->mutex.lock();
+                    vts->msg_count += msg_count;
+                    if (++vts->msg_count_acks == NUM_SHARDS) {
+                        WDEBUG << "Msg count = " << vts->msg_count << std::endl;
+                        vts->msg_count_acks = 0;
+                    }
+                    vts->mutex.unlock();
+                    break;
+                }
 
                 default:
                     std::cerr << "unexpected msg type " << mtype << std::endl;
