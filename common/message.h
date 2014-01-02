@@ -561,12 +561,21 @@ namespace message
         }
     }
 
+    template <typename T>
+    inline void 
+    pack_buffer_checked(e::buffer::packer &packer, const T &t)
+    {
+        uint32_t before = packer.remain();
+        pack_buffer(packer, t);
+        assert((before - packer.remain()) == size(t) && "reserved size for type not same as nubmer of bytes packed");
+    }
+
     template <typename T, typename... Args>
     inline void 
-    pack_buffer(e::buffer::packer &packer, const T &t, const Args&... args)
+    pack_buffer_checked(e::buffer::packer &packer, const T &t, const Args&... args)
     {
-        pack_buffer(packer, t);
-        pack_buffer(packer, args...);
+        pack_buffer_checked(packer, t);
+        pack_buffer_checked(packer, args...);
     }
 
     inline void
@@ -590,8 +599,9 @@ namespace message
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
 
         packer = packer << given_type;
-        pack_buffer(packer, args...);
-        assert(packer.remain() == 0); // make sure reserved size() was the same size as bytes actually packed
+        pack_buffer_checked(packer, args...);
+        WDEBUG << packer.remain() << std::endl;
+        assert(packer.remain() == 0 && "reserved size for message not same as nubmer of bytes packed");
     }
 
     inline void

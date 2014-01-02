@@ -196,9 +196,7 @@ timer_function()
     while (true) {
         //WDEBUG << "loop in timer function()\n";
         sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, NULL);
-        if (sleep_ret == 0 || sleep_ret == EINTR) {
-            assert(false);
-        }
+        assert(sleep_ret == 0 || sleep_ret == EINTR);
 
         // update vclock at other timestampers
         if (vts->clock_update_acks == (NUM_VTS-1) && NUM_VTS > 1) {
