@@ -12,15 +12,15 @@
 # 
 
 import sys
-sys.path.append('../bindings/python')
+sys.path.append('../../bindings/python')
 
 import client
 import time
 
 # creating line graph
 nodes = []
-num_nodes = 1000
-cut_idx = 200
+num_nodes = 100
+cut_idx = 50
 assert(cut_idx < num_nodes)
 coord_id = 0
 c = client.Client(client._CLIENT_ID, coord_id)
@@ -56,7 +56,7 @@ print 'successful'
 print('deleting edge ' + str(break_edge) + ' and retry from node: '),
 sys.stdout.flush()
 tx_id = c.begin_tx()
-c.delete_edge(tx_id, nodes[cut_idx], break_edge)
+c.delete_edge(tx_id, break_edge, nodes[cut_idx])
 c.end_tx(tx_id)
 
 for i in range(num_nodes):
