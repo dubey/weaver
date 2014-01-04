@@ -64,27 +64,27 @@ namespace message
             packer = packer << upd->type;
             switch (upd->type) {
                 case CLIENT_NODE_CREATE_REQ:
-                    pack_buffer(packer, upd->handle);
+                    pack_buffer_checked(packer, upd->handle);
                     break;
 
                 case CLIENT_EDGE_CREATE_REQ:
-                    pack_buffer(packer, upd->handle, upd->elem1, upd->elem2);
+                    pack_buffer_checked(packer, upd->handle, upd->elem1, upd->elem2);
                     break;
 
                 case CLIENT_NODE_DELETE_REQ:
-                    pack_buffer(packer, upd->elem1);
+                    pack_buffer_checked(packer, upd->elem1);
                     break;
 
                 case CLIENT_EDGE_DELETE_REQ:
-                    pack_buffer(packer, upd->elem1, upd->elem2);
+                    pack_buffer_checked(packer, upd->elem1, upd->elem2);
                     break;
 
                 case CLIENT_NODE_SET_PROP:
-                    pack_buffer(packer, upd->elem1, upd->key, upd->value);
+                    pack_buffer_checked(packer, upd->elem1, upd->key, upd->value);
                     break;
 
                 case CLIENT_EDGE_SET_PROP:
-                    pack_buffer(packer, upd->elem1, upd->elem2, upd->key, upd->value);
+                    pack_buffer_checked(packer, upd->elem1, upd->elem2, upd->key, upd->value);
                     break;
 
                 default:

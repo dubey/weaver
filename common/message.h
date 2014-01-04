@@ -245,9 +245,9 @@ namespace message
     }
     inline uint64_t size(const common::property &t)
     {
-        return sizeof(t.key)
-            + sizeof(t.value)
-            + 2*sizeof(t.creat_time);
+        return size(t.key)
+            + size(t.value)
+            + 2*size(t.creat_time); // for del time
     }
     inline uint64_t size(const db::element::remote_node &t)
     {
@@ -600,7 +600,6 @@ namespace message
 
         packer = packer << given_type;
         pack_buffer_checked(packer, args...);
-        WDEBUG << packer.remain() << std::endl;
         assert(packer.remain() == 0 && "reserved size for message not same as nubmer of bytes packed");
     }
 
