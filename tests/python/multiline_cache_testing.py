@@ -12,7 +12,7 @@
 # 
 
 import sys
-sys.path.append('../bindings/python')
+sys.path.append('../../bindings/python')
 
 import client
 print ' run reachability on'
@@ -34,7 +34,7 @@ line2 = []
 line3 = []
 line4 = []
 coord_id = 0
-c = client.Client(client._CLIENT_ID+1, coord_id)
+c = client.Client(client._CLIENT_ID, coord_id)
 
 tx_id = c.begin_tx()
 source = c.create_node(tx_id);
@@ -93,28 +93,28 @@ response = c.run_reach_program(prog_args)
 assert(response.reachable)
 print 'Sink reachable from source before cuts'
 tx_id = c.begin_tx()
-c.delete_edge(tx_id, line1[1*nodes_per_line/5], cut1)
+c.delete_edge(tx_id, cut1, line1[1*nodes_per_line/5])
 c.end_tx(tx_id)
 prog_args = [(source, rp)]
 response = c.run_reach_program(prog_args)
 assert(response.reachable)
 print 'Sink reachable from source after cut1'
 tx_id = c.begin_tx()
-c.delete_edge(tx_id, line2[2*nodes_per_line/5], cut2)
+c.delete_edge(tx_id, cut2, line2[2*nodes_per_line/5])
 c.end_tx(tx_id)
 prog_args = [(source, rp)]
 response = c.run_reach_program(prog_args)
 assert(response.reachable)
 print 'Sink reachable from source after cut2'
 tx_id = c.begin_tx()
-c.delete_edge(tx_id, line3[3*nodes_per_line/5], cut3)
+c.delete_edge(tx_id, cut3, line3[3*nodes_per_line/5])
 c.end_tx(tx_id)
 prog_args = [(source, rp)]
 response = c.run_reach_program(prog_args)
 assert(response.reachable)
 print 'Sink reachable from source after cut3'
 tx_id = c.begin_tx()
-c.delete_edge(tx_id, line4[4*nodes_per_line/5], cut4)
+c.delete_edge(tx_id, cut4, line4[4*nodes_per_line/5])
 c.end_tx(tx_id)
 prog_args = [(source, rp)]
 response = c.run_reach_program(prog_args)

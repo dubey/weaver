@@ -1,5 +1,5 @@
 import sys
-sys.path.append('../bindings/python')
+sys.path.append('../../bindings/python')
 
 import client
 import time
@@ -8,7 +8,7 @@ import time
 nodes = []
 num_nodes = 1000
 coord_id = 0
-c = client.Client(client._CLIENT_ID+1, coord_id)
+c = client.Client(client._CLIENT_ID, coord_id)
 
 tx_id = c.begin_tx()
 center = c.create_node(tx_id)
