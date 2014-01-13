@@ -41,9 +41,9 @@
 #define CLIENT_SHARDS_FILE "shards"
 // weaver setup
 #define NUM_SHARDS 2
-#define NUM_VTS 1
+#define NUM_VTS 2
 #define SHARD_ID_INCR NUM_VTS
-#define NUM_THREADS 8
+#define NUM_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
 #define ID_BITS 8
 #define TOP_MASK (0x0fffffffffffffffULL)
 #define GRAPH_FILE "graph.rec"
@@ -59,6 +59,7 @@
 #define VT_NANO (1000000000ULL)
 #define VT_BB_TIMEOUT 1 // epoll timeout in ms
 #define VT_NOP_TIMEOUT 10000 // number of nanoseconds between successive nops
+#define VT_NOP_INITIAL_TIMEOUT 5000000000 // number of nanoseconds delay for first nop - setup time for all timestampers
 #define VT_INITIAL_CLKUPDATE_DELAY 5000 // number of millis delay to ensure all timestampers are running
 // hyperdex
 #define HYPERDEX_COORD_IPADDR "127.0.0.1"

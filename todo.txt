@@ -1,21 +1,24 @@
-TODO
-Clean up, tackle TODO/XXX.
-    Fast bulk loading.
-        Pending Hyperdex speedup.
-    Shards
-        reverse edges
-            traverse edge to node which doesn't exist - require that all in-edges are deleted
-        Kronos result caching
-        migrate_step 2 & 3 - rename, optimize (batch?)
+DONE
+Fast bulk loading.
+    Pending Hyperdex speedup.
+Shards
+    reverse edges
+        traverse edge to node which doesn't exist - require that all in-edges are deleted
+    Kronos result caching
 Node/edge properties.
 Migration experiments.
-Move prog state inside node.
-Test serializability of transactions.
-Analytics API - global requests
-    Find out why triangle counting is slow.
-    RW node program
+
+TODO
+Fix transaction protocol.
+    Defer reads within an epoch.
+    RW transactions?
+    Test serializability of transactions.
 Permanent deletion.
 Fault tolerant (chain replicated) coordinator and shards.
+Clean up, tackle TODO/XXX.
+        migrate_step 2 & 3 - rename, optimize (batch?)
+Analytics API - global requests
+    Find out why triangle counting is slow.
 
 BUGS
 -

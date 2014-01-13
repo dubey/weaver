@@ -483,7 +483,7 @@ unpack_tx_request(void *req)
     }
 
     // increment qts for next writes
-    S->record_completed_transaction(vt_id, tx_id, tx.writes.size());
+    S->record_completed_tx(vt_id, tx_id, vclk.clock, tx.writes.size());
     delete request;
 
     // send tx confirmation to coordinator
@@ -502,7 +502,7 @@ nop(void *noparg)
     bool check_move_migr, check_init_migr, check_migr_step3;
     
     // increment qts
-    S->record_completed_transaction(nop_arg->vt_id, nop_arg->req_id);
+    S->record_completed_tx(nop_arg->vt_id, nop_arg->req_id, nop_arg->vclk.clock);
     
     // note done progs for state clean up
     S->add_done_requests(nop_arg->done_reqs);
@@ -1541,14 +1541,14 @@ msgrecv_loop()
 
             case message::VT_NOP: {
                 db::nop_data *nop_arg = new db::nop_data();
-                message::unpack_message(*rec_msg, mtype, vt_id, vclk, qts, req_id, nop_arg->done_reqs, nop_arg->max_done_id,
+                message::unpack_message(*rec_msg, mtype, vt_id, nop_arg->vclk, qts, req_id, nop_arg->done_reqs, nop_arg->max_done_id,
                         nop_arg->shard_node_count);
                 nop_arg->vt_id = vt_id;
                 nop_arg->req_id = req_id;
-                thr = new db::thread::unstarted_thread(qts.at(shard_id-SHARD_ID_INCR), vclk, nop, (void*)nop_arg);
+                thr = new db::thread::unstarted_thread(qts[shard_id-SHARD_ID_INCR], nop_arg->vclk, nop, (void*)nop_arg);
                 S->add_write_request(vt_id, thr);
                 rec_msg.reset(new message::message());
-                assert(vclk.clock.size() == NUM_VTS);
+                assert(nop_arg->vclk.clock.size() == NUM_VTS);
                 break;
             }
 

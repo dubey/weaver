@@ -567,7 +567,8 @@ namespace message
     {
         uint32_t before = packer.remain();
         pack_buffer(packer, t);
-        assert((before - packer.remain()) == size(t) && "reserved size for type not same as nubmer of bytes packed");
+        assert((before - packer.remain()) == size(t) && "reserved size for type not same as number of bytes packed");
+        UNUSED(before);
     }
 
     template <typename T, typename... Args>

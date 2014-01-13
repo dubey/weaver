@@ -21,6 +21,7 @@
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
 
+#include "common/weaver_constants.h"
 #include "common/message.h"
 
 namespace db
@@ -84,6 +85,7 @@ namespace thread
             std::vector<pqueue_t> read_queues;
             std::vector<pqueue_t> write_queues;
             std::vector<uint64_t> last_ids; // records last transaction id pulled of threadpool for that vector timestamper
+            std::vector<vc::vclock_t> last_clocks; // records last transaction vclock pulled of threadpool for that vector timestamper
             vc::qtimestamp_t qts; // queue timestamps
             po6::threads::mutex queue_mutex, thread_loop_mutex;
             po6::threads::cond queue_cond;
@@ -93,7 +95,7 @@ namespace thread
             void add_read_request(uint64_t vt_id, unstarted_thread*);
             void add_write_request(uint64_t vt_id, unstarted_thread*);
             bool check_qts(uint64_t vt_id, uint64_t qts);
-            void record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id, uint64_t incr);
+            void record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk, uint64_t incr);
 
         public:
             pool(int n_threads);
@@ -105,6 +107,7 @@ namespace thread
         , read_queues(NUM_VTS, pqueue_t())
         , write_queues(NUM_VTS, pqueue_t())
         , last_ids(NUM_VTS, 0)
+        , last_clocks(NUM_VTS, vc::vclock_t(NUM_VTS, 0))
         , qts(NUM_VTS, 0)
         , queue_cond(&queue_mutex)
     {
@@ -145,12 +148,13 @@ namespace thread
 
     // increment a queue timestamp and most recent transation id after processing request
     inline void
-    pool :: record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id, uint64_t incr)
+    pool :: record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk, uint64_t incr)
     {
         queue_mutex.lock();
         //WDEBUG << "incrementing qts for vt " << vt_id << std::endl;
-        qts.at(vt_id) += incr;
-        last_ids.at(vt_id) = transaction_completed_id;
+        qts[vt_id] += incr;
+        last_ids[vt_id] = tx_id;
+        last_clocks[vt_id] = tx_clk;
         queue_cond.broadcast();
         queue_mutex.unlock();
     }

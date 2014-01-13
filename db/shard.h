@@ -102,7 +102,7 @@ namespace db
 
             // Consistency
         public:
-            void record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id, uint64_t incr);
+            void record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk, uint64_t incr);
             element::node* acquire_node(uint64_t node_handle);
             element::node* acquire_node_nonlocking(uint64_t node_handle);
             void release_node(element::node *n, bool migr_node);
@@ -209,7 +209,6 @@ namespace db
         , migr_chance(0)
         , shard_node_count(NUM_SHARDS, 0)
         , nop_count(NUM_VTS, 0)
-        , max_clk(MAX_UINT64, MAX_UINT64)
         , zero_clk(0, 0)
         , cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT)
         , max_prog_id(NUM_VTS, 0)
@@ -229,9 +228,9 @@ namespace db
     // Consistency methods
 
     inline void
-    shard :: record_completed_transaction(uint64_t vt_id, uint64_t transaction_completed_id, uint64_t incr=1)
+    shard :: record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk, uint64_t incr=1)
     {
-        thread_pool.record_completed_transaction(vt_id, transaction_completed_id, incr);
+        thread_pool.record_completed_tx(vt_id, tx_id, tx_clk, incr);
     }
 
     // find the node corresponding to given handle
@@ -651,19 +650,33 @@ namespace db
     }
 
     inline thread::unstarted_thread*
-    get_read_thr(std::vector<thread::pqueue_t> &read_queues, std::vector<uint64_t> &last_ids)
+    get_read_thr(std::vector<thread::pqueue_t> &read_queues,
+        std::vector<uint64_t> &last_ids, std::vector<vc::vclock_t> &last_clocks)
     {
-        thread::unstarted_thread * thr = NULL;
+        thread::unstarted_thread* thr;
+        bool can_exec;
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
             thread::pqueue_t &pq = read_queues.at(vt_id);
-            // execute read request after subsequent write request from same vt has been executed
+            // execute read request after all write queues have processed write which happens after this read
             if (!pq.empty() && pq.top()->priority < last_ids[vt_id]) {
-                thr = read_queues.at(vt_id).top();
-                read_queues.at(vt_id).pop();
-                return thr;
+                can_exec = true;
+                thr = pq.top();
+                for (uint64_t write_vt = 0; write_vt < NUM_VTS; write_vt++) {
+                    if (write_vt == vt_id) {
+                        continue;
+                    }
+                    if (order::compare_two_clocks(thr->vclock.clock, last_clocks[write_vt]) != 0) {
+                        can_exec = false;
+                        break;
+                    }
+                }
+                if (can_exec) {
+                    pq.pop();
+                    return thr;
+                }
             }
         }
-        return thr;
+        return NULL;
     }
 
     inline thread::unstarted_thread*
@@ -705,7 +718,7 @@ namespace db
     inline thread::unstarted_thread*
     get_read_or_write(thread::pool *tpool)
     {
-        thread::unstarted_thread *thr = get_read_thr(tpool->read_queues, tpool->last_ids);
+        thread::unstarted_thread *thr = get_read_thr(tpool->read_queues, tpool->last_ids, tpool->last_clocks);
         if (thr == NULL) {
             thr = get_write_thr(tpool);
         }

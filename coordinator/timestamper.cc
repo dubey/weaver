@@ -189,14 +189,25 @@ timer_function()
     std::vector<done_req_t> done_reqs(NUM_SHARDS, done_req_t());
     std::vector<uint64_t> del_done_reqs;
     message::message msg;
+
+    // initial delay for setting up all timestampers
+    // the thread should awaken only after all timestampers are running
+    sleep_time.tv_sec = VT_NOP_INITIAL_TIMEOUT / VT_NANO;
+    sleep_time.tv_nsec = VT_NOP_INITIAL_TIMEOUT % VT_NANO;
+    sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, NULL);
+    if (sleep_ret != 0 && sleep_ret != EINTR) {
+        assert(false);
+    }
+
     sleep_time.tv_sec = VT_NOP_TIMEOUT / VT_NANO;
     sleep_time.tv_nsec = VT_NOP_TIMEOUT % VT_NANO;
 
     vts->periodic_update_mutex.lock();
     while (true) {
-        //WDEBUG << "loop in timer function()\n";
         sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, NULL);
-        assert(sleep_ret == 0 || sleep_ret == EINTR);
+        if (sleep_ret != 0 && sleep_ret != EINTR) {
+            assert(false);
+        }
 
         // update vclock at other timestampers
         if (vts->clock_update_acks == (NUM_VTS-1) && NUM_VTS > 1) {
@@ -259,11 +270,12 @@ timer_function()
                     message::prepare_message(msg, message::VT_NOP, vt_id, vclk,
                             qts, req_id, done_reqs[shard_id], max_done_id, vts->shard_node_count);
                     vts->send(shard_id + SHARD_ID_INCR, msg.buf);
+                    WDEBUG << "Sending nop to shard " << shard_id+SHARD_ID_INCR << std::endl;
                 }
             }
             vts->to_nop.reset();
         } else {
-            vts->periodic_cond.wait();
+            //vts->periodic_cond.wait();
         }
     }
     vts->periodic_update_mutex.unlock();
@@ -425,6 +437,7 @@ server_loop(int thread_id)
                     vts->clock_update_acks++;
                     assert(vts->clock_update_acks < NUM_VTS);
                     vts->periodic_cond.signal();
+                    WDEBUG << "Signaling periodic cond for clock update ack\n";
                     vts->periodic_update_mutex.unlock();
                     break;
 
@@ -435,6 +448,7 @@ server_loop(int thread_id)
                     vts->shard_node_count[sender - SHARD_ID_INCR] = shard_node_count;
                     vts->to_nop.set(sender - SHARD_ID_INCR);
                     vts->periodic_cond.signal();
+                    WDEBUG << "Signaling periodic cond for nop ack\n";
                     vts->periodic_update_mutex.unlock();
                     break;
                 }
