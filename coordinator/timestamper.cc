@@ -15,14 +15,15 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+#include <stdlib.h>
 #include <signal.h>
+#include <sys/time.h>
 
-#define __WEAVER_DEBUG__
+//#define __WEAVER_DEBUG__
 #include "common/vclock.h"
 #include "common/transaction.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
-//#include "node_prog/triangle_program.h"
 #include "timestamper.h"
 
 static coordinator::timestamper *vts;
@@ -30,9 +31,9 @@ static uint64_t vt_id;
 
 // SIGINT handler
 void
-end_program(int param)
+end_program(int signum)
 {
-    std::cerr << "Ending program, param = " << param << std::endl;
+    std::cerr << "Ending program, signum = " << signum << std::endl;
     exit(0);
 }
 
@@ -131,7 +132,7 @@ nop(uint64_t shard_id)
 
     message::message msg;
     message::prepare_message(msg, message::VT_NOP, vt_id, vclk,
-            new_qts, req_id, done_reqs, max_done_id);
+        new_qts, req_id, done_reqs, max_done_id, vts->shard_node_count);
     vts->send(shard_id, msg.buf);
 }
 
@@ -146,11 +147,11 @@ periodic_update()
     uint64_t cur_time_millis = wclock::get_time_elapsed_millis(vts->tspec);
     uint64_t diff_millis = cur_time_millis - vts->nop_time_millis;
 
-    if (diff_millis > VT_NOP_TIMEOUT) {
+    if (diff_millis > VT_TIMEOUT_MILL) {
         vts->nop_time_millis = cur_time_millis;
         if (vts->first_clock_update) {
             uint64_t first_diff_millis = cur_time_millis - vts->first_nop_time_millis;
-            first_update = first_diff_millis > VT_INITIAL_CLKUPDATE_DELAY;
+            first_update = first_diff_millis > VT_INITIAL_TIMEOUT_MILL;
         }
         if (first_update && vts->clock_update_acks == (NUM_VTS-1)) {
             vts->first_clock_update = false;
@@ -189,44 +190,19 @@ timer_function()
     std::vector<done_req_t> done_reqs(NUM_SHARDS, done_req_t());
     std::vector<uint64_t> del_done_reqs;
     message::message msg;
+    bool nop_sent;
 
-    // initial delay for setting up all timestampers
-    // the thread should awaken only after all timestampers are running
-    sleep_time.tv_sec = VT_NOP_INITIAL_TIMEOUT / VT_NANO;
-    sleep_time.tv_nsec = VT_NOP_INITIAL_TIMEOUT % VT_NANO;
-    sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, NULL);
-    if (sleep_ret != 0 && sleep_ret != EINTR) {
-        assert(false);
-    }
+    sleep_time.tv_sec =  VT_TIMEOUT_NANO / VT_NANO;
+    sleep_time.tv_nsec = VT_TIMEOUT_NANO % VT_NANO;
 
-    sleep_time.tv_sec = VT_NOP_TIMEOUT / VT_NANO;
-    sleep_time.tv_nsec = VT_NOP_TIMEOUT % VT_NANO;
-
-    vts->periodic_update_mutex.lock();
     while (true) {
         sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, NULL);
         if (sleep_ret != 0 && sleep_ret != EINTR) {
             assert(false);
         }
-
-        // update vclock at other timestampers
-        if (vts->clock_update_acks == (NUM_VTS-1) && NUM_VTS > 1) {
-            vts->clock_update_acks = 0;
-            vts->mutex.lock();
-            vclk.clock = vts->vclk.clock;
-            vts->mutex.unlock();
-            for (uint64_t i = 0; i < NUM_VTS; i++) {
-                if (i == vt_id) {
-                    continue;
-                }
-                message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, vclk.clock[vt_id]);
-                vts->send(i, msg.buf);
-            }
-            WDEBUG << "updating vector clock at other shards\n";
-        } else if (NUM_VTS > 1) {
-            vts->periodic_cond.wait();
-        }
-
+        nop_sent = false;
+        vts->periodic_update_mutex.lock();
+        
         // send nops and state cleanup info to shards
         if (vts->to_nop.any()) {
             vts->mutex.lock();
@@ -266,19 +242,35 @@ timer_function()
 
             for (uint64_t shard_id = 0; shard_id < NUM_SHARDS; shard_id++) {
                 if (vts->to_nop[shard_id]) {
-                    message::message msg;
                     message::prepare_message(msg, message::VT_NOP, vt_id, vclk,
                             qts, req_id, done_reqs[shard_id], max_done_id, vts->shard_node_count);
                     vts->send(shard_id + SHARD_ID_INCR, msg.buf);
-                    WDEBUG << "Sending nop to shard " << shard_id+SHARD_ID_INCR << std::endl;
                 }
             }
             vts->to_nop.reset();
-        } else {
-            //vts->periodic_cond.wait();
+            nop_sent = true;
         }
+
+        // update vclock at other timestampers
+        if (vts->clock_update_acks == (NUM_VTS-1) && NUM_VTS > 1) {
+            vts->clock_update_acks = 0;
+            if (!nop_sent) {
+                vts->mutex.lock();
+                vclk.clock = vts->vclk.clock;
+                vts->mutex.unlock();
+            }
+            for (uint64_t i = 0; i < NUM_VTS; i++) {
+                if (i == vt_id) {
+                    continue;
+                }
+                message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, vclk.clock[vt_id]);
+                vts->send(i, msg.buf);
+            }
+            WDEBUG << "updating vector clock at other shards\n";
+        }
+
+        vts->periodic_update_mutex.unlock();
     }
-    vts->periodic_update_mutex.unlock();
 }
 
 // unpack client message for a node program, prepare shard msges, and send out
@@ -301,7 +293,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     for (auto &initial_arg : initial_args) {
         uint64_t c_id = initial_arg.first;
         if (c_id == -1) { // max uint64_t means its a global thing like triangle count
-            WDEBUG << "timestamper GOIN GLOBAL" << std::endl;
             assert(mappings_to_get.empty()); // dont mix global req with normal nodes
             assert(initial_args.size() == 1);
             global_req = true;
@@ -337,7 +328,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     assert(req_timestamp.clock.size() == NUM_VTS);
     uint64_t req_id = vts->generate_id();
 
-/*
+    /*
     if (global_req) {
         vts->outstanding_triangle_progs.emplace(req_id, std::make_pair(NUM_SHARDS, node_prog::triangle_params()));
     }
@@ -398,9 +389,11 @@ server_loop(int thread_id)
         if (ret != BUSYBEE_SUCCESS && ret != BUSYBEE_TIMEOUT) {
             WDEBUG << "msg recv error: " << ret << std::endl;
             continue;
-        //} else if (ret == BUSYBEE_TIMEOUT) {
-        //    periodic_update();
-        //    continue;
+        /*
+        } else if (ret == BUSYBEE_TIMEOUT) {
+            periodic_update();
+            continue;
+        */
         } else {
             // good to go, unpack msg
             uint64_t _size;
@@ -436,9 +429,10 @@ server_loop(int thread_id)
                     vts->periodic_update_mutex.lock();
                     vts->clock_update_acks++;
                     assert(vts->clock_update_acks < NUM_VTS);
-                    vts->periodic_cond.signal();
-                    WDEBUG << "Signaling periodic cond for clock update ack\n";
+                    WDEBUG << "vclk update signal\n";
+                    //vts->periodic_cond.signal();
                     vts->periodic_update_mutex.unlock();
+                    //periodic_update();
                     break;
 
                 case message::VT_NOP_ACK: {
@@ -447,9 +441,10 @@ server_loop(int thread_id)
                     vts->periodic_update_mutex.lock();
                     vts->shard_node_count[sender - SHARD_ID_INCR] = shard_node_count;
                     vts->to_nop.set(sender - SHARD_ID_INCR);
-                    vts->periodic_cond.signal();
-                    WDEBUG << "Signaling periodic cond for nop ack\n";
+                    //vts->periodic_cond.signal();
+                    WDEBUG << "nop signal from shard " << sender << std::endl;
                     vts->periodic_update_mutex.unlock();
+                    //nop(sender);
                     break;
                 }
 
@@ -529,7 +524,7 @@ server_loop(int thread_id)
                     if (vts->outstanding_node_progs.find(req_id) != vts->outstanding_node_progs.end()) { // TODO: change to .count (AD: why?)
                         uint64_t client_to_ret = vts->outstanding_node_progs.at(req_id);
 
-/*
+                        /*
                         if (vts->outstanding_triangle_progs.count(req_id) > 0) { // a triangle prog response
                             std::pair<int, node_prog::triangle_params>& p = vts->outstanding_triangle_progs.at(req_id);
                             p.first--; // count of shards responded
@@ -581,7 +576,6 @@ server_loop(int thread_id)
                 default:
                     std::cerr << "unexpected msg type " << mtype << std::endl;
             }
-            //periodic_update();
         }
     }
 }
@@ -590,25 +584,36 @@ server_loop(int thread_id)
 int
 main(int argc, char *argv[])
 {
-    std::thread *thr;
-    signal(SIGINT, end_program);
     if (argc != 2) {
         WDEBUG << "Usage: " << argv[0] << " <vector_timestamper_id>" << std::endl;
         return -1;
     }
+
+    struct sigaction intr_handler;
+    intr_handler.sa_handler = end_program;
+    sigemptyset(&intr_handler.sa_mask);
+    int ret = sigaction(SIGINT, &intr_handler, NULL);
+    assert(ret == 0);
+    
     vt_id = atoi(argv[1]);
     vts = new coordinator::timestamper(vt_id);
-    std::cout << "Vector timestamper " << vt_id << std::endl;
-    for (int i = 0; i < NUM_THREADS-1; i++) {
+
+    std::thread *thr;
+    for (int i = 0; i < NUM_THREADS; i++) {
         thr = new std::thread(server_loop, i);
         thr->detach();
     }
 
-    // send out nops to each shard
-    //for (uint64_t shard = 0; shard < NUM_SHARDS; shard++) {
-    //    nop(shard + SHARD_ID_INCR);
-    //}
-    //server_loop(NUM_THREADS-1);
+    timespec sleep_time;
+    sleep_time.tv_sec =  VT_INITIAL_TIMEOUT_NANO / VT_NANO;
+    sleep_time.tv_nsec = VT_INITIAL_TIMEOUT_NANO % VT_NANO;
+    ret = clock_nanosleep(CLOCK_REALTIME, 0, &sleep_time, NULL);
+    assert(ret == 0);
+    WDEBUG << "Initial setup delay complete" << std::endl;
+
+    UNUSED(ret);
+
+    std::cout << "Vector timestamper " << vt_id << std::endl;
 
     // call periodic thread function
     timer_function();

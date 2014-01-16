@@ -140,7 +140,7 @@ namespace coordinator
     {
         // initialize array of server locations
         initialize_busybee(bb, vt_id, myloc, NUM_THREADS);
-        //bb->set_timeout(VT_BB_TIMEOUT);
+        //bb->set_timeout(VT_TIMEOUT_MILL);
         nop_time_millis = wclock::get_time_elapsed_millis(tspec);
         nop_time_nanos = wclock::get_time_elapsed(tspec);
         first_nop_time_millis = nop_time_millis;

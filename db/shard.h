@@ -667,10 +667,12 @@ namespace db
                     }
                     if (order::compare_two_clocks(thr->vclock.clock, last_clocks[write_vt]) != 0) {
                         can_exec = false;
+                        //WDEBUG << "need to wait for read thread to exec, vt: " << vt_id << ", qts: " << thr->priority << std::endl;
                         break;
                     }
                 }
                 if (can_exec) {
+                    //WDEBUG << "executing read thread, vt: " << vt_id << ", qts: " << thr->priority << std::endl;
                     pq.pop();
                     return thr;
                 }

@@ -57,10 +57,12 @@
 //#define WEAVER_MSG_COUNT // defined if client msg count call will take place
 // coordinator
 #define VT_NANO (1000000000ULL)
-#define VT_BB_TIMEOUT 1 // epoll timeout in ms
-#define VT_NOP_TIMEOUT 10000 // number of nanoseconds between successive nops
-#define VT_NOP_INITIAL_TIMEOUT 5000000000 // number of nanoseconds delay for first nop - setup time for all timestampers
-#define VT_INITIAL_CLKUPDATE_DELAY 5000 // number of millis delay to ensure all timestampers are running
+#define VT_TIMEOUT_MILL 1 // epoll and nop timeout in ms
+#define VT_TIMEOUT_MICR 100 // number of microseconds between successive nops
+#define VT_TIMEOUT_NANO 100000 // number of nanoseconds between successive nops
+#define VT_INITIAL_TIMEOUT_MILL 5000 // number of milliseconds delay for first nop - setup time for all timestampers
+#define VT_INITIAL_TIMEOUT_MICR 5000000 // number of microseconds delay for first nop - setup time for all timestampers
+#define VT_INITIAL_TIMEOUT_NANO 5000000000 // number of nanoseconds delay for first nop - setup time for all timestampers
 // hyperdex
 #define HYPERDEX_COORD_IPADDR "127.0.0.1"
 //#define HYPERDEX_COORD_IPADDR "128.84.227.101"
