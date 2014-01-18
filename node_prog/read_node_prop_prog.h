@@ -31,7 +31,7 @@ namespace node_prog
         public:
             std::vector<std::string> keys; // empty vector means fetch all props
             uint64_t vt_id;
-            std::vector<common::property> edge_props;
+            std::vector<common::property> node_props;
 
         public:
             virtual bool search_cache() {
@@ -45,7 +45,7 @@ namespace node_prog
             virtual uint64_t size() const 
             {
                 uint64_t toRet = message::size(keys)
-                    + message::size(edge_props);
+                    + message::size(node_props);
                 return toRet;
             }
 
@@ -53,14 +53,14 @@ namespace node_prog
             {
                 message::pack_buffer(packer, keys);
                 message::pack_buffer(packer, vt_id);
-                message::pack_buffer(packer, edge_props);
+                message::pack_buffer(packer, node_props);
             }
 
             virtual void unpack(e::unpacker& unpacker)
             {
                 message::unpack_buffer(unpacker, keys);
                 message::unpack_buffer(unpacker, vt_id);
-                message::unpack_buffer(unpacker, edge_props);
+                message::unpack_buffer(unpacker, node_props);
             }
     };
 
@@ -115,71 +115,15 @@ namespace node_prog
         std::vector<std::pair<db::element::remote_node, read_node_prop_params>> next;
         next.emplace_back(std::make_pair(coord, std::move(params)));
 
-        return next;
+        for (common::property &prop : *n.get_props()){
+            bool desired_key = params.keys.empty() || std::find(params.keys.begin(), params.keys.end(), prop.key) != params.keys.end();
+            if desired_key && order::clock_creat_before_del_after(*req_vclock, prop.get_creat_time(), prop.get_del_time()){
+                next[0].node_props.emplace_back(prop);
+            }
+        }
 
-        if (MAX_CACHE_ENTRIES)
-        {
-        if (params._search_cache && cache_response != NULL){
-            // check context, update cache
-            bool valid = check_cache_context(cache_response->context, rn);
-            if (valid) {
-                //WDEBUG  << "WEEE GOT A valid CACHE RESPONSE, short circuit" << std::endl;
-                std::shared_ptr<clustering_cache_value> val = std::dynamic_pointer_cast<clustering_cache_value>(cache_response->value);
-                params.clustering_coeff = calculate_from_cached(cache_response->context, *cache_response->watch_set,
-                        rn, val->numerator, *req_vclock, n, rn, add_cache_func);
-                db::element::remote_node coord(params.vt_id, 1337);
-                next.emplace_back(std::make_pair(coord, params));
-
-                return next;
-            }
-            cache_response->invalidate();
-        }
-        params._search_cache = false; // only search cache for first of req
-        }
-        if (params.is_center) {
-            node_prog::clustering_node_state &cstate = state_getter();
-            if (params.outgoing) {
-                    params.is_center = false;
-                    params.center = rn;
-                    db::element::edge *e;
-                    for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
-                        e = possible_nbr.second;
-                        if (order::clock_creat_before_del_after(*req_vclock, e->get_creat_time(), e->get_del_time()))
-                        {
-                            next.emplace_back(std::make_pair(possible_nbr.second->nbr, params));
-                            cstate.neighbor_counts.insert(std::make_pair(possible_nbr.second->nbr.handle, 0));
-                            cstate.responses_left++;
-                            e->traverse();
-                        }
-                    }
-                    if (cstate.responses_left == 0) {
-                        calculate_response(cstate, n, rn, *req_vclock, next, params, add_cache_func);
-                    }
-            } else {
-                for (uint64_t poss_nbr : params.neighbors) {
-                    if (cstate.neighbor_counts.count(poss_nbr) > 0) {
-                        cstate.neighbor_counts[poss_nbr]++;
-                    }
-                }
-                if (--cstate.responses_left == 0){
-                    calculate_response(cstate, n, rn, *req_vclock, next, params, add_cache_func);
-                }
-            }
-        } else { // not center
-            for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
-                if (order::clock_creat_before_del_after(
-                            *req_vclock, possible_nbr.second->get_creat_time(), possible_nbr.second->get_del_time()))
-                {
-                    params.neighbors.push_back(possible_nbr.second->nbr.handle);
-                }
-            }
-            params.outgoing = false;
-            params.is_center = true;
-            next.emplace_back(std::make_pair(params.center, params));
-        }
         return next;
     }
-
 }
 
 #endif
