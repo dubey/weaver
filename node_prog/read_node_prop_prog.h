@@ -64,9 +64,9 @@ namespace node_prog
             }
     };
 
-    struct read_node_prop_node_state : public virtual Node_State_Base
+    struct read_node_prop_state : public virtual Node_State_Base
     {
-        virtual ~read_node_prop_node_state() { }
+        virtual ~read_node_prop_state() { }
 
         virtual uint64_t size() const
         {
@@ -75,10 +75,12 @@ namespace node_prog
 
         virtual void pack(e::buffer::packer& packer) const 
         {
+            UNUSED(packer);
         }
 
         virtual void unpack(e::unpacker& unpacker)
         {
+            UNUSED(unpacker);
         }
     };
 
@@ -93,32 +95,36 @@ namespace node_prog
 
         virtual void pack(e::buffer::packer& packer) const 
         {
+            UNUSED(packer);
         }
 
         virtual void unpack(e::unpacker& unpacker)
         {
+            UNUSED(unpacker);
         }
     };
 
     std::vector<std::pair<db::element::remote_node, read_node_prop_params>> 
     read_node_prop_node_program(uint64_t,
             db::element::node &n,
-            db::element::remote_node &rn,
-            clustering_params &params,
-            std::function<clustering_node_state&()> state_getter,
+            db::element::remote_node &,
+            read_node_prop_params &params,
+            std::function<read_node_prop_state&()>,
             std::shared_ptr<vc::vclock> &req_vclock,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
-            std::unique_ptr<db::caching::cache_response> cache_response)
+                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
+            std::unique_ptr<db::caching::cache_response>)
     {
         db::element::remote_node coord(params.vt_id, 1337);
         std::vector<std::pair<db::element::remote_node, read_node_prop_params>> next;
         next.emplace_back(std::make_pair(coord, std::move(params)));
 
-        for (common::property &prop : *n.get_props()){
-            bool desired_key = params.keys.empty() || std::find(params.keys.begin(), params.keys.end(), prop.key) != params.keys.end();
-            if desired_key && order::clock_creat_before_del_after(*req_vclock, prop.get_creat_time(), prop.get_del_time()){
-                next[0].node_props.emplace_back(prop);
+        for (const common::property &prop : *n.get_props())
+        {
+            bool key_match = params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.key) != params.keys.end());
+            if (key_match && order::clock_creat_before_del_after(*req_vclock, prop.get_creat_time(), prop.get_del_time()))
+            {
+                next[0].second.node_props.emplace_back(prop);
             }
         }
 

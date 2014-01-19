@@ -28,7 +28,8 @@ namespace node_prog
         N_HOP_REACHABILITY,
         TRIANGLE_COUNT,
         DIJKSTRA,
-        CLUSTERING
+        CLUSTERING,
+        READ_NODE_PROP
     };
 
     /*

@@ -30,6 +30,7 @@
 #include "node_prog_type.h"
 #include "dijkstra_program.h"
 #include "reach_program.h"
+#include "read_node_prop_prog.h"
 //#include "triangle_program.h"
 //#include "n_hop_reach_program.h"
 #include "clustering_program.h"
@@ -166,7 +167,9 @@ namespace node_prog
         { DIJKSTRA,
             new particular_node_program<node_prog::dijkstra_params, node_prog::dijkstra_node_state>(DIJKSTRA, node_prog::dijkstra_node_program) },
         { CLUSTERING,
-            new particular_node_program<node_prog::clustering_params, node_prog::clustering_node_state>(CLUSTERING, node_prog::clustering_node_program) }
+            new particular_node_program<node_prog::clustering_params, node_prog::clustering_node_state>(CLUSTERING, node_prog::clustering_node_program) },
+        { READ_NODE_PROP,
+            new particular_node_program<node_prog::read_node_prop_params, node_prog::read_node_prop_state>(READ_NODE_PROP, node_prog::read_node_prop_node_program) }
     };
 }
 #endif //__NODE_PROG__
