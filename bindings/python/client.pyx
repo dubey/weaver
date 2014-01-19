@@ -79,20 +79,11 @@ _COORD_SM_ID                = COORD_SM_ID
 _CLIENT_ID                  = CLIENT_ID
 _NUM_SHARDS                 = NUM_SHARDS
 _NUM_VTS                    = NUM_VTS
-_SHARD_ID_INCR              = SHARD_ID_INCR
-_NUM_THREADS                = NUM_THREADS
 _ID_BITS                    = ID_BITS
 _TOP_MASK                   = TOP_MASK
 _GRAPH_FILE                 = GRAPH_FILE
-_BATCH_MSG_SIZE             = BATCH_MSG_SIZE
-_START_MIGR_ID              = START_MIGR_ID
-_VT_BB_TIMEOUT              = VT_BB_TIMEOUT
-_VT_NOP_TIMEOUT             = VT_NOP_TIMEOUT
-_VT_INITIAL_CLKUPDATE_DELAY = VT_INITIAL_CLKUPDATE_DELAY
 _HYPERDEX_COORD_IPADDR      = HYPERDEX_COORD_IPADDR
 _HYPERDEX_COORD_PORT        = HYPERDEX_COORD_PORT
-_KRONOS_IPADDR              = KRONOS_IPADDR
-_KRONOS_PORT                = KRONOS_PORT
 
 cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
     cdef enum prog_type:
