@@ -9,7 +9,6 @@ Node/edge properties.
 Migration experiments.
 
 TODO
-FIFO lock for graph nodes to speed up shard threadpool.
 Test serializability of transactions.
 Permanent deletion.
 Fault tolerant (chain replicated) coordinator and shards.
