@@ -9,10 +9,8 @@ Node/edge properties.
 Migration experiments.
 
 TODO
-Fix transaction protocol.
-    Defer reads within an epoch.
-    RW transactions?
-    Test serializability of transactions.
+FIFO lock for graph nodes to speed up shard threadpool.
+Test serializability of transactions.
 Permanent deletion.
 Fault tolerant (chain replicated) coordinator and shards.
 Clean up, tackle TODO/XXX.
@@ -21,6 +19,7 @@ Analytics API - global requests
     Find out why triangle counting is slow.
 
 BUGS
+line_properties.py speeds up with 2 timestampers and 2 shards if nop/vclk update couts are turned on.
 -
 
 WISHLIST

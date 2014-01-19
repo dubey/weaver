@@ -19,7 +19,7 @@
 #include <signal.h>
 #include <sys/time.h>
 
-//#define __WEAVER_DEBUG__
+#define __WEAVER_DEBUG__
 #include "common/vclock.h"
 #include "common/transaction.h"
 #include "node_prog/node_prog_type.h"

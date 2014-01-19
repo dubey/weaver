@@ -102,8 +102,11 @@ namespace db
 
             // Consistency
         public:
-            void record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk, uint64_t incr);
+            void increment_qts(uint64_t vt_id, uint64_t incr);
+            void record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk);
             element::node* acquire_node(uint64_t node_handle);
+            void node_tx_order(uint64_t node, uint64_t vt_id, uint64_t qts);
+            element::node* acquire_node_write(uint64_t node, uint64_t vt_id, uint64_t qts);
             element::node* acquire_node_nonlocking(uint64_t node_handle);
             void release_node(element::node *n, bool migr_node);
 
@@ -120,22 +123,22 @@ namespace db
             void add_read_request(uint64_t vt_id, thread::unstarted_thread *thr);
             element::node* create_node(uint64_t node_handle, vc::vclock &vclk, bool migrate, bool init_load);
             void delete_node_nonlocking(element::node *n, vc::vclock &tdel);
-            void delete_node(uint64_t node_handle, vc::vclock &vclk);
+            void delete_node(uint64_t node_handle, vc::vclock &vclk, vc::qtimestamp_t &qts);
             void create_edge_nonlocking(element::node *n, uint64_t edge, uint64_t remote_node,
                     uint64_t remote_loc, vc::vclock &vclk, bool init_load);
             void create_edge(uint64_t edge_handle, uint64_t local_node,
-                    uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk);
+                    uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, vc::qtimestamp_t &qts);
             void delete_edge_nonlocking(element::node *n, uint64_t edge, vc::vclock &tdel);
-            void delete_edge(uint64_t edge_handle, uint64_t node_handle, vc::vclock &vclk);
+            void delete_edge(uint64_t edge_handle, uint64_t node_handle, vc::vclock &vclk, vc::qtimestamp_t &qts);
             // properties
             void set_node_property_nonlocking(element::node *n,
                     std::string &key, std::string &value, vc::vclock &vclk);
             void set_node_property(uint64_t node_handle,
-                    std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk);
+                    std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk, vc::qtimestamp_t &qts);
             void set_edge_property_nonlocking(element::node *n, uint64_t edge_handle,
                     std::string &key, std::string &value, vc::vclock &vclk);
             void set_edge_property(uint64_t node_handle, uint64_t edge_handle,
-                    std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk);
+                    std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk, vc::qtimestamp_t &qts);
             uint64_t get_node_count();
             bool node_exists_nonlocking(uint64_t node_handle);
 
@@ -226,11 +229,16 @@ namespace db
     }
 
     // Consistency methods
+    inline void
+    shard :: increment_qts(uint64_t vt_id, uint64_t incr)
+    {
+        thread_pool.increment_qts(vt_id, incr);
+    }
 
     inline void
-    shard :: record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk, uint64_t incr=1)
+    shard :: record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk)
     {
-        thread_pool.record_completed_tx(vt_id, tx_id, tx_clk, incr);
+        thread_pool.record_completed_tx(vt_id, tx_id, tx_clk);
     }
 
     // find the node corresponding to given handle
@@ -249,6 +257,37 @@ namespace db
             }
             n->waiters--;
             n->in_use = true;
+        }
+        update_mutex.unlock();
+
+        return n;
+    }
+
+    inline void
+    shard :: node_tx_order(uint64_t node, uint64_t vt_id, uint64_t qts)
+    {
+        update_mutex.lock();
+        if (nodes.find(node) != nodes.end()) {
+            nodes[node]->tx_queue.emplace_back(std::make_pair(vt_id, qts));
+        }
+        update_mutex.unlock();
+    }
+
+    inline element::node*
+    shard :: acquire_node_write(uint64_t node, uint64_t vt_id, uint64_t qts)
+    {
+        element::node *n = NULL;
+        auto comp = std::make_pair(vt_id, qts);
+        update_mutex.lock();
+        if (nodes.find(node) != nodes.end()) {
+            n = nodes[node];
+            n->waiters++;
+            while (n->in_use || n->tx_queue.front() != comp) {
+                n->cv.wait();
+            }
+            n->waiters--;
+            n->in_use = true;
+            n->tx_queue.pop_front();
         }
         update_mutex.unlock();
 
@@ -353,9 +392,9 @@ namespace db
     }
 
     inline void
-    shard :: delete_node(uint64_t node_handle, vc::vclock &tdel)
+    shard :: delete_node(uint64_t node_handle, vc::vclock &tdel, vc::qtimestamp_t &qts)
     {
-        element::node *n = acquire_node(node_handle);
+        element::node *n = acquire_node_write(node_handle, tdel.vt_id, qts[tdel.vt_id]);
         if (n == NULL) {
             // node is being migrated
             migration_mutex.lock();
@@ -387,9 +426,9 @@ namespace db
 
     inline void
     shard :: create_edge(uint64_t edge_handle, uint64_t local_node,
-            uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk)
+            uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, vc::qtimestamp_t &qts)
     {
-        element::node *n = acquire_node(local_node);
+        element::node *n = acquire_node_write(local_node, vclk.vt_id, qts[vclk.vt_id]);
         if (n == NULL) {
             // node is being migrated
             migration_mutex.lock();
@@ -417,9 +456,9 @@ namespace db
     }
 
     inline void
-    shard :: delete_edge(uint64_t edge_handle, uint64_t node_handle, vc::vclock &tdel)
+    shard :: delete_edge(uint64_t edge_handle, uint64_t node_handle, vc::vclock &tdel, vc::qtimestamp_t &qts)
     {
-        element::node *n = acquire_node(node_handle);
+        element::node *n = acquire_node_write(node_handle, tdel.vt_id, qts[tdel.vt_id]);
         if (n == NULL) {
             migration_mutex.lock();
             def_write_lst &dwl = deferred_writes[node_handle];
@@ -444,9 +483,9 @@ namespace db
 
     inline void
     shard :: set_node_property(uint64_t node_handle,
-            std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk)
+            std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk, vc::qtimestamp_t &qts)
     {
-        element::node *n = acquire_node(node_handle);
+        element::node *n = acquire_node_write(node_handle, vclk.vt_id, qts[vclk.vt_id]);
         if (n == NULL) {
             migration_mutex.lock();
             def_write_lst &dwl = deferred_writes[node_handle];
@@ -472,9 +511,9 @@ namespace db
 
     inline void
     shard :: set_edge_property(uint64_t node_handle, uint64_t edge_handle,
-            std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk)
+            std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk, vc::qtimestamp_t &qts)
     {
-        element::node *n = acquire_node(node_handle);
+        element::node *n = acquire_node_write(node_handle, vclk.vt_id, qts[vclk.vt_id]);
         if (n == NULL) {
             migration_mutex.lock();
             def_write_lst &dwl = deferred_writes[node_handle];
@@ -667,12 +706,10 @@ namespace db
                     }
                     if (order::compare_two_clocks(thr->vclock.clock, last_clocks[write_vt]) != 0) {
                         can_exec = false;
-                        //WDEBUG << "need to wait for read thread to exec, vt: " << vt_id << ", qts: " << thr->priority << std::endl;
                         break;
                     }
                 }
                 if (can_exec) {
-                    //WDEBUG << "executing read thread, vt: " << vt_id << ", qts: " << thr->priority << std::endl;
                     pq.pop();
                     return thr;
                 }

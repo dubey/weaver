@@ -95,7 +95,8 @@ namespace thread
             void add_read_request(uint64_t vt_id, unstarted_thread*);
             void add_write_request(uint64_t vt_id, unstarted_thread*);
             bool check_qts(uint64_t vt_id, uint64_t qts);
-            void record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk, uint64_t incr);
+            void increment_qts(uint64_t vt_id, uint64_t incr);
+            void record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk);
 
         public:
             pool(int n_threads);
@@ -124,7 +125,7 @@ namespace thread
     {
         queue_mutex.lock();
         queue_cond.broadcast();
-        read_queues.at(vt_id).push(t);
+        read_queues[vt_id].push(t);
         queue_mutex.unlock();
     }
 
@@ -133,7 +134,7 @@ namespace thread
     {
         queue_mutex.lock();
         queue_cond.broadcast();
-        write_queues.at(vt_id).push(t);
+        write_queues[vt_id].push(t);
         queue_mutex.unlock();
     }
 
@@ -146,13 +147,21 @@ namespace thread
         return (timestamp == (qts.at(vt_id)+1));
     }
 
-    // increment a queue timestamp and most recent transation id after processing request
+    // increment queue timestamp for a tx which has been ordered
     inline void
-    pool :: record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk, uint64_t incr)
+    pool :: increment_qts(uint64_t vt_id, uint64_t incr)
     {
         queue_mutex.lock();
-        //WDEBUG << "incrementing qts for vt " << vt_id << std::endl;
         qts[vt_id] += incr;
+        queue_cond.broadcast();
+        queue_mutex.unlock();
+    }
+
+    // record the tx_id the vclk for last completed write tx
+    inline void
+    pool :: record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk)
+    {
+        queue_mutex.lock();
         last_ids[vt_id] = tx_id;
         last_clocks[vt_id] = tx_clk;
         queue_cond.broadcast();
