@@ -17,6 +17,7 @@
 #include <stdint.h>
 #include <vector>
 
+#include "common/weaver_constants.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/base_classes.h"
 #include "db/element/node.h"
@@ -60,9 +61,8 @@ namespace caching
     program_cache :: add_cache_value(node_prog::prog_type& ptype, std::shared_ptr<node_prog::Cache_Value_Base> cache_value,
             std::shared_ptr<std::vector<db::element::remote_node>> watch_set, uint64_t key, std::shared_ptr<vc::vclock>& vc)
     {
-        //WDEBUG << "OMG WE EMPLACED, cache size "<< cache.size() << std::endl;
+        // clear oldest entry if cache is full
         if (MAX_CACHE_ENTRIES > 0 && cache.size() >= MAX_CACHE_ENTRIES){
-            //WDEBUG << "cache is full!" << std::endl;
             vc::vclock& oldest = *vc;
             uint64_t key_to_del = key;
             for (auto& kvpair : cache) 
@@ -75,7 +75,8 @@ namespace caching
             }
             cache.erase(key_to_del);
         }
-        // TODO: use prog_type
+        
+        UNUSED(ptype); // TODO: use prog_type
         cache.emplace(key, std::make_tuple(cache_value, vc, watch_set));
     }
     inline uint64_t
