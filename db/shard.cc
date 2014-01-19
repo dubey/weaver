@@ -77,35 +77,35 @@ create_node(vc::vclock &t_creat, uint64_t node_handle)
 }
 
 inline void
-create_edge(vc::vclock &t_creat, uint64_t edge_handle, uint64_t n1, uint64_t n2, uint64_t loc2)
+create_edge(vc::vclock &t_creat, vc::qtimestamp_t &qts, uint64_t edge_handle, uint64_t n1, uint64_t n2, uint64_t loc2)
 {
-    S->create_edge(edge_handle, n1, n2, loc2, t_creat);
+    S->create_edge(edge_handle, n1, n2, loc2, t_creat, qts);
 }
 
 inline void
-delete_node(vc::vclock &t_del, uint64_t node_handle)
+delete_node(vc::vclock &t_del, vc::qtimestamp_t &qts, uint64_t node_handle)
 {
-    S->delete_node(node_handle, t_del);
+    S->delete_node(node_handle, t_del, qts);
 }
 
 inline void
-delete_edge(vc::vclock &t_del, uint64_t edge_handle, uint64_t node_handle)
+delete_edge(vc::vclock &t_del, vc::qtimestamp_t &qts, uint64_t edge_handle, uint64_t node_handle)
 {
-    S->delete_edge(edge_handle, node_handle, t_del);
+    S->delete_edge(edge_handle, node_handle, t_del, qts);
 }
 
 inline void
-set_node_property(vc::vclock &vclk, uint64_t node_handle, std::unique_ptr<std::string> key,
+set_node_property(vc::vclock &vclk, vc::qtimestamp_t &qts, uint64_t node_handle, std::unique_ptr<std::string> key,
     std::unique_ptr<std::string> value)
 {
-    S->set_node_property(node_handle, std::move(key), std::move(value), vclk);
+    S->set_node_property(node_handle, std::move(key), std::move(value), vclk, qts);
 }
 
 inline void
-set_edge_property(vc::vclock &vclk, uint64_t edge_handle, uint64_t node_handle,
+set_edge_property(vc::vclock &vclk, vc::qtimestamp_t &qts, uint64_t edge_handle, uint64_t node_handle,
     std::unique_ptr<std::string> key, std::unique_ptr<std::string> value)
 {
-    S->set_edge_property(node_handle, edge_handle, std::move(key), std::move(value), vclk);
+    S->set_edge_property(node_handle, edge_handle, std::move(key), std::move(value), vclk, qts);
 }
 
 // parse the string 'line' as a uint64_t starting at index 'idx' till the first whitespace or end of string
@@ -450,9 +450,14 @@ unpack_tx_request(void *req)
     transaction::pending_tx tx;
     message::unpack_message(*request->msg, message::TX_INIT, vt_id, vclk, qts, tx_id, tx.writes);
 
-    // establish tx order at all graph nodes
+    // execute all create_node writes
+    // establish tx order at all graph nodes for all other writes
     for (auto upd: tx.writes) {
         switch (upd->type) {
+            case transaction::NODE_CREATE_REQ:
+                create_node(vclk, upd->handle);
+                break;
+
             case transaction::EDGE_CREATE_REQ:
             case transaction::NODE_DELETE_REQ:
             case transaction::NODE_SET_PROPERTY: // elem1
@@ -466,45 +471,44 @@ unpack_tx_request(void *req)
 
             default:
                 WDEBUG << "unknown type" << std::endl;
+        }
     }
 
     // increment qts so that threadpool moves forward
     // since tx order has already been established, conflicting txs will be processed in correct order
+    S->increment_qts(vt_id, tx.writes.size());
 
     // apply all writes
+    // acquire_node_write blocks if a preceding write has not been executed
     for (auto upd: tx.writes) {
         switch (upd->type) {
-            case transaction::NODE_CREATE_REQ:
-                create_node(vclk, upd->handle);
-                break;
-
             case transaction::EDGE_CREATE_REQ:
-                create_edge(vclk, upd->handle, upd->elem1, upd->elem2, upd->loc2);
+                create_edge(vclk, qts, upd->handle, upd->elem1, upd->elem2, upd->loc2);
                 break;
 
             case transaction::NODE_DELETE_REQ:
-                delete_node(vclk, upd->elem1);
+                delete_node(vclk, qts, upd->elem1);
                 break;
 
             case transaction::EDGE_DELETE_REQ:
-                delete_edge(vclk, upd->elem1, upd->elem2);
+                delete_edge(vclk, qts, upd->elem1, upd->elem2);
                 break;
 
             case transaction::NODE_SET_PROPERTY:
-                set_node_property(vclk, upd->elem1, std::move(upd->key), std::move(upd->value));
+                set_node_property(vclk, qts, upd->elem1, std::move(upd->key), std::move(upd->value));
                 break;
 
             case transaction::EDGE_SET_PROPERTY:
-                set_edge_property(vclk, upd->elem1, upd->elem2, std::move(upd->key), std::move(upd->value));
+                set_edge_property(vclk, qts, upd->elem1, upd->elem2, std::move(upd->key), std::move(upd->value));
                 break;
 
             default:
-                WDEBUG << "unknown type" << std::endl;
+                continue;
         }
     }
 
     // increment qts for next writes
-    S->record_completed_tx(vt_id, tx_id, vclk.clock, tx.writes.size());
+    S->record_completed_tx(vt_id, tx_id, vclk.clock);
     delete request;
 
     // send tx confirmation to coordinator
@@ -523,6 +527,7 @@ nop(void *noparg)
     bool check_move_migr, check_init_migr, check_migr_step3;
     
     // increment qts
+    S->increment_qts(nop_arg->vt_id, 1);
     S->record_completed_tx(nop_arg->vt_id, nop_arg->req_id, nop_arg->vclk.clock);
     
     // note done progs for state clean up
