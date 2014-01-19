@@ -104,6 +104,8 @@ namespace db
         public:
             void record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk, uint64_t incr);
             element::node* acquire_node(uint64_t node_handle);
+            void node_tx_order(uint64_t node, uint64_t vt_id, uint64_t qts);
+            element::node* acquire_node_write(uint64_t node, uint64_t vt_id, uint64_t qts);
             element::node* acquire_node_nonlocking(uint64_t node_handle);
             void release_node(element::node *n, bool migr_node);
 
@@ -245,6 +247,37 @@ namespace db
             n = nodes[node_handle];
             n->waiters++;
             while (n->in_use) {
+                n->cv.wait();
+            }
+            n->waiters--;
+            n->in_use = true;
+        }
+        update_mutex.unlock();
+
+        return n;
+    }
+
+    inline void
+    shard :: node_tx_order(uint64_t node, uint64_t vt_id, uint64_t qts)
+    {
+        update_mutex.lock();
+        if (nodes.find(node) != nodes.end()) {
+            element::node *n = nodes[node];
+            n->tx_queue.emplace_back(std::make_pair(vt_id, qts));
+        }
+        update_mutex.unlock();
+    }
+
+    inline element::node*
+    shard :: acquire_node_write(uint64_t node, uint64_t vt_id, uint64_t qts)
+    {
+        element::node *n = NULL;
+        auto comp = std::make_pair(vt_id, qts);
+        update_mutex.lock();
+        if (nodes.find(node) != nodes.end()) {
+            n = nodes[node_handle];
+            n->waiters++;
+            while (n->in_use || n->tx_queue.front() != comp) {
                 n->cv.wait();
             }
             n->waiters--;
@@ -667,12 +700,10 @@ namespace db
                     }
                     if (order::compare_two_clocks(thr->vclock.clock, last_clocks[write_vt]) != 0) {
                         can_exec = false;
-                        //WDEBUG << "need to wait for read thread to exec, vt: " << vt_id << ", qts: " << thr->priority << std::endl;
                         break;
                     }
                 }
                 if (can_exec) {
-                    //WDEBUG << "executing read thread, vt: " << vt_id << ", qts: " << thr->priority << std::endl;
                     pq.pop();
                     return thr;
                 }

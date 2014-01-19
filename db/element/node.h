@@ -19,6 +19,7 @@
 #include <unordered_map>
 #include <unordered_set>
 #include <queue>
+#include <deque>
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
 
@@ -55,6 +56,7 @@ namespace element
             std::unordered_map<uint64_t, edge*> out_edges;
             po6::threads::cond cv; // for locking node
             po6::threads::cond migr_cv; // make reads/writes wait while node is being migrated
+            std::deque<std::pair<uint64_t, uint64_t>> tx_queue; // queued txs, identified by <vt_id, queue timestamp> tuple
             bool in_use;
             uint32_t waiters; // count of number of waiters
             bool permanently_deleted;

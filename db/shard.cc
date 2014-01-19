@@ -450,6 +450,27 @@ unpack_tx_request(void *req)
     transaction::pending_tx tx;
     message::unpack_message(*request->msg, message::TX_INIT, vt_id, vclk, qts, tx_id, tx.writes);
 
+    // establish tx order at all graph nodes
+    for (auto upd: tx.writes) {
+        switch (upd->type) {
+            case transaction::EDGE_CREATE_REQ:
+            case transaction::NODE_DELETE_REQ:
+            case transaction::NODE_SET_PROPERTY: // elem1
+                S->node_tx_order(upd->elem1, vt_id, qts[vt_id]);
+                break;
+
+            case transaction::EDGE_DELETE_REQ:
+            case transaction::EDGE_SET_PROPERTY: // elem2
+                S->node_tx_order(upd->elem2, vt_id, qts[vt_id]);
+                break;
+
+            default:
+                WDEBUG << "unknown type" << std::endl;
+    }
+
+    // increment qts so that threadpool moves forward
+    // since tx order has already been established, conflicting txs will be processed in correct order
+
     // apply all writes
     for (auto upd: tx.writes) {
         switch (upd->type) {

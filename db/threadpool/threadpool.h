@@ -124,7 +124,7 @@ namespace thread
     {
         queue_mutex.lock();
         queue_cond.broadcast();
-        read_queues.at(vt_id).push(t);
+        read_queues[vt_id].push(t);
         queue_mutex.unlock();
     }
 
@@ -133,7 +133,7 @@ namespace thread
     {
         queue_mutex.lock();
         queue_cond.broadcast();
-        write_queues.at(vt_id).push(t);
+        write_queues[vt_id].push(t);
         queue_mutex.unlock();
     }
 
