@@ -24,6 +24,7 @@ namespace db
         uint64_t req_id;
         std::vector<std::pair<uint64_t, node_prog::prog_type>> done_reqs;
         uint64_t max_done_id;
+        vc::vclock_t max_done_clk;
         std::vector<uint64_t> shard_node_count;
     };
 }

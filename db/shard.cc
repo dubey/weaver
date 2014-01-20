@@ -570,6 +570,7 @@ nop(void *noparg)
     // node max done id for migrated node clean up
     assert(S->max_done_id[nop_arg->vt_id] <= nop_arg->max_done_id);
     S->max_done_id[nop_arg->vt_id] = nop_arg->max_done_id;
+    S->max_done_clk[nop_arg->vt_id] = std::move(nop_arg->max_done_clk);
     check_migr_step3 = check_step3();
     
     // atmost one check should be true
@@ -1567,14 +1568,15 @@ msgrecv_loop()
 
             case message::VT_NOP: {
                 db::nop_data *nop_arg = new db::nop_data();
-                message::unpack_message(*rec_msg, mtype, vt_id, nop_arg->vclk, qts, req_id, nop_arg->done_reqs, nop_arg->max_done_id,
-                        nop_arg->shard_node_count);
+                message::unpack_message(*rec_msg, mtype, vt_id, nop_arg->vclk, qts, req_id,
+                    nop_arg->done_reqs, nop_arg->max_done_id, nop_arg->max_done_clk, nop_arg->shard_node_count);
+                assert(nop_arg->vclk.clock.size() == NUM_VTS);
+                assert(nop_arg->max_done_clk.size() == NUM_VTS);
                 nop_arg->vt_id = vt_id;
                 nop_arg->req_id = req_id;
                 thr = new db::thread::unstarted_thread(qts[shard_id-SHARD_ID_INCR], nop_arg->vclk, nop, (void*)nop_arg);
                 S->add_write_request(vt_id, thr);
                 rec_msg.reset(new message::message());
-                assert(nop_arg->vclk.clock.size() == NUM_VTS);
                 break;
             }
 

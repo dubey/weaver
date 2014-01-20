@@ -103,6 +103,7 @@ timer_function()
     vc::vclock vclk(vt_id, 0);
     vc::qtimestamp_t qts;
     uint64_t req_id, max_done_id;
+    vc::vclock_t max_done_clk;
     typedef std::vector<std::pair<uint64_t, node_prog::prog_type>> done_req_t;
     std::vector<done_req_t> done_reqs(NUM_SHARDS, done_req_t());
     std::vector<uint64_t> del_done_reqs;
@@ -127,6 +128,7 @@ timer_function()
             vclk.clock = vts->vclk.clock;
             req_id = vts->generate_id();
             max_done_id = vts->max_done_id;
+            max_done_clk = *vts->max_done_clk;
             del_done_reqs.clear();
             for (uint64_t shard_id = 0; shard_id < NUM_SHARDS; shard_id++) {
                 if (vts->to_nop[shard_id]) {
@@ -159,8 +161,11 @@ timer_function()
 
             for (uint64_t shard_id = 0; shard_id < NUM_SHARDS; shard_id++) {
                 if (vts->to_nop[shard_id]) {
-                    message::prepare_message(msg, message::VT_NOP, vt_id, vclk,
-                            qts, req_id, done_reqs[shard_id], max_done_id, vts->shard_node_count);
+                    assert(vclk.clock.size() == NUM_VTS);
+                    assert(max_done_clk.size() == NUM_VTS);
+                    assert(vt_id == 0);
+                    message::prepare_message(msg, message::VT_NOP, vt_id, vclk, qts, req_id,
+                        done_reqs[shard_id], max_done_id, max_done_clk, vts->shard_node_count);
                     vts->send(shard_id + SHARD_ID_INCR, msg.buf);
                 }
             }
@@ -252,6 +257,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     */
     vts->outstanding_node_progs.emplace(req_id, clientID);
     vts->outstanding_req_ids.emplace(req_id);
+    std::unique_ptr<vc::vclock_t> vclk_ptr(new vc::vclock_t(req_timestamp.clock));
+    vts->id_to_clk[req_id] = std::move(vclk_ptr);
     vts->mutex.unlock();
 
     message::message msg_to_send;
@@ -272,18 +279,27 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
 { }
 
 // remove a completed node program from outstanding requests data structure
-// update 'max_done_id' accordingly
-inline void mark_req_finished(uint64_t req_id) {
+// update 'max_done_id' and 'max_done_clk' accordingly
+// caution: need to hold vts->mutex
+inline void
+mark_req_finished(uint64_t req_id)
+{
     if (vts->outstanding_req_ids.top() == req_id) {
         assert(vts->max_done_id < vts->outstanding_req_ids.top());
         vts->max_done_id = req_id;
+        assert(vts->id_to_clk.find(vts->max_done_id) != vts->id_to_clk.end());
+        vts->max_done_clk = std::move(vts->id_to_clk[vts->max_done_id]);
         vts->outstanding_req_ids.pop();
+        vts->id_to_clk.erase(vts->max_done_id);
         while (!vts->outstanding_req_ids.empty() && !vts->done_req_ids.empty()
-                && vts->outstanding_req_ids.top() == vts->done_req_ids.top()) {
+            && vts->outstanding_req_ids.top() == vts->done_req_ids.top()) {
             assert(vts->max_done_id < vts->outstanding_req_ids.top());
             vts->max_done_id = vts->outstanding_req_ids.top();
+            assert(vts->id_to_clk.find(vts->max_done_id) != vts->id_to_clk.end());
+            vts->max_done_clk = std::move(vts->id_to_clk[vts->max_done_id]);
             vts->outstanding_req_ids.pop();
             vts->done_req_ids.pop();
+            vts->id_to_clk.erase(vts->max_done_id);
         }
     } else {
         vts->done_req_ids.emplace(req_id);
@@ -440,7 +456,6 @@ server_loop(int thread_id)
                     vts->mutex.lock();
                     if (vts->outstanding_node_progs.find(req_id) != vts->outstanding_node_progs.end()) { // TODO: change to .count (AD: why?)
                         uint64_t client_to_ret = vts->outstanding_node_progs.at(req_id);
-
                         /*
                         if (vts->outstanding_triangle_progs.count(req_id) > 0) { // a triangle prog response
                             std::pair<int, node_prog::triangle_params>& p = vts->outstanding_triangle_progs.at(req_id);
@@ -465,7 +480,8 @@ server_loop(int thread_id)
                                 vts->outstanding_node_progs.erase(req_id);
                                 mark_req_finished(req_id);
                             }
-                        } else {*/ // just a normal node program
+                        } else {*/
+                            // just a normal node program
                             vts->done_reqs[type].emplace(req_id, std::bitset<NUM_SHARDS>());
                             vts->send(client_to_ret, msg->buf);
                             vts->outstanding_node_progs.erase(req_id);

@@ -145,6 +145,7 @@ namespace db
             // Initial graph loading
             uint64_t max_load_time;
             uint32_t load_count;
+
             // Permanent deletion
         public:
             void delete_migrated_node(uint64_t migr_node);
@@ -169,13 +170,13 @@ namespace db
             const char *loc_space = "weaver_loc_mapping";
             const char *loc_attrName = "shard";
             hyperdex::Client cl;
-            //bool node_migrated;
             void update_migrated_nbr_nonlocking(element::node *n, uint64_t migr_node, uint64_t old_loc, uint64_t new_loc);
             void update_migrated_nbr(uint64_t node, uint64_t old_loc, uint64_t new_loc);
             void update_node_mapping(uint64_t node, uint64_t shard);
             std::vector<uint64_t> max_prog_id // max prog id seen from each vector timestamper
                 , target_prog_id
                 , max_done_id; // max id done from each VT
+            std::vector<vc::vclock_t> max_done_clk; // vclk of cumulative last node program completed
             std::bitset<NUM_SHARDS> migr_edge_acks;
             uint64_t msg_count;
             
@@ -217,6 +218,7 @@ namespace db
         , max_prog_id(NUM_VTS, 0)
         , target_prog_id(NUM_VTS, 0)
         , max_done_id(NUM_VTS, 0)
+        , max_done_clk(NUM_VTS, vc::vclock_t())
         , msg_count(0)
         , prog_state()
     {

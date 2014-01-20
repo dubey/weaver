@@ -87,6 +87,8 @@ namespace coordinator
             std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> outstanding_req_ids;
             std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> done_req_ids;
             uint64_t max_done_id;
+            std::unique_ptr<vc::vclock_t> max_done_clk;
+            std::unordered_map<uint64_t, std::unique_ptr<vc::vclock_t>> id_to_clk;
             std::unordered_map<node_prog::prog_type,
                     std::unordered_map<uint64_t, std::bitset<NUM_SHARDS>>> done_reqs;
             // node map client
@@ -131,6 +133,7 @@ namespace coordinator
         , nop_last_qts(NUM_SHARDS, 0)
         , first_clock_update(true)
         , max_done_id(0)
+        , max_done_clk(new vc::vclock_t(NUM_VTS, 0))
         , periodic_cond(&periodic_update_mutex)
         , load_count(0)
         , max_load_time(0)
