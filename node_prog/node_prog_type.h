@@ -29,7 +29,7 @@ namespace node_prog
         TRIANGLE_COUNT,
         DIJKSTRA,
         CLUSTERING,
-        READ_NODE_PROP
+        READ_NODE_PROPS
     };
 
     /*

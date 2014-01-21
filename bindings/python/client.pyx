@@ -104,6 +104,7 @@ cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
         TRIANGLE_COUNT
         DIJKSTRA
         CLUSTERING
+        READ_NODE_PROPS
 
 cdef extern from 'db/element/remote_node.h' namespace 'db::element':
     cdef cppclass remote_node:
@@ -194,6 +195,18 @@ class DijkstraParams:
         self.final_path = final_path
         self.cost = cost
         self.vt_id = vt_id
+
+cdef extern from 'node_prog/read_node_props_program.h' namespace 'node_prog':
+    cdef cppclass read_node_props_params:
+        vector[string] keys
+        uint64_t vt_id
+        vector[property] node_props
+
+class ReadNodePropsParams:
+    def __init__(self, keys = [], vt_id = 0, node_props = []):
+        self.keys = keys
+        self.vt_id = vt_id
+        self.node_props = node_props
 
 cdef extern from 'client/client.h' namespace 'client':
     cdef cppclass client:

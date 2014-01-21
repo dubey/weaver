@@ -12,8 +12,8 @@
  * ================================================================
  */
 
-#ifndef __READ_NODE_PROP_PROG__
-#define __READ_NODE_PROP_PROG__
+#ifndef __READ_NODE_PROPS_PROG__
+#define __READ_NODE_PROPS_PROG__
 
 #include <vector>
 #include <string>
@@ -26,7 +26,7 @@
 
 namespace node_prog
 {
-    class read_node_prop_params : public virtual Node_Parameters_Base 
+    class read_node_props_params : public virtual Node_Parameters_Base 
     {
         public:
             std::vector<std::string> keys; // empty vector means fetch all props
@@ -64,9 +64,9 @@ namespace node_prog
             }
     };
 
-    struct read_node_prop_state : public virtual Node_State_Base
+    struct read_node_props_state : public virtual Node_State_Base
     {
-        virtual ~read_node_prop_state() { }
+        virtual ~read_node_props_state() { }
 
         virtual uint64_t size() const
         {
@@ -84,9 +84,9 @@ namespace node_prog
         }
     };
 
-    struct read_node_prop_cache_value : public virtual Cache_Value_Base 
+    struct read_node_props_cache_value : public virtual Cache_Value_Base 
     {
-        virtual ~read_node_prop_cache_value() { }
+        virtual ~read_node_props_cache_value() { }
 
         virtual uint64_t size() const 
         {
@@ -104,19 +104,19 @@ namespace node_prog
         }
     };
 
-    std::vector<std::pair<db::element::remote_node, read_node_prop_params>> 
-    read_node_prop_node_program(uint64_t,
+    std::vector<std::pair<db::element::remote_node, read_node_props_params>> 
+    read_node_props_node_program(uint64_t,
             db::element::node &n,
             db::element::remote_node &,
-            read_node_prop_params &params,
-            std::function<read_node_prop_state&()>,
+            read_node_props_params &params,
+            std::function<read_node_props_state&()>,
             std::shared_ptr<vc::vclock> &req_vclock,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)
     {
         db::element::remote_node coord(params.vt_id, 1337);
-        std::vector<std::pair<db::element::remote_node, read_node_prop_params>> next;
+        std::vector<std::pair<db::element::remote_node, read_node_props_params>> next;
         next.emplace_back(std::make_pair(coord, std::move(params)));
 
         for (const common::property &prop : *n.get_props())
