@@ -45,6 +45,7 @@ namespace node_prog
             virtual uint64_t size() const 
             {
                 uint64_t toRet = message::size(keys)
+                    + message::size(vt_id)
                     + message::size(node_props);
                 return toRet;
             }

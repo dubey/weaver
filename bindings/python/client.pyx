@@ -223,6 +223,7 @@ cdef extern from 'client/client.h' namespace 'client':
         reach_params run_reach_program(vector[pair[uint64_t, reach_params]] initial_args)
         clustering_params run_clustering_program(vector[pair[uint64_t, clustering_params]] initial_args)
         dijkstra_params run_dijkstra_program(vector[pair[uint64_t, dijkstra_params]] initial_args)
+        read_node_props_params read_node_props_program(vector[pair[uint64_t, read_node_props_params]] initial_args)
         void start_migration()
         void single_stream_migration()
         void commit_graph()
@@ -300,6 +301,24 @@ cdef class Client:
             c_args.push_back(arg_pair)
         c_dp = self.thisptr.run_dijkstra_program(c_args)
         response = DijkstraParams(final_path=c_dp.final_path, cost=c_dp.cost)
+        return response
+    def read_node_props(self, init_args):
+        cdef vector[pair[uint64_t, read_node_props_params]] c_args
+        cdef pair[uint64_t, read_node_props_params] arg_pair
+        cdef property prop
+        for rp in init_args:
+            arg_pair.first = rp[0]
+            arg_pair.second.keys = rp[1].keys
+            arg_pair.second.vt_id = rp[1].vt_id
+            for p in rp[1].node_props:
+                prop.key = p[0].encode('UTF-8')
+                prop.value = p[1].encode('UTF-8')
+                arg_pair.second.node_props.push_back(prop)
+            c_args.push_back(arg_pair)
+
+        c_rp = self.thisptr.read_node_props_program(c_args)
+        response = ReadNodePropsParams()#node_props=c_rp.node_props) XXX
+
         return response
 
     def start_migration(self):

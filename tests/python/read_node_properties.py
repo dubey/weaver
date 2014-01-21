@@ -27,10 +27,16 @@ c = client.Client(client._CLIENT_ID, coord_id)
 
 tx_id = c.begin_tx()
 node_id = c.create_node(tx_id)
-c.set_edge_property(tx_id, node_id, 'color', 'blue')
+c.set_node_property(tx_id, node_id, 'color', 'blue')
 c.end_tx(tx_id)
 
 rp = client.ReadNodePropsParams(vt_id=coord_id)
 prog_args = [(node_id, rp)]
-response = c.run_reach_program(prog_args)
+response = c.read_node_props(prog_args)
+print response.node_props
+
+rp = client.ReadNodePropsParams(vt_id=coord_id)
+rp.keys = ['color']
+prog_args = [(node_id, rp)]
+response = c.read_node_props(prog_args)
 print response.node_props

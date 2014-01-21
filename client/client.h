@@ -58,6 +58,7 @@ namespace client
             node_prog::reach_params run_reach_program(std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args);
             node_prog::clustering_params run_clustering_program(std::vector<std::pair<uint64_t, node_prog::clustering_params>> initial_args);
             node_prog::dijkstra_params run_dijkstra_program(std::vector<std::pair<uint64_t, node_prog::dijkstra_params>> initial_args);
+            node_prog::read_node_props_params read_node_props_program(std::vector<std::pair<uint64_t, node_prog::read_node_props_params>> initial_args);
 
             void start_migration();
             void single_stream_migration();
@@ -253,6 +254,11 @@ namespace client
         return *run_node_program(node_prog::DIJKSTRA, initial_args);
     }
 
+    inline node_prog::read_node_props_params
+    client :: read_node_props_program(std::vector<std::pair<uint64_t, node_prog::read_node_props_params>> initial_args)
+    {
+        return *run_node_program(node_prog::READ_NODE_PROPS, initial_args);
+    }
 
     inline void
     client :: start_migration()
