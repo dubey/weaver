@@ -47,7 +47,6 @@ namespace element
             {
                 NASCENT = 0,
                 STABLE,
-                IN_TRANSIT,
                 MOVED
             };
         
@@ -96,7 +95,7 @@ namespace element
         , waiters(0)
         , permanently_deleted(false)
         , cached_req_ids(new std::vector<uint64_t>())
-        , new_loc(-1)
+        , new_loc(UINT64_MAX)
         , update_count(1)
         , migr_score(NUM_SHARDS, 0)
         , updated(true)

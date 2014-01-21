@@ -586,7 +586,7 @@ nop(void *noparg)
         S->shard_node_count[shrd] = nop_arg->shard_node_count[shrd];
     }
     S->migration_mutex.unlock();
-
+    
     // call appropriate function based on check
     if (check_move_migr) {
         migrate_node_step2_req();
@@ -595,6 +595,9 @@ nop(void *noparg)
     } else if (check_migr_step3) {
         migrate_node_step3();
     }
+
+    // initiate permanent deletion
+    S->permanent_delete_loop();
 
     // ack to VT
     message::prepare_message(msg, message::VT_NOP_ACK, shard_id, cur_node_count);
@@ -672,8 +675,7 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& handles, std::vec
     for (uint64_t handle : handles){
         db::element::node *node = S->acquire_node(handle);
         assert(node != NULL); // TODO could be garbage collected, or migrated but not completed?
-        if (node->state == db::element::node::mode::IN_TRANSIT
-                || node->state == db::element::node::mode::MOVED) {
+        if (node->state == db::element::node::mode::MOVED) {
             WDEBUG << "cache dont support this yet" << std::endl;
             assert(false);
         } else { // node exists
@@ -856,8 +858,7 @@ inline void node_prog_loop(
                     WDEBUG << "Buffering read for node " << node_handle << std::endl;
                     S->migration_mutex.unlock();
                 }
-            } else if (node->state == db::element::node::mode::IN_TRANSIT
-                    || node->state == db::element::node::mode::MOVED) {
+            } else if (node->state == db::element::node::mode::MOVED) {
                 // queueing/forwarding node program
                 std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> fwd_node_params;
                 fwd_node_params.emplace_back(handle_params);
@@ -1113,6 +1114,43 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     unpack_and_start_coord(std::unique_ptr<message::message>, uint64_t, int)
 { }
 
+// delete all in-edges for a permanently deleted node
+inline void
+update_deleted_node(void *node)
+{
+    uint64_t *node_handle = (uint64_t*)node;
+    std::unordered_set<uint64_t> nbrs;
+    db::element::node *n;
+    db::element::edge *e;
+    S->edge_map_mutex.lock();
+    if (S->edge_map.find(*node_handle) != S->edge_map.end()) {
+        nbrs = std::move(S->edge_map[*node_handle]);
+        S->edge_map.erase(*node_handle);
+    }
+    S->edge_map_mutex.unlock();
+
+    std::vector<uint64_t> to_del;
+    bool found;
+    for (uint64_t nbr: nbrs) {
+        n = S->acquire_node(nbr);
+        to_del.clear();
+        found = false;
+        for (auto &x: n->out_edges) {
+            e = x.second;
+            if (e->nbr.handle == *node_handle) {
+                delete e;
+                to_del.emplace_back(x.first);
+                found = true;
+            }
+        }
+        assert(found);
+        for (uint64_t del_edge: to_del) {
+            n->out_edges.erase(del_edge);
+        }
+        S->release_node(n);
+    }
+}
+
 inline uint64_t
 get_balanced_assignment(std::vector<uint64_t> &shard_node_count, std::vector<uint32_t> &max_indices)
 {
@@ -1131,7 +1169,7 @@ get_balanced_assignment(std::vector<uint64_t> &shard_node_count, std::vector<uin
 }
 
 // decide node migration shard based on migration score
-// mark node as "in transit" so that subsequent requests are queued up
+// mark node as "moved" so that subsequent requests are queued up
 // send migration information to coordinator mapper
 // return false if no migration happens (max migr score = this shard), else return true
 bool
@@ -1171,8 +1209,8 @@ migrate_node_step1(db::element::node *n, std::vector<uint64_t> &shard_node_count
     }
     S->migration_mutex.unlock();
 
-    // mark node as "in transit"
-    n->state = db::element::node::mode::IN_TRANSIT;
+    // mark node as "moved"
+    n->state = db::element::node::mode::MOVED;
     n->new_loc = migr_loc;
     S->migr_node = n->get_handle();
     S->migr_shard = migr_loc;
@@ -1333,7 +1371,6 @@ inline bool
 check_migr_node(db::element::node *n)
 {
     if (n == NULL || order::compare_two_clocks(n->get_del_time().clock, S->max_clk.clock) != 2 ||
-        n->state == db::element::node::mode::IN_TRANSIT ||
         n->state == db::element::node::mode::MOVED ||
         n->already_migr) {
         if (n != NULL) {
@@ -1576,6 +1613,15 @@ msgrecv_loop()
                 nop_arg->req_id = req_id;
                 thr = new db::thread::unstarted_thread(qts[shard_id-SHARD_ID_INCR], nop_arg->vclk, nop, (void*)nop_arg);
                 S->add_write_request(vt_id, thr);
+                rec_msg.reset(new message::message());
+                break;
+            }
+
+            case message::PERMANENTLY_DELETED_NODE: {
+                uint64_t *node = (uint64_t*)malloc(sizeof(uint64_t));
+                message::unpack_message(*rec_msg, mtype, *node);
+                thr = new db::thread::unstarted_thread(0, S->zero_clk, update_deleted_node, (void*)node);
+                S->add_read_request(rand() % NUM_VTS, thr);
                 rec_msg.reset(new message::message());
                 break;
             }

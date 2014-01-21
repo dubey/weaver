@@ -36,6 +36,7 @@
 #include "state/program_state.h"
 #include "threadpool/threadpool.h"
 #include "deferred_write.h"
+#include "del_obj.h"
 
 namespace std {
 // so we can use a pair as key to unordered_map TODO move me??
@@ -63,6 +64,22 @@ namespace db
             std::unique_ptr<message::message> msg;
     };
 
+    // for permanent deletion priority queue
+    struct perm_del_compare
+        : std::binary_function<del_obj*, del_obj*, bool>
+    {
+        bool operator()(const del_obj* const &dw1, const del_obj* const &dw2)
+        {
+            assert(dw1->vclk.clock.size() == NUM_VTS);
+            assert(dw2->vclk.clock.size() == NUM_VTS);
+            for (uint64_t i = 0; i < NUM_VTS; i++) {
+                if (dw1->vclk.clock[i] <= dw2->vclk.clock[i]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    };
 
     inline
     graph_request :: graph_request(enum message::msg_type mt, std::unique_ptr<message::message> m)
@@ -91,7 +108,8 @@ namespace db
 
             // Mutexes
             po6::threads::mutex update_mutex // shard update mutex
-                , edge_map_mutex;
+                , edge_map_mutex
+                , perm_del_mutex;
         private:
             po6::threads::mutex clock_mutex; // vector clock/queue timestamp mutex
         public:
@@ -148,7 +166,10 @@ namespace db
 
             // Permanent deletion
         public:
+            typedef std::priority_queue<del_obj*, std::vector<del_obj*>, perm_del_compare> del_queue_t;
+            del_queue_t perm_del_queue;
             void delete_migrated_node(uint64_t migr_node);
+            void permanent_delete_loop();
         private:
             void permanent_node_delete(element::node *n);
 
@@ -319,7 +340,6 @@ namespace db
             n->cv.signal();
             update_mutex.unlock();
         } else if (n->permanently_deleted) {
-            // TODO permanent deletion code check
             uint64_t node_handle = n->get_handle();
             nodes.erase(node_handle);
             node_list.erase(node_handle);
@@ -405,8 +425,11 @@ namespace db
         } else {
             delete_node_nonlocking(n, tdel);
             release_node(n);
+            // record object for permanent deletion later on
+            perm_del_mutex.lock();
+            perm_del_queue.emplace(new del_obj(message::NODE_DELETE_REQ, tdel, node_handle));
+            perm_del_mutex.unlock();
         }
-        // TODO permanent deletion
     }
 
     inline void
@@ -471,8 +494,11 @@ namespace db
         } else {
             delete_edge_nonlocking(n, edge_handle, tdel);
             release_node(n);
+            // record object for permanent deletion later on
+            perm_del_mutex.lock();
+            perm_del_queue.emplace(new del_obj(message::EDGE_DELETE_REQ, tdel, node_handle, edge_handle));
+            perm_del_mutex.unlock();
         }
-        // TODO permanent deletion
     }
 
     inline void
@@ -557,20 +583,74 @@ namespace db
     }
 
     inline void
+    shard :: permanent_delete_loop()
+    {
+        element::node *n;
+        del_obj *dobj;
+        perm_del_mutex.lock();
+        while (true) {
+            bool to_del = !perm_del_queue.empty();
+            for (uint64_t i = 0; (i < NUM_VTS) && to_del; i++) {
+                to_del = (order::compare_two_clocks(perm_del_queue.top()->vclk.clock, max_done_clk[i]) == 0);
+            }
+            if (!to_del) {
+                break;
+            }
+            WDEBUG << "perm deleting\n";
+            dobj = perm_del_queue.top();
+            switch (dobj->type) {
+                case message::NODE_DELETE_REQ:
+                    n = acquire_node(dobj->node);
+                    n->permanently_deleted = true;
+                    for (auto &e: n->out_edges) {
+                        uint64_t node = e.second->nbr.handle;
+                        assert(edge_map.find(node) != edge_map.end());
+                        auto &node_set = edge_map[node];
+                        node_set.erase(dobj->node);
+                        if (node_set.empty()) {
+                            edge_map.erase(node);
+                        }
+                    }
+                    release_node(n);
+                    break;
+
+                case message::EDGE_DELETE_REQ:
+                    n = acquire_node(dobj->node);
+                    assert(n->out_edges.find(dobj->edge) != n->out_edges.end());
+                    delete n->out_edges[dobj->edge];
+                    n->out_edges.erase(dobj->edge);
+                    release_node(n);
+                    break;
+
+                default:
+                    WDEBUG << "invalid type " << dobj->type << " in deleted object" << std::endl;
+            }
+            delete dobj;
+            perm_del_queue.pop();
+        }
+        perm_del_mutex.unlock();
+    }
+
+    inline void
     shard :: permanent_node_delete(element::node *n)
     {
-        element::edge *e;
         message::message msg;
         assert(n->waiters == 0);
         assert(!n->in_use);
-        // following loop is a no-op in case of deletion of
-        // migrated nodes, since edges have already been deleted
-        // TODO fix permanent deletion, no back-edges now
-        for (auto &it: n->out_edges) {
-            e = it.second;
-            message::prepare_message(msg, message::PERMANENT_DELETE_EDGE, e->nbr.handle, it.first);
-            send(e->nbr.loc, msg.buf);
-            delete e;
+        // send msg to each shard to delete incoming edges
+        // this happens lazily, and there could be dangling edges
+        // users should explicitly delete edges before nodes if the program requires
+        // this loop isn't executed in case of deletion of migrated nodes
+        if (n->state != element::node::mode::MOVED) {
+            for (uint64_t shard = SHARD_ID_INCR; shard < SHARD_ID_INCR + NUM_SHARDS; shard++) {
+                message::prepare_message(msg, message::PERMANENTLY_DELETED_NODE, n->get_handle());
+                send(shard, msg.buf);
+            }
+            for (auto &e: n->out_edges) {
+                delete e.second;
+            }
+            n->out_edges.clear();
+            prog_state.delete_node_state(n->get_handle());
         }
         delete n;
     }
@@ -590,9 +670,7 @@ namespace db
                 found = true;
             }
         }
-        if (!found) {
-            WDEBUG << "Neighbor not found for migrated node " << migr_node << std::endl;
-        }
+        assert(found);
     }
 
     inline void

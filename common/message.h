@@ -64,10 +64,9 @@ namespace message
         EDGE_CREATE_REQ,
         NODE_DELETE_REQ,
         EDGE_DELETE_REQ,
-        PERMANENT_DELETE_EDGE,
-        PERMANENT_DELETE_EDGE_ACK,
         NODE_SET_PROP,
         EDGE_SET_PROP,
+        PERMANENTLY_DELETED_NODE,
         // node program messages
         NODE_PROG,
         NODE_PROG_RETURN,
