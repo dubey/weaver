@@ -31,6 +31,7 @@
 #include "dijkstra_program.h"
 #include "reach_program.h"
 #include "read_node_props_program.h"
+#include "read_edges_props_program.h"
 //#include "triangle_program.h"
 //#include "n_hop_reach_program.h"
 #include "clustering_program.h"
@@ -169,7 +170,9 @@ namespace node_prog
         { CLUSTERING,
             new particular_node_program<node_prog::clustering_params, node_prog::clustering_node_state>(CLUSTERING, node_prog::clustering_node_program) },
         { READ_NODE_PROPS,
-            new particular_node_program<node_prog::read_node_props_params, node_prog::read_node_props_state>(READ_NODE_PROPS, node_prog::read_node_props_node_program) }
+            new particular_node_program<node_prog::read_node_props_params, node_prog::read_node_props_state>(READ_NODE_PROPS, node_prog::read_node_props_node_program) },
+        { READ_EDGES_PROPS,
+            new particular_node_program<node_prog::read_edges_props_params, node_prog::read_edges_props_state>(READ_EDGES_PROPS, node_prog::read_edges_props_node_program) }
     };
 }
 #endif //__NODE_PROG__

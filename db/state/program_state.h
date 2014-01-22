@@ -25,6 +25,7 @@
 #include "node_prog/dijkstra_program.h"
 #include "node_prog/clustering_program.h"
 #include "node_prog/read_node_props_program.h"
+#include "node_prog/read_edges_props_program.h"
 #include "common/message.h"
 
 namespace state
@@ -85,6 +86,7 @@ namespace state
         prog_state.emplace(node_prog::CLUSTERING, new_req_map);
         prog_state.emplace(node_prog::DIJKSTRA, new_req_map);
         prog_state.emplace(node_prog::READ_NODE_PROPS, new_req_map);
+        prog_state.emplace(node_prog::READ_EDGES_PROPS, new_req_map);
     }
 
     inline void
@@ -229,6 +231,12 @@ namespace state
                                 sz += cns->size();
                                 break;
                             }
+                            case node_prog::READ_EDGES_PROPS: {
+                                std::shared_ptr<node_prog::read_edges_props_state> cns =
+                                    std::dynamic_pointer_cast<node_prog::read_edges_props_state>(rmap.at(req_id)->at(node_handle));
+                                sz += cns->size();
+                                break;
+                            }
 
                             default:
                                 WDEBUG << "Bad type in program state size " << t.first << std::endl;
@@ -289,6 +297,13 @@ namespace state
                                 break;
                             }
 
+                            case node_prog::READ_EDGES_PROPS: {
+                                std::shared_ptr<node_prog::read_edges_props_state> cns =
+                                    std::dynamic_pointer_cast<node_prog::read_edges_props_state>(rmap.at(req_id)->at(node_handle));
+                                cns->pack(packer);
+                                break;
+                            }
+
                             default:
                                 WDEBUG << "Bad type in program state pack " << t.first << std::endl;
                         }
@@ -336,8 +351,16 @@ namespace state
                     new_entry = std::dynamic_pointer_cast<node_prog::Node_State_Base>(cns);
                     break;
                 }
+
                 case node_prog::READ_NODE_PROPS: {
                     std::shared_ptr<node_prog::read_node_props_state> cns(new node_prog::read_node_props_state());
+                    cns->unpack(unpacker);
+                    new_entry = std::dynamic_pointer_cast<node_prog::Node_State_Base>(cns);
+                    break;
+                }
+
+                case node_prog::READ_EDGES_PROPS: {
+                    std::shared_ptr<node_prog::read_edges_props_state> cns(new node_prog::read_edges_props_state());
                     cns->unpack(unpacker);
                     new_entry = std::dynamic_pointer_cast<node_prog::Node_State_Base>(cns);
                     break;
