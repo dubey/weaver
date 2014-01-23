@@ -105,6 +105,7 @@ cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
         DIJKSTRA
         CLUSTERING
         READ_NODE_PROPS
+        READ_EDGES_PROPS
 
 cdef extern from 'db/element/remote_node.h' namespace 'db::element':
     cdef cppclass remote_node:
@@ -208,6 +209,20 @@ class ReadNodePropsParams:
         self.vt_id = vt_id
         self.node_props = node_props
 
+cdef extern from 'node_prog/read_edges_props_program.h' namespace 'node_prog':
+    cdef cppclass read_edges_props_params:
+        vector[uint64_t] edges
+        vector[string] keys
+        uint64_t vt_id
+        vector[pair[uint64_t, vector[property]]] edges_props
+
+class ReadEdgesPropsParams:
+    def __init__(self, edges = [], keys = [], vt_id = 0, edges_props = []):
+        self.edges = edges
+        self.keys = keys
+        self.vt_id = vt_id
+        self.edges_props = edges_props
+
 cdef extern from 'client/client.h' namespace 'client':
     cdef cppclass client:
         client(uint64_t my_id, uint64_t vt_id)
@@ -224,6 +239,7 @@ cdef extern from 'client/client.h' namespace 'client':
         clustering_params run_clustering_program(vector[pair[uint64_t, clustering_params]] initial_args)
         dijkstra_params run_dijkstra_program(vector[pair[uint64_t, dijkstra_params]] initial_args)
         read_node_props_params read_node_props_program(vector[pair[uint64_t, read_node_props_params]] initial_args)
+        read_edges_props_params read_edges_props_program(vector[pair[uint64_t, read_edges_props_params]] initial_args)
         void start_migration()
         void single_stream_migration()
         void commit_graph()
@@ -310,14 +326,30 @@ cdef class Client:
             arg_pair.first = rp[0]
             arg_pair.second.keys = rp[1].keys
             arg_pair.second.vt_id = rp[1].vt_id
-            for p in rp[1].node_props:
-                prop.key = p[0].encode('UTF-8')
-                prop.value = p[1].encode('UTF-8')
-                arg_pair.second.node_props.push_back(prop)
+            #for p in rp[1].node_props:
+            #    prop.key = p[0].encode('UTF-8')
+            #    prop.value = p[1].encode('UTF-8')
+            #    arg_pair.second.node_props.push_back(prop)
             c_args.push_back(arg_pair)
 
         c_rp = self.thisptr.read_node_props_program(c_args)
         response = ReadNodePropsParams()#node_props=c_rp.node_props) XXX
+
+        return response
+
+    def read_edges_props(self, init_args):
+        cdef vector[pair[uint64_t, read_edges_props_params]] c_args
+        cdef pair[uint64_t, read_edges_props_params] arg_pair
+        cdef property prop
+        for rp in init_args:
+            arg_pair.first = rp[0]
+            #arg_pair.second.edges = rp[1].edges
+            arg_pair.second.keys = rp[1].keys
+            arg_pair.second.vt_id = rp[1].vt_id
+            c_args.push_back(arg_pair)
+
+        c_rp = self.thisptr.read_edges_props_program(c_args)
+        response = ReadEdgesPropsParams()#node_props=c_rp.node_props) XXX
 
         return response
 
