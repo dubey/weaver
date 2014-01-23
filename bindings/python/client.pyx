@@ -30,6 +30,7 @@ MAX_UINT64 = UINT64_MAX
 # end <stolen from Hyperdex/bindings/client.pyx>
 
 from libcpp.string cimport string
+from cython.operator cimport dereference as deref, preincrement as inc
 
 cdef extern from '<utility>' namespace 'std':
     cdef cppclass pair[T1, T2]:
@@ -42,7 +43,17 @@ cdef extern from '<memory>' namespace 'std':
 
 cdef extern from '<vector>' namespace 'std':
     cdef cppclass vector[T]:
-        void push_back(T& t)
+        cppclass iterator:
+            T operator*()
+            iterator operator++()
+            bint operator==(iterator)
+            bint operator!=(iterator)
+        vector()
+        void push_back(T&)
+        T& operator[](int)
+        T& at(int)
+        iterator begin()
+        iterator end()
 
 cdef extern from 'common/weaver_constants.h':
     # messaging constants
@@ -204,6 +215,7 @@ cdef extern from 'client/client.h' namespace 'client':
         void commit_graph()
         void exit_weaver()
         void print_msgcount()
+        vector[uint64_t] get_node_count()
 
 cdef class Client:
     cdef client *thisptr
@@ -287,3 +299,11 @@ cdef class Client:
         self.thisptr.exit_weaver()
     def print_msgcount(self):
         self.thisptr.print_msgcount()
+    def get_node_count(self):
+        cdef vector[uint64_t] node_count = self.thisptr.get_node_count()
+        count = []
+        cdef vector[uint64_t].iterator iter = node_count.begin()
+        while iter != node_count.end():
+            count.append(deref(iter))
+            inc(iter)
+        return count

@@ -81,10 +81,10 @@ namespace message
         MIGRATED_NBR_UPDATE,
         MIGRATED_NBR_ACK,
         MIGRATION_TOKEN,
-        REQUEST_COUNT,
-        REQUEST_COUNT_ACK,
         MSG_COUNT,
         CLIENT_MSG_COUNT,
+        CLIENT_NODE_COUNT,
+        NODE_COUNT_REPLY,
         // initial graph loading
         LOADED_GRAPH,
         // coordinator group

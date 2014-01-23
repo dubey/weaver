@@ -12,6 +12,7 @@
  * ===============================================================
  */
 
+
 namespace db
 {
     struct del_obj
@@ -19,6 +20,7 @@ namespace db
         enum message::msg_type type;
         vc::vclock vclk;
         uint64_t node, edge;
+        std::bitset<NUM_VTS> no_outstanding_progs;
 
         inline
         del_obj(enum message::msg_type t, vc::vclock &vc, uint64_t n, uint64_t e=0)

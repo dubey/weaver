@@ -528,7 +528,6 @@ nop(void *noparg)
     
     // increment qts
     S->increment_qts(nop_arg->vt_id, 1);
-    S->record_completed_tx(nop_arg->vt_id, nop_arg->req_id, nop_arg->vclk.clock);
     
     // note done progs for state clean up
     S->add_done_requests(nop_arg->done_reqs);
@@ -597,7 +596,10 @@ nop(void *noparg)
     }
 
     // initiate permanent deletion
-    S->permanent_delete_loop();
+    S->permanent_delete_loop(nop_arg->vt_id, nop_arg->outstanding_progs != 0);
+
+    // record clock; reads go through
+    S->record_completed_tx(nop_arg->vt_id, nop_arg->req_id, nop_arg->vclk.clock);
 
     // ack to VT
     message::prepare_message(msg, message::VT_NOP_ACK, shard_id, cur_node_count);
@@ -1606,7 +1608,8 @@ msgrecv_loop()
             case message::VT_NOP: {
                 db::nop_data *nop_arg = new db::nop_data();
                 message::unpack_message(*rec_msg, mtype, vt_id, nop_arg->vclk, qts, req_id,
-                    nop_arg->done_reqs, nop_arg->max_done_id, nop_arg->max_done_clk, nop_arg->shard_node_count);
+                    nop_arg->done_reqs, nop_arg->max_done_id, nop_arg->max_done_clk,
+                    nop_arg->outstanding_progs, nop_arg->shard_node_count);
                 assert(nop_arg->vclk.clock.size() == NUM_VTS);
                 assert(nop_arg->max_done_clk.size() == NUM_VTS);
                 nop_arg->vt_id = vt_id;

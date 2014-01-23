@@ -64,6 +64,7 @@ namespace client
             void commit_graph();
             void exit_weaver();
             void print_msgcount();
+            std::vector<uint64_t> get_node_count();
 
         private:
             void send_coord(std::auto_ptr<e::buffer> buf);
@@ -296,6 +297,21 @@ namespace client
         message::message msg;
         message::prepare_message(msg, message::CLIENT_MSG_COUNT);
         send_coord(msg.buf);
+    }
+
+    inline std::vector<uint64_t>
+    client :: get_node_count()
+    {
+        message::message msg;
+        message::prepare_message(msg, message::CLIENT_NODE_COUNT);
+        send_coord(msg.buf);
+
+        if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
+            WDEBUG << "node count return msg fail" << std::endl;
+        }
+        std::vector<uint64_t> node_count;
+        message::unpack_message(msg, message::NODE_COUNT_REPLY, node_count);
+        return node_count;
     }
 
     inline void

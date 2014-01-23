@@ -169,7 +169,7 @@ namespace db
             typedef std::priority_queue<del_obj*, std::vector<del_obj*>, perm_del_compare> del_queue_t;
             del_queue_t perm_del_queue;
             void delete_migrated_node(uint64_t migr_node);
-            void permanent_delete_loop();
+            void permanent_delete_loop(uint64_t vt_id, bool outstanding_progs);
         private:
             void permanent_node_delete(element::node *n);
 
@@ -583,21 +583,28 @@ namespace db
     }
 
     inline void
-    shard :: permanent_delete_loop()
+    shard :: permanent_delete_loop(uint64_t vt_id, bool outstanding_progs)
     {
         element::node *n;
         del_obj *dobj;
         perm_del_mutex.lock();
         while (true) {
             bool to_del = !perm_del_queue.empty();
-            for (uint64_t i = 0; (i < NUM_VTS) && to_del; i++) {
-                to_del = (order::compare_two_clocks(perm_del_queue.top()->vclk.clock, max_done_clk[i]) == 0);
+            if (to_del) {
+                dobj = perm_del_queue.top();
+                if (!outstanding_progs) {
+                    dobj->no_outstanding_progs.set(vt_id);
+                }
+                // if all VTs have no outstanding node progs, then everything can be permanently deleted
+                if (!dobj->no_outstanding_progs.all()) {
+                    for (uint64_t i = 0; (i < NUM_VTS) && to_del; i++) {
+                        to_del = (order::compare_two_clocks(dobj->vclk.clock, max_done_clk[i]) == 0);
+                    }
+                }
             }
             if (!to_del) {
                 break;
             }
-            WDEBUG << "perm deleting\n";
-            dobj = perm_del_queue.top();
             switch (dobj->type) {
                 case message::NODE_DELETE_REQ:
                     n = acquire_node(dobj->node);
@@ -627,6 +634,14 @@ namespace db
             }
             delete dobj;
             perm_del_queue.pop();
+        }
+        if (!outstanding_progs) {
+            auto copy_del_queue = perm_del_queue;
+            while (!copy_del_queue.empty()) {
+                dobj = copy_del_queue.top();
+                dobj->no_outstanding_progs.set(vt_id);
+                copy_del_queue.pop();
+            }
         }
         perm_del_mutex.unlock();
     }

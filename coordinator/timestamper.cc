@@ -104,6 +104,7 @@ timer_function()
     vc::qtimestamp_t qts;
     uint64_t req_id, max_done_id;
     vc::vclock_t max_done_clk;
+    uint64_t num_outstanding_progs;
     typedef std::vector<std::pair<uint64_t, node_prog::prog_type>> done_req_t;
     std::vector<done_req_t> done_reqs(NUM_SHARDS, done_req_t());
     std::vector<uint64_t> del_done_reqs;
@@ -129,6 +130,7 @@ timer_function()
             req_id = vts->generate_id();
             max_done_id = vts->max_done_id;
             max_done_clk = *vts->max_done_clk;
+            num_outstanding_progs = vts->outstanding_req_ids.size();
             del_done_reqs.clear();
             for (uint64_t shard_id = 0; shard_id < NUM_SHARDS; shard_id++) {
                 if (vts->to_nop[shard_id]) {
@@ -165,7 +167,8 @@ timer_function()
                     assert(max_done_clk.size() == NUM_VTS);
                     assert(vt_id == 0);
                     message::prepare_message(msg, message::VT_NOP, vt_id, vclk, qts, req_id,
-                        done_reqs[shard_id], max_done_id, max_done_clk, vts->shard_node_count);
+                        done_reqs[shard_id], max_done_id, max_done_clk,
+                        num_outstanding_progs, vts->shard_node_count);
                     vts->send(shard_id + SHARD_ID_INCR, msg.buf);
                 }
             }
@@ -363,9 +366,7 @@ server_loop(int thread_id)
                     vts->clock_update_acks++;
                     assert(vts->clock_update_acks < NUM_VTS);
                     WDEBUG << "vclk update signal\n";
-                    //vts->periodic_cond.signal();
                     vts->periodic_update_mutex.unlock();
-                    //periodic_update();
                     break;
 
                 case message::VT_NOP_ACK: {
@@ -374,10 +375,8 @@ server_loop(int thread_id)
                     vts->periodic_update_mutex.lock();
                     vts->shard_node_count[sender - SHARD_ID_INCR] = shard_node_count;
                     vts->to_nop.set(sender - SHARD_ID_INCR);
-                    //vts->periodic_cond.signal();
                     WDEBUG << "nop signal from shard " << sender << std::endl;
                     vts->periodic_update_mutex.unlock();
-                    //nop(sender);
                     break;
                 }
 
@@ -389,6 +388,14 @@ server_loop(int thread_id)
                         message::prepare_message(*msg, message::MSG_COUNT, vt_id);
                         vts->send(i, msg->buf);
                     }
+                    break;
+                }
+
+                case message::CLIENT_NODE_COUNT: {
+                    vts->periodic_update_mutex.lock();
+                    message::prepare_message(*msg, message::NODE_COUNT_REPLY, vts->shard_node_count);
+                    vts->periodic_update_mutex.unlock();
+                    vts->send(sender, msg->buf);
                     break;
                 }
 

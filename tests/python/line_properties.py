@@ -47,6 +47,11 @@ for i in range(num_nodes-1):
 c.end_tx(tx_id)
 print 'Created graph\n'
 
+node_count = c.get_node_count()
+print 'Node count:'
+for cnt in node_count:
+    print str(cnt)
+
 print 'Now testing without edge props'
 line_requests([], num_nodes-1)
 
