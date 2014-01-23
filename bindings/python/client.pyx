@@ -326,15 +326,13 @@ cdef class Client:
             arg_pair.first = rp[0]
             arg_pair.second.keys = rp[1].keys
             arg_pair.second.vt_id = rp[1].vt_id
-            #for p in rp[1].node_props:
-            #    prop.key = p[0].encode('UTF-8')
-            #    prop.value = p[1].encode('UTF-8')
-            #    arg_pair.second.node_props.push_back(prop)
             c_args.push_back(arg_pair)
 
         c_rp = self.thisptr.read_node_props_program(c_args)
-        response = ReadNodePropsParams()#node_props=c_rp.node_props) XXX
-
+        response = ReadNodePropsParams(node_props=[])
+        assert(len(response.node_props) == 0)
+        for c_prop in c_rp.node_props:
+            response.node_props.append((c_prop.key, c_prop.value))
         return response
 
     def read_edges_props(self, init_args):

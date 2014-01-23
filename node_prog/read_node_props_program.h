@@ -119,10 +119,11 @@ namespace node_prog
         db::element::remote_node coord(params.vt_id, 1337);
         std::vector<std::pair<db::element::remote_node, read_node_props_params>> next;
         next.emplace_back(std::make_pair(coord, std::move(params)));
+        std::vector<std::string> &keys = next[0].second.keys; // because of std::move above
 
         for (const common::property &prop : *n.get_props())
         {
-            bool key_match = params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.key) != params.keys.end());
+            bool key_match = keys.empty() || (std::find(keys.begin(), keys.end(), prop.key) != keys.end());
             if (key_match && order::clock_creat_before_del_after(*req_vclock, prop.get_creat_time(), prop.get_del_time()))
             {
                 next[0].second.node_props.emplace_back(prop);

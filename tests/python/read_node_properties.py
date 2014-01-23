@@ -28,15 +28,27 @@ c = client.Client(client._CLIENT_ID, coord_id)
 tx_id = c.begin_tx()
 node_id = c.create_node(tx_id)
 c.set_node_property(tx_id, node_id, 'color', 'blue')
+c.set_node_property(tx_id, node_id, 'size', '27')
 c.end_tx(tx_id)
 
 rp = client.ReadNodePropsParams(vt_id=coord_id)
 prog_args = [(node_id, rp)]
 response = c.read_node_props(prog_args)
-print response.node_props
+print "All pairs: " + str(response.node_props)
 
 rp = client.ReadNodePropsParams(vt_id=coord_id)
 rp.keys = ['color']
 prog_args = [(node_id, rp)]
 response = c.read_node_props(prog_args)
-print response.node_props
+print "Only lookup color : " + str(response.node_props)
+
+tx_id = c.begin_tx()
+c.set_node_property(tx_id, node_id, 'age', '37')
+c.end_tx(tx_id)
+print "adding 'age' property"
+
+rp = client.ReadNodePropsParams(vt_id=coord_id)
+rp.keys = ['size', 'age']
+prog_args = [(node_id, rp)]
+response = c.read_node_props(prog_args)
+print "Lookup size, age : " + str(response.node_props)
