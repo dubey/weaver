@@ -18,6 +18,21 @@ Clean up, tackle TODO/XXX.
 Analytics API - global requests
     Find out why triangle counting is slow.
 
+
+GREG TODO BEFORE A RELEASE
+
+clean up node program interface
+    special exposed node/edge objects
+    no timestamps
+
+allow clients to dynamically load node_program code
+    dynamically generate python bindings?
+
+Write-up 'how to make a node program'
+
+Indexing? (later)
+
+
 BUGS
 line_properties.py speeds up with 2 timestampers and 2 shards if nop/vclk update couts are turned on.
 -
