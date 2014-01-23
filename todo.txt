@@ -11,6 +11,7 @@ Migration experiments.
 TODO
 Test serializability of transactions.
 Permanent deletion.
+    Extensive testing needed.
 Fault tolerant (chain replicated) coordinator and shards.
 Clean up, tackle TODO/XXX.
         migrate_step 2 & 3 - rename, optimize (batch?)
