@@ -140,28 +140,24 @@ namespace node_prog
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)
     {
-        db::element::remote_node coord(params.vt_id, 1337);
-        std::vector<std::pair<db::element::remote_node, read_edges_props_params>> next;
-        next.emplace_back(std::make_pair(coord, std::move(params)));
-        std::vector<std::string> &keys = next[0].second.keys; // because of std::move above
-
         if (params.edges.empty()) {
             for (auto &edge_pair : n.out_edges)
             {
-                record_desired_props(edge_pair.second, keys, *req_vclock, next[0].second.edges_props);
+                record_desired_props(edge_pair.second, params.keys, *req_vclock, params.edges_props);
             }
         } else {
-            for(uint64_t edge_handle : next[0].second.edges)
+            for(uint64_t edge_handle : params.edges)
             {
                 auto edge_iter = n.out_edges.find(edge_handle);
                 if (edge_iter == n.out_edges.end()){
                     WDEBUG << "edge handle didnt exist in edge prop read program" << std::endl;
                 } else {
-                    record_desired_props(edge_iter->second, keys, *req_vclock, next[0].second.edges_props);
+                    record_desired_props(edge_iter->second, params.keys, *req_vclock, params.edges_props);
                 }
             }
         }
-        return next;
+
+        return {std::make_pair(db::element::remote_node(params.vt_id, 1337), std::move(params))}; // initializer list of vector
     }
 }
 

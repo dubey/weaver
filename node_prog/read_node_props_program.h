@@ -125,8 +125,7 @@ namespace node_prog
             }
         }
 
-        db::element::remote_node coord(params.vt_id, 1337);
-        return {std::make_pair(coord, std::move(params))}; // initializer list of vector
+        return {std::make_pair(db::element::remote_node(params.vt_id, 1337), std::move(params))}; // initializer list of vector
     }
 }
 

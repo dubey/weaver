@@ -18,10 +18,6 @@ sys.path.append('../../bindings/python')
 
 import client
 
-# creating line graph
-nodes = []
-edges = []
-num_nodes = 200
 coord_id = 0
 c = client.Client(client._CLIENT_ID, coord_id)
 
@@ -56,7 +52,26 @@ assert(('age', '37') in response.node_props and ('size', '27') in response.node_
 
 
 # adding edges, edge properites
+
+tx_id = c.begin_tx()
 neighbors = []
+neighbors.append(c.create_node(tx_id))
+neighbors.append(c.create_node(tx_id))
+neighbors.append(c.create_node(tx_id))
+edges = []
+edges.append(c.create_edge(tx_id, node_id, neighbors[0]))
+edges.append(c.create_edge(tx_id, node_id, neighbors[1]))
+edges.append(c.create_edge(tx_id, node_id, neighbors[2]))
+c.set_edge_property(tx_id, node_id, edges[0], 'created', '1')
+c.set_edge_property(tx_id, node_id, edges[1], 'created', '2')
+c.set_edge_property(tx_id, node_id, edges[2], 'created', '3')
+c.set_edge_property(tx_id, node_id, edges[0], 'cost', '7')
+c.set_edge_property(tx_id, node_id, edges[1], 'cost', '8')
+c.set_edge_property(tx_id, node_id, edges[2], 'cost', '9')
+c.end_tx(tx_id)
 
 # reading edge properties
-neighbors = []
+rp = client.ReadEdgesPropsParams(vt_id=coord_id)
+prog_args = [(node_id, rp)]
+response = c.read_edges_props(prog_args)
+print response.edges_props

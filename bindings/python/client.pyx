@@ -347,7 +347,14 @@ cdef class Client:
             c_args.push_back(arg_pair)
 
         c_rp = self.thisptr.read_edges_props_program(c_args)
-        response = ReadEdgesPropsParams()#node_props=c_rp.node_props) XXX
+        response = ReadEdgesPropsParams()
+        assert(len(response.edges_props) == 0)
+        for c_pair in c_rp.edges_props:
+            edge_props_pair = (c_pair.first, [])
+            for c_prop in c_pair.second:
+                edge_props_pair[1].append((c_prop.key, c_prop.value))
+
+            response.edges_props.append(edge_props_pair)
 
         return response
 
