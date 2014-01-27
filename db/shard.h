@@ -505,7 +505,7 @@ namespace db
     shard :: set_node_property_nonlocking(element::node *n,
             std::string &key, std::string &value, vc::vclock &vclk)
     {
-        common::property p(key, value, vclk);
+        db::element::property p(key, value, vclk);
         n->check_and_add_property(p);
     }
 
@@ -533,7 +533,7 @@ namespace db
             std::string &key, std::string &value, vc::vclock &vclk)
     {
         db::element::edge *e = n->out_edges[edge_handle];
-        common::property p(key, value, vclk);
+        db::element::property p(key, value, vclk);
         e->check_and_add_property(p);
     }
 

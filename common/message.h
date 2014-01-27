@@ -25,7 +25,6 @@
 #include <busybee_constants.h>
 
 #include "common/weaver_constants.h"
-#include "common/property.h"
 #include "common/meta_element.h"
 #include "common/vclock.h"
 #include "common/transaction.h"
@@ -33,6 +32,7 @@
 #include "db/element/node.h"
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
+#include "db/element/property.h"
 
 namespace message
 {
@@ -242,7 +242,7 @@ namespace message
         return size(t.vt_id)
             + size(t.clock);
     }
-    inline uint64_t size(const common::property &t)
+    inline uint64_t size(const db::element::property &t)
     {
         return size(t.key)
             + size(t.value)
@@ -431,7 +431,7 @@ namespace message
     }
 
     inline void 
-    pack_buffer(e::buffer::packer &packer, const common::property &t)
+    pack_buffer(e::buffer::packer &packer, const db::element::property &t)
     {
         pack_buffer(packer, t.key);
         pack_buffer(packer, t.value);
@@ -707,7 +707,7 @@ namespace message
     }
 
     inline void 
-    unpack_buffer(e::unpacker &unpacker, common::property &t)
+    unpack_buffer(e::unpacker &unpacker, db::element::property &t)
     {
         unpack_buffer(unpacker, t.key);
         unpack_buffer(unpacker, t.value);

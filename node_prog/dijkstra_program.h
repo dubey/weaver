@@ -82,7 +82,7 @@ namespace node_prog
             db::element::remote_node source_node;
             uint64_t dst_handle;
             std::string edge_weight_name; // the name of the property which holds the weight of an an edge
-            std::vector<common::property> edge_props;
+            std::vector<db::element::property> edge_props;
             bool is_widest_path;
             bool adding_nodes;
             uint64_t prev_node;

@@ -36,7 +36,7 @@ namespace node_prog
             bool mode; // false = request, true = reply
             db::element::remote_node prev_node;
             uint64_t dest;
-            std::vector<common::property> edge_props;
+            std::vector<db::element::property> edge_props;
             uint32_t hops;
             bool reachable;
             std::vector<db::element::remote_node> path;

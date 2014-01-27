@@ -20,7 +20,9 @@
 #include "common/weaver_constants.h"
 #include "common/vclock.h"
 
-namespace common 
+namespace db
+{
+namespace element
 {
     class property
     {
@@ -124,19 +126,20 @@ namespace common
         del_time = tdel;
     }
 }
+}
 
 namespace std
 {
     template <>
-    struct hash<common::property> 
+    struct hash<db::element::property> 
     {
         private:
             std::function<size_t(const std::string&)> string_hasher;
 
         public:
-            hash<common::property>() : string_hasher(std::hash<std::string>()) { }
+            hash<db::element::property>() : string_hasher(std::hash<std::string>()) { }
 
-            size_t operator()(const common::property &p) const throw() 
+            size_t operator()(const db::element::property &p) const throw() 
             {
                 size_t hkey = string_hasher(p.key);
                 size_t hvalue = string_hasher(p.value);

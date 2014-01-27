@@ -21,11 +21,11 @@
 #include <string.h>
 
 #include "common/weaver_constants.h"
-#include "common/property.h"
+#include "property.h"
 #include "common/event_order.h"
 
 bool
-check_remove_prop(std::string &key, vc::vclock &vclk, common::property &prop)
+check_remove_prop(std::string &key, vc::vclock &vclk, db::element::property &prop)
 {
     if (prop.key == key) {
         if (order::compare_two_vts(vclk, prop.get_del_time()) >= 1) {
@@ -47,7 +47,7 @@ namespace element
             
         protected:
             uint64_t handle;
-            std::vector<common::property> properties;
+            std::vector<property> properties;
             vc::vclock creat_time;
             vc::vclock del_time;
 
@@ -55,18 +55,18 @@ namespace element
             static vc::vclock static_del_time;
 
         public:
-            void add_property(common::property prop);
+            void add_property(property prop);
             void delete_property(std::string &key, vc::vclock &tdel);
             void remove_property(std::string &key, vc::vclock &vclk);
-            bool has_property(common::property &prop, vc::vclock &vclk);
-            bool check_and_add_property(common::property prop);
-            void set_properties(std::vector<common::property> &props);
+            bool has_property(property &prop, vc::vclock &vclk);
+            bool check_and_add_property(property prop);
+            void set_properties(std::vector<property> &props);
             void update_del_time(vc::vclock &del_time);
             void update_creat_time(vc::vclock &creat_time);
             const vc::vclock& get_creat_time() const;
             const vc::vclock& get_del_time() const;
             std::pair<bool, std::string> get_property_value(std::string prop_key, vc::vclock &at_time);
-            const std::vector<common::property>* get_props() const;
+            const std::vector<property>* get_props() const;
             void set_handle(uint64_t handle);
             uint64_t get_handle() const;
     };
@@ -80,7 +80,7 @@ namespace element
     { }
 
     inline void
-    element :: add_property(common::property prop)
+    element :: add_property(property prop)
     {
         properties.push_back(prop);
     }
@@ -101,14 +101,14 @@ namespace element
     {
         auto iter = std::remove_if(properties.begin(), properties.end(),
                 // lambda function to check if property can be removed
-                [&key, &vclk](common::property &prop) {
+                [&key, &vclk](property &prop) {
                     return check_remove_prop(key, vclk, prop);
                 });
         properties.erase(iter, properties.end());
     }
 
     inline bool
-    element :: has_property(common::property &prop, vc::vclock &vclk)
+    element :: has_property(property &prop, vc::vclock &vclk)
     {
         for (auto &p: properties) {
             if (prop == p) {
@@ -126,7 +126,7 @@ namespace element
 
     // if property with same key-value does not exist, add it
     bool
-    element :: check_and_add_property(common::property prop)
+    element :: check_and_add_property(property prop)
     {
         for (auto &iter: properties) {
             if (prop == iter) {
@@ -138,7 +138,7 @@ namespace element
     }
 
     inline void
-    element :: set_properties(std::vector<common::property> &props)
+    element :: set_properties(std::vector<property> &props)
     {
         properties = props;
     }
@@ -167,7 +167,7 @@ namespace element
         return del_time;
     }
 
-    inline const std::vector<common::property>*
+    inline const std::vector<property>*
     element :: get_props() const
     {
         return &properties;
@@ -177,7 +177,7 @@ namespace element
     std::pair<bool, std::string>
     element :: get_property_value(std::string prop_key, vc::vclock &at_time)
     {
-        for (common::property& prop : properties)
+        for (property& prop : properties)
         {
             const vc::vclock& vclk_creat = prop.get_creat_time();
             const vc::vclock& vclk_del = prop.get_del_time();

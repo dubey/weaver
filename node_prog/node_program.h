@@ -21,11 +21,11 @@
 #include <po6/threads/mutex.h>
 
 #include "common/weaver_constants.h"
-#include "common/property.h"
 #include "common/meta_element.h"
 #include "db/element/node.h"
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
+#include "db/element/property.h"
 
 #include "node_prog_type.h"
 #include "dijkstra_program.h"

@@ -84,7 +84,7 @@ namespace message
     {
         uint64_t handle;
         vc::vclock creat_time, del_time;
-        std::vector<common::property> props;
+        std::vector<db::element::property> props;
 
         unpacker = unpacker >> handle;
         t.set_handle(handle);
@@ -116,7 +116,7 @@ namespace message
     {
         uint64_t handle;
         vc::vclock creat_time, del_time;
-        std::vector<common::property> props;
+        std::vector<db::element::property> props;
         unpacker = unpacker >> handle;
         unpack_buffer(unpacker, creat_time);
         unpack_buffer(unpacker, del_time);

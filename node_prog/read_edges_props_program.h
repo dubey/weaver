@@ -32,7 +32,7 @@ namespace node_prog
             std::vector<uint64_t> edges; // empty vector means fetch props for all edges
             std::vector<std::string> keys; // empty vector means fetch all props
             uint64_t vt_id;
-            std::vector<std::pair<uint64_t, std::vector<common::property>>> edges_props;
+            std::vector<std::pair<uint64_t, std::vector<db::element::property>>> edges_props;
 
         public:
             virtual bool search_cache() {
@@ -111,11 +111,11 @@ namespace node_prog
 
     inline void
     record_desired_props(db::element::edge *edge, std::vector<std::string> &keys, vc::vclock &req_vclock,
-            std::vector<std::pair<uint64_t, std::vector<common::property>>> &add_to)
+            std::vector<std::pair<uint64_t, std::vector<db::element::property>>> &add_to)
     {
-            std::vector<common::property> matching_edge_props;
+            std::vector<db::element::property> matching_edge_props;
 
-            for (const common::property &prop : *edge->get_props())
+            for (const db::element::property &prop : *edge->get_props())
             {
                 bool key_match = keys.empty() || (std::find(keys.begin(), keys.end(), prop.key) != keys.end());
                 if (key_match && order::clock_creat_before_del_after(req_vclock, prop.get_creat_time(), prop.get_del_time()))
