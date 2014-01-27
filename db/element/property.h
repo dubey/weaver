@@ -38,6 +38,9 @@ namespace element
             vc::vclock del_time;
 
         public:
+            const std::string& get_key();
+            const std::string& get_value();
+
             bool operator==(property const &p2) const;
 
         public:
@@ -68,6 +71,18 @@ namespace element
         , creat_time(creat)
         , del_time(MAX_UINT64, MAX_UINT64)
     { }
+
+    inline const std::string&
+    property :: get_key()
+    {
+        return key;
+    }
+
+    inline const std::string&
+    property :: get_value()
+    {
+        return value;
+    }
 
     inline bool
     property :: operator==(property const &p2) const

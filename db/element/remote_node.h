@@ -27,6 +27,7 @@ namespace element
         public:
             uint64_t loc;
             uint64_t handle;
+            uint64_t get_id();
             bool operator==(const db::element::remote_node &t) const;
             bool operator!=(const db::element::remote_node &t) const;
     };
@@ -38,6 +39,12 @@ namespace element
     { }
 
     inline remote_node :: remote_node() { }
+
+    inline uint64_t 
+    remote_node :: get_id()
+    {
+        return handle;
+    }
 
     inline bool
     remote_node :: operator==(const db::element::remote_node &t) const
