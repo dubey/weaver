@@ -111,7 +111,7 @@ timer_function()
     message::message msg;
     bool nop_sent;
 
-    sleep_time.tv_sec =  VT_TIMEOUT_NANO / VT_NANO;
+    sleep_time.tv_sec  = VT_TIMEOUT_NANO / VT_NANO;
     sleep_time.tv_nsec = VT_TIMEOUT_NANO % VT_NANO;
 
     while (true) {
@@ -325,11 +325,6 @@ server_loop(int thread_id)
         if (ret != BUSYBEE_SUCCESS && ret != BUSYBEE_TIMEOUT) {
             WDEBUG << "msg recv error: " << ret << std::endl;
             continue;
-        /*
-        } else if (ret == BUSYBEE_TIMEOUT) {
-            periodic_update();
-            continue;
-        */
         } else {
             // good to go, unpack msg
             uint64_t _size;

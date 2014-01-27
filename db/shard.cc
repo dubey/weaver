@@ -841,7 +841,6 @@ inline void node_prog_loop(
             node_handle = std::get<0>(handle_params);
             ParamsType& params = std::get<1>(handle_params);
             this_node.handle = node_handle;
-            // TODO maybe use a try-lock later so forward progress can continue on other nodes in list
             db::element::node *node = S->acquire_node(node_handle);
             if (node == NULL || order::compare_two_vts(node->get_del_time(), *np.req_vclock)==0) { // TODO: TIMESTAMP
                 if (node != NULL) {
@@ -1019,7 +1018,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         assert(fstate->prog_state.cache_value); // cache value should exist
         node_prog_loop<ParamsType, NodeStateType>(enclosed_node_prog_func, fstate->prog_state);
         fstate->counter_mutex.unlock();
-        //WDEBUG << "deleting lookup pair for node: " << lookup_pair.second << std::endl;
         //remove from map
         S->node_prog_running_states_mutex.lock();
         size_t num_erased = S->node_prog_running_states.erase(lookup_pair);
@@ -1045,7 +1043,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         assert(np.req_vclock->clock.size() == NUM_VTS);
     } catch (std::bad_alloc& ba) {
         WDEBUG << "bad_alloc caught " << ba.what() << std::endl;
-        assert(false); // TODO better way to do this?
+        assert(false);
         return;
     }
     

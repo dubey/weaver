@@ -784,21 +784,17 @@ namespace db
     }
 
     inline thread::unstarted_thread*
-    get_read_thr(std::vector<thread::pqueue_t> &read_queues,
-        std::vector<uint64_t> &last_ids, std::vector<vc::vclock_t> &last_clocks)
+    get_read_thr(std::vector<thread::pqueue_t> &read_queues, std::vector<vc::vclock_t> &last_clocks)
     {
         thread::unstarted_thread* thr;
         bool can_exec;
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
             thread::pqueue_t &pq = read_queues.at(vt_id);
             // execute read request after all write queues have processed write which happens after this read
-            if (!pq.empty() && pq.top()->priority < last_ids[vt_id]) {
+            if (!pq.empty()) {
                 can_exec = true;
                 thr = pq.top();
                 for (uint64_t write_vt = 0; write_vt < NUM_VTS; write_vt++) {
-                    if (write_vt == vt_id) {
-                        continue;
-                    }
                     if (order::compare_two_clocks(thr->vclock.clock, last_clocks[write_vt]) != 0) {
                         can_exec = false;
                         break;
@@ -852,7 +848,7 @@ namespace db
     inline thread::unstarted_thread*
     get_read_or_write(thread::pool *tpool)
     {
-        thread::unstarted_thread *thr = get_read_thr(tpool->read_queues, tpool->last_ids, tpool->last_clocks);
+        thread::unstarted_thread *thr = get_read_thr(tpool->read_queues, tpool->last_clocks);
         if (thr == NULL) {
             thr = get_write_thr(tpool);
         }
