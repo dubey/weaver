@@ -71,9 +71,9 @@ namespace nmap
                 return;
             }
             i++;
-            if (i % num_div10 == 0) {
-                WDEBUG << "Put map completed " << i << " puts" << std::endl;
-            }
+            //if (i % num_div10 == 0) {
+            //    WDEBUG << "Put map completed " << i << " puts" << std::endl;
+            //}
         }
 
         hyperdex_client_returncode loop_status;
@@ -86,9 +86,9 @@ namespace nmap
                 free(attrs_to_add);
                 return;
             }
-            if (i % num_div10 == 0) {
-                WDEBUG << "LOOP in Put map completed " << i << " loops" << std::endl;
-            }
+            //if (i % num_div10 == 0) {
+            //    WDEBUG << "LOOP in Put map completed " << i << " loops" << std::endl;
+            //}
         }
         free(attrs_to_add);
     }

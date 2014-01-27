@@ -360,7 +360,7 @@ server_loop(int thread_id)
                     vts->periodic_update_mutex.lock();
                     vts->clock_update_acks++;
                     assert(vts->clock_update_acks < NUM_VTS);
-                    WDEBUG << "vclk update signal\n";
+                    //WDEBUG << "vclk update signal\n";
                     vts->periodic_update_mutex.unlock();
                     break;
 
@@ -370,7 +370,7 @@ server_loop(int thread_id)
                     vts->periodic_update_mutex.lock();
                     vts->shard_node_count[sender - SHARD_ID_INCR] = shard_node_count;
                     vts->to_nop.set(sender - SHARD_ID_INCR);
-                    WDEBUG << "nop signal from shard " << sender << std::endl;
+                    //WDEBUG << "nop signal from shard " << sender << std::endl;
                     vts->periodic_update_mutex.unlock();
                     break;
                 }
