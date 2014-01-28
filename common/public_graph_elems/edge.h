@@ -41,7 +41,7 @@ namespace common
 
         bool operator==(const prop_iter& rhs) {return cur==rhs.cur && req_time == rhs.req_time;} // TODO == for req time?
         bool operator!=(const prop_iter& rhs) {return cur!=rhs.cur || req_time != rhs.req_time;} // TODO == for req time?
-        prop& operator*() {return *cur;}
+        prop& operator*() {return (property) *cur;}
     };
 
     class edge 
@@ -54,7 +54,6 @@ namespace common
         edge(db::element::edge& base, vc::vclock& time);
 
         node_ptr get_neighbor() { return (node_ptr) base.nbr;};
-        //TODO get props (make template for interator of things that have create and del times and use that for edges, props)
         props_iter get_prop_iter(){ return props_iter(base.get_props(), req_time);};
 }
 

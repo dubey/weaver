@@ -13,11 +13,11 @@
 #include <iterator>
 #include <vector>
 #include <unordered_map>
-#include <unordered_set>
 
 #include "edge.h"
 #include "property.h"
 #include "db/element/node.h"
+#include "db/element/edge.h"
 
 namespace common
 {
