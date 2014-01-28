@@ -1,76 +1,61 @@
 /*
  * ===============================================================
- *    Description:  Graph edge class 
- *
- *        Created:  Tuesday 16 October 2012 02:28:29  EDT
- *
- *         Author:  Ayush Dubey, dubey@cs.cornell.edu
- * 
  * Copyright (C) 2013, Cornell University, see the LICENSE file
  *                     for licensing agreement
  * ===============================================================
  */
 
-#ifndef __EDGE__
-#define __EDGE__
+#ifndef __PUB_EDGE__
+#define __PUB_EDGE__
 
 #include <stdint.h>
 #include <vector>
 #include <po6/net/location.h>
 
-#include "remote_node.h"
-#include "element.h"
+#include "node_ptr.h"
+#include "db/element/edge.h"
 
-namespace db
+namespace common
 {
-namespace element
-{
-    class edge : public element
+    class prop_iter : public std::iterator<std::input_iterator_tag, property>
     {
+        private:
+        db::element::prop::iterator cur;
+        db::element::prop::iterator end;
+        vc::vclock& req_time;
+
         public:
-            edge();
-            edge(uint64_t handle, vc::vclock &vclk, uint64_t remote_loc, uint64_t remote_handle);
-            edge(uint64_t handle, vc::vclock &vclk, remote_node &rn);
+        prop_iter(std::vector<db::element::prop>* prop_list, vc::vclock& req_time)
+            : cur(prop_list->begin()), end(prop_list->end()), req_time(req_time) {}
         
-        public:
-            remote_node nbr; // out-neighbor for this edge
-            uint32_t msg_count; // number of messages sent on this link
-            bool migr_edge; // true if this edge was migrated along with parent node
-            void traverse(); // indicate that this edge was traversed; useful for migration statistics
+        prop_iter& operator++() {
+            while (cur != end) {
+                cur++;
+                if (cur != end && !order::clock_creat_before_del_after(req_time,
+                            cur->get_creat_time(), cur->get_del_time())) {
+                    break;
+                }
+            }
+            return *this;
+        }
+
+        bool operator==(const prop_iter& rhs) {return cur==rhs.cur && req_time == rhs.req_time;} // TODO == for req time?
+        bool operator!=(const prop_iter& rhs) {return cur!=rhs.cur || req_time != rhs.req_time;} // TODO == for req time?
+        prop& operator*() {return *cur;}
     };
 
-    // empty constructor for unpacking
-    inline
-    edge :: edge()
-        : element()
-        , msg_count(0)
-        , migr_edge(false)
-    { }
-
-    inline
-    edge :: edge(uint64_t handle, vc::vclock &vclk, uint64_t remote_loc, uint64_t remote_handle)
-        : element(handle, vclk)
-        , nbr(remote_loc, remote_handle)
-        , msg_count(0)
-        , migr_edge(false)
-    { }
-
-    inline
-    edge :: edge(uint64_t handle, vc::vclock &vclk, remote_node &rn)
-        : element(handle, vclk)
-        , nbr(rn)
-        , msg_count(0)
-        , migr_edge(false)
-    { }
-
-    // caution: should be called with node mutex held
-    // should always be called when an edge is traversed in a node program
-    inline void
-    edge :: traverse()
+    class edge 
     {
-        msg_count++;
-    }
-}
+        private:
+        db::element::edge& base; 
+        vc::vclock& req_time;
+
+        public:
+        edge(db::element::edge& base, vc::vclock& time);
+
+        node_ptr get_neighbor() { return (node_ptr) base.nbr;};
+        //TODO get props (make template for interator of things that have create and del times and use that for edges, props)
+        props_iter get_prop_iter(){ return props_iter(base.get_props(), req_time);};
 }
 
 #endif
