@@ -242,6 +242,7 @@ namespace node_prog
             std::unique_ptr<db::caching::cache_response> cache_response)
     {
         std::vector<std::pair<common::node_ptr, clustering_params>> next;
+        /*
         if (MAX_CACHE_ENTRIES)
         {
         if (params._search_cache && cache_response != NULL){
@@ -302,6 +303,7 @@ namespace node_prog
             params.is_center = true;
             next.emplace_back(std::make_pair(params.center, params));
         }
+        */
         return next;
     }
 

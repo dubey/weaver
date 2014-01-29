@@ -229,6 +229,7 @@ namespace node_prog
     {
         WDEBUG << "DIJKSTRAAAAA" << std::endl;
         std::vector<std::pair<common::node_ptr, dijkstra_params>> next;
+        /*
         if (n.get_handle() == params.src_handle) {
             dijkstra_node_state &node_state = state_getter();
             WDEBUG << "Dijkstra program: at source" <<  std::endl;
@@ -269,6 +270,7 @@ namespace node_prog
                             }
                         }
                         */
+                        /*
                         if (use_edge) {
                             // first is whether key exists, second is value
                             std::pair<bool, std::string> weightpair = 
@@ -384,6 +386,7 @@ namespace node_prog
             params.adding_nodes = true;
             next.emplace_back(std::make_pair(params.source_node, params));
         }
+        */
         return next;
     }
 

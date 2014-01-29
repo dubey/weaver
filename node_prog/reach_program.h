@@ -214,6 +214,7 @@ namespace node_prog
             std::unique_ptr<db::caching::cache_response> cache_response)
     {
         std::vector<std::pair<common::node_ptr, reach_params>> next;
+        /*
         if (MAX_CACHE_ENTRIES)
         {
         if (params._search_cache  && !params.mode && cache_response){
@@ -318,6 +319,7 @@ namespace node_prog
                 while(1);
             }
         }
+        */
         return next;
     }
 }

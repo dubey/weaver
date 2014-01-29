@@ -141,6 +141,7 @@ namespace node_prog
                 std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)
     {
+        /*
         if (params.edges.empty()) {
             for (auto &edge_pair : n.out_edges)
             {
@@ -159,6 +160,8 @@ namespace node_prog
         }
 
         return {std::make_pair(common::node_ptr(params.vt_id, 1337), std::move(params))}; // initializer list of vector
+        */
+        return {};
     }
 }
 
