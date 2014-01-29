@@ -474,7 +474,11 @@ namespace db
     inline void
     shard :: delete_edge_nonlocking(element::node *n, uint64_t edge, vc::vclock &tdel)
     {
-        element::edge *e = n->out_edges.at(edge);
+#ifdef __WEAVER_DEBUG__
+        assert(n->edge_handles.find(edge) != n->edge_handles.end());
+#endif
+        assert(n->out_edges.find(edge) != n->out_edges.end());
+        element::edge *e = n->out_edges[edge];
         e->update_del_time(tdel);
         n->updated = true;
         n->dependent_del++;
@@ -789,7 +793,7 @@ namespace db
         thread::unstarted_thread* thr;
         bool can_exec;
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
-            thread::pqueue_t &pq = read_queues.at(vt_id);
+            thread::pqueue_t &pq = read_queues[vt_id];
             // execute read request after all write queues have processed write which happens after this read
             if (!pq.empty()) {
                 can_exec = true;
@@ -818,7 +822,7 @@ namespace db
         std::vector<thread::pqueue_t> &write_queues = tpool->write_queues;
         // get next jobs from each queue
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
-            thread::pqueue_t &pq = write_queues.at(vt_id);
+            thread::pqueue_t &pq = write_queues[vt_id];
             // wait for queue to receive at least one job
             if (pq.empty()) { // can't write if one of the pq's is empty
                 return NULL;
@@ -832,7 +836,7 @@ namespace db
         }
         // all write queues are good to go, compare timestamps
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
-            timestamps.emplace_back(write_queues.at(vt_id).top()->vclock);
+            timestamps.emplace_back(write_queues[vt_id].top()->vclock);
         }
         uint64_t exec_vt_id;
         if (NUM_VTS == 1) {
@@ -840,8 +844,8 @@ namespace db
         } else {
             exec_vt_id = order::compare_vts(timestamps);
         }
-        thr = write_queues.at(exec_vt_id).top();
-        write_queues.at(exec_vt_id).pop();
+        thr = write_queues[exec_vt_id].top();
+        write_queues[exec_vt_id].pop();
         return thr;
     }
 

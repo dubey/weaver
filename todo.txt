@@ -20,6 +20,7 @@ Analytics API - global requests
 
 BUGS
 line_properties.py speeds up with 2 timestampers and 2 shards if nop/vclk update couts are turned on.
+transactions.py hangs with multiple vts with both read and write
 -
 
 WISHLIST

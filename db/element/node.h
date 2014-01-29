@@ -77,6 +77,10 @@ namespace element
             caching::program_cache cache; // TODO init me, also XXX migrate me
             bool checking_cache;
 
+#ifdef __WEAVER_DEBUG__
+            // testing
+            std::unordered_set<uint64_t> edge_handles;
+#endif
 
         public:
             void add_edge(edge *e);
@@ -108,6 +112,9 @@ namespace element
     inline void
     node :: add_edge(edge *e)
     {
+#ifdef __WEAVER_DEBUG__
+        edge_handles.emplace(e->get_handle());
+#endif
         out_edges.emplace(e->get_handle(), e);
     }
 

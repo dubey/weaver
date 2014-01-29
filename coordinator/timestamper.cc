@@ -165,7 +165,6 @@ timer_function()
                 if (vts->to_nop[shard_id]) {
                     assert(vclk.clock.size() == NUM_VTS);
                     assert(max_done_clk.size() == NUM_VTS);
-                    assert(vt_id == 0);
                     message::prepare_message(msg, message::VT_NOP, vt_id, vclk, qts, req_id,
                         done_reqs[shard_id], max_done_id, max_done_clk,
                         num_outstanding_progs, vts->shard_node_count);
@@ -191,7 +190,7 @@ timer_function()
                 message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, vclk.clock[vt_id]);
                 vts->send(i, msg.buf);
             }
-            WDEBUG << "updating vector clock at other shards\n";
+            //WDEBUG << "updating vector clock at other shards\n";
         }
 
         vts->periodic_update_mutex.unlock();

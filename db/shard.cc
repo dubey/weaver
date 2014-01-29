@@ -855,7 +855,7 @@ inline void node_prog_loop(
                     if (S->deferred_reads.find(node_handle) == S->deferred_reads.end()) {
                         S->deferred_reads.emplace(node_handle, std::vector<std::unique_ptr<message::message>>());
                     }
-                    S->deferred_reads.at(node_handle).emplace_back(std::move(m));
+                    S->deferred_reads[node_handle].emplace_back(std::move(m));
                     WDEBUG << "Buffering read for node " << node_handle << std::endl;
                     S->migration_mutex.unlock();
                 }
@@ -979,7 +979,8 @@ unpack_node_program(void *req)
     node_prog::prog_type pType;
 
     message::unpack_partial_message(*request->msg, message::NODE_PROG, pType);
-    node_prog::programs.at(pType)->unpack_and_run_db(std::move(request->msg));
+    assert(node_prog::programs.find(pType) != node_prog::programs.end());
+    node_prog::programs[pType]->unpack_and_run_db(std::move(request->msg));
     delete request;
 }
 
@@ -990,7 +991,8 @@ unpack_context_reply(void *req)
     node_prog::prog_type pType;
 
     message::unpack_partial_message(*request->msg, message::NODE_CONTEXT_REPLY, pType);
-    node_prog::programs.at(pType)->unpack_context_reply_db(std::move(request->msg));
+    assert(node_prog::programs.find(pType) != node_prog::programs.end());
+    node_prog::programs[pType]->unpack_context_reply_db(std::move(request->msg));
     delete request;
 }
 
@@ -1006,7 +1008,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     message::unpack_message(*msg, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_pair, contexts_to_add);
 
     S->node_prog_running_states_mutex.lock();
-    //WDEBUG << "unpacking context reply for node: " << lookup_pair.second << " where exists is " << (S->node_prog_running_states.count(lookup_pair) > 0) << std::endl;
     struct fetch_state<ParamsType, NodeStateType> *fstate = (struct fetch_state<ParamsType, NodeStateType> *) S->node_prog_running_states.at(lookup_pair);
     S->node_prog_running_states_mutex.unlock();
 
@@ -1290,7 +1291,7 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
     S->migration_mutex.lock();
     // apply buffered writes
     if (S->deferred_writes.find(node_handle) != S->deferred_writes.end()) {
-        for (auto &dw: S->deferred_writes.at(node_handle)) {
+        for (auto &dw: S->deferred_writes[node_handle]) {
             switch (dw.type) {
                 case message::NODE_DELETE_REQ:
                     S->delete_node_nonlocking(n, dw.vclk);
@@ -1327,7 +1328,7 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
     // move deferred reads to local for releasing migration_mutex
     std::vector<std::unique_ptr<message::message>> deferred_reads;
     if (S->deferred_reads.find(node_handle) != S->deferred_reads.end()) {
-        deferred_reads = std::move(S->deferred_reads.at(node_handle));
+        deferred_reads = std::move(S->deferred_reads[node_handle]);
         S->deferred_reads.erase(node_handle);
     }
     S->migration_mutex.unlock();
@@ -1340,7 +1341,8 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
         node_prog::prog_type pType;
         message::unpack_partial_message(*m, message::NODE_PROG, pType);
         WDEBUG << "APPLYING BUFREAD for node " << node_handle << std::endl;
-        node_prog::programs.at(pType)->unpack_and_run_db(std::move(m));
+        assert(node_prog::programs.find(pType) != node_prog::programs.end());
+        node_prog::programs[pType]->unpack_and_run_db(std::move(m));
     }
 }
 
@@ -1568,8 +1570,9 @@ msgrecv_loop()
         {
             case message::TX_INIT:
                 message::unpack_partial_message(*rec_msg, message::TX_INIT, vt_id, vclk, qts);
+                assert(qts.size() == NUM_SHARDS);
                 request = new db::graph_request(mtype, std::move(rec_msg));
-                thr = new db::thread::unstarted_thread(qts.at(shard_id-SHARD_ID_INCR), vclk, unpack_tx_request, request);
+                thr = new db::thread::unstarted_thread(qts[shard_id-SHARD_ID_INCR], vclk, unpack_tx_request, request);
                 S->add_write_request(vt_id, thr);
                 rec_msg.reset(new message::message());
                 assert(vclk.clock.size() == NUM_VTS);
