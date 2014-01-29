@@ -255,7 +255,7 @@ namespace message
     }
     inline uint64_t size(const common::node_ptr &t)
     {
-        return size((db::element::node) t);
+        return size((const db::element::remote_node&)t);
     }
     inline uint64_t size(const common::meta_element &t)
     {
@@ -453,7 +453,7 @@ namespace message
     inline void 
     pack_buffer(e::buffer::packer &packer, const common::node_ptr &t)
     {
-        pack_buffer(packer, (db::element::remote_node) t);
+        pack_buffer(packer, (const db::element::remote_node&)t);
     }
 
     inline void
@@ -736,7 +736,7 @@ namespace message
     inline void 
     unpack_buffer(e::unpacker &unpacker, common::node_ptr& t)
     {
-        unpack_buffer(unpacker, (db::element::remote_node) t);
+        unpack_buffer(unpacker, (db::element::remote_node&) t);
     }
 
     inline void

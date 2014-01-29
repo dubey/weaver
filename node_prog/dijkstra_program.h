@@ -260,6 +260,7 @@ namespace node_prog
                         e = iter.second;
                         // edge created and deleted in acceptable timeframe
                         bool use_edge = order::clock_creat_before_del_after(*req_vclock, e->get_creat_time(), e->get_del_time());
+                        */
                         /*
                         for (uint64_t i = 0; i < params.edge_props.size() && use_edge; i++) {
                             // checking edge properties

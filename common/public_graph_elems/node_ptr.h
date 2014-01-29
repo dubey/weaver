@@ -20,7 +20,7 @@ namespace common
 {
     class node_ptr : private db::element::remote_node
     {
-        using db::element::remote_node::get_handle();
+        using db::element::remote_node::get_handle;
     };
 }
 

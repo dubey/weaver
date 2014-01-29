@@ -12,6 +12,7 @@
 #include <vector>
 #include <po6/net/location.h>
 
+#include "property.h"
 #include "node_ptr.h"
 #include "db/element/edge.h"
 
@@ -20,12 +21,12 @@ namespace common
     class prop_iter : public std::iterator<std::input_iterator_tag, property>
     {
         private:
-        db::element::prop::iterator cur;
-        db::element::prop::iterator end;
+        db::element::property::iterator cur;
+        db::element::property::iterator end;
         vc::vclock& req_time;
 
         public:
-        prop_iter(std::vector<db::element::prop>* prop_list, vc::vclock& req_time)
+        prop_iter(std::vector<db::element::property>* prop_list, vc::vclock& req_time)
             : cur(prop_list->begin()), end(prop_list->end()), req_time(req_time) {}
         
         prop_iter& operator++() {

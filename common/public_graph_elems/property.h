@@ -19,7 +19,7 @@
 
 #include "db/element/property.h"
 
-namespace element
+namespace common
 {
     class property : private db::element::property
     {
