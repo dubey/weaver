@@ -135,6 +135,7 @@ namespace node_prog
             message::unpack_buffer(unpacker, numerator);
         }
     };
+    /*
 
     inline void
     add_to_cache(uint64_t numerator, common::node &n, common::node_ptr &rn, vc::vclock &req_vclock,
@@ -229,6 +230,7 @@ namespace node_prog
         add_to_cache(numerator, n, rn, req_vclock, add_cache_func);
         return (double) numerator / denominator;
     }
+    */
 
     std::vector<std::pair<common::node_ptr, clustering_params>> 
     clustering_node_program(

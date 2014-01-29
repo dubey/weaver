@@ -175,6 +175,7 @@ namespace node_prog
         }
     };
 
+/*
     inline bool
     check_cache_context(std::vector<std::pair<common::node_ptr, db::caching::node_cache_context>>& context)
     {
@@ -201,6 +202,7 @@ namespace node_prog
         }
         return true;
     }
+    */
 
     std::vector<std::pair<common::node_ptr, reach_params>> 
     reach_node_program(
