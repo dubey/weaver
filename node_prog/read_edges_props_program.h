@@ -131,12 +131,11 @@ namespace node_prog
     }
 
     std::vector<std::pair<common::node_ptr, read_edges_props_params>> 
-    read_edges_props_node_program(uint64_t,
+    read_edges_props_node_program(
             common::node &n,
             common::node_ptr &,
             read_edges_props_params &params,
             std::function<read_edges_props_state&()>,
-            std::shared_ptr<vc::vclock> &req_vclock,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
                 std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)

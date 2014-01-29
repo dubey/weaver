@@ -203,12 +203,11 @@ namespace node_prog
     }
 
     std::vector<std::pair<common::node_ptr, reach_params>> 
-    reach_node_program(uint64_t, // TODO used to be req_id, now replaced by vclock
+    reach_node_program(
             common::node &n,
             common::node_ptr &rn,
             reach_params &params,
             std::function<reach_node_state&()> state_getter,
-            std::shared_ptr<vc::vclock> &req_vclock,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
                 std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>& add_cache_func,
             std::unique_ptr<db::caching::cache_response> cache_response)

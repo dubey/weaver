@@ -59,12 +59,11 @@ namespace node_prog
     struct node_function_type
     {
         public:
-            typedef std::vector<std::pair<common::node_ptr, params_type>> (*value_type)(uint64_t, // req_id
+            typedef std::vector<std::pair<common::node_ptr, params_type>> (*value_type)(
                 common::node&, // this node
                 common::node_ptr&, // this remote node
                 params_type&,
                 std::function<node_state_type&()>,
-                std::shared_ptr<vc::vclock> &req_vlock,
                 std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
                     std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>& add_cache_func,
                     std::unique_ptr<db::caching::cache_response> cache_response);

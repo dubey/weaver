@@ -24,6 +24,8 @@
 #include "common/message_cache_context.h"
 #include "common/message_graph_elem.h"
 #include "common/nmap_stub.h"
+#include "common/public_graph_elems/node.h"
+#include "common/public_graph_elems/node_ptr.h"
 #include "shard.h"
 #include "nop_data.h"
 #include "db/cache/prog_cache.h"

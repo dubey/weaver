@@ -218,12 +218,11 @@ namespace node_prog
     }
 
     std::vector<std::pair<common::node_ptr, dijkstra_params>> 
-    dijkstra_node_program(uint64_t,
+    dijkstra_node_program(
             common::node &n,
             common::node_ptr &rn,
             dijkstra_params &params,
             std::function<dijkstra_node_state&()> state_getter,
-            std::shared_ptr<vc::vclock> &req_vclock,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)
     {
