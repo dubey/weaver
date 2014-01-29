@@ -18,11 +18,12 @@
 #include <vector>
 
 #include "common/weaver_constants.h"
-#include "db/element/node.h"
-#include "db/element/remote_node.h"
 #include "common/message.h"
 #include "common/vclock.h"
 #include "common/event_order.h"
+#include "common/public_graph_elems/node.h"
+#include "common/public_graph_elems/edge.h"
+#include "common/public_graph_elems/node_ptr.h"
 
 namespace node_prog
 {
@@ -31,11 +32,11 @@ namespace node_prog
         public:
             bool returning; // false = request, true = reply
             bool reachable;
-            db::element::remote_node prev_node;
+            common::node_ptr prev_node;
             uint64_t dest;
             uint32_t hops;
             uint32_t max_hops;
-            std::vector<db::element::remote_node> path;
+            std::vector<common::node_ptr> path;
 
         public:
             n_hop_reach_params()
@@ -90,7 +91,7 @@ namespace node_prog
     {
         //bool visited;
         uint64_t already_visited_hops; // number of hops for a traversal that has alraedy visited this node
-        db::element::remote_node prev_node; // previous node
+        common::node_ptr prev_node; // previous node
         uint32_t out_count; // number of requests propagated
         bool reachable;
         uint64_t hops;
@@ -133,10 +134,10 @@ namespace node_prog
         }
     };
 
-    std::vector<std::pair<db::element::remote_node, n_hop_reach_params>> 
+    std::vector<std::pair<common::node_ptr, n_hop_reach_params>> 
     n_hop_reach_node_program(uint64_t, // TODO used to be req_id, now replaced by vclock
-            db::element::node &n,
-            db::element::remote_node &rn,
+            common::node &n,
+            common::node_ptr &rn,
             n_hop_reach_params &params,
             std::function<n_hop_reach_node_state&()> state_getter,
             vc::vclock &req_vclock)
@@ -145,10 +146,10 @@ namespace node_prog
         n_hop_reach_node_state &state = state_getter();
         WDEBUG << "got state\n";
         bool false_reply = false;
-        db::element::remote_node prev_node = params.prev_node;
-        //db::element::remote_node *next_node = NULL;
+        common::node_ptr prev_node = params.prev_node;
+        //common::node_ptr *next_node = NULL;
         params.prev_node = rn;
-        std::vector<std::pair<db::element::remote_node, n_hop_reach_params>> next;
+        std::vector<std::pair<common::node_ptr, n_hop_reach_params>> next;
         if (!params.returning) { // request mode
             WDEBUG << "outgoing mode\n";
             if (params.dest == rn.handle) {
@@ -181,7 +182,7 @@ namespace node_prog
                 params.hops++;
                 // have not found it yet or previously found it with longer path and don't not maxed out hops yet
                 if (!false_reply && (state.already_visited_hops == 0 || (state.already_visited_hops > params.hops))) {
-                    db::element::edge *e;
+                    common::edge *e;
                     state.prev_node = prev_node;
                     state.already_visited_hops = params.hops;
                     for (auto &iter: n.out_edges) {
@@ -284,9 +285,9 @@ namespace node_prog
     }
 
     /*
-    std::vector<std::pair<db::element::remote_node, reach_params>> 
+    std::vector<std::pair<common::node_ptr, reach_params>> 
     reach_node_deleted_program(uint64_t req_id,
-                db::element::node &n, // node who asked to go to deleted node
+                common::node &n, // node who asked to go to deleted node
                 uint64_t deleted_handle, // handle of node that didn't exist
             reach_params &params_given, // params we had sent to deleted node
             std::function<reach_node_state&()> state_getter)
@@ -296,7 +297,7 @@ namespace node_prog
         UNUSED(deleted_handle);
         UNUSED(params_given);
         UNUSED(state_getter);
-        return std::vector<std::pair<db::element::remote_node, reach_params>>(); 
+        return std::vector<std::pair<common::node_ptr, reach_params>>(); 
     }
     */
 }

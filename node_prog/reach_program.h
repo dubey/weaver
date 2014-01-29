@@ -19,12 +19,13 @@
 
 #include "node_prog/base_classes.h"
 #include "common/weaver_constants.h"
-#include "db/element/node.h"
-#include "db/element/remote_node.h"
 #include "db/cache/prog_cache.h"
 #include "common/message.h"
 #include "common/vclock.h"
 #include "common/event_order.h"
+#include "common/public_graph_elems/node.h"
+#include "common/public_graph_elems/edge.h"
+#include "common/public_graph_elems/node_ptr.h"
 
 namespace node_prog
 {
@@ -34,12 +35,12 @@ namespace node_prog
             bool _search_cache;
             uint64_t _cache_key;
             bool mode; // false = request, true = reply
-            db::element::remote_node prev_node;
+            common::node_ptr prev_node;
             uint64_t dest;
             std::vector<db::element::property> edge_props;
             uint32_t hops;
             bool reachable;
-            std::vector<db::element::remote_node> path;
+            std::vector<common::node_ptr> path;
 
         public:
             reach_params()
@@ -104,7 +105,7 @@ namespace node_prog
     struct reach_node_state : public virtual Node_State_Base 
     {
         bool visited;
-        db::element::remote_node prev_node; // previous node
+        common::node_ptr prev_node; // previous node
         uint32_t out_count; // number of requests propagated
         bool reachable;
         uint64_t hops;
@@ -150,7 +151,7 @@ namespace node_prog
     struct reach_cache_value : public virtual Cache_Value_Base 
     {
         public:
-            //std::vector<db::element::remote_node> path;
+            //std::vector<common::node_ptr> path;
 
         virtual ~reach_cache_value () { }
 
@@ -175,7 +176,7 @@ namespace node_prog
     };
 
     inline bool
-    check_cache_context(std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& context)
+    check_cache_context(std::vector<std::pair<common::node_ptr, db::caching::node_cache_context>>& context)
     {
         //WDEBUG  << "$$$$$ checking context of size "<< context.size() << std::endl;
         // path not valid if broken by:
@@ -201,18 +202,18 @@ namespace node_prog
         return true;
     }
 
-    std::vector<std::pair<db::element::remote_node, reach_params>> 
+    std::vector<std::pair<common::node_ptr, reach_params>> 
     reach_node_program(uint64_t, // TODO used to be req_id, now replaced by vclock
-            db::element::node &n,
-            db::element::remote_node &rn,
+            common::node &n,
+            common::node_ptr &rn,
             reach_params &params,
             std::function<reach_node_state&()> state_getter,
             std::shared_ptr<vc::vclock> &req_vclock,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
+                std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>& add_cache_func,
             std::unique_ptr<db::caching::cache_response> cache_response)
     {
-        std::vector<std::pair<db::element::remote_node, reach_params>> next;
+        std::vector<std::pair<common::node_ptr, reach_params>> next;
         if (MAX_CACHE_ENTRIES)
         {
         if (params._search_cache  && !params.mode && cache_response){
@@ -240,7 +241,7 @@ namespace node_prog
 
         reach_node_state &state = state_getter();
         bool false_reply = false;
-        db::element::remote_node prev_node = params.prev_node;
+        common::node_ptr prev_node = params.prev_node;
         params.prev_node = rn;
         if (!params.mode) { // request mode
             if (params.dest == rn.handle) {
@@ -253,7 +254,7 @@ namespace node_prog
                 // have not found it yet, check the cache, then follow all out edges
                 bool got_cache = false; // TODO
                 if (!state.visited && !got_cache) {
-                    db::element::edge *e;
+                    common::edge *e;
                     state.prev_node = prev_node;
                     state.visited = true;
                     for (auto &iter: n.out_edges) {
@@ -303,7 +304,7 @@ namespace node_prog
                     {
                     // now add to cache
                     std::shared_ptr<node_prog::reach_cache_value> toCache(new reach_cache_value());
-                    std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<db::element::remote_node>(params.path)); // copy return path from params
+                    std::shared_ptr<std::vector<common::node_ptr>> watch_set(new std::vector<common::node_ptr>(params.path)); // copy return path from params
                     uint64_t cache_key = params.dest;
                     add_cache_func(toCache, watch_set, cache_key);
                     }

@@ -19,10 +19,11 @@
 #include <string>
 
 #include "common/message.h"
-#include "db/element/node.h"
-#include "db/element/remote_node.h"
 #include "common/vclock.h"
 #include "common/event_order.h"
+#include "common/public_graph_elems/node.h"
+#include "common/public_graph_elems/edge.h"
+#include "common/public_graph_elems/node_ptr.h"
 
 namespace node_prog
 {
@@ -110,7 +111,7 @@ namespace node_prog
     };
 
     inline void
-    record_desired_props(db::element::edge *edge, std::vector<std::string> &keys, vc::vclock &req_vclock,
+    record_desired_props(common::edge *edge, std::vector<std::string> &keys, vc::vclock &req_vclock,
             std::vector<std::pair<uint64_t, std::vector<db::element::property>>> &add_to)
     {
             std::vector<db::element::property> matching_edge_props;
@@ -129,15 +130,15 @@ namespace node_prog
             }
     }
 
-    std::vector<std::pair<db::element::remote_node, read_edges_props_params>> 
+    std::vector<std::pair<common::node_ptr, read_edges_props_params>> 
     read_edges_props_node_program(uint64_t,
-            db::element::node &n,
-            db::element::remote_node &,
+            common::node &n,
+            common::node_ptr &,
             read_edges_props_params &params,
             std::function<read_edges_props_state&()>,
             std::shared_ptr<vc::vclock> &req_vclock,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
+                std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)
     {
         if (params.edges.empty()) {
@@ -157,7 +158,7 @@ namespace node_prog
             }
         }
 
-        return {std::make_pair(db::element::remote_node(params.vt_id, 1337), std::move(params))}; // initializer list of vector
+        return {std::make_pair(common::node_ptr(params.vt_id, 1337), std::move(params))}; // initializer list of vector
     }
 }
 

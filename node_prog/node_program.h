@@ -22,10 +22,15 @@
 
 #include "common/weaver_constants.h"
 #include "common/meta_element.h"
+#include "common/public_graph_elems/node.h"
+#include "common/public_graph_elems/edge.h"
+#include "common/public_graph_elems/node_ptr.h"
+/*
 #include "db/element/node.h"
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
 #include "db/element/property.h"
+*/
 
 #include "node_prog_type.h"
 #include "dijkstra_program.h"
@@ -54,14 +59,14 @@ namespace node_prog
     struct node_function_type
     {
         public:
-            typedef std::vector<std::pair<db::element::remote_node, params_type>> (*value_type)(uint64_t, // req_id
-                db::element::node&, // this node
-                db::element::remote_node&, // this remote node
+            typedef std::vector<std::pair<common::node_ptr, params_type>> (*value_type)(uint64_t, // req_id
+                common::node&, // this node
+                common::node_ptr&, // this remote node
                 params_type&,
                 std::function<node_state_type&()>,
                 std::shared_ptr<vc::vclock> &req_vlock,
                 std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                    std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
+                    std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>& add_cache_func,
                     std::unique_ptr<db::caching::cache_response> cache_response);
 
     };
@@ -91,7 +96,7 @@ namespace node_prog
         uint64_t vt_id;
         std::shared_ptr<vc::vclock> req_vclock;
         uint64_t req_id;
-        std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> start_node_params;
+        std::vector<std::tuple<uint64_t, ParamsType, common::node_ptr>> start_node_params;
         std::unique_ptr<db::caching::cache_response> cache_value;
 
         node_prog_running_state() {};

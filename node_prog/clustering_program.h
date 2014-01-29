@@ -18,10 +18,11 @@
 #include <vector>
 
 #include "common/message.h"
-#include "db/element/node.h"
-#include "db/element/remote_node.h"
 #include "common/vclock.h"
 #include "common/event_order.h"
+#include "common/public_graph_elems/node.h"
+#include "common/public_graph_elems/edge.h"
+#include "common/public_graph_elems/node_ptr.h"
 
 namespace node_prog
 {
@@ -31,7 +32,7 @@ namespace node_prog
             bool _search_cache;
             uint64_t _cache_key;
             bool is_center;
-            db::element::remote_node center;
+            common::node_ptr center;
             bool outgoing;
             std::vector<uint64_t> neighbors;
             double clustering_coeff;
@@ -136,15 +137,15 @@ namespace node_prog
     };
 
     inline void
-    add_to_cache(uint64_t numerator, db::element::node &n, db::element::remote_node &rn, vc::vclock &req_vclock,
+    add_to_cache(uint64_t numerator, common::node &n, common::node_ptr &rn, vc::vclock &req_vclock,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func)
+                std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>& add_cache_func)
     {
         std::shared_ptr<node_prog::clustering_cache_value> toCache(new clustering_cache_value(numerator));
-        std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<db::element::remote_node>());
+        std::shared_ptr<std::vector<common::node_ptr>> watch_set(new std::vector<common::node_ptr>());
         // add center node and valid neighbors to watch set XXX re-use old list for re-caching
         watch_set->emplace_back(rn);
-        for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
+        for (std::pair<const uint64_t, common::edge*> &possible_nbr : n.out_edges) {
             if (order::clock_creat_before_del_after(req_vclock, possible_nbr.second->get_creat_time(), possible_nbr.second->get_del_time()))
             {
                 watch_set->emplace_back(possible_nbr.second->nbr);
@@ -155,10 +156,10 @@ namespace node_prog
     }
 
     inline void
-    calculate_response(clustering_node_state &cstate, db::element::node &n, db::element::remote_node &rn, vc::vclock &req_vclock,
-            std::vector<std::pair<db::element::remote_node, clustering_params>> &next,
+    calculate_response(clustering_node_state &cstate, common::node &n, common::node_ptr &rn, vc::vclock &req_vclock,
+            std::vector<std::pair<common::node_ptr, clustering_params>> &next,
             clustering_params &params, std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func)
+                std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>& add_cache_func)
     {
         if (cstate.neighbor_counts.size() > 1) {
             double denominator = (double) (cstate.neighbor_counts.size() * (cstate.neighbor_counts.size() - 1));
@@ -174,12 +175,12 @@ namespace node_prog
         } else {
             params.clustering_coeff = 0;
         }
-        db::element::remote_node coord(params.vt_id, 1337);
-        next.emplace_back(std::make_pair(db::element::remote_node(params.vt_id, 1337), params));
+        common::node_ptr coord(params.vt_id, 1337);
+        next.emplace_back(std::make_pair(common::node_ptr(params.vt_id, 1337), params));
     }
 
     inline bool
-    check_cache_context(std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& context, db::element::remote_node& center)
+    check_cache_context(std::vector<std::pair<common::node_ptr, db::caching::node_cache_context>>& context, common::node_ptr& center)
     {
         // if center unchanged and no neighbor was deleted cache is valid
         for (auto& pair : context)
@@ -197,11 +198,11 @@ namespace node_prog
     }
 
     inline double
-    calculate_from_cached(std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& context,
-            std::vector<db::element::remote_node>& watch_set, db::element::remote_node& center, uint64_t numerator,
-            vc::vclock &req_vclock, db::element::node &n, db::element::remote_node &rn,
+    calculate_from_cached(std::vector<std::pair<common::node_ptr, db::caching::node_cache_context>>& context,
+            std::vector<common::node_ptr>& watch_set, common::node_ptr& center, uint64_t numerator,
+            vc::vclock &req_vclock, common::node &n, common::node_ptr &rn,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func)
+                std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>& add_cache_func)
     {
         if (watch_set.size() <= 2){
             return 0;
@@ -229,18 +230,18 @@ namespace node_prog
         return (double) numerator / denominator;
     }
 
-    std::vector<std::pair<db::element::remote_node, clustering_params>> 
+    std::vector<std::pair<common::node_ptr, clustering_params>> 
     clustering_node_program(uint64_t,
-            db::element::node &n,
-            db::element::remote_node &rn,
+            common::node &n,
+            common::node_ptr &rn,
             clustering_params &params,
             std::function<clustering_node_state&()> state_getter,
             std::shared_ptr<vc::vclock> &req_vclock,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
+                std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>& add_cache_func,
             std::unique_ptr<db::caching::cache_response> cache_response)
     {
-        std::vector<std::pair<db::element::remote_node, clustering_params>> next;
+        std::vector<std::pair<common::node_ptr, clustering_params>> next;
         if (MAX_CACHE_ENTRIES)
         {
         if (params._search_cache && cache_response != NULL){
@@ -251,7 +252,7 @@ namespace node_prog
                 std::shared_ptr<clustering_cache_value> val = std::dynamic_pointer_cast<clustering_cache_value>(cache_response->value);
                 params.clustering_coeff = calculate_from_cached(cache_response->context, *cache_response->watch_set,
                         rn, val->numerator, *req_vclock, n, rn, add_cache_func);
-                db::element::remote_node coord(params.vt_id, 1337);
+                common::node_ptr coord(params.vt_id, 1337);
                 next.emplace_back(std::make_pair(coord, params));
 
                 return next;
@@ -265,8 +266,8 @@ namespace node_prog
             if (params.outgoing) {
                     params.is_center = false;
                     params.center = rn;
-                    db::element::edge *e;
-                    for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
+                    common::edge *e;
+                    for (std::pair<const uint64_t, common::edge*> &possible_nbr : n.out_edges) {
                         e = possible_nbr.second;
                         if (order::clock_creat_before_del_after(*req_vclock, e->get_creat_time(), e->get_del_time()))
                         {
@@ -290,7 +291,7 @@ namespace node_prog
                 }
             }
         } else { // not center
-            for (std::pair<const uint64_t, db::element::edge*> &possible_nbr : n.out_edges) {
+            for (std::pair<const uint64_t, common::edge*> &possible_nbr : n.out_edges) {
                 if (order::clock_creat_before_del_after(
                             *req_vclock, possible_nbr.second->get_creat_time(), possible_nbr.second->get_del_time()))
                 {

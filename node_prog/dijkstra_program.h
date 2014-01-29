@@ -20,8 +20,9 @@
 #include <sstream>
 
 #include "common/message.h"
-#include "db/element/node.h"
-#include "db/element/remote_node.h"
+#include "common/public_graph_elems/node.h"
+#include "common/public_graph_elems/edge.h"
+#include "common/public_graph_elems/node_ptr.h"
 
 namespace node_prog
 {
@@ -29,7 +30,7 @@ namespace node_prog
     {
         public:
             uint64_t cost;
-            db::element::remote_node node;
+            common::node_ptr node;
             uint64_t prev_node_req_id; // used for reconstructing path in coordinator
 
             int operator<(const dijkstra_queue_elem& other) const
@@ -44,7 +45,7 @@ namespace node_prog
 
             dijkstra_queue_elem() { }
 
-            dijkstra_queue_elem(uint64_t c, db::element::remote_node n, uint64_t prev)
+            dijkstra_queue_elem(uint64_t c, common::node_ptr n, uint64_t prev)
                 : cost(c)
                 , node(n)
                 , prev_node_req_id(prev)
@@ -79,14 +80,14 @@ namespace node_prog
     {
         public:
             uint64_t src_handle;
-            db::element::remote_node source_node;
+            common::node_ptr source_node;
             uint64_t dst_handle;
             std::string edge_weight_name; // the name of the property which holds the weight of an an edge
             std::vector<db::element::property> edge_props;
             bool is_widest_path;
             bool adding_nodes;
             uint64_t prev_node;
-            std::vector<std::pair<uint64_t, db::element::remote_node>> entries_to_add;
+            std::vector<std::pair<uint64_t, common::node_ptr>> entries_to_add;
             uint64_t next_node;
             std::vector<std::pair<uint64_t, uint64_t>> final_path;
             uint64_t cost;
@@ -216,18 +217,18 @@ namespace node_prog
         return priority;
     }
 
-    std::vector<std::pair<db::element::remote_node, dijkstra_params>> 
+    std::vector<std::pair<common::node_ptr, dijkstra_params>> 
     dijkstra_node_program(uint64_t,
-            db::element::node &n,
-            db::element::remote_node &rn,
+            common::node &n,
+            common::node_ptr &rn,
             dijkstra_params &params,
             std::function<dijkstra_node_state&()> state_getter,
             std::shared_ptr<vc::vclock> &req_vclock,
-            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
+            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)
     {
         WDEBUG << "DIJKSTRAAAAA" << std::endl;
-        std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
+        std::vector<std::pair<common::node_ptr, dijkstra_params>> next;
         if (n.get_handle() == params.src_handle) {
             dijkstra_node_state &node_state = state_getter();
             WDEBUG << "Dijkstra program: at source" <<  std::endl;
@@ -254,7 +255,7 @@ namespace node_prog
                     params.cost = params.is_widest_path ? MAX_TIME : 0; // don't want source node to be bottleneck in path
                     node_state.visited.emplace(params.src_handle, std::make_pair(params.src_handle, params.cost)); // handles same at source
 
-                    db::element::edge *e;
+                    common::edge *e;
                     for (auto &iter: n.out_edges) {
                         e = iter.second;
                         // edge created and deleted in acceptable timeframe
@@ -333,7 +334,7 @@ namespace node_prog
                             cur_node = visited_entry.first;
                         }
                     }
-                    next.emplace_back(std::make_pair(db::element::remote_node(params.vt_id, 1337), params));
+                    next.emplace_back(std::make_pair(common::node_ptr(params.vt_id, 1337), params));
                     return next;
                 } else { // we need to send a prop
                     bool get_neighbors = true;
@@ -355,12 +356,12 @@ namespace node_prog
             std::vector<std::pair<uint64_t, uint64_t>> emptyPath;
             params.final_path = emptyPath;
             params.cost = 0;
-            next.emplace_back(std::make_pair(db::element::remote_node(COORD_ID, 1337), params));
+            next.emplace_back(std::make_pair(common::node_ptr(COORD_ID, 1337), params));
 
         } else { // it is a request to add neighbors
             // check the properties of each out-edge, assumes lock for node is held
             WDEBUG << "Dijkstra program: NOT source" <<  std::endl;
-            db::element::edge *e;
+            common::edge *e;
             for (auto &iter: n.out_edges) {
                 e = iter.second;
                 // edge created and deleted in acceptable timeframe
@@ -387,9 +388,9 @@ namespace node_prog
     }
 
     /*
-    std::vector<std::pair<db::element::remote_node, dijkstra_params>> 
+    std::vector<std::pair<common::node_ptr, dijkstra_params>> 
     dijkstra_node_deleted_program(uint64_t req_id,
-        db::element::node &n, // node who asked to go to deleted node
+        common::node &n, // node who asked to go to deleted node
         uint64_t deleted_handle, // handle of node that didn't exist
         dijkstra_params &params_given, // params we had sent to deleted node
         std::function<dijkstra_node_state&()> state_getter)
@@ -400,7 +401,7 @@ namespace node_prog
 
         WDEBUG << "DELETED PROGRAM " << deleted_handle << std::endl;
         params_given.adding_nodes = false;
-        std::vector<std::pair<db::element::remote_node, dijkstra_params>> next;
+        std::vector<std::pair<common::node_ptr, dijkstra_params>> next;
         next.emplace_back(std::make_pair(params_given.source_node, params_given));
         return next;
     }
