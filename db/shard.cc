@@ -910,16 +910,16 @@ inline void node_prog_loop(
                         np.prog_type_recvd, _1, _2, _3, np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key
                 }
 
-                auto next_node_params = func(np.req_id, *node, this_node,
+                auto next_node_params = func(common::node(*node, np.req_vclock), (common::node_ptr) this_node,
                         params, // actual parameters for this node program
-                        node_state_getter, np.req_vclock, add_cache_func, std::move(np.cache_value));
+                        node_state_getter, add_cache_func, std::move(np.cache_value));
                // WDEBUG << "1 got new params count" << next_node_params.size() << std::endl;
                 // batch the newly generated node programs for onward propagation
 #ifdef WEAVER_CLDG
                 std::unordered_map<uint64_t, uint32_t> agg_msg_count;
 #endif
-                for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
-                    uint64_t loc = res.first.loc;
+                for (std::pair<common::node_ptr, ParamsType> &res : next_node_params) {
+                    uint64_t loc = ((db::element::remote_node) res.first).loc;
                     assert(loc < NUM_SHARDS + SHARD_ID_INCR);
                     if (loc == np.vt_id) {
                         // signal to send back to vector timestamper that issued request
@@ -930,7 +930,8 @@ inline void node_prog_loop(
                         message::prepare_message(*m, message::NODE_PROG_RETURN, np.prog_type_recvd, np.req_id, temppair);
                         S->send(np.vt_id, m->buf);
                     } else {
-                        batched_node_progs[loc].emplace_back(res.first.handle, std::move(res.second), this_node);
+                        uint64_t handle = ((db::element::remote_node) res.first).handle;
+                        batched_node_progs[loc].emplace_back(handle, std::move(res.second), this_node);
 #ifdef WEAVER_CLDG
                         agg_msg_count[node_handle]++;
 #endif
