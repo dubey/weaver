@@ -28,8 +28,8 @@ namespace common
             vc::vclock& req_time;
 
         public:
-        prop_iter(const std::vector<db::element::property>* prop_list, vc::vclock& req_time)
-            : cur(prop_list->begin()), end(prop_list->end()), req_time(req_time) {}
+        prop_iter(std::vector<db::element::property>& prop_list, vc::vclock& req_time)
+            : cur(prop_list.begin()), end(prop_list.end()), req_time(req_time) {}
         
         prop_iter& operator++() {
             while (cur != end) {
@@ -45,20 +45,19 @@ namespace common
 
         bool operator==(const prop_iter& rhs) {return cur==rhs.cur && req_time == rhs.req_time;} // TODO == for req time?
         bool operator!=(const prop_iter& rhs) {return cur!=rhs.cur || !(req_time == rhs.req_time);} // TODO == for req time?
-        property& operator*() {return (property &) *cur;}
+        property& operator*() {return (property &) *cur;} // XXX change to static cast?
     };
 
-    class edge 
+    class edge : private db::element::edge
     {
         private:
-        db::element::edge& base; 
-        vc::vclock& req_time;
+            using db::element::edge::nbr;
+            using db::element::edge::properties;
+            using db::element::edge::view_time;
 
         public:
-        edge(db::element::edge& base, vc::vclock& time);
-
-        node_ptr& get_neighbor(){ return (node_ptr&) base.nbr;};
-        prop_iter get_prop_iter(){ return prop_iter(base.get_props(), req_time);};
+            node_ptr& get_neighbor(){ return (node_ptr&) nbr;};
+            prop_iter get_prop_iter(){assert(view_time != NULL); return prop_iter(properties, *view_time);};
     };
 }
 

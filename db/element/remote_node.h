@@ -28,7 +28,7 @@ namespace element
             uint64_t loc;
             uint64_t handle;
             uint64_t get_id();
-            uint64_t get_handle();
+            uint64_t get_handle(); // XXX clean this up
             bool operator==(const db::element::remote_node &t) const;
             bool operator!=(const db::element::remote_node &t) const;
     };

@@ -35,12 +35,10 @@ namespace common
         edge_iter& operator++() {
             while (cur != end) {
                 cur++;
-                /* XXX
-                if (cur != end && !order::clock_creat_before_del_after(req_time,
+                if (cur != end && order::clock_creat_before_del_after(req_time,
                             cur->second->get_creat_time(), cur->second->get_del_time())) {
                     break;
                 }
-                */
             }
             return *this;
         }
@@ -48,21 +46,24 @@ namespace common
         //edge_iter operator++(int) {edge_iter tmp(*this); operator++(); return tmp;}
         bool operator==(const edge_iter& rhs) {return cur==rhs.cur && req_time == rhs.req_time;} // TODO == for req time?
         bool operator!=(const edge_iter& rhs) {return cur!=rhs.cur || !(req_time == rhs.req_time);} // TODO == for req time?
-        edge&& operator*() {return edge(*cur->second, req_time);}
+        edge& operator*()
+        {
+            db::element::edge& toRet = *cur->second;
+            toRet.view_time = &req_time;
+            return (edge &) toRet;
+        }
     };
 
-    class node
+    class node : private db::element::node
     {
         private:
-        db::element::node& base;
-        vc::vclock& req_time;
-
+            using db::element::node::out_edges;
+            using db::element::node::properties;
+            using db::element::node::view_time;
         public:
-        node(db::element::node& base, vc::vclock& time);
-
-        uint64_t get_handle() { return base.get_handle();};
-        edge_iter get_edge_iter(){ return edge_iter(base.out_edges, req_time);};
-        prop_iter get_prop_iter(){ return prop_iter(base.get_props(), req_time);};
+            using db::element::node::get_handle;
+            edge_iter get_edge_iter(){assert(view_time != NULL); return edge_iter(out_edges, *view_time);};
+            prop_iter get_prop_iter(){assert(view_time != NULL); return prop_iter(properties, *view_time);};
     };
 }
 

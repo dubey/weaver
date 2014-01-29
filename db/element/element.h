@@ -52,6 +52,7 @@ namespace element
             vc::vclock del_time;
 
         public:
+            vc::vclock* view_time;
             static vc::vclock static_del_time;
 
         public:
@@ -77,6 +78,7 @@ namespace element
         : handle(hndl)
         , creat_time(vclk)
         , del_time(MAX_UINT64, MAX_TIME)
+        , view_time(NULL)
     { }
 
     inline void
