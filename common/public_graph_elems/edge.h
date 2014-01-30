@@ -31,8 +31,12 @@ namespace common
             prop_iter& operator++() {
                 while (internal_cur != internal_end) {
                     internal_cur++;
-                    if (internal_cur != internal_end && !order::clock_creat_before_del_after(req_time,
+
+                    if (internal_cur != internal_end)    WDEBUG << "checking property " << internal_cur->key << " in filtering iter2" << std::endl;
+
+                    if (internal_cur != internal_end && order::clock_creat_before_del_after(req_time,
                                 internal_cur->get_creat_time(), internal_cur->get_del_time())) {
+                        WDEBUG << "ready to pass property " << internal_cur->key << " in filtering iter2" << std::endl;
 
                         break;
                     }
@@ -44,7 +48,9 @@ namespace common
                     std::vector<db::element::property>::iterator end, vc::vclock& req_time)
                 : internal_cur(begin), internal_end(end), req_time(req_time)
             {
-                if (internal_cur != internal_end && !order::clock_creat_before_del_after(req_time,
+               if (internal_cur != internal_end)  WDEBUG << "checking property " << internal_cur->key << " in filtering iter1" << std::endl;
+
+               if (internal_cur != internal_end && !order::clock_creat_before_del_after(req_time,
                             internal_cur->get_creat_time(), internal_cur->get_del_time())) {
                     ++(*this);
                 }
@@ -84,8 +90,10 @@ namespace common
             using db::element::edge::nbr;
             using db::element::edge::properties;
             using db::element::edge::view_time;
+            using db::element::edge::get_handle;
 
         public:
+            uint64_t get_handle(){ return this->get_handle();};
             node_ptr& get_neighbor(){ return (node_ptr&) nbr;};
             prop_list get_properties(){assert(view_time != NULL); return prop_list(properties, *view_time);};
             //prop_iter get_prop_iter(){assert(view_time != NULL); return prop_iter(properties, *view_time);};

@@ -118,6 +118,7 @@ namespace node_prog
     {
         for (common::property &prop : n.get_properties())
         {
+            WDEBUG << "checking property " << prop.key << " in node prog!" << std::endl;
             if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.key) != params.keys.end()))
             {
                 params.node_props.emplace_back(prop);

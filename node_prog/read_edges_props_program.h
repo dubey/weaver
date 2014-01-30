@@ -110,28 +110,6 @@ namespace node_prog
         }
     };
 
-/*
-    inline void
-    record_desired_props(common::edge *edge, std::vector<std::string> &keys, vc::vclock &req_vclock,
-            std::vector<std::pair<uint64_t, std::vector<db::element::property>>> &add_to)
-    {
-            std::vector<db::element::property> matching_edge_props;
-
-            for (const db::element::property &prop : *edge->get_props())
-            {
-                bool key_match = keys.empty() || (std::find(keys.begin(), keys.end(), prop.key) != keys.end());
-                if (key_match && order::clock_creat_before_del_after(req_vclock, prop.get_creat_time(), prop.get_del_time()))
-                {
-                    matching_edge_props.emplace_back(prop);
-                }
-            }
-            if (!matching_edge_props.empty())
-            {
-                add_to.emplace_back(edge->get_handle(), std::move(matching_edge_props));
-            }
-    }
-    */
-
     std::vector<std::pair<common::node_ptr, read_edges_props_params>> 
     read_edges_props_node_program(
             common::node &n,
@@ -142,27 +120,26 @@ namespace node_prog
                 std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)
     {
-        /*
-        if (params.edges.empty()) {
-            for (auto &edge_pair : n.out_edges)
+        for (common::edge &edge : n.get_edges())
+        {
+            if (params.edges.empty() || (std::find(params.edges.begin(), params.edges.end(), edge.get_handle()) != params.edges.end()))
             {
-                record_desired_props(edge_pair.second, params.keys, *req_vclock, params.edges_props);
-            }
-        } else {
-            for(uint64_t edge_handle : params.edges)
-            {
-                auto edge_iter = n.out_edges.find(edge_handle);
-                if (edge_iter == n.out_edges.end()){
-                    WDEBUG << "edge handle didnt exist in edge prop read program" << std::endl;
-                } else {
-                    record_desired_props(edge_iter->second, params.keys, *req_vclock, params.edges_props);
+                std::vector<common::property> matching_edge_props;
+                for (common::property &prop : edge.get_properties())
+                {
+                    if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.key) != params.keys.end()))
+                    {
+                        matching_edge_props.emplace_back(prop);
+                    }
+                }
+                if (!matching_edge_props.empty())
+                {
+                    params.edges_props.emplace_back(edge.get_handle(), std::move(matching_edge_props));
                 }
             }
         }
 
-        return {std::make_pair(common::node_ptr(params.vt_id, 1337), std::move(params))}; // initializer list of vector
-        */
-        return {};
+        return {std::make_pair(common::coordinator, std::move(params))}; // initializer list of vector
     }
 }
 

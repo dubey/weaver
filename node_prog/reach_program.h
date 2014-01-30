@@ -19,7 +19,7 @@
 
 #include "node_prog/base_classes.h"
 #include "common/weaver_constants.h"
-#include "db/cache/prog_cache.h"
+//#include "db/cache/prog_cache.h"
 #include "common/message.h"
 #include "common/vclock.h"
 #include "common/event_order.h"
@@ -37,7 +37,7 @@ namespace node_prog
             bool mode; // false = request, true = reply
             common::node_ptr prev_node;
             uint64_t dest;
-            std::vector<db::element::property> edge_props;
+            std::vector<common::property> edge_props;
             uint32_t hops;
             bool reachable;
             std::vector<common::node_ptr> path;
