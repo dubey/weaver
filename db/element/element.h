@@ -52,7 +52,7 @@ namespace element
             vc::vclock del_time;
 
         public:
-            vc::vclock* view_time;
+            std::shared_ptr<vc::vclock> view_time;
             static vc::vclock static_del_time;
 
         public:

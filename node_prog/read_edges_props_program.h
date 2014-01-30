@@ -110,6 +110,7 @@ namespace node_prog
         }
     };
 
+/*
     inline void
     record_desired_props(common::edge *edge, std::vector<std::string> &keys, vc::vclock &req_vclock,
             std::vector<std::pair<uint64_t, std::vector<db::element::property>>> &add_to)
@@ -129,6 +130,7 @@ namespace node_prog
                 add_to.emplace_back(edge->get_handle(), std::move(matching_edge_props));
             }
     }
+    */
 
     std::vector<std::pair<common::node_ptr, read_edges_props_params>> 
     read_edges_props_node_program(

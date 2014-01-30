@@ -242,8 +242,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     } else { // regular style node program
         for (std::pair<uint64_t, ParamsType> &node_params_pair: initial_args) {
             uint64_t loc = request_element_mappings[node_params_pair.first];
-            initial_batches[loc].emplace_back(std::make_tuple(node_params_pair.first,
-                    std::move(node_params_pair.second), db::element::remote_node()));
+            initial_batches[loc].emplace_back(std::make_pair(node_params_pair.first,
+                    std::move(node_params_pair.second)));
         }
     }
     

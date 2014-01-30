@@ -116,6 +116,7 @@ namespace node_prog
                 std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)
     {
+        /*
         for (const db::element::property &prop : *n.get_props())
         {
             bool key_match = params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.key) != params.keys.end());
@@ -126,6 +127,7 @@ namespace node_prog
         }
 
         return {std::make_pair(common::node_ptr(params.vt_id, 1337), std::move(params))}; // initializer list of vector
+        */
     }
 }
 

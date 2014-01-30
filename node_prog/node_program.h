@@ -70,6 +70,7 @@ namespace node_prog
 
     };
 
+// XXX IS THE BELOW USED?
     template <typename ParamsType, typename NodeStateType>
     void node_program_runner(typename node_prog::node_function_type<ParamsType,
             NodeStateType>::value_type np,
@@ -95,7 +96,7 @@ namespace node_prog
         uint64_t vt_id;
         std::shared_ptr<vc::vclock> req_vclock;
         uint64_t req_id;
-        std::vector<std::tuple<uint64_t, ParamsType, common::node_ptr>> start_node_params;
+        std::vector<std::pair<uint64_t, ParamsType>> start_node_params;
         std::unique_ptr<db::caching::cache_response> cache_value;
 
         node_prog_running_state() {};

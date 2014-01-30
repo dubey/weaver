@@ -26,16 +26,16 @@ namespace common
     {
         std::unordered_map<uint64_t, db::element::edge*>::iterator cur;
         std::unordered_map<uint64_t, db::element::edge*>::iterator end;
-        vc::vclock& req_time;
+        std::shared_ptr<vc::vclock> req_time;
 
         public:
-        edge_iter(std::unordered_map<uint64_t, db::element::edge*>& edges, vc::vclock& req_time) : cur(edges.begin()), end(edges.end()), req_time(req_time) {}
+        edge_iter(std::unordered_map<uint64_t, db::element::edge*>& edges, std::shared_ptr<vc::vclock>& req_time) : cur(edges.begin()), end(edges.end()), req_time(req_time) {}
         //edge_iter(const MyIterator& mit) : p(mit.p) {}
         
         edge_iter& operator++() {
             while (cur != end) {
                 cur++;
-                if (cur != end && order::clock_creat_before_del_after(req_time,
+                if (cur != end && order::clock_creat_before_del_after(*req_time,
                             cur->second->get_creat_time(), cur->second->get_del_time())) {
                     break;
                 }
@@ -49,7 +49,7 @@ namespace common
         edge& operator*()
         {
             db::element::edge& toRet = *cur->second;
-            toRet.view_time = &req_time;
+            toRet.view_time = req_time;
             return (edge &) toRet;
         }
     };
@@ -62,7 +62,7 @@ namespace common
             using db::element::node::view_time;
         public:
             using db::element::node::get_handle;
-            edge_iter get_edge_iter(){assert(view_time != NULL); return edge_iter(out_edges, *view_time);};
+            edge_iter get_edge_iter(){assert(view_time != NULL); return edge_iter(out_edges, view_time);};
             prop_iter get_prop_iter(){assert(view_time != NULL); return prop_iter(properties, *view_time);};
     };
 }
