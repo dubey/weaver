@@ -33,11 +33,13 @@ rp = client.ReadNodePropsParams(vt_id=coord_id)
 prog_args = [(node_id, rp)]
 response = c.read_node_props(prog_args)
 print "All pairs: " + str(response.node_props)
+print ""
 assert(('color', 'blue') in response.node_props and ('size', '27') in response.node_props and len(response.node_props) == 2)
 
 prog_args[0][1].keys = ['color']
 response = c.read_node_props(prog_args)
 print "Only lookup color : " + str(response.node_props)
+print ""
 assert(('color', 'blue') in response.node_props and len(response.node_props) == 1)
 
 tx_id = c.begin_tx()
@@ -48,6 +50,7 @@ print "adding 'age' property"
 prog_args[0][1].keys = ['size', 'age']
 response = c.read_node_props(prog_args)
 print "Lookup size, age : " + str(response.node_props)
+print ""
 assert(('age', '37') in response.node_props and ('size', '27') in response.node_props and len(response.node_props) == 2)
 
 
@@ -74,4 +77,10 @@ c.end_tx(tx_id)
 rp = client.ReadEdgesPropsParams(vt_id=coord_id)
 prog_args = [(node_id, rp)]
 response = c.read_edges_props(prog_args)
-print response.edges_props
+print "All edges and their properties" + str(response.edges_props)
+print ""
+
+prog_args[0][1].keys = ['cost']
+response = c.read_edges_props(prog_args)
+print "Only cost property for all edges" + str(response.edges_props)
+print ""

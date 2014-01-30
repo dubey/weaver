@@ -115,7 +115,7 @@ class NodePtr:
     def __init__(self, handle=0):
         self.handle = handle
 
-cdef extern from 'common/property.h' namespace 'common':
+cdef extern from 'common/public_graph_elems/property.h' namespace 'common':
     cdef cppclass property:
         #property()
         string key
@@ -344,7 +344,7 @@ cdef class Client:
             c_args.push_back(arg_pair)
 
         c_rp = self.thisptr.read_edges_props_program(c_args)
-        response = ReadEdgesPropsParams()
+        response = ReadEdgesPropsParams(edges_props=[])
         assert(len(response.edges_props) == 0)
         for c_pair in c_rp.edges_props:
             edge_props_pair = (c_pair.first, [])

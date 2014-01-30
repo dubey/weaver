@@ -93,7 +93,7 @@ namespace common
             using db::element::edge::get_handle;
 
         public:
-            uint64_t get_handle(){ return this->get_handle();};
+            uint64_t get_handle(){ return db::element::edge::get_handle();};
             node_ptr& get_neighbor(){ return (node_ptr&) nbr;};
             prop_list get_properties(){assert(view_time != NULL); return prop_list(properties, *view_time);};
             //prop_iter get_prop_iter(){assert(view_time != NULL); return prop_iter(properties, *view_time);};

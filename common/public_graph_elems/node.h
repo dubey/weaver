@@ -31,9 +31,11 @@ namespace common
         public:
         edge_iter& operator++() {
             while (internal_cur != internal_end) {
+                if (internal_cur != internal_end)    WDEBUG << "checking edge " << internal_cur->second->get_handle() << " in filtering iter2" << std::endl;
                 internal_cur++;
                 if (internal_cur != internal_end && order::clock_creat_before_del_after(*req_time,
                             internal_cur->second->get_creat_time(), internal_cur->second->get_del_time())) {
+                        WDEBUG << "ready to pass edge " << internal_cur->second->get_handle() << " in filtering iter ++" << std::endl;
                     break;
                 }
             }
@@ -46,6 +48,7 @@ namespace common
         {
             if (internal_cur != internal_end && !order::clock_creat_before_del_after(*req_time,
                         internal_cur->second->get_creat_time(), internal_cur->second->get_del_time())) {
+                        WDEBUG << "ready to pass edge " << internal_cur->second->get_handle() << " in filtering iter construct" << std::endl;
                 ++(*this);
             }
         }
@@ -57,7 +60,7 @@ namespace common
         {
             db::element::edge& toRet = *internal_cur->second;
             toRet.view_time = req_time;
-            return (edge &) toRet;
+            return (edge &) toRet; // XXX problem here?
         }
     };
 
