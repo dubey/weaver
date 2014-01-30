@@ -209,7 +209,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, pType, initial_args);
     
     // map from locations to a list of start_node_params to send to that shard
-    std::unordered_map<uint64_t, std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>>> initial_batches; 
+    std::unordered_map<uint64_t, std::vector<std::pair<uint64_t, ParamsType>>> initial_batches; 
     bool global_req = false;
 
     // lookup mappings
@@ -236,8 +236,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     if (global_req) {
         // send copy of params to each shard
         for (int i = 0; i < NUM_SHARDS; i++) {
-            initial_batches[i + SHARD_ID_INCR].emplace_back(std::make_tuple(initial_args[0].first,
-                    initial_args[0].second, db::element::remote_node()));
+            initial_batches[i + SHARD_ID_INCR].emplace_back(std::make_pair(initial_args[0].first,
+                    initial_args[0].second));
         }
     } else { // regular style node program
         for (std::pair<uint64_t, ParamsType> &node_params_pair: initial_args) {
