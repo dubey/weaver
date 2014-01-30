@@ -22,10 +22,10 @@
 #include "common/busybee_infra.h"
 #include "common/message.h"
 #include "common/message_tx_client.h"
-#include "common/property.h"
+//#include "common/public_graph_elems/property.h"
 #include "transaction.h"
 #include "node_prog/node_prog_type.h"
-#include "node_prog/reach_program.h"
+//#include "node_prog/reach_program.h"
 
 namespace client
 {

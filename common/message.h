@@ -33,6 +33,7 @@
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
 #include "db/element/property.h"
+#include "common/public_graph_elems/property.h"
 #include "common/public_graph_elems/node_ptr.h"
 
 namespace message
@@ -249,13 +250,17 @@ namespace message
             + size(t.value)
             + 2*size(t.creat_time); // for del time
     }
+    inline uint64_t size(const common::property &t)
+    {
+        return size((const db::element::property&) t);
+    }
     inline uint64_t size(const db::element::remote_node &t)
     {
         return size(t.loc) + size(t.handle);
     }
     inline uint64_t size(const common::node_ptr &t)
     {
-        return size((const db::element::remote_node&)t);
+        return size((const db::element::remote_node&) t);
     }
     inline uint64_t size(const common::meta_element &t)
     {
@@ -442,6 +447,12 @@ namespace message
         pack_buffer(packer, t.value);
         pack_buffer(packer, t.creat_time);
         pack_buffer(packer, t.del_time);
+    }
+
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const common::property &t)
+    {
+        pack_buffer(packer, (const db::element::property&) t);
     }
 
     inline void 
@@ -726,6 +737,12 @@ namespace message
         t.del_time.clock.clear();
         unpack_buffer(unpacker, t.creat_time);
         unpack_buffer(unpacker, t.del_time);
+    }
+
+    inline void 
+    unpack_buffer(e::unpacker &unpacker, common::property &t)
+    {
+        unpack_buffer(unpacker, (db::element::property &) t);
     }
 
     inline void 

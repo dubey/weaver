@@ -32,7 +32,7 @@ namespace node_prog
         public:
             std::vector<std::string> keys; // empty vector means fetch all props
             uint64_t vt_id;
-            std::vector<db::element::property> node_props;
+            std::vector<common::property> node_props;
 
         public:
             virtual bool search_cache() {
@@ -116,18 +116,15 @@ namespace node_prog
                 std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)
     {
-        /*
-        for (const db::element::property &prop : *n.get_props())
+        for (common::property &prop : n.get_properties())
         {
-            bool key_match = params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.key) != params.keys.end());
-            if (key_match && order::clock_creat_before_del_after(*req_vclock, prop.get_creat_time(), prop.get_del_time()))
+            if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.key) != params.keys.end()))
             {
                 params.node_props.emplace_back(prop);
             }
         }
 
-        return {std::make_pair(common::node_ptr(params.vt_id, 1337), std::move(params))}; // initializer list of vector
-        */
+        return {std::make_pair(common::coordinator, std::move(params))}; // initializer list of vector
     }
 }
 

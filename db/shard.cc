@@ -24,8 +24,8 @@
 #include "common/message_cache_context.h"
 #include "common/message_graph_elem.h"
 #include "common/nmap_stub.h"
-#include "common/public_graph_elems/node.h"
 #include "common/public_graph_elems/node_ptr.h"
+#include "common/public_graph_elems/node.h"
 #include "shard.h"
 #include "nop_data.h"
 #include "db/cache/prog_cache.h"
@@ -931,7 +931,7 @@ inline void node_prog_loop(
                 for (std::pair<common::node_ptr, ParamsType> &res : next_node_params) {
                     db::element::remote_node& rn = (db::element::remote_node &) res.first;
                     assert(rn.loc < NUM_SHARDS + SHARD_ID_INCR);
-                    if (rn.loc == np.vt_id) {
+                    if (rn == common::coord_remote_node) {
                         // signal to send back to vector timestamper that issued request
                         // TODO mark done
                         // XXX get rid of pair, without pair it is not working for some reason

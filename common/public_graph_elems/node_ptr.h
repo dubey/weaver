@@ -22,6 +22,9 @@ namespace common
     {
         using db::element::remote_node::get_handle;
     };
+
+    static db::element::remote_node coord_remote_node(0,0);
+    static node_ptr& coordinator = (node_ptr &) coord_remote_node;
 }
 
 #endif

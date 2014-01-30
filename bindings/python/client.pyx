@@ -107,20 +107,17 @@ cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
         READ_NODE_PROPS
         READ_EDGES_PROPS
 
-cdef extern from 'db/element/remote_node.h' namespace 'db::element':
-    cdef cppclass remote_node:
-        remote_node(uint64_t loc, uint64_t handle)
-        uint64_t loc
-        uint64_t handle
+cdef extern from 'common/public_graph_elems/node_ptr.h' namespace 'common':
+    cdef cppclass node_ptr:
+        uint64_t get_handle()
 
-class RemoteNode:
-    def __init__(self, loc=0, handle=0):
-        self.loc = loc
+class NodePtr:
+    def __init__(self, handle=0):
         self.handle = handle
 
 cdef extern from 'common/property.h' namespace 'common':
     cdef cppclass property:
-        property()
+        #property()
         string key
         string value
 
@@ -130,14 +127,14 @@ cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
         bint _search_cache
         uint64_t _cache_key
         bint mode
-        remote_node prev_node
+        node_ptr prev_node
         uint64_t dest
         vector[property] edge_props
         uint32_t hops
         bint reachable
 
 class ReachParams:
-    def __init__(self, mode=False, prev_node=RemoteNode(), dest=0, hops=0, reachable=False, caching=False, edge_props=[]):
+    def __init__(self, mode=False, prev_node=NodePtr(), dest=0, hops=0, reachable=False, caching=False, edge_props=[]):
         self._search_cache = caching
         self._cache_key = dest
         self.mode = mode
@@ -152,7 +149,7 @@ cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
         bint _search_cache
         uint64_t _cache_key
         bint is_center
-        remote_node center
+        node_ptr center
         bint outgoing
         vector[uint64_t] neighbors
         double clustering_coeff
@@ -169,21 +166,21 @@ class ClusteringParams:
 cdef extern from 'node_prog/dijkstra_program.h' namespace 'node_prog':
     cdef cppclass dijkstra_params:
         uint64_t src_handle
-        remote_node source_node
+        node_ptr source_node
         uint64_t dst_handle
         string edge_weight_name
         bint is_widest_path
         bint adding_nodes
         uint64_t prev_node
-        vector[pair[uint64_t, remote_node]] entries_to_add
+        vector[pair[uint64_t, node_ptr]] entries_to_add
         uint64_t next_node
         vector[pair[uint64_t, uint64_t]] final_path
         uint64_t cost
         uint64_t vt_id
 
 class DijkstraParams:
-    def __init__(self, src_handle=0, source_node=RemoteNode(), dst_handle=0, edge_weight_name="weight", is_widest_path=False,
-            adding_nodes=False, prev_node=RemoteNode(), entries_to_add=[], next_node=0, final_path=[], cost=0, vt_id=0):
+    def __init__(self, src_handle=0, source_node=NodePtr(), dst_handle=0, edge_weight_name="weight", is_widest_path=False,
+            adding_nodes=False, prev_node=NodePtr(), entries_to_add=[], next_node=0, final_path=[], cost=0, vt_id=0):
         self.src_handle = src_handle
         self.source_node = source_node
         self.dst_handle = dst_handle
@@ -280,8 +277,8 @@ cdef class Client:
             arg_pair.second.mode = rp[1].mode
             arg_pair.second.dest = rp[1].dest
             arg_pair.second.reachable = rp[1].reachable
-            arg_pair.second.prev_node.loc = rp[1].prev_node.loc
-            arg_pair.second.prev_node.handle = rp[1].prev_node.handle
+            #arg_pair.second.prev_node.loc = rp[1].prev_node.loc
+            #arg_pair.second.prev_node.handle = rp[1].prev_node.handle
             for p in rp[1].edge_props:
                 prop.key = p[0].encode('UTF-8')
                 prop.value = p[1].encode('UTF-8')

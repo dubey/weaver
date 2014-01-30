@@ -33,7 +33,7 @@ namespace node_prog
             std::vector<uint64_t> edges; // empty vector means fetch props for all edges
             std::vector<std::string> keys; // empty vector means fetch all props
             uint64_t vt_id;
-            std::vector<std::pair<uint64_t, std::vector<db::element::property>>> edges_props;
+            std::vector<std::pair<uint64_t, std::vector<common::property>>> edges_props;
 
         public:
             virtual bool search_cache() {
