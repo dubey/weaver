@@ -31,7 +31,7 @@ edge_cnt = 0
 init_tx_sz = 100
 assert (num_nodes % init_tx_sz == 0)
 assert (int(edge_factor * num_nodes) % init_tx_sz == 0)
-wr_loops = 1000
+wr_loops = 100
 rd_loops = 100
 clients = []
 n_hndls = []
@@ -131,18 +131,15 @@ def reach_requests(c, n_reqs):
             n2 = get_random_idx(1 if n1 % 2 == 0 else 0)
             neg_reqs.append((n_hndls_cpy[n1], n_hndls_cpy[n2]))
     rp = client.ReachParams()
-    print 'starting reach reqs'
     for r in pos_reqs:
         rp.dest = r[1]
         prog_args = [(r[0], rp)]
         response = c.run_reach_program(prog_args)
-    print 'done pos reqs'
     for r in neg_reqs:
         rp.dest = r[1]
         prog_args = [(r[0], rp)]
         response = c.run_reach_program(prog_args)
         assert (not response.reachable)
-    print 'done neg reqs'
 
 
 # create initial graph
@@ -197,9 +194,9 @@ for i in range(num_clients/2):
     t = threading.Thread(target=write_loop, args=(clients[i], i))
     t.start()
     threads.append(t)
-#for i in range(num_clients/2, num_clients):
-#    t = threading.Thread(target=read_loop, args=(clients[i], i))
-#    t.start()
-#    threads.append(t)
+for i in range(num_clients/2, num_clients):
+    t = threading.Thread(target=read_loop, args=(clients[i], i))
+    t.start()
+    threads.append(t)
 for t in threads:
     t.join()

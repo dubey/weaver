@@ -703,7 +703,6 @@ unpack_and_fetch_context(void *req)
     message::unpack_message(*request->msg, message::NODE_CONTEXT_FETCH, pType, req_id, vt_id, req_vclock, cache_entry_time, lookup_pair, handles, from_shard);
     std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>> contexts;
 
-    //WDEBUG << "fetching cache contexts on remote shard" << std::endl;
     fetch_node_cache_contexts(S->shard_id, handles, contexts, cache_entry_time, req_vclock);
 
     message::message m;
@@ -736,9 +735,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
     assert(node_to_check != NULL);
     assert(np.cache_value == false); // cache_value is not already assigned
     np.cache_value = NULL; // it is unallocated anyway
-    //WDEBUG << "cache search for " << cache_key << " on node " << node_to_check->get_handle() << std::endl;
     if (node_to_check->cache.cache.count(cache_key) == 0){
-        //WDEBUG << "no cache entry exists" << std::endl;
         return true;
     } else {
         auto entry = node_to_check->cache.cache.at(cache_key);
@@ -746,7 +743,6 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         std::shared_ptr<vc::vclock> cache_entry_time(std::get<1>(entry));
         std::shared_ptr<std::vector<db::element::remote_node>>& watch_set = std::get<2>(entry);
 
-        //WDEBUG << "found cache value keyed: " << cache_key << " checking clocks for on node " << node_to_check->get_handle() << std::endl;
         int64_t cmp_1 = order::compare_two_vts(*cache_entry_time, *np.req_vclock);
         if (cmp_1 >= 1){ // cached value is newer or from this same request
             return true;
@@ -820,7 +816,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
 template <typename ParamsType, typename NodeStateType>
 inline void node_prog_loop(
         typename node_prog::node_function_type<ParamsType, NodeStateType>::value_type func,
-        node_prog::node_prog_running_state<ParamsType, NodeStateType>& np)
+        node_prog::node_prog_running_state<ParamsType, NodeStateType> &np)
 {
     assert(np.start_node_params.size() == 1 || !np.cache_value); // if cache value passed in the start node params should be size 1
     // tuple of (node handle, node prog params, prev node)
@@ -873,7 +869,6 @@ inline void node_prog_loop(
                 if (MAX_CACHE_ENTRIES)
                 {
                 if (params.search_cache()){ // && !node->checking_cache){
-                //    WDEBUG << "GOT SEARCH CACHE for key: " << params.cache_key() << std::endl;
                     if (np.cache_value) { // cache value already found (from a fetch)
                         node->checking_cache = false;
                     } else if (!node->checking_cache) { // lookup cache value if another prog isnt already
@@ -901,16 +896,16 @@ inline void node_prog_loop(
                 }
                 if (MAX_CACHE_ENTRIES)
                 {
-                // call node program
                 using namespace std::placeholders;
                 add_cache_func = std::bind(&db::caching::program_cache::add_cache_value, &(node->cache),
                         np.prog_type_recvd, _1, _2, _3, np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key
                 }
 
+                // call node program
                 auto next_node_params = func(np.req_id, *node, this_node,
                         params, // actual parameters for this node program
                         node_state_getter, np.req_vclock, add_cache_func, std::move(np.cache_value));
-               // WDEBUG << "1 got new params count" << next_node_params.size() << std::endl;
+
                 // batch the newly generated node programs for onward propagation
 #ifdef WEAVER_CLDG
                 std::unordered_map<uint64_t, uint32_t> agg_msg_count;
@@ -918,6 +913,8 @@ inline void node_prog_loop(
                 for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                     uint64_t loc = res.first.loc;
                     assert(loc < NUM_SHARDS + SHARD_ID_INCR);
+                    if (loc < SHARD_ID_INCR) {
+                    }
                     if (loc == np.vt_id) {
                         // signal to send back to vector timestamper that issued request
                         // TODO mark done
@@ -1047,7 +1044,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         assert(false);
         return;
     }
-    
+
     // update max prog id
     S->migration_mutex.lock();
     if (S->max_prog_id[np.vt_id] < np.req_id) {
@@ -1255,7 +1252,6 @@ migrate_node_step2_req()
     message::prepare_message(msg, message::MIGRATE_SEND_NODE, S->migr_node, shard_id, *n);
     S->release_node(n);
     S->send(S->migr_shard, msg.buf);
-    //WDEBUG << "Migrating node " << S->migr_node << " to shard " << S->migr_shard << std::endl;
 }
 
 // receive and place node which has been migrated to this shard

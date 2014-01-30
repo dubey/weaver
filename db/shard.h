@@ -427,7 +427,7 @@ namespace db
             release_node(n);
             // record object for permanent deletion later on
             perm_del_mutex.lock();
-            perm_del_queue.emplace(new del_obj(message::NODE_DELETE_REQ, tdel, node_handle));
+            //perm_del_queue.emplace(new del_obj(message::NODE_DELETE_REQ, tdel, node_handle));
             perm_del_mutex.unlock();
         }
     }
@@ -500,7 +500,7 @@ namespace db
             release_node(n);
             // record object for permanent deletion later on
             perm_del_mutex.lock();
-            perm_del_queue.emplace(new del_obj(message::EDGE_DELETE_REQ, tdel, node_handle, edge_handle));
+            //perm_del_queue.emplace(new del_obj(message::EDGE_DELETE_REQ, tdel, node_handle, edge_handle));
             perm_del_mutex.unlock();
         }
     }

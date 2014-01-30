@@ -177,7 +177,6 @@ namespace node_prog
     inline bool
     check_cache_context(std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& context)
     {
-        //WDEBUG  << "$$$$$ checking context of size "<< context.size() << std::endl;
         // path not valid if broken by:
         for (auto& pair : context)
         {
@@ -202,7 +201,7 @@ namespace node_prog
     }
 
     std::vector<std::pair<db::element::remote_node, reach_params>> 
-    reach_node_program(uint64_t, // TODO used to be req_id, now replaced by vclock
+    reach_node_program(uint64_t rid, // TODO used to be req_id, now replaced by vclock
             db::element::node &n,
             db::element::remote_node &rn,
             reach_params &params,
@@ -219,7 +218,6 @@ namespace node_prog
             // check context, update cache
             bool valid = check_cache_context(cache_response->context);
             if (valid) {
-                //WDEBUG  << "valid CACHE RESPONSE node handle: " << rn.handle << std::endl;
                 // we found the node we are looking for, prepare a reply
                 params.mode = true;
                 params.reachable = true;
@@ -311,8 +309,6 @@ namespace node_prog
                 next.emplace_back(std::make_pair(state.prev_node, params));
             }
             if ((int)state.out_count < 0) {
-                WDEBUG << "ALERT! Bad state value in reach program for node " << rn.handle
-                        << " at loc " << rn.loc << std::endl;
                 next.clear();
                 while(1);
             }

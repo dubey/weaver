@@ -190,7 +190,6 @@ timer_function()
                 message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, vclk.clock[vt_id]);
                 vts->send(i, msg.buf);
             }
-            //WDEBUG << "updating vector clock at other shards\n";
         }
 
         vts->periodic_update_mutex.unlock();
@@ -236,13 +235,13 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         // send copy of params to each shard
         for (int i = 0; i < NUM_SHARDS; i++) {
             initial_batches[i + SHARD_ID_INCR].emplace_back(std::make_tuple(initial_args[0].first,
-                    initial_args[0].second, db::element::remote_node()));
+                    initial_args[0].second, db::element::remote_node(vt_id, 0)));
         }
     } else { // regular style node program
         for (std::pair<uint64_t, ParamsType> &node_params_pair: initial_args) {
             uint64_t loc = request_element_mappings[node_params_pair.first];
             initial_batches[loc].emplace_back(std::make_tuple(node_params_pair.first,
-                    std::move(node_params_pair.second), db::element::remote_node()));
+                    std::move(node_params_pair.second), db::element::remote_node(vt_id, 0)));
         }
     }
     
@@ -359,7 +358,6 @@ server_loop(int thread_id)
                     vts->periodic_update_mutex.lock();
                     vts->clock_update_acks++;
                     assert(vts->clock_update_acks < NUM_VTS);
-                    //WDEBUG << "vclk update signal\n";
                     vts->periodic_update_mutex.unlock();
                     break;
 
@@ -369,7 +367,6 @@ server_loop(int thread_id)
                     vts->periodic_update_mutex.lock();
                     vts->shard_node_count[sender - SHARD_ID_INCR] = shard_node_count;
                     vts->to_nop.set(sender - SHARD_ID_INCR);
-                    //WDEBUG << "nop signal from shard " << sender << std::endl;
                     vts->periodic_update_mutex.unlock();
                     break;
                 }
@@ -489,7 +486,7 @@ server_loop(int thread_id)
                             mark_req_finished(req_id);
                         //}
                     } else {
-                        WDEBUG << "node prog return for already completed ornever existed req id" << std::endl;
+                        WDEBUG << "node prog return for already completed or never existed req id" << std::endl;
                     }
                     vts->mutex.unlock();
                     break;
