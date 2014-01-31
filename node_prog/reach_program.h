@@ -23,6 +23,7 @@
 #include "common/message.h"
 #include "common/vclock.h"
 #include "common/event_order.h"
+#include "db/element/edge.h"
 #include "common/public_graph_elems/node.h"
 #include "common/public_graph_elems/edge.h"
 #include "common/public_graph_elems/node_ptr.h"
@@ -175,13 +176,13 @@ namespace node_prog
         }
     };
 
-/*
     inline bool
     check_cache_context(std::vector<std::pair<common::node_ptr, db::caching::node_cache_context>>& context)
     {
+        /*
         //WDEBUG  << "$$$$$ checking context of size "<< context.size() << std::endl;
         // path not valid if broken by:
-        for (auto& pair : context)
+        for (std::pair<common::node_ptr, db::caching::node_cache_context>& pair : context)
         {
             if (pair.second.node_deleted){  // node deletion
                 WDEBUG  << "Cache entry invalid because of node deletion" << std::endl;
@@ -189,10 +190,10 @@ namespace node_prog
             }
             // edge deletion, currently n^2 check for any edge deletion between two nodes in watch set, could poss be better
             if (!pair.second.edges_deleted.empty()) {
-                for(auto edge :  pair.second.edges_deleted){
-                    for (auto& pair2 : context)
+                for(auto edge : pair.second.edges_deleted){
+                    for (std::pair<common::node_ptr, db::caching::node_cache_context>& pair2 : context)
                     {
-                        if (edge.nbr.handle == pair2.first.handle){
+                        if ((common::node_ptr) edge.nbr == pair2.first) { // XXX casted unti I fix cache context for public bgraph elems
                             WDEBUG  << "Cache entry invalid because of edge deletion" << std::endl;
                             return false;
                         }
@@ -200,9 +201,10 @@ namespace node_prog
                 }
             }
         }
+        XXX temp
+        */
         return true;
     }
-    */
 
     std::vector<std::pair<common::node_ptr, reach_params>> 
     reach_node_program(
@@ -214,8 +216,6 @@ namespace node_prog
                 std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>& add_cache_func,
             std::unique_ptr<db::caching::cache_response> cache_response)
     {
-        std::vector<std::pair<common::node_ptr, reach_params>> next;
-        /*
         if (MAX_CACHE_ENTRIES)
         {
         if (params._search_cache  && !params.mode && cache_response){
@@ -232,58 +232,43 @@ namespace node_prog
                 for (auto& context_pair : cache_response->context) { 
                     params.path.emplace_back(context_pair.first);
                 }
-                next.emplace_back(std::make_pair(params.prev_node, params));
-                return next;
+                return {std::make_pair(params.prev_node, params)}; // single length vector
             } else {
                 cache_response->invalidate();
             }
         }
-        //params._search_cache = false; // only search cache for first of req
         }
 
         reach_node_state &state = state_getter();
+        std::vector<std::pair<common::node_ptr, reach_params>> next;
         bool false_reply = false;
         common::node_ptr prev_node = params.prev_node;
         params.prev_node = rn;
         if (!params.mode) { // request mode
-            if (params.dest == rn.handle) {
+            if (params.dest == rn.get_handle()) {
                 // we found the node we are looking for, prepare a reply
                 params.mode = true;
                 params.reachable = true;
                 params.path.emplace_back(rn);
                 next.emplace_back(std::make_pair(prev_node, params));
             } else {
-                // have not found it yet, check the cache, then follow all out edges
-                bool got_cache = false; // TODO
-                if (!state.visited && !got_cache) {
-                    common::edge *e;
+                // have not found it yet so follow all out edges
+                if (!state.visited) {
                     state.prev_node = prev_node;
                     state.visited = true;
-                    for (auto &iter: n.out_edges) {
-                        e = iter.second;
-                        // TODO change this so that the user does not see invalid edges
-                        // check edge created and deleted in acceptable timeframe
-                        bool traverse_edge = order::clock_creat_before_del_after(*req_vclock, e->get_creat_time(), e->get_del_time());
-
+                    for (common::edge &e: n.get_edges()) {
                         // checking edge properties
-                        for (auto &prop: params.edge_props) {
-                            if (!e->has_property(prop, *req_vclock)) {
-                                traverse_edge = false;
-                                break;
-                            }
-                        }
+                        if (e.has_all_properties(params.edge_props)) {
+                            // e->traverse(); no more traversal recording
 
-                        if (traverse_edge) {
-                            e->traverse();
-                            next.emplace_back(std::make_pair(e->nbr, params)); // propagate reachability request
+                            // propagate reachability request
+                            next.emplace_back(std::make_pair(e.get_neighbor(), params));
                             state.out_count++;
                         }
                     }
                     if (state.out_count == 0) {
                         false_reply = true;
                     }
-                } else if (!got_cache) {
-                    false_reply = true;
                 }
             }
             if (false_reply) {
@@ -314,13 +299,11 @@ namespace node_prog
                 next.emplace_back(std::make_pair(state.prev_node, params));
             }
             if ((int)state.out_count < 0) {
-                WDEBUG << "ALERT! Bad state value in reach program for node " << rn.handle
-                        << " at loc " << rn.loc << std::endl;
+                WDEBUG << "ALERT! Bad state value in reach program for node " << rn.get_handle() << std::endl;
                 next.clear();
                 while(1);
             }
         }
-        */
         return next;
     }
 }

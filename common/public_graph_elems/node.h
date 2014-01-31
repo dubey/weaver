@@ -31,11 +31,11 @@ namespace common
         public:
         edge_iter& operator++() {
             while (internal_cur != internal_end) {
-                if (internal_cur != internal_end)    WDEBUG << "checking edge " << internal_cur->second->get_handle() << " in filtering iter2" << std::endl;
+                //if (internal_cur != internal_end)    WDEBUG << "checking edge " << internal_cur->second->get_handle() << " in filtering iter2" << std::endl;
                 internal_cur++;
                 if (internal_cur != internal_end && order::clock_creat_before_del_after(*req_time,
                             internal_cur->second->get_creat_time(), internal_cur->second->get_del_time())) {
-                        WDEBUG << "ready to pass edge " << internal_cur->second->get_handle() << " in filtering iter ++" << std::endl;
+                        //WDEBUG << "ready to pass edge " << internal_cur->second->get_handle() << " in filtering iter ++" << std::endl;
                     break;
                 }
             }
@@ -48,7 +48,7 @@ namespace common
         {
             if (internal_cur != internal_end && !order::clock_creat_before_del_after(*req_time,
                         internal_cur->second->get_creat_time(), internal_cur->second->get_del_time())) {
-                        WDEBUG << "ready to pass edge " << internal_cur->second->get_handle() << " in filtering iter construct" << std::endl;
+                        //WDEBUG << "ready to pass edge " << internal_cur->second->get_handle() << " in filtering iter construct" << std::endl;
                 ++(*this);
             }
         }
@@ -93,8 +93,16 @@ namespace common
             using db::element::node::view_time;
         public:
             using db::element::node::get_handle;
-            edge_list get_edges(){assert(view_time != NULL); return edge_list(out_edges, view_time);};
-            prop_list get_properties(){assert(view_time != NULL); return prop_list(properties, *view_time);};
+
+            edge_list get_edges(){
+                assert(view_time != NULL);
+                return edge_list(out_edges, view_time);
+            };
+
+            prop_list get_properties(){
+                assert(view_time != NULL);
+                return prop_list(properties, *view_time);
+            };
     };
 }
 

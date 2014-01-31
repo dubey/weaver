@@ -32,11 +32,11 @@ namespace common
                 while (internal_cur != internal_end) {
                     internal_cur++;
 
-                    if (internal_cur != internal_end)    WDEBUG << "checking property " << internal_cur->key << " in filtering iter2" << std::endl;
+//                    if (internal_cur != internal_end)    WDEBUG << "checking property " << internal_cur->key << " in filtering iter2" << std::endl;
 
                     if (internal_cur != internal_end && order::clock_creat_before_del_after(req_time,
                                 internal_cur->get_creat_time(), internal_cur->get_del_time())) {
-                        WDEBUG << "ready to pass property " << internal_cur->key << " in filtering iter2" << std::endl;
+                        //WDEBUG << "ready to pass property " << internal_cur->key << " in filtering iter2" << std::endl;
 
                         break;
                     }
@@ -48,7 +48,7 @@ namespace common
                     std::vector<db::element::property>::iterator end, vc::vclock& req_time)
                 : internal_cur(begin), internal_end(end), req_time(req_time)
             {
-               if (internal_cur != internal_end)  WDEBUG << "checking property " << internal_cur->key << " in filtering iter1" << std::endl;
+               //if (internal_cur != internal_end)  WDEBUG << "checking property " << internal_cur->key << " in filtering iter1" << std::endl;
 
                if (internal_cur != internal_end && !order::clock_creat_before_del_after(req_time,
                             internal_cur->get_creat_time(), internal_cur->get_del_time())) {
@@ -91,12 +91,36 @@ namespace common
             using db::element::edge::properties;
             using db::element::edge::view_time;
             using db::element::edge::get_handle;
+            using db::element::edge::has_property;
 
         public:
-            uint64_t get_handle(){ return db::element::edge::get_handle();};
-            node_ptr& get_neighbor(){ return (node_ptr&) nbr;};
-            prop_list get_properties(){assert(view_time != NULL); return prop_list(properties, *view_time);};
-            //prop_iter get_prop_iter(){assert(view_time != NULL); return prop_iter(properties, *view_time);};
+            uint64_t get_handle() {
+                return db::element::edge::get_handle();
+            };
+
+            node_ptr& get_neighbor() {
+                return (node_ptr&) nbr;
+            };
+
+            prop_list get_properties() {
+                assert(view_time != NULL);
+                return prop_list(properties, *view_time);
+            };
+
+            bool has_property(common::property& p) {
+                assert(view_time != NULL);
+                return has_property((db::element::property &) p, *view_time);
+            };
+
+            bool has_all_properties(std::vector<common::property>& props) {
+                assert(view_time != NULL);
+                for (auto &p : props) {
+                    if (!has_property((db::element::property &) p, *view_time)) {
+                        return false;
+                    }
+                }
+                return true;
+            };
     };
 }
 

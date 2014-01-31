@@ -110,10 +110,12 @@ cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
 cdef extern from 'common/public_graph_elems/node_ptr.h' namespace 'common':
     cdef cppclass node_ptr:
         uint64_t get_handle()
+    cdef node_ptr coordinator
 
 class NodePtr:
-    def __init__(self, handle=0):
+    def __init__(self, handle=0, loc=0):
         self.handle = handle
+        self.loc = loc
 
 cdef extern from 'common/public_graph_elems/property.h' namespace 'common':
     cdef cppclass property:
@@ -134,7 +136,7 @@ cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
         bint reachable
 
 class ReachParams:
-    def __init__(self, mode=False, prev_node=NodePtr(), dest=0, hops=0, reachable=False, caching=False, edge_props=[]):
+    def __init__(self, mode=False, prev_node=NodePtr(0,0), dest=0, hops=0, reachable=False, caching=False, edge_props=[]):
         self._search_cache = caching
         self._cache_key = dest
         self.mode = mode
@@ -277,8 +279,7 @@ cdef class Client:
             arg_pair.second.mode = rp[1].mode
             arg_pair.second.dest = rp[1].dest
             arg_pair.second.reachable = rp[1].reachable
-            #arg_pair.second.prev_node.loc = rp[1].prev_node.loc
-            #arg_pair.second.prev_node.handle = rp[1].prev_node.handle
+            arg_pair.second.prev_node = coordinator
             for p in rp[1].edge_props:
                 prop.key = p[0].encode('UTF-8')
                 prop.value = p[1].encode('UTF-8')
