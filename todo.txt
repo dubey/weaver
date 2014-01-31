@@ -7,12 +7,12 @@ Shards
     Kronos result caching
 Node/edge properties.
 Migration experiments.
+Permanent deletion.
+Serializability test with multithreaded client.
 
 TODO
-Test serializability of transactions.
-Permanent deletion.
-    Extensive testing needed.
 Fault tolerant (chain replicated) coordinator and shards.
+Kronos events clean up
 Clean up, tackle TODO/XXX.
         migrate_step 2 & 3 - rename, optimize (batch?)
 Analytics API - global requests
@@ -20,9 +20,6 @@ Analytics API - global requests
 
 BUGS
 line_properties.py speeds up with 2 timestampers and 2 shards if nop/vclk update couts are turned on.
-transactions.py hangs with multiple vts with both read and write
 -
 
 WISHLIST
-?Failing transactions
-Kronos events clean up
