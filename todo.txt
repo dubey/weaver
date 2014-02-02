@@ -22,6 +22,7 @@ Analytics API - global requests
 GREG TODO BEFORE A RELEASE
 
 clean up code in general
+allow node programs to not use cache parameters (to clean up interface)
 
 get rid of unnecessary copies (possibly getting rid of all copy constructors for things)
 
