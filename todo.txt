@@ -11,7 +11,7 @@ Permanent deletion.
 Serializability test with multithreaded client.
 
 TODO
-Fault tolerant (chain replicated) coordinator and shards.
+Fault tolerant coordinator and shards.
 Kronos events clean up
 Clean up, tackle TODO/XXX.
         migrate_step 2 & 3 - rename, optimize (batch?)

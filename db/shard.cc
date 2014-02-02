@@ -381,7 +381,7 @@ init_nmap()
             auto &node_map = init_node_maps.front();
             WDEBUG << "NMAP init node map at shard " << shard_id << ", map size = " << node_map.size() << std::endl;
             init_mutex.unlock();
-            node_mapper.put_mappings(node_map, true);
+            node_mapper.put_mappings(node_map);
             init_mutex.lock();
             init_node_maps.pop_front();
         }

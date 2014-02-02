@@ -27,35 +27,32 @@ namespace nmap
             nmap_stub();
 
         private:
-            const char *loc_space = "weaver_loc_mapping";
-            const char *edge_space = "weaver_edge_mapping";
-            const char *loc_attrName = "shard"; // we get an attribute named "shard" with integer value correspoding to which shard node is placed on
-            const char *edge_attrName = "node"; // we get an attribute named "node" with integer value which tells us the source vertex of the edge
+            const char *space = "weaver_loc_mapping";
+            const char *attrName = "shard"; // we get an attribute named "shard" with integer value correspoding to which shard node is placed on
             hyperdex::Client cl;
 
         public:
-            void put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add, bool space);
-            std::vector<std::pair<uint64_t, uint64_t>> get_mappings(std::unordered_set<uint64_t> &toGet, bool space);
-            void del_mappings(std::vector<uint64_t> &toDel, bool space);
+            void put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add);
+            std::vector<std::pair<uint64_t, uint64_t>> get_mappings(std::unordered_set<uint64_t> &toGet);
+            void del_mappings(std::vector<uint64_t> &toDel);
             void clean_up_space();
     };
 
     inline
     nmap_stub :: nmap_stub() : cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT) { }
 
-    // sel_space: true = node map, false = edge_map
     inline void
-    nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add, bool sel_space)
+    nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add)
     {
-        const char *space = sel_space ? loc_space : edge_space;
-        const char *attrName = sel_space ? loc_attrName : edge_attrName;
         int numPairs = pairs_to_add.size();
         int i;
         hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute *) malloc(numPairs * sizeof(hyperdex_client_attribute));
 
         i = 0;
         uint32_t num_div10 = numPairs / 10;
-        num_div10 = num_div10 < 1 ? 1 : num_div10;
+        if (num_div10 < 1) {
+            num_div10 = 1;
+        }
 
         for (auto &entry: pairs_to_add) {
             attrs_to_add[i].attr = attrName;
@@ -71,9 +68,6 @@ namespace nmap
                 return;
             }
             i++;
-            //if (i % num_div10 == 0) {
-            //    WDEBUG << "Put map completed " << i << " puts" << std::endl;
-            //}
         }
 
         hyperdex_client_returncode loop_status;
@@ -86,17 +80,13 @@ namespace nmap
                 free(attrs_to_add);
                 return;
             }
-            //if (i % num_div10 == 0) {
-            //    WDEBUG << "LOOP in Put map completed " << i << " loops" << std::endl;
-            //}
         }
         free(attrs_to_add);
     }
 
     std::vector<std::pair<uint64_t, uint64_t>>
-    nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet, bool sel_space)
+    nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
     {
-        const char *space = sel_space ? loc_space : edge_space;
         int numNodes = toGet.size();
         struct async_get {
             uint64_t key;
@@ -153,9 +143,8 @@ namespace nmap
     }
 
     void
-    nmap_stub :: del_mappings(std::vector<uint64_t> &toDel, bool sel_space)
+    nmap_stub :: del_mappings(std::vector<uint64_t> &toDel)
     {
-        const char *space = sel_space ? loc_space : edge_space;
         int numNodes = toDel.size();
         std::vector<int64_t> results(numNodes);
         hyperdex_client_returncode get_status;

@@ -201,7 +201,7 @@ namespace node_prog
     }
 
     std::vector<std::pair<db::element::remote_node, reach_params>> 
-    reach_node_program(uint64_t rid, // TODO used to be req_id, now replaced by vclock
+    reach_node_program(uint64_t, // TODO used to be req_id, now replaced by vclock
             db::element::node &n,
             db::element::remote_node &rn,
             reach_params &params,

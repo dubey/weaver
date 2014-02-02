@@ -220,11 +220,11 @@ namespace coordinator
         }
 
         // insert mappings
-        nmap_client[thread_id]->put_mappings(mappings_to_put, true);
+        nmap_client[thread_id]->put_mappings(mappings_to_put);
 
         // get mappings
         if (!mappings_to_get.empty()) {
-            for (auto &toAdd: nmap_client[thread_id]->get_mappings(mappings_to_get, true)) {
+            for (auto &toAdd: nmap_client[thread_id]->get_mappings(mappings_to_get)) {
                 mappings_to_put.emplace(toAdd);
             }
         }

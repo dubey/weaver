@@ -224,7 +224,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
         mappings_to_get.insert(c_id);
     }
     if (!mappings_to_get.empty()) {
-        auto results = vts->nmap_client[thread_id]->get_mappings(mappings_to_get, true);
+        auto results = vts->nmap_client[thread_id]->get_mappings(mappings_to_get);
         assert(results.size() == mappings_to_get.size());
         for (auto &toAdd : results) {
             request_element_mappings.emplace(toAdd);
