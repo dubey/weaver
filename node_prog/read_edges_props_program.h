@@ -90,26 +90,6 @@ namespace node_prog
         }
     };
 
-    struct read_edges_props_cache_value : public virtual Cache_Value_Base 
-    {
-        virtual ~read_edges_props_cache_value() { }
-
-        virtual uint64_t size() const 
-        {
-            return 0;
-        }
-
-        virtual void pack(e::buffer::packer& packer) const 
-        {
-            UNUSED(packer);
-        }
-
-        virtual void unpack(e::unpacker& unpacker)
-        {
-            UNUSED(unpacker);
-        }
-    };
-
     std::vector<std::pair<common::node_ptr, read_edges_props_params>> 
     read_edges_props_node_program(
             common::node &n,

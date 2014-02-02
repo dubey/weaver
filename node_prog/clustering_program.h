@@ -111,44 +111,20 @@ namespace node_prog
         }
     };
 
-    struct clustering_cache_value : public virtual Cache_Value_Base 
-    {
-        public:
-        uint64_t numerator;
-
-        clustering_cache_value(uint64_t num) : numerator(num) {}; 
-
-        virtual ~clustering_cache_value () { }
-
-        virtual uint64_t size() const 
-        {
-            return message::size(numerator);
-        }
-
-        virtual void pack(e::buffer::packer& packer) const 
-        {
-            message::pack_buffer(packer, numerator);
-        }
-
-        virtual void unpack(e::unpacker& unpacker)
-        {
-            message::unpack_buffer(unpacker, numerator);
-        }
-    };
-
     std::vector<std::pair<common::node_ptr, clustering_params>> 
     clustering_node_program(
             common::node &n,
             common::node_ptr &rn,
             clustering_params &params,
-            std::function<clustering_node_state&()> state_getter,
+            std::function<clustering_node_state&()> get_state,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
                 std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>& add_cache_func,
             std::unique_ptr<db::caching::cache_response> cache_response)
     {
+        // TODO can we change this to a three enum switch to reduce number of if statements
         std::vector<std::pair<common::node_ptr, clustering_params>> next;
         if (params.is_center) {
-            node_prog::clustering_node_state &cstate = state_getter();
+            node_prog::clustering_node_state &cstate = get_state();
             if (params.outgoing) {
                 params.is_center = false;
                 params.center = rn;
