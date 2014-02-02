@@ -15,7 +15,7 @@
 import random
 import sys
 import time
-sys.path.append('../bindings/python')
+sys.path.append('../../bindings/python')
 
 import client
 

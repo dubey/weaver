@@ -146,27 +146,25 @@ namespace node_prog
                 std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>& add_cache_func,
             std::unique_ptr<db::caching::cache_response> cache_response)
     {
+        std::vector<std::pair<common::node_ptr, clustering_params>> next;
         if (params.is_center) {
             node_prog::clustering_node_state &cstate = state_getter();
             if (params.outgoing) {
-                std::vector<std::pair<common::node_ptr, clustering_params>> neighbor_programs;
                 params.is_center = false;
                 params.center = rn;
                 for (common::edge& edge : n.get_edges()) {
-                    neighbor_programs.emplace_back(std::make_pair(edge.get_neighbor(), params));
+                    next.emplace_back(std::make_pair(edge.get_neighbor(), params));
                     cstate.neighbor_counts.insert(std::make_pair(edge.get_neighbor().get_handle(), 0));
                     cstate.responses_left++;
                 }
                 if (cstate.responses_left < 2) { // if no or one neighbor we know clustering coeff already
                     params.clustering_coeff = 0;
-                    return {std::make_pair(common::coordinator, std::move(params))};
-                } else {
-                    return neighbor_programs;
+                    next = {std::make_pair(common::coordinator, std::move(params))};
                 }
             } else {
                 for (uint64_t nbr : params.neighbors) {
-                    if (cstate.neighbor_counts.count(poss_nbr) > 0) {
-                        cstate.neighbor_counts[poss_nbr]++;
+                    if (cstate.neighbor_counts.count(nbr) > 0) {
+                        cstate.neighbor_counts[nbr]++;
                     }
                 }
                 if (--cstate.responses_left == 0) {
@@ -177,8 +175,8 @@ namespace node_prog
                         numerator += nbr_count.second;
                     }
                     params.clustering_coeff = (double) numerator / denominator;
-                    return {std::make_pair(common::coordinator, std::move(params))};
-                }
+                    next = {std::make_pair(common::coordinator, std::move(params))};
+                } 
             }
         } else { // not center
             for (common::edge& edge : n.get_edges()) {
@@ -186,8 +184,9 @@ namespace node_prog
             }
             params.outgoing = false;
             params.is_center = true;
-            return {std::make_pair(params.center, std::move(params))};
+            next = {std::make_pair(params.center, std::move(params))};
         }
+        return next;
     }
 }
 
