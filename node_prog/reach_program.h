@@ -218,25 +218,25 @@ namespace node_prog
     {
         if (MAX_CACHE_ENTRIES)
         {
-        if (params._search_cache  && !params.mode && cache_response){
-            // check context, update cache
-            bool valid = check_cache_context(cache_response->context);
-            if (valid) {
-                //WDEBUG  << "valid CACHE RESPONSE node handle: " << rn.handle << std::endl;
-                // we found the node we are looking for, prepare a reply
-                params.mode = true;
-                params.reachable = true;
-                params._search_cache = false; // don't search on way back
+            if (params._search_cache  && !params.mode && cache_response){
+                // check context, update cache
+                bool valid = check_cache_context(cache_response->context);
+                if (valid) {
+                    //WDEBUG  << "valid CACHE RESPONSE node handle: " << rn.handle << std::endl;
+                    // we found the node we are looking for, prepare a reply
+                    params.mode = true;
+                    params.reachable = true;
+                    params._search_cache = false; // don't search on way back
 
-                // context for cached value contains the nodes in the path to the destination from this node
-                for (auto& context_pair : cache_response->context) { 
-                    params.path.emplace_back(context_pair.first);
+                    // context for cached value contains the nodes in the path to the destination from this node
+                    for (auto& context_pair : cache_response->context) { 
+                        params.path.emplace_back(context_pair.first);
+                    }
+                    return {std::make_pair(params.prev_node, params)}; // single length vector
+                } else {
+                    cache_response->invalidate();
                 }
-                return {std::make_pair(params.prev_node, params)}; // single length vector
-            } else {
-                cache_response->invalidate();
             }
-        }
         }
 
         reach_node_state &state = state_getter();
@@ -289,11 +289,11 @@ namespace node_prog
                     params.path.emplace_back(rn);
                     if (MAX_CACHE_ENTRIES)
                     {
-                    // now add to cache
-                    std::shared_ptr<node_prog::reach_cache_value> toCache(new reach_cache_value());
-                    std::shared_ptr<std::vector<common::node_ptr>> watch_set(new std::vector<common::node_ptr>(params.path)); // copy return path from params
-                    uint64_t cache_key = params.dest;
-                    add_cache_func(toCache, watch_set, cache_key);
+                        // now add to cache
+                        std::shared_ptr<node_prog::reach_cache_value> toCache(new reach_cache_value());
+                        std::shared_ptr<std::vector<common::node_ptr>> watch_set(new std::vector<common::node_ptr>(params.path)); // copy return path from params
+                        uint64_t cache_key = params.dest;
+                        add_cache_func(toCache, watch_set, cache_key);
                     }
                 }
                 next.emplace_back(std::make_pair(state.prev_node, params));
