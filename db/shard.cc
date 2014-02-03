@@ -917,13 +917,15 @@ inline void node_prog_loop(
                         np.prog_type_recvd, _1, _2, _3, np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key
                 }
 
-                node->view_time = np.req_vclock; 
                 common::node& node_to_pass = (common::node &) (*node);
                 common::node_ptr& ptr_to_pass = (common::node_ptr &) (this_node);
+
+                node->view_time = np.req_vclock; 
                 auto next_node_params = func(node_to_pass, ptr_to_pass,
                         params, // actual parameters for this node program
                         node_state_getter, add_cache_func, std::move(np.cache_value));
-               // WDEBUG << "1 got new params count" << next_node_params.size() << std::endl;
+                node->view_time = nullptr; 
+
                 // batch the newly generated node programs for onward propagation
 #ifdef WEAVER_CLDG
                 std::unordered_map<uint64_t, uint32_t> agg_msg_count;
