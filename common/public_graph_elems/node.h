@@ -29,13 +29,12 @@ namespace common
         std::shared_ptr<vc::vclock> req_time;
 
         public:
-        edge_iter& operator++() {
+        edge_iter& operator++()
+        {
             while (internal_cur != internal_end) {
-                //if (internal_cur != internal_end)    WDEBUG << "checking edge " << internal_cur->second->get_handle() << " in filtering iter2" << std::endl;
                 internal_cur++;
                 if (internal_cur != internal_end && order::clock_creat_before_del_after(*req_time,
                             internal_cur->second->get_creat_time(), internal_cur->second->get_del_time())) {
-                        //WDEBUG << "ready to pass edge " << internal_cur->second->get_handle() << " in filtering iter ++" << std::endl;
                     break;
                 }
             }
@@ -48,14 +47,13 @@ namespace common
         {
             if (internal_cur != internal_end && !order::clock_creat_before_del_after(*req_time,
                         internal_cur->second->get_creat_time(), internal_cur->second->get_del_time())) {
-                        //WDEBUG << "ready to pass edge " << internal_cur->second->get_handle() << " in filtering iter construct" << std::endl;
                 ++(*this);
             }
         }
 
-        //edge_iter operator++(int) {edge_iter tmp(*this); operator++(); return tmp;}
-        bool operator==(const edge_iter& rhs) {return internal_cur == rhs.internal_cur && req_time == rhs.req_time;} // TODO == for req time?
-        bool operator!=(const edge_iter& rhs) {return internal_cur != rhs.internal_cur || !(req_time == rhs.req_time);} // TODO == for req time?
+        bool operator==(const edge_iter& rhs) { return internal_cur == rhs.internal_cur && req_time == rhs.req_time; } // TODO == for req time?
+        bool operator!=(const edge_iter& rhs) { return internal_cur != rhs.internal_cur || !(req_time == rhs.req_time); } // TODO == for req time?
+
         edge& operator*()
         {
             db::element::edge& toRet = *internal_cur->second;
@@ -68,38 +66,36 @@ namespace common
     {
         private:
             std::unordered_map<uint64_t, db::element::edge*>& wrapped;
-        std::shared_ptr<vc::vclock> req_time;
+            std::shared_ptr<vc::vclock> req_time;
 
         public:
-        edge_list(std::unordered_map<uint64_t, db::element::edge*>& edge_list, std::shared_ptr<vc::vclock>& req_time)
-            : wrapped(edge_list), req_time(req_time) {}
+            edge_list(std::unordered_map<uint64_t, db::element::edge*>& edge_list, std::shared_ptr<vc::vclock>& req_time)
+                : wrapped(edge_list), req_time(req_time) {}
 
-        edge_iter begin () //const
-        {
-            return edge_iter(wrapped.begin(), wrapped.end(), req_time);
-        }
+            edge_iter begin () //const
+            {
+                return edge_iter(wrapped.begin(), wrapped.end(), req_time);
+            }
 
-        edge_iter end () //const
-        {
-            return edge_iter(wrapped.end(), wrapped.end(), req_time);
-        }
+            edge_iter end () //const
+            {
+                return edge_iter(wrapped.end(), wrapped.end(), req_time);
+            }
     };
 
     class node : private db::element::node
     {
-        private:
-            using db::element::node::out_edges;
-            using db::element::node::properties;
-            using db::element::node::view_time;
         public:
             using db::element::node::get_handle;
 
-            edge_list get_edges(){
+            edge_list get_edges()
+            {
                 assert(view_time != NULL);
                 return edge_list(out_edges, view_time);
             };
 
-            prop_list get_properties(){
+            prop_list get_properties()
+            {
                 assert(view_time != NULL);
                 return prop_list(properties, *view_time);
             };

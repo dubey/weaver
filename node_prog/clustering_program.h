@@ -118,8 +118,8 @@ namespace node_prog
             clustering_params &params,
             std::function<clustering_node_state&()> get_state,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>& add_cache_func,
-            std::unique_ptr<db::caching::cache_response> cache_response)
+                std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>&,
+            std::unique_ptr<db::caching::cache_response>)
     {
         // TODO can we change this to a three enum switch to reduce number of if statements
         std::vector<std::pair<common::node_ptr, clustering_params>> next;

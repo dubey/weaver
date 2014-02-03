@@ -100,25 +100,19 @@ namespace node_prog
                 std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)
     {
-        for (common::edge &edge : n.get_edges())
-        {
-            if (params.edges.empty() || (std::find(params.edges.begin(), params.edges.end(), edge.get_handle()) != params.edges.end()))
-            {
+        for (common::edge &edge : n.get_edges()) {
+            if (params.edges.empty() || (std::find(params.edges.begin(), params.edges.end(), edge.get_handle()) != params.edges.end())) {
                 std::vector<common::property> matching_edge_props;
-                for (common::property &prop : edge.get_properties())
-                {
-                    if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.key) != params.keys.end()))
-                    {
+                for (common::property &prop : edge.get_properties()) {
+                    if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.key) != params.keys.end())) {
                         matching_edge_props.emplace_back(prop);
                     }
                 }
-                if (!matching_edge_props.empty())
-                {
+                if (!matching_edge_props.empty()) {
                     params.edges_props.emplace_back(edge.get_handle(), std::move(matching_edge_props));
                 }
             }
         }
-
         return {std::make_pair(common::coordinator, std::move(params))}; // initializer list of vector
     }
 }
