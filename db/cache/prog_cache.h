@@ -22,7 +22,7 @@
 #include "node_prog/base_classes.h"
 #include "db/element/node.h"
 #include "db/element/edge.h"
-#include "common/public_graph_elems/node_ptr.h"
+#include "node_prog/node_handle.h"
 
 namespace db
 {
@@ -44,10 +44,10 @@ namespace caching
     {
         uint64_t uid = 0;
         public:
-        std::unordered_map<uint64_t, std::tuple<std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<vc::vclock>, std::shared_ptr<std::vector<common::node_ptr>>>> cache;
+        std::unordered_map<uint64_t, std::tuple<std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<vc::vclock>, std::shared_ptr<std::vector<node_prog::node_handle>>>> cache;
 
         void add_cache_value(node_prog::prog_type& ptype, std::shared_ptr<node_prog::Cache_Value_Base> cache_value,
-                std::shared_ptr<std::vector<common::node_ptr>> watch_set, uint64_t key, std::shared_ptr<vc::vclock>& vc);
+                std::shared_ptr<std::vector<node_prog::node_handle>> watch_set, uint64_t key, std::shared_ptr<vc::vclock>& vc);
         uint64_t gen_uid();
 
         program_cache() : cache(MAX_CACHE_ENTRIES) {}; // reserve size of max cache
@@ -59,7 +59,7 @@ namespace caching
 
     inline void
     program_cache :: add_cache_value(node_prog::prog_type& ptype, std::shared_ptr<node_prog::Cache_Value_Base> cache_value,
-            std::shared_ptr<std::vector<common::node_ptr>> watch_set, uint64_t key, std::shared_ptr<vc::vclock>& vc)
+            std::shared_ptr<std::vector<node_prog::node_handle>> watch_set, uint64_t key, std::shared_ptr<vc::vclock>& vc)
     {
         // clear oldest entry if cache is full
         if (MAX_CACHE_ENTRIES > 0 && cache.size() >= MAX_CACHE_ENTRIES){
@@ -92,12 +92,12 @@ namespace caching
 
         public:
             std::shared_ptr<node_prog::Cache_Value_Base> value;
-            std::shared_ptr<std::vector<common::node_ptr>> watch_set;
-            std::vector<std::pair<common::node_ptr, node_cache_context>> context;
+            std::shared_ptr<std::vector<node_prog::node_handle>> watch_set;
+            std::vector<std::pair<node_prog::node_handle, node_cache_context>> context;
             void invalidate();
 
             cache_response(program_cache &came_from, uint64_t key_used, std::shared_ptr<node_prog::Cache_Value_Base> &val,
-                    std::shared_ptr<std::vector<common::node_ptr>> watch_set_used)
+                    std::shared_ptr<std::vector<node_prog::node_handle>> watch_set_used)
                 : from(came_from)
                 , key(key_used)
                 , value(val)

@@ -917,7 +917,7 @@ inline void node_prog_loop(
                         np.prog_type_recvd, _1, _2, _3, np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key
                 }
 
-                common::node& node_to_pass = (common::node &) (*node);
+                node_prog::node& node_to_pass = (node_prog::node &) (*node);
                 node_prog::node_handle& ptr_to_pass = (node_prog::node_handle &) (this_node);
 
                 node->view_time = np.req_vclock; 
@@ -933,7 +933,7 @@ inline void node_prog_loop(
                 for (std::pair<node_prog::node_handle, ParamsType> &res : next_node_params) {
                     db::element::remote_node& rn = (db::element::remote_node &) res.first;
                     assert(rn.loc < NUM_SHARDS + SHARD_ID_INCR);
-                    if (rn == common::coord_remote_node) {
+                    if (rn == node_prog::coord_remote_node) {
                         // signal to send back to vector timestamper that issued request
                         // TODO mark done
                         // XXX get rid of pair, without pair it is not working for some reason

@@ -13,7 +13,7 @@
 #include <po6/net/location.h>
 
 #include "property.h"
-#include "node_ptr.h"
+#include "node_handle.h"
 #include "common/vclock.h"
 #include "db/element/property.h"
 #include "db/element/edge.h"
@@ -85,9 +85,9 @@ namespace node_prog
                 return db::element::edge::get_id();
             };
 
-            node_ptr& get_neighbor()
+            node_handle& get_neighbor()
             {
-                return (node_ptr&) nbr;
+                return (node_handle&) nbr;
             };
 
             prop_list get_properties()

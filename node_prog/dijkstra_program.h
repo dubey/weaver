@@ -81,14 +81,14 @@ namespace node_prog
         public:
             uint64_t src_handle;
             node_handle source_node;
-            uint64_t dst_handle;
+            node_handle dst_handle;
             std::string edge_weight_name; // the name of the property which holds the weight of an an edge
             std::vector<db::element::property> edge_props;
             bool is_widest_path;
             bool adding_nodes;
             uint64_t prev_node;
             std::vector<std::pair<uint64_t, node_handle>> entries_to_add;
-            uint64_t next_node;
+            node_handle next_node;
             std::vector<std::pair<uint64_t, uint64_t>> final_path;
             uint64_t cost;
             uint64_t vt_id;
@@ -215,7 +215,7 @@ namespace node_prog
             std::unique_ptr<db::caching::cache_response>)
     {
         WDEBUG << "DIJKSTRAAAAA" << std::endl;
-        if (rn.get_handle() == params.src_handle) {
+        if (rn == params.src_handle) {
             dijkstra_node_state &node_state = get_state();
             WDEBUG << "Dijkstra program: at source" <<  std::endl;
             if (params.adding_nodes == true) { 
@@ -267,7 +267,7 @@ namespace node_prog
                     node_state.pq_shortest.pop();
                 }
                 params.cost = next_to_add.cost;
-                params.next_node = next_to_add.node.get_handle();
+                params.next_node = next_to_add.node;
                 params.prev_node = next_to_add.prev_node_req_id;
                 if (params.next_node == params.dst_handle) {
                     WDEBUG << "DIJKSTRA found dest" << std::endl;

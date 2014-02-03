@@ -250,7 +250,7 @@ namespace message
             + size(t.value)
             + 2*size(t.creat_time); // for del time
     }
-    inline uint64_t size(const common::property &t)
+    inline uint64_t size(const node_prog::property &t)
     {
         return size((const db::element::property&) t);
     }
@@ -450,7 +450,7 @@ namespace message
     }
 
     inline void 
-    pack_buffer(e::buffer::packer &packer, const common::property &t)
+    pack_buffer(e::buffer::packer &packer, const node_prog::property &t)
     {
         pack_buffer(packer, (const db::element::property&) t);
     }
@@ -740,7 +740,7 @@ namespace message
     }
 
     inline void 
-    unpack_buffer(e::unpacker &unpacker, common::property &t)
+    unpack_buffer(e::unpacker &unpacker, node_prog::property &t)
     {
         unpack_buffer(unpacker, (db::element::property &) t);
     }

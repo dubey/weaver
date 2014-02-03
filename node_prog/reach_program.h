@@ -37,7 +37,7 @@ namespace node_prog
             uint64_t _cache_key;
             bool mode; // false = request, true = reply
             node_handle prev_node;
-            uint64_t dest;
+            node_handle dest;
             std::vector<property> edge_props;
             uint32_t hops;
             bool reachable;
@@ -245,7 +245,7 @@ namespace node_prog
         node_handle prev_node = params.prev_node;
         params.prev_node = rn;
         if (!params.mode) { // request mode
-            if (params.dest == rn.get_handle()) {
+            if (params.dest == rn) {
                 // we found the node we are looking for, prepare a reply
                 params.mode = true;
                 params.reachable = true;
@@ -299,7 +299,7 @@ namespace node_prog
                 next.emplace_back(std::make_pair(state.prev_node, params));
             }
             if ((int)state.out_count < 0) {
-                WDEBUG << "ALERT! Bad state value in reach program for node " << rn.get_handle() << std::endl;
+                WDEBUG << "ALERT! Bad state value in reach program" << std::endl;
                 next.clear();
                 while(1);
             }

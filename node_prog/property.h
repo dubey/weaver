@@ -19,18 +19,14 @@
 
 #include "db/element/property.h"
 
-namespace common
+namespace node_prog
 {
     class property : private db::element::property
     {
         public:
             using db::element::property::key;
             using db::element::property::value;
-            /*
-            using db::element::property::property;
-            */
-            //property(std::string &k, std::string &v) /*: db::element::property(k, v)*/ {};
-    };
+   };
 }
 
 #endif

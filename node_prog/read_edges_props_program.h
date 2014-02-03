@@ -21,9 +21,9 @@
 #include "common/message.h"
 #include "common/vclock.h"
 #include "common/event_order.h"
-#include "common/public_graph_elems/node.h"
-#include "common/public_graph_elems/edge.h"
-#include "common/public_graph_elems/node_ptr.h"
+#include "node.h"
+#include "edge.h"
+#include "node_handle.h"
 
 namespace node_prog
 {

@@ -24,7 +24,7 @@ namespace message
     // size methods
     inline uint64_t size(const db::element::edge &t)
     {
-        uint64_t sz = sizeof(uint64_t) // handle
+        uint64_t sz = sizeof(uint64_t) // id
             + size(t.get_creat_time()) + size(t.get_del_time()) // time stamps
             + size(*t.get_props()) // properties
             + size(t.msg_count)
@@ -38,21 +38,21 @@ namespace message
 
     inline uint64_t size(const db::element::node &t)
     {
-        uint64_t sz = sizeof(uint64_t) // handle
+        uint64_t sz = sizeof(uint64_t) // id
             + size(t.get_creat_time()) + size(t.get_del_time()) // time stamps
             + size(*t.get_props())  // properties
             + size(t.out_edges)
             + size(t.update_count)
             + size(t.msg_count)
             + size(t.already_migr)
-            + prog_state->size(t.get_handle());
+            + prog_state->size(t.get_id());
         return sz;
     }
 
     // packing methods
     inline void pack_buffer(e::buffer::packer &packer, const db::element::edge &t)
     {
-        packer = packer << t.get_handle();
+        packer = packer << t.get_id();
         pack_buffer(packer, t.get_creat_time());
         pack_buffer(packer, t.get_del_time());
         pack_buffer(packer, *t.get_props());
@@ -67,7 +67,7 @@ namespace message
     inline void
     pack_buffer(e::buffer::packer &packer, const db::element::node &t)
     {
-        packer = packer << t.get_handle();
+        packer = packer << t.get_id();
         pack_buffer(packer, t.get_creat_time());
         pack_buffer(packer, t.get_del_time());
         pack_buffer(packer, *t.get_props());
@@ -75,19 +75,19 @@ namespace message
         pack_buffer(packer, t.update_count);
         pack_buffer(packer, t.msg_count);
         pack_buffer(packer, t.already_migr);
-        prog_state->pack(t.get_handle(), packer);
+        prog_state->pack(t.get_id(), packer);
     }
 
     // unpacking methods
     inline void
     unpack_buffer(e::unpacker &unpacker, db::element::edge &t)
     {
-        uint64_t handle;
+        uint64_t id;
         vc::vclock creat_time, del_time;
         std::vector<db::element::property> props;
 
-        unpacker = unpacker >> handle;
-        t.set_handle(handle);
+        unpacker = unpacker >> id;
+        t.set_id(id);
 
         unpack_buffer(unpacker, creat_time);
         t.update_creat_time(creat_time);
@@ -114,10 +114,10 @@ namespace message
     inline void
     unpack_buffer(e::unpacker &unpacker, db::element::node &t)
     {
-        uint64_t handle;
+        uint64_t id;
         vc::vclock creat_time, del_time;
         std::vector<db::element::property> props;
-        unpacker = unpacker >> handle;
+        unpacker = unpacker >> id;
         unpack_buffer(unpacker, creat_time);
         unpack_buffer(unpacker, del_time);
         unpack_buffer(unpacker, props);
@@ -125,11 +125,11 @@ namespace message
         unpack_buffer(unpacker, t.update_count);
         unpack_buffer(unpacker, t.msg_count);
         unpack_buffer(unpacker, t.already_migr);
-        t.set_handle(handle);
+        t.set_id(id);
         t.update_creat_time(creat_time);
         t.update_del_time(del_time);
         t.set_properties(props);
-        prog_state->unpack(handle, unpacker);
+        prog_state->unpack(id, unpacker);
     }
 }
 
