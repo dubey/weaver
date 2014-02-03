@@ -43,10 +43,10 @@ namespace element
     {
         public:
             element();
-            element(uint64_t handle, vc::vclock &vclk);
+            element(uint64_t id, vc::vclock &vclk);
             
         protected:
-            uint64_t handle;
+            uint64_t id;
             std::vector<property> properties;
             vc::vclock creat_time;
             vc::vclock del_time;
@@ -68,14 +68,14 @@ namespace element
             const vc::vclock& get_del_time() const;
             std::pair<bool, std::string> get_property_value(std::string prop_key, vc::vclock &at_time);
             const std::vector<property>* get_props() const;
-            void set_handle(uint64_t handle);
-            uint64_t get_handle() const;
+            void set_id(uint64_t id);
+            uint64_t get_id() const;
     };
 
     inline element :: element() { }
 
     inline element :: element(uint64_t hndl, vc::vclock &vclk)
-        : handle(hndl)
+        : id(hndl)
         , creat_time(vclk)
         , del_time(MAX_UINT64, MAX_TIME)
         , view_time(NULL)
@@ -193,15 +193,15 @@ namespace element
     }
 
     inline void
-    element :: set_handle(uint64_t hndl)
+    element :: set_id(uint64_t hndl)
     {
-        handle = hndl;
+        id = hndl;
     }
 
     inline uint64_t
-    element :: get_handle() const
+    element :: get_id() const
     {
-        return handle;
+        return id;
     }
 }
 }

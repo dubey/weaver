@@ -33,7 +33,7 @@ namespace node_prog
             std::vector<uint64_t> edges; // empty vector means fetch props for all edges
             std::vector<std::string> keys; // empty vector means fetch all props
             uint64_t vt_id;
-            std::vector<std::pair<uint64_t, std::vector<common::property>>> edges_props;
+            std::vector<std::pair<uint64_t, std::vector<property>>> edges_props;
 
         public:
             virtual bool search_cache() {
@@ -90,20 +90,20 @@ namespace node_prog
         }
     };
 
-    std::vector<std::pair<common::node_ptr, read_edges_props_params>> 
+    std::vector<std::pair<node_handle, read_edges_props_params>> 
     read_edges_props_node_program(
-            common::node &n,
-            common::node_ptr &,
+            node &n,
+            node_handle &,
             read_edges_props_params &params,
             std::function<read_edges_props_state&()>,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>&,
+                std::shared_ptr<std::vector<node_handle>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)
     {
-        for (common::edge &edge : n.get_edges()) {
+        for (edge &edge : n.get_edges()) {
             if (params.edges.empty() || (std::find(params.edges.begin(), params.edges.end(), edge.get_handle()) != params.edges.end())) {
-                std::vector<common::property> matching_edge_props;
-                for (common::property &prop : edge.get_properties()) {
+                std::vector<property> matching_edge_props;
+                for (property &prop : edge.get_properties()) {
                     if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.key) != params.keys.end())) {
                         matching_edge_props.emplace_back(prop);
                     }
@@ -113,7 +113,7 @@ namespace node_prog
                 }
             }
         }
-        return {std::make_pair(common::coordinator, std::move(params))}; // initializer list of vector
+        return {std::make_pair(coordinator, std::move(params))}; // initializer list of vector
     }
 }
 

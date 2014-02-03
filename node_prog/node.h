@@ -20,7 +20,7 @@
 #include "db/element/edge.h"
 #include "db/element/property.h"
 
-namespace common
+namespace node_prog
 {
     class edge_iter : public std::iterator<std::input_iterator_tag, edge>
     {
@@ -86,8 +86,6 @@ namespace common
     class node : private db::element::node
     {
         public:
-            using db::element::node::get_handle;
-
             edge_list get_edges()
             {
                 assert(view_time != NULL);

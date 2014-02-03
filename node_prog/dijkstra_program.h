@@ -20,9 +20,9 @@
 #include <sstream>
 
 #include "common/message.h"
-#include "common/public_graph_elems/node.h"
-#include "common/public_graph_elems/edge.h"
-#include "common/public_graph_elems/node_ptr.h"
+#include "node.h"
+#include "edge.h"
+#include "node_handle.h"
 
 namespace node_prog
 {
@@ -30,7 +30,7 @@ namespace node_prog
     {
         public:
             uint64_t cost;
-            common::node_ptr node;
+            node_handle node;
             uint64_t prev_node_req_id; // used for reconstructing path in coordinator
 
             int operator<(const dijkstra_queue_elem& other) const
@@ -45,7 +45,7 @@ namespace node_prog
 
             dijkstra_queue_elem() { }
 
-            dijkstra_queue_elem(uint64_t c, common::node_ptr n, uint64_t prev)
+            dijkstra_queue_elem(uint64_t c, node_handle n, uint64_t prev)
                 : cost(c)
                 , node(n)
                 , prev_node_req_id(prev)
@@ -80,14 +80,14 @@ namespace node_prog
     {
         public:
             uint64_t src_handle;
-            common::node_ptr source_node;
+            node_handle source_node;
             uint64_t dst_handle;
             std::string edge_weight_name; // the name of the property which holds the weight of an an edge
             std::vector<db::element::property> edge_props;
             bool is_widest_path;
             bool adding_nodes;
             uint64_t prev_node;
-            std::vector<std::pair<uint64_t, common::node_ptr>> entries_to_add;
+            std::vector<std::pair<uint64_t, node_handle>> entries_to_add;
             uint64_t next_node;
             std::vector<std::pair<uint64_t, uint64_t>> final_path;
             uint64_t cost;
@@ -205,13 +205,13 @@ namespace node_prog
         return priority;
     }
 
-    std::vector<std::pair<common::node_ptr, dijkstra_params>> 
+    std::vector<std::pair<node_handle, dijkstra_params>> 
     dijkstra_node_program(
-            common::node &n,
-            common::node_ptr &rn,
+            node &n,
+            node_handle &rn,
             dijkstra_params &params,
             std::function<dijkstra_node_state&()> get_state,
-            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>&,
+            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<std::vector<node_handle>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)
     {
         WDEBUG << "DIJKSTRAAAAA" << std::endl;
@@ -237,8 +237,8 @@ namespace node_prog
                 params.cost = params.is_widest_path ? MAX_TIME : 0; // don't want source node to be bottleneck in path
                 node_state.visited.emplace(params.src_handle, std::make_pair(params.src_handle, params.cost)); // handles same at source
 
-                for (common::edge &edge: n.get_edges()) {
-                    for (common::property& prop : edge.get_properties()) {
+                for (edge &edge: n.get_edges()) {
+                    for (property& prop : edge.get_properties()) {
                         if (params.edge_weight_name.compare(prop.key) == 0) {
                             uint64_t edge_weight;
                             std::stringstream(prop.value) >> edge_weight;
@@ -299,7 +299,7 @@ namespace node_prog
                             cur_node = visited_entry.first;
                         }
                     }
-                    return {std::make_pair(common::coordinator, std::move(params))};
+                    return {std::make_pair(coordinator, std::move(params))};
                 } else { // we need to send a prop
                     bool get_neighbors = true;
                     if (node_state.visited.count(params.next_node) > 0) {
@@ -317,12 +317,12 @@ namespace node_prog
             // dest couldn't be reached, send failure to coord
             params.final_path = {}; // empty path
             params.cost = 0;
-            return {std::make_pair(common::coordinator, std::move(params))};
+            return {std::make_pair(coordinator, std::move(params))};
         } else {
             params.adding_nodes = true;
             WDEBUG << "Dijkstra program: NOT source" <<  std::endl;
-            for (common::edge &edge: n.get_edges()) {
-                for (common::property& prop : edge.get_properties()) {
+            for (edge &edge: n.get_edges()) {
+                for (property& prop : edge.get_properties()) {
                     if (params.edge_weight_name.compare(prop.key) == 0) {
                         uint64_t edge_weight;
                         std::stringstream(prop.value) >> edge_weight;

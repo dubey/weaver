@@ -18,7 +18,7 @@
 #include "db/element/property.h"
 #include "db/element/edge.h"
 
-namespace common
+namespace node_prog
 {
     class prop_iter : public std::iterator<std::input_iterator_tag, property>
     {
@@ -80,9 +80,9 @@ namespace common
     class edge : private db::element::edge
     {
         public:
-            uint64_t get_handle()
+            uint64_t get_id()
             {
-                return db::element::edge::get_handle();
+                return db::element::edge::get_id();
             };
 
             node_ptr& get_neighbor()
@@ -96,13 +96,13 @@ namespace common
                 return prop_list(properties, *view_time);
             };
 
-            bool has_property(common::property& p)
+            bool has_property(property& p)
             {
                 assert(view_time != NULL);
                 return db::element::edge::has_property((db::element::property &) p, *view_time);
             };
 
-            bool has_all_properties(std::vector<common::property>& props)
+            bool has_all_properties(std::vector<property>& props)
             {
                 assert(view_time != NULL);
                 for (auto &p : props) {

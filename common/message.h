@@ -33,8 +33,8 @@
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
 #include "db/element/property.h"
-#include "common/public_graph_elems/property.h"
-#include "common/public_graph_elems/node_ptr.h"
+#include "node_prog/property.h"
+#include "node_prog/node_handle.h"
 
 namespace message
 {
@@ -258,7 +258,7 @@ namespace message
     {
         return size(t.loc) + size(t.handle);
     }
-    inline uint64_t size(const common::node_ptr &t)
+    inline uint64_t size(const node_prog::node_handle &t)
     {
         return size((const db::element::remote_node&) t);
     }
@@ -462,7 +462,7 @@ namespace message
     }
 
     inline void 
-    pack_buffer(e::buffer::packer &packer, const common::node_ptr &t)
+    pack_buffer(e::buffer::packer &packer, const node_prog::node_handle &t)
     {
         pack_buffer(packer, (const db::element::remote_node&)t);
     }
@@ -751,7 +751,7 @@ namespace message
         unpacker = unpacker >> t.loc >> t.handle;
     }
     inline void 
-    unpack_buffer(e::unpacker &unpacker, common::node_ptr& t)
+    unpack_buffer(e::unpacker &unpacker, node_prog::node_handle& t)
     {
         unpack_buffer(unpacker, (db::element::remote_node&) t);
     }

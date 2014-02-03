@@ -11,21 +11,20 @@
  * ===============================================================
  */
 
-#ifndef __NODE_PTR__
-#define __NODE_PTR__
+#ifndef __NODE_HANDLE__
+#define __NODE_HANDLE__
 
 #include "db/element/remote_node.h"
 
-namespace common
+namespace node_prog
 {
-    class node_ptr : private db::element::remote_node
+    class node_handle : private db::element::remote_node
     {
-        public:
-            using db::element::remote_node::get_handle;
+        // expose nothing!
     };
 
     static db::element::remote_node coord_remote_node(0,0);
-    static node_ptr& coordinator = (node_ptr &) coord_remote_node;
+    static node_handle& coordinator = (node_handle &) coord_remote_node;
 }
 
 #endif

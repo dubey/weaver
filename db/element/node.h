@@ -40,7 +40,7 @@ namespace element
     class node : public element
     {
         public:
-            node(uint64_t handle, vc::vclock &vclk, po6::threads::mutex *mtx);
+            node(uint64_t id, vc::vclock &vclk, po6::threads::mutex *mtx);
 
         public:
             enum mode
@@ -86,8 +86,8 @@ namespace element
     };
 
     inline
-    node :: node(uint64_t handle, vc::vclock &vclk, po6::threads::mutex *mtx)
-        : element(handle, vclk)
+    node :: node(uint64_t id, vc::vclock &vclk, po6::threads::mutex *mtx)
+        : element(id, vclk)
         , state(mode::NASCENT)
         , cv(mtx)
         , migr_cv(mtx)
@@ -108,7 +108,7 @@ namespace element
     inline void
     node :: add_edge(edge *e)
     {
-        out_edges.emplace(e->get_handle(), e);
+        out_edges.emplace(e->get_id(), e);
     }
 
     inline void

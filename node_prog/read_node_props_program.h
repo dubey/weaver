@@ -21,9 +21,9 @@
 #include "common/message.h"
 #include "common/vclock.h"
 #include "common/event_order.h"
-#include "common/public_graph_elems/node.h"
-#include "common/public_graph_elems/edge.h"
-#include "common/public_graph_elems/node_ptr.h"
+#include "node.h"
+#include "edge.h"
+#include "node_handle.h"
 
 namespace node_prog
 {
@@ -32,7 +32,7 @@ namespace node_prog
         public:
             std::vector<std::string> keys; // empty vector means fetch all props
             uint64_t vt_id;
-            std::vector<common::property> node_props;
+            std::vector<property> node_props;
 
         public:
             virtual bool search_cache() {
@@ -86,23 +86,23 @@ namespace node_prog
         }
     };
 
-    std::vector<std::pair<common::node_ptr, read_node_props_params>> 
+    std::vector<std::pair<node_handle, read_node_props_params>> 
     read_node_props_node_program(
-            common::node &n,
-            common::node_ptr &,
+            node &n,
+            node_handle &,
             read_node_props_params &params,
             std::function<read_node_props_state&()>,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>&,
+                std::shared_ptr<std::vector<node_handle>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)
     {
-        for (common::property &prop : n.get_properties()) {
+        for (property &prop : n.get_properties()) {
             if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.key) != params.keys.end())) {
                 params.node_props.emplace_back(prop);
             }
         }
 
-        return {std::make_pair(common::coordinator, std::move(params))}; // initializer list of vector
+        return {std::make_pair(coordinator, std::move(params))}; // initializer list of vector
     }
 }
 

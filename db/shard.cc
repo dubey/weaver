@@ -24,8 +24,8 @@
 #include "common/message_cache_context.h"
 #include "common/message_graph_elem.h"
 #include "common/nmap_stub.h"
-#include "common/public_graph_elems/node_ptr.h"
-#include "common/public_graph_elems/node.h"
+#include "node_prog/node_handle.h"
+#include "node_prog/node.h"
 #include "shard.h"
 #include "nop_data.h"
 #include "db/cache/prog_cache.h"
@@ -57,7 +57,7 @@ void migration_wrapper();
 void shard_daemon_begin();
 void shard_daemon_end();
 
-// SIGINT handler
+// SIGINT idr
 void
 end_program(int param)
 {
@@ -73,41 +73,41 @@ end_program(int param)
 
 
 inline void
-create_node(vc::vclock &t_creat, uint64_t node_handle)
+create_node(vc::vclock &t_creat, uint64_t node_id)
 {
-    S->create_node(node_handle, t_creat, false);
+    S->create_node(node_id, t_creat, false);
 }
 
 inline void
-create_edge(vc::vclock &t_creat, vc::qtimestamp_t &qts, uint64_t edge_handle, uint64_t n1, uint64_t n2, uint64_t loc2)
+create_edge(vc::vclock &t_creat, vc::qtimestamp_t &qts, uint64_t edge_id, uint64_t n1, uint64_t n2, uint64_t loc2)
 {
-    S->create_edge(edge_handle, n1, n2, loc2, t_creat, qts);
+    S->create_edge(edge_id, n1, n2, loc2, t_creat, qts);
 }
 
 inline void
-delete_node(vc::vclock &t_del, vc::qtimestamp_t &qts, uint64_t node_handle)
+delete_node(vc::vclock &t_del, vc::qtimestamp_t &qts, uint64_t node_id)
 {
-    S->delete_node(node_handle, t_del, qts);
+    S->delete_node(node_id, t_del, qts);
 }
 
 inline void
-delete_edge(vc::vclock &t_del, vc::qtimestamp_t &qts, uint64_t edge_handle, uint64_t node_handle)
+delete_edge(vc::vclock &t_del, vc::qtimestamp_t &qts, uint64_t edge_id, uint64_t node_id)
 {
-    S->delete_edge(edge_handle, node_handle, t_del, qts);
+    S->delete_edge(edge_id, node_id, t_del, qts);
 }
 
 inline void
-set_node_property(vc::vclock &vclk, vc::qtimestamp_t &qts, uint64_t node_handle, std::unique_ptr<std::string> key,
+set_node_property(vc::vclock &vclk, vc::qtimestamp_t &qts, uint64_t node_id, std::unique_ptr<std::string> key,
     std::unique_ptr<std::string> value)
 {
-    S->set_node_property(node_handle, std::move(key), std::move(value), vclk, qts);
+    S->set_node_property(node_id, std::move(key), std::move(value), vclk, qts);
 }
 
 inline void
-set_edge_property(vc::vclock &vclk, vc::qtimestamp_t &qts, uint64_t edge_handle, uint64_t node_handle,
+set_edge_property(vc::vclock &vclk, vc::qtimestamp_t &qts, uint64_t edge_id, uint64_t node_id,
     std::unique_ptr<std::string> key, std::unique_ptr<std::string> value)
 {
-    S->set_edge_property(node_handle, edge_handle, std::move(key), std::move(value), vclk, qts);
+    S->set_edge_property(node_id, edge_id, std::move(key), std::move(value), vclk, qts);
 }
 
 // parse the string 'line' as a uint64_t starting at index 'idx' till the first whitespace or end of string
@@ -221,7 +221,7 @@ inline void
 load_graph(db::graph_file_format format, const char *graph_file)
 {
     std::ifstream file;
-    uint64_t node0, node1, loc, edge_handle;
+    uint64_t node0, node1, loc, edge_id;
     std::string line, str_node;
     std::unordered_map<uint64_t, std::vector<std::pair<uint64_t, uint64_t>>> graph;
 
@@ -235,7 +235,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
     db::element::node *n;
     uint64_t line_count = 0;
     uint64_t edge_count = 1;
-    uint64_t max_node_handle = 0;
+    uint64_t max_node_id = 0;
     std::unordered_set<uint64_t> seen_nodes;
     std::unordered_map<uint64_t, uint64_t> node_map;
     vc::vclock zero_clk(0, 0);
@@ -247,14 +247,14 @@ load_graph(db::graph_file_format format, const char *graph_file)
             assert(line.length() > 0 && line[0] == '#');
             char *max_node_ptr = new char[line.length()+1];
             std::strcpy(max_node_ptr, line.c_str());
-            max_node_handle = strtoull(++max_node_ptr, NULL, 10);
+            max_node_id = strtoull(++max_node_ptr, NULL, 10);
             while (std::getline(file, line)) {
                 line_count++;
                 if ((line.length() == 0) || (line[0] == '#')) {
                     continue;
                 } else {
                     parse_two_uint64(line, node0, node1);
-                    edge_handle = max_node_handle + (edge_count++);
+                    edge_id = max_node_id + (edge_count++);
                     uint64_t loc0 = ((node0 % NUM_SHARDS) + SHARD_ID_INCR);
                     uint64_t loc1 = ((node1 % NUM_SHARDS) + SHARD_ID_INCR);
                     assert(loc0 < NUM_SHARDS + SHARD_ID_INCR);
@@ -265,7 +265,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                             n = S->create_node(node0, zero_clk, false, true);
                             node_map[node0] = shard_id;
                         }
-                        S->create_edge_nonlocking(n, edge_handle, node1, loc1, zero_clk, true);
+                        S->create_edge_nonlocking(n, edge_id, node1, loc1, zero_clk, true);
                     }
                     if (loc1 == shard_id) {
                         if (!S->node_exists_nonlocking(node1)) {
@@ -299,7 +299,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
             assert(line.length() > 0 && line[0] == '#');
             char *max_node_ptr = new char[line.length()+1];
             std::strcpy(max_node_ptr, line.c_str());
-            max_node_handle = strtoull(++max_node_ptr, NULL, 10);
+            max_node_id = strtoull(++max_node_ptr, NULL, 10);
             // nodes
             while (std::getline(file, line)) {
                 parse_two_uint64(line, node0, loc);
@@ -320,7 +320,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                     init_mutex.unlock();
                     node_map.clear();
                 }
-                if (++line_count == max_node_handle) {
+                if (++line_count == max_node_id) {
                      WDEBUG << "Last node pos line: " << line << std::endl;
                      break;
                 }
@@ -339,7 +339,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                 props.clear();
                 //parse_two_uint64(line, node0, node1);
                 parse_weaver_edge(line, node0, node1, props);
-                edge_handle = max_node_handle + (edge_count++);
+                edge_id = max_node_id + (edge_count++);
                 uint64_t loc0 = all_node_map[node0];
                 uint64_t loc1 = all_node_map[node1];
                 if (loc0 == shard_id) {
@@ -348,9 +348,9 @@ load_graph(db::graph_file_format format, const char *graph_file)
                         WDEBUG << "Not found node " << node0 << std::endl;
                     }
                     assert(n != NULL);
-                    S->create_edge_nonlocking(n, edge_handle, node1, loc1, zero_clk, true);
+                    S->create_edge_nonlocking(n, edge_id, node1, loc1, zero_clk, true);
                     for (auto &p: props) {
-                        S->set_edge_property_nonlocking(n, edge_handle, p.first, p.second, zero_clk);
+                        S->set_edge_property_nonlocking(n, edge_id, p.first, p.second, zero_clk);
                     }
                 }
             }
@@ -457,7 +457,7 @@ unpack_tx_request(void *req)
     for (auto upd: tx.writes) {
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ:
-                create_node(vclk, upd->handle);
+                create_node(vclk, upd->id);
                 break;
 
             case transaction::EDGE_CREATE_REQ:
@@ -485,7 +485,7 @@ unpack_tx_request(void *req)
     for (auto upd: tx.writes) {
         switch (upd->type) {
             case transaction::EDGE_CREATE_REQ:
-                create_edge(vclk, qts, upd->handle, upd->elem1, upd->elem2, upd->loc2);
+                create_edge(vclk, qts, upd->id, upd->elem1, upd->elem2, upd->loc2);
                 break;
 
             case transaction::NODE_DELETE_REQ:
@@ -611,10 +611,10 @@ nop(void *noparg)
 
 template <typename NodeStateType>
 std::shared_ptr<NodeStateType> get_node_state(node_prog::prog_type pType,
-        uint64_t req_id, uint64_t node_handle)
+        uint64_t req_id, uint64_t node_id)
 {
     std::shared_ptr<NodeStateType> ret;
-    auto state = S->fetch_prog_req_state(pType, req_id, node_handle);
+    auto state = S->fetch_prog_req_state(pType, req_id, node_id);
     if (state) {
         ret = std::dynamic_pointer_cast<NodeStateType>(state);
     }
@@ -623,13 +623,13 @@ std::shared_ptr<NodeStateType> get_node_state(node_prog::prog_type pType,
 
 template <typename NodeStateType>
 NodeStateType& return_state(node_prog::prog_type pType, uint64_t req_id,
-        uint64_t node_handle, std::shared_ptr<NodeStateType> toRet)
+        uint64_t node_id, std::shared_ptr<NodeStateType> toRet)
 {
     if (toRet) {
         return *toRet;
     } else {
         std::shared_ptr<NodeStateType> newState(new NodeStateType());
-        S->insert_prog_req_state(pType, req_id, node_handle,
+        S->insert_prog_req_state(pType, req_id, node_id,
                 std::dynamic_pointer_cast<node_prog::Node_State_Base>(newState));
         return *newState;
     }
@@ -672,23 +672,23 @@ fill_node_cache_context(db::caching::node_cache_context& context, db::element::n
 }
 
 inline void
-fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& handles, std::vector<std::pair<common::node_ptr, db::caching::node_cache_context>>& toFill,
+fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<std::pair<node_prog::node_handle, db::caching::node_cache_context>>& toFill,
         vc::vclock& cache_entry_time, vc::vclock& req_vclock)
 {
     // TODO maybe make this skip over locked nodes and retry fetching later
-    for (uint64_t handle : handles){
-        db::element::node *node = S->acquire_node(handle);
+    for (uint64_t id : ids){
+        db::element::node *node = S->acquire_node(id);
         assert(node != NULL); // TODO could be garbage collected, or migrated but not completed?
         if (node->state == db::element::node::mode::MOVED) {
             WDEBUG << "cache dont support this yet" << std::endl;
             assert(false);
         } else { // node exists
-            db::element::remote_node rn(loc, handle);
-            common::node_ptr &nptr = (common::node_ptr &) rn;
+            db::element::remote_node rn(loc, id);
+            node_prog::node_handle &nptr = (node_prog::node_handle &) rn;
             toFill.emplace_back(std::make_pair(nptr, db::caching::node_cache_context()));
             /*
             toFill.back().first.loc = loc;
-            toFill.back().first.handle = handle;
+            toFill.back().first.id = id;
             */
             fill_node_cache_context(toFill.back().second, *node, cache_entry_time, req_vclock);
         }
@@ -700,17 +700,17 @@ void
 unpack_and_fetch_context(void *req)
 {
     db::graph_request *request = (db::graph_request *) req;
-    std::vector<uint64_t> handles;
+    std::vector<uint64_t> ids;
     vc::vclock req_vclock, cache_entry_time;
     uint64_t vt_id, req_id, from_shard;
     std::pair<uint64_t, uint64_t> lookup_pair;
     node_prog::prog_type pType;
 
-    message::unpack_message(*request->msg, message::NODE_CONTEXT_FETCH, pType, req_id, vt_id, req_vclock, cache_entry_time, lookup_pair, handles, from_shard);
-    std::vector<std::pair<common::node_ptr, db::caching::node_cache_context>> contexts;
+    message::unpack_message(*request->msg, message::NODE_CONTEXT_FETCH, pType, req_id, vt_id, req_vclock, cache_entry_time, lookup_pair, ids, from_shard);
+    std::vector<std::pair<node_prog::node_handle, db::caching::node_cache_context>> contexts;
 
     //WDEBUG << "fetching cache contexts on remote shard" << std::endl;
-    fetch_node_cache_contexts(S->shard_id, handles, contexts, cache_entry_time, req_vclock);
+    fetch_node_cache_contexts(S->shard_id, ids, contexts, cache_entry_time, req_vclock);
 
     message::message m;
     message::prepare_message(m, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_pair, contexts);
@@ -742,7 +742,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
     assert(node_to_check != NULL);
     assert(np.cache_value == false); // cache_value is not already assigned
     np.cache_value = NULL; // it is unallocated anyway
-    //WDEBUG << "cache search for " << cache_key << " on node " << node_to_check->get_handle() << std::endl;
+    //WDEBUG << "cache search for " << cache_key << " on node " << node_to_check->get_id() << std::endl;
     if (node_to_check->cache.cache.count(cache_key) == 0){
         //WDEBUG << "no cache entry exists" << std::endl;
         return true;
@@ -750,9 +750,9 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         auto entry = node_to_check->cache.cache.at(cache_key);
         std::shared_ptr<node_prog::Cache_Value_Base>& cval = std::get<0>(entry);
         std::shared_ptr<vc::vclock> cache_entry_time(std::get<1>(entry));
-        std::shared_ptr<std::vector<common::node_ptr>>& watch_set = std::get<2>(entry);
+        std::shared_ptr<std::vector<node_prog::node_handle>>& watch_set = std::get<2>(entry);
 
-        //WDEBUG << "found cache value keyed: " << cache_key << " checking clocks for on node " << node_to_check->get_handle() << std::endl;
+        //WDEBUG << "found cache value keyed: " << cache_key << " checking clocks for on node " << node_to_check->get_id() << std::endl;
         int64_t cmp_1 = order::compare_two_vts(*cache_entry_time, *np.req_vclock);
         if (cmp_1 >= 1){ // cached value is newer or from this same request
             return true;
@@ -768,27 +768,27 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
 
         // save node info for re-aquirining node if needed
         db::element::node *local_node_ptr = node_to_check;
-        uint64_t local_node_handle = node_to_check->get_handle();
+        uint64_t local_node_id = node_to_check->get_id();
         uint64_t uid = node_to_check->cache.gen_uid();
         S->release_node(node_to_check);
 
 
-        // map from loc to list of handles on that shard we need context from for this request
+        // map from loc to list of ids on that shard we need context from for this request
         std::vector<uint64_t> local_contexts_to_fetch; 
         std::unordered_map<uint64_t, std::vector<uint64_t>> contexts_to_fetch; 
-        for (common::node_ptr& watch_ptr : *watch_set)
+        for (node_prog::node_handle& watch_ptr : *watch_set)
         {
             db::element::remote_node& watch_node = (db::element::remote_node &) watch_ptr; // XXX safe cast?
             if (watch_node.loc == S->shard_id) { 
-                local_contexts_to_fetch.emplace_back(watch_node.handle); // fetch this state after we send requests to other servers
+                local_contexts_to_fetch.emplace_back(watch_node.id); // fetch this state after we send requests to other servers
             } else { // on another shard
-                contexts_to_fetch[watch_node.loc].emplace_back(watch_node.handle);
+                contexts_to_fetch[watch_node.loc].emplace_back(watch_node.id);
             } 
         }
         if (contexts_to_fetch.empty()){ // all contexts needed were on local shard
             fetch_node_cache_contexts(S->shard_id, local_contexts_to_fetch, cache_response->context, *cache_entry_time, *np.req_vclock);
             np.cache_value = std::move(cache_response);
-            node_to_check = S->acquire_node(local_node_handle);
+            node_to_check = S->acquire_node(local_node_id);
             assert(node_to_check == local_node_ptr && "migration not supported yet");
             UNUSED(local_node_ptr);
             return true;
@@ -797,7 +797,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         //WDEBUG << "caching waiting for rest of context to be fetched" << std::endl;
         // add waiting stuff to shard global structure
 
-        std::pair<uint64_t, uint64_t> lookup_pair(uid, local_node_handle);
+        std::pair<uint64_t, uint64_t> lookup_pair(uid, local_node_id);
         // saving copying node_prog_running_state np for later
         fetch_state<ParamsType, NodeStateType> *fstate = new fetch_state<ParamsType, NodeStateType>(np);
         fstate->replies_left = contexts_to_fetch.size();
@@ -807,10 +807,10 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         fstate->counter_mutex.lock();
 
 
-        // map from node_handle, lookup_pair to node_prog_running_state
+        // map from node_id, lookup_pair to node_prog_running_state
         S->node_prog_running_states_mutex.lock();
         S->node_prog_running_states[lookup_pair] = fstate; 
-        //WDEBUG << "Inserting prog state with lookup pair where local_node_handle is " << local_node_handle << std::endl;
+        //WDEBUG << "Inserting prog state with lookup pair where local_node_id is " << local_node_id << std::endl;
         S->node_prog_running_states_mutex.unlock();
         for (auto& shard_list_pair : contexts_to_fetch){
             std::unique_ptr<message::message> m(new message::message()); // XXX can we re-use messages?
@@ -830,26 +830,26 @@ inline void node_prog_loop(
         node_prog::node_prog_running_state<ParamsType, NodeStateType>& np)
 {
     assert(np.start_node_params.size() == 1 || !np.cache_value); // if cache value passed in the start node params should be size 1
-    //typedef std::tuple<uint64_t, ParamsType, db::element::remote_node> node_params_t; // tuple of (node handle, node prog params, prev node) not needed anymore I think
+    //typedef std::tuple<uint64_t, ParamsType, db::element::remote_node> node_params_t; // tuple of (node id, node prog params, prev node) not needed anymore I think
     typedef std::pair<uint64_t, ParamsType> node_params_t;
     // these are the node programs that will be propagated onwards
     std::unordered_map<uint64_t, std::vector<node_params_t>> batched_node_progs;
     // node state function
     std::function<NodeStateType&()> node_state_getter;
     std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-            std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)> add_cache_func;
+            std::shared_ptr<std::vector<node_prog::node_handle>>, uint64_t)> add_cache_func;
 
-    uint64_t node_handle;
+    uint64_t node_id;
     bool done_request = false;
     db::element::remote_node this_node(S->shard_id, 0);
 
     while (!np.start_node_params.empty() && !done_request) {
-        for (auto &handle_params : np.start_node_params) {
-            node_handle = handle_params.first;
-            ParamsType& params = handle_params.second;
-            this_node.handle = node_handle;
+        for (auto &id_params : np.start_node_params) {
+            node_id = id_params.first;
+            ParamsType& params = id_params.second;
+            this_node.id = node_id;
             // TODO maybe use a try-lock later so forward progress can continue on other nodes in list
-            db::element::node *node = S->acquire_node(node_handle);
+            db::element::node *node = S->acquire_node(node_id);
             if (node == NULL || order::compare_two_vts(node->get_del_time(), *np.req_vclock)==0) { // TODO: TIMESTAMP
                 if (node != NULL) {
                     S->release_node(node);
@@ -857,22 +857,22 @@ inline void node_prog_loop(
                     // node is being migrated here, but not yet completed
                     //std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> buf_node_params;
                     std::vector<std::pair<uint64_t, ParamsType>> buf_node_params;
-                    buf_node_params.emplace_back(handle_params);
+                    buf_node_params.emplace_back(id_params);
                     std::unique_ptr<message::message> m(new message::message());
                     message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, buf_node_params);
                     S->migration_mutex.lock();
-                    if (S->deferred_reads.find(node_handle) == S->deferred_reads.end()) {
-                        S->deferred_reads.emplace(node_handle, std::vector<std::unique_ptr<message::message>>());
+                    if (S->deferred_reads.find(node_id) == S->deferred_reads.end()) {
+                        S->deferred_reads.emplace(node_id, std::vector<std::unique_ptr<message::message>>());
                     }
-                    S->deferred_reads.at(node_handle).emplace_back(std::move(m));
-                    WDEBUG << "Buffering read for node " << node_handle << std::endl;
+                    S->deferred_reads.at(node_id).emplace_back(std::move(m));
+                    WDEBUG << "Buffering read for node " << node_id << std::endl;
                     S->migration_mutex.unlock();
                 }
             } else if (node->state == db::element::node::mode::MOVED) {
                 // queueing/forwarding node program
                 //std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> fwd_node_params;
                 std::vector<std::pair<uint64_t, ParamsType>> fwd_node_params;
-                fwd_node_params.emplace_back(handle_params);
+                fwd_node_params.emplace_back(id_params);
                 std::unique_ptr<message::message> m(new message::message());
                 message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, fwd_node_params);
                 uint64_t new_loc = node->new_loc;
@@ -888,7 +888,7 @@ inline void node_prog_loop(
                         node->checking_cache = false;
                     } else if (!node->checking_cache) { // lookup cache value if another prog isnt already
                         node->checking_cache = true;
-                        bool run_prog_now = cache_lookup<ParamsType, NodeStateType>(node, params.cache_key(), np, handle_params);
+                        bool run_prog_now = cache_lookup<ParamsType, NodeStateType>(node, params.cache_key(), np, id_params);
                         if (run_prog_now) { // we fetched context and will give it to node program
                             node->checking_cache = false;
                         } else { // go to next node while we fetch cache context for this one, cache_lookup releases node if false
@@ -900,9 +900,9 @@ inline void node_prog_loop(
 
                 // bind cache getter and putter function variables to functions
                 std::shared_ptr<NodeStateType> state = get_node_state<NodeStateType>(np.prog_type_recvd,
-                        np.req_id, node_handle);
+                        np.req_id, node_id);
                 node_state_getter = std::bind(return_state<NodeStateType>,
-                        np.prog_type_recvd, np.req_id, node_handle, state);
+                        np.prog_type_recvd, np.req_id, node_id, state);
 
                 if (S->check_done_request(np.req_id)) {
                     done_request = true;
@@ -918,7 +918,7 @@ inline void node_prog_loop(
                 }
 
                 common::node& node_to_pass = (common::node &) (*node);
-                common::node_ptr& ptr_to_pass = (common::node_ptr &) (this_node);
+                node_prog::node_handle& ptr_to_pass = (node_prog::node_handle &) (this_node);
 
                 node->view_time = np.req_vclock; 
                 auto next_node_params = func(node_to_pass, ptr_to_pass,
@@ -930,7 +930,7 @@ inline void node_prog_loop(
 #ifdef WEAVER_CLDG
                 std::unordered_map<uint64_t, uint32_t> agg_msg_count;
 #endif
-                for (std::pair<common::node_ptr, ParamsType> &res : next_node_params) {
+                for (std::pair<node_prog::node_handle, ParamsType> &res : next_node_params) {
                     db::element::remote_node& rn = (db::element::remote_node &) res.first;
                     assert(rn.loc < NUM_SHARDS + SHARD_ID_INCR);
                     if (rn == common::coord_remote_node) {
@@ -942,9 +942,9 @@ inline void node_prog_loop(
                         message::prepare_message(*m, message::NODE_PROG_RETURN, np.prog_type_recvd, np.req_id, temppair);
                         S->send(np.vt_id, m->buf);
                     } else {
-                        batched_node_progs[rn.loc].emplace_back(rn.handle, std::move(res.second)); // TEMP: prev node was this_node
+                        batched_node_progs[rn.loc].emplace_back(rn.id, std::move(res.second)); // TEMP: prev node was this_node
 #ifdef WEAVER_CLDG
-                        agg_msg_count[node_handle]++;
+                        agg_msg_count[node_id]++;
 #endif
                     }
                 }
@@ -1017,7 +1017,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     node_prog::prog_type pType;
     uint64_t req_id, vt_id;
     std::pair<uint64_t, uint64_t> lookup_pair;
-    std::vector<std::pair<common::node_ptr, db::caching::node_cache_context>> contexts_to_add; // TODO extra copy, later unpack into cache_response object itself
+    std::vector<std::pair<node_prog::node_handle, db::caching::node_cache_context>> contexts_to_add; // TODO extra copy, later unpack into cache_response object itself
     message::unpack_message(*msg, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_pair, contexts_to_add);
 
     S->node_prog_running_states_mutex.lock();
@@ -1082,28 +1082,28 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     if (global_req) {
         assert(start_node_params.size() == 1);
 
-        std::vector<uint64_t> handles_to_send_to;
+        std::vector<uint64_t> ids_to_send_to;
         S->update_mutex.lock();
         for (auto& n : S->nodes) {
             bool creat_before = order::compare_two_vts(n.second->get_del_time(), req_vclock) != 0;
             bool del_after = order::compare_two_vts(req_vclock, n.second->get_creat_time()) != 0;
             if (creat_before && del_after) {
-                handles_to_send_to.emplace_back(n.first);
+                ids_to_send_to.emplace_back(n.first);
             }
         }
         S->update_mutex.unlock();
         ParamsType& params_copy = std::get<1>(start_node_params[0]); // send this all over
-        assert(handles_to_send_to.size() > 0);
-        this_node.handle = handles_to_send_to[0];
-        //modify_triangle_params((void *) &params_copy, handles_to_send_to.size(), this_node);
+        assert(ids_to_send_to.size() > 0);
+        this_node.id = ids_to_send_to[0];
+        //modify_triangle_params((void *) &params_copy, ids_to_send_to.size(), this_node);
         global_req = false; // for batched messages to execute normally
         uint64_t idx = 0;
-        size_t batch_size = handles_to_send_to.size() / (NUM_THREADS-1);
+        size_t batch_size = ids_to_send_to.size() / (NUM_THREADS-1);
         db::thread::unstarted_thread *thr;
         db::graph_request *request;
         std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> next_batch;
-        while (idx < handles_to_send_to.size()) {
-            next_batch.emplace_back(std::make_tuple(handles_to_send_to[idx], params_copy, db::element::remote_node()));
+        while (idx < ids_to_send_to.size()) {
+            next_batch.emplace_back(std::make_tuple(ids_to_send_to[idx], params_copy, db::element::remote_node()));
             if (next_batch.size() % batch_size == 0) {
                 message::prepare_message(*msg, message::NODE_PROG, prog_type_recvd, global_req, vt_id, req_vclock, req_id, next_batch);
                 request = new db::graph_request(message::NODE_PROG, std::move(msg));
@@ -1134,14 +1134,14 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
 inline void
 update_deleted_node(void *node)
 {
-    uint64_t *node_handle = (uint64_t*)node;
+    uint64_t *node_id = (uint64_t*)node;
     std::unordered_set<uint64_t> nbrs;
     db::element::node *n;
     db::element::edge *e;
     S->edge_map_mutex.lock();
-    if (S->edge_map.find(*node_handle) != S->edge_map.end()) {
-        nbrs = std::move(S->edge_map[*node_handle]);
-        S->edge_map.erase(*node_handle);
+    if (S->edge_map.find(*node_id) != S->edge_map.end()) {
+        nbrs = std::move(S->edge_map[*node_id]);
+        S->edge_map.erase(*node_id);
     }
     S->edge_map_mutex.unlock();
 
@@ -1153,7 +1153,7 @@ update_deleted_node(void *node)
         found = false;
         for (auto &x: n->out_edges) {
             e = x.second;
-            if (e->nbr.handle == *node_handle) {
+            if (e->nbr.id == *node_id) {
                 delete e;
                 to_del.emplace_back(x.first);
                 found = true;
@@ -1228,13 +1228,13 @@ migrate_node_step1(db::element::node *n, std::vector<uint64_t> &shard_node_count
     // mark node as "moved"
     n->state = db::element::node::mode::MOVED;
     n->new_loc = migr_loc;
-    S->migr_node = n->get_handle();
+    S->migr_node = n->get_id();
     S->migr_shard = migr_loc;
 
     // updating edge map
     S->edge_map_mutex.lock();
     for (auto &e: n->out_edges) {
-        uint64_t node = e.second->nbr.handle;
+        uint64_t node = e.second->nbr.id;
         assert(S->edge_map.find(node) != S->edge_map.end());
         auto &node_set = S->edge_map[node];
         node_set.erase(S->migr_node);
@@ -1281,15 +1281,15 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
 {
     // unpack and place node
     uint64_t from_loc;
-    uint64_t node_handle;
+    uint64_t node_id;
     db::element::node *n;
 
     // create a new node, unpack the message
     vc::vclock dummy_clock;
-    message::unpack_message(*msg, message::MIGRATE_SEND_NODE, node_handle);
-    n = S->create_node(node_handle, dummy_clock, true); // node will be acquired on return
+    message::unpack_message(*msg, message::MIGRATE_SEND_NODE, node_id);
+    n = S->create_node(node_id, dummy_clock, true); // node will be acquired on return
     try {
-        message::unpack_message(*msg, message::MIGRATE_SEND_NODE, node_handle, from_loc, *n);
+        message::unpack_message(*msg, message::MIGRATE_SEND_NODE, node_id, from_loc, *n);
     } catch (std::bad_alloc& ba) {
         WDEBUG << "bad_alloc caught " << ba.what() << std::endl;
         return;
@@ -1298,15 +1298,15 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
     // updating edge map
     S->edge_map_mutex.lock();
     for (auto &e: n->out_edges) {
-        uint64_t node = e.second->nbr.handle;
-        S->edge_map[node].emplace(node_handle);
+        uint64_t node = e.second->nbr.id;
+        S->edge_map[node].emplace(node_id);
     }
     S->edge_map_mutex.unlock();
 
     S->migration_mutex.lock();
     // apply buffered writes
-    if (S->deferred_writes.find(node_handle) != S->deferred_writes.end()) {
-        for (auto &dw: S->deferred_writes.at(node_handle)) {
+    if (S->deferred_writes.find(node_id) != S->deferred_writes.end()) {
+        for (auto &dw: S->deferred_writes.at(node_id)) {
             switch (dw.type) {
                 case message::NODE_DELETE_REQ:
                     S->delete_node_nonlocking(n, dw.vclk);
@@ -1324,7 +1324,7 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
                     WDEBUG << "unexpected type" << std::endl;
             }
         }
-        S->deferred_writes.erase(node_handle);
+        S->deferred_writes.erase(node_id);
     }
 
     // update nbrs
@@ -1332,7 +1332,7 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
         if (upd_shard == shard_id) {
             continue;
         }
-        message::prepare_message(*msg, message::MIGRATED_NBR_UPDATE, node_handle, from_loc, shard_id);
+        message::prepare_message(*msg, message::MIGRATED_NBR_UPDATE, node_id, from_loc, shard_id);
         S->send(upd_shard, msg->buf);
     }
     n->state = db::element::node::mode::STABLE;
@@ -1342,20 +1342,20 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
 
     // move deferred reads to local for releasing migration_mutex
     std::vector<std::unique_ptr<message::message>> deferred_reads;
-    if (S->deferred_reads.find(node_handle) != S->deferred_reads.end()) {
-        deferred_reads = std::move(S->deferred_reads.at(node_handle));
-        S->deferred_reads.erase(node_handle);
+    if (S->deferred_reads.find(node_id) != S->deferred_reads.end()) {
+        deferred_reads = std::move(S->deferred_reads.at(node_id));
+        S->deferred_reads.erase(node_id);
     }
     S->migration_mutex.unlock();
 
     // update local nbrs
-    S->update_migrated_nbr(node_handle, from_loc, shard_id);
+    S->update_migrated_nbr(node_id, from_loc, shard_id);
 
     // apply buffered reads
     for (auto &m: deferred_reads) {
         node_prog::prog_type pType;
         message::unpack_partial_message(*m, message::NODE_PROG, pType);
-        WDEBUG << "APPLYING BUFREAD for node " << node_handle << std::endl;
+        WDEBUG << "APPLYING BUFREAD for node " << node_id << std::endl;
         node_prog::programs.at(pType)->unpack_and_run_db(std::move(m));
     }
 }

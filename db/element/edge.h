@@ -29,8 +29,8 @@ namespace element
     {
         public:
             edge();
-            edge(uint64_t handle, vc::vclock &vclk, uint64_t remote_loc, uint64_t remote_handle);
-            edge(uint64_t handle, vc::vclock &vclk, remote_node &rn);
+            edge(uint64_t id, vc::vclock &vclk, uint64_t remote_loc, uint64_t remote_id);
+            edge(uint64_t id, vc::vclock &vclk, remote_node &rn);
         
         public:
             remote_node nbr; // out-neighbor for this edge
@@ -48,16 +48,16 @@ namespace element
     { }
 
     inline
-    edge :: edge(uint64_t handle, vc::vclock &vclk, uint64_t remote_loc, uint64_t remote_handle)
-        : element(handle, vclk)
-        , nbr(remote_loc, remote_handle)
+    edge :: edge(uint64_t id, vc::vclock &vclk, uint64_t remote_loc, uint64_t remote_id)
+        : element(id, vclk)
+        , nbr(remote_loc, remote_id)
         , msg_count(0)
         , migr_edge(false)
     { }
 
     inline
-    edge :: edge(uint64_t handle, vc::vclock &vclk, remote_node &rn)
-        : element(handle, vclk)
+    edge :: edge(uint64_t id, vc::vclock &vclk, remote_node &rn)
+        : element(id, vclk)
         , nbr(rn)
         , msg_count(0)
         , migr_edge(false)

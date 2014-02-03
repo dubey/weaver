@@ -22,15 +22,9 @@
 
 #include "common/weaver_constants.h"
 #include "common/meta_element.h"
-#include "common/public_graph_elems/node.h"
-#include "common/public_graph_elems/edge.h"
-#include "common/public_graph_elems/node_ptr.h"
-/*
-#include "db/element/node.h"
-#include "db/element/edge.h"
-#include "db/element/remote_node.h"
-#include "db/element/property.h"
-*/
+#include "node.h"
+#include "edge.h"
+#include "node_handle.h"
 
 #include "node_prog_type.h"
 #include "dijkstra_program.h"
@@ -59,13 +53,13 @@ namespace node_prog
     struct node_function_type
     {
         public:
-            typedef std::vector<std::pair<common::node_ptr, params_type>> (*value_type)(
-                common::node&, // this node
-                common::node_ptr&, // this remote node
+            typedef std::vector<std::pair<node_handle, params_type>> (*value_type)(
+                node&, // this node
+                node_handle&, // this remote node
                 params_type&,
                 std::function<node_state_type&()>,
                 std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                    std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>& add_cache_func,
+                    std::shared_ptr<std::vector<node_handle>>, uint64_t)>& add_cache_func,
                     std::unique_ptr<db::caching::cache_response> cache_response);
 
     };

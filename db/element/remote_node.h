@@ -26,9 +26,9 @@ namespace element
 
         public:
             uint64_t loc;
-            uint64_t handle;
+            uint64_t id;
             uint64_t get_id();
-            uint64_t get_handle(); // XXX clean this up
+            uint64_t get_id(); // XXX clean this up
             bool operator==(const db::element::remote_node &t) const;
             bool operator!=(const db::element::remote_node &t) const;
     };
@@ -36,33 +36,33 @@ namespace element
     inline
     remote_node :: remote_node(uint64_t l, uint64_t h)
         : loc(l)
-        , handle(h)
+        , id(h)
     { }
 
     inline remote_node :: remote_node() { }
 
     inline uint64_t 
-    remote_node :: get_handle()
+    remote_node :: get_id()
     {
-        return handle;
+        return id;
     }
 
     inline uint64_t 
     remote_node :: get_id()
     {
-        return handle;
+        return id;
     }
 
     inline bool
     remote_node :: operator==(const db::element::remote_node &t) const
     {
-        return (handle == t.handle) && (loc == t.loc);
+        return (id == t.id) && (loc == t.loc);
     }
 
     inline bool
     remote_node :: operator!=(const db::element::remote_node &t) const
     {
-        return (handle != t.handle) || (loc != t.loc);
+        return (id != t.id) || (loc != t.loc);
     }
     
 }
@@ -77,7 +77,7 @@ namespace std
         public:
             size_t operator()(db::element::remote_node x) const throw() 
             {
-                return (hash<int>()(x.loc) * 6291469) + (hash<size_t>()(x.handle) * 393241); // some big primes
+                return (hash<int>()(x.loc) * 6291469) + (hash<size_t>()(x.id) * 393241); // some big primes
             }
     };
 }

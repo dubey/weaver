@@ -20,9 +20,9 @@
 #include "common/message.h"
 #include "common/vclock.h"
 #include "common/event_order.h"
-#include "common/public_graph_elems/node.h"
-#include "common/public_graph_elems/edge.h"
-#include "common/public_graph_elems/node_ptr.h"
+#include "node.h"
+#include "edge.h"
+#include "node_handle.h"
 
 namespace node_prog
 {
@@ -32,7 +32,7 @@ namespace node_prog
             bool _search_cache;
             uint64_t _cache_key;
             bool is_center;
-            common::node_ptr center;
+            node_handle center;
             bool outgoing;
             std::vector<uint64_t> neighbors;
             double clustering_coeff;
@@ -111,31 +111,31 @@ namespace node_prog
         }
     };
 
-    std::vector<std::pair<common::node_ptr, clustering_params>> 
+    std::vector<std::pair<node_handle, clustering_params>> 
     clustering_node_program(
-            common::node &n,
-            common::node_ptr &rn,
+            node &n,
+            node_handle &rn,
             clustering_params &params,
             std::function<clustering_node_state&()> get_state,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>&,
+                std::shared_ptr<std::vector<node_handle>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)
     {
         // TODO can we change this to a three enum switch to reduce number of if statements
-        std::vector<std::pair<common::node_ptr, clustering_params>> next;
+        std::vector<std::pair<node_handle, clustering_params>> next;
         if (params.is_center) {
             node_prog::clustering_node_state &cstate = get_state();
             if (params.outgoing) {
                 params.is_center = false;
                 params.center = rn;
-                for (common::edge& edge : n.get_edges()) {
+                for (edge& edge : n.get_edges()) {
                     next.emplace_back(std::make_pair(edge.get_neighbor(), params));
                     cstate.neighbor_counts.insert(std::make_pair(edge.get_neighbor().get_handle(), 0));
                     cstate.responses_left++;
                 }
                 if (cstate.responses_left < 2) { // if no or one neighbor we know clustering coeff already
                     params.clustering_coeff = 0;
-                    next = {std::make_pair(common::coordinator, std::move(params))};
+                    next = {std::make_pair(coordinator, std::move(params))};
                 }
             } else {
                 for (uint64_t nbr : params.neighbors) {
@@ -151,11 +151,11 @@ namespace node_prog
                         numerator += nbr_count.second;
                     }
                     params.clustering_coeff = (double) numerator / denominator;
-                    next = {std::make_pair(common::coordinator, std::move(params))};
+                    next = {std::make_pair(coordinator, std::move(params))};
                 } 
             }
         } else { // not center
-            for (common::edge& edge : n.get_edges()) {
+            for (edge& edge : n.get_edges()) {
                 params.neighbors.push_back(edge.get_neighbor().get_handle());
             }
             params.outgoing = false;
