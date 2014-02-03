@@ -29,7 +29,6 @@
 #include "common/meta_element.h"
 #include "common/vclock.h"
 #include "common/transaction.h"
-#include "node_prog/base_classes.h" // used for packing Packable objects
 #include "db/element/node.h"
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
@@ -182,17 +181,12 @@ namespace message
         type = t;
     }
 
-// size templates
+    // size templates
+
     inline uint64_t size(const node_prog::prog_type&)
     {
         return sizeof(uint32_t);
     }
-    /*
-    inline uint64_t size(const node_prog::Packable &t)
-    {
-        return t.size();
-    }
-    */
     inline uint64_t size(const node_prog::Node_Parameters_Base &t)
     {
         return t.size();
@@ -341,6 +335,11 @@ namespace message
         return sz;
     }
 
+    inline uint64_t size()
+    {
+        return 0;
+    }
+
     template <typename T, typename... Args>
     inline uint64_t size(const T &t, const Args&... args)
     {
@@ -349,12 +348,6 @@ namespace message
 
     // packing templates
 
-    /*
-    inline void pack_buffer(e::buffer::packer &packer, const node_prog::Packable &t)
-    {
-        t.pack(packer);
-    }
-    */
     inline void pack_buffer(e::buffer::packer &packer, const node_prog::Node_Parameters_Base &t)
     {
         t.pack(packer);
@@ -560,33 +553,21 @@ namespace message
         }
     }
 
-    template <typename T>
-    inline void 
-    pack_buffer_checked(e::buffer::packer &packer, const T &t)
+    inline void
+    pack_buffer_checked(e::buffer::packer &packer)
     {
-        uint32_t before = packer.remain();
-        pack_buffer(packer, t);
-        assert((before - packer.remain()) == size(t) && "reserved size for type not same as number of bytes packed");
-        UNUSED(before);
+        assert(packer.remain() == 0);
     }
 
     template <typename T, typename... Args>
     inline void 
     pack_buffer_checked(e::buffer::packer &packer, const T &t, const Args&... args)
     {
-        pack_buffer_checked(packer, t);
+        uint32_t before = packer.remain();
+        pack_buffer(packer, t);
+        assert((before - packer.remain()) == size(t) && "reserved size for type not same as number of bytes packed");
+        UNUSED(before);
         pack_buffer_checked(packer, args...);
-    }
-
-    inline void
-    prepare_message(message &m, enum msg_type given_type)
-    {
-        uint32_t index = BUSYBEE_HEADER_SIZE;
-        uint64_t bytes_to_pack =  sizeof(enum msg_type);
-        m.type = given_type;
-        m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
-
-        m.buf->pack_at(index) << given_type;
     }
 
     template <typename... Args>
@@ -616,13 +597,11 @@ namespace message
     }
 
     // unpacking templates
-    /*
+
     inline void
-    unpack_buffer(e::unpacker &unpacker, node_prog::Packable &t)
-    {
-        t.unpack(unpacker);
-    }
-    */
+    unpack_buffer(e::unpacker&)
+    { }
+
     inline void
     unpack_buffer(e::unpacker &unpacker, node_prog::Node_Parameters_Base &t)
     {

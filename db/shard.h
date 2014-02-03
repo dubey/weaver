@@ -37,6 +37,7 @@
 #include "threadpool/threadpool.h"
 #include "deferred_write.h"
 #include "del_obj.h"
+#include "hdex_stub.h"
 
 namespace std {
 // so we can use a pair as key to unordered_map TODO move me??

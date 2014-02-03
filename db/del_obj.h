@@ -12,6 +12,8 @@
  * ===============================================================
  */
 
+#ifndef __SHARD_DEL_OBJ__
+#define __SHARD_DEL_OBJ__
 
 namespace db
 {
@@ -31,3 +33,5 @@ namespace db
         { }
     };
 }
+
+#endif

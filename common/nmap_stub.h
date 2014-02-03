@@ -13,6 +13,9 @@
  * ===============================================================
  */
 
+#ifndef __NMAP_STUB__
+#define __NMAP_STUB__
+
 #include <vector>
 #include <hyperdex/client.hpp>
 #include <hyperdex/datastructures.h>
@@ -185,3 +188,5 @@ namespace nmap
     }
 
 }
+
+#endif

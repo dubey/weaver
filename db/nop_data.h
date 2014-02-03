@@ -13,6 +13,9 @@
  * ===============================================================
  */
 
+#ifndef __SHARD_NOP_DATA__
+#define __SHARD_NOP_DATA__
+
 #include "node_prog/node_prog_type.h"
 
 namespace db
@@ -29,3 +32,5 @@ namespace db
         std::vector<uint64_t> shard_node_count;
     };
 }
+
+#endif
