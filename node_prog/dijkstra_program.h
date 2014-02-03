@@ -193,18 +193,6 @@ namespace node_prog
         }
     };
 
-    struct dijkstra_cache_value : public virtual Cache_Value_Base 
-    {
-        /*
-        uint32_t edge_key; // edge weight key
-        uint64_t dst_node;
-        uint64_t cost;
-        bool is_widest;
-        
-        */
-        virtual ~dijkstra_cache_value() { }
-    };
-
     inline uint64_t
     calculate_priority(uint64_t current_cost, uint64_t edge_cost, bool is_widest_path)
     {
@@ -222,15 +210,13 @@ namespace node_prog
             common::node &n,
             common::node_ptr &rn,
             dijkstra_params &params,
-            std::function<dijkstra_node_state&()> state_getter,
+            std::function<dijkstra_node_state&()> get_state,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<std::vector<common::node_ptr>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)
     {
         WDEBUG << "DIJKSTRAAAAA" << std::endl;
-        std::vector<std::pair<common::node_ptr, dijkstra_params>> next;
-        /*
-        if (n.get_handle() == params.src_handle) {
-            dijkstra_node_state &node_state = state_getter();
+        if (rn.get_handle() == params.src_handle) {
+            dijkstra_node_state &node_state = get_state();
             WDEBUG << "Dijkstra program: at source" <<  std::endl;
             if (params.adding_nodes == true) { 
                 // response from a propagation, add nodes it could potentially reach to priority queue
@@ -246,45 +232,22 @@ namespace node_prog
                 params.entries_to_add.clear();
                 node_state.visited.emplace(params.next_node, std::make_pair(params.prev_node, params.cost));
             } else { 
-                if (node_state.visited.count(params.src_handle) > 0) { 
-                    // response from a deleted node
-                    params.entries_to_add.clear();
-                } else { 
-                    // starting the request, add source neighbors to priority queue
-                    params.source_node = rn;
-                    params.cost = params.is_widest_path ? MAX_TIME : 0; // don't want source node to be bottleneck in path
-                    node_state.visited.emplace(params.src_handle, std::make_pair(params.src_handle, params.cost)); // handles same at source
+                // starting the request, add source neighbors to priority queue
+                params.source_node = rn;
+                params.cost = params.is_widest_path ? MAX_TIME : 0; // don't want source node to be bottleneck in path
+                node_state.visited.emplace(params.src_handle, std::make_pair(params.src_handle, params.cost)); // handles same at source
 
-                    common::edge *e;
-                    for (auto &iter: n.out_edges) {
-                        e = iter.second;
-                        // edge created and deleted in acceptable timeframe
-                        bool use_edge = order::clock_creat_before_del_after(*req_vclock, e->get_creat_time(), e->get_del_time());
-                        */
-                        /*
-                        for (uint64_t i = 0; i < params.edge_props.size() && use_edge; i++) {
-                            // checking edge properties
-                            if (!e->has_property(params.edge_props[i])) {
-                                use_edge = false;
-                                break; 
-                            }
-                        }
-                        */
-                        /*
-                        if (use_edge) {
-                            // first is whether key exists, second is value
-                            std::pair<bool, std::string> weightpair = 
-                                    e->get_property_value(params.edge_weight_name, *req_vclock);
-                            if (weightpair.first) {
-                                uint64_t edge_weight;
-                                std::stringstream(weightpair.second) >> edge_weight;
-                                WDEBUG << "got edge weight " << edge_weight << " from string " << weightpair.second << std::endl;
-                                uint64_t priority = calculate_priority(params.cost, edge_weight, params.is_widest_path);
-                                if (params.is_widest_path) {
-                                    node_state.pq_widest.emplace(priority, e->nbr, params.src_handle); 
-                                } else {
-                                    node_state.pq_shortest.emplace(priority, e->nbr, params.src_handle);
-                                }
+                for (common::edge &edge: n.get_edges()) {
+                    for (common::property& prop : edge.get_properties()) {
+                        if (params.edge_weight_name.compare(prop.key) == 0) {
+                            uint64_t edge_weight;
+                            std::stringstream(prop.value) >> edge_weight;
+                            WDEBUG << "got edge weight " << edge_weight << " from string " << prop.value << std::endl;
+                            uint64_t priority = calculate_priority(params.cost, edge_weight, params.is_widest_path);
+                            if (params.is_widest_path) {
+                                node_state.pq_widest.emplace(priority, edge.get_neighbor(), params.src_handle); 
+                            } else {
+                                node_state.pq_shortest.emplace(priority, edge.get_neighbor(), params.src_handle);
                             }
                         }
                     }
@@ -304,7 +267,7 @@ namespace node_prog
                     node_state.pq_shortest.pop();
                 }
                 params.cost = next_to_add.cost;
-                params.next_node = next_to_add.node.handle;
+                params.next_node = next_to_add.node.get_handle();
                 params.prev_node = next_to_add.prev_node_req_id;
                 if (params.next_node == params.dst_handle) {
                     WDEBUG << "DIJKSTRA found dest" << std::endl;
@@ -336,8 +299,7 @@ namespace node_prog
                             cur_node = visited_entry.first;
                         }
                     }
-                    next.emplace_back(std::make_pair(common::node_ptr(params.vt_id, 1337), params));
-                    return next;
+                    return {std::make_pair(common::coordinator, std::move(params))};
                 } else { // we need to send a prop
                     bool get_neighbors = true;
                     if (node_state.visited.count(params.next_node) > 0) {
@@ -348,67 +310,32 @@ namespace node_prog
                         }
                     }
                     if (get_neighbors) {
-                        WDEBUG << "DIJKSTRA sending to node "<< next_to_add.node.handle << " on shard " <<  next_to_add.node.loc << std::endl;
-                        next.emplace_back(std::make_pair(next_to_add.node, params));
-                        return next;
+                        return {std::make_pair(next_to_add.node, std::move(params))};
                     }
                 }
             }
             // dest couldn't be reached, send failure to coord
-            std::vector<std::pair<uint64_t, uint64_t>> emptyPath;
-            params.final_path = emptyPath;
+            params.final_path = {}; // empty path
             params.cost = 0;
-            next.emplace_back(std::make_pair(common::node_ptr(COORD_ID, 1337), params));
-
-        } else { // it is a request to add neighbors
-            // check the properties of each out-edge, assumes lock for node is held
+            return {std::make_pair(common::coordinator, std::move(params))};
+        } else {
+            params.adding_nodes = true;
             WDEBUG << "Dijkstra program: NOT source" <<  std::endl;
-            common::edge *e;
-            for (auto &iter: n.out_edges) {
-                e = iter.second;
-                // edge created and deleted in acceptable timeframe
-                bool use_edge = order::clock_creat_before_del_after(*req_vclock, e->get_creat_time(), e->get_del_time());
-
-                if (use_edge) {
-                    // first is whether key exists, second is value
-                    std::pair<bool, std::string> weightpair = e->get_property_value(params.edge_weight_name, *req_vclock);
-                    if (weightpair.first) {
+            for (common::edge &edge: n.get_edges()) {
+                for (common::property& prop : edge.get_properties()) {
+                    if (params.edge_weight_name.compare(prop.key) == 0) {
                         uint64_t edge_weight;
-                        std::stringstream(weightpair.second) >> edge_weight;
-                        WDEBUG << "got edge weight " << edge_weight << " from string " << weightpair.second << std::endl;
+                        std::stringstream(prop.value) >> edge_weight;
+                        WDEBUG << "got edge weight " << edge_weight << " from string " << prop.value << std::endl;
                         uint64_t priority = calculate_priority(params.cost, edge_weight, params.is_widest_path);
-                        WDEBUG << " trying to add edge with nbr loc " << e->nbr.loc << " and nbr handle " << e->nbr.handle << std::endl;
-                        assert(e->nbr.loc < NUM_SHARDS + SHARD_ID_INCR); //XXX
-                        params.entries_to_add.emplace_back(std::make_pair(priority, e->nbr));
+                        //assert(e->nbr.loc < NUM_SHARDS + SHARD_ID_INCR); //XXX
+                        params.entries_to_add.emplace_back(std::make_pair(priority, edge.get_neighbor()));
                     }
                 }
             }
-            params.adding_nodes = true;
-            next.emplace_back(std::make_pair(params.source_node, params));
+            return {std::make_pair(params.source_node, std::move(params))};
         }
-        */
-        return next;
     }
-
-    /*
-    std::vector<std::pair<common::node_ptr, dijkstra_params>> 
-    dijkstra_node_deleted_program(uint64_t req_id,
-        common::node &n, // node who asked to go to deleted node
-        uint64_t deleted_handle, // handle of node that didn't exist
-        dijkstra_params &params_given, // params we had sent to deleted node
-        std::function<dijkstra_node_state&()> state_getter)
-    {
-        UNUSED(req_id);
-        UNUSED(n);
-        UNUSED(state_getter);
-
-        WDEBUG << "DELETED PROGRAM " << deleted_handle << std::endl;
-        params_given.adding_nodes = false;
-        std::vector<std::pair<common::node_ptr, dijkstra_params>> next;
-        next.emplace_back(std::make_pair(params_given.source_node, params_given));
-        return next;
-    }
-    */
 }
 
 #endif //__DIKJSTRA_PROG__
