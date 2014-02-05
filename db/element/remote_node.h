@@ -28,7 +28,6 @@ namespace element
             uint64_t loc;
             uint64_t id;
             uint64_t get_id();
-            uint64_t get_id(); // XXX clean this up
             bool operator==(const db::element::remote_node &t) const;
             bool operator!=(const db::element::remote_node &t) const;
     };
@@ -40,12 +39,6 @@ namespace element
     { }
 
     inline remote_node :: remote_node() { }
-
-    inline uint64_t 
-    remote_node :: get_id()
-    {
-        return id;
-    }
 
     inline uint64_t 
     remote_node :: get_id()
@@ -75,7 +68,7 @@ namespace std
     struct hash<db::element::remote_node> 
     {
         public:
-            size_t operator()(db::element::remote_node x) const throw() 
+            size_t operator()(db::element::remote_node &x) const throw() 
             {
                 return (hash<int>()(x.loc) * 6291469) + (hash<size_t>()(x.id) * 393241); // some big primes
             }

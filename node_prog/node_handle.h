@@ -27,4 +27,18 @@ namespace node_prog
     static node_handle& coordinator = (node_handle &) coord_remote_node;
 }
 
+namespace std
+{
+    // used if we want a hash table with a node_handle as the key
+    template <>
+    struct hash<node_prog::node_handle> 
+    {
+        public:
+            size_t operator()(node_prog::node_handle &x) const throw() 
+            {
+                return hash<db::element::remote_node>()((db::element::remote_node &) x);
+            }
+    };
+}
+
 #endif

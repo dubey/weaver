@@ -25,7 +25,6 @@
 #include <busybee_constants.h>
 
 #include "common/weaver_constants.h"
-#include "common/meta_element.h"
 #include "common/vclock.h"
 #include "common/transaction.h"
 #include "node_prog/base_classes.h" // used for packing Packable objects
@@ -252,7 +251,7 @@ namespace message
     }
     inline uint64_t size(const node_prog::property &t)
     {
-        return size((const db::element::property&) t);
+        return size((const db::element::property &) t);
     }
     inline uint64_t size(const db::element::remote_node &t)
     {
@@ -262,13 +261,6 @@ namespace message
     {
         return size((const db::element::remote_node&) t);
     }
-    inline uint64_t size(const common::meta_element &t)
-    {
-        return size(t.get_loc())
-            + size(t.get_creat_time())
-            + size(t.get_del_time())
-            + size(t.get_handle());
-    }
 
     inline uint64_t
     size(const std::shared_ptr<transaction::pending_update> &ptr_t)
@@ -276,7 +268,7 @@ namespace message
         transaction::pending_update &t = *ptr_t;
         uint64_t sz = sizeof(t.type)
              + size(t.qts)
-             + size(t.handle)
+             + size(t.id)
              + size(t.elem1)
              + size(t.elem2)
              + size(t.loc1)
@@ -468,19 +460,12 @@ namespace message
     }
 
     inline void
-    pack_buffer(e::buffer::packer &packer, const common::meta_element &t)
-    {
-        packer = packer << t.get_loc() << t.get_creat_time()
-            << t.get_del_time() << t.get_handle();
-    }
-
-    inline void
     pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::pending_update> &ptr_t)
     {
         transaction::pending_update &t = *ptr_t;
         packer = packer << t.type;
         pack_buffer(packer, t.qts);
-        pack_buffer(packer, t.handle);
+        pack_buffer(packer, t.id);
         pack_buffer(packer, t.elem1);
         pack_buffer(packer, t.elem2);
         pack_buffer(packer, t.loc1);
@@ -748,23 +733,12 @@ namespace message
     inline void 
     unpack_buffer(e::unpacker &unpacker, db::element::remote_node& t)
     {
-        unpacker = unpacker >> t.loc >> t.handle;
+        unpacker = unpacker >> t.loc >> t.id;
     }
     inline void 
     unpack_buffer(e::unpacker &unpacker, node_prog::node_handle& t)
     {
         unpack_buffer(unpacker, (db::element::remote_node&) t);
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, common::meta_element &t)
-    {
-        uint64_t handle, loc, tc, td;
-        unpacker = unpacker >> loc >> tc >> td >> handle;
-        t.update_creat_time(tc);
-        t.update_del_time(td);
-        t.update_handle(handle);
-        t.update_loc(loc);
     }
 
     inline void
@@ -776,7 +750,7 @@ namespace message
         unpacker = unpacker >> mtype;
         t.type = ((enum transaction::update_type)mtype);
         unpack_buffer(unpacker, t.qts);
-        unpack_buffer(unpacker, t.handle);
+        unpack_buffer(unpacker, t.id);
         unpack_buffer(unpacker, t.elem1);
         unpack_buffer(unpacker, t.elem2);
         unpack_buffer(unpacker, t.loc1);
@@ -944,12 +918,12 @@ namespace message
             switch (mtype) {
                 case CLIENT_NODE_CREATE_REQ:
                     upd->type = transaction::NODE_CREATE_REQ;
-                    unpack_buffer(unpacker, upd->handle); 
+                    unpack_buffer(unpacker, upd->id); 
                     break;
 
                 case CLIENT_EDGE_CREATE_REQ:
                     upd->type = transaction::EDGE_CREATE_REQ;
-                    unpack_buffer(unpacker, upd->handle, upd->elem1, upd->elem2);
+                    unpack_buffer(unpacker, upd->id, upd->elem1, upd->elem2);
                     break;
 
                 case CLIENT_NODE_DELETE_REQ:

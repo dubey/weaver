@@ -21,7 +21,6 @@
 #include <po6/threads/mutex.h>
 
 #include "common/weaver_constants.h"
-#include "common/meta_element.h"
 #include "node.h"
 #include "edge.h"
 #include "node_handle.h"
