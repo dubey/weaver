@@ -126,6 +126,10 @@ namespace message
     template <typename T1, typename T2> inline uint64_t size(const std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline uint64_t size(const std::tuple<T1, T2, T3>& t);
     template <typename T> inline uint64_t size(const std::shared_ptr<T> &ptr_t);
+    uint64_t size(const db::caching::node_cache_context &t);
+    uint64_t size(const db::element::edge &t);
+    uint64_t size(const db::element::edge* const &t);
+    uint64_t size(const db::element::node &t);
 
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T>& t);
@@ -134,6 +138,10 @@ namespace message
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer &packer, const std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::shared_ptr<T> &ptr_t);
+    void pack_buffer(e::buffer::packer &packer, const db::caching::node_cache_context &t);
+    void pack_buffer(e::buffer::packer &packer, const db::element::edge &t);
+    void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t);
+    void pack_buffer(e::buffer::packer &packer, const db::element::node &t);
 
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
@@ -142,15 +150,6 @@ namespace message
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void unpack_buffer(e::unpacker& unpacker, std::tuple<T1, T2, T3>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::shared_ptr<T> &ptr_t);
-
-    uint64_t size(const db::caching::node_cache_context &t);
-    uint64_t size(const db::element::edge &t);
-    uint64_t size(const db::element::edge* const &t);
-    uint64_t size(const db::element::node &t);
-    void pack_buffer(e::buffer::packer &packer, const db::caching::node_cache_context &t);
-    void pack_buffer(e::buffer::packer &packer, const db::element::edge &t);
-    void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t);
-    void pack_buffer(e::buffer::packer &packer, const db::element::node &t);
     void unpack_buffer(e::unpacker &unpacker, db::caching::node_cache_context &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge *&t);
@@ -187,65 +186,80 @@ namespace message
     {
         return sizeof(uint32_t);
     }
+
     inline uint64_t size(const node_prog::Node_Parameters_Base &t)
     {
         return t.size();
     }
+
     inline uint64_t size(const node_prog::Node_State_Base &t)
     {
         return t.size();
     }
+
     inline uint64_t size(const node_prog::Cache_Value_Base &t)
     {
         return t.size();
     }
+
     inline uint64_t size(const bool&)
     {
         return sizeof(uint16_t);
     }
+
     inline uint64_t size(const char&)
     {
         return sizeof(uint8_t);
     }
+
     inline uint64_t size(const uint16_t&)
     {
         return sizeof(uint16_t);
     }
+
     inline uint64_t size(const uint32_t&)
     {
         return sizeof(uint32_t);
     }
+
     inline uint64_t size(const uint64_t&)
     {
         return sizeof(uint64_t);
     }
+
     inline uint64_t size(const int&)
     {
         return sizeof(int);
     }
+
     inline uint64_t size(const double&)
     {
         return sizeof(uint64_t);
     }
+
     inline uint64_t size(const std::string &t)
     {
         return t.size() + sizeof(uint64_t);
     }
+
     inline uint64_t size(const vc::vclock &t)
     {
         return size(t.vt_id)
             + size(t.clock);
     }
+
     inline uint64_t size(const common::property &t)
     {
         return size(t.key)
             + size(t.value)
             + 2*size(t.creat_time); // for del time
     }
+
     inline uint64_t size(const db::element::remote_node &t)
     {
         return size(t.loc) + size(t.handle);
     }
+
     inline uint64_t size(const common::meta_element &t)
     {
         return size(t.get_loc())
@@ -335,16 +349,20 @@ namespace message
         return sz;
     }
 
-    inline uint64_t size()
+    // base case for recursive size_wrapper()
+    template <typename T>
+    inline uint64_t size_wrapper(const T &t)
     {
-        return 0;
+        return size(t);
     }
 
+    // recursive wrapper around variadic templated size()
     template <typename T, typename... Args>
-    inline uint64_t size(const T &t, const Args&... args)
+    inline uint64_t size_wrapper(const T &t, const Args&... args)
     {
-        return size(t) + size(args...);
+        return size_wrapper(t) + size_wrapper(args...);
     }
+
 
     // packing templates
 
@@ -352,14 +370,17 @@ namespace message
     {
         t.pack(packer);
     }
+
     inline void pack_buffer(e::buffer::packer &packer, const node_prog::Node_State_Base &t)
     {
         t.pack(packer);
     }
+
     inline void pack_buffer(e::buffer::packer &packer, const node_prog::Cache_Value_Base *&t)
     {
         t->pack(packer);
     }
+
     inline void pack_buffer(e::buffer::packer &packer, const node_prog::prog_type &t)
     {
         packer = packer << t;
@@ -367,29 +388,37 @@ namespace message
 
     inline void pack_buffer(e::buffer::packer &packer, const bool &t)
     {
-        uint16_t to_pack = t ? 1 : 0;
+        uint16_t to_pack = 0;
+        if (t) {
+            to_pack = 1;
+        }
         packer = packer << to_pack;
     }
+
     inline void 
     pack_buffer(e::buffer::packer &packer, const uint8_t &t)
     {
         packer = packer << t;
     }
+
     inline void 
     pack_buffer(e::buffer::packer &packer, const uint16_t &t)
     {
         packer = packer << t;
     }
+
     inline void 
     pack_buffer(e::buffer::packer &packer, const uint32_t &t)
     {
         packer = packer << t;
     }
+
     inline void 
     pack_buffer(e::buffer::packer &packer, const uint64_t &t)
     {
         packer = packer << t;
     }
+
     inline void 
     pack_buffer(e::buffer::packer &packer, const int &t)
     {
@@ -511,25 +540,6 @@ namespace message
         }
     }
 
-    /* vector with elements of constant size
-    template <typename T> 
-    inline void 
-    pack_buffer(e::buffer::packer &packer, const std::vector<T> &t)
-    {
-        // !assumes constant element size
-        uint64_t num_elems = t.size();
-        //std::cout << "pack buffer packed vector of size " << num_elems<< std::endl;
-        packer = packer << num_elems;
-        if (num_elems > 0){
-            uint64_t element_size = size(t[0]);
-            for (const T &elem : t) {
-                pack_buffer(packer, elem);
-                assert(element_size == size(elem));//slow
-            }
-        }
-    }
-    */
-
     template <typename T>
     inline void 
     pack_buffer(e::buffer::packer &packer, const std::unordered_set<T> &t)
@@ -553,35 +563,52 @@ namespace message
         }
     }
 
-    inline void
-    pack_buffer_checked(e::buffer::packer &packer)
-    {
-        assert(packer.remain() == 0);
-    }
-
-    template <typename T, typename... Args>
+    // base case for recursive pack_buffer_wrapper()
+    template <typename T>
     inline void 
-    pack_buffer_checked(e::buffer::packer &packer, const T &t, const Args&... args)
+    pack_buffer_wrapper(e::buffer::packer &packer, const T &t)
     {
         uint32_t before = packer.remain();
         pack_buffer(packer, t);
         assert((before - packer.remain()) == size(t) && "reserved size for type not same as number of bytes packed");
         UNUSED(before);
-        pack_buffer_checked(packer, args...);
+    }
+
+    // recursive wrapper around variadic templated pack_buffer()
+    // also performs buffer size sanity checks
+    template <typename T, typename... Args>
+    inline void 
+    pack_buffer_wrapper(e::buffer::packer &packer, const T &t, const Args&... args)
+    {
+        pack_buffer_wrapper(packer, t);
+        pack_buffer_wrapper(packer, args...);
+    }
+
+    // prepare message with only message_type and no additional payload
+    inline void
+    prepare_message(message &m, const enum msg_type given_type)
+    {
+        uint64_t bytes_to_pack = sizeof(enum msg_type);
+        m.type = given_type;
+        m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
+        e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
+
+        packer = packer << given_type;
+        assert(packer.remain() == 0 && "reserved size for message not same as number of bytes packed");
     }
 
     template <typename... Args>
     inline void
     prepare_message(message &m, const enum msg_type given_type, const Args&... args)
     {
-        uint64_t bytes_to_pack = size(args...) + sizeof(enum msg_type);
+        uint64_t bytes_to_pack = size_wrapper(args...) + sizeof(enum msg_type);
         m.type = given_type;
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
 
         packer = packer << given_type;
-        pack_buffer_checked(packer, args...);
-        assert(packer.remain() == 0 && "reserved size for message not same as nubmer of bytes packed");
+        pack_buffer_wrapper(packer, args...);
+        assert(packer.remain() == 0 && "reserved size for message not same as number of bytes packed");
     }
 
     inline void
@@ -596,27 +623,27 @@ namespace message
         return m.buf->empty();
     }
 
-    // unpacking templates
 
-    inline void
-    unpack_buffer(e::unpacker&)
-    { }
+    // unpacking templates
 
     inline void
     unpack_buffer(e::unpacker &unpacker, node_prog::Node_Parameters_Base &t)
     {
         t.unpack(unpacker);
     }
+
     inline void
     unpack_buffer(e::unpacker &unpacker, node_prog::Node_State_Base &t)
     {
         t.unpack(unpacker);
     }
+
     inline void
     unpack_buffer(e::unpacker &unpacker, node_prog::Cache_Value_Base &t)
     {
         t.unpack(unpacker);
     }
+
     inline void
     unpack_buffer(e::unpacker &unpacker, node_prog::prog_type &t)
     {
@@ -624,6 +651,7 @@ namespace message
         unpacker = unpacker >> _type;
         t = (enum node_prog::prog_type)_type;
     }
+
     inline void
     unpack_buffer(e::unpacker &unpacker, bool &t)
     {
@@ -631,26 +659,31 @@ namespace message
         unpacker = unpacker >> temp;
         t = (temp != 0);
     }
+
     inline void
     unpack_buffer(e::unpacker &unpacker, uint8_t &t)
     {
         unpacker = unpacker >> t;
     }
+
     inline void
     unpack_buffer(e::unpacker &unpacker, uint16_t &t)
     {
         unpacker = unpacker >> t;
     }
+
     inline void
     unpack_buffer(e::unpacker &unpacker, uint32_t &t)
     {
         unpacker = unpacker >> t;
     }
+
     inline void 
     unpack_buffer(e::unpacker &unpacker, uint64_t &t)
     {
         unpacker = unpacker >> t;
     }
+
     inline void 
     unpack_buffer(e::unpacker &unpacker, int &t)
     {

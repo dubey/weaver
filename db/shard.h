@@ -37,7 +37,7 @@
 #include "threadpool/threadpool.h"
 #include "deferred_write.h"
 #include "del_obj.h"
-#include "hdex_stub.h"
+#include "hyper_stub.h"
 
 namespace std {
 // so we can use a pair as key to unordered_map TODO move me??
@@ -118,6 +118,9 @@ namespace db
                 , msg_count_mutex
                 , migration_mutex
                 , graph_load_mutex; // gather load times from all shards
+
+            // Hyperdex stub
+            hyper_stub hstub;
 
             // Consistency
         public:
@@ -402,6 +405,9 @@ namespace db
         if (!migrate) {
             new_node->state = element::node::mode::STABLE;
             new_node->msg_count.resize(NUM_SHARDS, 0);
+            // store in Hyperdex
+            std::unordered_set<uint64_t> empty_set;
+            hstub.put_node(*new_node, empty_set);
             release_node(new_node);
         }
         return new_node;
@@ -412,6 +418,8 @@ namespace db
     {
         n->update_del_time(tdel);
         n->updated = true;
+        // store in Hyperdex
+        hstub.update_del_time(*n);
     }
 
     inline void
@@ -448,6 +456,9 @@ namespace db
         if (!init_load) {
             edge_map_mutex.unlock();
         }
+        // store in Hyperdex
+        hstub.add_out_edge(*n, new_edge);
+        hstub.add_in_nbr(remote_node, n->get_handle());
     }
 
     inline void
@@ -483,6 +494,8 @@ namespace db
         e->update_del_time(tdel);
         n->updated = true;
         n->dependent_del++;
+        // store in Hyperdex
+        hstub.add_out_edge(*n, e);
     }
 
     inline void
@@ -512,6 +525,8 @@ namespace db
     {
         common::property p(key, value, vclk);
         n->check_and_add_property(p);
+        // store in Hyperdex
+        hstub.update_properties(*n);
     }
 
     inline void
@@ -540,6 +555,8 @@ namespace db
         db::element::edge *e = n->out_edges[edge_handle];
         common::property p(key, value, vclk);
         e->check_and_add_property(p);
+        // store in Hyperdex
+        hstub.add_out_edge(*n, e);
     }
 
     inline void
