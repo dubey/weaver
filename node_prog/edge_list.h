@@ -55,7 +55,7 @@ namespace node_prog
         edge& operator*()
         {
             db::element::edge& toRet = *internal_cur->second;
-            toRet.view_time = req_time;
+            toRet.base.view_time = req_time;
             return (edge &) toRet; // XXX problem here?
         }
     };

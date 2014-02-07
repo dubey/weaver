@@ -109,7 +109,7 @@ namespace node_prog
                     }
                 }
                 if (!matching_edge_props.empty()) {
-                    params.edges_props.emplace_back(edge.get_identifier(), std::move(matching_edge_props));
+                    params.edges_props.emplace_back(edge.get_id(), std::move(matching_edge_props));
                 }
             }
         }

@@ -59,7 +59,7 @@ namespace element
             void add_property(property prop);
             void delete_property(std::string &key, vc::vclock &tdel);
             void remove_property(std::string &key, vc::vclock &vclk);
-            bool has_property_at_time(property &prop, vc::vclock &vclk);
+            bool has_property(property &prop, vc::vclock &vclk);
             bool check_and_add_property(property prop);
             void set_properties(std::vector<property> &props);
             void update_del_time(vc::vclock &del_time);
@@ -110,7 +110,7 @@ namespace element
     }
 
     inline bool
-    element :: has_property_at_time(property &prop, vc::vclock &vclk)
+    element :: has_property(property &prop, vc::vclock &vclk)
     {
         for (auto &p: properties) {
             if (prop == p) {

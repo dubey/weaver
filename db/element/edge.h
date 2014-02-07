@@ -48,7 +48,7 @@ namespace element
             node_prog::prop_list get_properties();
             bool has_property(node_prog::property& p);
             bool has_all_properties(std::vector<node_prog::property>& props);
-            uint64_t get_identifier() const { return id; } ;
+            uint64_t get_id() const { return base.get_id(); } ;
     };
 
     // empty constructor for unpacking
@@ -92,23 +92,23 @@ namespace element
     node_prog::prop_list 
     edge :: get_properties()
     {
-        assert(view_time != NULL);
-        return node_prog::prop_list(base.properties, *view_time);
+        assert(base.view_time != NULL);
+        return node_prog::prop_list(base.properties, *base.view_time);
     }
 
     bool
     edge :: has_property(node_prog::property& p)
     {
-        assert(view_time != NULL);
-        return base.has_property((db::element::property &) p, *view_time); // cast
+        assert(base.view_time != NULL);
+        return base.has_property((db::element::property &) p, *base.view_time); // cast
     }
 
     bool
     edge :: has_all_properties(std::vector<node_prog::property>& props)
     {
-        assert(view_time != NULL);
+        assert(base.view_time != NULL);
         for (auto &p : props) {
-            if (!base.has_property((db::element::property &) p, *view_time)) { // cast
+            if (!base.has_property((db::element::property &) p, *base.view_time)) { // cast
                 return false;
             }
         }

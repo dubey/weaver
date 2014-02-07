@@ -92,14 +92,14 @@ namespace element
 
             node_prog::edge_list get_edges()
             {
-                assert(view_time != NULL);
+                assert(base.view_time != NULL);
                 return node_prog::edge_list(out_edges, base.view_time);
             };
 
             node_prog::prop_list get_properties()
             {
-                assert(view_time != NULL);
-                return node_prog::prop_list(base.properties, base->view_time);
+                assert(base.view_time != NULL);
+                return node_prog::prop_list(base.properties, *base.view_time);
             };
     };
 
