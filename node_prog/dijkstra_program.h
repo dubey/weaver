@@ -235,10 +235,10 @@ namespace node_prog
 
                 for (edge &edge: n.get_edges()) {
                     for (property& prop : edge.get_properties()) {
-                        if (params.edge_weight_name.compare(prop.key) == 0) {
+                        if (params.edge_weight_name.compare(prop.get_key()) == 0) {
                             uint64_t edge_weight;
-                            std::stringstream(prop.value) >> edge_weight;
-                            WDEBUG << "got edge weight " << edge_weight << " from string " << prop.value << std::endl;
+                            std::stringstream(prop.get_value()) >> edge_weight;
+                            WDEBUG << "got edge weight " << edge_weight << " from string " << prop.get_value() << std::endl;
                             uint64_t priority = calculate_priority(params.cost, edge_weight, params.is_widest_path);
                             if (params.is_widest_path) {
                                 node_state.pq_widest.emplace(priority, edge.get_neighbor(), params.src_handle); 
@@ -319,10 +319,10 @@ namespace node_prog
             WDEBUG << "Dijkstra program: NOT source" <<  std::endl;
             for (edge &edge: n.get_edges()) {
                 for (property& prop : edge.get_properties()) {
-                    if (params.edge_weight_name.compare(prop.key) == 0) {
+                    if (params.edge_weight_name.compare(prop.get_key()) == 0) {
                         uint64_t edge_weight;
-                        std::stringstream(prop.value) >> edge_weight;
-                        WDEBUG << "got edge weight " << edge_weight << " from string " << prop.value << std::endl;
+                        std::stringstream(prop.get_value()) >> edge_weight;
+                        WDEBUG << "got edge weight " << edge_weight << " from string " << prop.get_value() << std::endl;
                         uint64_t priority = calculate_priority(params.cost, edge_weight, params.is_widest_path);
                         //assert(e->nbr.loc < NUM_SHARDS + SHARD_ID_INCR); //XXX
                         params.entries_to_add.emplace_back(std::make_pair(priority, edge.get_neighbor()));

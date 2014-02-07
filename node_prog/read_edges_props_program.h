@@ -104,12 +104,12 @@ namespace node_prog
             if (params.edges.empty() || (std::find(params.edges.begin(), params.edges.end(), edge.get_handle()) != params.edges.end())) {
                 std::vector<property> matching_edge_props;
                 for (property &prop : edge.get_properties()) {
-                    if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.key) != params.keys.end())) {
+                    if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.get_key()) != params.keys.end())) {
                         matching_edge_props.emplace_back(prop);
                     }
                 }
                 if (!matching_edge_props.empty()) {
-                    params.edges_props.emplace_back(edge.get_handle(), std::move(matching_edge_props));
+                    params.edges_props.emplace_back(edge.get_id(), std::move(matching_edge_props));
                 }
             }
         }

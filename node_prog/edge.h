@@ -28,7 +28,7 @@ namespace node_prog
             virtual prop_list get_properties() = 0;
             virtual bool has_property(property& p) = 0;
             virtual bool has_all_properties(std::vector<property>& props) = 0;
-    };
+   };
 }
 
 #endif

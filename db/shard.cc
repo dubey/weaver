@@ -931,9 +931,9 @@ inline void node_prog_loop(
                 std::unordered_map<uint64_t, uint32_t> agg_msg_count;
 #endif
                 for (std::pair<node_prog::node_handle, ParamsType> &res : next_node_params) {
-                    db::element::remote_node& rn = (db::element::remote_node &) res.first;
+                    db::element::remote_node& rn = (db::element::remote_node &) res.first; // XXX Dynamic cast
                     assert(rn.loc < NUM_SHARDS + SHARD_ID_INCR);
-                    if (rn == node_prog::coord_remote_node) {
+                    if (rn == db::element::coord_remote_node) {
                         // signal to send back to vector timestamper that issued request
                         // TODO mark done
                         // XXX get rid of pair, without pair it is not working for some reason

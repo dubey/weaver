@@ -18,15 +18,13 @@
 #include <vector>
 #include <po6/net/location.h>
 
+#include "common/event_order.h"
 #include "node_prog/edge.h"
+#include "node_prog/prop_list.h"
 #include "node_prog/property.h"
+#include "property.h"
 #include "remote_node.h"
 #include "element.h"
-
-namespace node_prog
-{
-    prop_list(std::vector<db::element::property>& prop_list, vc::vclock& req_time);
-}
 
 namespace db
 {
@@ -89,12 +87,12 @@ namespace element
         return (node_prog::node_handle &) nbr; // cast
     }
 
-    node_prog::prop_list
+    node_prog::prop_list 
     edge :: get_properties()
     {
         assert(view_time != NULL);
         return node_prog::prop_list(properties, *view_time);
-    }
+    };
 
     bool
     edge :: has_property(node_prog::property& p)

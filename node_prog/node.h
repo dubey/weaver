@@ -14,19 +14,15 @@
 #include <vector>
 #include <unordered_map>
 
-#include "edge.h"
+#include "edge_list.h"
 
 namespace node_prog
 {
-    class edge_iter;
-    class edge_list;
-
     class node
     {
         public:
             virtual edge_list get_edges() = 0;
             virtual prop_list get_properties() = 0;
-
     };
 }
 

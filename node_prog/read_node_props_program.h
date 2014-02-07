@@ -97,7 +97,7 @@ namespace node_prog
             std::unique_ptr<db::caching::cache_response>)
     {
         for (property &prop : n.get_properties()) {
-            if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.key) != params.keys.end())) {
+            if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.get_key()) != params.keys.end())) {
                 params.node_props.emplace_back(prop);
             }
         }

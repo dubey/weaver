@@ -86,7 +86,7 @@ namespace std
         public:
             size_t operator()(const node_prog::node_handle &x) const throw() 
             {
-                db::element::remote_node& toHash = dynamic_cast<db::element::remote_node&>(x);
+                const db::element::remote_node& toHash = dynamic_cast<const db::element::remote_node&>(x);
                 return std::hash<db::element::remote_node>()(toHash);
             }
     };

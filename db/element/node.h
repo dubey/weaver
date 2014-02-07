@@ -23,7 +23,9 @@
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
 
+#include "common/event_order.h"
 #include "node_prog/edge.h"
+#include "node_prog/edge_list.h"
 #include "node_prog/property.h"
 #include "common/weaver_constants.h"
 #include "db/cache/prog_cache.h"
@@ -33,12 +35,6 @@
 namespace message
 {
     class message;
-}
-
-namespace node_prog
-{
-    edge_list(std::unordered_map<uint64_t, db::element::edge*>& edge_list,
-            std::shared_ptr<vc::vclock>& req_time);
 }
 
 namespace db
