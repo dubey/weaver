@@ -32,7 +32,7 @@ namespace message
 
     inline uint64_t size(const db::element::edge &t)
     {
-        uint64_t sz = size(base)
+        uint64_t sz = size(t.base)
             + size(t.msg_count)
             + size(t.nbr);
         return sz;
@@ -44,12 +44,12 @@ namespace message
 
     inline uint64_t size(const db::element::node &t)
     {
-        uint64_t sz = size(base)
+        uint64_t sz = size(t.base)
             + size(t.out_edges)
             + size(t.update_count)
             + size(t.msg_count)
             + size(t.already_migr)
-            + prog_state->size(t.get_id());
+            + prog_state->size(t.base.get_id());
         return sz;
     }
 
@@ -81,7 +81,7 @@ namespace message
         pack_buffer(packer, t.update_count);
         pack_buffer(packer, t.msg_count);
         pack_buffer(packer, t.already_migr);
-        prog_state->pack(t.get_id(), packer);
+        prog_state->pack(t.base.get_id(), packer);
     }
 
     // unpacking methods
@@ -131,7 +131,7 @@ namespace message
         unpack_buffer(unpacker, t.update_count);
         unpack_buffer(unpacker, t.msg_count);
         unpack_buffer(unpacker, t.already_migr);
-        prog_state->unpack(id, unpacker);
+        prog_state->unpack(base.id, unpacker);
     }
 }
 

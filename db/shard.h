@@ -409,7 +409,7 @@ namespace db
     inline void
     shard :: delete_node_nonlocking(element::node *n, vc::vclock &tdel)
     {
-        n->update_del_time(tdel);
+        n->base.update_del_time(tdel);
         n->updated = true;
     }
 
@@ -475,7 +475,7 @@ namespace db
     shard :: delete_edge_nonlocking(element::node *n, uint64_t edge, vc::vclock &tdel)
     {
         element::edge *e = n->out_edges.at(edge);
-        e->update_del_time(tdel);
+        e->base.update_del_time(tdel);
         n->updated = true;
         n->dependent_del++;
     }

@@ -657,7 +657,7 @@ fill_node_cache_context(db::caching::node_cache_context& context, db::element::n
         bool creat_after_cached = (order::compare_two_vts(e->base.get_creat_time(), cache_time) == 1);
 
         bool del_before_cur = (order::compare_two_vts(e->base.get_del_time(), cur_time) == 0);
-        bool creat_before_cur = (order::compare_two_vts(e->base.get_(), cur_time) == 0);
+        bool creat_before_cur = (order::compare_two_vts(e->base.get_creat_time(), cur_time) == 0);
 
         assert(creat_before_cur); // TODO: is this check needed/valid
         assert(del_after_cached);
@@ -920,11 +920,11 @@ inline void node_prog_loop(
                 node_prog::node& node_to_pass = (node_prog::node &) (*node);
                 node_prog::node_handle& ptr_to_pass = (node_prog::node_handle &) (this_node);
 
-                node->view_time = np.req_vclock; 
+                node->base.view_time = np.req_vclock; 
                 auto next_node_params = func(node_to_pass, ptr_to_pass,
                         params, // actual parameters for this node program
                         node_state_getter, add_cache_func, std::move(np.cache_value));
-                node->view_time = nullptr; 
+                node->base.view_time = nullptr; 
 
                 // batch the newly generated node programs for onward propagation
 #ifdef WEAVER_CLDG
