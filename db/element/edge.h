@@ -30,7 +30,7 @@ namespace db
 {
 namespace element
 {
-    class edge : public element, public node_prog::edge
+    class edge : public element, virtual public node_prog::edge
     {
         public:
             edge();
@@ -47,6 +47,7 @@ namespace element
             node_prog::prop_list get_properties();
             bool has_property(node_prog::property& p);
             bool has_all_properties(std::vector<node_prog::property>& props);
+            uint64_t get_identifier() const { return id; } ;
     };
 
     // empty constructor for unpacking
@@ -92,7 +93,7 @@ namespace element
     {
         assert(view_time != NULL);
         return node_prog::prop_list(properties, *view_time);
-    };
+    }
 
     bool
     edge :: has_property(node_prog::property& p)

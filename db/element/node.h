@@ -24,6 +24,7 @@
 #include <po6/threads/cond.h>
 
 #include "common/event_order.h"
+#include "node_prog/node.h"
 #include "node_prog/edge.h"
 #include "node_prog/edge_list.h"
 #include "node_prog/property.h"
@@ -41,7 +42,7 @@ namespace db
 {
 namespace element
 {
-    class node : public element, public node_prog::node
+    class node : public element, virtual public node_prog::node
     {
         public:
             node(uint64_t id, vc::vclock &vclk, po6::threads::mutex *mtx);
