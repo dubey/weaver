@@ -179,6 +179,7 @@ namespace node_prog
     inline bool
     check_cache_context(std::vector<std::pair<node_handle, db::caching::node_cache_context>>& context)
     {
+        UNUSED(context); // temp
         /*
         //WDEBUG  << "$$$$$ checking context of size "<< context.size() << std::endl;
         // path not valid if broken by:
@@ -292,7 +293,7 @@ namespace node_prog
                         // now add to cache
                         std::shared_ptr<node_prog::reach_cache_value> toCache(new reach_cache_value());
                         std::shared_ptr<std::vector<node_handle>> watch_set(new std::vector<node_handle>(params.path)); // copy return path from params
-                        uint64_t cache_key = params.dest;
+                        uint64_t cache_key = std::hash<node_handle>()(params.dest);
                         add_cache_func(toCache, watch_set, cache_key);
                     }
                 }

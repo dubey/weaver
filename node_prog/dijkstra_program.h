@@ -31,7 +31,7 @@ namespace node_prog
         public:
             uint64_t cost;
             node_handle node;
-            uint64_t prev_node_req_id; // used for reconstructing path in coordinator
+            node_handle prev_handle; // used for reconstructing path in coordinator
 
             int operator<(const dijkstra_queue_elem& other) const
             { 
@@ -45,10 +45,10 @@ namespace node_prog
 
             dijkstra_queue_elem() { }
 
-            dijkstra_queue_elem(uint64_t c, node_handle n, uint64_t prev)
+            dijkstra_queue_elem(uint64_t c, node_handle n, node_handle prev)
                 : cost(c)
                 , node(n)
-                , prev_node_req_id(prev)
+                , prev_handle(prev)
             {
             }
 
@@ -57,7 +57,7 @@ namespace node_prog
             {
                 uint64_t sz = message::size(cost)
                     + message::size(node)
-                    + message::size(prev_node_req_id);
+                    + message::size(prev_handle);
                 return sz;
             }
 
@@ -65,31 +65,30 @@ namespace node_prog
             {
                 message::pack_buffer(packer, cost);
                 message::pack_buffer(packer, node);
-                message::pack_buffer(packer, prev_node_req_id);
+                message::pack_buffer(packer, prev_handle);
             }
 
             virtual void unpack(e::unpacker& unpacker)
             {
                 message::unpack_buffer(unpacker, cost);
                 message::unpack_buffer(unpacker, node);
-                message::unpack_buffer(unpacker, prev_node_req_id);
+                message::unpack_buffer(unpacker, prev_handle);
             }
     };
 
     class dijkstra_params : public virtual Node_Parameters_Base  
     {
         public:
-            uint64_t src_handle;
-            node_handle source_node;
+            node_handle src_handle;
             node_handle dst_handle;
             std::string edge_weight_name; // the name of the property which holds the weight of an an edge
             std::vector<db::element::property> edge_props;
             bool is_widest_path;
             bool adding_nodes;
-            uint64_t prev_node;
+            node_handle prev_handle;
             std::vector<std::pair<uint64_t, node_handle>> entries_to_add;
             node_handle next_node;
-            std::vector<std::pair<uint64_t, uint64_t>> final_path;
+            std::vector<std::pair<node_handle, uint64_t>> final_path;
             uint64_t cost;
             uint64_t vt_id;
 
@@ -108,13 +107,12 @@ namespace node_prog
             {
                 uint64_t toRet = 0;
                 toRet += message::size(src_handle);
-                toRet += message::size(source_node);
                 toRet += message::size(dst_handle);
                 toRet += message::size(edge_weight_name);
                 toRet += message::size(edge_props);
                 toRet += message::size(is_widest_path);
                 toRet += message::size(adding_nodes);
-                toRet += message::size(prev_node);
+                toRet += message::size(prev_handle);
                 toRet += message::size(entries_to_add);
                 toRet += message::size(next_node);
                 toRet += message::size(final_path);
@@ -126,13 +124,12 @@ namespace node_prog
             virtual void pack(e::buffer::packer& packer) const 
             {
                 message::pack_buffer(packer, src_handle);
-                message::pack_buffer(packer, source_node);
                 message::pack_buffer(packer, dst_handle);
                 message::pack_buffer(packer, edge_weight_name);
                 message::pack_buffer(packer, edge_props);
                 message::pack_buffer(packer, is_widest_path);
                 message::pack_buffer(packer, adding_nodes);
-                message::pack_buffer(packer, prev_node);
+                message::pack_buffer(packer, prev_handle);
                 message::pack_buffer(packer, entries_to_add);
                 message::pack_buffer(packer, next_node);
                 message::pack_buffer(packer, final_path);
@@ -143,13 +140,12 @@ namespace node_prog
             virtual void unpack(e::unpacker& unpacker)
             {
                 message::unpack_buffer(unpacker, src_handle);
-                message::unpack_buffer(unpacker, source_node);
                 message::unpack_buffer(unpacker, dst_handle);
                 message::unpack_buffer(unpacker, edge_weight_name);
                 message::unpack_buffer(unpacker, edge_props);
                 message::unpack_buffer(unpacker, is_widest_path);
                 message::unpack_buffer(unpacker, adding_nodes);
-                message::unpack_buffer(unpacker, prev_node);
+                message::unpack_buffer(unpacker, prev_handle);
                 message::unpack_buffer(unpacker, entries_to_add);
                 message::unpack_buffer(unpacker, next_node);
                 message::unpack_buffer(unpacker, final_path);
@@ -168,7 +164,7 @@ namespace node_prog
                             std::greater<dijkstra_queue_elem>> pq_widest; 
         // map from a node (by its create time) to the req_id of the node
         // that came before it in the shortest path and its cost
-        std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> visited; 
+        std::unordered_map<node_handle, std::pair<node_handle, uint64_t>> visited; 
 
         virtual ~dijkstra_node_state() { }
 
@@ -230,10 +226,10 @@ namespace node_prog
                     }
                 }
                 params.entries_to_add.clear();
-                node_state.visited.emplace(params.next_node, std::make_pair(params.prev_node, params.cost));
+                node_state.visited.emplace(params.next_node, std::make_pair(params.prev_handle, params.cost));
             } else { 
                 // starting the request, add source neighbors to priority queue
-                params.source_node = rn;
+                params.src_handle = rn;
                 params.cost = params.is_widest_path ? MAX_TIME : 0; // don't want source node to be bottleneck in path
                 node_state.visited.emplace(params.src_handle, std::make_pair(params.src_handle, params.cost)); // handles same at source
 
@@ -268,29 +264,29 @@ namespace node_prog
                 }
                 params.cost = next_to_add.cost;
                 params.next_node = next_to_add.node;
-                params.prev_node = next_to_add.prev_node_req_id;
+                params.prev_handle = next_to_add.prev_handle;
                 if (params.next_node == params.dst_handle) {
                     WDEBUG << "DIJKSTRA found dest" << std::endl;
                     // we have found destination! We know it was not deleted as coord checked
-                    std::pair<uint64_t, uint64_t> visited_entry;
+                    std::pair<node_handle, uint64_t> visited_entry;
                     // rebuild path based on req_id's in visited
                     if (params.is_widest_path) {
-                        uint64_t cur_node = params.dst_handle;
+                        node_handle &cur_handle = params.dst_handle;
                         uint64_t cur_cost = params.cost;
-                        params.final_path.push_back(std::make_pair(cur_node, cur_cost));
-                        cur_node = params.prev_node;
-                        visited_entry = node_state.visited[params.prev_node];
-                        while (cur_node != params.src_handle) {
+                        params.final_path.push_back(std::make_pair(cur_handle, cur_cost));
+                        cur_handle = params.prev_handle;
+                        visited_entry = node_state.visited[params.prev_handle];
+                        while (cur_handle != params.src_handle) {
                             cur_cost = visited_entry.second;
-                            params.final_path.push_back(std::make_pair(cur_node, cur_cost));
-                            cur_node = visited_entry.first;
-                            visited_entry = node_state.visited[cur_node];
+                            params.final_path.push_back(std::make_pair(cur_handle, cur_cost));
+                            cur_handle = visited_entry.first;
+                            visited_entry = node_state.visited[cur_handle];
                         }
                     } else {
                         // shortest path, have to calculate edge weight based on cumulative cost to node before
                         uint64_t old_cost = params.cost;
-                        uint64_t old_node = params.dst_handle; // the node father from sourc
-                        uint64_t cur_node = params.prev_node;
+                        node_handle &old_node = params.dst_handle; // the node father from sourc
+                        node_handle &cur_node = params.prev_handle;
                         while (old_node != params.src_handle) {
                             visited_entry = node_state.visited[cur_node];
                             params.final_path.push_back(std::make_pair(old_node, old_cost-visited_entry.second));
@@ -333,7 +329,7 @@ namespace node_prog
                     }
                 }
             }
-            return {std::make_pair(params.source_node, std::move(params))};
+            return {std::make_pair(params.src_handle, std::move(params))};
         }
     }
 }

@@ -255,7 +255,7 @@ namespace message
     }
     inline uint64_t size(const db::element::remote_node &t)
     {
-        return size(t.loc) + size(t.handle);
+        return size(t.loc) + size(t.id);
     }
     inline uint64_t size(const node_prog::node_handle &t)
     {
@@ -450,7 +450,7 @@ namespace message
     inline void 
     pack_buffer(e::buffer::packer &packer, const db::element::remote_node &t)
     {
-        packer = packer << t.loc << t.handle;
+        packer = packer << t.loc << t.id;
     }
 
     inline void 

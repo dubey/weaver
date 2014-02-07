@@ -34,7 +34,7 @@ namespace node_prog
             bool is_center;
             node_handle center;
             bool outgoing;
-            std::vector<uint64_t> neighbors;
+            std::vector<node_handle> neighbors;
             double clustering_coeff;
             uint64_t vt_id;
 
@@ -88,7 +88,7 @@ namespace node_prog
     struct clustering_node_state : public virtual Node_State_Base
     {
         // map from a node (by its create time) to the number of neighbors who are connected to it
-        std::unordered_map<uint64_t, int> neighbor_counts;
+        std::unordered_map<node_handle, int> neighbor_counts;
         int responses_left;
 
 
@@ -138,7 +138,7 @@ namespace node_prog
                     next = {std::make_pair(coordinator, std::move(params))};
                 }
             } else {
-                for (uint64_t nbr : params.neighbors) {
+                for (node_handle &nbr : params.neighbors) {
                     if (cstate.neighbor_counts.count(nbr) > 0) {
                         cstate.neighbor_counts[nbr]++;
                     }
@@ -147,7 +147,7 @@ namespace node_prog
                     assert(cstate.neighbor_counts.size() > 1);
                     double denominator = (double) (cstate.neighbor_counts.size() * (cstate.neighbor_counts.size() - 1));
                     uint64_t numerator = 0;
-                    for (std::pair<const uint64_t, int>& nbr_count : cstate.neighbor_counts){
+                    for (std::pair<const node_handle, int>& nbr_count : cstate.neighbor_counts){
                         numerator += nbr_count.second;
                     }
                     params.clustering_coeff = (double) numerator / denominator;

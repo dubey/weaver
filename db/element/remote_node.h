@@ -68,7 +68,7 @@ namespace std
     struct hash<db::element::remote_node> 
     {
         public:
-            size_t operator()(db::element::remote_node &x) const throw() 
+            size_t operator()(const db::element::remote_node &x) const throw() 
             {
                 return (hash<int>()(x.loc) * 6291469) + (hash<size_t>()(x.id) * 393241); // some big primes
             }

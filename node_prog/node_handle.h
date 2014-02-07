@@ -18,13 +18,20 @@
 
 namespace node_prog
 {
-    class node_handle : private db::element::remote_node
+    class node_handle
     {
-        // expose nothing!
+    private:
+      const db::element::remote_node& wrapped;
+      node_handle(const db::element::remote_node& to_wrap) : wrapped(to_wrap) {}
+    public:
+      friend class node_handle_api;
     };
 
     static db::element::remote_node coord_remote_node(0,0);
     static node_handle& coordinator = (node_handle &) coord_remote_node;
+
+
+  };
 }
 
 namespace std
@@ -34,9 +41,10 @@ namespace std
     struct hash<node_prog::node_handle> 
     {
         public:
-            size_t operator()(node_prog::node_handle &x) const throw() 
+            size_t operator()(const node_prog::node_handle &x) const throw() 
             {
-                return hash<db::element::remote_node>()((db::element::remote_node &) x);
+                db::element::remote_node& toHash = dynamic_cast<db::element::remote_node&>(x);
+                return std::hash<db::element::remote_node>()(toHash);
             }
     };
 }
