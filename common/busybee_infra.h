@@ -45,6 +45,11 @@ class weaver_mapper : public busybee_mapper
             }
         }
 
+        void update_map(uint64_t server_id, po6::net::location &loc)
+        {
+            mlist[server_id] = loc;
+        }
+
     private:
         weaver_mapper(const weaver_mapper&);
         weaver_mapper& operator=(const weaver_mapper&);
