@@ -508,7 +508,7 @@ unpack_tx_request(void *req)
     }
 
     // increment qts for next writes
-    S->record_completed_tx(vt_id, tx_id, vclk.clock);
+    S->record_completed_tx(vt_id, vclk.clock);
     delete request;
 
     // send tx confirmation to coordinator
@@ -599,7 +599,7 @@ nop(void *noparg)
     S->permanent_delete_loop(nop_arg->vt_id, nop_arg->outstanding_progs != 0);
 
     // record clock; reads go through
-    S->record_completed_tx(nop_arg->vt_id, nop_arg->req_id, nop_arg->vclk.clock);
+    S->record_completed_tx(nop_arg->vt_id, nop_arg->vclk.clock);
 
     // ack to VT
     message::prepare_message(msg, message::VT_NOP_ACK, shard_id, cur_node_count);

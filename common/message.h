@@ -227,6 +227,11 @@ namespace message
         return sizeof(uint64_t);
     }
 
+    inline uint64_t size(const int64_t&)
+    {
+        return sizeof(int64_t);
+    }
+
     inline uint64_t size(const int&)
     {
         return sizeof(int);
@@ -415,6 +420,12 @@ namespace message
 
     inline void 
     pack_buffer(e::buffer::packer &packer, const uint64_t &t)
+    {
+        packer = packer << t;
+    }
+
+    inline void
+    pack_buffer(e::buffer::packer &packer, const int64_t &t)
     {
         packer = packer << t;
     }
@@ -680,6 +691,12 @@ namespace message
 
     inline void 
     unpack_buffer(e::unpacker &unpacker, uint64_t &t)
+    {
+        unpacker = unpacker >> t;
+    }
+
+    inline void
+    unpack_buffer(e::unpacker &unpacker, int64_t &t)
     {
         unpacker = unpacker >> t;
     }

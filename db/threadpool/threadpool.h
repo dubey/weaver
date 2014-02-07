@@ -31,7 +31,7 @@ class shard;
 namespace thread
 {
     class pool;
-    void worker_thread_loop(pool *tpool);
+    void worker_thread_loop(pool *tpool, uint64_t);
 
     class unstarted_thread
     {
@@ -84,7 +84,6 @@ namespace thread
             int num_threads;
             std::vector<pqueue_t> read_queues;
             std::vector<pqueue_t> write_queues;
-            std::vector<uint64_t> last_ids; // records last transaction id pulled of threadpool for that vector timestamper
             std::vector<vc::vclock_t> last_clocks; // records last transaction vclock pulled of threadpool for that vector timestamper
             vc::qtimestamp_t qts; // queue timestamps
             po6::threads::mutex queue_mutex, thread_loop_mutex;
@@ -96,7 +95,7 @@ namespace thread
             void add_write_request(uint64_t vt_id, unstarted_thread*);
             bool check_qts(uint64_t vt_id, uint64_t qts);
             void increment_qts(uint64_t vt_id, uint64_t incr);
-            void record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk);
+            void record_completed_tx(uint64_t vt_id, vc::vclock_t &tx_clk);
 
         public:
             pool(int n_threads);
@@ -107,15 +106,14 @@ namespace thread
         : num_threads(n_threads)
         , read_queues(NUM_VTS, pqueue_t())
         , write_queues(NUM_VTS, pqueue_t())
-        , last_ids(NUM_VTS, 0)
         , last_clocks(NUM_VTS, vc::vclock_t(NUM_VTS, 0))
         , qts(NUM_VTS, 0)
         , queue_cond(&queue_mutex)
     {
-        int i;
+        uint64_t i;
         std::unique_ptr<std::thread> t;
-        for (i = 0; i < num_threads; i++) {
-            t.reset(new std::thread(worker_thread_loop, this));
+        for (i = 0; i < (uint64_t)num_threads; i++) {
+            t.reset(new std::thread(worker_thread_loop, this, i));
             t->detach();
         }
     }
@@ -157,12 +155,11 @@ namespace thread
         queue_mutex.unlock();
     }
 
-    // record the tx_id the vclk for last completed write tx
+    // record the vclk for last completed write tx
     inline void
-    pool :: record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk)
+    pool :: record_completed_tx(uint64_t vt_id, vc::vclock_t &tx_clk)
     {
         queue_mutex.lock();
-        last_ids[vt_id] = tx_id;
         last_clocks[vt_id] = tx_clk;
         queue_cond.broadcast();
         queue_mutex.unlock();

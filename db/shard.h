@@ -54,6 +54,8 @@ namespace std {
 
 namespace db
 {
+    thread_local uint64_t thread_id = MAX_UINT64;
+
     // Pending update request
     class graph_request
     {
@@ -120,12 +122,12 @@ namespace db
                 , graph_load_mutex; // gather load times from all shards
 
             // Hyperdex stub
-            hyper_stub hstub;
+            std::vector<hyper_stub*> hstub;
 
             // Consistency
         public:
             void increment_qts(uint64_t vt_id, uint64_t incr);
-            void record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk);
+            void record_completed_tx(uint64_t vt_id, vc::vclock_t &tx_clk);
             element::node* acquire_node(uint64_t node_handle);
             void node_tx_order(uint64_t node, uint64_t vt_id, uint64_t qts);
             element::node* acquire_node_write(uint64_t node, uint64_t vt_id, uint64_t qts);
@@ -216,7 +218,6 @@ namespace db
             void add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
             bool check_done_request(uint64_t req_id);
 
-            
             std::unordered_map<std::pair<uint64_t, uint64_t>, void *> node_prog_running_states; // used for fetching cache contexts
             po6::threads::mutex node_prog_running_states_mutex;
 
@@ -253,19 +254,24 @@ namespace db
         order::call_times = new std::list<uint64_t>();
         assert(NUM_VTS == KRONOS_NUM_VTS);
         message::prog_state = &prog_state;
+        for (int i = 0; i < NUM_THREADS; i++) {
+            hstub.push_back(new hyper_stub(shard_id));
+        }
     }
 
     // Consistency methods
     inline void
     shard :: increment_qts(uint64_t vt_id, uint64_t incr)
     {
+        hstub[thread_id]->increment_qts(vt_id, incr);
         thread_pool.increment_qts(vt_id, incr);
     }
 
     inline void
-    shard :: record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk)
+    shard :: record_completed_tx(uint64_t vt_id, vc::vclock_t &tx_clk)
     {
-        thread_pool.record_completed_tx(vt_id, tx_id, tx_clk);
+        hstub[thread_id]->update_last_clocks(vt_id, tx_clk);
+        thread_pool.record_completed_tx(vt_id, tx_clk);
     }
 
     // find the node corresponding to given handle
@@ -407,7 +413,7 @@ namespace db
             new_node->msg_count.resize(NUM_SHARDS, 0);
             // store in Hyperdex
             std::unordered_set<uint64_t> empty_set;
-            hstub.put_node(*new_node, empty_set);
+            hstub[thread_id]->put_node(*new_node, empty_set);
             release_node(new_node);
         }
         return new_node;
@@ -419,7 +425,7 @@ namespace db
         n->update_del_time(tdel);
         n->updated = true;
         // store in Hyperdex
-        hstub.update_del_time(*n);
+        hstub[thread_id]->update_del_time(*n);
     }
 
     inline void
@@ -457,8 +463,8 @@ namespace db
             edge_map_mutex.unlock();
         }
         // store in Hyperdex
-        hstub.add_out_edge(*n, new_edge);
-        hstub.add_in_nbr(remote_node, n->get_handle());
+        hstub[thread_id]->add_out_edge(*n, new_edge);
+        hstub[thread_id]->add_in_nbr(remote_node, n->get_handle());
     }
 
     inline void
@@ -495,7 +501,7 @@ namespace db
         n->updated = true;
         n->dependent_del++;
         // store in Hyperdex
-        hstub.add_out_edge(*n, e);
+        hstub[thread_id]->add_out_edge(*n, e);
     }
 
     inline void
@@ -526,7 +532,7 @@ namespace db
         common::property p(key, value, vclk);
         n->check_and_add_property(p);
         // store in Hyperdex
-        hstub.update_properties(*n);
+        hstub[thread_id]->update_properties(*n);
     }
 
     inline void
@@ -556,7 +562,7 @@ namespace db
         common::property p(key, value, vclk);
         e->check_and_add_property(p);
         // store in Hyperdex
-        hstub.add_out_edge(*n, e);
+        hstub[thread_id]->add_out_edge(*n, e);
     }
 
     inline void
@@ -882,8 +888,9 @@ namespace db
     // if yes, execute the earliest job, else sleep and wait for incoming jobs
     // "earliest" is decided by comparison functions using vector clocks and Kronos
     void
-    thread :: worker_thread_loop(thread::pool *tpool)
+    thread :: worker_thread_loop(thread::pool *tpool, uint64_t tid)
     {
+        db::thread_id = tid;
         thread::unstarted_thread *thr = NULL;
         po6::threads::cond &c = tpool->queue_cond;
         while (true) {
