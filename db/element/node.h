@@ -42,7 +42,7 @@ namespace db
 {
 namespace element
 {
-    class node : public element, virtual public node_prog::node
+    class node : public node_prog::node
     {
         public:
             node(uint64_t id, vc::vclock &vclk, po6::threads::mutex *mtx);
@@ -56,6 +56,7 @@ namespace element
             };
         
         public:
+            element base;
             enum mode state;
             std::unordered_map<uint64_t, edge*> out_edges;
             po6::threads::cond cv; // for locking node
@@ -92,19 +93,19 @@ namespace element
             node_prog::edge_list get_edges()
             {
                 assert(view_time != NULL);
-                return node_prog::edge_list(out_edges, view_time);
+                return node_prog::edge_list(out_edges, base.view_time);
             };
 
             node_prog::prop_list get_properties()
             {
                 assert(view_time != NULL);
-                return node_prog::prop_list(properties, *view_time);
+                return node_prog::prop_list(base.properties, base->view_time);
             };
     };
 
     inline
     node :: node(uint64_t id, vc::vclock &vclk, po6::threads::mutex *mtx)
-        : element(id, vclk)
+        : base(id, vclk)
         , state(mode::NASCENT)
         , cv(mtx)
         , migr_cv(mtx)

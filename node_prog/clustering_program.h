@@ -130,7 +130,7 @@ namespace node_prog
                 params.center = rn;
                 for (edge& edge : n.get_edges()) {
                     next.emplace_back(std::make_pair(edge.get_neighbor(), params));
-                    cstate.neighbor_counts.insert(std::make_pair(edge.get_neighbor().get_handle(), 0));
+                    cstate.neighbor_counts.insert(std::make_pair(edge.get_neighbor(), 0));
                     cstate.responses_left++;
                 }
                 if (cstate.responses_left < 2) { // if no or one neighbor we know clustering coeff already
@@ -156,7 +156,7 @@ namespace node_prog
             }
         } else { // not center
             for (edge& edge : n.get_edges()) {
-                params.neighbors.push_back(edge.get_neighbor().get_handle());
+                params.neighbors.push_back(edge.get_neighbor());
             }
             params.outgoing = false;
             params.is_center = true;

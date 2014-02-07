@@ -340,7 +340,7 @@ namespace db
             n->cv.signal();
             update_mutex.unlock();
         } else if (n->permanently_deleted) {
-            uint64_t node_id = n->get_id();
+            uint64_t node_id = n->base.get_id();
             nodes.erase(node_id);
             node_list.erase(node_id);
             update_mutex.unlock();
@@ -443,7 +443,7 @@ namespace db
         if (!init_load) {
             edge_map_mutex.lock();
         }
-        edge_map[remote_node].emplace(n->get_id());
+        edge_map[remote_node].emplace(n->base.get_id());
         if (!init_load) {
             edge_map_mutex.unlock();
         }
@@ -465,7 +465,7 @@ namespace db
             dw.remote_loc = remote_loc; 
             migration_mutex.unlock();
         } else {
-            assert(n->get_id() == local_node);
+            assert(n->base.get_id() == local_node);
             create_edge_nonlocking(n, edge_id, remote_node, remote_loc, vclk);
             release_node(n);
         }
@@ -506,7 +506,7 @@ namespace db
             std::string &key, std::string &value, vc::vclock &vclk)
     {
         db::element::property p(key, value, vclk);
-        n->check_and_add_property(p);
+        n->base.check_and_add_property(p);
     }
 
     inline void
@@ -534,7 +534,7 @@ namespace db
     {
         db::element::edge *e = n->out_edges[edge_id];
         db::element::property p(key, value, vclk);
-        e->check_and_add_property(p);
+        e->base.check_and_add_property(p);
     }
 
     inline void
@@ -658,14 +658,14 @@ namespace db
         // this loop isn't executed in case of deletion of migrated nodes
         if (n->state != element::node::mode::MOVED) {
             for (uint64_t shard = SHARD_ID_INCR; shard < SHARD_ID_INCR + NUM_SHARDS; shard++) {
-                message::prepare_message(msg, message::PERMANENTLY_DELETED_NODE, n->get_id());
+                message::prepare_message(msg, message::PERMANENTLY_DELETED_NODE, n->base.get_id());
                 send(shard, msg.buf);
             }
             for (auto &e: n->out_edges) {
                 delete e.second;
             }
             n->out_edges.clear();
-            prog_state.delete_node_state(n->get_id());
+            prog_state.delete_node_state(n->base.get_id());
         }
         delete n;
     }

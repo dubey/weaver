@@ -30,7 +30,7 @@ namespace db
 {
 namespace element
 {
-    class edge : public element, virtual public node_prog::edge
+    class edge : public node_prog::edge
     {
         public:
             edge();
@@ -38,6 +38,7 @@ namespace element
             edge(uint64_t id, vc::vclock &vclk, remote_node &rn);
         
         public:
+            element base;
             remote_node nbr; // out-neighbor for this edge
             uint32_t msg_count; // number of messages sent on this link
             bool migr_edge; // true if this edge was migrated along with parent node
@@ -53,14 +54,14 @@ namespace element
     // empty constructor for unpacking
     inline
     edge :: edge()
-        : element()
+        : base()
         , msg_count(0)
         , migr_edge(false)
     { }
 
     inline
     edge :: edge(uint64_t id, vc::vclock &vclk, uint64_t remote_loc, uint64_t remote_id)
-        : element(id, vclk)
+        : base(id, vclk)
         , nbr(remote_loc, remote_id)
         , msg_count(0)
         , migr_edge(false)
@@ -68,7 +69,7 @@ namespace element
 
     inline
     edge :: edge(uint64_t id, vc::vclock &vclk, remote_node &rn)
-        : element(id, vclk)
+        : base(id, vclk)
         , nbr(rn)
         , msg_count(0)
         , migr_edge(false)
@@ -92,14 +93,14 @@ namespace element
     edge :: get_properties()
     {
         assert(view_time != NULL);
-        return node_prog::prop_list(properties, *view_time);
+        return node_prog::prop_list(base.properties, *view_time);
     }
 
     bool
     edge :: has_property(node_prog::property& p)
     {
         assert(view_time != NULL);
-        return has_property((db::element::property &) p, *view_time);// cast
+        return base.has_property((db::element::property &) p, *view_time); // cast
     }
 
     bool
@@ -107,7 +108,7 @@ namespace element
     {
         assert(view_time != NULL);
         for (auto &p : props) {
-            if (!has_property((db::element::property &) p, *view_time)) { // cast
+            if (!base.has_property((db::element::property &) p, *view_time)) { // cast
                 return false;
             }
         }

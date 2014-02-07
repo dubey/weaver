@@ -18,6 +18,19 @@ namespace node_prog
 {
     class node_handle
     {
+
+    /*
+    bool operator==(const db::element::remote_node &t) const
+    {
+        return (id == t.id) && (loc == t.loc);
+    }
+
+    bool operator!=(const node_handle &t) const
+    {
+        return (id != t.id) || (loc != t.loc);
+    }
+    */
+
     };
 
     extern node_handle& coordinator;

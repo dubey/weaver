@@ -101,7 +101,7 @@ namespace node_prog
             std::unique_ptr<db::caching::cache_response>)
     {
         for (edge &edge : n.get_edges()) {
-            if (params.edges.empty() || (std::find(params.edges.begin(), params.edges.end(), edge.get_handle()) != params.edges.end())) {
+            if (params.edges.empty() || (std::find(params.edges.begin(), params.edges.end(), edge.get_id()) != params.edges.end())) {
                 std::vector<property> matching_edge_props;
                 for (property &prop : edge.get_properties()) {
                     if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.get_key()) != params.keys.end())) {

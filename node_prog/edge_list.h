@@ -32,7 +32,7 @@ namespace node_prog
             while (internal_cur != internal_end) {
                 internal_cur++;
                 if (internal_cur != internal_end && order::clock_creat_before_del_after(*req_time,
-                            internal_cur->second->get_creat_time(), internal_cur->second->get_del_time())) {
+                            internal_cur->second->base.get_creat_time(), internal_cur->second->base.get_del_time())) {
                     break;
                 }
             }
@@ -44,7 +44,7 @@ namespace node_prog
             : internal_cur(begin), internal_end(end), req_time(req_time)
         {
             if (internal_cur != internal_end && !order::clock_creat_before_del_after(*req_time,
-                        internal_cur->second->get_creat_time(), internal_cur->second->get_del_time())) {
+                        internal_cur->second->base.get_creat_time(), internal_cur->second->base.get_del_time())) {
                 ++(*this);
             }
         }

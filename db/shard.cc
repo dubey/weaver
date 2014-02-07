@@ -648,16 +648,16 @@ inline void modify_triangle_params(void * triangle_params, size_t num_nodes, db:
 inline void
 fill_node_cache_context(db::caching::node_cache_context& context, db::element::node& node, vc::vclock& cache_time, vc::vclock& cur_time)
 {
-    context.node_deleted = (order::compare_two_vts(node.get_del_time(), cur_time) == 0);
+    context.node_deleted = (order::compare_two_vts(node.base.get_del_time(), cur_time) == 0);
     for (auto &iter: node.out_edges) {
         db::element::edge* e = iter.second;
         assert(e != NULL);
 
-        bool del_after_cached = (order::compare_two_vts(e->get_del_time(), cache_time) == 1);
-        bool creat_after_cached = (order::compare_two_vts(e->get_creat_time(), cache_time) == 1);
+        bool del_after_cached = (order::compare_two_vts(e->base.get_del_time(), cache_time) == 1);
+        bool creat_after_cached = (order::compare_two_vts(e->base.get_creat_time(), cache_time) == 1);
 
-        bool del_before_cur = (order::compare_two_vts(e->get_del_time(), cur_time) == 0);
-        bool creat_before_cur = (order::compare_two_vts(e->get_creat_time(), cur_time) == 0);
+        bool del_before_cur = (order::compare_two_vts(e->base.get_del_time(), cur_time) == 0);
+        bool creat_before_cur = (order::compare_two_vts(e->base.get_(), cur_time) == 0);
 
         assert(creat_before_cur); // TODO: is this check needed/valid
         assert(del_after_cached);
@@ -768,7 +768,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
 
         // save node info for re-aquirining node if needed
         db::element::node *local_node_ptr = node_to_check;
-        uint64_t local_node_id = node_to_check->get_id();
+        uint64_t local_node_id = node_to_check->base.get_id();
         uint64_t uid = node_to_check->cache.gen_uid();
         S->release_node(node_to_check);
 
@@ -850,7 +850,7 @@ inline void node_prog_loop(
             this_node.id = node_id;
             // TODO maybe use a try-lock later so forward progress can continue on other nodes in list
             db::element::node *node = S->acquire_node(node_id);
-            if (node == NULL || order::compare_two_vts(node->get_del_time(), *np.req_vclock)==0) { // TODO: TIMESTAMP
+            if (node == NULL || order::compare_two_vts(node->base.get_del_time(), *np.req_vclock)==0) { // TODO: TIMESTAMP
                 if (node != NULL) {
                     S->release_node(node);
                 } else {
@@ -1228,7 +1228,7 @@ migrate_node_step1(db::element::node *n, std::vector<uint64_t> &shard_node_count
     // mark node as "moved"
     n->state = db::element::node::mode::MOVED;
     n->new_loc = migr_loc;
-    S->migr_node = n->get_id();
+    S->migr_node = n->base.get_id();
     S->migr_shard = migr_loc;
 
     // updating edge map
@@ -1386,7 +1386,7 @@ migrate_node_step3()
 inline bool
 check_migr_node(db::element::node *n)
 {
-    if (n == NULL || order::compare_two_clocks(n->get_del_time().clock, S->max_clk.clock) != 2 ||
+    if (n == NULL || order::compare_two_clocks(n->base.get_del_time().clock, S->max_clk.clock) != 2 ||
         n->state == db::element::node::mode::MOVED ||
         n->already_migr) {
         if (n != NULL) {
