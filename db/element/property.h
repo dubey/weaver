@@ -20,11 +20,13 @@
 #include "common/weaver_constants.h"
 #include "common/vclock.h"
 
+#include "node_prog/property.h"
+
 namespace db
 {
 namespace element
 {
-    class property
+    class property : public node_prog::property
     {
         public:
             property();

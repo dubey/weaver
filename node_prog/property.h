@@ -17,15 +17,13 @@
 
 #include <string>
 
-#include "db/element/property.h"
-
 namespace node_prog
 {
-    class property : private db::element::property
+    class property
     {
         public:
-            using db::element::property::key;
-            using db::element::property::value;
+            virtual const std::string& get_key() = 0;
+            virtual const std::string& get_value() = 0;
    };
 }
 

@@ -23,6 +23,8 @@
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
 
+#include "node_prog/edge.h"
+#include "node_prog/property.h"
 #include "common/weaver_constants.h"
 #include "db/cache/prog_cache.h"
 #include "element.h"
@@ -33,11 +35,17 @@ namespace message
     class message;
 }
 
+namespace node_prog
+{
+    edge_list(std::unordered_map<uint64_t, db::element::edge*>& edge_list,
+            std::shared_ptr<vc::vclock>& req_time);
+}
+
 namespace db
 {
 namespace element
 {
-    class node : public element
+    class node : public element, public node_prog::node
     {
         public:
             node(uint64_t id, vc::vclock &vclk, po6::threads::mutex *mtx);
@@ -83,6 +91,18 @@ namespace element
             void add_cached_req(uint64_t req_id);
             void remove_cached_req(uint64_t req_id);
             std::unique_ptr<std::vector<uint64_t>> purge_cache();
+
+            node_prog::edge_list get_edges()
+            {
+                assert(view_time != NULL);
+                return node_prog::edge_list(out_edges, view_time);
+            };
+
+            node_prog::prop_list get_properties()
+            {
+                assert(view_time != NULL);
+                return node_prog::prop_list(properties, *view_time);
+            };
     };
 
     inline
