@@ -129,7 +129,7 @@ namespace node_prog
                 params.is_center = false;
                 params.center = rn;
                 for (edge& edge : n.get_edges()) {
-                    next.emplace_back(std::make_pair(edge.get_neighbor().get_id(), params));
+                    next.emplace_back(std::make_pair(edge.get_neighbor(), params));
                     cstate.neighbor_counts.insert(std::make_pair(edge.get_neighbor().get_id(), 0));
                     cstate.responses_left++;
                 }
@@ -147,7 +147,7 @@ namespace node_prog
                     assert(cstate.neighbor_counts.size() > 1);
                     double denominator = (double) (cstate.neighbor_counts.size() * (cstate.neighbor_counts.size() - 1));
                     uint64_t numerator = 0;
-                    for (std::pair<const db::element::remote_node, int>& nbr_count : cstate.neighbor_counts){
+                    for (std::pair<const uint64_t, int>& nbr_count : cstate.neighbor_counts){
                         numerator += nbr_count.second;
                     }
                     params.clustering_coeff = (double) numerator / denominator;

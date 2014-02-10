@@ -83,7 +83,7 @@ namespace element
         msg_count++;
     }
 
-    node_prog::node_handle& // TODO, make const, nbr private var
+    remote_node& // TODO, make const, nbr private var
     edge :: get_neighbor()
     {
         return nbr; 

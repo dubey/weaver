@@ -930,7 +930,7 @@ inline void node_prog_loop(
                 for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                     db::element::remote_node& rn = (db::element::remote_node &) res.first; // XXX Dynamic cast
                     assert(rn.loc < NUM_SHARDS + SHARD_ID_INCR);
-                    if (rn == db::element::coord_remote_node) {
+                    if (rn == db::element::coordinator) {
                         // signal to send back to vector timestamper that issued request
                         // TODO mark done
                         // XXX get rid of pair, without pair it is not working for some reason

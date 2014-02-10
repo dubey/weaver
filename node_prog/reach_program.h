@@ -41,7 +41,7 @@ namespace node_prog
             std::vector<std::pair<std::string, std::string>> edge_props;
             uint32_t hops;
             bool reachable;
-            std::vector<uint64_t> path;
+            std::vector<db::element::remote_node> path;
 
         public:
             reach_params()
@@ -172,8 +172,6 @@ namespace node_prog
     inline bool
     check_cache_context(std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& context)
     {
-        UNUSED(context); // temp
-        /*
         //WDEBUG  << "$$$$$ checking context of size "<< context.size() << std::endl;
         // path not valid if broken by:
         for (std::pair<db::element::remote_node, db::caching::node_cache_context>& pair : context)
@@ -195,8 +193,6 @@ namespace node_prog
                 }
             }
         }
-        XXX temp
-        */
         return true;
     }
 
@@ -224,7 +220,7 @@ namespace node_prog
 
                     // context for cached value contains the nodes in the path to the dest_handleination from this node
                     for (auto& context_pair : cache_response->context) { 
-                        params.path.emplace_back(context_pair.first.get_id());
+                        params.path.emplace_back(context_pair.first);
                     }
                     return {std::make_pair(params.prev_node, params)}; // single length vector
                 } else {
@@ -239,11 +235,11 @@ namespace node_prog
         db::element::remote_node prev_node = params.prev_node;
         params.prev_node = rn;
         if (!params.mode) { // request mode
-            if (params.dest_handle == rn) {
+            if (params.dest_handle == rn.get_id()) {
                 // we found the node we are looking for, prepare a reply
                 params.mode = true;
                 params.reachable = true;
-                params.path.emplace_back(rn.get_id());
+                params.path.emplace_back(rn);
                 next.emplace_back(std::make_pair(prev_node, params));
             } else {
                 // have not found it yet so follow all out edges
@@ -280,12 +276,12 @@ namespace node_prog
                 state.reachable |= params.reachable;
                 if (params.reachable) {
                     params.hops = state.hops + 1;
-                    params.path.emplace_back(rn.get_id();
+                    params.path.emplace_back(rn);
                     if (MAX_CACHE_ENTRIES)
                     {
                         // now add to cache
                         std::shared_ptr<node_prog::reach_cache_value> toCache(new reach_cache_value());
-                        std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<uint64_t>(params.path)); // copy return path from params
+                        std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<db::element::remote_node>(params.path)); // copy return path from params
                         add_cache_func(toCache, watch_set, params.dest_handle);
                     }
                 }
