@@ -31,9 +31,6 @@
 #include "db/element/node.h"
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
-#include "db/element/property.h"
-#include "node_prog/property.h"
-#include "node_prog/node_handle.h"
 
 namespace message
 {
@@ -149,14 +146,25 @@ namespace message
     uint64_t size(const db::element::edge &t);
     uint64_t size(const db::element::edge* const &t);
     uint64_t size(const db::element::node &t);
+    uint64_t size(const db::element::property &t);
+    uint64_t size(const node_prog::property &t);
+    uint64_t size(const node_prog::node_handle &t);
     void pack_buffer(e::buffer::packer &packer, const db::caching::node_cache_context &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::edge &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::node &t);
+    void pack_buffer(e::buffer::packer &packer, const db::element::property &t);
+    void pack_buffer(e::buffer::packer &packer, const node_prog::property &t);
+    void pack_buffer(e::buffer::packer &packer, const node_prog::node_handle &t);
     void unpack_buffer(e::unpacker &unpacker, db::caching::node_cache_context &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge *&t);
     void unpack_buffer(e::unpacker &unpacker, db::element::node &t);
+    void unpack_buffer(e::unpacker &unpacker, db::element::property &t);
+    void unpack_buffer(e::unpacker &unpacker, node_prog::property &t);
+    void unpack_buffer(e::unpacker &unpacker, node_prog::node_handle &t);
+    void unpack_buffer(e::unpacker &unpacker, std::vector<node_prog::property> &t);
+    void unpack_buffer(e::unpacker &unpacker, std::vector<node_prog::node_handle> &t);
 
     inline
     message :: message()
@@ -243,23 +251,9 @@ namespace message
         return size(t.vt_id)
             + size(t.clock);
     }
-    inline uint64_t size(const db::element::property &t)
-    {
-        return size(t.key)
-            + size(t.value)
-            + 2*size(t.creat_time); // for del time
-    }
-    inline uint64_t size(const node_prog::property &t)
-    {
-        return size((const db::element::property &) t);
-    }
     inline uint64_t size(const db::element::remote_node &t)
     {
         return size(t.loc) + size(t.id);
-    }
-    inline uint64_t size(const node_prog::node_handle &t)
-    {
-        return size((const db::element::remote_node&) t);
     }
 
     inline uint64_t
@@ -433,30 +427,9 @@ namespace message
     }
 
     inline void 
-    pack_buffer(e::buffer::packer &packer, const db::element::property &t)
-    {
-        pack_buffer(packer, t.key);
-        pack_buffer(packer, t.value);
-        pack_buffer(packer, t.creat_time);
-        pack_buffer(packer, t.del_time);
-    }
-
-    inline void 
-    pack_buffer(e::buffer::packer &packer, const node_prog::property &t)
-    {
-        pack_buffer(packer, (const db::element::property&) t);
-    }
-
-    inline void 
     pack_buffer(e::buffer::packer &packer, const db::element::remote_node &t)
     {
         packer = packer << t.loc << t.id;
-    }
-
-    inline void 
-    pack_buffer(e::buffer::packer &packer, const node_prog::node_handle &t)
-    {
-        pack_buffer(packer, (const db::element::remote_node&)t);
     }
 
     inline void
@@ -714,31 +687,9 @@ namespace message
     }
 
     inline void 
-    unpack_buffer(e::unpacker &unpacker, db::element::property &t)
-    {
-        unpack_buffer(unpacker, t.key);
-        unpack_buffer(unpacker, t.value);
-        t.creat_time.clock.clear();
-        t.del_time.clock.clear();
-        unpack_buffer(unpacker, t.creat_time);
-        unpack_buffer(unpacker, t.del_time);
-    }
-
-    inline void 
-    unpack_buffer(e::unpacker &unpacker, node_prog::property &t)
-    {
-        unpack_buffer(unpacker, (db::element::property &) t);
-    }
-
-    inline void 
     unpack_buffer(e::unpacker &unpacker, db::element::remote_node& t)
     {
         unpacker = unpacker >> t.loc >> t.id;
-    }
-    inline void 
-    unpack_buffer(e::unpacker &unpacker, node_prog::node_handle& t)
-    {
-        unpack_buffer(unpacker, (db::element::remote_node&) t);
     }
 
     inline void
