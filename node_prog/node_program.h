@@ -23,7 +23,7 @@
 #include "common/weaver_constants.h"
 #include "node.h"
 #include "edge.h"
-#include "node_handle.h"
+#include "db/element/remote_node.h"
 
 #include "node_prog_type.h"
 #include "dijkstra_program.h"
@@ -52,13 +52,13 @@ namespace node_prog
     struct node_function_type
     {
         public:
-            typedef std::vector<std::pair<node_handle, params_type>> (*value_type)(
+            typedef std::vector<std::pair<db::element::remote_node, params_type>> (*value_type)(
                 node&, // this node
-                node_handle&, // this remote node
+                db::element::remote_node&, // this remote node
                 params_type&,
                 std::function<node_state_type&()>,
                 std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                    std::shared_ptr<std::vector<node_handle>>, uint64_t)>& add_cache_func,
+                    std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
                     std::unique_ptr<db::caching::cache_response> cache_response);
 
     };

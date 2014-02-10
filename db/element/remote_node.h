@@ -14,13 +14,11 @@
 #ifndef __REMOTE_NODE__
 #define __REMOTE_NODE__
 
-#include "node_prog/node_handle.h"
-
 namespace db
 {
 namespace element
 {
-    class remote_node : public node_prog::node_handle
+    class remote_node
     {
         public:
             remote_node();
@@ -34,8 +32,7 @@ namespace element
             bool operator!=(const db::element::remote_node &t) const;
     };
 
-    static db::element::remote_node coord_remote_node(0,0);
-    static node_prog::node_handle& coordinator = (node_prog::node_handle &) coord_remote_node;
+    static db::element::remote_node coordinator(0,0);
     
     inline
     remote_node :: remote_node(uint64_t l, uint64_t h)

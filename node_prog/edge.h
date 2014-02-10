@@ -12,7 +12,7 @@
 #include <vector>
 #include <po6/net/location.h>
 
-#include "node_handle.h"
+#include "db/element/remote_node.h"
 #include "property.h"
 
 namespace node_prog
@@ -24,7 +24,7 @@ namespace node_prog
     {
         public:
             virtual uint64_t get_id() const = 0;
-            virtual node_handle& get_neighbor() = 0;
+            virtual db::element::remote_node& get_neighbor() = 0;
             virtual prop_list get_properties() = 0;
             virtual bool has_property(std::pair<std::string, std::string>& p) = 0;
             virtual bool has_all_properties(std::vector<std::pair<std::string, std::string>>& props) = 0;

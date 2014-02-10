@@ -22,7 +22,7 @@
 #include "common/event_order.h"
 #include "node.h"
 #include "edge.h"
-#include "node_handle.h"
+#include "db/element/remote_node.h"
 
 namespace node_prog
 {
@@ -32,9 +32,9 @@ namespace node_prog
             bool _search_cache;
             uint64_t _cache_key;
             bool is_center;
-            node_handle center;
+            db::element::remote_node center;
             bool outgoing;
-            std::vector<node_handle> neighbors;
+            std::vector<uint64_t> neighbors;
             double clustering_coeff;
             uint64_t vt_id;
 
@@ -87,8 +87,8 @@ namespace node_prog
 
     struct clustering_node_state : public virtual Node_State_Base
     {
-        // map from a node (by its create time) to the number of neighbors who are connected to it
-        std::unordered_map<node_handle, int> neighbor_counts;
+        // map from a node id to the number of neighbors who are connected to it
+        std::unordered_map<uint64_t, int> neighbor_counts;
         int responses_left;
 
 
@@ -111,52 +111,52 @@ namespace node_prog
         }
     };
 
-    std::vector<std::pair<node_handle, clustering_params>> 
+    std::vector<std::pair<db::element::remote_node, clustering_params>> 
     clustering_node_program(
             node &n,
-            node_handle &rn,
+            db::element::remote_node &rn,
             clustering_params &params,
             std::function<clustering_node_state&()> get_state,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<node_handle>>, uint64_t)>&,
+                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)
     {
         // TODO can we change this to a three enum switch to reduce number of if statements
-        std::vector<std::pair<node_handle, clustering_params>> next;
+        std::vector<std::pair<db::element::remote_node, clustering_params>> next;
         if (params.is_center) {
             node_prog::clustering_node_state &cstate = get_state();
             if (params.outgoing) {
                 params.is_center = false;
                 params.center = rn;
                 for (edge& edge : n.get_edges()) {
-                    next.emplace_back(std::make_pair(edge.get_neighbor(), params));
-                    cstate.neighbor_counts.insert(std::make_pair(edge.get_neighbor(), 0));
+                    next.emplace_back(std::make_pair(edge.get_neighbor().get_id(), params));
+                    cstate.neighbor_counts.insert(std::make_pair(edge.get_neighbor().get_id(), 0));
                     cstate.responses_left++;
                 }
                 if (cstate.responses_left < 2) { // if no or one neighbor we know clustering coeff already
                     params.clustering_coeff = 0;
-                    next = {std::make_pair(coordinator, std::move(params))};
+                    next = {std::make_pair(db::element::coordinator, std::move(params))};
                 }
             } else {
-                for (node_handle &nbr : params.neighbors) {
-                    if (cstate.neighbor_counts.count(nbr) > 0) {
-                        cstate.neighbor_counts[nbr]++;
+                for (uint64_t &nbr_id : params.neighbors) {
+                    if (cstate.neighbor_counts.count(nbr_id) > 0) {
+                        cstate.neighbor_counts[nbr_id]++;
                     }
                 }
                 if (--cstate.responses_left == 0) {
                     assert(cstate.neighbor_counts.size() > 1);
                     double denominator = (double) (cstate.neighbor_counts.size() * (cstate.neighbor_counts.size() - 1));
                     uint64_t numerator = 0;
-                    for (std::pair<const node_handle, int>& nbr_count : cstate.neighbor_counts){
+                    for (std::pair<const db::element::remote_node, int>& nbr_count : cstate.neighbor_counts){
                         numerator += nbr_count.second;
                     }
                     params.clustering_coeff = (double) numerator / denominator;
-                    next = {std::make_pair(coordinator, std::move(params))};
+                    next = {std::make_pair(db::element::coordinator, std::move(params))};
                 } 
             }
         } else { // not center
             for (edge& edge : n.get_edges()) {
-                params.neighbors.push_back(edge.get_neighbor());
+                params.neighbors.push_back(edge.get_neighbor().get_id());
             }
             params.outgoing = false;
             params.is_center = true;

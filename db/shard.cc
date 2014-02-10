@@ -24,10 +24,10 @@
 #include "common/message_cache_context.h"
 #include "common/message_graph_elem.h"
 #include "common/nmap_stub.h"
-#include "node_prog/node_handle.h"
 #include "node_prog/node.h"
 #include "shard.h"
 #include "nop_data.h"
+#include "db/element/remote_node.h"
 #include "db/cache/prog_cache.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
@@ -672,7 +672,7 @@ fill_node_cache_context(db::caching::node_cache_context& context, db::element::n
 }
 
 inline void
-fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<std::pair<node_prog::node_handle, db::caching::node_cache_context>>& toFill,
+fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& toFill,
         vc::vclock& cache_entry_time, vc::vclock& req_vclock)
 {
     // TODO maybe make this skip over locked nodes and retry fetching later
@@ -684,7 +684,7 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<
             assert(false);
         } else { // node exists
             db::element::remote_node rn(loc, id);
-            node_prog::node_handle &nptr = (node_prog::node_handle &) rn;
+            db::element::remote_node &nptr = (db::element::remote_node &) rn;
             toFill.emplace_back(std::make_pair(nptr, db::caching::node_cache_context()));
             /*
             toFill.back().first.loc = loc;
@@ -707,7 +707,7 @@ unpack_and_fetch_context(void *req)
     node_prog::prog_type pType;
 
     message::unpack_message(*request->msg, message::NODE_CONTEXT_FETCH, pType, req_id, vt_id, req_vclock, cache_entry_time, lookup_pair, ids, from_shard);
-    std::vector<std::pair<node_prog::node_handle, db::caching::node_cache_context>> contexts;
+    std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>> contexts;
 
     //WDEBUG << "fetching cache contexts on remote shard" << std::endl;
     fetch_node_cache_contexts(S->shard_id, ids, contexts, cache_entry_time, req_vclock);
@@ -750,7 +750,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         auto entry = node_to_check->cache.cache.at(cache_key);
         std::shared_ptr<node_prog::Cache_Value_Base>& cval = std::get<0>(entry);
         std::shared_ptr<vc::vclock> cache_entry_time(std::get<1>(entry));
-        std::shared_ptr<std::vector<node_prog::node_handle>>& watch_set = std::get<2>(entry);
+        std::shared_ptr<std::vector<db::element::remote_node>>& watch_set = std::get<2>(entry);
 
         //WDEBUG << "found cache value keyed: " << cache_key << " checking clocks for on node " << node_to_check->get_id() << std::endl;
         int64_t cmp_1 = order::compare_two_vts(*cache_entry_time, *np.req_vclock);
@@ -776,7 +776,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         // map from loc to list of ids on that shard we need context from for this request
         std::vector<uint64_t> local_contexts_to_fetch; 
         std::unordered_map<uint64_t, std::vector<uint64_t>> contexts_to_fetch; 
-        for (node_prog::node_handle& watch_ptr : *watch_set)
+        for (db::element::remote_node& watch_ptr : *watch_set)
         {
             db::element::remote_node& watch_node = (db::element::remote_node &) watch_ptr; // XXX safe cast?
             if (watch_node.loc == S->shard_id) { 
@@ -837,7 +837,7 @@ inline void node_prog_loop(
     // node state function
     std::function<NodeStateType&()> node_state_getter;
     std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-            std::shared_ptr<std::vector<node_prog::node_handle>>, uint64_t)> add_cache_func;
+            std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)> add_cache_func;
 
     uint64_t node_id;
     bool done_request = false;
@@ -917,11 +917,8 @@ inline void node_prog_loop(
                         np.prog_type_recvd, _1, _2, _3, np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key
                 }
 
-                node_prog::node& node_to_pass = (node_prog::node &) (*node);
-                node_prog::node_handle& ptr_to_pass = (node_prog::node_handle &) (this_node);
-
                 node->base.view_time = np.req_vclock; 
-                auto next_node_params = func(node_to_pass, ptr_to_pass,
+                auto next_node_params = func(*node, this_node,
                         params, // actual parameters for this node program
                         node_state_getter, add_cache_func, std::move(np.cache_value));
                 node->base.view_time = nullptr; 
@@ -930,7 +927,7 @@ inline void node_prog_loop(
 #ifdef WEAVER_CLDG
                 std::unordered_map<uint64_t, uint32_t> agg_msg_count;
 #endif
-                for (std::pair<node_prog::node_handle, ParamsType> &res : next_node_params) {
+                for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
                     db::element::remote_node& rn = (db::element::remote_node &) res.first; // XXX Dynamic cast
                     assert(rn.loc < NUM_SHARDS + SHARD_ID_INCR);
                     if (rn == db::element::coord_remote_node) {
@@ -1017,7 +1014,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     node_prog::prog_type pType;
     uint64_t req_id, vt_id;
     std::pair<uint64_t, uint64_t> lookup_pair;
-    std::vector<std::pair<node_prog::node_handle, db::caching::node_cache_context>> contexts_to_add; // TODO extra copy, later unpack into cache_response object itself
+    std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>> contexts_to_add; // TODO extra copy, later unpack into cache_response object itself
     message::unpack_message(*msg, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_pair, contexts_to_add);
 
     S->node_prog_running_states_mutex.lock();

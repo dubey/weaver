@@ -23,7 +23,7 @@
 #include "common/event_order.h"
 #include "node.h"
 #include "edge.h"
-#include "node_handle.h"
+#include "db/element/remote_node.h"
 
 namespace node_prog
 {
@@ -90,14 +90,14 @@ namespace node_prog
         }
     };
 
-    std::vector<std::pair<node_handle, read_edges_props_params>> 
+    std::vector<std::pair<db::element::remote_node, read_edges_props_params>> 
     read_edges_props_node_program(
             node &n,
-            node_handle &,
+            db::element::remote_node &,
             read_edges_props_params &params,
             std::function<read_edges_props_state&()>,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<node_handle>>, uint64_t)>&,
+                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
             std::unique_ptr<db::caching::cache_response>)
     {
         for (edge &edge : n.get_edges()) {
@@ -113,7 +113,7 @@ namespace node_prog
                 }
             }
         }
-        return {std::make_pair(coordinator, std::move(params))}; // initializer list of vector
+        return {std::make_pair(db::element::coordinator, std::move(params))}; // initializer list of vector
     }
 }
 

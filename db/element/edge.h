@@ -44,7 +44,7 @@ namespace element
             bool migr_edge; // true if this edge was migrated along with parent node
             void traverse(); // indicate that this edge was traversed; useful for migration statistics
 
-            node_prog::node_handle& get_neighbor();
+            remote_node &get_neighbor();
             node_prog::prop_list get_properties();
             bool has_property(std::pair<std::string, std::string> &p);
             bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
@@ -83,10 +83,10 @@ namespace element
         msg_count++;
     }
 
-    node_prog::node_handle&
+    node_prog::node_handle& // TODO, make const, nbr private var
     edge :: get_neighbor()
     {
-        return (node_prog::node_handle &) nbr; // cast
+        return nbr; 
     }
 
     node_prog::prop_list 

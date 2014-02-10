@@ -18,7 +18,6 @@
 #include "common/vclock.h"
 #include "db/element/property.h"
 #include "node_prog/property.h"
-#include "node_prog/node_handle.h"
 
 namespace message
 {
@@ -30,10 +29,6 @@ namespace message
         return size(t.key)
             + size(t.value)
             + 2*size(t.creat_time); // for del time
-    }
-    inline uint64_t size(const node_prog::node_handle &t)
-    {
-        return size((const db::element::remote_node&) t);
     }
     inline uint64_t size(const db::element::element &t)
     {
@@ -74,12 +69,6 @@ namespace message
         pack_buffer(packer, t.value);
         pack_buffer(packer, t.creat_time);
         pack_buffer(packer, t.del_time);
-    }
-
-    inline void 
-    pack_buffer(e::buffer::packer &packer, const node_prog::node_handle &t)
-    {
-        pack_buffer(packer, (const db::element::remote_node&)t);
     }
 
 
@@ -123,12 +112,6 @@ namespace message
         t.del_time.clock.clear();
         unpack_buffer(unpacker, t.creat_time);
         unpack_buffer(unpacker, t.del_time);
-    }
-
-    inline void 
-    unpack_buffer(e::unpacker &unpacker, node_prog::node_handle &t)
-    {
-        unpack_buffer(unpacker, (db::element::remote_node&) t);
     }
 
     inline void
