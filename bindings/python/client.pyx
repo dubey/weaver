@@ -126,18 +126,18 @@ cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
         uint64_t _cache_key
         bint mode
         remote_node prev_node
-        uint64_t dest_id
+        uint64_t dest
         vector[pair[string, string]] edge_props
         uint32_t hops
         bint reachable
 
 class ReachParams:
-    def __init__(self, mode=False, prev_node=RemoteNode(0,0), dest_id=0, hops=0, reachable=False, caching=False, edge_props=[]):
+    def __init__(self, mode=False, prev_node=RemoteNode(0,0), dest=0, hops=0, reachable=False, caching=False, edge_props=[]):
         self._search_cache = caching
-        self._cache_key = dest_id
+        self._cache_key = dest
         self.mode = mode
         self.prev_node = prev_node
-        self.dest_id = dest_id
+        self.dest= dest
         self.hops = hops
         self.reachable = reachable
         self.edge_props = edge_props
@@ -262,9 +262,9 @@ cdef class Client:
         for rp in init_args:
             arg_pair.first = rp[0]
             arg_pair.second._search_cache = rp[1]._search_cache 
-            arg_pair.second._cache_key = rp[1].dest_id
+            arg_pair.second._cache_key = rp[1].dest
             arg_pair.second.mode = rp[1].mode
-            arg_pair.second.dest_id = rp[1].dest_id
+            arg_pair.second.dest= rp[1].dest
             arg_pair.second.reachable = rp[1].reachable
             arg_pair.second.prev_node = coordinator
             for p in rp[1].edge_props:
