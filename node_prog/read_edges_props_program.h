@@ -33,7 +33,7 @@ namespace node_prog
             std::vector<uint64_t> edges; // empty vector means fetch props for all edges
             std::vector<std::string> keys; // empty vector means fetch all props
             uint64_t vt_id;
-            std::vector<std::pair<uint64_t, std::vector<property>>> edges_props;
+            std::vector<std::pair<uint64_t, std::vector<std::pair<std::string, std::string>>>> edges_props;
 
         public:
             virtual bool search_cache() {
@@ -102,10 +102,10 @@ namespace node_prog
     {
         for (edge &edge : n.get_edges()) {
             if (params.edges.empty() || (std::find(params.edges.begin(), params.edges.end(), edge.get_id()) != params.edges.end())) {
-                std::vector<property> matching_edge_props;
+                std::vector<std::pair<std::string, std::string>> matching_edge_props;
                 for (property &prop : edge.get_properties()) {
                     if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.get_key()) != params.keys.end())) {
-                        matching_edge_props.emplace_back(prop);
+                        matching_edge_props.emplace_back(prop.get_key(), prop.get_value());
                     }
                 }
                 if (!matching_edge_props.empty()) {

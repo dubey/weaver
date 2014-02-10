@@ -43,6 +43,7 @@ namespace element
             const std::string& get_key();
             const std::string& get_value();
 
+            bool equals(std::string const &key2, std::string const &value2) const;
             bool operator==(property const &p2) const;
 
         public:
@@ -87,10 +88,10 @@ namespace element
     }
 
     inline bool
-    property :: operator==(property const &p2) const
+    property :: equals(std::string const &key2, std::string const &value2) const
     {
-        if (key.length() != p2.key.length()
-         || value.length() != p2.value.length()) {
+        if (key.length() != key2.length()
+         || value.length() != value2.length()) {
             return false;
         }
         uint64_t smaller, larger;
@@ -103,26 +104,32 @@ namespace element
         }
         uint64_t i;
         for (i = 0; i < smaller; i++) {
-            if (key[i] != p2.key[i]) {
+            if (key[i] != key2[i]) {
                 return false;
-            } else if (value[i] != p2.value[i]) {
+            } else if (value[i] != value2[i]) {
                 return false;
             }
         }
         if (larger == key.length()) {
             for (; i < larger; i++) {
-                if (key[i] != p2.key[i]) {
+                if (key[i] != key2[i]) {
                     return false;
                 }
             }
         } else {
             for (; i < larger; i++) {
-                if (value[i] != p2.value[i]) {
+                if (value[i] != value2[i]) {
                     return false;
                 }
             }
         }
         return true;
+    }
+
+    inline bool
+    property :: operator==(property const &p2) const
+    {
+        return equals(p2.key, p2.value);
     }
 
     inline const vc::vclock&

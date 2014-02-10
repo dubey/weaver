@@ -19,15 +19,7 @@ namespace node_prog
     class node_handle
     {
         public:
-            bool operator==(const node_handle &) const
-            {
-                return true;//(id == t.id) && (loc == t.loc);
-            }
-
-            bool operator!=(const node_handle &) const
-            {
-                return false;//(id != t.id) || (loc != t.loc);
-            }
+            virtual uint64_t get_id() = 0;
     };
 
     extern node_handle& coordinator;

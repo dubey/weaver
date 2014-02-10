@@ -32,7 +32,7 @@ namespace node_prog
         public:
             std::vector<std::string> keys; // empty vector means fetch all props
             uint64_t vt_id;
-            std::vector<property> node_props;
+            std::vector<std::pair<std::string, std::string>> node_props;
 
         public:
             virtual bool search_cache() {
@@ -98,7 +98,7 @@ namespace node_prog
     {
         for (property &prop : n.get_properties()) {
             if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.get_key()) != params.keys.end())) {
-                params.node_props.emplace_back(prop);
+                params.node_props.emplace_back(prop.get_key(), prop.get_value());
             }
         }
 

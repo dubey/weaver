@@ -147,24 +147,19 @@ namespace message
     uint64_t size(const db::element::edge* const &t);
     uint64_t size(const db::element::node &t);
     uint64_t size(const db::element::property &t);
-    uint64_t size(const node_prog::property &t);
     uint64_t size(const node_prog::node_handle &t);
     void pack_buffer(e::buffer::packer &packer, const db::caching::node_cache_context &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::edge &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::node &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::property &t);
-    void pack_buffer(e::buffer::packer &packer, const node_prog::property &t);
     void pack_buffer(e::buffer::packer &packer, const node_prog::node_handle &t);
     void unpack_buffer(e::unpacker &unpacker, db::caching::node_cache_context &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge *&t);
     void unpack_buffer(e::unpacker &unpacker, db::element::node &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::property &t);
-    void unpack_buffer(e::unpacker &unpacker, node_prog::property &t);
     void unpack_buffer(e::unpacker &unpacker, node_prog::node_handle &t);
-    void unpack_buffer(e::unpacker &unpacker, std::vector<node_prog::property> &t);
-    void unpack_buffer(e::unpacker &unpacker, std::vector<node_prog::node_handle> &t);
 
     inline
     message :: message()

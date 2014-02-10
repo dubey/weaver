@@ -46,8 +46,8 @@ namespace element
 
             node_prog::node_handle& get_neighbor();
             node_prog::prop_list get_properties();
-            bool has_property(node_prog::property& p);
-            bool has_all_properties(std::vector<node_prog::property>& props);
+            bool has_property(std::pair<std::string, std::string> &p);
+            bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
             uint64_t get_id() const { return base.get_id(); } ;
     };
 
@@ -97,22 +97,17 @@ namespace element
     }
 
     bool
-    edge :: has_property(node_prog::property& p)
+    edge :: has_property(std::pair<std::string, std::string> &p)
     {
         assert(base.view_time != NULL);
-        return base.has_property((db::element::property &) p, *base.view_time); // cast
+        return base.has_property(p, *base.view_time);
     }
 
     bool
-    edge :: has_all_properties(std::vector<node_prog::property>& props)
+    edge :: has_all_properties(std::vector<std::pair<std::string, std::string>> &props)
     {
         assert(base.view_time != NULL);
-        for (auto &p : props) {
-            if (!base.has_property((db::element::property &) p, *base.view_time)) { // cast
-                return false;
-            }
-        }
-        return true;
+        return base.has_all_properties(props, *base.view_time);
     }
 }
 }

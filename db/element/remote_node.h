@@ -78,18 +78,6 @@ namespace std
                 return (hash<int>()(x.loc) * 6291469) + (hash<size_t>()(x.id) * 393241); // some big primes
             }
     };
-
-    // used if we want a hash table with a node_handle as the key
-    template <>
-    struct hash<node_prog::node_handle> 
-    {
-        public:
-            size_t operator()(const node_prog::node_handle &x) const throw() 
-            {
-                const db::element::remote_node& toHash = dynamic_cast<const db::element::remote_node&>(x);
-                return std::hash<db::element::remote_node>()(toHash);
-            }
-    };
 }
 
 #endif

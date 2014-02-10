@@ -37,11 +37,11 @@ namespace node_prog
             uint64_t _cache_key;
             bool mode; // false = request, true = reply
             node_handle prev_node;
-            node_handle dest;
-            std::vector<property> edge_props;
+            uint64_t dest_handle;
+            std::vector<std::pair<std::string, std::string>> edge_props;
             uint32_t hops;
             bool reachable;
-            std::vector<node_handle> path;
+            std::vector<uint64_t> path;
 
         public:
             reach_params()
@@ -68,7 +68,7 @@ namespace node_prog
                     + message::size(_cache_key)
                     + message::size(mode)
                     + message::size(prev_node)
-                    + message::size(dest) 
+                    + message::size(dest_handle) 
                     + message::size(edge_props)
                     + message::size(hops)
                     + message::size(reachable)
@@ -82,7 +82,7 @@ namespace node_prog
                 message::pack_buffer(packer, _cache_key);
                 message::pack_buffer(packer, mode);
                 message::pack_buffer(packer, prev_node);
-                message::pack_buffer(packer, dest);
+                message::pack_buffer(packer, dest_handle);
                 message::pack_buffer(packer, edge_props);
                 message::pack_buffer(packer, hops);
                 message::pack_buffer(packer, reachable);
@@ -95,7 +95,7 @@ namespace node_prog
                 message::unpack_buffer(unpacker, _cache_key);
                 message::unpack_buffer(unpacker, mode);
                 message::unpack_buffer(unpacker, prev_node);
-                message::unpack_buffer(unpacker, dest);
+                message::unpack_buffer(unpacker, dest_handle);
                 message::unpack_buffer(unpacker, edge_props);
                 message::unpack_buffer(unpacker, hops);
                 message::unpack_buffer(unpacker, reachable);
@@ -152,27 +152,20 @@ namespace node_prog
     struct reach_cache_value : public virtual Cache_Value_Base 
     {
         public:
-            //std::vector<node_handle> path;
 
         virtual ~reach_cache_value () { }
 
         virtual uint64_t size() const 
         {
-            /*
-            uint64_t toRet = message::size(path);
-            return toRet;
-            */
             return 0;
         }
 
         virtual void pack(e::buffer::packer&) const 
         {
-            //message::pack_buffer(packer, path);
         }
 
         virtual void unpack(e::unpacker&)
         {
-            //message::unpack_buffer(unpacker, path);
         }
     };
 
@@ -229,9 +222,9 @@ namespace node_prog
                     params.reachable = true;
                     params._search_cache = false; // don't search on way back
 
-                    // context for cached value contains the nodes in the path to the destination from this node
+                    // context for cached value contains the nodes in the path to the dest_handleination from this node
                     for (auto& context_pair : cache_response->context) { 
-                        params.path.emplace_back(context_pair.first);
+                        params.path.emplace_back(context_pair.first.get_id());
                     }
                     return {std::make_pair(params.prev_node, params)}; // single length vector
                 } else {
@@ -246,11 +239,11 @@ namespace node_prog
         node_handle prev_node = params.prev_node;
         params.prev_node = rn;
         if (!params.mode) { // request mode
-            if (params.dest == rn) {
+            if (params.dest_handle == rn) {
                 // we found the node we are looking for, prepare a reply
                 params.mode = true;
                 params.reachable = true;
-                params.path.emplace_back(rn);
+                params.path.emplace_back(rn.get_id());
                 next.emplace_back(std::make_pair(prev_node, params));
             } else {
                 // have not found it yet so follow all out edges
@@ -287,14 +280,13 @@ namespace node_prog
                 state.reachable |= params.reachable;
                 if (params.reachable) {
                     params.hops = state.hops + 1;
-                    params.path.emplace_back(rn);
+                    params.path.emplace_back(rn.get_id();
                     if (MAX_CACHE_ENTRIES)
                     {
                         // now add to cache
                         std::shared_ptr<node_prog::reach_cache_value> toCache(new reach_cache_value());
-                        std::shared_ptr<std::vector<node_handle>> watch_set(new std::vector<node_handle>(params.path)); // copy return path from params
-                        uint64_t cache_key = std::hash<node_handle>()(params.dest);
-                        add_cache_func(toCache, watch_set, cache_key);
+                        std::shared_ptr<std::vector<node_handle>> watch_set(new std::vector<uint64_t>(params.path)); // copy return path from params
+                        add_cache_func(toCache, watch_set, params.dest_handle);
                     }
                 }
                 next.emplace_back(std::make_pair(state.prev_node, params));

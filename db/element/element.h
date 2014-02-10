@@ -59,7 +59,10 @@ namespace element
             void add_property(property prop);
             void delete_property(std::string &key, vc::vclock &tdel);
             void remove_property(std::string &key, vc::vclock &vclk);
+            bool has_property(std::string &key, std::string &value, vc::vclock &vclk);
             bool has_property(property &prop, vc::vclock &vclk);
+            bool has_property(std::pair<std::string, std::string> &p, vc::vclock &vclk);
+            bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props, vc::vclock &vclk);
             bool check_and_add_property(property prop);
             void set_properties(std::vector<property> &props);
             void update_del_time(vc::vclock &del_time);
@@ -110,10 +113,10 @@ namespace element
     }
 
     inline bool
-    element :: has_property(property &prop, vc::vclock &vclk)
+    element ::has_property(std::string &key, std::string &value, vc::vclock &vclk)
     {
         for (auto &p: properties) {
-            if (prop == p) {
+            if (p.equals(key, value)) {
                 const vc::vclock& vclk_creat = p.get_creat_time();
                 const vc::vclock& vclk_del = p.get_del_time();
                 int64_t cmp1 = order::compare_two_vts(vclk, vclk_creat);
@@ -124,6 +127,23 @@ namespace element
             }
         }
         return false;
+    }
+
+    inline bool
+    element :: has_property(std::pair<std::string, std::string> &p, vc::vclock &vclk)
+    {
+        return has_property(p.first, p.second, vclk);
+    }
+
+    inline bool
+    element :: has_all_properties(std::vector<std::pair<std::string, std::string>> &props, vc::vclock &vclk)
+    {
+        for (auto &p : props) {
+            if (!has_property(p.first, p.second, vclk)) { 
+                return false;
+            }
+        }
+        return true;
     }
 
     // if property with same key-value does not exist, add it
