@@ -170,7 +170,7 @@ namespace coordinator
 
     // return false if the main node in the transaction is not found in node map
     // this is not a complete sanity check, e.g. create_edge(n1, n2) will succeed even if n2 is garbage
-    // similarly edge handles are not checked
+    // similarly edge ids are not checked
     inline bool
     timestamper :: unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id, int thread_id)
     {
@@ -188,7 +188,7 @@ namespace coordinator
                     loc_gen = (loc_gen + 1) % NUM_SHARDS;
                     upd->loc1 = loc_gen + SHARD_ID_INCR; // node will be placed on this shard
                     loc_gen_mutex.unlock();
-                    mappings_to_put.emplace(upd->handle, upd->loc1);
+                    mappings_to_put.emplace(upd->id, upd->loc1);
                     break;
 
                 case transaction::EDGE_CREATE_REQ:

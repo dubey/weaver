@@ -32,7 +32,6 @@ namespace node_prog
         public:
             std::vector<uint64_t> edges; // empty vector means fetch props for all edges
             std::vector<std::string> keys; // empty vector means fetch all props
-            uint64_t vt_id;
             std::vector<std::pair<uint64_t, std::vector<std::pair<std::string, std::string>>>> edges_props;
 
         public:
@@ -48,7 +47,6 @@ namespace node_prog
             {
                 uint64_t toRet = message::size(edges)
                     + message::size(keys)
-                    + message::size(vt_id)
                     + message::size(edges_props);
                 return toRet;
             }
@@ -57,7 +55,6 @@ namespace node_prog
             {
                 message::pack_buffer(packer, edges);
                 message::pack_buffer(packer, keys);
-                message::pack_buffer(packer, vt_id);
                 message::pack_buffer(packer, edges_props);
             }
 
@@ -65,7 +62,6 @@ namespace node_prog
             {
                 message::unpack_buffer(unpacker, edges);
                 message::unpack_buffer(unpacker, keys);
-                message::unpack_buffer(unpacker, vt_id);
                 message::unpack_buffer(unpacker, edges_props);
             }
     };

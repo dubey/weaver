@@ -146,17 +146,14 @@ namespace message
     uint64_t size(const db::element::edge &t);
     uint64_t size(const db::element::edge* const &t);
     uint64_t size(const db::element::node &t);
-    uint64_t size(const db::element::property &t);
     void pack_buffer(e::buffer::packer &packer, const db::caching::node_cache_context &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::edge &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::node &t);
-    void pack_buffer(e::buffer::packer &packer, const db::element::property &t);
     void unpack_buffer(e::unpacker &unpacker, db::caching::node_cache_context &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge *&t);
     void unpack_buffer(e::unpacker &unpacker, db::element::node &t);
-    void unpack_buffer(e::unpacker &unpacker, db::element::property &t);
 
     inline
     message :: message()
@@ -242,6 +239,12 @@ namespace message
     {
         return size(t.vt_id)
             + size(t.clock);
+    }
+    inline uint64_t size(const db::element::property &t)
+    {
+        return size(t.key)
+            + size(t.value)
+            + 2*size(t.creat_time); // for del time
     }
     inline uint64_t size(const db::element::remote_node &t)
     {
@@ -416,6 +419,15 @@ namespace message
     {
         pack_buffer(packer, t.vt_id);
         pack_buffer(packer, t.clock);
+    }
+
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const db::element::property &t)
+    {
+        pack_buffer(packer, t.key);
+        pack_buffer(packer, t.value);
+        pack_buffer(packer, t.creat_time);
+        pack_buffer(packer, t.del_time);
     }
 
     inline void 
@@ -676,6 +688,17 @@ namespace message
     {
         unpack_buffer(unpacker, t.vt_id);
         unpack_buffer(unpacker, t.clock);
+    }
+
+    inline void 
+    unpack_buffer(e::unpacker &unpacker, db::element::property &t)
+    {
+        unpack_buffer(unpacker, t.key);
+        unpack_buffer(unpacker, t.value);
+        t.creat_time.clock.clear();
+        t.del_time.clock.clear();
+        unpack_buffer(unpacker, t.creat_time);
+        unpack_buffer(unpacker, t.del_time);
     }
 
     inline void 

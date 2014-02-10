@@ -107,21 +107,17 @@ cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
         READ_NODE_PROPS
         READ_EDGES_PROPS
 
-cdef extern from 'common/public_graph_elems/node_ptr.h' namespace 'common':
-    cdef cppclass node_ptr:
-        uint64_t get_handle()
-    cdef node_ptr coordinator
+cdef extern from 'db/element/remote_node.h' namespace 'db::element':
+    cdef cppclass remote_node:
+        remote_node(uint64_t id, uint64_t handle)
+        uint64_t id
+        uint64_t loc
+    cdef remote_node coordinator
 
-class NodePtr:
-    def __init__(self, handle=0, loc=0):
-        self.handle = handle
+class RemoteNode:
+    def __init__(self, id=0, loc=0):
+        self.id = id
         self.loc = loc
-
-cdef extern from 'common/public_graph_elems/property.h' namespace 'common':
-    cdef cppclass property:
-        #property()
-        string key
-        string value
 
 cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
     cdef cppclass reach_params:
@@ -129,19 +125,19 @@ cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
         bint _search_cache
         uint64_t _cache_key
         bint mode
-        node_ptr prev_node
-        uint64_t dest
-        vector[property] edge_props
+        remote_node prev_node
+        uint64_t dest_id
+        vector[pair[string, string]] edge_props
         uint32_t hops
         bint reachable
 
 class ReachParams:
-    def __init__(self, mode=False, prev_node=NodePtr(0,0), dest=0, hops=0, reachable=False, caching=False, edge_props=[]):
+    def __init__(self, mode=False, prev_node=RemoteNode(0,0), dest_id=0, hops=0, reachable=False, caching=False, edge_props=[]):
         self._search_cache = caching
-        self._cache_key = dest
+        self._cache_key = dest_id
         self.mode = mode
         self.prev_node = prev_node
-        self.dest = dest
+        self.dest_id = dest_id
         self.hops = hops
         self.reachable = reachable
         self.edge_props = edge_props
@@ -151,40 +147,37 @@ cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
         bint _search_cache
         uint64_t _cache_key
         bint is_center
-        node_ptr center
+        remote_node center
         bint outgoing
         vector[uint64_t] neighbors
         double clustering_coeff
-        uint64_t vt_id
 
 class ClusteringParams:
-    def __init__(self, is_center=True, outgoing=True, vt_id=0, caching=False, clustering_coeff=0.0):
+    def __init__(self, is_center=True, outgoing=True, caching=False, clustering_coeff=0.0):
         self._search_cache = caching
         self.is_center = is_center
         self.outgoing = outgoing
-        self.vt_id = vt_id
         self.clustering_coeff = clustering_coeff
 
 cdef extern from 'node_prog/dijkstra_program.h' namespace 'node_prog':
     cdef cppclass dijkstra_params:
-        uint64_t src_handle
-        node_ptr source_node
+        uint64_t src_id
+        remote_node src_handle
         uint64_t dst_handle
         string edge_weight_name
         bint is_widest_path
         bint adding_nodes
         uint64_t prev_node
-        vector[pair[uint64_t, node_ptr]] entries_to_add
-        uint64_t next_node
+        vector[pair[uint64_t, remote_node]] entries_to_add
+        remote_node next_node
         vector[pair[uint64_t, uint64_t]] final_path
         uint64_t cost
-        uint64_t vt_id
 
 class DijkstraParams:
-    def __init__(self, src_handle=0, source_node=NodePtr(), dst_handle=0, edge_weight_name="weight", is_widest_path=False,
-            adding_nodes=False, prev_node=NodePtr(), entries_to_add=[], next_node=0, final_path=[], cost=0, vt_id=0):
+    def __init__(self, src_id = 0, src_handle=RemoteNode(), dst_handle=0, edge_weight_name="weight", is_widest_path=False,
+            adding_nodes=False, prev_node=RemoteNode(), entries_to_add=[], next_node=0, final_path=[], cost=0):
+        self.src_id = src_id
         self.src_handle = src_handle
-        self.source_node = source_node
         self.dst_handle = dst_handle
         self.edge_weight_name = edge_weight_name
         self.is_widest_path = is_widest_path
@@ -194,32 +187,27 @@ class DijkstraParams:
         self.next_node = next_node
         self.final_path = final_path
         self.cost = cost
-        self.vt_id = vt_id
 
 cdef extern from 'node_prog/read_node_props_program.h' namespace 'node_prog':
     cdef cppclass read_node_props_params:
         vector[string] keys
-        uint64_t vt_id
-        vector[property] node_props
+        vector[pair[string, string]] node_props
 
 class ReadNodePropsParams:
-    def __init__(self, keys = [], vt_id = 0, node_props = []):
+    def __init__(self, keys = [], node_props = []):
         self.keys = keys
-        self.vt_id = vt_id
         self.node_props = node_props
 
 cdef extern from 'node_prog/read_edges_props_program.h' namespace 'node_prog':
     cdef cppclass read_edges_props_params:
         vector[uint64_t] edges
         vector[string] keys
-        uint64_t vt_id
-        vector[pair[uint64_t, vector[property]]] edges_props
+        vector[pair[uint64_t, vector[pair[string, string]]]] edges_props
 
 class ReadEdgesPropsParams:
-    def __init__(self, edges = [], keys = [], vt_id = 0, edges_props = []):
+    def __init__(self, edges = [], keys = [], edges_props = []):
         self.edges = edges
         self.keys = keys
-        self.vt_id = vt_id
         self.edges_props = edges_props
 
 cdef extern from 'client/client.h' namespace 'client':
@@ -271,19 +259,16 @@ cdef class Client:
     def run_reach_program(self, init_args):
         cdef vector[pair[uint64_t, reach_params]] c_args
         cdef pair[uint64_t, reach_params] arg_pair
-        cdef property prop
         for rp in init_args:
             arg_pair.first = rp[0]
             arg_pair.second._search_cache = rp[1]._search_cache 
-            arg_pair.second._cache_key = rp[1].dest
+            arg_pair.second._cache_key = rp[1].dest_id
             arg_pair.second.mode = rp[1].mode
-            arg_pair.second.dest = rp[1].dest
+            arg_pair.second.dest_id = rp[1].dest_id
             arg_pair.second.reachable = rp[1].reachable
             arg_pair.second.prev_node = coordinator
             for p in rp[1].edge_props:
-                prop.key = p[0].encode('UTF-8')
-                prop.value = p[1].encode('UTF-8')
-                arg_pair.second.edge_props.push_back(prop)
+                arg_pair.second.edge_props.push_back(p)
             c_args.push_back(arg_pair)
         c_rp = self.thisptr.run_reach_program(c_args)
         response = ReachParams(hops=c_rp.hops, reachable=c_rp.reachable)
@@ -297,7 +282,6 @@ cdef class Client:
             arg_pair.second._cache_key = cp[0] # cache key is center node handle
             arg_pair.second.is_center = cp[1].is_center
             arg_pair.second.outgoing = cp[1].outgoing
-            arg_pair.second.vt_id = cp[1].vt_id
             c_args.push_back(arg_pair)
         c_cp = self.thisptr.run_clustering_program(c_args)
         response = ClusteringParams(clustering_coeff=c_cp.clustering_coeff)
@@ -308,10 +292,9 @@ cdef class Client:
         for cp in init_args:
             arg_pair.first = cp[0]
             arg_pair.second.is_widest_path = cp[1].is_widest_path;
-            arg_pair.second.src_handle = cp[1].src_handle;
+            arg_pair.second.src_id = cp[1].src_id;
             arg_pair.second.dst_handle = cp[1].dst_handle;
             arg_pair.second.edge_weight_name = cp[1].edge_weight_name;
-            arg_pair.second.vt_id = cp[1].vt_id
             c_args.push_back(arg_pair)
         c_dp = self.thisptr.run_dijkstra_program(c_args)
         response = DijkstraParams(final_path=c_dp.final_path, cost=c_dp.cost)
@@ -319,41 +302,26 @@ cdef class Client:
     def read_node_props(self, init_args):
         cdef vector[pair[uint64_t, read_node_props_params]] c_args
         cdef pair[uint64_t, read_node_props_params] arg_pair
-        cdef property prop
         for rp in init_args:
             arg_pair.first = rp[0]
             arg_pair.second.keys = rp[1].keys
-            arg_pair.second.vt_id = rp[1].vt_id
             c_args.push_back(arg_pair)
 
         c_rp = self.thisptr.read_node_props_program(c_args)
-        response = ReadNodePropsParams(node_props=[])
-        assert(len(response.node_props) == 0)
-        for c_prop in c_rp.node_props:
-            response.node_props.append((c_prop.key, c_prop.value))
+        response = ReadNodePropsParams(node_props=c_rp.node_props)
         return response
 
     def read_edges_props(self, init_args):
         cdef vector[pair[uint64_t, read_edges_props_params]] c_args
         cdef pair[uint64_t, read_edges_props_params] arg_pair
-        cdef property prop
         for rp in init_args:
             arg_pair.first = rp[0]
             #arg_pair.second.edges = rp[1].edges
             arg_pair.second.keys = rp[1].keys
-            arg_pair.second.vt_id = rp[1].vt_id
             c_args.push_back(arg_pair)
 
         c_rp = self.thisptr.read_edges_props_program(c_args)
-        response = ReadEdgesPropsParams(edges_props=[])
-        assert(len(response.edges_props) == 0)
-        for c_pair in c_rp.edges_props:
-            edge_props_pair = (c_pair.first, [])
-            for c_prop in c_pair.second:
-                edge_props_pair[1].append((c_prop.key, c_prop.value))
-
-            response.edges_props.append(edge_props_pair)
-
+        response = ReadEdgesPropsParams(edges_props=c_rp.edges_props)
         return response
 
     def start_migration(self):

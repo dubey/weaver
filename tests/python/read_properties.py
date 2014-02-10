@@ -29,7 +29,7 @@ c.set_node_property(tx_id, node_id, 'size', '27')
 c.end_tx(tx_id)
 
 # reading node properites
-rp = client.ReadNodePropsParams(vt_id=coord_id)
+rp = client.ReadNodePropsParams()
 prog_args = [(node_id, rp)]
 response = c.read_node_props(prog_args)
 print "All pairs: " + str(response.node_props)
@@ -74,7 +74,7 @@ c.set_edge_property(tx_id, node_id, edges[2], 'cost', '9')
 c.end_tx(tx_id)
 
 # reading edge properties
-rp = client.ReadEdgesPropsParams(vt_id=coord_id)
+rp = client.ReadEdgesPropsParams()
 prog_args = [(node_id, rp)]
 response = c.read_edges_props(prog_args)
 print "All edges and their properties" + str(response.edges_props)

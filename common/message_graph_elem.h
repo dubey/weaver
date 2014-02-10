@@ -24,12 +24,6 @@ namespace message
     static state::program_state *prog_state;
 
     // size methods
-    inline uint64_t size(const db::element::property &t)
-    {
-        return size(t.key)
-            + size(t.value)
-            + 2*size(t.creat_time); // for del time
-    }
     inline uint64_t size(const db::element::element &t)
     {
         uint64_t sz = sizeof(uint64_t) // id
@@ -62,16 +56,6 @@ namespace message
     }
 
     // packing methods
-    inline void 
-    pack_buffer(e::buffer::packer &packer, const db::element::property &t)
-    {
-        pack_buffer(packer, t.key);
-        pack_buffer(packer, t.value);
-        pack_buffer(packer, t.creat_time);
-        pack_buffer(packer, t.del_time);
-    }
-
-
     inline void pack_buffer(e::buffer::packer &packer, const db::element::element &t)
     {
         packer = packer << t.get_id();
@@ -103,17 +87,6 @@ namespace message
     }
 
     // unpacking methods
-    inline void 
-    unpack_buffer(e::unpacker &unpacker, db::element::property &t)
-    {
-        unpack_buffer(unpacker, t.key);
-        unpack_buffer(unpacker, t.value);
-        t.creat_time.clock.clear();
-        t.del_time.clock.clear();
-        unpack_buffer(unpacker, t.creat_time);
-        unpack_buffer(unpacker, t.del_time);
-    }
-
     inline void
     unpack_buffer(e::unpacker &unpacker, db::element::element &t)
     {

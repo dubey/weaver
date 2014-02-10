@@ -36,7 +36,6 @@ namespace node_prog
             bool outgoing;
             std::vector<uint64_t> neighbors;
             double clustering_coeff;
-            uint64_t vt_id;
 
         public:
             virtual bool search_cache() {
@@ -55,8 +54,7 @@ namespace node_prog
                     + message::size(center)
                     + message::size(outgoing)
                     + message::size(neighbors)
-                    + message::size(clustering_coeff)
-                    + message::size(vt_id);
+                    + message::size(clustering_coeff);
                 return toRet;
             }
 
@@ -69,7 +67,6 @@ namespace node_prog
                 message::pack_buffer(packer, outgoing);
                 message::pack_buffer(packer, neighbors);
                 message::pack_buffer(packer, clustering_coeff);
-                message::pack_buffer(packer, vt_id);
             }
 
             virtual void unpack(e::unpacker& unpacker)
@@ -81,7 +78,6 @@ namespace node_prog
                 message::unpack_buffer(unpacker, outgoing);
                 message::unpack_buffer(unpacker, neighbors);
                 message::unpack_buffer(unpacker, clustering_coeff);
-                message::unpack_buffer(unpacker, vt_id);
             }
     };
 

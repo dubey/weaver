@@ -37,7 +37,7 @@ namespace node_prog
             uint64_t _cache_key;
             bool mode; // false = request, true = reply
             db::element::remote_node prev_node;
-            uint64_t dest_handle;
+            uint64_t dest_id;
             std::vector<std::pair<std::string, std::string>> edge_props;
             uint32_t hops;
             bool reachable;
@@ -68,7 +68,7 @@ namespace node_prog
                     + message::size(_cache_key)
                     + message::size(mode)
                     + message::size(prev_node)
-                    + message::size(dest_handle) 
+                    + message::size(dest_id) 
                     + message::size(edge_props)
                     + message::size(hops)
                     + message::size(reachable)
@@ -82,7 +82,7 @@ namespace node_prog
                 message::pack_buffer(packer, _cache_key);
                 message::pack_buffer(packer, mode);
                 message::pack_buffer(packer, prev_node);
-                message::pack_buffer(packer, dest_handle);
+                message::pack_buffer(packer, dest_id);
                 message::pack_buffer(packer, edge_props);
                 message::pack_buffer(packer, hops);
                 message::pack_buffer(packer, reachable);
@@ -95,7 +95,7 @@ namespace node_prog
                 message::unpack_buffer(unpacker, _cache_key);
                 message::unpack_buffer(unpacker, mode);
                 message::unpack_buffer(unpacker, prev_node);
-                message::unpack_buffer(unpacker, dest_handle);
+                message::unpack_buffer(unpacker, dest_id);
                 message::unpack_buffer(unpacker, edge_props);
                 message::unpack_buffer(unpacker, hops);
                 message::unpack_buffer(unpacker, reachable);
@@ -218,7 +218,7 @@ namespace node_prog
                     params.reachable = true;
                     params._search_cache = false; // don't search on way back
 
-                    // context for cached value contains the nodes in the path to the dest_handleination from this node
+                    // context for cached value contains the nodes in the path to the dest_idination from this node
                     for (auto& context_pair : cache_response->context) { 
                         params.path.emplace_back(context_pair.first);
                     }
@@ -235,7 +235,7 @@ namespace node_prog
         db::element::remote_node prev_node = params.prev_node;
         params.prev_node = rn;
         if (!params.mode) { // request mode
-            if (params.dest_handle == rn.get_id()) {
+            if (params.dest_id == rn.get_id()) {
                 // we found the node we are looking for, prepare a reply
                 params.mode = true;
                 params.reachable = true;
@@ -282,7 +282,7 @@ namespace node_prog
                         // now add to cache
                         std::shared_ptr<node_prog::reach_cache_value> toCache(new reach_cache_value());
                         std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<db::element::remote_node>(params.path)); // copy return path from params
-                        add_cache_func(toCache, watch_set, params.dest_handle);
+                        add_cache_func(toCache, watch_set, params.dest_id);
                     }
                 }
                 next.emplace_back(std::make_pair(state.prev_node, params));

@@ -31,7 +31,6 @@ namespace node_prog
     {
         public:
             std::vector<std::string> keys; // empty vector means fetch all props
-            uint64_t vt_id;
             std::vector<std::pair<std::string, std::string>> node_props;
 
         public:
@@ -46,7 +45,6 @@ namespace node_prog
             virtual uint64_t size() const 
             {
                 uint64_t toRet = message::size(keys)
-                    + message::size(vt_id)
                     + message::size(node_props);
                 return toRet;
             }
@@ -54,14 +52,12 @@ namespace node_prog
             virtual void pack(e::buffer::packer& packer) const 
             {
                 message::pack_buffer(packer, keys);
-                message::pack_buffer(packer, vt_id);
                 message::pack_buffer(packer, node_props);
             }
 
             virtual void unpack(e::unpacker& unpacker)
             {
                 message::unpack_buffer(unpacker, keys);
-                message::unpack_buffer(unpacker, vt_id);
                 message::unpack_buffer(unpacker, node_props);
             }
     };
