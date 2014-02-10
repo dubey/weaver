@@ -111,8 +111,8 @@ timer_function()
     message::message msg;
     bool nop_sent;
 
-    sleep_time.tv_sec  = VT_TIMEOUT_NANO / VT_NANO;
-    sleep_time.tv_nsec = VT_TIMEOUT_NANO % VT_NANO;
+    sleep_time.tv_sec  = VT_TIMEOUT_NANO / NANO;
+    sleep_time.tv_nsec = VT_TIMEOUT_NANO % NANO;
 
     while (true) {
         sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, NULL);
@@ -536,8 +536,8 @@ main(int argc, char *argv[])
     }
 
     timespec sleep_time;
-    sleep_time.tv_sec =  VT_INITIAL_TIMEOUT_NANO / VT_NANO;
-    sleep_time.tv_nsec = VT_INITIAL_TIMEOUT_NANO % VT_NANO;
+    sleep_time.tv_sec =  INITIAL_TIMEOUT_NANO / NANO;
+    sleep_time.tv_nsec = INITIAL_TIMEOUT_NANO % NANO;
     ret = clock_nanosleep(CLOCK_REALTIME, 0, &sleep_time, NULL);
     assert(ret == 0);
     WDEBUG << "Initial setup delay complete" << std::endl;

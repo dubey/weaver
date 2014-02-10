@@ -47,6 +47,10 @@
 #define ID_BITS 8
 #define TOP_MASK (0x0fffffffffffffffULL)
 #define GRAPH_FILE "graph.rec"
+#define NANO (1000000000ULL)
+#define INITIAL_TIMEOUT_MILL 5000 // number of milliseconds initial delay
+#define INITIAL_TIMEOUT_MICR 5000000 // number of microseconds initial delay
+#define INITIAL_TIMEOUT_NANO 5000000000 // number of nanoseconds initial delay
 // node programs
 #define BATCH_MSG_SIZE 1 // 1 == no batching
 #define MAX_CACHE_ENTRIES 0 // 0 to turn off caching
@@ -56,13 +60,9 @@
 //#define WEAVER_CLDG // defined if communication-based LDG, false otherwise
 //#define WEAVER_MSG_COUNT // defined if client msg count call will take place
 // coordinator
-#define VT_NANO (1000000000ULL)
 #define VT_TIMEOUT_MILL 1 // epoll and nop timeout in ms
 #define VT_TIMEOUT_MICR 100 // number of microseconds between successive nops
 #define VT_TIMEOUT_NANO 100000 // number of nanoseconds between successive nops
-#define VT_INITIAL_TIMEOUT_MILL 5000 // number of milliseconds delay for first nop - setup time for all timestampers
-#define VT_INITIAL_TIMEOUT_MICR 5000000 // number of microseconds delay for first nop - setup time for all timestampers
-#define VT_INITIAL_TIMEOUT_NANO 5000000000 // number of nanoseconds delay for first nop - setup time for all timestampers
 // hyperdex
 #define HYPERDEX_COORD_IPADDR "127.0.0.1"
 //#define HYPERDEX_COORD_IPADDR "128.84.227.101"

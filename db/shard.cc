@@ -1691,6 +1691,7 @@ main(int argc, char *argv[])
     shard_id = id;
     S = new db::shard(id);
     if (argc == 4) {
+        // bulk loading
         db::graph_file_format format = db::SNAP;
         if (strcmp(argv[2], "tsv") == 0) {
             format = db::TSV;
