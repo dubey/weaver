@@ -15,6 +15,8 @@ print "interactive demo, start with -i flag"
 
 import client
 print "import client"
+import simple_client
+print "import simple_client"
 
 coord_id = 0
 print "coord_id = 0"
@@ -230,6 +232,8 @@ c.set_edge_property(tx_id, nodes['cerberus'], edge, 'lives', '')
 
 c.end_tx(tx_id)
 '''
+
+sc = simple_client.simple_client(c)
 
 print ""
 print "demo time!"
