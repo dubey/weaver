@@ -111,7 +111,7 @@ timer_function()
     message::message msg;
     bool nop_sent;
 
-    sleep_time.tv_sec =  VT_TIMEOUT_NANO / VT_NANO;
+    sleep_time.tv_sec  = VT_TIMEOUT_NANO / VT_NANO;
     sleep_time.tv_nsec = VT_TIMEOUT_NANO % VT_NANO;
 
     while (true) {
@@ -165,7 +165,6 @@ timer_function()
                 if (vts->to_nop[shard_id]) {
                     assert(vclk.clock.size() == NUM_VTS);
                     assert(max_done_clk.size() == NUM_VTS);
-                    assert(vt_id == 0);
                     message::prepare_message(msg, message::VT_NOP, vt_id, vclk, qts, req_id,
                         done_reqs[shard_id], max_done_id, max_done_clk,
                         num_outstanding_progs, vts->shard_node_count);
@@ -191,7 +190,6 @@ timer_function()
                 message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, vclk.clock[vt_id]);
                 vts->send(i, msg.buf);
             }
-            WDEBUG << "updating vector clock at other shards\n";
         }
 
         vts->periodic_update_mutex.unlock();
@@ -325,11 +323,6 @@ server_loop(int thread_id)
         if (ret != BUSYBEE_SUCCESS && ret != BUSYBEE_TIMEOUT) {
             WDEBUG << "msg recv error: " << ret << std::endl;
             continue;
-        /*
-        } else if (ret == BUSYBEE_TIMEOUT) {
-            periodic_update();
-            continue;
-        */
         } else {
             // good to go, unpack msg
             uint64_t _size;
@@ -365,7 +358,6 @@ server_loop(int thread_id)
                     vts->periodic_update_mutex.lock();
                     vts->clock_update_acks++;
                     assert(vts->clock_update_acks < NUM_VTS);
-                    WDEBUG << "vclk update signal\n";
                     vts->periodic_update_mutex.unlock();
                     break;
 
@@ -374,8 +366,8 @@ server_loop(int thread_id)
                     message::unpack_message(*msg, message::VT_NOP_ACK, sender, shard_node_count);
                     vts->periodic_update_mutex.lock();
                     vts->shard_node_count[sender - SHARD_ID_INCR] = shard_node_count;
+
                     vts->to_nop.set(sender - SHARD_ID_INCR);
-                    WDEBUG << "nop signal from shard " << sender << std::endl;
                     vts->periodic_update_mutex.unlock();
                     break;
                 }
@@ -394,7 +386,7 @@ server_loop(int thread_id)
                 case message::CLIENT_NODE_COUNT: {
                     vts->periodic_update_mutex.lock();
                     message::prepare_message(*msg, message::NODE_COUNT_REPLY, vts->shard_node_count);
-                    vts->periodic_update_mutex.unlock();
+vts->periodic_update_mutex.unlock();
                     vts->send(sender, msg->buf);
                     break;
                 }
@@ -495,7 +487,7 @@ server_loop(int thread_id)
                             mark_req_finished(req_id);
                         //}
                     } else {
-                        WDEBUG << "node prog return for already completed ornever existed req id" << std::endl;
+                        WDEBUG << "node prog return for already completed or never existed req id" << std::endl;
                     }
                     vts->mutex.unlock();
                     break;

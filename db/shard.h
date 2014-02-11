@@ -474,7 +474,11 @@ namespace db
     inline void
     shard :: delete_edge_nonlocking(element::node *n, uint64_t edge, vc::vclock &tdel)
     {
-        element::edge *e = n->out_edges.at(edge);
+#ifdef __WEAVER_DEBUG__
+        assert(n->edge_handles.find(edge) != n->edge_handles.end());
+#endif
+        assert(n->out_edges.find(edge) != n->out_edges.end());
+        element::edge *e = n->out_edges[edge];
         e->base.update_del_time(tdel);
         n->updated = true;
         n->dependent_del++;
@@ -784,21 +788,17 @@ namespace db
     }
 
     inline thread::unstarted_thread*
-    get_read_thr(std::vector<thread::pqueue_t> &read_queues,
-        std::vector<uint64_t> &last_ids, std::vector<vc::vclock_t> &last_clocks)
+    get_read_thr(std::vector<thread::pqueue_t> &read_queues, std::vector<vc::vclock_t> &last_clocks)
     {
         thread::unstarted_thread* thr;
         bool can_exec;
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
-            thread::pqueue_t &pq = read_queues.at(vt_id);
+            thread::pqueue_t &pq = read_queues[vt_id];
             // execute read request after all write queues have processed write which happens after this read
-            if (!pq.empty() && pq.top()->priority < last_ids[vt_id]) {
+            if (!pq.empty()) {
                 can_exec = true;
                 thr = pq.top();
                 for (uint64_t write_vt = 0; write_vt < NUM_VTS; write_vt++) {
-                    if (write_vt == vt_id) {
-                        continue;
-                    }
                     if (order::compare_two_clocks(thr->vclock.clock, last_clocks[write_vt]) != 0) {
                         can_exec = false;
                         break;
@@ -822,7 +822,7 @@ namespace db
         std::vector<thread::pqueue_t> &write_queues = tpool->write_queues;
         // get next jobs from each queue
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
-            thread::pqueue_t &pq = write_queues.at(vt_id);
+            thread::pqueue_t &pq = write_queues[vt_id];
             // wait for queue to receive at least one job
             if (pq.empty()) { // can't write if one of the pq's is empty
                 return NULL;
@@ -836,7 +836,7 @@ namespace db
         }
         // all write queues are good to go, compare timestamps
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
-            timestamps.emplace_back(write_queues.at(vt_id).top()->vclock);
+            timestamps.emplace_back(write_queues[vt_id].top()->vclock);
         }
         uint64_t exec_vt_id;
         if (NUM_VTS == 1) {
@@ -844,15 +844,15 @@ namespace db
         } else {
             exec_vt_id = order::compare_vts(timestamps);
         }
-        thr = write_queues.at(exec_vt_id).top();
-        write_queues.at(exec_vt_id).pop();
+        thr = write_queues[exec_vt_id].top();
+        write_queues[exec_vt_id].pop();
         return thr;
     }
 
     inline thread::unstarted_thread*
     get_read_or_write(thread::pool *tpool)
     {
-        thread::unstarted_thread *thr = get_read_thr(tpool->read_queues, tpool->last_ids, tpool->last_clocks);
+        thread::unstarted_thread *thr = get_read_thr(tpool->read_queues, tpool->last_clocks);
         if (thr == NULL) {
             thr = get_write_thr(tpool);
         }

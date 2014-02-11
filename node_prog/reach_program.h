@@ -172,7 +172,6 @@ namespace node_prog
     inline bool
     check_cache_context(std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& context)
     {
-        //WDEBUG  << "$$$$$ checking context of size "<< context.size() << std::endl;
         // path not valid if broken by:
         for (std::pair<db::element::remote_node, db::caching::node_cache_context>& pair : context)
         {
@@ -212,7 +211,6 @@ namespace node_prog
                 // check context, update cache
                 bool valid = check_cache_context(cache_response->context);
                 if (valid) {
-                    //WDEBUG  << "valid CACHE RESPONSE node handle: " << rn.handle << std::endl;
                     // we found the node we are looking for, prepare a reply
                     params.mode = true;
                     params.reachable = true;
@@ -264,6 +262,7 @@ namespace node_prog
             if (false_reply) {
                 params.mode = true;
                 params.reachable = false;
+                WDEBUG << rn.get_id() << " false reply, turning around" << std::endl;
                 next.emplace_back(std::make_pair(prev_node, params));
             }
         } else { // reply mode
@@ -272,6 +271,7 @@ namespace node_prog
                     state.hops = params.hops;
                 }
             }
+            WDEBUG << rn.get_id() << " on way back, state out count " << state.out_count << std::endl;
             if (((--state.out_count == 0) || params.reachable) && !state.reachable) {
                 state.reachable |= params.reachable;
                 if (params.reachable) {
@@ -285,6 +285,7 @@ namespace node_prog
                         add_cache_func(toCache, watch_set, params.dest);
                     }
                 }
+                WDEBUG << rn.get_id() << " false reply, going back" << std::endl;
                 next.emplace_back(std::make_pair(state.prev_node, params));
             }
             if ((int)state.out_count < 0) {
@@ -293,6 +294,7 @@ namespace node_prog
                 while(1);
             }
         }
+        WDEBUG << rn.get_id() << " sending to " << next.size() << " others" << std::endl;
         return next;
     }
 }

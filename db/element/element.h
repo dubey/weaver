@@ -168,6 +168,7 @@ namespace element
     inline void
     element :: update_del_time(vc::vclock &tdel)
     {
+        assert(del_time.vt_id == MAX_UINT64);
         del_time = tdel;
     }
 

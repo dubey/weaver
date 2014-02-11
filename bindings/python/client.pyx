@@ -236,8 +236,10 @@ cdef extern from 'client/client.h' namespace 'client':
 
 cdef class Client:
     cdef client *thisptr
+    cdef uint64_t vtid
     def __cinit__(self, uint64_t my_id, uint64_t vt_id):
         self.thisptr = new client(my_id, vt_id)
+        self.vtid = vt_id
     def __dealloc__(self):
         del self.thisptr
     def begin_tx(self):
@@ -273,6 +275,7 @@ cdef class Client:
         c_rp = self.thisptr.run_reach_program(c_args)
         response = ReachParams(hops=c_rp.hops, reachable=c_rp.reachable)
         return response
+    # warning! set prev_node loc to vt_id if somewhere in params
     def run_clustering_program(self, init_args):
         cdef vector[pair[uint64_t, clustering_params]] c_args
         cdef pair[uint64_t, clustering_params] arg_pair

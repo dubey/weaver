@@ -245,4 +245,6 @@ rp = client.ReadEdgesPropsParams(keys = ['relationship'])
 prog_args = [(node_id, rp)]
 response = c.read_edges_props(prog_args)
 print response.edges_props
+
+sc.reachability(nodes['pluto'], nodes['hercules'])
 '''

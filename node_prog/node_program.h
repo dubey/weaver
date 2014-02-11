@@ -82,7 +82,8 @@ namespace node_prog
               , global_req(_global_req)
               , vt_id(_vt_id)
               , req_vclock(_req_vclock)
-              , req_id(_req_id) {};
+              , req_id(_req_id)
+        { };
         public:
         node_prog::prog_type prog_type_recvd;
         bool global_req;
