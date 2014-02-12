@@ -32,7 +32,6 @@ class simple_client:
         rp = client.ReachParams(dest=dest, edge_props=edge_props)
         prog_args = [(source, rp)]
         response = self.c.run_reach_program(prog_args)
-        print "got response"
         return response.reachable
 
     def clustering(self, id):
