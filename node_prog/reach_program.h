@@ -195,18 +195,13 @@ namespace node_prog
         return true;
     }
 
-    uint64_t last_2_hex(uint64_t in) {
-        uint64_t mask = 0xFFF;
-        return in & mask;
-    }
-
     std::vector<std::pair<db::element::remote_node, reach_params>> 
     reach_node_program(
             node &n,
             db::element::remote_node &rn,
             reach_params &params,
             std::function<reach_node_state&()> state_getter,
-            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
+            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, // TODO make const
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
             std::unique_ptr<db::caching::cache_response> cache_response)
     {
@@ -243,26 +238,22 @@ namespace node_prog
                 params.mode = true;
                 params.reachable = true;
                 params.path.emplace_back(rn);
-                WDEBUG << last_2_hex(rn.get_id()) << " found it!" << std::endl;
                 next.emplace_back(std::make_pair(prev_node, params));
             } else {
                 // have not found it yet so follow all out edges
                 if (!state.visited) {
                     state.prev_node = prev_node;
                     state.visited = true;
-                    WDEBUG << last_2_hex(rn.get_id()) << " propagating to ";
                     for (edge &e: n.get_edges()) {
                         // checking edge properties
                         if (e.has_all_properties(params.edge_props)) {
                             // e->traverse(); no more traversal recording
 
                             // propagate reachability request
-                            std::cerr << " "  << last_2_hex(e.get_neighbor().get_id());
                             next.emplace_back(std::make_pair(e.get_neighbor(), params));
                             state.out_count++;
                         }
                     }
-                    std::cerr << std::endl;
                     if (state.out_count == 0) {
                         false_reply = true;
                     }
@@ -273,7 +264,6 @@ namespace node_prog
             if (false_reply) {
                 params.mode = true;
                 params.reachable = false;
-                WDEBUG << last_2_hex(rn.get_id()) << " false reply, turning around" << std::endl;
                 next.emplace_back(std::make_pair(prev_node, params));
             }
         } else { // reply mode
@@ -282,7 +272,6 @@ namespace node_prog
                     state.hops = params.hops;
                 }
             }
-            WDEBUG << last_2_hex(rn.get_id()) << " on way back, state out count " << state.out_count << std::endl;
             if (((--state.out_count == 0) || params.reachable) && !state.reachable) {
                 state.reachable |= params.reachable;
                 if (params.reachable) {
@@ -296,7 +285,6 @@ namespace node_prog
                         add_cache_func(toCache, watch_set, params.dest);
                     }
                 }
-                WDEBUG << last_2_hex(rn.get_id()) << " reply, going back" << std::endl;
                 next.emplace_back(std::make_pair(state.prev_node, params));
             }
             if ((int)state.out_count < 0) {
@@ -305,7 +293,6 @@ namespace node_prog
                 while(1);
             }
         }
-        WDEBUG << last_2_hex(rn.get_id()) << " sending to " << next.size() << " others" << std::endl;
         return next;
     }
 }

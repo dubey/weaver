@@ -72,7 +72,7 @@ class test_graph:
             node_sets.append(nx_nodes[(nodes_per_thread)*i : (nodes_per_thread)*(i+1)])
         node_sets.append(nx_nodes[(nodes_per_thread)*(num_threads-1) :])
         for i in range(num_threads):
-            t = threading.Thread(target=self.create_nodes, args=(node_sets[i], clients[i], i))
+            t = threading.Thread(target=self.create_nodes, args=(node_sets[i], clients[i], i, nodes_per_thread))
             t.start()
             threads.append(t)
             print 'Started thread ' + str(i) + ' for create nodes'
@@ -120,7 +120,7 @@ class test_graph:
             g_out.write(line + '\n')
         g_out.close()
 
-    def create_nodes(self, nx_nodes, client, client_id):
+    def create_nodes(self, nx_nodes, client, client_id, nodes_per_thread):
         with self.lock:
             while not self.startThread:
                 self.cv.wait()
@@ -139,7 +139,7 @@ class test_graph:
             cntr += 1
         with self.lock:
             for i in range(len(nx_nodes)):
-                self.nodes[i] = w_nodes[i]
+                self.nodes[i+client_id*nodes_per_thread] = w_nodes[i]
                 self.node_map[nx_nodes[i]] = w_nodes[i]
                 self.edges[w_nodes[i]] = []
                 self.edge_handles[w_nodes[i]] = []

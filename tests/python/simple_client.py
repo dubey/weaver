@@ -28,8 +28,8 @@ class simple_client:
         response = self.c.read_edges_props(prog_args)
         return response.edges_props
 
-    def reachability(self, source, dest, edge_props = []):
-        rp = client.ReachParams(dest=dest, edge_props=edge_props)
+    def reachability(self, source, dest, edge_props = [], caching = False):
+        rp = client.ReachParams(dest=dest, edge_props=edge_props, caching=caching)
         prog_args = [(source, rp)]
         response = self.c.run_reach_program(prog_args)
         return response.reachable

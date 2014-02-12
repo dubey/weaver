@@ -23,9 +23,7 @@ requests_per_dest = 5
 def exec_traversals(reqs, cl):
     rp = client.ReachParams(caching=True)
     start = time.time()
-    cnt = 0
     for r in reqs:
-        cnt += 1
         rp.dest = r[1]
         prog_args = [(r[0], rp)]
         response = cl.run_reach_program(prog_args)

@@ -20,6 +20,8 @@
 #include "common/weaver_constants.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/base_classes.h"
+#include "node_prog/edge_list.h"
+#include "node_prog/cache_response.h"
 #include "db/element/node.h"
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
@@ -29,15 +31,20 @@ namespace db
 namespace caching
 {
 
-    struct node_cache_context
+    struct node_cache_context : node_prog::node_cache_context
     {
-        bool node_deleted;
-        std::vector<db::element::edge> edges_added;
-        std::vector<db::element::edge> edges_deleted;
+        bool node_deleted_internal;
+        std::vector<db::element::edge> edges_added_internal;
+        std::vector<db::element::edge> edges_deleted_internal;
+        vc::vclock &cur_time;
 
         // delete standard copy onstructors TODO
         //node_cache_context(const node_cache_context&) = delete;
         //node_cache_context& operator=(node_cache_context const&) = delete;
+
+        bool node_deleted() { return node_deleted_internal; };
+        node_prog::edge_list edges_added() { return node_prog::edge_list(edges_added_internal, cur_time); };
+        node_prog::edge_list edges_deleted() { return node_prog::edge_list(edges_deleted_internal, cur_time); };
     };
 
     class program_cache 
@@ -84,7 +91,7 @@ namespace caching
         return ++uid;
     }
 
-    struct cache_response
+    struct cache_response : node_prog::cache_response
     {
         private:
             program_cache &from;
@@ -94,7 +101,6 @@ namespace caching
             std::shared_ptr<node_prog::Cache_Value_Base> value;
             std::shared_ptr<std::vector<db::element::remote_node>> watch_set;
             std::vector<std::pair<db::element::remote_node, node_cache_context>> context;
-            void invalidate();
 
             cache_response(program_cache &came_from, uint64_t key_used, std::shared_ptr<node_prog::Cache_Value_Base> &val,
                     std::shared_ptr<std::vector<db::element::remote_node>> watch_set_used)
@@ -106,12 +112,13 @@ namespace caching
             // delete standard copy onstructors
             cache_response (const cache_response &) = delete;
             cache_response& operator=(cache_response const&) = delete;
-    };
 
-    inline void
-    cache_response :: invalidate(){
-        from.cache.erase(key);
-    }
+            void invalidate() { from.cache.erase(key); };
+
+            std::shared_ptr<node_prog::Cache_Value_Base> get_cached_value() { return value; }
+            std::shared_ptr<std::vector<db::element::remote_node>> get_watch_set() { return watch_set; };
+            std::vector<std::pair<db::element::remote_node, node_cache_context>> &get_cache_context() { return context; };
+    };
 }
 }
 

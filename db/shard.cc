@@ -643,34 +643,6 @@ inline void modify_triangle_params(void * triangle_params, size_t num_nodes, db:
 }
 */
 
-/* fill changes since time on node
- */
-inline void
-fill_node_cache_context(db::caching::node_cache_context& context, db::element::node& node, vc::vclock& cache_time, vc::vclock& cur_time)
-{
-    context.node_deleted = (order::compare_two_vts(node.base.get_del_time(), cur_time) == 0);
-    for (auto &iter: node.out_edges) {
-        db::element::edge* e = iter.second;
-        assert(e != NULL);
-
-        bool del_after_cached = (order::compare_two_vts(e->base.get_del_time(), cache_time) == 1);
-        bool creat_after_cached = (order::compare_two_vts(e->base.get_creat_time(), cache_time) == 1);
-
-        bool del_before_cur = (order::compare_two_vts(e->base.get_del_time(), cur_time) == 0);
-        bool creat_before_cur = (order::compare_two_vts(e->base.get_creat_time(), cur_time) == 0);
-
-        assert(creat_before_cur); // TODO: is this check needed/valid
-        assert(del_after_cached);
-
-        if (creat_after_cached && creat_before_cur && !del_before_cur){
-            context.edges_added.push_back(*e);
-        }
-        if (del_after_cached && del_before_cur) {
-            context.edges_deleted.push_back(*e);
-        }
-    }
-}
-
 inline void
 fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& toFill,
         vc::vclock& cache_entry_time, vc::vclock& req_vclock)
@@ -683,14 +655,30 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<
             WDEBUG << "cache dont support this yet" << std::endl;
             assert(false);
         } else { // node exists
-            db::element::remote_node rn(loc, id);
-            db::element::remote_node &nptr = (db::element::remote_node &) rn;
-            toFill.emplace_back(std::make_pair(nptr, db::caching::node_cache_context()));
-            /*
-            toFill.back().first.loc = loc;
-            toFill.back().first.id = id;
-            */
-            fill_node_cache_context(toFill.back().second, *node, cache_entry_time, req_vclock);
+            toFill.emplace_back(std::make_pair(db::element::remote_node(loc, id), db::caching::node_cache_context()));
+            db::caching::node_cache_context &context = toFill.back().second;
+
+            context.node_deleted = (order::compare_two_vts(node->base.get_del_time(), req_vclock) == 0);
+            for (auto &iter: node->out_edges) {
+                db::element::edge* e = iter.second;
+                assert(e != NULL);
+
+                bool del_after_cached = (order::compare_two_vts(e->base.get_del_time(), cache_entry_time) == 1);
+                bool creat_after_cached = (order::compare_two_vts(e->base.get_creat_time(), cache_entry_time) == 1);
+
+                bool del_before_cur = (order::compare_two_vts(e->base.get_del_time(), req_vclock) == 0);
+                bool creat_before_cur = (order::compare_two_vts(e->base.get_creat_time(), req_vclock) == 0);
+
+                assert(creat_before_cur); // TODO: is this check needed/valid
+                assert(del_after_cached);
+
+                if (creat_after_cached && creat_before_cur && !del_before_cur){
+                    context.edges_added.push_back(*e);
+                }
+                if (del_after_cached && del_before_cur) {
+                    context.edges_deleted.push_back(*e);
+                }
+            }
         }
         S->release_node(node);
     }
