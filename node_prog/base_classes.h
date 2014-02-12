@@ -19,7 +19,7 @@ namespace node_prog
             virtual ~Deletable() = 0;
     };
 
-    Deletable::~Deletable() 
+    inline Deletable::~Deletable() 
     { 
         /* destructor must be defined */ 
     }

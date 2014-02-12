@@ -566,7 +566,7 @@ server_manager :: generate_cached_configuration(replicant_state_machine_context*
     m_latest_config = new_config;
 }
 
-// XXX why not just return m_servers?
+// XXX
 void
 server_manager :: servers_in_configuration(std::vector<server_id>* sids)
 {

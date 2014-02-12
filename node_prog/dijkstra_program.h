@@ -216,7 +216,7 @@ namespace node_prog
         return priority;
     }
 
-    std::vector<std::pair<db::element::remote_node, dijkstra_params>> 
+    inline std::vector<std::pair<db::element::remote_node, dijkstra_params>> 
     dijkstra_node_program(uint64_t,
             db::element::node &n,
             db::element::remote_node &rn,

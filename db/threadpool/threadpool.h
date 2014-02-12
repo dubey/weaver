@@ -39,7 +39,7 @@ namespace thread
             unstarted_thread(
                 uint64_t prio,
                 vc::vclock vclk,
-                void (*f)(void*),
+                void (*f)(uint64_t, void*),
                 void *a);
 
         public:
@@ -48,7 +48,7 @@ namespace thread
         public:
             uint64_t priority;
             vc::vclock vclock;
-            void (*func)(void*);
+            void (*func)(uint64_t, void*);
             void *arg;
     };
 
@@ -56,7 +56,7 @@ namespace thread
     unstarted_thread :: unstarted_thread( 
             uint64_t prio,
             vc::vclock vclk,
-            void (*f)(void*),
+            void (*f)(uint64_t, void*),
             void *a)
         : priority(prio)
         , vclock(vclk)

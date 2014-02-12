@@ -31,7 +31,7 @@
 namespace wclock
 {
 
-    void get_clock(timespec *ts)
+    inline void get_clock(timespec *ts)
     {
 #ifdef __MACH__ // OS X does not have clock_gettime, use clock_get_time
         clock_serv_t cclock;
@@ -47,7 +47,7 @@ namespace wclock
     }
 
     // return nanosecs elapsed since some fixed time
-    uint64_t get_time_elapsed(timespec &ts)
+    inline uint64_t get_time_elapsed(timespec &ts)
     {
         uint64_t ret = 0;
         get_clock(&ts);
@@ -56,13 +56,13 @@ namespace wclock
     }
 
     // get_time_elapsed / 1000000
-    uint64_t get_time_elapsed_millis(timespec &ts)
+    inline uint64_t get_time_elapsed_millis(timespec &ts)
     {
         uint64_t ret = get_time_elapsed(ts) / MEGA;
         return ret;
     }
 
-    double diff(timespec &start, timespec &end)
+    inline double diff(timespec &start, timespec &end)
     {
         timespec temp;
         if ((end.tv_nsec-start.tv_nsec)<0) {

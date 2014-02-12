@@ -1,32 +1,24 @@
-// Copyright (c) 2012, Cornell University
-// All rights reserved.
-//
-// Redistribution and use in source and binary forms, with or without
-// modification, are permitted provided that the following conditions are met:
-//
-//     * Redistributions of source code must retain the above copyright notice,
-//       this list of conditions and the following disclaimer.
-//     * Redistributions in binary form must reproduce the above copyright
-//       notice, this list of conditions and the following disclaimer in the
-//       documentation and/or other materials provided with the distribution.
-//     * Neither the name of HyperDex nor the names of its contributors may be
-//       used to endorse or promote products derived from this software without
-//       specific prior written permission.
-//
-// THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-// AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-// IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
-// ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE
-// LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR
-// CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF
-// SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS
-// INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN
-// CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
-// ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
-// POSSIBILITY OF SUCH DAMAGE.
+/*
+ * ===============================================================
+ *    Description:  Interfaces for po6 classes packers and
+ *                  unpackers.
+ *
+ *        Created:  2014-02-08 17:26:46
+ *
+ *         Author:  Robert Escriva, escriva@cs.cornell.edu
+ *                  Ayush Dubey, dubey@cs.cornell.edu
+ *
+ * Copyright (C) 2013, Cornell University, see the LICENSE file
+ *                     for licensing agreement
+ * ===============================================================
+ */
 
-#ifndef hyperdex_common_serialization_h_
-#define hyperdex_common_serialization_h_
+// Most of the following code has been 'borrowed' from
+// Robert Escriva's HyperDex coordinator.
+// see https://github.com/rescrv/HyperDex for the original code.
+
+#ifndef weaver_common_serialization_h_
+#define weaver_common_serialization_h_
 
 // po6
 #include <po6/net/location.h>
@@ -76,4 +68,4 @@ pack_size(const std::vector<T>& v)
     return sz;
 }
 
-#endif // hyperdex_common_serialization_h_
+#endif // weaver_common_serialization_h_

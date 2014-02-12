@@ -26,6 +26,7 @@
 
 #include "node_prog/base_classes.h"
 #include "common/weaver_constants.h"
+#include "common/ids.h"
 #include "common/vclock.h"
 #include "common/message.h"
 #include "common/busybee_infra.h"
@@ -38,6 +39,7 @@
 #include "deferred_write.h"
 #include "del_obj.h"
 #include "hyper_stub.h"
+#include "server_manager_link_wrapper.h"
 
 namespace std {
 // so we can use a pair as key to unordered_map TODO move me??
@@ -54,8 +56,6 @@ namespace std {
 
 namespace db
 {
-    thread_local uint64_t thread_id = MAX_UINT64;
-
     // Pending update request
     class graph_request
     {
@@ -124,10 +124,13 @@ namespace db
             // Hyperdex stub
             std::vector<hyper_stub*> hstub;
 
+            // Server manager link
+            server_manager_link_wrapper sm_stub;
+
             // Consistency
         public:
-            void increment_qts(uint64_t vt_id, uint64_t incr);
-            void record_completed_tx(uint64_t vt_id, vc::vclock_t &tx_clk);
+            void increment_qts(uint64_t thread_id, uint64_t vt_id, uint64_t incr);
+            void record_completed_tx(uint64_t thread_id, uint64_t vt_id, vc::vclock_t &tx_clk);
             element::node* acquire_node(uint64_t node_handle);
             void node_tx_order(uint64_t node, uint64_t vt_id, uint64_t qts);
             element::node* acquire_node_write(uint64_t node, uint64_t vt_id, uint64_t qts);
@@ -136,6 +139,7 @@ namespace db
 
             // Graph state
             uint64_t shard_id;
+            server_id m_us;
             std::unordered_set<uint64_t> node_list; // list of node handles currently on this shard
             std::unordered_map<uint64_t, element::node*> nodes; // node handle -> ptr to node object
             std::unordered_map<uint64_t, // node handle n ->
@@ -145,23 +149,23 @@ namespace db
         public:
             void add_write_request(uint64_t vt_id, thread::unstarted_thread *thr);
             void add_read_request(uint64_t vt_id, thread::unstarted_thread *thr);
-            element::node* create_node(uint64_t node_handle, vc::vclock &vclk, bool migrate, bool init_load);
-            void delete_node_nonlocking(element::node *n, vc::vclock &tdel);
-            void delete_node(uint64_t node_handle, vc::vclock &vclk, vc::qtimestamp_t &qts);
-            void create_edge_nonlocking(element::node *n, uint64_t edge, uint64_t remote_node,
+            element::node* create_node(uint64_t thread_id, uint64_t node_handle, vc::vclock &vclk, bool migrate, bool init_load);
+            void delete_node_nonlocking(uint64_t thread_id, element::node *n, vc::vclock &tdel);
+            void delete_node(uint64_t thread_id, uint64_t node_handle, vc::vclock &vclk, vc::qtimestamp_t &qts);
+            void create_edge_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge, uint64_t remote_node,
                     uint64_t remote_loc, vc::vclock &vclk, bool init_load);
-            void create_edge(uint64_t edge_handle, uint64_t local_node,
+            void create_edge(uint64_t thread_id, uint64_t edge_handle, uint64_t local_node,
                     uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, vc::qtimestamp_t &qts);
-            void delete_edge_nonlocking(element::node *n, uint64_t edge, vc::vclock &tdel);
-            void delete_edge(uint64_t edge_handle, uint64_t node_handle, vc::vclock &vclk, vc::qtimestamp_t &qts);
+            void delete_edge_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge, vc::vclock &tdel);
+            void delete_edge(uint64_t thread_id, uint64_t edge_handle, uint64_t node_handle, vc::vclock &vclk, vc::qtimestamp_t &qts);
             // properties
-            void set_node_property_nonlocking(element::node *n,
+            void set_node_property_nonlocking(uint64_t thread_id, element::node *n,
                     std::string &key, std::string &value, vc::vclock &vclk);
-            void set_node_property(uint64_t node_handle,
+            void set_node_property(uint64_t thread_id, uint64_t node_handle,
                     std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk, vc::qtimestamp_t &qts);
-            void set_edge_property_nonlocking(element::node *n, uint64_t edge_handle,
+            void set_edge_property_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge_handle,
                     std::string &key, std::string &value, vc::vclock &vclk);
-            void set_edge_property(uint64_t node_handle, uint64_t edge_handle,
+            void set_edge_property(uint64_t thread_id, uint64_t node_handle, uint64_t edge_handle,
                     std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk, vc::qtimestamp_t &qts);
             uint64_t get_node_count();
             bool node_exists_nonlocking(uint64_t node_handle);
@@ -225,13 +229,18 @@ namespace db
         public:
             std::shared_ptr<po6::net::location> myloc;
             busybee_mta *bb; // Busybee instance used for sending and receiving messages
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
             busybee_returncode send(uint64_t loc, std::auto_ptr<e::buffer> buf);
+#pragma GCC diagnostic push
 
     };
 
     inline
     shard :: shard(uint64_t my_id)
-        : shard_id(my_id)
+        : sm_stub(this)
+        , shard_id(my_id)
+        , m_us(my_id)
         , thread_pool(NUM_THREADS - 1)
         , current_migr(false)
         , migr_token(false)
@@ -261,14 +270,14 @@ namespace db
 
     // Consistency methods
     inline void
-    shard :: increment_qts(uint64_t vt_id, uint64_t incr)
+    shard :: increment_qts(uint64_t thread_id, uint64_t vt_id, uint64_t incr)
     {
         hstub[thread_id]->increment_qts(vt_id, incr);
         thread_pool.increment_qts(vt_id, incr);
     }
 
     inline void
-    shard :: record_completed_tx(uint64_t vt_id, vc::vclock_t &tx_clk)
+    shard :: record_completed_tx(uint64_t thread_id, uint64_t vt_id, vc::vclock_t &tx_clk)
     {
         hstub[thread_id]->update_last_clocks(vt_id, tx_clk);
         thread_pool.record_completed_tx(vt_id, tx_clk);
@@ -385,7 +394,7 @@ namespace db
     }
 
     inline element::node*
-    shard :: create_node(uint64_t node_handle, vc::vclock &vclk, bool migrate, bool init_load=false)
+    shard :: create_node(uint64_t thread_id, uint64_t node_handle, vc::vclock &vclk, bool migrate, bool init_load=false)
     {
         element::node *new_node = new element::node(node_handle, vclk, &update_mutex);
         
@@ -420,7 +429,7 @@ namespace db
     }
 
     inline void
-    shard :: delete_node_nonlocking(element::node *n, vc::vclock &tdel)
+    shard :: delete_node_nonlocking(uint64_t thread_id, element::node *n, vc::vclock &tdel)
     {
         n->update_del_time(tdel);
         n->updated = true;
@@ -429,7 +438,7 @@ namespace db
     }
 
     inline void
-    shard :: delete_node(uint64_t node_handle, vc::vclock &tdel, vc::qtimestamp_t &qts)
+    shard :: delete_node(uint64_t thread_id, uint64_t node_handle, vc::vclock &tdel, vc::qtimestamp_t &qts)
     {
         element::node *n = acquire_node_write(node_handle, tdel.vt_id, qts[tdel.vt_id]);
         if (n == NULL) {
@@ -438,7 +447,7 @@ namespace db
             deferred_writes[node_handle].emplace_back(deferred_write(message::NODE_DELETE_REQ, tdel));
             migration_mutex.unlock();
         } else {
-            delete_node_nonlocking(n, tdel);
+            delete_node_nonlocking(thread_id, n, tdel);
             release_node(n);
             // record object for permanent deletion later on
             perm_del_mutex.lock();
@@ -448,7 +457,7 @@ namespace db
     }
 
     inline void
-    shard :: create_edge_nonlocking(element::node *n, uint64_t edge, uint64_t remote_node,
+    shard :: create_edge_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge, uint64_t remote_node,
             uint64_t remote_loc, vc::vclock &vclk, bool init_load=false)
     {
         element::edge *new_edge = new element::edge(edge, vclk, remote_loc, remote_node);
@@ -468,7 +477,7 @@ namespace db
     }
 
     inline void
-    shard :: create_edge(uint64_t edge_handle, uint64_t local_node,
+    shard :: create_edge(uint64_t thread_id, uint64_t edge_handle, uint64_t local_node,
             uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, vc::qtimestamp_t &qts)
     {
         element::node *n = acquire_node_write(local_node, vclk.vt_id, qts[vclk.vt_id]);
@@ -484,13 +493,13 @@ namespace db
             migration_mutex.unlock();
         } else {
             assert(n->get_handle() == local_node);
-            create_edge_nonlocking(n, edge_handle, remote_node, remote_loc, vclk);
+            create_edge_nonlocking(thread_id, n, edge_handle, remote_node, remote_loc, vclk);
             release_node(n);
         }
     }
 
     inline void
-    shard :: delete_edge_nonlocking(element::node *n, uint64_t edge, vc::vclock &tdel)
+    shard :: delete_edge_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge, vc::vclock &tdel)
     {
 #ifdef __WEAVER_DEBUG__
         assert(n->edge_handles.find(edge) != n->edge_handles.end());
@@ -505,7 +514,7 @@ namespace db
     }
 
     inline void
-    shard :: delete_edge(uint64_t edge_handle, uint64_t node_handle, vc::vclock &tdel, vc::qtimestamp_t &qts)
+    shard :: delete_edge(uint64_t thread_id, uint64_t edge_handle, uint64_t node_handle, vc::vclock &tdel, vc::qtimestamp_t &qts)
     {
         element::node *n = acquire_node_write(node_handle, tdel.vt_id, qts[tdel.vt_id]);
         if (n == NULL) {
@@ -516,7 +525,7 @@ namespace db
             dw.edge = edge_handle;
             migration_mutex.unlock();
         } else {
-            delete_edge_nonlocking(n, edge_handle, tdel);
+            delete_edge_nonlocking(thread_id, n, edge_handle, tdel);
             release_node(n);
             // record object for permanent deletion later on
             perm_del_mutex.lock();
@@ -526,7 +535,7 @@ namespace db
     }
 
     inline void
-    shard :: set_node_property_nonlocking(element::node *n,
+    shard :: set_node_property_nonlocking(uint64_t thread_id, element::node *n,
             std::string &key, std::string &value, vc::vclock &vclk)
     {
         common::property p(key, value, vclk);
@@ -536,7 +545,7 @@ namespace db
     }
 
     inline void
-    shard :: set_node_property(uint64_t node_handle,
+    shard :: set_node_property(uint64_t thread_id, uint64_t node_handle,
             std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk, vc::qtimestamp_t &qts)
     {
         element::node *n = acquire_node_write(node_handle, vclk.vt_id, qts[vclk.vt_id]);
@@ -549,13 +558,13 @@ namespace db
             dw.value = std::move(value);
             migration_mutex.unlock();
         } else {
-            set_node_property_nonlocking(n, *key, *value, vclk);
+            set_node_property_nonlocking(thread_id, n, *key, *value, vclk);
             release_node(n);
         }
     }
 
     inline void
-    shard :: set_edge_property_nonlocking(element::node *n, uint64_t edge_handle,
+    shard :: set_edge_property_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge_handle,
             std::string &key, std::string &value, vc::vclock &vclk)
     {
         db::element::edge *e = n->out_edges[edge_handle];
@@ -566,7 +575,7 @@ namespace db
     }
 
     inline void
-    shard :: set_edge_property(uint64_t node_handle, uint64_t edge_handle,
+    shard :: set_edge_property(uint64_t thread_id, uint64_t node_handle, uint64_t edge_handle,
             std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk, vc::qtimestamp_t &qts)
     {
         element::node *n = acquire_node_write(node_handle, vclk.vt_id, qts[vclk.vt_id]);
@@ -580,7 +589,7 @@ namespace db
             dw.value = std::move(value);
             migration_mutex.unlock();
         } else {
-            set_edge_property_nonlocking(n, edge_handle, *key, *value, vclk);
+            set_edge_property_nonlocking(thread_id, n, edge_handle, *key, *value, vclk);
             release_node(n);
         }
     }
@@ -801,6 +810,8 @@ namespace db
 
     // messaging methods
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     inline busybee_returncode
     shard :: send(uint64_t loc, std::auto_ptr<e::buffer> msg)
     {
@@ -810,6 +821,7 @@ namespace db
         }
         return ret;
     }
+#pragma GCC diagnostic push
 
     inline thread::unstarted_thread*
     get_read_thr(std::vector<thread::pqueue_t> &read_queues, std::vector<vc::vclock_t> &last_clocks)
@@ -887,10 +899,9 @@ namespace db
     // check all queues are ready to go
     // if yes, execute the earliest job, else sleep and wait for incoming jobs
     // "earliest" is decided by comparison functions using vector clocks and Kronos
-    void
+    inline void
     thread :: worker_thread_loop(thread::pool *tpool, uint64_t tid)
     {
-        db::thread_id = tid;
         thread::unstarted_thread *thr = NULL;
         po6::threads::cond &c = tpool->queue_cond;
         while (true) {
@@ -903,7 +914,7 @@ namespace db
             }
             tpool->queue_mutex.unlock();
             tpool->thread_loop_mutex.unlock();
-            (*thr->func)(thr->arg);
+            (*thr->func)(tid, thr->arg);
             // queue timestamp is incremented by the thread, upon finishing
             // because the decision to increment or not is based on thread-specific knowledge
             // moreover, when to increment can also be decided by thread only

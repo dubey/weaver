@@ -48,7 +48,7 @@ db::shard *db::thread::pool::S = NULL; // reinitialized in graph constructor
 void migrated_nbr_update(std::unique_ptr<message::message> msg);
 bool migrate_node_step1(db::element::node*, std::vector<uint64_t>&);
 void migrate_node_step2_req();
-void migrate_node_step2_resp(std::unique_ptr<message::message> msg);
+void migrate_node_step2_resp(uint64_t thread_id, std::unique_ptr<message::message> msg);
 bool check_step3();
 void migrate_node_step3();
 void migration_wrapper();
@@ -71,41 +71,41 @@ end_program(int param)
 
 
 inline void
-create_node(vc::vclock &t_creat, uint64_t node_handle)
+create_node(uint64_t thread_id, vc::vclock &t_creat, uint64_t node_handle)
 {
-    S->create_node(node_handle, t_creat, false);
+    S->create_node(thread_id, node_handle, t_creat, false);
 }
 
 inline void
-create_edge(vc::vclock &t_creat, vc::qtimestamp_t &qts, uint64_t edge_handle, uint64_t n1, uint64_t n2, uint64_t loc2)
+create_edge(uint64_t thread_id, vc::vclock &t_creat, vc::qtimestamp_t &qts, uint64_t edge_handle, uint64_t n1, uint64_t n2, uint64_t loc2)
 {
-    S->create_edge(edge_handle, n1, n2, loc2, t_creat, qts);
+    S->create_edge(thread_id, edge_handle, n1, n2, loc2, t_creat, qts);
 }
 
 inline void
-delete_node(vc::vclock &t_del, vc::qtimestamp_t &qts, uint64_t node_handle)
+delete_node(uint64_t thread_id, vc::vclock &t_del, vc::qtimestamp_t &qts, uint64_t node_handle)
 {
-    S->delete_node(node_handle, t_del, qts);
+    S->delete_node(thread_id, node_handle, t_del, qts);
 }
 
 inline void
-delete_edge(vc::vclock &t_del, vc::qtimestamp_t &qts, uint64_t edge_handle, uint64_t node_handle)
+delete_edge(uint64_t thread_id, vc::vclock &t_del, vc::qtimestamp_t &qts, uint64_t edge_handle, uint64_t node_handle)
 {
-    S->delete_edge(edge_handle, node_handle, t_del, qts);
+    S->delete_edge(thread_id, edge_handle, node_handle, t_del, qts);
 }
 
 inline void
-set_node_property(vc::vclock &vclk, vc::qtimestamp_t &qts, uint64_t node_handle, std::unique_ptr<std::string> key,
+set_node_property(uint64_t thread_id, vc::vclock &vclk, vc::qtimestamp_t &qts, uint64_t node_handle, std::unique_ptr<std::string> key,
     std::unique_ptr<std::string> value)
 {
-    S->set_node_property(node_handle, std::move(key), std::move(value), vclk, qts);
+    S->set_node_property(thread_id, node_handle, std::move(key), std::move(value), vclk, qts);
 }
 
 inline void
-set_edge_property(vc::vclock &vclk, vc::qtimestamp_t &qts, uint64_t edge_handle, uint64_t node_handle,
+set_edge_property(uint64_t thread_id, vc::vclock &vclk, vc::qtimestamp_t &qts, uint64_t edge_handle, uint64_t node_handle,
     std::unique_ptr<std::string> key, std::unique_ptr<std::string> value)
 {
-    S->set_edge_property(node_handle, edge_handle, std::move(key), std::move(value), vclk, qts);
+    S->set_edge_property(thread_id, node_handle, edge_handle, std::move(key), std::move(value), vclk, qts);
 }
 
 // parse the string 'line' as a uint64_t starting at index 'idx' till the first whitespace or end of string
@@ -260,14 +260,14 @@ load_graph(db::graph_file_format format, const char *graph_file)
                     if (loc0 == shard_id) {
                         n = S->acquire_node_nonlocking(node0);
                         if (n == NULL) {
-                            n = S->create_node(node0, zero_clk, false, true);
+                            n = S->create_node(0, node0, zero_clk, false, true);
                             node_map[node0] = shard_id;
                         }
-                        S->create_edge_nonlocking(n, edge_handle, node1, loc1, zero_clk, true);
+                        S->create_edge_nonlocking(0, n, edge_handle, node1, loc1, zero_clk, true);
                     }
                     if (loc1 == shard_id) {
                         if (!S->node_exists_nonlocking(node1)) {
-                            S->create_node(node1, zero_clk, false, true);
+                            S->create_node(0, node1, zero_clk, false, true);
                             node_map[node1] = shard_id;
                         }
                     }
@@ -307,7 +307,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                 if (loc == shard_id) {
                     n = S->acquire_node_nonlocking(node0);
                     if (n == NULL) {
-                        n = S->create_node(node0, zero_clk, false, true);
+                        n = S->create_node(0, node0, zero_clk, false, true);
                         node_map[node0] = shard_id;
                     }
                 }
@@ -346,9 +346,9 @@ load_graph(db::graph_file_format format, const char *graph_file)
                         WDEBUG << "Not found node " << node0 << std::endl;
                     }
                     assert(n != NULL);
-                    S->create_edge_nonlocking(n, edge_handle, node1, loc1, zero_clk, true);
+                    S->create_edge_nonlocking(0, n, edge_handle, node1, loc1, zero_clk, true);
                     for (auto &p: props) {
-                        S->set_edge_property_nonlocking(n, edge_handle, p.first, p.second, zero_clk);
+                        S->set_edge_property_nonlocking(0, n, edge_handle, p.first, p.second, zero_clk);
                     }
                 }
             }
@@ -413,7 +413,7 @@ migrated_nbr_ack(uint64_t from_loc, std::vector<uint64_t> &target_req_id, uint64
 }
 
 void
-unpack_migrate_request(void *req)
+unpack_migrate_request(uint64_t thread_id, void *req)
 {
     db::graph_request *request = (db::graph_request*)req;
 
@@ -423,7 +423,7 @@ unpack_migrate_request(void *req)
             break;
 
         case message::MIGRATE_SEND_NODE:
-            migrate_node_step2_resp(std::move(request->msg));
+            migrate_node_step2_resp(thread_id, std::move(request->msg));
             break;
 
         case message::MIGRATED_NBR_ACK: {
@@ -441,7 +441,7 @@ unpack_migrate_request(void *req)
 }
 
 void
-unpack_tx_request(void *req)
+unpack_tx_request(uint64_t thread_id, void *req)
 {
     db::graph_request *request = (db::graph_request*)req;
     uint64_t vt_id, tx_id;
@@ -455,7 +455,7 @@ unpack_tx_request(void *req)
     for (auto upd: tx.writes) {
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ:
-                create_node(vclk, upd->handle);
+                create_node(thread_id, vclk, upd->handle);
                 break;
 
             case transaction::EDGE_CREATE_REQ:
@@ -476,30 +476,30 @@ unpack_tx_request(void *req)
 
     // increment qts so that threadpool moves forward
     // since tx order has already been established, conflicting txs will be processed in correct order
-    S->increment_qts(vt_id, tx.writes.size());
+    S->increment_qts(thread_id, vt_id, tx.writes.size());
 
     // apply all writes
     // acquire_node_write blocks if a preceding write has not been executed
     for (auto upd: tx.writes) {
         switch (upd->type) {
             case transaction::EDGE_CREATE_REQ:
-                create_edge(vclk, qts, upd->handle, upd->elem1, upd->elem2, upd->loc2);
+                create_edge(thread_id, vclk, qts, upd->handle, upd->elem1, upd->elem2, upd->loc2);
                 break;
 
             case transaction::NODE_DELETE_REQ:
-                delete_node(vclk, qts, upd->elem1);
+                delete_node(thread_id, vclk, qts, upd->elem1);
                 break;
 
             case transaction::EDGE_DELETE_REQ:
-                delete_edge(vclk, qts, upd->elem1, upd->elem2);
+                delete_edge(thread_id, vclk, qts, upd->elem1, upd->elem2);
                 break;
 
             case transaction::NODE_SET_PROPERTY:
-                set_node_property(vclk, qts, upd->elem1, std::move(upd->key), std::move(upd->value));
+                set_node_property(thread_id, vclk, qts, upd->elem1, std::move(upd->key), std::move(upd->value));
                 break;
 
             case transaction::EDGE_SET_PROPERTY:
-                set_edge_property(vclk, qts, upd->elem1, upd->elem2, std::move(upd->key), std::move(upd->value));
+                set_edge_property(thread_id, vclk, qts, upd->elem1, upd->elem2, std::move(upd->key), std::move(upd->value));
                 break;
 
             default:
@@ -508,7 +508,7 @@ unpack_tx_request(void *req)
     }
 
     // increment qts for next writes
-    S->record_completed_tx(vt_id, vclk.clock);
+    S->record_completed_tx(thread_id, vt_id, vclk.clock);
     delete request;
 
     // send tx confirmation to coordinator
@@ -520,14 +520,14 @@ unpack_tx_request(void *req)
 // process nop
 // migration-related checks, and possibly initiating migration
 inline void
-nop(void *noparg)
+nop(uint64_t thread_id, void *noparg)
 {
     message::message msg;
     db::nop_data *nop_arg = (db::nop_data*)noparg;
     bool check_move_migr, check_init_migr, check_migr_step3;
     
     // increment qts
-    S->increment_qts(nop_arg->vt_id, 1);
+    S->increment_qts(thread_id, nop_arg->vt_id, 1);
     
     // note done progs for state clean up
     S->add_done_requests(nop_arg->done_reqs);
@@ -599,7 +599,7 @@ nop(void *noparg)
     S->permanent_delete_loop(nop_arg->vt_id, nop_arg->outstanding_progs != 0);
 
     // record clock; reads go through
-    S->record_completed_tx(nop_arg->vt_id, nop_arg->vclk.clock);
+    S->record_completed_tx(thread_id, nop_arg->vt_id, nop_arg->vclk.clock);
 
     // ack to VT
     message::prepare_message(msg, message::VT_NOP_ACK, shard_id, cur_node_count);
@@ -691,7 +691,7 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& handles, std::vec
 }
 
 void
-unpack_and_fetch_context(void *req)
+unpack_and_fetch_context(uint64_t, void *req)
 {
     db::graph_request *request = (db::graph_request *) req;
     std::vector<uint64_t> handles;
@@ -970,7 +970,7 @@ inline void node_prog_loop(
 }
 
 void
-unpack_node_program(void *req)
+unpack_node_program(uint64_t, void *req)
 {
     db::graph_request *request = (db::graph_request *) req;
     node_prog::prog_type pType;
@@ -982,7 +982,7 @@ unpack_node_program(void *req)
 }
 
 void
-unpack_context_reply(void *req)
+unpack_context_reply(uint64_t, void *req)
 {
     db::graph_request *request = (db::graph_request *) req;
     node_prog::prog_type pType;
@@ -1114,7 +1114,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
 
 // delete all in-edges for a permanently deleted node
 inline void
-update_deleted_node(void *node)
+update_deleted_node(uint64_t, void *node)
 {
     uint64_t *node_handle = (uint64_t*)node;
     std::unordered_set<uint64_t> nbrs;
@@ -1258,7 +1258,7 @@ migrate_node_step2_req()
 // apply buffered reads and writes to node
 // update nbrs of migrated nbrs
 void
-migrate_node_step2_resp(std::unique_ptr<message::message> msg)
+migrate_node_step2_resp(uint64_t thread_id, std::unique_ptr<message::message> msg)
 {
     // unpack and place node
     uint64_t from_loc;
@@ -1268,7 +1268,7 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
     // create a new node, unpack the message
     vc::vclock dummy_clock;
     message::unpack_message(*msg, message::MIGRATE_SEND_NODE, node_handle);
-    n = S->create_node(node_handle, dummy_clock, true); // node will be acquired on return
+    n = S->create_node(thread_id, node_handle, dummy_clock, true); // node will be acquired on return
     try {
         message::unpack_message(*msg, message::MIGRATE_SEND_NODE, node_handle, from_loc, *n);
     } catch (std::bad_alloc& ba) {
@@ -1290,15 +1290,15 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
         for (auto &dw: S->deferred_writes[node_handle]) {
             switch (dw.type) {
                 case message::NODE_DELETE_REQ:
-                    S->delete_node_nonlocking(n, dw.vclk);
+                    S->delete_node_nonlocking(thread_id, n, dw.vclk);
                     break;
 
                 case message::EDGE_CREATE_REQ:
-                    S->create_edge_nonlocking(n, dw.edge, dw.remote_node, dw.remote_loc, dw.vclk);
+                    S->create_edge_nonlocking(thread_id, n, dw.edge, dw.remote_node, dw.remote_loc, dw.vclk);
                     break;
 
                 case message::EDGE_DELETE_REQ:
-                    S->delete_edge_nonlocking(n, dw.edge, dw.vclk);
+                    S->delete_edge_nonlocking(thread_id, n, dw.edge, dw.vclk);
                     break;
 
                 default:

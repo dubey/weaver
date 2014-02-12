@@ -114,7 +114,10 @@ namespace coordinator
 
         public:
             timestamper(uint64_t id);
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
             busybee_returncode send(uint64_t shard_id, std::auto_ptr<e::buffer> buf);
+#pragma GCC diagnostic push
             bool unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id, int tid);
             //void clean_nmap_space();
             uint64_t generate_id();
@@ -158,6 +161,8 @@ namespace coordinator
         to_nop.set(); // set to_nop to 1 for each shard
     }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     inline busybee_returncode
     timestamper :: send(uint64_t shard_id, std::auto_ptr<e::buffer> buf)
     {
@@ -167,6 +172,7 @@ namespace coordinator
         }
         return ret;
     }
+#pragma GCC diagnostic pop
 
     // return false if the main node in the transaction is not found in node map
     // this is not a complete sanity check, e.g. create_edge(n1, n2) will succeed even if n2 is garbage

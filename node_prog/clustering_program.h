@@ -229,7 +229,7 @@ namespace node_prog
         return (double) numerator / denominator;
     }
 
-    std::vector<std::pair<db::element::remote_node, clustering_params>> 
+    inline std::vector<std::pair<db::element::remote_node, clustering_params>> 
     clustering_node_program(uint64_t,
             db::element::node &n,
             db::element::remote_node &rn,
