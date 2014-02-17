@@ -24,11 +24,13 @@
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
 
-#include "common/busybee_infra.h"
+#include "common/ids.h"
+#include "common/clock.h"
 #include "common/vclock.h"
 #include "common/message.h"
 #include "common/transaction.h"
-#include "common/clock.h"
+#include "common/configuration.h"
+#include "common/comm_wrapper.h"
 #include "common/nmap_stub.h"
 //#include "node_prog/triangle_program.h"
 
@@ -70,6 +72,7 @@ namespace coordinator
     {
         public:
             uint64_t vt_id, shifted_id, id_gen; // this vector timestamper's id
+            server_id server;
             // timestamper state
             uint64_t loc_gen;
             vc::vclock vclk; // vector clock
@@ -109,15 +112,10 @@ namespace coordinator
             // permanent deletion
             // daemon
             // messaging
-            std::shared_ptr<po6::net::location> myloc;
-            busybee_mta *bb;
+            common::comm_wrapper comm;
 
         public:
             timestamper(uint64_t id);
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-            busybee_returncode send(uint64_t shard_id, std::auto_ptr<e::buffer> buf);
-#pragma GCC diagnostic push
             bool unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id, int tid);
             //void clean_nmap_space();
             uint64_t generate_id();
@@ -128,6 +126,7 @@ namespace coordinator
         : vt_id(id)
         , shifted_id(id << (64-ID_BITS))
         , id_gen(0)
+        , server(id)
         , loc_gen(0)
         , vclk(id, 0)
         , qts(NUM_SHARDS, 0)
@@ -143,9 +142,12 @@ namespace coordinator
         , shard_node_count(NUM_SHARDS, 0)
         , msg_count(0)
         , msg_count_acks(0)
+        , comm(server.get(), NUM_THREADS)
     {
-        // initialize array of server locations
-        initialize_busybee(bb, vt_id, myloc, NUM_THREADS);
+        // initialize communication layer
+        // TODO this is wrong
+        configuration config;
+        comm.init(config);
         //bb->set_timeout(VT_TIMEOUT_MILL);
         nop_time_millis = wclock::get_time_elapsed_millis(tspec);
         nop_time_nanos = wclock::get_time_elapsed(tspec);
@@ -160,19 +162,6 @@ namespace coordinator
         }
         to_nop.set(); // set to_nop to 1 for each shard
     }
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    inline busybee_returncode
-    timestamper :: send(uint64_t shard_id, std::auto_ptr<e::buffer> buf)
-    {
-        busybee_returncode ret;
-        if ((ret = bb->send(shard_id, buf)) != BUSYBEE_SUCCESS) {
-            WDEBUG << "message sending error: " << ret << std::endl;
-        }
-        return ret;
-    }
-#pragma GCC diagnostic pop
 
     // return false if the main node in the transaction is not found in node map
     // this is not a complete sanity check, e.g. create_edge(n1, n2) will succeed even if n2 is garbage

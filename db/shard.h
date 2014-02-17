@@ -29,8 +29,9 @@
 #include "common/ids.h"
 #include "common/vclock.h"
 #include "common/message.h"
-#include "common/busybee_infra.h"
+#include "common/comm_wrapper.h"
 #include "common/event_order.h"
+#include "common/configuration.h"
 #include "element/element.h"
 #include "element/node.h"
 #include "element/edge.h"
@@ -107,12 +108,15 @@ namespace db
     class shard
     {
         public:
-            shard(uint64_t my_id);
+            shard(uint64_t shard, uint64_t server);
+            void init();
+            void reconfigure();
 
             // Mutexes
             po6::threads::mutex update_mutex // shard update mutex
                 , edge_map_mutex
-                , perm_del_mutex;
+                , perm_del_mutex
+                , config_mutex;
         private:
             po6::threads::mutex clock_mutex; // vector clock/queue timestamp mutex
         public:
@@ -124,8 +128,12 @@ namespace db
             // Hyperdex stub
             std::vector<hyper_stub*> hstub;
 
-            // Server manager link
+            // Server manager
             server_manager_link_wrapper sm_stub;
+            configuration config;
+            std::vector<uint64_t> server_backups[NUM_VTS + NUM_SHARDS];
+            bool active_backup, first_config;
+            po6::threads::cond backup_cond, first_config_cond;
 
             // Consistency
         public:
@@ -227,20 +235,22 @@ namespace db
 
             // Messaging infrastructure
         public:
-            std::shared_ptr<po6::net::location> myloc;
-            busybee_mta *bb; // Busybee instance used for sending and receiving messages
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-            busybee_returncode send(uint64_t loc, std::auto_ptr<e::buffer> buf);
-#pragma GCC diagnostic push
+            common::comm_wrapper comm;
+            //std::shared_ptr<po6::net::location> myloc;
+            //weaver_mapper *wmap;
+            //busybee_mta *bb; // Busybee instance used for sending and receiving messages
 
     };
 
     inline
-    shard :: shard(uint64_t my_id)
+    shard :: shard(uint64_t shard, uint64_t server)
         : sm_stub(this)
-        , shard_id(my_id)
-        , m_us(my_id)
+        , active_backup(false)
+        , first_config(false)
+        , backup_cond(&config_mutex)
+        , first_config_cond(&config_mutex)
+        , shard_id(shard)
+        , m_us(server)
         , thread_pool(NUM_THREADS - 1)
         , current_migr(false)
         , migr_token(false)
@@ -256,15 +266,59 @@ namespace db
         , max_done_clk(NUM_VTS, vc::vclock_t())
         , msg_count(0)
         , prog_state()
+        , comm(m_us.get(), 1)
     {
-        thread::pool::S = this;
-        initialize_busybee(bb, shard_id, myloc);
-        order::kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT);
-        order::call_times = new std::list<uint64_t>();
         assert(NUM_VTS == KRONOS_NUM_VTS);
+        thread::pool::S = this;
         message::prog_state = &prog_state;
         for (int i = 0; i < NUM_THREADS; i++) {
             hstub.push_back(new hyper_stub(shard_id));
+        }
+
+        // server management
+        for (uint64_t i = 0; i < NUM_VTS; i++) {
+            server_backups[i].push_back(i);
+        }
+        for (uint64_t i = NUM_VTS; i < NUM_VTS + NUM_SHARDS; i++) {
+            for (uint64_t j = 0; j < NUM_BACKUPS+1; j++) {
+                server_backups[i].push_back(i + j*NUM_SHARDS);
+            }
+        }
+    }
+
+    // initialize: msging layer
+    //           , chronos client
+    //           , hyperdex stub
+    // caution: assume holding config_mutex
+    inline void
+    shard :: init()
+    {
+        comm.init(config);
+        for (int i = 0; i < NUM_THREADS; i++) {
+            hstub.back()->init();
+        }
+        order::kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT);
+        order::call_times = new std::list<uint64_t>();
+    }
+
+    // reconfigure cluster according to new configuration
+    // caution: assume holding config_mutex
+    inline void
+    shard :: reconfigure()
+    {
+        WDEBUG << "Cluster reconfigure triggered\n";
+        for (uint64_t i = 0; i < NUM_VTS + NUM_SHARDS*(1+NUM_BACKUPS); i++) {
+            server::state_t st = config.get_state(server_id(i));
+            if (st != server::AVAILABLE) {
+                WDEBUG << "Server " << i << " is in trouble, has state " << st << std::endl;
+            } else {
+                WDEBUG << "Server " << i << " is healthy, has state " << st << std::endl;
+            }
+        }
+        if (comm.reconfigure(config) == m_us.get()) {
+            // this server is now primary for the shard
+            active_backup = true;
+            backup_cond.signal();
         }
     }
 
@@ -696,7 +750,7 @@ namespace db
         if (n->state != element::node::mode::MOVED) {
             for (uint64_t shard = SHARD_ID_INCR; shard < SHARD_ID_INCR + NUM_SHARDS; shard++) {
                 message::prepare_message(msg, message::PERMANENTLY_DELETED_NODE, n->get_handle());
-                send(shard, msg.buf);
+                comm.send(shard, msg.buf);
             }
             for (auto &e: n->out_edges) {
                 delete e.second;
@@ -743,7 +797,7 @@ namespace db
             message::message msg;
             message::prepare_message(msg, message::MIGRATED_NBR_ACK, shard_id, max_prog_id,
                     shard_node_count[shard_id-SHARD_ID_INCR]);
-            send(old_loc, msg.buf);
+            comm.send(old_loc, msg.buf);
         } else {
             for (int i = 0; i < NUM_VTS; i++) {
                 if (target_prog_id[i] < max_prog_id[i]) {
@@ -809,19 +863,6 @@ namespace db
     }
 
     // messaging methods
-
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    inline busybee_returncode
-    shard :: send(uint64_t loc, std::auto_ptr<e::buffer> msg)
-    {
-        busybee_returncode ret;
-        if ((ret = bb->send(loc, msg)) != BUSYBEE_SUCCESS) {
-            WDEBUG << "msg send error: " << ret << std::endl;
-        }
-        return ret;
-    }
-#pragma GCC diagnostic push
 
     inline thread::unstarted_thread*
     get_read_thr(std::vector<thread::pqueue_t> &read_queues, std::vector<vc::vclock_t> &last_clocks)

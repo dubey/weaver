@@ -87,7 +87,10 @@ class server_manager_link_wrapper
 
     private:
         shard* m_shard;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         std::auto_ptr<server_manager_link> m_sm;
+#pragma GCC diagnostic pop
         rpc_map_t m_rpcs;
         po6::threads::mutex m_mtx;
         po6::threads::cond m_cond;

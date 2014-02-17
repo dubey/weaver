@@ -95,6 +95,7 @@ weaver_server_manager_create(struct replicant_state_machine_context* ctx)
         fprintf(replicant_state_machine_log_stream(ctx), "memory allocation failed\n");
     }
 
+    fprintf(replicant_state_machine_log_stream(ctx), "created server manager object\n");
     return c;
 }
 

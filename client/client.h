@@ -23,6 +23,7 @@
 #include "common/message.h"
 #include "common/message_tx_client.h"
 #include "common/property.h"
+#include "common/comm_wrapper.h"
 #include "transaction.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/reach_program.h"
@@ -37,8 +38,7 @@ namespace client
 
         private:
             uint64_t myid, shifted_id, vtid;
-            std::shared_ptr<po6::net::location> myloc;
-            busybee_mta *client_bb;
+            common::comm_wrapper comm;
             std::unordered_map<uint64_t, tx_list_t> tx_map;
             uint64_t tx_id_ctr, temp_handle_ctr;
 
@@ -79,8 +79,9 @@ namespace client
         , vtid(vt_id)
         , tx_id_ctr(0)
         , temp_handle_ctr(0)
+        , comm(my_id, 1)
     {
-        initialize_busybee(client_bb, myid, myloc);
+        comm.init();
     }
 
     inline
@@ -317,9 +318,7 @@ namespace client
     inline void
     client :: send_coord(std::auto_ptr<e::buffer> buf)
     {
-        busybee_returncode ret;
-        if ((ret = client_bb->send(vtid, buf)) != BUSYBEE_SUCCESS) {
-            WDEBUG << "msg send error: " << ret << std::endl;
+        if (comm.send(vtid, buf) != BUSYBEE_SUCCESS) {
             return;
         }
     }
@@ -330,7 +329,7 @@ namespace client
         busybee_returncode ret;
         uint64_t sender;
         while (true) {
-            ret = client_bb->recv(&sender, buf);
+            ret = comm.recv(&sender, buf);
             switch (ret) {
                 case BUSYBEE_SUCCESS:
                     return ret;

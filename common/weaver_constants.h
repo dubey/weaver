@@ -57,6 +57,10 @@
 // migration
 #define START_MIGR_ID SHARD_ID_INCR // first shard to get migration token
 #define SHARD_CAP (360000ULL/NUM_SHARDS)
+// fault tolerance
+#define NUM_BACKUPS 1
+#define SERVER_MANAGER_IPADDR "127.0.0.1"
+#define SERVER_MANAGER_PORT 2002
 //#define WEAVER_CLDG // defined if communication-based LDG, false otherwise
 //#define WEAVER_MSG_COUNT // defined if client msg count call will take place
 // coordinator

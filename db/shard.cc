@@ -514,7 +514,7 @@ unpack_tx_request(uint64_t thread_id, void *req)
     // send tx confirmation to coordinator
     message::message conf_msg;
     message::prepare_message(conf_msg, message::TX_DONE, tx_id);
-    S->send(vt_id, conf_msg.buf);
+    S->comm.send(vt_id, conf_msg.buf);
 }
 
 // process nop
@@ -555,7 +555,7 @@ nop(uint64_t thread_id, void *noparg)
             }
             std::cerr << std::endl;
             message::prepare_message(msg, message::MIGRATION_TOKEN);
-            S->send(S->migr_vt, msg.buf);
+            S->comm.send(S->migr_vt, msg.buf);
             S->migrated = true;
             S->migr_token = false;
         } else if (S->migr_chance++ > 2) {
@@ -603,7 +603,7 @@ nop(uint64_t thread_id, void *noparg)
 
     // ack to VT
     message::prepare_message(msg, message::VT_NOP_ACK, shard_id, cur_node_count);
-    S->send(nop_arg->vt_id, msg.buf);
+    S->comm.send(nop_arg->vt_id, msg.buf);
     free(nop_arg);
 }
 
@@ -707,7 +707,7 @@ unpack_and_fetch_context(uint64_t, void *req)
 
     message::message m;
     message::prepare_message(m, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_pair, contexts);
-    S->send(from_shard, m.buf);
+    S->comm.send(from_shard, m.buf);
     delete request;
 }
 
@@ -804,7 +804,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         for (auto& shard_list_pair : contexts_to_fetch){
             std::unique_ptr<message::message> m(new message::message()); // XXX can we re-use messages?
             message::prepare_message(*m, message::NODE_CONTEXT_FETCH, np.prog_type_recvd, np.req_id, np.vt_id, np.req_vclock, *cache_entry_time, lookup_pair, shard_list_pair.second, S->shard_id);
-            S->send(shard_list_pair.first, m->buf);
+            S->comm.send(shard_list_pair.first, m->buf);
         }
 
         fetch_node_cache_contexts(S->shard_id, local_contexts_to_fetch, fstate->prog_state.cache_value->context, *cache_entry_time, *np.req_vclock);
@@ -863,7 +863,7 @@ inline void node_prog_loop(
                 message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, fwd_node_params);
                 uint64_t new_loc = node->new_loc;
                 S->release_node(node);
-                S->send(new_loc, m->buf);
+                S->comm.send(new_loc, m->buf);
             } else { // node does exist
                 assert(node->state == db::element::node::mode::STABLE);
                 if (MAX_CACHE_ENTRIES)
@@ -922,7 +922,7 @@ inline void node_prog_loop(
                         std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
                         std::unique_ptr<message::message> m(new message::message());
                         message::prepare_message(*m, message::NODE_PROG_RETURN, np.prog_type_recvd, np.req_id, temppair);
-                        S->send(np.vt_id, m->buf);
+                        S->comm.send(np.vt_id, m->buf);
                     } else {
                         batched_node_progs[loc].emplace_back(res.first.handle, std::move(res.second), this_node);
 #ifdef WEAVER_CLDG
@@ -945,7 +945,7 @@ inline void node_prog_loop(
                         && next_loc != S->shard_id) {
                         std::unique_ptr<message::message> m(new message::message());
                         message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, batched_node_progs[next_loc]);
-                        S->send(next_loc, m->buf);
+                        S->comm.send(next_loc, m->buf);
                         batched_node_progs[next_loc].clear();
                         msg_count++;
                     }
@@ -1251,7 +1251,7 @@ migrate_node_step2_req()
     assert(n != NULL);
     message::prepare_message(msg, message::MIGRATE_SEND_NODE, S->migr_node, shard_id, *n);
     S->release_node(n);
-    S->send(S->migr_shard, msg.buf);
+    S->comm.send(S->migr_shard, msg.buf);
 }
 
 // receive and place node which has been migrated to this shard
@@ -1314,7 +1314,7 @@ migrate_node_step2_resp(uint64_t thread_id, std::unique_ptr<message::message> ms
             continue;
         }
         message::prepare_message(*msg, message::MIGRATED_NBR_UPDATE, node_handle, from_loc, shard_id);
-        S->send(upd_shard, msg->buf);
+        S->comm.send(upd_shard, msg->buf);
     }
     n->state = db::element::node::mode::STABLE;
 
@@ -1532,14 +1532,13 @@ shard_daemon_end()
     } else {
         next_id = shard_id + 1;
     }
-    S->send(next_id, msg.buf);
+    S->comm.send(next_id, msg.buf);
 }
 
 // server msg recv loop for the shard server
 void
 msgrecv_loop()
 {
-    busybee_returncode ret;
     uint64_t sender, vt_id, req_id;
     uint32_t code;
     enum message::msg_type mtype;
@@ -1551,8 +1550,7 @@ msgrecv_loop()
     vc::qtimestamp_t qts;
 
     while (true) {
-        if ((ret = S->bb->recv(&sender, &rec_msg->buf)) != BUSYBEE_SUCCESS) {
-            WDEBUG << "msg recv error: " << ret << " at shard " << S->shard_id << std::endl;
+        if (S->comm.recv(&sender, &rec_msg->buf) != BUSYBEE_SUCCESS) {
             continue;
         }
         rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
@@ -1666,7 +1664,7 @@ msgrecv_loop()
                 message::prepare_message(*rec_msg, message::MSG_COUNT, shard_id, S->msg_count);
                 S->msg_count = 0;
                 S->update_mutex.unlock();
-                S->send(vt_id, rec_msg->buf);
+                S->comm.send(vt_id, rec_msg->buf);
                 break;
             }
 
@@ -1679,19 +1677,120 @@ msgrecv_loop()
     }
 }
 
+void
+server_manager_link_loop(po6::net::hostname sm_host)
+{
+    // Most of the following code has been 'borrowed' from
+    // Robert Escriva's HyperDex.
+    // see https://github.com/rescrv/HyperDex for the original code.
+
+    S->sm_stub.set_server_manager_address(sm_host.address.c_str(), sm_host.port);
+
+    if (!S->sm_stub.register_id(S->m_us, *S->comm.get_loc()))
+    {
+        return;
+    }
+
+    bool cluster_jump = false;
+
+    while (!S->sm_stub.should_exit())
+    {
+        if (!S->sm_stub.maintain_link())
+        {
+            continue;
+        }
+
+        const configuration& old_config(S->config);
+        const configuration& new_config(S->sm_stub.config());
+
+        if (old_config.cluster() != 0 &&
+            old_config.cluster() != new_config.cluster())
+        {
+            cluster_jump = true;
+            break;
+        }
+
+        if (old_config.version() > new_config.version())
+        {
+            WDEBUG << "received new configuration version=" << new_config.version()
+                   << " that's older than our current configuration version="
+                   << old_config.version();
+            continue;
+        }
+        // if old_config.version == new_config.version, still fetch
+
+        S->config_mutex.lock();
+        S->config = new_config;
+        if (!S->first_config) {
+            S->first_config = true;
+            S->first_config_cond.signal();
+        } else {
+            S->reconfigure();
+        }
+        S->config_mutex.unlock();
+
+        // let the coordinator know we've moved to this config
+        S->sm_stub.config_ack(new_config.version());
+    }
+
+    if (cluster_jump)
+    {
+        WDEBUG << "\n================================================================================\n"
+               << "Exiting because the server manager changed on us.\n"
+               << "This is most likely an operations error."
+               << "================================================================================";
+    }
+    else if (S->sm_stub.should_exit() && !S->sm_stub.config().exists(S->m_us))
+    {
+        WDEBUG << "\n================================================================================\n"
+               << "Exiting because the server manager says it doesn't know about this node.\n"
+               << "================================================================================";
+    }
+}
+
 int
 main(int argc, char *argv[])
 {
     signal(SIGINT, end_program);
-    if (argc != 2 && argc != 4) {
-        WDEBUG << "Usage: " << argv[0] << " <myid> [<graph_file_format> <graph_file_name>]" << std::endl;
+    signal(SIGHUP, end_program);
+    signal(SIGTERM, end_program);
+    if (argc < 2 && argc > 4) {
+        WDEBUG << "Usage,  primary shard: " << argv[0] << " <myid>" << std::endl
+               << "         backup shard: " << argv[0] << " <myid> <backup_number>" << std::endl
+               << " primary bulk loading: " << argv[0] << " <myid> <graph_file_format> <graph_file_name>" << std::endl;
         return -1;
     }
+
+    // shard setup
     uint64_t id = atoi(argv[1]);
     shard_id = id;
-    S = new db::shard(id);
+    if (argc == 3) {
+        // backup shard
+        uint64_t backup_num = atoi(argv[2]);
+        S = new db::shard(id, backup_num);
+    } else {
+        S = new db::shard(id, id);
+    }
+    // server manager link
+    std::thread sm_thr(server_manager_link_loop,
+        po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT));
+    sm_thr.detach();
+
+    S->config_mutex.lock();
+
+    // wait for first config to arrive from server_manager
+    while (!S->first_config) {
+        S->first_config_cond.wait();
+    }
+
+    // registered this server with server_manager, config has fairly recent value
+    // go ahead and initialize shard
+    S->init();
+
+    S->config_mutex.unlock();
+
+    // bulk loading
     if (argc == 4) {
-        // bulk loading
         db::graph_file_format format = db::SNAP;
         if (strcmp(argv[2], "tsv") == 0) {
             format = db::TSV;
@@ -1713,11 +1812,23 @@ main(int argc, char *argv[])
         load_time = wclock::get_time_elapsed(ts) - load_time;
         message::message msg;
         message::prepare_message(msg, message::LOADED_GRAPH, load_time);
-        S->send(SHARD_ID_INCR, msg.buf);
+        S->comm.send(SHARD_ID_INCR, msg.buf);
     }
-    std::cout << "Weaver: shard instance " << S->shard_id << std::endl;
+
+    if (argc == 3) {
+        S->config_mutex.lock();
+        while (!S->active_backup) {
+            S->backup_cond.wait();
+        }
+        S->config_mutex.unlock();
+        WDEBUG << "backup " << atoi(argv[2]) << " now primary for shard " << shard_id << std::endl;
+    } else {
+        std::cout << "Weaver: shard instance " << S->shard_id << std::endl;
+    }
 
     msgrecv_loop();
 
     return 0;
 }
+
+#undef __WEAVER_DEBUG__

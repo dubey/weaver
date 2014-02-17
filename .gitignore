@@ -7,6 +7,8 @@
 *.sh
 *.depend
 *.out
+*.lo
+*.la
 */*.[0-9][0-9]*
 */*.eps
 */*.pdf

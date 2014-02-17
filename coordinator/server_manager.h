@@ -120,7 +120,10 @@ class server_manager
         uint64_t m_config_stable_through;
         server_barrier m_config_stable_barrier;
         // cached config
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         std::auto_ptr<e::buffer> m_latest_config;
+#pragma GCC diagnostic pop
 
     private:
         server_manager(const server_manager&);

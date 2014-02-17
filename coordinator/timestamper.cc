@@ -70,7 +70,7 @@ begin_transaction(transaction::pending_tx &tx)
             tx_vec[i].timestamp = tx.timestamp;
             tx_vec[i].id = tx.id;
             message::prepare_message(msg, message::TX_INIT, vt_id, tx.timestamp, tx_vec[i].writes.at(0)->qts, tx.id, tx_vec[i].writes);
-            vts->send(tx_vec[i].writes.at(0)->loc1, msg.buf);
+            vts->comm.send(tx_vec[i].writes.at(0)->loc1, msg.buf);
         }
     }
 }
@@ -87,7 +87,7 @@ end_transaction(uint64_t tx_id)
         vts->mutex.unlock();
         message::message msg;
         message::prepare_message(msg, message::CLIENT_TX_DONE);
-        vts->send(client_id, msg.buf);
+        vts->comm.send(client_id, msg.buf);
     } else {
         vts->mutex.unlock();
     }
@@ -168,7 +168,7 @@ timer_function()
                     message::prepare_message(msg, message::VT_NOP, vt_id, vclk, qts, req_id,
                         done_reqs[shard_id], max_done_id, max_done_clk,
                         num_outstanding_progs, vts->shard_node_count);
-                    vts->send(shard_id + SHARD_ID_INCR, msg.buf);
+                    vts->comm.send(shard_id + SHARD_ID_INCR, msg.buf);
                 }
             }
             vts->to_nop.reset();
@@ -188,7 +188,7 @@ timer_function()
                     continue;
                 }
                 message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, vclk.clock[vt_id]);
-                vts->send(i, msg.buf);
+                vts->comm.send(i, msg.buf);
             }
         }
 
@@ -265,7 +265,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     message::message msg_to_send;
     for (auto &batch_pair : initial_batches) {
         message::prepare_message(msg_to_send, message::NODE_PROG, pType, global_req, vt_id, req_timestamp, req_id, batch_pair.second);
-        vts->send(batch_pair.first, msg_to_send.buf);
+        vts->comm.send(batch_pair.first, msg_to_send.buf);
     }
 }
 
@@ -319,9 +319,8 @@ server_loop(int thread_id)
 
     while (true) {
         msg.reset(new message::message());
-        ret = vts->bb->recv(&sender, &msg->buf);
-        if (ret != BUSYBEE_SUCCESS && ret != BUSYBEE_TIMEOUT) {
-            WDEBUG << "msg recv error: " << ret << std::endl;
+        ret = vts->comm.recv(&sender, &msg->buf);
+        if (ret != BUSYBEE_SUCCESS) {
             continue;
         } else {
             // good to go, unpack msg
@@ -336,7 +335,7 @@ server_loop(int thread_id)
                     transaction::pending_tx tx;
                     if (!vts->unpack_tx(*msg, tx, sender, thread_id)) {
                         message::prepare_message(*msg, message::CLIENT_TX_FAIL);
-                        vts->send(sender, msg->buf);
+                        vts->comm.send(sender, msg->buf);
                     } else {
                         begin_transaction(tx);
                     }
@@ -350,7 +349,7 @@ server_loop(int thread_id)
                     vts->vclk.update_clock(rec_vtid, rec_clock);
                     vts->mutex.unlock();
                     message::prepare_message(*msg, message::VT_CLOCK_UPDATE_ACK);
-                    vts->send(rec_vtid, msg->buf);
+                    vts->comm.send(rec_vtid, msg->buf);
                     break;
                 }
 
@@ -377,7 +376,7 @@ server_loop(int thread_id)
                     vts->mutex.unlock();
                     for (uint64_t i = SHARD_ID_INCR; i < (SHARD_ID_INCR + NUM_SHARDS); i++) {
                         message::prepare_message(*msg, message::MSG_COUNT, vt_id);
-                        vts->send(i, msg->buf);
+                        vts->comm.send(i, msg->buf);
                     }
                     break;
                 }
@@ -386,7 +385,7 @@ server_loop(int thread_id)
                     vts->periodic_update_mutex.lock();
                     message::prepare_message(*msg, message::NODE_COUNT_REPLY, vts->shard_node_count);
                     vts->periodic_update_mutex.unlock();
-                    vts->send(sender, msg->buf);
+                    vts->comm.send(sender, msg->buf);
                     break;
                 }
 
@@ -413,7 +412,7 @@ server_loop(int thread_id)
                 case message::START_MIGR: {
                     uint64_t hops = MAX_UINT64;
                     message::prepare_message(*msg, message::MIGRATION_TOKEN, hops, vt_id);
-                    vts->send(START_MIGR_ID, msg->buf); 
+                    vts->comm.send(START_MIGR_ID, msg->buf); 
                     break;
                 }
 
@@ -423,7 +422,7 @@ server_loop(int thread_id)
                     vts->migr_client = sender;
                     vts->mutex.unlock();
                     message::prepare_message(*msg, message::MIGRATION_TOKEN, hops, vt_id);
-                    vts->send(START_MIGR_ID, msg->buf);
+                    vts->comm.send(START_MIGR_ID, msg->buf);
                     break;
                 }
 
@@ -432,7 +431,7 @@ server_loop(int thread_id)
                     uint64_t client = vts->migr_client;
                     vts->mutex.unlock();
                     message::prepare_message(*msg, message::DONE_MIGR);
-                    vts->send(client, msg->buf);
+                    vts->comm.send(client, msg->buf);
                     WDEBUG << "Shard node counts are:";
                     for (uint64_t &x: vts->shard_node_count) {
                         std::cerr << " " << x;
@@ -474,14 +473,14 @@ server_loop(int thread_id)
                                 vts->done_reqs[type].emplace(req_id, std::bitset<NUM_SHARDS>());
                                 tempPair.second.num_edges = p.second.num_edges;
                                 message::prepare_message(*msg, message::NODE_PROG_RETURN, type, req_id, tempPair);
-                                vts->send(client_to_ret, msg->buf);
+                                vts->comm.send(client_to_ret, msg->buf);
                                 vts->outstanding_node_progs.erase(req_id);
                                 mark_req_finished(req_id);
                             }
                         } else {*/
                             // just a normal node program
                             vts->done_reqs[type].emplace(req_id, std::bitset<NUM_SHARDS>());
-                            vts->send(client_to_ret, msg->buf);
+                            vts->comm.send(client_to_ret, msg->buf);
                             vts->outstanding_node_progs.erase(req_id);
                             mark_req_finished(req_id);
                         //}
@@ -549,3 +548,5 @@ main(int argc, char *argv[])
     // call periodic thread function
     timer_function();
 }
+
+#undef __WEAVER_DEBUG__

@@ -59,6 +59,8 @@ namespace db
 
         public:
             hyper_stub(uint64_t sid);
+            void init();
+            // XXX init from backup after failure
             // graph updates
             void put_node(element::node &n, std::unordered_set<uint64_t> &nbr_map);
             element::node* get_node(uint64_t node);
@@ -90,6 +92,10 @@ namespace db
         , shard_attrs{"qts", "last_clocks"}
         , shard_dtypes{HYPERDATATYPE_MAP_INT64_INT64, HYPERDATATYPE_MAP_INT64_STRING}
         , cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT)
+    { }
+
+    inline void
+    hyper_stub :: init()
     {
         vc::vclock_t zero_clk(NUM_VTS, 0);
         std::unordered_map<uint64_t, uint64_t> qts_map;

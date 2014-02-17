@@ -67,6 +67,9 @@ server_manager :: server_manager()
 {
     assert(m_config_ack_through == m_config_ack_barrier.min_version());
     assert(m_config_stable_through == m_config_stable_barrier.min_version());
+    // XXX remove when you want to support multiple clusters
+    // do a proper init; see HyperDex/tools/coordinator.cc
+    m_cluster = 1;
 }
 
 server_manager :: ~server_manager() throw ()
@@ -95,8 +98,8 @@ server_manager :: init(replicant_state_machine_context* ctx, uint64_t token)
 
 void
 server_manager :: server_register(replicant_state_machine_context* ctx,
-                               const server_id& sid,
-                               const po6::net::location& bind_to)
+                                  const server_id& sid,
+                                  const po6::net::location& bind_to)
 {
     FILE* log = replicant_state_machine_log_stream(ctx);
     server* srv = get_server(sid);
@@ -402,7 +405,10 @@ server_manager*
 server_manager :: recreate(replicant_state_machine_context* ctx,
                            const char* data, size_t data_sz)
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     std::auto_ptr<server_manager> c(new server_manager());
+#pragma GCC diagnostic pop
 
     if (!c.get())
     {
@@ -440,7 +446,10 @@ server_manager :: snapshot(replicant_state_machine_context* /*ctx*/,
               + sizeof(m_config_stable_through)
               + pack_size(m_config_stable_barrier);
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     std::auto_ptr<e::buffer> buf(e::buffer::create(sz));
+#pragma GCC diagnostic pop
     e::buffer::packer pa = buf->pack_at(0);
     pa = pa << m_cluster << m_counter << m_version << m_flags << m_servers
             << m_config_ack_through << m_config_ack_barrier
@@ -553,7 +562,10 @@ server_manager :: generate_cached_configuration(replicant_state_machine_context*
         sz += pack_size(m_servers[i]);
     }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     std::auto_ptr<e::buffer> new_config(e::buffer::create(sz));
+#pragma GCC diagnostic pop
     e::buffer::packer pa = new_config->pack_at(0);
     pa = pa << m_cluster << m_version << m_flags
             << uint64_t(m_servers.size());
@@ -566,15 +578,12 @@ server_manager :: generate_cached_configuration(replicant_state_machine_context*
     m_latest_config = new_config;
 }
 
-// XXX
+// always send state of all servers
 void
 server_manager :: servers_in_configuration(std::vector<server_id>* sids)
 {
-    for (std::vector<server>::iterator it = m_servers.begin();
-         it != m_servers.end(); it++) {
-        if (it->state == server::AVAILABLE) {
-            sids->push_back(it->id);
-        }
+    for (std::vector<server>::iterator it = m_servers.begin(); it != m_servers.end(); it++) {
+        sids->push_back(it->id);
     }
     /*
     for (std::map<std::string, std::tr1::shared_ptr<space> >::iterator it = m_spaces.begin();

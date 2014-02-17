@@ -28,6 +28,7 @@
 #include <e/endian.h>
 
 // Weaver
+#define __WEAVER_DEBUG__
 #include "common/weaver_constants.h"
 #include "common/server_manager_returncode.h"
 #include "common/serialization.h"
@@ -135,15 +136,21 @@ server_manager_link_wrapper :: set_server_manager_address(const char* host, uint
 bool
 server_manager_link_wrapper :: register_id(server_id us, const po6::net::location& bind_to)
 {
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     std::auto_ptr<e::buffer> buf(e::buffer::create(sizeof(uint64_t) + pack_size(bind_to)));
+#pragma GCC diagnostic pop
     e::buffer::packer pa = buf->pack_at(0);
     pa = pa << us << bind_to;
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     std::auto_ptr<sm_rpc> rpc(new sm_rpc);
+#pragma GCC diagnostic pop
     int64_t rid = m_sm->rpc("server_register",
-                               reinterpret_cast<const char*>(buf->data()), buf->size(),
-                               &rpc->status,
-                               &rpc->output,
-                               &rpc->output_sz);
+                            reinterpret_cast<const char*>(buf->data()), buf->size(),
+                            &rpc->status,
+                            &rpc->output,
+                            &rpc->output_sz);
 
     if (rid < 0)
     {
@@ -466,15 +473,18 @@ server_manager_link_wrapper :: ensure_available()
         return;
     }
 
-    if (m_sm->config()->get_address(m_shard->m_us) == *m_shard->myloc &&
+    if (m_sm->config()->get_address(m_shard->m_us) == *m_shard->comm.get_loc() &&
         m_sm->config()->get_state(m_shard->m_us) == server::AVAILABLE)
     {
         return;
     }
 
-    size_t sz = sizeof(uint64_t) + pack_size(*m_shard->myloc);
+    size_t sz = sizeof(uint64_t) + pack_size(*m_shard->comm.get_loc());
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     std::auto_ptr<e::buffer> buf(e::buffer::create(sz));
-    *buf << m_shard->m_us << *m_shard->myloc;
+#pragma GCC diagnostic pop
+    *buf << m_shard->m_us << *m_shard->comm.get_loc();
     e::intrusive_ptr<sm_rpc> rpc = new sm_rpc_available();
     rpc->msg << "server online";
     m_online_id = make_rpc_nosync("server_online",
@@ -605,3 +615,5 @@ server_manager_link_wrapper :: wait_nosync(const char* cond, uint64_t state,
 
     return id;
 }
+
+#undef __WEAVER_DEBUG__
