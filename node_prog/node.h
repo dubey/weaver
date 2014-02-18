@@ -21,7 +21,7 @@ namespace node_prog
     class node
     {
         public:
-            virtual edge_list<std::unordered_map<uint64_t, db::element::edge*>, map_edge_iter> get_edges() = 0;
+            virtual edge_list get_edges() = 0;
             virtual prop_list get_properties() = 0;
     };
 }
