@@ -34,14 +34,18 @@ namespace element
             property(std::string&, std::string&, vc::vclock&);
         
         public:
+        /*
             std::string key;
             std::string value;
+            */
             vc::vclock creat_time;
             vc::vclock del_time;
 
         public:
+        /*
             const std::string& get_key();
             const std::string& get_value();
+            */
 
             bool equals(std::string const &key2, std::string const &value2) const;
             bool operator==(property const &p2) const;
@@ -54,27 +58,24 @@ namespace element
 
     inline
     property :: property()
-        : key("")
-        , value("")
-        , creat_time(MAX_UINT64, MAX_UINT64)
+        : creat_time(MAX_UINT64, MAX_UINT64)
         , del_time(MAX_UINT64, MAX_UINT64)
     { }
 
     inline
     property :: property(std::string &k, std::string &v)
-        : key(k)
-        , value(v)
+        : node_prog::property(k, v)
     {
     }
 
     inline
     property :: property(std::string &k, std::string &v, vc::vclock &creat)
-        : key(k)
-        , value(v)
+        : node_prog::property(k, v)
         , creat_time(creat)
         , del_time(MAX_UINT64, MAX_UINT64)
     { }
 
+/*
     inline const std::string&
     property :: get_key()
     {
@@ -86,6 +87,7 @@ namespace element
     {
         return value;
     }
+    */
 
     inline bool
     property :: equals(std::string const &key2, std::string const &value2) const

@@ -29,39 +29,29 @@
 
 namespace node_prog
 {
-    struct node_cache_context
+    struct edge_cache_context
     {
-        public:
-            bool node_deleted_internal;
-            std::vector<db::element::edge> edges_added_internal;
-            std::vector<db::element::edge> edges_deleted_internal;
-            std::shared_ptr<vc::vclock> cur_time;
+        uint64_t edge_handle;
+        db::element::remote_node nbr;
 
-            node_cache_context() {};
-            node_cache_context(std::shared_ptr<vc::vclock> &time) : cur_time(time) {}; 
-
-            // delete standard copy onstructors TODO
-            //node_cache_context(const node_cache_context&) = delete;
-            //node_cache_context& operator=(node_cache_context const&) = delete;
-
-            bool node_deleted() { return node_deleted_internal; };
-
-            node_prog::edge_list<std::vector<db::element::edge>, node_prog::vector_edge_iter> edges_added()
-            {
-                return node_prog::edge_list
-                    <std::vector<db::element::edge>, node_prog::vector_edge_iter>
-                    (edges_added_internal, cur_time);
-            };
-
-            node_prog::edge_list<std::vector<db::element::edge>, node_prog::vector_edge_iter> edges_deleted()
-            {
-                return node_prog::edge_list
-                    <std::vector<db::element::edge>, node_prog::vector_edge_iter>
-                    (edges_deleted_internal, cur_time);
-            };
+        std::vector<node_prog::property> props_added;
+        std::vector<node_prog::property> props_deleted;
     };
 
+    struct node_cache_context
+    {
+        db::element::remote_node node;
+
+        bool node_deleted;
+        std::vector<node_prog::property> props_added;
+        std::vector<node_prog::property> props_deleted;
+
+        std::vector<edge_cache_context> edges_added;
+        std::vector<edge_cache_context> edges_changed;
+        std::vector<edge_cache_context> edges_deleted;
+    };
 }
+
 namespace db
 {
 namespace caching

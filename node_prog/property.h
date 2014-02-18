@@ -21,9 +21,16 @@ namespace node_prog
 {
     class property
     {
+
         public:
-            virtual const std::string& get_key() = 0;
-            virtual const std::string& get_value() = 0;
+            std::string key;
+            std::string value;
+
+            property() : key(""), value("") {};
+            property(std::string &k, std::string &v) : key(k), value(v) {};
+
+            const std::string& get_key() { return key; };
+            const std::string& get_value() {return value; };
    };
 }
 
