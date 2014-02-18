@@ -18,9 +18,46 @@
 #include "message_graph_elem.h"
 #include "db/cache/prog_cache.h"
 
+/*
+    struct edge_cache_context
+    {
+        uint64_t edge_handle;
+        db::element::remote_node nbr;
+
+        edge_cache_context(uint64_t handle, db::element::remote_node &nbr) : edge_handle(handle), nbr(nbr) {};
+
+        std::vector<node_prog::property> props_added;
+        std::vector<node_prog::property> props_deleted;
+    };
+
+    struct node_cache_context
+    {
+        db::element::remote_node node;
+
+        bool node_deleted;
+        std::vector<node_prog::property> props_added;
+        std::vector<node_prog::property> props_deleted;
+
+        std::vector<edge_cache_context> edges_added;
+        std::vector<edge_cache_context> edges_modified;
+        std::vector<edge_cache_context> edges_deleted;
+    };
+    XXX make stuff in message.h for node_prog::property
+    */
+
 namespace message
 {
     // size methods
+    inline uint64_t
+    size(const node_prog::edge_cache_context &t)
+    {
+        uint64_t toRet = size(t.edge_handle)
+            + size(t.nbr)
+            + size(t.props_added)
+            + size(t.props_deleted);
+        return toRet;
+    }
+
     inline uint64_t
     size(const node_prog::node_cache_context &t)
     {

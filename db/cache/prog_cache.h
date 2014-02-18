@@ -34,6 +34,8 @@ namespace node_prog
         uint64_t edge_handle;
         db::element::remote_node nbr;
 
+        edge_cache_context(uint64_t handle, db::element::remote_node &nbr) : edge_handle(handle), nbr(nbr) {};
+
         std::vector<node_prog::property> props_added;
         std::vector<node_prog::property> props_deleted;
     };
@@ -47,7 +49,7 @@ namespace node_prog
         std::vector<node_prog::property> props_deleted;
 
         std::vector<edge_cache_context> edges_added;
-        std::vector<edge_cache_context> edges_changed;
+        std::vector<edge_cache_context> edges_modified;
         std::vector<edge_cache_context> edges_deleted;
     };
 }
@@ -109,7 +111,7 @@ namespace caching
         public:
             std::shared_ptr<node_prog::Cache_Value_Base> value;
             std::shared_ptr<std::vector<db::element::remote_node>> watch_set;
-            std::vector<std::pair<db::element::remote_node, node_prog::node_cache_context>> context;
+            std::vector<node_prog::node_cache_context> context;
 
             cache_response(program_cache &came_from, uint64_t key_used, std::shared_ptr<node_prog::Cache_Value_Base> &val,
                     std::shared_ptr<std::vector<db::element::remote_node>> watch_set_used)
@@ -126,7 +128,7 @@ namespace caching
 
             std::shared_ptr<node_prog::Cache_Value_Base> get_value() { return value; }
             std::shared_ptr<std::vector<db::element::remote_node>> get_watch_set() { return watch_set; };
-            std::vector<std::pair<db::element::remote_node, node_prog::node_cache_context>> &get_context() { return context; };
+            std::vector<node_prog::node_cache_context> &get_context() { return context; };
     };
 }
 }

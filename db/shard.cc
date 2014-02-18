@@ -643,40 +643,92 @@ inline void modify_triangle_params(void * triangle_params, size_t num_nodes, db:
 }
 */
 
+// vector pointers can be null if we don't want to fill that vector
 inline void
-fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<std::pair<db::element::remote_node, node_prog::node_cache_context>>& toFill,
+fill_changed_properties(std::vector<property> &props, std::vector<node_prog::property> *props_added, std::vector<node_prog::property> *props_deleted, vc::vclock &cache_entry_time, vc::vclock &cur_time)
+{
+    for (element::property &prop : props)
+    {
+        bool del_before_cur = (order::compare_two_vts(prop.get_del_time(), req_vclock) == 0);
+
+        if (props_added != NULL) {
+            bool creat_after_cached = (order::compare_two_vts(prop.get_creat_time(), cache_entry_time) == 1);
+            bool creat_before_cur = (order::compare_two_vts(prop.get_creat_time(), req_vclock) == 0);
+
+            if (creat_after_cached && creat_before_cur && !del_before_cur){
+                props_added->emplace_back(prop.key, prop.value);
+            }
+        }
+
+        if (props_deleted != NULL) {
+            bool del_after_cached = (order::compare_two_vts(prop.get_del_time(), cache_entry_time) == 1);
+
+            if (del_after_cached && del_before_cur) {
+                props_deleted->emplace_back(prop.key, prop.value);
+            }
+        }
+    }
+}
+
+inline void
+fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<node_prog::node_cache_context>& toFill,
         vc::vclock& cache_entry_time, vc::vclock& req_vclock)
 {
     // TODO maybe make this skip over locked nodes and retry fetching later
     for (uint64_t id : ids){
         db::element::node *node = S->acquire_node(id);
-        assert(node != NULL); // TODO could be garbage collected, or migrated but not completed?
-        if (node->state == db::element::node::mode::MOVED) {
-            WDEBUG << "cache dont support this yet" << std::endl;
+        if (node == NULL || node->state == db::element::node::mode::MOVED) {
+            WDEBUG << "node not found or migrated, invalidating cached value" << std::endl;
             assert(false);
         } else { // node exists
-            toFill.emplace_back(std::make_pair(db::element::remote_node(loc, id), node_prog::node_cache_context()));
-            node_prog::node_cache_context &context = toFill.back().second;
+            toFill.emplace_back();
+            node_prog::node_cache_context &context = toFill.back();
+            context.node = db::element::remote_node(loc, id);
 
-            context.node_deleted_internal = (order::compare_two_vts(node->base.get_del_time(), req_vclock) == 0);
-            for (auto &iter: node->out_edges) {
-                db::element::edge* e = iter.second;
-                assert(e != NULL);
+            context.node_deleted = (order::compare_two_vts(node->base.get_del_time(), req_vclock) == 0);
+            if (!context.node_deleted)
+            {
+                fill_changed_properties(node->base.properties, &context.props_added, &context.props_deleted, cache_entry_time, req_vclock);
+                std::vector<node_prog::property> temp_props_added;
+                std::vector<node_prog::property> temp_props_deleted;
+                for (auto &iter: node->out_edges) {
+                    db::element::edge* e = iter.second;
+                    assert(e != NULL);
 
-                bool del_after_cached = (order::compare_two_vts(e->base.get_del_time(), cache_entry_time) == 1);
-                bool creat_after_cached = (order::compare_two_vts(e->base.get_creat_time(), cache_entry_time) == 1);
+                    bool del_after_cached = (order::compare_two_vts(e->base.get_del_time(), cache_entry_time) == 1);
+                    bool creat_after_cached = (order::compare_two_vts(e->base.get_creat_time(), cache_entry_time) == 1);
 
-                bool del_before_cur = (order::compare_two_vts(e->base.get_del_time(), req_vclock) == 0);
-                bool creat_before_cur = (order::compare_two_vts(e->base.get_creat_time(), req_vclock) == 0);
+                    bool del_before_cur = (order::compare_two_vts(e->base.get_del_time(), req_vclock) == 0);
+                    bool creat_before_cur = (order::compare_two_vts(e->base.get_creat_time(), req_vclock) == 0);
 
-                assert(creat_before_cur); // TODO: is this check needed/valid
-                assert(del_after_cached);
+                    if (creat_after_cached && creat_before_cur && !del_before_cur){
+                        context.edges_added.emplace_back(e->base.handle, e->nbr);
 
-                if (creat_after_cached && creat_before_cur && !del_before_cur){
-                    context.edges_added_internal.push_back(*e);
-                }
-                if (del_after_cached && del_before_cur) {
-                    context.edges_deleted_internal.push_back(*e);
+                        node_prog::edge_cache_context &edge_context = context.edges_added.back();
+                        // don't care about props deleted before req time for an edge created after cache value was stored
+                        fill_changed_properties(e->base.properties, edge_context.props_created,
+                                NULL, cache_entry_time, req_vclock);
+                    } else if (del_after_cached && del_before_cur) {
+                        context.edges_deleted.emplace_back(e->base.handle, e->nbr);
+                        node_prog::edge_cache_context &edge_context = context.edges_deleted.back();
+
+                        // don't care about props added after cache time on a deleted edge
+                        fill_changed_properties(e->base.properties, NULL,
+                                edge_context.props_deleted, cache_entry_time, req_vclock);
+                    } else if (del_after_cached && !creat_after_cached) {
+                        // see if any properties changed on edge that didnt change
+                        fill_changed_properties(e->base.properties, temp_props_added,
+                                temp_props_deleted, cache_entry_time, req_vclock);
+                        if (!temp_props_added.empty() || !temp_props_deleted.empty()) {
+                            context.edges_modified.emplace_back(e->base.handle, e->nbr);
+
+                            context.edges_modified.back().props_added = std::move(temp_props_added);
+                            context.edges_modified.back().props_deleted = std::move(temp_props_deleted);
+
+                            temp_props_added.clear();
+                            temp_props_deleted.clear();
+                        }
+                    }
                 }
             }
         }
@@ -998,7 +1050,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     node_prog::prog_type pType;
     uint64_t req_id, vt_id;
     std::pair<uint64_t, uint64_t> lookup_pair;
-    std::vector<std::pair<db::element::remote_node, node_prog::node_cache_context>> contexts_to_add; // TODO extra copy, later unpack into cache_response object itself
+    std::vector<node_prog::node_cache_context> contexts_to_add; // TODO extra copy, later unpack into cache_response object itself
     message::unpack_message(*msg, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_pair, contexts_to_add);
 
     S->node_prog_running_states_mutex.lock();

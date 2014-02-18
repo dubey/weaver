@@ -170,21 +170,20 @@ namespace node_prog
     };
 
     inline bool
-    check_cache_context(std::vector<std::pair<db::element::remote_node, node_prog::node_cache_context>>& context)
+    check_cache_context(std::vector<node_cache_context>& contexts)
     {
         // path not valid if broken by:
-        for (std::pair<db::element::remote_node, node_prog::node_cache_context>& pair : context)
+        for (node_cache_context& node_context : contexts)
         {
-            if (pair.second.node_deleted()){  // node deletion
+            if (node_context.node_deleted()){  // node deletion
                 WDEBUG  << "Cache entry invalid because of node deletion" << std::endl;
                 return false;
             }
             // edge deletion, currently n^2 check for any edge deletion between two nodes in watch set, could poss be better
-            for(auto &edge : pair.second.edges_deleted()){
-                db::element::remote_node &nbr = edge.get_neighbor();
-                for (std::pair<db::element::remote_node, node_prog::node_cache_context>& pair2 : context)
+            for(auto &edge : node_context.edges_deleted()){
+                for (node_prog::node_cache_context& other_node_context : contexts)
                 {
-                    if (nbr == pair2.first) {
+                    if (edge.nbr == other_node_context.node) {
                         WDEBUG  << "Cache entry invalid because of edge deletion" << std::endl;
                         return false;
                     }
@@ -217,7 +216,7 @@ namespace node_prog
 
                     // context for cached value contains the nodes in the path to the dest_idination from this node
                     for (auto& context_pair : cache_response->get_context()) { 
-                        params.path.emplace_back(context_pair.first);
+                        params.path.emplace_back(context_pair.first); // XXX THEse can be shuffled, change to storing this in cache
                     }
                     return {std::make_pair(params.prev_node, params)}; // single length vector
                 } else {
