@@ -30,6 +30,7 @@ depcomp
 install-sh
 libtool
 .libs
+m4/*.m4
 missing
 shard
 stamp-h1
