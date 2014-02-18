@@ -19,7 +19,6 @@
 #include <po6/net/location.h>
 
 #include "common/weaver_constants.h"
-#include "common/busybee_infra.h"
 #include "common/message.h"
 #include "common/message_tx_client.h"
 #include "common/property.h"
@@ -34,7 +33,6 @@ namespace client
     {
         public:
             client(uint64_t my_id, uint64_t vt_id);
-            ~client();
 
         private:
             uint64_t myid, shifted_id, vtid;
@@ -77,17 +75,11 @@ namespace client
         : myid(my_id)
         , shifted_id(myid << (64-ID_BITS))
         , vtid(vt_id)
+        , comm(my_id, 1)
         , tx_id_ctr(0)
         , temp_handle_ctr(0)
-        , comm(my_id, 1)
     {
-        comm.init();
-    }
-
-    inline
-    client :: ~client()
-    {
-        delete client_bb;
+        comm.client_init();
     }
 
     inline uint64_t

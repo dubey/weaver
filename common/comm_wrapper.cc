@@ -15,7 +15,6 @@
 #include "comm_wrapper.h"
 
 using common::comm_wrapper;
-//using common::comm_wrapper::weaver_mapper;
 
 comm_wrapper :: weaver_mapper :: weaver_mapper()
 {
@@ -46,13 +45,7 @@ comm_wrapper :: weaver_mapper :: reconfigure(configuration &new_config, uint64_t
             uint64_t srv_idx = active_server_idx[i];
             while (config.get_state(server_id(srv_idx)) != server::AVAILABLE) {
                 srv_idx = srv_idx + NUM_SHARDS;
-                srv_idx = srv_idx % (NUM_VTS + NUM_SHARDS*(1+NUM_BACKUPS));
-                if (srv_idx < NUM_VTS+NUM_SHARDS) {
-                    srv_idx += NUM_VTS;
-                }
-                WDEBUG << "cur server for " << i << " died, checking " << srv_idx
-                    << ", active server id " << active_server_idx[i] << std::endl;
-                if (srv_idx == active_server_idx[i]) {
+                if (srv_idx > (NUM_VTS + NUM_SHARDS*(1+NUM_BACKUPS))) {
                     // all backups dead, not contactable
                     // cannot do anything
                     WDEBUG << "Caution! All backups for server " << i << " are dead\n";
@@ -62,19 +55,13 @@ comm_wrapper :: weaver_mapper :: reconfigure(configuration &new_config, uint64_t
             if (srv_idx != active_server_idx[i]) {
                 mlist[ID_INCR + i] = config.get_address(server_id(srv_idx));
                 active_server_idx[i] = srv_idx;
-                //now_primary = srv_idx;
             }
-            WDEBUG << "server " << i << " at port " << mlist[ID_INCR + i].port << std::endl;
         } else {
             // server i is not yet up
             // check only i in the new config
             if (config.get_state(server_id(i)) == server::AVAILABLE) {
                 mlist[ID_INCR + i] = config.get_address(server_id(i));
                 active_server_idx[i] = i;
-                //now_primary = i;
-                WDEBUG << "server " << i << " at port " << mlist[ID_INCR + i].port << std::endl;
-            } else {
-                WDEBUG << "server " << i << " not yet up\n";
             }
         }
     }
@@ -116,7 +103,19 @@ comm_wrapper :: init(configuration &config)
 {
     uint64_t primary = bb_id;
     wmap.reset(new weaver_mapper());
+#ifdef __CLIENT__
+    wmap->client_configure(cluster);
+#else
     wmap->reconfigure(config, primary);
+#endif
+    bb.reset(new busybee_mta(wmap.get(), *loc, bb_id+ID_INCR, num_threads));
+}
+
+void
+comm_wrapper :: client_init()
+{
+    wmap.reset(new weaver_mapper());
+    wmap->client_configure(cluster);
     bb.reset(new busybee_mta(wmap.get(), *loc, bb_id+ID_INCR, num_threads));
 }
 
