@@ -142,15 +142,15 @@ namespace message
     template <typename T1, typename T2, typename T3> inline void unpack_buffer(e::unpacker& unpacker, std::tuple<T1, T2, T3>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::shared_ptr<T> &ptr_t);
 
-    uint64_t size(const db::caching::node_cache_context &t);
+    uint64_t size(const node_prog::node_cache_context &t);
     uint64_t size(const db::element::edge &t);
     uint64_t size(const db::element::edge* const &t);
     uint64_t size(const db::element::node &t);
-    void pack_buffer(e::buffer::packer &packer, const db::caching::node_cache_context &t);
+    void pack_buffer(e::buffer::packer &packer, const node_prog::node_cache_context &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::edge &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::node &t);
-    void unpack_buffer(e::unpacker &unpacker, db::caching::node_cache_context &t);
+    void unpack_buffer(e::unpacker &unpacker, node_prog::node_cache_context &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge *&t);
     void unpack_buffer(e::unpacker &unpacker, db::element::node &t);
@@ -811,7 +811,7 @@ namespace message
         unpacker = unpacker >> elements_left;
         // set number of buckets to 1.25*elements it will contain
         // did not use reserve as max_load_factor is default 1
-        t.rehash(elements_left*1.25); 
+        t.rehash(elements_left*1.25); // XXX why 1.25??
 
         while (elements_left > 0) {
             T1 key_to_add;

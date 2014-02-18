@@ -26,27 +26,45 @@
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
 
+
+namespace node_prog
+{
+    struct node_cache_context
+    {
+        public:
+            bool node_deleted_internal;
+            std::vector<db::element::edge> edges_added_internal;
+            std::vector<db::element::edge> edges_deleted_internal;
+            std::shared_ptr<vc::vclock> &cur_time;
+
+            node_cache_context(std::shared_ptr<vc::vclock> &time) : cur_time(time) {}; 
+
+            // delete standard copy onstructors TODO
+            //node_cache_context(const node_cache_context&) = delete;
+            //node_cache_context& operator=(node_cache_context const&) = delete;
+
+            bool node_deleted() { return node_deleted_internal; };
+
+            node_prog::edge_list<std::vector<db::element::edge>, node_prog::vector_edge_iter> edges_added()
+            {
+                return node_prog::edge_list
+                    <std::vector<db::element::edge>, node_prog::vector_edge_iter>
+                    (edges_added_internal, cur_time);
+            };
+
+            node_prog::edge_list<std::vector<db::element::edge>, node_prog::vector_edge_iter> edges_deleted()
+            {
+                return node_prog::edge_list
+                    <std::vector<db::element::edge>, node_prog::vector_edge_iter>
+                    (edges_deleted_internal, cur_time);
+            };
+    };
+
+}
 namespace db
 {
 namespace caching
 {
-
-    struct node_cache_context : node_prog::node_cache_context
-    {
-        bool node_deleted_internal;
-        std::vector<db::element::edge> edges_added_internal;
-        std::vector<db::element::edge> edges_deleted_internal;
-        vc::vclock &cur_time;
-
-        // delete standard copy onstructors TODO
-        //node_cache_context(const node_cache_context&) = delete;
-        //node_cache_context& operator=(node_cache_context const&) = delete;
-
-        bool node_deleted() { return node_deleted_internal; };
-        node_prog::edge_list edges_added() { return node_prog::edge_list(edges_added_internal, cur_time); };
-        node_prog::edge_list edges_deleted() { return node_prog::edge_list(edges_deleted_internal, cur_time); };
-    };
-
     class program_cache 
     {
         uint64_t uid = 0;
@@ -100,14 +118,14 @@ namespace caching
         public:
             std::shared_ptr<node_prog::Cache_Value_Base> value;
             std::shared_ptr<std::vector<db::element::remote_node>> watch_set;
-            std::vector<std::pair<db::element::remote_node, node_cache_context>> context;
+            std::vector<std::pair<db::element::remote_node, node_prog::node_cache_context>> context;
 
             cache_response(program_cache &came_from, uint64_t key_used, std::shared_ptr<node_prog::Cache_Value_Base> &val,
                     std::shared_ptr<std::vector<db::element::remote_node>> watch_set_used)
                 : from(came_from)
-                , key(key_used)
-                , value(val)
-                , watch_set(watch_set_used) {};
+                  , key(key_used)
+                  , value(val)
+                  , watch_set(watch_set_used) {};
 
             // delete standard copy onstructors
             cache_response (const cache_response &) = delete;
@@ -117,9 +135,10 @@ namespace caching
 
             std::shared_ptr<node_prog::Cache_Value_Base> get_cached_value() { return value; }
             std::shared_ptr<std::vector<db::element::remote_node>> get_watch_set() { return watch_set; };
-            std::vector<std::pair<db::element::remote_node, node_cache_context>> &get_cache_context() { return context; };
+            std::vector<std::pair<db::element::remote_node, node_prog::node_cache_context>> &get_cache_context() { return context; };
     };
 }
 }
+
 
 #endif // __CACHING__

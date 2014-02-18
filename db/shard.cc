@@ -644,7 +644,7 @@ inline void modify_triangle_params(void * triangle_params, size_t num_nodes, db:
 */
 
 inline void
-fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& toFill,
+fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<std::pair<db::element::remote_node, node_prog::node_cache_context>>& toFill,
         vc::vclock& cache_entry_time, vc::vclock& req_vclock)
 {
     // TODO maybe make this skip over locked nodes and retry fetching later
@@ -655,8 +655,8 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<
             WDEBUG << "cache dont support this yet" << std::endl;
             assert(false);
         } else { // node exists
-            toFill.emplace_back(std::make_pair(db::element::remote_node(loc, id), db::caching::node_cache_context()));
-            db::caching::node_cache_context &context = toFill.back().second;
+            toFill.emplace_back(std::make_pair(db::element::remote_node(loc, id), node_prog::node_cache_context(&req_vclock)));
+            node_prog::node_cache_context &context = toFill.back().second;
 
             context.node_deleted = (order::compare_two_vts(node->base.get_del_time(), req_vclock) == 0);
             for (auto &iter: node->out_edges) {
@@ -695,7 +695,7 @@ unpack_and_fetch_context(void *req)
     node_prog::prog_type pType;
 
     message::unpack_message(*request->msg, message::NODE_CONTEXT_FETCH, pType, req_id, vt_id, req_vclock, cache_entry_time, lookup_pair, ids, from_shard);
-    std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>> contexts;
+    std::vector<std::pair<db::element::remote_node, node_prog::node_cache_context>> contexts;
 
     fetch_node_cache_contexts(S->shard_id, ids, contexts, cache_entry_time, req_vclock);
 
@@ -898,12 +898,13 @@ inline void node_prog_loop(
                         np.prog_type_recvd, _1, _2, _3, np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key
                 }
 
-                node->base.view_time = np.req_vclock; 
+                node->base.view_time = np.req_vclock.get(); 
                 // call node program
                 auto next_node_params = func(*node, this_node,
                         params, // actual parameters for this node program
-                        node_state_getter, add_cache_func, std::move(np.cache_value));
-                node->base.view_time = nullptr; 
+                        node_state_getter, add_cache_func,
+                        (node_prog::cache_response *) *np.cache_value);
+                node->base.view_time = NULL; 
 
                 // batch the newly generated node programs for onward propagation
 #ifdef WEAVER_CLDG
@@ -997,7 +998,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     node_prog::prog_type pType;
     uint64_t req_id, vt_id;
     std::pair<uint64_t, uint64_t> lookup_pair;
-    std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>> contexts_to_add; // TODO extra copy, later unpack into cache_response object itself
+    std::vector<std::pair<db::element::remote_node, node_prog::node_cache_context>> contexts_to_add; // TODO extra copy, later unpack into cache_response object itself
     message::unpack_message(*msg, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_pair, contexts_to_add);
 
     S->node_prog_running_states_mutex.lock();

@@ -59,7 +59,7 @@ namespace node_prog
                 std::function<node_state_type&()>,
                 std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
                     std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
-                    std::unique_ptr<db::caching::cache_response> cache_response);
+                    db::caching::cache_response *cache_response);
 
     };
 
@@ -91,7 +91,7 @@ namespace node_prog
         std::shared_ptr<vc::vclock> req_vclock;
         uint64_t req_id;
         std::vector<std::pair<uint64_t, ParamsType>> start_node_params;
-        std::unique_ptr<db::caching::cache_response> cache_value;
+        std::unique_ptr<db::caching::cache_response> cache_value; // XXX unique ptr needed?
 
         node_prog_running_state() {};
         // delete standard copy onstructors

@@ -94,10 +94,11 @@ namespace element
             void remove_cached_req(uint64_t req_id);
             std::unique_ptr<std::vector<uint64_t>> purge_cache();
 
-            node_prog::edge_list get_edges()
+            node_prog::edge_list<std::unordered_map<uint64_t, db::element::edge*>, node_prog::map_edge_iter> get_edges()
             {
                 assert(base.view_time != NULL);
-                return node_prog::edge_list(out_edges, base.view_time);
+                return node_prog::edge_list<std::unordered_map<uint64_t, db::element::edge*>, node_prog::map_edge_iter>
+                    (out_edges, base.view_time);
             };
 
             node_prog::prop_list get_properties()

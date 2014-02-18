@@ -170,24 +170,22 @@ namespace node_prog
     };
 
     inline bool
-    check_cache_context(std::vector<std::pair<db::element::remote_node, db::caching::node_cache_context>>& context)
+    check_cache_context(std::vector<std::pair<db::element::remote_node, node_prog::node_cache_context>>& context)
     {
         // path not valid if broken by:
-        for (std::pair<db::element::remote_node, db::caching::node_cache_context>& pair : context)
+        for (std::pair<db::element::remote_node, node_prog::node_cache_context>& pair : context)
         {
-            if (pair.second.node_deleted){  // node deletion
+            if (pair.second.node_deleted()){  // node deletion
                 WDEBUG  << "Cache entry invalid because of node deletion" << std::endl;
                 return false;
             }
             // edge deletion, currently n^2 check for any edge deletion between two nodes in watch set, could poss be better
-            if (!pair.second.edges_deleted.empty()) {
-                for(auto edge : pair.second.edges_deleted){
-                    for (std::pair<db::element::remote_node, db::caching::node_cache_context>& pair2 : context)
-                    {
-                        if ((db::element::remote_node) edge.nbr == pair2.first) { // XXX casted unti I fix cache context for public bgraph elems
-                            WDEBUG  << "Cache entry invalid because of edge deletion" << std::endl;
-                            return false;
-                        }
+            for(auto edge : pair.second.edges_deleted){
+                for (std::pair<db::element::remote_node, node_prog::node_cache_context>& pair2 : context)
+                {
+                    if (edge.nbr == pair2.first) {
+                        WDEBUG  << "Cache entry invalid because of edge deletion" << std::endl;
+                        return false;
                     }
                 }
             }
@@ -203,7 +201,7 @@ namespace node_prog
             std::function<reach_node_state&()> state_getter,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, // TODO make const
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
-            std::unique_ptr<db::caching::cache_response> cache_response)
+            node_prog::cache_response *cache_response)
     {
         if (MAX_CACHE_ENTRIES)
         {
