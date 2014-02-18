@@ -65,8 +65,11 @@ namespace client
             std::vector<uint64_t> get_node_count();
 
         private:
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
             void send_coord(std::auto_ptr<e::buffer> buf);
             busybee_returncode recv_coord(std::auto_ptr<e::buffer> *buf);
+#pragma GCC diagnostic pop
             uint64_t generate_handle();
     };
 
@@ -307,6 +310,8 @@ namespace client
         return node_count;
     }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     inline void
     client :: send_coord(std::auto_ptr<e::buffer> buf)
     {
@@ -335,6 +340,7 @@ namespace client
             }
         }
     }
+#pragma GCC diagnostic pop
 
     // to generate 64 bit graph element handles
     // assuming no more than 2^(ID_BITS) clients

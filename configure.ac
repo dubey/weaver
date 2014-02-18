@@ -4,10 +4,12 @@
 AC_PREREQ([2.68])
 AC_INIT([Weaver], [0.1], [dubey@cs.cornell.edu])
 AM_INIT_AUTOMAKE
+AM_SILENT_RULES([yes])
 LT_INIT
 AM_PATH_PYTHON
 AC_CONFIG_SRCDIR([tests/cpp/nmap_unit_tests.h])
 AC_CONFIG_HEADERS([config.h])
+AC_CONFIG_MACRO_DIR([m4])
 : ${CFLAGS=""}
 : ${CXXFLAGS=""}
 
@@ -16,11 +18,19 @@ AC_PROG_CXX
 AC_PROG_CC
 
 # Checks for libraries.
-AC_CHECK_LIB([busybee], [send])
-AC_CHECK_LIB([chronos], [weaver_order])
-AC_CHECK_LIB([replicant], [send])
-# FIXME: Replace `main' with a function in `-lrt':
-AC_CHECK_LIB([rt], [main])
+AC_CHECK_LIB([rt], [clock_gettime], [], [AC_MSG_ERROR([
+-----------------------------------------------------------
+Weaver requires the rt library; please install to continue.
+-----------------------------------------------------------])])
+
+
+PKG_CHECK_MODULES([PO6], [libpo6 >= 0.3.1])
+PKG_CHECK_MODULES([E], [libe >= 0.3.2])
+PKG_CHECK_MODULES([BUSYBEE], [busybee >= 0.3.0])
+PKG_CHECK_MODULES([REPLICANT], [replicant >= 0.2.dev])
+PKG_CHECK_MODULES([HYPERDEX], [hyperdex-client >= 1.0.dev])
+# TODO chronos checks after upgrading chronos to use pkg-config
+#PKG_CHECK_MODULES([CHRONOS], )
 
 # Checks for header files.
 AC_CHECK_HEADERS([limits.h mach/mach.h stdint.h stdlib.h string.h sys/time.h])

@@ -1,10 +1,10 @@
-#ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
+ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 CC=gcc-4.8
 CXX=g++-4.8
 CYTHON=cython
 
-AM_CFLAGS=-std=c++0x -Wall -Wextra
+AM_CFLAGS=-Wall -Wextra
 AM_CXXFLAGS=-std=c++0x -Wall -Wextra
 CYTHON_FLAGS=--cplus
 LIBS=-lbusybee -le -pthread -lrt -lhyperdex-client -lchronos -lreplicant
