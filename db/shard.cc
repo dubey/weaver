@@ -655,10 +655,10 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<
             WDEBUG << "cache dont support this yet" << std::endl;
             assert(false);
         } else { // node exists
-            toFill.emplace_back(std::make_pair(db::element::remote_node(loc, id), node_prog::node_cache_context(&req_vclock)));
+            toFill.emplace_back(std::make_pair(db::element::remote_node(loc, id), node_prog::node_cache_context()));
             node_prog::node_cache_context &context = toFill.back().second;
 
-            context.node_deleted = (order::compare_two_vts(node->base.get_del_time(), req_vclock) == 0);
+            context.node_deleted_internal = (order::compare_two_vts(node->base.get_del_time(), req_vclock) == 0);
             for (auto &iter: node->out_edges) {
                 db::element::edge* e = iter.second;
                 assert(e != NULL);
@@ -673,10 +673,10 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<
                 assert(del_after_cached);
 
                 if (creat_after_cached && creat_before_cur && !del_before_cur){
-                    context.edges_added.push_back(*e);
+                    context.edges_added_internal.push_back(*e);
                 }
                 if (del_after_cached && del_before_cur) {
-                    context.edges_deleted.push_back(*e);
+                    context.edges_deleted_internal.push_back(*e);
                 }
             }
         }
@@ -898,12 +898,12 @@ inline void node_prog_loop(
                         np.prog_type_recvd, _1, _2, _3, np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key
                 }
 
-                node->base.view_time = np.req_vclock.get(); 
+                node->base.view_time = np.req_vclock; 
                 // call node program
                 auto next_node_params = func(*node, this_node,
                         params, // actual parameters for this node program
                         node_state_getter, add_cache_func,
-                        (node_prog::cache_response *) *np.cache_value);
+                        (node_prog::cache_response *) np.cache_value.get());
                 node->base.view_time = NULL; 
 
                 // batch the newly generated node programs for onward propagation

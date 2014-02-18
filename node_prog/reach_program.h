@@ -180,10 +180,11 @@ namespace node_prog
                 return false;
             }
             // edge deletion, currently n^2 check for any edge deletion between two nodes in watch set, could poss be better
-            for(auto edge : pair.second.edges_deleted){
+            for(auto &edge : pair.second.edges_deleted()){
+                db::element::remote_node &nbr = edge.get_neighbor();
                 for (std::pair<db::element::remote_node, node_prog::node_cache_context>& pair2 : context)
                 {
-                    if (edge.nbr == pair2.first) {
+                    if (nbr == pair2.first) {
                         WDEBUG  << "Cache entry invalid because of edge deletion" << std::endl;
                         return false;
                     }
@@ -201,13 +202,13 @@ namespace node_prog
             std::function<reach_node_state&()> state_getter,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, // TODO make const
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
-            node_prog::cache_response *cache_response)
+            cache_response *cache_response)
     {
         if (MAX_CACHE_ENTRIES)
         {
             if (params._search_cache  && !params.mode && cache_response){
                 // check context, update cache
-                bool valid = check_cache_context(cache_response->context);
+                bool valid = check_cache_context(cache_response->get_context());
                 if (valid) {
                     // we found the node we are looking for, prepare a reply
                     params.mode = true;
@@ -215,7 +216,7 @@ namespace node_prog
                     params._search_cache = false; // don't search on way back
 
                     // context for cached value contains the nodes in the path to the dest_idination from this node
-                    for (auto& context_pair : cache_response->context) { 
+                    for (auto& context_pair : cache_response->get_context()) { 
                         params.path.emplace_back(context_pair.first);
                     }
                     return {std::make_pair(params.prev_node, params)}; // single length vector

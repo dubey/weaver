@@ -35,8 +35,9 @@ namespace node_prog
             bool node_deleted_internal;
             std::vector<db::element::edge> edges_added_internal;
             std::vector<db::element::edge> edges_deleted_internal;
-            std::shared_ptr<vc::vclock> &cur_time;
+            std::shared_ptr<vc::vclock> cur_time;
 
+            node_cache_context() {};
             node_cache_context(std::shared_ptr<vc::vclock> &time) : cur_time(time) {}; 
 
             // delete standard copy onstructors TODO
@@ -133,9 +134,9 @@ namespace caching
 
             void invalidate() { from.cache.erase(key); };
 
-            std::shared_ptr<node_prog::Cache_Value_Base> get_cached_value() { return value; }
+            std::shared_ptr<node_prog::Cache_Value_Base> get_value() { return value; }
             std::shared_ptr<std::vector<db::element::remote_node>> get_watch_set() { return watch_set; };
-            std::vector<std::pair<db::element::remote_node, node_prog::node_cache_context>> &get_cache_context() { return context; };
+            std::vector<std::pair<db::element::remote_node, node_prog::node_cache_context>> &get_context() { return context; };
     };
 }
 }

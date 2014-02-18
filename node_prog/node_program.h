@@ -21,6 +21,7 @@
 #include <po6/threads/mutex.h>
 
 #include "common/weaver_constants.h"
+#include "cache_response.h"
 #include "node.h"
 #include "edge.h"
 #include "db/element/remote_node.h"
@@ -59,7 +60,7 @@ namespace node_prog
                 std::function<node_state_type&()>,
                 std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
                     std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
-                    db::caching::cache_response *cache_response);
+                    cache_response *cache_response);
 
     };
 

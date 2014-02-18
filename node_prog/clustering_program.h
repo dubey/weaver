@@ -115,7 +115,7 @@ namespace node_prog
             std::function<clustering_node_state&()> get_state,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
-            db::caching::cache_response*)
+            cache_response*)
     {
         // TODO can we change this to a three enum switch to reduce number of if statements
         std::vector<std::pair<db::element::remote_node, clustering_params>> next;
