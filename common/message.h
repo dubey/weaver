@@ -28,6 +28,7 @@
 #include "common/vclock.h"
 #include "common/transaction.h"
 #include "node_prog/base_classes.h" // used for packing Packable objects
+#include "node_prog/property.h"
 #include "db/element/node.h"
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
@@ -143,14 +144,17 @@ namespace message
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::shared_ptr<T> &ptr_t);
 
     uint64_t size(const node_prog::node_cache_context &t);
+    uint64_t size(const node_prog::edge_cache_context &t);
     uint64_t size(const db::element::edge &t);
     uint64_t size(const db::element::edge* const &t);
     uint64_t size(const db::element::node &t);
     void pack_buffer(e::buffer::packer &packer, const node_prog::node_cache_context &t);
+    void pack_buffer(e::buffer::packer &packer, const node_prog::edge_cache_context &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::edge &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::node &t);
     void unpack_buffer(e::unpacker &unpacker, node_prog::node_cache_context &t);
+    void unpack_buffer(e::unpacker &unpacker, node_prog::edge_cache_context &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge *&t);
     void unpack_buffer(e::unpacker &unpacker, db::element::node &t);
@@ -239,6 +243,11 @@ namespace message
     {
         return size(t.vt_id)
             + size(t.clock);
+    }
+    inline uint64_t size(const node_prog::property &t)
+    {
+        return size(t.key)
+            + size(t.value);
     }
     inline uint64_t size(const db::element::property &t)
     {
@@ -419,6 +428,13 @@ namespace message
     {
         pack_buffer(packer, t.vt_id);
         pack_buffer(packer, t.clock);
+    }
+
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const node_prog::property &t)
+    {
+        pack_buffer(packer, t.key);
+        pack_buffer(packer, t.value);
     }
 
     inline void 
@@ -690,6 +706,12 @@ namespace message
         unpack_buffer(unpacker, t.clock);
     }
 
+    inline void 
+    unpack_buffer(e::unpacker &unpacker, node_prog::property &t)
+    {
+        unpack_buffer(unpacker, t.key);
+        unpack_buffer(unpacker, t.value);
+    }
     inline void 
     unpack_buffer(e::unpacker &unpacker, db::element::property &t)
     {

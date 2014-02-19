@@ -175,12 +175,12 @@ namespace node_prog
         // path not valid if broken by:
         for (node_cache_context& node_context : contexts)
         {
-            if (node_context.node_deleted()){  // node deletion
+            if (node_context.node_deleted){  // node deletion
                 WDEBUG  << "Cache entry invalid because of node deletion" << std::endl;
                 return false;
             }
             // edge deletion, currently n^2 check for any edge deletion between two nodes in watch set, could poss be better
-            for(auto &edge : node_context.edges_deleted()){
+            for(auto &edge : node_context.edges_deleted){
                 for (node_prog::node_cache_context& other_node_context : contexts)
                 {
                     if (edge.nbr == other_node_context.node) {
@@ -215,8 +215,8 @@ namespace node_prog
                     params._search_cache = false; // don't search on way back
 
                     // context for cached value contains the nodes in the path to the dest_idination from this node
-                    for (auto& context_pair : cache_response->get_context()) { 
-                        params.path.emplace_back(context_pair.first); // XXX THEse can be shuffled, change to storing this in cache
+                    for (auto& node_context : cache_response->get_context()) { 
+                        params.path.emplace_back(node_context.node); // XXX THEse can be shuffled, change to storing this in cache
                     }
                     return {std::make_pair(params.prev_node, params)}; // single length vector
                 } else {

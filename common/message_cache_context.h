@@ -18,32 +18,6 @@
 #include "message_graph_elem.h"
 #include "db/cache/prog_cache.h"
 
-/*
-    struct edge_cache_context
-    {
-        uint64_t edge_handle;
-        db::element::remote_node nbr;
-
-        edge_cache_context(uint64_t handle, db::element::remote_node &nbr) : edge_handle(handle), nbr(nbr) {};
-
-        std::vector<node_prog::property> props_added;
-        std::vector<node_prog::property> props_deleted;
-    };
-
-    struct node_cache_context
-    {
-        db::element::remote_node node;
-
-        bool node_deleted;
-        std::vector<node_prog::property> props_added;
-        std::vector<node_prog::property> props_deleted;
-
-        std::vector<edge_cache_context> edges_added;
-        std::vector<edge_cache_context> edges_modified;
-        std::vector<edge_cache_context> edges_deleted;
-    };
-    XXX make stuff in message.h for node_prog::property
-    */
 
 namespace message
 {
@@ -61,29 +35,58 @@ namespace message
     inline uint64_t
     size(const node_prog::node_cache_context &t)
     {
-        uint64_t toRet = size(t.node_deleted_internal)
-            + size(t.edges_added_internal)
-            + size(t.edges_deleted_internal);
+        uint64_t toRet = size(t.node) +
+            size(t.node_deleted) +
+            size(t.props_added) +
+            size(t.props_deleted) +
+            size(t.edges_added) +
+            size(t.edges_modified) +
+            size(t.edges_deleted);
         return toRet;
     }
 
 
     // packing methods
     inline void
+    pack_buffer(e::buffer::packer &packer, const node_prog::edge_cache_context &t)
+    {
+        pack_buffer(packer, t.edge_handle);
+        pack_buffer(packer, t.nbr);
+        pack_buffer(packer, t.props_added);
+        pack_buffer(packer, t.props_deleted);
+    }
+
+    inline void
     pack_buffer(e::buffer::packer &packer, const node_prog::node_cache_context &t)
     {
-        pack_buffer(packer, t.node_deleted_internal);
-        pack_buffer(packer, t.edges_added_internal);
-        pack_buffer(packer, t.edges_deleted_internal);
+        pack_buffer(packer, t.node);
+        pack_buffer(packer, t.node_deleted);
+        pack_buffer(packer, t.props_added);
+        pack_buffer(packer, t.props_deleted);
+        pack_buffer(packer, t.edges_added);
+        pack_buffer(packer, t.edges_modified);
+        pack_buffer(packer, t.edges_deleted);
     }
 
     // unpacking methods
     inline void
+    unpack_buffer(e::unpacker &unpacker, node_prog::edge_cache_context &t)
+    {
+        unpack_buffer(unpacker, t.edge_handle);
+        unpack_buffer(unpacker, t.nbr);
+        unpack_buffer(unpacker, t.props_added);
+        unpack_buffer(unpacker, t.props_deleted);
+    }
+    inline void
     unpack_buffer(e::unpacker &unpacker, node_prog::node_cache_context &t)
     {
-        unpack_buffer(unpacker, t.node_deleted_internal);
-        unpack_buffer(unpacker, t.edges_added_internal);
-        unpack_buffer(unpacker, t.edges_deleted_internal);
+        unpack_buffer(unpacker, t.node);
+        unpack_buffer(unpacker, t.node_deleted);
+        unpack_buffer(unpacker, t.props_added);
+        unpack_buffer(unpacker, t.props_deleted);
+        unpack_buffer(unpacker, t.edges_added);
+        unpack_buffer(unpacker, t.edges_modified);
+        unpack_buffer(unpacker, t.edges_deleted);
     }
 }
 

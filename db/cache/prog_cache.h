@@ -34,6 +34,7 @@ namespace node_prog
         uint64_t edge_handle;
         db::element::remote_node nbr;
 
+        edge_cache_context() {};
         edge_cache_context(uint64_t handle, db::element::remote_node &nbr) : edge_handle(handle), nbr(nbr) {};
 
         std::vector<node_prog::property> props_added;
