@@ -1784,8 +1784,11 @@ main(int argc, char *argv[])
     }
 
     // registered this server with server_manager, config has fairly recent value
-    // go ahead and initialize shard
-    S->init();
+    if (argc != 3) {
+        S->init(false); // primary
+    } else {
+        S->init(true); // backup
+    }
 
     S->config_mutex.unlock();
 
@@ -1822,6 +1825,7 @@ main(int argc, char *argv[])
         }
         S->config_mutex.unlock();
         WDEBUG << "backup " << atoi(argv[2]) << " now primary for shard " << shard_id << std::endl;
+        S->restore_backup();
     } else {
         std::cout << "Weaver: shard instance " << S->shard_id << std::endl;
     }

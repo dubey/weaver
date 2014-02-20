@@ -23,7 +23,6 @@ AC_CHECK_LIB([rt], [clock_gettime], [], [AC_MSG_ERROR([
 Weaver requires the rt library; please install to continue.
 -----------------------------------------------------------])])
 
-
 PKG_CHECK_MODULES([PO6], [libpo6 >= 0.3.1])
 PKG_CHECK_MODULES([E], [libe >= 0.3.2])
 PKG_CHECK_MODULES([BUSYBEE], [busybee >= 0.3.0])

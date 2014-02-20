@@ -96,6 +96,8 @@ namespace thread
             bool check_qts(uint64_t vt_id, uint64_t qts);
             void increment_qts(uint64_t vt_id, uint64_t incr);
             void record_completed_tx(uint64_t vt_id, vc::vclock_t &tx_clk);
+            // fault tolerance
+            void restore_backup(std::unordered_map<uint64_t, uint64_t> &qts, std::unordered_map<uint64_t, vc::vclock_t> &last_clocks);
 
         public:
             pool(int n_threads);
@@ -164,7 +166,19 @@ namespace thread
         queue_cond.broadcast();
         queue_mutex.unlock();
     }
-} 
+
+    // initialize thread pool qts/last_clocks from backup
+    inline void
+    pool :: restore_backup(std::unordered_map<uint64_t, uint64_t> &map_qts, std::unordered_map<uint64_t, vc::vclock_t> &map_lstclk)
+    {
+        for (uint64_t i = 0; i < NUM_VTS; i++) {
+            assert(map_qts.find(i) != map_qts.end());
+            assert(map_lstclk.find(i) != map_lstclk.end());
+            qts[i] = map_qts[i];
+            last_clocks[i] = map_lstclk[i];
+        }
+    }
+}
 }
 
 #endif

@@ -109,7 +109,8 @@ namespace db
     {
         public:
             shard(uint64_t shard, uint64_t server);
-            void init();
+            void init(bool backup);
+            void restore_backup();
             void reconfigure();
 
             // Mutexes
@@ -291,14 +292,23 @@ namespace db
     //           , hyperdex stub
     // caution: assume holding config_mutex
     inline void
-    shard :: init()
+    shard :: init(bool backup)
     {
         comm.init(config);
-        for (int i = 0; i < NUM_THREADS; i++) {
+        if (!backup) {
             hstub.back()->init();
         }
         order::kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT);
         order::call_times = new std::list<uint64_t>();
+    }
+
+    inline void
+    shard :: restore_backup()
+    {
+        std::unordered_map<uint64_t, uint64_t> qts_map;
+        std::unordered_map<uint64_t, vc::vclock_t> last_clocks;
+        hstub.back()->restore_backup(qts_map, last_clocks);
+        thread_pool.restore_backup(qts_map, last_clocks);
     }
 
     // reconfigure cluster according to new configuration
@@ -861,8 +871,6 @@ namespace db
         bool done = prog_state.check_done_request(req_id);
         return done;
     }
-
-    // messaging methods
 
     inline thread::unstarted_thread*
     get_read_thr(std::vector<thread::pqueue_t> &read_queues, std::vector<vc::vclock_t> &last_clocks)

@@ -37,8 +37,8 @@
 #define COORD_ID (0ULL)
 #define COORD_SM_ID (0ULL)
 #define CLIENT_ID (100ULL)
-#define SHARDS_FILE "../common/shards"
-#define CLIENT_SHARDS_FILE "shards"
+#define SHARDS_FILE "common/shards"
+#define CLIENT_SHARDS_FILE "common/shards"
 // weaver setup
 #define NUM_SHARDS 2
 #define NUM_VTS 1

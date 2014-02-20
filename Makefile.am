@@ -1,3 +1,16 @@
+# 
+# ===============================================================
+#    Description:  Automake Makefile for Weaver.
+# 
+#        Created:  2014-02-18 12:00:00
+# 
+#         Author:  Ayush Dubey, dubey@cs.cornell.edu
+# 
+# Copyright (C) 2014, Cornell University, see the LICENSE file
+#                     for licensing agreement
+# ===============================================================
+# 
+
 ACLOCAL_AMFLAGS = -I m4 ${ACLOCAL_FLAGS}
 
 CC=gcc-4.8
@@ -53,6 +66,7 @@ shard_SOURCES=	common/ids.cc \
 				common/server_manager_link.cc \
                 common/comm_wrapper.cc \
 				db/server_manager_link_wrapper.cc \
+                db/hyper_stub.cc \
 				db/shard.cc
 shard_CFLAGS= 	$(AM_CFLAGS)
 shard_CXXFLAGS=	$(AM_CXXFLAGS)
