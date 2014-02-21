@@ -956,6 +956,7 @@ inline void node_prog_loop(
                         params, // actual parameters for this node program
                         node_state_getter, add_cache_func,
                         (node_prog::cache_response *) np.cache_value.get());
+                np.cache_value.reset(NULL);
                 node->base.view_time = NULL; 
 
                 // batch the newly generated node programs for onward propagation

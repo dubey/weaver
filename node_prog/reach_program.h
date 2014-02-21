@@ -190,6 +190,7 @@ namespace node_prog
                 }
             }
         }
+        WDEBUG  << "Cache entry with context size " << contexts.size() << " valid" << std::endl;
         return true;
     }
 

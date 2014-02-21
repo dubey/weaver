@@ -15,6 +15,8 @@ import sys
 sys.path.append('../../bindings/python')
 
 import client
+import simple_client
+
 print ' run reachability on'
 print ' paralell lines from source to sink'
 print ' part way through cut links'
@@ -35,6 +37,7 @@ line3 = []
 line4 = []
 coord_id = 0
 c = client.Client(client._CLIENT_ID, coord_id)
+sc = simple_client.simple_client(c)
 
 tx_id = c.begin_tx()
 source = c.create_node(tx_id);
