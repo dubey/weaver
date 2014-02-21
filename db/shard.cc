@@ -24,8 +24,9 @@
 #include "common/message_cache_context.h"
 #include "common/message_graph_elem.h"
 #include "common/nmap_stub.h"
-#include "shard.h"
-#include "nop_data.h"
+#include "db/shard.h"
+#include "db/nop_data.h"
+#include "db/message_wrapper.h"
 #include "db/cache/prog_cache.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
@@ -42,8 +43,6 @@ static po6::threads::cond start_load_cv(&init_mutex);
 static std::deque<std::unordered_map<uint64_t, uint64_t>> init_node_maps;
 static bool init_nodes;
 static uint16_t start_load;
-// threadpool shard pointer
-db::shard *db::thread::pool::S = NULL; // reinitialized in graph constructor
 
 void migrated_nbr_update(std::unique_ptr<message::message> msg);
 bool migrate_node_step1(db::element::node*, std::vector<uint64_t>&);
@@ -415,7 +414,7 @@ migrated_nbr_ack(uint64_t from_loc, std::vector<uint64_t> &target_req_id, uint64
 void
 unpack_migrate_request(uint64_t thread_id, void *req)
 {
-    db::graph_request *request = (db::graph_request*)req;
+    db::message_wrapper *request = (db::message_wrapper*)req;
 
     switch (request->type) {
         case message::MIGRATED_NBR_UPDATE:
@@ -443,7 +442,7 @@ unpack_migrate_request(uint64_t thread_id, void *req)
 void
 unpack_tx_request(uint64_t thread_id, void *req)
 {
-    db::graph_request *request = (db::graph_request*)req;
+    db::message_wrapper *request = (db::message_wrapper*)req;
     uint64_t vt_id, tx_id;
     vc::vclock vclk;
     vc::qtimestamp_t qts;
@@ -693,7 +692,7 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& handles, std::vec
 void
 unpack_and_fetch_context(uint64_t, void *req)
 {
-    db::graph_request *request = (db::graph_request *) req;
+    db::message_wrapper *request = (db::message_wrapper*)req;
     std::vector<uint64_t> handles;
     vc::vclock req_vclock, cache_entry_time;
     uint64_t vt_id, req_id, from_shard;
@@ -972,7 +971,7 @@ inline void node_prog_loop(
 void
 unpack_node_program(uint64_t, void *req)
 {
-    db::graph_request *request = (db::graph_request *) req;
+    db::message_wrapper *request = (db::message_wrapper*)req;
     node_prog::prog_type pType;
 
     message::unpack_partial_message(*request->msg, message::NODE_PROG, pType);
@@ -984,7 +983,7 @@ unpack_node_program(uint64_t, void *req)
 void
 unpack_context_reply(uint64_t, void *req)
 {
-    db::graph_request *request = (db::graph_request *) req;
+    db::message_wrapper *request = (db::message_wrapper*)req;
     node_prog::prog_type pType;
 
     message::unpack_partial_message(*request->msg, message::NODE_CONTEXT_REPLY, pType);
@@ -1537,143 +1536,158 @@ shard_daemon_end()
 
 // server msg recv loop for the shard server
 void
-msgrecv_loop()
+recv_loop(uint64_t thread_id)
 {
     uint64_t sender, vt_id, req_id;
     uint32_t code;
     enum message::msg_type mtype;
     std::unique_ptr<message::message> rec_msg(new message::message());
-    db::thread::unstarted_thread *thr;
-    db::graph_request *request;
+    db::queued_request *qreq;
+    db::message_wrapper *mwrap;
     node_prog::prog_type pType;
     vc::vclock vclk;
     vc::qtimestamp_t qts;
 
+    busybee_returncode bb_code;
     while (true) {
-        if (S->comm.recv(&sender, &rec_msg->buf) != BUSYBEE_SUCCESS) {
+        bb_code = S->comm.recv(&sender, &rec_msg->buf);
+        if (bb_code != BUSYBEE_SUCCESS && bb_code != BUSYBEE_TIMEOUT) {
             continue;
         }
-        rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
-        mtype = (enum message::msg_type)code;
-        rec_msg->change_type(mtype);
-        sender -= ID_INCR;
-        vclk.clock.clear();
-        qts.clear();
 
-        switch (mtype)
-        {
-            case message::TX_INIT:
-                message::unpack_partial_message(*rec_msg, message::TX_INIT, vt_id, vclk, qts);
-                assert(qts.size() == NUM_SHARDS);
-                request = new db::graph_request(mtype, std::move(rec_msg));
-                thr = new db::thread::unstarted_thread(qts[shard_id-SHARD_ID_INCR], vclk, unpack_tx_request, request);
-                S->add_write_request(vt_id, thr);
-                rec_msg.reset(new message::message());
-                assert(vclk.clock.size() == NUM_VTS);
-                break;
+        if (bb_code == BUSYBEE_SUCCESS) {
+            // exec or enqueue this request
+            rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
+            mtype = (enum message::msg_type)code;
+            rec_msg->change_type(mtype);
+            sender -= ID_INCR;
+            vclk.clock.clear();
+            qts.clear();
 
-            case message::NODE_PROG:
-                bool global_req;
-                message::unpack_partial_message(*rec_msg, message::NODE_PROG, pType, global_req, vt_id, vclk, req_id);
-                request = new db::graph_request(mtype, std::move(rec_msg));
-                thr = new db::thread::unstarted_thread(req_id, vclk, unpack_node_program, request);
-                S->add_read_request(vt_id, thr);
-                rec_msg.reset(new message::message());
-                assert(vclk.clock.size() == NUM_VTS);
-                break;
+            switch (mtype)
+            {
+                case message::TX_INIT:
+                    message::unpack_partial_message(*rec_msg, message::TX_INIT, vt_id, vclk, qts);
+                    assert(qts.size() == NUM_SHARDS);
+                    assert(vclk.clock.size() == NUM_VTS);
+                    mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
+                    if (S->qm.check_wr_request(vclk, qts[shard_id-SHARD_ID_INCR])) {
+                        unpack_tx_request(thread_id, (void*)mwrap);
+                    } else {
+                        qreq = new db::queued_request(qts[shard_id-SHARD_ID_INCR], vclk, unpack_tx_request, mwrap);
+                        S->qm.enqueue_write_request(vt_id, qreq);
+                    }
+                    break;
 
-            case message::NODE_CONTEXT_FETCH:
-                message::unpack_partial_message(*rec_msg, message::NODE_CONTEXT_FETCH, pType, req_id, vt_id, vclk);
-                request = new db::graph_request(mtype, std::move(rec_msg));
-                thr = new db::thread::unstarted_thread(req_id, vclk, unpack_and_fetch_context, request);
-                S->add_read_request(vt_id, thr);
-                rec_msg.reset(new message::message());
-                assert(vclk.clock.size() == NUM_VTS);
-                break;
+                case message::NODE_PROG:
+                    bool global_req;
+                    message::unpack_partial_message(*rec_msg, message::NODE_PROG, pType, global_req, vt_id, vclk, req_id);
+                    assert(vclk.clock.size() == NUM_VTS);
+                    mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
+                    if (S->qm.check_rd_request(vclk.clock)) {
+                        unpack_node_program(thread_id, (void*)mwrap);
+                    } else {
+                        qreq = new db::queued_request(req_id, vclk, unpack_node_program, mwrap);
+                        S->qm.enqueue_read_request(vt_id, qreq);
+                    }
+                    break;
 
-            case message::NODE_CONTEXT_REPLY:
-                message::unpack_partial_message(*rec_msg, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, vclk);
-                request = new db::graph_request(mtype, std::move(rec_msg));
-                thr = new db::thread::unstarted_thread(req_id, vclk, unpack_context_reply, request);
-                S->add_read_request(vt_id, thr);
-                rec_msg.reset(new message::message());
-                assert(vclk.clock.size() == NUM_VTS);
-                break;
-
-            case message::VT_NOP: {
-                db::nop_data *nop_arg = new db::nop_data();
-                message::unpack_message(*rec_msg, mtype, vt_id, nop_arg->vclk, qts, req_id,
-                    nop_arg->done_reqs, nop_arg->max_done_id, nop_arg->max_done_clk,
-                    nop_arg->outstanding_progs, nop_arg->shard_node_count);
-                assert(nop_arg->vclk.clock.size() == NUM_VTS);
-                assert(nop_arg->max_done_clk.size() == NUM_VTS);
-                nop_arg->vt_id = vt_id;
-                nop_arg->req_id = req_id;
-                thr = new db::thread::unstarted_thread(qts[shard_id-SHARD_ID_INCR], nop_arg->vclk, nop, (void*)nop_arg);
-                S->add_write_request(vt_id, thr);
-                rec_msg.reset(new message::message());
-                break;
-            }
-
-            case message::PERMANENTLY_DELETED_NODE: {
-                uint64_t *node = (uint64_t*)malloc(sizeof(uint64_t));
-                message::unpack_message(*rec_msg, mtype, *node);
-                thr = new db::thread::unstarted_thread(0, S->zero_clk, update_deleted_node, (void*)node);
-                S->add_read_request(rand() % NUM_VTS, thr);
-                rec_msg.reset(new message::message());
-                break;
-            }
-
-            case message::MIGRATE_SEND_NODE:
-            case message::MIGRATED_NBR_UPDATE:
-            case message::MIGRATED_NBR_ACK:
-                request = new db::graph_request(mtype, std::move(rec_msg));
-                thr = new db::thread::unstarted_thread(0, S->zero_clk, unpack_migrate_request, request);
-                S->add_read_request(rand() % NUM_VTS, thr);
-                rec_msg.reset(new message::message());
-                break;
-
-            case message::MIGRATION_TOKEN:
-                S->migration_mutex.lock();
-                message::unpack_message(*rec_msg, mtype, S->migr_token_hops, S->migr_vt);
-                S->migr_token = true;
-                S->migrated = false;
-                S->migration_mutex.unlock();
-                break;
-
-            case message::LOADED_GRAPH: {
-                uint64_t load_time;
-                message::unpack_message(*rec_msg, message::LOADED_GRAPH, load_time);
-                S->graph_load_mutex.lock();
-                if (load_time > S->max_load_time) {
-                    S->max_load_time = load_time;
+                case message::NODE_CONTEXT_FETCH:
+                case message::NODE_CONTEXT_REPLY: {
+                    void (*f)(uint64_t, void*);
+                    if (mtype == message::NODE_CONTEXT_FETCH) {
+                        f = unpack_and_fetch_context;
+                    } else { // NODE_CONTEXT_REPLY
+                        f = unpack_context_reply;
+                    }
+                    message::unpack_partial_message(*rec_msg, mtype, pType, req_id, vt_id, vclk);
+                    assert(vclk.clock.size() == NUM_VTS);
+                    mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
+                    if (S->qm.check_rd_request(vclk.clock)) {
+                        f(thread_id, mwrap);
+                    } else {
+                        qreq = new db::queued_request(req_id, vclk, f, mwrap);
+                        S->qm.enqueue_read_request(vt_id, qreq);
+                    }
+                    break;
                 }
-                if (++S->load_count == NUM_SHARDS) {
-                    WDEBUG << "Loaded graph on all shards, time taken = " << (S->max_load_time/MEGA) << " ms." << std::endl;
-                } else {
-                    WDEBUG << "Loaded graph on " << S->load_count << " shards, current time "
-                            << (S->max_load_time/MEGA) << "ms." << std::endl;
+
+                case message::VT_NOP: {
+                    db::nop_data *nop_arg = new db::nop_data();
+                    message::unpack_message(*rec_msg, mtype, vt_id, nop_arg->vclk, qts, req_id,
+                        nop_arg->done_reqs, nop_arg->max_done_id, nop_arg->max_done_clk,
+                        nop_arg->outstanding_progs, nop_arg->shard_node_count);
+                    assert(nop_arg->vclk.clock.size() == NUM_VTS);
+                    assert(nop_arg->max_done_clk.size() == NUM_VTS);
+                    nop_arg->vt_id = vt_id;
+                    nop_arg->req_id = req_id;
+                    // nop goes through queues always
+                    qreq = new db::queued_request(qts[shard_id-SHARD_ID_INCR], nop_arg->vclk, nop, (void*)nop_arg);
+                    S->qm.enqueue_write_request(vt_id, qreq);
+                    break;
                 }
-                S->graph_load_mutex.unlock();
-                break;
-            }
 
-            case message::MSG_COUNT: {
-                message::unpack_message(*rec_msg, message::MSG_COUNT, vt_id);
-                S->update_mutex.lock();
-                message::prepare_message(*rec_msg, message::MSG_COUNT, shard_id, S->msg_count);
-                S->msg_count = 0;
-                S->update_mutex.unlock();
-                S->comm.send(vt_id, rec_msg->buf);
-                break;
-            }
+                case message::PERMANENTLY_DELETED_NODE: {
+                    uint64_t *node = (uint64_t*)malloc(sizeof(uint64_t));
+                    message::unpack_message(*rec_msg, mtype, *node);
+                    update_deleted_node(thread_id, (void*)node);
+                    break;
+                }
 
-            case message::EXIT_WEAVER:
-                exit(0);
-                
-            default:
-                WDEBUG << "unexpected msg type " << mtype << std::endl;
+                case message::MIGRATE_SEND_NODE:
+                case message::MIGRATED_NBR_UPDATE:
+                case message::MIGRATED_NBR_ACK:
+                    mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
+                    unpack_migrate_request(thread_id, (void*)mwrap);
+                    break;
+
+                case message::MIGRATION_TOKEN:
+                    S->migration_mutex.lock();
+                    message::unpack_message(*rec_msg, mtype, S->migr_token_hops, S->migr_vt);
+                    S->migr_token = true;
+                    S->migrated = false;
+                    S->migration_mutex.unlock();
+                    break;
+
+                case message::LOADED_GRAPH: {
+                    uint64_t load_time;
+                    message::unpack_message(*rec_msg, message::LOADED_GRAPH, load_time);
+                    S->graph_load_mutex.lock();
+                    if (load_time > S->max_load_time) {
+                        S->max_load_time = load_time;
+                    }
+                    if (++S->load_count == NUM_SHARDS) {
+                        WDEBUG << "Loaded graph on all shards, time taken = " << (S->max_load_time/MEGA) << " ms." << std::endl;
+                    } else {
+                        WDEBUG << "Loaded graph on " << S->load_count << " shards, current time "
+                                << (S->max_load_time/MEGA) << "ms." << std::endl;
+                    }
+                    S->graph_load_mutex.unlock();
+                    break;
+                }
+
+                case message::MSG_COUNT: {
+                    message::unpack_message(*rec_msg, message::MSG_COUNT, vt_id);
+                    S->update_mutex.lock();
+                    message::prepare_message(*rec_msg, message::MSG_COUNT, shard_id, S->msg_count);
+                    S->msg_count = 0;
+                    S->update_mutex.unlock();
+                    S->comm.send(vt_id, rec_msg->buf);
+                    break;
+                }
+
+                case message::EXIT_WEAVER:
+                    exit(0);
+                    
+                default:
+                    WDEBUG << "unexpected msg type " << mtype << std::endl;
+            }
+            rec_msg->type = message::ERROR;
         }
+
+        // execute all queued requests that can be executed now
+        // will break from loop when no more requests can be executed, in which case we need to recv
+        while (S->qm.exec_queued_request(thread_id));
     }
 }
 
@@ -1830,7 +1844,13 @@ main(int argc, char *argv[])
         std::cout << "Weaver: shard instance " << S->shard_id << std::endl;
     }
 
-    msgrecv_loop();
+    // start all threads
+    std::thread *t;
+    for (int i = 0; i < NUM_THREADS-1; i++) {
+        t = new std::thread(recv_loop, i);
+        t->detach();
+    }
+    recv_loop(NUM_THREADS-1);
 
     return 0;
 }

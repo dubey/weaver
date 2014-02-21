@@ -67,6 +67,7 @@ shard_SOURCES=	common/ids.cc \
                 common/comm_wrapper.cc \
 				db/server_manager_link_wrapper.cc \
                 db/hyper_stub.cc \
+                db/queue_manager.cc \
 				db/shard.cc
 shard_CFLAGS= 	$(AM_CFLAGS)
 shard_CXXFLAGS=	$(AM_CXXFLAGS)

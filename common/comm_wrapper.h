@@ -57,9 +57,10 @@ class comm_wrapper
         std::unordered_map<uint64_t, po6::net::location> cluster;
         uint64_t bb_id;
         int num_threads;
+        int timeout;
 
     public:
-        comm_wrapper(uint64_t bbid, int nthr);
+        comm_wrapper(uint64_t bbid, int nthr, int timeout);
         void init(configuration &config);
         void client_init();
         uint64_t reconfigure(configuration &config);

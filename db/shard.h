@@ -36,7 +36,7 @@
 #include "element/node.h"
 #include "element/edge.h"
 #include "state/program_state.h"
-#include "threadpool/threadpool.h"
+#include "db/queue_manager.h"
 #include "deferred_write.h"
 #include "del_obj.h"
 #include "hyper_stub.h"
@@ -57,17 +57,6 @@ namespace std {
 
 namespace db
 {
-    // Pending update request
-    class graph_request
-    {
-        public:
-            graph_request(enum message::msg_type, std::unique_ptr<message::message>);
-
-        public:
-            enum message::msg_type type;
-            std::unique_ptr<message::message> msg;
-    };
-
     // for permanent deletion priority queue
     struct perm_del_compare
         : std::binary_function<del_obj*, del_obj*, bool>
@@ -84,12 +73,6 @@ namespace db
             return true;
         }
     };
-
-    inline
-    graph_request :: graph_request(enum message::msg_type mt, std::unique_ptr<message::message> m)
-        : type(mt)
-        , msg(std::move(m))
-    { }
 
     enum graph_file_format
     {
@@ -121,8 +104,7 @@ namespace db
         private:
             po6::threads::mutex clock_mutex; // vector clock/queue timestamp mutex
         public:
-            po6::threads::mutex queue_mutex // exclusive access to thread pool queues
-                , msg_count_mutex
+            po6::threads::mutex msg_count_mutex
                 , migration_mutex
                 , graph_load_mutex; // gather load times from all shards
 
@@ -153,11 +135,8 @@ namespace db
             std::unordered_map<uint64_t, element::node*> nodes; // node handle -> ptr to node object
             std::unordered_map<uint64_t, // node handle n ->
                 std::unordered_set<uint64_t>> edge_map; // in-neighbors of n
-        private:
-            db::thread::pool thread_pool;
+            queue_manager qm;
         public:
-            void add_write_request(uint64_t vt_id, thread::unstarted_thread *thr);
-            void add_read_request(uint64_t vt_id, thread::unstarted_thread *thr);
             element::node* create_node(uint64_t thread_id, uint64_t node_handle, vc::vclock &vclk, bool migrate, bool init_load);
             void delete_node_nonlocking(uint64_t thread_id, element::node *n, vc::vclock &tdel);
             void delete_node(uint64_t thread_id, uint64_t node_handle, vc::vclock &vclk, vc::qtimestamp_t &qts);
@@ -252,7 +231,6 @@ namespace db
         , first_config_cond(&config_mutex)
         , shard_id(shard)
         , m_us(server)
-        , thread_pool(NUM_THREADS - 1)
         , current_migr(false)
         , migr_token(false)
         , migrated(false)
@@ -267,10 +245,9 @@ namespace db
         , max_done_clk(NUM_VTS, vc::vclock_t())
         , msg_count(0)
         , prog_state()
-        , comm(m_us.get(), 1)
+        , comm(m_us.get(), NUM_THREADS, SHARD_MSGRECV_TIMEOUT)
     {
         assert(NUM_VTS == KRONOS_NUM_VTS);
-        thread::pool::S = this;
         message::prog_state = &prog_state;
         for (int i = 0; i < NUM_THREADS; i++) {
             hstub.push_back(new hyper_stub(shard_id));
@@ -308,7 +285,7 @@ namespace db
         std::unordered_map<uint64_t, uint64_t> qts_map;
         std::unordered_map<uint64_t, vc::vclock_t> last_clocks;
         hstub.back()->restore_backup(qts_map, last_clocks);
-        thread_pool.restore_backup(qts_map, last_clocks);
+        qm.restore_backup(qts_map, last_clocks);
     }
 
     // reconfigure cluster according to new configuration
@@ -337,14 +314,14 @@ namespace db
     shard :: increment_qts(uint64_t thread_id, uint64_t vt_id, uint64_t incr)
     {
         hstub[thread_id]->increment_qts(vt_id, incr);
-        thread_pool.increment_qts(vt_id, incr);
+        qm.increment_qts(vt_id, incr);
     }
 
     inline void
     shard :: record_completed_tx(uint64_t thread_id, uint64_t vt_id, vc::vclock_t &tx_clk)
     {
         hstub[thread_id]->update_last_clocks(vt_id, tx_clk);
-        thread_pool.record_completed_tx(vt_id, tx_clk);
+        qm.record_completed_tx(vt_id, tx_clk);
     }
 
     // find the node corresponding to given handle
@@ -444,18 +421,6 @@ namespace db
 
 
     // Graph state update methods
-
-    inline void
-    shard :: add_write_request(uint64_t vt_id, thread::unstarted_thread *thr)
-    {
-        thread_pool.add_write_request(vt_id, thr);
-    }
-
-    inline void
-    shard :: add_read_request(uint64_t vt_id, thread::unstarted_thread *thr)
-    {
-        thread_pool.add_read_request(vt_id, thr);
-    }
 
     inline element::node*
     shard :: create_node(uint64_t thread_id, uint64_t node_handle, vc::vclock &vclk, bool migrate, bool init_load=false)
@@ -733,7 +698,11 @@ namespace db
                 default:
                     WDEBUG << "invalid type " << dobj->type << " in deleted object" << std::endl;
             }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+            // we know dobj will be initialized here
             delete dobj;
+#pragma GCC diagnostic pop
             perm_del_queue.pop();
         }
         if (!outstanding_progs) {
@@ -872,106 +841,6 @@ namespace db
         return done;
     }
 
-    inline thread::unstarted_thread*
-    get_read_thr(std::vector<thread::pqueue_t> &read_queues, std::vector<vc::vclock_t> &last_clocks)
-    {
-        thread::unstarted_thread* thr;
-        bool can_exec;
-        for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
-            thread::pqueue_t &pq = read_queues[vt_id];
-            // execute read request after all write queues have processed write which happens after this read
-            if (!pq.empty()) {
-                can_exec = true;
-                thr = pq.top();
-                for (uint64_t write_vt = 0; write_vt < NUM_VTS; write_vt++) {
-                    if (order::compare_two_clocks(thr->vclock.clock, last_clocks[write_vt]) != 0) {
-                        can_exec = false;
-                        break;
-                    }
-                }
-                if (can_exec) {
-                    pq.pop();
-                    return thr;
-                }
-            }
-        }
-        return NULL;
-    }
-
-    inline thread::unstarted_thread*
-    get_write_thr(thread::pool *tpool)
-    {
-        thread::unstarted_thread *thr = NULL;
-        std::vector<vc::vclock> timestamps;
-        timestamps.reserve(NUM_VTS);
-        std::vector<thread::pqueue_t> &write_queues = tpool->write_queues;
-        // get next jobs from each queue
-        for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
-            thread::pqueue_t &pq = write_queues[vt_id];
-            // wait for queue to receive at least one job
-            if (pq.empty()) { // can't write if one of the pq's is empty
-                return NULL;
-            } else {
-                thr = pq.top();
-                // check for correct ordering of queue timestamp (which is priority for thread)
-                if (!tpool->check_qts(vt_id, thr->priority)) {
-                    return NULL;
-                }
-            }
-        }
-        // all write queues are good to go, compare timestamps
-        for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
-            timestamps.emplace_back(write_queues[vt_id].top()->vclock);
-        }
-        uint64_t exec_vt_id;
-        if (NUM_VTS == 1) {
-            exec_vt_id = 0; // only one timestamper
-        } else {
-            exec_vt_id = order::compare_vts(timestamps);
-        }
-        thr = write_queues[exec_vt_id].top();
-        write_queues[exec_vt_id].pop();
-        return thr;
-    }
-
-    inline thread::unstarted_thread*
-    get_read_or_write(thread::pool *tpool)
-    {
-        thread::unstarted_thread *thr = get_read_thr(tpool->read_queues, tpool->last_clocks);
-        if (thr == NULL) {
-            thr = get_write_thr(tpool);
-        }
-        return thr;
-    }
-
-    // work loop for threads in thread pool
-    // check all queues are ready to go
-    // if yes, execute the earliest job, else sleep and wait for incoming jobs
-    // "earliest" is decided by comparison functions using vector clocks and Kronos
-    inline void
-    thread :: worker_thread_loop(thread::pool *tpool, uint64_t tid)
-    {
-        thread::unstarted_thread *thr = NULL;
-        po6::threads::cond &c = tpool->queue_cond;
-        while (true) {
-            // TODO better queue locking needed
-            tpool->thread_loop_mutex.lock(); // only one thread accesses queues
-            // TODO add job method should be non-blocking on this mutex
-            tpool->queue_mutex.lock(); // prevent more jobs from being added
-            while((thr = get_read_or_write(tpool)) == NULL) {
-                c.wait();
-            }
-            tpool->queue_mutex.unlock();
-            tpool->thread_loop_mutex.unlock();
-            (*thr->func)(tid, thr->arg);
-            // queue timestamp is incremented by the thread, upon finishing
-            // because the decision to increment or not is based on thread-specific knowledge
-            // moreover, when to increment can also be decided by thread only
-            // this could potentially decrease throughput, because other ops in the
-            // threadpool are blocked, waiting for this thread to increment qts
-            delete thr;
-        }
-    }
 }
 
 #endif

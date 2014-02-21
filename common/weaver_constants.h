@@ -51,6 +51,8 @@
 #define INITIAL_TIMEOUT_MILL 5000 // number of milliseconds initial delay
 #define INITIAL_TIMEOUT_MICR 5000000 // number of microseconds initial delay
 #define INITIAL_TIMEOUT_NANO 5000000000 // number of nanoseconds initial delay
+#define SHARD_MSGRECV_TIMEOUT 100 // busybee recv timeout for shard worker threads
+                                  // worker threads should constantly check for and execute queued_requests
 // node programs
 #define BATCH_MSG_SIZE 1 // 1 == no batching
 #define MAX_CACHE_ENTRIES 0 // 0 to turn off caching

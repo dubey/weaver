@@ -158,14 +158,12 @@ namespace message
     inline
     message :: message()
         : type(ERROR)
-    {
-    }
+    { }
 
     inline
     message :: message(enum msg_type t)
         : type(t)
-    {
-    }
+    { }
 
     inline 
     message :: message(message &copy)

@@ -78,7 +78,7 @@ namespace client
         : myid(my_id)
         , shifted_id(myid << (64-ID_BITS))
         , vtid(vt_id)
-        , comm(my_id, 1)
+        , comm(my_id, 1, -1)
         , tx_id_ctr(0)
         , temp_handle_ctr(0)
     {

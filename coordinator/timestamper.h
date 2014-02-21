@@ -142,7 +142,7 @@ namespace coordinator
         , shard_node_count(NUM_SHARDS, 0)
         , msg_count(0)
         , msg_count_acks(0)
-        , comm(server.get(), NUM_THREADS)
+        , comm(server.get(), NUM_THREADS, -1)
     {
         // initialize communication layer
         // TODO this is wrong

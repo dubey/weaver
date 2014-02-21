@@ -72,9 +72,10 @@ comm_wrapper :: weaver_mapper :: reconfigure(configuration &new_config, uint64_t
 }
 
 
-comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr)
+comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr, int to)
     : bb_id(bbid)
     , num_threads(nthr)
+    , timeout(to)
 {
     int inport;
     uint64_t id;
@@ -109,6 +110,7 @@ comm_wrapper :: init(configuration &config)
     wmap->reconfigure(config, primary);
 #endif
     bb.reset(new busybee_mta(wmap.get(), *loc, bb_id+ID_INCR, num_threads));
+    bb->set_timeout(timeout);
 }
 
 void
@@ -123,7 +125,9 @@ uint64_t
 comm_wrapper :: reconfigure(configuration &config)
 {
     uint64_t primary = bb_id;
+    bb->pause();
     wmap->reconfigure(config, primary);
+    bb->unpause();
     return primary;
 }
 
