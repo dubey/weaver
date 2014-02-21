@@ -46,6 +46,10 @@ namespace node_prog
         db::element::remote_node node;
 
         bool node_deleted;
+
+        node_cache_context() {};
+        node_cache_context(uint64_t loc, uint64_t id, bool deleted) : node(loc, id), node_deleted(deleted) {};
+
         std::vector<node_prog::property> props_added;
         std::vector<node_prog::property> props_deleted;
 

@@ -32,7 +32,7 @@ class simple_client:
         rp = client.ReachParams(dest=dest, edge_props=edge_props, caching=caching)
         prog_args = [(source, rp)]
         response = self.c.run_reach_program(prog_args)
-        return response.reachable
+        return (response.reachable, response.hops)
 
     def clustering(self, id):
         cp = client.ClusteringParams(caching=False)

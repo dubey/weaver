@@ -35,9 +35,9 @@ namespace element
     static db::element::remote_node coordinator(0,0);
     
     inline
-    remote_node :: remote_node(uint64_t l, uint64_t h)
+    remote_node :: remote_node(uint64_t l, uint64_t i)
         : loc(l)
-        , id(h)
+        , id(i)
     { }
 
     inline remote_node :: remote_node() { }

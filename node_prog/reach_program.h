@@ -181,6 +181,7 @@ namespace node_prog
             }
             // edge deletion, currently n^2 check for any edge deletion between two nodes in watch set, could poss be better
             for(auto &edge : node_context.edges_deleted){
+                WDEBUG  << "edge deletion exists" << std::endl;
                 for (node_prog::node_cache_context& other_node_context : contexts)
                 {
                     if (edge.nbr == other_node_context.node) {

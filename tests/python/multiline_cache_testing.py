@@ -89,6 +89,7 @@ c.end_tx(tx_id)
 
 print 'Created graph'
 
+#sc.reachability(source, sink, caching = True).first
 rp = client.ReachParams(dest=sink, caching=True)
 print 'Created reach param: mode = ' + str(rp.mode) + ', reachable = ' + str(rp.reachable)
 prog_args = [(source, rp)]

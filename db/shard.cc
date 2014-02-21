@@ -681,16 +681,25 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<
             WDEBUG << "node not found or migrated, invalidating cached value" << std::endl;
             assert(false);
         } else { // node exists
-            toFill.emplace_back();
-            node_prog::node_cache_context &context = toFill.back();
-            context.node = db::element::remote_node(loc, id);
-
-            context.node_deleted = (order::compare_two_vts(node->base.get_del_time(), cur_time) == 0);
-            if (!context.node_deleted)
-            {
-                fill_changed_properties(node->base.properties, &context.props_added, &context.props_deleted, cache_entry_time, cur_time);
+            if (order::compare_two_vts(node->base.get_del_time(), cur_time) == 0) { // node has been deleted
+                toFill.emplace_back(loc, id, true);
+            } else {
+                node_prog::node_cache_context *context = NULL;
                 std::vector<node_prog::property> temp_props_added;
                 std::vector<node_prog::property> temp_props_deleted;
+
+                fill_changed_properties(node->base.properties, &temp_props_added, &temp_props_deleted, cache_entry_time, cur_time);
+                // check for changes to node properties
+                if (!temp_props_added.empty() || !temp_props_deleted.empty()) {
+                    toFill.emplace_back(loc, id, false);
+                    context = &toFill.back();
+
+                    context->props_added = std::move(temp_props_added);
+                    context->props_deleted = std::move(temp_props_deleted);
+                    temp_props_added.clear();
+                    temp_props_deleted.clear();
+                }
+                // now check for any edge changes
                 for (auto &iter: node->out_edges) {
                     db::element::edge* e = iter.second;
                     assert(e != NULL);
@@ -701,17 +710,30 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<
                     bool del_before_cur = (order::compare_two_vts(e->base.get_del_time(), cur_time) == 0);
                     bool creat_before_cur = (order::compare_two_vts(e->base.get_creat_time(), cur_time) == 0);
 
-                    if (creat_after_cached && creat_before_cur && !del_before_cur){
-                        context.edges_added.emplace_back(e->base.get_id(), e->nbr);
+                    if (del_after_cached && del_before_cur) {
+                        WDEBUG << "edge deleted kinda!" << std::endl;
+                    }
 
-                        node_prog::edge_cache_context &edge_context = context.edges_added.back();
+                    if (creat_after_cached && creat_before_cur && !del_before_cur){
+                        WDEBUG << "edge created!" << std::endl;
+                        if (context == NULL) {
+                            toFill.emplace_back(loc, id, false);
+                            context = &toFill.back();
+                        }
+
+                        context->edges_added.emplace_back(e->base.get_id(), e->nbr);
+                        node_prog::edge_cache_context &edge_context = context->edges_added.back();
                         // don't care about props deleted before req time for an edge created after cache value was stored
                         fill_changed_properties(e->base.properties, &edge_context.props_added,
                                 NULL, cache_entry_time, cur_time);
                     } else if (del_after_cached && del_before_cur) {
-                        context.edges_deleted.emplace_back(e->base.get_id(), e->nbr);
-                        node_prog::edge_cache_context &edge_context = context.edges_deleted.back();
-
+                        WDEBUG << "edge deleted!" << std::endl;
+                        if (context == NULL) {
+                            toFill.emplace_back(loc, id, false);
+                            context = &toFill.back();
+                        }
+                        context->edges_added.emplace_back(e->base.get_id(), e->nbr);
+                        node_prog::edge_cache_context &edge_context = context->edges_added.back();
                         // don't care about props added after cache time on a deleted edge
                         fill_changed_properties(e->base.properties, NULL,
                                 &edge_context.props_deleted, cache_entry_time, cur_time);
@@ -720,10 +742,14 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<
                         fill_changed_properties(e->base.properties, &temp_props_added,
                                 &temp_props_deleted, cache_entry_time, cur_time);
                         if (!temp_props_added.empty() || !temp_props_deleted.empty()) {
-                            context.edges_modified.emplace_back(e->base.get_id(), e->nbr);
+                            if (context == NULL) {
+                                toFill.emplace_back(loc, id, false);
+                                context = &toFill.back();
+                            }
+                            context->edges_modified.emplace_back(e->base.get_id(), e->nbr);
 
-                            context.edges_modified.back().props_added = std::move(temp_props_added);
-                            context.edges_modified.back().props_deleted = std::move(temp_props_deleted);
+                            context->edges_modified.back().props_added = std::move(temp_props_added);
+                            context->edges_modified.back().props_deleted = std::move(temp_props_deleted);
 
                             temp_props_added.clear();
                             temp_props_deleted.clear();
