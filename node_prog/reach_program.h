@@ -152,26 +152,33 @@ namespace node_prog
     struct reach_cache_value : public virtual Cache_Value_Base 
     {
         public:
+            std::vector<db::element::remote_node> path;
 
+            reach_cache_value(std::vector<db::element::remote_node> &copy_path)
+                : path(copy_path) { };
         virtual ~reach_cache_value () { }
 
         virtual uint64_t size() const 
         {
-            return 0;
+            return message::size(path);
         }
 
-        virtual void pack(e::buffer::packer&) const 
+        virtual void pack(e::buffer::packer& packer) const 
         {
+            message::pack_buffer(packer, path);
         }
 
-        virtual void unpack(e::unpacker&)
+        virtual void unpack(e::unpacker& unpacker)
         {
+            message::unpack_buffer(unpacker, path);
         }
     };
 
     inline bool
-    check_cache_context(std::vector<node_cache_context>& contexts)
+    check_cache_context(cache_response &cr)
     {
+        std::vector<node_cache_context>& contexts = cr.get_context();
+        std::shared_ptr<reach_cache_value> cv = std::dynamic_pointer_cast<reach_cache_value>(cr.get_value());
         // path not valid if broken by:
         for (node_cache_context& node_context : contexts)
         {
@@ -179,15 +186,17 @@ namespace node_prog
                 WDEBUG  << "Cache entry invalid because of node deletion" << std::endl;
                 return false;
             }
-            // edge deletion, currently n^2 check for any edge deletion between two nodes in watch set, could poss be better
-            for(auto &edge : node_context.edges_deleted){
-                WDEBUG  << "edge deletion exists" << std::endl;
-                for (node_prog::node_cache_context& other_node_context : contexts)
-                {
-                    if (edge.nbr == other_node_context.node) {
-                        WDEBUG  << "Cache entry invalid because of edge deletion" << std::endl;
-                        return false;
+            // edge deletion, see if path was broken
+            for (size_t i = 0; i < cv->path.size() - 1; i++) {
+                if (node_context.node == cv->path.at(i)) {
+                    db::element::remote_node &path_next_node = cv->path.at(i+1);
+                    for(auto &edge : node_context.edges_deleted){
+                        if (edge.nbr == path_next_node) {
+                            WDEBUG  << "Cache entry invalid because of edge deletion" << std::endl;
+                            return false;
+                        }
                     }
+                    break; // path not broken here, move on
                 }
             }
         }
@@ -207,9 +216,9 @@ namespace node_prog
     {
         if (MAX_CACHE_ENTRIES)
         {
-            if (params._search_cache  && !params.mode && cache_response){
+            if (params._search_cache && !params.mode && cache_response != NULL){
                 // check context, update cache
-                bool valid = check_cache_context(cache_response->get_context());
+                bool valid = check_cache_context(*cache_response);
                 if (valid) {
                     // we found the node we are looking for, prepare a reply
                     params.mode = true;
@@ -217,6 +226,7 @@ namespace node_prog
                     params._search_cache = false; // don't search on way back
 
                     // context for cached value contains the nodes in the path to the dest_idination from this node
+                    params.path = std::dynamic_pointer_cast<reach_cache_value>(cache_response->get_value())->path;
                     for (auto& node_context : cache_response->get_context()) { 
                         params.path.emplace_back(node_context.node); // XXX THEse can be shuffled, change to storing this in cache
                     }
@@ -280,7 +290,7 @@ namespace node_prog
                     if (MAX_CACHE_ENTRIES)
                     {
                         // now add to cache
-                        std::shared_ptr<node_prog::reach_cache_value> toCache(new reach_cache_value());
+                        std::shared_ptr<node_prog::reach_cache_value> toCache(new reach_cache_value(params.path));
                         std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<db::element::remote_node>(params.path)); // copy return path from params
                         add_cache_func(toCache, watch_set, params.dest);
                     }
