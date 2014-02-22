@@ -187,9 +187,9 @@ namespace node_prog
                 return false;
             }
             // edge deletion, see if path was broken
-            for (size_t i = 0; i < cv->path.size() - 1; i++) {
+            for (size_t i = 1; i < cv->path.size(); i++) {
                 if (node_context.node == cv->path.at(i)) {
-                    db::element::remote_node &path_next_node = cv->path.at(i+1);
+                    db::element::remote_node &path_next_node = cv->path.at(i-1);
                     for(auto &edge : node_context.edges_deleted){
                         if (edge.nbr == path_next_node) {
                             WDEBUG  << "Cache entry invalid because of edge deletion" << std::endl;
