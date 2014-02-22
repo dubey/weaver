@@ -24,13 +24,11 @@ GREG TODO BEFORE A RELEASE
 clean up code in general
 allow node programs to not use cache parameters (to clean up interface)
 
-make sure cached paths for reachability are valid
-
 get rid of unnecessary copies (possibly getting rid of all copy constructors for things)
 
-clean up node program interface
-    special exposed node/edge objects
-    no timestamps
+make prog_state less global?
+make node prog cache dynamic cast away from cache value base internally (dont return to user as cache_value_base type)
+make cache invalidation work with permanent edge deletion
 
 allow clients to dynamically load node_program code
     dynamically generate python bindings?
