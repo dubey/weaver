@@ -609,13 +609,6 @@ nop(void *noparg)
     free(nop_arg);
 }
 
-template <typename CacheValueType>
-void put_cache_value(db::caching::program_cache &cache, node_prog::prog_type pType, std::shared_ptr<vc::vclock>& vc, std::shared_ptr<CacheValueType> cache_value, std::shared_ptr<std::vector<db::element::remote_node>> watch_set, uint64_t key)
-{
-    std::shared_ptr<node_prog::Cache_Value_Base> casted_cval = std::dynamic_pointer_cast<node_prog::Cache_Value_Base>(cache_value);
-    cache.add_cache_value(pType, casted_cval, watch_set, key, vc);
-}
-
 template <typename NodeStateType>
 NodeStateType& get_or_create_state(node_prog::prog_type pType, uint64_t req_id, uint64_t node_id)
 {
@@ -963,8 +956,8 @@ inline void node_prog_loop(
                 if (MAX_CACHE_ENTRIES)
                 {
                 using namespace std::placeholders;
-                add_cache_func = std::bind(put_cache_value<CacheValueType>, std::ref(node->cache),
-                        np.prog_type_recvd, std::ref(np.req_vclock), _1, _2, _3); // 1 is cache value, 2 is watch set, 3 is key
+                add_cache_func = std::bind(&db::caching::program_cache::add_cache_value, &(node->cache),
+                        np.prog_type_recvd, _1, _2, _3, np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key
                 }
 
                 node->base.view_time = np.req_vclock; 

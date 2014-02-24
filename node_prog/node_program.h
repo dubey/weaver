@@ -87,9 +87,8 @@ namespace node_prog
 
         node_prog_running_state() {};
         // delete standard copy onstructors
-        node_prog_running_state (const node_prog_running_state &) = delete;
+        node_prog_running_state(const node_prog_running_state &) = delete;
         node_prog_running_state& operator=(node_prog_running_state const&) = delete;
-        //node_prog_running_state(const node_prog_running_state &)  = delete;
 
         node_prog_running_state clone_without_start_node_params()
         {

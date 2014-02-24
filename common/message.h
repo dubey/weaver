@@ -784,9 +784,8 @@ namespace message
         t.reserve(elements_left);
 
         while (elements_left > 0) {
-            T to_add;
-            unpack_buffer(unpacker, to_add);
-            t.emplace_back(std::move(to_add));
+            t.emplace_back();
+            unpack_buffer(unpacker, t.back());
             elements_left--;
         }
     }
