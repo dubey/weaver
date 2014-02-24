@@ -65,6 +65,7 @@ namespace element
             bool in_use;
             uint32_t waiters; // count of number of waiters
             bool permanently_deleted;
+            std::unique_ptr<vc::vclock> last_perm_deletion; // vclock of last edge/property permanently deleted at this node
 
             // for migration
             uint64_t new_loc;
@@ -112,6 +113,7 @@ namespace element
         , in_use(true)
         , waiters(0)
         , permanently_deleted(false)
+        , last_perm_deletion(nullptr)
         , new_loc(UINT64_MAX)
         , update_count(1)
         , migr_score(NUM_SHARDS, 0)

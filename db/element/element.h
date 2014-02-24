@@ -53,7 +53,6 @@ namespace element
         public:
             std::vector<property> properties;
             std::shared_ptr<vc::vclock> view_time;
-            static vc::vclock static_del_time;
 
         public:
             void add_property(property prop);

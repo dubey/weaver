@@ -627,7 +627,14 @@ namespace db
 
                 case message::EDGE_DELETE_REQ:
                     n = acquire_node(dobj->node);
-                    assert(n->out_edges.find(dobj->edge) != n->out_edges.end());
+                    assert(n->out_edges.count(dobj->edge) > 0);
+                    // XXX can we avoid kronos in worst case below?
+                    if (n->last_perm_deletion == nullptr ||
+                            order::compare_two_vts(*n->last_perm_deletion,
+                                n->out_edges.at(dobj->edge)->base.get_del_time()) == 0) {
+                        n->last_perm_deletion.reset(
+                                new vc::vclock(std::move(n->out_edges.at(dobj->edge)->base.get_del_time())));
+                    }
                     delete n->out_edges[dobj->edge];
                     n->out_edges.erase(dobj->edge);
                     release_node(n);
