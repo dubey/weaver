@@ -44,8 +44,8 @@ comm_wrapper :: weaver_mapper :: reconfigure(configuration &new_config, uint64_t
         if (active_server_idx[i] < MAX_UINT64) {
             uint64_t srv_idx = active_server_idx[i];
             while (config.get_state(server_id(srv_idx)) != server::AVAILABLE) {
-                srv_idx = srv_idx + NUM_SHARDS;
-                if (srv_idx > (NUM_VTS + NUM_SHARDS*(1+NUM_BACKUPS))) {
+                srv_idx = srv_idx + NUM_VTS + NUM_SHARDS;
+                if (srv_idx > NUM_SERVERS) {
                     // all backups dead, not contactable
                     // cannot do anything
                     WDEBUG << "Caution! All backups for server " << i << " are dead\n";
@@ -66,7 +66,7 @@ comm_wrapper :: weaver_mapper :: reconfigure(configuration &new_config, uint64_t
         }
     }
     while (primary >= NUM_VTS + NUM_SHARDS) {
-        primary -= NUM_SHARDS;
+        primary -= (NUM_VTS+NUM_SHARDS);
     }
     primary = active_server_idx[primary];
 }
@@ -147,7 +147,7 @@ busybee_returncode
 comm_wrapper :: recv(uint64_t *recv_from, std::auto_ptr<e::buffer> *msg)
 {
     busybee_returncode code = bb->recv(recv_from, msg);
-    if (code != BUSYBEE_SUCCESS) {
+    if (code != BUSYBEE_SUCCESS && code != BUSYBEE_TIMEOUT) {
         WDEBUG << "busybee recv returned " << code << std::endl;
     }
     return code;

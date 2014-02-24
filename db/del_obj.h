@@ -32,6 +32,23 @@ namespace db
             , edge(e)
         { }
     };
+
+    // for permanent deletion priority queue
+    struct perm_del_compare
+        : std::binary_function<del_obj*, del_obj*, bool>
+    {
+        bool operator()(const del_obj* const &dw1, const del_obj* const &dw2)
+        {
+            assert(dw1->vclk.clock.size() == NUM_VTS);
+            assert(dw2->vclk.clock.size() == NUM_VTS);
+            for (uint64_t i = 0; i < NUM_VTS; i++) {
+                if (dw1->vclk.clock[i] <= dw2->vclk.clock[i]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+    };
 }
 
 #endif

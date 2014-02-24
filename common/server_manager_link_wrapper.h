@@ -32,18 +32,13 @@
 #include "common/server_manager_link.h"
 #include "common/ids.h"
 
-namespace db
-{
-
-class shard;
-
 // The thread whose calls the constructor can call everything.  All other
 // threads are left with the threadsafe block below.
 
 class server_manager_link_wrapper
 {
     public:
-        server_manager_link_wrapper(shard* s);
+        server_manager_link_wrapper(server_id us, std::shared_ptr<po6::net::location> loc);
         ~server_manager_link_wrapper() throw ();
 
     public:
@@ -86,7 +81,8 @@ class server_manager_link_wrapper
                             e::intrusive_ptr<sm_rpc> rpc);
 
     private:
-        shard* m_shard;
+        server_id m_us;
+        std::shared_ptr<po6::net::location> m_loc;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         std::auto_ptr<server_manager_link> m_sm;
@@ -114,7 +110,5 @@ class server_manager_link_wrapper
         server_manager_link_wrapper(const server_manager_link_wrapper&);
         server_manager_link_wrapper& operator = (const server_manager_link_wrapper&);
 };
-
-}
 
 #endif // weaver_shard_server_manager_link_wrapper_h_

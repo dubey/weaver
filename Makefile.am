@@ -41,6 +41,8 @@ timestamper_SOURCES=common/comm_wrapper.cc \
                     common/server.cc \
                     common/ids.cc \
                     common/serialization.cc \
+                    common/server_manager_link.cc \
+                    common/server_manager_link_wrapper.cc \
 					coordinator/timestamper.cc
 timestamper_CFLAGS= 	$(AM_CFLAGS)
 timestamper_CXXFLAGS= 	$(AM_CXXFLAGS)
@@ -63,9 +65,9 @@ shard_SOURCES=	common/ids.cc \
 				common/serialization.cc \
 				common/server.cc \
 				common/configuration.cc \
-				common/server_manager_link.cc \
                 common/comm_wrapper.cc \
-				db/server_manager_link_wrapper.cc \
+				common/server_manager_link.cc \
+				common/server_manager_link_wrapper.cc \
                 db/hyper_stub.cc \
                 db/queue_manager.cc \
 				db/shard.cc

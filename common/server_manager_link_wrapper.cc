@@ -32,10 +32,7 @@
 #include "common/weaver_constants.h"
 #include "common/server_manager_returncode.h"
 #include "common/serialization.h"
-#include "db/server_manager_link_wrapper.h"
-#include "db/shard.h"
-
-using db::server_manager_link_wrapper;
+#include "common/server_manager_link_wrapper.h"
 
 class server_manager_link_wrapper::sm_rpc
 {
@@ -100,8 +97,9 @@ server_manager_link_wrapper :: sm_rpc :: callback(server_manager_link_wrapper* c
     return false;
 }
 
-server_manager_link_wrapper :: server_manager_link_wrapper(shard* s)
-    : m_shard(s)
+server_manager_link_wrapper :: server_manager_link_wrapper(server_id us, std::shared_ptr<po6::net::location> loc)
+    : m_us(us)
+    , m_loc(loc)
     , m_sm()
     , m_rpcs()
     , m_mtx()
@@ -216,8 +214,8 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
 bool
 server_manager_link_wrapper :: should_exit()
 {
-    return (!m_sm->config()->exists(m_shard->m_us) && m_sm->config()->version() > 0) ||
-           (m_shutdown_requested && m_sm->config()->get_state(m_shard->m_us) == server::SHUTDOWN);
+    return (!m_sm->config()->exists(m_us) && m_sm->config()->version() > 0) ||
+           (m_shutdown_requested && m_sm->config()->get_state(m_us) == server::SHUTDOWN);
 }
 
 bool
@@ -273,7 +271,7 @@ server_manager_link_wrapper :: maintain_link()
 
         if (id == INT64_MAX)
         {
-            exit_status = m_sm->config()->exists(m_shard->m_us);
+            exit_status = m_sm->config()->exists(m_us);
             break;
         }
 
@@ -308,7 +306,7 @@ server_manager_link_wrapper :: request_shutdown()
 {
     m_shutdown_requested = true;
     char buf[sizeof(uint64_t)];
-    e::pack64be(m_shard->m_us.get(), buf);
+    e::pack64be(m_us.get(), buf);
     e::intrusive_ptr<sm_rpc> rpc = new sm_rpc();
     rpc->msg << "request shutdown";
     make_rpc("server_shutdown", buf, sizeof(uint64_t), rpc);
@@ -473,18 +471,18 @@ server_manager_link_wrapper :: ensure_available()
         return;
     }
 
-    if (m_sm->config()->get_address(m_shard->m_us) == *m_shard->comm.get_loc() &&
-        m_sm->config()->get_state(m_shard->m_us) == server::AVAILABLE)
+    if (m_sm->config()->get_address(m_us) == *m_loc &&
+        m_sm->config()->get_state(m_us) == server::AVAILABLE)
     {
         return;
     }
 
-    size_t sz = sizeof(uint64_t) + pack_size(*m_shard->comm.get_loc());
+    size_t sz = sizeof(uint64_t) + pack_size(*m_loc);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     std::auto_ptr<e::buffer> buf(e::buffer::create(sz));
 #pragma GCC diagnostic pop
-    *buf << m_shard->m_us << *m_shard->comm.get_loc();
+    *buf << m_us << *m_loc;
     e::intrusive_ptr<sm_rpc> rpc = new sm_rpc_available();
     rpc->msg << "server online";
     m_online_id = make_rpc_nosync("server_online",
@@ -520,7 +518,7 @@ server_manager_link_wrapper :: ensure_config_ack()
     }
 
     char buf[2 * sizeof(uint64_t)];
-    e::pack64be(m_shard->m_us.get(), buf);
+    e::pack64be(m_us.get(), buf);
     e::pack64be(m_config_ack, buf + sizeof(uint64_t));
     e::intrusive_ptr<sm_rpc> rpc = new sm_rpc_config_ack();
     rpc->msg << "ack config version=" << m_config_ack;
@@ -555,7 +553,7 @@ server_manager_link_wrapper :: ensure_config_stable()
     }
 
     char buf[2 * sizeof(uint64_t)];
-    e::pack64be(m_shard->m_us.get(), buf);
+    e::pack64be(m_us.get(), buf);
     e::pack64be(m_config_stable, buf + sizeof(uint64_t));
     e::intrusive_ptr<sm_rpc> rpc = new sm_rpc_config_stable();
     rpc->msg << "stable config version=" << m_config_stable;

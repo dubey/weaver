@@ -32,18 +32,18 @@
 #include "common/comm_wrapper.h"
 #include "common/event_order.h"
 #include "common/configuration.h"
+#include "common/server_manager_link_wrapper.h"
 #include "element/element.h"
 #include "element/node.h"
 #include "element/edge.h"
-#include "state/program_state.h"
+#include "db/state/program_state.h"
 #include "db/queue_manager.h"
-#include "deferred_write.h"
-#include "del_obj.h"
-#include "hyper_stub.h"
-#include "server_manager_link_wrapper.h"
+#include "db/deferred_write.h"
+#include "db/del_obj.h"
+#include "db/hyper_stub.h"
 
 namespace std {
-// so we can use a pair as key to unordered_map TODO move me??
+    // so we can use a pair as key to unordered_map
     template <typename T1, typename T2>
         struct hash<std::pair<T1, T2>>
         {
@@ -57,23 +57,6 @@ namespace std {
 
 namespace db
 {
-    // for permanent deletion priority queue
-    struct perm_del_compare
-        : std::binary_function<del_obj*, del_obj*, bool>
-    {
-        bool operator()(const del_obj* const &dw1, const del_obj* const &dw2)
-        {
-            assert(dw1->vclk.clock.size() == NUM_VTS);
-            assert(dw2->vclk.clock.size() == NUM_VTS);
-            for (uint64_t i = 0; i < NUM_VTS; i++) {
-                if (dw1->vclk.clock[i] <= dw2->vclk.clock[i]) {
-                    return false;
-                }
-            }
-            return true;
-        }
-    };
-
     enum graph_file_format
     {
         // edge list
@@ -108,13 +91,15 @@ namespace db
                 , migration_mutex
                 , graph_load_mutex; // gather load times from all shards
 
+            // Messaging infrastructure
+            common::comm_wrapper comm;
+
             // Hyperdex stub
             std::vector<hyper_stub*> hstub;
 
             // Server manager
             server_manager_link_wrapper sm_stub;
             configuration config;
-            std::vector<uint64_t> server_backups[NUM_VTS + NUM_SHARDS];
             bool active_backup, first_config;
             po6::threads::cond backup_cond, first_config_cond;
 
@@ -130,7 +115,7 @@ namespace db
 
             // Graph state
             uint64_t shard_id;
-            server_id m_us;
+            server_id server;
             std::unordered_set<uint64_t> node_list; // list of node handles currently on this shard
             std::unordered_map<uint64_t, element::node*> nodes; // node handle -> ptr to node object
             std::unordered_map<uint64_t, // node handle n ->
@@ -213,24 +198,18 @@ namespace db
             std::unordered_map<std::pair<uint64_t, uint64_t>, void *> node_prog_running_states; // used for fetching cache contexts
             po6::threads::mutex node_prog_running_states_mutex;
 
-            // Messaging infrastructure
-        public:
-            common::comm_wrapper comm;
-            //std::shared_ptr<po6::net::location> myloc;
-            //weaver_mapper *wmap;
-            //busybee_mta *bb; // Busybee instance used for sending and receiving messages
-
     };
 
     inline
-    shard :: shard(uint64_t shard, uint64_t server)
-        : sm_stub(this)
+    shard :: shard(uint64_t shardid, uint64_t serverid)
+        : comm(serverid, NUM_THREADS, SHARD_MSGRECV_TIMEOUT)
+        , sm_stub(server_id(serverid), comm.get_loc())
         , active_backup(false)
         , first_config(false)
         , backup_cond(&config_mutex)
         , first_config_cond(&config_mutex)
-        , shard_id(shard)
-        , m_us(server)
+        , shard_id(shardid)
+        , server(serverid)
         , current_migr(false)
         , migr_token(false)
         , migrated(false)
@@ -245,22 +224,11 @@ namespace db
         , max_done_clk(NUM_VTS, vc::vclock_t())
         , msg_count(0)
         , prog_state()
-        , comm(m_us.get(), NUM_THREADS, SHARD_MSGRECV_TIMEOUT)
     {
         assert(NUM_VTS == KRONOS_NUM_VTS);
         message::prog_state = &prog_state;
         for (int i = 0; i < NUM_THREADS; i++) {
             hstub.push_back(new hyper_stub(shard_id));
-        }
-
-        // server management
-        for (uint64_t i = 0; i < NUM_VTS; i++) {
-            server_backups[i].push_back(i);
-        }
-        for (uint64_t i = NUM_VTS; i < NUM_VTS + NUM_SHARDS; i++) {
-            for (uint64_t j = 0; j < NUM_BACKUPS+1; j++) {
-                server_backups[i].push_back(i + j*NUM_SHARDS);
-            }
         }
     }
 
@@ -279,6 +247,7 @@ namespace db
         order::call_times = new std::list<uint64_t>();
     }
 
+    // restore state when backup becomes primary due to failure
     inline void
     shard :: restore_backup()
     {
@@ -288,13 +257,13 @@ namespace db
         qm.restore_backup(qts_map, last_clocks);
     }
 
-    // reconfigure cluster according to new configuration
+    // reconfigure shard according to new cluster configuration
     // caution: assume holding config_mutex
     inline void
     shard :: reconfigure()
     {
         WDEBUG << "Cluster reconfigure triggered\n";
-        for (uint64_t i = 0; i < NUM_VTS + NUM_SHARDS*(1+NUM_BACKUPS); i++) {
+        for (uint64_t i = 0; i < NUM_SERVERS; i++) {
             server::state_t st = config.get_state(server_id(i));
             if (st != server::AVAILABLE) {
                 WDEBUG << "Server " << i << " is in trouble, has state " << st << std::endl;
@@ -302,7 +271,7 @@ namespace db
                 WDEBUG << "Server " << i << " is healthy, has state " << st << std::endl;
             }
         }
-        if (comm.reconfigure(config) == m_us.get()) {
+        if (comm.reconfigure(config) == server.get()) {
             // this server is now primary for the shard
             active_backup = true;
             backup_cond.signal();

@@ -1700,7 +1700,7 @@ server_manager_link_loop(po6::net::hostname sm_host)
 
     S->sm_stub.set_server_manager_address(sm_host.address.c_str(), sm_host.port);
 
-    if (!S->sm_stub.register_id(S->m_us, *S->comm.get_loc()))
+    if (!S->sm_stub.register_id(S->server, *S->comm.get_loc()))
     {
         return;
     }
@@ -1754,7 +1754,7 @@ server_manager_link_loop(po6::net::hostname sm_host)
                << "This is most likely an operations error."
                << "================================================================================";
     }
-    else if (S->sm_stub.should_exit() && !S->sm_stub.config().exists(S->m_us))
+    else if (S->sm_stub.should_exit() && !S->sm_stub.config().exists(S->server))
     {
         WDEBUG << "\n================================================================================\n"
                << "Exiting because the server manager says it doesn't know about this node.\n"

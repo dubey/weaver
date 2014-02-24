@@ -31,127 +31,103 @@
 #include "common/transaction.h"
 #include "common/configuration.h"
 #include "common/comm_wrapper.h"
+#include "common/server_manager_link_wrapper.h"
 #include "common/nmap_stub.h"
+#include "coordinator/current_tx.h"
+#include "coordinator/current_prog.h"
 //#include "node_prog/triangle_program.h"
-
-namespace coordinator
-{
-    struct tx_reply
-    {
-        uint64_t count;
-        uint64_t client_id;
-    };
-
-    class prog_reply
-    {
-        public:
-            uint64_t req_id;
-            std::bitset<NUM_SHARDS> replied;
-
-            prog_reply(uint64_t rid) : req_id(rid) { }
-
-            bool operator==(const prog_reply &rp) const { return req_id == rp.req_id; }
-    };
-}
-
-namespace std
-{
-    template <>
-    struct hash<coordinator::prog_reply>
-    {
-        size_t operator()(const coordinator::prog_reply &pr) const
-        {
-            return std::hash<uint64_t>()(pr.req_id);
-        }
-    };
-}
 
 namespace coordinator
 {
     class timestamper
     {
         public:
+            // messaging
+            common::comm_wrapper comm;
+
+            // server manager
+            server_manager_link_wrapper sm_stub;
+            configuration config;
+            bool active_backup, first_config;
+            po6::threads::cond backup_cond, first_config_cond;
+
+            // timestamper state
             uint64_t vt_id, shifted_id, id_gen; // this vector timestamper's id
             server_id server;
-            // timestamper state
             uint64_t loc_gen;
             vc::vclock vclk; // vector clock
             vc::qtimestamp_t qts; // queue timestamp
-            std::unordered_map<uint64_t, tx_reply> tx_replies;
-            timespec tspec;
-            uint64_t nop_time_millis, nop_time_nanos, first_nop_time_millis, clock_update_acks, nop_acks;
+            std::unordered_map<uint64_t, current_tx> outstanding_tx;
+            uint64_t clock_update_acks;
             std::bitset<NUM_SHARDS> to_nop;
-            std::vector<uint64_t> nop_last_qts;
-            bool first_clock_update;
+
             // node prog
-            // map from req_id to client_id that ensures a single response to a node program
-            std::unordered_map<uint64_t, uint64_t> outstanding_node_progs;
-            //std::unordered_map<uint64_t, std::pair<int,node_prog::triangle_params>> outstanding_triangle_progs;
-            std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> outstanding_req_ids;
-            std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> done_req_ids;
+            typedef std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> req_queue_t;
+            typedef std::unordered_map<uint64_t, std::bitset<NUM_SHARDS>> prog_reply_t;
+            std::unordered_map<uint64_t, current_prog> outstanding_progs;
+            // node prog cleanup and permanent deletion
+            req_queue_t pend_prog_queue;
+            req_queue_t done_prog_queue;
             uint64_t max_done_id;
             std::unique_ptr<vc::vclock_t> max_done_clk;
-            std::unordered_map<uint64_t, std::unique_ptr<vc::vclock_t>> id_to_clk;
-            std::unordered_map<node_prog::prog_type,
-                    std::unordered_map<uint64_t, std::bitset<NUM_SHARDS>>> done_reqs;
+            std::unordered_map<node_prog::prog_type, prog_reply_t> done_reqs;
             // node map client
             std::vector<nmap::nmap_stub*> nmap_client;
+
             // mutexes
-            po6::threads::mutex mutex // big mutex for clock and timestamper DS
-                    , loc_gen_mutex
+        private:
+            po6::threads::mutex loc_gen_mutex;
+        public:
+            po6::threads::mutex clk_mutex // vclock and queue timestamp
+                    , tx_prog_mutex // state for outstanding and completed node progs, transactions
                     , periodic_update_mutex // make sure to not send out clock update before getting ack from other VTs
-                    , graph_load_mutex;
-            po6::threads::cond periodic_cond;
+                    , msg_count_mutex
+                    , migr_mutex
+                    , graph_load_mutex
+                    , config_mutex;
+
             // initial graph loading
             uint32_t load_count;
             uint64_t max_load_time;
+
             // migration
             uint64_t migr_client;
             std::vector<uint64_t> shard_node_count;
             uint64_t msg_count, msg_count_acks;
-            // permanent deletion
-            // daemon
-            // messaging
-            common::comm_wrapper comm;
 
         public:
-            timestamper(uint64_t id);
+            timestamper(uint64_t vt, uint64_t server);
+            void init(bool backup);
+            void restore_backup();
+            void reconfigure();
             bool unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id, int tid);
-            //void clean_nmap_space();
             uint64_t generate_id();
     };
 
     inline
-    timestamper :: timestamper(uint64_t id)
-        : vt_id(id)
-        , shifted_id(id << (64-ID_BITS))
+    timestamper :: timestamper(uint64_t vtid, uint64_t serverid)
+        : comm(serverid, NUM_THREADS, -1)
+        , sm_stub(server_id(serverid), comm.get_loc())
+        , active_backup(false)
+        , first_config(false)
+        , backup_cond(&config_mutex)
+        , first_config_cond(&config_mutex)
+        , vt_id(vtid)
+        , shifted_id(vtid << (64-ID_BITS))
         , id_gen(0)
-        , server(id)
+        , server(serverid)
         , loc_gen(0)
-        , vclk(id, 0)
+        , vclk(vtid, 0)
         , qts(NUM_SHARDS, 0)
         , clock_update_acks(NUM_VTS-1)
-        , nop_acks(NUM_SHARDS)
-        , nop_last_qts(NUM_SHARDS, 0)
-        , first_clock_update(true)
         , max_done_id(0)
         , max_done_clk(new vc::vclock_t(NUM_VTS, 0))
-        , periodic_cond(&periodic_update_mutex)
         , load_count(0)
         , max_load_time(0)
         , shard_node_count(NUM_SHARDS, 0)
         , msg_count(0)
         , msg_count_acks(0)
-        , comm(server.get(), NUM_THREADS, -1)
     {
-        // initialize communication layer
-        // TODO this is wrong
-        configuration config;
-        comm.init(config);
-        //bb->set_timeout(VT_TIMEOUT_MILL);
-        nop_time_millis = wclock::get_time_elapsed_millis(tspec);
-        nop_time_nanos = wclock::get_time_elapsed(tspec);
-        first_nop_time_millis = nop_time_millis;
         // initialize empty vector of done reqs for each prog type
         std::unordered_map<uint64_t, std::bitset<NUM_SHARDS>> empty_map;
         done_reqs.emplace(node_prog::REACHABILITY, empty_map);
@@ -161,6 +137,42 @@ namespace coordinator
             nmap_client.push_back(new nmap::nmap_stub());
         }
         to_nop.set(); // set to_nop to 1 for each shard
+    }
+
+    // initialize msging layer
+    // TODO bool backup for hyper_stub
+    // caution: holding config_mutex
+    inline void
+    timestamper :: init(bool)
+    {
+        comm.init(config);
+    }
+
+    // restore state when backup becomes primary due to failure
+    inline void
+    timestamper :: restore_backup()
+    {
+        // TODO
+    }
+
+    // reconfigure timestamper according to new cluster configuration
+    inline void
+    timestamper :: reconfigure()
+    {
+        WDEBUG << "Cluster reconfigure triggered\n";
+        for (uint64_t i = 0; i < NUM_SERVERS; i++) {
+            server::state_t st = config.get_state(server_id(i));
+            if (st != server::AVAILABLE) {
+                WDEBUG << "Server " << i << " is in trouble, has state " << st << std::endl;
+            } else {
+                WDEBUG << "Server " << i << " is healthy, has state " << st << std::endl;
+            }
+        }
+        if (comm.reconfigure(config) == server.get()) {
+            // this server is now primary for the shard
+            active_backup = true;
+            backup_cond.signal();
+        }
     }
 
     // return false if the main node in the transaction is not found in node map
@@ -262,7 +274,7 @@ namespace coordinator
         return true;
     }
 
-    // caution: assuming caller holds mutex
+    // caution: assuming caller holds clk_mutex
     inline uint64_t
     timestamper :: generate_id()
     {
