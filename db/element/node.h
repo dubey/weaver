@@ -65,7 +65,6 @@ namespace element
             bool in_use;
             uint32_t waiters; // count of number of waiters
             bool permanently_deleted;
-            std::unique_ptr<std::vector<uint64_t>> cached_req_ids; // requests which have been cached
 
             // for migration
             uint64_t new_loc;
@@ -90,9 +89,6 @@ namespace element
 
         public:
             void add_edge(edge *e);
-            void add_cached_req(uint64_t req_id);
-            void remove_cached_req(uint64_t req_id);
-            std::unique_ptr<std::vector<uint64_t>> purge_cache();
 
             node_prog::edge_list get_edges()
             {
@@ -116,7 +112,6 @@ namespace element
         , in_use(true)
         , waiters(0)
         , permanently_deleted(false)
-        , cached_req_ids(new std::vector<uint64_t>())
         , new_loc(UINT64_MAX)
         , update_count(1)
         , migr_score(NUM_SHARDS, 0)
@@ -134,26 +129,6 @@ namespace element
         edge_handles.emplace(e->get_id());
 #endif
         out_edges.emplace(e->get_id(), e);
-    }
-
-    inline void
-    node :: add_cached_req(uint64_t req_id)
-    {
-        cached_req_ids->push_back(req_id);
-    }
-
-    inline void
-    node :: remove_cached_req(uint64_t req_id)
-    {
-        cached_req_ids->erase(std::remove(cached_req_ids->begin(), cached_req_ids->end(), req_id), cached_req_ids->end());
-    }
-
-    inline std::unique_ptr<std::vector<uint64_t>>
-    node :: purge_cache()
-    {
-        std::unique_ptr<std::vector<uint64_t>> ret = std::move(cached_req_ids);
-        cached_req_ids.reset(new std::vector<uint64_t>());
-        return ret;
     }
 
     inline bool
