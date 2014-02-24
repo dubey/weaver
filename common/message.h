@@ -836,11 +836,10 @@ namespace message
 
         while (elements_left > 0) {
             T1 key_to_add;
-            T2 val_to_add;
-
             unpack_buffer(unpacker, key_to_add);
-            unpack_buffer(unpacker, val_to_add);
-            t.emplace(key_to_add, std::move(val_to_add));
+            auto retPair = t.emplace(std::piecewise_construct, std::forward_as_tuple(key_to_add),
+              std::forward_as_tuple()); // emplace key with no-arg constructor value
+            unpack_buffer(unpacker, retPair.first->second); // unpacks value in place in map
             elements_left--;
         }
     }
