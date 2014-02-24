@@ -90,7 +90,7 @@ namespace node_prog
             std::function<read_node_props_state&()>,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
-            cache_response*)
+            cache_response<Cache_Value_Base>*)
     {
         for (property &prop : n.get_properties()) {
             if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.get_key()) != params.keys.end())) {

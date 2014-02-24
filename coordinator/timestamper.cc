@@ -197,8 +197,8 @@ timer_function()
 }
 
 // unpack client message for a node program, prepare shard msges, and send out
-template <typename ParamsType, typename NodeStateType>
-void node_prog :: particular_node_program<ParamsType, NodeStateType> :: 
+template <typename ParamsType, typename NodeStateType, typename CacheValueType>
+void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
     unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, int thread_id)
 {
     node_prog::prog_type pType;
@@ -269,13 +269,13 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
     }
 }
 
-template <typename ParamsType, typename NodeStateType>
-void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
+template <typename ParamsType, typename NodeStateType, typename CacheValueType>
+void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> ::
     unpack_and_run_db(std::unique_ptr<message::message>)
 { }
 
-template <typename ParamsType, typename NodeStateType>
-void node_prog :: particular_node_program<ParamsType, NodeStateType> ::
+template <typename ParamsType, typename NodeStateType, typename CacheValueType>
+void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> ::
     unpack_context_reply_db(std::unique_ptr<message::message>)
 { }
 

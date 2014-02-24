@@ -175,10 +175,10 @@ namespace node_prog
     };
 
     inline bool
-    check_cache_context(cache_response &cr)
+    check_cache_context(cache_response<reach_cache_value> &cr)
     {
         std::vector<node_cache_context>& contexts = cr.get_context();
-        std::shared_ptr<reach_cache_value> cv = std::dynamic_pointer_cast<reach_cache_value>(cr.get_value());
+        reach_cache_value &cv = *cr.get_value();
         // path not valid if broken by:
         for (node_cache_context& node_context : contexts)
         {
@@ -187,9 +187,9 @@ namespace node_prog
                 return false;
             }
             // edge deletion, see if path was broken
-            for (size_t i = 1; i < cv->path.size(); i++) {
-                if (node_context.node == cv->path.at(i)) {
-                    db::element::remote_node &path_next_node = cv->path.at(i-1);
+            for (size_t i = 1; i < cv.path.size(); i++) {
+                if (node_context.node == cv.path.at(i)) {
+                    db::element::remote_node &path_next_node = cv.path.at(i-1);
                     for(auto &edge : node_context.edges_deleted){
                         if (edge.nbr == path_next_node) {
                             WDEBUG  << "Cache entry invalid because of edge deletion" << std::endl;
@@ -210,9 +210,9 @@ namespace node_prog
             db::element::remote_node &rn,
             reach_params &params,
             std::function<reach_node_state&()> state_getter,
-            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, // TODO make const
+            std::function<void(std::shared_ptr<reach_cache_value>, // TODO make const
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
-            cache_response *cache_response)
+            cache_response<reach_cache_value>*cache_response)
     {
         if (MAX_CACHE_ENTRIES)
         {

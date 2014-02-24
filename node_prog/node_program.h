@@ -49,7 +49,7 @@ namespace db
 namespace node_prog
 {
 
-    template <typename params_type, typename node_state_type>
+    template <typename params_type, typename node_state_type, typename cache_value_type>
     struct node_function_type
     {
         public:
@@ -58,22 +58,13 @@ namespace node_prog
                 db::element::remote_node&, // this remote node
                 params_type&,
                 std::function<node_state_type&()>,
-                std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
+                std::function<void(std::shared_ptr<cache_value_type>,
                     std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
-                    cache_response *cache_response);
+                    cache_response<cache_value_type> *cache_response);
 
     };
 
-// XXX IS THE BELOW USED?
-    template <typename ParamsType, typename NodeStateType>
-    void node_program_runner(typename node_prog::node_function_type<ParamsType,
-            NodeStateType>::value_type np,
-            std::vector<std::pair<uint64_t, ParamsType>> &start_node_params,
-            node_prog::prog_type program,
-            uint64_t request_id)
-    { }
-
-    template <typename ParamsType, typename NodeStateType>
+    template <typename ParamsType, typename NodeStateType, typename CacheValueType>
         struct node_prog_running_state //: public virtual node_prog::Packable XXX can't get making this packable to work
     {
         private:
@@ -92,7 +83,7 @@ namespace node_prog
         std::shared_ptr<vc::vclock> req_vclock;
         uint64_t req_id;
         std::vector<std::pair<uint64_t, ParamsType>> start_node_params;
-        std::unique_ptr<db::caching::cache_response> cache_value; // XXX unique ptr needed?
+        std::unique_ptr<db::caching::cache_response<CacheValueType>> cache_value; // XXX unique ptr needed?
 
         node_prog_running_state() {};
         // delete standard copy onstructors
@@ -125,24 +116,22 @@ namespace node_prog
             virtual ~node_program() { }
     };
 
-    template <typename ParamsType, typename NodeStateType>
+    template <typename ParamsType, typename NodeStateType, typename CacheValueType>
     class particular_node_program : public virtual node_program 
     {
         public:
-            typedef typename node_function_type<ParamsType, NodeStateType>::value_type func;
-            //typedef typename deleted_node_function_type<ParamsType, NodeStateType>::value_type dfunc; TODO: NEEDED?
+            typedef typename node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type func;
             func enclosed_node_prog_func;
-            //dfunc enclosed_node_deleted_func;
             prog_type type;
 
         public:
-            particular_node_program(prog_type _type, func prog_func)//, dfunc del_func)
+            particular_node_program(prog_type _type, func prog_func)
                 : enclosed_node_prog_func(prog_func)
-              //  , enclosed_node_deleted_func(del_func)
                 , type(_type)
             {
                 static_assert(std::is_base_of<Node_Parameters_Base, ParamsType>::value, "Params type must be derived from Node_Parameters_Base");
-                static_assert(std::is_base_of<Node_State_Base, NodeStateType>::value, "Params type must be derived from Node_Parameters_Base");
+                static_assert(std::is_base_of<Node_State_Base, NodeStateType>::value, "State type must be derived from Node_State_Base");
+                static_assert(std::is_base_of<Cache_Value_Base, CacheValueType>::value, "Cache value type must be derived from Cache_Value_Base");
 
             }
 
@@ -158,21 +147,15 @@ namespace node_prog
     
     std::map<prog_type, node_program*> programs = {
         { REACHABILITY,
-            new particular_node_program<node_prog::reach_params, node_prog::reach_node_state>(REACHABILITY, node_prog::reach_node_program) },
-        /*
-        { TRIANGLE_COUNT,
-        new particular_node_program<node_prog::triangle_params, node_prog::triangle_node_state>(TRIANGLE_COUNT, node_prog::triangle_node_program) },
-        { N_HOP_REACHABILITY,
-          new particular_node_program<node_prog::n_hop_reach_params, node_prog::n_hop_reach_node_state>(N_HOP_REACHABILITY, node_prog::n_hop_reach_node_program) },
-        */
+            new particular_node_program<reach_params, reach_node_state, reach_cache_value>(REACHABILITY, node_prog::reach_node_program) },
         { DIJKSTRA,
-            new particular_node_program<node_prog::dijkstra_params, node_prog::dijkstra_node_state>(DIJKSTRA, node_prog::dijkstra_node_program) },
+            new particular_node_program<dijkstra_params, dijkstra_node_state, Cache_Value_Base>(DIJKSTRA, node_prog::dijkstra_node_program) },
         { CLUSTERING,
-            new particular_node_program<node_prog::clustering_params, node_prog::clustering_node_state>(CLUSTERING, node_prog::clustering_node_program) },
+            new particular_node_program<clustering_params, clustering_node_state, Cache_Value_Base>(CLUSTERING, node_prog::clustering_node_program) },
         { READ_NODE_PROPS,
-            new particular_node_program<node_prog::read_node_props_params, node_prog::read_node_props_state>(READ_NODE_PROPS, node_prog::read_node_props_node_program) },
+            new particular_node_program<read_node_props_params, read_node_props_state, Cache_Value_Base>(READ_NODE_PROPS, node_prog::read_node_props_node_program) },
         { READ_EDGES_PROPS,
-            new particular_node_program<node_prog::read_edges_props_params, node_prog::read_edges_props_state>(READ_EDGES_PROPS, node_prog::read_edges_props_node_program) }
+            new particular_node_program<read_edges_props_params, read_edges_props_state, Cache_Value_Base>(READ_EDGES_PROPS, node_prog::read_edges_props_node_program) }
     };
 }
 #endif //__NODE_PROG__

@@ -208,7 +208,7 @@ namespace node_prog
             dijkstra_params &params,
             std::function<dijkstra_node_state&()> get_state,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
-            cache_response*)
+            cache_response<Cache_Value_Base>*)
     {
         WDEBUG << "DIJKSTRAAAAA" << std::endl;
         if (rn.get_id() == params.src_id) {

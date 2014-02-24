@@ -94,7 +94,7 @@ namespace node_prog
             std::function<read_edges_props_state&()>,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
-            cache_response*)
+            cache_response<Cache_Value_Base>*)
     {
         for (edge &edge : n.get_edges()) {
             if (params.edges.empty() || (std::find(params.edges.begin(), params.edges.end(), edge.get_id()) != params.edges.end())) {
