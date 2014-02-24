@@ -598,7 +598,7 @@ nop(void *noparg)
     }
 
     // initiate permanent deletion
-    //S->permanent_delete_loop(nop_arg->vt_id, nop_arg->outstanding_progs != 0);
+    S->permanent_delete_loop(nop_arg->vt_id, nop_arg->outstanding_progs != 0);
 
     // record clock; reads go through
     S->record_completed_tx(nop_arg->vt_id, nop_arg->req_id, nop_arg->vclk.clock);
@@ -624,24 +624,16 @@ NodeStateType& get_or_create_state(node_prog::prog_type pType, uint64_t req_id, 
     return *toRet;
 }
 
-/*
-inline void modify_triangle_params(void * triangle_params, size_t num_nodes, db::element::remote_node& node) {
-    node_prog::triangle_params * params = (node_prog::triangle_params *) triangle_params;
-    params->responses_left = num_nodes;
-    params->super_node = node;
-}
-*/
-
 // vector pointers can be null if we don't want to fill that vector
 inline void
-fill_changed_properties(std::vector<db::element::property> &props, std::vector<node_prog::property> *props_added, std::vector<node_prog::property> *props_deleted, vc::vclock &cache_entry_time, vc::vclock &cur_time)
+fill_changed_properties(std::vector<db::element::property> &props, std::vector<node_prog::property> *props_added, std::vector<node_prog::property> *props_deleted, vc::vclock &time_cached, vc::vclock &cur_time)
 {
     for (db::element::property &prop : props)
     {
         bool del_before_cur = (order::compare_two_vts(prop.get_del_time(), cur_time) == 0);
 
         if (props_added != NULL) {
-            bool creat_after_cached = (order::compare_two_vts(prop.get_creat_time(), cache_entry_time) == 1);
+            bool creat_after_cached = (order::compare_two_vts(prop.get_creat_time(), time_cached) == 1);
             bool creat_before_cur = (order::compare_two_vts(prop.get_creat_time(), cur_time) == 0);
 
             if (creat_after_cached && creat_before_cur && !del_before_cur){
@@ -650,7 +642,7 @@ fill_changed_properties(std::vector<db::element::property> &props, std::vector<n
         }
 
         if (props_deleted != NULL) {
-            bool del_after_cached = (order::compare_two_vts(prop.get_del_time(), cache_entry_time) == 1);
+            bool del_after_cached = (order::compare_two_vts(prop.get_del_time(), time_cached) == 1);
 
             if (del_after_cached && del_before_cur) {
                 props_deleted->emplace_back(prop.key, prop.value);
@@ -659,16 +651,21 @@ fill_changed_properties(std::vector<db::element::property> &props, std::vector<n
     }
 }
 
-inline void
+// records all changes to nodes given in ids vector between time_cached and cur_time
+// returns false if cache should be invalidated
+inline bool
 fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<node_prog::node_cache_context>& toFill,
-        vc::vclock& cache_entry_time, vc::vclock& cur_time)
+        vc::vclock& time_cached, vc::vclock& cur_time)
 {
     // TODO maybe make this skip over locked nodes and retry fetching later
     for (uint64_t id : ids){
         db::element::node *node = S->acquire_node(id);
-        if (node == NULL || node->state == db::element::node::mode::MOVED) {
+        if (node == NULL || node->state == db::element::node::mode::MOVED ||
+                (node->last_perm_deletion != NULL && order::compare_two_vts(time_cached, *node->last_perm_deletion) == 0)) {
+            S->release_node(node);
             WDEBUG << "node not found or migrated, invalidating cached value" << std::endl;
-            assert(false);
+            toFill.clear(); // contexts aren't valid so don't send back
+            return false;
         } else { // node exists
             if (order::compare_two_vts(node->base.get_del_time(), cur_time) == 0) { // node has been deleted
                 toFill.emplace_back(loc, id, true);
@@ -677,7 +674,7 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<
                 std::vector<node_prog::property> temp_props_added;
                 std::vector<node_prog::property> temp_props_deleted;
 
-                fill_changed_properties(node->base.properties, &temp_props_added, &temp_props_deleted, cache_entry_time, cur_time);
+                fill_changed_properties(node->base.properties, &temp_props_added, &temp_props_deleted, time_cached, cur_time);
                 // check for changes to node properties
                 if (!temp_props_added.empty() || !temp_props_deleted.empty()) {
                     toFill.emplace_back(loc, id, false);
@@ -693,8 +690,8 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<
                     db::element::edge* e = iter.second;
                     assert(e != NULL);
 
-                    bool del_after_cached = (order::compare_two_vts(e->base.get_del_time(), cache_entry_time) == 1);
-                    bool creat_after_cached = (order::compare_two_vts(e->base.get_creat_time(), cache_entry_time) == 1);
+                    bool del_after_cached = (order::compare_two_vts(time_cached, e->base.get_del_time()) == 0);
+                    bool creat_after_cached = (order::compare_two_vts(time_cached, e->base.get_creat_time()) == 0);
 
                     bool del_before_cur = (order::compare_two_vts(e->base.get_del_time(), cur_time) == 0);
                     bool creat_before_cur = (order::compare_two_vts(e->base.get_creat_time(), cur_time) == 0);
@@ -710,7 +707,7 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<
                         node_prog::edge_cache_context &edge_context = context->edges_added.back();
                         // don't care about props deleted before req time for an edge created after cache value was stored
                         fill_changed_properties(e->base.properties, &edge_context.props_added,
-                                NULL, cache_entry_time, cur_time);
+                                NULL, time_cached, cur_time);
                     } else if (del_after_cached && del_before_cur) {
                         if (context == NULL) {
                             toFill.emplace_back(loc, id, false);
@@ -720,11 +717,11 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<
                         node_prog::edge_cache_context &edge_context = context->edges_deleted.back();
                         // don't care about props added after cache time on a deleted edge
                         fill_changed_properties(e->base.properties, NULL,
-                                &edge_context.props_deleted, cache_entry_time, cur_time);
+                                &edge_context.props_deleted, time_cached, cur_time);
                     } else if (del_after_cached && !creat_after_cached) {
                         // see if any properties changed on edge that didnt change
                         fill_changed_properties(e->base.properties, &temp_props_added,
-                                &temp_props_deleted, cache_entry_time, cur_time);
+                                &temp_props_deleted, time_cached, cur_time);
                         if (!temp_props_added.empty() || !temp_props_deleted.empty()) {
                             if (context == NULL) {
                                 toFill.emplace_back(loc, id, false);
@@ -744,6 +741,7 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<
         }
         S->release_node(node);
     }
+    return true;
 }
 
 void
@@ -751,18 +749,19 @@ unpack_and_fetch_context(void *req)
 {
     db::graph_request *request = (db::graph_request *) req;
     std::vector<uint64_t> ids;
-    vc::vclock req_vclock, cache_entry_time;
+    vc::vclock req_vclock, time_cached;
     uint64_t vt_id, req_id, from_shard;
     std::pair<uint64_t, uint64_t> lookup_pair;
     node_prog::prog_type pType;
 
-    message::unpack_message(*request->msg, message::NODE_CONTEXT_FETCH, pType, req_id, vt_id, req_vclock, cache_entry_time, lookup_pair, ids, from_shard);
+    message::unpack_message(*request->msg, message::NODE_CONTEXT_FETCH, pType, req_id, vt_id, req_vclock, time_cached, lookup_pair, ids, from_shard);
     std::vector<node_prog::node_cache_context> contexts;
 
-    fetch_node_cache_contexts(S->shard_id, ids, contexts, cache_entry_time, req_vclock);
+    bool cache_valid = fetch_node_cache_contexts(S->shard_id, ids, contexts, time_cached, req_vclock);
 
     message::message m;
-    message::prepare_message(m, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_pair, contexts);
+    message::prepare_message(m, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock,
+            lookup_pair, contexts, cache_valid);
     S->send(from_shard, m.buf);
     delete request;
 }
@@ -772,8 +771,10 @@ struct fetch_state{
     node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> prog_state;
     po6::threads::mutex counter_mutex;
     uint64_t replies_left;
+    bool cache_valid;
+
     fetch_state(node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> & copy_from)
-        : prog_state(copy_from.clone_without_start_node_params()) {};
+        : prog_state(copy_from.clone_without_start_node_params()), cache_valid(false) {};
 
     // delete standard copy onstructors
     fetch_state (const fetch_state&) = delete;
@@ -796,10 +797,10 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
     } else {
         auto entry = node_to_check->cache.cache.at(cache_key);
         std::shared_ptr<node_prog::Cache_Value_Base>& cval = std::get<0>(entry);
-        std::shared_ptr<vc::vclock> cache_entry_time(std::get<1>(entry));
+        std::shared_ptr<vc::vclock> time_cached(std::get<1>(entry));
         std::shared_ptr<std::vector<db::element::remote_node>>& watch_set = std::get<2>(entry);
 
-        int64_t cmp_1 = order::compare_two_vts(*cache_entry_time, *np.req_vclock);
+        int64_t cmp_1 = order::compare_two_vts(*time_cached, *np.req_vclock);
         if (cmp_1 >= 1){ // cached value is newer or from this same request
             return true;
         }
@@ -832,9 +833,13 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
             } 
         }
         if (contexts_to_fetch.empty()){ // all contexts needed were on local shard
-            fetch_node_cache_contexts(S->shard_id, local_contexts_to_fetch, cache_response->context, *cache_entry_time, *np.req_vclock);
-            np.cache_value = std::move(cache_response);
+            bool cache_valid = fetch_node_cache_contexts(S->shard_id, local_contexts_to_fetch, cache_response->context, *time_cached, *np.req_vclock);
             node_to_check = S->acquire_node(local_node_id);
+            if (cache_valid) {
+                np.cache_value = std::move(cache_response);
+            } else {
+                cache_response->invalidate();
+            }
             assert(node_to_check == local_node_ptr && "migration not supported yet");
             UNUSED(local_node_ptr);
             return true;
@@ -860,13 +865,21 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         S->node_prog_running_states_mutex.unlock();
         for (auto& shard_list_pair : contexts_to_fetch){
             std::unique_ptr<message::message> m(new message::message()); // XXX can we re-use messages?
-            message::prepare_message(*m, message::NODE_CONTEXT_FETCH, np.prog_type_recvd, np.req_id, np.vt_id, np.req_vclock, *cache_entry_time, lookup_pair, shard_list_pair.second, S->shard_id);
+            message::prepare_message(*m, message::NODE_CONTEXT_FETCH, np.prog_type_recvd, np.req_id, np.vt_id, np.req_vclock, *time_cached, lookup_pair, shard_list_pair.second, S->shard_id);
             S->send(shard_list_pair.first, m->buf);
         }
 
-        fetch_node_cache_contexts(S->shard_id, local_contexts_to_fetch, fstate->prog_state.cache_value->context, *cache_entry_time, *np.req_vclock);
-        fstate->counter_mutex.unlock();
-        return false;
+        fstate->cache_valid = fetch_node_cache_contexts(S->shard_id, local_contexts_to_fetch, fstate->prog_state.cache_value->context, *time_cached, *np.req_vclock);
+        if (!fstate->cache_valid) {
+            assert(fstate->prog_state.cache_value != nullptr);
+            fstate->prog_state.cache_value->invalidate();
+            fstate->prog_state.cache_value.reset(nullptr); // clear cached value
+            fstate->counter_mutex.unlock();
+            return true;
+        } else {
+            fstate->counter_mutex.unlock();
+            return false;
+        }
     } 
 }
 
@@ -935,7 +948,8 @@ inline void node_prog_loop(
                         bool run_prog_now = cache_lookup<ParamsType, NodeStateType, CacheValueType>(node, params.cache_key(), np, id_params);
                         if (run_prog_now) { // we fetched context and will give it to node program
                             node->checking_cache = false;
-                        } else { // go to next node while we fetch cache context for this one, cache_lookup releases node if false
+                        } else { 
+                        // go to next node while we fetch cache context for this one, cache_lookup releases node if false
                             continue;
                         }
                     }
@@ -1061,30 +1075,46 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     node_prog::prog_type pType;
     uint64_t req_id, vt_id;
     std::pair<uint64_t, uint64_t> lookup_pair;
-    std::vector<node_prog::node_cache_context> contexts_to_add; // TODO extra copy, later unpack into cache_response object itself
-    message::unpack_message(*msg, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_pair, contexts_to_add);
+    std::vector<node_prog::node_cache_context> contexts_to_add; 
+    bool cache_valid;
+    message::unpack_message(*msg, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock,
+            lookup_pair, contexts_to_add, cache_valid);
 
     S->node_prog_running_states_mutex.lock();
+    assert(S->node_prog_running_states.count(lookup_pair) == 1);
     struct fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (struct fetch_state<ParamsType, NodeStateType, CacheValueType> *) S->node_prog_running_states.at(lookup_pair);
     S->node_prog_running_states_mutex.unlock();
 
     fstate->counter_mutex.lock();
     auto& existing_context = fstate->prog_state.cache_value->context;
-    existing_context.insert(existing_context.end(), contexts_to_add.begin(), contexts_to_add.end()); // XXX avoid copy here
+    if (fstate->cache_valid) {
+        if (cache_valid) {
+            // XXX try to avoid copy here
+            existing_context.insert(existing_context.end(), contexts_to_add.begin(), contexts_to_add.end());
+        } else {
+            // invalidate cache, run now
+            existing_context.clear();
+            assert(fstate->prog_state.cache_value != nullptr);
+            fstate->prog_state.cache_value->invalidate();
+            fstate->prog_state.cache_value.reset(nullptr); // clear cached value
+            fstate->cache_valid = false;
+            node_prog_loop<ParamsType, NodeStateType, CacheValueType>(enclosed_node_prog_func, fstate->prog_state);
+        }
+    }
     fstate->replies_left--;
-    if (fstate->replies_left == 0){
-        assert(fstate->prog_state.cache_value); // cache value should exist
-        node_prog_loop<ParamsType, NodeStateType, CacheValueType>(enclosed_node_prog_func, fstate->prog_state);
+    if (fstate->replies_left == 0) {
+        if (fstate->cache_valid) {
+            node_prog_loop<ParamsType, NodeStateType, CacheValueType>(enclosed_node_prog_func, fstate->prog_state);
+        }
         fstate->counter_mutex.unlock();
         //remove from map
         S->node_prog_running_states_mutex.lock();
         size_t num_erased = S->node_prog_running_states.erase(lookup_pair);
         S->node_prog_running_states_mutex.unlock();
         assert(num_erased == 1);
-        UNUSED(num_erased);
+        UNUSED(num_erased); // if asserts are off
         delete fstate; // XXX did we delete prog_state, cache_value?
-    }
-    else { // wait for more replies
+    } else { // wait for more replies
         fstate->counter_mutex.unlock();
     }
 }
