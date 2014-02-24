@@ -1186,6 +1186,7 @@ update_deleted_node(void *node)
             }
         }
         assert(found);
+        UNUSED(found);
         for (uint64_t del_edge: to_del) {
             n->out_edges.erase(del_edge);
         }
