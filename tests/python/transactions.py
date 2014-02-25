@@ -14,7 +14,7 @@
 # 
 
 import sys
-sys.path.append('../../bindings/python')
+sys.path.append('../../.libs/')
 
 import client
 import time

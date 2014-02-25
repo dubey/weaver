@@ -541,7 +541,6 @@ server_manager_link_loop(po6::net::hostname sm_host)
         {
             continue;
         }
-
         const configuration& old_config(vts->config);
         const configuration& new_config(vts->sm_stub.config());
 
@@ -590,40 +589,90 @@ server_manager_link_loop(po6::net::hostname sm_host)
     }
 }
 
+void
+install_signal_handler(int signum, void (*handler)(int))
+{
+    struct sigaction sa;
+    sa.sa_handler = handler;
+    sigemptyset(&sa.sa_mask);
+    int ret = sigaction(signum, &sa, NULL);
+    assert(ret == 0);
+}
 
 int
 main(int argc, char *argv[])
 {
-    if (argc != 2) {
-        WDEBUG << "Usage: " << argv[0] << " <vector_timestamper_id>" << std::endl;
+    if (argc < 2 || argc > 3) {
+        WDEBUG << "Usage,   primary vt:" << argv[0] << " <vector_timestamper_id>" << std::endl
+               << "          backup vt:" << argv[0] << " <vector_timestamper_id> <backup_number>" << std::endl; 
         return -1;
     }
 
-    struct sigaction intr_handler;
-    intr_handler.sa_handler = end_program;
-    sigemptyset(&intr_handler.sa_mask);
-    int ret = sigaction(SIGINT, &intr_handler, NULL);
-    assert(ret == 0);
-    
-    vt_id = atoi(argv[1]);
-    vts = new coordinator::timestamper(vt_id, vt_id);
+    install_signal_handler(SIGINT, end_program);
+    install_signal_handler(SIGHUP, end_program);
+    install_signal_handler(SIGTERM, end_program);
 
+    // vt setup
+    vt_id = atoi(argv[1]);
+    if (argc == 3) {
+        vts = new coordinator::timestamper(vt_id, atoi(argv[2]));
+        assert((atoi(argv[2]) - vt_id) % (NUM_VTS+NUM_SHARDS) == 0);
+    } else {
+        vts = new coordinator::timestamper(vt_id, vt_id);
+    }
+
+    // server manager link
+    std::thread sm_thr(server_manager_link_loop,
+        po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT));
+    sm_thr.detach();
+
+    vts->config_mutex.lock();
+
+    // wait for first config to arrive from server manager
+    while (!vts->first_config) {
+        vts->first_config_cond.wait();
+    }
+
+    // registered this server with server_manager, config has fairly recent value
+    if (argc != 3) {
+        vts->init(false); // primary
+    } else {
+        vts->init(true); // backup
+    }
+
+    vts->config_mutex.unlock();
+
+    // start all threads
     std::thread *thr;
     for (int i = 0; i < NUM_THREADS; i++) {
         thr = new std::thread(server_loop, i);
         thr->detach();
     }
 
+    if (argc == 3) {
+        // wait till this server becomes primary vt
+        vts->config_mutex.lock();
+        while (!vts->active_backup) {
+            vts->backup_cond.wait();
+        }
+        vts->config_mutex.unlock();
+        WDEBUG << "backup " << atoi(argv[2]) << " now primary for vt " << vt_id << std::endl;
+        vts->restore_backup();
+    } else {
+        // this server is primary vt, start now
+        std::cout << "Vector timestamper " << vt_id << std::endl;
+    }
+
+    // initial wait for all vector timestampers to start
+    // TODO change this to use config pushed by server manager
     timespec sleep_time;
     sleep_time.tv_sec =  INITIAL_TIMEOUT_NANO / NANO;
     sleep_time.tv_nsec = INITIAL_TIMEOUT_NANO % NANO;
-    ret = clock_nanosleep(CLOCK_REALTIME, 0, &sleep_time, NULL);
+    int ret = clock_nanosleep(CLOCK_REALTIME, 0, &sleep_time, NULL);
     assert(ret == 0);
     WDEBUG << "Initial setup delay complete" << std::endl;
 
     UNUSED(ret);
-
-    std::cout << "Vector timestamper " << vt_id << std::endl;
 
     // call periodic thread function
     timer_function();

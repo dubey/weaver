@@ -1747,6 +1747,7 @@ server_manager_link_loop(po6::net::hostname sm_host)
         S->sm_stub.config_ack(new_config.version());
     }
 
+    WDEBUG << "going to exit server manager link loop" << std::endl;
     if (cluster_jump)
     {
         WDEBUG << "\n================================================================================\n"
@@ -1762,29 +1763,39 @@ server_manager_link_loop(po6::net::hostname sm_host)
     }
 }
 
+void
+install_signal_handler(int signum, void (*handler)(int))
+{
+    struct sigaction sa;
+    sa.sa_handler = handler;
+    sigemptyset(&sa.sa_mask);
+    int ret = sigaction(signum, &sa, NULL);
+    assert(ret == 0);
+}
+
 int
 main(int argc, char *argv[])
 {
-    signal(SIGINT, end_program);
-    signal(SIGHUP, end_program);
-    signal(SIGTERM, end_program);
     if (argc < 2 && argc > 4) {
-        WDEBUG << "Usage,  primary shard: " << argv[0] << " <myid>" << std::endl
-               << "         backup shard: " << argv[0] << " <myid> <backup_number>" << std::endl
-               << " primary bulk loading: " << argv[0] << " <myid> <graph_file_format> <graph_file_name>" << std::endl;
+        WDEBUG << "Usage,  primary shard: " << argv[0] << " <shard_id>" << std::endl
+               << "         backup shard: " << argv[0] << " <shard_id> <backup_number>" << std::endl
+               << " primary bulk loading: " << argv[0] << " <shard_id> <graph_file_format> <graph_file_name>" << std::endl;
         return -1;
     }
 
+    install_signal_handler(SIGINT, end_program);
+    install_signal_handler(SIGHUP, end_program);
+    install_signal_handler(SIGTERM, end_program);
+
     // shard setup
-    uint64_t id = atoi(argv[1]);
-    shard_id = id;
+    shard_id = atoi(argv[1]);
     if (argc == 3) {
         // backup shard
-        uint64_t backup_num = atoi(argv[2]);
-        S = new db::shard(id, backup_num);
+        S = new db::shard(shard_id, atoi(argv[2]));
     } else {
-        S = new db::shard(id, id);
+        S = new db::shard(shard_id, shard_id);
     }
+
     // server manager link
     std::thread sm_thr(server_manager_link_loop,
         po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT));
@@ -1832,7 +1843,15 @@ main(int argc, char *argv[])
         S->comm.send(SHARD_ID_INCR, msg.buf);
     }
 
+    // start all threads
+    std::vector<std::thread*> worker_threads;
+    for (int i = 0; i < NUM_THREADS; i++) {
+        std::thread *t = new std::thread(recv_loop, i);
+        worker_threads.emplace_back(t);
+    }
+
     if (argc == 3) {
+        // wait till this server becomes primary shard
         S->config_mutex.lock();
         while (!S->active_backup) {
             S->backup_cond.wait();
@@ -1841,16 +1860,13 @@ main(int argc, char *argv[])
         WDEBUG << "backup " << atoi(argv[2]) << " now primary for shard " << shard_id << std::endl;
         S->restore_backup();
     } else {
+        // this server is primary shard, start now
         std::cout << "Weaver: shard instance " << S->shard_id << std::endl;
     }
 
-    // start all threads
-    std::thread *t;
-    for (int i = 0; i < NUM_THREADS-1; i++) {
-        t = new std::thread(recv_loop, i);
-        t->detach();
+    for (auto t: worker_threads) {
+        t->join();
     }
-    recv_loop(NUM_THREADS-1);
 
     return 0;
 }
