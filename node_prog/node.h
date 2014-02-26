@@ -21,6 +21,7 @@ namespace node_prog
     class node
     {
         public:
+            virtual ~node() { }
             virtual edge_list get_edges() = 0;
             virtual prop_list get_properties() = 0;
     };

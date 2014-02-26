@@ -36,6 +36,7 @@ namespace element
             edge();
             edge(uint64_t id, vc::vclock &vclk, uint64_t remote_loc, uint64_t remote_id);
             edge(uint64_t id, vc::vclock &vclk, remote_node &rn);
+            ~edge() { }
         
         public:
             element base;

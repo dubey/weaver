@@ -46,6 +46,7 @@ namespace element
     {
         public:
             node(uint64_t id, vc::vclock &vclk, po6::threads::mutex *mtx);
+            ~node() { }
 
         public:
             enum mode

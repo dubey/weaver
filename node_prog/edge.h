@@ -23,6 +23,7 @@ namespace node_prog
     class edge
     {
         public:
+            virtual ~edge() { }
             virtual uint64_t get_id() const = 0;
             virtual db::element::remote_node& get_neighbor() = 0;
             virtual prop_list get_properties() = 0;
