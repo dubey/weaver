@@ -5,8 +5,8 @@
  * ===============================================================
  */
 
-#ifndef __CACHE_RESPONSE__
-#define __CACHE_RESPONSE__
+#ifndef weaver_node_prog_cache_response_h_
+#define weaver_node_prog_cache_response_h_
 
 #include <stdint.h>
 #include <iostream>

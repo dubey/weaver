@@ -11,7 +11,7 @@
  * ===============================================================
  */
 
-#define __WEAVER_DEBUG__
+#define weaver_debug_
 #include <set>
 #include "hyper_stub.h"
 
@@ -449,4 +449,4 @@ hyper_stub :: update_last_clocks(uint64_t vt_id, vc::vclock_t &vclk)
     hypermap_call_and_loop(&hyperdex::Client::map_add, shard_space, shard_id, &map_attr, 1);
 }
 
-#undef __WEAVER_DEBUG__
+#undef weaver_debug_

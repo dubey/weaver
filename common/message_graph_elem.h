@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef __MESSAGE_GRAPH_ELEM__
-#define __MESSAGE_GRAPH_ELEM__
+#ifndef weaver_common_message_graph_elem_h_
+#define weaver_common_message_graph_elem_h_
 
 #include "db/state/program_state.h"
 #include "common/vclock.h"

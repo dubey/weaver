@@ -13,8 +13,8 @@
  * ===============================================================
  */
 
-#ifndef __VCLOCK__
-#define __VCLOCK__
+#ifndef weaver_common_vclock_h_
+#define weaver_common_vclock_h_
 
 #include <vector>
 #include <algorithm>

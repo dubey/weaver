@@ -13,8 +13,8 @@
  * ===============================================================
  */
 
-#ifndef weaver_db_work_queue_
-#define weaver_db_work_queue_
+#ifndef weaver_db_queue_manager_h_
+#define weaver_db_queue_manager_h_
 
 #include <queue>
 #include <thread>

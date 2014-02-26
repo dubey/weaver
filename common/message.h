@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef __MESSAGE__
-#define __MESSAGE__
+#ifndef weaver_common_message_h_
+#define weaver_common_message_h_
 
 #include <memory>
 #include <vector>

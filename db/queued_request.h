@@ -13,8 +13,8 @@
  * ===============================================================
  */
 
-#ifndef weaver_db_queued_request_
-#define weaver_db_queued_request_
+#ifndef weaver_db_queued_request_h_
+#define weaver_db_queued_request_h_
 
 #include "common/vclock.h"
 

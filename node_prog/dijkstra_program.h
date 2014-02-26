@@ -12,8 +12,8 @@
  * ================================================================
  */
 
-#ifndef __DIJKSTRA_PROG__
-#define __DIJKSTRA_PROG__
+#ifndef weaver_node_prog_dijkstra_program_h_
+#define weaver_node_prog_dijkstra_program_h_
 
 #include <vector>
 #include <string.h>

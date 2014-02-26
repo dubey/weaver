@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef __REMOTE_NODE__
-#define __REMOTE_NODE__
+#ifndef weaver_db_element_remote_node_h_
+#define weaver_db_element_remote_node_h_
 
 namespace db
 {

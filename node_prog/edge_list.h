@@ -5,8 +5,8 @@
  * ===============================================================
  */
 
-#ifndef __EDGE_LIST__
-#define __EDGE_LIST__
+#ifndef weaver_node_prog_edge_list_h_
+#define weaver_node_prog_edge_list_h_
 
 #include <stdint.h>
 #include <iostream>

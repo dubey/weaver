@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef __EDGE__
-#define __EDGE__
+#ifndef weaver_db_element_edge_h_
+#define weaver_db_element_edge_h_
 
 #include <stdint.h>
 #include <vector>

@@ -19,7 +19,7 @@
 #include <signal.h>
 #include <sys/time.h>
 
-#define __WEAVER_DEBUG__
+#define weaver_debug_
 #include "common/vclock.h"
 #include "common/transaction.h"
 #include "node_prog/node_prog_type.h"
@@ -679,4 +679,4 @@ main(int argc, char *argv[])
     timer_function();
 }
 
-#undef __WEAVER_DEBUG__
+#undef weaver_debug_

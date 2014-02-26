@@ -12,8 +12,8 @@
  * ================================================================
  */
 
-#ifndef __CLUSTERING_PROG__
-#define __CLUSTERING_PROG__
+#ifndef weaver_node_prog_clustering_program_h_
+#define weaver_node_prog_clustering_program_h_
 
 #include <vector>
 

@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef __ELEMENT__
-#define __ELEMENT__
+#ifndef weaver_db_element_element_h_
+#define weaver_db_element_element_h_
 
 #include <limits.h>
 #include <stdint.h>

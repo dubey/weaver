@@ -1,5 +1,5 @@
-#ifndef __BASE_CLASSES__
-#define __BASE_CLASSES__
+#ifndef weaver_node_prog_base_classes_h_
+#define weaver_node_prog_base_classes_h_
 
 #include <e/buffer.h>
 
@@ -23,8 +23,6 @@ namespace node_prog
     { 
         /* destructor must be defined */ 
     }
-
-//    class Packable_Deletable : public virtual Packable, public virtual Deletable { };
 
     class Node_Parameters_Base : public virtual Packable
     {

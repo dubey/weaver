@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef __CACHING__
-#define __CACHING__
+#ifndef weaver_db_program_cache_h_
+#define weaver_db_program_cache_h_
 
 #include <stdint.h>
 #include <vector>

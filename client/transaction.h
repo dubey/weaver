@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef __CLIENT_TX__
-#define __CLIENT_TX__
+#ifndef weaver_client_transaction_h_
+#define weaver_client_transaction_h_
 
 #include <vector>
 

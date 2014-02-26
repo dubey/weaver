@@ -13,8 +13,8 @@
  * ===============================================================
  */
 
-#ifndef __SHARD_NOP_DATA__
-#define __SHARD_NOP_DATA__
+#ifndef weaver_db_nop_data_h_
+#define weaver_db_nop_data_h_
 
 #include "node_prog/node_prog_type.h"
 

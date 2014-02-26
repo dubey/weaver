@@ -12,8 +12,8 @@
  * ===============================================================
  */
 
-#ifndef weaver_db_message_wrapper_
-#define weaver_db_message_wrapper_
+#ifndef weaver_db_message_wrapper_h_
+#define weaver_db_message_wrapper_h_
 
 #include "common/message.h"
 

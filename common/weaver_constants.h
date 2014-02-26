@@ -15,15 +15,15 @@
 
 // debugging
 #ifndef WDEBUG
-#ifdef __WEAVER_DEBUG__
+#ifdef weaver_debug_
 #define WDEBUG std::cerr << __FILE__ << ":" << __LINE__ << " "
 #else
 #define WDEBUG if (0) std::cerr << __FILE__ << ":" << __LINE__ << " "
 #endif
 #endif
 
-#ifndef __CONSTANTS__
-#define __CONSTANTS__
+#ifndef weaver_common_constants_h_
+#define weaver_common_constants_h_
 
 // unused expression for no warnings
 #define UNUSED(exp) do { (void)(exp); } while (0)

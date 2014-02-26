@@ -12,8 +12,8 @@
  * ===============================================================
  */
 
-#ifndef __WEAVER_GET_CLOCK__
-#define __WEAVER_GET_CLOCK__
+#ifndef weaver_common_clock_h_
+#define weaver_common_clock_h_
 
 #include <time.h>
 #include <sys/time.h>

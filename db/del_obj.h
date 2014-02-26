@@ -12,8 +12,8 @@
  * ===============================================================
  */
 
-#ifndef __SHARD_DEL_OBJ__
-#define __SHARD_DEL_OBJ__
+#ifndef weaver_db_del_obj_h_
+#define weaver_db_del_obj_h_
 
 namespace db
 {

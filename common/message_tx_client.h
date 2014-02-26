@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef __MSG_TX_CLIENT__
-#define __MSG_TX_CLIENT__
+#ifndef weaver_common_message_tx_client_h_
+#define weaver_common_message_tx_client_h_
 
 #include "message.h"
 #include "client/transaction.h"

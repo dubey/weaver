@@ -13,8 +13,8 @@
  * ===============================================================
  */
 
-#ifndef __NMAP_STUB__
-#define __NMAP_STUB__
+#ifndef weaver_common_nmap_stub_h_
+#define weaver_common_nmap_stub_h_
 
 #include <vector>
 #include <hyperdex/client.hpp>

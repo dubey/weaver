@@ -12,8 +12,8 @@
  * ===============================================================
  */
 
-#ifndef __PUB_PROPERTY__
-#define __PUB_PROPERTY__
+#ifndef weaver_node_prog_property_h_
+#define weaver_node_prog_property_h_
 
 #include <string>
 

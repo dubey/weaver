@@ -5,8 +5,8 @@
  * ===============================================================
  */
 
-#ifndef __PUB_EDGE__
-#define __PUB_EDGE__
+#ifndef weaver_node_prog_edge_h_
+#define weaver_node_prog_edge_h_
 
 #include <stdint.h>
 #include <vector>

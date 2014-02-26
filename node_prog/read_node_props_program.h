@@ -12,8 +12,8 @@
  * ================================================================
  */
 
-#ifndef __READ_NODE_PROPS_PROG__
-#define __READ_NODE_PROPS_PROG__
+#ifndef weaver_node_prog_read_node_props_program_h 
+#define weaver_node_prog_read_node_props_program_h 
 
 #include <vector>
 #include <string>

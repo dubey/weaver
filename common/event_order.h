@@ -12,8 +12,8 @@
  * ===============================================================
  */
 
-#ifndef __WEAVER_ORDERING__
-#define __WEAVER_ORDERING__
+#ifndef weaver_common_event_order_h_
+#define weaver_common_event_order_h_
 
 #include <list>
 #include <unordered_map>

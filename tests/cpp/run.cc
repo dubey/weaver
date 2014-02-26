@@ -12,7 +12,7 @@
  */
 
 #include "common/debug.h"
-#define __WEAVER_DEBUG__
+#define weaver_debug_
 #include "common/weaver_constants.h"
 
 //#include "message_test.h"

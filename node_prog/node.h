@@ -5,8 +5,8 @@
  * ===============================================================
  */
 
-#ifndef __PUB_NODE__
-#define __PUB_NODE__
+#ifndef weaver_node_prog_node_h_
+#define weaver_node_prog_node_h_
 
 #include <stdint.h>
 #include <iostream>

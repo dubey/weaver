@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef __PROG_STATE__
-#define __PROG_STATE__
+#ifndef weaver_db_state_program_state_h_
+#define weaver_db_state_program_state_h_
 
 #include <unordered_map>
 #include <unordered_set>
@@ -44,7 +44,7 @@ namespace state
         std::unordered_set<uint64_t> done_ids;
         po6::threads::mutex mutex;
         po6::threads::cond in_use_cond;
-#ifdef __WEAVER_DEBUG__
+#ifdef weaver_debug_
         bool holding;
 #endif
 
@@ -76,7 +76,7 @@ namespace state
     program_state :: program_state()
         : completed_id(0)
         , in_use_cond(&mutex)
-#ifdef __WEAVER_DEBUG__
+#ifdef weaver_debug_
         , holding(false)
 #endif
     {
@@ -94,7 +94,7 @@ namespace state
     program_state :: acquire()
     {
         mutex.lock();
-#ifdef __WEAVER_DEBUG__
+#ifdef weaver_debug_
         holding = true;
 #endif
     }
@@ -102,7 +102,7 @@ namespace state
     inline void
     program_state :: release()
     {
-#ifdef __WEAVER_DEBUG__
+#ifdef weaver_debug_
         holding = false;
 #endif
         mutex.unlock();

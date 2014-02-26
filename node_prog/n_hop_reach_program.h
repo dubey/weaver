@@ -12,8 +12,8 @@
  * ================================================================
  */
 
-#ifndef __N_HOP_REACH_PROG__
-#define __N_HOP_REACH_PROG__
+#ifndef weaver_node_prog_n_hop_reach_program_h_
+#define weaver_node_prog_n_hop_reach_program_h_
 
 #include <vector>
 

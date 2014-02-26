@@ -12,8 +12,8 @@
  * ================================================================
  */
 
-#ifndef __READ_EDGES_PROPS_PROG__
-#define __READ_EDGES_PROPS_PROG__
+#ifndef weaver_node_prog_read_edges_props_program_h_
+#define weaver_node_prog_read_edges_props_program_h_
 
 #include <vector>
 #include <string>

@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef __CLIENT__
-#define __CLIENT__
+#ifndef weaver_client_client_h_
+#define weaver_client_client_h_
 
 #include <fstream>
 #include <unordered_map>
@@ -226,7 +226,6 @@ namespace client
         node_prog::prog_type ignore_type;
         std::pair<uint64_t, ParamsType> tempPair;
         message::unpack_message(msg, message::NODE_PROG_RETURN, ignore_type, ignore_req_id, tempPair);
-// XXX fix this crap, why not unpack into unique_ptr?
         std::unique_ptr<ParamsType> toRet(new ParamsType(tempPair.second));
         return std::move(toRet);
     }
@@ -356,7 +355,6 @@ namespace client
     // to generate 64 bit graph element handles
     // assuming no more than 2^(ID_BITS) clients
     // assuming no more than 2^(64-ID_BITS) graph nodes and edges created at this client
-    // TODO shift to 128 bit handles? or more client id bits
     inline uint64_t
     client :: generate_handle()
     {

@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef weaver_common_comm_wrapper_
-#define weaver_common_comm_wrapper_
+#ifndef weaver_common_comm_wrapper_h_
+#define weaver_common_comm_wrapper_h_
 
 #include <fstream>
 #include <algorithm>

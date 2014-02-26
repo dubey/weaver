@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef __MESSAGE_CACHE_CONTEXT__
-#define __MESSAGE_CACHE_CONTEXT__
+#ifndef weaver_common_message_cache_context_h_
+#define weaver_common_message_cache_context_h_
 
 #include "message.h"
 #include "message_graph_elem.h"

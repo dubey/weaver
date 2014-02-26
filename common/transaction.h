@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef __COORD_TX__
-#define __COORD_TX__
+#ifndef weaver_common_transaction_h_
+#define weaver_common_transaction_h_
 
 #include <vector>
 

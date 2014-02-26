@@ -1,5 +1,5 @@
-#ifndef __TRIANGLE_PROG__
-#define __TRIANGLE_PROG__
+#ifndef weaver_node_prog_triangle_program_h_
+#define weaver_node_prog_triangle_program_h_
 #include <vector>
 
 #include "common/weaver_constants.h"

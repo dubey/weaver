@@ -11,7 +11,7 @@
  * ===============================================================
  */
 
-#define __WEAVER_DEBUG__
+#define weaver_debug_
 #include "comm_wrapper.h"
 
 using common::comm_wrapper;
@@ -154,4 +154,4 @@ comm_wrapper :: recv(uint64_t *recv_from, std::auto_ptr<e::buffer> *msg)
 }
 #pragma GCC diagnostic pop
 
-#undef __WEAVER_DEBUG__
+#undef weaver_debug_

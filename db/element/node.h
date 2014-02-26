@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef __NODE__
-#define __NODE__
+#ifndef weaver_db_element_node_h_
+#define weaver_db_element_node_h_
 
 #include <stdint.h>
 #include <vector>
@@ -84,7 +84,7 @@ namespace element
             caching::program_cache cache; // TODO init me, also XXX migrate me
             bool checking_cache;
 
-#ifdef __WEAVER_DEBUG__
+#ifdef weaver_debug_
             // testing
             std::unordered_set<uint64_t> edge_handles;
 #endif
@@ -128,7 +128,7 @@ namespace element
     inline void
     node :: add_edge(edge *e)
     {
-#ifdef __WEAVER_DEBUG__
+#ifdef weaver_debug_
         edge_handles.emplace(e->get_id());
 #endif
         out_edges.emplace(e->get_id(), e);

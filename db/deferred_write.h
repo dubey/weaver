@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef __DEFERRED_WRITE__
-#define __DEFERRED_WRITE__
+#ifndef weaver_db_deferred_write_h_
+#define weaver_db_deferred_write_h_
 
 namespace db
 {

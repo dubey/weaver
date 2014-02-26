@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef __HDEX_SHARD_STUB__
-#define __HDEX_SHARD_STUB__
+#ifndef weaver_db_hyper_stub_h_
+#define weaver_db_hyper_stub_h_
 
 #include <e/endian.h>
 #include <hyperdex/client.hpp>

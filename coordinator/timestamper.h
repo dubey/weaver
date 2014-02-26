@@ -14,8 +14,8 @@
  * ===============================================================
  */
 
-#ifndef __COORD_VT__
-#define __COORD_VT__
+#ifndef weaver_coordinator_timestamper_h_
+#define weaver_coordinator_timestamper_h_
 
 #include <vector>
 #include <bitset>

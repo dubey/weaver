@@ -5,8 +5,8 @@
  * ===============================================================
  */
 
-#ifndef __PROP_LIST__
-#define __PROP_LIST__
+#ifndef weaver_node_prog_prop_list_h_
+#define weaver_node_prog_prop_list_h_
 
 #include <stdint.h>
 #include <iostream>

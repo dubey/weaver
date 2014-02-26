@@ -12,8 +12,8 @@
  * ================================================================
  */
 
-#ifndef __NODE_PROG__
-#define __NODE_PROG__
+#ifndef weaver_node_prog_node_program_h_
+#define weaver_node_prog_node_program_h_
 
 #include <vector>
 #include <map>

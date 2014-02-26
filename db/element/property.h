@@ -12,8 +12,8 @@
  * ===============================================================
  */
 
-#ifndef __PROPERTY__
-#define __PROPERTY__
+#ifndef weaver_db_element_property_h_
+#define weaver_db_element_property_h_
 
 #include <string>
 

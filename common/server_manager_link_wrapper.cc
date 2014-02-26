@@ -28,7 +28,7 @@
 #include <e/endian.h>
 
 // Weaver
-#define __WEAVER_DEBUG__
+#define weaver_debug_
 #include "common/weaver_constants.h"
 #include "common/server_manager_returncode.h"
 #include "common/serialization.h"
@@ -615,4 +615,4 @@ server_manager_link_wrapper :: wait_nosync(const char* cond, uint64_t state,
     return id;
 }
 
-#undef __WEAVER_DEBUG__
+#undef weaver_debug_

@@ -12,8 +12,8 @@
  * ===============================================================
  */
 
-#ifndef __SHARD_SERVER__
-#define __SHARD_SERVER__
+#ifndef weaver_db_shard_h_
+#define weaver_db_shard_h_
 
 #include <set>
 #include <vector>

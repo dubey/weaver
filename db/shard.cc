@@ -18,7 +18,7 @@
 #include <e/buffer.h>
 #include "busybee_constants.h"
 
-#define __WEAVER_DEBUG__
+#define weaver_debug_
 #include "common/weaver_constants.h"
 #include "common/event_order.h"
 #include "common/message_cache_context.h"
@@ -1916,4 +1916,4 @@ main(int argc, char *argv[])
     return 0;
 }
 
-#undef __WEAVER_DEBUG__
+#undef weaver_debug_
