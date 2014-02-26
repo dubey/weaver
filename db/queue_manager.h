@@ -1,0 +1,65 @@
+/*
+ * ===============================================================
+ *    Description:  Shard queues for storing requests which cannot
+ *                  be executed on receipt due to ordering
+ *                  constraints.
+ *
+ *        Created:  2014-02-20 16:41:22
+ *
+ *         Author:  Ayush Dubey, dubey@cs.cornell.edu
+ *
+ * Copyright (C) 2013-2014, Cornell University, see the LICENSE
+ *                     file for licensing agreement
+ * ===============================================================
+ */
+
+#ifndef weaver_db_work_queue_
+#define weaver_db_work_queue_
+
+#include <queue>
+#include <thread>
+#include <po6/threads/mutex.h>
+
+#include "common/weaver_constants.h"
+#include "db/queued_request.h"
+
+namespace db
+{
+    // priority queue type definition
+    // each shard server has one such priority queue for each vector timestamper
+    typedef std::priority_queue<queued_request*, std::vector<queued_request*>, work_thread_compare> pqueue_t;
+
+    class queue_manager
+    {
+        private:
+            std::vector<pqueue_t> rd_queues;
+            std::vector<pqueue_t> wr_queues;
+            std::vector<vc::vclock_t> last_clocks; // records last transaction vclock pulled of queue for each vector timestamper
+            vc::qtimestamp_t qts; // queue timestamps
+            po6::threads::mutex queue_mutex;
+            //po6::threads::mutex thread_loop_mutex;
+            //static db::shard *S;
+
+        private:
+            queued_request* get_rd_req();
+            queued_request* get_wr_req();
+            queued_request* get_rw_req();
+            bool check_rd_req_nonlocking(vc::vclock_t &clk);
+            bool check_wr_queues_timestamps(uint64_t vt_id, uint64_t qt);
+
+        public:
+            queue_manager();
+            void enqueue_read_request(uint64_t vt_id, queued_request*);
+            bool check_rd_request(vc::vclock_t &clk);
+            void enqueue_write_request(uint64_t vt_id, queued_request*);
+            bool check_wr_request(vc::vclock &vclk, uint64_t qt);
+            bool exec_queued_request(uint64_t tid);
+            void increment_qts(uint64_t vt_id, uint64_t incr);
+            void record_completed_tx(uint64_t vt_id, vc::vclock_t &tx_clk);
+            // fault tolerance
+            void restore_backup(std::unordered_map<uint64_t, uint64_t> &qts, std::unordered_map<uint64_t, vc::vclock_t> &last_clocks);
+    };
+
+}
+
+#endif

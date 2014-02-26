@@ -1,0 +1,33 @@
+/*
+ * ===============================================================
+ *    Description:  Metadata for a currently executing node prog.
+ *
+ *        Created:  2014-02-24 14:07:52
+ *
+ *         Author:  Ayush Dubey, dubey@cs.cornell.edu
+ *
+ * Copyright (C) 2013-2014, Cornell University, see the LICENSE
+ *                     file for licensing agreement
+ * ===============================================================
+ */
+
+#ifndef weaver_coordinator_current_prog_h_
+#define weaver_coordinator_current_prog_h_
+
+namespace coordinator
+{
+    struct current_prog
+    {
+        uint64_t client;
+        std::unique_ptr<vc::vclock_t> vclk;
+
+        current_prog(uint64_t cl, vc::vclock_t &vc)
+            : client(cl)
+            , vclk(new vc::vclock_t(vc))
+        { }
+        
+        current_prog() : client(UINT64_MAX) { }
+    };
+}
+
+#endif

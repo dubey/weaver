@@ -26,6 +26,8 @@
 #include "node_prog/node_program.h"
 #include "timestamper.h"
 
+using coordinator::current_prog;
+using coordinator::current_tx;
 static coordinator::timestamper *vts;
 static uint64_t vt_id;
 
@@ -46,7 +48,7 @@ begin_transaction(transaction::pending_tx &tx)
     message::message msg;
     std::vector<transaction::pending_tx> tx_vec(NUM_SHARDS, transaction::pending_tx());
 
-    vts->mutex.lock();
+    vts->clk_mutex.lock();
     for (std::shared_ptr<transaction::pending_update> upd: tx.writes) {
         vts->qts.at(upd->loc1-SHARD_ID_INCR)++;
         upd->qts = vts->qts;
@@ -54,15 +56,20 @@ begin_transaction(transaction::pending_tx &tx)
     }
     vts->vclk.increment_clock();
     tx.timestamp = vts->vclk;
+    // get unique tx id
     tx.id = vts->generate_id();
-    vts->tx_replies[tx.id].client_id = tx.client_id;
+    vts->clk_mutex.unlock();
+
+    current_tx cur_tx(tx.client_id);
     // record txs as outstanding for reply bookkeeping
     for (uint64_t i = 0; i < NUM_SHARDS; i++) {
         if (!tx_vec[i].writes.empty()) {
-            vts->tx_replies[tx.id].count++;
+            cur_tx.count++;
         }
     }
-    vts->mutex.unlock();
+    vts->tx_prog_mutex.lock();
+    vts->outstanding_tx.emplace(tx.id, cur_tx);
+    vts->tx_prog_mutex.unlock();
 
     // send tx batches
     for (uint64_t i = 0; i < NUM_SHARDS; i++) {
@@ -70,7 +77,7 @@ begin_transaction(transaction::pending_tx &tx)
             tx_vec[i].timestamp = tx.timestamp;
             tx_vec[i].id = tx.id;
             message::prepare_message(msg, message::TX_INIT, vt_id, tx.timestamp, tx_vec[i].writes.at(0)->qts, tx.id, tx_vec[i].writes);
-            vts->send(tx_vec[i].writes.at(0)->loc1, msg.buf);
+            vts->comm.send(tx_vec[i].writes.at(0)->loc1, msg.buf);
         }
     }
 }
@@ -79,17 +86,17 @@ begin_transaction(transaction::pending_tx &tx)
 inline void
 end_transaction(uint64_t tx_id)
 {
-    vts->mutex.lock();
-    if (--vts->tx_replies.at(tx_id).count == 0) {
+    vts->tx_prog_mutex.lock();
+    if (--vts->outstanding_tx.at(tx_id).count == 0) {
         // done tx
-        uint64_t client_id = vts->tx_replies[tx_id].client_id;
-        vts->tx_replies.erase(tx_id);
-        vts->mutex.unlock();
+        uint64_t client_id = vts->outstanding_tx[tx_id].client;
+        vts->outstanding_tx.erase(tx_id);
+        vts->tx_prog_mutex.unlock();
         message::message msg;
         message::prepare_message(msg, message::CLIENT_TX_DONE);
-        vts->send(client_id, msg.buf);
+        vts->comm.send(client_id, msg.buf);
     } else {
-        vts->mutex.unlock();
+        vts->tx_prog_mutex.unlock();
     }
 }
 
@@ -111,8 +118,8 @@ timer_function()
     message::message msg;
     bool nop_sent;
 
-    sleep_time.tv_sec  = VT_TIMEOUT_NANO / VT_NANO;
-    sleep_time.tv_nsec = VT_TIMEOUT_NANO % VT_NANO;
+    sleep_time.tv_sec  = VT_TIMEOUT_NANO / NANO;
+    sleep_time.tv_nsec = VT_TIMEOUT_NANO % NANO;
 
     while (true) {
         sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, NULL);
@@ -124,14 +131,10 @@ timer_function()
         
         // send nops and state cleanup info to shards
         if (vts->to_nop.any()) {
-            vts->mutex.lock();
+            vts->clk_mutex.lock();
             vts->vclk.increment_clock();
             vclk.clock = vts->vclk.clock;
             req_id = vts->generate_id();
-            max_done_id = vts->max_done_id;
-            max_done_clk = *vts->max_done_clk;
-            num_outstanding_progs = vts->outstanding_req_ids.size();
-            del_done_reqs.clear();
             for (uint64_t shard_id = 0; shard_id < NUM_SHARDS; shard_id++) {
                 if (vts->to_nop[shard_id]) {
                     vts->qts[shard_id]++;
@@ -139,6 +142,13 @@ timer_function()
                 }
             }
             qts = vts->qts;
+            vts->clk_mutex.unlock();
+
+            del_done_reqs.clear();
+            vts->tx_prog_mutex.lock();
+            max_done_id = vts->max_done_id;
+            max_done_clk = *vts->max_done_clk;
+            num_outstanding_progs = vts->pend_prog_queue.size();
             for (auto &x: vts->done_reqs) {
                 // x.first = node prog type
                 // x.second = unordered_map <req_id -> bitset<NUM_SHARDS>>
@@ -159,7 +169,7 @@ timer_function()
                     x.second.erase(del);
                 }
             }
-            vts->mutex.unlock();
+            vts->tx_prog_mutex.unlock();
 
             for (uint64_t shard_id = 0; shard_id < NUM_SHARDS; shard_id++) {
                 if (vts->to_nop[shard_id]) {
@@ -168,7 +178,7 @@ timer_function()
                     message::prepare_message(msg, message::VT_NOP, vt_id, vclk, qts, req_id,
                         done_reqs[shard_id], max_done_id, max_done_clk,
                         num_outstanding_progs, vts->shard_node_count);
-                    vts->send(shard_id + SHARD_ID_INCR, msg.buf);
+                    vts->comm.send(shard_id + SHARD_ID_INCR, msg.buf);
                 }
             }
             vts->to_nop.reset();
@@ -179,16 +189,16 @@ timer_function()
         if (vts->clock_update_acks == (NUM_VTS-1) && NUM_VTS > 1) {
             vts->clock_update_acks = 0;
             if (!nop_sent) {
-                vts->mutex.lock();
+                vts->clk_mutex.lock();
                 vclk.clock = vts->vclk.clock;
-                vts->mutex.unlock();
+                vts->clk_mutex.unlock();
             }
             for (uint64_t i = 0; i < NUM_VTS; i++) {
                 if (i == vt_id) {
                     continue;
                 }
                 message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, vclk.clock[vt_id]);
-                vts->send(i, msg.buf);
+                vts->comm.send(i, msg.buf);
             }
         }
 
@@ -224,7 +234,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         mappings_to_get.insert(c_id);
     }
     if (!mappings_to_get.empty()) {
-        auto results = vts->nmap_client[thread_id]->get_mappings(mappings_to_get, true);
+        auto results = vts->nmap_client[thread_id]->get_mappings(mappings_to_get);
         assert(results.size() == mappings_to_get.size());
         for (auto &toAdd : results) {
             request_element_mappings.emplace(toAdd);
@@ -245,27 +255,28 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         }
     }
     
-    vts->mutex.lock();
+    vts->clk_mutex.lock();
     vts->vclk.increment_clock();
     vc::vclock req_timestamp = vts->vclk;
     assert(req_timestamp.clock.size() == NUM_VTS);
     uint64_t req_id = vts->generate_id();
+    vts->clk_mutex.unlock();
 
     /*
     if (global_req) {
         vts->outstanding_triangle_progs.emplace(req_id, std::make_pair(NUM_SHARDS, node_prog::triangle_params()));
     }
     */
-    vts->outstanding_node_progs.emplace(req_id, clientID);
-    vts->outstanding_req_ids.emplace(req_id);
-    std::unique_ptr<vc::vclock_t> vclk_ptr(new vc::vclock_t(req_timestamp.clock));
-    vts->id_to_clk[req_id] = std::move(vclk_ptr);
-    vts->mutex.unlock();
+    vts->tx_prog_mutex.lock();
+    vts->outstanding_progs.emplace(req_id, current_prog(clientID, req_timestamp.clock));
+    vts->pend_prog_queue.emplace(req_id);
+    //std::unique_ptr<vc::vclock_t> vclk_ptr(new vc::vclock_t(req_timestamp.clock));
+    vts->tx_prog_mutex.unlock();
 
     message::message msg_to_send;
     for (auto &batch_pair : initial_batches) {
         message::prepare_message(msg_to_send, message::NODE_PROG, pType, global_req, vt_id, req_timestamp, req_id, batch_pair.second);
-        vts->send(batch_pair.first, msg_to_send.buf);
+        vts->comm.send(batch_pair.first, msg_to_send.buf);
     }
 }
 
@@ -281,29 +292,29 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
 // remove a completed node program from outstanding requests data structure
 // update 'max_done_id' and 'max_done_clk' accordingly
-// caution: need to hold vts->mutex
+// caution: need to hold vts->tx_prog_mutex
 inline void
 mark_req_finished(uint64_t req_id)
 {
-    if (vts->outstanding_req_ids.top() == req_id) {
-        assert(vts->max_done_id < vts->outstanding_req_ids.top());
+    if (vts->pend_prog_queue.top() == req_id) {
+        assert(vts->max_done_id < vts->pend_prog_queue.top());
         vts->max_done_id = req_id;
-        assert(vts->id_to_clk.find(vts->max_done_id) != vts->id_to_clk.end());
-        vts->max_done_clk = std::move(vts->id_to_clk[vts->max_done_id]);
-        vts->outstanding_req_ids.pop();
-        vts->id_to_clk.erase(vts->max_done_id);
-        while (!vts->outstanding_req_ids.empty() && !vts->done_req_ids.empty()
-            && vts->outstanding_req_ids.top() == vts->done_req_ids.top()) {
-            assert(vts->max_done_id < vts->outstanding_req_ids.top());
-            vts->max_done_id = vts->outstanding_req_ids.top();
-            assert(vts->id_to_clk.find(vts->max_done_id) != vts->id_to_clk.end());
-            vts->max_done_clk = std::move(vts->id_to_clk[vts->max_done_id]);
-            vts->outstanding_req_ids.pop();
-            vts->done_req_ids.pop();
-            vts->id_to_clk.erase(vts->max_done_id);
+        assert(vts->outstanding_progs.find(vts->max_done_id) != vts->outstanding_progs.end());
+        vts->max_done_clk = std::move(vts->outstanding_progs[vts->max_done_id].vclk);
+        vts->pend_prog_queue.pop();
+        vts->outstanding_progs.erase(vts->max_done_id);
+        while (!vts->pend_prog_queue.empty() && !vts->done_prog_queue.empty()
+            && vts->pend_prog_queue.top() == vts->done_prog_queue.top()) {
+            assert(vts->max_done_id < vts->pend_prog_queue.top());
+            vts->max_done_id = vts->pend_prog_queue.top();
+            assert(vts->outstanding_progs.find(vts->max_done_id) != vts->outstanding_progs.end());
+            vts->max_done_clk = std::move(vts->outstanding_progs[vts->max_done_id].vclk);
+            vts->pend_prog_queue.pop();
+            vts->done_prog_queue.pop();
+            vts->outstanding_progs.erase(vts->max_done_id);
         }
     } else {
-        vts->done_req_ids.emplace(req_id);
+        vts->done_prog_queue.emplace(req_id);
     }
 }
 
@@ -319,9 +330,8 @@ server_loop(int thread_id)
 
     while (true) {
         msg.reset(new message::message());
-        ret = vts->bb->recv(&sender, &msg->buf);
-        if (ret != BUSYBEE_SUCCESS && ret != BUSYBEE_TIMEOUT) {
-            WDEBUG << "msg recv error: " << ret << std::endl;
+        ret = vts->comm.recv(&sender, &msg->buf);
+        if (ret != BUSYBEE_SUCCESS) {
             continue;
         } else {
             // good to go, unpack msg
@@ -336,7 +346,7 @@ server_loop(int thread_id)
                     transaction::pending_tx tx;
                     if (!vts->unpack_tx(*msg, tx, sender, thread_id)) {
                         message::prepare_message(*msg, message::CLIENT_TX_FAIL);
-                        vts->send(sender, msg->buf);
+                        vts->comm.send(sender, msg->buf);
                     } else {
                         begin_transaction(tx);
                     }
@@ -346,11 +356,11 @@ server_loop(int thread_id)
                 case message::VT_CLOCK_UPDATE: {
                     uint64_t rec_vtid, rec_clock;
                     message::unpack_message(*msg, message::VT_CLOCK_UPDATE, rec_vtid, rec_clock);
-                    vts->mutex.lock();
+                    vts->clk_mutex.lock();
                     vts->vclk.update_clock(rec_vtid, rec_clock);
-                    vts->mutex.unlock();
+                    vts->clk_mutex.unlock();
                     message::prepare_message(*msg, message::VT_CLOCK_UPDATE_ACK);
-                    vts->send(rec_vtid, msg->buf);
+                    vts->comm.send(rec_vtid, msg->buf);
                     break;
                 }
 
@@ -373,12 +383,13 @@ server_loop(int thread_id)
                 }
 
                 case message::CLIENT_MSG_COUNT: {
-                    vts->mutex.lock();
+                    vts->msg_count_mutex.lock();
                     vts->msg_count = 0;
-                    vts->mutex.unlock();
+                    vts->msg_count_acks = 0;
+                    vts->msg_count_mutex.unlock();
                     for (uint64_t i = SHARD_ID_INCR; i < (SHARD_ID_INCR + NUM_SHARDS); i++) {
                         message::prepare_message(*msg, message::MSG_COUNT, vt_id);
-                        vts->send(i, msg->buf);
+                        vts->comm.send(i, msg->buf);
                     }
                     break;
                 }
@@ -386,8 +397,8 @@ server_loop(int thread_id)
                 case message::CLIENT_NODE_COUNT: {
                     vts->periodic_update_mutex.lock();
                     message::prepare_message(*msg, message::NODE_COUNT_REPLY, vts->shard_node_count);
-vts->periodic_update_mutex.unlock();
-                    vts->send(sender, msg->buf);
+                    vts->periodic_update_mutex.unlock();
+                    vts->comm.send(sender, msg->buf);
                     break;
                 }
 
@@ -414,26 +425,26 @@ vts->periodic_update_mutex.unlock();
                 case message::START_MIGR: {
                     uint64_t hops = MAX_UINT64;
                     message::prepare_message(*msg, message::MIGRATION_TOKEN, hops, vt_id);
-                    vts->send(START_MIGR_ID, msg->buf); 
+                    vts->comm.send(START_MIGR_ID, msg->buf); 
                     break;
                 }
 
                 case message::ONE_STREAM_MIGR: {
                     uint64_t hops = NUM_SHARDS;
-                    vts->mutex.lock();
+                    vts->migr_mutex.lock();
                     vts->migr_client = sender;
-                    vts->mutex.unlock();
+                    vts->migr_mutex.unlock();
                     message::prepare_message(*msg, message::MIGRATION_TOKEN, hops, vt_id);
-                    vts->send(START_MIGR_ID, msg->buf);
+                    vts->comm.send(START_MIGR_ID, msg->buf);
                     break;
                 }
 
                 case message::MIGRATION_TOKEN: {
-                    vts->mutex.lock();
+                    vts->migr_mutex.lock();
                     uint64_t client = vts->migr_client;
-                    vts->mutex.unlock();
+                    vts->migr_mutex.unlock();
                     message::prepare_message(*msg, message::DONE_MIGR);
-                    vts->send(client, msg->buf);
+                    vts->comm.send(client, msg->buf);
                     WDEBUG << "Shard node counts are:";
                     for (uint64_t &x: vts->shard_node_count) {
                         std::cerr << " " << x;
@@ -452,9 +463,9 @@ vts->periodic_update_mutex.unlock();
                     uint64_t req_id;
                     node_prog::prog_type type;
                     message::unpack_partial_message(*msg, message::NODE_PROG_RETURN, type, req_id); // don't unpack rest
-                    vts->mutex.lock();
-                    if (vts->outstanding_node_progs.find(req_id) != vts->outstanding_node_progs.end()) { // TODO: change to .count (AD: why?)
-                        uint64_t client_to_ret = vts->outstanding_node_progs.at(req_id);
+                    vts->tx_prog_mutex.lock();
+                    if (vts->outstanding_progs.find(req_id) != vts->outstanding_progs.end()) { // TODO: change to .count (AD: why?)
+                        uint64_t client = vts->outstanding_progs[req_id].client;
                         /*
                         if (vts->outstanding_triangle_progs.count(req_id) > 0) { // a triangle prog response
                             std::pair<int, node_prog::triangle_params>& p = vts->outstanding_triangle_progs.at(req_id);
@@ -475,33 +486,30 @@ vts->periodic_update_mutex.unlock();
                                 vts->done_reqs[type].emplace(req_id, std::bitset<NUM_SHARDS>());
                                 tempPair.second.num_edges = p.second.num_edges;
                                 message::prepare_message(*msg, message::NODE_PROG_RETURN, type, req_id, tempPair);
-                                vts->send(client_to_ret, msg->buf);
-                                vts->outstanding_node_progs.erase(req_id);
+                                vts->comm.send(client_to_ret, msg->buf);
                                 mark_req_finished(req_id);
                             }
                         } else {*/
                             // just a normal node program
                             vts->done_reqs[type].emplace(req_id, std::bitset<NUM_SHARDS>());
-                            vts->send(client_to_ret, msg->buf);
-                            vts->outstanding_node_progs.erase(req_id);
+                            vts->comm.send(client, msg->buf);
                             mark_req_finished(req_id);
                         //}
                     } else {
                         WDEBUG << "node prog return for already completed or never existed req id" << std::endl;
                     }
-                    vts->mutex.unlock();
+                    vts->tx_prog_mutex.unlock();
                     break;
 
                 case message::MSG_COUNT: {
                     uint64_t shard, msg_count;
                     message::unpack_message(*msg, message::MSG_COUNT, shard, msg_count);
-                    vts->mutex.lock();
+                    vts->msg_count_mutex.lock();
                     vts->msg_count += msg_count;
                     if (++vts->msg_count_acks == NUM_SHARDS) {
                         WDEBUG << "Msg count = " << vts->msg_count << std::endl;
-                        vts->msg_count_acks = 0;
                     }
-                    vts->mutex.unlock();
+                    vts->msg_count_mutex.unlock();
                     break;
                 }
 
@@ -512,41 +520,163 @@ vts->periodic_update_mutex.unlock();
     }
 }
 
+void
+server_manager_link_loop(po6::net::hostname sm_host)
+{
+    // Most of the following code has been 'borrowed' from
+    // Robert Escriva's HyperDex.
+    // see https://github.com/rescrv/HyperDex for the original code.
+
+    vts->sm_stub.set_server_manager_address(sm_host.address.c_str(), sm_host.port);
+
+    if (!vts->sm_stub.register_id(vts->server, *vts->comm.get_loc()))
+    {
+        return;
+    }
+
+    bool cluster_jump = false;
+
+    while (!vts->sm_stub.should_exit())
+    {
+        if (!vts->sm_stub.maintain_link())
+        {
+            continue;
+        }
+        const configuration& old_config(vts->config);
+        const configuration& new_config(vts->sm_stub.config());
+
+        if (old_config.cluster() != 0 &&
+            old_config.cluster() != new_config.cluster())
+        {
+            cluster_jump = true;
+            break;
+        }
+
+        if (old_config.version() > new_config.version())
+        {
+            WDEBUG << "received new configuration version=" << new_config.version()
+                   << " that's older than our current configuration version="
+                   << old_config.version();
+            continue;
+        }
+        // if old_config.version == new_config.version, still fetch
+
+        vts->config_mutex.lock();
+        vts->config = new_config;
+        if (!vts->first_config) {
+            vts->first_config = true;
+            vts->first_config_cond.signal();
+        } else {
+            vts->reconfigure();
+        }
+        vts->config_mutex.unlock();
+
+        // let the coordinator know we've moved to this config
+        vts->sm_stub.config_ack(new_config.version());
+    }
+
+    if (cluster_jump)
+    {
+        WDEBUG << "\n================================================================================\n"
+               << "Exiting because the server manager changed on us.\n"
+               << "This is most likely an operations error."
+               << "================================================================================";
+    }
+    else if (vts->sm_stub.should_exit() && !vts->sm_stub.config().exists(vts->server))
+    {
+        WDEBUG << "\n================================================================================\n"
+               << "Exiting because the server manager says it doesn't know about this node.\n"
+               << "================================================================================";
+    }
+}
+
+void
+install_signal_handler(int signum, void (*handler)(int))
+{
+    struct sigaction sa;
+    sa.sa_handler = handler;
+    sigemptyset(&sa.sa_mask);
+    int ret = sigaction(signum, &sa, NULL);
+    assert(ret == 0);
+}
 
 int
 main(int argc, char *argv[])
 {
-    if (argc != 2) {
-        WDEBUG << "Usage: " << argv[0] << " <vector_timestamper_id>" << std::endl;
+    if (argc < 2 || argc > 3) {
+        WDEBUG << "Usage,   primary vt:" << argv[0] << " <vector_timestamper_id>" << std::endl
+               << "          backup vt:" << argv[0] << " <vector_timestamper_id> <backup_number>" << std::endl; 
         return -1;
     }
 
-    struct sigaction intr_handler;
-    intr_handler.sa_handler = end_program;
-    sigemptyset(&intr_handler.sa_mask);
-    int ret = sigaction(SIGINT, &intr_handler, NULL);
-    assert(ret == 0);
-    
-    vt_id = atoi(argv[1]);
-    vts = new coordinator::timestamper(vt_id);
+    install_signal_handler(SIGINT, end_program);
+    install_signal_handler(SIGHUP, end_program);
+    install_signal_handler(SIGTERM, end_program);
 
+    // vt setup
+    vt_id = atoi(argv[1]);
+    if (argc == 3) {
+        vts = new coordinator::timestamper(vt_id, atoi(argv[2]));
+        assert((atoi(argv[2]) - vt_id) % (NUM_VTS+NUM_SHARDS) == 0);
+    } else {
+        vts = new coordinator::timestamper(vt_id, vt_id);
+    }
+
+    // server manager link
+    std::thread sm_thr(server_manager_link_loop,
+        po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT));
+    sm_thr.detach();
+
+    vts->config_mutex.lock();
+
+    // wait for first config to arrive from server manager
+    while (!vts->first_config) {
+        vts->first_config_cond.wait();
+    }
+
+    // registered this server with server_manager, config has fairly recent value
+    if (argc != 3) {
+        vts->init(false); // primary
+    } else {
+        vts->init(true); // backup
+    }
+
+    vts->config_mutex.unlock();
+
+    // start all threads
     std::thread *thr;
     for (int i = 0; i < NUM_THREADS; i++) {
         thr = new std::thread(server_loop, i);
         thr->detach();
     }
 
+    if (argc == 3) {
+        // wait till this server becomes primary vt
+        vts->config_mutex.lock();
+        while (!vts->active_backup) {
+            vts->backup_cond.wait();
+        }
+        vts->config_mutex.unlock();
+        WDEBUG << "backup " << atoi(argv[2]) << " now primary for vt " << vt_id << std::endl;
+        vts->restore_backup();
+    } else {
+        // this server is primary vt, start now
+        std::cout << "Vector timestamper " << vt_id << std::endl;
+    }
+
+    // initial wait for all vector timestampers to start
+    // TODO change this to use config pushed by server manager
     timespec sleep_time;
-    sleep_time.tv_sec =  VT_INITIAL_TIMEOUT_NANO / VT_NANO;
-    sleep_time.tv_nsec = VT_INITIAL_TIMEOUT_NANO % VT_NANO;
-    ret = clock_nanosleep(CLOCK_REALTIME, 0, &sleep_time, NULL);
+    sleep_time.tv_sec =  INITIAL_TIMEOUT_NANO / NANO;
+    sleep_time.tv_nsec = INITIAL_TIMEOUT_NANO % NANO;
+    int ret = clock_nanosleep(CLOCK_REALTIME, 0, &sleep_time, NULL);
     assert(ret == 0);
     WDEBUG << "Initial setup delay complete" << std::endl;
 
     UNUSED(ret);
 
-    std::cout << "Vector timestamper " << vt_id << std::endl;
-
     // call periodic thread function
     timer_function();
 }
+
+#undef __WEAVER_DEBUG__

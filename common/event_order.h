@@ -180,21 +180,38 @@ namespace order
         return UINT64_MAX;
     }
 
+    // plain old vector clock comparison
+    // if the vector has a single clock which happens before all the others, the index of that clock is stored in small_idx
+    // large[i] is true if clocks[i] is definitely not the earliest clock
+    // i.e. large[i] <=> \exists j clock[j] -> clock[i], where -> is the happens before relationship for vector clocks
+    static inline void
+    compare_vts_no_kronos(const std::vector<vc::vclock> &clocks, std::vector<bool> &large, int64_t &small_idx)
+    {
+        large = compare_vector_clocks(clocks);
+        assert(clocks.size() == large.size());
+
+        if (std::count(large.begin(), large.end(), false) == 1) {
+            // Kronos not required
+            small_idx = get_false_position(large);
+        }
+    }
+
     // static vector clock comparison method
     // will call Kronos if clocks are incomparable
-    // returns index of earliest clock
+    // returns index of earliest clock`
     static inline int64_t
     compare_vts(const std::vector<vc::vclock> &clocks)
     {
-        uint64_t num_clks = clocks.size();
-        std::vector<bool> large = compare_vector_clocks(clocks);
-        uint64_t num_large = std::count(large.begin(), large.end(), true);
+        std::vector<bool> large;
+        int64_t ret_idx = INT64_MAX;
 
-        if (num_large == (num_clks-1)) {
+        compare_vts_no_kronos(clocks, large, ret_idx);
+        if (ret_idx != INT64_MAX) {
             // Kronos not required
-            return get_false_position(large);
+            return ret_idx;
         } else {
             // check cache
+            uint64_t num_clks = clocks.size();
             for (uint64_t i = 0; i < num_clks; i++) {
                 for (uint64_t j = i+1; j < num_clks; j++) {
                     if (!large.at(i) && !large.at(j)) {
@@ -211,7 +228,7 @@ namespace order
                     }
                 }
             }
-            num_large = std::count(large.begin(), large.end(), true);
+            uint64_t num_large = std::count(large.begin(), large.end(), true);
             if (num_large == (num_clks-1)) {
                 // Kronos not required
                 return get_false_position(large);

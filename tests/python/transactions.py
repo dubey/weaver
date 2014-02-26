@@ -14,7 +14,7 @@
 # 
 
 import sys
-sys.path.append('../../bindings/python')
+sys.path.append('../../.libs/')
 
 import client
 import time
@@ -24,7 +24,7 @@ from test_base import test_graph
 from sets import Set
 
 num_clients = 10
-num_vts = 2
+num_vts = 1
 num_nodes = 10000
 edge_factor = 1
 edge_cnt = 0

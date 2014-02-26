@@ -7,19 +7,23 @@ Shards
     Kronos result caching
 Node/edge properties.
 Migration experiments.
-Permanent deletion.
 Serializability test with multithreaded client.
 
 TODO
-Fault tolerant (chain replicated) coordinator and shards.
-Kronos events clean up
+Fault tolerant coordinator and shards.
+Permanent deletion.
+    Node/edge properties
+    Kronos events clean up
+    Testing
 Clean up, tackle TODO/XXX.
         migrate_step 2 & 3 - rename, optimize (batch?)
+change all include guards from __UPPERCASE_... to lowercase_...
 Analytics API - global requests
     Find out why triangle counting is slow.
 
 
 GREG TODO BEFORE A RELEASE
+node.has_property() needed
 
 clean up code in general
 allow node programs to not use cache parameters (to clean up interface)

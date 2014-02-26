@@ -19,13 +19,11 @@
 #include <po6/net/location.h>
 
 #include "common/weaver_constants.h"
-#include "common/busybee_infra.h"
 #include "common/message.h"
 #include "common/message_tx_client.h"
-//#include "common/public_graph_elems/property.h"
+#include "common/comm_wrapper.h"
 #include "transaction.h"
 #include "node_prog/node_prog_type.h"
-//#include "node_prog/reach_program.h"
 
 namespace client
 {
@@ -33,12 +31,10 @@ namespace client
     {
         public:
             client(uint64_t my_id, uint64_t vt_id);
-            ~client();
 
         private:
             uint64_t myid, shifted_id, vtid;
-            std::shared_ptr<po6::net::location> myloc;
-            busybee_mta *client_bb;
+            common::comm_wrapper comm;
             std::unordered_map<uint64_t, tx_list_t> tx_map;
             uint64_t tx_id_ctr, temp_handle_ctr;
 
@@ -69,8 +65,11 @@ namespace client
             std::vector<uint64_t> get_node_count();
 
         private:
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
             void send_coord(std::auto_ptr<e::buffer> buf);
             busybee_returncode recv_coord(std::auto_ptr<e::buffer> *buf);
+#pragma GCC diagnostic pop
             uint64_t generate_handle();
     };
 
@@ -79,16 +78,11 @@ namespace client
         : myid(my_id)
         , shifted_id(myid << (64-ID_BITS))
         , vtid(vt_id)
+        , comm(my_id, 1, -1)
         , tx_id_ctr(0)
         , temp_handle_ctr(0)
     {
-        initialize_busybee(client_bb, myid, myloc);
-    }
-
-    inline
-    client :: ~client()
-    {
-        delete client_bb;
+        comm.client_init();
     }
 
     inline uint64_t
@@ -327,12 +321,12 @@ namespace client
         return node_count;
     }
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     inline void
     client :: send_coord(std::auto_ptr<e::buffer> buf)
     {
-        busybee_returncode ret;
-        if ((ret = client_bb->send(vtid, buf)) != BUSYBEE_SUCCESS) {
-            WDEBUG << "msg send error: " << ret << std::endl;
+        if (comm.send(vtid, buf) != BUSYBEE_SUCCESS) {
             return;
         }
     }
@@ -343,7 +337,7 @@ namespace client
         busybee_returncode ret;
         uint64_t sender;
         while (true) {
-            ret = client_bb->recv(&sender, buf);
+            ret = comm.recv(&sender, buf);
             switch (ret) {
                 case BUSYBEE_SUCCESS:
                     return ret;
@@ -357,6 +351,7 @@ namespace client
             }
         }
     }
+#pragma GCC diagnostic pop
 
     // to generate 64 bit graph element handles
     // assuming no more than 2^(ID_BITS) clients

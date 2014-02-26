@@ -24,31 +24,31 @@ namespace message
     {
         uint64_t num_writes = tx.size();
         uint64_t bytes_to_pack = sizeof(enum msg_type) * (1 + tx.size())
-            + size(num_writes);
+            + size_wrapper(num_writes);
         for (auto &upd: tx) {
             switch (upd->type) {
                 case CLIENT_NODE_CREATE_REQ:
-                    bytes_to_pack += size(upd->handle);
+                    bytes_to_pack += size_wrapper(upd->handle);
                     break;
 
                 case CLIENT_EDGE_CREATE_REQ:
-                    bytes_to_pack += size(upd->handle, upd->elem1, upd->elem2);
+                    bytes_to_pack += size_wrapper(upd->handle, upd->elem1, upd->elem2);
                     break;
 
                 case CLIENT_NODE_DELETE_REQ:
-                    bytes_to_pack += size(upd->elem1);
+                    bytes_to_pack += size_wrapper(upd->elem1);
                     break;
 
                 case CLIENT_EDGE_DELETE_REQ:
-                    bytes_to_pack += size(upd->elem1, upd->elem2);
+                    bytes_to_pack += size_wrapper(upd->elem1, upd->elem2);
                     break;
 
                 case CLIENT_NODE_SET_PROP:
-                    bytes_to_pack += size(upd->elem1, upd->key, upd->value);
+                    bytes_to_pack += size_wrapper(upd->elem1, upd->key, upd->value);
                     break;
 
                 case CLIENT_EDGE_SET_PROP:
-                    bytes_to_pack += size(upd->elem1, upd->elem2, upd->key, upd->value);
+                    bytes_to_pack += size_wrapper(upd->elem1, upd->elem2, upd->key, upd->value);
                     break;
 
                 default:
@@ -59,32 +59,32 @@ namespace message
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE);
 
         packer = packer << CLIENT_TX_INIT;
-        pack_buffer(packer, num_writes);
+        pack_buffer_wrapper(packer, num_writes);
         for (auto &upd: tx) {
             packer = packer << upd->type;
             switch (upd->type) {
                 case CLIENT_NODE_CREATE_REQ:
-                    pack_buffer_checked(packer, upd->handle);
+                    pack_buffer_wrapper(packer, upd->handle);
                     break;
 
                 case CLIENT_EDGE_CREATE_REQ:
-                    pack_buffer_checked(packer, upd->handle, upd->elem1, upd->elem2);
+                    pack_buffer_wrapper(packer, upd->handle, upd->elem1, upd->elem2);
                     break;
 
                 case CLIENT_NODE_DELETE_REQ:
-                    pack_buffer_checked(packer, upd->elem1);
+                    pack_buffer_wrapper(packer, upd->elem1);
                     break;
 
                 case CLIENT_EDGE_DELETE_REQ:
-                    pack_buffer_checked(packer, upd->elem1, upd->elem2);
+                    pack_buffer_wrapper(packer, upd->elem1, upd->elem2);
                     break;
 
                 case CLIENT_NODE_SET_PROP:
-                    pack_buffer_checked(packer, upd->elem1, upd->key, upd->value);
+                    pack_buffer_wrapper(packer, upd->elem1, upd->key, upd->value);
                     break;
 
                 case CLIENT_EDGE_SET_PROP:
-                    pack_buffer_checked(packer, upd->elem1, upd->elem2, upd->key, upd->value);
+                    pack_buffer_wrapper(packer, upd->elem1, upd->elem2, upd->key, upd->value);
                     break;
 
                 default:

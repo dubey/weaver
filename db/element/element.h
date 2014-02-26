@@ -24,7 +24,7 @@
 #include "property.h"
 #include "common/event_order.h"
 
-bool
+inline bool
 check_remove_prop(std::string &key, vc::vclock &vclk, db::element::property &prop)
 {
     if (prop.key == key) {
@@ -146,7 +146,7 @@ namespace element
     }
 
     // if property with same key-value does not exist, add it
-    bool
+    inline bool
     element :: check_and_add_property(property prop)
     {
         for (auto &iter: properties) {
@@ -196,7 +196,7 @@ namespace element
     }
 
     // return a pair, first is whether prop exists, second is value
-    std::pair<bool, std::string>
+    inline std::pair<bool, std::string>
     element :: get_property_value(std::string prop_key, vc::vclock &at_time)
     {
         for (property& prop : properties)

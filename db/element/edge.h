@@ -83,27 +83,27 @@ namespace element
         msg_count++;
     }
 
-    remote_node& // TODO, make const, nbr private var
+    inline remote_node& // TODO, make const, nbr private var
     edge :: get_neighbor()
     {
         return nbr; 
     }
 
-    node_prog::prop_list 
+    inline node_prog::prop_list 
     edge :: get_properties()
     {
         assert(base.view_time != NULL);
         return node_prog::prop_list(base.properties, *base.view_time);
     }
 
-    bool
+    inline bool
     edge :: has_property(std::pair<std::string, std::string> &p)
     {
         assert(base.view_time != NULL);
         return base.has_property(p, *base.view_time);
     }
 
-    bool
+    inline bool
     edge :: has_all_properties(std::vector<std::pair<std::string, std::string>> &props)
     {
         assert(base.view_time != NULL);

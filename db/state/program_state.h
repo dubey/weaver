@@ -72,6 +72,7 @@ namespace state
             bool check_done_nolock(uint64_t req_id);
     };
 
+    inline
     program_state :: program_state()
         : completed_id(0)
         , in_use_cond(&mutex)

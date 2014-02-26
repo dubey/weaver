@@ -26,20 +26,24 @@
 
 #include "node_prog/base_classes.h"
 #include "common/weaver_constants.h"
+#include "common/ids.h"
 #include "common/vclock.h"
 #include "common/message.h"
-#include "common/busybee_infra.h"
+#include "common/comm_wrapper.h"
 #include "common/event_order.h"
+#include "common/configuration.h"
+#include "common/server_manager_link_wrapper.h"
 #include "element/element.h"
 #include "element/node.h"
 #include "element/edge.h"
-#include "state/program_state.h"
-#include "threadpool/threadpool.h"
-#include "deferred_write.h"
-#include "del_obj.h"
+#include "db/state/program_state.h"
+#include "db/queue_manager.h"
+#include "db/deferred_write.h"
+#include "db/del_obj.h"
+#include "db/hyper_stub.h"
 
 namespace std {
-// so we can use a pair as key to unordered_map TODO move me??
+    // so we can use a pair as key to unordered_map
     template <typename T1, typename T2>
         struct hash<std::pair<T1, T2>>
         {
@@ -53,40 +57,6 @@ namespace std {
 
 namespace db
 {
-    // Pending update request
-    class graph_request
-    {
-        public:
-            graph_request(enum message::msg_type, std::unique_ptr<message::message>);
-
-        public:
-            enum message::msg_type type;
-            std::unique_ptr<message::message> msg;
-    };
-
-    // for permanent deletion priority queue
-    struct perm_del_compare
-        : std::binary_function<del_obj*, del_obj*, bool>
-    {
-        bool operator()(const del_obj* const &dw1, const del_obj* const &dw2)
-        {
-            assert(dw1->vclk.clock.size() == NUM_VTS);
-            assert(dw2->vclk.clock.size() == NUM_VTS);
-            for (uint64_t i = 0; i < NUM_VTS; i++) {
-                if (dw1->vclk.clock[i] <= dw2->vclk.clock[i]) {
-                    return false;
-                }
-            }
-            return true;
-        }
-    };
-
-    inline
-    graph_request :: graph_request(enum message::msg_type mt, std::unique_ptr<message::message> m)
-        : type(mt)
-        , msg(std::move(m))
-    { }
-
     enum graph_file_format
     {
         // edge list
@@ -104,24 +74,39 @@ namespace db
     class shard
     {
         public:
-            shard(uint64_t my_id);
+            shard(uint64_t shard, uint64_t server);
+            void init(bool backup);
+            void restore_backup();
+            void reconfigure();
 
             // Mutexes
             po6::threads::mutex update_mutex // shard update mutex
                 , edge_map_mutex
-                , perm_del_mutex;
+                , perm_del_mutex
+                , config_mutex;
         private:
             po6::threads::mutex clock_mutex; // vector clock/queue timestamp mutex
         public:
-            po6::threads::mutex queue_mutex // exclusive access to thread pool queues
-                , msg_count_mutex
+            po6::threads::mutex msg_count_mutex
                 , migration_mutex
                 , graph_load_mutex; // gather load times from all shards
 
+            // Messaging infrastructure
+            common::comm_wrapper comm;
+
+            // Hyperdex stub
+            std::vector<hyper_stub*> hstub;
+
+            // Server manager
+            server_manager_link_wrapper sm_stub;
+            configuration config;
+            bool active_backup, first_config;
+            po6::threads::cond backup_cond, first_config_cond;
+
             // Consistency
         public:
-            void increment_qts(uint64_t vt_id, uint64_t incr);
-            void record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk);
+            void increment_qts(uint64_t thread_id, uint64_t vt_id, uint64_t incr);
+            void record_completed_tx(uint64_t thread_id, uint64_t vt_id, vc::vclock_t &tx_clk);
             element::node* acquire_node(uint64_t node_id);
             void node_tx_order(uint64_t node, uint64_t vt_id, uint64_t qts);
             element::node* acquire_node_write(uint64_t node, uint64_t vt_id, uint64_t qts);
@@ -130,32 +115,30 @@ namespace db
 
             // Graph state
             uint64_t shard_id;
+            server_id server;
             std::unordered_set<uint64_t> node_list; // list of node ids currently on this shard
             std::unordered_map<uint64_t, element::node*> nodes; // node id -> ptr to node object
             std::unordered_map<uint64_t, // node id n ->
                 std::unordered_set<uint64_t>> edge_map; // in-neighbors of n
-        private:
-            db::thread::pool thread_pool;
+            queue_manager qm;
         public:
-            void add_write_request(uint64_t vt_id, thread::unstarted_thread *thr);
-            void add_read_request(uint64_t vt_id, thread::unstarted_thread *thr);
-            element::node* create_node(uint64_t node_id, vc::vclock &vclk, bool migrate, bool init_load);
-            void delete_node_nonlocking(element::node *n, vc::vclock &tdel);
-            void delete_node(uint64_t node_id, vc::vclock &vclk, vc::qtimestamp_t &qts);
-            void create_edge_nonlocking(element::node *n, uint64_t edge, uint64_t remote_node,
+            element::node* create_node(uint64_t thread_id, uint64_t node_id, vc::vclock &vclk, bool migrate, bool init_load);
+            void delete_node_nonlocking(uint64_t thread_id, element::node *n, vc::vclock &tdel);
+            void delete_node(uint64_t thread_id, uint64_t node_id, vc::vclock &vclk, vc::qtimestamp_t &qts);
+            void create_edge_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge, uint64_t remote_node,
                     uint64_t remote_loc, vc::vclock &vclk, bool init_load);
-            void create_edge(uint64_t edge_id, uint64_t local_node,
+            void create_edge(uint64_t thread_id, uint64_t edge_id, uint64_t local_node,
                     uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, vc::qtimestamp_t &qts);
-            void delete_edge_nonlocking(element::node *n, uint64_t edge, vc::vclock &tdel);
-            void delete_edge(uint64_t edge_id, uint64_t node_id, vc::vclock &vclk, vc::qtimestamp_t &qts);
+            void delete_edge_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge, vc::vclock &tdel);
+            void delete_edge(uint64_t thread_id, uint64_t edge_id, uint64_t node_id, vc::vclock &vclk, vc::qtimestamp_t &qts);
             // properties
-            void set_node_property_nonlocking(element::node *n,
+            void set_node_property_nonlocking(uint64_t thread_id, element::node *n,
                     std::string &key, std::string &value, vc::vclock &vclk);
-            void set_node_property(uint64_t node_id,
+            void set_node_property(uint64_t thread_id, uint64_t node_id,
                     std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk, vc::qtimestamp_t &qts);
-            void set_edge_property_nonlocking(element::node *n, uint64_t edge_id,
+            void set_edge_property_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge_id,
                     std::string &key, std::string &value, vc::vclock &vclk);
-            void set_edge_property(uint64_t node_id, uint64_t edge_id,
+            void set_edge_property(uint64_t thread_id, uint64_t node_id, uint64_t edge_id,
                     std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk, vc::qtimestamp_t &qts);
             uint64_t get_node_count();
             bool node_exists_nonlocking(uint64_t node_id);
@@ -212,22 +195,21 @@ namespace db
             void add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
             bool check_done_request(uint64_t req_id);
 
-            
             std::unordered_map<std::pair<uint64_t, uint64_t>, void *> node_prog_running_states; // used for fetching cache contexts
             po6::threads::mutex node_prog_running_states_mutex;
-
-            // Messaging infrastructure
-        public:
-            std::shared_ptr<po6::net::location> myloc;
-            busybee_mta *bb; // Busybee instance used for sending and receiving messages
-            busybee_returncode send(uint64_t loc, std::auto_ptr<e::buffer> buf);
 
     };
 
     inline
-    shard :: shard(uint64_t my_id)
-        : shard_id(my_id)
-        , thread_pool(NUM_THREADS - 1)
+    shard :: shard(uint64_t shardid, uint64_t serverid)
+        : comm(serverid, NUM_THREADS, SHARD_MSGRECV_TIMEOUT)
+        , sm_stub(server_id(serverid), comm.get_loc())
+        , active_backup(false)
+        , first_config(false)
+        , backup_cond(&config_mutex)
+        , first_config_cond(&config_mutex)
+        , shard_id(shardid)
+        , server(serverid)
         , current_migr(false)
         , migr_token(false)
         , migrated(false)
@@ -243,25 +225,72 @@ namespace db
         , msg_count(0)
         , prog_state()
     {
-        thread::pool::S = this;
-        initialize_busybee(bb, shard_id, myloc);
-        order::kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT);
-        order::call_times = new std::list<uint64_t>();
         assert(NUM_VTS == KRONOS_NUM_VTS);
         message::prog_state = &prog_state;
+        for (int i = 0; i < NUM_THREADS; i++) {
+            hstub.push_back(new hyper_stub(shard_id));
+        }
+    }
+
+    // initialize: msging layer
+    //           , chronos client
+    //           , hyperdex stub
+    // caution: assume holding config_mutex
+    inline void
+    shard :: init(bool backup)
+    {
+        comm.init(config);
+        if (!backup) {
+            hstub.back()->init();
+        }
+        order::kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT);
+        order::call_times = new std::list<uint64_t>();
+    }
+
+    // restore state when backup becomes primary due to failure
+    inline void
+    shard :: restore_backup()
+    {
+        std::unordered_map<uint64_t, uint64_t> qts_map;
+        std::unordered_map<uint64_t, vc::vclock_t> last_clocks;
+        hstub.back()->restore_backup(qts_map, last_clocks);
+        qm.restore_backup(qts_map, last_clocks);
+    }
+
+    // reconfigure shard according to new cluster configuration
+    // caution: assume holding config_mutex
+    inline void
+    shard :: reconfigure()
+    {
+        WDEBUG << "Cluster reconfigure triggered\n";
+        for (uint64_t i = 0; i < NUM_SERVERS; i++) {
+            server::state_t st = config.get_state(server_id(i));
+            if (st != server::AVAILABLE) {
+                WDEBUG << "Server " << i << " is in trouble, has state " << st << std::endl;
+            } else {
+                WDEBUG << "Server " << i << " is healthy, has state " << st << std::endl;
+            }
+        }
+        if (comm.reconfigure(config) == server.get()) {
+            // this server is now primary for the shard
+            active_backup = true;
+            backup_cond.signal();
+        }
     }
 
     // Consistency methods
     inline void
-    shard :: increment_qts(uint64_t vt_id, uint64_t incr)
+    shard :: increment_qts(uint64_t thread_id, uint64_t vt_id, uint64_t incr)
     {
-        thread_pool.increment_qts(vt_id, incr);
+        hstub[thread_id]->increment_qts(vt_id, incr);
+        qm.increment_qts(vt_id, incr);
     }
 
     inline void
-    shard :: record_completed_tx(uint64_t vt_id, uint64_t tx_id, vc::vclock_t tx_clk)
+    shard :: record_completed_tx(uint64_t thread_id, uint64_t vt_id, vc::vclock_t &tx_clk)
     {
-        thread_pool.record_completed_tx(vt_id, tx_id, tx_clk);
+        hstub[thread_id]->update_last_clocks(vt_id, tx_clk);
+        qm.record_completed_tx(vt_id, tx_clk);
     }
 
     // find the node corresponding to given id
@@ -362,20 +391,8 @@ namespace db
 
     // Graph state update methods
 
-    inline void
-    shard :: add_write_request(uint64_t vt_id, thread::unstarted_thread *thr)
-    {
-        thread_pool.add_write_request(vt_id, thr);
-    }
-
-    inline void
-    shard :: add_read_request(uint64_t vt_id, thread::unstarted_thread *thr)
-    {
-        thread_pool.add_read_request(vt_id, thr);
-    }
-
     inline element::node*
-    shard :: create_node(uint64_t node_id, vc::vclock &vclk, bool migrate, bool init_load=false)
+    shard :: create_node(uint64_t thread_id, uint64_t node_id, vc::vclock &vclk, bool migrate, bool init_load=false)
     {
         element::node *new_node = new element::node(node_id, vclk, &update_mutex);
         
@@ -401,20 +418,25 @@ namespace db
         if (!migrate) {
             new_node->state = element::node::mode::STABLE;
             new_node->msg_count.resize(NUM_SHARDS, 0);
+            // store in Hyperdex
+            std::unordered_set<uint64_t> empty_set;
+            hstub[thread_id]->put_node(*new_node, empty_set);
             release_node(new_node);
         }
         return new_node;
     }
 
     inline void
-    shard :: delete_node_nonlocking(element::node *n, vc::vclock &tdel)
+    shard :: delete_node_nonlocking(uint64_t thread_id, element::node *n, vc::vclock &tdel)
     {
         n->base.update_del_time(tdel);
         n->updated = true;
+        // store in Hyperdex
+        hstub[thread_id]->update_del_time(*n);
     }
 
     inline void
-    shard :: delete_node(uint64_t node_id, vc::vclock &tdel, vc::qtimestamp_t &qts)
+    shard :: delete_node(uint64_t thread_id, uint64_t node_id, vc::vclock &tdel, vc::qtimestamp_t &qts)
     {
         element::node *n = acquire_node_write(node_id, tdel.vt_id, qts[tdel.vt_id]);
         if (n == NULL) {
@@ -423,7 +445,7 @@ namespace db
             deferred_writes[node_id].emplace_back(deferred_write(message::NODE_DELETE_REQ, tdel));
             migration_mutex.unlock();
         } else {
-            delete_node_nonlocking(n, tdel);
+            delete_node_nonlocking(thread_id, n, tdel);
             release_node(n);
             // record object for permanent deletion later on
             perm_del_mutex.lock();
@@ -433,7 +455,7 @@ namespace db
     }
 
     inline void
-    shard :: create_edge_nonlocking(element::node *n, uint64_t edge, uint64_t remote_node,
+    shard :: create_edge_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge, uint64_t remote_node,
             uint64_t remote_loc, vc::vclock &vclk, bool init_load=false)
     {
         element::edge *new_edge = new element::edge(edge, vclk, remote_loc, remote_node);
@@ -447,10 +469,13 @@ namespace db
         if (!init_load) {
             edge_map_mutex.unlock();
         }
+        // store in Hyperdex
+        hstub[thread_id]->add_out_edge(*n, new_edge);
+        hstub[thread_id]->add_in_nbr(remote_node, n->base.get_id());
     }
 
     inline void
-    shard :: create_edge(uint64_t edge_id, uint64_t local_node,
+    shard :: create_edge(uint64_t thread_id, uint64_t edge_id, uint64_t local_node,
             uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, vc::qtimestamp_t &qts)
     {
         element::node *n = acquire_node_write(local_node, vclk.vt_id, qts[vclk.vt_id]);
@@ -466,13 +491,13 @@ namespace db
             migration_mutex.unlock();
         } else {
             assert(n->base.get_id() == local_node);
-            create_edge_nonlocking(n, edge_id, remote_node, remote_loc, vclk);
+            create_edge_nonlocking(thread_id, n, edge_id, remote_node, remote_loc, vclk);
             release_node(n);
         }
     }
 
     inline void
-    shard :: delete_edge_nonlocking(element::node *n, uint64_t edge, vc::vclock &tdel)
+    shard :: delete_edge_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge, vc::vclock &tdel)
     {
 #ifdef __WEAVER_DEBUG__
         assert(n->edge_handles.find(edge) != n->edge_handles.end());
@@ -482,10 +507,12 @@ namespace db
         e->base.update_del_time(tdel);
         n->updated = true;
         n->dependent_del++;
+        // store in Hyperdex
+        hstub[thread_id]->add_out_edge(*n, e);
     }
 
     inline void
-    shard :: delete_edge(uint64_t edge_id, uint64_t node_id, vc::vclock &tdel, vc::qtimestamp_t &qts)
+    shard :: delete_edge(uint64_t thread_id, uint64_t edge_id, uint64_t node_id, vc::vclock &tdel, vc::qtimestamp_t &qts)
     {
         element::node *n = acquire_node_write(node_id, tdel.vt_id, qts[tdel.vt_id]);
         if (n == NULL) {
@@ -496,7 +523,7 @@ namespace db
             dw.edge = edge_id;
             migration_mutex.unlock();
         } else {
-            delete_edge_nonlocking(n, edge_id, tdel);
+            delete_edge_nonlocking(thread_id, n, edge_id, tdel);
             release_node(n);
             // record object for permanent deletion later on
             perm_del_mutex.lock();
@@ -506,15 +533,17 @@ namespace db
     }
 
     inline void
-    shard :: set_node_property_nonlocking(element::node *n,
+    shard :: set_node_property_nonlocking(uint64_t thread_id, element::node *n,
             std::string &key, std::string &value, vc::vclock &vclk)
     {
         db::element::property p(key, value, vclk);
         n->base.check_and_add_property(p);
+        // store in Hyperdex
+        hstub[thread_id]->update_properties(*n);
     }
 
     inline void
-    shard :: set_node_property(uint64_t node_id,
+    shard :: set_node_property(uint64_t thread_id, uint64_t node_id,
             std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk, vc::qtimestamp_t &qts)
     {
         element::node *n = acquire_node_write(node_id, vclk.vt_id, qts[vclk.vt_id]);
@@ -527,22 +556,24 @@ namespace db
             dw.value = std::move(value);
             migration_mutex.unlock();
         } else {
-            set_node_property_nonlocking(n, *key, *value, vclk);
+            set_node_property_nonlocking(thread_id, n, *key, *value, vclk);
             release_node(n);
         }
     }
 
     inline void
-    shard :: set_edge_property_nonlocking(element::node *n, uint64_t edge_id,
+    shard :: set_edge_property_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge_id,
             std::string &key, std::string &value, vc::vclock &vclk)
     {
         db::element::edge *e = n->out_edges[edge_id];
         db::element::property p(key, value, vclk);
         e->base.check_and_add_property(p);
+        // store in Hyperdex
+        hstub[thread_id]->add_out_edge(*n, e);
     }
 
     inline void
-    shard :: set_edge_property(uint64_t node_id, uint64_t edge_id,
+    shard :: set_edge_property(uint64_t thread_id, uint64_t node_id, uint64_t edge_id,
             std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk, vc::qtimestamp_t &qts)
     {
         element::node *n = acquire_node_write(node_id, vclk.vt_id, qts[vclk.vt_id]);
@@ -556,7 +587,7 @@ namespace db
             dw.value = std::move(value);
             migration_mutex.unlock();
         } else {
-            set_edge_property_nonlocking(n, edge_id, *key, *value, vclk);
+            set_edge_property_nonlocking(thread_id, n, edge_id, *key, *value, vclk);
             release_node(n);
         }
     }
@@ -628,12 +659,10 @@ namespace db
                 case message::EDGE_DELETE_REQ:
                     n = acquire_node(dobj->node);
                     assert(n->out_edges.count(dobj->edge) > 0);
-                    // XXX can we avoid kronos in worst case below?
                     if (n->last_perm_deletion == nullptr ||
                             order::compare_two_vts(*n->last_perm_deletion,
                                 n->out_edges.at(dobj->edge)->base.get_del_time()) == 0) {
-                        n->last_perm_deletion.reset(
-                                new vc::vclock(std::move(n->out_edges.at(dobj->edge)->base.get_del_time())));
+                        n->last_perm_deletion.reset(new vc::vclock(std::move(n->out_edges.at(dobj->edge)->base.get_del_time())));
                     }
                     delete n->out_edges[dobj->edge];
                     n->out_edges.erase(dobj->edge);
@@ -643,7 +672,11 @@ namespace db
                 default:
                     WDEBUG << "invalid type " << dobj->type << " in deleted object" << std::endl;
             }
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
+            // we know dobj will be initialized here
             delete dobj;
+#pragma GCC diagnostic pop
             perm_del_queue.pop();
         }
         if (!outstanding_progs) {
@@ -670,7 +703,7 @@ namespace db
         if (n->state != element::node::mode::MOVED) {
             for (uint64_t shard = SHARD_ID_INCR; shard < SHARD_ID_INCR + NUM_SHARDS; shard++) {
                 message::prepare_message(msg, message::PERMANENTLY_DELETED_NODE, n->base.get_id());
-                send(shard, msg.buf);
+                comm.send(shard, msg.buf);
             }
             for (auto &e: n->out_edges) {
                 delete e.second;
@@ -717,7 +750,7 @@ namespace db
             message::message msg;
             message::prepare_message(msg, message::MIGRATED_NBR_ACK, shard_id, max_prog_id,
                     shard_node_count[shard_id-SHARD_ID_INCR]);
-            send(old_loc, msg.buf);
+            comm.send(old_loc, msg.buf);
         } else {
             for (int i = 0; i < NUM_VTS; i++) {
                 if (target_prog_id[i] < max_prog_id[i]) {
@@ -782,118 +815,6 @@ namespace db
         return done;
     }
 
-    // messaging methods
-
-    inline busybee_returncode
-    shard :: send(uint64_t loc, std::auto_ptr<e::buffer> msg)
-    {
-        busybee_returncode ret;
-        if ((ret = bb->send(loc, msg)) != BUSYBEE_SUCCESS) {
-            WDEBUG << "msg send error: " << ret << std::endl;
-        }
-        return ret;
-    }
-
-    inline thread::unstarted_thread*
-    get_read_thr(std::vector<thread::pqueue_t> &read_queues, std::vector<vc::vclock_t> &last_clocks)
-    {
-        thread::unstarted_thread* thr;
-        bool can_exec;
-        for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
-            thread::pqueue_t &pq = read_queues[vt_id];
-            // execute read request after all write queues have processed write which happens after this read
-            if (!pq.empty()) {
-                can_exec = true;
-                thr = pq.top();
-                for (uint64_t write_vt = 0; write_vt < NUM_VTS; write_vt++) {
-                    if (order::compare_two_clocks(thr->vclock.clock, last_clocks[write_vt]) != 0) {
-                        can_exec = false;
-                        break;
-                    }
-                }
-                if (can_exec) {
-                    pq.pop();
-                    return thr;
-                }
-            }
-        }
-        return NULL;
-    }
-
-    inline thread::unstarted_thread*
-    get_write_thr(thread::pool *tpool)
-    {
-        thread::unstarted_thread *thr = NULL;
-        std::vector<vc::vclock> timestamps;
-        timestamps.reserve(NUM_VTS);
-        std::vector<thread::pqueue_t> &write_queues = tpool->write_queues;
-        // get next jobs from each queue
-        for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
-            thread::pqueue_t &pq = write_queues[vt_id];
-            // wait for queue to receive at least one job
-            if (pq.empty()) { // can't write if one of the pq's is empty
-                return NULL;
-            } else {
-                thr = pq.top();
-                // check for correct ordering of queue timestamp (which is priority for thread)
-                if (!tpool->check_qts(vt_id, thr->priority)) {
-                    return NULL;
-                }
-            }
-        }
-        // all write queues are good to go, compare timestamps
-        for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
-            timestamps.emplace_back(write_queues[vt_id].top()->vclock);
-        }
-        uint64_t exec_vt_id;
-        if (NUM_VTS == 1) {
-            exec_vt_id = 0; // only one timestamper
-        } else {
-            exec_vt_id = order::compare_vts(timestamps);
-        }
-        thr = write_queues[exec_vt_id].top();
-        write_queues[exec_vt_id].pop();
-        return thr;
-    }
-
-    inline thread::unstarted_thread*
-    get_read_or_write(thread::pool *tpool)
-    {
-        thread::unstarted_thread *thr = get_read_thr(tpool->read_queues, tpool->last_clocks);
-        if (thr == NULL) {
-            thr = get_write_thr(tpool);
-        }
-        return thr;
-    }
-
-    // work loop for threads in thread pool
-    // check all queues are ready to go
-    // if yes, execute the earliest job, else sleep and wait for incoming jobs
-    // "earliest" is decided by comparison functions using vector clocks and Kronos
-    void
-    thread :: worker_thread_loop(thread::pool *tpool)
-    {
-        thread::unstarted_thread *thr = NULL;
-        po6::threads::cond &c = tpool->queue_cond;
-        while (true) {
-            // TODO better queue locking needed
-            tpool->thread_loop_mutex.lock(); // only one thread accesses queues
-            // TODO add job method should be non-blocking on this mutex
-            tpool->queue_mutex.lock(); // prevent more jobs from being added
-            while((thr = get_read_or_write(tpool)) == NULL) {
-                c.wait();
-            }
-            tpool->queue_mutex.unlock();
-            tpool->thread_loop_mutex.unlock();
-            (*thr->func)(thr->arg);
-            // queue timestamp is incremented by the thread, upon finishing
-            // because the decision to increment or not is based on thread-specific knowledge
-            // moreover, when to increment can also be decided by thread only
-            // this could potentially decrease throughput, because other ops in the
-            // threadpool are blocked, waiting for this thread to increment qts
-            delete thr;
-        }
-    }
 }
 
 #endif

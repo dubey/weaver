@@ -11,6 +11,9 @@
  * ===============================================================
  */
 
+#ifndef __DEFERRED_WRITE__
+#define __DEFERRED_WRITE__
+
 namespace db
 {
     // state for a deferred write for a migrated node
@@ -27,3 +30,5 @@ namespace db
     
     typedef std::vector<deferred_write> def_write_lst;
 }
+
+#endif

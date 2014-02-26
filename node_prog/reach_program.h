@@ -204,7 +204,7 @@ namespace node_prog
         return true;
     }
 
-    std::vector<std::pair<db::element::remote_node, reach_params>> 
+    inline std::vector<std::pair<db::element::remote_node, reach_params>> 
     reach_node_program(
             node &n,
             db::element::remote_node &rn,
