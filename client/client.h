@@ -78,11 +78,13 @@ namespace client
         : myid(my_id)
         , shifted_id(myid << (64-ID_BITS))
         , vtid(vt_id)
-        , comm(my_id, 1, -1)
+        , comm(my_id, 1, -1, true)
         , tx_id_ctr(0)
         , temp_handle_ctr(0)
     {
+        std::cerr << "in client constructor\n";
         comm.client_init();
+        std::cerr << "client cons done\n";
     }
 
     inline uint64_t

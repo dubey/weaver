@@ -11,6 +11,7 @@ Serializability test with multithreaded client.
 
 TODO
 Fault tolerant coordinator and shards.
+    Timestamper: log each tx before sending to shards. Entire tx message.
 Permanent deletion.
     Node/edge properties
     Kronos events clean up

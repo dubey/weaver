@@ -33,6 +33,8 @@ endif
 bin_PROGRAMS=
 lib_LTLIBRARIES=
 pkgpyexec_LTLIBRARIES=
+pkgpyexec_DATA=
+CLEANFILES=
 
 # timestamper
 bin_PROGRAMS+=		timestamper
@@ -43,6 +45,8 @@ timestamper_SOURCES=common/comm_wrapper.cc \
                     common/serialization.cc \
                     common/server_manager_link.cc \
                     common/server_manager_link_wrapper.cc \
+                    common/hyper_stub_base.cc \
+                    coordinator/hyper_stub.cc \
 					coordinator/timestamper.cc
 timestamper_CFLAGS= 	$(AM_CFLAGS)
 timestamper_CXXFLAGS= 	$(AM_CXXFLAGS)
@@ -68,6 +72,7 @@ shard_SOURCES=	common/ids.cc \
                 common/comm_wrapper.cc \
 				common/server_manager_link.cc \
 				common/server_manager_link_wrapper.cc \
+                common/hyper_stub_base.cc \
                 db/hyper_stub.cc \
                 db/queue_manager.cc \
 				db/shard.cc
@@ -75,14 +80,21 @@ shard_CFLAGS= 	$(AM_CFLAGS)
 shard_CXXFLAGS=	$(AM_CXXFLAGS)
 
 # python client
-pkgpyexec_LTLIBRARIES+=	libclient.la
-libclient_la_SOURCES=	bindings/python/client.cpp
-bindings/python/client.cpp:	bindings/python/client.pyx
-	$(CYTHON) $(CYTHON_FLAGS) $<
-libclient_la_CFLAGS= 	-fno-strict-aliasing $(AM_CFLAGS)
-libclient_la_CXXFLAGS=	-fno-strict-aliasing $(AM_CXXFLAGS)
-libclient_la_CPPFLAGS=	-I/usr/include/python2.7
-libclient_la_LIBS=		-lpython2.7
+#pkgpyexec_DATA+=	bindings/python/__init__.py
+#pkgpyexec_LTLIBRARIES+=	libclient.la
+#CLEANFILES+=	bindings/python/client.cpp
+#libclient_la_SOURCES=	common/ids.cc \
+#                        common/serialization.cc \
+#                        common/server.cc \
+#                        common/configuration.cc \
+#                        common/comm_wrapper.cc \
+#                        bindings/python/client.cpp
+#bindings/python/client.cpp:	bindings/python/client.pyx
+#	$(CYTHON) $(CYTHON_FLAGS) $<
+#libclient_la_CFLAGS= 	-fno-strict-aliasing $(AM_CFLAGS)
+#libclient_la_CXXFLAGS=	-fno-strict-aliasing $(AM_CXXFLAGS)
+#libclient_la_CPPFLAGS=	-I/usr/include/python2.7
+#libclient_la_LIBS=		-lpython2.7 $(LIBS)
 
 # cpp tests
 bin_PROGRAMS+=				tests/cpp/tests

@@ -45,7 +45,6 @@ end_program(int signum)
 inline void
 begin_transaction(transaction::pending_tx &tx)
 {
-    message::message msg;
     std::vector<transaction::pending_tx> tx_vec(NUM_SHARDS, transaction::pending_tx());
 
     vts->clk_mutex.lock();
@@ -57,21 +56,21 @@ begin_transaction(transaction::pending_tx &tx)
     vts->vclk.increment_clock();
     tx.timestamp = vts->vclk;
     // get unique tx id
-    tx.id = vts->generate_id();
     vts->clk_mutex.unlock();
 
     current_tx cur_tx(tx.client_id);
-    // record txs as outstanding for reply bookkeeping
     for (uint64_t i = 0; i < NUM_SHARDS; i++) {
         if (!tx_vec[i].writes.empty()) {
             cur_tx.count++;
         }
     }
+    // record txs as outstanding for reply bookkeeping and fault tolerance
     vts->tx_prog_mutex.lock();
     vts->outstanding_tx.emplace(tx.id, cur_tx);
     vts->tx_prog_mutex.unlock();
 
     // send tx batches
+    message::message msg;
     for (uint64_t i = 0; i < NUM_SHARDS; i++) {
         if (!tx_vec[i].writes.empty()) {
             tx_vec[i].timestamp = tx.timestamp;
@@ -84,11 +83,12 @@ begin_transaction(transaction::pending_tx &tx)
 
 // decrement reply count. if all replies have been received, ack to client
 inline void
-end_transaction(uint64_t tx_id)
+end_transaction(uint64_t tx_id, int thread_id)
 {
     vts->tx_prog_mutex.lock();
     if (--vts->outstanding_tx.at(tx_id).count == 0) {
         // done tx
+        vts->hstub[thread_id]->del_tx(tx_id);
         uint64_t client_id = vts->outstanding_tx[tx_id].client;
         vts->outstanding_tx.erase(tx_id);
         vts->tx_prog_mutex.unlock();
@@ -131,10 +131,10 @@ timer_function()
         
         // send nops and state cleanup info to shards
         if (vts->to_nop.any()) {
+            req_id = vts->generate_id();
             vts->clk_mutex.lock();
             vts->vclk.increment_clock();
             vclk.clock = vts->vclk.clock;
-            req_id = vts->generate_id();
             for (uint64_t shard_id = 0; shard_id < NUM_SHARDS; shard_id++) {
                 if (vts->to_nop[shard_id]) {
                     vts->qts[shard_id]++;
@@ -255,11 +255,11 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         }
     }
     
+    uint64_t req_id = vts->generate_id();
     vts->clk_mutex.lock();
     vts->vclk.increment_clock();
     vc::vclock req_timestamp = vts->vclk;
     assert(req_timestamp.clock.size() == NUM_VTS);
-    uint64_t req_id = vts->generate_id();
     vts->clk_mutex.unlock();
 
     /*
@@ -419,7 +419,7 @@ server_loop(int thread_id)
 
                 case message::TX_DONE:
                     message::unpack_message(*msg, message::TX_DONE, tx_id);
-                    end_transaction(tx_id);
+                    end_transaction(tx_id, thread_id);
                     break;
 
                 case message::START_MIGR: {
@@ -635,11 +635,12 @@ main(int argc, char *argv[])
     }
 
     // registered this server with server_manager, config has fairly recent value
-    if (argc != 3) {
-        vts->init(false); // primary
-    } else {
-        vts->init(true); // backup
-    }
+    vts->init();
+    //if (argc != 3) {
+    //    vts->init(false); // primary
+    //} else {
+    //    vts->init(true); // backup
+    //}
 
     vts->config_mutex.unlock();
 

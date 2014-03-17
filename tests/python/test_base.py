@@ -12,7 +12,7 @@
 # 
 
 import sys
-sys.path.append('../bindings/python')
+sys.path.append('../../bindings/python')
 
 import client
 import time

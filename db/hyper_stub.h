@@ -14,16 +14,15 @@
 #ifndef weaver_db_hyper_stub_h_
 #define weaver_db_hyper_stub_h_
 
-#include <e/endian.h>
-#include <hyperdex/client.hpp>
-#include <hyperdex/datastructures.h>
-
 #include "common/weaver_constants.h"
-#include "common/message_graph_elem.h"
+#include "common/hyper_stub_base.h"
+#include "common/vclock.h"
+#include "db/element/node.h"
+#include "db/element/edge.h"
 
 namespace db
 {
-    class hyper_stub
+    class hyper_stub : private hyper_stub_base
     {
         private:
             const uint64_t shard_id;
@@ -33,7 +32,6 @@ namespace db
             const char *shard_space = "weaver_shard_data";
             const char *shard_attrs[2];
             const enum hyperdatatype shard_dtypes[2];
-            hyperdex::Client cl;
             typedef int64_t (hyperdex::Client::*hyper_func)(const char*,
                 const char*,
                 size_t,
@@ -46,19 +44,6 @@ namespace db
                 const struct hyperdex_client_map_attribute*,
                 size_t,
                 hyperdex_client_returncode*);
-
-        private:
-            template <typename T> void prepare_buffer(const T &t, std::unique_ptr<e::buffer> &buf);
-            template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, T &t);
-            template <typename T> void prepare_buffer(const std::unordered_map<uint64_t, T> &map, std::unique_ptr<char> &buf, uint64_t &buf_sz);
-            template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<uint64_t, T> &map);
-            void prepare_buffer(const std::unordered_map<uint64_t, uint64_t> &map, std::unique_ptr<char> &buf, uint64_t &buf_sz);
-            void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<uint64_t, uint64_t> &map);
-            void prepare_buffer(const std::unordered_set<uint64_t> &set, std::unique_ptr<char> &buf, uint64_t &buf_sz);
-            void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<uint64_t> &set);
-            void hyper_call_and_loop(hyper_func h, const char *space, uint64_t key, hyperdex_client_attribute *cl_attr, size_t num_attrs);
-            void hypermap_call_and_loop(hyper_map_func h, const char *space, uint64_t key, hyperdex_client_map_attribute *map_attr, size_t num_attrs);
-            void hyper_get_and_loop(const char *space, uint64_t key, const hyperdex_client_attribute **cl_attr, size_t *num_attrs);
 
         public:
             hyper_stub(uint64_t sid);

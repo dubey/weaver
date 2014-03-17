@@ -221,12 +221,12 @@ cdef extern from 'client/client.h' namespace 'client':
         void delete_edge(uint64_t tx_id, uint64_t edge, uint64_t node)
         void set_node_property(uint64_t tx_id, uint64_t node, string &key, string &value)
         void set_edge_property(uint64_t tx_id, uint64_t node, uint64_t edge, string &key, string &value)
-        bint end_tx(uint64_t tx_id)
-        reach_params run_reach_program(vector[pair[uint64_t, reach_params]] initial_args)
-        clustering_params run_clustering_program(vector[pair[uint64_t, clustering_params]] initial_args)
-        dijkstra_params run_dijkstra_program(vector[pair[uint64_t, dijkstra_params]] initial_args)
-        read_node_props_params read_node_props_program(vector[pair[uint64_t, read_node_props_params]] initial_args)
-        read_edges_props_params read_edges_props_program(vector[pair[uint64_t, read_edges_props_params]] initial_args)
+        bint end_tx(uint64_t tx_id) nogil
+        reach_params run_reach_program(vector[pair[uint64_t, reach_params]] initial_args) nogil
+        clustering_params run_clustering_program(vector[pair[uint64_t, clustering_params]] initial_args) nogil
+        dijkstra_params run_dijkstra_program(vector[pair[uint64_t, dijkstra_params]] initial_args) nogil
+        read_node_props_params read_node_props_program(vector[pair[uint64_t, read_node_props_params]] initial_args) nogil
+        read_edges_props_params read_edges_props_program(vector[pair[uint64_t, read_edges_props_params]] initial_args) nogil
         void start_migration()
         void single_stream_migration()
         void commit_graph()
@@ -257,13 +257,17 @@ cdef class Client:
     def set_edge_property(self, tx_id, node, edge, key, value):
         self.thisptr.set_edge_property(tx_id, node, edge, key, value)
     def end_tx(self, tx_id):
-        return self.thisptr.end_tx(tx_id)
+        cdef uint64_t txid = tx_id
+        cdef bint ret
+        with nogil:
+            ret = self.thisptr.end_tx(txid)
+        return ret
     def run_reach_program(self, init_args):
         cdef vector[pair[uint64_t, reach_params]] c_args
         cdef pair[uint64_t, reach_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
-            arg_pair.second._search_cache = rp[1]._search_cache 
+            arg_pair.second._search_cache = rp[1]._search_cache
             arg_pair.second._cache_key = rp[1].dest
             arg_pair.second.mode = rp[1].mode
             arg_pair.second.dest= rp[1].dest
@@ -272,7 +276,8 @@ cdef class Client:
             for p in rp[1].edge_props:
                 arg_pair.second.edge_props.push_back(p)
             c_args.push_back(arg_pair)
-        c_rp = self.thisptr.run_reach_program(c_args)
+        with nogil:
+            c_rp = self.thisptr.run_reach_program(c_args)
         response = ReachParams(hops=c_rp.hops, reachable=c_rp.reachable)
         return response
     # warning! set prev_node loc to vt_id if somewhere in params
@@ -286,7 +291,8 @@ cdef class Client:
             arg_pair.second.is_center = cp[1].is_center
             arg_pair.second.outgoing = cp[1].outgoing
             c_args.push_back(arg_pair)
-        c_cp = self.thisptr.run_clustering_program(c_args)
+        with nogil:
+            c_cp = self.thisptr.run_clustering_program(c_args)
         response = ClusteringParams(clustering_coeff=c_cp.clustering_coeff)
         return response
     def run_dijkstra_program(self, init_args):
@@ -299,7 +305,8 @@ cdef class Client:
             arg_pair.second.dst_handle = cp[1].dst_handle;
             arg_pair.second.edge_weight_name = cp[1].edge_weight_name;
             c_args.push_back(arg_pair)
-        c_dp = self.thisptr.run_dijkstra_program(c_args)
+        with nogil:
+            c_dp = self.thisptr.run_dijkstra_program(c_args)
         response = DijkstraParams(final_path=c_dp.final_path, cost=c_dp.cost)
         return response
     def read_node_props(self, init_args):
@@ -309,8 +316,8 @@ cdef class Client:
             arg_pair.first = rp[0]
             arg_pair.second.keys = rp[1].keys
             c_args.push_back(arg_pair)
-
-        c_rp = self.thisptr.read_node_props_program(c_args)
+        with nogil:
+            c_rp = self.thisptr.read_node_props_program(c_args)
         response = ReadNodePropsParams(node_props=c_rp.node_props)
         return response
 
@@ -322,8 +329,8 @@ cdef class Client:
             #arg_pair.second.edges = rp[1].edges
             arg_pair.second.keys = rp[1].keys
             c_args.push_back(arg_pair)
-
-        c_rp = self.thisptr.read_edges_props_program(c_args)
+        with nogil:
+            c_rp = self.thisptr.read_edges_props_program(c_args)
         response = ReadEdgesPropsParams(edges_props=c_rp.edges_props)
         return response
 

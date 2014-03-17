@@ -172,7 +172,7 @@ namespace message
     message :: message(message &copy)
         : type(copy.type)
     {
-        buf = copy.buf;
+        buf.reset(copy.buf->copy());
     }
 
     inline void

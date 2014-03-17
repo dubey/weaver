@@ -35,12 +35,16 @@
 #include "common/nmap_stub.h"
 #include "coordinator/current_tx.h"
 #include "coordinator/current_prog.h"
+#include "coordinator/hyper_stub.h"
 //#include "node_prog/triangle_program.h"
 
 namespace coordinator
 {
     class timestamper
     {
+        typedef std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> req_queue_t;
+        typedef std::unordered_map<uint64_t, std::bitset<NUM_SHARDS>> prog_reply_t;
+
         public:
             // messaging
             common::comm_wrapper comm;
@@ -50,27 +54,34 @@ namespace coordinator
             configuration config;
             bool active_backup, first_config;
             po6::threads::cond backup_cond, first_config_cond;
+            
+            // Hyperdex stub
+            std::vector<hyper_stub*> hstub;
 
             // timestamper state
             uint64_t vt_id, shifted_id, id_gen; // this vector timestamper's id
             server_id server;
             uint64_t loc_gen;
+
+            // consistency
             vc::vclock vclk; // vector clock
             vc::qtimestamp_t qts; // queue timestamp
-            std::unordered_map<uint64_t, current_tx> outstanding_tx;
             uint64_t clock_update_acks;
             std::bitset<NUM_SHARDS> to_nop;
 
+            // write transactions
+            std::unordered_map<uint64_t, current_tx> outstanding_tx;
+
             // node prog
-            typedef std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> req_queue_t;
-            typedef std::unordered_map<uint64_t, std::bitset<NUM_SHARDS>> prog_reply_t;
             std::unordered_map<uint64_t, current_prog> outstanding_progs;
-            // node prog cleanup and permanent deletion
+
+            // prog cleanup and permanent deletion
             req_queue_t pend_prog_queue;
             req_queue_t done_prog_queue;
-            uint64_t max_done_id;
-            std::unique_ptr<vc::vclock_t> max_done_clk;
-            std::unordered_map<node_prog::prog_type, prog_reply_t> done_reqs;
+            uint64_t max_done_id; // permanent deletion of migrated nodes
+            std::unique_ptr<vc::vclock_t> max_done_clk; // permanent deletion
+            std::unordered_map<node_prog::prog_type, prog_reply_t> done_reqs; // prog state cleanup
+
             // node map client
             std::vector<nmap::nmap_stub*> nmap_client;
 
@@ -81,6 +92,7 @@ namespace coordinator
             po6::threads::mutex clk_mutex // vclock and queue timestamp
                     , tx_prog_mutex // state for outstanding and completed node progs, transactions
                     , periodic_update_mutex // make sure to not send out clock update before getting ack from other VTs
+                    , id_gen_mutex
                     , msg_count_mutex
                     , migr_mutex
                     , graph_load_mutex
@@ -97,7 +109,7 @@ namespace coordinator
 
         public:
             timestamper(uint64_t vt, uint64_t server);
-            void init(bool backup);
+            void init();
             void restore_backup();
             void reconfigure();
             bool unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id, int tid);
@@ -106,7 +118,7 @@ namespace coordinator
 
     inline
     timestamper :: timestamper(uint64_t vtid, uint64_t serverid)
-        : comm(serverid, NUM_THREADS, -1)
+        : comm(serverid, NUM_THREADS, -1, false)
         , sm_stub(server_id(serverid), comm.get_loc())
         , active_backup(false)
         , first_config(false)
@@ -137,13 +149,15 @@ namespace coordinator
             nmap_client.push_back(new nmap::nmap_stub());
         }
         to_nop.set(); // set to_nop to 1 for each shard
+        for (int i = 0; i < NUM_THREADS; i++) {
+            hstub.push_back(new hyper_stub(vt_id));
+        }
     }
 
     // initialize msging layer
-    // TODO bool backup for hyper_stub
     // caution: holding config_mutex
     inline void
-    timestamper :: init(bool)
+    timestamper :: init()
     {
         comm.init(config);
     }
@@ -152,7 +166,9 @@ namespace coordinator
     inline void
     timestamper :: restore_backup()
     {
-        // TODO
+        std::unordered_map<uint64_t, transaction::pending_tx> txs;
+        hstub.back()->restore_backup(txs);
+        // TODO restore tx state
     }
 
     // reconfigure timestamper according to new cluster configuration
@@ -182,6 +198,8 @@ namespace coordinator
     timestamper :: unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id, int thread_id)
     {
         message::unpack_client_tx(msg, tx);
+        tx.id = generate_id();
+        hstub[thread_id]->put_tx(tx.id, msg);
         tx.client_id = client_id;
 
         // lookup mappings
@@ -274,12 +292,13 @@ namespace coordinator
         return true;
     }
 
-    // caution: assuming caller holds clk_mutex
     inline uint64_t
     timestamper :: generate_id()
     {
         uint64_t new_id;
+        id_gen_mutex.lock();
         new_id = (++id_gen) & TOP_MASK;
+        id_gen_mutex.unlock();
         new_id |= shifted_id;
         return new_id;
     }

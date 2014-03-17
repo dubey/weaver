@@ -39,7 +39,7 @@
 #define COORD_SM_ID (0ULL)
 #define CLIENT_ID (100ULL)
 #define SHARDS_FILE "common/shards"
-#define CLIENT_SHARDS_FILE "common/shards"
+#define CLIENT_SHARDS_FILE "shards"
 
 // fault tolerance
 #define NUM_BACKUPS 1

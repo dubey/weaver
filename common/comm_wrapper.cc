@@ -16,10 +16,17 @@
 
 using common::comm_wrapper;
 
-comm_wrapper :: weaver_mapper :: weaver_mapper()
+comm_wrapper :: weaver_mapper :: weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster)
 {
     for (uint64_t i = 0; i < NUM_VTS+NUM_SHARDS; i++) {
         active_server_idx[i] = MAX_UINT64;
+    }
+    for (auto &s: cluster) {
+        uint64_t id = s.first - ID_INCR;
+        if (id >= CLIENT_ID) {
+            // clients do not register with server manager
+            mlist[s.first] = cluster[s.first];
+        }
     }
 }
 
@@ -31,7 +38,7 @@ comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *
         *loc = mlist.at(incr_id);
         return true;
     } else {
-        WDEBUG << "returning false from mapper lookup for id " << server_id << std::endl;
+        WDEBUG << "returning false from mapper lookup for id " << server_id << ", incr id " << incr_id << std::endl;
         return false;
     }
 }
@@ -72,7 +79,7 @@ comm_wrapper :: weaver_mapper :: reconfigure(configuration &new_config, uint64_t
 }
 
 
-comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr, int to)
+comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr, int to, bool client=false)
     : bb_id(bbid)
     , num_threads(nthr)
     , timeout(to)
@@ -80,35 +87,38 @@ comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr, int to)
     int inport;
     uint64_t id;
     std::string ipaddr;
+    std::ifstream file;
+    file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
 
-#ifdef __CLIENT__
-    std::ifstream file(CLIENT_SHARDS_FILE);
-    assert(file != NULL);
-#else
-    std::ifstream file(SHARDS_FILE);
-    assert(file != NULL);
-#endif
-
-    while (file >> id >> ipaddr >> inport) {
-        uint64_t incr_id = ID_INCR + id;
-        cluster[incr_id] = po6::net::location(ipaddr.c_str(), inport);
-        if (id == bb_id) {
-            loc.reset(new po6::net::location(ipaddr.c_str(), inport));
+    try {
+        if (client) {
+            file.open(CLIENT_SHARDS_FILE, std::ifstream::in);
+        } else {
+            file.open(SHARDS_FILE, std::ifstream::in);
         }
+        assert(file != NULL);
+        assert(file.good());
+
+        while (file >> id >> ipaddr >> inport) {
+            uint64_t incr_id = ID_INCR + id;
+            cluster[incr_id] = po6::net::location(ipaddr.c_str(), inport);
+            WDEBUG << "id " << incr_id << " at location " << inport << std::endl;
+            if (id == bb_id) {
+                loc.reset(new po6::net::location(ipaddr.c_str(), inport));
+            }
+        }
+        file.close();
+    } catch (std::ifstream::failure e) {
+        WDEBUG << "file exception" << std::endl;
     }
-    file.close();
 }
 
 void
 comm_wrapper :: init(configuration &config)
 {
     uint64_t primary = bb_id;
-    wmap.reset(new weaver_mapper());
-#ifdef __CLIENT__
-    wmap->client_configure(cluster);
-#else
+    wmap.reset(new weaver_mapper(cluster));
     wmap->reconfigure(config, primary);
-#endif
     bb.reset(new busybee_mta(wmap.get(), *loc, bb_id+ID_INCR, num_threads));
     bb->set_timeout(timeout);
 }
@@ -116,9 +126,13 @@ comm_wrapper :: init(configuration &config)
 void
 comm_wrapper :: client_init()
 {
-    wmap.reset(new weaver_mapper());
+    WDEBUG << "1\n";
+    wmap.reset(new weaver_mapper(cluster));
+    WDEBUG << "2\n";
     wmap->client_configure(cluster);
+    WDEBUG << "3\n";
     bb.reset(new busybee_mta(wmap.get(), *loc, bb_id+ID_INCR, num_threads));
+    WDEBUG << "4\n";
 }
 
 uint64_t

@@ -202,7 +202,7 @@ namespace db
 
     inline
     shard :: shard(uint64_t shardid, uint64_t serverid)
-        : comm(serverid, NUM_THREADS, SHARD_MSGRECV_TIMEOUT)
+        : comm(serverid, NUM_THREADS, SHARD_MSGRECV_TIMEOUT, false)
         , sm_stub(server_id(serverid), comm.get_loc())
         , active_backup(false)
         , first_config(false)
@@ -499,7 +499,7 @@ namespace db
     inline void
     shard :: delete_edge_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge, vc::vclock &tdel)
     {
-#ifdef __WEAVER_DEBUG__
+#ifdef weaver_debug_
         assert(n->edge_handles.find(edge) != n->edge_handles.end());
 #endif
         assert(n->out_edges.find(edge) != n->out_edges.end());

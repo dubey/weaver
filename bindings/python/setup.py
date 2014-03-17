@@ -3,7 +3,7 @@ from distutils.core import setup
 from Cython.Build import cythonize
 from distutils.extension import Extension
 
-sourcefiles = ['client.pyx']
+sourcefiles = ['client.pyx','../../common/ids.cc','../../common/serialization.cc','../../common/server.cc','../../common/configuration.cc','../../common/comm_wrapper.cc']
 
 extensions = [Extension('client',
                 sourcefiles,

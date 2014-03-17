@@ -1659,13 +1659,12 @@ recv_loop(uint64_t thread_id)
 
                 case message::VT_NOP: {
                     db::nop_data *nop_arg = new db::nop_data();
-                    message::unpack_message(*rec_msg, mtype, vt_id, nop_arg->vclk, qts, req_id,
+                    message::unpack_message(*rec_msg, mtype, vt_id, nop_arg->vclk, qts, nop_arg->req_id,
                         nop_arg->done_reqs, nop_arg->max_done_id, nop_arg->max_done_clk,
                         nop_arg->outstanding_progs, nop_arg->shard_node_count);
                     assert(nop_arg->vclk.clock.size() == NUM_VTS);
                     assert(nop_arg->max_done_clk.size() == NUM_VTS);
                     nop_arg->vt_id = vt_id;
-                    nop_arg->req_id = req_id;
                     // nop goes through queues always
                     qreq = new db::queued_request(qts[shard_id-SHARD_ID_INCR], nop_arg->vclk, nop, (void*)nop_arg);
                     S->qm.enqueue_write_request(vt_id, qreq);
@@ -1727,7 +1726,8 @@ recv_loop(uint64_t thread_id)
                 default:
                     WDEBUG << "unexpected msg type " << mtype << std::endl;
             }
-            rec_msg->type = message::ERROR;
+            rec_msg.reset(new message::message());
+            //rec_msg->type = message::ERROR;
         }
 
         // execute all queued requests that can be executed now

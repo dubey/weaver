@@ -14,7 +14,7 @@
 # 
 
 import sys
-sys.path.append('../../.libs/')
+sys.path.append('../../bindings/python')
 
 import client
 import time
@@ -23,7 +23,7 @@ import threading
 from test_base import test_graph
 from sets import Set
 
-num_clients = 10
+num_clients = 2
 num_vts = 1
 num_nodes = 10000
 edge_factor = 1
@@ -31,8 +31,8 @@ edge_cnt = 0
 init_tx_sz = 100
 assert (num_nodes % init_tx_sz == 0)
 assert (int(edge_factor * num_nodes) % init_tx_sz == 0)
-wr_loops = 100
-rd_loops = 100
+wr_loops = 20
+rd_loops = 10
 clients = []
 n_hndls = []
 n_hndls_cpy = []
@@ -185,8 +185,10 @@ def read_loop(c, tid):
         with pmutex:
             print str(tid) + ': Read loop ' + str(i)
 
+print 'Going to create clients'
 for i in range(num_clients):
     clients.append(client.Client(client._CLIENT_ID + i, i % num_vts))
+print 'Created clients'
 init_graph(clients[0])
 print 'Created graph'
 threads = []

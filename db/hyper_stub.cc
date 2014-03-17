@@ -12,8 +12,8 @@
  */
 
 #define weaver_debug_
-#include <set>
-#include "hyper_stub.h"
+
+#include "db/hyper_stub.h"
 
 using db::hyper_stub;
 
@@ -31,7 +31,6 @@ hyper_stub :: hyper_stub(uint64_t sid)
         HYPERDATATYPE_SET_INT64}
     , shard_attrs{"qts", "last_clocks"}
     , shard_dtypes{HYPERDATATYPE_MAP_INT64_INT64, HYPERDATATYPE_MAP_INT64_STRING}
-    , cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT)
 { }
 
 void
@@ -40,7 +39,7 @@ hyper_stub :: init()
     vc::vclock_t zero_clk(NUM_VTS, 0);
     std::unordered_map<uint64_t, uint64_t> qts_map;
     std::unordered_map<uint64_t, vc::vclock_t> last_clocks;
-    
+
     for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
         qts_map.emplace(vt_id, 0);
         last_clocks.emplace(vt_id, zero_clk);
@@ -78,195 +77,6 @@ hyper_stub :: restore_backup(std::unordered_map<uint64_t, uint64_t> &qts_map,
 
     unpack_buffer(cl_attr[0].value, cl_attr[0].value_sz, qts_map);
     unpack_buffer(cl_attr[1].value, cl_attr[1].value_sz, last_clocks);
-}
-
-// store the given t as a HYPERDATATYPE_STRING
-template <typename T>
-void
-hyper_stub :: prepare_buffer(const T &t, std::unique_ptr<e::buffer> &buf)
-{
-    uint64_t buf_sz = message::size(t);
-    buf.reset(e::buffer::create(buf_sz));
-    e::buffer::packer packer = buf->pack_at(0);
-    message::pack_buffer(packer, t);
-}
-
-// unpack the HYPERDATATYPE_STRING in to the given object
-template <typename T>
-void
-hyper_stub :: unpack_buffer(const char *buf, uint64_t buf_sz, T &t)
-{
-    std::unique_ptr<e::buffer> ebuf(e::buffer::create(buf, buf_sz));
-    e::unpacker unpacker = ebuf->unpack_from(0);
-    message::unpack_buffer(unpacker, t);
-}
-
-// store the given unordered_map as a HYPERDATATYPE_MAP_INT64_STRING
-template <typename T>
-void
-hyper_stub :: prepare_buffer(const std::unordered_map<uint64_t, T> &map, std::unique_ptr<char> &ret_buf, uint64_t &buf_sz)
-{
-    buf_sz = 0;
-    std::set<uint64_t> sorted;
-    std::vector<uint32_t> val_sz;
-    for (auto &p: map) {
-        sorted.emplace(p.first);
-        val_sz.emplace_back(message::size(p.second));
-        buf_sz += sizeof(p.first) // map key
-                + sizeof(uint32_t) // map val encoding sz
-                + val_sz.back(); // map val encoding
-    }
-
-    char *buf = (char*)malloc(buf_sz);
-    ret_buf.reset(buf);
-    // now iterate in sorted order
-    uint64_t i = 0;
-    std::unique_ptr<e::buffer> temp_buf;
-    for (uint64_t hndl: sorted) {
-        buf = e::pack64le(hndl, buf);
-        buf = e::pack32le(val_sz[i], buf);
-        temp_buf.reset(e::buffer::create(val_sz[i]));
-        e::buffer::packer packer = temp_buf->pack_at(0);
-        message::pack_buffer(packer, map.at(hndl));
-        memmove(buf, temp_buf->data(), val_sz[i]);
-        buf += val_sz[i];
-        i++;
-    }
-}
-
-// unpack the HYPERDATATYPE_MAP_INT64_STRING in to the given map
-template <typename T>
-void
-hyper_stub :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<uint64_t, T> &map)
-{
-    const char *end = buf + buf_sz;
-    uint64_t key;
-    uint32_t val_sz;
-    std::unique_ptr<e::buffer> temp_buf;
-
-    while (buf != end) {
-        buf = e::unpack64le(buf, &key);
-        buf = e::unpack32le(buf, &val_sz);
-        temp_buf.reset(e::buffer::create(val_sz));
-        memmove(temp_buf->data(), buf, val_sz);
-        e::unpacker unpacker = temp_buf->unpack_from(0);
-        message::unpack_buffer(unpacker, map[key]);
-        buf += val_sz;
-    }
-}
-
-// store the given unordered_map<int, int> as a HYPERDATATYPE_MAP_INT64_INT64
-void
-hyper_stub :: prepare_buffer(const std::unordered_map<uint64_t, uint64_t> &map, std::unique_ptr<char> &ret_buf, uint64_t &buf_sz)
-{
-    buf_sz = map.size() * (sizeof(int64_t) + sizeof(int64_t));
-    char *buf = (char*)malloc(buf_sz);
-    ret_buf.reset(buf);
-    
-    for (auto &p: map) {
-        buf = e::pack64le(p.first, buf);
-        buf = e::pack64le(p.second, buf);
-    }
-}
-
-// unpack the HYPERDATATYPE_MAP_INT64_INT64 in to an unordered_map<int, int>
-void
-hyper_stub :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<uint64_t, uint64_t> &map)
-{
-    uint64_t num_entries = buf_sz / (sizeof(int64_t) + sizeof(int64_t));
-    map.reserve(num_entries);
-    uint64_t key, val;
-
-    for (uint64_t i = 0; i < num_entries; i++) {
-        buf = e::unpack64le(buf, &key);
-        buf = e::unpack64le(buf, &val);
-        map.emplace(key, val);
-    }
-}
-
-// store the given unordered_set as a HYPERDATATYPE_SET_INT64
-void
-hyper_stub :: prepare_buffer(const std::unordered_set<uint64_t> &set, std::unique_ptr<char> &ret_buf, uint64_t &buf_sz)
-{
-    buf_sz = sizeof(uint64_t) * set.size();
-    std::set<uint64_t> sorted;
-    for (uint64_t x: set) {
-        sorted.emplace(x);
-    }
-
-    char *buf = (char*)malloc(buf_sz);
-    ret_buf.reset(buf);
-    // now iterate in sorted order
-    for (uint64_t x: sorted) {
-        buf = e::pack64le(x, buf);
-    }
-}
-
-// unpack the HYPERDATATYPE_SET_INT64 in to an unordered_set
-void
-hyper_stub :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<uint64_t> &set)
-{
-    uint64_t set_sz = buf_sz / sizeof(uint64_t);
-    uint64_t next;
-    set.reserve(set_sz);
-
-    for (uint64_t i = 0; i < set_sz; i++) {
-        buf = e::unpack64le(buf, &next);
-        set.emplace(next);
-    }
-}
-
-// call hyperdex function h using key hndl, attributes cl_attr, and then loop for response
-void
-hyper_stub :: hyper_call_and_loop(hyper_func h, const char *space,
-    uint64_t key, hyperdex_client_attribute *cl_attr, size_t num_attrs)
-{
-    hyperdex_client_returncode status;
-    std::unique_ptr<int64_t> key_buf(new int64_t(key));
-    int64_t hdex_id = (cl.*h)(space, (const char*)key_buf.get(), sizeof(int64_t), cl_attr, num_attrs, &status);
-    if (hdex_id < 0) {
-        WDEBUG << "Hyperdex function failed, op id = " << hdex_id << ", status = " << status << std::endl;
-        return;
-    }
-    hdex_id = cl.loop(-1, &status);
-    if (hdex_id < 0) {
-        WDEBUG << "Hyperdex loop failed, op id = " << hdex_id << ", status = " << status << std::endl;
-    }
-}
-
-// call hyperdex map function h using key hndl, attributes cl_attr, and then loop for response
-void
-hyper_stub :: hypermap_call_and_loop(hyper_map_func h, const char *space,
-    uint64_t key, hyperdex_client_map_attribute *map_attr, size_t num_attrs)
-{
-    hyperdex_client_returncode status;
-    std::unique_ptr<int64_t> key_buf(new int64_t(key));
-    int64_t hdex_id = (cl.*h)(space, (const char*)key_buf.get(), sizeof(int64_t), map_attr, num_attrs, &status);
-    if (hdex_id < 0) {
-        WDEBUG << "Hyperdex map function failed, op id = " << hdex_id << ", status = " << status << std::endl;
-        return;
-    }
-    hdex_id = cl.loop(-1, &status);
-    if (hdex_id < 0) {
-        WDEBUG << "Hyperdex loop failed, op id = " << hdex_id << ", status = " << status << std::endl;
-    }
-}
-
-void
-hyper_stub :: hyper_get_and_loop(const char *space, uint64_t key,
-    const hyperdex_client_attribute **cl_attr, size_t *num_attrs)
-{
-    hyperdex_client_returncode status;
-    std::unique_ptr<int64_t> key_buf(new int64_t(key));
-    int64_t hdex_id = cl.get(space, (const char*)key_buf.get(), sizeof(int64_t), &status, cl_attr, num_attrs);
-    if (hdex_id < 0) {
-        WDEBUG << "Hyperdex get failed, op id = " << hdex_id << ", status = " << status << std::endl;
-        return;
-    }
-    hdex_id = cl.loop(-1, &status);
-    if (hdex_id < 0) {
-        WDEBUG << "Hyperdex loop failed, op id = " << hdex_id << ", status = " << status << std::endl;
-    }
 }
 
 void
