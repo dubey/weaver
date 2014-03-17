@@ -80,21 +80,21 @@ shard_CFLAGS= 	$(AM_CFLAGS)
 shard_CXXFLAGS=	$(AM_CXXFLAGS)
 
 # python client
-#pkgpyexec_DATA+=	bindings/python/__init__.py
-#pkgpyexec_LTLIBRARIES+=	libclient.la
-#CLEANFILES+=	bindings/python/client.cpp
-#libclient_la_SOURCES=	common/ids.cc \
-#                        common/serialization.cc \
-#                        common/server.cc \
-#                        common/configuration.cc \
-#                        common/comm_wrapper.cc \
-#                        bindings/python/client.cpp
-#bindings/python/client.cpp:	bindings/python/client.pyx
-#	$(CYTHON) $(CYTHON_FLAGS) $<
-#libclient_la_CFLAGS= 	-fno-strict-aliasing $(AM_CFLAGS)
-#libclient_la_CXXFLAGS=	-fno-strict-aliasing $(AM_CXXFLAGS)
-#libclient_la_CPPFLAGS=	-I/usr/include/python2.7
-#libclient_la_LIBS=		-lpython2.7 $(LIBS)
+pkgpyexec_DATA+=	bindings/python/__init__.py
+pkgpyexec_LTLIBRARIES+=	libclient.la
+CLEANFILES+=	bindings/python/libclient.cpp
+libclient_la_SOURCES=	common/ids.cc \
+                        common/serialization.cc \
+                        common/server.cc \
+                        common/configuration.cc \
+                        common/comm_wrapper.cc \
+                        bindings/python/libclient.cpp
+bindings/python/libclient.cpp:	bindings/python/libclient.pyx
+	$(CYTHON) $(CYTHON_FLAGS) $<
+libclient_la_CFLAGS= 	-fno-strict-aliasing $(AM_CFLAGS)
+libclient_la_CXXFLAGS=	-fno-strict-aliasing $(AM_CXXFLAGS)
+libclient_la_CPPFLAGS=	-I/usr/include/python2.7
+libclient_la_LIBS=		-lpython2.7 $(LIBS)
 
 # cpp tests
 bin_PROGRAMS+=				tests/cpp/tests

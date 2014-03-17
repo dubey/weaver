@@ -8,9 +8,9 @@
 
 import sys
 import time
-sys.path.append('../../bindings/python')
+sys.path.append('../../.libs')
 
-import client
+import libclient as client
 
 class simple_client:
     def __init__(self, client_to_wrap):

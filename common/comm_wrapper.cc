@@ -102,7 +102,6 @@ comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr, int to, bool client=false)
         while (file >> id >> ipaddr >> inport) {
             uint64_t incr_id = ID_INCR + id;
             cluster[incr_id] = po6::net::location(ipaddr.c_str(), inport);
-            WDEBUG << "id " << incr_id << " at location " << inport << std::endl;
             if (id == bb_id) {
                 loc.reset(new po6::net::location(ipaddr.c_str(), inport));
             }

@@ -1,7 +1,7 @@
 import sys
-sys.path.append('../../bindings/python')
+sys.path.append('../../.libs')
 
-import client
+import libclient as client
 import time
 
 # creating star graph, tests one source many destinations with disjoint paths (aka max cache size)

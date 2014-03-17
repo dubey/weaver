@@ -14,9 +14,9 @@
 # 
 
 import sys
-sys.path.append('../../bindings/python')
+sys.path.append('../../.libs')
 
-import client
+import libclient as client
 import time
 import random
 import threading

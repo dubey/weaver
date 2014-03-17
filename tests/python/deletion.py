@@ -13,9 +13,9 @@
 # 
 
 import sys
-sys.path.append('../../bindings/python')
+sys.path.append('../../.libs')
 
-import client
+import libclient as client
 import time
 import random
 from test_base import test_graph

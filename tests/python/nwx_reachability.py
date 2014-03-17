@@ -13,9 +13,9 @@
 import random
 import sys
 import time
-sys.path.append('../../bindings/python')
+sys.path.append('../../.libs')
 
-import client
+import libclient as client
 import simple_client
 import test_base
 import random

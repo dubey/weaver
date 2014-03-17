@@ -15,9 +15,9 @@
 import random
 import sys
 import time
-sys.path.append('../../bindings/python')
+sys.path.append('../../.libs')
 
-import client
+import libclient as client
 
 def exec_clusterings(reqs, cl):
     cp = client.ClusteringParams()

@@ -9,12 +9,12 @@
 import sys
 import time
 import code
-sys.path.append('../../bindings/python')
+sys.path.append('../../.libs')
 
 print "interactive demo, start with -i flag"
 
-import client
-print "import client"
+import libclient as client
+print "import libclient as client"
 import simple_client
 print "import simple_client"
 
