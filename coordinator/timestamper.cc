@@ -636,11 +636,6 @@ main(int argc, char *argv[])
 
     // registered this server with server_manager, config has fairly recent value
     vts->init();
-    //if (argc != 3) {
-    //    vts->init(false); // primary
-    //} else {
-    //    vts->init(true); // backup
-    //}
 
     vts->config_mutex.unlock();
 

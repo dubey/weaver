@@ -84,7 +84,6 @@ hyper_stub :: put_tx(uint64_t tx_id, message::message &tx_msg)
     keys.emplace_back(tx_id);
 
     hyper_multiple_call_and_loop(spaces, funcs, keys, attrs, num_attrs);
-    WDEBUG << "Hyperdex put tx " << tx_id << std::endl;
 }
 
 void
@@ -100,5 +99,4 @@ hyper_stub :: del_tx(uint64_t tx_id)
     hyper_call_and_loop(&hyperdex::Client::set_remove, vt_set_space, vt_id, &cl_attr, 1);
 
     hyper_del_and_loop(vt_map_space, tx_id);
-    WDEBUG << "Hyperdex del tx " << tx_id << std::endl;
 }

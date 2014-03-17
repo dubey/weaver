@@ -70,6 +70,7 @@ namespace client
             void send_coord(std::auto_ptr<e::buffer> buf);
             busybee_returncode recv_coord(std::auto_ptr<e::buffer> *buf);
 #pragma GCC diagnostic pop
+            void reconfigure();
             uint64_t generate_handle();
     };
 
@@ -78,13 +79,11 @@ namespace client
         : myid(my_id)
         , shifted_id(myid << (64-ID_BITS))
         , vtid(vt_id)
-        , comm(my_id, 1, -1, true)
+        , comm(my_id, 1, CLIENT_MSGRECV_TIMEOUT, true)
         , tx_id_ctr(0)
         , temp_handle_ctr(0)
     {
-        std::cerr << "in client constructor\n";
         comm.client_init();
-        std::cerr << "client cons done\n";
     }
 
     inline uint64_t
@@ -194,8 +193,16 @@ namespace client
             message::message msg;
             message::prepare_tx_message_client(msg, tx_map[tx_id]);
             send_coord(msg.buf);
-            if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
+
+            busybee_returncode recv_code = recv_coord(&msg.buf);
+            if (recv_code == BUSYBEE_TIMEOUT) {
+                // assume vt is dead, fail tx
+                reconfigure();
+                return false;
+            }
+            if (recv_code != BUSYBEE_SUCCESS) {
                 WDEBUG << "tx msg recv fail" << std::endl;
+                return false;
             }
             uint32_t mtype;
             msg.buf->unpack_from(BUSYBEE_HEADER_SIZE) >> mtype;
@@ -219,7 +226,14 @@ namespace client
         message::message msg;
         message::prepare_message(msg, message::CLIENT_NODE_PROG_REQ, prog_to_run, initial_args);
         send_coord(msg.buf);
-        if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
+
+        busybee_returncode recv_code = recv_coord(&msg.buf);
+        if (recv_code == BUSYBEE_TIMEOUT) {
+            // assume vt is dead
+            reconfigure();
+            return NULL;
+        }
+        if (recv_code != BUSYBEE_SUCCESS) {
             WDEBUG << "node prog return msg fail" << std::endl;
             return NULL;
         }
@@ -341,6 +355,7 @@ namespace client
             ret = comm.recv(&sender, buf);
             switch (ret) {
                 case BUSYBEE_SUCCESS:
+                case BUSYBEE_TIMEOUT:
                     return ret;
 
                 case BUSYBEE_INTERRUPTED:
@@ -353,6 +368,14 @@ namespace client
         }
     }
 #pragma GCC diagnostic pop
+
+    inline void
+    client :: reconfigure()
+    {
+        // our vt is probably dead
+        // set vtid to next backup, client has to retry
+        vtid += (NUM_SHARDS + NUM_VTS);
+    }
 
     // to generate 64 bit graph element handles
     // assuming no more than 2^(ID_BITS) clients

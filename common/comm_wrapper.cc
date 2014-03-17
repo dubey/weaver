@@ -88,7 +88,7 @@ comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr, int to, bool client=false)
     uint64_t id;
     std::string ipaddr;
     std::ifstream file;
-    file.exceptions(std::ifstream::failbit | std::ifstream::badbit);
+    file.exceptions(std::ifstream::badbit);
 
     try {
         if (client) {
@@ -125,13 +125,9 @@ comm_wrapper :: init(configuration &config)
 void
 comm_wrapper :: client_init()
 {
-    WDEBUG << "1\n";
     wmap.reset(new weaver_mapper(cluster));
-    WDEBUG << "2\n";
     wmap->client_configure(cluster);
-    WDEBUG << "3\n";
     bb.reset(new busybee_mta(wmap.get(), *loc, bb_id+ID_INCR, num_threads));
-    WDEBUG << "4\n";
 }
 
 uint64_t
