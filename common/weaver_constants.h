@@ -43,11 +43,12 @@
 
 // fault tolerance
 #define NUM_BACKUPS 1
-#define SERVER_MANAGER_IPADDR "127.0.0.1"
+//#define SERVER_MANAGER_IPADDR "127.0.0.1"
+#define SERVER_MANAGER_IPADDR "128.84.167.101"
 #define SERVER_MANAGER_PORT 2002
 
 // weaver setup
-#define NUM_SHARDS 2
+#define NUM_SHARDS 3
 #define NUM_VTS 1
 #define NUM_SERVERS ((NUM_VTS + NUM_SHARDS) * (1 + NUM_BACKUPS))
 #define SHARD_ID_INCR NUM_VTS
@@ -79,13 +80,13 @@
 #define VT_TIMEOUT_NANO 100000 // number of nanoseconds between successive nops
 
 // hyperdex
-#define HYPERDEX_COORD_IPADDR "127.0.0.1"
-//#define HYPERDEX_COORD_IPADDR "128.84.227.101"
+//#define HYPERDEX_COORD_IPADDR "127.0.0.1"
+#define HYPERDEX_COORD_IPADDR "128.84.167.101"
 #define HYPERDEX_COORD_PORT 1982
 
 // kronos
-#define KRONOS_IPADDR "127.0.0.1"
-//#define KRONOS_IPADDR "128.84.227.101"
+//#define KRONOS_IPADDR "127.0.0.1"
+#define KRONOS_IPADDR "128.84.167.101"
 #define KRONOS_PORT 1992
 
 #endif
