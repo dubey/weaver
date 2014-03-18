@@ -27,7 +27,11 @@ def snap_to_weaver(snap_file):
     nmap = {}
     edges = {}
     handle = 0
+    line_count = 0
     for line in sfile:
+        line_count += 1
+        if line_count % 100000 == 0:
+            print 'read ' + str(line_count) + ' lines'
         if len(line) == 0 or line[0] == '#':
             continue
         split = line.split()
