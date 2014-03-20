@@ -49,7 +49,7 @@
 
 // weaver setup
 #define NUM_SHARDS 3
-#define NUM_VTS 1
+#define NUM_VTS 2
 #define NUM_SERVERS ((NUM_VTS + NUM_SHARDS) * (1 + NUM_BACKUPS))
 #define SHARD_ID_INCR NUM_VTS
 #define NUM_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
@@ -57,8 +57,6 @@
 #define TOP_MASK (0x0fffffffffffffffULL)
 #define GRAPH_FILE "graph.rec"
 #define NANO (1000000000ULL)
-#define INITIAL_TIMEOUT_MILL 5000 // number of milliseconds initial delay
-#define INITIAL_TIMEOUT_MICR 5000000 // number of microseconds initial delay
 #define INITIAL_TIMEOUT_NANO 5000000000 // number of nanoseconds initial delay
 #define SHARD_MSGRECV_TIMEOUT 1 // busybee recv timeout (ms) for shard worker threads
                                 // worker threads should constantly check for and execute queued_requests
@@ -75,9 +73,7 @@
 //#define WEAVER_MSG_COUNT // defined if client msg count call will take place
 
 // coordinator
-#define VT_TIMEOUT_MILL 1 // epoll and nop timeout in ms
-#define VT_TIMEOUT_MICR 100 // number of microseconds between successive nops
-#define VT_TIMEOUT_NANO 100000 // number of nanoseconds between successive nops
+#define VT_TIMEOUT_NANO 10000 // number of nanoseconds between successive nops
 
 // hyperdex
 //#define HYPERDEX_COORD_IPADDR "127.0.0.1"

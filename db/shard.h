@@ -78,6 +78,7 @@ namespace db
             void init(bool backup);
             void restore_backup();
             void reconfigure();
+            void bulk_load_persistent();
 
             // Mutexes
             po6::threads::mutex update_mutex // shard update mutex
@@ -241,10 +242,8 @@ namespace db
     {
         comm.init(config);
         if (!backup) {
-            hstub.back()->init();
+            hstub.back()->init(); // put initial vclock, qts
         }
-        order::kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT);
-        order::call_times = new std::list<uint64_t>();
     }
 
     // restore state when backup becomes primary due to failure
@@ -278,18 +277,31 @@ namespace db
         }
     }
 
+    inline void
+    shard :: bulk_load_persistent()
+    {
+        std::unordered_set<uint64_t> empty_set;
+        uint64_t cnt = 0;
+        for (auto &x: nodes) {
+            hstub[0]->put_node(*x.second, empty_set);
+            if (++cnt % 10000 == 0) {
+                WDEBUG << "wrote " << cnt << " nodes to HyperDex" << std::endl;
+            }
+        }
+    }
+
     // Consistency methods
     inline void
     shard :: increment_qts(uint64_t thread_id, uint64_t vt_id, uint64_t incr)
     {
-        hstub[thread_id]->increment_qts(vt_id, incr);
+        //hstub[thread_id]->increment_qts(vt_id, incr);
         qm.increment_qts(vt_id, incr);
     }
 
     inline void
     shard :: record_completed_tx(uint64_t thread_id, uint64_t vt_id, vc::vclock_t &tx_clk)
     {
-        hstub[thread_id]->update_last_clocks(vt_id, tx_clk);
+        //hstub[thread_id]->update_last_clocks(vt_id, tx_clk);
         qm.record_completed_tx(vt_id, tx_clk);
     }
 
@@ -420,7 +432,7 @@ namespace db
             new_node->msg_count.resize(NUM_SHARDS, 0);
             // store in Hyperdex
             std::unordered_set<uint64_t> empty_set;
-            hstub[thread_id]->put_node(*new_node, empty_set);
+            //hstub[thread_id]->put_node(*new_node, empty_set);
             release_node(new_node);
         }
         return new_node;
@@ -470,8 +482,8 @@ namespace db
             edge_map_mutex.unlock();
         }
         // store in Hyperdex
-        hstub[thread_id]->add_out_edge(*n, new_edge);
-        hstub[thread_id]->add_in_nbr(remote_node, n->base.get_id());
+        //hstub[thread_id]->add_out_edge(*n, new_edge);
+        //hstub[thread_id]->add_in_nbr(remote_node, n->base.get_id());
     }
 
     inline void

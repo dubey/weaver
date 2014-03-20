@@ -16,11 +16,14 @@
 
 using common::comm_wrapper;
 
-comm_wrapper :: weaver_mapper :: weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster)
+comm_wrapper :: weaver_mapper :: weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster, uint64_t my_id)
 {
     for (uint64_t i = 0; i < NUM_VTS+NUM_SHARDS; i++) {
         active_server_idx[i] = MAX_UINT64;
     }
+    uint64_t incr_id = my_id + ID_INCR;
+    assert(cluster.find(incr_id) != cluster.end());
+    mlist[incr_id] = cluster[incr_id];
     for (auto &s: cluster) {
         uint64_t id = s.first - ID_INCR;
         if (id >= CLIENT_ID) {
@@ -116,8 +119,9 @@ void
 comm_wrapper :: init(configuration &config)
 {
     uint64_t primary = bb_id;
-    wmap.reset(new weaver_mapper(cluster));
+    wmap.reset(new weaver_mapper(cluster, bb_id));
     wmap->reconfigure(config, primary);
+    WDEBUG << "Busybee attaching to loc " << loc->address << ":" << loc->port << std::endl;
     bb.reset(new busybee_mta(wmap.get(), *loc, bb_id+ID_INCR, num_threads));
     bb->set_timeout(timeout);
 }
@@ -125,7 +129,7 @@ comm_wrapper :: init(configuration &config)
 void
 comm_wrapper :: client_init()
 {
-    wmap.reset(new weaver_mapper(cluster));
+    wmap.reset(new weaver_mapper(cluster, bb_id));
     wmap->client_configure(cluster);
     bb.reset(new busybee_mta(wmap.get(), *loc, bb_id+ID_INCR, num_threads));
 }

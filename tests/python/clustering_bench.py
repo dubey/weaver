@@ -15,11 +15,12 @@
 import random
 import sys
 import time
+import threading
 sys.path.append('../../.libs')
 
 import libclient as client
 
-def exec_clusterings(reqs, cl):
+def exec_clusterings(reqs, cl, exec_time, idx):
     cp = client.ClusteringParams()
     start = time.time()
     cnt = 0
@@ -27,29 +28,40 @@ def exec_clusterings(reqs, cl):
         cnt += 1
         prog_args = [(r, cp)]
         response = cl.run_clustering_program(prog_args)
+        if cnt % 1000 == 0:
+            print 'done ' + str(cnt) + ' by client ' + str(idx)
     end = time.time()
-    return (end-start)
+    exec_time[idx] = end - start
 
 num_requests = 2000
-num_runs = 5
 #num_nodes = 82168 # snap soc-Slashdot0902
 #num_nodes = 10876 # snap p2pgnutella04
 num_nodes = 81306 # snap twitter-combined
+#num_nodes = 107600 # snap gplus-combined
 # node handles are range(0, num_nodes)
+num_vts = 1
+num_clients = 8
 
-coord_id = 0
-c = client.Client(client._CLIENT_ID, coord_id)
+clients = []
+for i in range(num_clients):
+    clients.append(client.Client(client._CLIENT_ID + i, i % num_vts))
 
 reqs = []
-random.seed(420)
-for numr in range(num_requests):
-    reqs.append(random.randint(0, num_nodes-1))
+for i in range(num_clients):
+    cl_reqs = []
+    for numr in range(num_requests):
+        cl_reqs.append(random.randint(0, num_nodes-1))
+    reqs.append(cl_reqs)
 
-t = 0
+exec_time = [0] * num_clients
+threads = []
 print "starting requests"
-for runs in range(num_runs):
-    t += exec_clusterings(reqs, c)
-    if runs % 1 == 0:
-        sys.stdout.write('.')
-        sys.stdout.flush()
-print "time taken for " + str(num_requests * num_runs) + " random clustering requests of " + str(num_nodes) + " nodes was: " + str(t)
+for i in range(num_clients):
+    thr = threading.Thread(target=exec_clusterings, args=(reqs[i], clients[i], exec_time, i))
+    thr.start()
+    threads.append(thr)
+for thr in threads:
+    thr.join()
+print 'Total time = ' + str(max(exec_time))
+throughput = (num_requests * num_clients) / max(exec_time)
+print 'Throughput = ' + str(throughput)

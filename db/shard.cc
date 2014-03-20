@@ -46,6 +46,15 @@ static std::deque<std::unordered_map<uint64_t, uint64_t>> init_node_maps;
 static bool init_nodes;
 static uint16_t start_load;
 
+namespace order
+{
+    chronos_client *kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT);
+    po6::threads::mutex kronos_mutex;
+    std::list<uint64_t> *call_times = new std::list<uint64_t>();
+    uint64_t cache_hits = 0;
+    kronos_cache kcache;
+}
+
 void migrated_nbr_update(std::unique_ptr<message::message> msg);
 bool migrate_node_step1(db::element::node*, std::vector<uint64_t>&);
 void migrate_node_step2_req();
@@ -249,6 +258,9 @@ load_graph(db::graph_file_format format, const char *graph_file)
             max_node_id = strtoull(++max_node_ptr, NULL, 10);
             while (std::getline(file, line)) {
                 line_count++;
+                if (line_count % 100000 == 0) {
+                    WDEBUG << "bulk loading: processed " << line_count << " lines" << std::endl;
+                }
                 if ((line.length() == 0) || (line[0] == '#')) {
                     continue;
                 } else {
@@ -281,6 +293,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                     }
                 }
             }
+            S->bulk_load_persistent();
             init_mutex.lock();
             while (start_load < 1) {
                 start_load_cv.wait();
@@ -372,6 +385,7 @@ inline void
 init_nmap()
 {
     nmap::nmap_stub node_mapper;
+    uint64_t processed = 0;
     init_mutex.lock();
     start_load++;
     start_load_cv.signal();
@@ -380,10 +394,11 @@ init_nmap()
             init_cv.wait();
         } else {
             auto &node_map = init_node_maps.front();
-            WDEBUG << "NMAP init node map at shard " << shard_id << ", map size = " << node_map.size() << std::endl;
             init_mutex.unlock();
             node_mapper.put_mappings(node_map);
             init_mutex.lock();
+            processed += node_map.size();
+            WDEBUG << "node mapper stored " << processed << " nodes" << std::endl;
             init_node_maps.pop_front();
         }
     }
@@ -1756,6 +1771,7 @@ server_manager_link_loop(po6::net::hostname sm_host)
     {
         if (!S->sm_stub.maintain_link())
         {
+            WDEBUG << "maintain link fail\n";
             continue;
         }
 
@@ -1862,6 +1878,13 @@ main(int argc, char *argv[])
 
     S->config_mutex.unlock();
 
+    // start all threads
+    std::vector<std::thread*> worker_threads;
+    for (int i = 0; i < NUM_THREADS; i++) {
+        std::thread *t = new std::thread(recv_loop, i);
+        worker_threads.emplace_back(t);
+    }
+
     // bulk loading
     if (argc == 4) {
         db::graph_file_format format = db::SNAP;
@@ -1888,13 +1911,6 @@ main(int argc, char *argv[])
         S->comm.send(SHARD_ID_INCR, msg.buf);
     }
 
-    // start all threads
-    std::vector<std::thread*> worker_threads;
-    for (int i = 0; i < NUM_THREADS; i++) {
-        std::thread *t = new std::thread(recv_loop, i);
-        worker_threads.emplace_back(t);
-    }
-
     if (argc == 3) {
         // wait till this server becomes primary shard
         S->config_mutex.lock();
@@ -1902,7 +1918,6 @@ main(int argc, char *argv[])
             S->backup_cond.wait();
         }
         S->config_mutex.unlock();
-        WDEBUG << "backup " << atoi(argv[2]) << " now primary for shard " << shard_id << std::endl;
         S->restore_backup();
     } else {
         // this server is primary shard, start now

@@ -22,6 +22,7 @@
 #define weaver_debug_
 #include "common/vclock.h"
 #include "common/transaction.h"
+#include "common/event_order.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
 #include "timestamper.h"
@@ -30,6 +31,15 @@ using coordinator::current_prog;
 using coordinator::current_tx;
 static coordinator::timestamper *vts;
 static uint64_t vt_id;
+
+namespace order
+{
+    chronos_client *kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT);
+    po6::threads::mutex kronos_mutex;
+    std::list<uint64_t> *call_times = new std::list<uint64_t>();
+    uint64_t cache_hits = 0;
+    kronos_cache kcache;
+}
 
 // SIGINT handler
 void
@@ -116,7 +126,7 @@ timer_function()
     std::vector<done_req_t> done_reqs(NUM_SHARDS, done_req_t());
     std::vector<uint64_t> del_done_reqs;
     message::message msg;
-    bool nop_sent;
+    bool nop_sent, clock_synced;
 
     sleep_time.tv_sec  = VT_TIMEOUT_NANO / NANO;
     sleep_time.tv_nsec = VT_TIMEOUT_NANO % NANO;
@@ -127,6 +137,7 @@ timer_function()
             assert(false);
         }
         nop_sent = false;
+        clock_synced = false;
         vts->periodic_update_mutex.lock();
         
         // send nops and state cleanup info to shards
@@ -187,6 +198,7 @@ timer_function()
 
         // update vclock at other timestampers
         if (vts->clock_update_acks == (NUM_VTS-1) && NUM_VTS > 1) {
+            clock_synced = true;
             vts->clock_update_acks = 0;
             if (!nop_sent) {
                 vts->clk_mutex.lock();
@@ -201,6 +213,12 @@ timer_function()
                 vts->comm.send(i, msg.buf);
             }
         }
+
+        //if (nop_sent && !clock_synced) {
+        //    WDEBUG << "nop yes, clock no" << std::endl;
+        //} else if (!nop_sent && clock_synced) {
+        //    WDEBUG << "clock yes, nop no" << std::endl;
+        //}
 
         vts->periodic_update_mutex.unlock();
     }

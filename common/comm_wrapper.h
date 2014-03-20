@@ -39,7 +39,7 @@ class comm_wrapper
                 configuration config;
 
             public:
-                weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster);
+                weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster, uint64_t my_id);
                 virtual ~weaver_mapper() throw () {}
                 virtual bool lookup(uint64_t server_id, po6::net::location *loc);
                 void reconfigure(configuration &new_config, uint64_t &now_primary);

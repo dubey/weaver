@@ -270,7 +270,7 @@ namespace node_prog
                     }
                     params.clustering_coeff = (double) numerator / denominator;
                     next = {std::make_pair(db::element::coordinator, std::move(params))};
-                } 
+                }
             }
         } else { // not center
             for (edge& edge : n.get_edges()) {

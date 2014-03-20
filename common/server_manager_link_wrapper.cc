@@ -86,7 +86,7 @@ server_manager_link_wrapper :: sm_rpc :: callback(server_manager_link_wrapper* c
     {
         e::error err = clw->m_sm->error();
         WDEBUG << "server manager error: " << msg.str()
-               << ": " << err.msg() << " @ " << err.loc();
+               << ": " << err.msg() << " @ " << err.loc() << std::endl;
     }
 
     if (status == REPLICANT_CLUSTER_JUMP)
@@ -153,7 +153,7 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
     if (rid < 0)
     {
         e::error err = m_sm->error();
-        WDEBUG << "could not register as " << us << ": " << err.msg() << " @ " << err.loc();
+        WDEBUG << "could not register as " << us << ": " << err.msg() << " @ " << err.loc() << std::endl;
         return false;
     }
 
@@ -163,20 +163,20 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
     if (lid < 0)
     {
         e::error err = m_sm->error();
-        WDEBUG << "could not register as " << us << ": " << err.msg() << " @ " << err.loc();
+        WDEBUG << "could not register as " << us << ": " << err.msg() << " @ " << err.loc() << std::endl;
         return false;
     }
 
     if (lid != rid)
     {
-        WDEBUG << "could not register as " << us << ": server manager loop malfunction";
+        WDEBUG << "could not register as " << us << ": server manager loop malfunction" << std::endl;
         return false;
     }
 
     if (rpc->status != REPLICANT_SUCCESS)
     {
         e::error err = m_sm->error();
-        WDEBUG << "could not register as " << us << ": " << err.msg() << " @ " << err.loc();
+        WDEBUG << "could not register as " << us << ": " << err.msg() << " @ " << err.loc() << std::endl;
         return false;
     }
 
@@ -191,22 +191,22 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
             case COORD_SUCCESS:
                 return true;
             case COORD_DUPLICATE:
-                WDEBUG << "could not register as " << us << ": another server has this ID";
+                WDEBUG << "could not register as " << us << ": another server has this ID" << std::endl;
                 return false;
             case COORD_UNINITIALIZED:
-                WDEBUG << "could not register as " << us << ": server manager not initialized";
+                WDEBUG << "could not register as " << us << ": server manager not initialized" << std::endl;
                 return false;
             case COORD_MALFORMED:
             case COORD_NOT_FOUND:
             case COORD_NO_CAN_DO:
             default:
-                WDEBUG << "could not register as " << us << ": server manager returned " << rc;
+                WDEBUG << "could not register as " << us << ": server manager returned " << rc << std::endl;
                 return false;
         }
     }
     else
     {
-        WDEBUG << "could not register as " << us << ": server manager returned invalid message";
+        WDEBUG << "could not register as " << us << ": server manager returned invalid message" << std::endl;
         return false;
     }
 }
@@ -245,8 +245,8 @@ server_manager_link_wrapper :: maintain_link()
                             status == REPLICANT_NEED_BOOTSTRAP))
         {
             e::error err = m_sm->error();
-            WDEBUG << "server manager disconnected: backing off before retrying";
-            WDEBUG << "details: " << err.msg() << " @ " << err.loc();
+            WDEBUG << "server manager disconnected: backing off before retrying" << std::endl;
+            WDEBUG << "details: " << err.msg() << " @ " << err.loc() << std::endl;
             do_sleep();
             exit_status = false;
             break;
@@ -254,7 +254,7 @@ server_manager_link_wrapper :: maintain_link()
         else if (id < 0 && status == REPLICANT_CLUSTER_JUMP)
         {
             e::error err = m_sm->error();
-            WDEBUG << "cluster jump: " << err.msg() << " @ " << err.loc();
+            WDEBUG << "cluster jump: " << err.msg() << " @ " << err.loc() << std::endl;
             do_sleep();
             exit_status = false;
             break;
@@ -262,7 +262,7 @@ server_manager_link_wrapper :: maintain_link()
         else if (id < 0)
         {
             e::error err = m_sm->error();
-            WDEBUG << "server manager error: " << err.msg() << " @ " << err.loc();
+            WDEBUG << "server manager error: " << err.msg() << " @ " << err.loc() << std::endl;
             do_sleep();
             exit_status = false;
             break;
@@ -375,7 +375,7 @@ server_manager_link_wrapper :: reset_sleep()
     if (m_sleep != start_sleep)
     {
         m_sleep = start_sleep;
-        WDEBUG << "connection to server manager reestablished";
+        WDEBUG << "connection to server manager reestablished" << std::endl;
     }
 }
 
@@ -585,7 +585,7 @@ server_manager_link_wrapper :: make_rpc_nosync(const char* func,
     {
         e::error err = m_sm->error();
         WDEBUG << "server manager error: " << rpc->msg.str()
-                   << ": " << err.msg() << " @ " << err.loc();
+                   << ": " << err.msg() << " @ " << err.loc() << std::endl;
     }
     else
     {
@@ -605,7 +605,7 @@ server_manager_link_wrapper :: wait_nosync(const char* cond, uint64_t state,
     {
         e::error err = m_sm->error();
         WDEBUG << "server manager error: " << rpc->msg.str()
-                   << ": " << err.msg() << " @ " << err.loc();
+                   << ": " << err.msg() << " @ " << err.loc() << std::endl;
     }
     else
     {

@@ -46,6 +46,7 @@ timestamper_SOURCES=common/comm_wrapper.cc \
                     common/server_manager_link.cc \
                     common/server_manager_link_wrapper.cc \
                     common/hyper_stub_base.cc \
+                    common/event_order.cc \
                     coordinator/hyper_stub.cc \
 					coordinator/timestamper.cc
 timestamper_CFLAGS= 	$(AM_CFLAGS)
@@ -73,6 +74,7 @@ shard_SOURCES=	common/ids.cc \
 				common/server_manager_link.cc \
 				common/server_manager_link_wrapper.cc \
                 common/hyper_stub_base.cc \
+                common/event_order.cc \
                 db/hyper_stub.cc \
                 db/queue_manager.cc \
 				db/shard.cc

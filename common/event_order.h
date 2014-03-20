@@ -105,17 +105,25 @@ namespace order
             }
     };
 
-    // static chronos client (and assoc. mutex), which ensures only one client per shard
-    static chronos_client *kronos_cl;
-    static po6::threads::mutex kronos_mutex;
-    static std::list<uint64_t> *call_times;
-    static uint64_t cache_hits = 0;
-    static kronos_cache kcache;
+    extern chronos_client *kronos_cl;
+    extern po6::threads::mutex kronos_mutex;
+    extern std::list<uint64_t> *call_times;
+    extern uint64_t cache_hits;
+    extern kronos_cache kcache;
 
+    int compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2);
+    std::vector<bool> compare_vector_clocks(const std::vector<vc::vclock> &clocks);
+    uint64_t get_false_position(std::vector<bool> &large);
+    void compare_vts_no_kronos(const std::vector<vc::vclock> &clocks, std::vector<bool> &large, int64_t &small_idx);
+    int64_t compare_vts(const std::vector<vc::vclock> &clocks);
+    int64_t compare_two_vts(const vc::vclock &clk1, const vc::vclock &clk2);
+    bool clock_creat_before_del_after(const vc::vclock &req_vclock, const vc::vclock &creat_time, const vc::vclock &del_time);
+
+    /*
     // return the smaller of the two clocks
     // return -1 if clocks cannot be compared
     // return 2 if clocks are identical
-    static inline int
+    inline int
     compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
     {
         int ret = 2;
@@ -139,9 +147,9 @@ namespace order
         return ret;
     }
 
-    // static method which only compares vector clocks
+    // method which only compares vector clocks
     // returns bool vector, with i'th entry as true if that clock is definitely larger than some other clock
-    static inline std::vector<bool>
+    inline std::vector<bool>
     compare_vector_clocks(const std::vector<vc::vclock> &clocks)
     {
         uint64_t num_clks = clocks.size();
@@ -184,7 +192,7 @@ namespace order
     // if the vector has a single clock which happens before all the others, the index of that clock is stored in small_idx
     // large[i] is true if clocks[i] is definitely not the earliest clock
     // i.e. large[i] <=> \exists j clock[j] -> clock[i], where -> is the happens before relationship for vector clocks
-    static inline void
+    inline void
     compare_vts_no_kronos(const std::vector<vc::vclock> &clocks, std::vector<bool> &large, int64_t &small_idx)
     {
         large = compare_vector_clocks(clocks);
@@ -196,10 +204,10 @@ namespace order
         }
     }
 
-    // static vector clock comparison method
+    // vector clock comparison method
     // will call Kronos if clocks are incomparable
     // returns index of earliest clock`
-    static inline int64_t
+    inline int64_t
     compare_vts(const std::vector<vc::vclock> &clocks)
     {
         std::vector<bool> large;
@@ -261,6 +269,7 @@ namespace order
             kronos_mutex.lock();
             timespec ts;
             uint64_t start_time = wclock::get_time_elapsed(ts);
+            WDEBUG << "calling kronos order\n";
             int64_t ret = kronos_cl->weaver_order(wpair, num_pairs, &status, &cret);
             ret = kronos_cl->wait(ret, 100000, &status);
             uint64_t end_time = wclock::get_time_elapsed(ts);
@@ -311,7 +320,7 @@ namespace order
 
     // compare two vector clocks
     // return 0 if first is smaller, 1 if second is smaller, 2 if identical
-    static inline int64_t
+    inline int64_t
     compare_two_vts(const vc::vclock &clk1, const vc::vclock &clk2)
     {
         int cmp = compare_two_clocks(clk1.clock, clk2.clock);
@@ -325,7 +334,7 @@ namespace order
     }
 
     // return true if the first clock occurred between the second two
-    static inline bool
+    inline bool
     clock_creat_before_del_after(const vc::vclock &req_vclock, const vc::vclock &creat_time, const vc::vclock &del_time)
     {
         int64_t cmp_1 = compare_two_vts(del_time, req_vclock);
@@ -338,6 +347,7 @@ namespace order
         }
         return toRet;
     }
+    */
 }
 
 #endif
