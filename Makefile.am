@@ -90,6 +90,8 @@ libclient_la_SOURCES=	common/ids.cc \
                         common/server.cc \
                         common/configuration.cc \
                         common/comm_wrapper.cc \
+                        common/event_order.cc \
+                        client/client.cc \
                         bindings/python/libclient.cpp
 bindings/python/libclient.cpp:	bindings/python/libclient.pyx
 	$(CYTHON) $(CYTHON_FLAGS) $<
@@ -99,7 +101,7 @@ libclient_la_CPPFLAGS=	-I/usr/include/python2.7
 libclient_la_LIBS=		-lpython2.7 $(LIBS)
 
 # cpp tests
-bin_PROGRAMS+=				tests/cpp/tests
-tests_cpp_tests_SOURCES=	tests/cpp/run.cc
-tests_cpp_tests_CFLAGS= 	$(AM_CFLAGS)
-tests_cpp_tests_CXXFLAGS= 	$(AM_CXXFLAGS)
+#bin_PROGRAMS+=				tests/cpp/tests
+#tests_cpp_tests_SOURCES=	tests/cpp/run.cc
+#tests_cpp_tests_CFLAGS= 	$(AM_CFLAGS)
+#tests_cpp_tests_CXXFLAGS= 	$(AM_CXXFLAGS)

@@ -214,11 +214,11 @@ timer_function()
             }
         }
 
-        //if (nop_sent && !clock_synced) {
+        if (nop_sent && !clock_synced) {
         //    WDEBUG << "nop yes, clock no" << std::endl;
-        //} else if (!nop_sent && clock_synced) {
+        } else if (!nop_sent && clock_synced) {
         //    WDEBUG << "clock yes, nop no" << std::endl;
-        //}
+        }
 
         vts->periodic_update_mutex.unlock();
     }
