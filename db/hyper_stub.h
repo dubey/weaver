@@ -60,6 +60,8 @@ namespace db
             void remove_out_edge(element::node &n, element::edge *e);
             void add_in_nbr(uint64_t n_hndl, uint64_t nbr);
             void remove_in_nbr(uint64_t n_hndl, uint64_t nbr);
+            // bulk loading
+            void bulk_load(std::unordered_map<uint64_t, element::node*> nodes, std::unordered_map<uint64_t, std::unordered_set<uint64_t>> edge_map);
             // shard updates
             void increment_qts(uint64_t vt_id, uint64_t incr);
             void update_last_clocks(uint64_t vt_id, vc::vclock_t &vclk);

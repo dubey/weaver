@@ -64,26 +64,30 @@ void
 hyper_stub :: put_tx(uint64_t tx_id, message::message &tx_msg)
 {
     std::vector<const char*> spaces;
-    std::vector<hyperdex_client_attribute> attrs(2, hyperdex_client_attribute());
+    std::vector<hyperdex_client_attribute*> attrs(2, NULL);
     std::vector<hyper_func> funcs;
     std::vector<uint64_t> keys;
     std::vector<size_t> num_attrs(2, 1);
-    attrs[0].attr = attr;
-    attrs[0].value = (const char*)&tx_id;
-    attrs[0].value_sz = sizeof(int64_t);
-    attrs[0].datatype = set_dtype;
+
+    attrs.emplace_back(new hyperdex_client_attribute());
+    attrs.emplace_back(new hyperdex_client_attribute());
+
+    attrs[0]->attr = attr;
+    attrs[0]->value = (const char*)&tx_id;
+    attrs[0]->value_sz = sizeof(int64_t);
+    attrs[0]->datatype = set_dtype;
     spaces.emplace_back(vt_set_space);
     funcs.emplace_back(&hyperdex::Client::set_add);
     keys.emplace_back(vt_id);
-    attrs[1].attr = attr;
-    attrs[1].value = (const char*)tx_msg.buf->data();
-    attrs[1].value_sz = tx_msg.buf->size();
-    attrs[1].datatype = map_dtype;
+    attrs[1]->attr = attr;
+    attrs[1]->value = (const char*)tx_msg.buf->data();
+    attrs[1]->value_sz = tx_msg.buf->size();
+    attrs[1]->datatype = map_dtype;
     spaces.emplace_back(vt_map_space);
     funcs.emplace_back(&hyperdex::Client::put);
     keys.emplace_back(tx_id);
 
-    hyper_multiple_call_and_loop(spaces, funcs, keys, attrs, num_attrs);
+    hyper_multiple_call_and_loop(funcs, spaces, keys, attrs, num_attrs);
 }
 
 void

@@ -171,12 +171,10 @@ void
 hyper_stub :: add_out_edge(element::node &n, element::edge *e)
 {
     hyperdex_client_map_attribute map_attr;
-    //std::unique_ptr<int64_t> key_buf(new int64_t(e->base.get_id()));
     uint64_t key = e->base.get_id();
     std::unique_ptr<e::buffer> val_buf;
     prepare_buffer(e, val_buf);
     map_attr.attr = graph_attrs[3];
-    //map_attr.map_key = (const char*)key_buf.get();
     map_attr.map_key = (const char*)&key;
     map_attr.map_key_sz = sizeof(int64_t);
     map_attr.map_key_datatype = HYPERDATATYPE_INT64;
@@ -191,10 +189,8 @@ void
 hyper_stub :: remove_out_edge(element::node &n, element::edge *e)
 {
     hyperdex_client_attribute cl_attr;
-    //std::unique_ptr<int64_t> key_buf(new int64_t(e->base.get_id()));
     uint64_t key = e->base.get_id();
     cl_attr.attr = graph_attrs[3];
-    //cl_attr.value = (const char*)key_buf.get();
     cl_attr.value = (const char*)&key;
     cl_attr.value_sz = sizeof(int64_t);
     cl_attr.datatype = HYPERDATATYPE_INT64;
@@ -206,9 +202,7 @@ void
 hyper_stub :: add_in_nbr(uint64_t n_hndl, uint64_t nbr)
 {
     hyperdex_client_attribute cl_attr;
-    //std::unique_ptr<int64_t> nbr_buf(new int64_t(nbr));
     cl_attr.attr = graph_attrs[4];
-    //cl_attr.value = (const char*)nbr_buf.get();
     cl_attr.value = (const char*)&nbr;
     cl_attr.value_sz = sizeof(int64_t);
     cl_attr.datatype = HYPERDATATYPE_INT64;
@@ -220,9 +214,7 @@ void
 hyper_stub :: remove_in_nbr(uint64_t n_hndl, uint64_t nbr)
 {
     hyperdex_client_attribute cl_attr;
-    //std::unique_ptr<int64_t> nbr_buf(new int64_t(nbr));
     cl_attr.attr = graph_attrs[4];
-    //cl_attr.value = (const char*)nbr_buf.get();
     cl_attr.value = (const char*)&nbr;
     cl_attr.value_sz = sizeof(int64_t);
     cl_attr.datatype = HYPERDATATYPE_INT64;
@@ -231,17 +223,77 @@ hyper_stub :: remove_in_nbr(uint64_t n_hndl, uint64_t nbr)
 }
 
 void
+hyper_stub :: bulk_load(std::unordered_map<uint64_t, element::node*> nodes, std::unordered_map<uint64_t, std::unordered_set<uint64_t>> edge_map)
+{
+    std::vector<hyper_func> funcs(nodes.size(), &hyperdex::Client::put);
+    std::vector<const char*> spaces(nodes.size(), graph_space);
+    std::vector<uint64_t> keys;
+    std::vector<hyperdex_client_attribute*> attrs(nodes.size(), NULL);
+    std::vector<size_t> num_attrs(nodes.size(), 5);
+
+    uint64_t idx = 0;
+    for (auto &node_pair: nodes) {
+        uint64_t node_id = node_pair.first;
+        element::node &n = *node_pair.second;
+        hyperdex_client_attribute *cl_attr = (hyperdex_client_attribute*)malloc(5 * sizeof(hyperdex_client_attribute));
+
+        // create clock
+        std::unique_ptr<e::buffer> creat_clk_buf;
+        prepare_buffer(n.base.get_creat_time(), creat_clk_buf);
+        cl_attr[0].attr = graph_attrs[0];
+        cl_attr[0].value = (const char*)creat_clk_buf->data();
+        cl_attr[0].value_sz = creat_clk_buf->size();
+        cl_attr[0].datatype = graph_dtypes[0];
+        // delete clock
+        std::unique_ptr<e::buffer> del_clk_buf;
+        prepare_buffer(n.base.get_del_time(), del_clk_buf);
+        cl_attr[1].attr = graph_attrs[1];
+        cl_attr[1].value = (const char*)del_clk_buf->data();
+        cl_attr[1].value_sz = del_clk_buf->size();
+        cl_attr[1].datatype = graph_dtypes[1];
+        // properties
+        std::unique_ptr<e::buffer> props_buf;
+        prepare_buffer(*n.base.get_props(), props_buf);
+        cl_attr[2].attr = graph_attrs[2];
+        cl_attr[2].value = (const char*)props_buf->data();
+        cl_attr[2].value_sz = props_buf->size();
+        cl_attr[2].datatype = graph_dtypes[2];
+        // out edges
+        std::unique_ptr<char> out_edges_buf;
+        uint64_t out_edges_buf_sz;
+        prepare_buffer<element::edge*>(n.out_edges, out_edges_buf, out_edges_buf_sz);
+        cl_attr[3].attr = graph_attrs[3];
+        cl_attr[3].value = out_edges_buf.get();
+        cl_attr[3].value_sz = out_edges_buf_sz;
+        cl_attr[3].datatype = graph_dtypes[3];
+        // in nbrs
+        std::unique_ptr<char> in_nbrs_buf;
+        uint64_t in_nbrs_buf_sz;
+        prepare_buffer(edge_map[node_id], in_nbrs_buf, in_nbrs_buf_sz);
+        cl_attr[4].attr = graph_attrs[4];
+        cl_attr[4].value = in_nbrs_buf.get();
+        cl_attr[4].value_sz = in_nbrs_buf_sz;
+        cl_attr[4].datatype = graph_dtypes[4];
+
+        keys.emplace_back(node_id);
+        attrs[idx++] = cl_attr;
+    }
+
+    hyper_multiple_call_and_loop(funcs, spaces, keys, attrs, num_attrs);
+
+    for (auto cl_attr: attrs) {
+        free(cl_attr);
+    }
+}
+
+void
 hyper_stub :: increment_qts(uint64_t vt_id, uint64_t incr)
 {
     hyperdex_client_map_attribute map_attr;
-    //std::unique_ptr<int64_t> key_buf(new int64_t(vt_id));
-    //std::unique_ptr<int64_t> val_buf(new int64_t(incr));
     map_attr.attr = shard_attrs[0];
-    //map_attr.map_key = (const char*)key_buf.get();
     map_attr.map_key = (const char*)&vt_id;
     map_attr.map_key_sz = sizeof(int64_t);
     map_attr.map_key_datatype = HYPERDATATYPE_INT64;
-    //map_attr.value = (const char*)val_buf.get();
     map_attr.value = (const char*)&incr;
     map_attr.value_sz = sizeof(int64_t);
     map_attr.value_datatype = HYPERDATATYPE_INT64;
@@ -253,11 +305,9 @@ void
 hyper_stub :: update_last_clocks(uint64_t vt_id, vc::vclock_t &vclk)
 {
     hyperdex_client_map_attribute map_attr;
-    //std::unique_ptr<int64_t> key_buf(new int64_t(vt_id));
     std::unique_ptr<e::buffer> clk_buf;
     prepare_buffer(vclk, clk_buf);
     map_attr.attr = shard_attrs[1];
-    //map_attr.map_key = (const char*)key_buf.get();
     map_attr.map_key = (const char*)&vt_id;
     map_attr.map_key_sz = sizeof(int64_t);
     map_attr.map_key_datatype = HYPERDATATYPE_INT64;

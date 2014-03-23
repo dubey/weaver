@@ -107,7 +107,7 @@ namespace db
             // Consistency
         public:
             void increment_qts(uint64_t thread_id, uint64_t vt_id, uint64_t incr);
-            void record_completed_tx(uint64_t thread_id, uint64_t vt_id, vc::vclock_t &tx_clk);
+            void record_completed_tx(uint64_t vt_id, vc::vclock_t &tx_clk);
             element::node* acquire_node(uint64_t node_id);
             void node_tx_order(uint64_t node, uint64_t vt_id, uint64_t qts);
             element::node* acquire_node_write(uint64_t node, uint64_t vt_id, uint64_t qts);
@@ -133,11 +133,11 @@ namespace db
             void delete_edge_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge, vc::vclock &tdel);
             void delete_edge(uint64_t thread_id, uint64_t edge_id, uint64_t node_id, vc::vclock &vclk, vc::qtimestamp_t &qts);
             // properties
-            void set_node_property_nonlocking(uint64_t thread_id, element::node *n,
+            void set_node_property_nonlocking(element::node *n,
                     std::string &key, std::string &value, vc::vclock &vclk);
             void set_node_property(uint64_t thread_id, uint64_t node_id,
                     std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk, vc::qtimestamp_t &qts);
-            void set_edge_property_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge_id,
+            void set_edge_property_nonlocking(element::node *n, uint64_t edge_id,
                     std::string &key, std::string &value, vc::vclock &vclk);
             void set_edge_property(uint64_t thread_id, uint64_t node_id, uint64_t edge_id,
                     std::unique_ptr<std::string> key, std::unique_ptr<std::string> value, vc::vclock &vclk, vc::qtimestamp_t &qts);
@@ -280,28 +280,20 @@ namespace db
     inline void
     shard :: bulk_load_persistent()
     {
-        std::unordered_set<uint64_t> empty_set;
-        uint64_t cnt = 0;
-        for (auto &x: nodes) {
-            hstub[0]->put_node(*x.second, empty_set);
-            if (++cnt % 10000 == 0) {
-                WDEBUG << "wrote " << cnt << " nodes to HyperDex" << std::endl;
-            }
-        }
+        hstub[0]->bulk_load(nodes, edge_map);
     }
 
     // Consistency methods
     inline void
     shard :: increment_qts(uint64_t thread_id, uint64_t vt_id, uint64_t incr)
     {
-        //hstub[thread_id]->increment_qts(vt_id, incr);
+        hstub[thread_id]->increment_qts(vt_id, incr);
         qm.increment_qts(vt_id, incr);
     }
 
     inline void
-    shard :: record_completed_tx(uint64_t thread_id, uint64_t vt_id, vc::vclock_t &tx_clk)
+    shard :: record_completed_tx(uint64_t vt_id, vc::vclock_t &tx_clk)
     {
-        //hstub[thread_id]->update_last_clocks(vt_id, tx_clk);
         qm.record_completed_tx(vt_id, tx_clk);
     }
 
@@ -430,9 +422,11 @@ namespace db
         if (!migrate) {
             new_node->state = element::node::mode::STABLE;
             new_node->msg_count.resize(NUM_SHARDS, 0);
-            // store in Hyperdex
-            std::unordered_set<uint64_t> empty_set;
-            //hstub[thread_id]->put_node(*new_node, empty_set);
+            if (!init_load) {
+                // store in Hyperdex
+                std::unordered_set<uint64_t> empty_set;
+                hstub[thread_id]->put_node(*new_node, empty_set);
+            }
             release_node(new_node);
         }
         return new_node;
@@ -479,11 +473,11 @@ namespace db
         }
         edge_map[remote_node].emplace(n->base.get_id());
         if (!init_load) {
+            // store in Hyperdex
+            hstub[thread_id]->add_out_edge(*n, new_edge);
+            hstub[thread_id]->add_in_nbr(remote_node, n->base.get_id());
             edge_map_mutex.unlock();
         }
-        // store in Hyperdex
-        //hstub[thread_id]->add_out_edge(*n, new_edge);
-        //hstub[thread_id]->add_in_nbr(remote_node, n->base.get_id());
     }
 
     inline void
@@ -545,13 +539,11 @@ namespace db
     }
 
     inline void
-    shard :: set_node_property_nonlocking(uint64_t thread_id, element::node *n,
+    shard :: set_node_property_nonlocking(element::node *n,
             std::string &key, std::string &value, vc::vclock &vclk)
     {
         db::element::property p(key, value, vclk);
         n->base.check_and_add_property(p);
-        // store in Hyperdex
-        hstub[thread_id]->update_properties(*n);
     }
 
     inline void
@@ -568,20 +560,20 @@ namespace db
             dw.value = std::move(value);
             migration_mutex.unlock();
         } else {
-            set_node_property_nonlocking(thread_id, n, *key, *value, vclk);
+            set_node_property_nonlocking(n, *key, *value, vclk);
+            // store in Hyperdex
+            hstub[thread_id]->update_properties(*n);
             release_node(n);
         }
     }
 
     inline void
-    shard :: set_edge_property_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge_id,
+    shard :: set_edge_property_nonlocking(element::node *n, uint64_t edge_id,
             std::string &key, std::string &value, vc::vclock &vclk)
     {
         db::element::edge *e = n->out_edges[edge_id];
         db::element::property p(key, value, vclk);
         e->base.check_and_add_property(p);
-        // store in Hyperdex
-        hstub[thread_id]->add_out_edge(*n, e);
     }
 
     inline void
@@ -599,7 +591,9 @@ namespace db
             dw.value = std::move(value);
             migration_mutex.unlock();
         } else {
-            set_edge_property_nonlocking(thread_id, n, edge_id, *key, *value, vclk);
+            set_edge_property_nonlocking(n, edge_id, *key, *value, vclk);
+            // store in Hyperdex
+            hstub[thread_id]->add_out_edge(*n, n->out_edges[edge_id]);
             release_node(n);
         }
     }

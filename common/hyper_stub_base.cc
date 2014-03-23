@@ -51,31 +51,31 @@ hyper_stub_base :: hypermap_call_and_loop(hyper_map_func h, const char *space,
 
 // multiple hyperdex calls
 void
-hyper_stub_base :: hyper_multiple_call_and_loop(std::vector<const char*> &spaces,
-    std::vector<hyper_func> &funcs,
+hyper_stub_base :: hyper_multiple_call_and_loop(std::vector<hyper_func> &funcs,
+    std::vector<const char*> &spaces,
     std::vector<uint64_t> &keys,
-    std::vector<hyperdex_client_attribute> &attrs,
+    std::vector<hyperdex_client_attribute*> &attrs,
     std::vector<size_t> &num_attrs)
 {
     std::vector<const char*> map_spaces;
     std::vector<hyper_map_func> map_funcs;
     std::vector<uint64_t> map_keys;
-    std::vector<hyperdex_client_map_attribute> map_attrs;
+    std::vector<hyperdex_client_map_attribute*> map_attrs;
     std::vector<size_t> map_num_attrs;
-    hyper_multiple_call_and_loop(spaces, funcs, keys, attrs, num_attrs,
-        map_spaces, map_funcs, map_keys, map_attrs, map_num_attrs);
+    hyper_multiple_call_and_loop(funcs, spaces, keys, attrs, num_attrs,
+        map_funcs, map_spaces, map_keys, map_attrs, map_num_attrs);
 }
 
 void
-hyper_stub_base :: hyper_multiple_call_and_loop(std::vector<const char*> &spaces,
-    std::vector<hyper_func> &funcs,
+hyper_stub_base :: hyper_multiple_call_and_loop(std::vector<hyper_func> &funcs,
+    std::vector<const char*> &spaces,
     std::vector<uint64_t> &keys,
-    std::vector<hyperdex_client_attribute> &attrs,
+    std::vector<hyperdex_client_attribute*> &attrs,
     std::vector<size_t> &num_attrs,
-    std::vector<const char*> &map_spaces,
     std::vector<hyper_map_func> &map_funcs,
+    std::vector<const char*> &map_spaces,
     std::vector<uint64_t> &map_keys,
-    std::vector<hyperdex_client_map_attribute> &map_attrs,
+    std::vector<hyperdex_client_map_attribute*> &map_attrs,
     std::vector<size_t> &map_num_attrs)
 {
     uint64_t num_calls = funcs.size();
@@ -95,14 +95,14 @@ hyper_stub_base :: hyper_multiple_call_and_loop(std::vector<const char*> &spaces
 
     uint64_t i = 0;
     for (; i < num_calls; i++) {
-        hdex_id = (cl.*funcs[i])(spaces[i], (const char*)&keys[i], sizeof(int64_t), &attrs[i], num_attrs[i], &status);
+        hdex_id = (cl.*funcs[i])(spaces[i], (const char*)&keys[i], sizeof(int64_t), attrs[i], num_attrs[i], &status);
         if (hdex_id < 0) {
             WDEBUG << "Hyperdex function failed, op id = " << hdex_id << ", status = " << status << std::endl;
             break;
         }
     }
     for (uint64_t j = 0; j < map_num_calls; j++, i++) {
-        hdex_id = (cl.*map_funcs[j])(map_spaces[j], (const char*)&map_keys[j], sizeof(int64_t), &map_attrs[j], map_num_attrs[j], &status);
+        hdex_id = (cl.*map_funcs[j])(map_spaces[j], (const char*)&map_keys[j], sizeof(int64_t), map_attrs[j], map_num_attrs[j], &status);
         if (hdex_id < 0) {
             WDEBUG << "Hyperdex map function failed, op id = " << hdex_id << ", status = " << status << std::endl;
             return;
