@@ -88,6 +88,10 @@ hyper_stub :: put_tx(uint64_t tx_id, message::message &tx_msg)
     keys.emplace_back(tx_id);
 
     hyper_multiple_call_and_loop(funcs, spaces, keys, attrs, num_attrs);
+    
+    for (hyperdex_client_attribute *del_attr: attrs) {
+        delete del_attr;
+    }
 }
 
 void
