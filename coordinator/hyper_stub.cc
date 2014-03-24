@@ -69,8 +69,8 @@ hyper_stub :: put_tx(uint64_t tx_id, message::message &tx_msg)
     std::vector<uint64_t> keys;
     std::vector<size_t> num_attrs(2, 1);
 
-    attrs.emplace_back(new hyperdex_client_attribute());
-    attrs.emplace_back(new hyperdex_client_attribute());
+    attrs[0] = new hyperdex_client_attribute();
+    attrs[1] = new hyperdex_client_attribute();
 
     attrs[0]->attr = attr;
     attrs[0]->value = (const char*)&tx_id;
