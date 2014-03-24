@@ -77,6 +77,8 @@ hyper_stub :: restore_backup(std::unordered_map<uint64_t, uint64_t> &qts_map,
 
     unpack_buffer(cl_attr[0].value, cl_attr[0].value_sz, qts_map);
     unpack_buffer(cl_attr[1].value, cl_attr[1].value_sz, last_clocks);
+
+    hyperdex_client_destroy_attrs(cl_attr, num_attrs);
 }
 
 void
