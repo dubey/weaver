@@ -16,6 +16,7 @@
 #include "common/event_order.h"
 #include "db/queue_manager.h"
 
+using db::queue_order;
 using db::queue_manager;
 using db::queued_request;
 
@@ -54,15 +55,18 @@ queue_manager :: enqueue_write_request(uint64_t vt_id, queued_request *t)
 
 // check if write request received in thread loop can be executed without waiting
 // this does not call Kronos, so if vector clocks cannot be compared, the request will be pushed on write queue
-bool
+enum queue_order
 queue_manager :: check_wr_request(vc::vclock &vclk, uint64_t qt)
 {
-    bool check;
+    enum queue_order ret = FUTURE;
     queue_mutex.lock();
-    if (check_wr_queues_timestamps(vclk.vt_id, qt)) {
+    enum queue_order cur_order = check_wr_queues_timestamps(vclk.vt_id, qt);
+    if (cur_order == PAST) {
+        ret = PAST;
+    } else if (cur_order == PRESENT) {
         // all write queues (possibly except vt_id) good to go
         if (NUM_VTS == 1) {
-            check = true;
+            ret = PRESENT;
         } else {
             // compare vector clocks, NO Kronos call
             std::vector<vc::vclock> timestamps;
@@ -78,16 +82,16 @@ queue_manager :: check_wr_request(vc::vclock &vclk, uint64_t qt)
             int64_t small_idx = INT64_MAX;
             order::compare_vts_no_kronos(timestamps, large, small_idx);
             if ((uint64_t)small_idx == vclk.vt_id) {
-                check = true;
+                ret = PRESENT;
             } else {
-                check = false;
+                ret = FUTURE;
             }
         }
     } else {
-        check = false;
+        ret = FUTURE;
     }
     queue_mutex.unlock();
-    return check;
+    return ret;
 }
 
 // check all read and write queues
@@ -123,10 +127,12 @@ queue_manager :: increment_qts(uint64_t vt_id, uint64_t incr)
 
 // record the vclk for last completed write tx
 void
-queue_manager :: record_completed_tx(uint64_t vt_id, vc::vclock_t &tx_clk)
+queue_manager :: record_completed_tx(vc::vclock &tx_clk)
 {
     queue_mutex.lock();
-    last_clocks[vt_id] = tx_clk;
+    if (last_clocks[tx_clk.vt_id][tx_clk.vt_id] < tx_clk.clock[tx_clk.vt_id]) {
+        last_clocks[tx_clk.vt_id] = tx_clk.clock;
+    }
     queue_mutex.unlock();
 }
 
@@ -171,34 +177,41 @@ queue_manager :: get_rd_req()
     return NULL;
 }
 
-bool
+enum queue_order
 queue_manager :: check_wr_queues_timestamps(uint64_t vt_id, uint64_t qt)
 {
     // check each write queue ready to go
     for (uint64_t i = 0; i < NUM_VTS; i++) {
         if (vt_id == i) {
-            if ((qts[i] + 1) != qt) {
-                return false;
+            if (qt <= qts[i]) {
+                return PAST;
+            } else if (qt != (qts[i]+1)) {
+                return FUTURE;
             }
+            //if ((qts[i] + 1) != qt) {
+            //    return false;
+            //}
         } else {
             pqueue_t &pq = wr_queues[i];
             if (pq.empty()) { // can't go on if one of the pq's is empty
-                return false;
+                return FUTURE;
             } else {
                 // check for correct ordering of queue timestamp (which is priority for thread)
                 if ((qts[i] + 1) != pq.top()->priority) {
-                    return false;
+                    return FUTURE;
                 }
             }
         }
     }
-    return true;
+    return PRESENT;
 }
 
 queued_request*
 queue_manager :: get_wr_req()
 {
-    if (!check_wr_queues_timestamps(UINT64_MAX, UINT64_MAX)) {
+    enum queue_order queue_status = check_wr_queues_timestamps(UINT64_MAX, UINT64_MAX);
+    assert(queue_status != PAST);
+    if (queue_status == FUTURE) {
         return NULL;
     }
 
@@ -208,16 +221,11 @@ queue_manager :: get_wr_req()
         exec_vt_id = 0; // only one timestamper
     } else {
         // compare timestamps, may call Kronos
-        //std::cerr << "comparing vclks\n";
         std::vector<vc::vclock> timestamps;
         timestamps.reserve(NUM_VTS);
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
             timestamps.emplace_back(wr_queues[vt_id].top()->vclock);
             assert(timestamps.back().clock.size() == NUM_VTS);
-            //for (int j = 0; j < NUM_VTS; j++) {
-            //    std::cerr << timestamps.back().clock.at(j) << ",";
-            //}
-            //std::cerr << std::endl;
         }
         exec_vt_id = order::compare_vts(timestamps);
     }

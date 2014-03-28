@@ -25,6 +25,13 @@
 
 namespace db
 {
+    enum queue_order
+    {
+        PAST,
+        PRESENT,
+        FUTURE
+    };
+
     // priority queue type definition
     // each shard server has one such priority queue for each vector timestamper
     typedef std::priority_queue<queued_request*, std::vector<queued_request*>, work_thread_compare> pqueue_t;
@@ -37,25 +44,23 @@ namespace db
             std::vector<vc::vclock_t> last_clocks; // records last transaction vclock pulled of queue for each vector timestamper
             vc::qtimestamp_t qts; // queue timestamps
             po6::threads::mutex queue_mutex;
-            //po6::threads::mutex thread_loop_mutex;
-            //static db::shard *S;
 
         private:
             queued_request* get_rd_req();
             queued_request* get_wr_req();
             queued_request* get_rw_req();
             bool check_rd_req_nonlocking(vc::vclock_t &clk);
-            bool check_wr_queues_timestamps(uint64_t vt_id, uint64_t qt);
+            enum queue_order check_wr_queues_timestamps(uint64_t vt_id, uint64_t qt);
 
         public:
             queue_manager();
             void enqueue_read_request(uint64_t vt_id, queued_request*);
             bool check_rd_request(vc::vclock_t &clk);
             void enqueue_write_request(uint64_t vt_id, queued_request*);
-            bool check_wr_request(vc::vclock &vclk, uint64_t qt);
+            enum queue_order check_wr_request(vc::vclock &vclk, uint64_t qt);
             bool exec_queued_request(uint64_t tid);
             void increment_qts(uint64_t vt_id, uint64_t incr);
-            void record_completed_tx(uint64_t vt_id, vc::vclock_t &tx_clk);
+            void record_completed_tx(vc::vclock &tx_clk);
             // fault tolerance
             void restore_backup(std::unordered_map<uint64_t, uint64_t> &qts, std::unordered_map<uint64_t, vc::vclock_t> &last_clocks);
     };

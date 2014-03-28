@@ -112,7 +112,8 @@ namespace coordinator
             void init();
             void restore_backup();
             void reconfigure();
-            bool unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id, int tid);
+            bool unpack_tx(message::message &msg, transaction::pending_tx &tx,
+                uint64_t client_id, int tid);
             uint64_t generate_id();
     };
 
@@ -176,6 +177,10 @@ namespace coordinator
     timestamper :: reconfigure()
     {
         WDEBUG << "Cluster reconfigure triggered\n";
+        periodic_update_mutex.lock();
+        comm.pause();
+
+        // print cluster info
         for (uint64_t i = 0; i < NUM_SERVERS; i++) {
             server::state_t st = config.get_state(server_id(i));
             if (st != server::AVAILABLE) {
@@ -184,18 +189,36 @@ namespace coordinator
                 WDEBUG << "Server " << i << " is healthy, has state " << st << std::endl;
             }
         }
-        if (comm.reconfigure(config) == server.get()) {
+
+        // reconfigure busybee
+        uint64_t changed = UINT64_MAX;
+        if (comm.reconfigure(config, changed) == server.get()) {
             // this server is now primary for the shard
             active_backup = true;
             backup_cond.signal();
         }
+
+        // resend unacked transactions
+        if (changed >= SHARD_ID_INCR && changed < (SHARD_ID_INCR+NUM_SHARDS)) {
+            uint64_t sid = changed - SHARD_ID_INCR;
+            for (auto &entry: outstanding_tx) {
+                if (!(*entry.second.tx_vec)[sid].writes.empty()) {
+                    // TODO resend transactions
+                    // TODO figure out nop situation
+                }
+            }
+        }
+
+        comm.unpause();
+        periodic_update_mutex.unlock();
     }
 
     // return false if the main node in the transaction is not found in node map
     // this is not a complete sanity check, e.g. create_edge(n1, n2) will succeed even if n2 is garbage
     // similarly edge ids are not checked
     inline bool
-    timestamper :: unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id, int thread_id)
+    timestamper :: unpack_tx(message::message &msg, transaction::pending_tx &tx,
+        uint64_t client_id, int thread_id)
     {
         message::unpack_client_tx(msg, tx);
         tx.id = generate_id();

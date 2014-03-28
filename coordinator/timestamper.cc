@@ -55,22 +55,23 @@ end_program(int signum)
 inline void
 begin_transaction(transaction::pending_tx &tx)
 {
-    std::vector<transaction::pending_tx> tx_vec(NUM_SHARDS, transaction::pending_tx());
+    typedef std::vector<transaction::pending_tx> tx_vec_t;
+    std::shared_ptr<tx_vec_t> tx_vec(new tx_vec_t(NUM_SHARDS, transaction::pending_tx()));
+    tx_vec_t &tv = *tx_vec;
 
     vts->clk_mutex.lock();
     for (std::shared_ptr<transaction::pending_update> upd: tx.writes) {
         vts->qts.at(upd->loc1-SHARD_ID_INCR)++;
         upd->qts = vts->qts;
-        tx_vec[upd->loc1-SHARD_ID_INCR].writes.emplace_back(upd);
+        tv[upd->loc1-SHARD_ID_INCR].writes.emplace_back(upd);
     }
     vts->vclk.increment_clock();
     tx.timestamp = vts->vclk;
-    // get unique tx id
     vts->clk_mutex.unlock();
 
-    current_tx cur_tx(tx.client_id);
+    current_tx cur_tx(tx.id, tx.client_id, tx.timestamp, tx_vec);
     for (uint64_t i = 0; i < NUM_SHARDS; i++) {
-        if (!tx_vec[i].writes.empty()) {
+        if (!tv[i].writes.empty()) {
             cur_tx.count++;
         }
     }
@@ -82,11 +83,11 @@ begin_transaction(transaction::pending_tx &tx)
     // send tx batches
     message::message msg;
     for (uint64_t i = 0; i < NUM_SHARDS; i++) {
-        if (!tx_vec[i].writes.empty()) {
-            tx_vec[i].timestamp = tx.timestamp;
-            tx_vec[i].id = tx.id;
-            message::prepare_message(msg, message::TX_INIT, vt_id, tx.timestamp, tx_vec[i].writes.at(0)->qts, tx.id, tx_vec[i].writes);
-            vts->comm.send(tx_vec[i].writes.at(0)->loc1, msg.buf);
+        if (!tv[i].writes.empty()) {
+            tv[i].timestamp = tx.timestamp;
+            tv[i].id = tx.id;
+            message::prepare_message(msg, message::TX_INIT, vt_id, tx.timestamp, tv[i].writes.at(0)->qts, tx.id, tv[i].writes);
+            vts->comm.send(tv[i].writes.at(0)->loc1, msg.buf);
         }
     }
 }
@@ -139,7 +140,7 @@ timer_function()
         nop_sent = false;
         clock_synced = false;
         vts->periodic_update_mutex.lock();
-        
+
         // send nops and state cleanup info to shards
         if (vts->to_nop.any()) {
             req_id = vts->generate_id();

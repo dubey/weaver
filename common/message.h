@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <vector>
+#include <deque>
 #include <unordered_set>
 #include <unordered_map>
 #include <queue>
@@ -122,6 +123,7 @@ namespace message
     template <typename T1, typename T2> inline uint64_t size(const std::unordered_map<T1, T2>& t);
     template <typename T> inline uint64_t size(const std::unordered_set<T>& t);
     template <typename T> inline uint64_t size(const std::vector<T>& t);
+    template <typename T> inline uint64_t size(const std::deque<T>& t);
     template <typename T1, typename T2, typename T3> uint64_t size(std::priority_queue<T1, T2, T3>);
     template <typename T1, typename T2> inline uint64_t size(const std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline uint64_t size(const std::tuple<T1, T2, T3>& t);
@@ -135,6 +137,7 @@ namespace message
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::vector<T>& t);
+    template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::deque<T>& t);
     template <typename T1, typename T2, typename T3> void pack_buffer(e::buffer::packer&, std::priority_queue<T1, T2, T3>);
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer &packer, const std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3>& t);
@@ -148,6 +151,7 @@ namespace message
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::vector<T>& t);
+    template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::deque<T>& t);
     template <typename T1, typename T2, typename T3> void unpack_buffer(e::unpacker&, std::priority_queue<T1, T2, T3>&);
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void unpack_buffer(e::unpacker& unpacker, std::tuple<T1, T2, T3>& t);
@@ -336,7 +340,17 @@ namespace message
     inline uint64_t size(const std::vector<T> &t)
     {
         uint64_t tot_size = sizeof(uint64_t);
-        for (const T &elem : t) {
+        for (const T &elem: t) {
+            tot_size += size(elem);
+        }
+        return tot_size;
+    }
+
+    template <typename T>
+    inline uint64_t size(const std::deque<T> &t)
+    {
+        uint64_t tot_size = sizeof(uint64_t);
+        for (const T &elem: t) {
             tot_size += size(elem);
         }
         return tot_size;
@@ -531,13 +545,27 @@ namespace message
         // !assumes constant element size
         uint64_t num_elems = t.size();
         packer = packer << num_elems;
-        if (num_elems > 0){
-            for (const T &elem : t) {
+        if (num_elems > 0) {
+            for (const T &elem: t) {
                 pack_buffer(packer, elem);
             }
         }
     }
-    
+
+    template <typename T> 
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const std::deque<T> &t)
+    {
+        // !assumes constant element size
+        uint64_t num_elems = t.size();
+        packer = packer << num_elems;
+        if (num_elems > 0) {
+            for (const T &elem: t) {
+                pack_buffer(packer, elem);
+            }
+        }
+    }
+
     template <typename T1, typename T2, typename T3>
     inline void
     pack_buffer(e::buffer::packer &packer, std::priority_queue<T1, T2, T3> t)
@@ -810,6 +838,21 @@ namespace message
         unpacker = unpacker >> elements_left;
 
         t.reserve(elements_left);
+
+        while (elements_left > 0) {
+            t.emplace_back();
+            unpack_buffer(unpacker, t.back());
+            elements_left--;
+        }
+    }
+
+    template <typename T> 
+    inline void 
+    unpack_buffer(e::unpacker &unpacker, std::deque<T> &t)
+    {
+        assert(t.size() == 0);
+        uint64_t elements_left;
+        unpacker = unpacker >> elements_left;
 
         while (elements_left > 0) {
             t.emplace_back();

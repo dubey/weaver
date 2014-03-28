@@ -20,8 +20,8 @@ from test_base import test_graph
 
 # creating line graph
 nodes = []
-num_nodes = 1000
-num_clients = 2
+num_nodes = 10000
+num_clients = 1
 clients = []
 for i in range(num_clients):
     clients.append(client.Client(client._CLIENT_ID+i, i % client._NUM_VTS))

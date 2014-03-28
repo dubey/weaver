@@ -21,7 +21,7 @@ import libclient as client
 # creating line graph
 nodes = []
 edges = []
-num_nodes = 200
+num_nodes = 100
 coord_id = 0
 c = client.Client(client._CLIENT_ID, coord_id)
 
@@ -51,6 +51,8 @@ node_count = c.get_node_count()
 print 'Node count:'
 for cnt in node_count:
     print str(cnt)
+
+dummy = raw_input('press a key when shard is killed ')
 
 print 'Now testing without edge props'
 line_requests([], num_nodes-1)

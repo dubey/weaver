@@ -19,11 +19,21 @@ namespace coordinator
 {
     struct current_tx
     {
+        uint64_t id;
         uint64_t client;
         uint64_t count;
+        vc::vclock timestamp;
+        std::shared_ptr<std::vector<transaction::pending_tx>> tx_vec;
 
         current_tx() : client(UINT64_MAX), count(0) { }
-        current_tx(uint64_t cl) : client(cl), count(0) { }
+        current_tx(uint64_t _id, uint64_t cl, vc::vclock &vclk,
+            std::shared_ptr<std::vector<transaction::pending_tx>> &tv)
+            : id(_id)
+            , client(cl)
+            , count(0)
+            , timestamp(vclk)
+            , tx_vec(tv)
+        { }
     };
 }
 

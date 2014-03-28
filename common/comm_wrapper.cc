@@ -47,7 +47,7 @@ comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *
 }
 
 void
-comm_wrapper :: weaver_mapper :: reconfigure(configuration &new_config, uint64_t &primary)
+comm_wrapper :: weaver_mapper :: reconfigure(configuration &new_config, uint64_t &primary, uint64_t &changed)
 {
     config = new_config;
     for (uint64_t i = 0; i < NUM_VTS+NUM_SHARDS; i++) {
@@ -63,8 +63,10 @@ comm_wrapper :: weaver_mapper :: reconfigure(configuration &new_config, uint64_t
                 }
             }
             if (srv_idx != active_server_idx[i]) {
+                WDEBUG << "Idx " << i << ": " << active_server_idx[i] << " dead, now making " << srv_idx << " primary" << std::endl;
                 mlist[ID_INCR + i] = config.get_address(server_id(srv_idx));
                 active_server_idx[i] = srv_idx;
+                changed = i;
             }
         } else {
             // server i is not yet up
@@ -119,8 +121,9 @@ void
 comm_wrapper :: init(configuration &config)
 {
     uint64_t primary = bb_id;
+    uint64_t changed = UINT64_MAX;
     wmap.reset(new weaver_mapper(cluster, bb_id));
-    wmap->reconfigure(config, primary);
+    wmap->reconfigure(config, primary, changed);
     WDEBUG << "Busybee attaching to loc " << loc->address << ":" << loc->port << std::endl;
     bb.reset(new busybee_mta(wmap.get(), *loc, bb_id+ID_INCR, num_threads));
     bb->set_timeout(timeout);
@@ -135,12 +138,12 @@ comm_wrapper :: client_init()
 }
 
 uint64_t
-comm_wrapper :: reconfigure(configuration &config)
+comm_wrapper :: reconfigure(configuration &config, uint64_t &changed)
 {
     uint64_t primary = bb_id;
-    bb->pause();
-    wmap->reconfigure(config, primary);
-    bb->unpause();
+    //bb->pause();
+    wmap->reconfigure(config, primary, changed);
+    //bb->unpause();
     return primary;
 }
 

@@ -16,9 +16,10 @@
 #define weaver_db_shard_h_
 
 #include <set>
+#include <map>
+#include <bitset>
 #include <vector>
 #include <unordered_map>
-#include <bitset>
 #include <po6/threads/mutex.h>
 #include <po6/net/location.h>
 #include <hyperdex/client.hpp>
@@ -76,7 +77,6 @@ namespace db
         public:
             shard(uint64_t shard, uint64_t server);
             void init(bool backup);
-            void restore_backup();
             void reconfigure();
             void bulk_load_persistent();
 
@@ -84,19 +84,14 @@ namespace db
             po6::threads::mutex update_mutex // shard update mutex
                 , edge_map_mutex
                 , perm_del_mutex
-                , config_mutex;
-        private:
-            po6::threads::mutex clock_mutex; // vector clock/queue timestamp mutex
-        public:
-            po6::threads::mutex msg_count_mutex
+                , config_mutex
+                , restore_mutex
+                , msg_count_mutex
                 , migration_mutex
                 , graph_load_mutex; // gather load times from all shards
 
             // Messaging infrastructure
             common::comm_wrapper comm;
-
-            // Hyperdex stub
-            std::vector<hyper_stub*> hstub;
 
             // Server manager
             server_manager_link_wrapper sm_stub;
@@ -107,11 +102,12 @@ namespace db
             // Consistency
         public:
             void increment_qts(uint64_t thread_id, uint64_t vt_id, uint64_t incr);
-            void record_completed_tx(uint64_t vt_id, vc::vclock_t &tx_clk);
+            void record_completed_tx(vc::vclock &tx_clk);
             element::node* acquire_node(uint64_t node_id);
             void node_tx_order(uint64_t node, uint64_t vt_id, uint64_t qts);
             element::node* acquire_node_write(uint64_t node, uint64_t vt_id, uint64_t qts);
             element::node* acquire_node_nonlocking(uint64_t node_id);
+            void release_node_write(uint64_t thread_id, element::node *n);
             void release_node(element::node *n, bool migr_node);
 
             // Graph state
@@ -195,10 +191,13 @@ namespace db
                     std::shared_ptr<node_prog::Node_State_Base> toAdd);
             void add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
             bool check_done_request(uint64_t req_id);
-
             std::unordered_map<std::pair<uint64_t, uint64_t>, void *> node_prog_running_states; // used for fetching cache contexts
             po6::threads::mutex node_prog_running_states_mutex;
 
+            // Fault tolerance
+        public:
+            std::vector<hyper_stub*> hstub;
+            void restore_backup();
     };
 
     inline
@@ -246,22 +245,13 @@ namespace db
         }
     }
 
-    // restore state when backup becomes primary due to failure
-    inline void
-    shard :: restore_backup()
-    {
-        std::unordered_map<uint64_t, uint64_t> qts_map;
-        std::unordered_map<uint64_t, vc::vclock_t> last_clocks;
-        hstub.back()->restore_backup(qts_map, last_clocks);
-        qm.restore_backup(qts_map, last_clocks);
-    }
-
     // reconfigure shard according to new cluster configuration
     // caution: assume holding config_mutex
     inline void
     shard :: reconfigure()
     {
         WDEBUG << "Cluster reconfigure triggered\n";
+        comm.pause();
         for (uint64_t i = 0; i < NUM_SERVERS; i++) {
             server::state_t st = config.get_state(server_id(i));
             if (st != server::AVAILABLE) {
@@ -270,11 +260,13 @@ namespace db
                 WDEBUG << "Server " << i << " is healthy, has state " << st << std::endl;
             }
         }
-        if (comm.reconfigure(config) == server.get()) {
+        uint64_t changed = UINT64_MAX;
+        if (comm.reconfigure(config, changed) == server.get()) {
             // this server is now primary for the shard
             active_backup = true;
             backup_cond.signal();
         }
+        comm.unpause();
     }
 
     inline void
@@ -292,9 +284,9 @@ namespace db
     }
 
     inline void
-    shard :: record_completed_tx(uint64_t vt_id, vc::vclock_t &tx_clk)
+    shard :: record_completed_tx(vc::vclock &tx_clk)
     {
-        qm.record_completed_tx(vt_id, tx_clk);
+        qm.record_completed_tx(tx_clk);
     }
 
     // find the node corresponding to given id
@@ -360,6 +352,14 @@ namespace db
         return n;
     }
 
+    // write n->tx_queue to HyperDex, and then release node
+    inline void
+    shard :: release_node_write(uint64_t thread_id, element::node *n)
+    {
+        hstub[thread_id]->update_tx_queue(*n);
+        release_node(n, false);
+    }
+
     // unlock the previously acquired node, and wake any waiting threads
     inline void
     shard :: release_node(element::node *n, bool migr_done=false)
@@ -399,7 +399,7 @@ namespace db
     shard :: create_node(uint64_t thread_id, uint64_t node_id, vc::vclock &vclk, bool migrate, bool init_load=false)
     {
         element::node *new_node = new element::node(node_id, vclk, &update_mutex);
-        
+
         if (!init_load) {
             update_mutex.lock();
         }
@@ -418,7 +418,7 @@ namespace db
         if (!init_load) {
             migration_mutex.unlock();
         }
-        
+
         if (!migrate) {
             new_node->state = element::node::mode::STABLE;
             new_node->msg_count.resize(NUM_SHARDS, 0);
@@ -426,8 +426,10 @@ namespace db
                 // store in Hyperdex
                 std::unordered_set<uint64_t> empty_set;
                 hstub[thread_id]->put_node(*new_node, empty_set);
+                release_node(new_node);
+            } else {
+                new_node->in_use = false;
             }
-            release_node(new_node);
         }
         return new_node;
     }
@@ -452,7 +454,7 @@ namespace db
             migration_mutex.unlock();
         } else {
             delete_node_nonlocking(thread_id, n, tdel);
-            release_node(n);
+            release_node_write(thread_id, n);
             // record object for permanent deletion later on
             perm_del_mutex.lock();
             perm_del_queue.emplace(new del_obj(message::NODE_DELETE_REQ, tdel, node_id));
@@ -498,7 +500,7 @@ namespace db
         } else {
             assert(n->base.get_id() == local_node);
             create_edge_nonlocking(thread_id, n, edge_id, remote_node, remote_loc, vclk);
-            release_node(n);
+            release_node_write(thread_id, n);
         }
     }
 
@@ -513,6 +515,16 @@ namespace db
         e->base.update_del_time(tdel);
         n->updated = true;
         n->dependent_del++;
+        // update edge map
+        uint64_t remote = e->nbr.id;
+        edge_map_mutex.lock();
+        assert(edge_map.find(remote) != edge_map.end());
+        auto &node_set = edge_map[remote];
+        node_set.erase(n->base.get_id());
+        if (node_set.empty()) {
+            edge_map.erase(remote);
+        }
+        edge_map_mutex.unlock();
         // store in Hyperdex
         hstub[thread_id]->add_out_edge(*n, e);
     }
@@ -530,7 +542,7 @@ namespace db
             migration_mutex.unlock();
         } else {
             delete_edge_nonlocking(thread_id, n, edge_id, tdel);
-            release_node(n);
+            release_node_write(thread_id, n);
             // record object for permanent deletion later on
             perm_del_mutex.lock();
             perm_del_queue.emplace(new del_obj(message::EDGE_DELETE_REQ, tdel, node_id, edge_id));
@@ -563,7 +575,7 @@ namespace db
             set_node_property_nonlocking(n, *key, *value, vclk);
             // store in Hyperdex
             hstub[thread_id]->update_properties(*n);
-            release_node(n);
+            release_node_write(thread_id, n);
         }
     }
 
@@ -594,7 +606,7 @@ namespace db
             set_edge_property_nonlocking(n, edge_id, *key, *value, vclk);
             // store in Hyperdex
             hstub[thread_id]->add_out_edge(*n, n->out_edges[edge_id]);
-            release_node(n);
+            release_node_write(thread_id, n);
         }
     }
 
@@ -821,6 +833,20 @@ namespace db
         return done;
     }
 
+
+    // Fault tolerance
+
+    // restore state when backup becomes primary due to failure
+    inline void
+    shard :: restore_backup()
+    {
+        std::unordered_map<uint64_t, uint64_t> qts_map;
+        std::unordered_map<uint64_t, vc::vclock_t> last_clocks;
+        hstub.back()->restore_backup(qts_map, last_clocks, nodes, edge_map, &update_mutex);
+        qm.restore_backup(qts_map, last_clocks);
+        restore_mutex.lock();
+        restore_mutex.unlock();
+    }
 }
 
 #endif

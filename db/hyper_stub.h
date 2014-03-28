@@ -13,6 +13,10 @@
 
 #ifndef weaver_db_hyper_stub_h_
 #define weaver_db_hyper_stub_h_
+#define NUM_GRAPH_ATTRS 6
+#define NUM_SHARD_ATTRS 2
+
+#include <po6/threads/mutex.h>
 
 #include "common/weaver_constants.h"
 #include "common/hyper_stub_base.h"
@@ -27,29 +31,24 @@ namespace db
         private:
             const uint64_t shard_id;
             const char *graph_space = "weaver_graph_data";
-            const char *graph_attrs[5];
-            const enum hyperdatatype graph_dtypes[5];
+            const char *graph_attrs[NUM_GRAPH_ATTRS];
+            const enum hyperdatatype graph_dtypes[NUM_GRAPH_ATTRS];
             const char *shard_space = "weaver_shard_data";
-            const char *shard_attrs[2];
-            const enum hyperdatatype shard_dtypes[2];
-            typedef int64_t (hyperdex::Client::*hyper_func)(const char*,
-                const char*,
-                size_t,
-                const struct hyperdex_client_attribute*,
-                size_t,
-                hyperdex_client_returncode*);
-            typedef int64_t (hyperdex::Client::*hyper_map_func)(const char*,
-                const char*,
-                size_t,
-                const struct hyperdex_client_map_attribute*,
-                size_t,
-                hyperdex_client_returncode*);
+            const char *shard_attrs[NUM_SHARD_ATTRS];
+            const enum hyperdatatype shard_dtypes[NUM_SHARD_ATTRS];
+            const char *nmap_space = "weaver_loc_mapping";
+            const char *nmap_attr = "shard";
+            const enum hyperdatatype nmap_dtype = HYPERDATATYPE_INT64;
+            void recreate_node(const hyperdex_client_attribute *cl_attr, element::node &n, std::unordered_set<uint64_t> &nbr_map);
 
         public:
             hyper_stub(uint64_t sid);
             void init();
             void restore_backup(std::unordered_map<uint64_t, uint64_t> &qts_map,
-                std::unordered_map<uint64_t, vc::vclock_t> &last_clocks);
+                std::unordered_map<uint64_t, vc::vclock_t> &last_clocks,
+                std::unordered_map<uint64_t, element::node*> &nodes,
+                std::unordered_map<uint64_t, std::unordered_set<uint64_t>> &edge_map,
+                po6::threads::mutex *shard_mutex);
             // graph updates
             void put_node(element::node &n, std::unordered_set<uint64_t> &nbr_map);
             element::node* get_node(uint64_t node);
@@ -60,6 +59,7 @@ namespace db
             void remove_out_edge(element::node &n, element::edge *e);
             void add_in_nbr(uint64_t n_hndl, uint64_t nbr);
             void remove_in_nbr(uint64_t n_hndl, uint64_t nbr);
+            void update_tx_queue(element::node &n);
             // bulk loading
             void bulk_load(std::unordered_map<uint64_t, element::node*> nodes, std::unordered_map<uint64_t, std::unordered_set<uint64_t>> edge_map);
             // shard updates

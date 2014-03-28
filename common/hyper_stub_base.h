@@ -146,8 +146,7 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordere
     while (buf != end) {
         buf = e::unpack64le(buf, &key);
         buf = e::unpack32le(buf, &val_sz);
-        temp_buf.reset(e::buffer::create(val_sz));
-        memmove(temp_buf->data(), buf, val_sz);
+        temp_buf.reset(e::buffer::create(buf, val_sz));
         e::unpacker unpacker = temp_buf->unpack_from(0);
         message::unpack_buffer(unpacker, map[key]);
         buf += val_sz;

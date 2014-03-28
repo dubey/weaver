@@ -11,14 +11,16 @@ Serializability test with multithreaded client.
 
 TODO
 Fault tolerant coordinator and shards.
-    Timestamper: log each tx before sending to shards. Entire tx message.
+    Fix nops for crashed shard.
+    tx_queue in node has to be replicated to HyperDex.  Store as simple string.  Needed so that order of transactions at each node maintained after failure.
+        Popping from tx_queue replicated only after the update has been replicated.  When shard fails in the middle of a tx, it will be resent by VT: need a function that 'checks' tx
+        and only reexecutes the portion that has not been already executed---need a specialized check for each type of tx.
 Permanent deletion.
     Node/edge properties
     Kronos events clean up
     Testing
 Clean up, tackle TODO/XXX.
         migrate_step 2 & 3 - rename, optimize (batch?)
-change all include guards from __UPPERCASE_... to lowercase_...
 Analytics API - global requests
     Find out why triangle counting is slow.
 

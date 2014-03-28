@@ -418,6 +418,11 @@ unpack_migrate_request(uint64_t thread_id, void *req)
 }
 
 void
+check_tx_request(uint64_t , db::message_wrapper *)
+{
+}
+
+void
 unpack_tx_request(uint64_t thread_id, void *req)
 {
     db::message_wrapper *request = (db::message_wrapper*)req;
@@ -429,7 +434,9 @@ unpack_tx_request(uint64_t thread_id, void *req)
 
     // execute all create_node writes
     // establish tx order at all graph nodes for all other writes
+    db::element::node *n;
     for (auto upd: tx.writes) {
+        n = NULL;
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ:
                 create_node(thread_id, vclk, upd->id);
@@ -438,16 +445,23 @@ unpack_tx_request(uint64_t thread_id, void *req)
             case transaction::EDGE_CREATE_REQ:
             case transaction::NODE_DELETE_REQ:
             case transaction::NODE_SET_PROPERTY: // elem1
-                S->node_tx_order(upd->elem1, vt_id, qts[vt_id]);
+                //S->node_tx_order(upd->elem1, vt_id, qts[vt_id]);
+                n = S->acquire_node(upd->elem1);
                 break;
 
             case transaction::EDGE_DELETE_REQ:
             case transaction::EDGE_SET_PROPERTY: // elem2
-                S->node_tx_order(upd->elem2, vt_id, qts[vt_id]);
+                //S->node_tx_order(upd->elem2, vt_id, qts[vt_id]);
+                n = S->acquire_node(upd->elem2);
                 break;
 
             default:
                 WDEBUG << "unknown type" << std::endl;
+        }
+        if (n != NULL) {
+            n->tx_queue.emplace_back(std::make_pair(vt_id, qts[vt_id]));
+            S->hstub[thread_id]->update_tx_queue(*n);
+            S->release_node(n);
         }
     }
 
@@ -484,14 +498,21 @@ unpack_tx_request(uint64_t thread_id, void *req)
         }
     }
 
-    // increment qts for next writes
-    S->record_completed_tx(vt_id, vclk.clock);
+    // record clocks for future reads
+    S->record_completed_tx(vclk);
     delete request;
 
     // send tx confirmation to coordinator
     message::message conf_msg;
     message::prepare_message(conf_msg, message::TX_DONE, tx_id);
     S->comm.send(vt_id, conf_msg.buf);
+}
+
+void
+check_nop(uint64_t , db::nop_data *nop_arg)
+{
+    // TODO
+    S->record_completed_tx(nop_arg->vclk);
 }
 
 // process nop
@@ -502,13 +523,18 @@ nop(uint64_t thread_id, void *noparg)
     message::message msg;
     db::nop_data *nop_arg = (db::nop_data*)noparg;
     bool check_move_migr, check_init_migr, check_migr_step3;
-    
+
     // increment qts
     S->increment_qts(thread_id, nop_arg->vt_id, 1);
-    
+
+    /* state cleanup */
+
     // note done progs for state clean up
     S->add_done_requests(nop_arg->done_reqs);
+
     
+    /* migration */
+
     S->migration_mutex.lock();
 
     // increment nop count, trigger migration step 2 after check
@@ -548,7 +574,7 @@ nop(uint64_t thread_id, void *noparg)
     S->max_done_id[nop_arg->vt_id] = nop_arg->max_done_id;
     S->max_done_clk[nop_arg->vt_id] = std::move(nop_arg->max_done_clk);
     check_migr_step3 = check_step3();
-    
+
     // atmost one check should be true
     assert(!(check_move_migr && check_init_migr)
         && !(check_init_migr && check_migr_step3)
@@ -562,7 +588,7 @@ nop(uint64_t thread_id, void *noparg)
         S->shard_node_count[shrd] = nop_arg->shard_node_count[shrd];
     }
     S->migration_mutex.unlock();
-    
+
     // call appropriate function based on check
     if (check_move_migr) {
         migrate_node_step2_req();
@@ -572,11 +598,17 @@ nop(uint64_t thread_id, void *noparg)
         migrate_node_step3();
     }
 
+    /* done migration */
+
+
+    /* permanent deletion of deleted graph objects */
+
     // initiate permanent deletion
     S->permanent_delete_loop(nop_arg->vt_id, nop_arg->outstanding_progs != 0);
 
+
     // record clock; reads go through
-    S->record_completed_tx(nop_arg->vt_id, nop_arg->vclk.clock);
+    S->record_completed_tx(nop_arg->vclk);
 
     // ack to VT
     message::prepare_message(msg, message::VT_NOP_ACK, shard_id, cur_node_count);
@@ -863,6 +895,7 @@ inline void node_prog_loop(
         typename node_prog::node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type func,
         node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> &np)
 {
+    WDEBUG << "running node prog\n";
     assert(np.start_node_params.size() == 1 || !np.cache_value); // if cache value passed in the start node params should be size 1
     //typedef std::tuple<uint64_t, ParamsType, db::element::remote_node> node_params_t; // tuple of (node id, node prog params, prev node) not needed anymore I think
     typedef std::pair<uint64_t, ParamsType> node_params_t;
@@ -1587,18 +1620,30 @@ recv_loop(uint64_t thread_id)
 
             switch (mtype)
             {
-                case message::TX_INIT:
+                case message::TX_INIT: {
                     message::unpack_partial_message(*rec_msg, message::TX_INIT, vt_id, vclk, qts);
                     assert(qts.size() == NUM_SHARDS);
                     assert(vclk.clock.size() == NUM_VTS);
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
-                    if (S->qm.check_wr_request(vclk, qts[shard_id-SHARD_ID_INCR])) {
+                    //if (S->qm.check_wr_request(vclk, qts[shard_id-SHARD_ID_INCR])) {
+                    //    unpack_tx_request(thread_id, (void*)mwrap);
+                    //} else {
+                    //    qreq = new db::queued_request(qts[shard_id-SHARD_ID_INCR], vclk, unpack_tx_request, mwrap);
+                    //    S->qm.enqueue_write_request(vt_id, qreq);
+                    //}
+                    enum db::queue_order tx_order = S->qm.check_wr_request(vclk, qts[shard_id-SHARD_ID_INCR]);
+                    if (tx_order == db::PRESENT) {
                         unpack_tx_request(thread_id, (void*)mwrap);
+                    } else if (tx_order == db::PAST) {
+                        // vt resending tx which has been executed
+                        check_tx_request(thread_id, mwrap);
                     } else {
+                        // enqueue for future execution
                         qreq = new db::queued_request(qts[shard_id-SHARD_ID_INCR], vclk, unpack_tx_request, mwrap);
                         S->qm.enqueue_write_request(vt_id, qreq);
                     }
                     break;
+                }
 
                 case message::NODE_PROG:
                     bool global_req;
@@ -1638,12 +1683,18 @@ recv_loop(uint64_t thread_id)
                     message::unpack_message(*rec_msg, mtype, vt_id, nop_arg->vclk, qts, nop_arg->req_id,
                         nop_arg->done_reqs, nop_arg->max_done_id, nop_arg->max_done_clk,
                         nop_arg->outstanding_progs, nop_arg->shard_node_count);
+                    nop_arg->vt_id = vt_id;
                     assert(nop_arg->vclk.clock.size() == NUM_VTS);
                     assert(nop_arg->max_done_clk.size() == NUM_VTS);
-                    nop_arg->vt_id = vt_id;
-                    // nop goes through queues always
-                    qreq = new db::queued_request(qts[shard_id-SHARD_ID_INCR], nop_arg->vclk, nop, (void*)nop_arg);
-                    S->qm.enqueue_write_request(vt_id, qreq);
+                    enum db::queue_order tx_order = S->qm.check_wr_request(vclk, qts[shard_id-SHARD_ID_INCR]);
+                    if (tx_order == db::PAST) {
+                        // check and possibly reexec nop, update last clock
+                        check_nop(thread_id, nop_arg);
+                    } else {
+                        // nop goes through queues for both PRESENT and FUTURE
+                        qreq = new db::queued_request(qts[shard_id-SHARD_ID_INCR], nop_arg->vclk, nop, (void*)nop_arg);
+                        S->qm.enqueue_write_request(vt_id, qreq);
+                    }
                     break;
                 }
 

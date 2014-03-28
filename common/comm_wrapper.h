@@ -42,7 +42,7 @@ class comm_wrapper
                 weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster, uint64_t my_id);
                 virtual ~weaver_mapper() throw () {}
                 virtual bool lookup(uint64_t server_id, po6::net::location *loc);
-                void reconfigure(configuration &new_config, uint64_t &now_primary);
+                void reconfigure(configuration &new_config, uint64_t &now_primary, uint64_t &changed);
                 void client_configure(std::unordered_map<uint64_t, po6::net::location> &cluster) { mlist = cluster; }
 
             private:
@@ -63,7 +63,9 @@ class comm_wrapper
         comm_wrapper(uint64_t bbid, int nthr, int timeout, bool client);
         void init(configuration &config);
         void client_init();
-        uint64_t reconfigure(configuration &config);
+        void pause() { bb->pause(); }
+        void unpause() { bb->unpause(); }
+        uint64_t reconfigure(configuration &config, uint64_t &changed);
         std::shared_ptr<po6::net::location> get_loc() { return loc; }
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
