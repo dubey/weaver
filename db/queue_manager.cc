@@ -99,7 +99,7 @@ queue_manager :: check_wr_request(vc::vclock &vclk, uint64_t qt)
 // execute a single queued request which can be run now, and return true
 // else return false
 bool
-queue_manager :: exec_queued_request(uint64_t thread_id)
+queue_manager :: exec_queued_request(db::hyper_stub *hstub)
 {
     queue_mutex.lock(); // prevent more jobs from being added
     queued_request *req = get_rw_req();
@@ -107,7 +107,7 @@ queue_manager :: exec_queued_request(uint64_t thread_id)
     if (req == NULL) {
         return false;
     }
-    (*req->func)(thread_id, req->arg);
+    (*req->func)(hstub, req->arg);
     // queue timestamp is incremented by the thread, upon finishing
     // because the decision to increment or not is based on thread-specific knowledge
     // moreover, when to increment can also be decided by thread only

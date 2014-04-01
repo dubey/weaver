@@ -114,7 +114,7 @@ namespace coordinator
             void restore_backup();
             void reconfigure();
             bool unpack_tx(message::message &msg, transaction::pending_tx &tx,
-                uint64_t client_id, int tid);
+                uint64_t client_id, nmap::nmap_stub*);
             uint64_t generate_id();
     };
 
@@ -246,7 +246,7 @@ namespace coordinator
     // similarly edge ids are not checked
     inline bool
     timestamper :: unpack_tx(message::message &msg, transaction::pending_tx &tx,
-        uint64_t client_id, int thread_id)
+        uint64_t client_id, nmap::nmap_stub *nmap_cl)
     {
         message::unpack_client_tx(msg, tx);
         tx.id = generate_id();
@@ -295,11 +295,11 @@ namespace coordinator
         }
 
         // insert mappings
-        nmap_client[thread_id]->put_mappings(mappings_to_put);
+        nmap_cl->put_mappings(mappings_to_put);
 
         // get mappings
         if (!mappings_to_get.empty()) {
-            for (auto &toAdd: nmap_client[thread_id]->get_mappings(mappings_to_get)) {
+            for (auto &toAdd: nmap_cl->get_mappings(mappings_to_get)) {
                 mappings_to_put.emplace(toAdd);
             }
         }

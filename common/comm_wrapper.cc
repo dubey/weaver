@@ -22,10 +22,10 @@ comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *
     uint64_t incr_id = ID_INCR + server_id;
     if (mlist.find(incr_id) != mlist.end()) {
         *loc = mlist.at(incr_id);
-        WDEBUG << "lookup for server id " << server_id << " returned ip: " << loc->address << ":" << loc->port << std::endl;
         return true;
     } else {
         WDEBUG << "returning false from mapper lookup for id " << server_id << ", incr id " << incr_id << std::endl;
+        while(1);
         return false;
     }
 }
@@ -72,7 +72,7 @@ comm_wrapper :: init(configuration &config)
     uint64_t changed = UINT64_MAX;
     wmap.reset(new weaver_mapper(cluster));
     reconfigure(config, changed);
-    WDEBUG << "Busybee attaching to loc " << loc->address << ":" << loc->port << std::endl;
+    WDEBUG << "attaching to loc " << loc->address << ":" << loc->port << std::endl;
     bb.reset(new busybee_mta(wmap.get(), *loc, bb_id+ID_INCR, num_threads));
     bb->set_timeout(timeout);
 }

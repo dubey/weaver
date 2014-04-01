@@ -53,7 +53,7 @@ end_program(int signum)
 // for all writes, node mapper lookups should have already been performed
 // for create requests, instead of lookup an entry for new handle should have been inserted
 inline void
-begin_transaction(transaction::pending_tx &tx, int thread_id)
+begin_transaction(transaction::pending_tx &tx, coordinator::hyper_stub *hstub)
 {
     typedef std::vector<transaction::pending_tx> tx_vec_t;
     std::shared_ptr<tx_vec_t> tx_vec(new tx_vec_t(NUM_SHARDS, transaction::pending_tx()));
@@ -81,7 +81,7 @@ begin_transaction(transaction::pending_tx &tx, int thread_id)
     std::unique_ptr<e::buffer> buf(e::buffer::create(buf_sz));
     e::buffer::packer packer = buf->pack_at(0);
     message::pack_buffer(packer, tx);
-    vts->hstub[thread_id]->put_tx(tx.id, buf);
+    hstub->put_tx(tx.id, buf);
     vts->tx_prog_mutex.lock();
     vts->outstanding_tx.emplace(tx.id, cur_tx);
     vts->tx_prog_mutex.unlock();
@@ -100,12 +100,12 @@ begin_transaction(transaction::pending_tx &tx, int thread_id)
 
 // decrement reply count. if all replies have been received, ack to client
 inline void
-end_transaction(uint64_t tx_id, int thread_id)
+end_transaction(uint64_t tx_id, coordinator::hyper_stub *hstub)
 {
     vts->tx_prog_mutex.lock();
     if (--vts->outstanding_tx.at(tx_id).count == 0) {
         // done tx
-        vts->hstub[thread_id]->del_tx(tx_id);
+        hstub->del_tx(tx_id);
         uint64_t client_id = vts->outstanding_tx[tx_id].client;
         vts->outstanding_tx.erase(tx_id);
         vts->tx_prog_mutex.unlock();
@@ -234,7 +234,7 @@ timer_function()
 // unpack client message for a node program, prepare shard msges, and send out
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
-    unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, int thread_id)
+    unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, nmap::nmap_stub *nmap_cl)
 {
     node_prog::prog_type pType;
     std::vector<std::pair<uint64_t, ParamsType>> initial_args;
@@ -259,7 +259,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         mappings_to_get.insert(c_id);
     }
     if (!mappings_to_get.empty()) {
-        auto results = vts->nmap_client[thread_id]->get_mappings(mappings_to_get);
+        auto results = nmap_cl->get_mappings(mappings_to_get);
         assert(results.size() == mappings_to_get.size());
         for (auto &toAdd : results) {
             request_element_mappings.emplace(toAdd);
@@ -352,6 +352,8 @@ server_loop(int thread_id)
     std::unique_ptr<message::message> msg;
     uint64_t sender, tx_id;
     node_prog::prog_type pType;
+    coordinator::hyper_stub *hstub = vts->hstub[thread_id];
+    nmap::nmap_stub *nmap_cl = vts->nmap_client[thread_id];
 
     while (true) {
         msg.reset(new message::message());
@@ -369,11 +371,11 @@ server_loop(int thread_id)
                 // client messages
                 case message::CLIENT_TX_INIT: {
                     transaction::pending_tx tx;
-                    if (!vts->unpack_tx(*msg, tx, sender, thread_id)) {
+                    if (!vts->unpack_tx(*msg, tx, sender, nmap_cl)) {
                         message::prepare_message(*msg, message::CLIENT_TX_FAIL);
                         vts->comm.send(sender, msg->buf);
                     } else {
-                        begin_transaction(tx, thread_id);
+                        begin_transaction(tx, hstub);
                     }
                     break;
                 }
@@ -447,7 +449,7 @@ server_loop(int thread_id)
 
                 case message::TX_DONE:
                     message::unpack_message(*msg, message::TX_DONE, tx_id);
-                    end_transaction(tx_id, thread_id);
+                    end_transaction(tx_id, hstub);
                     break;
 
                 case message::START_MIGR: {
@@ -483,7 +485,7 @@ server_loop(int thread_id)
 
                 case message::CLIENT_NODE_PROG_REQ:
                     message::unpack_partial_message(*msg, message::CLIENT_NODE_PROG_REQ, pType);
-                    node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), sender, thread_id);
+                    node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), sender, nmap_cl);
                     break;
 
                 // node program response from a shard
