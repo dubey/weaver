@@ -34,7 +34,7 @@ namespace coordinator
         public:
             hyper_stub(uint64_t sid) : vt_id(sid) { }
             void restore_backup(std::unordered_map<uint64_t, transaction::pending_tx> &txs);
-            void put_tx(uint64_t tx_id, message::message &tx_msg);
+            void put_tx(uint64_t tx_id, std::unique_ptr<e::buffer> &buf);
             void del_tx(uint64_t tx_id);
     };
 }

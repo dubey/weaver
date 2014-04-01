@@ -197,6 +197,8 @@ namespace db
             // Fault tolerance
         public:
             std::vector<hyper_stub*> hstub;
+            bool restore_done;
+            po6::threads::cond restore_cv;
             void restore_backup();
     };
 
@@ -224,6 +226,8 @@ namespace db
         , max_done_clk(NUM_VTS, vc::vclock_t())
         , msg_count(0)
         , prog_state()
+        , restore_done(false)
+        , restore_cv(&restore_mutex)
     {
         assert(NUM_VTS == KRONOS_NUM_VTS);
         message::prog_state = &prog_state;
@@ -842,9 +846,11 @@ namespace db
     {
         std::unordered_map<uint64_t, uint64_t> qts_map;
         std::unordered_map<uint64_t, vc::vclock_t> last_clocks;
+        restore_mutex.lock();
         hstub.back()->restore_backup(qts_map, last_clocks, nodes, edge_map, &update_mutex);
         qm.restore_backup(qts_map, last_clocks);
-        restore_mutex.lock();
+        restore_done = true;
+        restore_cv.signal();
         restore_mutex.unlock();
     }
 }

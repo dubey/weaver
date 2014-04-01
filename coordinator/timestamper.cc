@@ -53,7 +53,7 @@ end_program(int signum)
 // for all writes, node mapper lookups should have already been performed
 // for create requests, instead of lookup an entry for new handle should have been inserted
 inline void
-begin_transaction(transaction::pending_tx &tx)
+begin_transaction(transaction::pending_tx &tx, int thread_id)
 {
     typedef std::vector<transaction::pending_tx> tx_vec_t;
     std::shared_ptr<tx_vec_t> tx_vec(new tx_vec_t(NUM_SHARDS, transaction::pending_tx()));
@@ -75,7 +75,13 @@ begin_transaction(transaction::pending_tx &tx)
             cur_tx.count++;
         }
     }
+
     // record txs as outstanding for reply bookkeeping and fault tolerance
+    uint64_t buf_sz = message::size(tx);
+    std::unique_ptr<e::buffer> buf(e::buffer::create(buf_sz));
+    e::buffer::packer packer = buf->pack_at(0);
+    message::pack_buffer(packer, tx);
+    vts->hstub[thread_id]->put_tx(tx.id, buf);
     vts->tx_prog_mutex.lock();
     vts->outstanding_tx.emplace(tx.id, cur_tx);
     vts->tx_prog_mutex.unlock();
@@ -367,7 +373,7 @@ server_loop(int thread_id)
                         message::prepare_message(*msg, message::CLIENT_TX_FAIL);
                         vts->comm.send(sender, msg->buf);
                     } else {
-                        begin_transaction(tx);
+                        begin_transaction(tx, thread_id);
                     }
                     break;
                 }
@@ -391,12 +397,15 @@ server_loop(int thread_id)
                     break;
 
                 case message::VT_NOP_ACK: {
-                    uint64_t shard_node_count;
-                    message::unpack_message(*msg, message::VT_NOP_ACK, sender, shard_node_count);
+                    uint64_t shard_node_count, nop_qts, sid;
+                    message::unpack_message(*msg, message::VT_NOP_ACK, sender, nop_qts, shard_node_count);
+                    sid = sender - SHARD_ID_INCR;
                     vts->periodic_update_mutex.lock();
-                    vts->shard_node_count[sender - SHARD_ID_INCR] = shard_node_count;
-
-                    vts->to_nop.set(sender - SHARD_ID_INCR);
+                    if (nop_qts > vts->nop_ack_qts[sid]) {
+                        vts->shard_node_count[sid] = shard_node_count;
+                        vts->to_nop.set(sid);
+                        vts->nop_ack_qts[sid] = nop_qts;
+                    }
                     vts->periodic_update_mutex.unlock();
                     break;
                 }

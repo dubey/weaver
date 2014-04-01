@@ -68,6 +68,7 @@ namespace coordinator
             vc::qtimestamp_t qts; // queue timestamp
             uint64_t clock_update_acks;
             std::bitset<NUM_SHARDS> to_nop;
+            uint64_t nop_ack_qts[NUM_SHARDS];
 
             // write transactions
             std::unordered_map<uint64_t, current_tx> outstanding_tx;
@@ -150,6 +151,9 @@ namespace coordinator
             nmap_client.push_back(new nmap::nmap_stub());
         }
         to_nop.set(); // set to_nop to 1 for each shard
+        for (int i = 0; i < NUM_SHARDS; i++) {
+            nop_ack_qts[i] = 0;
+        }
         for (int i = 0; i < NUM_THREADS; i++) {
             hstub.push_back(new hyper_stub(vt_id));
         }
@@ -198,14 +202,38 @@ namespace coordinator
             backup_cond.signal();
         }
 
-        // resend unacked transactions
+        // resend unacked transactions and nop for new shard
+        uint64_t max_qts = 0;
+        bool pending_tx = false;
         if (changed >= SHARD_ID_INCR && changed < (SHARD_ID_INCR+NUM_SHARDS)) {
+            // transactions
             uint64_t sid = changed - SHARD_ID_INCR;
             for (auto &entry: outstanding_tx) {
-                if (!(*entry.second.tx_vec)[sid].writes.empty()) {
+                std::vector<transaction::pending_tx> &tv = *entry.second.tx_vec;
+                if (!tv[sid].writes.empty()) {
+                    pending_tx = true;
                     // TODO resend transactions
-                    // TODO figure out nop situation
+                    if (tv[sid].writes.back()->qts[sid] > max_qts) {
+                        max_qts = tv[sid].writes.back()->qts[sid];
+                    }
                 }
+            }
+            assert(qts[sid] >= max_qts);
+
+            // nop
+            if (!to_nop[sid]) {
+                nop_ack_qts[sid] = qts[sid]; // artificially 'ack' old nop
+                to_nop.set(sid);
+                WDEBUG << "resetting to_nop for shard " << changed << std::endl;
+            }
+
+            if (!pending_tx) {
+                // only nop was pending, if any
+                // send msg to advance clock
+                message::message msg;
+                message::prepare_message(msg, message::SET_QTS, vt_id, qts[sid]);
+                comm.send(changed, msg.buf);
+                WDEBUG << "sent set qts msg to shard " << changed << std::endl;
             }
         }
 
@@ -222,7 +250,6 @@ namespace coordinator
     {
         message::unpack_client_tx(msg, tx);
         tx.id = generate_id();
-        hstub[thread_id]->put_tx(tx.id, msg);
         tx.client_id = client_id;
 
         // lookup mappings

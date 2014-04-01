@@ -95,6 +95,8 @@ namespace message
         VT_NOP,
         VT_NOP_ACK,
         DONE_MIGR,
+        // fault tolerance
+        SET_QTS,
 
         ERROR
     };
@@ -293,6 +295,15 @@ namespace message
              + size(*t.value);
         }
         return sz;
+    }
+
+    inline uint64_t
+    size(const transaction::pending_tx &t)
+    {
+        return size(t.id)
+             + size(t.client_id)
+             + size(t.writes)
+             + size(t.timestamp);
     }
 
     template <typename T1, typename T2>
@@ -514,6 +525,15 @@ namespace message
             pack_buffer(packer, *t.key);
             pack_buffer(packer, *t.value);
         }
+    }
+
+    inline void
+    pack_buffer(e::buffer::packer &packer, const transaction::pending_tx &t)
+    {
+        pack_buffer(packer, t.id);
+        pack_buffer(packer, t.client_id);
+        pack_buffer(packer, t.writes);
+        pack_buffer(packer, t.timestamp);
     }
 
     template <typename T1, typename T2>
@@ -806,6 +826,15 @@ namespace message
             unpack_buffer(unpacker, *t.key);
             unpack_buffer(unpacker, *t.value);
         }
+    }
+
+    inline void
+    unpack_buffer(e::unpacker &unpacker, transaction::pending_tx &t)
+    {
+        unpack_buffer(unpacker, t.id);
+        unpack_buffer(unpacker, t.client_id);
+        unpack_buffer(unpacker, t.writes);
+        unpack_buffer(unpacker, t.timestamp);
     }
 
     template <typename T1, typename T2>

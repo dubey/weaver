@@ -35,15 +35,12 @@ class comm_wrapper
         {
             private:
                 std::unordered_map<uint64_t, po6::net::location> mlist; // active servers only
-                uint64_t active_server_idx[NUM_VTS+NUM_SHARDS]; // for each vt/shard, index of the active server
-                configuration config;
 
             public:
-                weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster, uint64_t my_id);
+                weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster) { mlist = cluster; }
                 virtual ~weaver_mapper() throw () {}
                 virtual bool lookup(uint64_t server_id, po6::net::location *loc);
-                void reconfigure(configuration &new_config, uint64_t &now_primary, uint64_t &changed);
-                void client_configure(std::unordered_map<uint64_t, po6::net::location> &cluster) { mlist = cluster; }
+                void server_alive(uint64_t id, po6::net::location loc) { mlist[id] = loc; }
 
             private:
                 weaver_mapper(const weaver_mapper&);
@@ -54,6 +51,8 @@ class comm_wrapper
         std::unique_ptr<busybee_mta> bb;
         std::unique_ptr<weaver_mapper> wmap;
         std::shared_ptr<po6::net::location> loc;
+        uint64_t active_server_idx[NUM_VTS+NUM_SHARDS]; // for each vt/shard, index of the active server
+        configuration config;
         std::unordered_map<uint64_t, po6::net::location> cluster;
         uint64_t bb_id;
         int num_threads;

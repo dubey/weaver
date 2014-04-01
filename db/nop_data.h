@@ -24,6 +24,7 @@ namespace db
     {
         uint64_t vt_id;
         vc::vclock vclk;
+        vc::qtimestamp_t qts;
         uint64_t req_id;
         std::vector<std::pair<uint64_t, node_prog::prog_type>> done_reqs;
         uint64_t max_done_id;

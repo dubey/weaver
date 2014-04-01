@@ -13,6 +13,7 @@
 
 #include <unordered_map>
 
+#define weaver_debug_
 #include "common/event_order.h"
 #include "db/queue_manager.h"
 
@@ -146,6 +147,19 @@ queue_manager :: restore_backup(std::unordered_map<uint64_t, uint64_t> &map_qts,
         qts[i] = map_qts[i];
         last_clocks[i] = map_lstclk[i];
     }
+}
+
+void
+queue_manager :: set_qts(uint64_t vt_id, uint64_t rec_qts)
+{
+    queue_mutex.lock();
+    if (qts[vt_id] < rec_qts) {
+        WDEBUG << "Current qts for vt " << vt_id << " is " << qts[vt_id] << ", setting to " << rec_qts << std::endl;
+        qts[vt_id] = rec_qts;
+    } else {
+        WDEBUG << "set qts from vt " << vt_id << " not needed, current qts " << qts[vt_id] << ", rec qts " << rec_qts << std::endl;
+    }
+    queue_mutex.unlock();
 }
 
 bool

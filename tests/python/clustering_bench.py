@@ -38,7 +38,7 @@ num_requests = 2000
 #num_nodes = 10876 # snap p2pgnutella04
 #num_nodes = 81306 # snap twitter-combined
 #num_nodes = 107600 # snap gplus-combined
-num_nodes = 1000
+num_nodes = 2000
 # node handles are range(0, num_nodes)
 num_vts = 1
 num_clients = 8

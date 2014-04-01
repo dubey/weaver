@@ -418,7 +418,7 @@ unpack_migrate_request(uint64_t thread_id, void *req)
 }
 
 void
-check_tx_request(uint64_t , db::message_wrapper *)
+check_tx_request(uint64_t , db::message_wrapper *request)
 {
 }
 
@@ -611,7 +611,7 @@ nop(uint64_t thread_id, void *noparg)
     S->record_completed_tx(nop_arg->vclk);
 
     // ack to VT
-    message::prepare_message(msg, message::VT_NOP_ACK, shard_id, cur_node_count);
+    message::prepare_message(msg, message::VT_NOP_ACK, shard_id, nop_arg->qts[shard_id-SHARD_ID_INCR], cur_node_count);
     S->comm.send(nop_arg->vt_id, msg.buf);
     free(nop_arg);
 }
@@ -895,7 +895,6 @@ inline void node_prog_loop(
         typename node_prog::node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type func,
         node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> &np)
 {
-    WDEBUG << "running node prog\n";
     assert(np.start_node_params.size() == 1 || !np.cache_value); // if cache value passed in the start node params should be size 1
     //typedef std::tuple<uint64_t, ParamsType, db::element::remote_node> node_params_t; // tuple of (node id, node prog params, prev node) not needed anymore I think
     typedef std::pair<uint64_t, ParamsType> node_params_t;
@@ -1684,17 +1683,14 @@ recv_loop(uint64_t thread_id)
                         nop_arg->done_reqs, nop_arg->max_done_id, nop_arg->max_done_clk,
                         nop_arg->outstanding_progs, nop_arg->shard_node_count);
                     nop_arg->vt_id = vt_id;
+                    nop_arg->qts = qts;
                     assert(nop_arg->vclk.clock.size() == NUM_VTS);
                     assert(nop_arg->max_done_clk.size() == NUM_VTS);
                     enum db::queue_order tx_order = S->qm.check_wr_request(vclk, qts[shard_id-SHARD_ID_INCR]);
-                    if (tx_order == db::PAST) {
-                        // check and possibly reexec nop, update last clock
-                        check_nop(thread_id, nop_arg);
-                    } else {
-                        // nop goes through queues for both PRESENT and FUTURE
-                        qreq = new db::queued_request(qts[shard_id-SHARD_ID_INCR], nop_arg->vclk, nop, (void*)nop_arg);
-                        S->qm.enqueue_write_request(vt_id, qreq);
-                    }
+                    assert(tx_order != db::PAST);
+                    // nop goes through queues for both PRESENT and FUTURE
+                    qreq = new db::queued_request(qts[shard_id-SHARD_ID_INCR], nop_arg->vclk, nop, (void*)nop_arg);
+                    S->qm.enqueue_write_request(vt_id, qreq);
                     break;
                 }
 
@@ -1746,6 +1742,19 @@ recv_loop(uint64_t thread_id)
                     S->comm.send(vt_id, rec_msg->buf);
                     break;
                 }
+                
+                case message::SET_QTS: {
+                    uint64_t rec_qts;
+                    message::unpack_message(*rec_msg, message::SET_QTS, vt_id, rec_qts);
+                    WDEBUG << "got set qts from vt " << vt_id << ", qts " << rec_qts << std::endl;
+                    S->restore_mutex.lock();
+                    while (!S->restore_done) {
+                        S->restore_cv.wait();
+                    }
+                    S->qm.set_qts(vt_id, rec_qts);
+                    S->restore_mutex.unlock();
+                    break;
+                }
 
                 case message::EXIT_WEAVER:
                     exit(0);
@@ -1754,7 +1763,6 @@ recv_loop(uint64_t thread_id)
                     WDEBUG << "unexpected msg type " << mtype << std::endl;
             }
             rec_msg.reset(new message::message());
-            //rec_msg->type = message::ERROR;
         }
 
         // execute all queued requests that can be executed now

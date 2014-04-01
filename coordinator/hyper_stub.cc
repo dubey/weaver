@@ -61,7 +61,7 @@ hyper_stub :: restore_backup(std::unordered_map<uint64_t, transaction::pending_t
 }
 
 void
-hyper_stub :: put_tx(uint64_t tx_id, message::message &tx_msg)
+hyper_stub :: put_tx(uint64_t tx_id, std::unique_ptr<e::buffer> &buf)
 {
     std::vector<const char*> spaces;
     std::vector<hyperdex_client_attribute*> attrs(2, NULL);
@@ -80,8 +80,8 @@ hyper_stub :: put_tx(uint64_t tx_id, message::message &tx_msg)
     funcs.emplace_back(&hyperdex::Client::set_add);
     keys.emplace_back(vt_id);
     attrs[1]->attr = attr;
-    attrs[1]->value = (const char*)tx_msg.buf->data();
-    attrs[1]->value_sz = tx_msg.buf->size();
+    attrs[1]->value = (const char*)buf->data();
+    attrs[1]->value_sz = buf->size();
     attrs[1]->datatype = map_dtype;
     spaces.emplace_back(vt_map_space);
     funcs.emplace_back(&hyperdex::Client::put);

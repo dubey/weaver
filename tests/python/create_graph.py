@@ -20,7 +20,7 @@ from test_base import test_graph
 
 # creating line graph
 nodes = []
-num_nodes = 10000
+num_nodes = 2000
 num_clients = 1
 clients = []
 for i in range(num_clients):

@@ -63,6 +63,7 @@ namespace db
             void record_completed_tx(vc::vclock &tx_clk);
             // fault tolerance
             void restore_backup(std::unordered_map<uint64_t, uint64_t> &qts, std::unordered_map<uint64_t, vc::vclock_t> &last_clocks);
+            void set_qts(uint64_t vt_id, uint64_t rec_qts);
     };
 
 }
