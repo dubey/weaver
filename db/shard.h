@@ -339,6 +339,10 @@ namespace db
         if (nodes.find(node) != nodes.end()) {
             n = nodes[node];
             n->waiters++;
+            // first wait for node to become free
+            while (n->in_use) {
+                n->cv.wait();
+            }
             // check if write exists in queue---in case we are recovering from failure
             bool exists = false;
             for (auto &p: n->tx_queue) {
@@ -347,14 +351,18 @@ namespace db
                     break;
                 }
             }
-            if (exists) {
+            if (exists && n->tx_queue.front() != comp) {
+                // write exists in queue, but cannot be executed right now
                 while (n->in_use || n->tx_queue.front() != comp) {
                     n->cv.wait();
                 }
-            } // if doesn't exist, then execute write immediately
+                n->tx_queue.pop_front();
+            } else if (exists) {
+                // write exists in queue and is the first
+                n->tx_queue.pop_front();
+            }
             n->waiters--;
             n->in_use = true;
-            n->tx_queue.pop_front();
         }
         update_mutex.unlock();
 
