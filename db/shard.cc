@@ -247,7 +247,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
     uint64_t edge_count = 1;
     uint64_t max_node_id = 0;
     uint64_t node_count = 0;
-    std::thread *nmap_threads[8];
+    //std::thread *nmap_threads[8];
     std::vector<std::unordered_map<uint64_t, uint64_t>> node_maps(8, std::unordered_map<uint64_t, uint64_t>());
     vc::vclock zero_clk(0, 0);
 
@@ -277,26 +277,30 @@ load_graph(db::graph_file_format format, const char *graph_file)
                         n = S->acquire_node_nonlocking(node0);
                         if (n == NULL) {
                             n = S->create_node(0, node0, zero_clk, false, true);
-                            node_maps[node_count++ % 8][node0] = shard_id;
+                            //node_maps[node_count++ % 8][node0] = shard_id;
+                            node_maps[0][node0] = shard_id;
                         }
                         S->create_edge_nonlocking(0, n, edge_id, node1, loc1, zero_clk, true);
                     }
                     if (loc1 == shard_id) {
                         if (!S->node_exists_nonlocking(node1)) {
                             S->create_node(0, node1, zero_clk, false, true);
-                            node_maps[node_count++ % 8][node1] = shard_id;
+                            //node_maps[node_count++ % 8][node1] = shard_id;
+                            node_maps[0][node1] = shard_id;
                         }
                     }
                 }
             }
-            for (int i = 0; i < 8; i++) {
-                nmap_threads[i] = new std::thread(init_nmap, &node_maps[i]);
-            }
+            WDEBUG << "going to put " << node_maps[0].size() << " entries in node map\n";
+            init_nmap(&node_maps[0]);
+            //for (int i = 0; i < 8; i++) {
+            //    nmap_threads[i] = new std::thread(init_nmap, &node_maps[i]);
+            //}
             S->bulk_load_persistent();
-            for (int i = 0; i < 8; i++) {
-                nmap_threads[i]->join();
-                delete nmap_threads[i];
-            }
+            //for (int i = 0; i < 8; i++) {
+            //    nmap_threads[i]->join();
+            //    delete nmap_threads[i];
+            //}
             break;
         }
 
@@ -346,14 +350,14 @@ load_graph(db::graph_file_format format, const char *graph_file)
                     }
                 }
             }
-            for (int i = 0; i < 8; i++) {
-                nmap_threads[i] = new std::thread(init_nmap, &node_maps[i]);
-            }
+            //for (int i = 0; i < 8; i++) {
+            //    nmap_threads[i] = new std::thread(init_nmap, &node_maps[i]);
+            //}
             S->bulk_load_persistent();
-            for (int i = 0; i < 8; i++) {
-                nmap_threads[i]->join();
-                delete nmap_threads[i];
-            }
+            //for (int i = 0; i < 8; i++) {
+            //    nmap_threads[i]->join();
+            //    delete nmap_threads[i];
+            //}
             break;
         }
 
@@ -1873,7 +1877,8 @@ install_signal_handler(int signum, void (*handler)(int))
 {
     struct sigaction sa;
     sa.sa_handler = handler;
-    sigemptyset(&sa.sa_mask);
+    sigfillset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
     int ret = sigaction(signum, &sa, NULL);
     assert(ret == 0);
 }
@@ -1892,6 +1897,17 @@ main(int argc, char *argv[])
     install_signal_handler(SIGHUP, end_program);
     install_signal_handler(SIGTERM, end_program);
 
+    sigset_t ss;
+    if (sigfillset(&ss) < 0) {
+        WDEBUG << "sigfillset failed" << std::endl;
+        return -1;
+    }
+    //sigdelset(&ss, SIGPROF);
+    if (pthread_sigmask(SIG_SETMASK, &ss, NULL) < 0) {
+        WDEBUG << "pthread sigmask failed" << std::endl;
+        return -1;
+    }
+
     // shard setup
     shard_id = atoi(argv[1]);
     if (argc == 3) {
@@ -1902,8 +1918,7 @@ main(int argc, char *argv[])
     }
 
     // server manager link
-    std::thread sm_thr(server_manager_link_loop,
-        po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT));
+    std::thread sm_thr(server_manager_link_loop, po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT));
     sm_thr.detach();
 
     S->config_mutex.lock();

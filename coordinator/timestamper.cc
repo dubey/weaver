@@ -625,7 +625,8 @@ install_signal_handler(int signum, void (*handler)(int))
 {
     struct sigaction sa;
     sa.sa_handler = handler;
-    sigemptyset(&sa.sa_mask);
+    sigfillset(&sa.sa_mask);
+    sa.sa_flags = SA_RESTART;
     int ret = sigaction(signum, &sa, NULL);
     assert(ret == 0);
 }
@@ -642,6 +643,17 @@ main(int argc, char *argv[])
     install_signal_handler(SIGINT, end_program);
     install_signal_handler(SIGHUP, end_program);
     install_signal_handler(SIGTERM, end_program);
+
+    sigset_t ss;
+    if (sigfillset(&ss) < 0) {
+        WDEBUG << "sigfillset failed" << std::endl;
+        return -1;
+    }
+    sigdelset(&ss, SIGPROF);
+    if (pthread_sigmask(SIG_SETMASK, &ss, NULL) < 0) {
+        WDEBUG << "pthread sigmask failed" << std::endl;
+        return -1;
+    }
 
     // vt setup
     vt_id = atoi(argv[1]);

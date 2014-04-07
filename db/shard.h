@@ -268,7 +268,7 @@ namespace db
         }
         uint64_t changed = UINT64_MAX;
         if (comm.reconfigure(config, changed) == server.get()) {
-            if (!active_backup) {
+            if (!active_backup && server.get() > (NUM_VTS+NUM_SHARDS)) {
                 // this server is now primary for the shard
                 active_backup = true;
                 restore_backup();

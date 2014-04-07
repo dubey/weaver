@@ -238,7 +238,7 @@ server_manager_link_wrapper :: maintain_link()
         {
             reset_sleep();
             exit_status = false;
-            WDEBUG << "server manager replicant timeout or interrupted" << std::endl;
+            WDEBUG << "server manager " << status << std::endl;
             break;
         }
         else if (id < 0 && (status == REPLICANT_BACKOFF ||
