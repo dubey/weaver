@@ -28,12 +28,13 @@ num_requests = 5000
 num_nodes = 81306 # snap twitter-combined
 # node handles are range(0, num_nodes)
 num_vts = 1
-num_clients = 8
+num_clients = 64
 
 def exec_reads(reqs, cl, exec_time, idx):
     global num_started
     global cv
     global num_clients
+    global num_finished
     with cv:
         while num_started < num_clients:
             cv.wait()
@@ -60,20 +61,22 @@ for i in range(num_clients):
 # with p = 0.50 nodes have 0 props
 # with p = 0.25 nodes have 1 props
 # with p = 0.25 nodes have 2 props
-write_nodes = (num_nodes / 1000) * 1000
-tx_id = 0
-c = clients[0]
-tx_sz = 1000
-for n in range(write_nodes):
-    if n % tx_sz == 0:
-        tx_id = c.begin_tx()
-    coin_toss = random.random()
-    if coin_toss > 0.50:
-        c.set_node_property(tx_id, n, 'color', 'blue')
-    if coin_toss > 0.75:
-        c.set_node_property(tx_id, n, 'type', 'photo')
-    if n % tx_sz == (tx_sz-1):
-        c.end_tx(tx_id)
+if len(sys.argv) > 1:
+    write_nodes = (num_nodes / 1000) * 1000
+    tx_id = 0
+    c = clients[0]
+    tx_sz = 1000
+    for n in range(write_nodes):
+        if n % tx_sz == 0:
+            tx_id = c.begin_tx()
+        coin_toss = random.random()
+        if coin_toss > 0.50:
+            c.set_node_property(tx_id, n, 'color', 'blue')
+        if coin_toss > 0.75:
+            c.set_node_property(tx_id, n, 'type', 'photo')
+        if n % tx_sz == (tx_sz-1):
+            c.end_tx(tx_id)
+            print 'initial write thread processed ' + str(n+1) + ' nodes'
 
 reqs = []
 for i in range(num_clients):

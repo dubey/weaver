@@ -98,7 +98,7 @@ end_transaction(uint64_t tx_id, int thread_id)
     vts->tx_prog_mutex.lock();
     if (--vts->outstanding_tx.at(tx_id).count == 0) {
         // done tx
-        vts->hstub[thread_id]->del_tx(tx_id);
+        //vts->hstub[thread_id]->del_tx(tx_id);
         uint64_t client_id = vts->outstanding_tx[tx_id].client;
         vts->outstanding_tx.erase(tx_id);
         vts->tx_prog_mutex.unlock();

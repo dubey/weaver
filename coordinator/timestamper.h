@@ -199,7 +199,7 @@ namespace coordinator
     {
         message::unpack_client_tx(msg, tx);
         tx.id = generate_id();
-        hstub[thread_id]->put_tx(tx.id, msg);
+        //hstub[thread_id]->put_tx(tx.id, msg);
         tx.client_id = client_id;
 
         // lookup mappings

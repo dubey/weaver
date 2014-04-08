@@ -283,7 +283,7 @@ namespace db
         std::unordered_set<uint64_t> empty_set;
         uint64_t cnt = 0;
         for (auto &x: nodes) {
-            hstub[0]->put_node(*x.second, empty_set);
+            //hstub[0]->put_node(*x.second, empty_set);
             if (++cnt % 10000 == 0) {
                 WDEBUG << "wrote " << cnt << " nodes to HyperDex" << std::endl;
             }
@@ -551,7 +551,7 @@ namespace db
         db::element::property p(key, value, vclk);
         n->base.check_and_add_property(p);
         // store in Hyperdex
-        hstub[thread_id]->update_properties(*n);
+        //hstub[thread_id]->update_properties(*n);
     }
 
     inline void
@@ -581,7 +581,7 @@ namespace db
         db::element::property p(key, value, vclk);
         e->base.check_and_add_property(p);
         // store in Hyperdex
-        hstub[thread_id]->add_out_edge(*n, e);
+        //hstub[thread_id]->add_out_edge(*n, e);
     }
 
     inline void
