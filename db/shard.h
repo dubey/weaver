@@ -445,7 +445,7 @@ namespace db
         n->base.update_del_time(tdel);
         n->updated = true;
         // store in Hyperdex
-        hstub[thread_id]->update_del_time(*n);
+        //hstub[thread_id]->update_del_time(*n);
     }
 
     inline void
@@ -531,7 +531,7 @@ namespace db
             }
         edge_map_mutex.unlock();        
         // store in Hyperdex
-        hstub[thread_id]->add_out_edge(*n, e);
+        //hstub[thread_id]->add_out_edge(*n, e);
     }
 
     inline void
