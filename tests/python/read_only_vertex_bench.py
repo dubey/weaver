@@ -24,11 +24,11 @@ import libclient as client
 num_started = 0
 num_finished = 0
 cv = threading.Condition()
-num_requests = 5000
+num_requests = 3000
 num_nodes = 81306 # snap twitter-combined
 # node handles are range(0, num_nodes)
-num_vts = 1
-num_clients = 64
+num_vts = 2
+num_clients = 512
 
 def exec_reads(reqs, cl, exec_time, idx):
     global num_started

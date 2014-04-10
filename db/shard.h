@@ -519,6 +519,16 @@ namespace db
         e->base.update_del_time(tdel);
         n->updated = true;
         n->dependent_del++;
+        // update edge map
+        uint64_t remote = e->nbr.id;
+        edge_map_mutex.lock();
+        assert(edge_map.find(remote) != edge_map.end());
+        auto &node_set = edge_map[remote];
+        node_set.erase(n->base.get_id());
+        if (node_set.empty()) {
+                edge_map.erase(remote);
+            }
+        edge_map_mutex.unlock();        
         // store in Hyperdex
         hstub[thread_id]->add_out_edge(*n, e);
     }
