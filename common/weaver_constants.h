@@ -42,14 +42,14 @@
 #define CLIENT_SHARDS_FILE "shards"
 
 // fault tolerance
-#define NUM_BACKUPS 1
+#define NUM_BACKUPS 0
 //#define SERVER_MANAGER_IPADDR "127.0.0.1"
 #define SERVER_MANAGER_IPADDR "128.84.167.101"
 #define SERVER_MANAGER_PORT 2002
 
 // weaver setup
 #define NUM_SHARDS 2
-#define NUM_VTS 2
+#define NUM_VTS 1
 #define NUM_SERVERS ((NUM_VTS + NUM_SHARDS) * (1 + NUM_BACKUPS))
 #define SHARD_ID_INCR NUM_VTS
 #define NUM_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
@@ -68,7 +68,7 @@
 
 // migration
 #define START_MIGR_ID SHARD_ID_INCR // first shard to get migration token
-#define SHARD_CAP (360000ULL/NUM_SHARDS)
+#define SHARD_CAP (100000ULL/NUM_SHARDS)
 //#define WEAVER_CLDG // defined if communication-based LDG, false otherwise
 //#define WEAVER_MSG_COUNT // defined if client msg count call will take place
 
@@ -77,8 +77,9 @@
 
 // hyperdex
 //#define HYPERDEX_COORD_IPADDR "127.0.0.1"
+//#define HYPERDEX_COORD_PORT 1982
 #define HYPERDEX_COORD_IPADDR "128.84.167.101"
-#define HYPERDEX_COORD_PORT 1982
+#define HYPERDEX_COORD_PORT 7982
 
 // kronos
 //#define KRONOS_IPADDR "127.0.0.1"

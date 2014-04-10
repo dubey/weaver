@@ -676,7 +676,9 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<
         db::element::node *node = S->acquire_node(id);
         if (node == NULL || node->state == db::element::node::mode::MOVED ||
                 (node->last_perm_deletion != NULL && order::compare_two_vts(time_cached, *node->last_perm_deletion) == 0)) {
-            S->release_node(node);
+            if (node != NULL) {
+                S->release_node(node);
+            }
             WDEBUG << "node not found or migrated, invalidating cached value" << std::endl;
             toFill.clear(); // contexts aren't valid so don't send back
             return false;
@@ -875,7 +877,6 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         // map from node_id, lookup_pair to node_prog_running_state
         S->node_prog_running_states_mutex.lock();
         S->node_prog_running_states[lookup_pair] = fstate; 
-        //WDEBUG << "Inserting prog state with lookup pair where local_node_id is " << local_node_id << std::endl;
         S->node_prog_running_states_mutex.unlock();
         for (auto& shard_list_pair : contexts_to_fetch){
             std::unique_ptr<message::message> m(new message::message()); // XXX can we re-use messages?
@@ -927,7 +928,6 @@ inline void node_prog_loop(
                     S->release_node(node);
                 } else {
                     // node is being migrated here, but not yet completed
-                    //std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> buf_node_params;
                     std::vector<std::pair<uint64_t, ParamsType>> buf_node_params;
                     buf_node_params.emplace_back(id_params);
                     std::unique_ptr<message::message> m(new message::message());
@@ -1255,6 +1255,7 @@ migrate_node_step1(db::element::node *n, std::vector<uint64_t> &shard_node_count
     
     // no migration to self
     if (migr_loc == shard_id) {
+        S->release_node(n);
         return false;
     }
 
@@ -1326,7 +1327,7 @@ migrate_node_step2_resp(uint64_t thread_id, std::unique_ptr<message::message> ms
 
     // create a new node, unpack the message
     vc::vclock dummy_clock;
-    message::unpack_message(*msg, message::MIGRATE_SEND_NODE, node_id);
+    message::unpack_partial_message(*msg, message::MIGRATE_SEND_NODE, node_id);
     n = S->create_node(thread_id, node_id, dummy_clock, true); // node will be acquired on return
     try {
         message::unpack_message(*msg, message::MIGRATE_SEND_NODE, node_id, from_loc, *n);

@@ -217,6 +217,7 @@ namespace db
         , migr_chance(0)
         , shard_node_count(NUM_SHARDS, 0)
         , nop_count(NUM_VTS, 0)
+        , max_clk(UINT64_MAX, UINT64_MAX)
         , zero_clk(0, 0)
         , cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT)
         , max_prog_id(NUM_VTS, 0)

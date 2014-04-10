@@ -15,7 +15,7 @@
 import random
 import sys
 import time
-sys.path.append('../.libs')
+sys.path.append('../../.libs')
 
 import libclient as client
 
@@ -30,8 +30,8 @@ def exec_clusterings(reqs, cl):
     end = time.time()
     return (end-start)
 
-num_requests = 10000
-num_runs = 5
+num_requests = 1000
+num_runs = 1
 #num_nodes = 82168 # snap soc-Slashdot0902
 #num_nodes = 10876 # snap p2pgnutella04
 num_nodes = 81306 # snap twitter-combined
@@ -53,14 +53,14 @@ for runs in range(num_runs):
         sys.stdout.flush()
 print ' done'
 print 'time ' + str(t1)
-#for mrun in range(1,4):
-#    c.single_stream_migration()
-#    print 'Done repartitioning stream ' + str(mrun)
-#t2 = 0
-#for runs in range(num_runs):
-#    t2 += exec_clusterings(reqs, c)
-#    if runs % 1 == 0:
-#        sys.stdout.write('.')
-#        sys.stdout.flush()
-#print ' done'
-#print 'After time ' + str(t2)
+for mrun in range(1,3):
+    c.single_stream_migration()
+    print 'Done repartitioning stream ' + str(mrun)
+t2 = 0
+for runs in range(num_runs):
+    t2 += exec_clusterings(reqs, c)
+    if runs % 1 == 0:
+        sys.stdout.write('.')
+        sys.stdout.flush()
+print ' done'
+print 'After time ' + str(t2)
