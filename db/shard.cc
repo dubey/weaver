@@ -1429,8 +1429,7 @@ inline bool
 check_migr_node(db::element::node *n)
 {
     if (n == NULL || order::compare_two_clocks(n->base.get_del_time().clock, S->max_clk.clock) != 2 ||
-        n->state == db::element::node::mode::MOVED ||
-        n->already_migr) {
+        n->state == db::element::node::mode::MOVED || n->already_migr) {
         if (n != NULL) {
             n->already_migr = false;
             S->release_node(n);

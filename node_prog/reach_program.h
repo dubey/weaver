@@ -257,8 +257,7 @@ namespace node_prog
                     for (edge &e: n.get_edges()) {
                         // checking edge properties
                         if (e.has_all_properties(params.edge_props)) {
-                            // e->traverse(); no more traversal recording
-
+                            e.traverse();
                             // propagate reachability request
                             next.emplace_back(std::make_pair(e.get_neighbor(), params));
                             state.out_count++;

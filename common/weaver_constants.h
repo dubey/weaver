@@ -48,7 +48,7 @@
 #define SERVER_MANAGER_PORT 2002
 
 // weaver setup
-#define NUM_SHARDS 2
+#define NUM_SHARDS 5
 #define NUM_VTS 1
 #define NUM_SERVERS ((NUM_VTS + NUM_SHARDS) * (1 + NUM_BACKUPS))
 #define SHARD_ID_INCR NUM_VTS
@@ -68,8 +68,8 @@
 
 // migration
 #define START_MIGR_ID SHARD_ID_INCR // first shard to get migration token
-#define SHARD_CAP (100000ULL/NUM_SHARDS)
-//#define WEAVER_CLDG // defined if communication-based LDG, false otherwise
+#define SHARD_CAP (90000ULL/NUM_SHARDS)
+#define WEAVER_CLDG // defined if communication-based LDG, false otherwise
 //#define WEAVER_MSG_COUNT // defined if client msg count call will take place
 
 // coordinator

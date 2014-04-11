@@ -247,6 +247,7 @@ namespace node_prog
                 params.is_center = false;
                 params.center = rn;
                 for (edge& edge : n.get_edges()) {
+                    edge.traverse();
                     next.emplace_back(std::make_pair(edge.get_neighbor(), params));
                     cstate.neighbor_counts.insert(std::make_pair(edge.get_neighbor().get_id(), 0));
                     cstate.responses_left++;
