@@ -47,7 +47,7 @@ def exec_reads(reqs, sc, exec_time, idx):
     cnt = 0
     for (source, dest) in reqs:
         cnt += 1
-        print sc.reachability(source, dest, caching = False)
+        print sc.reachability(source, dest, caching = True)
         if cnt % 1000 == 0:
             print 'done ' + str(cnt) + ' by client ' + str(idx)
     end = time.time()
