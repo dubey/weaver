@@ -35,7 +35,7 @@ namespace node_prog
         public:
             bool _search_cache;
             uint64_t _cache_key;
-            bool mode; // false = request, true = reply
+            bool returning; // false = request, true = reply
             db::element::remote_node prev_node;
             uint64_t dest;
             std::vector<std::pair<std::string, std::string>> edge_props;
@@ -47,7 +47,7 @@ namespace node_prog
             reach_params()
                 : _search_cache(false)
                 , _cache_key(0)
-                , mode(false)
+                , returning(false)
                 , hops(0)
                 , reachable(false)
             { }
@@ -66,7 +66,7 @@ namespace node_prog
             {
                 uint64_t toRet = message::size(_search_cache)
                     + message::size(_cache_key)
-                    + message::size(mode)
+                    + message::size(returning)
                     + message::size(prev_node)
                     + message::size(dest) 
                     + message::size(edge_props)
@@ -80,7 +80,7 @@ namespace node_prog
             {
                 message::pack_buffer(packer, _search_cache);
                 message::pack_buffer(packer, _cache_key);
-                message::pack_buffer(packer, mode);
+                message::pack_buffer(packer, returning);
                 message::pack_buffer(packer, prev_node);
                 message::pack_buffer(packer, dest);
                 message::pack_buffer(packer, edge_props);
@@ -93,7 +93,7 @@ namespace node_prog
             {
                 message::unpack_buffer(unpacker, _search_cache);
                 message::unpack_buffer(unpacker, _cache_key);
-                message::unpack_buffer(unpacker, mode);
+                message::unpack_buffer(unpacker, returning);
                 message::unpack_buffer(unpacker, prev_node);
                 message::unpack_buffer(unpacker, dest);
                 message::unpack_buffer(unpacker, edge_props);
@@ -178,9 +178,9 @@ namespace node_prog
     check_cache_context(cache_response<reach_cache_value> &cr)
     {
         std::vector<node_cache_context>& contexts = cr.get_context();
-	if (contexts.size() == 0) {
-		return true;
-	}
+        if (contexts.size() == 0) {
+            return true;
+        }
         reach_cache_value &cv = *cr.get_value();
         // path not valid if broken by:
         for (node_cache_context& node_context : contexts)
@@ -217,46 +217,50 @@ namespace node_prog
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
             cache_response<reach_cache_value>*cache_response)
     {
-        if (MAX_CACHE_ENTRIES)
-        {
-            if (params._search_cache && !params.mode && cache_response != NULL){
-                // check context, update cache
-                bool valid = check_cache_context(*cache_response);
-                if (valid) {
-                    // we found the node we are looking for, prepare a reply
-                    params.mode = true;
-                    params.reachable = true;
-                    params._search_cache = false; // don't search on way back
-
-                    // context for cached value contains the nodes in the path to the dest_idination from this node
-                    params.path = std::dynamic_pointer_cast<reach_cache_value>(cache_response->get_value())->path;
-                    for (auto& node_context : cache_response->get_context()) { 
-                        params.path.emplace_back(node_context.node); // XXX THEse can be shuffled, change to storing this in cache
-                    }
-                    return {std::make_pair(params.prev_node, params)}; // single length vector
-                } else {
-                    cache_response->invalidate();
-                }
-            }
-        }
-
         reach_node_state &state = state_getter();
         std::vector<std::pair<db::element::remote_node, reach_params>> next;
         bool false_reply = false;
         db::element::remote_node prev_node = params.prev_node;
         params.prev_node = rn;
-        if (!params.mode) { // request mode
+        if (!params.returning) { // request mode
             if (params.dest == rn.get_id()) {
                 // we found the node we are looking for, prepare a reply
-                params.mode = true;
+                params.returning = true;
                 params.reachable = true;
                 params.path.emplace_back(rn);
-                next.emplace_back(std::make_pair(prev_node, params));
+                return {std::make_pair(prev_node, params)};
             } else {
                 // have not found it yet so follow all out edges
                 if (!state.visited) {
                     state.prev_node = prev_node;
                     state.visited = true;
+
+                    if (MAX_CACHE_ENTRIES)
+                    {
+                        if (params._search_cache /*&& !params.returning */ && cache_response != NULL){
+                            // check context, update cache
+                            bool valid = check_cache_context(*cache_response);
+                            if (valid) {
+                                WDEBUG  << "Cache worked at node " << rn.id << std::endl;
+                                // we found the node we are looking for, prepare a reply
+                                params.returning = true;
+                                params.reachable = true;
+                                params._search_cache = false; // don't search on way back
+
+                                // context for cached value contains the nodes in the path to the dest_idination from this node
+                                params.path = std::dynamic_pointer_cast<reach_cache_value>(cache_response->get_value())->path; // XXX double check this path
+                                /*
+                                for (auto& node_context : cache_response->get_context()) { 
+                                    params.path.emplace_back(node_context.node); // XXX THEse can be shuffled, change to storing this in cache
+                                }
+                                */
+                                return {std::make_pair(prev_node, params)}; // single length vector
+                            } else {
+                                cache_response->invalidate();
+                            }
+                        }
+                    }
+
                     for (edge &e: n.get_edges()) {
                         // checking edge properties
                         if (e.has_all_properties(params.edge_props)) {
@@ -274,7 +278,7 @@ namespace node_prog
                 }
             }
             if (false_reply) {
-                params.mode = true;
+                params.returning = true;
                 params.reachable = false;
                 next.emplace_back(std::make_pair(prev_node, params));
             }
@@ -292,6 +296,7 @@ namespace node_prog
                     if (MAX_CACHE_ENTRIES)
                     {
                         // now add to cache
+                        WDEBUG << "adding to cache on way back from dest on node " << rn.id << std::endl;
                         std::shared_ptr<node_prog::reach_cache_value> toCache(new reach_cache_value(params.path));
                         std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<db::element::remote_node>(params.path)); // copy return path from params
                         add_cache_func(toCache, watch_set, params.dest);
