@@ -178,6 +178,9 @@ namespace node_prog
     check_cache_context(cache_response<reach_cache_value> &cr)
     {
         std::vector<node_cache_context>& contexts = cr.get_context();
+	if (contexts.size() == 0) {
+		return true;
+	}
         reach_cache_value &cv = *cr.get_value();
         // path not valid if broken by:
         for (node_cache_context& node_context : contexts)
