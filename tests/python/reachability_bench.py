@@ -1,53 +1,92 @@
+#! /usr/bin/env python
+# 
 # ===============================================================
-#    Description:  Test performance of reachability program.
+#    Description:  Reachability benchmark
 # 
-#        Created:  12/17/2013 07:17:19 PM
+#        Created:  2014-03-21 13:39:06
 # 
-#         Author:  Greg Hill, gdh39@cornell.edu
+#         Author:  Ayush Dubey, dubey@cs.cornell.edu
 # 
-# Copyright (C) 2013, Cornell University, see the LICENSE file
-#                     for licensing agreement
+# Copyright (C) 2013-2014, Cornell University, see the LICENSE
+#                     file for licensing agreement
 # ===============================================================
 # 
 
 import random
 import sys
 import time
+import threading
 sys.path.append('../../.libs')
 
 import libclient as client
+import simple_client
 
-num_dests = 10
+
+num_started = 0
+num_finished = 0
+cv = threading.Condition()
+
+dests_per_client = 5
 requests_per_dest = 5
 
-def exec_traversals(reqs, cl):
-    rp = client.ReachParams(caching=True)
-    start = time.time()
-    for r in reqs:
-        rp.dest = r[1]
-        prog_args = [(r[0], rp)]
-        response = cl.run_reach_program(prog_args)
-        sys.stdout.write('.')
-        sys.stdout.flush()
-    print ' done'
-    end = time.time()
-    return (end-start)
-
-#num_nodes = 82168 # snap soc-Slashdot0902
-#num_nodes = 10876 # snap p2pgnutella04
 num_nodes = 81306 # snap twitter-combined
 # node handles are range(0, num_nodes)
+num_vts = 1
+num_clients = 8
 
-coord_id = 0
-c = client.Client(client._CLIENT_ID, coord_id)
+def exec_reads(reqs, sc, exec_time, idx):
+    global num_started
+    global cv
+    global num_clients
+    global num_finished
+    with cv:
+        while num_started < num_clients:
+            cv.wait()
+    rp = client.ReadNodePropsParams()
+    start = time.time()
+    cnt = 0
+    for (source, dest) in reqs:
+        cnt += 1
+        print sc.reachability(source, dest, caching = False)
+        if cnt % 1000 == 0:
+            print 'done ' + str(cnt) + ' by client ' + str(idx)
+    end = time.time()
+    with cv:
+        num_finished += 1
+        cv.notify_all()
+    exec_time[idx] = end - start
+
+clients = []
+for i in range(num_clients):
+    clients.append(simple_client.simple_client(client.Client(client._CLIENT_ID + i, i % num_vts)))
 
 reqs = []
-random.seed(42)
-for _ in range(num_dests):
-    dest = random.randint(0, num_nodes-1)
-    for _ in range(requests_per_dest):
-        reqs.append((random.randint(0, num_nodes-1), dest))
+for i in range(num_clients):
+    cl_reqs = []
+    for _ in range(dests_per_client):
+        dest = random.randint(0, num_nodes-1)
+        for _ in range(requests_per_dest):
+            cl_reqs.append((random.randint(0, num_nodes-1), dest))
 
-print "starting traversals"
-t = exec_traversals(reqs, c)
-print "time taken for " + str(num_dests * requests_per_dest) + " random reachability requests over " + str(num_nodes) + " nodes was: " + str(t)
+    reqs.append(cl_reqs)
+
+exec_time = [0] * num_clients
+threads = []
+print "starting requests"
+for i in range(num_clients):
+    thr = threading.Thread(target=exec_reads, args=(reqs[i], clients[i], exec_time, i))
+    thr.start()
+    threads.append(thr)
+start_time = time.time()
+with cv:
+    num_started = num_clients
+    cv.notify_all()
+    while num_finished < num_clients:
+        cv.wait()
+end_time = time.time()
+total_time = end_time-start_time
+for thr in threads:
+    thr.join()
+print 'Total time for ' + str(dests_per_client * requests_per_dest * num_clients) + 'requests = ' + str(total_time)
+throughput = (dests_per_client * requests_per_dest * num_clients) / total_time
+print 'Throughput = ' + str(throughput)
