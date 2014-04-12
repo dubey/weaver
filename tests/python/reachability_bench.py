@@ -26,13 +26,13 @@ num_started = 0
 num_finished = 0
 cv = threading.Condition()
 
-dests_per_client = 5
+dests_per_client = 1
 requests_per_dest = 5
 
 num_nodes = 81306 # snap twitter-combined
 # node handles are range(0, num_nodes)
 num_vts = 1
-num_clients = 8
+num_clients = 10
 
 def exec_reads(reqs, sc, exec_time, idx):
     global num_started
@@ -47,9 +47,8 @@ def exec_reads(reqs, sc, exec_time, idx):
     cnt = 0
     for (source, dest) in reqs:
         cnt += 1
-        print sc.reachability(source, dest, caching = True)
-        if cnt % 1000 == 0:
-            print 'done ' + str(cnt) + ' by client ' + str(idx)
+        sc.reachability(source, dest, caching = True)
+        print 'done ' + str(cnt) + ' by client ' + str(idx)
     end = time.time()
     with cv:
         num_finished += 1
