@@ -17,7 +17,7 @@ sys.path.append('../../.libs')
 
 import libclient as client
 
-num_dests = 10
+num_dests = 5
 requests_per_dest = 5
 
 def exec_traversals(reqs, cl):
