@@ -241,7 +241,6 @@ namespace node_prog
                             // check context, update cache
                             bool valid = check_cache_context(*cache_response);
                             if (valid) {
-                                WDEBUG  << "Cache worked at node " << rn.id << std::endl;
                                 // we found the node we are looking for, prepare a reply
                                 params.returning = true;
                                 params.reachable = true;
@@ -249,6 +248,7 @@ namespace node_prog
 
                                 // context for cached value contains the nodes in the path to the dest_idination from this node
                                 params.path = std::dynamic_pointer_cast<reach_cache_value>(cache_response->get_value())->path; // XXX double check this path
+                                WDEBUG  << "Cache worked at node " << rn.id << " with path len " << params.path.size() << std::endl;
                                 /*
                                 for (auto& node_context : cache_response->get_context()) { 
                                     params.path.emplace_back(node_context.node); // XXX THEse can be shuffled, change to storing this in cache
@@ -296,7 +296,7 @@ namespace node_prog
                     if (MAX_CACHE_ENTRIES)
                     {
                         // now add to cache
-                        WDEBUG << "adding to cache on way back from dest on node " << rn.id << std::endl;
+                        WDEBUG << "adding to cache on way back from dest on node " << rn.id << " with path len " << params.path.size() << std::endl;
                         std::shared_ptr<node_prog::reach_cache_value> toCache(new reach_cache_value(params.path));
                         std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<db::element::remote_node>(params.path)); // copy return path from params
                         add_cache_func(toCache, watch_set, params.dest);
