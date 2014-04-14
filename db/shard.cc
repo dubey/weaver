@@ -1039,6 +1039,8 @@ inline void node_prog_loop(
                     db::element::remote_node& rn = res.first; 
                     assert(rn.loc < NUM_SHARDS + SHARD_ID_INCR);
                     if (rn == db::element::coordinator || rn.loc == np.vt_id) {
+                        // mark requests as done, will be done for other shards by no-ops from coordinator
+                        S->add_done_request(np.req_id, np.prog_type_recvd);
                         // signal to send back to vector timestamper that issued request
                         // XXX get rid of pair, without pair it is not working for some reason
                         std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);

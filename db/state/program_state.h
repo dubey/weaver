@@ -64,6 +64,7 @@ namespace state
             void pack(uint64_t node_id, e::buffer::packer &packer);
             void unpack(uint64_t node_id, e::unpacker &unpacker);
             void delete_node_state(uint64_t node_id);
+            void done_request(uint64_t req_id, node_prog::prog_type type);
             void done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>>&);
             bool check_done_request(uint64_t req_id);
 
@@ -465,6 +466,25 @@ namespace state
             }
         }
         req_list.erase(node_id);
+        release();
+    }
+
+    inline void
+    program_state :: done_request(uint64_t req_id, node_prog::prog_type type)
+    {
+        acquire();
+        done_ids.emplace(req_id);
+        req_map &rmap = prog_state.at(type);
+        if (rmap.find(req_id) != rmap.end()) {
+            for (auto &p: *rmap.at(req_id)) {
+                uint64_t node_id = p.first;
+                req_list.at(node_id).erase(req_id);
+                if (req_list.at(node_id).empty()) {
+                    req_list.erase(node_id);
+                }
+            }
+            rmap.erase(req_id);
+        }
         release();
     }
 

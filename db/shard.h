@@ -193,6 +193,7 @@ namespace db
                 fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_id);
             void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_id,
                     std::shared_ptr<node_prog::Node_State_Base> toAdd);
+            void add_done_request(uint64_t completed_req_id, node_prog::prog_type type);
             void add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
             bool check_done_request(uint64_t req_id);
 
@@ -823,6 +824,12 @@ namespace db
         std::shared_ptr<node_prog::Node_State_Base> toAdd)
     {
         prog_state.put_state(t, request_id, local_node_id, toAdd);
+    }
+
+    inline void
+    shard :: add_done_request(uint64_t completed_req_id, node_prog::prog_type type)
+    {
+        prog_state.done_request(completed_req_id, type);
     }
 
     inline void
