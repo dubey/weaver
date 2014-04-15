@@ -1,9 +1,10 @@
 #! /usr/bin/env python
 # 
 # ===============================================================
-#    Description:  Tranform SNAP graph file to WEAVER graph file
+#    Description:  Tranform SNAP graph files so that node handles
+#                  are range(0, num_nodes).
 # 
-#        Created:  04/12/2014 01:30:15 PM
+#        Created:  12/03/2013 02:17:15 PM
 # 
 #         Author:  Ayush Dubey, dubey@cs.cornell.edu
 # 
@@ -13,6 +14,7 @@
 # 
 
 import sys
+import random
 from sets import Set
 
 def snap_to_weaver(snap_file):
@@ -20,6 +22,7 @@ def snap_to_weaver(snap_file):
     filename = path[len(path)-1]
     path[len(path)-1] = 'weaver'
     path.append(filename)
+    path.append('_50props')
     weaver_file = '/'.join(path)
 
     sfile = open(snap_file, 'r')
@@ -53,8 +56,15 @@ def snap_to_weaver(snap_file):
     wfile = open(weaver_file, 'w')
     wfile.write('#' + str(len(nmap)) + '\n')
     for n1 in edges:
+        wfile.write(str(n1) + '\n')
+    for n1 in edges:
         for n2 in edges[n1]:
-            wfile.write(str(n1) + ' ' + str(n2) + '\n')
+            edge_line = str(n1) + ' ' + str(n2)
+            if random.random() > 0.5:
+                edge_line += ' color red\n'
+            else:
+                edge_line += '\n'
+            wfile.write(edge_line)
     wfile.close()
 
 if __name__ == '__main__':

@@ -299,7 +299,6 @@ namespace node_prog
             if ((int)state.out_count < 0) {
                 WDEBUG << "ALERT! Bad state value in reach program" << std::endl;
                 next.clear();
-                while(1);
             }
         }
         return next;

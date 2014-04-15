@@ -69,7 +69,7 @@
 // migration
 #define START_MIGR_ID SHARD_ID_INCR // first shard to get migration token
 #define SHARD_CAP (90000ULL/NUM_SHARDS)
-#define WEAVER_CLDG // defined if communication-based LDG, false otherwise
+//#define WEAVER_CLDG // defined if communication-based LDG, undef otherwise
 //#define WEAVER_MSG_COUNT // defined if client msg count call will take place
 
 // coordinator

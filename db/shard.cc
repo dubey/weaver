@@ -142,11 +142,13 @@ parse_single_uint64(std::string &line, size_t &idx, uint64_t &n, bool &bad)
         }
         if (n > max64_div10) { // multiplication overflow
             bad = true;
+            WDEBUG << "multiplication overflow" << std::endl;
             break;
         }
         n *= 10;
         if ((n + next_digit) < n) { // addition overflow
             bad = true;
+            WDEBUG << "addition overflow" << std::endl;
             break;
         }
         n += next_digit;
@@ -179,7 +181,7 @@ parse_two_uint64(std::string &line, uint64_t &n1, uint64_t &n2)
     if (bad || i == line.length()) {
         n1 = 0;
         n2 = 0;
-        WDEBUG << "Parsing error" << std::endl;
+        WDEBUG << "Parsing error, line: " << line << std::endl;
         return -1;
     }
 

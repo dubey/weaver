@@ -23,7 +23,7 @@ import libclient as client
 num_migr = 5
 num_started = 0
 num_finished = 0
-num_clients = 50
+num_clients = 1
 cv = threading.Condition()
 
 def exec_traversals(reqs, cl, exec_time, idx):
@@ -34,8 +34,8 @@ def exec_traversals(reqs, cl, exec_time, idx):
     with cv:
         while num_started < num_clients:
             cv.wait()
-    rp = client.ReachParams()
-    #rp = client.ReachParams(edge_props=[('color','blue')])
+    #rp = client.ReachParams()
+    rp = client.ReachParams(edge_props=[('color','red')])
     start = time.time()
     cnt = 0
     for r in reqs:
@@ -43,7 +43,7 @@ def exec_traversals(reqs, cl, exec_time, idx):
         rp.dest = r[1]
         prog_args = [(r[0], rp)]
         response = cl.run_reach_program(prog_args)
-        if cnt % 1 == 0 and idx == 1:
+        if cnt % 1 == 0:
             print 'done ' + str(cnt) + ' by client ' + str(idx)
     end = time.time()
     with cv:
@@ -51,7 +51,7 @@ def exec_traversals(reqs, cl, exec_time, idx):
         cv.notify_all()
     exec_time[idx] = end - start
 
-num_requests = 2
+num_requests = 50
 num_nodes = 81306 # snap twitter-combined
 # node handles are range(0, num_nodes)
 num_vts = 1
@@ -61,6 +61,7 @@ for i in range(num_clients):
     clients.append(client.Client(client._CLIENT_ID + i, i % num_vts))
 
 reqs = []
+random.seed(42)
 for i in range(num_clients):
     cl_reqs = []
     for numr in range(num_requests):
@@ -91,9 +92,13 @@ print 'Throughput = ' + str(throughput)
 print 'Done first set of requests'
 
 # repartition
+migr_begin = time.time()
 for mrun in range(1,num_migr+1):
     clients[0].single_stream_migration()
     print 'Done repartitioning stream ' + str(mrun)
+migr_end = time.time()
+migr_time = migr_end - migr_begin
+print 'Time for repartitioning: ' + str(migr_time)
 
 # run after
 exec_time = [0] * num_clients
