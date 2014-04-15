@@ -111,6 +111,7 @@ cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
 cdef extern from 'db/element/remote_node.h' namespace 'db::element':
     cdef cppclass remote_node:
         remote_node(uint64_t id, uint64_t handle)
+        remote_node()
         uint64_t id
         uint64_t loc
     cdef remote_node coordinator
@@ -131,9 +132,10 @@ cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
         vector[pair[string, string]] edge_props
         uint32_t hops
         bint reachable
+        vector[remote_node] path
 
 class ReachParams:
-    def __init__(self, returning=False, prev_node=RemoteNode(0,0), dest=0, hops=0, reachable=False, caching=False, edge_props=[]):
+    def __init__(self, returning=False, prev_node=RemoteNode(0,0), dest=0, hops=0, reachable=False, caching=False, edge_props=[], path=[]):
         self._search_cache = caching
         self._cache_key = dest
         self.returning = returning
@@ -142,6 +144,7 @@ class ReachParams:
         self.hops = hops
         self.reachable = reachable
         self.edge_props = edge_props
+        self.path = path
 
 cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
     cdef cppclass clustering_params:
@@ -316,7 +319,10 @@ cdef class Client:
             c_args.push_back(arg_pair)
         with nogil:
             c_rp = self.thisptr.run_reach_program(c_args)
-        response = ReachParams(hops=c_rp.hops, reachable=c_rp.reachable)
+        foundpath = []
+        for rn in c_rp.path:
+            foundpath.append(rn.id)
+        response = ReachParams(path=foundpath, hops=c_rp.hops, reachable=c_rp.reachable)
         return response
     # warning! set prev_node loc to vt_id if somewhere in params
     def run_clustering_program(self, init_args):
