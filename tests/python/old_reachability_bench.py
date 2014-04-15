@@ -17,8 +17,8 @@ sys.path.append('../../.libs')
 
 import libclient as client
 
-num_dests = 5
-requests_per_dest = 5
+num_dests = 1
+requests_per_dest = 500
 
 def exec_traversals(reqs, cl):
     rp = client.ReachParams(caching=True)
