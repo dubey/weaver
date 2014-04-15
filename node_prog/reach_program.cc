@@ -12,11 +12,12 @@
  * ================================================================
  */
 
+//#define weaver_debug_
 #include "reach_program.h"
 
 namespace node_prog
 {
-    bool
+    inline bool
     check_cache_context(cache_response<reach_cache_value> &cr)
     {
         std::vector<node_cache_context>& contexts = cr.get_context();
@@ -59,6 +60,7 @@ namespace node_prog
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
             cache_response<reach_cache_value>*cache_response)
     {
+        WDEBUG  << "REACH AT NODE " << rn.id << std::endl;
         reach_node_state &state = state_getter();
         std::vector<std::pair<db::element::remote_node, reach_params>> next;
         bool false_reply = false;
@@ -70,6 +72,8 @@ namespace node_prog
                 params.returning = true;
                 params.reachable = true;
                 params.path.emplace_back(rn);
+                params._search_cache = false; // never search on way back
+                WDEBUG  << "returning to node " << prev_node.id << " because found " << std::endl;
                 return {std::make_pair(prev_node, params)};
             } else {
                 // have not found it yet so follow all out edges
@@ -79,10 +83,10 @@ namespace node_prog
 
                     if (MAX_CACHE_ENTRIES)
                     {
+                        WDEBUG  << "in cache section with search cache " << params._search_cache << ", cache key = " << params._cache_key << " and cache response "<< cache_response << std::endl;
                         if (params._search_cache /*&& !params.returning */ && cache_response != NULL){
                             // check context, update cache
-                            bool valid = check_cache_context(*cache_response);
-                            if (valid) {
+                            if (check_cache_context(*cache_response)) { // if context is valid
                                 // we found the node we are looking for, prepare a reply
                                 params.returning = true;
                                 params.reachable = true;
@@ -91,6 +95,12 @@ namespace node_prog
                                 // context for cached value contains the nodes in the path to the dest_idination from this node
                                 params.path = std::dynamic_pointer_cast<reach_cache_value>(cache_response->get_value())->path; // XXX double check this path
                                 WDEBUG  << "Cache worked at node " << rn.id << " with path len " << params.path.size() << std::endl;
+                                WDEBUG << "path is "<< std::endl;
+                                for (db::element::remote_node &r : params.path) {
+                                    WDEBUG <<  r.id << std::endl;
+                                }
+                                WDEBUG << std::endl;
+                                WDEBUG  << "returning to node " << prev_node.id << " in positive cache response " << std::endl;
                                 return {std::make_pair(prev_node, params)}; // single length vector
                             } else {
                                 cache_response->invalidate();
@@ -105,6 +115,7 @@ namespace node_prog
 
                             // propagate reachability request
                             next.emplace_back(std::make_pair(e.get_neighbor(), params));
+                            WDEBUG  << "emplacing " << e.get_neighbor().id << " to next" << std::endl;
                             state.out_count++;
                         }
                     }
@@ -134,7 +145,12 @@ namespace node_prog
                     if (MAX_CACHE_ENTRIES)
                     {
                         // now add to cache
-                        WDEBUG << "adding to cache on way back from dest on node " << rn.id << " with path len " << params.path.size() << std::endl;
+                        WDEBUG << "adding to cache for key " << params.dest << " on way back from dest on node " << rn.id << " with path len " << params.path.size() << std::endl;
+                        WDEBUG << "path is "<< std::endl;
+                        for (db::element::remote_node &r : params.path) {
+                            WDEBUG <<  r.id<< std::endl;
+                        }
+                        WDEBUG << std::endl;
                         std::shared_ptr<node_prog::reach_cache_value> toCache(new reach_cache_value(params.path));
                         std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<db::element::remote_node>(params.path)); // copy return path from params
                         add_cache_func(toCache, watch_set, params.dest);
@@ -147,6 +163,11 @@ namespace node_prog
                 next.clear();
             }
         }
+        WDEBUG << "propagating to "<< std::endl;
+        for (auto &pair : next) {
+            WDEBUG << pair.first.id << std::endl;
+        }
+        WDEBUG << std::endl;
         return next;
     }
 }
