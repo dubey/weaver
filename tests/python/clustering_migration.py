@@ -23,7 +23,7 @@ import libclient as client
 num_migr = 5
 num_started = 0
 num_finished = 0
-num_clients = 300
+num_clients = 1
 cv = threading.Condition()
 
 def exec_clusterings(reqs, cl, exec_time, idx):
@@ -49,7 +49,7 @@ def exec_clusterings(reqs, cl, exec_time, idx):
         cv.notify_all()
     exec_time[idx] = end - start
 
-num_requests = 2000
+num_requests = 10000
 num_nodes = 81306 # snap twitter-combined
 # node handles are range(0, num_nodes)
 num_vts = 1
@@ -89,9 +89,12 @@ print 'Throughput = ' + str(throughput)
 print 'Done first set of requests'
 
 # repartition
+migr_time = time.time()
 for mrun in range(1,num_migr+1):
     clients[0].single_stream_migration()
     print 'Done repartitioning stream ' + str(mrun)
+migr_time = time.time() - migr_time
+print 'Migration time total: ' + str(migr_time)
 
 # run after
 exec_time = [0] * num_clients

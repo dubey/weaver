@@ -69,12 +69,13 @@ namespace node_prog
     {
         private:
         /* constructs a clone without start_node_params or cache_value */
-        node_prog_running_state(node_prog::prog_type _prog_type_recvd, bool _global_req, uint64_t _vt_id, std::shared_ptr<vc::vclock> _req_vclock, uint64_t _req_id)
+        node_prog_running_state(node_prog::prog_type _prog_type_recvd, bool _global_req, uint64_t _vt_id, std::shared_ptr<vc::vclock> _req_vclock, uint64_t _req_id, uint64_t _prev)
             : prog_type_recvd(_prog_type_recvd)
               , global_req(_global_req)
               , vt_id(_vt_id)
               , req_vclock(_req_vclock)
               , req_id(_req_id)
+              , prev_server(_prev)
         { };
         public:
         node_prog::prog_type prog_type_recvd;
@@ -82,6 +83,7 @@ namespace node_prog
         uint64_t vt_id;
         std::shared_ptr<vc::vclock> req_vclock;
         uint64_t req_id;
+        uint64_t prev_server;
         std::vector<std::pair<uint64_t, ParamsType>> start_node_params;
         std::unique_ptr<db::caching::cache_response<CacheValueType>> cache_value; // XXX unique ptr needed?
 
@@ -92,7 +94,7 @@ namespace node_prog
 
         node_prog_running_state clone_without_start_node_params() 
         {
-            return node_prog_running_state(prog_type_recvd, global_req, vt_id, req_vclock, req_id);
+            return node_prog_running_state(prog_type_recvd, global_req, vt_id, req_vclock, req_id, prev_server);
         }
 
         node_prog_running_state(node_prog_running_state&& copy_from)
@@ -101,6 +103,7 @@ namespace node_prog
               , vt_id(copy_from.vt_id)
               , req_vclock(copy_from.req_vclock)
               , req_id(copy_from.req_id)
+              , prev_server(copy_from.prev_server)
               , start_node_params(copy_from.start_node_params)
               , cache_value(std::move(copy_from.cache_value)){};
    };

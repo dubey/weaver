@@ -933,7 +933,7 @@ inline void node_prog_loop(
                     std::vector<std::pair<uint64_t, ParamsType>> buf_node_params;
                     buf_node_params.emplace_back(id_params);
                     std::unique_ptr<message::message> m(new message::message());
-                    message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, buf_node_params);
+                    message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, np.prev_server, buf_node_params);
                     S->migration_mutex.lock();
                     if (S->deferred_reads.find(node_id) == S->deferred_reads.end()) {
                         S->deferred_reads.emplace(node_id, std::vector<std::unique_ptr<message::message>>());
@@ -948,12 +948,19 @@ inline void node_prog_loop(
                 std::vector<std::pair<uint64_t, ParamsType>> fwd_node_params;
                 fwd_node_params.emplace_back(id_params);
                 std::unique_ptr<message::message> m(new message::message());
-                message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, fwd_node_params);
+                message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, np.prev_server, fwd_node_params);
                 uint64_t new_loc = node->new_loc;
                 S->release_node(node);
                 S->comm.send(new_loc, m->buf);
             } else { // node does exist
                 assert(node->state == db::element::node::mode::STABLE);
+
+#ifdef WEAVER_NEW_CLDG
+                if (np.prev_server >= SHARD_ID_INCR) {
+                    node->msg_count[np.prev_server - SHARD_ID_INCR]++;
+                }
+#endif
+
                 if (MAX_CACHE_ENTRIES)
                 {
                 if (params.search_cache()){ // && !node->checking_cache){
@@ -1034,7 +1041,7 @@ inline void node_prog_loop(
                     if ((batched_node_progs.find(next_loc) != batched_node_progs.end() && !batched_node_progs[next_loc].empty())
                         && next_loc != S->shard_id) {
                         std::unique_ptr<message::message> m(new message::message());
-                        message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, batched_node_progs[next_loc]);
+                        message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, shard_id, batched_node_progs[next_loc]);
                         S->comm.send(next_loc, m->buf);
                         batched_node_progs[next_loc].clear();
                         msg_count++;
@@ -1143,7 +1150,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     // unpack the node program
     try {
-        message::unpack_message(*msg, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, np.start_node_params);
+        message::unpack_message(*msg, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, np.prev_server, np.start_node_params);
         assert(np.req_vclock->clock.size() == NUM_VTS);
     } catch (std::bad_alloc& ba) {
         WDEBUG << "bad_alloc caught " << ba.what() << std::endl;
@@ -1248,7 +1255,6 @@ migrate_node_step1(db::element::node *n, std::vector<uint64_t> &shard_node_count
         } else if (n->migr_score[max_pos] == n->migr_score[j]) {
             max_indices.emplace_back(j);
         }
-        n->msg_count[j] = 0;
     }
     uint64_t migr_loc = get_balanced_assignment(shard_node_count, max_indices) + SHARD_ID_INCR;
     if (migr_loc > shard_id) {
@@ -1461,6 +1467,11 @@ cldg_migration_wrapper(std::vector<uint64_t> &shard_node_count)
         }
 
         // communication-LDG
+#ifdef WEAVER_CLDG
+        for (uint64_t &cnt: n->msg_count) {
+            cnt = 0;
+        }
+
         db::element::edge *e;
         // get aggregate msg counts per shard
         //std::vector<uint64_t> msg_count(NUM_SHARDS, 0);
@@ -1474,6 +1485,8 @@ cldg_migration_wrapper(std::vector<uint64_t> &shard_node_count)
         //    double new_val = 0.4 * n->msg_count[i] + 0.6 * msg_count[i];
         //    n->msg_count[i] = new_val;
         //}
+#endif
+
         // update migration score based on CLDG
         for (int j = 0; j < NUM_SHARDS; j++) {
             double penalty = 1.0 - ((double)shard_node_count[j])/SHARD_CAP;
@@ -1536,6 +1549,9 @@ migration_wrapper()
 
 #ifdef WEAVER_CLDG
     cldg_migration_wrapper(shard_node_count);
+#endif
+#ifdef WEAVER_NEW_CLDG
+    cldg_migration_wrapper(shard_node_count);
 #else
     ldg_migration_wrapper(shard_node_count);
 #endif
@@ -1570,6 +1586,20 @@ shard_daemon_begin()
     }
     std::sort(sorted_nodes.begin(), sorted_nodes.end(), agg_count_compare);
     S->cldg_nodes = std::move(sorted_nodes);
+    S->cldg_iter = S->cldg_nodes.begin();
+#endif
+#ifdef WEAVER_NEW_CLDG
+    uint64_t mcnt;
+    for (uint64_t nid: S->ldg_nodes) {
+        mcnt = 0;
+        db::element::node *n = S->acquire_node(nid);
+        for (uint64_t cnt: n->msg_count) {
+            mcnt += cnt;
+        }
+        S->release_node(n);
+        S->cldg_nodes.emplace_back(std::make_pair(nid, mcnt));
+    }
+    std::sort(S->cldg_nodes.begin(), S->cldg_nodes.end(), agg_count_compare);
     S->cldg_iter = S->cldg_nodes.begin();
 #else
     S->ldg_iter = S->ldg_nodes.begin();
