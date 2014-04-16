@@ -54,6 +54,7 @@ cdef extern from '<vector>' namespace 'std':
         T& at(int)
         iterator begin()
         iterator end()
+        size_t size()
 
 cdef extern from 'common/weaver_constants.h':
     # messaging constants
@@ -214,13 +215,13 @@ cdef extern from 'node_prog/read_n_edges_program.h' namespace 'node_prog':
     cdef cppclass read_n_edges_params:
         uint64_t num_edges
         vector[pair[string, string]] edges_props
-        vector[uint64_t] edges
+        vector[uint64_t] return_edges
 
 class ReadNEdgesParams:
-    def __init__(self, num_edges = MAX_UINT64, edges_props = [], edges = []):
+    def __init__(self, num_edges = MAX_UINT64, edges_props = [], return_edges = []):
         self.num_edges = num_edges
         self.edges_props = edges_props
-        self.edges = edges
+        self.return_edges = return_edges
 
 cdef extern from 'client/client.h' namespace 'client':
     cdef cppclass client:
@@ -358,7 +359,7 @@ cdef class Client:
             c_args.push_back(arg_pair)
         with nogil:
             c_rp = self.thisptr.read_n_edges_program(c_args)
-        response = ReadNEdgesParams(edges_props=c_rp.edges_props)
+        response = ReadNEdgesParams(return_edges=c_rp.return_edges)
         return response
 
     def start_migration(self):

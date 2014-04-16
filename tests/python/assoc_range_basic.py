@@ -28,7 +28,7 @@ num_requests = 3000
 num_nodes = 81306 # snap twitter-combined
 # node handles are range(0, num_nodes)
 num_vts = 1
-num_clients = 8
+num_clients = 1
 num_read_edges = 4
 
 def exec_reads(reqs, cl, exec_time, idx):
@@ -37,6 +37,9 @@ def exec_reads(reqs, cl, exec_time, idx):
     global num_clients
     global num_finished
     global num_read_edges
+    edge_counts = {}
+    for i in range(num_read_edges+1):
+        edge_counts[i] = 0
     with cv:
         while num_started < num_clients:
             cv.wait()
@@ -47,9 +50,12 @@ def exec_reads(reqs, cl, exec_time, idx):
         cnt += 1
         prog_args = [(r, rp)]
         response = cl.read_n_edges(prog_args)
-        assert(len(response.edges) <= num_read_edges)
+        assert(len(response.return_edges) <= num_read_edges)
+        edge_counts[len(response.return_edges)] += 1
         if cnt % 1000 == 0:
             print 'done ' + str(cnt) + ' by client ' + str(idx)
+            for i in range(num_read_edges+1):
+                print 'num responses with #edges ' + str(i) + ' = ' + str(edge_counts[i])
     end = time.time()
     with cv:
         num_finished += 1

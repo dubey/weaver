@@ -70,17 +70,17 @@ namespace node_prog
                     std::shared_ptr<vc::vclock> &req_time)
                 : wrapped(edge_list), req_time(req_time) {}
 
-            edge_map_iter begin () //const
+            edge_map_iter begin()
             {
-                return edge_map_iter (wrapped.begin(), wrapped.end(), req_time);
+                return edge_map_iter(wrapped.begin(), wrapped.end(), req_time);
             }
 
-            edge_map_iter end () //const
+            edge_map_iter end()
             {
                 return edge_map_iter(wrapped.end(), wrapped.end(), req_time);
             }
 
-            // TODO could make an empty() function
+            uint64_t count() { return wrapped.size(); }
     };
 }
 

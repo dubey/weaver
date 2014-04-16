@@ -863,7 +863,6 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
             return true;
         }
 
-        //WDEBUG << "caching waiting for rest of context to be fetched" << std::endl;
         // add waiting stuff to shard global structure
 
         std::pair<uint64_t, uint64_t> lookup_pair(uid, local_node_id);
@@ -979,9 +978,6 @@ inline void node_prog_loop(
                 }
                 }
 
-                // bind cache getter and putter function variables to functions
-                //std::shared_ptr<NodeStateType> state = get_node_state<NodeStateType>(np.prog_type_recvd,
-                 //       np.req_id, node_id); // TODO: make this lazy!
                 node_state_getter = std::bind(get_or_create_state<NodeStateType>,
                         np.prog_type_recvd, np.req_id, node_id);
 
@@ -997,7 +993,7 @@ inline void node_prog_loop(
                         np.prog_type_recvd, _1, _2, _3, np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key
                 }
 
-                node->base.view_time = np.req_vclock; 
+                node->base.view_time = np.req_vclock;
                 // call node program
                 auto next_node_params = func(*node, this_node,
                         params, // actual parameters for this node program
@@ -1803,7 +1799,6 @@ server_manager_link_loop(po6::net::hostname sm_host)
     {
         if (!S->sm_stub.maintain_link())
         {
-            WDEBUG << "maintain link fail\n";
             continue;
         }
 

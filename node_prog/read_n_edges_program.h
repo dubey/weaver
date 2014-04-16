@@ -74,12 +74,16 @@ namespace node_prog
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
             cache_response<Cache_Value_Base>*)
     {
-        for (edge &e : n.get_edges()) {
+        auto elist = n.get_edges();
+        int pushcnt = 0;
+        for (edge &e : elist) {
             if (e.has_all_properties(params.edges_props)) {
+                pushcnt++;
                 params.return_edges.emplace_back(e.get_id());
                 if (--params.num_edges == 0) {
                     break;
                 }
+            } else {
             }
         }
         return {std::make_pair(db::element::coordinator, std::move(params))};
