@@ -210,6 +210,18 @@ class ReadEdgesPropsParams:
         self.keys = keys
         self.edges_props = edges_props
 
+cdef extern from 'node_prog/read_n_edges_program.h' namespace 'node_prog':
+    cdef cppclass read_n_edges_params:
+        uint64_t num_edges
+        vector[pair[string, string]] edges_props
+        vector[uint64_t] edges
+
+class ReadNEdgesParams:
+    def __init__(self, num_edges = MAX_UINT64, edges_props = [], edges = []):
+        self.num_edges = num_edges
+        self.edges_props = edges_props
+        self.edges = edges
+
 cdef extern from 'client/client.h' namespace 'client':
     cdef cppclass client:
         client(uint64_t my_id, uint64_t vt_id)
@@ -227,6 +239,7 @@ cdef extern from 'client/client.h' namespace 'client':
         dijkstra_params run_dijkstra_program(vector[pair[uint64_t, dijkstra_params]] initial_args) nogil
         read_node_props_params read_node_props_program(vector[pair[uint64_t, read_node_props_params]] initial_args) nogil
         read_edges_props_params read_edges_props_program(vector[pair[uint64_t, read_edges_props_params]] initial_args) nogil
+        read_n_edges_params read_n_edges_program(vector[pair[uint64_t, read_n_edges_params]] initial_args) nogil
         void start_migration()
         void single_stream_migration()
         void commit_graph()
@@ -332,6 +345,20 @@ cdef class Client:
         with nogil:
             c_rp = self.thisptr.read_edges_props_program(c_args)
         response = ReadEdgesPropsParams(edges_props=c_rp.edges_props)
+        return response
+
+    def read_n_edges(self, init_args):
+        cdef vector[pair[uint64_t, read_n_edges_params]] c_args
+        cdef pair[uint64_t, read_n_edges_params] arg_pair
+        for rp in init_args:
+            arg_pair.first = rp[0]
+            arg_pair.second.num_edges = rp[1].num_edges
+            for p in rp[1].edges_props:
+                arg_pair.second.edges_props.push_back(p)
+            c_args.push_back(arg_pair)
+        with nogil:
+            c_rp = self.thisptr.read_n_edges_program(c_args)
+        response = ReadNEdgesParams(edges_props=c_rp.edges_props)
         return response
 
     def start_migration(self):

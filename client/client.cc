@@ -226,6 +226,12 @@ client :: read_edges_props_program(std::vector<std::pair<uint64_t, node_prog::re
     return *run_node_program(node_prog::READ_EDGES_PROPS, initial_args);
 }
 
+node_prog::read_n_edges_params
+client :: read_n_edges_program(std::vector<std::pair<uint64_t, node_prog::read_n_edges_params>> initial_args)
+{
+    return *run_node_program(node_prog::READ_N_EDGES, initial_args);
+}
+
 void
 client :: start_migration()
 {

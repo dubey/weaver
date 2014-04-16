@@ -30,7 +30,8 @@ namespace node_prog
         DIJKSTRA,
         CLUSTERING,
         READ_NODE_PROPS,
-        READ_EDGES_PROPS
+        READ_EDGES_PROPS,
+        READ_N_EDGES
     };
 
 }
