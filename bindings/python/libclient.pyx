@@ -378,7 +378,6 @@ cdef class Client:
         cdef pair[uint64_t, edge_count_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
-            arg_pair.second.num_edges = rp[1].num_edges
             for p in rp[1].edges_props:
                 arg_pair.second.edges_props.push_back(p)
             c_args.push_back(arg_pair)

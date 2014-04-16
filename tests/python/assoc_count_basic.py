@@ -54,7 +54,7 @@ def exec_reads(reqs, cl, exec_time, idx):
         if response.edge_count < num_bins:
             edge_counts[response.edge_count] += 1
         else:
-            edge_count[-1] += 1
+            edge_counts[-1] += 1
         if cnt % 1000 == 0:
             print 'done ' + str(cnt) + ' by client ' + str(idx)
             for i in range(num_bins+1):
