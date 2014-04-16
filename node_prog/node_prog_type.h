@@ -31,7 +31,8 @@ namespace node_prog
         CLUSTERING,
         READ_NODE_PROPS,
         READ_EDGES_PROPS,
-        READ_N_EDGES
+        READ_N_EDGES,
+        EDGE_COUNT
     };
 
 }

@@ -1,9 +1,8 @@
 /*
  * ===============================================================
- *    Description:  Program to read the 'top' n edges, used to
- *                  simulate range queries for soc. net. workload.
+ *    Description:  Count number of edges at a node.
  *
- *        Created:  2014-04-15 21:30:10
+ *        Created:  2014-04-16 17:41:08
  *
  *         Author:  Ayush Dubey, dubey@cs.cornell.edu
  *
@@ -12,17 +11,16 @@
  * ===============================================================
  */
 
-#ifndef weaver_node_prog_read_n_edges_program_h_
-#define weaver_node_prog_read_n_edges_program_h_
+#ifndef weaver_node_prog_edge_count_program_h_
+#define weaver_node_prog_edge_count_program_h_
 
 namespace node_prog
 {
-    class read_n_edges_params : public virtual Node_Parameters_Base 
+    class edge_count_params : public virtual Node_Parameters_Base 
     {
         public:
-            uint64_t num_edges;
             std::vector<std::pair<std::string, std::string>> edges_props;
-            std::vector<uint64_t> return_edges;
+            uint64_t edge_count;
 
         public:
             virtual bool search_cache() {
@@ -35,54 +33,47 @@ namespace node_prog
 
             virtual uint64_t size() const 
             {
-                uint64_t toRet = message::size(num_edges)
-                    + message::size(edges_props)
-                    + message::size(return_edges);
+                uint64_t toRet = message::size(edges_props)
+                    + message::size(edge_count);
                 return toRet;
             }
 
             virtual void pack(e::buffer::packer& packer) const 
             {
-                message::pack_buffer(packer, num_edges);
                 message::pack_buffer(packer, edges_props);
-                message::pack_buffer(packer, return_edges);
+                message::pack_buffer(packer, edge_count);
             }
 
             virtual void unpack(e::unpacker& unpacker)
             {
-                message::unpack_buffer(unpacker, num_edges);
                 message::unpack_buffer(unpacker, edges_props);
-                message::unpack_buffer(unpacker, return_edges);
+                message::unpack_buffer(unpacker, edge_count);
             }
     };
 
-    struct read_n_edges_state : public virtual Node_State_Base
+    struct edge_count_state : public virtual Node_State_Base
     {
-        virtual ~read_n_edges_state() { }
+        virtual ~edge_count_state() { }
         virtual uint64_t size() const { return 0; }
         virtual void pack(e::buffer::packer&) const { }
         virtual void unpack(e::unpacker&) { }
     };
 
-    inline std::vector<std::pair<db::element::remote_node, read_n_edges_params>> 
-    read_n_edges_node_program(
+    inline std::vector<std::pair<db::element::remote_node, edge_count_params>> 
+    edge_count_node_program(
             node &n,
             db::element::remote_node &,
-            read_n_edges_params &params,
-            std::function<read_n_edges_state&()>,
+            edge_count_params &params,
+            std::function<edge_count_state&()>,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
             cache_response<Cache_Value_Base>*)
     {
         auto elist = n.get_edges();
-        int pushcnt = 0;
-        for (edge &e : elist) {
+        params.edge_count = 0;
+        for (edge &e: elist) {
             if (e.has_all_properties(params.edges_props)) {
-                pushcnt++;
-                params.return_edges.emplace_back(e.get_id());
-                if (--params.num_edges == 0) {
-                    break;
-                }
+                params.edge_count++;
             }
         }
         return {std::make_pair(db::element::coordinator, std::move(params))};

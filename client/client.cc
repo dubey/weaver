@@ -232,6 +232,12 @@ client :: read_n_edges_program(std::vector<std::pair<uint64_t, node_prog::read_n
     return *run_node_program(node_prog::READ_N_EDGES, initial_args);
 }
 
+node_prog::edge_count_params
+client :: edge_count_program(std::vector<std::pair<uint64_t, node_prog::edge_count_params>> initial_args)
+{
+    return *run_node_program(node_prog::EDGE_COUNT, initial_args);
+}
+
 void
 client :: start_migration()
 {

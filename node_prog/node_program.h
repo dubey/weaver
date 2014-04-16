@@ -27,14 +27,13 @@
 #include "db/element/remote_node.h"
 
 #include "node_prog_type.h"
-#include "dijkstra_program.h"
 #include "reach_program.h"
+#include "clustering_program.h"
+#include "dijkstra_program.h"
 #include "read_node_props_program.h"
 #include "read_edges_props_program.h"
 #include "read_n_edges_program.h"
-//#include "triangle_program.h"
-//#include "n_hop_reach_program.h"
-#include "clustering_program.h"
+#include "edge_count_program.h"
 
 namespace coordinator
 {
@@ -160,7 +159,9 @@ namespace node_prog
         { READ_EDGES_PROPS,
             new particular_node_program<read_edges_props_params, read_edges_props_state, Cache_Value_Base>(READ_EDGES_PROPS, node_prog::read_edges_props_node_program) },
         { READ_N_EDGES,
-            new particular_node_program<read_n_edges_params, read_n_edges_state, Cache_Value_Base>(READ_N_EDGES, node_prog::read_n_edges_node_program) }
+            new particular_node_program<read_n_edges_params, read_n_edges_state, Cache_Value_Base>(READ_N_EDGES, node_prog::read_n_edges_node_program) },
+        { EDGE_COUNT,
+            new particular_node_program<edge_count_params, edge_count_state, Cache_Value_Base>(EDGE_COUNT, node_prog::edge_count_node_program) }
     };
 }
 #endif //__NODE_PROG__

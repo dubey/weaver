@@ -30,6 +30,7 @@
 #include "node_prog/read_node_props_program.h"
 #include "node_prog/read_edges_props_program.h"
 #include "node_prog/read_n_edges_program.h"
+#include "node_prog/edge_count_program.h"
 
 namespace client
 {
@@ -63,6 +64,7 @@ namespace client
             node_prog::read_node_props_params read_node_props_program(std::vector<std::pair<uint64_t, node_prog::read_node_props_params>> initial_args);
             node_prog::read_edges_props_params read_edges_props_program(std::vector<std::pair<uint64_t, node_prog::read_edges_props_params>> initial_args);
             node_prog::read_n_edges_params read_n_edges_program(std::vector<std::pair<uint64_t, node_prog::read_n_edges_params>> initial_args);
+            node_prog::edge_count_params edge_count_program(std::vector<std::pair<uint64_t, node_prog::edge_count_params>> initial_args);
 
             void start_migration();
             void single_stream_migration();

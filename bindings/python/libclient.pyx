@@ -175,7 +175,7 @@ cdef extern from 'node_prog/dijkstra_program.h' namespace 'node_prog':
         uint64_t cost
 
 class DijkstraParams:
-    def __init__(self, src_id = 0, src_handle=RemoteNode(), dst_handle=0, edge_weight_name="weight", is_widest_path=False,
+    def __init__(self, src_id=0, src_handle=RemoteNode(), dst_handle=0, edge_weight_name="weight", is_widest_path=False,
             adding_nodes=False, prev_node=RemoteNode(), entries_to_add=[], next_node=0, final_path=[], cost=0):
         self.src_id = src_id
         self.src_handle = src_handle
@@ -195,7 +195,7 @@ cdef extern from 'node_prog/read_node_props_program.h' namespace 'node_prog':
         vector[pair[string, string]] node_props
 
 class ReadNodePropsParams:
-    def __init__(self, keys = [], node_props = []):
+    def __init__(self, keys=[], node_props=[]):
         self.keys = keys
         self.node_props = node_props
 
@@ -206,7 +206,7 @@ cdef extern from 'node_prog/read_edges_props_program.h' namespace 'node_prog':
         vector[pair[uint64_t, vector[pair[string, string]]]] edges_props
 
 class ReadEdgesPropsParams:
-    def __init__(self, edges = [], keys = [], edges_props = []):
+    def __init__(self, edges=[], keys=[], edges_props=[]):
         self.edges = edges
         self.keys = keys
         self.edges_props = edges_props
@@ -218,10 +218,20 @@ cdef extern from 'node_prog/read_n_edges_program.h' namespace 'node_prog':
         vector[uint64_t] return_edges
 
 class ReadNEdgesParams:
-    def __init__(self, num_edges = MAX_UINT64, edges_props = [], return_edges = []):
+    def __init__(self, num_edges=MAX_UINT64, edges_props=[], return_edges=[]):
         self.num_edges = num_edges
         self.edges_props = edges_props
         self.return_edges = return_edges
+
+cdef extern from 'node_prog/edge_count_program.h' namespace 'node_prog':
+    cdef cppclass edge_count_params:
+        vector[pair[string, string]] edges_props
+        uint64_t edge_count
+
+class EdgeCountParams:
+    def __init__(self, edges_props=[], edge_count=0):
+        self.edges_props = edges_props
+        self.edge_count = edge_count
 
 cdef extern from 'client/client.h' namespace 'client':
     cdef cppclass client:
@@ -241,6 +251,7 @@ cdef extern from 'client/client.h' namespace 'client':
         read_node_props_params read_node_props_program(vector[pair[uint64_t, read_node_props_params]] initial_args) nogil
         read_edges_props_params read_edges_props_program(vector[pair[uint64_t, read_edges_props_params]] initial_args) nogil
         read_n_edges_params read_n_edges_program(vector[pair[uint64_t, read_n_edges_params]] initial_args) nogil
+        edge_count_params edge_count_program(vector[pair[uint64_t, edge_count_params]] initial_args) nogil
         void start_migration()
         void single_stream_migration()
         void commit_graph()
@@ -360,6 +371,20 @@ cdef class Client:
         with nogil:
             c_rp = self.thisptr.read_n_edges_program(c_args)
         response = ReadNEdgesParams(return_edges=c_rp.return_edges)
+        return response
+
+    def edge_count(self, init_args):
+        cdef vector[pair[uint64_t, edge_count_params]] c_args
+        cdef pair[uint64_t, edge_count_params] arg_pair
+        for rp in init_args:
+            arg_pair.first = rp[0]
+            arg_pair.second.num_edges = rp[1].num_edges
+            for p in rp[1].edges_props:
+                arg_pair.second.edges_props.push_back(p)
+            c_args.push_back(arg_pair)
+        with nogil:
+            c_rp = self.thisptr.edge_count_program(c_args)
+        response = EdgeCountParams(edge_count=c_rp.edge_count)
         return response
 
     def start_migration(self):
