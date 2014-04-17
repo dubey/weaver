@@ -107,6 +107,9 @@ namespace coordinator
             std::vector<uint64_t> shard_node_count;
             uint64_t msg_count, msg_count_acks;
 
+            // testing
+            std::unordered_set<uint64_t> seen_done_id;
+
         public:
             timestamper(uint64_t vt, uint64_t server);
             void init();

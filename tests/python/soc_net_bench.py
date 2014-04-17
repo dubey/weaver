@@ -22,11 +22,11 @@ import libclient as client
 
 num_started = 0
 num_finished = 0
-num_clients = 100
+num_clients = 20
 cv = threading.Condition()
 
 class request_gen:
-    def __init__():
+    def __init__(self):
         # node handles are range(0, num_nodes)
         self.num_nodes = 81306 # snap twitter-combined
 
@@ -38,7 +38,7 @@ class request_gen:
         self.c_assoc_get = self.p_assoc_get
         self.c_assoc_range = self.c_assoc_get + self.p_assoc_range
         self.c_assoc_count = self.c_assoc_range + self.p_assoc_count
-        self.c_obj_get = c_assoc_count + self.p_obj_get
+        self.c_obj_get = self.c_assoc_count + self.p_obj_get
 
         self.p_write = 0.2
         self.p_assoc_add = 0.525
@@ -56,7 +56,7 @@ class request_gen:
                           'assoc_add', 'assoc_del', 'obj_add', 'obj_update', 'obj_del']
 
 
-    def get():
+    def get(self):
         coin_toss = random.random()
         n1 = random.randint(0, self.num_nodes-1)
         n2 = random.randint(0, self.num_nodes-1)
@@ -74,24 +74,23 @@ class request_gen:
             coin_toss = random.random()
             if coin_toss < self.c_assoc_add:
                 return [4, n1, n2]
-            elif coin_toss < self.c.assoc_del:
+            elif coin_toss < self.c_assoc_del:
                 return [5, n1, n2]
             elif coin_toss < self.c_obj_add:
                 return [6]
-            elif coin_toss < self.obj_update:
+            elif coin_toss < self.c_obj_update:
                 return [7, n1]
             else:
                 return [8, n1]
 
 
-def exec_work(cl):
+def exec_work(idx, cl, num_requests):
     global num_started
     global num_finished
     global num_clients
     global cv
-    num_requests = 2000
     assert(num_requests % 1000 == 0)
-    request_gen rgen
+    rgen = request_gen()
     egp = client.EdgeGetParams()
     ecp = client.EdgeCountParams()
     rnep = client.ReadNEdgesParams()
@@ -130,13 +129,14 @@ def exec_work(cl):
         else:
             print 'unknown request type'
             assert(False)
-        if rcnt % 1000 == 0:
+        if rcnt > 0 and rcnt % 1000 == 0:
             print 'done ' + str(rcnt) + ' by client ' + str(idx)
     with cv:
         num_finished += 1
         cv.notify_all()
 
 num_vts = 1
+num_requests = 2000
 
 clients = []
 for i in range(num_clients):
@@ -145,7 +145,7 @@ for i in range(num_clients):
 threads = []
 print "starting requests"
 for i in range(num_clients):
-    thr = threading.Thread(target=exec_work, args=(clients[i]))
+    thr = threading.Thread(target=exec_work, args=(i, clients[i], num_requests))
     thr.start()
     threads.append(thr)
 start_time = time.time()
