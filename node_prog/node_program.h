@@ -55,7 +55,7 @@ namespace node_prog
     struct node_function_type
     {
         public:
-            typedef std::vector<std::pair<db::element::remote_node, params_type>> (*value_type)(
+            typedef std::pair<search_type, std::vector<std::pair<db::element::remote_node, params_type>>> (*value_type)(
                 node&, // this node
                 db::element::remote_node&, // this remote node
                 params_type&,

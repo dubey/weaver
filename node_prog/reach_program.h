@@ -174,7 +174,7 @@ namespace node_prog
         }
     };
 
-    std::vector<std::pair<db::element::remote_node, reach_params>> 
+    std::pair<search_type, std::vector<std::pair<db::element::remote_node, reach_params>>>
     reach_node_program(
             node &n,
             db::element::remote_node &rn,

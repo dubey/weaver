@@ -1072,7 +1072,7 @@ inline void node_prog_loop(
 #ifdef WEAVER_CLDG
                 std::unordered_map<uint64_t, uint32_t> agg_msg_count;
 #endif
-                for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params) {
+                for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params.second) {
                     db::element::remote_node& rn = res.first; 
                     assert(rn.loc < NUM_SHARDS + SHARD_ID_INCR);
                     if (rn == db::element::coordinator || rn.loc == np.vt_id) {
@@ -1085,7 +1085,11 @@ inline void node_prog_loop(
                         message::prepare_message(*m, message::NODE_PROG_RETURN, np.prog_type_recvd, np.req_id, temppair);
                         S->comm.send(np.vt_id, m->buf);
                     } else {
-                        batched_node_progs[rn.loc].emplace_back(rn.id, std::move(res.second)); // TEMP: prev node was this_node
+                        if (next_node_params.first == node_prog::search_type::DEPTH_FIRST) {
+                            batched_node_progs[rn.loc].emplace_front(rn.id, std::move(res.second)); // TEMP: prev node was this_node
+                        } else { // BREADTH_FIRST
+                            batched_node_progs[rn.loc].emplace_back(rn.id, std::move(res.second)); // TEMP: prev node was this_node
+                        }
 #ifdef WEAVER_CLDG
                         agg_msg_count[node_id]++;
 #endif

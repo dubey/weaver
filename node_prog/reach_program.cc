@@ -50,7 +50,7 @@ namespace node_prog
         return true;
     }
 
-    std::vector<std::pair<db::element::remote_node, reach_params>> 
+    std::pair<search_type, std::vector<std::pair<db::element::remote_node, reach_params>>>
     reach_node_program(
             node &n,
             db::element::remote_node &rn,
@@ -61,13 +61,10 @@ namespace node_prog
             cache_response<reach_cache_value>*cache_response)
     {
         reach_node_state &state = state_getter();
-        /*
-        if (state.reachable == true) {
-            WDEBUG << "ITS HAPPENING" << std::endl;
-            return {};
-        }
-        */
         std::vector<std::pair<db::element::remote_node, reach_params>> next;
+        if (state.reachable == true) {
+            return std::make_pair(search_type::BREADTH_FIRST, next);
+        }
         bool false_reply = false;
         db::element::remote_node prev_node = params.prev_node;
         params.prev_node = rn;
@@ -79,7 +76,8 @@ namespace node_prog
                 params.path.emplace_back(rn);
                 params._search_cache = false; // never search on way back
             //    WDEBUG  << "found dest!" << std::endl;
-                return {std::make_pair(prev_node, params)};
+                next.emplace_back(std::make_pair(prev_node, params));
+                return std::make_pair(search_type::DEPTH_FIRST, next);
             } else {
                 // have not found it yet so follow all out edges
                 if (!state.visited) {
@@ -99,7 +97,8 @@ namespace node_prog
                                 params.path = std::dynamic_pointer_cast<reach_cache_value>(cache_response->get_value())->path; // XXX double check this path
                                 assert(params.path.size() > 0);
                                 //WDEBUG  << "Cache worked at node " << rn.id << " with path len " << params.path.size() << std::endl;
-                                return {std::make_pair(prev_node, params)}; // single length vector
+                                next.emplace_back(std::make_pair(prev_node, params));
+                                return std::make_pair(search_type::DEPTH_FIRST, next); // single length vector
                             } else {
                                 cache_response->invalidate();
                                 assert(false);
@@ -135,6 +134,7 @@ namespace node_prog
                 params.reachable = false;
                 next.emplace_back(std::make_pair(prev_node, params));
             }
+            return std::make_pair(search_type::BREADTH_FIRST, next);
         } else { // reply mode
             if (params.reachable) {
                 if (state.hops > params.hops) {
@@ -169,14 +169,11 @@ namespace node_prog
                 WDEBUG << "ALERT! Bad state value in reach program" << std::endl;
                 next.clear();
             }
+            if (params.reachable) {
+                return std::make_pair(search_type::DEPTH_FIRST, next);
+            } else {
+                return std::make_pair(search_type::BREADTH_FIRST, next);
+            }
         }
-        /*
-        WDEBUG << "propagating to "<< std::endl;
-        for (auto &pair : next) {
-            WDEBUG << pair.first.id << std::endl;
-        }
-        WDEBUG << std::endl;
-        */
-        return next;
     }
 }
