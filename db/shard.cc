@@ -971,51 +971,50 @@ inline void node_prog_loop(
     bool done_request = false;
     db::element::remote_node this_node(S->shard_id, 0);
 
-    while (!np.start_node_params.empty() && !done_request) {
-        for (auto &id_params : np.start_node_params) {
-            node_id = id_params.first;
-            ParamsType& params = id_params.second;
-            this_node.id = node_id;
-            db::element::node *node = S->acquire_node(node_id);
-            if (node == NULL || order::compare_two_vts(node->base.get_del_time(), *np.req_vclock)==0) {
-                if (node != NULL) {
-                    S->release_node(node);
-                } else {
-                    // node is being migrated here, but not yet completed
-                    std::vector<std::pair<uint64_t, ParamsType>> buf_node_params;
-                    buf_node_params.emplace_back(id_params);
-                    std::unique_ptr<message::message> m(new message::message());
-                    message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, np.prev_server, buf_node_params);
-                    S->migration_mutex.lock();
-                    if (S->deferred_reads.find(node_id) == S->deferred_reads.end()) {
-                        S->deferred_reads.emplace(node_id, std::vector<std::unique_ptr<message::message>>());
-                    }
-                    S->deferred_reads[node_id].emplace_back(std::move(m));
-                    WDEBUG << "Buffering read for node " << node_id << std::endl;
-                    S->migration_mutex.unlock();
-                }
-            } else if (node->state == db::element::node::mode::MOVED) {
-                // queueing/forwarding node program
-                //std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> fwd_node_params;
-                std::vector<std::pair<uint64_t, ParamsType>> fwd_node_params;
-                fwd_node_params.emplace_back(id_params);
-                std::unique_ptr<message::message> m(new message::message());
-                message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, np.prev_server, fwd_node_params);
-                uint64_t new_loc = node->new_loc;
+    while (!done_request && !np.start_node_params.empty()) {
+        auto &id_params = np.start_node_params.front();
+        node_id = id_params.first;
+        ParamsType& params = id_params.second;
+        this_node.id = node_id;
+        db::element::node *node = S->acquire_node(node_id);
+        if (node == NULL || order::compare_two_vts(node->base.get_del_time(), *np.req_vclock)==0) {
+            if (node != NULL) {
                 S->release_node(node);
-                S->comm.send(new_loc, m->buf);
-            } else { // node does exist
-                assert(node->state == db::element::node::mode::STABLE);
-
+            } else {
+                // node is being migrated here, but not yet completed
+                //std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> buf_node_params;
+                std::vector<std::pair<uint64_t, ParamsType>> buf_node_params;
+                buf_node_params.emplace_back(id_params);
+                std::unique_ptr<message::message> m(new message::message());
+                message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id,  np.prev_server, buf_node_params);
+                S->migration_mutex.lock();
+                if (S->deferred_reads.find(node_id) == S->deferred_reads.end()) {
+                    S->deferred_reads.emplace(node_id, std::vector<std::unique_ptr<message::message>>());
+                }
+                S->deferred_reads[node_id].emplace_back(std::move(m));
+                WDEBUG << "Buffering read for node " << node_id << std::endl;
+                S->migration_mutex.unlock();
+            }
+        } else if (node->state == db::element::node::mode::MOVED) {
+            // queueing/forwarding node program
+            //std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> fwd_node_params;
+            std::vector<std::pair<uint64_t, ParamsType>> fwd_node_params;
+            fwd_node_params.emplace_back(id_params);
+            std::unique_ptr<message::message> m(new message::message());
+            message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, np.prev_server, fwd_node_params);
+            uint64_t new_loc = node->new_loc;
+            S->release_node(node);
+            S->comm.send(new_loc, m->buf);
+        } else { // node does exist
+            assert(node->state == db::element::node::mode::STABLE);
 #ifdef WEAVER_NEW_CLDG
                 if (np.prev_server >= SHARD_ID_INCR) {
                     node->msg_count[np.prev_server - SHARD_ID_INCR]++;
                 }
 #endif
-
-                if (MAX_CACHE_ENTRIES)
-                {
-                if (params.search_cache()){ // && !node->checking_cache){
+            if (MAX_CACHE_ENTRIES)
+            {
+                if (params.search_cache()){ // && !node->checking_cache)
                     if (np.cache_value) { // cache value already found (from a fetch and restart node prog loop)
                         node->checking_cache = false;
                     } else if (!node->checking_cache) { // lookup cache value if another prog isnt already
@@ -1024,7 +1023,7 @@ inline void node_prog_loop(
                         if (run_prog_now) { // we fetched context and will give it to node program
                             node->checking_cache = false;
                         } else { 
-                        // go to next node while we fetch cache context for this one, cache_lookup releases node if false
+                            // go to next node while we fetch cache context for this one, cache_lookup releases node if false
                             continue;
                         }
                     } else if (node->checking_cache) {
@@ -1033,95 +1032,95 @@ inline void node_prog_loop(
                         S->watch_set_lookups_mutex.unlock();
                     }
                 }
-                }
+            }
 
-                node_state_getter = std::bind(get_or_create_state<NodeStateType>,
-                        np.prog_type_recvd, np.req_id, node_id);
+            node_state_getter = std::bind(get_or_create_state<NodeStateType>,
+                    np.prog_type_recvd, np.req_id, node_id);
 
-                if (S->check_done_request(np.req_id)) {
-                    done_request = true;
-                    S->release_node(node);
-                    break;
-                }
-                if (MAX_CACHE_ENTRIES)
-                {
+            if (S->check_done_request(np.req_id)) {
+                done_request = true;
+                S->release_node(node);
+                break;
+            }
+            if (MAX_CACHE_ENTRIES)
+            {
                 using namespace std::placeholders;
                 add_cache_func = std::bind(&db::caching::program_cache::add_cache_value, &(node->cache),
                         np.prog_type_recvd, _1, _2, _3, np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key
-                }
+            }
 
-                node->base.view_time = np.req_vclock;
-                // call node program
-                auto next_node_params = func(*node, this_node,
-                        params, // actual parameters for this node program
-                        node_state_getter, add_cache_func,
-                        (node_prog::cache_response<CacheValueType>*) np.cache_value.get());
-                if (MAX_CACHE_ENTRIES)
-                {
+            node->base.view_time = np.req_vclock; 
+            // call node program
+            auto next_node_params = func(*node, this_node,
+                    params, // actual parameters for this node program
+                    node_state_getter, add_cache_func,
+                    (node_prog::cache_response<CacheValueType>*) np.cache_value.get());
+            if (MAX_CACHE_ENTRIES)
+            {
                 if (np.cache_value) {
                     auto state = get_state_if_exists(np.prog_type_recvd, np.req_id, this_node.id);
                     if (state) {
                         state->contexts_found.insert(np.req_id);
                     }
                 }
-                }
-                np.cache_value.reset(NULL);
-                node->base.view_time = NULL; 
+            }
+            np.cache_value.reset(NULL);
+            node->base.view_time = NULL; 
+            np.start_node_params.pop_front();
 
-                // batch the newly generated node programs for onward propagation
+            // batch the newly generated node programs for onward propagation
 #ifdef WEAVER_CLDG
-                std::unordered_map<uint64_t, uint32_t> agg_msg_count;
+            std::unordered_map<uint64_t, uint32_t> agg_msg_count;
 #endif
-                for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params.second) {
-                    db::element::remote_node& rn = res.first; 
-                    assert(rn.loc < NUM_SHARDS + SHARD_ID_INCR);
-                    if (rn == db::element::coordinator || rn.loc == np.vt_id) {
-                        // mark requests as done, will be done for other shards by no-ops from coordinator
-                        S->add_done_request(np.req_id, np.prog_type_recvd);
-                        // signal to send back to vector timestamper that issued request
-                        // XXX get rid of pair, without pair it is not working for some reason
-                        std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
-                        std::unique_ptr<message::message> m(new message::message());
-                        message::prepare_message(*m, message::NODE_PROG_RETURN, np.prog_type_recvd, np.req_id, temppair);
-                        S->comm.send(np.vt_id, m->buf);
-                    } else {
-                        if (next_node_params.first == node_prog::search_type::DEPTH_FIRST) {
-                            batched_node_progs[rn.loc].emplace_front(rn.id, std::move(res.second)); // TEMP: prev node was this_node
-                        } else { // BREADTH_FIRST
-                            batched_node_progs[rn.loc].emplace_back(rn.id, std::move(res.second)); // TEMP: prev node was this_node
-                        }
-#ifdef WEAVER_CLDG
-                        agg_msg_count[node_id]++;
-#endif
+            for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params.second) {
+                db::element::remote_node& rn = res.first; 
+                assert(rn.loc < NUM_SHARDS + SHARD_ID_INCR);
+                if (rn == db::element::coordinator || rn.loc == np.vt_id) {
+                    // mark requests as done, will be done for other shards by no-ops from coordinator
+                    S->add_done_request(np.req_id, np.prog_type_recvd);
+                    // signal to send back to vector timestamper that issued request
+                    // XXX get rid of pair, without pair it is not working for some reason
+                    std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
+                    std::unique_ptr<message::message> m(new message::message());
+                    message::prepare_message(*m, message::NODE_PROG_RETURN, np.prog_type_recvd, np.req_id, temppair);
+                    S->comm.send(np.vt_id, m->buf);
+                } else {
+                    std::deque<node_params_t> &next_deque = (rn.loc == S->shard_id) ? np.start_node_params : batched_node_progs[rn.loc]; // TODO this is dumb just have a single data structure later
+                    if (next_node_params.first == node_prog::search_type::DEPTH_FIRST) {
+                        next_deque.emplace_front(rn.id, std::move(res.second));
+                    } else { // BREADTH_FIRST
+                        next_deque.emplace_back(rn.id, std::move(res.second));
                     }
-                }
-                S->release_node(node);
 #ifdef WEAVER_CLDG
-                S->msg_count_mutex.lock();
-                for (auto &p: agg_msg_count) {
-                    S->agg_msg_count[p.first] += p.second;
-                }
-                S->msg_count_mutex.unlock();
+                    agg_msg_count[node_id]++;
 #endif
-                uint64_t msg_count = 0;
-                // Only per hop batching
-                for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR; next_loc++) {
-                    if ((batched_node_progs.find(next_loc) != batched_node_progs.end() && !batched_node_progs[next_loc].empty())
-                        && next_loc != S->shard_id) {
-                        std::unique_ptr<message::message> m(new message::message());
-                        message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, shard_id, batched_node_progs[next_loc]);
-                        S->comm.send(next_loc, m->buf);
-                        batched_node_progs[next_loc].clear();
-                        msg_count++;
-                    }
                 }
             }
-            if (MAX_CACHE_ENTRIES)
-            {
-                assert(np.cache_value == false); // unique ptr is not assigned
+            S->release_node(node);
+#ifdef WEAVER_CLDG
+            S->msg_count_mutex.lock();
+            for (auto &p: agg_msg_count) {
+                S->agg_msg_count[p.first] += p.second;
+            }
+            S->msg_count_mutex.unlock();
+#endif
+            uint64_t msg_count = 0;
+            // Only per hop batching
+            for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR; next_loc++) {
+                if ((batched_node_progs.find(next_loc) != batched_node_progs.end() && !batched_node_progs[next_loc].empty())
+                        && next_loc != S->shard_id) {
+                    std::unique_ptr<message::message> m(new message::message());
+                    message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, shard_id, batched_node_progs[next_loc]);
+                    S->comm.send(next_loc, m->buf);
+                    batched_node_progs[next_loc].clear();
+                    msg_count++;
+                }
             }
         }
-        np.start_node_params = std::move(batched_node_progs[S->shard_id]);
+        if (MAX_CACHE_ENTRIES)
+        {
+            assert(np.cache_value == false); // unique ptr is not assigned
+        }
 
         if (S->check_done_request(np.req_id)) {
             done_request = true;
