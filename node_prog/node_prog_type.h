@@ -32,7 +32,8 @@ namespace node_prog
         READ_NODE_PROPS,
         READ_EDGES_PROPS,
         READ_N_EDGES,
-        EDGE_COUNT
+        EDGE_COUNT,
+        EDGE_GET
     };
 
 }

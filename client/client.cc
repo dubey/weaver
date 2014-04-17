@@ -238,6 +238,12 @@ client :: edge_count_program(std::vector<std::pair<uint64_t, node_prog::edge_cou
     return *run_node_program(node_prog::EDGE_COUNT, initial_args);
 }
 
+node_prog::edge_get_params
+client :: edge_get_program(std::vector<std::pair<uint64_t, node_prog::edge_get_params>> initial_args)
+{
+    return *run_node_program(node_prog::EDGE_GET, initial_args);
+}
+
 void
 client :: start_migration()
 {

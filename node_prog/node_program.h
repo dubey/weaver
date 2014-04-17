@@ -34,6 +34,7 @@
 #include "read_edges_props_program.h"
 #include "read_n_edges_program.h"
 #include "edge_count_program.h"
+#include "edge_get_program.h"
 
 namespace coordinator
 {
@@ -161,7 +162,9 @@ namespace node_prog
         { READ_N_EDGES,
             new particular_node_program<read_n_edges_params, read_n_edges_state, Cache_Value_Base>(READ_N_EDGES, node_prog::read_n_edges_node_program) },
         { EDGE_COUNT,
-            new particular_node_program<edge_count_params, edge_count_state, Cache_Value_Base>(EDGE_COUNT, node_prog::edge_count_node_program) }
+            new particular_node_program<edge_count_params, edge_count_state, Cache_Value_Base>(EDGE_COUNT, node_prog::edge_count_node_program) },
+        { EDGE_GET,
+            new particular_node_program<edge_get_params, edge_get_state, Cache_Value_Base>(EDGE_GET, node_prog::edge_get_node_program) },
     };
 }
 #endif //__NODE_PROG__
