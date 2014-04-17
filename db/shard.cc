@@ -12,6 +12,7 @@
  * ===============================================================
  */
 
+#include <deque>
 #include <iostream>
 #include <string>
 #include <signal.h>
@@ -960,7 +961,7 @@ inline void node_prog_loop(
     //typedef std::tuple<uint64_t, ParamsType, db::element::remote_node> node_params_t; // tuple of (node id, node prog params, prev node) not needed anymore I think
     typedef std::pair<uint64_t, ParamsType> node_params_t;
     // these are the node programs that will be propagated onwards
-    std::unordered_map<uint64_t, std::vector<node_params_t>> batched_node_progs;
+    std::unordered_map<uint64_t, std::deque<node_params_t>> batched_node_progs;
     // node state function
     std::function<NodeStateType&()> node_state_getter;
     std::function<void(std::shared_ptr<CacheValueType>,

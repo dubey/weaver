@@ -16,6 +16,7 @@
 #define weaver_node_prog_node_program_h_
 
 #include <vector>
+#include <deque>
 #include <map>
 #include <unordered_map>
 #include <po6/threads/mutex.h>
@@ -85,7 +86,7 @@ namespace node_prog
         std::shared_ptr<vc::vclock> req_vclock;
         uint64_t req_id;
         uint64_t prev_server;
-        std::vector<std::pair<uint64_t, ParamsType>> start_node_params;
+        std::deque<std::pair<uint64_t, ParamsType>> start_node_params;
         std::unique_ptr<db::caching::cache_response<CacheValueType>> cache_value; // XXX unique ptr needed?
 
         node_prog_running_state() {};
