@@ -200,6 +200,10 @@ namespace db
             std::unordered_map<std::pair<uint64_t, uint64_t>, void *> node_prog_running_states; // used for fetching cache contexts
             po6::threads::mutex node_prog_running_states_mutex;
 
+            po6::threads::mutex watch_set_lookups_mutex;
+            uint64_t watch_set_lookups;
+            uint64_t watch_set_nops;
+
     };
 
     inline
@@ -227,6 +231,8 @@ namespace db
         , max_done_clk(NUM_VTS, vc::vclock_t())
         , msg_count(0)
         , prog_state()
+        , watch_set_lookups(0)
+        , watch_set_nops(0)
     {
         assert(NUM_VTS == KRONOS_NUM_VTS);
         message::prog_state = &prog_state;

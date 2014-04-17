@@ -22,7 +22,7 @@
 #include "node_prog/reach_program.h"
 //#include "node_prog/n_hop_reach_program.h"
 //#include "node_prog/triangle_program.h"
-#include "node_prog/dijkstra_program.h"
+//#include "node_prog/dijkstra_program.h"
 #include "node_prog/clustering_program.h"
 #include "node_prog/read_node_props_program.h"
 #include "node_prog/read_edges_props_program.h"
@@ -221,12 +221,12 @@ namespace state
                             }
 
 */
-                            case node_prog::DIJKSTRA: {
-                                std::shared_ptr<node_prog::dijkstra_node_state> dns =
-                                    std::dynamic_pointer_cast<node_prog::dijkstra_node_state>(rmap.at(req_id)->at(node_id));
-                                sz += dns->size();
-                                break;
-                            }
+                            //case node_prog::DIJKSTRA: {
+                            //    std::shared_ptr<node_prog::dijkstra_node_state> dns =
+                            //        std::dynamic_pointer_cast<node_prog::dijkstra_node_state>(rmap.at(req_id)->at(node_id));
+                            //    sz += dns->size();
+                            //    break;
+                            //}
                             case node_prog::CLUSTERING: {
                                 std::shared_ptr<node_prog::clustering_node_state> cns =
                                     std::dynamic_pointer_cast<node_prog::clustering_node_state>(rmap.at(req_id)->at(node_id));
@@ -302,12 +302,12 @@ namespace state
                                 break;
                             }
 
-                            case node_prog::DIJKSTRA: {
-                                std::shared_ptr<node_prog::dijkstra_node_state> dns =
-                                    std::dynamic_pointer_cast<node_prog::dijkstra_node_state>(rmap.at(req_id)->at(node_id));
-                                dns->pack(packer);
-                                break;
-                            }
+                            //case node_prog::DIJKSTRA: {
+                            //    std::shared_ptr<node_prog::dijkstra_node_state> dns =
+                            //        std::dynamic_pointer_cast<node_prog::dijkstra_node_state>(rmap.at(req_id)->at(node_id));
+                            //    dns->pack(packer);
+                            //    break;
+                            //}
 
                             case node_prog::CLUSTERING: {
                                 std::shared_ptr<node_prog::clustering_node_state> cns =
@@ -386,12 +386,12 @@ namespace state
                     new_entry = std::dynamic_pointer_cast<node_prog::Node_State_Base>(rns);
                     break;
                 }
-                case node_prog::DIJKSTRA: {
-                    std::shared_ptr<node_prog::dijkstra_node_state> dns(new node_prog::dijkstra_node_state());
-                    dns->unpack(unpacker);
-                    new_entry = std::dynamic_pointer_cast<node_prog::Node_State_Base>(dns);
-                    break;
-                }
+                //case node_prog::DIJKSTRA: {
+                //    std::shared_ptr<node_prog::dijkstra_node_state> dns(new node_prog::dijkstra_node_state());
+                //    dns->unpack(unpacker);
+                //    new_entry = std::dynamic_pointer_cast<node_prog::Node_State_Base>(dns);
+                //    break;
+                //}
                 case node_prog::CLUSTERING: {
                     std::shared_ptr<node_prog::clustering_node_state> cns(new node_prog::clustering_node_state());
                     cns->unpack(unpacker);

@@ -32,6 +32,7 @@
 #include "node_prog/node.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
+#include "node_prog/base_classes.h"
 //#include "node_prog/triangle_program.h"
 
 // global static variables
@@ -71,6 +72,8 @@ end_program(int param)
 {
     WDEBUG << "Ending program, param = " << param << ", kronos num calls " << order::call_times->size()
         << ", kronos num cache hits = " << order::cache_hits << std::endl;
+    WDEBUG << "watch_set lookups originated from this shard " << S->watch_set_lookups << std::endl;
+    WDEBUG << "watch_set nops originated from this shard " << S->watch_set_nops << std::endl;
     //std::ofstream ktime("kronos_time.rec");
     //for (auto x: *order::call_times) {
     //    ktime << x << std::endl;
@@ -654,6 +657,11 @@ nop(uint64_t thread_id, void *noparg)
     free(nop_arg);
 }
 
+std::shared_ptr<node_prog::Node_State_Base> get_state_if_exists(node_prog::prog_type pType, uint64_t req_id, uint64_t node_id)
+{
+    return S->fetch_prog_req_state(pType, req_id, node_id);
+}
+
 template <typename NodeStateType>
 NodeStateType& get_or_create_state(node_prog::prog_type pType, uint64_t req_id, uint64_t node_id)
 {
@@ -847,6 +855,15 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         std::shared_ptr<vc::vclock> time_cached(std::get<1>(entry));
         std::shared_ptr<std::vector<db::element::remote_node>>& watch_set = std::get<2>(entry);
 
+        auto state = get_state_if_exists(np.prog_type_recvd, np.req_id, node_to_check->base.get_id());
+        if (state != NULL && state->contexts_found.find(np.req_id) != state->contexts_found.end()){
+            np.cache_value.reset(new db::caching::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
+            S->watch_set_lookups_mutex.lock();
+            S->watch_set_nops += watch_set->size();
+            S->watch_set_lookups_mutex.unlock();
+            return true;
+        }
+
         int64_t cmp_1 = order::compare_two_vts(*time_cached, *np.req_vclock);
         if (cmp_1 >= 1){ // cached value is newer or from this same request
             return true;
@@ -870,8 +887,13 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         // map from loc to list of ids on that shard we need context from for this request
         std::vector<uint64_t> local_contexts_to_fetch; 
         std::unordered_map<uint64_t, std::vector<uint64_t>> contexts_to_fetch; 
-        for (db::element::remote_node& watch_ptr : *watch_set)
-        {
+
+        S->watch_set_lookups_mutex.lock();
+        //WDEBUG << "doing lookup for contexts from node " << node_to_check->base.get_id() << std::endl;
+        S->watch_set_lookups += watch_set->size();
+        S->watch_set_lookups_mutex.unlock();
+
+        for (db::element::remote_node& watch_ptr : *watch_set) {
             db::element::remote_node& watch_node = (db::element::remote_node &) watch_ptr; // XXX safe cast?
             if (watch_node.loc == S->shard_id) { 
                 local_contexts_to_fetch.emplace_back(watch_node.id); // fetch this state after we send requests to other servers
@@ -992,7 +1014,7 @@ inline void node_prog_loop(
                 if (MAX_CACHE_ENTRIES)
                 {
                 if (params.search_cache()){ // && !node->checking_cache){
-                    if (np.cache_value) { // cache value already found (from a fetch)
+                    if (np.cache_value) { // cache value already found (from a fetch and restart node prog loop)
                         node->checking_cache = false;
                     } else if (!node->checking_cache) { // lookup cache value if another prog isnt already
                         node->checking_cache = true;
@@ -1053,6 +1075,15 @@ inline void node_prog_loop(
                         agg_msg_count[node_id]++;
 #endif
                     }
+                }
+                if (MAX_CACHE_ENTRIES)
+                {
+                if (np.cache_value) {
+                    auto state = get_state_if_exists(np.prog_type_recvd, np.req_id, this_node.id);
+                    if (state) {
+                        state->contexts_found.insert(np.req_id);
+                    }
+                }
                 }
                 S->release_node(node);
 #ifdef WEAVER_CLDG

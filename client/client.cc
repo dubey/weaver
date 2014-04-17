@@ -208,11 +208,13 @@ client :: run_clustering_program(std::vector<std::pair<uint64_t, node_prog::clus
     return *run_node_program(node_prog::CLUSTERING, initial_args);
 }
 
+/*
 node_prog::dijkstra_params
 client :: run_dijkstra_program(std::vector<std::pair<uint64_t, node_prog::dijkstra_params>> initial_args)
 {
     return *run_node_program(node_prog::DIJKSTRA, initial_args);
 }
+*/
 
 node_prog::read_node_props_params
 client :: read_node_props_program(std::vector<std::pair<uint64_t, node_prog::read_node_props_params>> initial_args)

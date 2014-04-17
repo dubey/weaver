@@ -151,8 +151,8 @@ namespace node_prog
     std::map<prog_type, node_program*> programs = {
         { REACHABILITY,
             new particular_node_program<reach_params, reach_node_state, reach_cache_value>(REACHABILITY, node_prog::reach_node_program) },
-        { DIJKSTRA,
-            new particular_node_program<dijkstra_params, dijkstra_node_state, Cache_Value_Base>(DIJKSTRA, node_prog::dijkstra_node_program) },
+//        { DIJKSTRA,
+ //           new particular_node_program<dijkstra_params, dijkstra_node_state, Cache_Value_Base>(DIJKSTRA, node_prog::dijkstra_node_program) },
         { CLUSTERING,
             new particular_node_program<clustering_params, clustering_node_state, Cache_Value_Base>(CLUSTERING, node_prog::clustering_node_program) },
         { READ_NODE_PROPS,

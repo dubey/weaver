@@ -163,6 +163,7 @@ class ClusteringParams:
         self.outgoing = outgoing
         self.clustering_coeff = clustering_coeff
 
+'''
 cdef extern from 'node_prog/dijkstra_program.h' namespace 'node_prog':
     cdef cppclass dijkstra_params:
         uint64_t src_id
@@ -191,6 +192,7 @@ class DijkstraParams:
         self.next_node = next_node
         self.final_path = final_path
         self.cost = cost
+'''
 
 cdef extern from 'node_prog/read_node_props_program.h' namespace 'node_prog':
     cdef cppclass read_node_props_params:
@@ -262,7 +264,7 @@ cdef extern from 'client/client.h' namespace 'client':
         bint end_tx(uint64_t tx_id) nogil
         reach_params run_reach_program(vector[pair[uint64_t, reach_params]] initial_args) nogil
         clustering_params run_clustering_program(vector[pair[uint64_t, clustering_params]] initial_args) nogil
-        dijkstra_params run_dijkstra_program(vector[pair[uint64_t, dijkstra_params]] initial_args) nogil
+        #dijkstra_params run_dijkstra_program(vector[pair[uint64_t, dijkstra_params]] initial_args) nogil
         read_node_props_params read_node_props_program(vector[pair[uint64_t, read_node_props_params]] initial_args) nogil
         read_edges_props_params read_edges_props_program(vector[pair[uint64_t, read_edges_props_params]] initial_args) nogil
         read_n_edges_params read_n_edges_program(vector[pair[uint64_t, read_n_edges_params]] initial_args) nogil
@@ -339,6 +341,7 @@ cdef class Client:
             c_cp = self.thisptr.run_clustering_program(c_args)
         response = ClusteringParams(clustering_coeff=c_cp.clustering_coeff)
         return response
+    '''
     def run_dijkstra_program(self, init_args):
         cdef vector[pair[uint64_t, dijkstra_params]] c_args
         cdef pair[uint64_t, dijkstra_params] arg_pair
@@ -353,6 +356,7 @@ cdef class Client:
             c_dp = self.thisptr.run_dijkstra_program(c_args)
         response = DijkstraParams(final_path=c_dp.final_path, cost=c_dp.cost)
         return response
+    '''
     def read_node_props(self, init_args):
         cdef vector[pair[uint64_t, read_node_props_params]] c_args
         cdef pair[uint64_t, read_node_props_params] arg_pair
