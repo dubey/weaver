@@ -74,6 +74,7 @@ end_program(int param)
         << ", kronos num cache hits = " << order::cache_hits << std::endl;
     WDEBUG << "watch_set lookups originated from this shard " << S->watch_set_lookups << std::endl;
     WDEBUG << "watch_set nops originated from this shard " << S->watch_set_nops << std::endl;
+    WDEBUG << "cache skips on this shard " << S->cache_skips << std::endl;
     //std::ofstream ktime("kronos_time.rec");
     //for (auto x: *order::call_times) {
     //    ktime << x << std::endl;
@@ -1025,6 +1026,10 @@ inline void node_prog_loop(
                         // go to next node while we fetch cache context for this one, cache_lookup releases node if false
                             continue;
                         }
+                    } else if (node->checking_cache) {
+                        S->watch_set_lookups_mutex.lock();
+                        S->cache_skips++;
+                        S->watch_set_lookups_mutex.unlock();
                     }
                 }
                 }
@@ -1050,6 +1055,15 @@ inline void node_prog_loop(
                         params, // actual parameters for this node program
                         node_state_getter, add_cache_func,
                         (node_prog::cache_response<CacheValueType>*) np.cache_value.get());
+                if (MAX_CACHE_ENTRIES)
+                {
+                if (np.cache_value) {
+                    auto state = get_state_if_exists(np.prog_type_recvd, np.req_id, this_node.id);
+                    if (state) {
+                        state->contexts_found.insert(np.req_id);
+                    }
+                }
+                }
                 np.cache_value.reset(NULL);
                 node->base.view_time = NULL; 
 
@@ -1075,15 +1089,6 @@ inline void node_prog_loop(
                         agg_msg_count[node_id]++;
 #endif
                     }
-                }
-                if (MAX_CACHE_ENTRIES)
-                {
-                if (np.cache_value) {
-                    auto state = get_state_if_exists(np.prog_type_recvd, np.req_id, this_node.id);
-                    if (state) {
-                        state->contexts_found.insert(np.req_id);
-                    }
-                }
                 }
                 S->release_node(node);
 #ifdef WEAVER_CLDG
