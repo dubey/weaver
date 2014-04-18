@@ -44,13 +44,26 @@
 
 namespace std {
     // so we can use a pair as key to unordered_map
+    template <typename T1, typename T2, typename T3>
+        struct hash<std::tuple<T1, T2, T3>>
+        {
+            size_t operator()(const std::tuple<T1, T2, T3>& k) const
+            {
+                size_t hash = std::hash<uint64_t>()(std::get<0>(k));
+                hash ^= std::hash<uint64_t>()(std::get<1>(k)) + 0x9e3779b9 + (hash<<6) + (hash>>2);
+                hash ^= std::hash<uint64_t>()(std::get<2>(k)) + 0x9e3779b9 + (hash<<6) + (hash>>2);
+                return hash;
+            }
+        };
+    // so we can use a pair as key to unordered_map
     template <typename T1, typename T2>
         struct hash<std::pair<T1, T2>>
         {
             size_t operator()(const std::pair<T1, T2>& k) const
             {
-                using std::hash;
-                return hash<T1>()(k.first) ^ (hash<T2>()(k.second) + 1);
+                size_t hash = std::hash<uint64_t>()(k.first);
+                hash ^= std::hash<uint64_t>()(k.second) + 0x9e3779b9 + (hash<<6) + (hash>>2);
+                return hash;
             }
         };
 }
@@ -197,7 +210,7 @@ namespace db
             void add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
             bool check_done_request(uint64_t req_id);
 
-            std::unordered_map<std::pair<uint64_t, uint64_t>, void *> node_prog_running_states; // used for fetching cache contexts
+            std::unordered_map<std::tuple<uint64_t, uint64_t, uint64_t>, void *> node_prog_running_states; // used for fetching cache contexts
             po6::threads::mutex node_prog_running_states_mutex;
 
             po6::threads::mutex watch_set_lookups_mutex;

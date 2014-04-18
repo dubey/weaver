@@ -82,7 +82,6 @@ namespace element
 
             // for node prog caching
             caching::program_cache cache; // TODO init me, also XXX migrate me
-            bool checking_cache;
 
 #ifdef weaver_debug_
             // testing
@@ -122,7 +121,6 @@ namespace element
         , already_migr(false)
         , dependent_del(0)
         , cache()
-        , checking_cache(false)
     { }
 
     inline void
