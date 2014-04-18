@@ -1104,17 +1104,15 @@ inline void node_prog_loop(
             }
             S->msg_count_mutex.unlock();
 #endif
-            uint64_t msg_count = 0;
             // Only per hop batching
-            for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR; next_loc++) {
-                if ((batched_node_progs.find(next_loc) != batched_node_progs.end() && !batched_node_progs[next_loc].empty())
-                        && next_loc != S->shard_id) {
-                    std::unique_ptr<message::message> m(new message::message());
-                    message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, shard_id, batched_node_progs[next_loc]);
-                    S->comm.send(next_loc, m->buf);
-                    batched_node_progs[next_loc].clear();
-                    msg_count++;
-                }
+        }
+        for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR; next_loc++) {
+            if (batched_node_progs.find(next_loc) != batched_node_progs.end() && next_loc != S->shard_id && batched_node_progs[next_loc].size() > BATCH_MSG_SIZE) {
+                std::unique_ptr<message::message> m(new message::message());
+                message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, shard_id, batched_node_progs[next_loc]);
+                S->comm.send(next_loc, m->buf);
+                batched_node_progs[next_loc].clear();
+                msg_count++;
             }
         }
         if (MAX_CACHE_ENTRIES)
@@ -1124,6 +1122,16 @@ inline void node_prog_loop(
 
         if (S->check_done_request(np.req_id)) {
             done_request = true;
+        }
+    }
+    for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR; next_loc++) {
+        if ((batched_node_progs.find(next_loc) != batched_node_progs.end() && !batched_node_progs[next_loc].empty())
+                && next_loc != S->shard_id) {
+            std::unique_ptr<message::message> m(new message::message());
+            message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, batched_node_progs[next_loc]);
+            S->comm.send(next_loc, m->buf);
+            batched_node_progs[next_loc].clear();
+            //msg_count++;
         }
     }
 #ifdef WEAVER_MSG_COUNT
