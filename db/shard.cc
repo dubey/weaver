@@ -804,7 +804,7 @@ fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<
 void
 unpack_and_fetch_context(uint64_t, void *req)
 {
-    db::message_wrapper *request = (db::message_wrapper*)req;
+    db::message_wrapper *request = (db::message_wrapper*) req;
     std::vector<uint64_t> ids;
     vc::vclock req_vclock, time_cached;
     uint64_t vt_id, req_id, from_shard;
@@ -820,6 +820,7 @@ unpack_and_fetch_context(uint64_t, void *req)
     message::prepare_message(m, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock,
             lookup_tuple, contexts, cache_valid);
     S->comm.send(from_shard, m.buf);
+    //WDEBUG << "Sent context reply to shard " << from_shard << " with req_id " << req_id<< " and node " << std::get<2>(lookup_tuple) << std::endl;
     delete request;
 }
 
@@ -847,7 +848,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         std::pair<uint64_t, ParamsType>& cur_node_params)
 {
     assert(node_to_check != NULL);
-    assert(np.cache_value == false); // cache_value is not already assigned
+    assert(!np.cache_value); // cache_value is not already assigned
     np.cache_value = NULL; // it is unallocated anyway
     if (node_to_check->cache.cache.count(cache_key) == 0){
         return true;
@@ -879,7 +880,6 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         }
 
         // save node info for re-aquirining node if needed
-        db::element::node *local_node_ptr = node_to_check;
         uint64_t local_node_id = node_to_check->base.get_id();
         S->release_node(node_to_check);
 
@@ -895,12 +895,14 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         }
 
         // add running state to shard global structure while context is being fetched
-        std::tuple<uint64_t, uint64_t, uint64_t> lookup_tuple(key, np.req_id, local_node_id);
+        std::tuple<uint64_t, uint64_t, uint64_t> lookup_tuple(cache_key, np.req_id, local_node_id);
         S->node_prog_running_states_mutex.lock();
         if (S->node_prog_running_states.find(lookup_tuple) != S->node_prog_running_states.end()) {
-            fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (fetch_state<ParamsType, NodeStateType, CacheValueType> *) = S->node_prog_running_states[lookup_tuple];
+            fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (fetch_state<ParamsType, NodeStateType, CacheValueType> *) S->node_prog_running_states[lookup_tuple];
             fstate->prog_state.start_node_params.push_back(cur_node_params);
+            //WDEBUG << " START NODE PARAMS is " << fstate->prog_state.start_node_params.size() << " for request id " << np.req_id << " node id "  << local_node_id << std::endl;
             S->node_prog_running_states_mutex.unlock();
+            return true;
         } else {
             fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = new fetch_state<ParamsType, NodeStateType, CacheValueType>(np);
             fstate->replies_left = contexts_to_fetch.size();
@@ -911,13 +913,18 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
 
             // map from node_id, lookup_tuple to node_prog_running_state
             S->node_prog_running_states[lookup_tuple] = fstate; 
+            //WDEBUG << "NODE PROG RUNNIGN STATES SIZE IS " << S->node_prog_running_states.size() << std::endl;
             S->node_prog_running_states_mutex.unlock();
 
             for (uint64_t i = SHARD_ID_INCR; i < NUM_SHARDS + SHARD_ID_INCR; i++) {
-                auto & shard_list_pair = contexts_to_fetch[i];
-                std::unique_ptr<message::message> m(new message::message());
-                message::prepare_message(*m, message::NODE_CONTEXT_FETCH, np.prog_type_recvd, np.req_id, np.vt_id, np.req_vclock, *time_cached, lookup_tuple, shard_list_pair.second, S->shard_id);
-                S->comm.send(shard_list_pair.first, m->buf);
+                if (contexts_to_fetch.find(i) != contexts_to_fetch.end()) {
+                    auto & context_list = contexts_to_fetch[i];
+                    assert(context_list.size() > 0);
+                    std::unique_ptr<message::message> m(new message::message());
+                    message::prepare_message(*m, message::NODE_CONTEXT_FETCH, np.prog_type_recvd, np.req_id, np.vt_id, np.req_vclock, *time_cached, lookup_tuple, context_list, S->shard_id);
+                    S->comm.send(i, m->buf);
+                    //WDEBUG << "sending to " << i << " FOR REQ ID " << np.req_id << " AND NODE " << local_node_id << std::endl;
+                }
             }
         }
         return false;
@@ -982,6 +989,11 @@ inline void node_prog_loop(
                     node->msg_count[np.prev_server - SHARD_ID_INCR]++;
                 }
 #endif
+            if (S->check_done_request(np.req_id)) { // XXX is this in the right place
+                done_request = true;
+                S->release_node(node);
+                break;
+            }
             if (MAX_CACHE_ENTRIES)
             {
                 if (params.search_cache() && !np.cache_value) {
@@ -989,6 +1001,7 @@ inline void node_prog_loop(
                     bool run_prog_now = cache_lookup<ParamsType, NodeStateType, CacheValueType>(node, params.cache_key(), np, id_params);
                     if (!run_prog_now) { 
                         // go to next node while we fetch cache context for this one, cache_lookup releases node if false
+                        np.start_node_params.pop_front();
                         continue;
                     }
                 }
@@ -997,11 +1010,6 @@ inline void node_prog_loop(
             node_state_getter = std::bind(get_or_create_state<NodeStateType>,
                     np.prog_type_recvd, np.req_id, node_id);
 
-            if (S->check_done_request(np.req_id)) {
-                done_request = true;
-                S->release_node(node);
-                break;
-            }
             if (MAX_CACHE_ENTRIES)
             {
                 using namespace std::placeholders;
@@ -1010,6 +1018,8 @@ inline void node_prog_loop(
             }
 
             node->base.view_time = np.req_vclock; 
+            assert(np.req_vclock);
+            assert(np.req_vclock->clock.size() == NUM_VTS);
             // call node program
             auto next_node_params = func(*node, this_node,
                     params, // actual parameters for this node program
@@ -1023,8 +1033,8 @@ inline void node_prog_loop(
                         state->contexts_found.insert(np.req_id);
                     }
                 }
+                np.cache_value.reset(NULL);
             }
-            np.cache_value.reset(NULL);
             node->base.view_time = NULL; 
             np.start_node_params.pop_front();
 
@@ -1139,7 +1149,9 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             lookup_tuple, contexts_to_add, cache_valid);
 
     S->node_prog_running_states_mutex.lock();
-    assert(S->node_prog_running_states.count(lookup_tuple) == 1);
+    uint64_t count = S->node_prog_running_states.count(lookup_tuple);
+    //WDEBUG << count << " DA COUNT IS for req id " << req_id << " AND NODE ID " << std::get<2>(lookup_tuple) << std::endl;
+    assert(count == 1);
     struct fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (struct fetch_state<ParamsType, NodeStateType, CacheValueType> *) S->node_prog_running_states.at(lookup_tuple);
     S->node_prog_running_states_mutex.unlock();
 
