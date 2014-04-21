@@ -879,9 +879,23 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
             return true;
         }
 
-        // save node info for re-aquirining node if needed
-        uint64_t local_node_id = node_to_check->base.get_id();
-        S->release_node(node_to_check);
+        std::tuple<uint64_t, uint64_t, uint64_t> lookup_tuple(cache_key, np.req_id, node_to_check->base.get_id());
+
+        S->node_prog_running_states_mutex.lock();
+        if (S->node_prog_running_states.find(lookup_tuple) != S->node_prog_running_states.end()) {
+            S->watch_set_lookups_mutex.lock();
+            S->watch_set_piggybacks++;
+            S->watch_set_lookups_mutex.unlock();
+            fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (fetch_state<ParamsType, NodeStateType, CacheValueType> *) S->node_prog_running_states[lookup_tuple];
+            fstate->monitor.lock(); // maybe move up
+            S->node_prog_running_states_mutex.unlock();
+            fstate->prog_state.start_node_params.push_back(cur_node_params);
+            fstate->monitor.unlock();
+
+            S->release_node(node_to_check);
+            node_to_check = NULL;
+            return false;
+        }
 
         // map from loc to list of ids on that shard we need context from for this request
         std::unordered_map<uint64_t, std::vector<uint64_t>> contexts_to_fetch; 
@@ -895,39 +909,29 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         }
 
         // add running state to shard global structure while context is being fetched
-        std::tuple<uint64_t, uint64_t, uint64_t> lookup_tuple(cache_key, np.req_id, local_node_id);
-        S->node_prog_running_states_mutex.lock();
-        if (S->node_prog_running_states.find(lookup_tuple) != S->node_prog_running_states.end()) {
-            S->watch_set_lookups_mutex.lock();
-            S->watch_set_piggybacks++;
-            S->watch_set_lookups_mutex.unlock();
-            fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (fetch_state<ParamsType, NodeStateType, CacheValueType> *) S->node_prog_running_states[lookup_tuple];
-            fstate->monitor.lock();
-            fstate->prog_state.start_node_params.push_back(cur_node_params);
-            fstate->monitor.unlock();
-            //WDEBUG << " START NODE PARAMS is " << fstate->prog_state.start_node_params.size() << " for request id " << np.req_id << " node id "  << local_node_id << std::endl;
-            S->node_prog_running_states_mutex.unlock();
-        } else {
-            fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = new fetch_state<ParamsType, NodeStateType, CacheValueType>(np);
-            // map from node_id, lookup_tuple to node_prog_running_state
+        fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = new fetch_state<ParamsType, NodeStateType, CacheValueType>(np);
+        fstate->monitor.lock();
+        S->node_prog_running_states[lookup_tuple] = fstate; 
+        S->node_prog_running_states_mutex.unlock();
 
-            fstate->replies_left = contexts_to_fetch.size();
-            fstate->prog_state.cache_value.reset(new db::caching::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
-            fstate->prog_state.start_node_params.push_back(cur_node_params);
-            fstate->cache_valid = true;
-            assert(fstate->prog_state.start_node_params.size() == 1);
-            S->node_prog_running_states[lookup_tuple] = fstate; 
-            S->node_prog_running_states_mutex.unlock();
+        fstate->replies_left = contexts_to_fetch.size();
+        fstate->prog_state.cache_value.reset(new db::caching::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
+        fstate->prog_state.start_node_params.push_back(cur_node_params);
+        fstate->cache_valid = true;
+        assert(fstate->prog_state.start_node_params.size() == 1);
+        fstate->monitor.unlock();
 
-            for (uint64_t i = SHARD_ID_INCR; i < NUM_SHARDS + SHARD_ID_INCR; i++) {
-                if (contexts_to_fetch.find(i) != contexts_to_fetch.end()) {
-                    auto & context_list = contexts_to_fetch[i];
-                    assert(context_list.size() > 0);
-                    std::unique_ptr<message::message> m(new message::message());
-                    message::prepare_message(*m, message::NODE_CONTEXT_FETCH, np.prog_type_recvd, np.req_id, np.vt_id, np.req_vclock, *time_cached, lookup_tuple, context_list, S->shard_id);
-                    S->comm.send(i, m->buf);
-                    //WDEBUG << "sending to " << i << " FOR REQ ID " << np.req_id << " AND NODE " << local_node_id << std::endl;
-                }
+        // map from node_id, lookup_tuple to node_prog_running_state
+        S->release_node(node_to_check);
+        node_to_check = NULL;
+
+        for (uint64_t i = SHARD_ID_INCR; i < NUM_SHARDS + SHARD_ID_INCR; i++) {
+            if (contexts_to_fetch.find(i) != contexts_to_fetch.end()) {
+                auto & context_list = contexts_to_fetch[i];
+                assert(context_list.size() > 0);
+                std::unique_ptr<message::message> m(new message::message());
+                message::prepare_message(*m, message::NODE_CONTEXT_FETCH, np.prog_type_recvd, np.req_id, np.vt_id, np.req_vclock, *time_cached, lookup_tuple, context_list, S->shard_id);
+                S->comm.send(i, m->buf);
             }
         }
         return false;
@@ -1156,9 +1160,9 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     //WDEBUG << count << " DA COUNT IS for req id " << req_id << " AND NODE ID " << std::get<2>(lookup_tuple) << std::endl;
     assert(count == 1);
     struct fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (struct fetch_state<ParamsType, NodeStateType, CacheValueType> *) S->node_prog_running_states.at(lookup_tuple);
+    fstate->monitor.lock();
     S->node_prog_running_states_mutex.unlock();
 
-    fstate->monitor.lock();
     auto& existing_context = fstate->prog_state.cache_value->context;
 
     if (fstate->cache_valid) {
@@ -1175,7 +1179,9 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     }
 
     fstate->replies_left--;
-    if (fstate->replies_left == 0) {
+    bool run_now = fstate->replies_left == 0;
+    fstate->monitor.unlock();
+    if (run_now) {
         //remove from map
         S->node_prog_running_states_mutex.lock();
         size_t num_erased = S->node_prog_running_states.erase(lookup_tuple);
@@ -1184,10 +1190,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         UNUSED(num_erased); // if asserts are off
 
         node_prog_loop<ParamsType, NodeStateType, CacheValueType>(enclosed_node_prog_func, fstate->prog_state);
-        fstate->monitor.unlock();
         delete fstate;
-    } else { // wait for more replies
-        fstate->monitor.unlock();
     }
 }
 
