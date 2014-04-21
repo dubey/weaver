@@ -216,7 +216,7 @@ namespace db
             po6::threads::mutex watch_set_lookups_mutex;
             uint64_t watch_set_lookups;
             uint64_t watch_set_nops;
-            uint64_t cache_skips;
+            uint64_t watch_set_piggybacks;
             //po6::threads::mutex node_prog_mutex;
             //std::unordered_map<uint64_t, std::deque<node_params_t>> node_progs_deque; // req id to node prog deque
 
@@ -249,7 +249,7 @@ namespace db
         , prog_state()
         , watch_set_lookups(0)
         , watch_set_nops(0)
-        , cache_skips(0)
+        , watch_set_piggybacks(0)
     {
         assert(NUM_VTS == KRONOS_NUM_VTS);
         message::prog_state = &prog_state;

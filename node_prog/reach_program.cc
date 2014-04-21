@@ -12,7 +12,7 @@
  * ================================================================
  */
 
-#define weaver_debug_
+//#define weaver_debug_
 #include "reach_program.h"
 
 namespace node_prog

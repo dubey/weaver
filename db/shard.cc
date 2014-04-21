@@ -75,7 +75,7 @@ end_program(int param)
         << ", kronos num cache hits = " << order::cache_hits << std::endl;
     WDEBUG << "watch_set lookups originated from this shard " << S->watch_set_lookups << std::endl;
     WDEBUG << "watch_set nops originated from this shard " << S->watch_set_nops << std::endl;
-    WDEBUG << "cache skips on this shard " << S->cache_skips << std::endl;
+    WDEBUG << "watch set piggybacks on this shard " << S->watch_set_piggybacks << std::endl;
     //std::ofstream ktime("kronos_time.rec");
     //for (auto x: *order::call_times) {
     //    ktime << x << std::endl;
@@ -827,7 +827,7 @@ unpack_and_fetch_context(uint64_t, void *req)
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 struct fetch_state{
     node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> prog_state;
-    po6::threads::mutex counter_mutex;
+    po6::threads::mutex monitor;
     uint64_t replies_left;
     bool cache_valid;
 
@@ -898,22 +898,25 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         std::tuple<uint64_t, uint64_t, uint64_t> lookup_tuple(cache_key, np.req_id, local_node_id);
         S->node_prog_running_states_mutex.lock();
         if (S->node_prog_running_states.find(lookup_tuple) != S->node_prog_running_states.end()) {
+            S->watch_set_lookups_mutex.lock();
+            S->watch_set_piggybacks++;
+            S->watch_set_lookups_mutex.unlock();
             fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (fetch_state<ParamsType, NodeStateType, CacheValueType> *) S->node_prog_running_states[lookup_tuple];
+            fstate->monitor.lock();
             fstate->prog_state.start_node_params.push_back(cur_node_params);
+            fstate->monitor.unlock();
             //WDEBUG << " START NODE PARAMS is " << fstate->prog_state.start_node_params.size() << " for request id " << np.req_id << " node id "  << local_node_id << std::endl;
             S->node_prog_running_states_mutex.unlock();
-            return true;
         } else {
             fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = new fetch_state<ParamsType, NodeStateType, CacheValueType>(np);
+            // map from node_id, lookup_tuple to node_prog_running_state
+
             fstate->replies_left = contexts_to_fetch.size();
             fstate->prog_state.cache_value.reset(new db::caching::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
             fstate->prog_state.start_node_params.push_back(cur_node_params);
             fstate->cache_valid = true;
             assert(fstate->prog_state.start_node_params.size() == 1);
-
-            // map from node_id, lookup_tuple to node_prog_running_state
             S->node_prog_running_states[lookup_tuple] = fstate; 
-            //WDEBUG << "NODE PROG RUNNIGN STATES SIZE IS " << S->node_prog_running_states.size() << std::endl;
             S->node_prog_running_states_mutex.unlock();
 
             for (uint64_t i = SHARD_ID_INCR; i < NUM_SHARDS + SHARD_ID_INCR; i++) {
@@ -1155,7 +1158,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     struct fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (struct fetch_state<ParamsType, NodeStateType, CacheValueType> *) S->node_prog_running_states.at(lookup_tuple);
     S->node_prog_running_states_mutex.unlock();
 
-    fstate->counter_mutex.lock();
+    fstate->monitor.lock();
     auto& existing_context = fstate->prog_state.cache_value->context;
 
     if (fstate->cache_valid) {
@@ -1181,10 +1184,10 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         UNUSED(num_erased); // if asserts are off
 
         node_prog_loop<ParamsType, NodeStateType, CacheValueType>(enclosed_node_prog_func, fstate->prog_state);
-        fstate->counter_mutex.unlock();
+        fstate->monitor.unlock();
         delete fstate;
     } else { // wait for more replies
-        fstate->counter_mutex.unlock();
+        fstate->monitor.unlock();
     }
 }
 

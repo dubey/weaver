@@ -15,6 +15,7 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+#include <deque>
 #include <stdlib.h>
 #include <signal.h>
 #include <sys/time.h>
@@ -235,7 +236,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, pType, initial_args);
     
     // map from locations to a list of start_node_params to send to that shard
-    std::unordered_map<uint64_t, std::vector<std::pair<uint64_t, ParamsType>>> initial_batches; 
+    std::unordered_map<uint64_t, std::deque<std::pair<uint64_t, ParamsType>>> initial_batches; 
     bool global_req = false;
 
     // lookup mappings
