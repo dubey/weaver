@@ -885,6 +885,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
             fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (fetch_state<ParamsType, NodeStateType, CacheValueType> *) S->node_prog_running_states[lookup_tuple];
             fstate->monitor.lock(); // maybe move up
             S->node_prog_running_states_mutex.unlock();
+            assert(fstate->replies_left > 0);
             fstate->prog_state.start_node_params.push_back(cur_node_params);
             fstate->monitor.unlock();
 
@@ -901,22 +902,22 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         S->release_node(node_to_check);
         node_to_check = NULL;
 
-        // map from loc to list of ids on that shard we need context from for this request
-        std::unordered_map<uint64_t, std::vector<uint64_t>> contexts_to_fetch; 
-
-        S->watch_set_lookups_mutex.lock();
-        S->watch_set_lookups++;
-        S->watch_set_lookups_mutex.unlock();
-
-        for (db::element::remote_node& watch_node : *watch_set) {
-            contexts_to_fetch[watch_node.loc].emplace_back(watch_node.id);
-        }
-
         // add running state to shard global structure while context is being fetched
         fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = new fetch_state<ParamsType, NodeStateType, CacheValueType>(np);
         fstate->monitor.lock();
         S->node_prog_running_states[lookup_tuple] = fstate; 
         S->node_prog_running_states_mutex.unlock();
+
+        S->watch_set_lookups_mutex.lock();
+        S->watch_set_lookups++;
+        S->watch_set_lookups_mutex.unlock();
+
+        // map from loc to list of ids on that shard we need context from for this request
+        std::unordered_map<uint64_t, std::vector<uint64_t>> contexts_to_fetch; 
+
+        for (db::element::remote_node& watch_node : *watch_set) {
+            contexts_to_fetch[watch_node.loc].emplace_back(watch_node.id);
+        }
 
         fstate->replies_left = contexts_to_fetch.size();
         fstate->prog_state.cache_value.swap(future_cache_response);
@@ -1164,6 +1165,14 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     assert(count == 1);
     struct fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (struct fetch_state<ParamsType, NodeStateType, CacheValueType> *) S->node_prog_running_states.at(lookup_tuple);
     fstate->monitor.lock();
+    fstate->replies_left--;
+    bool run_now = fstate->replies_left == 0;
+    if (run_now) {
+        //remove from map
+        size_t num_erased = S->node_prog_running_states.erase(lookup_tuple);
+        assert(num_erased == 1);
+        UNUSED(num_erased); // if asserts are off
+    }
     S->node_prog_running_states_mutex.unlock();
 
     auto& existing_context = fstate->prog_state.cache_value->context;
@@ -1181,20 +1190,12 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         }
     }
 
-    fstate->replies_left--;
-    bool run_now = fstate->replies_left == 0;
     if (run_now) {
-        //remove from map
-        S->node_prog_running_states_mutex.lock();
-        size_t num_erased = S->node_prog_running_states.erase(lookup_tuple);
-        S->node_prog_running_states_mutex.unlock();
-        assert(num_erased == 1);
-        UNUSED(num_erased); // if asserts are off
-        fstate->monitor.unlock();
-
         node_prog_loop<ParamsType, NodeStateType, CacheValueType>(enclosed_node_prog_func, fstate->prog_state);
+        fstate->monitor.unlock();
         delete fstate;
-    } else {
+    }
+    else {
         fstate->monitor.unlock();
     }
 }
