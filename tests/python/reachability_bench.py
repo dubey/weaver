@@ -42,13 +42,12 @@ def exec_reads(reqs, sc, exec_time, idx):
     with cv:
         while num_started < num_clients:
             cv.wait()
-    rp = client.ReadNodePropsParams()
     start = time.time()
     cnt = 0
     for (source, dest) in reqs:
         cnt += 1
-        sc.reachability(source, dest, caching = True)
-        if (not sc.reachable):
+        reachable = sc.reachability(source, dest, caching = True)[0]
+        if (not reachable):
             print str(dest) + " not reachable from " + str(source)
     end = time.time()
     with cv:
