@@ -27,12 +27,12 @@ num_finished = 0
 cv = threading.Condition()
 
 dests_per_client = 1
-requests_per_dest = 5
+requests_per_dest = 20
 
 num_nodes = 81306 # snap twitter-combined
 # node handles are range(0, num_nodes)
 num_vts = 1
-num_clients = 10
+num_clients = 25
 
 def exec_reads(reqs, sc, exec_time, idx):
     global num_started
@@ -48,7 +48,8 @@ def exec_reads(reqs, sc, exec_time, idx):
     for (source, dest) in reqs:
         cnt += 1
         sc.reachability(source, dest, caching = True)
-        print 'done ' + str(cnt) + ' by client ' + str(idx)
+        if (not sc.reachable):
+            print str(dest) + " not reachable from " + str(source)
     end = time.time()
     with cv:
         num_finished += 1
@@ -60,6 +61,7 @@ for i in range(num_clients):
     clients.append(simple_client.simple_client(client.Client(client._CLIENT_ID + i, i % num_vts)))
 
 reqs = []
+random.seed(42)
 for i in range(num_clients):
     cl_reqs = []
     for _ in range(dests_per_client):
