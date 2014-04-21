@@ -884,21 +884,17 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         if (S->node_prog_running_states.find(lookup_tuple) != S->node_prog_running_states.end()) {
             fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (fetch_state<ParamsType, NodeStateType, CacheValueType> *) S->node_prog_running_states[lookup_tuple];
             fstate->monitor.lock(); // maybe move up
-            if (fstate->replies_left > 0) {
-                S->node_prog_running_states_mutex.unlock();
-                fstate->prog_state.start_node_params.push_back(cur_node_params);
-                fstate->monitor.unlock();
+            S->node_prog_running_states_mutex.unlock();
+            fstate->prog_state.start_node_params.push_back(cur_node_params);
+            fstate->monitor.unlock();
 
-                S->release_node(node_to_check);
-                node_to_check = NULL;
+            S->release_node(node_to_check);
+            node_to_check = NULL;
 
-                S->watch_set_lookups_mutex.lock();
-                S->watch_set_piggybacks++;
-                S->watch_set_lookups_mutex.unlock();
-                return false;
-            } else {
-                fstate->monitor.unlock();
-            }
+            S->watch_set_lookups_mutex.lock();
+            S->watch_set_piggybacks++;
+            S->watch_set_lookups_mutex.unlock();
+            return false;
         }
 
         std::unique_ptr<db::caching::cache_response<CacheValueType>> future_cache_response(new db::caching::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
@@ -1187,7 +1183,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     fstate->replies_left--;
     bool run_now = fstate->replies_left == 0;
-    fstate->monitor.unlock();
     if (run_now) {
         //remove from map
         S->node_prog_running_states_mutex.lock();
@@ -1195,9 +1190,12 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         S->node_prog_running_states_mutex.unlock();
         assert(num_erased == 1);
         UNUSED(num_erased); // if asserts are off
+        fstate->monitor.unlock();
 
         node_prog_loop<ParamsType, NodeStateType, CacheValueType>(enclosed_node_prog_func, fstate->prog_state);
         delete fstate;
+    } else {
+        fstate->monitor.unlock();
     }
 }
 
