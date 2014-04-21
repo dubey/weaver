@@ -1163,6 +1163,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     S->node_prog_running_states_mutex.lock();
     uint64_t count = S->node_prog_running_states.count(lookup_tuple);
     //WDEBUG << count << " DA COUNT IS for req id " << req_id << " AND NODE ID " << std::get<2>(lookup_tuple) << std::endl;
+    assert(count != 0);
+    assert(count != 2);
     assert(count == 1);
     struct fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (struct fetch_state<ParamsType, NodeStateType, CacheValueType> *) S->node_prog_running_states.at(lookup_tuple);
     fstate->monitor.lock();
