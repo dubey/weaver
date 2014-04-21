@@ -861,9 +861,11 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         auto state = get_state_if_exists(np.prog_type_recvd, np.req_id, node_to_check->base.get_id());
         if (state != NULL && state->contexts_found.find(np.req_id) != state->contexts_found.end()){
             np.cache_value.reset(new db::caching::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
+#ifdef weaver_debug_
             S->watch_set_lookups_mutex.lock();
             S->watch_set_nops++;
             S->watch_set_lookups_mutex.unlock();
+#endif
             return true;
         }
 
@@ -892,9 +894,11 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
             S->release_node(node_to_check);
             node_to_check = NULL;
 
+#ifdef weaver_debug_
             S->watch_set_lookups_mutex.lock();
             S->watch_set_piggybacks++;
             S->watch_set_lookups_mutex.unlock();
+#endif
             return false;
         }
 
@@ -908,9 +912,11 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         S->node_prog_running_states[lookup_tuple] = fstate; 
         S->node_prog_running_states_mutex.unlock();
 
+#ifdef weaver_debug_
         S->watch_set_lookups_mutex.lock();
         S->watch_set_lookups++;
         S->watch_set_lookups_mutex.unlock();
+#endif
 
         // map from loc to list of ids on that shard we need context from for this request
         std::unordered_map<uint64_t, std::vector<uint64_t>> contexts_to_fetch; 
@@ -1159,9 +1165,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     S->node_prog_running_states_mutex.lock();
     uint64_t count = S->node_prog_running_states.count(lookup_tuple);
-    //WDEBUG << count << " DA COUNT IS for req id " << req_id << " AND NODE ID " << std::get<2>(lookup_tuple) << std::endl;
-    assert(count != 0);
-    assert(count != 2);
     assert(count == 1);
     struct fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (struct fetch_state<ParamsType, NodeStateType, CacheValueType> *) S->node_prog_running_states.at(lookup_tuple);
     fstate->monitor.lock();
