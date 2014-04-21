@@ -874,8 +874,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         assert(cmp_1 == 0);
 
         if (watch_set->empty()){ // no context needs to be fetched
-            std::unique_ptr<db::caching::cache_response<CacheValueType>> cache_response(new db::caching::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
-            np.cache_value = std::move(cache_response);
+            np.cache_value.reset(new db::caching::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
             return true;
         }
 
@@ -883,19 +882,28 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
 
         S->node_prog_running_states_mutex.lock();
         if (S->node_prog_running_states.find(lookup_tuple) != S->node_prog_running_states.end()) {
-            S->watch_set_lookups_mutex.lock();
-            S->watch_set_piggybacks++;
-            S->watch_set_lookups_mutex.unlock();
             fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (fetch_state<ParamsType, NodeStateType, CacheValueType> *) S->node_prog_running_states[lookup_tuple];
             fstate->monitor.lock(); // maybe move up
-            S->node_prog_running_states_mutex.unlock();
-            fstate->prog_state.start_node_params.push_back(cur_node_params);
-            fstate->monitor.unlock();
+            if (fstate->replies_left > 0) {
+                S->node_prog_running_states_mutex.unlock();
+                fstate->prog_state.start_node_params.push_back(cur_node_params);
+                fstate->monitor.unlock();
 
-            S->release_node(node_to_check);
-            node_to_check = NULL;
-            return false;
+                S->release_node(node_to_check);
+                node_to_check = NULL;
+
+                S->watch_set_lookups_mutex.lock();
+                S->watch_set_piggybacks++;
+                S->watch_set_lookups_mutex.unlock();
+                return false;
+            } else {
+                fstate->monitor.unlock();
+            }
         }
+
+        std::unique_ptr<db::caching::cache_response<CacheValueType>> future_cache_response(new db::caching::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
+        S->release_node(node_to_check);
+        node_to_check = NULL;
 
         // map from loc to list of ids on that shard we need context from for this request
         std::unordered_map<uint64_t, std::vector<uint64_t>> contexts_to_fetch; 
@@ -915,15 +923,12 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         S->node_prog_running_states_mutex.unlock();
 
         fstate->replies_left = contexts_to_fetch.size();
-        fstate->prog_state.cache_value.reset(new db::caching::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
+        fstate->prog_state.cache_value.swap(future_cache_response);
         fstate->prog_state.start_node_params.push_back(cur_node_params);
         fstate->cache_valid = true;
         assert(fstate->prog_state.start_node_params.size() == 1);
         fstate->monitor.unlock();
 
-        // map from node_id, lookup_tuple to node_prog_running_state
-        S->release_node(node_to_check);
-        node_to_check = NULL;
 
         for (uint64_t i = SHARD_ID_INCR; i < NUM_SHARDS + SHARD_ID_INCR; i++) {
             if (contexts_to_fetch.find(i) != contexts_to_fetch.end()) {
