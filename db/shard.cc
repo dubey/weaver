@@ -543,13 +543,13 @@ nop(uint64_t thread_id, void *noparg)
     message::message msg;
     db::nop_data *nop_arg = (db::nop_data*)noparg;
     bool check_move_migr, check_init_migr, check_migr_step3;
-    
+
     // increment qts
     S->increment_qts(thread_id, nop_arg->vt_id, 1);
-    
+
     // note done progs for state clean up
     S->add_done_requests(nop_arg->done_reqs);
-    
+
     S->migration_mutex.lock();
 
     // increment nop count, trigger migration step 2 after check
@@ -589,7 +589,7 @@ nop(uint64_t thread_id, void *noparg)
     S->max_done_id[nop_arg->vt_id] = nop_arg->max_done_id;
     S->max_done_clk[nop_arg->vt_id] = std::move(nop_arg->max_done_clk);
     check_migr_step3 = check_step3();
-    
+
     // atmost one check should be true
     assert(!(check_move_migr && check_init_migr)
         && !(check_init_migr && check_migr_step3)
@@ -603,7 +603,7 @@ nop(uint64_t thread_id, void *noparg)
         S->shard_node_count[shrd] = nop_arg->shard_node_count[shrd];
     }
     S->migration_mutex.unlock();
-    
+
     // call appropriate function based on check
     if (check_move_migr) {
         migrate_node_step2_req();

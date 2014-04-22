@@ -40,7 +40,7 @@ class request_gen:
         self.c_assoc_count = self.c_assoc_range + self.p_assoc_count
         self.c_obj_get = self.c_assoc_count + self.p_obj_get
 
-        self.p_write = 0.2
+        self.p_write = 0.002
         self.p_assoc_add = 0.525
         self.p_assoc_del = 0.083
         self.p_obj_add = 0.165
@@ -71,17 +71,18 @@ class request_gen:
             else:
                 return [3, n1]
         else:
-            coin_toss = random.random()
-            if coin_toss < self.c_assoc_add:
-                return [4, n1, n2]
-            elif coin_toss < self.c_assoc_del:
-                return [5, n1, n2]
-            elif coin_toss < self.c_obj_add:
-                return [6]
-            elif coin_toss < self.c_obj_update:
-                return [7, n1]
-            else:
-                return [8, n1]
+            return [4, n1, n2]
+            #coin_toss = random.random()
+            #if coin_toss < self.c_assoc_add:
+            #    return [4, n1, n2]
+            #elif coin_toss < self.c_assoc_del:
+            #    return [5, n1, n2]
+            #elif coin_toss < self.c_obj_add:
+            #    return [6]
+            #elif coin_toss < self.c_obj_update:
+            #    return [7, n1]
+            #else:
+            #    return [8, n1]
 
 
 def exec_work(idx, cl, num_requests):
@@ -116,19 +117,23 @@ def exec_work(idx, cl, num_requests):
         elif req[0] == 3: # obj get
             prog_args = [(req[1], rnpp)]
             response = cl.read_node_props(prog_args)
-        elif req[0] == 4: # assoc add
-            print 'write 4'
-        elif req[0] == 5: # assoc del
-            print 'write 5'
-        elif req[0] == 6: # obj add
-            print 'write 6'
-        elif req[0] == 7: # obj update
-            print 'write 7'
-        elif req[0] == 8: # obj del
-            print 'write 8'
         else:
-            print 'unknown request type'
-            assert(False)
+            tx_id = cl.begin_tx()
+            cl.create_edge(tx_id, req[1], req[2])
+            cl.end_tx(tx_id)
+        #elif req[0] == 4: # assoc add
+        #    print 'write 4'
+        #elif req[0] == 5: # assoc del
+        #    print 'write 5'
+        #elif req[0] == 6: # obj add
+        #    print 'write 6'
+        #elif req[0] == 7: # obj update
+        #    print 'write 7'
+        #elif req[0] == 8: # obj del
+        #    print 'write 8'
+        #else:
+        #    print 'unknown request type'
+        #    assert(False)
         if rcnt > 0 and rcnt % 1000 == 0:
             print 'done ' + str(rcnt) + ' by client ' + str(idx)
     with cv:

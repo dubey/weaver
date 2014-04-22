@@ -208,16 +208,11 @@ queue_manager :: get_wr_req()
         exec_vt_id = 0; // only one timestamper
     } else {
         // compare timestamps, may call Kronos
-        //std::cerr << "comparing vclks\n";
         std::vector<vc::vclock> timestamps;
         timestamps.reserve(NUM_VTS);
         for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
             timestamps.emplace_back(wr_queues[vt_id].top()->vclock);
             assert(timestamps.back().clock.size() == NUM_VTS);
-            //for (int j = 0; j < NUM_VTS; j++) {
-            //    std::cerr << timestamps.back().clock.at(j) << ",";
-            //}
-            //std::cerr << std::endl;
         }
         exec_vt_id = order::compare_vts(timestamps);
     }
