@@ -24,6 +24,7 @@
 //#include "node_prog/triangle_program.h"
 //#include "node_prog/dijkstra_program.h"
 #include "node_prog/clustering_program.h"
+#include "node_prog/two_neighborhood_program.h"
 #include "node_prog/read_node_props_program.h"
 #include "node_prog/read_edges_props_program.h"
 #include "node_prog/read_n_edges_program.h"
@@ -89,6 +90,7 @@ namespace state
         prog_state.emplace(node_prog::N_HOP_REACHABILITY, new_req_map);
         prog_state.emplace(node_prog::TRIANGLE_COUNT, new_req_map);
         prog_state.emplace(node_prog::CLUSTERING, new_req_map);
+        prog_state.emplace(node_prog::TWO_NEIGHBORHOOD, new_req_map);
         prog_state.emplace(node_prog::DIJKSTRA, new_req_map);
         prog_state.emplace(node_prog::READ_NODE_PROPS, new_req_map);
         prog_state.emplace(node_prog::READ_EDGES_PROPS, new_req_map);
@@ -233,6 +235,12 @@ namespace state
                                 sz += cns->size();
                                 break;
                             }
+                            case node_prog::TWO_NEIGHBORHOOD: {
+                                std::shared_ptr<node_prog::two_neighborhood_state> cns =
+                                    std::dynamic_pointer_cast<node_prog::two_neighborhood_state>(rmap.at(req_id)->at(node_id));
+                                sz += cns->size();
+                                break;
+                            }
                             case node_prog::READ_NODE_PROPS: {
                                 std::shared_ptr<node_prog::read_node_props_state> cns =
                                     std::dynamic_pointer_cast<node_prog::read_node_props_state>(rmap.at(req_id)->at(node_id));
@@ -316,6 +324,13 @@ namespace state
                                 break;
                             }
 
+                            case node_prog::TWO_NEIGHBORHOOD: {
+                                std::shared_ptr<node_prog::two_neighborhood_state> cns =
+                                    std::dynamic_pointer_cast<node_prog::two_neighborhood_state>(rmap.at(req_id)->at(node_id));
+                                cns->pack(packer);
+                                break;
+                            }
+
                             case node_prog::READ_NODE_PROPS: {
                                 std::shared_ptr<node_prog::read_node_props_state> cns =
                                     std::dynamic_pointer_cast<node_prog::read_node_props_state>(rmap.at(req_id)->at(node_id));
@@ -394,6 +409,13 @@ namespace state
                 //}
                 case node_prog::CLUSTERING: {
                     std::shared_ptr<node_prog::clustering_node_state> cns(new node_prog::clustering_node_state());
+                    cns->unpack(unpacker);
+                    new_entry = std::dynamic_pointer_cast<node_prog::Node_State_Base>(cns);
+                    break;
+                }
+
+                case node_prog::TWO_NEIGHBORHOOD: {
+                    std::shared_ptr<node_prog::two_neighborhood_state> cns(new node_prog::two_neighborhood_state());
                     cns->unpack(unpacker);
                     new_entry = std::dynamic_pointer_cast<node_prog::Node_State_Base>(cns);
                     break;

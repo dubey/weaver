@@ -36,6 +36,8 @@
 #include "read_n_edges_program.h"
 #include "edge_count_program.h"
 #include "edge_get_program.h"
+#include "clustering_program.h"
+#include "two_neighborhood_program.h"
 
 namespace coordinator
 {
@@ -156,6 +158,8 @@ namespace node_prog
  //           new particular_node_program<dijkstra_params, dijkstra_node_state, Cache_Value_Base>(DIJKSTRA, node_prog::dijkstra_node_program) },
         { CLUSTERING,
             new particular_node_program<clustering_params, clustering_node_state, Cache_Value_Base>(CLUSTERING, node_prog::clustering_node_program) },
+        { TWO_NEIGHBORHOOD,
+            new particular_node_program<two_neighborhood_params, two_neighborhood_state, Cache_Value_Base>(TWO_NEIGHBORHOOD, node_prog::two_neighborhood_node_program) },
         { READ_NODE_PROPS,
             new particular_node_program<read_node_props_params, read_node_props_state, Cache_Value_Base>(READ_NODE_PROPS, node_prog::read_node_props_node_program) },
         { READ_EDGES_PROPS,

@@ -51,7 +51,7 @@ namespace node_prog
                     + message::size(hops)
                     + message::size(outgoing)
                     + message::size(prev_node)
-                    + message::size(response_list)
+                    + message::size(response_list);
                 return toRet;
             }
 
@@ -88,7 +88,7 @@ namespace node_prog
             uint64_t toRet = message::size(visited)
                 + message::size(responses_left)
                 + message::size(prev_node)
-                + message::size(response_list)
+                + message::size(response_list);
                 return toRet;
         }
 
@@ -109,7 +109,7 @@ namespace node_prog
         }
     };
 
-    inline std::pair<search_type, std::vector<std::pair<db::element::remote_node, two_neighborhood_params>>>
+    std::pair<search_type, std::vector<std::pair<db::element::remote_node, two_neighborhood_params>>>
     two_neighborhood_node_program(
             node &n,
             db::element::remote_node &,

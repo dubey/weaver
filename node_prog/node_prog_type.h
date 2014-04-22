@@ -35,6 +35,7 @@ namespace node_prog
         TRIANGLE_COUNT,
         DIJKSTRA,
         CLUSTERING,
+        TWO_NEIGHBORHOOD,
         READ_NODE_PROPS,
         READ_EDGES_PROPS,
         READ_N_EDGES,
