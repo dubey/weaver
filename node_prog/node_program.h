@@ -159,7 +159,7 @@ namespace node_prog
         { CLUSTERING,
             new particular_node_program<clustering_params, clustering_node_state, Cache_Value_Base>(CLUSTERING, node_prog::clustering_node_program) },
         { TWO_NEIGHBORHOOD,
-            new particular_node_program<two_neighborhood_params, two_neighborhood_state, Cache_Value_Base>(TWO_NEIGHBORHOOD, node_prog::two_neighborhood_node_program) },
+            new particular_node_program<two_neighborhood_params, two_neighborhood_state, two_neighborhood_cache_value>(TWO_NEIGHBORHOOD, node_prog::two_neighborhood_node_program) },
         { READ_NODE_PROPS,
             new particular_node_program<read_node_props_params, read_node_props_state, Cache_Value_Base>(READ_NODE_PROPS, node_prog::read_node_props_node_program) },
         { READ_EDGES_PROPS,
