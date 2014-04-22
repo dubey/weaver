@@ -20,6 +20,38 @@
 
 namespace node_prog
 {
+    inline bool
+    check_cache_context(cache_response<two_neighborhood_cache_value> &cr)
+    {
+        std::vector<node_cache_context>& contexts = cr.get_context();
+        if (contexts.size() == 0) {
+            return true;
+        }
+        reach_cache_value &cv = *cr.get_value();
+        // path not valid if broken by:
+        for (node_cache_context& node_context : contexts)
+        {
+            if (node_context.node_deleted){  // node deletion
+                WDEBUG  << "Cache entry invalid because of node deletion" << std::endl;
+                return false;
+            }
+            // edge deletion, see if path was broken
+            for (size_t i = 1; i < cv.path.size(); i++) {
+                if (node_context.node == cv.path.at(i)) {
+                    db::element::remote_node &path_next_node = cv.path.at(i-1);
+                    for(auto &edge : node_context.edges_deleted){
+                        if (edge.nbr == path_next_node) {
+                            WDEBUG  << "Cache entry invalid because of edge deletion" << std::endl;
+                            return false;
+                        }
+                    }
+                    break; // path not broken here, move on
+                }
+            }
+        }
+        WDEBUG  << "Cache entry with context size " << contexts.size() << " valid" << std::endl;
+        return true;
+    }
     std::pair<search_type, std::vector<std::pair<db::element::remote_node, two_neighborhood_params>>>
         two_neighborhood_node_program(
                 node &n,
@@ -28,8 +60,18 @@ namespace node_prog
                 std::function<two_neighborhood_state&()> state_getter,
                 std::function<void(std::shared_ptr<node_prog::two_neighborhood_cache_value>,
                     std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)> &add_cache_func,
-                cache_response<Cache_Value_Base> *cache_response)
+                cache_response<two_neighborhood_cache_value> *cache_response)
         {
+            if (MAX_CACHE_ENTRIES && params._search_cache  && cache_response != NULL && cache_response->get_value().props_key.compare(params.props_key) == 0) {
+                assert(params.on_hop == 0 && params.outgoing);
+                if (check_cache_context(*cache_response)) { // if context is valid
+
+                } else {
+                    cache_response->invalidate();
+                }
+            }
+
+            params._search_cache = false;
             two_neighborhood_state &state = state_getter();
             std::vector<std::pair<db::element::remote_node, two_neighborhood_params>> next;
             if (params.outgoing) {

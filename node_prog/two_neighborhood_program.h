@@ -156,13 +156,13 @@ namespace node_prog
 
     std::pair<search_type, std::vector<std::pair<db::element::remote_node, two_neighborhood_params>>>
     two_neighborhood_node_program(
-            node &n,
+            node &,
             db::element::remote_node &,
-            two_neighborhood_params &params,
+            two_neighborhood_params &,
             std::function<two_neighborhood_state&()>,
             std::function<void(std::shared_ptr<two_neighborhood_cache_value>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)> &add_cache_func,
-            cache_response<Cache_Value_Base> *cache_response);
+                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)> &,
+            cache_response<two_neighborhood_cache_value> *);
 }
 
 #endif
