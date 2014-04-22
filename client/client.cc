@@ -208,6 +208,12 @@ client :: run_clustering_program(std::vector<std::pair<uint64_t, node_prog::clus
     return *run_node_program(node_prog::CLUSTERING, initial_args);
 }
 
+node_prog::two_neighborhood_params
+client :: run_two_neighborhood_program(std::vector<std::pair<uint64_t, node_prog::two_neighborhood_params>> initial_args)
+{
+    return *run_node_program(node_prog::TWO_NEIGHBORHOOD, initial_args);
+}
+
 /*
 node_prog::dijkstra_params
 client :: run_dijkstra_program(std::vector<std::pair<uint64_t, node_prog::dijkstra_params>> initial_args)

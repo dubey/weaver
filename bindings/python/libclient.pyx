@@ -105,6 +105,7 @@ cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
         TRIANGLE_COUNT
         DIJKSTRA
         CLUSTERING
+        TWO_NEIGHBORHOOD
         READ_NODE_PROPS
         READ_EDGES_PROPS
 
@@ -163,6 +164,21 @@ class ClusteringParams:
         self.outgoing = outgoing
         self.clustering_coeff = clustering_coeff
 
+cdef extern from 'node_prog/two_neighborhood_program.h' namespace 'node_prog':
+    cdef cppclass two_neighborhood_params:
+        string prop_key
+        uint32_t on_hop
+        bint outgoing
+        remote_node prev_node
+        vector[pair[uint64_t, string]] responses
+
+class TwoNeighborhoodParams:
+    def __init__(self, prop_key="", on_hop=0, outgoing=True, prev_node=RemoteNode(0,0), responses = []):
+        self.prop_key = prop_key
+        self.on_hop = on_hop
+        self.outgoing = outgoing
+        self.prev_node = prev_node
+        self.responses = responses
 '''
 cdef extern from 'node_prog/dijkstra_program.h' namespace 'node_prog':
     cdef cppclass dijkstra_params:
@@ -264,6 +280,7 @@ cdef extern from 'client/client.h' namespace 'client':
         bint end_tx(uint64_t tx_id) nogil
         reach_params run_reach_program(vector[pair[uint64_t, reach_params]] initial_args) nogil
         clustering_params run_clustering_program(vector[pair[uint64_t, clustering_params]] initial_args) nogil
+        two_neighborhood_params run_two_neighborhood_program(vector[pair[uint64_t, two_neighborhood_params]] initial_args) nogil
         #dijkstra_params run_dijkstra_program(vector[pair[uint64_t, dijkstra_params]] initial_args) nogil
         read_node_props_params read_node_props_program(vector[pair[uint64_t, read_node_props_params]] initial_args) nogil
         read_edges_props_params read_edges_props_program(vector[pair[uint64_t, read_edges_props_params]] initial_args) nogil
@@ -340,6 +357,20 @@ cdef class Client:
         with nogil:
             c_cp = self.thisptr.run_clustering_program(c_args)
         response = ClusteringParams(clustering_coeff=c_cp.clustering_coeff)
+        return response
+    def run_two_neighborhood_program(self, init_args):
+        cdef vector[pair[uint64_t, two_neighborhood_params]] c_args
+        cdef pair[uint64_t, two_neighborhood_params] arg_pair
+        for rp in init_args:
+            arg_pair.first = rp[0]
+            arg_pair.second.prop_key = rp[1].prop_key
+            arg_pair.second.on_hop = rp[1].on_hop
+            arg_pair.second.outgoing = rp[1].outgoing
+            arg_pair.second.prev_node = coordinator
+            c_args.push_back(arg_pair)
+        with nogil:
+            c_rp = self.thisptr.run_two_neighborhood_program(c_args)
+        response = TwoNeighborhoodParams(responses = c_rp.responses)
         return response
     '''
     def run_dijkstra_program(self, init_args):
