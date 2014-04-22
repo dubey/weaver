@@ -30,11 +30,11 @@ namespace node_prog
     class two_neighborhood_params : public virtual Node_Parameters_Base 
     {
         public:
-            std::string prop_key_val;
-            int hops;
+            std::string prop_key;
+            uint32_t hops;
             bool outgoing;
             db::element::remote_node prev_node;
-            std::vector<std::pair<uint64_t, std::string>> response_list;
+            std::vector<std::pair<uint64_t, std::string>> responses;
 
         public:
             virtual bool search_cache() {
@@ -47,30 +47,30 @@ namespace node_prog
 
             virtual uint64_t size() const 
             {
-                uint64_t toRet = message::size(prop_key_val)
+                uint64_t toRet = message::size(prop_key)
                     + message::size(hops)
                     + message::size(outgoing)
                     + message::size(prev_node)
-                    + message::size(response_list);
+                    + message::size(responses);
                 return toRet;
             }
 
             virtual void pack(e::buffer::packer& packer) const 
             {
-                message::pack_buffer(packer, prop_key_val);
+                message::pack_buffer(packer, prop_key);
                 message::pack_buffer(packer, hops);
                 message::pack_buffer(packer, outgoing);
                 message::pack_buffer(packer, prev_node);
-                message::pack_buffer(packer, response_list);
+                message::pack_buffer(packer, responses);
             }
 
             virtual void unpack(e::unpacker& unpacker)
             {
-                message::unpack_buffer(unpacker, prop_key_val);
+                message::unpack_buffer(unpacker, prop_key);
                 message::unpack_buffer(unpacker, hops);
                 message::unpack_buffer(unpacker, outgoing);
                 message::unpack_buffer(unpacker, prev_node);
-                message::unpack_buffer(unpacker, response_list);
+                message::unpack_buffer(unpacker, responses);
             }
     };
 
@@ -79,7 +79,7 @@ namespace node_prog
         bool visited;
         uint32_t responses_left;
         db::element::remote_node prev_node;
-        std::vector<std::pair<uint64_t, std::string>> response_list;
+        std::vector<std::pair<uint64_t, std::string>> responses;
 
         virtual ~two_neighborhood_state() { }
 
@@ -88,7 +88,7 @@ namespace node_prog
             uint64_t toRet = message::size(visited)
                 + message::size(responses_left)
                 + message::size(prev_node)
-                + message::size(response_list);
+                + message::size(responses);
                 return toRet;
         }
 
@@ -97,7 +97,7 @@ namespace node_prog
             message::pack_buffer(packer, visited);
             message::pack_buffer(packer, responses_left);
             message::pack_buffer(packer, prev_node);
-            message::pack_buffer(packer, response_list);
+            message::pack_buffer(packer, responses);
         }
 
         virtual void unpack(e::unpacker& unpacker)
@@ -105,7 +105,7 @@ namespace node_prog
             message::unpack_buffer(unpacker, visited);
             message::unpack_buffer(unpacker, responses_left);
             message::unpack_buffer(unpacker, prev_node);
-            message::unpack_buffer(unpacker, response_list);
+            message::unpack_buffer(unpacker, responses);
         }
     };
 
