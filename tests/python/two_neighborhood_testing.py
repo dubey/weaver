@@ -39,12 +39,14 @@ tx_id = c.begin_tx()
 new_2_hop = c.create_node(tx_id) 
 c.create_edge(tx_id, nodes[1], new_2_hop)
 c.set_node_property(tx_id, new_2_hop, 'name', 'Sam')
-c.end_tx(tx_id)
+assert(c.end_tx(tx_id))
+print "adding two hop neighbor"
 print sc.two_neighborhood(center, "name", caching=True)
 
+print "adding 1 and two hop neighbors"
 tx_id = c.begin_tx()
 new_1_hop = c.create_node(tx_id) 
-c.create_edge(tx_id, center, new_1_hop)
+to_del = c.create_edge(tx_id, center, new_1_hop)
 c.set_node_property(tx_id, new_1_hop, 'name', 'Robert')
 
 new_2_hops1 = c.create_node(tx_id) 
@@ -53,6 +55,13 @@ c.create_edge(tx_id, new_1_hop, new_2_hops1)
 c.create_edge(tx_id, new_1_hop, new_2_hops2)
 c.set_node_property(tx_id, new_2_hops1, 'name', 'Jianeng')
 c.set_node_property(tx_id, new_2_hops2, 'name', 'Sarah')
-c.end_tx(tx_id)
+assert(c.end_tx(tx_id))
+print sc.two_neighborhood(center, "name", caching=True)
+print "deleting node"
+
+tx_id = c.begin_tx()
+c.delete_edge(tx_id, to_del, center)
+c.delete_node(tx_id, new_1_hop)
+assert(c.end_tx(tx_id))
 print sc.two_neighborhood(center, "name", caching=True)
 print "done!"

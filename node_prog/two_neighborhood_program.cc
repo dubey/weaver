@@ -31,22 +31,24 @@ namespace node_prog
         for (node_cache_context& node_context : contexts)
         {
             if (node_context.node_deleted){  // node deletion
-                WDEBUG  << "Cache entry invalid because of node deletion" << std::endl;
+                WDEBUG  << "Cache entry INVALID because of node deletion" << std::endl;
                 return false;
             } else if (!node_context.edges_deleted.empty()) {
-                WDEBUG  << "Cache entry invalid because of edge deletion" << std::endl;
+                WDEBUG  << "Cache entry INVALID because of edge deletion" << std::endl;
                 return false;
             }
             for(auto &new_edge : node_context.edges_added){
                 if (node_context.node == center) {
+                    WDEBUG << "need to revalidate at 1 hop " << new_edge.nbr.get_id() << std::endl;
                     one_hops_to_check.emplace_back(new_edge.nbr);
                 } else  {
+                    WDEBUG << "need to revalidate at 2 hops " << new_edge.nbr.get_id() << std::endl;
                     two_hops_to_check.emplace_back(new_edge.nbr);
                 }
             }
         }
         WDEBUG  << "Cache entry with context size " << contexts.size() << " valid but need to read "
-            << one_hops_to_check.size() << " 1 hop neghbors and " << two_hops_to_check.size() << " two hop neighbors to revalidate" << std::endl;
+            << one_hops_to_check.size() << " one hop neghbors and " << two_hops_to_check.size() << " two hop neighbors to revalidate" << std::endl;
         return true;
     }
 

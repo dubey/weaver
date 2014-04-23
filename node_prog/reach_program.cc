@@ -101,7 +101,6 @@ namespace node_prog
                                 return std::make_pair(search_type::DEPTH_FIRST, next); // single length vector
                             } else {
                                 cache_response->invalidate();
-                                assert(false);
                             }
                         }
                     }
