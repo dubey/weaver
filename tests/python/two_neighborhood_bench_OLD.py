@@ -21,26 +21,6 @@ sys.path.append('../../.libs')
 import libclient as client
 import simple_client
 
-num_edges = 1768149
-edge_sources = [None] * num_edges
-
-def choose_random():
-    global edge_sources
-    return edge_sources[random.randint(0, num_edges-1)]
-
-if (len(sys.argv) != 2):
-    print "want single extra arg for file to open"
-    assert(false)
-
-f = open(sys.argv[1])
-
-i = 0
-for line in f:
-    if (line[0] is '#'):
-        continue
-    edge_sources[i] = int(line.split(" ")[0])
-    i += 1
-print "done loading file"
 
 num_started = 0
 num_finished = 0

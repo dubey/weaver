@@ -55,7 +55,7 @@ namespace node_prog
     inline void
         fill_minus_duplicates(std::vector<std::pair<uint64_t, std::string>> &from, std::vector<std::pair<uint64_t, std::string>> &to)
         {
-            to.swap(from);
+            to.swap(from); // TODO actually filter
         }
 
     std::pair<search_type, std::vector<std::pair<db::element::remote_node, two_neighborhood_params>>>
