@@ -49,9 +49,10 @@ cv = threading.Condition()
 
 
 num_nodes = 81306 # snap twitter-combined
+read_percent = 95
 # node handles are range(0, num_nodes)
 num_vts = 1
-num_clients = 50
+num_clients = 100
 requests_per_client = 200
 
 def add_labels(c, idx):
@@ -75,7 +76,7 @@ def exec_reads(reqs, sc, c, exec_time, idx):
     cnt = 0
     for pair in reqs:
         cnt += 1
-        if (random.randint(1,100) > 99) :
+        if (random.randint(1,100) > read_percent) :
             tx_id = c.begin_tx()
             c.create_edge(tx_id, pair[0], pair[1])
             assert(c.end_tx(tx_id))
@@ -125,6 +126,6 @@ end_time = time.time()
 total_time = end_time-start_time
 for thr in threads:
     thr.join()
-print 'Total time for ' + str(dests_per_client * requests_per_dest * num_clients) + 'requests = ' + str(total_time)
-throughput = (dests_per_client * requests_per_dest * num_clients) / total_time
+print 'Total time for ' + str(num_clients * requests_per_client) + 'requests = ' + str(total_time)
+throughput = (num_clients * requests_per_client) / total_time
 print 'Throughput = ' + str(throughput)
