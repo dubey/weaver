@@ -166,6 +166,8 @@ class ClusteringParams:
 
 cdef extern from 'node_prog/two_neighborhood_program.h' namespace 'node_prog':
     cdef cppclass two_neighborhood_params:
+        bint _search_cache
+        bint cache_update
         string prop_key
         uint32_t on_hop
         bint outgoing
@@ -173,7 +175,9 @@ cdef extern from 'node_prog/two_neighborhood_program.h' namespace 'node_prog':
         vector[pair[uint64_t, string]] responses
 
 class TwoNeighborhoodParams:
-    def __init__(self, prop_key="", on_hop=0, outgoing=True, prev_node=RemoteNode(0,0), responses = []):
+    def __init__(self, caching= False, cache_update = False, prop_key="", on_hop=0, outgoing=True, prev_node=RemoteNode(0,0), responses = []):
+        self._search_cache = caching;
+        self.cache_update = cache_update;
         self.prop_key = prop_key
         self.on_hop = on_hop
         self.outgoing = outgoing
@@ -363,6 +367,8 @@ cdef class Client:
         cdef pair[uint64_t, two_neighborhood_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
+            arg_pair.second._search_cache = rp[1]._search_cache
+            arg_pair.second.cache_update = rp[1].cache_update
             arg_pair.second.prop_key = rp[1].prop_key
             arg_pair.second.on_hop = rp[1].on_hop
             arg_pair.second.outgoing = rp[1].outgoing
