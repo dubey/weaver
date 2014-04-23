@@ -21,16 +21,17 @@ sys.path.append('../../.libs')
 import libclient as client
 import simple_client
 
+random.seed(42)
 num_edges = 1768149
 edge_sources = [None] * num_edges
 
-def choose_random():
+def choose_random_pair():
     global edge_sources
-    return edge_sources[random.randint(0, num_edges-1)]
+    return (edge_sources[random.randint(0, num_edges-1)], edge_sources[random.randint(0, num_edges-1)])
 
 if (len(sys.argv) != 2):
     print "want single extra arg for file to open"
-    assert(false)
+    assert(False)
 
 f = open(sys.argv[1])
 
@@ -46,13 +47,12 @@ num_started = 0
 num_finished = 0
 cv = threading.Condition()
 
-dests_per_client = 1
-requests_per_dest = 2
 
 num_nodes = 81306 # snap twitter-combined
 # node handles are range(0, num_nodes)
 num_vts = 1
 num_clients = 50
+requests_per_client = 200
 
 def add_labels(c, idx):
     global num_nodes
@@ -60,10 +60,10 @@ def add_labels(c, idx):
     for i in range(num_nodes):
         if i % num_clients is idx:
             c.set_node_property(tx_id, i, 'name', str(i))
-    c.end_tx(tx_id)
+    assert(c.end_tx(tx_id))
     print "writing labels finished for client " + str(idx)
 
-def exec_reads(reqs, sc, exec_time, idx):
+def exec_reads(reqs, sc, c, exec_time, idx):
     global num_started
     global cv
     global num_clients
@@ -73,10 +73,14 @@ def exec_reads(reqs, sc, exec_time, idx):
             cv.wait()
     start = time.time()
     cnt = 0
-    for node in reqs:
+    for pair in reqs:
         cnt += 1
-        two_neighborhood = sc.two_neighborhood(node, "name", caching = True)
-        print len(two_neighborhood) 
+        if (random.randint(1,100) > 99) :
+            tx_id = c.begin_tx()
+            c.create_edge(tx_id, pair[0], pair[1])
+            assert(c.end_tx(tx_id))
+        else:
+            two_neighborhood = sc.two_neighborhood(pair[0], "name", caching = True)
     end = time.time()
     with cv:
         num_finished += 1
@@ -90,14 +94,10 @@ for i in range(num_clients):
     simple_clients.append(simple_client.simple_client(clients[i]))
 
 reqs = []
-random.seed(42)
 for i in range(num_clients):
     cl_reqs = []
-    for _ in range(dests_per_client):
-        dest = random.randint(0, num_nodes-1)
-        for _ in range(requests_per_dest):
-            cl_reqs.append(dest)
-
+    for _ in range(requests_per_client):
+        cl_reqs.append(choose_random_pair())
     reqs.append(cl_reqs)
 
 exec_time = [0] * num_clients
@@ -112,7 +112,7 @@ for thr in threads:
 
 print "starting requests"
 for i in range(num_clients):
-    thr = threading.Thread(target=exec_reads, args=(reqs[i], simple_clients[i], exec_time, i))
+    thr = threading.Thread(target=exec_reads, args=(reqs[i], simple_clients[i], clients[i], exec_time, i))
     thr.start()
     threads.append(thr)
 start_time = time.time()
