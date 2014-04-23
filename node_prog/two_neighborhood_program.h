@@ -31,6 +31,7 @@ namespace node_prog
     {
         public:
             bool _search_cache;
+            bool cache_update;
             std::string prop_key;
             uint32_t on_hop;
             bool outgoing;
@@ -48,7 +49,9 @@ namespace node_prog
 
             virtual uint64_t size() const 
             {
-                uint64_t toRet = message::size(prop_key)
+                uint64_t toRet = message::size(_search_cache)
+                    + message::size(cache_update)
+                    + message::size(prop_key)
                     + message::size(on_hop)
                     + message::size(outgoing)
                     + message::size(prev_node)
@@ -58,6 +61,8 @@ namespace node_prog
 
             virtual void pack(e::buffer::packer& packer) const 
             {
+                message::pack_buffer(packer, _search_cache);
+                message::pack_buffer(packer, cache_update);
                 message::pack_buffer(packer, prop_key);
                 message::pack_buffer(packer, on_hop);
                 message::pack_buffer(packer, outgoing);
@@ -67,6 +72,8 @@ namespace node_prog
 
             virtual void unpack(e::unpacker& unpacker)
             {
+                message::unpack_buffer(unpacker, _search_cache);
+                message::unpack_buffer(unpacker, cache_update);
                 message::unpack_buffer(unpacker, prop_key);
                 message::unpack_buffer(unpacker, on_hop);
                 message::unpack_buffer(unpacker, outgoing);
@@ -124,11 +131,11 @@ namespace node_prog
     struct two_neighborhood_cache_value : public virtual Cache_Value_Base 
     {
         public:
-        std::string props_key;
+        std::string prop_key;
         std::vector<std::pair<uint64_t, std::string>> responses;
 
-        two_neighborhood_cache_value(std::string &props_key, std::vector<std::pair<uint64_t, std::string>> &responses)
-            : props_key(props_key)
+        two_neighborhood_cache_value(std::string &prop_key, std::vector<std::pair<uint64_t, std::string>> &responses)
+            : prop_key(prop_key)
             , responses(responses)
         { }
 
@@ -136,20 +143,20 @@ namespace node_prog
 
         virtual uint64_t size() const 
         {
-            uint64_t toRet = message::size(props_key)
+            uint64_t toRet = message::size(prop_key)
                 + message::size(responses);
                 return toRet;
         }
 
         virtual void pack(e::buffer::packer& packer) const 
         {
-            message::pack_buffer(packer, props_key);
+            message::pack_buffer(packer, prop_key);
             message::pack_buffer(packer, responses);
         }
 
         virtual void unpack(e::unpacker& unpacker)
         {
-            message::unpack_buffer(unpacker, props_key);
+            message::unpack_buffer(unpacker, prop_key);
             message::unpack_buffer(unpacker, responses);
         }
     };

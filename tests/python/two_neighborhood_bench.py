@@ -27,12 +27,12 @@ num_finished = 0
 cv = threading.Condition()
 
 dests_per_client = 1
-requests_per_dest = 1
+requests_per_dest = 2
 
 num_nodes = 81306 # snap twitter-combined
 # node handles are range(0, num_nodes)
 num_vts = 1
-num_clients = 10
+num_clients = 50
 
 def add_labels(c, idx):
     global num_nodes
@@ -55,7 +55,7 @@ def exec_reads(reqs, sc, exec_time, idx):
     cnt = 0
     for node in reqs:
         cnt += 1
-        two_neighborhood = sc.two_neighborhood(node, "name")
+        two_neighborhood = sc.two_neighborhood(node, "name", caching = True)
         print len(two_neighborhood) 
     end = time.time()
     with cv:
