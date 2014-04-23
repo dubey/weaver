@@ -34,8 +34,8 @@ class simple_client:
         response = self.c.run_reach_program(prog_args)
         return (response.reachable, response.path)
 
-    def two_neighborhood(self, id, prop_key):
-        tp = client.TwoNeighborhoodParams(prop_key = prop_key) 
+    def two_neighborhood(self, id, prop_key, caching = False):
+        tp = client.TwoNeighborhoodParams(prop_key = prop_key, caching = caching) 
         prog_args = [(id, tp)]
         response = self.c.run_two_neighborhood_program(prog_args)
         return response.responses;
