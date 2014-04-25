@@ -65,13 +65,11 @@ namespace caching
 {
     class program_cache 
     {
-        uint64_t uid = 0;
         public:
         std::unordered_map<uint64_t, std::tuple<std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<vc::vclock>, std::shared_ptr<std::vector<db::element::remote_node>>>> cache;
 
-        void add_cache_value(node_prog::prog_type& ptype, std::shared_ptr<node_prog::Cache_Value_Base> cache_value,
-                std::shared_ptr<std::vector<db::element::remote_node>> watch_set, uint64_t key, std::shared_ptr<vc::vclock>& vc);
-        uint64_t gen_uid();
+        void add_cache_value(node_prog::prog_type& ptype, std::shared_ptr<vc::vclock>& vc, std::shared_ptr<node_prog::Cache_Value_Base> cache_value,
+                std::shared_ptr<std::vector<db::element::remote_node>> watch_set, uint64_t key);
 
         program_cache() : cache(MAX_CACHE_ENTRIES) {}; // reserve size of max cache
 
@@ -81,8 +79,8 @@ namespace caching
     };
 
     inline void
-    program_cache :: add_cache_value(node_prog::prog_type& ptype, std::shared_ptr<node_prog::Cache_Value_Base> cache_value,
-            std::shared_ptr<std::vector<db::element::remote_node>> watch_set, uint64_t key, std::shared_ptr<vc::vclock>& vc)
+    program_cache :: add_cache_value(node_prog::prog_type& ptype, std::shared_ptr<vc::vclock>& vc, std::shared_ptr<node_prog::Cache_Value_Base> cache_value,
+            std::shared_ptr<std::vector<db::element::remote_node>> watch_set, uint64_t key)
     {
         // clear oldest entry if cache is full
         if (MAX_CACHE_ENTRIES > 0 && cache.size() >= MAX_CACHE_ENTRIES) {
@@ -101,12 +99,6 @@ namespace caching
         
         UNUSED(ptype); // TODO: use prog_type
         cache.emplace(key, std::make_tuple(cache_value, vc, watch_set));
-    }
-
-    inline uint64_t
-    program_cache :: gen_uid()
-    {
-        return ++uid;
     }
 
     template <typename CacheValueType>

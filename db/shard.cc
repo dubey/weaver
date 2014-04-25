@@ -951,9 +951,8 @@ inline void node_prog_loop(
         typename node_prog::node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type func,
         node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> &np)
 {
-    typedef std::pair<uint64_t, ParamsType> node_params_t;
     // these are the node programs that will be propagated onwards
-    std::unordered_map<uint64_t, std::deque<node_params_t>> batched_node_progs;
+    std::unordered_map<uint64_t, std::deque<std::pair<uint64_t, ParamsType>>> batched_node_progs(NUM_SHARDS);
     // node state function
     std::function<NodeStateType&()> node_state_getter;
     std::function<void(std::shared_ptr<CacheValueType>,
@@ -1029,7 +1028,7 @@ inline void node_prog_loop(
             {
                 using namespace std::placeholders;
                 add_cache_func = std::bind(&db::caching::program_cache::add_cache_value, &(node->cache),
-                        np.prog_type_recvd, _1, _2, _3, np.req_vclock); // 1 is cache value, 2 is watch set, 3 is key
+                        np.prog_type_recvd, np.req_vclock, _1, _2, _3); // 1 is cache value, 2 is watch set, 3 is key
             }
 
             node->base.view_time = np.req_vclock; 
@@ -1070,7 +1069,7 @@ inline void node_prog_loop(
                     message::prepare_message(*m, message::NODE_PROG_RETURN, np.prog_type_recvd, np.req_id, temppair);
                     S->comm.send(np.vt_id, m->buf);
                 } else {
-                    std::deque<node_params_t> &next_deque = (rn.loc == S->shard_id) ? np.start_node_params : batched_node_progs[rn.loc]; // TODO this is dumb just have a single data structure later
+                    std::deque<std::pair<uint64_t, ParamsType>> &next_deque = (rn.loc == S->shard_id) ? np.start_node_params : batched_node_progs[rn.loc]; // TODO this is dumb just have a single data structure later
                     if (next_node_params.first == node_prog::search_type::DEPTH_FIRST) {
                         next_deque.emplace_front(rn.id, std::move(res.second));
                     } else { // BREADTH_FIRST
@@ -1164,9 +1163,9 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             lookup_tuple, contexts_to_add, cache_valid);
 
     S->node_prog_running_states_mutex.lock();
-    uint64_t count = S->node_prog_running_states.count(lookup_tuple);
-    assert(count == 1);
-    struct fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (struct fetch_state<ParamsType, NodeStateType, CacheValueType> *) S->node_prog_running_states.at(lookup_tuple);
+    auto lookup_iter = S->node_prog_running_states.find(lookup_tuple);
+    assert(lookup_iter != S->node_prog_running_states.end());
+    struct fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (struct fetch_state<ParamsType, NodeStateType, CacheValueType> *) lookup_iter->second;
     fstate->monitor.lock();
     fstate->replies_left--;
     bool run_now = fstate->replies_left == 0;
