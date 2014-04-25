@@ -952,7 +952,7 @@ inline void node_prog_loop(
         node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> &np)
 {
     // these are the node programs that will be propagated onwards
-    std::unordered_map<uint64_t, std::deque<std::pair<uint64_t, ParamsType>>> batched_node_progs(NUM_SHARDS);
+    std::unordered_map<uint64_t, std::deque<std::pair<uint64_t, ParamsType>>> batched_node_progs(NUM_SHARDS-1); // local batching doesn't use this
     // node state function
     std::function<NodeStateType&()> node_state_getter;
     std::function<void(std::shared_ptr<CacheValueType>,
@@ -1090,12 +1090,14 @@ inline void node_prog_loop(
 #endif
             // Only per hop batching
         }
+        assert(batched_node_progs.size() < NUM_SHARDS);
         for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR; next_loc++) {
-            if (batched_node_progs.find(next_loc) != batched_node_progs.end() && next_loc != S->shard_id && batched_node_progs[next_loc].size() > BATCH_MSG_SIZE) {
+            auto batched_iter = batched_node_progs.find(next_loc);
+            if (batched_iter != batched_node_progs.end() && next_loc != S->shard_id && batched_iter->second.size() > BATCH_MSG_SIZE) {
                 std::unique_ptr<message::message> m(new message::message());
-                message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, shard_id, batched_node_progs[next_loc]);
+                message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, shard_id, batched_iter->second);
                 S->comm.send(next_loc, m->buf);
-                batched_node_progs[next_loc].clear();
+                batched_iter->second.clear();
                 msg_count++;
             }
         }
@@ -1109,12 +1111,13 @@ inline void node_prog_loop(
         }
     }
     for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR; next_loc++) {
-        if ((batched_node_progs.find(next_loc) != batched_node_progs.end() && !batched_node_progs[next_loc].empty())
+        auto batched_iter = batched_node_progs.find(next_loc);
+        if ((batched_iter != batched_node_progs.end() && !batched_iter->second.empty())
                 && next_loc != S->shard_id) {
             std::unique_ptr<message::message> m(new message::message());
-            message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, batched_node_progs[next_loc]);
+            message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.global_req, np.vt_id, np.req_vclock, np.req_id, batched_iter->second);
             S->comm.send(next_loc, m->buf);
-            batched_node_progs[next_loc].clear();
+            batched_iter->second.clear();
             //msg_count++;
         }
     }
