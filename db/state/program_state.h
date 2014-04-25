@@ -500,6 +500,7 @@ namespace state
         done_mutex.lock();
         done_ids.emplace(req_id);
         done_mutex.unlock();
+
         acquire();
         req_map &rmap = prog_state.at(type);
         if (rmap.find(req_id) != rmap.end()) {
@@ -527,6 +528,7 @@ namespace state
             done_ids.emplace(req_id);
         }
         done_mutex.unlock();
+
         acquire();
         for (auto &p: reqs) {
             uint64_t req_id = p.first;
