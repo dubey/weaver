@@ -1694,7 +1694,6 @@ void
 recv_loop(uint64_t thread_id)
 {
     uint64_t sender, vt_id, req_id;
-    uint32_t code;
     enum message::msg_type mtype;
     std::unique_ptr<message::message> rec_msg(new message::message());
     db::queued_request *qreq;
@@ -1712,8 +1711,8 @@ recv_loop(uint64_t thread_id)
 
         if (bb_code == BUSYBEE_SUCCESS) {
             // exec or enqueue this request
-            rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code;
-            mtype = (enum message::msg_type)code;
+            auto unpacker = rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE);
+            unpack_buffer(unpacker, mtype);
             rec_msg->change_type(mtype);
             sender -= ID_INCR;
             vclk.clock.clear();

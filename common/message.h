@@ -187,7 +187,17 @@ namespace message
 
     // size templates
 
+    inline uint64_t size(const enum msg_type &)
+    {
+        return sizeof(uint8_t);
+    }
+
     inline uint64_t size(const node_prog::prog_type&)
+    {
+        return sizeof(uint8_t);
+    }
+
+    inline uint64_t size(const enum transaction::update_type&)
     {
         return sizeof(uint8_t);
     }
@@ -280,7 +290,7 @@ namespace message
     size(const std::shared_ptr<transaction::pending_update> &ptr_t)
     {
         transaction::pending_update &t = *ptr_t;
-        uint64_t sz = sizeof(t.type)
+        uint64_t sz = size(t.type)
              + size(t.qts)
              + size(t.id)
              + size(t.elem1)
@@ -399,7 +409,19 @@ namespace message
         t->pack(packer);
     }
 
+    inline void pack_buffer(e::buffer::packer &packer, const enum msg_type &t)
+    {
+        assert(t < (1 << 8));
+        packer = packer << ((uint8_t) t);
+    }
+    
     inline void pack_buffer(e::buffer::packer &packer, const node_prog::prog_type &t)
+    {
+        assert(t < (1 << 8));
+        packer = packer << ((uint8_t) t);
+    }
+
+    inline void pack_buffer(e::buffer::packer &packer, const enum transaction::update_type&t)
     {
         assert(t < (1 << 8));
         packer = packer << ((uint8_t) t);
@@ -506,14 +528,15 @@ namespace message
     inline void 
     pack_buffer(e::buffer::packer &packer, const db::element::remote_node &t)
     {
-        packer = packer << t.loc << t.id;
+        pack_buffer(packer, t.loc);
+        pack_buffer(packer, t.id);
     }
 
     inline void
     pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::pending_update> &ptr_t)
     {
         transaction::pending_update &t = *ptr_t;
-        packer = packer << t.type;
+        pack_buffer(packer, t.type);
         pack_buffer(packer, t.qts);
         pack_buffer(packer, t.id);
         pack_buffer(packer, t.elem1);
@@ -556,7 +579,7 @@ namespace message
         // !assumes constant element size
         uint64_t num_elems = t.size();
         assert(num_elems < (1 << 16));
-        packer = packer << ((uint16_t) num_elems);
+        pack_buffer(packer, (uint16_t) num_elems);
         if (num_elems > 0){
             for (const T &elem : t) {
                 pack_buffer(packer, elem);
@@ -571,7 +594,7 @@ namespace message
         // !assumes constant element size
         uint64_t num_elems = t.size();
         assert(num_elems < (1 << 16));
-        packer = packer << ((uint16_t) num_elems);
+        pack_buffer(packer, (uint16_t) num_elems);
         if (num_elems > 0){
             for (const T &elem : t) {
                 pack_buffer(packer, elem);
@@ -597,7 +620,7 @@ namespace message
     {
         uint64_t num_keys = t.size();
         assert(num_keys < (1 << 16));
-        packer = packer << ((uint16_t) num_keys);
+        pack_buffer(packer, (uint16_t) num_keys);
         for (const T &elem : t) {
             pack_buffer(packer, elem);
         }
@@ -609,7 +632,7 @@ namespace message
     {
         uint64_t num_keys = t.size();
         assert(num_keys < (1 << 16));
-        packer = packer << ((uint16_t) num_keys);
+        pack_buffer(packer, (uint16_t) num_keys);
         for (const std::pair<T1, T2> &pair : t) {
             pack_buffer(packer, pair.first);
             pack_buffer(packer, pair.second);
@@ -641,12 +664,13 @@ namespace message
     inline void
     prepare_message(message &m, const enum msg_type given_type)
     {
-        uint64_t bytes_to_pack = sizeof(enum msg_type);
+        uint64_t bytes_to_pack = size(given_type);
         m.type = given_type;
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
 
-        packer = packer << given_type;
+
+        pack_buffer(packer, given_type);
         assert(packer.remain() == 0 && "reserved size for message not same as number of bytes packed");
     }
 
@@ -654,12 +678,12 @@ namespace message
     inline void
     prepare_message(message &m, const enum msg_type given_type, const Args&... args)
     {
-        uint64_t bytes_to_pack = size_wrapper(args...) + sizeof(enum msg_type);
+        uint64_t bytes_to_pack = size_wrapper(args...) + size(given_type);
         m.type = given_type;
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
 
-        packer = packer << given_type;
+        pack_buffer(packer, given_type);
         pack_buffer_wrapper(packer, args...);
         assert(packer.remain() == 0 && "reserved size for message not same as number of bytes packed");
     }
@@ -698,11 +722,27 @@ namespace message
     }
 
     inline void
+    unpack_buffer(e::unpacker &unpacker, enum msg_type &t)
+    {
+        uint8_t _type;
+        unpacker = unpacker >> _type;
+        t = (enum msg_type)_type;
+    }
+
+    inline void
     unpack_buffer(e::unpacker &unpacker, node_prog::prog_type &t)
     {
         uint8_t _type;
         unpacker = unpacker >> _type;
         t = (enum node_prog::prog_type)_type;
+    }
+
+    inline void
+    unpack_buffer(e::unpacker &unpacker, enum transaction::update_type &t)
+    {
+        uint8_t _type;
+        unpacker = unpacker >> _type;
+        t = (enum transaction::update_type)_type;
     }
 
     inline void
@@ -807,17 +847,16 @@ namespace message
     inline void 
     unpack_buffer(e::unpacker &unpacker, db::element::remote_node& t)
     {
-        unpacker = unpacker >> t.loc >> t.id;
+        unpack_buffer(unpacker, t.loc);
+        unpack_buffer(unpacker, t.id);
     }
 
     inline void
     unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::pending_update> &ptr_t)
     {
-        uint32_t mtype;
         ptr_t.reset(new transaction::pending_update());
         transaction::pending_update &t = *ptr_t;
-        unpacker = unpacker >> mtype;
-        t.type = ((enum transaction::update_type)mtype);
+        unpack_buffer(unpacker, t.type);
         unpack_buffer(unpacker, t.qts);
         unpack_buffer(unpacker, t.id);
         unpack_buffer(unpacker, t.elem1);
@@ -860,7 +899,7 @@ namespace message
     {
         assert(t.size() == 0);
         uint16_t elements_left;
-        unpacker = unpacker >> elements_left;
+        unpack_buffer(unpacker, elements_left);
 
         t.resize(elements_left);
 
@@ -875,7 +914,7 @@ namespace message
     {
         assert(t.size() == 0);
         uint16_t elements_left;
-        unpacker = unpacker >> elements_left;
+        unpack_buffer(unpacker, elements_left);
 
         t.resize(elements_left);
 
@@ -890,7 +929,7 @@ namespace message
     {
         assert(t.size() == 0);
         uint64_t elements_left = 0;
-        unpacker = unpacker >> elements_left;
+        unpack_buffer(unpacker, elements_left);
         while (elements_left > 0) {
             T1 to_add;
             unpack_buffer(unpacker, to_add);
@@ -905,14 +944,13 @@ namespace message
     {
         assert(t.size() == 0);
         uint16_t elements_left;
-        unpacker = unpacker >> elements_left;
+        unpack_buffer(unpacker, elements_left);
 
         t.rehash(elements_left*1.25); // set number of buckets to 1.25*elements it will contain
 
         while (elements_left > 0) {
-            T to_add;
-            unpack_buffer(unpacker, to_add);
-            t.emplace(std::move(to_add));
+            auto new_elem_iter = t.emplace();
+            unpack_buffer(unpacker, *new_elem_iter);
             elements_left--;
         }
     }
@@ -923,7 +961,7 @@ namespace message
     {
         assert(t.size() == 0);
         uint16_t elements_left;
-        unpacker = unpacker >> elements_left;
+        unpack_buffer(unpacker, elements_left);
         // set number of buckets to 1.25*elements it will contain
         // did not use reserve as max_load_factor is default 1
         t.rehash(elements_left*1.25); // XXX why 1.25??
@@ -950,12 +988,12 @@ namespace message
     inline void
     unpack_message_internal(bool check_empty, const message &m, const enum msg_type expected_type, Args&... args)
     {
-        uint32_t _type;
+        enum msg_type recieved_type;
         e::unpacker unpacker = m.buf->unpack_from(BUSYBEE_HEADER_SIZE);
         assert(!unpacker.error());
 
-        unpacker = unpacker >> _type;
-        assert((enum msg_type)_type == expected_type);
+        unpack_buffer(unpacker, recieved_type);
+        assert(recieved_type == expected_type);
         UNUSED(expected_type);
 
         unpack_buffer(unpacker, args...);
@@ -983,18 +1021,15 @@ namespace message
     unpack_client_tx(message &m, transaction::pending_tx &tx)
     {
         uint64_t num_tx;
-        uint32_t type;
         enum msg_type mtype;
         e::unpacker unpacker = m.buf->unpack_from(BUSYBEE_HEADER_SIZE);
-        unpacker = unpacker >> type;
-        mtype = (enum msg_type)type;
+        unpack_buffer(unpacker, mtype);
         assert(mtype == CLIENT_TX_INIT);
         unpack_buffer(unpacker, num_tx);
         while (num_tx-- > 0) {
             auto upd = std::make_shared<transaction::pending_update>();
-            tx.writes.emplace_back(upd);
-            unpacker = unpacker >> type;
-            mtype = (enum msg_type)type;
+            tx.writes.emplace_back(upd); // XXX redo this
+            unpack_buffer(unpacker, mtype);
             switch (mtype) {
                 case CLIENT_NODE_CREATE_REQ:
                     upd->type = transaction::NODE_CREATE_REQ;

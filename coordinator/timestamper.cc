@@ -343,7 +343,6 @@ void
 server_loop(int thread_id)
 {
     busybee_returncode ret;
-    uint32_t code;
     enum message::msg_type mtype;
     std::unique_ptr<message::message> msg;
     uint64_t sender, tx_id;
@@ -357,8 +356,9 @@ server_loop(int thread_id)
         } else {
             // good to go, unpack msg
             uint64_t _size;
-            msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code >> _size;
-            mtype = (enum message::msg_type)code;
+            auto unpacker = msg->buf->unpack_from(BUSYBEE_HEADER_SIZE);
+            message::unpack_buffer(unpacker, mtype);
+            message::unpack_buffer(unpacker, _size);
             sender -= ID_INCR;
 
             switch (mtype) {
