@@ -61,7 +61,7 @@ namespace state
             std::shared_ptr<node_prog::Node_State_Base> get_state(node_prog::prog_type t,
                     uint64_t req_id, uint64_t node_id);
             void put_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_id,
-                    std::shared_ptr<node_prog::Node_State_Base> new_state);
+                    std::shared_ptr<node_prog::Node_State_Base> &new_state);
             uint64_t size(uint64_t node_id);
             void pack(uint64_t node_id, e::buffer::packer &packer);
             void unpack(uint64_t node_id, e::unpacker &unpacker);
@@ -166,7 +166,7 @@ namespace state
     // if request completed, no-op
     inline void
     program_state :: put_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_id,
-        std::shared_ptr<node_prog::Node_State_Base> new_state)
+        std::shared_ptr<node_prog::Node_State_Base> &new_state)
     {
         bool finished = check_done_request(req_id);
         if (!finished) { // check request not done yet
@@ -176,9 +176,7 @@ namespace state
             if (nmap_iter != rmap.end()) {
                 (*(nmap_iter->second))[node_id] = new_state;
             } else {
-                std::shared_ptr<node_map> nmap(new node_map());
-                nmap->emplace(node_id, new_state);
-                rmap.emplace(req_id, nmap);
+                rmap.emplace(req_id, std::shared_ptr<node_map>(new node_map())).first->second->emplace(node_id, new_state);
             }
             auto nreq_list_iter = req_list.find(node_id);
             if (nreq_list_iter == req_list.end()) {
