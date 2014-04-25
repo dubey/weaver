@@ -1027,8 +1027,7 @@ namespace message
         assert(mtype == CLIENT_TX_INIT);
         unpack_buffer(unpacker, num_tx);
         while (num_tx-- > 0) {
-            auto upd = std::make_shared<transaction::pending_update>();
-            tx.writes.emplace_back(upd); // XXX redo this
+            auto upd = *(tx.writes.emplace(tx.writes.end(), std::make_shared<transaction::pending_update>()));
             unpack_buffer(unpacker, mtype);
             switch (mtype) {
                 case CLIENT_NODE_CREATE_REQ:
