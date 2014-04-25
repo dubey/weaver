@@ -15,7 +15,7 @@
 #ifndef weaver_node_prog_two_neighborhood_program_cc 
 #define weaver_node_prog_two_neighborhood_program_cc 
 
-#define weaver_debug_
+//#define weaver_debug_
 #include "two_neighborhood_program.h"
 
 namespace node_prog
