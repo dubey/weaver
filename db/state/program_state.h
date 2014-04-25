@@ -166,24 +166,26 @@ namespace state
     program_state :: put_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_id,
         std::shared_ptr<node_prog::Node_State_Base> new_state)
     {
-        acquire();
-        if (!check_done_nolock(req_id)) { // check request not done yet
+        bool finished = check_done_request(req_id);
+        if (!finished) { // check request not done yet
+            acquire();
             req_map &rmap = prog_state.at(t);
-            if (rmap.find(req_id) != rmap.end()) {
-                (*prog_state.at(t).at(req_id))[node_id] = new_state;
+            auto nmap_iter = rmap.find(req_id);
+            if (nmap_iter != rmap.end()) {
+                (*(nmap_iter->second))[node_id] = new_state;
             } else {
                 std::shared_ptr<node_map> nmap(new node_map());
                 nmap->emplace(node_id, new_state);
-                prog_state.at(t).emplace(req_id, nmap);
+                rmap.emplace(req_id, nmap);
             }
             if (req_list.find(node_id) == req_list.end()) {
                 req_list.emplace(node_id, std::unordered_set<uint64_t>());
             }
             req_list.at(node_id).emplace(req_id);
+            release();
         } else {
             WDEBUG << "not putting state, request " << req_id << " completed" << std::endl;
         }
-        release();
     }
     
     inline uint64_t
