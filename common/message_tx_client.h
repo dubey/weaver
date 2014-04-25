@@ -24,8 +24,13 @@ namespace message
     {
         uint64_t num_writes = tx.size();
         enum msg_type mtype;
-        uint64_t bytes_to_pack = size(mtype) * (1 + tx.size())
-            + size_wrapper(num_writes);
+        uint64_t bytes_to_pack = size(mtype) * (1 + tx.size());
+        bool small_tx = num_writes < (1 << 8);
+        if (small_tx) {
+            bytes_to_pack += sizeof(uint8_t);
+        } else {
+            bytes_to_pack += size(num_writes);
+        }
         for (auto &upd: tx) {
             switch (upd->type) {
                 case CLIENT_NODE_CREATE_REQ:
@@ -60,7 +65,13 @@ namespace message
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE);
 
         pack_buffer_wrapper(packer, CLIENT_TX_INIT);
-        pack_buffer_wrapper(packer, num_writes);
+        pack_buffer_wrapper(packer, small_tx);
+        if (small_tx) {
+            pack_buffer_wrapper(packer, (uint8_t) num_writes);
+        } else {
+            pack_buffer_wrapper(packer, num_writes);
+        }
+
         for (auto &upd: tx) {
             pack_buffer_wrapper(packer, upd->type);
             switch (upd->type) {

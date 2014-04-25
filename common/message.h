@@ -1021,11 +1021,20 @@ namespace message
     unpack_client_tx(message &m, transaction::pending_tx &tx)
     {
         uint64_t num_tx;
+        bool small_tx;
+        uint8_t small_tx_size;
+
         enum msg_type mtype;
         e::unpacker unpacker = m.buf->unpack_from(BUSYBEE_HEADER_SIZE);
         unpack_buffer(unpacker, mtype);
         assert(mtype == CLIENT_TX_INIT);
-        unpack_buffer(unpacker, num_tx);
+        unpack_buffer(unpacker, small_tx);
+        if (small_tx) {
+            unpack_buffer(unpacker, small_tx_size);
+            num_tx = small_tx_size;
+        } else {
+            unpack_buffer(unpacker, num_tx);
+        }
         while (num_tx-- > 0) {
             auto upd = *(tx.writes.emplace(tx.writes.end(), std::make_shared<transaction::pending_update>()));
             unpack_buffer(unpacker, mtype);
