@@ -189,7 +189,7 @@ namespace message
 
     inline uint64_t size(const node_prog::prog_type&)
     {
-        return sizeof(uint32_t);
+        return sizeof(uint8_t);
     }
 
     inline uint64_t size(const node_prog::Node_Parameters_Base &t)
@@ -209,7 +209,7 @@ namespace message
 
     inline uint64_t size(const bool&)
     {
-        return sizeof(uint16_t);
+        return sizeof(uint8_t);
     }
 
     inline uint64_t size(const char&)
@@ -249,7 +249,7 @@ namespace message
 
     inline uint64_t size(const std::string &t)
     {
-        return t.size() + sizeof(uint64_t);
+        return t.size() + sizeof(uint32_t);
     }
 
     inline uint64_t size(const vc::vclock &t)
@@ -322,7 +322,7 @@ namespace message
         for(const T &elem : t) {
             total_size += size(elem);
         }
-        return sizeof(uint64_t)+total_size;
+        return sizeof(uint16_t)+total_size;
     }
 
     template <typename T1, typename T2>
@@ -333,13 +333,13 @@ namespace message
         for (const std::pair<T1,T2> &pair : t) {
             total_size += size(pair.first) + size(pair.second);
         }
-        return sizeof(uint64_t)+total_size;
+        return sizeof(uint16_t)+total_size;
     }
 
     template <typename T>
     inline uint64_t size(const std::vector<T> &t)
     {
-        uint64_t tot_size = sizeof(uint64_t);
+        uint64_t tot_size = sizeof(uint16_t);
         for (const T &elem : t) {
             tot_size += size(elem);
         }
@@ -349,7 +349,7 @@ namespace message
     template <typename T>
     inline uint64_t size(const std::deque<T> &t)
     {
-        uint64_t tot_size = sizeof(uint64_t);
+        uint64_t tot_size = sizeof(uint16_t);
         for (const T &elem : t) {
             tot_size += size(elem);
         }
@@ -401,12 +401,13 @@ namespace message
 
     inline void pack_buffer(e::buffer::packer &packer, const node_prog::prog_type &t)
     {
-        packer = packer << t;
+        assert(t < (1 << 8));
+        packer = packer << ((uint8_t) t);
     }
 
     inline void pack_buffer(e::buffer::packer &packer, const bool &t)
     {
-        uint16_t to_pack = 0;
+        uint8_t to_pack = 0;
         if (t) {
             to_pack = 1;
         }
@@ -460,12 +461,22 @@ namespace message
     inline void 
     pack_buffer(e::buffer::packer &packer, const std::string &t)
     {
-        uint8_t strchar;
         uint64_t strlen = t.size();
-        pack_buffer(packer, strlen);
-        for (uint64_t i = 0; i < strlen; i++) {
-            strchar = (uint8_t)t[i];
-            pack_buffer(packer, strchar);
+        assert(strlen < ((uint64_t) 1 << 32));
+        packer = packer << (uint32_t) strlen;
+
+        uint32_t words = strlen / 8;
+        uint32_t leftover_chars = strlen % 8;
+
+        const char* rawchars = t.data();
+        const uint64_t* rawwords = (const uint64_t*) rawchars;
+
+        for (uint32_t i = 0; i < words; i++) {
+            pack_buffer(packer, rawwords[i]);
+        }
+
+        for (uint32_t i = 0; i < leftover_chars; i++) {
+            pack_buffer(packer, (uint8_t) rawchars[words*8+i]);
         }
     }
 
@@ -544,7 +555,8 @@ namespace message
     {
         // !assumes constant element size
         uint64_t num_elems = t.size();
-        packer = packer << num_elems;
+        assert(num_elems < (1 << 16));
+        packer = packer << ((uint16_t) num_elems);
         if (num_elems > 0){
             for (const T &elem : t) {
                 pack_buffer(packer, elem);
@@ -558,7 +570,8 @@ namespace message
     {
         // !assumes constant element size
         uint64_t num_elems = t.size();
-        packer = packer << num_elems;
+        assert(num_elems < (1 << 16));
+        packer = packer << ((uint16_t) num_elems);
         if (num_elems > 0){
             for (const T &elem : t) {
                 pack_buffer(packer, elem);
@@ -583,7 +596,8 @@ namespace message
     pack_buffer(e::buffer::packer &packer, const std::unordered_set<T> &t)
     {
         uint64_t num_keys = t.size();
-        packer = packer << num_keys;
+        assert(num_keys < (1 << 16));
+        packer = packer << ((uint16_t) num_keys);
         for (const T &elem : t) {
             pack_buffer(packer, elem);
         }
@@ -594,7 +608,8 @@ namespace message
     pack_buffer(e::buffer::packer &packer, const std::unordered_map<T1, T2> &t)
     {
         uint64_t num_keys = t.size();
-        packer = packer << num_keys;
+        assert(num_keys < (1 << 16));
+        packer = packer << ((uint16_t) num_keys);
         for (const std::pair<T1, T2> &pair : t) {
             pack_buffer(packer, pair.first);
             pack_buffer(packer, pair.second);
@@ -685,7 +700,7 @@ namespace message
     inline void
     unpack_buffer(e::unpacker &unpacker, node_prog::prog_type &t)
     {
-        uint32_t _type;
+        uint8_t _type;
         unpacker = unpacker >> _type;
         t = (enum node_prog::prog_type)_type;
     }
@@ -693,7 +708,7 @@ namespace message
     inline void
     unpack_buffer(e::unpacker &unpacker, bool &t)
     {
-        uint16_t temp;
+        uint8_t temp;
         unpacker = unpacker >> temp;
         t = (temp != 0);
     }
@@ -745,13 +760,23 @@ namespace message
     inline void 
     unpack_buffer(e::unpacker &unpacker, std::string &t)
     {
-        uint64_t strlen;
-        uint8_t strchar;
+        uint32_t strlen;
         unpack_buffer(unpacker, strlen);
         t.resize(strlen);
-        for (uint64_t i = 0; i < strlen; i++) {
-            unpack_buffer(unpacker, strchar);
-            t[i] = (char)strchar;
+
+        uint32_t words = strlen / 8;
+        uint32_t leftover_chars = strlen % 8;
+
+        const char* rawchars = t.data();
+        uint8_t* rawuint8s = (uint8_t*) rawchars;
+        uint64_t* rawwords = (uint64_t*) rawchars;
+
+        for (uint32_t i = 0; i < words; i++) {
+            unpack_buffer(unpacker, rawwords[i]);
+        }
+
+        for (uint32_t i = 0; i < leftover_chars; i++) {
+            unpack_buffer(unpacker, rawuint8s[words*8+i]);
         }
     }
 
@@ -834,7 +859,7 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, std::vector<T> &t)
     {
         assert(t.size() == 0);
-        uint64_t elements_left;
+        uint16_t elements_left;
         unpacker = unpacker >> elements_left;
 
         t.resize(elements_left);
@@ -849,7 +874,7 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, std::deque<T> &t)
     {
         assert(t.size() == 0);
-        uint64_t elements_left;
+        uint16_t elements_left;
         unpacker = unpacker >> elements_left;
 
         t.resize(elements_left);
@@ -879,7 +904,7 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, std::unordered_set<T> &t)
     {
         assert(t.size() == 0);
-        uint64_t elements_left;
+        uint16_t elements_left;
         unpacker = unpacker >> elements_left;
 
         t.rehash(elements_left*1.25); // set number of buckets to 1.25*elements it will contain
@@ -897,7 +922,7 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, std::unordered_map<T1, T2> &t)
     {
         assert(t.size() == 0);
-        uint64_t elements_left;
+        uint16_t elements_left;
         unpacker = unpacker >> elements_left;
         // set number of buckets to 1.25*elements it will contain
         // did not use reserve as max_load_factor is default 1
