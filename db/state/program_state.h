@@ -46,7 +46,8 @@ namespace state
         node_to_reqs req_list;
         uint64_t completed_id; // all nodes progs with id < completed_id are done
         std::unordered_set<uint64_t> done_ids;
-        po6::threads::mutex mutex;
+        po6::threads::mutex state_mutex;
+        po6::threads::mutex done_mutex;
         po6::threads::cond in_use_cond;
 #ifdef weaver_debug_
         bool holding;
@@ -80,7 +81,7 @@ namespace state
     inline
     program_state :: program_state()
         : completed_id(0)
-        , in_use_cond(&mutex)
+        , in_use_cond(&state_mutex)
 #ifdef weaver_debug_
         , holding(false)
 #endif
@@ -102,7 +103,7 @@ namespace state
     inline void
     program_state :: acquire()
     {
-        mutex.lock();
+        state_mutex.lock();
 #ifdef weaver_debug_
         holding = true;
 #endif
@@ -114,7 +115,7 @@ namespace state
 #ifdef weaver_debug_
         holding = false;
 #endif
-        mutex.unlock();
+        state_mutex.unlock();
     }
 
     inline bool
@@ -126,7 +127,7 @@ namespace state
         if (rmap_iter == rmap.end()) {
             return false;
         }
-        node_map &nmap = *rmap.at(req_id);
+        node_map &nmap = *(rmap_iter->second);
         node_map::iterator nmap_iter = nmap.find(node_id);
         if (nmap_iter == nmap.end()) {
             return false;
@@ -494,8 +495,10 @@ namespace state
     inline void
     program_state :: done_request(uint64_t req_id, node_prog::prog_type type)
     {
-        acquire();
+        done_mutex.lock();
         done_ids.emplace(req_id);
+        done_mutex.unlock();
+        acquire();
         req_map &rmap = prog_state.at(type);
         if (rmap.find(req_id) != rmap.end()) {
             for (auto &p: *rmap.at(req_id)) {
@@ -513,11 +516,19 @@ namespace state
     inline void
     program_state :: done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &reqs)
     {
+        if (reqs.size() == 0) {
+            return;
+        }
+        done_mutex.lock();
+        for (auto &p: reqs) {
+            uint64_t req_id = p.first;
+            done_ids.emplace(req_id);
+        }
+        done_mutex.unlock();
         acquire();
         for (auto &p: reqs) {
             uint64_t req_id = p.first;
             node_prog::prog_type type = p.second;
-            done_ids.emplace(req_id);
             req_map &rmap = prog_state.at(type);
             if (rmap.find(req_id) != rmap.end()) {
                 for (auto &p: *rmap.at(req_id)) {
@@ -543,9 +554,9 @@ namespace state
     program_state :: check_done_request(uint64_t req_id)
     {
         bool ret;
-        acquire();
+        done_mutex.lock();
         ret = check_done_nolock(req_id);
-        release();
+        done_mutex.unlock();
         return ret;
     }
 }
