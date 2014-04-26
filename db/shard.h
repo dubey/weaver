@@ -281,26 +281,26 @@ namespace db
     inline void
     shard :: bulk_load_persistent()
     {
-        std::unordered_set<uint64_t> empty_set;
-        uint64_t cnt = 0;
-        for (auto &x: nodes) {
-            //hstub[0]->put_node(*x.second, empty_set);
-            if (++cnt % 10000 == 0) {
-                WDEBUG << "wrote " << cnt << " nodes to HyperDex" << std::endl;
-            }
-        }
+        //std::unordered_set<uint64_t> empty_set;
+        //uint64_t cnt = 0;
+        //for (auto &x: nodes) {
+        //    //hstub[0]->put_node(*x.second, empty_set);
+        //    if (++cnt % 10000 == 0) {
+        //        WDEBUG << "wrote " << cnt << " nodes to HyperDex" << std::endl;
+        //    }
+        //}
     }
 
     // Consistency methods
     inline void
-    shard :: increment_qts(uint64_t thread_id, uint64_t vt_id, uint64_t incr)
+    shard :: increment_qts(uint64_t, uint64_t vt_id, uint64_t incr)
     {
         //hstub[thread_id]->increment_qts(vt_id, incr);
         qm.increment_qts(vt_id, incr);
     }
 
     inline void
-    shard :: record_completed_tx(uint64_t thread_id, uint64_t vt_id, vc::vclock_t &tx_clk)
+    shard :: record_completed_tx(uint64_t, uint64_t vt_id, vc::vclock_t &tx_clk)
     {
         //hstub[thread_id]->update_last_clocks(vt_id, tx_clk);
         qm.record_completed_tx(vt_id, tx_clk);
@@ -405,7 +405,7 @@ namespace db
     // Graph state update methods
 
     inline element::node*
-    shard :: create_node(uint64_t thread_id, uint64_t node_id, vc::vclock &vclk, bool migrate, bool init_load=false)
+    shard :: create_node(uint64_t, uint64_t node_id, vc::vclock &vclk, bool migrate, bool init_load=false)
     {
         element::node *new_node = new element::node(node_id, vclk, &update_mutex);
         
@@ -440,7 +440,7 @@ namespace db
     }
 
     inline void
-    shard :: delete_node_nonlocking(uint64_t thread_id, element::node *n, vc::vclock &tdel)
+    shard :: delete_node_nonlocking(uint64_t, element::node *n, vc::vclock &tdel)
     {
         n->base.update_del_time(tdel);
         n->updated = true;
@@ -468,7 +468,7 @@ namespace db
     }
 
     inline void
-    shard :: create_edge_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge, uint64_t remote_node,
+    shard :: create_edge_nonlocking(uint64_t, element::node *n, uint64_t edge, uint64_t remote_node,
             uint64_t remote_loc, vc::vclock &vclk, bool init_load=false)
     {
         element::edge *new_edge = new element::edge(edge, vclk, remote_loc, remote_node);
@@ -510,7 +510,7 @@ namespace db
     }
 
     inline void
-    shard :: delete_edge_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge, vc::vclock &tdel)
+    shard :: delete_edge_nonlocking(uint64_t, element::node *n, uint64_t edge, vc::vclock &tdel)
     {
 #ifdef weaver_debug_
         assert(n->edge_handles.find(edge) != n->edge_handles.end());
@@ -556,7 +556,7 @@ namespace db
     }
 
     inline void
-    shard :: set_node_property_nonlocking(uint64_t thread_id, element::node *n,
+    shard :: set_node_property_nonlocking(uint64_t, element::node *n,
             std::string &key, std::string &value, vc::vclock &vclk)
     {
         db::element::property p(key, value, vclk);
@@ -585,7 +585,7 @@ namespace db
     }
 
     inline void
-    shard :: set_edge_property_nonlocking(uint64_t thread_id, element::node *n, uint64_t edge_id,
+    shard :: set_edge_property_nonlocking(uint64_t, element::node *n, uint64_t edge_id,
             std::string &key, std::string &value, vc::vclock &vclk)
     {
         db::element::edge *e = n->out_edges[edge_id];

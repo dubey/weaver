@@ -317,7 +317,7 @@ mark_req_finished(uint64_t req_id)
     if (vts->pend_prog_queue.top() == req_id) {
         assert(vts->max_done_id < vts->pend_prog_queue.top());
         vts->max_done_id = req_id;
-        WDEBUG << "max_done_id set to " << req_id << std::endl;
+        //WDEBUG << "max_done_id set to " << req_id << std::endl;
         assert(vts->outstanding_progs.find(vts->max_done_id) != vts->outstanding_progs.end());
         vts->max_done_clk = std::move(vts->outstanding_progs[vts->max_done_id].vclk);
         vts->pend_prog_queue.pop();
@@ -326,7 +326,7 @@ mark_req_finished(uint64_t req_id)
             && vts->pend_prog_queue.top() == vts->done_prog_queue.top()) {
             assert(vts->max_done_id < vts->pend_prog_queue.top());
             vts->max_done_id = vts->pend_prog_queue.top();
-            WDEBUG << "max_done_id set to " << vts->pend_prog_queue.top() << std::endl;
+            //WDEBUG << "max_done_id set to " << vts->pend_prog_queue.top() << std::endl;
             assert(vts->outstanding_progs.find(vts->max_done_id) != vts->outstanding_progs.end());
             vts->max_done_clk = std::move(vts->outstanding_progs[vts->max_done_id].vclk);
             vts->pend_prog_queue.pop();

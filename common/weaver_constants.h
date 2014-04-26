@@ -48,8 +48,8 @@
 #define SERVER_MANAGER_PORT 2002
 
 // weaver setup
-#define NUM_SHARDS 5
-#define NUM_VTS 1
+#define NUM_SHARDS 8
+#define NUM_VTS 3
 #define NUM_SERVERS ((NUM_VTS + NUM_SHARDS) * (1 + NUM_BACKUPS))
 #define SHARD_ID_INCR NUM_VTS
 #define NUM_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
