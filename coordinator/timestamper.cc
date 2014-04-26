@@ -237,19 +237,12 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     
     // map from locations to a list of start_node_params to send to that shard
     std::unordered_map<uint64_t, std::deque<std::pair<uint64_t, ParamsType>>> initial_batches; 
-    bool global_req = false;
 
     // lookup mappings
     std::unordered_map<uint64_t, uint64_t> request_element_mappings;
     std::unordered_set<uint64_t> mappings_to_get;
     for (auto &initial_arg : initial_args) {
         uint64_t c_id = initial_arg.first;
-        if (c_id == -1) { // max uint64_t means its a global thing like triangle count
-            assert(mappings_to_get.empty()); // dont mix global req with normal nodes
-            assert(initial_args.size() == 1);
-            global_req = true;
-            break;
-        }
         mappings_to_get.insert(c_id);
     }
     if (!mappings_to_get.empty()) {
@@ -260,18 +253,10 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         }
     }
 
-    if (global_req) {
-        // send copy of params to each shard
-        for (int i = 0; i < NUM_SHARDS; i++) {
-            initial_batches[i + SHARD_ID_INCR].emplace_back(std::make_pair(initial_args[0].first,
-                    initial_args[0].second));
-        }
-    } else { // regular style node program
-        for (std::pair<uint64_t, ParamsType> &node_params_pair: initial_args) {
-            uint64_t loc = request_element_mappings[node_params_pair.first];
-            initial_batches[loc].emplace_back(std::make_pair(node_params_pair.first,
+    for (std::pair<uint64_t, ParamsType> &node_params_pair: initial_args) {
+        uint64_t loc = request_element_mappings[node_params_pair.first];
+        initial_batches[loc].emplace_back(std::make_pair(node_params_pair.first,
                     std::move(node_params_pair.second)));
-        }
     }
     
     vts->clk_mutex.lock();
@@ -280,10 +265,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     assert(req_timestamp.clock.size() == NUM_VTS);
     vts->clk_mutex.unlock();
 
-    /*
-    if (global_req) {
-    }
-    */
     vts->tx_prog_mutex.lock();
     uint64_t req_id = vts->generate_id();
     vts->outstanding_progs.emplace(req_id, current_prog(clientID, req_timestamp.clock));
@@ -292,7 +273,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     message::message msg_to_send;
     for (auto &batch_pair : initial_batches) {
-        message::prepare_message(msg_to_send, message::NODE_PROG, pType, global_req, vt_id, req_timestamp, req_id, vt_id, batch_pair.second);
+        message::prepare_message(msg_to_send, message::NODE_PROG, pType, vt_id, req_timestamp, req_id, batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
     }
 }
