@@ -973,7 +973,6 @@ inline void node_prog_loop(
                 S->release_node(node);
             } else {
                 // node is being migrated here, but not yet completed
-                //std::vector<std::tuple<uint64_t, ParamsType, db::element::remote_node>> buf_node_params;
                 std::vector<std::pair<uint64_t, ParamsType>> buf_node_params;
                 buf_node_params.emplace_back(id_params);
                 std::unique_ptr<message::message> m(new message::message());
