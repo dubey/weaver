@@ -28,7 +28,7 @@ def exec_traversals(reqs, cl):
         rp.dest = r[1]
         prog_args = [(r[0], rp)]
         response = cl.run_reach_program(prog_args)
-        print str(r[0]) + " " + str(r[1]) + " " + str(time.time()-s)
+        print '{0:05}'.format(r[0]) + " " + '{0:05}'.format(r[1]) + " " + str(time.time()-s)
         sys.stdout.flush()
     print ' done'
     end = time.time()
