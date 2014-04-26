@@ -949,8 +949,9 @@ namespace message
         t.rehash(elements_left*1.25); // set number of buckets to 1.25*elements it will contain
 
         while (elements_left > 0) {
-            auto new_elem_iter = t.emplace();
-            unpack_buffer(unpacker, *new_elem_iter);
+            T new_elem;
+            unpack_buffer(unpacker, new_elem);
+            t.emplace(new_elem);
             elements_left--;
         }
     }
