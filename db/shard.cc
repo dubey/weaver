@@ -1914,16 +1914,16 @@ main(int argc, char *argv[])
     }
 
     // server manager link
-    std::thread sm_thr(server_manager_link_loop,
-        po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT));
-    sm_thr.detach();
+    //std::thread sm_thr(server_manager_link_loop,
+    //    po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT));
+    //sm_thr.detach();
 
-    S->config_mutex.lock();
-
-    // wait for first config to arrive from server_manager
-    while (!S->first_config) {
-        S->first_config_cond.wait();
-    }
+    //S->config_mutex.lock();
+    //// wait for first config to arrive from server_manager
+    //while (!S->first_config) {
+    //    S->first_config_cond.wait();
+    //}
+    //S->config_mutex.unlock();
 
     // registered this server with server_manager, config has fairly recent value
     if (argc != 3) {
@@ -1931,8 +1931,6 @@ main(int argc, char *argv[])
     } else {
         S->init(true); // backup
     }
-
-    S->config_mutex.unlock();
 
     // start all threads
     std::vector<std::thread*> worker_threads;

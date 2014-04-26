@@ -25,11 +25,12 @@ comm_wrapper :: weaver_mapper :: weaver_mapper(std::unordered_map<uint64_t, po6:
     assert(cluster.find(incr_id) != cluster.end());
     mlist[incr_id] = cluster[incr_id];
     for (auto &s: cluster) {
-        uint64_t id = s.first - ID_INCR;
-        if (id >= CLIENT_ID) {
-            // clients do not register with server manager
-            mlist[s.first] = cluster[s.first];
-        }
+        mlist[s.first] = cluster[s.first];
+        //uint64_t id = s.first - ID_INCR;
+        //if (id >= CLIENT_ID) {
+        //    // clients do not register with server manager
+        //    mlist[s.first] = cluster[s.first];
+        //}
     }
 }
 
@@ -37,8 +38,9 @@ bool
 comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *loc)
 {
     uint64_t incr_id = ID_INCR + server_id;
-    if (mlist.find(incr_id) != mlist.end()) {
-        *loc = mlist.at(incr_id);
+    auto mlist_iter = mlist.find(incr_id);
+    if (mlist_iter != mlist.end()) {
+        *loc = mlist_iter->second;
         return true;
     } else {
         WDEBUG << "returning false from mapper lookup for id " << server_id << ", incr id " << incr_id << std::endl;
@@ -116,11 +118,11 @@ comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr, int to, bool client=false)
 }
 
 void
-comm_wrapper :: init(configuration &config)
+comm_wrapper :: init(configuration &)
 {
-    uint64_t primary = bb_id;
+    //uint64_t primary = bb_id;
     wmap.reset(new weaver_mapper(cluster, bb_id));
-    wmap->reconfigure(config, primary);
+    //wmap->reconfigure(config, primary);
     WDEBUG << "Busybee attaching to loc " << loc->address << ":" << loc->port << std::endl;
     bb.reset(new busybee_mta(wmap.get(), *loc, bb_id+ID_INCR, num_threads));
     bb->set_timeout(timeout);

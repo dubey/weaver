@@ -643,21 +643,19 @@ main(int argc, char *argv[])
     }
 
     // server manager link
-    std::thread sm_thr(server_manager_link_loop,
-        po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT));
-    sm_thr.detach();
+    //std::thread sm_thr(server_manager_link_loop,
+    //    po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT));
+    //sm_thr.detach();
 
-    vts->config_mutex.lock();
-
-    // wait for first config to arrive from server manager
-    while (!vts->first_config) {
-        vts->first_config_cond.wait();
-    }
+    //vts->config_mutex.lock();
+    //// wait for first config to arrive from server manager
+    //while (!vts->first_config) {
+    //    vts->first_config_cond.wait();
+    //}
+    //vts->config_mutex.unlock();
 
     // registered this server with server_manager, config has fairly recent value
     vts->init();
-
-    vts->config_mutex.unlock();
 
     // start all threads
     std::thread *thr;
