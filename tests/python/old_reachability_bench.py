@@ -17,17 +17,18 @@ sys.path.append('../../.libs')
 
 import libclient as client
 
-num_dests = 1
-requests_per_dest = 500
+num_dests = 1000
+requests_per_dest = 1
 
 def exec_traversals(reqs, cl):
     rp = client.ReachParams(caching=True)
     start = time.time()
     for r in reqs:
+        s= time.time()
         rp.dest = r[1]
         prog_args = [(r[0], rp)]
         response = cl.run_reach_program(prog_args)
-        sys.stdout.write('.')
+        print str(r[0]) + " " + str(r[1]) + " " + str(time.time()-s)
         sys.stdout.flush()
     print ' done'
     end = time.time()
