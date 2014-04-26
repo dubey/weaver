@@ -39,7 +39,7 @@ namespace node_prog
             db::element::remote_node prev_node;
             uint64_t dest;
             std::vector<std::pair<std::string, std::string>> edge_props;
-            uint32_t hops;
+            uint16_t hops;
             bool reachable;
             std::vector<db::element::remote_node> path;
 
@@ -109,13 +109,13 @@ namespace node_prog
         db::element::remote_node prev_node; // previous node
         uint32_t out_count; // number of requests propagated
         bool reachable;
-        uint64_t hops;
+        uint16_t hops;
 
         reach_node_state()
             : visited(false)
             , out_count(0)
             , reachable(false)
-            , hops(MAX_UINT64)
+            , hops(MAX_UINT16)
         { }
 
         virtual ~reach_node_state() { }
