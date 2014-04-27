@@ -412,19 +412,22 @@ namespace message
     inline void pack_buffer(e::buffer::packer &packer, const enum msg_type &t)
     {
         assert(t < (1 << 8));
-        packer = packer << ((uint8_t) t);
+        uint8_t temp = (uint8_t) t;
+        packer = packer << temp;
     }
     
     inline void pack_buffer(e::buffer::packer &packer, const node_prog::prog_type &t)
     {
         assert(t < (1 << 8));
-        packer = packer << ((uint8_t) t);
+        uint8_t temp = (uint8_t) t;
+        packer = packer << temp;
     }
 
     inline void pack_buffer(e::buffer::packer &packer, const enum transaction::update_type&t)
     {
         assert(t < (1 << 8));
-        packer = packer << ((uint8_t) t);
+        uint8_t temp = (uint8_t) t;
+        packer = packer << temp;
     }
 
     inline void pack_buffer(e::buffer::packer &packer, const bool &t)
@@ -485,7 +488,8 @@ namespace message
     {
         uint64_t strlen = t.size();
         assert(strlen < ((uint64_t) 1 << 32));
-        packer = packer << (uint32_t) strlen;
+        uint32_t shortlen = (uint32_t) strlen;
+        packer = packer << shortlen;
 
         uint32_t words = strlen / 8;
         uint32_t leftover_chars = strlen % 8;
