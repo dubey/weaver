@@ -64,7 +64,7 @@ namespace node_prog
         virtual void unpack(e::unpacker&) { }
     };
 
-    inline std::vector<std::pair<db::element::remote_node, edge_get_params>> 
+    inline std::pair<search_type, std::vector<std::pair<db::element::remote_node, edge_get_params>>>
     edge_get_node_program(
             node &n,
             db::element::remote_node &,
@@ -81,7 +81,8 @@ namespace node_prog
                 params.return_edges.emplace_back(e.get_id());
             }
         }
-        return {std::make_pair(db::element::coordinator, std::move(params))};
+        return std::make_pair(search_type::DEPTH_FIRST, std::vector<std::pair<db::element::remote_node, edge_get_params>>
+                (1, std::make_pair(db::element::coordinator, std::move(params)))); 
     }
 }
 
