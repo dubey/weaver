@@ -78,14 +78,12 @@ namespace node_prog
               , vt_id(_vt_id)
               , req_vclock(_req_vclock)
               , req_id(_req_id)
-              , prev_server(_prev)
         { };
         public:
         node_prog::prog_type prog_type_recvd;
         uint64_t vt_id;
         std::shared_ptr<vc::vclock> req_vclock;
         uint64_t req_id;
-        uint64_t prev_server;
         std::deque<std::pair<uint64_t, ParamsType>> start_node_params;
         std::unique_ptr<db::caching::cache_response<CacheValueType>> cache_value; // XXX unique ptr needed?
 
@@ -96,7 +94,7 @@ namespace node_prog
 
         node_prog_running_state clone_without_start_node_params() 
         {
-            return node_prog_running_state(prog_type_recvd, vt_id, req_vclock, req_id, prev_server);
+            return node_prog_running_state(prog_type_recvd, vt_id, req_vclock, req_id);
         }
 
         node_prog_running_state(node_prog_running_state&& copy_from)
@@ -104,7 +102,6 @@ namespace node_prog
               , vt_id(copy_from.vt_id)
               , req_vclock(copy_from.req_vclock)
               , req_id(copy_from.req_id)
-              , prev_server(copy_from.prev_server)
               , start_node_params(copy_from.start_node_params)
               , cache_value(std::move(copy_from.cache_value)){};
    };
