@@ -186,7 +186,7 @@ namespace state
             }
             release();
         } else {
-            WDEBUG << "not putting state, request " << req_id << " completed" << std::endl;
+            //WDEBUG << "not putting state, request " << req_id << " completed" << std::endl;
         }
     }
     
