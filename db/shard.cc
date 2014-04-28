@@ -976,7 +976,7 @@ inline void node_prog_loop(
                 std::vector<std::pair<uint64_t, ParamsType>> buf_node_params;
                 buf_node_params.emplace_back(id_params);
                 std::unique_ptr<message::message> m(new message::message());
-                message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, np.prev_server, buf_node_params);
+                message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, buf_node_params);
                 S->migration_mutex.lock();
                 if (S->deferred_reads.find(node_id) == S->deferred_reads.end()) {
                     S->deferred_reads.emplace(node_id, std::vector<std::unique_ptr<message::message>>());
@@ -991,7 +991,7 @@ inline void node_prog_loop(
             std::vector<std::pair<uint64_t, ParamsType>> fwd_node_params;
             fwd_node_params.emplace_back(id_params);
             std::unique_ptr<message::message> m(new message::message());
-            message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, np.prev_server, fwd_node_params);
+            message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, fwd_node_params);
             uint64_t new_loc = node->new_loc;
             S->release_node(node);
             S->comm.send(new_loc, m->buf);
@@ -1094,7 +1094,7 @@ inline void node_prog_loop(
             auto batched_iter = batched_node_progs.find(next_loc);
             if (batched_iter != batched_node_progs.end() && next_loc != S->shard_id && batched_iter->second.size() > BATCH_MSG_SIZE) {
                 std::unique_ptr<message::message> m(new message::message());
-                message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, shard_id, batched_iter->second);
+                message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, batched_iter->second);
                 S->comm.send(next_loc, m->buf);
                 batched_iter->second.clear();
             }
@@ -1114,7 +1114,7 @@ inline void node_prog_loop(
             if ((batched_iter != batched_node_progs.end() && !batched_iter->second.empty())
                     && next_loc != S->shard_id) {
                 std::unique_ptr<message::message> m(new message::message());
-                message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, shard_id, batched_iter->second);
+                message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, batched_iter->second);
                 S->comm.send(next_loc, m->buf);
                 batched_iter->second.clear();
             }
@@ -1212,7 +1212,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     // unpack the node program
     try {
-        message::unpack_message(*msg, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, np.prev_server, np.start_node_params);
+        message::unpack_message(*msg, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, np.start_node_params);
         assert(np.req_vclock->clock.size() == NUM_VTS);
     } catch (std::bad_alloc& ba) {
         WDEBUG << "bad_alloc caught " << ba.what() << std::endl;
