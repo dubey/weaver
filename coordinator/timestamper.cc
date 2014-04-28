@@ -273,7 +273,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     message::message msg_to_send;
     for (auto &batch_pair : initial_batches) {
-        message::prepare_message(msg_to_send, message::NODE_PROG, pType, vt_id, req_timestamp, req_id, batch_pair.second);
+        message::prepare_message(msg_to_send, message::NODE_PROG, pType, vt_id, req_timestamp, req_id, vt_id, batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
     }
 }

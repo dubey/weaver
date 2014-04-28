@@ -92,7 +92,7 @@ namespace state
         prog_state.emplace(node_prog::TRIANGLE_COUNT, new_req_map);
         prog_state.emplace(node_prog::CLUSTERING, new_req_map);
         prog_state.emplace(node_prog::TWO_NEIGHBORHOOD, new_req_map);
-        prog_state.emplace(node_prog::DIJKSTRA, new_req_map);
+        //prog_state.emplace(node_prog::DIJKSTRA, new_req_map);
         prog_state.emplace(node_prog::READ_NODE_PROPS, new_req_map);
         prog_state.emplace(node_prog::READ_EDGES_PROPS, new_req_map);
         prog_state.emplace(node_prog::READ_N_EDGES, new_req_map);

@@ -1097,7 +1097,6 @@ inline void node_prog_loop(
                 message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, shard_id, batched_iter->second);
                 S->comm.send(next_loc, m->buf);
                 batched_iter->second.clear();
-                msg_count++;
             }
         }
         if (MAX_CACHE_ENTRIES)
@@ -1109,15 +1108,16 @@ inline void node_prog_loop(
             done_request = true;
         }
     }
-    for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR; next_loc++) {
-        auto batched_iter = batched_node_progs.find(next_loc);
-        if ((batched_iter != batched_node_progs.end() && !batched_iter->second.empty())
-                && next_loc != S->shard_id) {
-            std::unique_ptr<message::message> m(new message::message());
-            message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, batched_iter->second);
-            S->comm.send(next_loc, m->buf);
-            batched_iter->second.clear();
-            //msg_count++;
+    if (!done_request) {
+        for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR; next_loc++) {
+            auto batched_iter = batched_node_progs.find(next_loc);
+            if ((batched_iter != batched_node_progs.end() && !batched_iter->second.empty())
+                    && next_loc != S->shard_id) {
+                std::unique_ptr<message::message> m(new message::message());
+                message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, shard_id, batched_iter->second);
+                S->comm.send(next_loc, m->buf);
+                batched_iter->second.clear();
+            }
         }
     }
 #ifdef WEAVER_MSG_COUNT

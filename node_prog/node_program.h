@@ -30,7 +30,7 @@
 #include "node_prog_type.h"
 #include "reach_program.h"
 #include "clustering_program.h"
-#include "dijkstra_program.h"
+//#include "dijkstra_program.h"
 #include "read_node_props_program.h"
 #include "read_edges_props_program.h"
 #include "read_n_edges_program.h"

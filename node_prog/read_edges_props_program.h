@@ -109,9 +109,8 @@ namespace node_prog
                 }
             }
         }
-        std::vector<std::pair<db::element::remote_node, read_edges_props_params>> toRet;
-        toRet.emplace_back(std::make_pair(db::element::coordinator, std::move(params)));
-        return std::make_pair(search_type::DEPTH_FIRST, toRet); 
+        return std::make_pair(search_type::DEPTH_FIRST, std::vector<std::pair<db::element::remote_node, read_edges_props_params>>
+                (1, std::make_pair(db::element::coordinator, std::move(params)))); 
     }
 }
 
