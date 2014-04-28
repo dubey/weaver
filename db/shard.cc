@@ -951,6 +951,7 @@ inline void node_prog_loop(
         typename node_prog::node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type func,
         node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> &np)
 {
+    message::message out_msg;
     // these are the node programs that will be propagated onwards
     std::unordered_map<uint64_t, std::deque<std::pair<uint64_t, ParamsType>>> batched_node_progs(NUM_SHARDS-1); // local batching doesn't use this
     // node state function
@@ -1093,13 +1094,12 @@ inline void node_prog_loop(
             // Only per hop batching
         }
         assert(batched_node_progs.size() < NUM_SHARDS);
-        for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR; next_loc++) {
-            auto batched_iter = batched_node_progs.find(next_loc);
-            if (batched_iter != batched_node_progs.end() && next_loc != S->shard_id && batched_iter->second.size() > BATCH_MSG_SIZE) {
-                std::unique_ptr<message::message> m(new message::message());
-                message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, batched_iter->second);
-                S->comm.send(next_loc, m->buf);
-                batched_iter->second.clear();
+        for (auto &loc_progs_pair : batched_node_progs) {
+            assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < NUM_SHARDS + SHARD_ID_INCR);
+            if (loc_progs_pair.second.size() > BATCH_MSG_SIZE) {
+                message::prepare_message(out_msg, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, loc_progs_pair.second);
+                S->comm.send(loc_progs_pair.first, out_msg.buf);
+                loc_progs_pair.second.clear();
             }
         }
         if (MAX_CACHE_ENTRIES)
@@ -1112,15 +1112,11 @@ inline void node_prog_loop(
         }
     }
     if (!done_request) {
-        for (uint64_t next_loc = SHARD_ID_INCR; next_loc < NUM_SHARDS + SHARD_ID_INCR; next_loc++) {
-            auto batched_iter = batched_node_progs.find(next_loc);
-            if ((batched_iter != batched_node_progs.end() && !batched_iter->second.empty())
-                    && next_loc != S->shard_id) {
-                std::unique_ptr<message::message> m(new message::message());
-                message::prepare_message(*m, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, batched_iter->second);
-                S->comm.send(next_loc, m->buf);
-                batched_iter->second.clear();
-            }
+        for (auto &loc_progs_pair : batched_node_progs) {
+            assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < NUM_SHARDS + SHARD_ID_INCR);
+            message::prepare_message(out_msg, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, loc_progs_pair.second);
+            S->comm.send(loc_progs_pair.first, out_msg.buf);
+            loc_progs_pair.second.clear();
         }
     }
 #ifdef WEAVER_MSG_COUNT
