@@ -73,7 +73,7 @@ namespace node_prog
     {
         private:
         /* constructs a clone without start_node_params or cache_value */
-        node_prog_running_state(node_prog::prog_type _prog_type_recvd, uint64_t _vt_id, std::shared_ptr<vc::vclock> _req_vclock, uint64_t _req_id, uint64_t _prev)
+        node_prog_running_state(node_prog::prog_type _prog_type_recvd, uint64_t _vt_id, std::shared_ptr<vc::vclock> _req_vclock, uint64_t _req_id)
             : prog_type_recvd(_prog_type_recvd)
               , vt_id(_vt_id)
               , req_vclock(_req_vclock)

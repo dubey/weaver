@@ -998,9 +998,12 @@ inline void node_prog_loop(
         } else { // node does exist
             assert(node->state == db::element::node::mode::STABLE);
 #ifdef WEAVER_NEW_CLDG
+            assert(false && "new_cldg not supported right now");
+                /*
                 if (np.prev_server >= SHARD_ID_INCR) {
                     node->msg_count[np.prev_server - SHARD_ID_INCR]++;
                 }
+                */
 #endif
             if (S->check_done_request(np.req_id)) { // XXX is this in the right place
                 done_request = true;
