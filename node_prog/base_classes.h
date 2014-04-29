@@ -4,6 +4,9 @@
 #include <e/buffer.h>
 #include <vector>
 #include <unordered_set>
+#include <iostream>
+
+#include "common/weaver_constants.h"
 #include "db/element/remote_node.h"
 
 namespace node_prog
@@ -36,6 +39,7 @@ namespace node_prog
     class Node_State_Base : public virtual Packable, public virtual Deletable 
     {
         public:
+        virtual ~Node_State_Base() { } // << important
         std::unordered_set<uint64_t> contexts_found;
     };
 
