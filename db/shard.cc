@@ -310,7 +310,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
             std::strcpy(max_node_ptr, line.c_str());
             max_node_id = strtoull(++max_node_ptr, NULL, 10);
 
-            uint32_t node_count = 0;
+            uint8_t thread_select = 0;
             while (std::getline(file, line)) {
                 line_count++;
                 if (line_count % 100000 == 0) {
@@ -326,19 +326,19 @@ load_graph(db::graph_file_format format, const char *graph_file)
                     assert(loc0 < NUM_SHARDS + SHARD_ID_INCR);
                     assert(loc1 < NUM_SHARDS + SHARD_ID_INCR);
                     if (loc0 == shard_id) {
-                        node_count++;
                         n = S->acquire_node_nonlocking(node0);
                         if (n == NULL) {
                             n = S->create_node(0, node0, zero_clk, false, true);
-                            node_maps[node_count % NUM_THREADS][node0] = shard_id;
+                            node_maps[thread_select][node0] = shard_id;
+                            thread_select = (thread_select + 1) % NUM_THREADS;
                         }
                         S->create_edge_nonlocking(0, n, edge_id, node1, loc1, zero_clk, true);
                     }
                     if (loc1 == shard_id) {
-                        node_count++;
                         if (!S->node_exists_nonlocking(node1)) {
                             S->create_node(0, node1, zero_clk, false, true);
-                            node_maps[node_count % NUM_THREADS][node1] = shard_id;
+                            node_maps[thread_select][node1] = shard_id;
+                            thread_select = (thread_select + 1) % NUM_THREADS;
                         }
                     }
                     //if (node_map.size() > 100000) {
