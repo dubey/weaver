@@ -434,6 +434,7 @@ namespace db
         } else {
             update_mutex.unlock();
         }
+        n = NULL;
     }
 
 
@@ -881,15 +882,15 @@ namespace db
             add_to.insert(add_to.end(), node_ids.begin(), node_ids.end());
 
             outstanding_prog_states_mutex.unlock();
+            // XXX maybe check request not done again here
             return;
     }
     inline void
     shard :: delete_prog_states(uint64_t req_id, std::vector<uint64_t> &node_ids)
     {
         for (uint64_t node_id : node_ids) {
+            //WDEBUG<< "DELETING STATES FOR REQ " << req_id << " and node_id "<< node_id<< std::endl;
             db::element::node *node = acquire_node(node_id); // TODO later we can only acquire node once for whole list
-            int elems_erased = node->prog_states.erase(req_id); // TODO double check thing isnt mem leaking
-            assert(elems_erased > 0 && "shoot");
 
             if (node == NULL) {
                 assert(false && "shit");
@@ -897,6 +898,12 @@ namespace db
                 release_node(node);
                 assert(false && "migration not supported");
             } else {
+                auto state_iter = node->prog_states.find(req_id);
+                assert(state_iter != node->prog_states.end());
+                state_iter->second.reset();
+                int elems_erased = node->prog_states.erase(req_id); // TODO double check thing isnt mem leaking
+                assert(elems_erased > 0 && "shoot");
+
                 release_node(node);
             }
         }
@@ -909,21 +916,32 @@ namespace db
         if (completed_requests.size() == 0) {
             return;
         }
-        prog_done_ids_mutex.lock();
+        std::vector<uint64_t> completed_request_ids; // XXX temp, later have completed requets not include prog type
         for (auto &p: completed_requests) {
-            uint64_t req_id = p.first;
-            done_ids.emplace(req_id);
+            uint64_t rid = p.first;
+            completed_request_ids.push_back(rid);
         }
+
+        prog_done_ids_mutex.lock();
+        done_ids.insert(completed_request_ids.begin(), completed_request_ids.end());
         prog_done_ids_mutex.unlock();
+
+        std::vector<std::pair<uint64_t, std::vector<uint64_t>>> to_delete;
         outstanding_prog_states_mutex.lock();
         for (auto &p: completed_requests) {
             uint64_t req_id = p.first;
             auto node_list_iter = outstanding_prog_states.find(req_id);
             if (node_list_iter != outstanding_prog_states.end()) {
-                delete_prog_states(req_id, node_list_iter->second);
+                to_delete.emplace_back(std::make_pair(req_id, std::move(node_list_iter->second)));
+                int num_deleted = outstanding_prog_states.erase(req_id);
+                assert(num_deleted == 1);
             }
         }
         outstanding_prog_states_mutex.unlock();
+
+        for (auto &p: to_delete) { // TODO, later delete multiple req ids per node
+            delete_prog_states(p.first, p.second);
+        }
     }
 
     inline bool
