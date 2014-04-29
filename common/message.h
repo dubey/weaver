@@ -165,11 +165,13 @@ namespace message
     inline
     message :: message()
         : type(ERROR)
+          , buf(NULL)
     { }
 
     inline
     message :: message(enum msg_type t)
         : type(t)
+          , buf(NULL)
     { }
 
     inline 
