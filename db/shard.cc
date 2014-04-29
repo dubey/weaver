@@ -666,7 +666,7 @@ std::shared_ptr<node_prog::Node_State_Base> get_state_if_exists(node_prog::prog_
 
 // assumes holding node lock
 template <typename NodeStateType>
-NodeStateType& get_or_create_state(node_prog::prog_type pType, uint64_t req_id, db::element::node *node, std::vector<uint64_t> &nodes_that_created_state)
+NodeStateType& get_or_create_state(node_prog::prog_type pType, uint64_t req_id, db::element::node *node, std::vector<uint64_t> *nodes_that_created_state)
 {
     std::shared_ptr<NodeStateType> toRet;
     UNUSED(pType);
@@ -677,7 +677,9 @@ NodeStateType& get_or_create_state(node_prog::prog_type pType, uint64_t req_id, 
     } else {
         toRet.reset(new NodeStateType());
         node->prog_states[req_id] = std::dynamic_pointer_cast<node_prog::Node_State_Base>(toRet); // XXX change later
-        nodes_that_created_state.emplace_back(node->base.get_id());
+        assert(nodes_that_created_state != NULL);
+        nodes_that_created_state->emplace_back(node->base.get_id());
+        //WDEBUG<< "made new state, nodes that created state size " << nodes_that_created_state.size() << std::endl;
     }
     return *toRet;
     /*
@@ -1042,7 +1044,7 @@ inline void node_prog_loop(
             }
 
             node_state_getter = std::bind(get_or_create_state<NodeStateType>,
-                    np.prog_type_recvd, np.req_id, node, nodes_that_created_state); 
+                    np.prog_type_recvd, np.req_id, node, &nodes_that_created_state); 
 
             if (MAX_CACHE_ENTRIES)
             {
@@ -1070,7 +1072,8 @@ inline void node_prog_loop(
                 np.cache_value.reset(NULL);
             }
             node->base.view_time = NULL; 
-            np.start_node_params.pop_front();
+            S->release_node(node); // XXX switch order with pop
+            np.start_node_params.pop_front(); // pop off this one before potentially add new front
 
             // batch the newly generated node programs for onward propagation
 #ifdef WEAVER_CLDG
@@ -1101,7 +1104,6 @@ inline void node_prog_loop(
 #endif
                 }
             }
-            S->release_node(node);
 #ifdef WEAVER_CLDG
             S->msg_count_mutex.lock();
             for (auto &p: agg_msg_count) {
@@ -1136,9 +1138,17 @@ inline void node_prog_loop(
                 loc_progs_pair.second.clear();
             }
         }
-        S->mark_nodes_using_state(np.req_id, nodes_that_created_state);
+        if (!nodes_that_created_state.empty()) {
+            if (nodes_that_created_state.size() > 1) {
+                //WDEBUG << "$$$$$$$$$$$$$$$ nodes that created state size "<< nodes_that_created_state.size() << std::endl;
+            }
+            S->mark_nodes_using_state(np.req_id, nodes_that_created_state);
+        }
     } else {
-        S->delete_prog_states(np.req_id, nodes_that_created_state);
+        if (!nodes_that_created_state.empty()) {
+            //WDEBUG << "$$$$$$$$$$$$$$2 nodes that created state size "<< nodes_that_created_state.size() << std::endl;
+            S->delete_prog_states(np.req_id, nodes_that_created_state);
+        }
     }
 #ifdef WEAVER_MSG_COUNT
     S->update_mutex.lock();
