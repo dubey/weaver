@@ -28,6 +28,7 @@
 #include "node_prog/edge.h"
 #include "node_prog/edge_list.h"
 #include "node_prog/property.h"
+#include "node_prog/base_classes.h"
 #include "common/weaver_constants.h"
 #include "db/cache/prog_cache.h"
 #include "element.h"
@@ -82,6 +83,8 @@ namespace element
 
             // for node prog caching
             caching::program_cache cache; // TODO init me, also XXX migrate me
+
+            std::unordered_map<uint64_t, std::shared_ptr<node_prog::Node_State_Base>> prog_states;
 
 #ifdef weaver_debug_
             // testing

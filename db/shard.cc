@@ -664,9 +664,23 @@ std::shared_ptr<node_prog::Node_State_Base> get_state_if_exists(node_prog::prog_
     return S->fetch_prog_req_state(pType, req_id, node_id);
 }
 
+// assumes holding node lock
 template <typename NodeStateType>
-NodeStateType& get_or_create_state(node_prog::prog_type pType, uint64_t req_id, uint64_t node_id)
+NodeStateType& get_or_create_state(node_prog::prog_type pType, uint64_t req_id, db::element::node *node, std::vector<uint64_t> &nodes_that_created_state)
 {
+    std::shared_ptr<NodeStateType> toRet;
+    UNUSED(pType);
+
+    auto state_iter = node->prog_states.find(req_id);
+    if (state_iter != node->prog_states.end()) {
+        toRet = std::dynamic_pointer_cast<NodeStateType>(state_iter->second);
+    } else {
+        toRet.reset(new NodeStateType());
+        node->prog_states[req_id] = std::dynamic_pointer_cast<node_prog::Node_State_Base>(toRet); // XXX change later
+        nodes_that_created_state.emplace_back(node->base.get_id());
+    }
+    return *toRet;
+    /*
     std::shared_ptr<NodeStateType> toRet;
     auto state = S->fetch_prog_req_state(pType, req_id, node_id);
     if (state) {
@@ -677,6 +691,7 @@ NodeStateType& get_or_create_state(node_prog::prog_type pType, uint64_t req_id, 
                 std::dynamic_pointer_cast<node_prog::Node_State_Base>(toRet));
     }
     return *toRet;
+    */
 }
 
 // vector pointers can be null if we don't want to fill that vector
@@ -959,6 +974,8 @@ inline void node_prog_loop(
     std::function<void(std::shared_ptr<CacheValueType>,
             std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)> add_cache_func;
 
+    std::vector<uint64_t> nodes_that_created_state;
+
     uint64_t node_id;
     bool done_request = false;
     db::element::remote_node this_node(S->shard_id, 0);
@@ -1025,7 +1042,7 @@ inline void node_prog_loop(
             }
 
             node_state_getter = std::bind(get_or_create_state<NodeStateType>,
-                    np.prog_type_recvd, np.req_id, node_id);
+                    np.prog_type_recvd, np.req_id, node, nodes_that_created_state); 
 
             if (MAX_CACHE_ENTRIES)
             {
@@ -1064,7 +1081,8 @@ inline void node_prog_loop(
                 assert(rn.loc < NUM_SHARDS + SHARD_ID_INCR);
                 if (rn == db::element::coordinator || rn.loc == np.vt_id) {
                     // mark requests as done, will be done for other shards by no-ops from coordinator
-                    S->add_done_request(np.req_id, np.prog_type_recvd);
+                    std::vector<std::pair<uint64_t, node_prog::prog_type>> completed_request {std::make_pair(np.req_id, np.prog_type_recvd)};
+                    S->add_done_requests(completed_request);
                     // signal to send back to vector timestamper that issued request
                     // XXX get rid of pair, without pair it is not working for some reason
                     std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
@@ -1118,6 +1136,9 @@ inline void node_prog_loop(
                 loc_progs_pair.second.clear();
             }
         }
+        S->mark_nodes_using_state(np.req_id, nodes_that_created_state);
+    } else {
+        S->delete_prog_states(np.req_id, nodes_that_created_state);
     }
 #ifdef WEAVER_MSG_COUNT
     S->update_mutex.lock();

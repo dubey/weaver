@@ -121,6 +121,7 @@ namespace state
     inline bool
     program_state :: state_exists_nolock(node_prog::prog_type t, uint64_t req_id, uint64_t node_id)
     {
+        assert(false);
         assert(prog_state.count(t) > 0); // make sure we can store this prog_type
         req_map &rmap = prog_state.at(t);
         req_map::iterator rmap_iter = rmap.find(req_id);
@@ -146,6 +147,7 @@ namespace state
     inline std::shared_ptr<node_prog::Node_State_Base>
     program_state :: get_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_id)
     {
+        assert(false);
         std::shared_ptr<node_prog::Node_State_Base> state(nullptr);
 
         acquire();
@@ -168,6 +170,7 @@ namespace state
     program_state :: put_state(node_prog::prog_type t, uint64_t req_id, uint64_t node_id,
         std::shared_ptr<node_prog::Node_State_Base> &new_state)
     {
+        assert(false);
         bool finished = check_done_request(req_id);
         if (!finished) { // check request not done yet
             acquire();
@@ -506,7 +509,11 @@ namespace state
     inline void
     program_state :: done_request(uint64_t req_id, node_prog::prog_type type)
     {
+        assert(false);
         done_mutex.lock();
+        if(done_ids.count(req_id) > 0) {
+            WDEBUG << "DONE IDS REDO"<< std::endl;
+        }
         done_ids.emplace(req_id);
         done_mutex.unlock();
 
@@ -529,15 +536,24 @@ namespace state
     inline void
     program_state :: done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &reqs)
     {
+        assert(false);
         if (reqs.size() == 0) {
             return;
         }
         done_mutex.lock();
+            bool report_reqs = false;
         for (auto &p: reqs) {
             uint64_t req_id = p.first;
+            if(done_ids.count(req_id) > 0) {
+                WDEBUG << "DONE IDS REDO VECOTE"<< std::endl;
+                report_reqs = true;
+            }
             done_ids.emplace(req_id);
         }
         done_mutex.unlock();
+        if (report_reqs) {
+                WDEBUG << "done reqs requested of size " << reqs.size()<< std::endl;
+        }
 
         acquire();
         for (auto &p: reqs) {
