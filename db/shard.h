@@ -338,8 +338,9 @@ namespace db
     {
         element::node *n = NULL;
         update_mutex.lock();
-        if (nodes.find(node_id) != nodes.end()) {
-            n = nodes[node_id];
+        auto node_iter = nodes.find(node_id);
+        if (node_iter != nodes.end()) {
+            n = node_iter->second;
             n->waiters++;
             while (n->in_use) {
                 n->cv.wait();
@@ -356,8 +357,9 @@ namespace db
     shard :: node_tx_order(uint64_t node, uint64_t vt_id, uint64_t qts)
     {
         update_mutex.lock();
-        if (nodes.find(node) != nodes.end()) {
-            nodes[node]->tx_queue.emplace_back(std::make_pair(vt_id, qts));
+        auto node_iter = nodes.find(node);
+        if (node_iter != nodes.end()) {
+            node_iter->second->tx_queue.emplace_back(std::make_pair(vt_id, qts));
         }
         update_mutex.unlock();
     }
@@ -368,8 +370,9 @@ namespace db
         element::node *n = NULL;
         auto comp = std::make_pair(vt_id, qts);
         update_mutex.lock();
-        if (nodes.find(node) != nodes.end()) {
-            n = nodes[node];
+        auto node_iter = nodes.find(node);
+        if (node_iter != nodes.end()) {
+            n = node_iter->second;
             n->waiters++;
             while (n->in_use || n->tx_queue.front() != comp) {
                 n->cv.wait();
@@ -387,8 +390,9 @@ namespace db
     shard :: acquire_node_nonlocking(uint64_t node_id)
     {
         element::node *n = NULL;
-        if (nodes.find(node_id) != nodes.end()) {
-            n = nodes[node_id];
+        auto node_iter = nodes.find(node_id);
+        if (node_iter != nodes.end()) {
+            n = node_iter->second;
         }
         return n;
     }
@@ -643,7 +647,7 @@ namespace db
     inline bool
     shard :: node_exists_nonlocking(uint64_t node_id)
     {
-        return (nodes.find(node_id) != nodes.end());
+        return (nodes.count(node_id) > 0);
     }
 
     // permanent deletion
