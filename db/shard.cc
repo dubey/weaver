@@ -1006,7 +1006,7 @@ inline void node_prog_loop(
                 }
                 */
 #endif
-            if (S->check_done_request(np.req_id)) { // XXX is this in the right place
+            if (S->check_done_request(np.req_id)) {
                 done_request = true;
                 S->release_node(node);
                 break;
@@ -1106,10 +1106,6 @@ inline void node_prog_loop(
         if (MAX_CACHE_ENTRIES)
         {
             assert(np.cache_value == false); // unique ptr is not assigned
-        }
-
-        if (S->check_done_request(np.req_id)) {
-            done_request = true;
         }
     }
     if (!done_request) {
