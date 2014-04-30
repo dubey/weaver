@@ -49,6 +49,14 @@ end_program(int signum)
     exit(0);
 }
 
+inline void
+prepare_del_transaction(transaction::pending_tx &tx, std::vector<uint64_t> &del_elems)
+{
+    vts->busy_mtx.lock();
+    vts->del_tx[tx.id] = tx;
+    vts->busy_mtx.unlock();
+}
+
 // expects an input of list of writes that are part of this transaction
 // for all writes, node mapper lookups should have already been performed
 // for create requests, instead of lookup an entry for new handle should have been inserted
@@ -68,7 +76,7 @@ begin_transaction(transaction::pending_tx &tx)
     // get unique tx id
     vts->clk_mutex.unlock();
 
-    current_tx cur_tx(tx.client_id);
+    current_tx cur_tx(tx.client_id, tx);
     for (uint64_t i = 0; i < NUM_SHARDS; i++) {
         if (!tx_vec[i].writes.empty()) {
             cur_tx.count++;
@@ -100,11 +108,52 @@ end_transaction(uint64_t tx_id, int thread_id)
         // done tx
         //vts->hstub[thread_id]->del_tx(tx_id);
         uint64_t client_id = vts->outstanding_tx[tx_id].client;
+        transaction::pending_tx tx = vts->outstanding_tx[tx_id].tx;
         vts->outstanding_tx.erase(tx_id);
         vts->tx_prog_mutex.unlock();
         message::message msg;
         message::prepare_message(msg, message::CLIENT_TX_DONE);
         vts->comm.send(client_id, msg.buf);
+
+        // unbusy elements
+        std::vector<uint64_t> busy;
+        for (auto upd: tx.writes) {
+            switch (upd->type) {
+                case transaction::NODE_CREATE_REQ:
+                    busy.emplace_back(upd->id);
+                    break;
+
+                case transaction::EDGE_CREATE_REQ:
+                    busy.emplace_back(upd->id);
+                    busy.emplace_back(upd->elem1);
+                    busy.emplace_back(upd->elem2);
+                    break;
+
+                case transaction::NODE_DELETE_REQ:
+                case transaction::NODE_SET_PROPERTY:
+                    busy.emplace_back(upd->elem1);
+                    break;
+
+                case transaction::EDGE_DELETE_REQ:
+                case transaction::EDGE_SET_PROPERTY:
+                    busy.emplace_back(upd->elem1);
+                    busy.emplace_back(upd->elem2);
+                    break;
+
+                default:
+                    WDEBUG << "bad type" << std::endl;
+            }
+        }
+
+        vts->busy_mtx.lock();
+        for (uint64_t e: busy) {
+            assert(vts->deleted_elems.find(e) == vts->deleted_elems.end());
+            assert(vts->busy_elems.find(e) != vts->busy_elems.end());
+            if (--vts->busy_elems[e] == 0) {
+                vts->busy_elems.erase(e);
+            }
+        }
+        vts->busy_mtx.unlock();
     } else {
         vts->tx_prog_mutex.unlock();
     }
@@ -364,9 +413,12 @@ server_loop(int thread_id)
                 // client messages
                 case message::CLIENT_TX_INIT: {
                     transaction::pending_tx tx;
-                    if (!vts->unpack_tx(*msg, tx, sender, thread_id)) {
+                    std::vector<uint64_t> del_elems;
+                    if (!vts->unpack_tx(*msg, tx, sender, thread_id, del_elems)) {
                         message::prepare_message(*msg, message::CLIENT_TX_FAIL);
                         vts->comm.send(sender, msg->buf);
+                    } else if (del_elems.size() > 0) {
+                        prepare_del_transaction(tx, del_elems);
                     } else {
                         begin_transaction(tx);
                     }

@@ -71,6 +71,9 @@ namespace coordinator
 
             // write transactions
             std::unordered_map<uint64_t, current_tx> outstanding_tx;
+            po6::threads::mutex busy_mtx;
+            std::unordered_set<uint64_t> deleted_elems;
+            std::unordered_map<uint64_t, uint64_t> busy_elems;
 
             // node prog
             std::unordered_map<uint64_t, current_prog> outstanding_progs;
@@ -115,7 +118,7 @@ namespace coordinator
             void init();
             void restore_backup();
             void reconfigure();
-            bool unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id, int tid);
+            bool unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id, int tid, std::vector<uint64_t> &del_elems);
             uint64_t generate_id();
     };
 
@@ -198,7 +201,7 @@ namespace coordinator
     // this is not a complete sanity check, e.g. create_edge(n1, n2) will succeed even if n2 is garbage
     // similarly edge ids are not checked
     inline bool
-    timestamper :: unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id, int thread_id)
+    timestamper :: unpack_tx(message::message &msg, transaction::pending_tx &tx, uint64_t client_id, int thread_id, std::vector<uint64_t> &del_elems)
     {
         message::unpack_client_tx(msg, tx);
         tx.id = generate_id();
@@ -208,6 +211,7 @@ namespace coordinator
         // lookup mappings
         std::unordered_map<uint64_t, uint64_t> mappings_to_put;
         std::unordered_set<uint64_t> mappings_to_get;
+        std::vector<uint64_t> busy;
         for (auto upd: tx.writes) {
             switch (upd->type) {
                 case transaction::NODE_CREATE_REQ:
@@ -217,6 +221,7 @@ namespace coordinator
                     upd->loc1 = loc_gen + SHARD_ID_INCR; // node will be placed on this shard
                     loc_gen_mutex.unlock();
                     mappings_to_put.emplace(upd->id, upd->loc1);
+                    busy.emplace_back(upd->id);
                     break;
 
                 case transaction::EDGE_CREATE_REQ:
@@ -226,6 +231,9 @@ namespace coordinator
                     if (mappings_to_put.find(upd->elem2) == mappings_to_put.end()) {
                         mappings_to_get.insert(upd->elem2);
                     }
+                    busy.emplace_back(upd->id);
+                    busy.emplace_back(upd->elem1);
+                    busy.emplace_back(upd->elem2);
                     break;
 
                 case transaction::NODE_DELETE_REQ:
@@ -233,6 +241,7 @@ namespace coordinator
                     if (mappings_to_put.find(upd->elem1) == mappings_to_put.end()) {
                         mappings_to_get.insert(upd->elem1);
                     }
+                    busy.emplace_back(upd->elem1);
                     break;
 
                 case transaction::EDGE_DELETE_REQ:
@@ -240,10 +249,15 @@ namespace coordinator
                     if (mappings_to_put.find(upd->elem2) == mappings_to_put.end()) {
                         mappings_to_get.insert(upd->elem2);
                     }
+                    busy.emplace_back(upd->elem1);
+                    busy.emplace_back(upd->elem2);
                     break;
 
                 default:
                     WDEBUG << "bad type" << std::endl;
+            }
+            if (upd->type == transaction::NODE_DELETE_REQ || upd->type == transaction::EDGE_DELETE_REQ) {
+                del_elems.emplace_back(upd->elem1);
             }
         }
 
@@ -292,6 +306,18 @@ namespace coordinator
                     continue;
             }
         }
+
+        busy_mtx.lock();
+        for (uint64_t e: busy) {
+            assert(deleted_elems.find(e) == deleted_elems.end());
+            if (busy_elems.find(e) == busy_elems.end()) {
+                busy_elems[e] = 1;
+            } else {
+                busy_elems[e]++;
+            }
+        }
+        busy_mtx.unlock();
+
         return true;
     }
 

@@ -21,9 +21,11 @@ namespace coordinator
     {
         uint64_t client;
         uint64_t count;
+        transaction::pending_tx tx;
 
         current_tx() : client(UINT64_MAX), count(0) { }
-        current_tx(uint64_t cl) : client(cl), count(0) { }
+        current_tx(uint64_t cl, transaction::pending_tx &t)
+            : client(cl), count(0), tx(t) { }
     };
 }
 
