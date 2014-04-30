@@ -93,6 +93,8 @@ namespace message
         VT_CLOCK_UPDATE_ACK,
         VT_NOP,
         VT_NOP_ACK,
+        PREP_DEL_TX,
+        DONE_DEL_TX,
         DONE_MIGR,
 
         ERROR

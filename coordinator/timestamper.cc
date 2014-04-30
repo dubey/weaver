@@ -52,9 +52,18 @@ end_program(int signum)
 inline void
 prepare_del_transaction(transaction::pending_tx &tx, std::vector<uint64_t> &del_elems)
 {
+    current_tx cur_tx(tx.client_id, tx);
+    cur_tx.count = NUM_VTS - 1;
     vts->busy_mtx.lock();
-    vts->del_tx[tx.id] = tx;
+    vts->del_tx[tx.id] = cur_tx;
     vts->busy_mtx.unlock();
+    for (uint64_t i = 0; i < NUM_VTS; i++) {
+        if (i != vt_id) {
+            message::message msg;
+            message::prepare_message(msg, message::PREP_DEL_TX, vt_id, tx.id, del_elems);
+            vts->comm.send(i, msg.buf);
+        }
+    }
 }
 
 // expects an input of list of writes that are part of this transaction
@@ -111,9 +120,6 @@ end_transaction(uint64_t tx_id, int thread_id)
         transaction::pending_tx tx = vts->outstanding_tx[tx_id].tx;
         vts->outstanding_tx.erase(tx_id);
         vts->tx_prog_mutex.unlock();
-        message::message msg;
-        message::prepare_message(msg, message::CLIENT_TX_DONE);
-        vts->comm.send(client_id, msg.buf);
 
         // unbusy elements
         std::vector<uint64_t> busy;
@@ -129,12 +135,14 @@ end_transaction(uint64_t tx_id, int thread_id)
                     busy.emplace_back(upd->elem2);
                     break;
 
-                case transaction::NODE_DELETE_REQ:
                 case transaction::NODE_SET_PROPERTY:
                     busy.emplace_back(upd->elem1);
                     break;
 
                 case transaction::EDGE_DELETE_REQ:
+                    busy.emplace_back(upd->elem2);
+                    break;
+
                 case transaction::EDGE_SET_PROPERTY:
                     busy.emplace_back(upd->elem1);
                     busy.emplace_back(upd->elem2);
@@ -148,12 +156,18 @@ end_transaction(uint64_t tx_id, int thread_id)
         vts->busy_mtx.lock();
         for (uint64_t e: busy) {
             assert(vts->deleted_elems.find(e) == vts->deleted_elems.end());
+            assert(vts->other_deleted_elems.find(e) == vts->other_deleted_elems.end());
             assert(vts->busy_elems.find(e) != vts->busy_elems.end());
             if (--vts->busy_elems[e] == 0) {
                 vts->busy_elems.erase(e);
             }
         }
         vts->busy_mtx.unlock();
+
+        // send response to client
+        message::message msg;
+        message::prepare_message(msg, message::CLIENT_TX_DONE);
+        vts->comm.send(client_id, msg.buf);
     } else {
         vts->tx_prog_mutex.unlock();
     }
@@ -417,10 +431,45 @@ server_loop(int thread_id)
                     if (!vts->unpack_tx(*msg, tx, sender, thread_id, del_elems)) {
                         message::prepare_message(*msg, message::CLIENT_TX_FAIL);
                         vts->comm.send(sender, msg->buf);
-                    } else if (del_elems.size() > 0) {
+                    } else if (del_elems.size() > 0 && NUM_VTS > 1) {
                         prepare_del_transaction(tx, del_elems);
                     } else {
                         begin_transaction(tx);
+                    }
+                    break;
+                }
+
+                case message::PREP_DEL_TX: {
+                    std::vector<uint64_t> del_elems;
+                    uint64_t tx_id, tx_vt;
+                    message::unpack_message(*msg, message::PREP_DEL_TX, tx_vt, tx_id, del_elems);
+                    vts->busy_mtx.lock();
+                    for (uint64_t d: del_elems) {
+                        assert(vts->deleted_elems.find(d) == vts->deleted_elems.end());
+                        assert(vts->other_deleted_elems.find(d) == vts->other_deleted_elems.end());
+                        assert(vts->busy_elems.find(d) == vts->busy_elems.end());
+                        vts->other_deleted_elems.emplace(d);
+                    }
+                    vts->busy_mtx.unlock();
+                    message::prepare_message(*msg, message::DONE_DEL_TX, tx_id);
+                    vts->comm.send(tx_vt, msg->buf);
+                    break;
+                }
+
+                case message::DONE_DEL_TX: {
+                    uint64_t tx_id;
+                    message::unpack_message(*msg, message::DONE_DEL_TX, tx_id);
+                    vts->busy_mtx.lock();
+                    assert(vts->del_tx.find(tx_id) != vts->del_tx.end());
+                    auto &cur_tx = vts->del_tx[tx_id];
+                    if (--cur_tx.count == 0) {
+                        // ready to run
+                        auto tx = cur_tx.tx;
+                        vts->del_tx.erase(tx_id);
+                        vts->busy_mtx.unlock();
+                        begin_transaction(tx);
+                    } else {
+                        vts->busy_mtx.unlock();
                     }
                     break;
                 }

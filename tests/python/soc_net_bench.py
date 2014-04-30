@@ -22,16 +22,16 @@ import libclient as client
 
 num_started = 0
 num_finished = 0
-num_clients = 200
+num_clients = 50
 cv = threading.Condition()
 
 class request_gen:
     def __init__(self):
         # node handles are range(0, num_nodes)
-        #self.num_nodes = 81306 # snap twitter-combined
-        self.num_nodes = 4847500 # snap twitter-combined
+        self.num_nodes = 81306 # snap twitter-combined
+        #self.num_nodes = 4847500 # snap twitter-combined
 
-        self.p_read = 1
+        self.p_read = 0.5
         self.p_assoc_get = 0.157
         self.p_assoc_range = 0.437
         self.p_assoc_count = 0.117
@@ -42,16 +42,21 @@ class request_gen:
         self.c_obj_get = self.c_assoc_count + self.p_obj_get
 
         self.p_write = 0.002
-        self.p_assoc_add = 0.525
-        self.p_assoc_del = 0.083
-        self.p_obj_add = 0.165
-        self.p_obj_update = 0.207
-        self.p_obj_del = 0.02
+        self.p_assoc_add = 0.8
+        self.p_assoc_del = 0.2
+        self.p_assoc_update = 0.207
+        #self.p_assoc_add = 0.525
+        #self.p_assoc_del = 0.083
+        #self.p_obj_add = 0.165
+        #self.p_obj_update = 0.207
+        #self.p_obj_del = 0.02
         self.c_assoc_add = self.p_assoc_add
         self.c_assoc_del = self.c_assoc_add + self.p_assoc_del
-        self.c_obj_add = self.c_assoc_del + self.p_obj_add
-        self.c_obj_update = self.c_obj_add + self.p_obj_update
-        self.c_obj_del = self.c_obj_update + self.p_obj_del
+        #self.c_assoc_add = self.p_assoc_add
+        #self.c_assoc_del = self.c_assoc_add + self.p_assoc_del
+        #self.c_obj_add = self.c_assoc_del + self.p_obj_add
+        #self.c_obj_update = self.c_obj_add + self.p_obj_update
+        #self.c_obj_del = self.c_obj_update + self.p_obj_del
 
         self.req_types = ['assoc_get', 'assoc_range', 'assoc_count', 'obj_get',
                           'assoc_add', 'assoc_del', 'obj_add', 'obj_update', 'obj_del']
@@ -72,12 +77,12 @@ class request_gen:
             else:
                 return [3, n1]
         else:
-            return [4, n1, n2]
-            #coin_toss = random.random()
-            #if coin_toss < self.c_assoc_add:
-            #    return [4, n1, n2]
-            #elif coin_toss < self.c_assoc_del:
-            #    return [5, n1, n2]
+            #return [4, n1, n2]
+            coin_toss = random.random()
+            if coin_toss < self.c_assoc_add:
+                return [4, n1, n2]
+            else:
+                return [5, n1, n2]
             #elif coin_toss < self.c_obj_add:
             #    return [6]
             #elif coin_toss < self.c_obj_update:
@@ -102,6 +107,8 @@ def exec_work(idx, cl, num_requests):
         while num_started < num_clients:
             cv.wait()
 
+    edge_list = []
+    edge_parent_list = []
     for rcnt in range(num_requests):
         req = rgen.get()
         if req[0] == 0:  # assoc_get
@@ -118,10 +125,29 @@ def exec_work(idx, cl, num_requests):
         elif req[0] == 3: # obj get
             prog_args = [(req[1], rnpp)]
             response = cl.read_node_props(prog_args)
-        else:
+        elif req[0] == 4: # assoc_add
             tx_id = cl.begin_tx()
-            cl.create_edge(tx_id, req[1], req[2])
+            new_edge = cl.create_edge(tx_id, req[1], req[2])
             cl.end_tx(tx_id)
+            edge_list.append(new_edge)
+            edge_parent_list.append(req[1])
+        elif req[0] == 5: # assoc del
+            if len(edge_list) > 0:
+                tx_id = cl.begin_tx()
+                del_edge = edge_list.pop()
+                del_edge_node = edge_parent_list.pop()
+                cl.delete_edge(tx_id, del_edge, del_edge_node)
+                cl.end_tx(tx_id)
+        #elif req[0] == 6: # assoc update
+        #    tx_id = cl.begin_tx()
+        #    if len(edge_list) > 0:
+        #        rnd_idx = random.randint(0, len(edge_list)-1)
+        #        edge = edge_list[rnd_idx]
+        #        node = edge_parent_list[rnd_idx]
+        #        cl.set_edge_property(tx_id, node, edge, 'color', 'red')
+        #    cl.end_tx(tx_id)
+        else:
+            print 'BAD VALUE!'
         #elif req[0] == 4: # assoc add
         #    print 'write 4'
         #elif req[0] == 5: # assoc del

@@ -20,6 +20,22 @@ int
 order :: compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
 {
     int ret = 2;
+    if (clk1.size() != NUM_VTS) {
+        WDEBUG << "clk1 size " << clk1.size() << ", vals: ";
+        for (uint64_t c: clk1) {
+            std::cerr << c << " ";
+        }
+        std::cerr << std::endl;
+        assert(false);
+    }
+    if (clk2.size() != NUM_VTS) {
+        WDEBUG << "clk2 size " << clk2.size() << ", vals: ";
+        for (uint64_t c: clk2) {
+            std::cerr << c << " ";
+        }
+        std::cerr << std::endl;
+        assert(false);
+    }
     assert(clk1.size() == NUM_VTS);
     assert(clk2.size() == NUM_VTS);
     for (uint64_t i = 0; i < NUM_VTS; i++) {

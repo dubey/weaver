@@ -223,7 +223,7 @@ namespace db
         , max_prog_id(NUM_VTS, 0)
         , target_prog_id(NUM_VTS, 0)
         , max_done_id(NUM_VTS, 0)
-        , max_done_clk(NUM_VTS, vc::vclock_t())
+        , max_done_clk(NUM_VTS, vc::vclock_t(NUM_VTS, 0))
         , msg_count(0)
         , prog_state()
     {
@@ -656,6 +656,10 @@ namespace db
                 // if all VTs have no outstanding node progs, then everything can be permanently deleted
                 if (!dobj->no_outstanding_progs.all()) {
                     for (uint64_t i = 0; (i < NUM_VTS) && to_del; i++) {
+                        if (max_done_clk[i].size() < NUM_VTS) {
+                            to_del = false;
+                            break;
+                        }
                         to_del = (order::compare_two_clocks(dobj->vclk.clock, max_done_clk[i]) == 0);
                     }
                 }

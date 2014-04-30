@@ -351,7 +351,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                 }
             }
             //S->bulk_load_persistent();
-            init_nmap(node_maps);
+            //init_nmap(node_maps);
             //init_mutex.lock();
             //while (start_load < 1) {
             //    start_load_cv.wait();
@@ -643,7 +643,7 @@ nop(uint64_t thread_id, void *noparg)
     }
 
     // initiate permanent deletion
-    S->permanent_delete_loop(nop_arg->vt_id, nop_arg->outstanding_progs != 0);
+    //S->permanent_delete_loop(nop_arg->vt_id, nop_arg->outstanding_progs != 0);
 
     // record clock; reads go through
     S->record_completed_tx(thread_id, nop_arg->vt_id, nop_arg->vclk.clock);

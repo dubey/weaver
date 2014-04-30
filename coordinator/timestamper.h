@@ -71,8 +71,9 @@ namespace coordinator
 
             // write transactions
             std::unordered_map<uint64_t, current_tx> outstanding_tx;
+            std::unordered_map<uint64_t, current_tx> del_tx;
             po6::threads::mutex busy_mtx;
-            std::unordered_set<uint64_t> deleted_elems;
+            std::unordered_set<uint64_t> deleted_elems, other_deleted_elems;
             std::unordered_map<uint64_t, uint64_t> busy_elems;
 
             // node prog
@@ -241,7 +242,9 @@ namespace coordinator
                     if (mappings_to_put.find(upd->elem1) == mappings_to_put.end()) {
                         mappings_to_get.insert(upd->elem1);
                     }
-                    busy.emplace_back(upd->elem1);
+                    if (upd->type != transaction::NODE_DELETE_REQ) {
+                        busy.emplace_back(upd->elem1);
+                    }
                     break;
 
                 case transaction::EDGE_DELETE_REQ:
@@ -249,7 +252,9 @@ namespace coordinator
                     if (mappings_to_put.find(upd->elem2) == mappings_to_put.end()) {
                         mappings_to_get.insert(upd->elem2);
                     }
-                    busy.emplace_back(upd->elem1);
+                    if (upd->type != transaction::EDGE_DELETE_REQ) {
+                        busy.emplace_back(upd->elem1);
+                    }
                     busy.emplace_back(upd->elem2);
                     break;
 
@@ -310,11 +315,18 @@ namespace coordinator
         busy_mtx.lock();
         for (uint64_t e: busy) {
             assert(deleted_elems.find(e) == deleted_elems.end());
+            assert(other_deleted_elems.find(e) == other_deleted_elems.end());
             if (busy_elems.find(e) == busy_elems.end()) {
                 busy_elems[e] = 1;
             } else {
                 busy_elems[e]++;
             }
+        }
+        for (uint64_t d: del_elems) {
+            assert(deleted_elems.find(d) == deleted_elems.end());
+            assert(other_deleted_elems.find(d) == other_deleted_elems.end());
+            assert(busy_elems.find(d) == busy_elems.end());
+            deleted_elems.emplace(d);
         }
         busy_mtx.unlock();
 
