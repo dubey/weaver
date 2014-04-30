@@ -668,30 +668,16 @@ std::shared_ptr<node_prog::Node_State_Base> get_state_if_exists(node_prog::prog_
 template <typename NodeStateType>
 NodeStateType& get_or_create_state(uint64_t req_id, db::element::node *node, std::vector<uint64_t> *nodes_that_created_state)
 {
-    std::shared_ptr<NodeStateType> toRet;
     auto state_iter = node->prog_states.find(req_id);
     if (state_iter != node->prog_states.end()) {
-        toRet = std::dynamic_pointer_cast<NodeStateType>(state_iter->second);
+        return dynamic_cast<NodeStateType &>(*(state_iter->second));
     } else {
-        toRet.reset(new NodeStateType());
-        node->prog_states[req_id] = std::dynamic_pointer_cast<node_prog::Node_State_Base>(toRet); // XXX change later
+        NodeStateType *ptr = new NodeStateType();
+        node->prog_states[req_id] = std::unique_ptr<node_prog::Node_State_Base>(ptr);// std::dynamic_pointer_cast<node_prog::Node_State_Base>(toRet); // XXX change later
         assert(nodes_that_created_state != NULL);
         nodes_that_created_state->emplace_back(node->base.get_id());
-        //WDEBUG<< "made new state, nodes that created state size " << nodes_that_created_state.size() << std::endl;
+        return *ptr;
     }
-    return *toRet;
-    /*
-    std::shared_ptr<NodeStateType> toRet;
-    auto state = S->fetch_prog_req_state(pType, req_id, node_id);
-    if (state) {
-        toRet = std::dynamic_pointer_cast<NodeStateType>(state);
-    } else {
-        toRet.reset(new NodeStateType());
-        S->insert_prog_req_state(pType, req_id, node_id,
-                std::dynamic_pointer_cast<node_prog::Node_State_Base>(toRet));
-    }
-    return *toRet;
-    */
 }
 
 // vector pointers can be null if we don't want to fill that vector

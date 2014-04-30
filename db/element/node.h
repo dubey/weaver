@@ -84,7 +84,7 @@ namespace element
             // for node prog caching
             caching::program_cache cache; // TODO init me, also XXX migrate me
 
-            std::unordered_map<uint64_t, std::shared_ptr<node_prog::Node_State_Base>> prog_states;
+            std::unordered_map<uint64_t, std::unique_ptr<node_prog::Node_State_Base>> prog_states;
 
 #ifdef weaver_debug_
             // testing
