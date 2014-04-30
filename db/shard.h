@@ -201,18 +201,17 @@ namespace db
             // node programs
         private:
 
-            po6::threads::mutex prog_done_ids_mutex;
+            po6::threads::mutex node_prog_state_mutex;
             std::unordered_set<uint64_t> done_ids; // request ids that have finished
-            po6::threads::mutex outstanding_prog_states_mutex;
             std::unordered_map<uint64_t, std::vector<uint64_t>> outstanding_prog_states; // maps request_id to list of nodes that have created prog state for that req id
             state::program_state prog_state; 
+            void delete_prog_states(uint64_t req_id, std::vector<uint64_t> &node_ids);
         public:
             std::shared_ptr<node_prog::Node_State_Base> 
                 fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_id);
             void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_id,
                     std::shared_ptr<node_prog::Node_State_Base> toAdd);
             void mark_nodes_using_state(uint64_t req_id, std::vector<uint64_t> &node_ids);
-            void delete_prog_states(uint64_t req_id, std::vector<uint64_t> &node_ids);
             //void add_done_request(uint64_t completed_req_id, node_prog::prog_type type);
             void add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
             bool check_done_request(uint64_t req_id);
@@ -863,29 +862,6 @@ namespace db
         prog_state.put_state(t, request_id, local_node_id, toAdd);
     }
 
-    /*
-    inline void
-    shard :: add_done_request(uint64_t completed_req_id, node_prog::prog_type type)
-    {
-        //prog_state.done_request(completed_req_id, type);
-        //add_done_requests({std::make_pair(completed_req_id, type)});
-    }
-    */
-
-    inline void
-    shard :: mark_nodes_using_state(uint64_t req_id, std::vector<uint64_t> &node_ids)
-    {
-            outstanding_prog_states_mutex.lock();
-
-            std::vector<uint64_t> &add_to = outstanding_prog_states[req_id];
-            add_to.reserve(add_to.size() + node_ids.size());
-            add_to.insert(add_to.end(), node_ids.begin(), node_ids.end());
-
-            outstanding_prog_states_mutex.unlock();
-            // XXX maybe check request not done again here
-            return;
-    }
-
     inline void
     shard :: delete_prog_states(uint64_t req_id, std::vector<uint64_t> &node_ids)
     {
@@ -910,6 +886,27 @@ namespace db
     }
 
     inline void
+    shard :: mark_nodes_using_state(uint64_t req_id, std::vector<uint64_t> &node_ids)
+    {
+            node_prog_state_mutex.lock();
+            bool done_request = done_ids.count(req_id) > 1;
+            if (!done_request) {
+                auto state_list_iter = outstanding_prog_states.find(req_id);
+                if (state_list_iter == outstanding_prog_states.end()) {
+                    outstanding_prog_states.emplace(req_id, std::move(node_ids));
+                } else {
+                    std::vector<uint64_t> &add_to = state_list_iter->second;
+                    add_to.reserve(add_to.size() + node_ids.size());
+                    add_to.insert(add_to.end(), node_ids.begin(), node_ids.end());
+                }
+                node_prog_state_mutex.unlock();
+            } else { // request is finished, just delete things
+                node_prog_state_mutex.unlock();
+                delete_prog_states(req_id, node_ids);
+            }
+    }
+
+    inline void
     shard :: add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests)
     {
 //        prog_state.done_requests(completed_requests);
@@ -922,12 +919,11 @@ namespace db
             completed_request_ids.push_back(rid);
         }
 
-        prog_done_ids_mutex.lock();
-        done_ids.insert(completed_request_ids.begin(), completed_request_ids.end());
-        prog_done_ids_mutex.unlock();
-
         std::vector<std::pair<uint64_t, std::vector<uint64_t>>> to_delete;
-        outstanding_prog_states_mutex.lock();
+
+        node_prog_state_mutex.lock();
+        done_ids.insert(completed_request_ids.begin(), completed_request_ids.end());
+
         for (auto &p: completed_requests) {
             uint64_t req_id = p.first;
             auto node_list_iter = outstanding_prog_states.find(req_id);
@@ -937,7 +933,7 @@ namespace db
                 assert(num_deleted == 1);
             }
         }
-        outstanding_prog_states_mutex.unlock();
+        node_prog_state_mutex.unlock();
 
         for (auto &p: to_delete) { // TODO, later delete multiple req ids per node
             delete_prog_states(p.first, p.second);
@@ -951,9 +947,9 @@ namespace db
         bool done = prog_state.check_done_request(req_id);
         return done;
         */
-        prog_done_ids_mutex.lock();
+        node_prog_state_mutex.lock();
         bool done = done_ids.count(req_id) > 0;
-        prog_done_ids_mutex.unlock();
+        node_prog_state_mutex.unlock();
         return done;
     }
 

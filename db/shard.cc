@@ -1121,17 +1121,10 @@ inline void node_prog_loop(
                 loc_progs_pair.second.clear();
             }
         }
-        if (!nodes_that_created_state.empty()) {
-            if (nodes_that_created_state.size() > 1) {
-                //WDEBUG << "$$$$$$$$$$$$$$$ nodes that created state size "<< nodes_that_created_state.size() << std::endl;
-            }
-            S->mark_nodes_using_state(np.req_id, nodes_that_created_state);
-        }
-    } else {
-        if (!nodes_that_created_state.empty()) {
-            //WDEBUG << "$$$$$$$$$$$$$$2 nodes that created state size "<< nodes_that_created_state.size() << std::endl;
-            S->delete_prog_states(np.req_id, nodes_that_created_state);
-        }
+    }
+
+    if (!nodes_that_created_state.empty()) {
+        S->mark_nodes_using_state(np.req_id, nodes_that_created_state);
     }
 #ifdef WEAVER_MSG_COUNT
     S->update_mutex.lock();
