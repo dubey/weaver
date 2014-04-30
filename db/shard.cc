@@ -1147,7 +1147,7 @@ inline void node_prog_loop(
     } else {
         if (!nodes_that_created_state.empty()) {
             //WDEBUG << "$$$$$$$$$$$$$$2 nodes that created state size "<< nodes_that_created_state.size() << std::endl;
-            S->delete_prog_states(np.req_id, nodes_that_created_state);
+            S->delete_prog_states_megalock(np.req_id, nodes_that_created_state);
         }
     }
 #ifdef WEAVER_MSG_COUNT
