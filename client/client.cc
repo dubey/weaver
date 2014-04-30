@@ -204,6 +204,12 @@ client :: run_reach_program(std::vector<std::pair<uint64_t, node_prog::reach_par
     return *run_node_program(node_prog::REACHABILITY, initial_args);
 }
 
+node_prog::pathless_reach_params
+client :: run_pathless_reach_program(std::vector<std::pair<uint64_t, node_prog::pathless_reach_params>> initial_args)
+{
+    return *run_node_program(node_prog::PATHLESS_REACHABILITY, initial_args);
+}
+
 node_prog::clustering_params
 client :: run_clustering_program(std::vector<std::pair<uint64_t, node_prog::clustering_params>> initial_args)
 {

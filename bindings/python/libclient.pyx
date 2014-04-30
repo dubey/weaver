@@ -101,6 +101,7 @@ cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
     cdef enum prog_type:
         DEFAULT
         REACHABILITY
+        PATHLESS_REACHABILITY
         N_HOP_REACHABILITY
         TRIANGLE_COUNT
         DIJKSTRA
@@ -146,6 +147,23 @@ class ReachParams:
         self.reachable = reachable
         self.edge_props = edge_props
         self.path = path
+
+cdef extern from 'node_prog/pathless_reach_program.h' namespace 'node_prog':
+    cdef cppclass pathless_reach_params:
+        pathless_reach_params()
+        bint returning
+        remote_node prev_node
+        uint64_t dest
+        vector[pair[string, string]] edge_props
+        bint reachable
+
+class PathlessReachParams:
+    def __init__(self, returning=False, prev_node=RemoteNode(0,0), dest=0, reachable=False, edge_props=[]):
+        self.returning = returning
+        self.prev_node = prev_node
+        self.dest= dest
+        self.reachable = reachable
+        self.edge_props = edge_props
 
 cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
     cdef cppclass clustering_params:
@@ -283,6 +301,7 @@ cdef extern from 'client/client.h' namespace 'client':
         void set_edge_property(uint64_t tx_id, uint64_t node, uint64_t edge, string &key, string &value)
         bint end_tx(uint64_t tx_id) nogil
         reach_params run_reach_program(vector[pair[uint64_t, reach_params]] initial_args) nogil
+        pathless_reach_params run_pathless_reach_program(vector[pair[uint64_t, pathless_reach_params]] initial_args) nogil
         clustering_params run_clustering_program(vector[pair[uint64_t, clustering_params]] initial_args) nogil
         two_neighborhood_params run_two_neighborhood_program(vector[pair[uint64_t, two_neighborhood_params]] initial_args) nogil
         #dijkstra_params run_dijkstra_program(vector[pair[uint64_t, dijkstra_params]] initial_args) nogil
@@ -348,6 +367,22 @@ cdef class Client:
         response = ReachParams(path=foundpath, hops=c_rp.hops, reachable=c_rp.reachable)
         return response
     # warning! set prev_node loc to vt_id if somewhere in params
+    def run_pathless_reach_program(self, init_args):
+        cdef vector[pair[uint64_t, pathless_reach_params]] c_args
+        cdef pair[uint64_t, pathless_reach_params] arg_pair
+        for rp in init_args:
+            arg_pair.first = rp[0]
+            arg_pair.second.returning = rp[1].returning
+            arg_pair.second.dest= rp[1].dest
+            arg_pair.second.reachable = rp[1].reachable
+            arg_pair.second.prev_node = coordinator
+            for p in rp[1].edge_props:
+                arg_pair.second.edge_props.push_back(p)
+            c_args.push_back(arg_pair)
+        with nogil:
+            c_rp = self.thisptr.run_pathless_reach_program(c_args)
+        response = PathlessReachParams(pathless_reachable=c_rp.reachable)
+        return response
     def run_clustering_program(self, init_args):
         cdef vector[pair[uint64_t, clustering_params]] c_args
         cdef pair[uint64_t, clustering_params] arg_pair

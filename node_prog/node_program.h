@@ -29,6 +29,7 @@
 
 #include "node_prog_type.h"
 #include "reach_program.h"
+#include "pathless_reach_program.h"
 #include "clustering_program.h"
 //#include "dijkstra_program.h"
 #include "read_node_props_program.h"
@@ -148,6 +149,8 @@ namespace node_prog
     std::map<prog_type, node_program*> programs = {
         { REACHABILITY,
             new particular_node_program<reach_params, reach_node_state, reach_cache_value>(REACHABILITY, node_prog::reach_node_program) },
+        { PATHLESS_REACHABILITY,
+            new particular_node_program<pathless_reach_params, pathless_reach_node_state, Cache_Value_Base>(PATHLESS_REACHABILITY, node_prog::pathless_reach_node_program) },
 //        { DIJKSTRA,
  //           new particular_node_program<dijkstra_params, dijkstra_node_state, Cache_Value_Base>(DIJKSTRA, node_prog::dijkstra_node_program) },
         { CLUSTERING,

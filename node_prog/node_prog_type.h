@@ -31,6 +31,7 @@ namespace node_prog
     {
         DEFAULT,
         REACHABILITY,
+        PATHLESS_REACHABILITY,
         N_HOP_REACHABILITY,
         TRIANGLE_COUNT,
         DIJKSTRA,
