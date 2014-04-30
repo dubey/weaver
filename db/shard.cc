@@ -1014,6 +1014,7 @@ inline void node_prog_loop(
                 S->release_node(node);
                 break;
             }
+
             if (MAX_CACHE_ENTRIES)
             {
                 if (params.search_cache() && !np.cache_value) {
@@ -1025,16 +1026,13 @@ inline void node_prog_loop(
                         continue;
                     }
                 }
-            }
 
-            node_state_getter = std::bind(get_or_create_state<NodeStateType>, np.req_id, node, &nodes_that_created_state); 
-
-            if (MAX_CACHE_ENTRIES)
-            {
                 using namespace std::placeholders;
                 add_cache_func = std::bind(&db::caching::program_cache::add_cache_value, &(node->cache),
                         np.prog_type_recvd, np.req_vclock, _1, _2, _3); // 1 is cache value, 2 is watch set, 3 is key
             }
+
+            node_state_getter = std::bind(get_or_create_state<NodeStateType>, np.req_id, node, &nodes_that_created_state); 
 
             node->base.view_time = np.req_vclock; 
             assert(np.req_vclock);
@@ -1069,12 +1067,14 @@ inline void node_prog_loop(
                     // mark requests as done, will be done for other shards by no-ops from coordinator
                     std::vector<std::pair<uint64_t, node_prog::prog_type>> completed_request {std::make_pair(np.req_id, np.prog_type_recvd)};
                     S->add_done_requests(completed_request);
+                    done_request = true;
                     // signal to send back to vector timestamper that issued request
                     // XXX get rid of pair, without pair it is not working for some reason
                     std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
                     std::unique_ptr<message::message> m(new message::message());
                     message::prepare_message(*m, message::NODE_PROG_RETURN, np.prog_type_recvd, np.req_id, temppair);
                     S->comm.send(np.vt_id, m->buf);
+                    break; // can only send one message back
                 } else {
                     std::deque<std::pair<uint64_t, ParamsType>> &next_deque = (rn.loc == S->shard_id) ? np.start_node_params : batched_node_progs[rn.loc]; // TODO this is dumb just have a single data structure later
                     if (next_node_params.first == node_prog::search_type::DEPTH_FIRST) {
