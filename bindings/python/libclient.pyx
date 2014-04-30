@@ -381,7 +381,7 @@ cdef class Client:
             c_args.push_back(arg_pair)
         with nogil:
             c_rp = self.thisptr.run_pathless_reach_program(c_args)
-        response = PathlessReachParams(pathless_reachable=c_rp.reachable)
+        response = PathlessReachParams(reachable=c_rp.reachable)
         return response
     def run_clustering_program(self, init_args):
         cdef vector[pair[uint64_t, clustering_params]] c_args
