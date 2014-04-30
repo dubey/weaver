@@ -212,7 +212,6 @@ namespace db
             void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_id,
                     std::shared_ptr<node_prog::Node_State_Base> toAdd);
             void mark_nodes_using_state(uint64_t req_id, std::vector<uint64_t> &node_ids);
-            void delete_prog_states_megalock(uint64_t req_id, std::vector<uint64_t> &node_ids);
             void delete_prog_states(uint64_t req_id, std::vector<uint64_t> &node_ids);
             //void add_done_request(uint64_t completed_req_id, node_prog::prog_type type);
             void add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
@@ -888,24 +887,6 @@ namespace db
     }
 
     inline void
-    shard :: delete_prog_states_megalock(uint64_t req_id, std::vector<uint64_t> &node_ids)
-    {
-        db::element::node *node;
-        update_mutex.lock();
-        for (uint64_t node_id : node_ids) {
-            auto node_iter = nodes.find(node_id);
-            if (node_iter != nodes.end() && node_iter->second->state != db::element::node::mode::MOVED) {
-                node = node_iter->second;
-                auto state_iter = node->prog_states.find(req_id);
-                assert(state_iter != node->prog_states.end());
-                int elems_erased = node->prog_states.erase(req_id); // TODO double check thing isnt mem leaking
-                assert(elems_erased > 0 && "shoot");
-            }
-        }
-        update_mutex.unlock();
-    }
-
-    inline void
     shard :: delete_prog_states(uint64_t req_id, std::vector<uint64_t> &node_ids)
     {
         for (uint64_t node_id : node_ids) {
@@ -959,7 +940,7 @@ namespace db
         outstanding_prog_states_mutex.unlock();
 
         for (auto &p: to_delete) { // TODO, later delete multiple req ids per node
-            delete_prog_states_megalock(p.first, p.second);
+            delete_prog_states(p.first, p.second);
         }
     }
 

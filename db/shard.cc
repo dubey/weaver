@@ -666,11 +666,9 @@ std::shared_ptr<node_prog::Node_State_Base> get_state_if_exists(node_prog::prog_
 
 // assumes holding node lock
 template <typename NodeStateType>
-NodeStateType& get_or_create_state(node_prog::prog_type pType, uint64_t req_id, db::element::node *node, std::vector<uint64_t> *nodes_that_created_state)
+NodeStateType& get_or_create_state(uint64_t req_id, db::element::node *node, std::vector<uint64_t> *nodes_that_created_state)
 {
     std::shared_ptr<NodeStateType> toRet;
-    UNUSED(pType);
-
     auto state_iter = node->prog_states.find(req_id);
     if (state_iter != node->prog_states.end()) {
         toRet = std::dynamic_pointer_cast<NodeStateType>(state_iter->second);
@@ -1043,8 +1041,7 @@ inline void node_prog_loop(
                 }
             }
 
-            node_state_getter = std::bind(get_or_create_state<NodeStateType>,
-                    np.prog_type_recvd, np.req_id, node, &nodes_that_created_state); 
+            node_state_getter = std::bind(get_or_create_state<NodeStateType>, np.req_id, node, &nodes_that_created_state); 
 
             if (MAX_CACHE_ENTRIES)
             {
@@ -1147,7 +1144,7 @@ inline void node_prog_loop(
     } else {
         if (!nodes_that_created_state.empty()) {
             //WDEBUG << "$$$$$$$$$$$$$$2 nodes that created state size "<< nodes_that_created_state.size() << std::endl;
-            S->delete_prog_states_megalock(np.req_id, nodes_that_created_state);
+            S->delete_prog_states(np.req_id, nodes_that_created_state);
         }
     }
 #ifdef WEAVER_MSG_COUNT
