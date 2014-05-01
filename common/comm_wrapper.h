@@ -65,6 +65,7 @@ class comm_wrapper
         void client_init();
         uint64_t reconfigure(configuration &config);
         std::shared_ptr<po6::net::location> get_loc() { return loc; }
+        void set_timeout(int timeout);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         busybee_returncode send(uint64_t send_to, std::auto_ptr<e::buffer> msg);

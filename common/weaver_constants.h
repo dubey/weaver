@@ -74,7 +74,8 @@
 //#define WEAVER_MSG_COUNT // defined if client msg count call will take place
 
 // coordinator
-#define VT_TIMEOUT_NANO 10000 // number of nanoseconds between successive nops
+//#define VT_TIMEOUT_NANO 10000 // number of nanoseconds between successive nops
+//#define VT_CLK_TIMEOUT_NANO 1 // number of nanoseconds between vt gossip
 
 // hyperdex
 //#define HYPERDEX_COORD_IPADDR "127.0.0.1"

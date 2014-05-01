@@ -22,16 +22,17 @@ import libclient as client
 
 num_started = 0
 num_finished = 0
-num_clients = 250
+num_clients = 200
 cv = threading.Condition()
+all_latencies = []
 
 class request_gen:
     def __init__(self):
         # node handles are range(0, num_nodes)
-        #self.num_nodes = 81306 # snap twitter-combined
-        self.num_nodes = 4840000 # snap twitter-combined
+        self.num_nodes = 81306 # snap twitter-combined
+        #self.num_nodes = 4840000 # snap twitter-combined
 
-        self.p_read = 0.998
+        self.p_read = 0.5
         self.p_assoc_get = 0.157
         self.p_assoc_range = 0.437
         self.p_assoc_count = 0.117
@@ -96,6 +97,7 @@ def exec_work(idx, cl, num_requests):
     global num_finished
     global num_clients
     global cv
+    global all_latencies
     assert(num_requests % 1000 == 0)
     rgen = request_gen()
     egp = client.EdgeGetParams()
@@ -109,8 +111,10 @@ def exec_work(idx, cl, num_requests):
 
     edge_list = []
     edge_parent_list = []
+    latencies = []
     for rcnt in range(num_requests):
         req = rgen.get()
+        start = time.time();
         if req[0] == 0:  # assoc_get
             egp.nbr_id = req[2]
             prog_args = [(req[1], egp)]
@@ -161,11 +165,14 @@ def exec_work(idx, cl, num_requests):
         #else:
         #    print 'unknown request type'
         #    assert(False)
+        end = time.time()
+        latencies.append(end-start)
         if rcnt > 0 and rcnt % 1000 == 0:
             print 'done ' + str(rcnt) + ' by client ' + str(idx)
     with cv:
         num_finished += 1
         cv.notify_all()
+        all_latencies.extend(latencies)
 
 num_vts = 3
 num_requests = 5000
@@ -193,3 +200,7 @@ throughput = (num_requests * num_clients) / total_time
 print 'Throughput = ' + str(throughput)
 for thr in threads:
     thr.join()
+
+lat_file = open('latencies', 'w')
+for t in all_latencies:
+    lat_file.write(str(t) + '\n')

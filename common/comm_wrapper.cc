@@ -146,6 +146,14 @@ comm_wrapper :: reconfigure(configuration &config)
     return primary;
 }
 
+void
+comm_wrapper :: set_timeout(int to)
+{
+    bb->pause();
+    bb->set_timeout(to);
+    bb->unpause();
+}
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 busybee_returncode

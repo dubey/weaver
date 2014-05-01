@@ -351,7 +351,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                 }
             }
             //S->bulk_load_persistent();
-            //init_nmap(node_maps);
+            init_nmap(node_maps);
             //init_mutex.lock();
             //while (start_load < 1) {
             //    start_load_cv.wait();

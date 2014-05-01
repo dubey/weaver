@@ -46,6 +46,9 @@ void
 end_program(int signum)
 {
     std::cerr << "Ending program, signum = " << signum << std::endl;
+    vts->clk_rw_mtx.wrlock();
+    WDEBUG << "num vclk updates " << vts->clk_updates << std::endl;
+    vts->clk_rw_mtx.unlock();
     exit(0);
 }
 
@@ -74,7 +77,7 @@ begin_transaction(transaction::pending_tx &tx)
 {
     std::vector<transaction::pending_tx> tx_vec(NUM_SHARDS, transaction::pending_tx());
 
-    vts->clk_mutex.lock();
+    vts->clk_rw_mtx.wrlock();
     for (std::shared_ptr<transaction::pending_update> upd: tx.writes) {
         vts->qts.at(upd->loc1-SHARD_ID_INCR)++;
         upd->qts = vts->qts;
@@ -83,7 +86,7 @@ begin_transaction(transaction::pending_tx &tx)
     vts->vclk.increment_clock();
     tx.timestamp = vts->vclk;
     // get unique tx id
-    vts->clk_mutex.unlock();
+    vts->clk_rw_mtx.unlock();
 
     current_tx cur_tx(tx.client_id, tx);
     for (uint64_t i = 0; i < NUM_SHARDS; i++) {
@@ -206,7 +209,7 @@ timer_function()
         // send nops and state cleanup info to shards
         if (vts->to_nop.any()) {
             req_id = vts->generate_id();
-            vts->clk_mutex.lock();
+            vts->clk_rw_mtx.wrlock();
             vts->vclk.increment_clock();
             vclk.clock = vts->vclk.clock;
             for (uint64_t shard_id = 0; shard_id < NUM_SHARDS; shard_id++) {
@@ -216,7 +219,7 @@ timer_function()
                 }
             }
             qts = vts->qts;
-            vts->clk_mutex.unlock();
+            vts->clk_rw_mtx.unlock();
 
             del_done_reqs.clear();
             vts->tx_prog_mutex.lock();
@@ -260,27 +263,63 @@ timer_function()
         }
 
         // update vclock at other timestampers
-        if (vts->clock_update_acks == (NUM_VTS-1) && NUM_VTS > 1) {
-            clock_synced = true;
-            vts->clock_update_acks = 0;
-            if (!nop_sent) {
-                vts->clk_mutex.lock();
-                vclk.clock = vts->vclk.clock;
-                vts->clk_mutex.unlock();
-            }
-            for (uint64_t i = 0; i < NUM_VTS; i++) {
-                if (i == vt_id) {
-                    continue;
-                }
-                message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, vclk.clock[vt_id]);
-                vts->comm.send(i, msg.buf);
-            }
-        }
+        //if (vts->clock_update_acks == (NUM_VTS-1) && NUM_VTS > 1) {
+        //clock_synced = true;
+        //vts->clock_update_acks = 0;
+        //if (!nop_sent) {
+        //    vts->clk_mutex.lock();
+        //    vclk.clock = vts->vclk.clock;
+        //    vts->clk_mutex.unlock();
+        //}
+        //for (uint64_t i = 0; i < NUM_VTS; i++) {
+        //    if (i == vt_id) {
+        //        continue;
+        //    }
+        //    message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, vclk.clock[vt_id]);
+        //    vts->comm.send(i, msg.buf);
+        //}
+        ////}
 
-        if (nop_sent && !clock_synced) {
-        //    WDEBUG << "nop yes, clock no" << std::endl;
-        } else if (!nop_sent && clock_synced) {
-        //    WDEBUG << "clock yes, nop no" << std::endl;
+        //if (nop_sent && !clock_synced) {
+        ////    WDEBUG << "nop yes, clock no" << std::endl;
+        //} else if (!nop_sent && clock_synced) {
+        ////    WDEBUG << "clock yes, nop no" << std::endl;
+        //}
+
+        vts->periodic_update_mutex.unlock();
+    }
+}
+
+inline void
+clk_timer_function()
+{
+    timespec sleep_time;
+    int sleep_ret;
+    int sleep_flags = 0;
+    message::message msg;
+    vc::vclock vclk(vt_id, 0);
+
+    sleep_time.tv_sec  = VT_CLK_TIMEOUT_NANO / NANO;
+    sleep_time.tv_nsec = VT_CLK_TIMEOUT_NANO % NANO;
+
+    while (true) {
+        sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, NULL);
+        if (sleep_ret != 0 && sleep_ret != EINTR) {
+            assert(false);
+        }
+        vts->periodic_update_mutex.lock();
+
+        // update vclock at other timestampers
+        vts->clock_update_acks = 0;
+        vts->clk_rw_mtx.rdlock();
+        vclk.clock = vts->vclk.clock;
+        vts->clk_rw_mtx.unlock();
+        for (uint64_t i = 0; i < NUM_VTS; i++) {
+            if (i == vt_id) {
+                continue;
+            }
+            message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, vclk.clock[vt_id]);
+            vts->comm.send(i, msg.buf);
         }
 
         vts->periodic_update_mutex.unlock();
@@ -336,11 +375,11 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         }
     }
     
-    vts->clk_mutex.lock();
+    vts->clk_rw_mtx.wrlock();
     vts->vclk.increment_clock();
     vc::vclock req_timestamp = vts->vclk;
     assert(req_timestamp.clock.size() == NUM_VTS);
-    vts->clk_mutex.unlock();
+    vts->clk_rw_mtx.unlock();
 
     /*
     if (global_req) {
@@ -414,7 +453,7 @@ server_loop(int thread_id)
     while (true) {
         msg.reset(new message::message());
         ret = vts->comm.recv(&sender, &msg->buf);
-        if (ret != BUSYBEE_SUCCESS) {
+        if (ret != BUSYBEE_SUCCESS && ret != BUSYBEE_TIMEOUT) {
             continue;
         } else {
             // good to go, unpack msg
@@ -477,11 +516,12 @@ server_loop(int thread_id)
                 case message::VT_CLOCK_UPDATE: {
                     uint64_t rec_vtid, rec_clock;
                     message::unpack_message(*msg, message::VT_CLOCK_UPDATE, rec_vtid, rec_clock);
-                    vts->clk_mutex.lock();
+                    vts->clk_rw_mtx.wrlock();
+                    vts->clk_updates++;
                     vts->vclk.update_clock(rec_vtid, rec_clock);
-                    vts->clk_mutex.unlock();
-                    message::prepare_message(*msg, message::VT_CLOCK_UPDATE_ACK);
-                    vts->comm.send(rec_vtid, msg->buf);
+                    vts->clk_rw_mtx.unlock();
+                    //message::prepare_message(*msg, message::VT_CLOCK_UPDATE_ACK);
+                    //vts->comm.send(rec_vtid, msg->buf);
                     break;
                 }
 
@@ -758,6 +798,14 @@ main(int argc, char *argv[])
     // registered this server with server_manager, config has fairly recent value
     vts->init();
 
+    // initial wait for all vector timestampers to start
+    // TODO change this to use config pushed by server manager
+    //timespec sleep_time;
+    //sleep_time.tv_sec =  INITIAL_TIMEOUT_NANO / NANO;
+    //sleep_time.tv_nsec = INITIAL_TIMEOUT_NANO % NANO;
+    //int ret = clock_nanosleep(CLOCK_REALTIME, 0, &sleep_time, NULL);
+    //assert(ret == 0);
+    //WDEBUG << "Initial setup delay complete" << std::endl;
     // start all threads
     std::thread *thr;
     for (int i = 0; i < NUM_THREADS; i++) {
@@ -779,8 +827,6 @@ main(int argc, char *argv[])
         std::cout << "Vector timestamper " << vt_id << std::endl;
     }
 
-    // initial wait for all vector timestampers to start
-    // TODO change this to use config pushed by server manager
     timespec sleep_time;
     sleep_time.tv_sec =  INITIAL_TIMEOUT_NANO / NANO;
     sleep_time.tv_nsec = INITIAL_TIMEOUT_NANO % NANO;
@@ -790,6 +836,10 @@ main(int argc, char *argv[])
 
     UNUSED(ret);
 
+    for (int i = 0; i < NUM_THREADS; i++) {
+        std::thread clk_timer_thr(clk_timer_function);
+        clk_timer_thr.detach();
+    }
     // call periodic thread function
     timer_function();
 }

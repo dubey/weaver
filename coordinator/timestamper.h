@@ -16,12 +16,15 @@
 
 #ifndef weaver_coordinator_timestamper_h_
 #define weaver_coordinator_timestamper_h_
+#define VT_TIMEOUT_NANO 1000000 // number of nanoseconds between successive nops
+#define VT_CLK_TIMEOUT_NANO 1000000 // number of nanoseconds between vt gossip
 
 #include <vector>
 #include <bitset>
 #include <unordered_map>
 #include <unordered_set>
 #include <po6/threads/mutex.h>
+#include <po6/threads/rwlock.h>
 #include <po6/threads/cond.h>
 
 #include "common/ids.h"
@@ -66,7 +69,7 @@ namespace coordinator
             // consistency
             vc::vclock vclk; // vector clock
             vc::qtimestamp_t qts; // queue timestamp
-            uint64_t clock_update_acks;
+            uint64_t clock_update_acks, clk_updates;
             std::bitset<NUM_SHARDS> to_nop;
 
             // write transactions
@@ -102,6 +105,7 @@ namespace coordinator
                     , migr_mutex
                     , graph_load_mutex
                     , config_mutex;
+            po6::threads::rwlock clk_rw_mtx;
 
             // initial graph loading
             uint32_t load_count;
@@ -140,6 +144,7 @@ namespace coordinator
         , vclk(vtid, 0)
         , qts(NUM_SHARDS, 0)
         , clock_update_acks(NUM_VTS-1)
+        , clk_updates(0)
         , max_done_id(0)
         , max_done_clk(new vc::vclock_t(NUM_VTS, 0))
         , load_count(0)

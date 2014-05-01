@@ -88,8 +88,9 @@ namespace vc
     vclock :: update_clock(uint64_t vtid, uint64_t new_clock)
     {
         assert(vtid < NUM_VTS);
-        assert(clock[vtid] <= new_clock);
-        clock[vtid] = new_clock;
+        if (clock[vtid] < new_clock) {
+            clock[vtid] = new_clock;
+        }
     }
 }
 
