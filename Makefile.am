@@ -26,8 +26,8 @@ if DEBUG
     AM_CFLAGS += -g3 -gdwarf-2 -Og
     AM_CXXFLAGS += -g3 -gdwarf-2 -Og
 else
-    AM_CFLAGS += -O2
-    AM_CXXFLAGS += -O2
+    AM_CFLAGS += -O2 -DNDEBUG
+    AM_CXXFLAGS += -O2 -DNDEBUG
 endif
 
 bin_PROGRAMS=
