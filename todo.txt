@@ -24,6 +24,9 @@ Analytics API - global requests
 
 
 GREG TODO BEFORE A RELEASE
+
+XXX get rid of db::nop_data, only unpack partial nop message to start and just pass message to queue to be fully unpacked later
+
 node.has_property() needed
 
 clean up code in general
