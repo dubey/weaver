@@ -15,6 +15,8 @@
 #ifndef weaver_db_shard_h_
 #define weaver_db_shard_h_
 
+#define NUM_NODE_MAPS 1024
+
 #include <set>
 #include <vector>
 #include <unordered_map>
@@ -94,10 +96,11 @@ namespace db
             void bulk_load_persistent();
 
             // Mutexes
-            po6::threads::mutex update_mutex // shard update mutex
+            po6::threads::mutex meta_update_mutex // shard update mutex
                 , edge_map_mutex
                 , perm_del_mutex
                 , config_mutex;
+            po6::threads::mutex node_map_mutexes[NUM_NODE_MAPS];
         private:
             po6::threads::mutex clock_mutex; // vector clock/queue timestamp mutex
         public:
@@ -131,7 +134,7 @@ namespace db
             uint64_t shard_id;
             server_id server;
             std::unordered_set<uint64_t> node_list; // list of node ids currently on this shard
-            std::unordered_map<uint64_t, element::node*> nodes; // node id -> ptr to node object
+            std::unordered_map<uint64_t, element::node*> nodes[NUM_NODE_MAPS]; // node id -> ptr to node object
             std::unordered_map<uint64_t, // node id n ->
                 std::unordered_set<uint64_t>> edge_map; // in-neighbors of n
             queue_manager qm;
@@ -342,10 +345,12 @@ namespace db
     inline element::node*
     shard :: acquire_node(uint64_t node_id)
     {
+        uint64_t map_idx = node_id % NUM_NODE_MAPS;
+
         element::node *n = NULL;
-        update_mutex.lock();
-        auto node_iter = nodes.find(node_id);
-        if (node_iter != nodes.end()) {
+        node_map_mutexes[map_idx].lock();
+        auto node_iter = nodes[map_idx].find(node_id);
+        if (node_iter != nodes[map_idx].end()) {
             n = node_iter->second;
             n->waiters++;
             while (n->in_use) {
@@ -354,7 +359,7 @@ namespace db
             n->waiters--;
             n->in_use = true;
         }
-        update_mutex.unlock();
+        node_map_mutexes[map_idx].unlock();
 
         return n;
     }
@@ -362,22 +367,26 @@ namespace db
     inline void
     shard :: node_tx_order(uint64_t node, uint64_t vt_id, uint64_t qts)
     {
-        update_mutex.lock();
-        auto node_iter = nodes.find(node);
-        if (node_iter != nodes.end()) {
+        uint64_t map_idx = node % NUM_NODE_MAPS;
+
+        node_map_mutexes[map_idx].lock();
+        auto node_iter = nodes[map_idx].find(node);
+        if (node_iter != nodes[map_idx].end()) {
             node_iter->second->tx_queue.emplace_back(std::make_pair(vt_id, qts));
         }
-        update_mutex.unlock();
+        node_map_mutexes[map_idx].unlock();
     }
 
     inline element::node*
     shard :: acquire_node_write(uint64_t node, uint64_t vt_id, uint64_t qts)
     {
+        uint64_t map_idx = node % NUM_NODE_MAPS;
+
         element::node *n = NULL;
         auto comp = std::make_pair(vt_id, qts);
-        update_mutex.lock();
-        auto node_iter = nodes.find(node);
-        if (node_iter != nodes.end()) {
+        node_map_mutexes[map_idx].lock();
+        auto node_iter = nodes[map_idx].find(node);
+        if (node_iter != nodes[map_idx].end()) {
             n = node_iter->second;
             n->waiters++;
             while (n->in_use || n->tx_queue.front() != comp) {
@@ -387,7 +396,7 @@ namespace db
             n->in_use = true;
             n->tx_queue.pop_front();
         }
-        update_mutex.unlock();
+        node_map_mutexes[map_idx].unlock();
 
         return n;
     }
@@ -395,9 +404,11 @@ namespace db
     inline element::node*
     shard :: acquire_node_nonlocking(uint64_t node_id)
     {
+        uint64_t map_idx = node_id % NUM_NODE_MAPS;
+
         element::node *n = NULL;
-        auto node_iter = nodes.find(node_id);
-        if (node_iter != nodes.end()) {
+        auto node_iter = nodes[map_idx].find(node_id);
+        if (node_iter != nodes[map_idx].end()) {
             n = node_iter->second;
         }
         return n;
@@ -407,19 +418,21 @@ namespace db
     inline void
     shard :: release_node(element::node *n, bool migr_done=false)
     {
-        update_mutex.lock();
+        uint64_t map_idx = n->base.get_id() % NUM_NODE_MAPS;
+
+        node_map_mutexes[map_idx].lock();
         n->in_use = false;
         if (migr_done) {
             n->migr_cv.broadcast();
         }
         if (n->waiters > 0) {
             n->cv.signal();
-            update_mutex.unlock();
+            node_map_mutexes[map_idx].unlock();
         } else if (n->permanently_deleted) {
             uint64_t node_id = n->base.get_id();
-            nodes.erase(node_id);
+            nodes[map_idx].erase(node_id);
             node_list.erase(node_id);
-            update_mutex.unlock();
+            node_map_mutexes[map_idx].unlock();
 
             migration_mutex.lock();
             shard_node_count[shard_id - SHARD_ID_INCR]--;
@@ -431,7 +444,7 @@ namespace db
             
             permanent_node_delete(n);
         } else {
-            update_mutex.unlock();
+            node_map_mutexes[map_idx].unlock();
         }
         n = NULL;
     }
@@ -442,17 +455,19 @@ namespace db
     inline element::node*
     shard :: create_node(uint64_t, uint64_t node_id, vc::vclock &vclk, bool migrate, bool init_load=false)
     {
-        element::node *new_node = new element::node(node_id, vclk, &update_mutex);
+        uint64_t map_idx = node_id % NUM_NODE_MAPS;
+
+        element::node *new_node = new element::node(node_id, vclk, &node_map_mutexes[map_idx]);
         
         if (!init_load) {
-            update_mutex.lock();
+            node_map_mutexes[map_idx].lock();
         }
-        bool success = nodes.emplace(node_id, new_node).second;
+        bool success = nodes[map_idx].emplace(node_id, new_node).second;
         assert(success);
         UNUSED(success);
         node_list.emplace(node_id);
         if (!init_load) {
-            update_mutex.unlock();
+            node_map_mutexes[map_idx].unlock();
         }
 
         if (!init_load) {
@@ -654,7 +669,8 @@ namespace db
     inline bool
     shard :: node_exists_nonlocking(uint64_t node_id)
     {
-        return (nodes.count(node_id) > 0);
+        uint64_t map_idx = node_id % NUM_NODE_MAPS;
+        return (nodes[map_idx].count(node_id) > 0);
     }
 
     // permanent deletion

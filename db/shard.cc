@@ -1127,9 +1127,9 @@ inline void node_prog_loop(
         S->mark_nodes_using_state(np.req_id, nodes_that_created_state);
     }
 #ifdef WEAVER_MSG_COUNT
-    S->update_mutex.lock();
+    S->meta_update_mutex.lock();
     S->msg_count += msg_count;
-    S->update_mutex.unlock();
+    S->meta_update_mutex.unlock();
 #endif
 }
 
@@ -1636,9 +1636,9 @@ bool agg_count_compare(std::pair<uint64_t, uint32_t> p1, std::pair<uint64_t, uin
 void
 shard_daemon_begin()
 {
-    S->update_mutex.lock();
+    S->meta_update_mutex.lock();
     S->ldg_nodes = S->node_list;
-    S->update_mutex.unlock();
+    S->meta_update_mutex.unlock();
 
 #ifdef WEAVER_CLDG
     S->msg_count_mutex.lock();
@@ -1825,10 +1825,10 @@ recv_loop(uint64_t thread_id)
 
                 case message::MSG_COUNT: {
                     message::unpack_message(*rec_msg, message::MSG_COUNT, vt_id);
-                    S->update_mutex.lock();
+                    S->meta_update_mutex.lock();
                     message::prepare_message(*rec_msg, message::MSG_COUNT, shard_id, S->msg_count);
                     S->msg_count = 0;
-                    S->update_mutex.unlock();
+                    S->meta_update_mutex.unlock();
                     S->comm.send(vt_id, rec_msg->buf);
                     break;
                 }
