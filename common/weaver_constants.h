@@ -53,8 +53,8 @@
 #define NUM_SERVERS ((NUM_VTS + NUM_SHARDS) * (1 + NUM_BACKUPS))
 #define SHARD_ID_INCR NUM_VTS
 #define NUM_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
-#define ID_BITS 8
-#define TOP_MASK (0x0fffffffffffffffULL)
+#define ID_BITS 16 // max client id
+#define TOP_MASK (0x0000ffffffffffffULL)
 #define GRAPH_FILE "graph.rec"
 #define NANO (1000000000ULL)
 #define INITIAL_TIMEOUT_NANO 5000000000 // number of nanoseconds initial delay

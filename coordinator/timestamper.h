@@ -73,7 +73,8 @@ namespace coordinator
             std::unordered_map<uint64_t, current_tx> outstanding_tx;
             std::unordered_map<uint64_t, current_tx> del_tx;
             po6::threads::mutex busy_mtx;
-            std::unordered_set<uint64_t> deleted_elems, other_deleted_elems;
+            std::unordered_set<uint64_t> deleted_elems;
+            std::unordered_map<uint64_t, uint64_t> other_deleted_elems;
             std::unordered_map<uint64_t, uint64_t> busy_elems;
 
             // node prog
@@ -315,6 +316,9 @@ namespace coordinator
         busy_mtx.lock();
         for (uint64_t e: busy) {
             assert(deleted_elems.find(e) == deleted_elems.end());
+            if (other_deleted_elems.find(e) != other_deleted_elems.end()) {
+                WDEBUG << "Bad deletion of edge " << e << " by client " << other_deleted_elems[e] << std::endl;
+            }
             assert(other_deleted_elems.find(e) == other_deleted_elems.end());
             if (busy_elems.find(e) == busy_elems.end()) {
                 busy_elems[e] = 1;

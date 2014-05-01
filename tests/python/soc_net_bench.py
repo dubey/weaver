@@ -22,16 +22,16 @@ import libclient as client
 
 num_started = 0
 num_finished = 0
-num_clients = 50
+num_clients = 250
 cv = threading.Condition()
 
 class request_gen:
     def __init__(self):
         # node handles are range(0, num_nodes)
-        self.num_nodes = 81306 # snap twitter-combined
-        #self.num_nodes = 4847500 # snap twitter-combined
+        #self.num_nodes = 81306 # snap twitter-combined
+        self.num_nodes = 4840000 # snap twitter-combined
 
-        self.p_read = 0.5
+        self.p_read = 0.998
         self.p_assoc_get = 0.157
         self.p_assoc_range = 0.437
         self.p_assoc_count = 0.117

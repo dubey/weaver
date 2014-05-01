@@ -60,7 +60,7 @@ prepare_del_transaction(transaction::pending_tx &tx, std::vector<uint64_t> &del_
     for (uint64_t i = 0; i < NUM_VTS; i++) {
         if (i != vt_id) {
             message::message msg;
-            message::prepare_message(msg, message::PREP_DEL_TX, vt_id, tx.id, del_elems);
+            message::prepare_message(msg, message::PREP_DEL_TX, vt_id, tx.id, tx.client_id, del_elems);
             vts->comm.send(i, msg.buf);
         }
     }
@@ -441,14 +441,14 @@ server_loop(int thread_id)
 
                 case message::PREP_DEL_TX: {
                     std::vector<uint64_t> del_elems;
-                    uint64_t tx_id, tx_vt;
-                    message::unpack_message(*msg, message::PREP_DEL_TX, tx_vt, tx_id, del_elems);
+                    uint64_t tx_id, tx_vt, client;
+                    message::unpack_message(*msg, message::PREP_DEL_TX, tx_vt, tx_id, client, del_elems);
                     vts->busy_mtx.lock();
                     for (uint64_t d: del_elems) {
                         assert(vts->deleted_elems.find(d) == vts->deleted_elems.end());
                         assert(vts->other_deleted_elems.find(d) == vts->other_deleted_elems.end());
                         assert(vts->busy_elems.find(d) == vts->busy_elems.end());
-                        vts->other_deleted_elems.emplace(d);
+                        vts->other_deleted_elems[d] = client;
                     }
                     vts->busy_mtx.unlock();
                     message::prepare_message(*msg, message::DONE_DEL_TX, tx_id);
