@@ -124,8 +124,15 @@ comm_wrapper :: init(configuration &)
     wmap.reset(new weaver_mapper(cluster, bb_id));
     //wmap->reconfigure(config, primary);
     WDEBUG << "Busybee attaching to loc " << loc->address << ":" << loc->port << std::endl;
-    bb.reset(new busybee_mta(wmap.get(), *loc, bb_id+ID_INCR, num_threads));
+    bb.reset(new busybee_mta(&bb_gc, wmap.get(), *loc, bb_id+ID_INCR, num_threads));
     bb->set_timeout(timeout);
+
+    std::unique_ptr<e::garbage_collector::thread_state> gc_ts_ptr;
+    for (int i = 0; i < num_threads; i++) {
+        gc_ts_ptr.reset(new e::garbage_collector::thread_state());
+        bb_gc.register_thread(gc_ts_ptr.get());
+        bb_gc_ts.emplace_back(std::move(gc_ts_ptr));
+    }
 }
 
 void
@@ -133,7 +140,12 @@ comm_wrapper :: client_init()
 {
     wmap.reset(new weaver_mapper(cluster, bb_id));
     wmap->client_configure(cluster);
-    bb.reset(new busybee_mta(wmap.get(), *loc, bb_id+ID_INCR, num_threads));
+    bb.reset(new busybee_mta(&bb_gc, wmap.get(), *loc, bb_id+ID_INCR, num_threads));
+
+    std::unique_ptr<e::garbage_collector::thread_state> gc_ts_ptr;
+    gc_ts_ptr.reset(new e::garbage_collector::thread_state());
+    bb_gc.register_thread(gc_ts_ptr.get());
+    bb_gc_ts.emplace_back(std::move(gc_ts_ptr));
 }
 
 uint64_t
@@ -176,5 +188,11 @@ comm_wrapper :: recv(uint64_t *recv_from, std::auto_ptr<e::buffer> *msg)
     return code;
 }
 #pragma GCC diagnostic pop
+
+void
+comm_wrapper :: quiesce_thread(int tid)
+{
+    bb_gc.quiescent_state(bb_gc_ts[tid].get());
+}
 
 #undef weaver_debug_

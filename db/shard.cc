@@ -1703,6 +1703,7 @@ recv_loop(uint64_t thread_id)
 
     busybee_returncode bb_code;
     while (true) {
+        S->comm.quiesce_thread(thread_id);
         bb_code = S->comm.recv(&sender, &rec_msg->buf);
         if (bb_code != BUSYBEE_SUCCESS && bb_code != BUSYBEE_TIMEOUT) {
             continue;

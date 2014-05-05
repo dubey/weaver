@@ -334,6 +334,7 @@ client :: recv_coord(std::auto_ptr<e::buffer> *buf)
     busybee_returncode ret;
     uint64_t sender;
     while (true) {
+        comm.quiesce_thread(0);
         ret = comm.recv(&sender, buf);
         switch (ret) {
             case BUSYBEE_SUCCESS:
