@@ -17,6 +17,7 @@
 #include <fstream>
 #include <algorithm>
 #include <unordered_map>
+#include <e/garbage_collector.h>
 #include <busybee_constants.h>
 #include <busybee_mapper.h>
 #include <busybee_mta.h>
@@ -48,6 +49,8 @@ class comm_wrapper
         };
 
     private:
+        e::garbage_collector bb_gc;
+        std::vector<std::unique_ptr<e::garbage_collector::thread_state>> bb_gc_ts;
         std::unique_ptr<busybee_mta> bb;
         std::unique_ptr<weaver_mapper> wmap;
         std::shared_ptr<po6::net::location> loc;
@@ -71,6 +74,7 @@ class comm_wrapper
         busybee_returncode send(uint64_t send_to, std::auto_ptr<e::buffer> msg);
         busybee_returncode recv(uint64_t *recv_from, std::auto_ptr<e::buffer> *msg);
 #pragma GCC diagnostic pop
+        void quiesce_thread(int tid);
 };
 
 }

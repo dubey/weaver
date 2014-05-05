@@ -356,6 +356,7 @@ server_loop(int thread_id)
     nmap::nmap_stub *nmap_cl = vts->nmap_client[thread_id];
 
     while (true) {
+        vts->comm.quiesce_thread(thread_id);
         msg.reset(new message::message());
         ret = vts->comm.recv(&sender, &msg->buf);
         if (ret != BUSYBEE_SUCCESS) {
