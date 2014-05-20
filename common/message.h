@@ -976,7 +976,7 @@ namespace message
         while (elements_left > 0) {
             T1 key_to_add;
             unpack_buffer(unpacker, key_to_add);
-            auto &retPair = t.emplace(std::piecewise_construct, std::forward_as_tuple(key_to_add),
+            auto retPair = t.emplace(std::piecewise_construct, std::forward_as_tuple(key_to_add),
               std::forward_as_tuple()); // emplace key with no-arg constructor value
             unpack_buffer(unpacker, retPair.first->second); // unpacks value in place in map
             elements_left--;
@@ -1027,7 +1027,7 @@ namespace message
     inline enum msg_type
     unpack_message_type(const message &m)
     {
-        message::msg_type mtype;
+        msg_type mtype;
         auto unpacker = m.buf->unpack_from(BUSYBEE_HEADER_SIZE);
         unpack_buffer(unpacker, mtype);
         return mtype;
