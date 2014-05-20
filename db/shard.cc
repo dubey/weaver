@@ -659,9 +659,14 @@ nop(uint64_t thread_id, void *noparg)
     free(nop_arg);
 }
 
-std::shared_ptr<node_prog::Node_State_Base> get_state_if_exists(node_prog::prog_type pType, uint64_t req_id, uint64_t node_id)
+node_prog::Node_State_Base* get_state_if_exists(db::element::node &node, uint64_t req_id)
 {
-    return S->fetch_prog_req_state(pType, req_id, node_id);
+    std::shared_ptr<node_prog::Node_State_Base> toRet;
+    auto state_iter = node.prog_states.find(req_id);
+    if (state_iter != node.prog_states.end()) {
+        return state_iter->second.get();
+    } 
+    return NULL;
 }
 
 // assumes holding node lock
@@ -857,7 +862,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         std::shared_ptr<vc::vclock> time_cached(std::get<1>(entry));
         std::shared_ptr<std::vector<db::element::remote_node>>& watch_set = std::get<2>(entry);
 
-        auto state = get_state_if_exists(np.prog_type_recvd, np.req_id, node_to_check->base.get_id());
+        auto state = get_state_if_exists(*node_to_check, np.req_id);
         if (state != NULL && state->contexts_found.find(np.req_id) != state->contexts_found.end()){
             np.cache_value.reset(new node_prog::cache_response<CacheValueType>(node_to_check->cache.cache, cache_key, cval, watch_set));
 #ifdef weaver_debug_
@@ -1042,7 +1047,7 @@ inline void node_prog_loop(
                     (node_prog::cache_response<CacheValueType>*) np.cache_value.get());
             if (MAX_CACHE_ENTRIES) {
                 if (np.cache_value) {
-                    auto state = get_state_if_exists(np.prog_type_recvd, np.req_id, this_node.id);
+                    auto state = get_state_if_exists(*node, np.req_id);
                     if (state) {
                         state->contexts_found.insert(np.req_id);
                     }
