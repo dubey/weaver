@@ -131,7 +131,7 @@ parse_single_uint64(std::string &line, size_t &idx, uint64_t &n, bool &bad)
 {
     uint64_t next_digit;
     static uint64_t zero = '0';
-    static uint64_t max64_div10 = MAX_UINT64 / 10;
+    static uint64_t max64_div10 = UINT64_MAX / 10;
     n = 0;
     while (line[idx] != ' '
         && line[idx] != '\t'

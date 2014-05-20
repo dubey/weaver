@@ -58,8 +58,8 @@ namespace element
 
     inline
     property :: property()
-        : creat_time(MAX_UINT64, MAX_UINT64)
-        , del_time(MAX_UINT64, MAX_UINT64)
+        : creat_time(UINT64_MAX, UINT64_MAX)
+        , del_time(UINT64_MAX, UINT64_MAX)
     { }
 
     inline
@@ -72,7 +72,7 @@ namespace element
     property :: property(std::string &k, std::string &v, vc::vclock &creat)
         : node_prog::property(k, v)
         , creat_time(creat)
-        , del_time(MAX_UINT64, MAX_UINT64)
+        , del_time(UINT64_MAX, UINT64_MAX)
     { }
 
 /*

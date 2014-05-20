@@ -25,8 +25,6 @@ cdef extern from 'stdint.h':
     ctypedef long unsigned int size_t
     cdef uint64_t UINT64_MAX
 
-MAX_UINT64 = UINT64_MAX
-
 # end <stolen from Hyperdex/bindings/client.pyx>
 
 from libcpp.string cimport string
@@ -261,7 +259,7 @@ cdef extern from 'node_prog/read_n_edges_program.h' namespace 'node_prog':
         vector[uint64_t] return_edges
 
 class ReadNEdgesParams:
-    def __init__(self, num_edges=MAX_UINT64, edges_props=[], return_edges=[]):
+    def __init__(self, num_edges=UINT64_MAX, edges_props=[], return_edges=[]):
         self.num_edges = num_edges
         self.edges_props = edges_props
         self.return_edges = return_edges
@@ -283,7 +281,7 @@ cdef extern from 'node_prog/edge_get_program.h' namespace 'node_prog':
         vector[uint64_t] return_edges
 
 class EdgeGetParams:
-    def __init__(self, nbr_id=MAX_UINT64, edges_props=[], return_edges=[]):
+    def __init__(self, nbr_id=UINT64_MAX, edges_props=[], return_edges=[]):
         self.nbr_id = nbr_id
         self.edges_props = edges_props
         self.return_edges = return_edges

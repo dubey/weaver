@@ -100,7 +100,7 @@ namespace node_prog
             : already_visited_hops(0)
             , out_count(0)
             , reachable(false)
-            , hops(MAX_UINT64)
+            , hops(UINT64_MAX)
         { }
 
         virtual ~n_hop_reach_node_state() { }

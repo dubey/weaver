@@ -19,7 +19,7 @@ using common::comm_wrapper;
 comm_wrapper :: weaver_mapper :: weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster, uint64_t my_id)
 {
     for (uint64_t i = 0; i < NUM_VTS+NUM_SHARDS; i++) {
-        active_server_idx[i] = MAX_UINT64;
+        active_server_idx[i] = UINT64_MAX;
     }
     uint64_t incr_id = my_id + ID_INCR;
     assert(cluster.find(incr_id) != cluster.end());
@@ -53,7 +53,7 @@ comm_wrapper :: weaver_mapper :: reconfigure(configuration &new_config, uint64_t
 {
     config = new_config;
     for (uint64_t i = 0; i < NUM_VTS+NUM_SHARDS; i++) {
-        if (active_server_idx[i] < MAX_UINT64) {
+        if (active_server_idx[i] < UINT64_MAX) {
             uint64_t srv_idx = active_server_idx[i];
             while (config.get_state(server_id(srv_idx)) != server::AVAILABLE) {
                 srv_idx = srv_idx + NUM_VTS + NUM_SHARDS;

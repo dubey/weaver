@@ -115,7 +115,7 @@ namespace node_prog
             : visited(false)
             , out_count(0)
             , reachable(false)
-            , hops(MAX_UINT16)
+            , hops(UINT16_MAX)
         { }
 
         virtual ~reach_node_state() { }

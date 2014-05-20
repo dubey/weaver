@@ -31,7 +31,6 @@
 #include "stdint.h"
 
 #define MAX_TIME UINT64_MAX
-#define MAX_UINT64 UINT64_MAX
 
 // messaging constants
 #define ID_INCR (1ULL << 32ULL)

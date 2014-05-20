@@ -566,7 +566,7 @@ server_loop(int thread_id)
                     break;
 
                 case message::START_MIGR: {
-                    uint64_t hops = MAX_UINT64;
+                    uint64_t hops = UINT64_MAX;
                     message::prepare_message(*msg, message::MIGRATION_TOKEN, hops, vt_id);
                     vts->comm.send(START_MIGR_ID, msg->buf); 
                     break;
