@@ -438,10 +438,7 @@ server_loop(int thread_id)
             continue;
         } else {
             // good to go, unpack msg
-            uint64_t _size;
-            auto unpacker = msg->buf->unpack_from(BUSYBEE_HEADER_SIZE);
-            message::unpack_buffer(unpacker, mtype);
-            message::unpack_buffer(unpacker, _size);
+            mtype = message::unpack_message_type(*msg);
             sender -= ID_INCR;
 
             switch (mtype) {

@@ -155,9 +155,7 @@ client :: end_tx(uint64_t tx_id)
             WDEBUG << "tx msg recv fail" << std::endl;
             return false;
         }
-        message::msg_type mtype;
-        auto unpacker = msg.buf->unpack_from(BUSYBEE_HEADER_SIZE);
-        unpack_buffer(unpacker, mtype);
+        message::msg_type mtype = message::unpack_message_type(msg);
         assert(mtype == message::CLIENT_TX_DONE
             || mtype == message::CLIENT_TX_FAIL);
         if (mtype == message::CLIENT_TX_DONE) {

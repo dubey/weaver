@@ -673,7 +673,7 @@ NodeStateType& get_or_create_state(uint64_t req_id, db::element::node *node, std
         return dynamic_cast<NodeStateType &>(*(state_iter->second));
     } else {
         NodeStateType *ptr = new NodeStateType();
-        node->prog_states[req_id] = std::unique_ptr<node_prog::Node_State_Base>(ptr);// std::dynamic_pointer_cast<node_prog::Node_State_Base>(toRet); // XXX change later
+        node->prog_states[req_id] = std::unique_ptr<node_prog::Node_State_Base>(ptr);
         assert(nodes_that_created_state != NULL);
         nodes_that_created_state->emplace_back(node->base.get_id());
         return *ptr;
@@ -818,10 +818,8 @@ unpack_and_fetch_context(uint64_t, void *req)
     bool cache_valid = fetch_node_cache_contexts(S->shard_id, ids, contexts, time_cached, req_vclock);
 
     message::message m;
-    message::prepare_message(m, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock,
-            lookup_tuple, contexts, cache_valid);
+    message::prepare_message(m, message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, lookup_tuple, contexts, cache_valid);
     S->comm.send(from_shard, m.buf);
-    //WDEBUG << "Sent context reply to shard " << from_shard << " with req_id " << req_id<< " and node " << std::get<2>(lookup_tuple) << std::endl;
     delete request;
 }
 
