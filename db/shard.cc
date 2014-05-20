@@ -303,7 +303,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
     uint64_t max_node_id = 0;
     std::unordered_set<uint64_t> seen_nodes;
     std::unordered_map<uint64_t, uint64_t> node_map;
-    std::vector<std::unordered_map<uint64_t, uint64_t>> node_maps(1, std::unordered_map<uint64_t, uint64_t>());
+    std::vector<std::unordered_map<uint64_t, uint64_t>> node_maps(NUM_THREADS, std::unordered_map<uint64_t, uint64_t>());
     vc::vclock zero_clk(0, 0);
 
     switch(format) {
@@ -335,7 +335,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                         n = S->acquire_node_nonlocking(node0);
                         if (n == NULL) {
                             n = S->create_node(0, node0, zero_clk, false, true);
-                            node_maps[node_count % 1][node0] = shard_id;
+                            node_maps[node_count % NUM_THREADS][node0] = shard_id;
                         }
                         S->create_edge_nonlocking(0, n, edge_id, node1, loc1, zero_clk, true);
                     }
@@ -343,7 +343,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                         node_count++;
                         if (!S->node_exists_nonlocking(node1)) {
                             S->create_node(0, node1, zero_clk, false, true);
-                            node_maps[node_count % 1][node1] = shard_id;
+                            node_maps[node_count % NUM_THREADS][node1] = shard_id;
                         }
                     }
                     //if (node_map.size() > 100000) {
