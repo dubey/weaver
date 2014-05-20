@@ -39,8 +39,8 @@ namespace node_prog
     class Node_State_Base : public virtual Packable, public virtual Deletable 
     {
         public:
-        virtual ~Node_State_Base() { } // << important
-        std::unordered_set<uint64_t> contexts_found;
+            virtual ~Node_State_Base() { } // << important
+            std::unordered_set<uint64_t> contexts_found;
     };
 
     class Cache_Value_Base : public virtual Packable, public virtual Deletable

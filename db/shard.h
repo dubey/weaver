@@ -210,12 +210,7 @@ namespace db
             state::program_state prog_state; 
             void delete_prog_states(uint64_t req_id, std::vector<uint64_t> &node_ids);
         public:
-            std::shared_ptr<node_prog::Node_State_Base> 
-                fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_id);
-            void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_id,
-                    std::shared_ptr<node_prog::Node_State_Base> toAdd);
             void mark_nodes_using_state(uint64_t req_id, std::vector<uint64_t> &node_ids);
-            //void add_done_request(uint64_t completed_req_id, node_prog::prog_type type);
             void add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
             bool check_done_request(uint64_t req_id);
 
@@ -867,30 +862,14 @@ namespace db
 
     // node program
 
-    inline std::shared_ptr<node_prog::Node_State_Base>
-    shard :: fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_id)
-    {
-        assert(false);
-        return prog_state.get_state(t, request_id, local_node_id);
-    }
-
-    inline void
-    shard :: insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_id,
-        std::shared_ptr<node_prog::Node_State_Base> toAdd)
-    {
-        assert(false);
-        prog_state.put_state(t, request_id, local_node_id, toAdd);
-    }
-
     inline void
     shard :: delete_prog_states(uint64_t req_id, std::vector<uint64_t> &node_ids)
     {
         for (uint64_t node_id : node_ids) {
-            //WDEBUG<< "DELETING STATES FOR REQ " << req_id << " and node_id "<< node_id<< std::endl;
-            db::element::node *node = acquire_node(node_id); // TODO later we can only acquire node once for whole list
+            db::element::node *node = acquire_node(node_id);
 
             if (node == NULL) {
-                assert(false && "shit");
+                assert(false && "probably due to migration or bad node handle");
             } else if (node->state == db::element::node::mode::MOVED) {
                 release_node(node);
                 assert(false && "migration not supported");
@@ -898,7 +877,7 @@ namespace db
                 auto state_iter = node->prog_states.find(req_id);
                 assert(state_iter != node->prog_states.end());
                 int elems_erased = node->prog_states.erase(req_id); // TODO double check thing isnt mem leaking
-                assert(elems_erased > 0 && "shoot");
+                assert(elems_erased > 0);
 
                 release_node(node);
             }
@@ -908,28 +887,27 @@ namespace db
     inline void
     shard :: mark_nodes_using_state(uint64_t req_id, std::vector<uint64_t> &node_ids)
     {
-            node_prog_state_mutex.lock();
-            bool done_request = done_ids.count(req_id) > 1;
-            if (!done_request) {
-                auto state_list_iter = outstanding_prog_states.find(req_id);
-                if (state_list_iter == outstanding_prog_states.end()) {
-                    outstanding_prog_states.emplace(req_id, std::move(node_ids));
-                } else {
-                    std::vector<uint64_t> &add_to = state_list_iter->second;
-                    add_to.reserve(add_to.size() + node_ids.size());
-                    add_to.insert(add_to.end(), node_ids.begin(), node_ids.end());
-                }
-                node_prog_state_mutex.unlock();
-            } else { // request is finished, just delete things
-                node_prog_state_mutex.unlock();
-                delete_prog_states(req_id, node_ids);
+        node_prog_state_mutex.lock();
+        bool done_request = done_ids.count(req_id) > 1;
+        if (!done_request) {
+            auto state_list_iter = outstanding_prog_states.find(req_id);
+            if (state_list_iter == outstanding_prog_states.end()) {
+                outstanding_prog_states.emplace(req_id, std::move(node_ids));
+            } else {
+                std::vector<uint64_t> &add_to = state_list_iter->second;
+                add_to.reserve(add_to.size() + node_ids.size());
+                add_to.insert(add_to.end(), node_ids.begin(), node_ids.end());
             }
+            node_prog_state_mutex.unlock();
+        } else { // request is finished, just delete things
+            node_prog_state_mutex.unlock();
+            delete_prog_states(req_id, node_ids);
+        }
     }
 
     inline void
     shard :: add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests)
     {
-//        prog_state.done_requests(completed_requests);
         if (completed_requests.size() == 0) {
             return;
         }
@@ -955,7 +933,7 @@ namespace db
         }
         node_prog_state_mutex.unlock();
 
-        for (auto &p: to_delete) { // TODO, later delete multiple req ids per node
+        for (auto &p: to_delete) {
             delete_prog_states(p.first, p.second);
         }
     }
@@ -963,10 +941,6 @@ namespace db
     inline bool
     shard :: check_done_request(uint64_t req_id)
     {
-        /*
-        bool done = prog_state.check_done_request(req_id);
-        return done;
-        */
         node_prog_state_mutex.lock();
         bool done = done_ids.count(req_id) > 0;
         node_prog_state_mutex.unlock();

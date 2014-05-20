@@ -953,7 +953,7 @@ inline void node_prog_loop(
 {
     message::message out_msg;
     // these are the node programs that will be propagated onwards
-    std::unordered_map<uint64_t, std::deque<std::pair<uint64_t, ParamsType>>> batched_node_progs(NUM_SHARDS-1); // local batching doesn't use this
+    std::unordered_map<uint64_t, std::deque<std::pair<uint64_t, ParamsType>>> batched_node_progs;
     // node state function
     std::function<NodeStateType&()> node_state_getter;
     std::function<void(std::shared_ptr<CacheValueType>,
@@ -1014,8 +1014,7 @@ inline void node_prog_loop(
                 break;
             }
 
-            if (MAX_CACHE_ENTRIES)
-            {
+            if (MAX_CACHE_ENTRIES) {
                 if (params.search_cache() && !np.cache_value) {
                     // cache value not already found, lookup in cache
                     bool run_prog_now = cache_lookup<ParamsType, NodeStateType, CacheValueType>(node, params.cache_key(), np, id_params);
@@ -1041,8 +1040,7 @@ inline void node_prog_loop(
                     params, // actual parameters for this node program
                     node_state_getter, add_cache_func,
                     (node_prog::cache_response<CacheValueType>*) np.cache_value.get());
-            if (MAX_CACHE_ENTRIES)
-            {
+            if (MAX_CACHE_ENTRIES) {
                 if (np.cache_value) {
                     auto state = get_state_if_exists(np.prog_type_recvd, np.req_id, this_node.id);
                     if (state) {
@@ -1052,7 +1050,7 @@ inline void node_prog_loop(
                 np.cache_value.reset(NULL);
             }
             node->base.view_time = NULL; 
-            S->release_node(node); // XXX switch order with pop
+            S->release_node(node);
             np.start_node_params.pop_front(); // pop off this one before potentially add new front
 
             // batch the newly generated node programs for onward propagation
@@ -1099,21 +1097,18 @@ inline void node_prog_loop(
         for (auto &loc_progs_pair : batched_node_progs) {
             assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < NUM_SHARDS + SHARD_ID_INCR);
             if (loc_progs_pair.second.size() > BATCH_MSG_SIZE) {
-                //WDEBUG << "sending prog list of size " << loc_progs_pair.second.size() << std::endl;
                 message::prepare_message(out_msg, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, loc_progs_pair.second);
                 S->comm.send(loc_progs_pair.first, out_msg.buf);
                 loc_progs_pair.second.clear();
             }
         }
-        if (MAX_CACHE_ENTRIES)
-        {
+        if (MAX_CACHE_ENTRIES) {
             assert(np.cache_value == false); // unique ptr is not assigned
         }
     }
     if (!done_request) {
         for (auto &loc_progs_pair : batched_node_progs) {
             if (!loc_progs_pair.second.empty()) {
-                //WDEBUG << "sending prog list of size " << loc_progs_pair.second.size() << std::endl;
                 assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < NUM_SHARDS + SHARD_ID_INCR);
                 message::prepare_message(out_msg, message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, loc_progs_pair.second);
                 S->comm.send(loc_progs_pair.first, out_msg.buf);
