@@ -25,7 +25,6 @@
 #include <po6/net/location.h>
 #include <busybee_constants.h>
 
-#include "common/message_type.h"
 #include "common/weaver_constants.h"
 #include "common/vclock.h"
 #include "common/transaction.h"
@@ -38,6 +37,92 @@
 
 namespace message
 {
+    enum msg_type
+    {
+        // client messages
+        CLIENT_NODE_CREATE_REQ = 0,
+        CLIENT_EDGE_CREATE_REQ,
+        CLIENT_NODE_DELETE_REQ,
+        CLIENT_EDGE_DELETE_REQ,
+        CLIENT_NODE_SET_PROP,
+        CLIENT_EDGE_SET_PROP,
+        CLIENT_TX_INIT,
+        CLIENT_TX_DONE,
+        CLIENT_TX_FAIL,
+        CLIENT_REPLY,
+        CLIENT_COMMIT_GRAPH,
+        CLIENT_NODE_PROG_REQ,
+        CLIENT_NODE_PROG_REPLY,
+        CLIENT_NODE_LOC_REQ,
+        CLIENT_NODE_LOC_REPLY,
+        START_MIGR,
+        ONE_STREAM_MIGR,
+        EXIT_WEAVER,
+        // graph update messages
+        TX_INIT,
+        TX_DONE,
+        NODE_CREATE_REQ,
+        EDGE_CREATE_REQ,
+        NODE_DELETE_REQ,
+        EDGE_DELETE_REQ,
+        NODE_SET_PROP,
+        EDGE_SET_PROP,
+        PERMANENTLY_DELETED_NODE,
+        // node program messages
+        NODE_PROG,
+        NODE_PROG_RETURN,
+        NODE_CONTEXT_FETCH,
+        NODE_CONTEXT_REPLY,
+        CACHE_UPDATE,
+        CACHE_UPDATE_ACK,
+        // migration messages
+        MIGRATE_SEND_NODE,
+        COORD_CLOCK_REQ,
+        COORD_CLOCK_REPLY,
+        MIGRATED_NBR_UPDATE,
+        MIGRATED_NBR_ACK,
+        MIGRATION_TOKEN,
+        MSG_COUNT,
+        CLIENT_MSG_COUNT,
+        CLIENT_NODE_COUNT,
+        NODE_COUNT_REPLY,
+        // initial graph loading
+        LOADED_GRAPH,
+        // coordinator group
+        COORD_LOC_REQ,
+        COORD_LOC_REPLY,
+        VT_CLOCK_UPDATE,
+        VT_CLOCK_UPDATE_ACK,
+        VT_NOP,
+        VT_NOP_ACK,
+        PREP_DEL_TX,
+        DONE_DEL_TX,
+        DONE_MIGR,
+
+        ERROR
+    };
+
+    enum edge_direction
+    {
+        FIRST_TO_SECOND = 0,
+        SECOND_TO_FIRST = 1
+    };
+
+    class message
+    {
+        public:
+            message();
+            message(enum msg_type t);
+            message(message &copy);
+
+        public:
+            enum msg_type type;
+            std::auto_ptr<e::buffer> buf;
+
+        public:
+            void change_type(enum msg_type t);
+    };
+
     template <typename T1, typename T2> inline uint64_t size(const std::unordered_map<T1, T2>& t);
     template <typename T> inline uint64_t size(const std::unordered_set<T>& t);
     template <typename T> inline uint64_t size(const std::vector<T>& t);
