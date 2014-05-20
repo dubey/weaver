@@ -21,43 +21,9 @@
 #include "node_prog/node_prog_type.h"
 #include "node_prog/base_classes.h"
 #include "node_prog/edge_list.h"
-#include "node_prog/cache_response.h"
 #include "db/element/node.h"
 #include "db/element/edge.h"
 #include "db/element/remote_node.h"
-
-
-namespace node_prog
-{
-    struct edge_cache_context
-    {
-        uint64_t edge_handle;
-        db::element::remote_node nbr;
-
-        edge_cache_context() {};
-        edge_cache_context(uint64_t handle, db::element::remote_node &nbr) : edge_handle(handle), nbr(nbr) {};
-
-        std::vector<node_prog::property> props_added;
-        std::vector<node_prog::property> props_deleted;
-    };
-
-    struct node_cache_context
-    {
-        db::element::remote_node node;
-
-        bool node_deleted;
-
-        node_cache_context() {};
-        node_cache_context(uint64_t loc, uint64_t id, bool deleted) : node(loc, id), node_deleted(deleted) {};
-
-        std::vector<node_prog::property> props_added;
-        std::vector<node_prog::property> props_deleted;
-
-        std::vector<edge_cache_context> edges_added;
-        std::vector<edge_cache_context> edges_modified;
-        std::vector<edge_cache_context> edges_deleted;
-    };
-}
 
 namespace db
 {
@@ -100,38 +66,7 @@ namespace caching
         UNUSED(ptype); // TODO: use prog_type
         cache.emplace(key, std::make_tuple(cache_value, vc, watch_set));
     }
-
-    template <typename CacheValueType>
-    struct cache_response : node_prog::cache_response<CacheValueType>
-    {
-        private:
-            program_cache &from;
-            uint64_t key;
-
-        public:
-            std::shared_ptr<CacheValueType> value;
-            std::shared_ptr<std::vector<db::element::remote_node>> watch_set;
-            std::vector<node_prog::node_cache_context> context;
-
-            cache_response(program_cache &came_from, uint64_t key_used, std::shared_ptr<node_prog::Cache_Value_Base> &val,
-                    std::shared_ptr<std::vector<db::element::remote_node>> watch_set_used)
-                : from(came_from)
-                  , key(key_used)
-                  , watch_set(watch_set_used)
-                  { value = std::shared_ptr<CacheValueType>(std::dynamic_pointer_cast<CacheValueType>(val)); };
-
-            // delete standard copy onstructors
-            cache_response (const cache_response &) = delete;
-            cache_response& operator=(cache_response const&) = delete;
-
-            void invalidate() { from.cache.erase(key); };
-
-            std::shared_ptr<CacheValueType> get_value() { return value; }
-            std::shared_ptr<std::vector<db::element::remote_node>> get_watch_set() { return watch_set; };
-            std::vector<node_prog::node_cache_context> &get_context() { return context; };
-    };
 }
 }
-
 
 #endif // __CACHING__

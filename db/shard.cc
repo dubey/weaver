@@ -859,7 +859,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
 
         auto state = get_state_if_exists(np.prog_type_recvd, np.req_id, node_to_check->base.get_id());
         if (state != NULL && state->contexts_found.find(np.req_id) != state->contexts_found.end()){
-            np.cache_value.reset(new db::caching::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
+            np.cache_value.reset(new node_prog::cache_response<CacheValueType>(node_to_check->cache.cache, cache_key, cval, watch_set));
 #ifdef weaver_debug_
             S->watch_set_lookups_mutex.lock();
             S->watch_set_nops++;
@@ -875,7 +875,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         assert(cmp_1 == 0);
 
         if (watch_set->empty()){ // no context needs to be fetched
-            np.cache_value.reset(new db::caching::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
+            np.cache_value.reset(new node_prog::cache_response<CacheValueType>(node_to_check->cache.cache, cache_key, cval, watch_set));
             return true;
         }
 
@@ -901,7 +901,8 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
             return false;
         }
 
-        std::unique_ptr<db::caching::cache_response<CacheValueType>> future_cache_response(new db::caching::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
+        std::unique_ptr<node_prog::cache_response<CacheValueType>> future_cache_response(
+                new node_prog::cache_response<CacheValueType>(node_to_check->cache.cache, cache_key, cval, watch_set));
         S->release_node(node_to_check);
         node_to_check = NULL;
 
@@ -1183,7 +1184,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     }
     S->node_prog_running_states_mutex.unlock();
 
-    auto& existing_context = fstate->prog_state.cache_value->context;
+    auto& existing_context = fstate->prog_state.cache_value->get_context();
 
     if (fstate->cache_valid) {
         if (cache_valid) {

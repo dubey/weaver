@@ -82,7 +82,7 @@ namespace element
             std::vector<std::unique_ptr<message::message>> pending_requests;
 
             // for node prog caching
-            caching::program_cache cache; // TODO init me, also XXX migrate me
+            db::caching::program_cache cache; // TODO init me, also XXX migrate me
 
             std::unordered_map<uint64_t, std::unique_ptr<node_prog::Node_State_Base>> prog_states;
 

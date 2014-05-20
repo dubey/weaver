@@ -26,6 +26,7 @@
 #include "db/element/edge.h"
 #include "node.h"
 #include "edge.h"
+#include "cache_response.h"
 #include "db/element/remote_node.h"
 
 namespace node_prog

@@ -39,7 +39,6 @@
 #include "coordinator/current_tx.h"
 #include "coordinator/current_prog.h"
 #include "coordinator/hyper_stub.h"
-//#include "node_prog/triangle_program.h"
 
 namespace coordinator
 {
