@@ -12,8 +12,8 @@
  * ================================================================
  */
 
-#ifndef weaver_node_prog_reach_program_h_
-#define weaver_node_prog_reach_program_h_
+#ifndef weaver_node_prog_pathless_reach_program_h_
+#define weaver_node_prog_pathless_reach_program_h_
 
 #include <vector>
 
@@ -30,103 +30,81 @@
 
 namespace node_prog
 {
-    class reach_params : public virtual Node_Parameters_Base  
+    class pathless_reach_params : public virtual Node_Parameters_Base  
     {
         public:
-            bool _search_cache;
-            uint64_t _cache_key;
             bool returning; // false = request, true = reply
             db::element::remote_node prev_node;
             uint64_t dest;
             std::vector<std::pair<std::string, std::string>> edge_props;
-            uint16_t hops;
             bool reachable;
-            std::vector<db::element::remote_node> path;
 
         public:
-            reach_params()
-                : _search_cache(false)
-                , _cache_key(0)
-                , returning(false)
-                , hops(0)
+            pathless_reach_params()
+                : returning(false)
                 , reachable(false)
             { }
             
-            virtual ~reach_params() { }
+            virtual ~pathless_reach_params() { }
 
             virtual bool search_cache() {
-                return _search_cache;
+                return false;
             }
 
             virtual uint64_t cache_key() {
-                return _cache_key;
+                return 0;
             }
 
             virtual uint64_t size() const 
             {
-                uint64_t toRet = message::size(_search_cache)
-                    + message::size(_cache_key)
-                    + message::size(returning)
+                uint64_t toRet = message::size(returning)
                     + message::size(prev_node)
                     + message::size(dest) 
                     + message::size(edge_props)
-                    + message::size(hops)
-                    + message::size(reachable)
-                    + message::size(path);
+                    + message::size(reachable);
                 return toRet;
             }
 
             virtual void pack(e::buffer::packer &packer) const 
             {
-                message::pack_buffer(packer, _search_cache);
-                message::pack_buffer(packer, _cache_key);
                 message::pack_buffer(packer, returning);
                 message::pack_buffer(packer, prev_node);
                 message::pack_buffer(packer, dest);
                 message::pack_buffer(packer, edge_props);
-                message::pack_buffer(packer, hops);
                 message::pack_buffer(packer, reachable);
-                message::pack_buffer(packer, path);
             }
 
             virtual void unpack(e::unpacker &unpacker)
             {
-                message::unpack_buffer(unpacker, _search_cache);
-                message::unpack_buffer(unpacker, _cache_key);
                 message::unpack_buffer(unpacker, returning);
                 message::unpack_buffer(unpacker, prev_node);
                 message::unpack_buffer(unpacker, dest);
                 message::unpack_buffer(unpacker, edge_props);
-                message::unpack_buffer(unpacker, hops);
                 message::unpack_buffer(unpacker, reachable);
-                message::unpack_buffer(unpacker, path);
             }
     };
 
-    struct reach_node_state : public virtual Node_State_Base 
+    struct pathless_reach_node_state : public virtual Node_State_Base 
     {
         bool visited;
         db::element::remote_node prev_node; // previous node
         uint32_t out_count; // number of requests propagated
         bool reachable;
-        uint16_t hops;
 
-        reach_node_state()
+        pathless_reach_node_state()
             : visited(false)
             , out_count(0)
             , reachable(false)
-            , hops(MAX_UINT16)
         { }
 
-        virtual ~reach_node_state() { }
+        virtual ~pathless_reach_node_state() { }
 
         virtual uint64_t size() const 
         {
             uint64_t toRet = message::size(visited)
                 + message::size(prev_node)
                 + message::size(out_count)
-                + message::size(reachable)
-                + message::size(hops);
+                + message::size(reachable);
             return toRet;
         }
 
@@ -136,7 +114,6 @@ namespace node_prog
             message::pack_buffer(packer, prev_node);
             message::pack_buffer(packer, out_count);
             message::pack_buffer(packer, reachable);
-            message::pack_buffer(packer, hops);
         }
 
         virtual void unpack(e::unpacker& unpacker)
@@ -145,44 +122,18 @@ namespace node_prog
             message::unpack_buffer(unpacker, prev_node);
             message::unpack_buffer(unpacker, out_count);
             message::unpack_buffer(unpacker, reachable);
-            message::unpack_buffer(unpacker, hops);
         }
     };
 
-    struct reach_cache_value : public virtual Cache_Value_Base 
-    {
-        public:
-            std::vector<db::element::remote_node> path;
-
-            reach_cache_value(std::vector<db::element::remote_node> &copy_path)
-                : path(copy_path) { };
-        virtual ~reach_cache_value () { }
-
-        virtual uint64_t size() const 
-        {
-            return message::size(path);
-        }
-
-        virtual void pack(e::buffer::packer& packer) const 
-        {
-            message::pack_buffer(packer, path);
-        }
-
-        virtual void unpack(e::unpacker& unpacker)
-        {
-            message::unpack_buffer(unpacker, path);
-        }
-    };
-
-    std::pair<search_type, std::vector<std::pair<db::element::remote_node, reach_params>>>
-    reach_node_program(
+    std::pair<search_type, std::vector<std::pair<db::element::remote_node, pathless_reach_params>>>
+    pathless_reach_node_program(
             node &n,
             db::element::remote_node &rn,
-            reach_params &params,
-            std::function<reach_node_state&()> state_getter,
-            std::function<void(std::shared_ptr<reach_cache_value>, // TODO make const
+            pathless_reach_params &params,
+            std::function<pathless_reach_node_state&()> state_getter,
+            std::function<void(std::shared_ptr<Cache_Value_Base>,
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
-            cache_response<reach_cache_value>*cache_response);
+            cache_response<Cache_Value_Base>*cache_response);
 }
 
 #endif

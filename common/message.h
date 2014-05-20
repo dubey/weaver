@@ -16,6 +16,7 @@
 
 #include <memory>
 #include <vector>
+#include <deque>
 #include <unordered_set>
 #include <unordered_map>
 #include <queue>
@@ -124,6 +125,7 @@ namespace message
     template <typename T1, typename T2> inline uint64_t size(const std::unordered_map<T1, T2>& t);
     template <typename T> inline uint64_t size(const std::unordered_set<T>& t);
     template <typename T> inline uint64_t size(const std::vector<T>& t);
+    template <typename T> inline uint64_t size(const std::deque<T>& t);
     template <typename T1, typename T2, typename T3> uint64_t size(std::priority_queue<T1, T2, T3>);
     template <typename T1, typename T2> inline uint64_t size(const std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline uint64_t size(const std::tuple<T1, T2, T3>& t);
@@ -137,6 +139,7 @@ namespace message
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::vector<T>& t);
+    template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::deque<T>& t);
     template <typename T1, typename T2, typename T3> void pack_buffer(e::buffer::packer&, std::priority_queue<T1, T2, T3>);
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer &packer, const std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3>& t);
@@ -150,6 +153,7 @@ namespace message
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::vector<T>& t);
+    template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::deque<T>& t);
     template <typename T1, typename T2, typename T3> void unpack_buffer(e::unpacker&, std::priority_queue<T1, T2, T3>&);
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void unpack_buffer(e::unpacker& unpacker, std::tuple<T1, T2, T3>& t);
@@ -163,11 +167,13 @@ namespace message
     inline
     message :: message()
         : type(ERROR)
+          , buf(NULL)
     { }
 
     inline
     message :: message(enum msg_type t)
         : type(t)
+          , buf(NULL)
     { }
 
     inline 
@@ -185,9 +191,19 @@ namespace message
 
     // size templates
 
+    inline uint64_t size(const enum msg_type &)
+    {
+        return sizeof(uint8_t);
+    }
+
     inline uint64_t size(const node_prog::prog_type&)
     {
-        return sizeof(uint32_t);
+        return sizeof(uint8_t);
+    }
+
+    inline uint64_t size(const enum transaction::update_type&)
+    {
+        return sizeof(uint8_t);
     }
 
     inline uint64_t size(const node_prog::Node_Parameters_Base &t)
@@ -207,7 +223,7 @@ namespace message
 
     inline uint64_t size(const bool&)
     {
-        return sizeof(uint16_t);
+        return sizeof(uint8_t);
     }
 
     inline uint64_t size(const char&)
@@ -247,7 +263,7 @@ namespace message
 
     inline uint64_t size(const std::string &t)
     {
-        return t.size() + sizeof(uint64_t);
+        return t.size() + sizeof(uint32_t);
     }
 
     inline uint64_t size(const vc::vclock &t)
@@ -278,7 +294,7 @@ namespace message
     size(const std::shared_ptr<transaction::pending_update> &ptr_t)
     {
         transaction::pending_update &t = *ptr_t;
-        uint64_t sz = sizeof(t.type)
+        uint64_t sz = size(t.type)
              + size(t.qts)
              + size(t.id)
              + size(t.elem1)
@@ -320,7 +336,7 @@ namespace message
         for(const T &elem : t) {
             total_size += size(elem);
         }
-        return sizeof(uint64_t)+total_size;
+        return sizeof(uint16_t)+total_size;
     }
 
     template <typename T1, typename T2>
@@ -331,13 +347,23 @@ namespace message
         for (const std::pair<T1,T2> &pair : t) {
             total_size += size(pair.first) + size(pair.second);
         }
-        return sizeof(uint64_t)+total_size;
+        return sizeof(uint16_t)+total_size;
     }
 
     template <typename T>
     inline uint64_t size(const std::vector<T> &t)
     {
-        uint64_t tot_size = sizeof(uint64_t);
+        uint64_t tot_size = sizeof(uint16_t);
+        for (const T &elem : t) {
+            tot_size += size(elem);
+        }
+        return tot_size;
+    }
+    
+    template <typename T>
+    inline uint64_t size(const std::deque<T> &t)
+    {
+        uint64_t tot_size = sizeof(uint16_t);
         for (const T &elem : t) {
             tot_size += size(elem);
         }
@@ -387,14 +413,30 @@ namespace message
         t->pack(packer);
     }
 
+    inline void pack_buffer(e::buffer::packer &packer, const enum msg_type &t)
+    {
+        assert(t < (1 << 8));
+        uint8_t temp = (uint8_t) t;
+        packer = packer << temp;
+    }
+    
     inline void pack_buffer(e::buffer::packer &packer, const node_prog::prog_type &t)
     {
-        packer = packer << t;
+        assert(t < (1 << 8));
+        uint8_t temp = (uint8_t) t;
+        packer = packer << temp;
+    }
+
+    inline void pack_buffer(e::buffer::packer &packer, const enum transaction::update_type&t)
+    {
+        assert(t < (1 << 8));
+        uint8_t temp = (uint8_t) t;
+        packer = packer << temp;
     }
 
     inline void pack_buffer(e::buffer::packer &packer, const bool &t)
     {
-        uint16_t to_pack = 0;
+        uint8_t to_pack = 0;
         if (t) {
             to_pack = 1;
         }
@@ -448,12 +490,23 @@ namespace message
     inline void 
     pack_buffer(e::buffer::packer &packer, const std::string &t)
     {
-        uint8_t strchar;
         uint64_t strlen = t.size();
-        pack_buffer(packer, strlen);
-        for (uint64_t i = 0; i < strlen; i++) {
-            strchar = (uint8_t)t[i];
-            pack_buffer(packer, strchar);
+        assert(strlen < ((uint64_t) 1 << 32));
+        uint32_t shortlen = (uint32_t) strlen;
+        packer = packer << shortlen;
+
+        uint32_t words = strlen / 8;
+        uint32_t leftover_chars = strlen % 8;
+
+        const char* rawchars = t.data();
+        const uint64_t* rawwords = (const uint64_t*) rawchars;
+
+        for (uint32_t i = 0; i < words; i++) {
+            pack_buffer(packer, rawwords[i]);
+        }
+
+        for (uint32_t i = 0; i < leftover_chars; i++) {
+            pack_buffer(packer, (uint8_t) rawchars[words*8+i]);
         }
     }
 
@@ -483,14 +536,15 @@ namespace message
     inline void 
     pack_buffer(e::buffer::packer &packer, const db::element::remote_node &t)
     {
-        packer = packer << t.loc << t.id;
+        pack_buffer(packer, t.loc);
+        pack_buffer(packer, t.id);
     }
 
     inline void
     pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::pending_update> &ptr_t)
     {
         transaction::pending_update &t = *ptr_t;
-        packer = packer << t.type;
+        pack_buffer(packer, t.type);
         pack_buffer(packer, t.qts);
         pack_buffer(packer, t.id);
         pack_buffer(packer, t.elem1);
@@ -532,7 +586,23 @@ namespace message
     {
         // !assumes constant element size
         uint64_t num_elems = t.size();
-        packer = packer << num_elems;
+        assert(num_elems < (1 << 16));
+        pack_buffer(packer, (uint16_t) num_elems);
+        if (num_elems > 0){
+            for (const T &elem : t) {
+                pack_buffer(packer, elem);
+            }
+        }
+    }
+
+    template <typename T> 
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const std::deque<T> &t)
+    {
+        // !assumes constant element size
+        uint64_t num_elems = t.size();
+        assert(num_elems < (1 << 16));
+        pack_buffer(packer, (uint16_t) num_elems);
         if (num_elems > 0){
             for (const T &elem : t) {
                 pack_buffer(packer, elem);
@@ -557,7 +627,8 @@ namespace message
     pack_buffer(e::buffer::packer &packer, const std::unordered_set<T> &t)
     {
         uint64_t num_keys = t.size();
-        packer = packer << num_keys;
+        assert(num_keys < (1 << 16));
+        pack_buffer(packer, (uint16_t) num_keys);
         for (const T &elem : t) {
             pack_buffer(packer, elem);
         }
@@ -568,7 +639,8 @@ namespace message
     pack_buffer(e::buffer::packer &packer, const std::unordered_map<T1, T2> &t)
     {
         uint64_t num_keys = t.size();
-        packer = packer << num_keys;
+        assert(num_keys < (1 << 16));
+        pack_buffer(packer, (uint16_t) num_keys);
         for (const std::pair<T1, T2> &pair : t) {
             pack_buffer(packer, pair.first);
             pack_buffer(packer, pair.second);
@@ -600,12 +672,13 @@ namespace message
     inline void
     prepare_message(message &m, const enum msg_type given_type)
     {
-        uint64_t bytes_to_pack = sizeof(enum msg_type);
+        uint64_t bytes_to_pack = size(given_type);
         m.type = given_type;
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
 
-        packer = packer << given_type;
+
+        pack_buffer(packer, given_type);
         assert(packer.remain() == 0 && "reserved size for message not same as number of bytes packed");
     }
 
@@ -613,12 +686,12 @@ namespace message
     inline void
     prepare_message(message &m, const enum msg_type given_type, const Args&... args)
     {
-        uint64_t bytes_to_pack = size_wrapper(args...) + sizeof(enum msg_type);
+        uint64_t bytes_to_pack = size_wrapper(args...) + size(given_type);
         m.type = given_type;
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
 
-        packer = packer << given_type;
+        pack_buffer(packer, given_type);
         pack_buffer_wrapper(packer, args...);
         assert(packer.remain() == 0 && "reserved size for message not same as number of bytes packed");
     }
@@ -657,17 +730,33 @@ namespace message
     }
 
     inline void
+    unpack_buffer(e::unpacker &unpacker, enum msg_type &t)
+    {
+        uint8_t _type;
+        unpacker = unpacker >> _type;
+        t = (enum msg_type)_type;
+    }
+
+    inline void
     unpack_buffer(e::unpacker &unpacker, node_prog::prog_type &t)
     {
-        uint32_t _type;
+        uint8_t _type;
         unpacker = unpacker >> _type;
         t = (enum node_prog::prog_type)_type;
     }
 
     inline void
+    unpack_buffer(e::unpacker &unpacker, enum transaction::update_type &t)
+    {
+        uint8_t _type;
+        unpacker = unpacker >> _type;
+        t = (enum transaction::update_type)_type;
+    }
+
+    inline void
     unpack_buffer(e::unpacker &unpacker, bool &t)
     {
-        uint16_t temp;
+        uint8_t temp;
         unpacker = unpacker >> temp;
         t = (temp != 0);
     }
@@ -719,13 +808,23 @@ namespace message
     inline void 
     unpack_buffer(e::unpacker &unpacker, std::string &t)
     {
-        uint64_t strlen;
-        uint8_t strchar;
+        uint32_t strlen;
         unpack_buffer(unpacker, strlen);
         t.resize(strlen);
-        for (uint64_t i = 0; i < strlen; i++) {
-            unpack_buffer(unpacker, strchar);
-            t[i] = (char)strchar;
+
+        uint32_t words = strlen / 8;
+        uint32_t leftover_chars = strlen % 8;
+
+        const char* rawchars = t.data();
+        uint8_t* rawuint8s = (uint8_t*) rawchars;
+        uint64_t* rawwords = (uint64_t*) rawchars;
+
+        for (uint32_t i = 0; i < words; i++) {
+            unpack_buffer(unpacker, rawwords[i]);
+        }
+
+        for (uint32_t i = 0; i < leftover_chars; i++) {
+            unpack_buffer(unpacker, rawuint8s[words*8+i]);
         }
     }
 
@@ -756,17 +855,16 @@ namespace message
     inline void 
     unpack_buffer(e::unpacker &unpacker, db::element::remote_node& t)
     {
-        unpacker = unpacker >> t.loc >> t.id;
+        unpack_buffer(unpacker, t.loc);
+        unpack_buffer(unpacker, t.id);
     }
 
     inline void
     unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::pending_update> &ptr_t)
     {
-        uint32_t mtype;
         ptr_t.reset(new transaction::pending_update());
         transaction::pending_update &t = *ptr_t;
-        unpacker = unpacker >> mtype;
-        t.type = ((enum transaction::update_type)mtype);
+        unpack_buffer(unpacker, t.type);
         unpack_buffer(unpacker, t.qts);
         unpack_buffer(unpacker, t.id);
         unpack_buffer(unpacker, t.elem1);
@@ -808,15 +906,28 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, std::vector<T> &t)
     {
         assert(t.size() == 0);
-        uint64_t elements_left;
-        unpacker = unpacker >> elements_left;
+        uint16_t elements_left;
+        unpack_buffer(unpacker, elements_left);
 
-        t.reserve(elements_left);
+        t.resize(elements_left);
 
-        while (elements_left > 0) {
-            t.emplace_back();
-            unpack_buffer(unpacker, t.back());
-            elements_left--;
+        for (int i = 0; i < elements_left; i++) {
+            unpack_buffer(unpacker, t[i]);
+        }
+    }
+
+    template <typename T> 
+    inline void 
+    unpack_buffer(e::unpacker &unpacker, std::deque<T> &t)
+    {
+        assert(t.size() == 0);
+        uint16_t elements_left;
+        unpack_buffer(unpacker, elements_left);
+
+        t.resize(elements_left);
+
+        for (int i = 0; i < elements_left; i++) {
+            unpack_buffer(unpacker, t[i]);
         }
     }
 
@@ -826,7 +937,7 @@ namespace message
     {
         assert(t.size() == 0);
         uint64_t elements_left = 0;
-        unpacker = unpacker >> elements_left;
+        unpack_buffer(unpacker, elements_left);
         while (elements_left > 0) {
             T1 to_add;
             unpack_buffer(unpacker, to_add);
@@ -840,15 +951,15 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, std::unordered_set<T> &t)
     {
         assert(t.size() == 0);
-        uint64_t elements_left;
-        unpacker = unpacker >> elements_left;
+        uint16_t elements_left;
+        unpack_buffer(unpacker, elements_left);
 
         t.rehash(elements_left*1.25); // set number of buckets to 1.25*elements it will contain
 
         while (elements_left > 0) {
-            T to_add;
-            unpack_buffer(unpacker, to_add);
-            t.emplace(std::move(to_add));
+            T new_elem;
+            unpack_buffer(unpacker, new_elem);
+            t.emplace(new_elem);
             elements_left--;
         }
     }
@@ -858,8 +969,8 @@ namespace message
     unpack_buffer(e::unpacker &unpacker, std::unordered_map<T1, T2> &t)
     {
         assert(t.size() == 0);
-        uint64_t elements_left;
-        unpacker = unpacker >> elements_left;
+        uint16_t elements_left;
+        unpack_buffer(unpacker, elements_left);
         // set number of buckets to 1.25*elements it will contain
         // did not use reserve as max_load_factor is default 1
         t.rehash(elements_left*1.25); // XXX why 1.25??
@@ -886,12 +997,12 @@ namespace message
     inline void
     unpack_message_internal(bool check_empty, const message &m, const enum msg_type expected_type, Args&... args)
     {
-        uint32_t _type;
+        enum msg_type recieved_type;
         e::unpacker unpacker = m.buf->unpack_from(BUSYBEE_HEADER_SIZE);
         assert(!unpacker.error());
 
-        unpacker = unpacker >> _type;
-        assert((enum msg_type)_type == expected_type);
+        unpack_buffer(unpacker, recieved_type);
+        assert(recieved_type == expected_type);
         UNUSED(expected_type);
 
         unpack_buffer(unpacker, args...);
@@ -919,18 +1030,23 @@ namespace message
     unpack_client_tx(message &m, transaction::pending_tx &tx)
     {
         uint64_t num_tx;
-        uint32_t type;
+        bool small_tx;
+        uint8_t small_tx_size;
+
         enum msg_type mtype;
         e::unpacker unpacker = m.buf->unpack_from(BUSYBEE_HEADER_SIZE);
-        unpacker = unpacker >> type;
-        mtype = (enum msg_type)type;
+        unpack_buffer(unpacker, mtype);
         assert(mtype == CLIENT_TX_INIT);
-        unpack_buffer(unpacker, num_tx);
+        unpack_buffer(unpacker, small_tx);
+        if (small_tx) {
+            unpack_buffer(unpacker, small_tx_size);
+            num_tx = small_tx_size;
+        } else {
+            unpack_buffer(unpacker, num_tx);
+        }
         while (num_tx-- > 0) {
-            auto upd = std::make_shared<transaction::pending_update>();
-            tx.writes.emplace_back(upd);
-            unpacker = unpacker >> type;
-            mtype = (enum msg_type)type;
+            auto upd = *(tx.writes.emplace(tx.writes.end(), std::make_shared<transaction::pending_update>()));
+            unpack_buffer(unpacker, mtype);
             switch (mtype) {
                 case CLIENT_NODE_CREATE_REQ:
                     upd->type = transaction::NODE_CREATE_REQ;

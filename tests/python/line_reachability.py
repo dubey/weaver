@@ -18,7 +18,7 @@ import libclient as client
 
 # creating line graph
 nodes = []
-num_nodes = 1000
+num_nodes = 200
 coord_id = 0
 c = client.Client(client._CLIENT_ID, coord_id)
 

@@ -58,7 +58,7 @@ namespace message
     // packing methods
     inline void pack_buffer(e::buffer::packer &packer, const db::element::element &t)
     {
-        packer = packer << t.get_id();
+        pack_buffer(packer, t.get_id());
         pack_buffer(packer, t.get_creat_time());
         pack_buffer(packer, t.get_del_time());
         pack_buffer(packer, *t.get_props());
@@ -94,7 +94,7 @@ namespace message
         vc::vclock creat_time, del_time;
         std::vector<db::element::property> props;
 
-        unpacker = unpacker >> id;
+        unpack_buffer(unpacker, id);
         t.set_id(id);
 
         unpack_buffer(unpacker, creat_time);

@@ -101,16 +101,19 @@ cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
     cdef enum prog_type:
         DEFAULT
         REACHABILITY
+        PATHLESS_REACHABILITY
         N_HOP_REACHABILITY
         TRIANGLE_COUNT
         DIJKSTRA
         CLUSTERING
+        TWO_NEIGHBORHOOD
         READ_NODE_PROPS
         READ_EDGES_PROPS
 
 cdef extern from 'db/element/remote_node.h' namespace 'db::element':
     cdef cppclass remote_node:
         remote_node(uint64_t id, uint64_t handle)
+        remote_node()
         uint64_t id
         uint64_t loc
     cdef remote_node coordinator
@@ -125,21 +128,40 @@ cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
         reach_params()
         bint _search_cache
         uint64_t _cache_key
-        bint mode
+        bint returning
         remote_node prev_node
         uint64_t dest
         vector[pair[string, string]] edge_props
         uint32_t hops
         bint reachable
+        vector[remote_node] path
 
 class ReachParams:
-    def __init__(self, mode=False, prev_node=RemoteNode(0,0), dest=0, hops=0, reachable=False, caching=False, edge_props=[]):
+    def __init__(self, returning=False, prev_node=RemoteNode(0,0), dest=0, hops=0, reachable=False, caching=False, edge_props=[], path=[]):
         self._search_cache = caching
         self._cache_key = dest
-        self.mode = mode
+        self.returning = returning
         self.prev_node = prev_node
         self.dest= dest
         self.hops = hops
+        self.reachable = reachable
+        self.edge_props = edge_props
+        self.path = path
+
+cdef extern from 'node_prog/pathless_reach_program.h' namespace 'node_prog':
+    cdef cppclass pathless_reach_params:
+        pathless_reach_params()
+        bint returning
+        remote_node prev_node
+        uint64_t dest
+        vector[pair[string, string]] edge_props
+        bint reachable
+
+class PathlessReachParams:
+    def __init__(self, returning=False, prev_node=RemoteNode(0,0), dest=0, reachable=False, edge_props=[]):
+        self.returning = returning
+        self.prev_node = prev_node
+        self.dest= dest
         self.reachable = reachable
         self.edge_props = edge_props
 
@@ -160,6 +182,26 @@ class ClusteringParams:
         self.outgoing = outgoing
         self.clustering_coeff = clustering_coeff
 
+cdef extern from 'node_prog/two_neighborhood_program.h' namespace 'node_prog':
+    cdef cppclass two_neighborhood_params:
+        bint _search_cache
+        bint cache_update
+        string prop_key
+        uint32_t on_hop
+        bint outgoing
+        remote_node prev_node
+        vector[pair[uint64_t, string]] responses
+
+class TwoNeighborhoodParams:
+    def __init__(self, caching= False, cache_update = False, prop_key="", on_hop=0, outgoing=True, prev_node=RemoteNode(0,0), responses = []):
+        self._search_cache = caching;
+        self.cache_update = cache_update;
+        self.prop_key = prop_key
+        self.on_hop = on_hop
+        self.outgoing = outgoing
+        self.prev_node = prev_node
+        self.responses = responses
+'''
 cdef extern from 'node_prog/dijkstra_program.h' namespace 'node_prog':
     cdef cppclass dijkstra_params:
         uint64_t src_id
@@ -188,6 +230,7 @@ class DijkstraParams:
         self.next_node = next_node
         self.final_path = final_path
         self.cost = cost
+'''
 
 cdef extern from 'node_prog/read_node_props_program.h' namespace 'node_prog':
     cdef cppclass read_node_props_params:
@@ -258,8 +301,10 @@ cdef extern from 'client/client.h' namespace 'client':
         void set_edge_property(uint64_t tx_id, uint64_t node, uint64_t edge, string &key, string &value)
         bint end_tx(uint64_t tx_id) nogil
         reach_params run_reach_program(vector[pair[uint64_t, reach_params]] initial_args) nogil
+        pathless_reach_params run_pathless_reach_program(vector[pair[uint64_t, pathless_reach_params]] initial_args) nogil
         clustering_params run_clustering_program(vector[pair[uint64_t, clustering_params]] initial_args) nogil
-        dijkstra_params run_dijkstra_program(vector[pair[uint64_t, dijkstra_params]] initial_args) nogil
+        two_neighborhood_params run_two_neighborhood_program(vector[pair[uint64_t, two_neighborhood_params]] initial_args) nogil
+        #dijkstra_params run_dijkstra_program(vector[pair[uint64_t, dijkstra_params]] initial_args) nogil
         read_node_props_params read_node_props_program(vector[pair[uint64_t, read_node_props_params]] initial_args) nogil
         read_edges_props_params read_edges_props_program(vector[pair[uint64_t, read_edges_props_params]] initial_args) nogil
         read_n_edges_params read_n_edges_program(vector[pair[uint64_t, read_n_edges_params]] initial_args) nogil
@@ -307,7 +352,7 @@ cdef class Client:
             arg_pair.first = rp[0]
             arg_pair.second._search_cache = rp[1]._search_cache
             arg_pair.second._cache_key = rp[1].dest
-            arg_pair.second.mode = rp[1].mode
+            arg_pair.second.returning = rp[1].returning
             arg_pair.second.dest= rp[1].dest
             arg_pair.second.reachable = rp[1].reachable
             arg_pair.second.prev_node = coordinator
@@ -316,9 +361,28 @@ cdef class Client:
             c_args.push_back(arg_pair)
         with nogil:
             c_rp = self.thisptr.run_reach_program(c_args)
-        response = ReachParams(hops=c_rp.hops, reachable=c_rp.reachable)
+        foundpath = []
+        for rn in c_rp.path:
+            foundpath.append(rn.id)
+        response = ReachParams(path=foundpath, hops=c_rp.hops, reachable=c_rp.reachable)
         return response
     # warning! set prev_node loc to vt_id if somewhere in params
+    def run_pathless_reach_program(self, init_args):
+        cdef vector[pair[uint64_t, pathless_reach_params]] c_args
+        cdef pair[uint64_t, pathless_reach_params] arg_pair
+        for rp in init_args:
+            arg_pair.first = rp[0]
+            arg_pair.second.returning = rp[1].returning
+            arg_pair.second.dest= rp[1].dest
+            arg_pair.second.reachable = rp[1].reachable
+            arg_pair.second.prev_node = coordinator
+            for p in rp[1].edge_props:
+                arg_pair.second.edge_props.push_back(p)
+            c_args.push_back(arg_pair)
+        with nogil:
+            c_rp = self.thisptr.run_pathless_reach_program(c_args)
+        response = PathlessReachParams(reachable=c_rp.reachable)
+        return response
     def run_clustering_program(self, init_args):
         cdef vector[pair[uint64_t, clustering_params]] c_args
         cdef pair[uint64_t, clustering_params] arg_pair
@@ -333,6 +397,23 @@ cdef class Client:
             c_cp = self.thisptr.run_clustering_program(c_args)
         response = ClusteringParams(clustering_coeff=c_cp.clustering_coeff)
         return response
+    def run_two_neighborhood_program(self, init_args):
+        cdef vector[pair[uint64_t, two_neighborhood_params]] c_args
+        cdef pair[uint64_t, two_neighborhood_params] arg_pair
+        for rp in init_args:
+            arg_pair.first = rp[0]
+            arg_pair.second._search_cache = rp[1]._search_cache
+            arg_pair.second.cache_update = rp[1].cache_update
+            arg_pair.second.prop_key = rp[1].prop_key
+            arg_pair.second.on_hop = rp[1].on_hop
+            arg_pair.second.outgoing = rp[1].outgoing
+            arg_pair.second.prev_node = coordinator
+            c_args.push_back(arg_pair)
+        with nogil:
+            c_rp = self.thisptr.run_two_neighborhood_program(c_args)
+        response = TwoNeighborhoodParams(responses = c_rp.responses)
+        return response
+    '''
     def run_dijkstra_program(self, init_args):
         cdef vector[pair[uint64_t, dijkstra_params]] c_args
         cdef pair[uint64_t, dijkstra_params] arg_pair
@@ -347,6 +428,7 @@ cdef class Client:
             c_dp = self.thisptr.run_dijkstra_program(c_args)
         response = DijkstraParams(final_path=c_dp.final_path, cost=c_dp.cost)
         return response
+    '''
     def read_node_props(self, init_args):
         cdef vector[pair[uint64_t, read_node_props_params]] c_args
         cdef pair[uint64_t, read_node_props_params] arg_pair

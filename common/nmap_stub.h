@@ -64,12 +64,17 @@ namespace nmap
             attrs_to_add[i].datatype = HYPERDATATYPE_INT64;
 
             hyperdex_client_returncode put_status;
-            int64_t op_id = cl.put(space, (const char *) &entry.first, sizeof(int64_t), &(attrs_to_add[i]), 1, &put_status);
-            if (op_id < 0) {
-                WDEBUG << "\"put\" returned " << op_id << " with status " << put_status << std::endl;
-                free(attrs_to_add);
-                return;
-            }
+            int retries = 0;
+            int64_t op_id = -1;
+            do {
+                op_id = cl.put(space, (const char *) &entry.first, sizeof(int64_t), &(attrs_to_add[i]), 1, &put_status);
+                if (retries++ > 8) {
+                    WDEBUG << "\"put\" returned " << op_id << " with status " << put_status << std::endl;
+                    free(attrs_to_add);
+                    assert(false && "too many hyperdex failures");
+                    return;
+                }
+            } while (op_id < 0);
             i++;
         }
 

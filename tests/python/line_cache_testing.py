@@ -14,6 +14,7 @@
 import sys
 sys.path.append('../../.libs')
 
+import time
 import libclient as client
 import simple_client
 
@@ -42,15 +43,14 @@ c.end_tx(tx_id)
 
 print 'Created graph'
 
+start_time = time.time()
 reachable = sc.reachability(nodes[0], nodes[num_nodes-1], caching=True)[0]
-print 'From node ' + str(0) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(reachable)
+#print 'From node ' + str(0) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(reachable)
 assert(reachable)
-'''
 for i in range(num_nodes):
     reachable = sc.reachability(nodes[i], nodes[num_nodes-1], caching=True)[0]
-    print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(reachable)
+    #print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(reachable)
     assert(reachable)
-    '''
 
 print 'deleting middle edge ' + str(break_edge) + ' and retry'
 tx_id = c.begin_tx()
@@ -58,16 +58,17 @@ c.delete_edge(tx_id, break_edge, nodes[num_nodes/2])
 c.end_tx(tx_id)
 
 reachable = sc.reachability(nodes[0], nodes[num_nodes-1], caching=True)[0]
-print 'From node ' + str(0) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(reachable)
+#print 'From node ' + str(0) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(reachable)
 assert(not reachable)
 
-'''
 for i in range(num_nodes):
     if i == num_nodes/2 + 1:
         print 'past broken chain point'
 
     reachable = sc.reachability(nodes[i], nodes[num_nodes-1], caching=True)[0]
-    print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(reachable)
+    #print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(reachable)
     assert(reachable is (i > num_nodes/2))
-    '''
+
+end_time = time.time()
+print 'Total time for test was ' + str(end_time-start_time)
 

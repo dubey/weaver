@@ -26,8 +26,8 @@ if DEBUG
     AM_CFLAGS += -g3 -gdwarf-2 -Og
     AM_CXXFLAGS += -g3 -gdwarf-2 -Og
 else
-    AM_CFLAGS += -O2
-    AM_CXXFLAGS += -O2
+    AM_CFLAGS += -O2 -DNDEBUG
+    AM_CXXFLAGS += -O2 -DNDEBUG
 endif
 
 bin_PROGRAMS=
@@ -47,6 +47,9 @@ timestamper_SOURCES=common/comm_wrapper.cc \
                     common/server_manager_link_wrapper.cc \
                     common/hyper_stub_base.cc \
                     common/event_order.cc \
+                    node_prog/reach_program.cc \
+                    node_prog/pathless_reach_program.cc \
+                    node_prog/two_neighborhood_program.cc \
                     coordinator/hyper_stub.cc \
 					coordinator/timestamper.cc
 timestamper_CFLAGS= 	$(AM_CFLAGS)
@@ -75,6 +78,9 @@ shard_SOURCES=	common/ids.cc \
 				common/server_manager_link_wrapper.cc \
                 common/hyper_stub_base.cc \
                 common/event_order.cc \
+                node_prog/reach_program.cc \
+                node_prog/pathless_reach_program.cc \
+                node_prog/two_neighborhood_program.cc \
                 db/hyper_stub.cc \
                 db/queue_manager.cc \
 				db/shard.cc

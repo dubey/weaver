@@ -15,6 +15,8 @@
 #ifndef weaver_db_shard_h_
 #define weaver_db_shard_h_
 
+#define NUM_NODE_MAPS 1024
+
 #include <set>
 #include <vector>
 #include <unordered_map>
@@ -44,13 +46,26 @@
 
 namespace std {
     // so we can use a pair as key to unordered_map
+    template <typename T1, typename T2, typename T3>
+        struct hash<std::tuple<T1, T2, T3>>
+        {
+            size_t operator()(const std::tuple<T1, T2, T3>& k) const
+            {
+                size_t hash = std::hash<uint64_t>()(std::get<0>(k));
+                hash ^= std::hash<uint64_t>()(std::get<1>(k)) + 0x9e3779b9 + (hash<<6) + (hash>>2);
+                hash ^= std::hash<uint64_t>()(std::get<2>(k)) + 0x9e3779b9 + (hash<<6) + (hash>>2);
+                return hash;
+            }
+        };
+    // so we can use a pair as key to unordered_map
     template <typename T1, typename T2>
         struct hash<std::pair<T1, T2>>
         {
             size_t operator()(const std::pair<T1, T2>& k) const
             {
-                using std::hash;
-                return hash<T1>()(k.first) ^ (hash<T2>()(k.second) + 1);
+                size_t hash = std::hash<uint64_t>()(k.first);
+                hash ^= std::hash<uint64_t>()(k.second) + 0x9e3779b9 + (hash<<6) + (hash>>2);
+                return hash;
             }
         };
 }
@@ -81,10 +96,11 @@ namespace db
             void bulk_load_persistent();
 
             // Mutexes
-            po6::threads::mutex update_mutex // shard update mutex
+            po6::threads::mutex meta_update_mutex // shard update mutex
                 , edge_map_mutex
                 , perm_del_mutex
                 , config_mutex;
+            po6::threads::mutex node_map_mutexes[NUM_NODE_MAPS];
         private:
             po6::threads::mutex clock_mutex; // vector clock/queue timestamp mutex
         public:
@@ -118,7 +134,7 @@ namespace db
             uint64_t shard_id;
             server_id server;
             std::unordered_set<uint64_t> node_list; // list of node ids currently on this shard
-            std::unordered_map<uint64_t, element::node*> nodes; // node id -> ptr to node object
+            std::unordered_map<uint64_t, element::node*> nodes[NUM_NODE_MAPS]; // node id -> ptr to node object
             std::unordered_map<uint64_t, // node id n ->
                 std::unordered_set<uint64_t>> edge_map; // in-neighbors of n
             queue_manager qm;
@@ -187,17 +203,31 @@ namespace db
             
             // node programs
         private:
+
+            po6::threads::mutex node_prog_state_mutex;
+            std::unordered_set<uint64_t> done_ids; // request ids that have finished
+            std::unordered_map<uint64_t, std::vector<uint64_t>> outstanding_prog_states; // maps request_id to list of nodes that have created prog state for that req id
             state::program_state prog_state; 
+            void delete_prog_states(uint64_t req_id, std::vector<uint64_t> &node_ids);
         public:
             std::shared_ptr<node_prog::Node_State_Base> 
                 fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_id);
             void insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_id,
                     std::shared_ptr<node_prog::Node_State_Base> toAdd);
+            void mark_nodes_using_state(uint64_t req_id, std::vector<uint64_t> &node_ids);
+            //void add_done_request(uint64_t completed_req_id, node_prog::prog_type type);
             void add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
             bool check_done_request(uint64_t req_id);
 
-            std::unordered_map<std::pair<uint64_t, uint64_t>, void *> node_prog_running_states; // used for fetching cache contexts
+            std::unordered_map<std::tuple<uint64_t, uint64_t, uint64_t>, void *> node_prog_running_states; // used for fetching cache contexts
             po6::threads::mutex node_prog_running_states_mutex;
+
+            po6::threads::mutex watch_set_lookups_mutex;
+            uint64_t watch_set_lookups;
+            uint64_t watch_set_nops;
+            uint64_t watch_set_piggybacks;
+            //po6::threads::mutex node_prog_mutex;
+            //std::unordered_map<uint64_t, std::deque<node_params_t>> node_progs_deque; // req id to node prog deque
 
     };
 
@@ -226,6 +256,9 @@ namespace db
         , max_done_clk(NUM_VTS, vc::vclock_t(NUM_VTS, 0))
         , msg_count(0)
         , prog_state()
+        , watch_set_lookups(0)
+        , watch_set_nops(0)
+        , watch_set_piggybacks(0)
     {
         assert(NUM_VTS == KRONOS_NUM_VTS);
         message::prog_state = &prog_state;
@@ -312,10 +345,13 @@ namespace db
     inline element::node*
     shard :: acquire_node(uint64_t node_id)
     {
+        uint64_t map_idx = node_id % NUM_NODE_MAPS;
+
         element::node *n = NULL;
-        update_mutex.lock();
-        if (nodes.find(node_id) != nodes.end()) {
-            n = nodes[node_id];
+        node_map_mutexes[map_idx].lock();
+        auto node_iter = nodes[map_idx].find(node_id);
+        if (node_iter != nodes[map_idx].end()) {
+            n = node_iter->second;
             n->waiters++;
             while (n->in_use) {
                 n->cv.wait();
@@ -323,7 +359,7 @@ namespace db
             n->waiters--;
             n->in_use = true;
         }
-        update_mutex.unlock();
+        node_map_mutexes[map_idx].unlock();
 
         return n;
     }
@@ -331,21 +367,27 @@ namespace db
     inline void
     shard :: node_tx_order(uint64_t node, uint64_t vt_id, uint64_t qts)
     {
-        update_mutex.lock();
-        if (nodes.find(node) != nodes.end()) {
-            nodes[node]->tx_queue.emplace_back(std::make_pair(vt_id, qts));
+        uint64_t map_idx = node % NUM_NODE_MAPS;
+
+        node_map_mutexes[map_idx].lock();
+        auto node_iter = nodes[map_idx].find(node);
+        if (node_iter != nodes[map_idx].end()) {
+            node_iter->second->tx_queue.emplace_back(std::make_pair(vt_id, qts));
         }
-        update_mutex.unlock();
+        node_map_mutexes[map_idx].unlock();
     }
 
     inline element::node*
     shard :: acquire_node_write(uint64_t node, uint64_t vt_id, uint64_t qts)
     {
+        uint64_t map_idx = node % NUM_NODE_MAPS;
+
         element::node *n = NULL;
         auto comp = std::make_pair(vt_id, qts);
-        update_mutex.lock();
-        if (nodes.find(node) != nodes.end()) {
-            n = nodes[node];
+        node_map_mutexes[map_idx].lock();
+        auto node_iter = nodes[map_idx].find(node);
+        if (node_iter != nodes[map_idx].end()) {
+            n = node_iter->second;
             n->waiters++;
             while (n->in_use || n->tx_queue.front() != comp) {
                 n->cv.wait();
@@ -354,7 +396,7 @@ namespace db
             n->in_use = true;
             n->tx_queue.pop_front();
         }
-        update_mutex.unlock();
+        node_map_mutexes[map_idx].unlock();
 
         return n;
     }
@@ -362,9 +404,12 @@ namespace db
     inline element::node*
     shard :: acquire_node_nonlocking(uint64_t node_id)
     {
+        uint64_t map_idx = node_id % NUM_NODE_MAPS;
+
         element::node *n = NULL;
-        if (nodes.find(node_id) != nodes.end()) {
-            n = nodes[node_id];
+        auto node_iter = nodes[map_idx].find(node_id);
+        if (node_iter != nodes[map_idx].end()) {
+            n = node_iter->second;
         }
         return n;
     }
@@ -373,19 +418,21 @@ namespace db
     inline void
     shard :: release_node(element::node *n, bool migr_done=false)
     {
-        update_mutex.lock();
+        uint64_t map_idx = n->base.get_id() % NUM_NODE_MAPS;
+
+        node_map_mutexes[map_idx].lock();
         n->in_use = false;
         if (migr_done) {
             n->migr_cv.broadcast();
         }
         if (n->waiters > 0) {
             n->cv.signal();
-            update_mutex.unlock();
+            node_map_mutexes[map_idx].unlock();
         } else if (n->permanently_deleted) {
             uint64_t node_id = n->base.get_id();
-            nodes.erase(node_id);
+            nodes[map_idx].erase(node_id);
             node_list.erase(node_id);
-            update_mutex.unlock();
+            node_map_mutexes[map_idx].unlock();
 
             migration_mutex.lock();
             shard_node_count[shard_id - SHARD_ID_INCR]--;
@@ -397,8 +444,9 @@ namespace db
             
             permanent_node_delete(n);
         } else {
-            update_mutex.unlock();
+            node_map_mutexes[map_idx].unlock();
         }
+        n = NULL;
     }
 
 
@@ -407,17 +455,19 @@ namespace db
     inline element::node*
     shard :: create_node(uint64_t, uint64_t node_id, vc::vclock &vclk, bool migrate, bool init_load=false)
     {
-        element::node *new_node = new element::node(node_id, vclk, &update_mutex);
+        uint64_t map_idx = node_id % NUM_NODE_MAPS;
+
+        element::node *new_node = new element::node(node_id, vclk, &node_map_mutexes[map_idx]);
         
         if (!init_load) {
-            update_mutex.lock();
+            node_map_mutexes[map_idx].lock();
         }
-        bool success = nodes.emplace(node_id, new_node).second;
+        bool success = nodes[map_idx].emplace(node_id, new_node).second;
         assert(success);
         UNUSED(success);
         node_list.emplace(node_id);
         if (!init_load) {
-            update_mutex.unlock();
+            node_map_mutexes[map_idx].unlock();
         }
 
         if (!init_load) {
@@ -619,7 +669,8 @@ namespace db
     inline bool
     shard :: node_exists_nonlocking(uint64_t node_id)
     {
-        return (nodes.find(node_id) != nodes.end());
+        uint64_t map_idx = node_id % NUM_NODE_MAPS;
+        return (nodes[map_idx].count(node_id) > 0);
     }
 
     // permanent deletion
@@ -819,6 +870,7 @@ namespace db
     inline std::shared_ptr<node_prog::Node_State_Base>
     shard :: fetch_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_id)
     {
+        assert(false);
         return prog_state.get_state(t, request_id, local_node_id);
     }
 
@@ -826,19 +878,98 @@ namespace db
     shard :: insert_prog_req_state(node_prog::prog_type t, uint64_t request_id, uint64_t local_node_id,
         std::shared_ptr<node_prog::Node_State_Base> toAdd)
     {
+        assert(false);
         prog_state.put_state(t, request_id, local_node_id, toAdd);
+    }
+
+    inline void
+    shard :: delete_prog_states(uint64_t req_id, std::vector<uint64_t> &node_ids)
+    {
+        for (uint64_t node_id : node_ids) {
+            //WDEBUG<< "DELETING STATES FOR REQ " << req_id << " and node_id "<< node_id<< std::endl;
+            db::element::node *node = acquire_node(node_id); // TODO later we can only acquire node once for whole list
+
+            if (node == NULL) {
+                assert(false && "shit");
+            } else if (node->state == db::element::node::mode::MOVED) {
+                release_node(node);
+                assert(false && "migration not supported");
+            } else {
+                auto state_iter = node->prog_states.find(req_id);
+                assert(state_iter != node->prog_states.end());
+                int elems_erased = node->prog_states.erase(req_id); // TODO double check thing isnt mem leaking
+                assert(elems_erased > 0 && "shoot");
+
+                release_node(node);
+            }
+        }
+    }
+
+    inline void
+    shard :: mark_nodes_using_state(uint64_t req_id, std::vector<uint64_t> &node_ids)
+    {
+            node_prog_state_mutex.lock();
+            bool done_request = done_ids.count(req_id) > 1;
+            if (!done_request) {
+                auto state_list_iter = outstanding_prog_states.find(req_id);
+                if (state_list_iter == outstanding_prog_states.end()) {
+                    outstanding_prog_states.emplace(req_id, std::move(node_ids));
+                } else {
+                    std::vector<uint64_t> &add_to = state_list_iter->second;
+                    add_to.reserve(add_to.size() + node_ids.size());
+                    add_to.insert(add_to.end(), node_ids.begin(), node_ids.end());
+                }
+                node_prog_state_mutex.unlock();
+            } else { // request is finished, just delete things
+                node_prog_state_mutex.unlock();
+                delete_prog_states(req_id, node_ids);
+            }
     }
 
     inline void
     shard :: add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests)
     {
-        prog_state.done_requests(completed_requests);
+//        prog_state.done_requests(completed_requests);
+        if (completed_requests.size() == 0) {
+            return;
+        }
+        std::vector<uint64_t> completed_request_ids; // XXX temp, later have completed requets not include prog type
+        for (auto &p: completed_requests) {
+            uint64_t rid = p.first;
+            completed_request_ids.push_back(rid);
+        }
+
+        std::vector<std::pair<uint64_t, std::vector<uint64_t>>> to_delete;
+
+        node_prog_state_mutex.lock();
+        done_ids.insert(completed_request_ids.begin(), completed_request_ids.end());
+
+        for (auto &p: completed_requests) {
+            uint64_t req_id = p.first;
+            auto node_list_iter = outstanding_prog_states.find(req_id);
+            if (node_list_iter != outstanding_prog_states.end()) {
+                to_delete.emplace_back(std::make_pair(req_id, std::move(node_list_iter->second)));
+                int num_deleted = outstanding_prog_states.erase(req_id);
+                assert(num_deleted == 1);
+            }
+        }
+        node_prog_state_mutex.unlock();
+
+        for (auto &p: to_delete) { // TODO, later delete multiple req ids per node
+            delete_prog_states(p.first, p.second);
+        }
     }
 
     inline bool
     shard :: check_done_request(uint64_t req_id)
     {
+        /*
         bool done = prog_state.check_done_request(req_id);
+        return done;
+        */
+        node_prog_state_mutex.lock();
+        bool done = done_ids.count(req_id) > 0;
+        node_prog_state_mutex.unlock();
         return done;
     }
 

@@ -12,6 +12,7 @@
  */
 
 #include "client/client.h"
+#include "common/message.h"
 
 namespace order
 {
@@ -154,8 +155,9 @@ client :: end_tx(uint64_t tx_id)
             WDEBUG << "tx msg recv fail" << std::endl;
             return false;
         }
-        uint32_t mtype;
-        msg.buf->unpack_from(BUSYBEE_HEADER_SIZE) >> mtype;
+        message::msg_type mtype;
+        auto unpacker = msg.buf->unpack_from(BUSYBEE_HEADER_SIZE);
+        unpack_buffer(unpacker, mtype);
         assert(mtype == message::CLIENT_TX_DONE
             || mtype == message::CLIENT_TX_FAIL);
         if (mtype == message::CLIENT_TX_DONE) {
@@ -202,17 +204,31 @@ client :: run_reach_program(std::vector<std::pair<uint64_t, node_prog::reach_par
     return *run_node_program(node_prog::REACHABILITY, initial_args);
 }
 
+node_prog::pathless_reach_params
+client :: run_pathless_reach_program(std::vector<std::pair<uint64_t, node_prog::pathless_reach_params>> initial_args)
+{
+    return *run_node_program(node_prog::PATHLESS_REACHABILITY, initial_args);
+}
+
 node_prog::clustering_params
 client :: run_clustering_program(std::vector<std::pair<uint64_t, node_prog::clustering_params>> initial_args)
 {
     return *run_node_program(node_prog::CLUSTERING, initial_args);
 }
 
+node_prog::two_neighborhood_params
+client :: run_two_neighborhood_program(std::vector<std::pair<uint64_t, node_prog::two_neighborhood_params>> initial_args)
+{
+    return *run_node_program(node_prog::TWO_NEIGHBORHOOD, initial_args);
+}
+
+/*
 node_prog::dijkstra_params
 client :: run_dijkstra_program(std::vector<std::pair<uint64_t, node_prog::dijkstra_params>> initial_args)
 {
     return *run_node_program(node_prog::DIJKSTRA, initial_args);
 }
+*/
 
 node_prog::read_node_props_params
 client :: read_node_props_program(std::vector<std::pair<uint64_t, node_prog::read_node_props_params>> initial_args)

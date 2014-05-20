@@ -6,7 +6,7 @@ import time
 
 # creating star graph, tests one source many destinations with disjoint paths (aka max cache size)
 nodes = []
-num_nodes = 1000
+num_nodes = 2000
 coord_id = 0
 c = client.Client(client._CLIENT_ID, coord_id)
 
@@ -24,9 +24,16 @@ c.end_tx(tx_id)
 print 'Created graph'
 
 start = time.time()
-print('Running rechability from node: '),
+print('Running rechability to node: '),
 for i in range(num_nodes):
     rp = client.ReachParams(dest=nodes[i], caching=False)
+    prog_args = [(center, rp)]
+    response = c.run_reach_program(prog_args)
+    print(str(i) + ','),
+    sys.stdout.flush()
+    assert(response.reachable)
+for i in range(num_nodes):
+    rp = client.ReachParams(dest=nodes[i], caching=True)
     prog_args = [(center, rp)]
     response = c.run_reach_program(prog_args)
     print(str(i) + ','),

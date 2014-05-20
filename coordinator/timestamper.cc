@@ -15,6 +15,7 @@
 #include <iostream>
 #include <thread>
 #include <vector>
+#include <deque>
 #include <stdlib.h>
 #include <signal.h>
 #include <sys/time.h>
@@ -337,20 +338,13 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, pType, initial_args);
     
     // map from locations to a list of start_node_params to send to that shard
-    std::unordered_map<uint64_t, std::vector<std::pair<uint64_t, ParamsType>>> initial_batches; 
-    bool global_req = false;
+    std::unordered_map<uint64_t, std::deque<std::pair<uint64_t, ParamsType>>> initial_batches; 
 
     // lookup mappings
     std::unordered_map<uint64_t, uint64_t> request_element_mappings;
     std::unordered_set<uint64_t> mappings_to_get;
     for (auto &initial_arg : initial_args) {
         uint64_t c_id = initial_arg.first;
-        if (c_id == -1) { // max uint64_t means its a global thing like triangle count
-            assert(mappings_to_get.empty()); // dont mix global req with normal nodes
-            assert(initial_args.size() == 1);
-            global_req = true;
-            break;
-        }
         mappings_to_get.insert(c_id);
     }
     if (!mappings_to_get.empty()) {
@@ -361,18 +355,10 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         }
     }
 
-    if (global_req) {
-        // send copy of params to each shard
-        for (int i = 0; i < NUM_SHARDS; i++) {
-            initial_batches[i + SHARD_ID_INCR].emplace_back(std::make_pair(initial_args[0].first,
-                    initial_args[0].second));
-        }
-    } else { // regular style node program
-        for (std::pair<uint64_t, ParamsType> &node_params_pair: initial_args) {
-            uint64_t loc = request_element_mappings[node_params_pair.first];
-            initial_batches[loc].emplace_back(std::make_pair(node_params_pair.first,
+    for (std::pair<uint64_t, ParamsType> &node_params_pair: initial_args) {
+        uint64_t loc = request_element_mappings[node_params_pair.first];
+        initial_batches[loc].emplace_back(std::make_pair(node_params_pair.first,
                     std::move(node_params_pair.second)));
-        }
     }
     
     vts->clk_rw_mtx.wrlock();
@@ -381,10 +367,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     assert(req_timestamp.clock.size() == NUM_VTS);
     vts->clk_rw_mtx.unlock();
 
-    /*
-    if (global_req) {
-    }
-    */
     vts->tx_prog_mutex.lock();
     uint64_t req_id = vts->generate_id();
     vts->outstanding_progs.emplace(req_id, current_prog(clientID, req_timestamp.clock));
@@ -393,7 +375,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     message::message msg_to_send;
     for (auto &batch_pair : initial_batches) {
-        message::prepare_message(msg_to_send, message::NODE_PROG, pType, global_req, vt_id, req_timestamp, req_id, vt_id, batch_pair.second);
+        message::prepare_message(msg_to_send, message::NODE_PROG, pType, vt_id, req_timestamp, req_id, batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
     }
 }
@@ -419,18 +401,18 @@ mark_req_finished(uint64_t req_id)
     if (vts->pend_prog_queue.top() == req_id) {
         assert(vts->max_done_id < vts->pend_prog_queue.top());
         vts->max_done_id = req_id;
-        //WDEBUG << "max_done_id set to " << req_id << std::endl;
-        assert(vts->outstanding_progs.find(vts->max_done_id) != vts->outstanding_progs.end());
-        vts->max_done_clk = std::move(vts->outstanding_progs[vts->max_done_id].vclk);
+        auto outstanding_prog_iter = vts->outstanding_progs.find(vts->max_done_id);
+        assert(outstanding_prog_iter != vts->outstanding_progs.end());
+        vts->max_done_clk = std::move(outstanding_prog_iter->second.vclk);
         vts->pend_prog_queue.pop();
         vts->outstanding_progs.erase(vts->max_done_id);
         while (!vts->pend_prog_queue.empty() && !vts->done_prog_queue.empty()
             && vts->pend_prog_queue.top() == vts->done_prog_queue.top()) {
             assert(vts->max_done_id < vts->pend_prog_queue.top());
             vts->max_done_id = vts->pend_prog_queue.top();
-            //WDEBUG << "max_done_id set to " << vts->pend_prog_queue.top() << std::endl;
-            assert(vts->outstanding_progs.find(vts->max_done_id) != vts->outstanding_progs.end());
-            vts->max_done_clk = std::move(vts->outstanding_progs[vts->max_done_id].vclk);
+            outstanding_prog_iter = vts->outstanding_progs.find(vts->max_done_id);
+            assert(outstanding_prog_iter != vts->outstanding_progs.end());
+            vts->max_done_clk = std::move(outstanding_prog_iter->second.vclk);
             vts->pend_prog_queue.pop();
             vts->done_prog_queue.pop();
             vts->outstanding_progs.erase(vts->max_done_id);
@@ -444,7 +426,6 @@ void
 server_loop(int thread_id)
 {
     busybee_returncode ret;
-    uint32_t code;
     enum message::msg_type mtype;
     std::unique_ptr<message::message> msg;
     uint64_t sender, tx_id;
@@ -458,8 +439,9 @@ server_loop(int thread_id)
         } else {
             // good to go, unpack msg
             uint64_t _size;
-            msg->buf->unpack_from(BUSYBEE_HEADER_SIZE) >> code >> _size;
-            mtype = (enum message::msg_type)code;
+            auto unpacker = msg->buf->unpack_from(BUSYBEE_HEADER_SIZE);
+            message::unpack_buffer(unpacker, mtype);
+            message::unpack_buffer(unpacker, _size);
             sender -= ID_INCR;
 
             switch (mtype) {
@@ -620,47 +602,23 @@ server_loop(int thread_id)
                     break;
 
                 // node program response from a shard
-                case message::NODE_PROG_RETURN:
+                case message::NODE_PROG_RETURN: {
                     uint64_t req_id;
                     node_prog::prog_type type;
                     message::unpack_partial_message(*msg, message::NODE_PROG_RETURN, type, req_id); // don't unpack rest
                     vts->tx_prog_mutex.lock();
-                    if (vts->outstanding_progs.find(req_id) != vts->outstanding_progs.end()) { // TODO: change to .count (AD: why?)
-                        uint64_t client = vts->outstanding_progs[req_id].client;
-                        /*
-                        if (vts->outstanding_triangle_progs.count(req_id) > 0) { // a triangle prog response
-                            std::pair<int, node_prog::triangle_params>& p = vts->outstanding_triangle_progs.at(req_id);
-                            p.first--; // count of shards responded
-
-                            // unpack whole thing
-                            std::pair<uint64_t, node_prog::triangle_params> tempPair;
-                            message::unpack_message(*msg, message::NODE_PROG_RETURN, type, req_id, tempPair);
-
-                            uint64_t oldval = p.second.num_edges;
-                            p.second.num_edges += tempPair.second.num_edges;
-
-                            // XXX temp make sure reference worked (AD: let's fix this)
-                            assert(vts->outstanding_triangle_progs.at(req_id).second.num_edges - tempPair.second.num_edges == oldval); 
-
-                            if (p.first == 0) { // all shards responded
-                                // send back to client
-                                vts->done_reqs[type].emplace(req_id, std::bitset<NUM_SHARDS>());
-                                tempPair.second.num_edges = p.second.num_edges;
-                                message::prepare_message(*msg, message::NODE_PROG_RETURN, type, req_id, tempPair);
-                                vts->comm.send(client_to_ret, msg->buf);
-                                mark_req_finished(req_id);
-                            }
-                        } else {*/
-                            // just a normal node program
-                            vts->done_reqs[type].emplace(req_id, std::bitset<NUM_SHARDS>());
-                            vts->comm.send(client, msg->buf);
-                            mark_req_finished(req_id);
-                        //}
+                    auto outstanding_prog_iter = vts->outstanding_progs.find(req_id);
+                    if (outstanding_prog_iter != vts->outstanding_progs.end()) { 
+                        uint64_t client = outstanding_prog_iter->second.client;
+                        vts->done_reqs[type].emplace(req_id, std::bitset<NUM_SHARDS>());
+                        vts->comm.send(client, msg->buf);
+                        mark_req_finished(req_id);
                     } else {
                         WDEBUG << "node prog return for already completed or never existed req id" << std::endl;
                     }
                     vts->tx_prog_mutex.unlock();
                     break;
+                }
 
                 case message::MSG_COUNT: {
                     uint64_t shard, msg_count;

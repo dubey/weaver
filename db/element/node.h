@@ -28,6 +28,7 @@
 #include "node_prog/edge.h"
 #include "node_prog/edge_list.h"
 #include "node_prog/property.h"
+#include "node_prog/base_classes.h"
 #include "common/weaver_constants.h"
 #include "db/cache/prog_cache.h"
 #include "element.h"
@@ -82,7 +83,8 @@ namespace element
 
             // for node prog caching
             caching::program_cache cache; // TODO init me, also XXX migrate me
-            bool checking_cache;
+
+            std::unordered_map<uint64_t, std::unique_ptr<node_prog::Node_State_Base>> prog_states;
 
 #ifdef weaver_debug_
             // testing
@@ -122,7 +124,6 @@ namespace element
         , already_migr(false)
         , dependent_del(0)
         , cache()
-        , checking_cache(false)
     { }
 
     inline void

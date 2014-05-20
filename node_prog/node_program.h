@@ -16,6 +16,7 @@
 #define weaver_node_prog_node_program_h_
 
 #include <vector>
+#include <deque>
 #include <map>
 #include <unordered_map>
 #include <po6/threads/mutex.h>
@@ -28,13 +29,16 @@
 
 #include "node_prog_type.h"
 #include "reach_program.h"
+#include "pathless_reach_program.h"
 #include "clustering_program.h"
-#include "dijkstra_program.h"
+//#include "dijkstra_program.h"
 #include "read_node_props_program.h"
 #include "read_edges_props_program.h"
 #include "read_n_edges_program.h"
 #include "edge_count_program.h"
 #include "edge_get_program.h"
+#include "clustering_program.h"
+#include "two_neighborhood_program.h"
 
 namespace coordinator
 {
@@ -54,7 +58,7 @@ namespace node_prog
     struct node_function_type
     {
         public:
-            typedef std::vector<std::pair<db::element::remote_node, params_type>> (*value_type)(
+            typedef std::pair<search_type, std::vector<std::pair<db::element::remote_node, params_type>>> (*value_type)(
                 node&, // this node
                 db::element::remote_node&, // this remote node
                 params_type&,
@@ -70,22 +74,18 @@ namespace node_prog
     {
         private:
         /* constructs a clone without start_node_params or cache_value */
-        node_prog_running_state(node_prog::prog_type _prog_type_recvd, bool _global_req, uint64_t _vt_id, std::shared_ptr<vc::vclock> _req_vclock, uint64_t _req_id, uint64_t _prev)
+        node_prog_running_state(node_prog::prog_type _prog_type_recvd, uint64_t _vt_id, std::shared_ptr<vc::vclock> _req_vclock, uint64_t _req_id)
             : prog_type_recvd(_prog_type_recvd)
-              , global_req(_global_req)
               , vt_id(_vt_id)
               , req_vclock(_req_vclock)
               , req_id(_req_id)
-              , prev_server(_prev)
         { };
         public:
         node_prog::prog_type prog_type_recvd;
-        bool global_req;
         uint64_t vt_id;
         std::shared_ptr<vc::vclock> req_vclock;
         uint64_t req_id;
-        uint64_t prev_server;
-        std::vector<std::pair<uint64_t, ParamsType>> start_node_params;
+        std::deque<std::pair<uint64_t, ParamsType>> start_node_params;
         std::unique_ptr<db::caching::cache_response<CacheValueType>> cache_value; // XXX unique ptr needed?
 
         node_prog_running_state() {};
@@ -95,16 +95,14 @@ namespace node_prog
 
         node_prog_running_state clone_without_start_node_params() 
         {
-            return node_prog_running_state(prog_type_recvd, global_req, vt_id, req_vclock, req_id, prev_server);
+            return node_prog_running_state(prog_type_recvd, vt_id, req_vclock, req_id);
         }
 
         node_prog_running_state(node_prog_running_state&& copy_from)
             : prog_type_recvd(copy_from.prog_type_recvd)
-              , global_req(copy_from.global_req)
               , vt_id(copy_from.vt_id)
               , req_vclock(copy_from.req_vclock)
               , req_id(copy_from.req_id)
-              , prev_server(copy_from.prev_server)
               , start_node_params(copy_from.start_node_params)
               , cache_value(std::move(copy_from.cache_value)){};
    };
@@ -151,10 +149,14 @@ namespace node_prog
     std::map<prog_type, node_program*> programs = {
         { REACHABILITY,
             new particular_node_program<reach_params, reach_node_state, reach_cache_value>(REACHABILITY, node_prog::reach_node_program) },
-        { DIJKSTRA,
-            new particular_node_program<dijkstra_params, dijkstra_node_state, Cache_Value_Base>(DIJKSTRA, node_prog::dijkstra_node_program) },
+        { PATHLESS_REACHABILITY,
+            new particular_node_program<pathless_reach_params, pathless_reach_node_state, Cache_Value_Base>(PATHLESS_REACHABILITY, node_prog::pathless_reach_node_program) },
+//        { DIJKSTRA,
+ //           new particular_node_program<dijkstra_params, dijkstra_node_state, Cache_Value_Base>(DIJKSTRA, node_prog::dijkstra_node_program) },
         { CLUSTERING,
             new particular_node_program<clustering_params, clustering_node_state, Cache_Value_Base>(CLUSTERING, node_prog::clustering_node_program) },
+        { TWO_NEIGHBORHOOD,
+            new particular_node_program<two_neighborhood_params, two_neighborhood_state, two_neighborhood_cache_value>(TWO_NEIGHBORHOOD, node_prog::two_neighborhood_node_program) },
         { READ_NODE_PROPS,
             new particular_node_program<read_node_props_params, read_node_props_state, Cache_Value_Base>(READ_NODE_PROPS, node_prog::read_node_props_node_program) },
         { READ_EDGES_PROPS,
