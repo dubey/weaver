@@ -1027,7 +1027,7 @@ namespace message
     inline enum msg_type
     unpack_message_type(const message &m)
     {
-        msg_type mtype;
+        enum msg_type mtype;
         auto unpacker = m.buf->unpack_from(BUSYBEE_HEADER_SIZE);
         unpack_buffer(unpacker, mtype);
         return mtype;
