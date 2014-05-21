@@ -190,9 +190,8 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
 
     uint64_t ignore_req_id;
     node_prog::prog_type ignore_type;
-    std::pair<uint64_t, ParamsType> tempPair;
-    message::unpack_message(msg, message::NODE_PROG_RETURN, ignore_type, ignore_req_id, tempPair);
-    std::unique_ptr<ParamsType> toRet(new ParamsType(tempPair.second));
+    std::unique_ptr<ParamsType> toRet(new ParamsType());
+    message::unpack_message(msg, message::NODE_PROG_RETURN, ignore_type, ignore_req_id, *toRet);
     return std::move(toRet);
 }
 

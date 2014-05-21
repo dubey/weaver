@@ -984,27 +984,36 @@ namespace message
         }
     }
 
-    template <typename T, typename... Args>
-    inline void 
-    unpack_buffer(e::unpacker &unpacker, T &t, Args&... args)
+    // base case for recursive unpack_buffer_wrapper()
+    template <typename T>
+    inline void
+    unpack_buffer_wrapper(e::unpacker &unpacker, T &t)
     {
         unpack_buffer(unpacker, t);
-        unpack_buffer(unpacker, args...);
+    }
+
+    // recursive weapper around variadic templated pack_buffer()
+    template <typename T, typename... Args>
+    inline void 
+    unpack_buffer_wrapper(e::unpacker &unpacker, T &t, Args&... args)
+    {
+        unpack_buffer_wrapper(unpacker, t);
+        unpack_buffer_wrapper(unpacker, args...);
     }
 
     template <typename... Args>
     inline void
     unpack_message_internal(bool check_empty, const message &m, const enum msg_type expected_type, Args&... args)
     {
-        enum msg_type recieved_type;
+        enum msg_type received_type;
         e::unpacker unpacker = m.buf->unpack_from(BUSYBEE_HEADER_SIZE);
         assert(!unpacker.error());
 
-        unpack_buffer(unpacker, recieved_type);
-        assert(recieved_type == expected_type);
+        unpack_buffer(unpacker, received_type);
+        assert(received_type == expected_type);
         UNUSED(expected_type);
 
-        unpack_buffer(unpacker, args...);
+        unpack_buffer_wrapper(unpacker, args...);
         assert(!unpacker.error());
         if (check_empty) {
             assert(unpacker.empty()); // assert whole message was unpacked
@@ -1055,7 +1064,9 @@ namespace message
 
                 case CLIENT_EDGE_CREATE_REQ:
                     upd->type = transaction::EDGE_CREATE_REQ;
-                    unpack_buffer(unpacker, upd->id, upd->elem1, upd->elem2);
+                    unpack_buffer(unpacker, upd->id);
+                    unpack_buffer(unpacker, upd->elem1);
+                    unpack_buffer(unpacker, upd->elem2);
                     break;
 
                 case CLIENT_NODE_DELETE_REQ:
@@ -1065,21 +1076,27 @@ namespace message
 
                 case CLIENT_EDGE_DELETE_REQ:
                     upd->type = transaction::EDGE_DELETE_REQ;
-                    unpack_buffer(unpacker, upd->elem1, upd->elem2);
+                    unpack_buffer(unpacker, upd->elem1);
+                    unpack_buffer(unpacker, upd->elem2);
                     break;
 
                 case CLIENT_NODE_SET_PROP:
                     upd->type = transaction::NODE_SET_PROPERTY;
                     upd->key.reset(new std::string());
                     upd->value.reset(new std::string());
-                    unpack_buffer(unpacker, upd->elem1, *upd->key, *upd->value);
+                    unpack_buffer(unpacker, upd->elem1);
+                    unpack_buffer(unpacker, *upd->key);
+                    unpack_buffer(unpacker, *upd->value);
                     break;
 
                 case CLIENT_EDGE_SET_PROP:
                     upd->type = transaction::EDGE_SET_PROPERTY;
                     upd->key.reset(new std::string());
                     upd->value.reset(new std::string());
-                    unpack_buffer(unpacker, upd->elem1, upd->elem2, *upd->key, *upd->value);
+                    unpack_buffer(unpacker, upd->elem1);
+                    unpack_buffer(unpacker, upd->elem2);
+                    unpack_buffer(unpacker, *upd->key);
+                    unpack_buffer(unpacker, *upd->value);
                     break;
 
                 default:

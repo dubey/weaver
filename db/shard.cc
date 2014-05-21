@@ -1071,10 +1071,8 @@ inline void node_prog_loop(
                     S->add_done_requests(completed_request);
                     done_request = true;
                     // signal to send back to vector timestamper that issued request
-                    // XXX get rid of pair, without pair it is not working for some reason
-                    std::pair<uint64_t, ParamsType> temppair = std::make_pair(1337, res.second);
                     std::unique_ptr<message::message> m(new message::message());
-                    message::prepare_message(*m, message::NODE_PROG_RETURN, np.prog_type_recvd, np.req_id, temppair);
+                    message::prepare_message(*m, message::NODE_PROG_RETURN, np.prog_type_recvd, np.req_id, res.second);
                     S->comm.send(np.vt_id, m->buf);
                     break; // can only send one message back
                 } else {
