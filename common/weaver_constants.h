@@ -12,6 +12,7 @@
  */
 
 #include <stdint.h>
+#include <iostream>
 
 // debugging
 #ifndef WDEBUG
