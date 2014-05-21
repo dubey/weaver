@@ -179,7 +179,7 @@ end_transaction(uint64_t tx_id, int thread_id)
 
 // single dedicated thread which wakes up after given timeout, sends updates, and sleeps
 inline void
-timer_function()
+nop_function()
 {
     timespec sleep_time;
     int sleep_ret;
@@ -193,7 +193,7 @@ timer_function()
     std::vector<done_req_t> done_reqs(NUM_SHARDS, done_req_t());
     std::vector<uint64_t> del_done_reqs;
     message::message msg;
-    bool nop_sent, clock_synced;
+    //bool nop_sent, clock_synced;
 
     sleep_time.tv_sec  = VT_TIMEOUT_NANO / NANO;
     sleep_time.tv_nsec = VT_TIMEOUT_NANO % NANO;
@@ -203,8 +203,8 @@ timer_function()
         if (sleep_ret != 0 && sleep_ret != EINTR) {
             assert(false);
         }
-        nop_sent = false;
-        clock_synced = false;
+        //nop_sent = false;
+        //clock_synced = false;
         vts->periodic_update_mutex.lock();
         
         // send nops and state cleanup info to shards
@@ -260,7 +260,7 @@ timer_function()
                 }
             }
             vts->to_nop.reset();
-            nop_sent = true;
+            //nop_sent = true;
         }
 
         // update vclock at other timestampers
@@ -292,7 +292,7 @@ timer_function()
 }
 
 inline void
-clk_timer_function()
+clk_update_function()
 {
     timespec sleep_time;
     int sleep_ret;
@@ -311,7 +311,6 @@ clk_timer_function()
         vts->periodic_update_mutex.lock();
 
         // update vclock at other timestampers
-        vts->clock_update_acks = 0;
         vts->clk_rw_mtx.rdlock();
         vclk.clock = vts->vclk.clock;
         vts->clk_rw_mtx.unlock();
@@ -505,12 +504,12 @@ server_loop(int thread_id)
                     break;
                 }
 
-                case message::VT_CLOCK_UPDATE_ACK:
-                    vts->periodic_update_mutex.lock();
-                    vts->clock_update_acks++;
-                    assert(vts->clock_update_acks < NUM_VTS);
-                    vts->periodic_update_mutex.unlock();
-                    break;
+                //case message::VT_CLOCK_UPDATE_ACK:
+                //    vts->periodic_update_mutex.lock();
+                //    vts->clock_update_acks++;
+                //    assert(vts->clock_update_acks < NUM_VTS);
+                //    vts->periodic_update_mutex.unlock();
+                //    break;
 
                 case message::VT_NOP_ACK: {
                     uint64_t shard_node_count;
@@ -754,14 +753,6 @@ main(int argc, char *argv[])
     // registered this server with server_manager, config has fairly recent value
     vts->init();
 
-    // initial wait for all vector timestampers to start
-    // TODO change this to use config pushed by server manager
-    //timespec sleep_time;
-    //sleep_time.tv_sec =  INITIAL_TIMEOUT_NANO / NANO;
-    //sleep_time.tv_nsec = INITIAL_TIMEOUT_NANO % NANO;
-    //int ret = clock_nanosleep(CLOCK_REALTIME, 0, &sleep_time, NULL);
-    //assert(ret == 0);
-    //WDEBUG << "Initial setup delay complete" << std::endl;
     // start all threads
     std::thread *thr;
     for (int i = 0; i < NUM_THREADS; i++) {
@@ -783,6 +774,8 @@ main(int argc, char *argv[])
         std::cout << "Vector timestamper " << vt_id << std::endl;
     }
 
+    // initial wait for all vector timestampers to start
+    // TODO change this to use config pushed by server manager
     timespec sleep_time;
     sleep_time.tv_sec =  INITIAL_TIMEOUT_NANO / NANO;
     sleep_time.tv_nsec = INITIAL_TIMEOUT_NANO % NANO;
@@ -792,12 +785,12 @@ main(int argc, char *argv[])
 
     UNUSED(ret);
 
-    for (int i = 0; i < NUM_THREADS; i++) {
-        std::thread clk_timer_thr(clk_timer_function);
-        clk_timer_thr.detach();
-    }
-    // call periodic thread function
-    timer_function();
+    // periodic vector clock update to other timestampers
+    std::thread clk_update_thr(clk_update_function);
+    clk_update_thr.detach();
+
+    // periodic nops to shard
+    nop_function();
 }
 
 #undef weaver_debug_
