@@ -48,8 +48,8 @@
 #define SERVER_MANAGER_PORT 2002
 
 // weaver setup
-#define NUM_SHARDS 8
-#define NUM_VTS 3
+#define NUM_SHARDS 1
+#define NUM_VTS 1
 #define NUM_SERVERS ((NUM_VTS + NUM_SHARDS) * (1 + NUM_BACKUPS))
 #define SHARD_ID_INCR NUM_VTS
 #define NUM_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
@@ -70,7 +70,7 @@
 #define START_MIGR_ID SHARD_ID_INCR // first shard to get migration token
 #define SHARD_CAP (90000ULL/NUM_SHARDS)
 //#define WEAVER_CLDG // defined if communication-based LDG, undef otherwise
-#define WEAVER_NEW_CLDG // defined if communication-based LDG, undef otherwise
+//#define WEAVER_NEW_CLDG // defined if communication-based LDG, undef otherwise
 //#define WEAVER_MSG_COUNT // defined if client msg count call will take place
 
 // coordinator
@@ -78,14 +78,13 @@
 //#define VT_CLK_TIMEOUT_NANO 1 // number of nanoseconds between vt gossip
 
 // hyperdex
-//#define HYPERDEX_COORD_IPADDR "127.0.0.1"
-//#define HYPERDEX_COORD_PORT 1982
-#define HYPERDEX_COORD_IPADDR "128.84.167.101"
+#define HYPERDEX_COORD_IPADDR "127.0.0.1"
+//#define HYPERDEX_COORD_IPADDR "128.84.167.101"
 #define HYPERDEX_COORD_PORT 7982
 
 // kronos
-//#define KRONOS_IPADDR "127.0.0.1"
-#define KRONOS_IPADDR "128.84.167.101"
+#define KRONOS_IPADDR "127.0.0.1"
+//#define KRONOS_IPADDR "128.84.167.101"
 #define KRONOS_PORT 1992
 
 #endif

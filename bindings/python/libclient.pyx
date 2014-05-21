@@ -67,7 +67,6 @@ cdef extern from 'common/weaver_constants.h':
     cdef uint64_t NUM_THREADS
     cdef uint64_t ID_BITS
     cdef uint64_t TOP_MASK
-    cdef char *GRAPH_FILE
     # node programs
     cdef uint64_t BATCH_MSG_SIZE
     # migration
@@ -91,7 +90,6 @@ _NUM_SHARDS                 = NUM_SHARDS
 _NUM_VTS                    = NUM_VTS
 _ID_BITS                    = ID_BITS
 _TOP_MASK                   = TOP_MASK
-_GRAPH_FILE                 = GRAPH_FILE
 _HYPERDEX_COORD_IPADDR      = HYPERDEX_COORD_IPADDR
 _HYPERDEX_COORD_PORT        = HYPERDEX_COORD_PORT
 
