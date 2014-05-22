@@ -40,13 +40,6 @@
 static uint64_t shard_id;
 // shard pointer for shard.cc
 static db::shard *S;
-// for Hyperdex entries while loading graph from file
-static po6::threads::mutex init_mutex;
-static po6::threads::cond init_cv(&init_mutex);
-static po6::threads::cond start_load_cv(&init_mutex);
-static std::deque<std::unordered_map<uint64_t, uint64_t>> init_node_maps;
-static bool init_nodes;
-static uint16_t start_load;
 
 namespace order
 {
@@ -76,11 +69,6 @@ end_program(int param)
     WDEBUG << "watch_set lookups originated from this shard " << S->watch_set_lookups << std::endl;
     WDEBUG << "watch_set nops originated from this shard " << S->watch_set_nops << std::endl;
     WDEBUG << "watch set piggybacks on this shard " << S->watch_set_piggybacks << std::endl;
-    //std::ofstream ktime("kronos_time.rec");
-    //for (auto x: *order::call_times) {
-    //    ktime << x << std::endl;
-    //}
-    //ktime.close();
     exit(0);
 }
 
@@ -241,8 +229,9 @@ init_single_nmap(int thread_id, std::unordered_map<uint64_t, uint64_t> *node_map
 }
 
 inline void
-init_nmap(std::vector<std::unordered_map<uint64_t, uint64_t>> &node_maps)
+init_nmap(std::vector<std::unordered_map<uint64_t, uint64_t>> *node_maps_ptr)
 {
+    auto &node_maps = *node_maps_ptr;
     int num_thr = node_maps.size();
     WDEBUG << "creating " << num_thr << " threads for node map inserts" << std::endl;
     std::vector<std::thread> threads;
@@ -254,30 +243,6 @@ init_nmap(std::vector<std::unordered_map<uint64_t, uint64_t>> &node_maps)
     }
     WDEBUG << "all node map threads done" << std::endl;
 }
-//inline void
-//init_nmap()
-//{
-//    nmap::nmap_stub node_mapper;
-//    uint64_t processed = 0;
-//    init_mutex.lock();
-//    start_load++;
-//    start_load_cv.signal();
-//    while (!init_nodes || !init_node_maps.empty()) {
-//        if (init_node_maps.empty()) {
-//            init_cv.wait();
-//        } else {
-//            auto &node_map = init_node_maps.front();
-//            init_mutex.unlock();
-//            node_mapper.put_mappings(node_map);
-//            init_mutex.lock();
-//            processed += node_map.size();
-//            WDEBUG << "node mapper stored " << processed << " nodes" << std::endl;
-//            init_node_maps.pop_front();
-//        }
-//    }
-//    init_mutex.unlock();
-//    WDEBUG << "Done init nmap thread, exiting now" << std::endl;
-//}
 
 // initial bulk graph loading method
 // 'format' stores the format of the graph file
@@ -305,6 +270,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
     std::unordered_map<uint64_t, uint64_t> node_map;
     std::vector<std::unordered_map<uint64_t, uint64_t>> node_maps(NUM_THREADS, std::unordered_map<uint64_t, uint64_t>());
     vc::vclock zero_clk(0, 0);
+    uint8_t thread_select = 0;
 
     switch(format) {
 
@@ -315,7 +281,6 @@ load_graph(db::graph_file_format format, const char *graph_file)
             std::strcpy(max_node_ptr, line.c_str());
             max_node_id = strtoull(++max_node_ptr, NULL, 10);
 
-            uint8_t thread_select = 0;
             while (std::getline(file, line)) {
                 line_count++;
                 if (line_count % 100000 == 0) {
@@ -346,25 +311,10 @@ load_graph(db::graph_file_format format, const char *graph_file)
                             thread_select = (thread_select + 1) % NUM_THREADS;
                         }
                     }
-                    //if (node_map.size() > 100000) {
-                    //    init_mutex.lock();
-                    //    init_node_maps.emplace_back(std::move(node_map));
-                    //    init_cv.broadcast();
-                    //    init_mutex.unlock();
-                    //    node_map.clear();
-                    //}
                 }
             }
             //S->bulk_load_persistent();
-            init_nmap(node_maps);
-            //init_mutex.lock();
-            //while (start_load < 1) {
-            //    start_load_cv.wait();
-            //}
-            //init_node_maps.emplace_back(std::move(node_map));
-            //init_nodes = true;
-            //init_cv.broadcast();
-            //init_mutex.unlock();
+            init_nmap(&node_maps);
             break;
         }
 
@@ -375,6 +325,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
             char *max_node_ptr = new char[line.length()+1];
             std::strcpy(max_node_ptr, line.c_str());
             max_node_id = strtoull(++max_node_ptr, NULL, 10);
+
             // nodes
             while (std::getline(file, line)) {
                 parse_two_uint64(line, node0, loc);
@@ -385,43 +336,27 @@ load_graph(db::graph_file_format format, const char *graph_file)
                     n = S->acquire_node_nonlocking(node0);
                     if (n == NULL) {
                         n = S->create_node(0, node0, zero_clk, false, true);
-                        node_map[node0] = shard_id;
+                        node_maps[thread_select][node0] = shard_id;
+                        thread_select = (thread_select + 1) % NUM_THREADS;
                     }
-                }
-                if (node_map.size() > 100000) {
-                    init_mutex.lock();
-                    init_node_maps.emplace_back(std::move(node_map));
-                    init_cv.broadcast();
-                    init_mutex.unlock();
-                    node_map.clear();
                 }
                 if (++line_count == max_node_id) {
                      WDEBUG << "Last node pos line: " << line << std::endl;
                      break;
                 }
             }
-            init_mutex.lock();
-            while (start_load < 1) {
-                start_load_cv.wait();
-            }
-            init_node_maps.emplace_back(std::move(node_map));
-            init_nodes = true;
-            init_cv.broadcast();
-            init_mutex.unlock();
+            std::thread nmap_thr(init_nmap, &node_maps);
+
             // edges
             std::vector<std::pair<std::string, std::string>> props;
             while (std::getline(file, line)) {
                 props.clear();
-                //parse_two_uint64(line, node0, node1);
                 parse_weaver_edge(line, node0, node1, props);
                 edge_id = max_node_id + (edge_count++);
                 uint64_t loc0 = all_node_map[node0];
                 uint64_t loc1 = all_node_map[node1];
                 if (loc0 == shard_id) {
                     n = S->acquire_node_nonlocking(node0);
-                    if (n == NULL) {
-                        WDEBUG << "Not found node " << node0 << std::endl;
-                    }
                     assert(n != NULL);
                     S->create_edge_nonlocking(0, n, edge_id, node1, loc1, zero_clk, true);
                     for (auto &p: props) {
@@ -429,6 +364,9 @@ load_graph(db::graph_file_format format, const char *graph_file)
                     }
                 }
             }
+
+            //S->bulk_load_persistent();
+            nmap_thr.join();
             break;
         }
 
@@ -2004,14 +1942,10 @@ main(int argc, char *argv[])
         } else {
             WDEBUG << "Invalid graph file format" << std::endl;
         }
-        init_nodes = false;
-        start_load = 0;
-        //std::thread nmap_thr(init_nmap);
 
         timespec ts;
         uint64_t load_time = wclock::get_time_elapsed(ts);
         load_graph(format, argv[3]);
-        //nmap_thr.join();
         load_time = wclock::get_time_elapsed(ts) - load_time;
         message::message msg;
         message::prepare_message(msg, message::LOADED_GRAPH, load_time);
