@@ -29,7 +29,6 @@ namespace node_prog
 
     enum prog_type
     {
-        DEFAULT,
         REACHABILITY,
         PATHLESS_REACHABILITY,
         N_HOP_REACHABILITY,
@@ -41,7 +40,8 @@ namespace node_prog
         READ_EDGES_PROPS,
         READ_N_EDGES,
         EDGE_COUNT,
-        EDGE_GET
+        EDGE_GET,
+        END
     };
 
 }

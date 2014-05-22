@@ -56,7 +56,7 @@ namespace element
                 STABLE,
                 MOVED
             };
-        
+
         public:
             element base;
             enum mode state;
@@ -82,9 +82,12 @@ namespace element
             std::vector<std::unique_ptr<message::message>> pending_requests;
 
             // for node prog caching
-            db::caching::program_cache cache; // TODO init me, also XXX migrate me
+            db::caching::program_cache cache;
 
-            std::unordered_map<uint64_t, std::unique_ptr<node_prog::Node_State_Base>> prog_states;
+            // node program state
+            typedef std::unordered_map<uint64_t, std::shared_ptr<node_prog::Node_State_Base>> id_to_state_t;
+            typedef std::vector<id_to_state_t> prog_state_t;
+            prog_state_t prog_states;
 
 #ifdef weaver_debug_
             // testing
@@ -124,7 +127,10 @@ namespace element
         , already_migr(false)
         , dependent_del(0)
         , cache()
-    { }
+    {
+        int num_prog_types = node_prog::END;
+        prog_states.resize(num_prog_types);
+    }
 
     inline void
     node :: add_edge(edge *e)
@@ -148,6 +154,7 @@ namespace element
         }
         return (s1<s2);
     }
+
 }
 }
 

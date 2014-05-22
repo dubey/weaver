@@ -152,7 +152,7 @@ namespace node_prog
         { PATHLESS_REACHABILITY,
             new particular_node_program<pathless_reach_params, pathless_reach_node_state, Cache_Value_Base>(PATHLESS_REACHABILITY, node_prog::pathless_reach_node_program) },
 //        { DIJKSTRA,
- //           new particular_node_program<dijkstra_params, dijkstra_node_state, Cache_Value_Base>(DIJKSTRA, node_prog::dijkstra_node_program) },
+//           new particular_node_program<dijkstra_params, dijkstra_node_state, Cache_Value_Base>(DIJKSTRA, node_prog::dijkstra_node_program) },
         { CLUSTERING,
             new particular_node_program<clustering_params, clustering_node_state, Cache_Value_Base>(CLUSTERING, node_prog::clustering_node_program) },
         { TWO_NEIGHBORHOOD,

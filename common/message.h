@@ -131,6 +131,7 @@ namespace message
     template <typename T1, typename T2> inline uint64_t size(const std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline uint64_t size(const std::tuple<T1, T2, T3>& t);
     template <typename T> inline uint64_t size(const std::shared_ptr<T> &ptr_t);
+    template <typename T> inline uint64_t size(const std::unique_ptr<T> &ptr_t);
     uint64_t size(const node_prog::node_cache_context &t);
     uint64_t size(const node_prog::edge_cache_context &t);
     uint64_t size(const db::element::edge &t);
@@ -145,6 +146,7 @@ namespace message
     template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer &packer, const std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::shared_ptr<T> &ptr_t);
+    template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unique_ptr<T> &ptr_t);
     void pack_buffer(e::buffer::packer &packer, const node_prog::node_cache_context &t);
     void pack_buffer(e::buffer::packer &packer, const node_prog::edge_cache_context &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::edge &t);
@@ -159,6 +161,7 @@ namespace message
     template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::pair<T1, T2>& t);
     template <typename T1, typename T2, typename T3> inline void unpack_buffer(e::unpacker& unpacker, std::tuple<T1, T2, T3>& t);
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::shared_ptr<T> &ptr_t);
+    template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::unique_ptr<T> &ptr_t);
     void unpack_buffer(e::unpacker &unpacker, node_prog::node_cache_context &t);
     void unpack_buffer(e::unpacker &unpacker, node_prog::edge_cache_context &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge &t);
@@ -332,6 +335,16 @@ namespace message
     }
 
     template <typename T>
+    inline uint64_t size(const std::unique_ptr<T> &ptr_t)
+    {
+        if (ptr_t.get() == NULL) {
+            return 0;
+        } else {
+            return size(*ptr_t);
+        }
+    }
+
+    template <typename T>
     inline uint64_t size(const std::unordered_set<T> &t)
     {
         // O(n) size operation can handle elements of differing sizes
@@ -347,7 +360,7 @@ namespace message
     {
         // O(n) size operation can handle keys and values of differing sizes
         uint64_t total_size = sizeof(uint32_t);
-        for (const std::pair<T1,T2> &pair : t) {
+        for (const std::pair<const T1, T2> &pair : t) {
             total_size += size(pair.first) + size(pair.second);
         }
         return total_size;
@@ -577,7 +590,15 @@ namespace message
         pack_buffer(packer, std::get<2>(t));
     }
 
-    template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::shared_ptr<T> &ptr_t){
+    template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::shared_ptr<T> &ptr_t)
+    {
+        if (ptr_t.get() != NULL) {
+            pack_buffer(packer, *ptr_t);
+        }
+    }
+
+    template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unique_ptr<T> &ptr_t)
+    {
         if (ptr_t.get() != NULL) {
             pack_buffer(packer, *ptr_t);
         }
@@ -641,7 +662,7 @@ namespace message
         assert(t.size() <= UINT32_MAX);
         uint32_t num_keys = t.size();
         pack_buffer(packer, num_keys);
-        for (const std::pair<T1, T2> &pair : t) {
+        for (const std::pair<const T1, T2> &pair : t) {
             pack_buffer(packer, pair.first);
             pack_buffer(packer, pair.second);
         }
@@ -896,7 +917,14 @@ namespace message
         unpack_buffer(unpacker, std::get<2>(t));
     }
 
-    template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::shared_ptr<T> &ptr_t){
+    template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::shared_ptr<T> &ptr_t)
+    {
+        ptr_t.reset(new T());
+        unpack_buffer(unpacker, *ptr_t);
+    }
+
+    template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::unique_ptr<T> &ptr_t)
+    {
         ptr_t.reset(new T());
         unpack_buffer(unpacker, *ptr_t);
     }

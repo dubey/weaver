@@ -659,11 +659,12 @@ nop(uint64_t thread_id, void *noparg)
     free(nop_arg);
 }
 
-node_prog::Node_State_Base* get_state_if_exists(db::element::node &node, uint64_t req_id)
+node_prog::Node_State_Base* get_state_if_exists(db::element::node &node, uint64_t req_id, node_prog::prog_type ptype)
 {
+    auto &state_map = node.prog_states[(int)ptype];
     std::shared_ptr<node_prog::Node_State_Base> toRet;
-    auto state_iter = node.prog_states.find(req_id);
-    if (state_iter != node.prog_states.end()) {
+    auto state_iter = state_map.find(req_id);
+    if (state_iter != state_map.end()) {
         return state_iter->second.get();
     } 
     return NULL;
@@ -671,14 +672,15 @@ node_prog::Node_State_Base* get_state_if_exists(db::element::node &node, uint64_
 
 // assumes holding node lock
 template <typename NodeStateType>
-NodeStateType& get_or_create_state(uint64_t req_id, db::element::node *node, std::vector<uint64_t> *nodes_that_created_state)
+NodeStateType& get_or_create_state(node_prog::prog_type ptype, uint64_t req_id, db::element::node *node, std::vector<uint64_t> *nodes_that_created_state)
 {
-    auto state_iter = node->prog_states.find(req_id);
-    if (state_iter != node->prog_states.end()) {
+    auto &state_map = node->prog_states[(int)ptype];
+    auto state_iter = state_map.find(req_id);
+    if (state_iter != state_map.end()) {
         return dynamic_cast<NodeStateType &>(*(state_iter->second));
     } else {
         NodeStateType *ptr = new NodeStateType();
-        node->prog_states[req_id] = std::unique_ptr<node_prog::Node_State_Base>(ptr);
+        state_map[req_id] = std::unique_ptr<node_prog::Node_State_Base>(ptr);
         assert(nodes_that_created_state != NULL);
         nodes_that_created_state->emplace_back(node->base.get_id());
         return *ptr;
@@ -862,7 +864,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         std::shared_ptr<vc::vclock> time_cached(std::get<1>(entry));
         std::shared_ptr<std::vector<db::element::remote_node>>& watch_set = std::get<2>(entry);
 
-        auto state = get_state_if_exists(*node_to_check, np.req_id);
+        auto state = get_state_if_exists(*node_to_check, np.req_id, np.prog_type_recvd);
         if (state != NULL && state->contexts_found.find(np.req_id) != state->contexts_found.end()){
             np.cache_value.reset(new node_prog::cache_response<CacheValueType>(node_to_check->cache.cache, cache_key, cval, watch_set));
 #ifdef weaver_debug_
@@ -1035,7 +1037,7 @@ inline void node_prog_loop(
                         np.prog_type_recvd, np.req_vclock, _1, _2, _3); // 1 is cache value, 2 is watch set, 3 is key
             }
 
-            node_state_getter = std::bind(get_or_create_state<NodeStateType>, np.req_id, node, &nodes_that_created_state); 
+            node_state_getter = std::bind(get_or_create_state<NodeStateType>, np.prog_type_recvd, np.req_id, node, &nodes_that_created_state); 
 
             node->base.view_time = np.req_vclock; 
             assert(np.req_vclock);
@@ -1047,7 +1049,7 @@ inline void node_prog_loop(
                     (node_prog::cache_response<CacheValueType>*) np.cache_value.get());
             if (MAX_CACHE_ENTRIES) {
                 if (np.cache_value) {
-                    auto state = get_state_if_exists(*node, np.req_id);
+                    auto state = get_state_if_exists(*node, np.req_id, np.prog_type_recvd);
                     if (state) {
                         state->contexts_found.insert(np.req_id);
                     }
@@ -1451,8 +1453,20 @@ migrate_node_step2_resp(uint64_t thread_id, std::unique_ptr<message::message> ms
     }
     n->state = db::element::node::mode::STABLE;
 
+    std::vector<uint64_t> prog_state_reqs;
+    for (auto &state_map: n->prog_states) {
+        for (auto &state: state_map) {
+            prog_state_reqs.emplace_back(state.first);
+        }
+    }
+
     // release node for new reads and writes
     S->release_node(n);
+
+    std::vector<uint64_t> this_node_vec(1, node_id);
+    for (uint64_t req_id: prog_state_reqs) {
+        S->mark_nodes_using_state(req_id, this_node_vec);
+    }
 
     // move deferred reads to local for releasing migration_mutex
     std::vector<std::unique_ptr<message::message>> deferred_reads;

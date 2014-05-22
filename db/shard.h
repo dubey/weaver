@@ -38,7 +38,6 @@
 #include "element/element.h"
 #include "element/node.h"
 #include "element/edge.h"
-#include "db/state/program_state.h"
 #include "db/queue_manager.h"
 #include "db/deferred_write.h"
 #include "db/del_obj.h"
@@ -207,7 +206,6 @@ namespace db
             po6::threads::mutex node_prog_state_mutex;
             std::unordered_set<uint64_t> done_ids; // request ids that have finished
             std::unordered_map<uint64_t, std::vector<uint64_t>> outstanding_prog_states; // maps request_id to list of nodes that have created prog state for that req id
-            state::program_state prog_state; 
             void delete_prog_states(uint64_t req_id, std::vector<uint64_t> &node_ids);
         public:
             void mark_nodes_using_state(uint64_t req_id, std::vector<uint64_t> &node_ids);
@@ -250,13 +248,11 @@ namespace db
         , max_done_id(NUM_VTS, 0)
         , max_done_clk(NUM_VTS, vc::vclock_t(NUM_VTS, 0))
         , msg_count(0)
-        , prog_state()
         , watch_set_lookups(0)
         , watch_set_nops(0)
         , watch_set_piggybacks(0)
     {
         assert(NUM_VTS == KRONOS_NUM_VTS);
-        message::prog_state = &prog_state;
         for (int i = 0; i < NUM_THREADS; i++) {
             hstub.push_back(new hyper_stub(shard_id));
         }
@@ -682,7 +678,6 @@ namespace db
             delete e.second;
         }
         n->out_edges.clear();
-        prog_state.delete_node_state(migr_node);
         release_node(n);
     }
 
@@ -782,7 +777,6 @@ namespace db
                 delete e.second;
             }
             n->out_edges.clear();
-            prog_state.delete_node_state(n->base.get_id());
         }
         delete n;
     }
@@ -868,16 +862,18 @@ namespace db
         for (uint64_t node_id : node_ids) {
             db::element::node *node = acquire_node(node_id);
 
-            if (node == NULL) {
-                assert(false && "probably due to migration or bad node handle");
-            } else if (node->state == db::element::node::mode::MOVED) {
-                release_node(node);
-                assert(false && "migration not supported");
-            } else {
-                auto state_iter = node->prog_states.find(req_id);
-                assert(state_iter != node->prog_states.end());
-                int elems_erased = node->prog_states.erase(req_id); // TODO double check thing isnt mem leaking
-                assert(elems_erased > 0);
+            // check that node not migrated or permanently deleted
+            if (node != NULL) {
+                bool found = false;
+                for (auto &state_map: node->prog_states) {
+                    auto state_iter = state_map.find(req_id);
+                    if (state_iter != state_map.end()) {
+                        assert(state_map.erase(req_id) > 0);
+                    }
+                    found = true;
+                    break;
+                }
+                assert(found);
 
                 release_node(node);
             }

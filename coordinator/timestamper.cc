@@ -114,7 +114,7 @@ begin_transaction(transaction::pending_tx &tx)
 
 // decrement reply count. if all replies have been received, ack to client
 inline void
-end_transaction(uint64_t tx_id, int thread_id)
+end_transaction(uint64_t tx_id, int)
 {
     vts->tx_prog_mutex.lock();
     if (--vts->outstanding_tx.at(tx_id).count == 0) {
