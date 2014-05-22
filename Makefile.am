@@ -47,6 +47,7 @@ timestamper_SOURCES=common/comm_wrapper.cc \
                     common/server_manager_link_wrapper.cc \
                     common/hyper_stub_base.cc \
                     common/event_order.cc \
+                    common/nmap_stub.cc \
                     node_prog/reach_program.cc \
                     node_prog/pathless_reach_program.cc \
                     node_prog/two_neighborhood_program.cc \
@@ -78,6 +79,7 @@ shard_SOURCES=	common/ids.cc \
 				common/server_manager_link_wrapper.cc \
                 common/hyper_stub_base.cc \
                 common/event_order.cc \
+                common/nmap_stub.cc \
                 node_prog/reach_program.cc \
                 node_prog/pathless_reach_program.cc \
                 node_prog/two_neighborhood_program.cc \
