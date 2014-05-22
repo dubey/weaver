@@ -21,7 +21,6 @@ order :: compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
 {
     int ret = 2;
     if (clk1.size() != NUM_VTS) {
-        WDEBUG << "clk1 size " << clk1.size() << ", vals: ";
         for (uint64_t c: clk1) {
             std::cerr << c << " ";
         }
@@ -29,7 +28,6 @@ order :: compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
         assert(false);
     }
     if (clk2.size() != NUM_VTS) {
-        WDEBUG << "clk2 size " << clk2.size() << ", vals: ";
         for (uint64_t c: clk2) {
             std::cerr << c << " ";
         }
@@ -176,13 +174,8 @@ order :: compare_vts(const std::vector<vc::vclock> &clocks)
         ssize_t cret;
 
         kronos_mutex.lock();
-        timespec ts;
-        uint64_t start_time = wclock::get_time_elapsed(ts);
-        WDEBUG << "calling kronos order\n";
         int64_t ret = kronos_cl->weaver_order(wpair, num_pairs, &status, &cret);
         ret = kronos_cl->wait(ret, 100000, &status);
-        uint64_t end_time = wclock::get_time_elapsed(ts);
-        call_times->emplace_back(end_time-start_time);
         kronos_mutex.unlock();
 
         wp = wpair;
