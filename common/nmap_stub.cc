@@ -11,6 +11,8 @@
  * ===============================================================
  */
 
+#define weaver_debug_
+
 #include <assert.h>
 #include "common/nmap_stub.h"
 
@@ -39,6 +41,10 @@ nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add)
         opid_to_idx[op_id] = put_idx;
 
         put_idx++;
+        
+        if (put_idx % 2000 == 0) {
+            WDEBUG << "completed " << put_idx << " puts\n";
+        }
     }
 
     int64_t loop_id;
@@ -59,6 +65,10 @@ nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add)
             WDEBUG << "error loc: " << cl.error_location() << std::endl;
         }
         loop_idx = -1;
+
+        if (i % 2000 == 0) {
+            WDEBUG << "completed " << i << " put loops\n";
+        }
     }
 
     free(attrs_to_add);
@@ -94,6 +104,10 @@ nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
         assert(results[i].op_id >= 0);
         assert(opid_to_idx.find(results[i].op_id) == opid_to_idx.end());
         opid_to_idx[results[i].op_id] = i;
+
+        if (i % 2000 == 0) {
+            WDEBUG << "completed " << i << " gets\n";
+        }
     }
 
     int64_t loop_id;
@@ -125,6 +139,10 @@ nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
         hyperdex_client_destroy_attrs(results[loop_idx].attr, results[loop_idx].attr_size);
 
         loop_idx = -1;
+
+        if (i % 2000 == 0) {
+            WDEBUG << "completed " << i << " get loops\n";
+        }
     }
 
     return mappings;
