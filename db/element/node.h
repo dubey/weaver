@@ -29,7 +29,7 @@
 #include "node_prog/property.h"
 #include "node_prog/base_classes.h"
 #include "common/weaver_constants.h"
-#include "db/cache/prog_cache.h"
+#include "db/prog_cache.h"
 #include "element.h"
 #include "edge.h"
 

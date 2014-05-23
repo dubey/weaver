@@ -29,12 +29,11 @@
 #include "db/nop_data.h"
 #include "db/message_wrapper.h"
 #include "db/element/remote_node.h"
-#include "db/cache/prog_cache.h"
+#include "db/prog_cache.h"
 #include "node_prog/node.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
 #include "node_prog/base_classes.h"
-//#include "node_prog/triangle_program.h"
 
 // global static variables
 static uint64_t shard_id;
