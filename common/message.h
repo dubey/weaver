@@ -28,12 +28,26 @@
 #include "common/weaver_constants.h"
 #include "common/vclock.h"
 #include "common/transaction.h"
-#include "node_prog/base_classes.h" // used for packing Packable objects TODO do we need this?
-#include "node_prog/cache_response.h" 
+#include "node_prog/node_prog_type.h"
+#include "node_prog/base_classes.h"
 #include "node_prog/property.h"
-#include "db/element/node.h"
-#include "db/element/edge.h"
 #include "db/element/remote_node.h"
+#include "db/element/property.h"
+
+namespace db
+{
+    namespace element
+    {
+        class node;
+        class edge;
+    }
+}
+
+namespace node_prog
+{
+    struct edge_cache_context;
+    struct node_cache_context;
+}
 
 namespace message
 {

@@ -26,11 +26,11 @@ namespace node_prog
             std::string key;
             std::string value;
 
-            property() : key(""), value("") {};
-            property(std::string &k, std::string &v) : key(k), value(v) {};
+            property() : key(""), value("") { }
+            property(std::string &k, std::string &v) : key(k), value(v) { }
 
-            const std::string& get_key() { return key; };
-            const std::string& get_value() {return value; };
+            const std::string& get_key() { return key; }
+            const std::string& get_value() { return value; }
    };
 }
 

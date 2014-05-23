@@ -20,10 +20,6 @@
 #include "common/weaver_constants.h"
 #include "common/message.h"
 #include "common/vclock.h"
-#include "common/event_order.h"
-#include "common/public_graph_elems/node.h"
-#include "common/public_graph_elems/edge.h"
-#include "common/public_graph_elems/node_ptr.h"
 
 namespace node_prog
 {

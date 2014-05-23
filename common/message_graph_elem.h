@@ -15,6 +15,8 @@
 #define weaver_common_message_graph_elem_h_
 
 #include "common/vclock.h"
+#include "db/element/node.h"
+#include "db/element/edge.h"
 #include "db/element/property.h"
 #include "node_prog/property.h"
 #include "node_prog/node_prog_type.h"

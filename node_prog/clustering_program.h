@@ -19,7 +19,6 @@
 
 #include "common/message.h"
 #include "common/vclock.h"
-#include "common/event_order.h"
 #include "node.h"
 #include "edge.h"
 #include "cache_response.h"

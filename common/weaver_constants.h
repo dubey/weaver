@@ -48,7 +48,7 @@
 #define SERVER_MANAGER_PORT 2002
 
 // weaver setup
-#define NUM_SHARDS 1
+#define NUM_SHARDS 2
 #define NUM_VTS 1
 #define NUM_SERVERS ((NUM_VTS + NUM_SHARDS) * (1 + NUM_BACKUPS))
 #define SHARD_ID_INCR NUM_VTS

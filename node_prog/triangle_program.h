@@ -7,7 +7,6 @@
 #include "db/element/remote_node.h"
 #include "common/message.h"
 #include "common/vclock.h"
-#include "common/event_order.h"
 
 namespace node_prog
 {

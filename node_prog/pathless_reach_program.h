@@ -19,11 +19,8 @@
 
 #include "node_prog/base_classes.h"
 #include "common/weaver_constants.h"
-//#include "db/cache/prog_cache.h"
 #include "common/message.h"
 #include "common/vclock.h"
-#include "common/event_order.h"
-#include "db/element/edge.h"
 #include "node.h"
 #include "edge.h"
 #include "cache_response.h"

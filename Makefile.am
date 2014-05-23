@@ -98,6 +98,7 @@ libclient_la_SOURCES=	common/ids.cc \
                         common/server.cc \
                         common/configuration.cc \
                         common/comm_wrapper.cc \
+                        common/event_order.cc \
                         client/client.cc \
                         bindings/python/libclient.cpp
 bindings/python/libclient.cpp:	bindings/python/libclient.pyx
