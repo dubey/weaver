@@ -68,7 +68,7 @@ nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add)
         }
         loop_idx = -1;
 
-        if (i % 2000 == 0) {
+        if (i > 0 && i % 2000 == 0) {
             WDEBUG << "completed " << i << " put loops\n";
         }
     }
@@ -108,7 +108,7 @@ nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
         assert(opid_to_idx.find(results[i].op_id) == opid_to_idx.end());
         opid_to_idx[results[i].op_id] = i;
 
-        if (i % 2000 == 0) {
+        if (i > 0 && i % 2000 == 0) {
             WDEBUG << "completed " << i << " gets\n";
         }
     }
@@ -144,7 +144,7 @@ nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
 
         loop_idx = -1;
 
-        if (i % 2000 == 0) {
+        if (i > 0 && i % 2000 == 0) {
             WDEBUG << "completed " << i << " get loops\n";
         }
     }
