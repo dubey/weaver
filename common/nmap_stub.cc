@@ -35,8 +35,9 @@ nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add)
         attrs_to_add[put_idx].value_sz = sizeof(int64_t);
         attrs_to_add[put_idx].datatype = HYPERDATATYPE_INT64;
 
-        op_id = cl.put(space, (const char*)&entry.first, sizeof(int64_t), attrs_to_add+put_idx, 1, put_status+put_idx);
-        assert(op_id >= 0);
+        do {
+            op_id = cl.put(space, (const char*)&entry.first, sizeof(int64_t), attrs_to_add+put_idx, 1, put_status+put_idx);
+        } while (op_id < 0);
         assert(opid_to_idx.find(op_id) == opid_to_idx.end());
         opid_to_idx[op_id] = put_idx;
 
@@ -51,8 +52,9 @@ nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add)
     hyperdex_client_returncode loop_status;
     // call loop once for every put
     for (int64_t i = 0; i < num_pairs; i++) {
-        loop_id = cl.loop(-1, &loop_status);
-        assert(loop_id >= 0);
+        do {
+            loop_id = cl.loop(-1, &loop_status);
+        } while (loop_id < 0);
         assert(opid_to_idx.find(loop_id) != opid_to_idx.end());
         int64_t &loop_idx = opid_to_idx[loop_id];
         assert(loop_idx >= 0);
@@ -99,9 +101,10 @@ nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
         results[i].key = *next_node;
         next_node++;
 
-        results[i].op_id = cl.get(space, (char*)&(results[i].key), sizeof(int64_t), 
-            &(results[i].status), &(results[i].attr), &(results[i].attr_size));
-        assert(results[i].op_id >= 0);
+        do {
+            results[i].op_id = cl.get(space, (char*)&(results[i].key), sizeof(int64_t), 
+                &(results[i].status), &(results[i].attr), &(results[i].attr_size));
+        } while (results[i].op_id < 0);
         assert(opid_to_idx.find(results[i].op_id) == opid_to_idx.end());
         opid_to_idx[results[i].op_id] = i;
 
@@ -117,8 +120,9 @@ nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
     mappings.reserve(num_nodes);
     // call loop once for every get
     for (int64_t i = 0; i < num_nodes; i++) {
-        loop_id = cl.loop(-1, &loop_status);
-        assert(loop_id >= 0);
+        do {
+            loop_id = cl.loop(-1, &loop_status);
+        } while (loop_id < 0);
         assert(opid_to_idx.find(loop_id) != opid_to_idx.end());
         int64_t &loop_idx = opid_to_idx[loop_id];
         assert(loop_idx >= 0);

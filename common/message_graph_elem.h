@@ -56,12 +56,13 @@ namespace message
 
     inline uint64_t size(const db::element::node &t)
     {
-        uint64_t sz = size(t.base)
-            + size(t.out_edges)
-            + size(t.update_count)
-            + size(t.msg_count)
-            + size(t.already_migr)
-            + size(t.prog_states);
+        uint64_t sz = 0;
+        sz += size(t.base);
+        sz += size(t.out_edges);
+        sz += size(t.update_count);
+        sz += size(t.msg_count);
+        sz += size(t.already_migr);
+        sz += size(t.prog_states);;
         return sz;
     }
 
@@ -157,6 +158,10 @@ namespace message
         // need to unroll because we have to first unpack into particular state type, and then upcast and save as base type
         uint32_t num_prog_types = node_prog::END;
         assert(t.prog_states.size() == num_prog_types);
+
+        uint32_t num_unpacked_maps;
+        unpack_buffer(unpacker, num_unpacked_maps);
+        assert(num_unpacked_maps == num_prog_types);
 
         uint64_t key;
         std::shared_ptr<node_prog::Node_State_Base> val;
