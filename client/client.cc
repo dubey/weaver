@@ -12,6 +12,7 @@
  */
 
 #include "client/client.h"
+#include "common/message.h"
 
 namespace order
 {
@@ -154,8 +155,7 @@ client :: end_tx(uint64_t tx_id)
             WDEBUG << "tx msg recv fail" << std::endl;
             return false;
         }
-        uint32_t mtype;
-        msg.buf->unpack_from(BUSYBEE_HEADER_SIZE) >> mtype;
+        message::msg_type mtype = message::unpack_message_type(msg);
         assert(mtype == message::CLIENT_TX_DONE
             || mtype == message::CLIENT_TX_FAIL);
         if (mtype == message::CLIENT_TX_DONE) {
@@ -190,9 +190,8 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
 
     uint64_t ignore_req_id;
     node_prog::prog_type ignore_type;
-    std::pair<uint64_t, ParamsType> tempPair;
-    message::unpack_message(msg, message::NODE_PROG_RETURN, ignore_type, ignore_req_id, tempPair);
-    std::unique_ptr<ParamsType> toRet(new ParamsType(tempPair.second));
+    std::unique_ptr<ParamsType> toRet(new ParamsType());
+    message::unpack_message(msg, message::NODE_PROG_RETURN, ignore_type, ignore_req_id, *toRet);
     return std::move(toRet);
 }
 
@@ -202,17 +201,31 @@ client :: run_reach_program(std::vector<std::pair<uint64_t, node_prog::reach_par
     return *run_node_program(node_prog::REACHABILITY, initial_args);
 }
 
+node_prog::pathless_reach_params
+client :: run_pathless_reach_program(std::vector<std::pair<uint64_t, node_prog::pathless_reach_params>> initial_args)
+{
+    return *run_node_program(node_prog::PATHLESS_REACHABILITY, initial_args);
+}
+
 node_prog::clustering_params
 client :: run_clustering_program(std::vector<std::pair<uint64_t, node_prog::clustering_params>> initial_args)
 {
     return *run_node_program(node_prog::CLUSTERING, initial_args);
 }
 
+node_prog::two_neighborhood_params
+client :: run_two_neighborhood_program(std::vector<std::pair<uint64_t, node_prog::two_neighborhood_params>> initial_args)
+{
+    return *run_node_program(node_prog::TWO_NEIGHBORHOOD, initial_args);
+}
+
+/*
 node_prog::dijkstra_params
 client :: run_dijkstra_program(std::vector<std::pair<uint64_t, node_prog::dijkstra_params>> initial_args)
 {
     return *run_node_program(node_prog::DIJKSTRA, initial_args);
 }
+*/
 
 node_prog::read_node_props_params
 client :: read_node_props_program(std::vector<std::pair<uint64_t, node_prog::read_node_props_params>> initial_args)
@@ -224,6 +237,24 @@ node_prog::read_edges_props_params
 client :: read_edges_props_program(std::vector<std::pair<uint64_t, node_prog::read_edges_props_params>> initial_args)
 {
     return *run_node_program(node_prog::READ_EDGES_PROPS, initial_args);
+}
+
+node_prog::read_n_edges_params
+client :: read_n_edges_program(std::vector<std::pair<uint64_t, node_prog::read_n_edges_params>> initial_args)
+{
+    return *run_node_program(node_prog::READ_N_EDGES, initial_args);
+}
+
+node_prog::edge_count_params
+client :: edge_count_program(std::vector<std::pair<uint64_t, node_prog::edge_count_params>> initial_args)
+{
+    return *run_node_program(node_prog::EDGE_COUNT, initial_args);
+}
+
+node_prog::edge_get_params
+client :: edge_get_program(std::vector<std::pair<uint64_t, node_prog::edge_get_params>> initial_args)
+{
+    return *run_node_program(node_prog::EDGE_GET, initial_args);
 }
 
 void

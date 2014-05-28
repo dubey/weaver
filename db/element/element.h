@@ -79,7 +79,7 @@ namespace element
     inline element :: element(uint64_t hndl, vc::vclock &vclk)
         : id(hndl)
         , creat_time(vclk)
-        , del_time(MAX_UINT64, MAX_TIME)
+        , del_time(UINT64_MAX, MAX_TIME)
         , view_time(NULL)
     { }
 
@@ -167,7 +167,7 @@ namespace element
     inline void
     element :: update_del_time(vc::vclock &tdel)
     {
-        assert(del_time.vt_id == MAX_UINT64);
+        assert(del_time.vt_id == UINT64_MAX);
         del_time = tdel;
     }
 

@@ -16,12 +16,15 @@
 
 #ifndef weaver_coordinator_timestamper_h_
 #define weaver_coordinator_timestamper_h_
+#define VT_TIMEOUT_NANO 1000000 // number of nanoseconds between successive nops
+#define VT_CLK_TIMEOUT_NANO 1000000 // number of nanoseconds between vt gossip
 
 #include <vector>
 #include <bitset>
 #include <unordered_map>
 #include <unordered_set>
 #include <po6/threads/mutex.h>
+#include <po6/threads/rwlock.h>
 #include <po6/threads/cond.h>
 
 #include "common/ids.h"
@@ -36,7 +39,6 @@
 #include "coordinator/current_tx.h"
 #include "coordinator/current_prog.h"
 #include "coordinator/hyper_stub.h"
-//#include "node_prog/triangle_program.h"
 
 namespace coordinator
 {
@@ -66,12 +68,17 @@ namespace coordinator
             // consistency
             vc::vclock vclk; // vector clock
             vc::qtimestamp_t qts; // queue timestamp
-            uint64_t clock_update_acks;
+            uint64_t clock_update_acks, clk_updates;
             std::bitset<NUM_SHARDS> to_nop;
             uint64_t nop_ack_qts[NUM_SHARDS];
 
             // write transactions
             std::unordered_map<uint64_t, current_tx> outstanding_tx;
+            std::unordered_map<uint64_t, current_tx> del_tx;
+            po6::threads::mutex busy_mtx;
+            std::unordered_set<uint64_t> deleted_elems;
+            std::unordered_map<uint64_t, uint64_t> other_deleted_elems;
+            std::unordered_map<uint64_t, uint64_t> busy_elems;
 
             // node prog
             std::unordered_map<uint64_t, current_prog> outstanding_progs;
@@ -98,6 +105,7 @@ namespace coordinator
                     , migr_mutex
                     , graph_load_mutex
                     , config_mutex;
+            po6::threads::rwlock clk_rw_mtx;
 
             // initial graph loading
             uint32_t load_count;
@@ -108,13 +116,16 @@ namespace coordinator
             std::vector<uint64_t> shard_node_count;
             uint64_t msg_count, msg_count_acks;
 
+            // testing
+            std::unordered_set<uint64_t> seen_done_id;
+
         public:
             timestamper(uint64_t vt, uint64_t server);
             void init();
             void restore_backup();
             void reconfigure();
-            bool unpack_tx(message::message &msg, transaction::pending_tx &tx,
-                uint64_t client_id, nmap::nmap_stub*);
+            bool unpack_tx(nmap::nmap_stub *nmap_cl, message::message &msg, transaction::pending_tx &tx,
+                uint64_t client_id, std::vector<uint64_t> &del_elems);
             uint64_t generate_id();
     };
 
@@ -134,6 +145,7 @@ namespace coordinator
         , vclk(vtid, 0)
         , qts(NUM_SHARDS, 0)
         , clock_update_acks(NUM_VTS-1)
+        , clk_updates(0)
         , max_done_id(0)
         , max_done_clk(new vc::vclock_t(NUM_VTS, 0))
         , load_count(0)
@@ -181,8 +193,6 @@ namespace coordinator
     timestamper :: reconfigure()
     {
         WDEBUG << "Cluster reconfigure triggered\n";
-        periodic_update_mutex.lock();
-        comm.pause();
 
         // print cluster info
         for (uint64_t i = 0; i < NUM_SERVERS; i++) {
@@ -194,59 +204,55 @@ namespace coordinator
             }
         }
 
-        // reconfigure busybee
-        uint64_t changed = UINT64_MAX;
-        if (comm.reconfigure(config, changed) == server.get()) {
+        if (comm.reconfigure(config) == server.get()) {
             // this server is now primary for the shard
             active_backup = true;
             backup_cond.signal();
         }
 
         // resend unacked transactions and nop for new shard
-        uint64_t max_qts = 0;
-        bool pending_tx = false;
-        if (changed >= SHARD_ID_INCR && changed < (SHARD_ID_INCR+NUM_SHARDS)) {
-            // transactions
-            uint64_t sid = changed - SHARD_ID_INCR;
-            for (auto &entry: outstanding_tx) {
-                std::vector<transaction::pending_tx> &tv = *entry.second.tx_vec;
-                if (!tv[sid].writes.empty()) {
-                    pending_tx = true;
-                    // TODO resend transactions
-                    if (tv[sid].writes.back()->qts[sid] > max_qts) {
-                        max_qts = tv[sid].writes.back()->qts[sid];
-                    }
-                }
-            }
-            assert(qts[sid] >= max_qts);
+        // TODO flesh out
+        //uint64_t max_qts = 0;
+        //bool pending_tx = false;
+        //if (changed >= SHARD_ID_INCR && changed < (SHARD_ID_INCR+NUM_SHARDS)) {
+        //    // transactions
+        //    uint64_t sid = changed - SHARD_ID_INCR;
+        //    for (auto &entry: outstanding_tx) {
+        //        std::vector<transaction::pending_tx> &tv = *entry.second.tx_vec;
+        //        if (!tv[sid].writes.empty()) {
+        //            pending_tx = true;
+        //            // TODO resend transactions
+        //            if (tv[sid].writes.back()->qts[sid] > max_qts) {
+        //                max_qts = tv[sid].writes.back()->qts[sid];
+        //            }
+        //        }
+        //    }
+        //    assert(qts[sid] >= max_qts);
 
-            // nop
-            if (!to_nop[sid]) {
-                nop_ack_qts[sid] = qts[sid]; // artificially 'ack' old nop
-                to_nop.set(sid);
-                WDEBUG << "resetting to_nop for shard " << changed << std::endl;
-            }
+        //    // nop
+        //    if (!to_nop[sid]) {
+        //        nop_ack_qts[sid] = qts[sid]; // artificially 'ack' old nop
+        //        to_nop.set(sid);
+        //        WDEBUG << "resetting to_nop for shard " << changed << std::endl;
+        //    }
 
-            if (!pending_tx) {
-                // only nop was pending, if any
-                // send msg to advance clock
-                message::message msg;
-                message::prepare_message(msg, message::SET_QTS, vt_id, qts[sid]);
-                comm.send(changed, msg.buf);
-                WDEBUG << "sent set qts msg to shard " << changed << std::endl;
-            }
-        }
-
-        comm.unpause();
-        periodic_update_mutex.unlock();
+        //    if (!pending_tx) {
+        //        // only nop was pending, if any
+        //        // send msg to advance clock
+        //        message::message msg;
+        //        message::prepare_message(msg, message::SET_QTS, vt_id, qts[sid]);
+        //        comm.send(changed, msg.buf);
+        //        WDEBUG << "sent set qts msg to shard " << changed << std::endl;
+        //    }
+        //}
     }
 
     // return false if the main node in the transaction is not found in node map
     // this is not a complete sanity check, e.g. create_edge(n1, n2) will succeed even if n2 is garbage
     // similarly edge ids are not checked
     inline bool
-    timestamper :: unpack_tx(message::message &msg, transaction::pending_tx &tx,
-        uint64_t client_id, nmap::nmap_stub *nmap_cl)
+    timestamper :: unpack_tx(nmap::nmap_stub *nmap_cl, message::message &msg, transaction::pending_tx &tx,
+        uint64_t client_id, std::vector<uint64_t> &del_elems)
     {
         message::unpack_client_tx(msg, tx);
         tx.id = generate_id();
@@ -255,6 +261,7 @@ namespace coordinator
         // lookup mappings
         std::unordered_map<uint64_t, uint64_t> mappings_to_put;
         std::unordered_set<uint64_t> mappings_to_get;
+        std::vector<uint64_t> busy;
         for (auto upd: tx.writes) {
             switch (upd->type) {
                 case transaction::NODE_CREATE_REQ:
@@ -264,6 +271,7 @@ namespace coordinator
                     upd->loc1 = loc_gen + SHARD_ID_INCR; // node will be placed on this shard
                     loc_gen_mutex.unlock();
                     mappings_to_put.emplace(upd->id, upd->loc1);
+                    busy.emplace_back(upd->id);
                     break;
 
                 case transaction::EDGE_CREATE_REQ:
@@ -273,12 +281,18 @@ namespace coordinator
                     if (mappings_to_put.find(upd->elem2) == mappings_to_put.end()) {
                         mappings_to_get.insert(upd->elem2);
                     }
+                    busy.emplace_back(upd->id);
+                    busy.emplace_back(upd->elem1);
+                    busy.emplace_back(upd->elem2);
                     break;
 
                 case transaction::NODE_DELETE_REQ:
                 case transaction::NODE_SET_PROPERTY:
                     if (mappings_to_put.find(upd->elem1) == mappings_to_put.end()) {
                         mappings_to_get.insert(upd->elem1);
+                    }
+                    if (upd->type != transaction::NODE_DELETE_REQ) {
+                        busy.emplace_back(upd->elem1);
                     }
                     break;
 
@@ -287,10 +301,17 @@ namespace coordinator
                     if (mappings_to_put.find(upd->elem2) == mappings_to_put.end()) {
                         mappings_to_get.insert(upd->elem2);
                     }
+                    if (upd->type != transaction::EDGE_DELETE_REQ) {
+                        busy.emplace_back(upd->elem1);
+                    }
+                    busy.emplace_back(upd->elem2);
                     break;
 
                 default:
                     WDEBUG << "bad type" << std::endl;
+            }
+            if (upd->type == transaction::NODE_DELETE_REQ || upd->type == transaction::EDGE_DELETE_REQ) {
+                del_elems.emplace_back(upd->elem1);
             }
         }
 
@@ -339,6 +360,28 @@ namespace coordinator
                     continue;
             }
         }
+
+        busy_mtx.lock();
+        for (uint64_t e: busy) {
+            assert(deleted_elems.find(e) == deleted_elems.end());
+            if (other_deleted_elems.find(e) != other_deleted_elems.end()) {
+                WDEBUG << "Bad deletion of edge " << e << " by client " << other_deleted_elems[e] << std::endl;
+            }
+            assert(other_deleted_elems.find(e) == other_deleted_elems.end());
+            if (busy_elems.find(e) == busy_elems.end()) {
+                busy_elems[e] = 1;
+            } else {
+                busy_elems[e]++;
+            }
+        }
+        for (uint64_t d: del_elems) {
+            assert(deleted_elems.find(d) == deleted_elems.end());
+            assert(other_deleted_elems.find(d) == other_deleted_elems.end());
+            assert(busy_elems.find(d) == busy_elems.end());
+            deleted_elems.emplace(d);
+        }
+        busy_mtx.unlock();
+
         return true;
     }
 

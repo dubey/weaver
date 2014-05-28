@@ -25,10 +25,15 @@
 #include "transaction.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/reach_program.h"
+#include "node_prog/pathless_reach_program.h"
 #include "node_prog/clustering_program.h"
-#include "node_prog/dijkstra_program.h"
+#include "node_prog/two_neighborhood_program.h"
+//#include "node_prog/dijkstra_program.h"
 #include "node_prog/read_node_props_program.h"
 #include "node_prog/read_edges_props_program.h"
+#include "node_prog/read_n_edges_program.h"
+#include "node_prog/edge_count_program.h"
+#include "node_prog/edge_get_program.h"
 
 namespace client
 {
@@ -57,10 +62,15 @@ namespace client
             std::unique_ptr<ParamsType> 
             run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args);
             node_prog::reach_params run_reach_program(std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args);
+            node_prog::pathless_reach_params run_pathless_reach_program(std::vector<std::pair<uint64_t, node_prog::pathless_reach_params>> initial_args);
             node_prog::clustering_params run_clustering_program(std::vector<std::pair<uint64_t, node_prog::clustering_params>> initial_args);
-            node_prog::dijkstra_params run_dijkstra_program(std::vector<std::pair<uint64_t, node_prog::dijkstra_params>> initial_args);
+            node_prog::two_neighborhood_params run_two_neighborhood_program(std::vector<std::pair<uint64_t, node_prog::two_neighborhood_params>> initial_args);
+            //node_prog::dijkstra_params run_dijkstra_program(std::vector<std::pair<uint64_t, node_prog::dijkstra_params>> initial_args);
             node_prog::read_node_props_params read_node_props_program(std::vector<std::pair<uint64_t, node_prog::read_node_props_params>> initial_args);
             node_prog::read_edges_props_params read_edges_props_program(std::vector<std::pair<uint64_t, node_prog::read_edges_props_params>> initial_args);
+            node_prog::read_n_edges_params read_n_edges_program(std::vector<std::pair<uint64_t, node_prog::read_n_edges_params>> initial_args);
+            node_prog::edge_count_params edge_count_program(std::vector<std::pair<uint64_t, node_prog::edge_count_params>> initial_args);
+            node_prog::edge_get_params edge_get_program(std::vector<std::pair<uint64_t, node_prog::edge_get_params>> initial_args);
 
             void start_migration();
             void single_stream_migration();

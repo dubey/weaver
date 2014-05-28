@@ -20,7 +20,6 @@
 
 #include "common/message.h"
 #include "common/vclock.h"
-#include "common/event_order.h"
 #include "node.h"
 #include "edge.h"
 #include "db/element/remote_node.h"
@@ -82,7 +81,7 @@ namespace node_prog
         }
     };
 
-    inline std::vector<std::pair<db::element::remote_node, read_node_props_params>> 
+    inline std::pair<search_type, std::vector<std::pair<db::element::remote_node, read_node_props_params>>>
     read_node_props_node_program(
             node &n,
             db::element::remote_node &,
@@ -92,13 +91,15 @@ namespace node_prog
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
             cache_response<Cache_Value_Base>*)
     {
+        bool fetch_all = params.keys.empty();
         for (property &prop : n.get_properties()) {
-            if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.get_key()) != params.keys.end())) {
+            if (fetch_all || (std::find(params.keys.begin(), params.keys.end(), prop.get_key()) != params.keys.end())) {
                 params.node_props.emplace_back(prop.get_key(), prop.get_value());
             }
         }
 
-        return {std::make_pair(db::element::coordinator, std::move(params))}; // initializer list of vector
+        return std::make_pair(search_type::DEPTH_FIRST, std::vector<std::pair<db::element::remote_node, read_node_props_params>>
+                (1, std::make_pair(db::element::coordinator, std::move(params)))); 
     }
 }
 

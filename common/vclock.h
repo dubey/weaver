@@ -47,14 +47,14 @@ namespace vc
     };
 
     inline
-    vclock :: vclock() : vt_id(MAX_UINT64) { }
+    vclock :: vclock() : vt_id(UINT64_MAX) { }
 
     inline
     vclock :: vclock(uint64_t vtid, uint64_t clk_init)
         : vt_id(vtid)
         , clock(std::vector<uint64_t>(NUM_VTS, clk_init))
     {
-        assert(vt_id < NUM_VTS || vt_id == MAX_UINT64);
+        assert(vt_id < NUM_VTS || vt_id == UINT64_MAX);
     }
 
     inline
@@ -62,7 +62,7 @@ namespace vc
         : vt_id(vtid)
         , clock(vclk)
     {
-        assert(vt_id < NUM_VTS || vt_id == MAX_UINT64);
+        assert(vt_id < NUM_VTS || vt_id == UINT64_MAX);
     }
 
     inline vclock_t
@@ -88,8 +88,9 @@ namespace vc
     vclock :: update_clock(uint64_t vtid, uint64_t new_clock)
     {
         assert(vtid < NUM_VTS);
-        assert(clock[vtid] <= new_clock);
-        clock[vtid] = new_clock;
+        if (clock[vtid] < new_clock) {
+            clock[vtid] = new_clock;
+        }
     }
 }
 

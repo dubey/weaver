@@ -18,7 +18,6 @@
 #include <vector>
 #include <po6/net/location.h>
 
-#include "common/event_order.h"
 #include "node_prog/edge.h"
 #include "node_prog/prop_list.h"
 #include "node_prog/property.h"

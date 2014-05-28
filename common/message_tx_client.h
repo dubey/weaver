@@ -22,9 +22,11 @@ namespace message
     inline void
     prepare_tx_message_client(message &m, const client::tx_list_t &tx)
     {
-        uint64_t num_writes = tx.size();
-        uint64_t bytes_to_pack = sizeof(enum msg_type) * (1 + tx.size())
-            + size_wrapper(num_writes);
+        assert(tx.size() <= UINT32_MAX);
+        uint32_t num_writes = tx.size();
+        enum msg_type mtype;
+        uint64_t bytes_to_pack = size(mtype) * (1 + tx.size()) + size(num_writes);
+
         for (auto &upd: tx) {
             switch (upd->type) {
                 case CLIENT_NODE_CREATE_REQ:
@@ -55,13 +57,15 @@ namespace message
                     WDEBUG << "bad msg type" << std::endl;
             }
         }
+
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE);
 
-        packer = packer << CLIENT_TX_INIT;
-        pack_buffer_wrapper(packer, num_writes);
+        pack_buffer_wrapper(packer, CLIENT_TX_INIT);
+        pack_buffer(packer, num_writes);
+
         for (auto &upd: tx) {
-            packer = packer << upd->type;
+            pack_buffer_wrapper(packer, upd->type);
             switch (upd->type) {
                 case CLIENT_NODE_CREATE_REQ:
                     pack_buffer_wrapper(packer, upd->handle);

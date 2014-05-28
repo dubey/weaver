@@ -11,7 +11,6 @@
  * ===============================================================
  */
 
-#include "common/debug.h"
 #define weaver_debug_
 #include "common/weaver_constants.h"
 

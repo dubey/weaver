@@ -14,6 +14,7 @@
 #include <vector>
 #include <unordered_map>
 
+#include "common/event_order.h"
 #include "node_prog/property.h"
 #include "db/element/property.h"
 

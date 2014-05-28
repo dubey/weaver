@@ -20,7 +20,6 @@
 
 #include "common/message.h"
 #include "common/vclock.h"
-#include "common/event_order.h"
 #include "node.h"
 #include "edge.h"
 #include "db/element/remote_node.h"
@@ -86,7 +85,7 @@ namespace node_prog
         }
     };
 
-    inline std::vector<std::pair<db::element::remote_node, read_edges_props_params>> 
+    inline std::pair<search_type, std::vector<std::pair<db::element::remote_node, read_edges_props_params>>>
     read_edges_props_node_program(
             node &n,
             db::element::remote_node &,
@@ -109,7 +108,8 @@ namespace node_prog
                 }
             }
         }
-        return {std::make_pair(db::element::coordinator, std::move(params))}; // initializer list of vector
+        return std::make_pair(search_type::DEPTH_FIRST, std::vector<std::pair<db::element::remote_node, read_edges_props_params>>
+                (1, std::make_pair(db::element::coordinator, std::move(params)))); 
     }
 }
 

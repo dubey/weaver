@@ -1,159 +1,155 @@
 /*
  * ===============================================================
- *    Description:  Node mapper stub implementation.
+ *    Description:  Implementation of node mapper Hyperdex stub.
  *
- *        Created:  2014-04-01 13:54:51
+ *        Created:  2014-05-22 11:53:59
  *
  *         Author:  Ayush Dubey, dubey@cs.cornell.edu
  *
- * Copyright (C) 2013-2014, Cornell University, see the LICENSE
- *                     file for licensing agreement
+ * Copyright (C) 2013, Cornell University, see the LICENSE file
+ *                     for licensing agreement
  * ===============================================================
  */
 
 #define weaver_debug_
-#include "common/weaver_constants.h"
+
+#include <assert.h>
 #include "common/nmap_stub.h"
 
 using nmap::nmap_stub;
 
-nmap_stub :: nmap_stub() : cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT) { }
-
 void
 nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add)
 {
-    int numPairs = pairs_to_add.size();
-    int i;
-    hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute *) malloc(numPairs * sizeof(hyperdex_client_attribute));
+    int num_pairs = pairs_to_add.size();
+    hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute *)malloc(num_pairs * sizeof(hyperdex_client_attribute));
+    hyperdex_client_returncode put_status[num_pairs];
+    std::unordered_map<int64_t, int64_t> opid_to_idx;
+    opid_to_idx.reserve(num_pairs);
 
-    i = 0;
-    uint32_t num_div10 = numPairs / 10;
-    if (num_div10 < 1) {
-        num_div10 = 1;
-    }
-
-    int num_loops = 0;
+    int64_t put_idx = 0;
+    int64_t op_id;
     for (auto &entry: pairs_to_add) {
-        attrs_to_add[i].attr = attrName;
-        attrs_to_add[i].value = (char *) &entry.second;
-        attrs_to_add[i].value_sz = sizeof(int64_t);
-        attrs_to_add[i].datatype = HYPERDATATYPE_INT64;
+        attrs_to_add[put_idx].attr = attrName;
+        attrs_to_add[put_idx].value = (char*)&entry.second;
+        attrs_to_add[put_idx].value_sz = sizeof(int64_t);
+        attrs_to_add[put_idx].datatype = HYPERDATATYPE_INT64;
 
-        hyperdex_client_returncode put_status = HYPERDEX_CLIENT_INTERRUPTED;
-        int64_t op_id = -1;
-        //uint64_t tries = 0;
-        while (op_id < 0 && put_status == HYPERDEX_CLIENT_INTERRUPTED) {
-            op_id = cl.put(space, (const char *) &entry.first, sizeof(int64_t), &(attrs_to_add[i]), 1, &put_status);
-            num_loops++;
-            if (put_status == HYPERDEX_CLIENT_INTERRUPTED) {
-                //WDEBUG << "trying to put in nmap " << (tries++) << std::endl;
-            }
+        do {
+            op_id = cl.put(space, (const char*)&entry.first, sizeof(int64_t), attrs_to_add+put_idx, 1, put_status+put_idx);
+        } while (op_id < 0);
+        assert(opid_to_idx.find(op_id) == opid_to_idx.end());
+        opid_to_idx[op_id] = put_idx;
+
+        put_idx++;
+        
+        if (put_idx % 2000 == 0) {
+            WDEBUG << "completed " << put_idx << " puts\n";
         }
-        if (op_id < 0) {
-            WDEBUG << "\"put\" returned " << op_id << " with status " << put_status << std::endl;
-            free(attrs_to_add);
-            return;
-        } else {
-            //WDEBUG << "put " << entry.first << ":" << entry.second << std::endl;
-        }
-        i++;
     }
 
-    hyperdex_client_returncode loop_status = HYPERDEX_CLIENT_INTERRUPTED;
-    int64_t loop_id = -1;
+    int64_t loop_id;
+    hyperdex_client_returncode loop_status;
     // call loop once for every put
-    //for (i = 0; i < numPairs; i++) {
-    for (i = 0; i < num_loops; i++) {
-        while (loop_id < 0 && loop_status == HYPERDEX_CLIENT_INTERRUPTED) {
+    for (int64_t i = 0; i < num_pairs; i++) {
+        do {
             loop_id = cl.loop(-1, &loop_status);
+        } while (loop_id < 0);
+        assert(opid_to_idx.find(loop_id) != opid_to_idx.end());
+        int64_t &loop_idx = opid_to_idx[loop_id];
+        assert(loop_idx >= 0);
+
+        if (loop_status != HYPERDEX_CLIENT_SUCCESS || put_status[loop_idx] != HYPERDEX_CLIENT_SUCCESS) {
+            WDEBUG << "bad put for node at idx " << loop_idx
+                   << ", put status: " << put_status[loop_idx]
+                   << ", loop status: " << loop_status << std::endl;
+            WDEBUG << "error message: " << cl.error_message() << std::endl;
+            WDEBUG << "error loc: " << cl.error_location() << std::endl;
         }
-        if (loop_id < 0) {
-            WDEBUG << "put \"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
-            free(attrs_to_add);
-            return;
+        loop_idx = -1;
+
+        if (i > 0 && i % 2000 == 0) {
+            WDEBUG << "completed " << i << " put loops\n";
         }
     }
+
     free(attrs_to_add);
 }
 
 std::vector<std::pair<uint64_t, uint64_t>>
 nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
 {
-    int numNodes = toGet.size();
-    struct async_get {
-        uint64_t key;
-        int64_t op_id;
-        hyperdex_client_returncode get_status;
-        const hyperdex_client_attribute * attr;
-        size_t attr_size;
+    class async_get
+    {
+        public:
+            uint64_t key;
+            int64_t op_id;
+            hyperdex_client_returncode status;
+            const hyperdex_client_attribute *attr;
+            size_t attr_size;
+
+            async_get() { status = (hyperdex_client_returncode)0; }
     };
-    std::vector<struct async_get> results(numNodes);
-    auto nextHandle = toGet.begin();
-    for (int i = 0; i < numNodes; i++) {
-        results[i].key = *nextHandle;
-        results[i].op_id = -1;
-        results[i].get_status = HYPERDEX_CLIENT_INTERRUPTED;
-        nextHandle++;
+
+    int64_t num_nodes = toGet.size();
+    std::vector<async_get> results(num_nodes);
+    std::unordered_map<int64_t, int64_t> opid_to_idx;
+    opid_to_idx.reserve(num_nodes);
+
+    auto next_node = toGet.begin();
+    for (int64_t i = 0; i < num_nodes; i++) {
+        results[i].key = *next_node;
+        next_node++;
+
+        do {
+            results[i].op_id = cl.get(space, (char*)&(results[i].key), sizeof(int64_t), 
+                &(results[i].status), &(results[i].attr), &(results[i].attr_size));
+        } while (results[i].op_id < 0);
+        assert(opid_to_idx.find(results[i].op_id) == opid_to_idx.end());
+        opid_to_idx[results[i].op_id] = i;
+
+        if (i > 0 && i % 2000 == 0) {
+            WDEBUG << "completed " << i << " gets\n";
+        }
     }
 
-    int num_loops = 0;
-    for (int i = 0; i < numNodes; i++) {
-        while (results[i].op_id < 0 && results[i].get_status == HYPERDEX_CLIENT_INTERRUPTED) {
-            results[i].op_id = cl.get(space, (char*)&(results[i].key), sizeof(uint64_t),
-                &(results[i].get_status), &(results[i].attr), &(results[i].attr_size));
-            num_loops++;
-            if (results[i].get_status == HYPERDEX_CLIENT_INTERRUPTED) {
-                WDEBUG << "get interrupted\n";
-            }
-        }
-        if (results[i].op_id < 0) {
-            WDEBUG << "\"get\" returned " << results[i].op_id << " with status " << results[i].get_status << std::endl;
-        }
-    }
-
-    hyperdex_client_returncode loop_status = HYPERDEX_CLIENT_INTERRUPTED;
-    int64_t loop_id = -1;
+    int64_t loop_id;
+    hyperdex_client_returncode loop_status;
+    uint64_t *val;
+    std::vector<std::pair<uint64_t, uint64_t>> mappings;
+    mappings.reserve(num_nodes);
     // call loop once for every get
-    //for (int i = 0; i < numNodes; i++) {
-    for (int i = 0; i < num_loops; i++) {
-        while (loop_id < 0 && loop_status == HYPERDEX_CLIENT_INTERRUPTED) {
+    for (int64_t i = 0; i < num_nodes; i++) {
+        do {
             loop_id = cl.loop(-1, &loop_status);
-            if (loop_status == HYPERDEX_CLIENT_INTERRUPTED) {
-                WDEBUG << "loop interrupted\n";
-            }
-        }
-        if (loop_id < 0) {
-            WDEBUG << "get \"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
-            for (i = i-1; i >= 0; i--) {
-                hyperdex_client_destroy_attrs(results[i].attr, results[i].attr_size);
-            }
-            std::vector<std::pair<uint64_t, uint64_t>> empty(0);
-            return empty;
+        } while (loop_id < 0);
+        assert(opid_to_idx.find(loop_id) != opid_to_idx.end());
+        int64_t &loop_idx = opid_to_idx[loop_id];
+        assert(loop_idx >= 0);
+
+        if (loop_status != HYPERDEX_CLIENT_SUCCESS || results[loop_idx].status != HYPERDEX_CLIENT_SUCCESS) {
+            WDEBUG << "bad get for node at idx " << loop_idx
+                   << ", get status: " << results[loop_idx].status
+                   << ", loop status: " << loop_status << std::endl;
         }
 
-        // double check this ID exists
-        bool found = false;
-        for (int i = 0; i < numNodes; i++) {
-            found = found || (results[i].op_id == loop_id);
-        }
-        assert(found);
-    }
-
-    std::vector<std::pair<uint64_t, uint64_t>> toRet;
-    for (int i = 0; i < numNodes; i++) {
-        if (results[i].attr_size == 0) {
-            WDEBUG << "Key " << results[i].key << " did not exist in hyperdex" << std::endl;
-        } else if (results[i].attr_size > 1) {
-            WDEBUG << "\"get\" number " << i << " returned " << results[i].attr_size << " attrs" << std::endl;
+        if (results[loop_idx].attr_size == 0) {
+            WDEBUG << "Key " << results[loop_idx].key << " did not exist in hyperdex" << std::endl;
         } else {
-            uint64_t *shard = (uint64_t*)results[i].attr->value;
-            uint64_t nodeID = results[i].key;
-            toRet.emplace_back(nodeID, *shard);
+            assert(results[loop_idx].attr_size == 1);
+            val = (uint64_t*)results[loop_idx].attr->value;
+            mappings.emplace_back(std::make_pair(results[loop_idx].key, *val));
         }
-        hyperdex_client_destroy_attrs(results[i].attr, results[i].attr_size);
+        hyperdex_client_destroy_attrs(results[loop_idx].attr, results[loop_idx].attr_size);
+
+        loop_idx = -1;
+
+        if (i > 0 && i % 2000 == 0) {
+            WDEBUG << "completed " << i << " get loops\n";
+        }
     }
-    WDEBUG << "get asked for " << numNodes << " mappings, returning " << toRet.size() << std::endl;
-    return toRet;
+
+    return mappings;
 }
 
 void
@@ -197,5 +193,3 @@ nmap_stub :: clean_up_space()
 {
     //cl.rm_space(space);
 }
-
-

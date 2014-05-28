@@ -19,9 +19,9 @@
 
 #include "common/message.h"
 #include "common/vclock.h"
-#include "common/event_order.h"
 #include "node.h"
 #include "edge.h"
+#include "cache_response.h"
 #include "db/element/remote_node.h"
 
 namespace node_prog
@@ -229,7 +229,7 @@ namespace node_prog
     }
     */
 
-    inline std::vector<std::pair<db::element::remote_node, clustering_params>> 
+    inline std::pair<search_type, std::vector<std::pair<db::element::remote_node, clustering_params>>>
     clustering_node_program(
             node &n,
             db::element::remote_node &rn,
@@ -247,6 +247,7 @@ namespace node_prog
                 params.is_center = false;
                 params.center = rn;
                 for (edge& edge : n.get_edges()) {
+                    edge.traverse();
                     next.emplace_back(std::make_pair(edge.get_neighbor(), params));
                     cstate.neighbor_counts.insert(std::make_pair(edge.get_neighbor().get_id(), 0));
                     cstate.responses_left++;
@@ -280,7 +281,7 @@ namespace node_prog
             params.is_center = true;
             next = {std::make_pair(params.center, std::move(params))};
         }
-        return next;
+        return std::make_pair(search_type::BREADTH_FIRST, next);
     }
 }
 

@@ -1,10 +1,9 @@
 #! /usr/bin/env python
 # 
 # ===============================================================
-#    Description:  Tranform SNAP graph files so that node handles
-#                  are range(0, num_nodes).
+#    Description:  Tranform SNAP graph file to WEAVER graph file
 # 
-#        Created:  12/03/2013 02:17:15 PM
+#        Created:  04/12/2014 01:30:15 PM
 # 
 #         Author:  Ayush Dubey, dubey@cs.cornell.edu
 # 

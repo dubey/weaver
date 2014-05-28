@@ -107,7 +107,6 @@ namespace order
 
     extern chronos_client *kronos_cl;
     extern po6::threads::mutex kronos_mutex;
-    extern std::list<uint64_t> *call_times;
     extern uint64_t cache_hits;
     extern kronos_cache kcache;
 

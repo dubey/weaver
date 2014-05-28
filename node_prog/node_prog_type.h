@@ -21,16 +21,27 @@
 
 namespace node_prog
 {
+    enum search_type
+    {
+        BREADTH_FIRST,
+        DEPTH_FIRST
+    };
+
     enum prog_type
     {
-        DEFAULT,
         REACHABILITY,
+        PATHLESS_REACHABILITY,
         N_HOP_REACHABILITY,
         TRIANGLE_COUNT,
         DIJKSTRA,
         CLUSTERING,
+        TWO_NEIGHBORHOOD,
         READ_NODE_PROPS,
-        READ_EDGES_PROPS
+        READ_EDGES_PROPS,
+        READ_N_EDGES,
+        EDGE_COUNT,
+        EDGE_GET,
+        END
     };
 
 }

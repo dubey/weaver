@@ -36,12 +36,15 @@ class comm_wrapper
         {
             private:
                 std::unordered_map<uint64_t, po6::net::location> mlist; // active servers only
+                uint64_t active_server_idx[NUM_VTS+NUM_SHARDS]; // for each vt/shard, index of the active server
+                configuration config;
 
             public:
-                weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster) { mlist = cluster; }
+                weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster, uint64_t my_id);
                 virtual ~weaver_mapper() throw () {}
                 virtual bool lookup(uint64_t server_id, po6::net::location *loc);
-                void server_alive(uint64_t id, po6::net::location loc) { mlist[id] = loc; }
+                void reconfigure(configuration &new_config, uint64_t &now_primary);
+                void client_configure(std::unordered_map<uint64_t, po6::net::location> &cluster) { mlist = cluster; }
 
             private:
                 weaver_mapper(const weaver_mapper&);
@@ -54,8 +57,6 @@ class comm_wrapper
         std::unique_ptr<busybee_mta> bb;
         std::unique_ptr<weaver_mapper> wmap;
         std::shared_ptr<po6::net::location> loc;
-        uint64_t active_server_idx[NUM_VTS+NUM_SHARDS]; // for each vt/shard, index of the active server
-        configuration config;
         std::unordered_map<uint64_t, po6::net::location> cluster;
         uint64_t bb_id;
         int num_threads;
@@ -65,9 +66,7 @@ class comm_wrapper
         comm_wrapper(uint64_t bbid, int nthr, int timeout, bool client);
         void init(configuration &config);
         void client_init();
-        void pause() { bb->pause(); }
-        void unpause() { bb->unpause(); }
-        uint64_t reconfigure(configuration &config, uint64_t &changed);
+        uint64_t reconfigure(configuration &config);
         std::shared_ptr<po6::net::location> get_loc() { return loc; }
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"

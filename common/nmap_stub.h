@@ -23,12 +23,14 @@
 #include <hyperdex/client.hpp>
 #include <hyperdex/datastructures.h>
 
+#include "common/weaver_constants.h"
+
 namespace nmap
 {
     class nmap_stub
     {
         public:
-            nmap_stub();
+            nmap_stub() : cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT) { }
 
         private:
             const char *space = "weaver_loc_mapping";

@@ -26,6 +26,9 @@ Analytics API - global requests
 
 
 GREG TODO BEFORE A RELEASE
+
+XXX get rid of db::nop_data, only unpack partial nop message to start and just pass message to queue to be fully unpacked later
+
 node.has_property() needed
 
 clean up code in general
@@ -36,6 +39,8 @@ get rid of global_req stuff
 
 make prog_state less global?
 make cache invalidation work with permanent edge deletion
+
+If a shard realizes a node program is deleted after it starts running it but before the node program requests a state value, a state value will be created that is never inserted into the state map and dies at the end of the node prog (which will also die because of a check in the prog loop to see if the request completed)
 
 allow clients to dynamically load node_program code
     dynamically generate python bindings?
