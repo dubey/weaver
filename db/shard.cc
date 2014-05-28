@@ -1997,7 +1997,8 @@ main(int argc, char *argv[])
     }
 
     // server manager link
-    std::thread sm_thr(server_manager_link_loop, po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT));
+    std::thread sm_thr(server_manager_link_loop,
+        po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT));
     sm_thr.detach();
 
     S->config_mutex.lock();

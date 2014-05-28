@@ -54,8 +54,8 @@ namespace coordinator
             // server manager
             server_manager_link_wrapper sm_stub;
             configuration config;
-            bool active_backup, first_config;
-            po6::threads::cond backup_cond, first_config_cond;
+            bool active_backup, first_config, vts_init;
+            po6::threads::cond backup_cond, first_config_cond, vts_init_cond;
             
             // Hyperdex stub
             std::vector<hyper_stub*> hstub;
@@ -135,8 +135,10 @@ namespace coordinator
         , sm_stub(server_id(serverid), comm.get_loc())
         , active_backup(false)
         , first_config(false)
+        , vts_init(false)
         , backup_cond(&config_mutex)
         , first_config_cond(&config_mutex)
+        , vts_init_cond(&config_mutex)
         , vt_id(vtid)
         , shifted_id(vtid << (64-ID_BITS))
         , id_gen(0)
