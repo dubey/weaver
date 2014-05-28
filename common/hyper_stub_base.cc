@@ -18,16 +18,26 @@ void
 hyper_stub_base :: hyper_call_and_loop(hyper_func h, const char *space,
     uint64_t key, hyperdex_client_attribute *cl_attr, size_t num_attrs)
 {
-    hyperdex_client_returncode status;
+    hyperdex_client_returncode call_status, loop_status;
     std::unique_ptr<int64_t> key_buf(new int64_t(key));
-    int64_t hdex_id = (cl.*h)(space, (const char*)key_buf.get(), sizeof(int64_t), cl_attr, num_attrs, &status);
+
+    int64_t hdex_id = (cl.*h)(space, (const char*)key_buf.get(), sizeof(int64_t), cl_attr, num_attrs, &call_status);
     if (hdex_id < 0) {
-        WDEBUG << "Hyperdex function failed, op id = " << hdex_id << ", status = " << status << std::endl;
+        WDEBUG << "Hyperdex function failed, op id = " << hdex_id << ", status = " << call_status << std::endl;
         return;
     }
-    hdex_id = cl.loop(-1, &status);
+
+    hdex_id = cl.loop(-1, &loop_status);
     if (hdex_id < 0) {
-        WDEBUG << "Hyperdex loop failed, op id = " << hdex_id << ", status = " << status << std::endl;
+        WDEBUG << "Hyperdex loop failed, op id = " << hdex_id << ", status = " << loop_status << std::endl;
+    }
+
+    if (loop_status != HYPERDEX_CLIENT_SUCCESS || call_status != HYPERDEX_CLIENT_SUCCESS) {
+        WDEBUG << "hyperdex error"
+               << ", call status: " << call_status
+               << ", loop status: " << loop_status << std::endl;
+        WDEBUG << "error message: " << cl.error_message() << std::endl;
+        WDEBUG << "error loc: " << cl.error_location() << std::endl;
     }
 }
 
@@ -36,16 +46,26 @@ void
 hyper_stub_base :: hypermap_call_and_loop(hyper_map_func h, const char *space,
     uint64_t key, hyperdex_client_map_attribute *map_attr, size_t num_attrs)
 {
-    hyperdex_client_returncode status;
+    hyperdex_client_returncode call_status, loop_status;
     std::unique_ptr<int64_t> key_buf(new int64_t(key));
-    int64_t hdex_id = (cl.*h)(space, (const char*)key_buf.get(), sizeof(int64_t), map_attr, num_attrs, &status);
+
+    int64_t hdex_id = (cl.*h)(space, (const char*)key_buf.get(), sizeof(int64_t), map_attr, num_attrs, &call_status);
     if (hdex_id < 0) {
-        WDEBUG << "Hyperdex map function failed, op id = " << hdex_id << ", status = " << status << std::endl;
+        WDEBUG << "Hyperdex map function failed, op id = " << hdex_id << ", status = " << call_status << std::endl;
         return;
     }
-    hdex_id = cl.loop(-1, &status);
+
+    hdex_id = cl.loop(-1, &loop_status);
     if (hdex_id < 0) {
-        WDEBUG << "Hyperdex loop failed, op id = " << hdex_id << ", status = " << status << std::endl;
+        WDEBUG << "Hyperdex loop failed, op id = " << hdex_id << ", status = " << loop_status << std::endl;
+    }
+
+    if (loop_status != HYPERDEX_CLIENT_SUCCESS || call_status != HYPERDEX_CLIENT_SUCCESS) {
+        WDEBUG << "hyperdex error"
+               << ", call status: " << call_status
+               << ", loop status: " << loop_status << std::endl;
+        WDEBUG << "error message: " << cl.error_message() << std::endl;
+        WDEBUG << "error loc: " << cl.error_location() << std::endl;
     }
 }
 
@@ -90,28 +110,39 @@ hyper_stub_base :: hyper_multiple_call_and_loop(std::vector<hyper_func> &funcs,
     assert(map_num_calls == map_num_attrs.size());
     assert(map_num_calls == map_attrs.size());
 
-    hyperdex_client_returncode status;
+    hyperdex_client_returncode call_status[num_calls+map_num_calls];
     int hdex_id;
 
     uint64_t i = 0;
     for (; i < num_calls; i++) {
-        hdex_id = (cl.*funcs[i])(spaces[i], (const char*)&keys[i], sizeof(int64_t), attrs[i], num_attrs[i], &status);
+        hdex_id = (cl.*funcs[i])(spaces[i], (const char*)&keys[i], sizeof(int64_t), attrs[i], num_attrs[i], call_status+i);
         if (hdex_id < 0) {
-            WDEBUG << "Hyperdex function failed, op id = " << hdex_id << ", status = " << status << std::endl;
+            WDEBUG << "Hyperdex function failed, op id = " << hdex_id << ", status = " << call_status[i] << std::endl;
             break;
         }
     }
+
     for (uint64_t j = 0; j < map_num_calls; j++, i++) {
-        hdex_id = (cl.*map_funcs[j])(map_spaces[j], (const char*)&map_keys[j], sizeof(int64_t), map_attrs[j], map_num_attrs[j], &status);
+        hdex_id = (cl.*map_funcs[j])(map_spaces[j], (const char*)&map_keys[j], sizeof(int64_t), map_attrs[j], map_num_attrs[j], call_status+i);
         if (hdex_id < 0) {
-            WDEBUG << "Hyperdex map function failed, op id = " << hdex_id << ", status = " << status << std::endl;
+            WDEBUG << "Hyperdex map function failed, op id = " << hdex_id << ", status = " << call_status[i] << std::endl;
             return;
         }
     }
+
+    hyperdex_client_returncode loop_status;
     for (; i > 0; i--) {
-        hdex_id = cl.loop(-1, &status);
+        hdex_id = cl.loop(-1, &loop_status);
         if (hdex_id < 0) {
-            WDEBUG << "Hyperdex loop failed, op id = " << hdex_id << ", status = " << status << std::endl;
+            WDEBUG << "Hyperdex loop failed, op id = " << hdex_id << ", status = " << loop_status << std::endl;
+        }
+
+        if (loop_status != HYPERDEX_CLIENT_SUCCESS || call_status[i] != HYPERDEX_CLIENT_SUCCESS) {
+            WDEBUG << "hyperdex error at call " << i
+                   << ", call status: " << call_status
+                   << ", loop status: " << loop_status << std::endl;
+            WDEBUG << "error message: " << cl.error_message() << std::endl;
+            WDEBUG << "error loc: " << cl.error_location() << std::endl;
         }
     }
 }
@@ -120,16 +151,26 @@ void
 hyper_stub_base :: hyper_get_and_loop(const char *space, uint64_t key,
     const hyperdex_client_attribute **cl_attr, size_t *num_attrs)
 {
-    hyperdex_client_returncode status;
+    hyperdex_client_returncode get_status, loop_status;
     std::unique_ptr<int64_t> key_buf(new int64_t(key));
-    int64_t hdex_id = cl.get(space, (const char*)key_buf.get(), sizeof(int64_t), &status, cl_attr, num_attrs);
+
+    int64_t hdex_id = cl.get(space, (const char*)key_buf.get(), sizeof(int64_t), &get_status, cl_attr, num_attrs);
     if (hdex_id < 0) {
-        WDEBUG << "Hyperdex get failed, op id = " << hdex_id << ", status = " << status << std::endl;
+        WDEBUG << "Hyperdex get failed, op id = " << hdex_id << ", status = " << get_status << std::endl;
         return;
     }
-    hdex_id = cl.loop(-1, &status);
+
+    hdex_id = cl.loop(-1, &loop_status);
     if (hdex_id < 0) {
-        WDEBUG << "Hyperdex loop failed, op id = " << hdex_id << ", status = " << status << std::endl;
+        WDEBUG << "Hyperdex loop failed, op id = " << hdex_id << ", status = " << loop_status << std::endl;
+    }
+
+    if (loop_status != HYPERDEX_CLIENT_SUCCESS || get_status != HYPERDEX_CLIENT_SUCCESS) {
+        WDEBUG << "hyperdex error"
+               << ", call status: " << get_status
+               << ", loop status: " << loop_status << std::endl;
+        WDEBUG << "error message: " << cl.error_message() << std::endl;
+        WDEBUG << "error loc: " << cl.error_location() << std::endl;
     }
 }
 
@@ -144,22 +185,32 @@ hyper_stub_base :: hyper_multiple_get_and_loop(std::vector<const char*> &spaces,
     assert(num_calls == num_attrs.size());
     assert(num_calls == cl_attrs.size());
 
-    hyperdex_client_returncode status;
+    hyperdex_client_returncode get_status[num_calls];
     int64_t hdex_id;
     
     uint64_t i = 0;
     for (; i < num_calls; i++) {
-        hdex_id = cl.get(spaces[i], (const char*)&keys[i], sizeof(int64_t), &status, cl_attrs[i], num_attrs[i]);
+        hdex_id = cl.get(spaces[i], (const char*)&keys[i], sizeof(int64_t), get_status+i, cl_attrs[i], num_attrs[i]);
         if (hdex_id < 0) {
-            WDEBUG << "Hyperdex get failed, op id = " << hdex_id << ", status = " << status << std::endl;
+            WDEBUG << "Hyperdex get failed, op id = " << hdex_id << ", status = " << get_status[i] << std::endl;
             break;
         }
     }
+
+    hyperdex_client_returncode loop_status;
     for (; i > 0; i--) {
-        hdex_id = cl.loop(-1, &status);
+        hdex_id = cl.loop(-1, &loop_status);
         if (hdex_id < 0) {
-            WDEBUG << "Hyperdex loop failed, op id = " << hdex_id << ", status = " << status << std::endl;
+            WDEBUG << "Hyperdex loop failed, op id = " << hdex_id << ", status = " << loop_status << std::endl;
             continue;
+        }
+
+        if (loop_status != HYPERDEX_CLIENT_SUCCESS || get_status[i] != HYPERDEX_CLIENT_SUCCESS) {
+            WDEBUG << "hyperdex error"
+                   << ", call status: " << get_status[i]
+                   << ", loop status: " << loop_status << std::endl;
+            WDEBUG << "error message: " << cl.error_message() << std::endl;
+            WDEBUG << "error loc: " << cl.error_location() << std::endl;
         }
     }
 }
@@ -168,15 +219,24 @@ hyper_stub_base :: hyper_multiple_get_and_loop(std::vector<const char*> &spaces,
 void
 hyper_stub_base :: hyper_del_and_loop(const char *space, uint64_t key)
 {
-    hyperdex_client_returncode status;
-    int64_t hdex_id = cl.del(space, (const char*)&key, sizeof(int64_t), &status);
+    hyperdex_client_returncode del_status, loop_status;
+    int64_t hdex_id = cl.del(space, (const char*)&key, sizeof(int64_t), &del_status);
     if (hdex_id < 0) {
-        WDEBUG << "Hyperdex get failed, op id = " << hdex_id << ", status = " << status << std::endl;
+        WDEBUG << "Hyperdex get failed, op id = " << hdex_id << ", status = " << del_status << std::endl;
         return;
     }
-    hdex_id = cl.loop(-1, &status);
+
+    hdex_id = cl.loop(-1, &loop_status);
     if (hdex_id < 0) {
-        WDEBUG << "Hyperdex loop failed, op id = " << hdex_id << ", status = " << status << std::endl;
+        WDEBUG << "Hyperdex loop failed, op id = " << hdex_id << ", status = " << loop_status << std::endl;
+    }
+
+    if (loop_status != HYPERDEX_CLIENT_SUCCESS || del_status != HYPERDEX_CLIENT_SUCCESS) {
+        WDEBUG << "hyperdex error"
+               << ", call status: " << del_status
+               << ", loop status: " << loop_status << std::endl;
+        WDEBUG << "error message: " << cl.error_message() << std::endl;
+        WDEBUG << "error loc: " << cl.error_location() << std::endl;
     }
 }
 
