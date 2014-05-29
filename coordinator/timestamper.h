@@ -28,7 +28,6 @@
 #include <po6/threads/cond.h>
 
 #include "common/ids.h"
-#include "common/clock.h"
 #include "common/vclock.h"
 #include "common/message.h"
 #include "common/transaction.h"

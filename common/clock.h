@@ -16,66 +16,44 @@
 #define weaver_common_clock_h_
 
 #include <time.h>
-#include <sys/time.h>
 
-#ifdef __MACH__
-#include <mach/clock.h>
-#include <mach/mach.h>
-#endif
-
-#include "weaver_constants.h"
-
-#define GIGA (1000000000UL)
-#define MEGA (1000000UL)
+#include "common/weaver_constants.h"
 
 namespace wclock
 {
-
-    inline void get_clock(timespec *ts)
+    class weaver_timer
     {
-#ifdef __MACH__ // OS X does not have clock_gettime, use clock_get_time
-        clock_serv_t cclock;
-        mach_timespec_t mts;
-        host_get_clock_service(mach_host_self(), CALENDAR_CLOCK, &cclock);
-        clock_get_time(cclock, &mts);
-        mach_port_deallocate(mach_task_self(), cclock);
-        ts->tv_sec = mts.tv_sec;
-        ts->tv_nsec = mts.tv_nsec;
-#else
-        clock_gettime(CLOCK_MONOTONIC, ts);
-#endif
-    }
+        public:
+            timespec ts;
+            void get_clock();
+            weaver_timer() { get_clock(); }
+            double get_secs() { return ts.tv_sec + ((double)ts.tv_nsec)/GIGA; }
+            uint64_t get_nanosecs() { return ts.tv_nsec + ((uint64_t)ts.tv_sec)*GIGA; }
+            // return nanosecs elapsed since some fixed time
+            uint64_t get_time_elapsed();
+            // get_time_elapsed / 1000000
+            uint64_t get_time_elapsed_millis();
+            weaver_timer& operator-=(const weaver_timer &rhs);
+    };
 
-    // return nanosecs elapsed since some fixed time
-    inline uint64_t get_time_elapsed(timespec &ts)
+    inline weaver_timer
+    operator-(weaver_timer lhs, const weaver_timer &rhs)
     {
-        uint64_t ret = 0;
-        get_clock(&ts);
-        ret += ts.tv_sec * GIGA + ts.tv_nsec;
-        return ret;
-    }
-
-    // get_time_elapsed / 1000000
-    inline uint64_t get_time_elapsed_millis(timespec &ts)
-    {
-        uint64_t ret = get_time_elapsed(ts) / MEGA;
-        return ret;
-    }
-
-    inline double diff(timespec &start, timespec &end)
-    {
-        timespec temp;
-        if ((end.tv_nsec-start.tv_nsec)<0) {
-            temp.tv_sec = end.tv_sec-start.tv_sec-1;
-            temp.tv_nsec = GIGA + end.tv_nsec-start.tv_nsec;
+        if ((lhs.ts.tv_nsec-rhs.ts.tv_nsec)<0) {
+            lhs.ts.tv_sec  = lhs.ts.tv_sec - rhs.ts.tv_sec - 1;
+            lhs.ts.tv_nsec = GIGA + lhs.ts.tv_nsec - rhs.ts.tv_nsec;
         } else {
-            temp.tv_sec = end.tv_sec-start.tv_sec;
-            temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+            lhs.ts.tv_sec  -= rhs.ts.tv_sec;
+            lhs.ts.tv_nsec -= rhs.ts.tv_nsec;
         }
-        double ret = temp.tv_sec;
-        ret += (((double)temp.tv_nsec) / GIGA);
-        return ret;
+        return lhs;
     }
 
+    inline weaver_timer&
+    weaver_timer :: operator-=(const weaver_timer &rhs)
+    {
+        *this = *this - rhs;
+        return *this;
+    }
 }
 #endif

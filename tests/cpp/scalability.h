@@ -12,8 +12,9 @@
  * ===============================================================
  */
 
-#include "client/client.h"
 #include <po6/threads/mutex.h>
+#include "common/clock.h"
+#include "client/client.h"
 #include "test_base.h"
 #include "node_prog/n_hop_reach_program.h"
 
@@ -169,7 +170,8 @@ scale_test()
     std::thread *t[NUM_CLIENTS];
     WDEBUG << "starting threads" << std::endl;
     timespec ts;
-    uint64_t start = wclock::get_time_elapsed_millis(ts);
+    wclock::weaver_timer timer;
+    uint64_t start = timer.get_time_elapsed_millis();
     for (uint64_t i = 0; i < NUM_CLIENTS; i++) {
         t[i] = new std::thread(scale_client, i);
     }
@@ -177,7 +179,7 @@ scale_test()
         t[i]->join();
     }
 
-    uint64_t end = wclock::get_time_elapsed_millis(ts);
+    uint64_t end = timer.get_time_elapsed_millis();
     WDEBUG << "Time taken = " << (end-start) << std::endl;
     //double op_mult = (PERCENT_READS + (100-PERCENT_READS)*(1+NUM_NEW_EDGES)) /100.;
     double div = NUM_CLIENTS * OPS_PER_CLIENT;

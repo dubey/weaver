@@ -25,6 +25,7 @@
 #include "common/message_cache_context.h"
 #include "common/message_graph_elem.h"
 #include "common/nmap_stub.h"
+#include "common/clock.h"
 #include "db/shard.h"
 #include "db/nop_data.h"
 #include "db/message_wrapper.h"
@@ -2038,10 +2039,10 @@ main(int argc, char *argv[])
             WDEBUG << "Invalid graph file format" << std::endl;
         }
 
-        timespec ts;
-        uint64_t load_time = wclock::get_time_elapsed(ts);
+        wclock::weaver_timer timer;
+        uint64_t load_time = timer.get_time_elapsed();
         load_graph(format, argv[3]);
-        load_time = wclock::get_time_elapsed(ts) - load_time;
+        load_time = timer.get_time_elapsed() - load_time;
         message::message msg;
         message::prepare_message(msg, message::LOADED_GRAPH, load_time);
         S->comm.send(SHARD_ID_INCR, msg.buf);

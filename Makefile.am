@@ -80,6 +80,7 @@ shard_SOURCES=	common/ids.cc \
                 common/hyper_stub_base.cc \
                 common/event_order.cc \
                 common/nmap_stub.cc \
+                common/clock.cc \
                 node_prog/reach_program.cc \
                 node_prog/pathless_reach_program.cc \
                 node_prog/two_neighborhood_program.cc \
@@ -110,6 +111,7 @@ libclient_la_LIBS=		-lpython2.7 $(LIBS)
 
 # cpp tests
 bin_PROGRAMS+=				tests/cpp/tests
-tests_cpp_tests_SOURCES=	tests/cpp/run.cc
+tests_cpp_tests_SOURCES=	tests/cpp/run.cc \
+							common/clock.cc
 tests_cpp_tests_CFLAGS= 	$(AM_CFLAGS)
 tests_cpp_tests_CXXFLAGS= 	$(AM_CXXFLAGS)

@@ -118,12 +118,6 @@ namespace message
         ERROR
     };
 
-    enum edge_direction
-    {
-        FIRST_TO_SECOND = 0,
-        SECOND_TO_FIRST = 1
-    };
-
     class message
     {
         public:

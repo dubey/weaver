@@ -11,8 +11,9 @@
  * ===============================================================
  */
 
-#include "client/client.h"
 #include <vector>
+#include "common/clock.h"
+#include "client/client.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/clustering_program.h"
 #include "test_base.h"
@@ -84,15 +85,15 @@ multiple_clustering()
     test_graph *g = new test_graph(&c, time(NULL), num_nodes, num_edges, false, false);
     std::thread *t[MC_NUM_CLIENTS];
 
-    timespec ts;
-    uint64_t start = wclock::get_time_elapsed_millis(ts);
+    wclock::weaver_timer timer;
+    uint64_t start = timer.get_time_elapsed_millis();
     for (int i = 0; i < MC_NUM_CLIENTS; i++) {
         t[i] = new std::thread(single_clustering, i + CLIENT_ID, g);
     }
     for (int i = 0; i < MC_NUM_CLIENTS; i++) {
         t[i]->join();
     }
-    uint64_t end = wclock::get_time_elapsed_millis(ts);
+    uint64_t end = timer.get_time_elapsed_millis();
     DEBUG << "Time taken = " << (end-start) << std::endl;
     double div = MC_NUM_CLIENTS * MC_OPS_PER_CLIENT;
     DEBUG << "Per op = " << (end-start)/div << std::endl;

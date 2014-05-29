@@ -23,7 +23,6 @@
 
 #include "common/weaver_constants.h"
 #include "common/vclock.h"
-#include "common/clock.h"
 
 namespace order
 {

@@ -11,7 +11,6 @@
  * ===============================================================
  */
 
-#include "common/clock.h"
 #include "client/client.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/reach_program.h"
@@ -26,7 +25,6 @@ clique_reach_prog(bool to_exit)
 {
     client c(CLIENT_ID);
     int i, num_nodes;
-    timespec start, t1, t2, dif;
     std::vector<uint64_t> nodes, edges;
     srand(time(NULL));
     num_nodes = NUM_CLIQUES * CLIQUE_SIZE;
@@ -67,20 +65,8 @@ clique_reach_prog(bool to_exit)
     
     std::ofstream file, req_time;
     file.open("requests.rec");
-    req_time.open("time.rec");
-    wclock::get_clock(&t1);
-    start = t1;
     // random reachability requests
     for (i = 0; i < CRP_REQUESTS; i++) {
-        wclock::get_clock(&t2);
-        dif = diff(t1, t2);
-        WDEBUG << "Test: i = " << i << ", ";
-        WDEBUG << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
-        if (i % 10 == 0) {
-            dif = diff(start, t2);
-            req_time << dif.tv_sec << '.' << dif.tv_nsec << std::endl;
-        }
-        t1 = t2;
         int first = rand() % num_nodes;
         int second = rand() % num_nodes;
         while (second == first) {
@@ -94,13 +80,7 @@ clique_reach_prog(bool to_exit)
         assert(res->reachable);
     }
     file.close();
-    req_time.close();
-    dif = diff(start, t2);
-    WDEBUG << "Total time taken " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
-    std::ofstream stat_file;
-    stat_file.open("stats.rec", std::ios::out | std::ios::app);
-    stat_file << num_nodes << " " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
-    stat_file.close();
-    if (to_exit)
+    if (to_exit) {
         c.exit_weaver();
+    }
 }

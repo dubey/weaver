@@ -57,6 +57,8 @@
 #define TOP_MASK (0x0000ffffffffffffULL)
 #define GRAPH_FILE "graph.rec"
 #define NANO (1000000000ULL)
+#define GIGA (1000000000ULL)
+#define MEGA (1000000UL)
 #define INITIAL_TIMEOUT_NANO 5000000000 // number of nanoseconds initial delay
 #define SHARD_MSGRECV_TIMEOUT 1 // busybee recv timeout (ms) for shard worker threads
                                 // worker threads should constantly check for and execute queued_requests

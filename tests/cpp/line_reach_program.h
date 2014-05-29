@@ -55,14 +55,14 @@ line_reach_prog(bool)
     std::ofstream req_time;
     //file.open("requests.rec");
     req_time.open("time.rec");
-    timespec t;
+    wclock::weaver_timer timer;
     uint64_t start, t1, t2, diff;
-    start = wclock::get_time_elapsed(t);
+    start = timer.get_time_elapsed();
     t1 = start;
     // start migration
     c.start_migration();
     for (i = 0; i < LRP_REQUESTS; i++) {
-        t2 = wclock::get_time_elapsed(t);
+        t2 = timer.get_time_elapsed();
         diff = t2 - t1;
         WDEBUG << "Test: i = " << i << ", " << diff << std::endl;
         if (i % 10 == 0) {

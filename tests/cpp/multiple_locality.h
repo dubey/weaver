@@ -13,6 +13,7 @@
  * ===============================================================
  */
 
+#include "common/clock.h"
 #include "client/client.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/reach_program.h"
@@ -54,7 +55,6 @@ multiple_locality_prog(bool dense, bool to_exit)
 {
     client::client c(CLIENT_ID+2, 0);
     int i, num_nodes, num_edges;
-    timespec t;
     uint64_t seed = time(NULL);
 
     // creating graph
@@ -94,10 +94,11 @@ multiple_locality_prog(bool dense, bool to_exit)
     file.open("requests.rec");
     req_time.open("time_weaver.rec");
     uint64_t start, cur, prev, diff;
-    start = wclock::get_time_elapsed(t);
+    wclock::weaver_timer timer;
+    start = timer.get_time_elapsed();
     prev = start;
     for (i = 0; i < ML_REQUESTS; i++) {
-        cur = wclock::get_time_elapsed(t);
+        cur = timer.get_time_elapsed();
         diff = cur - prev;
         WDEBUG << "Test: i = " << i << ", " << diff << std::endl;
         req_time << diff << std::endl;

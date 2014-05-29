@@ -13,7 +13,6 @@
  * ===============================================================
  */
 
-#include "common/clock.h"
 #include "client/client.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/reach_program.h"
@@ -26,7 +25,6 @@ unreachable_reach_prog(bool to_exit)
 {
     client c(CLIENT_ID);
     int i, num_nodes, num_edges;
-    timespec first, t1, t2, dif;
     std::ofstream seed_file;
     uint64_t seed = time(NULL);
     WDEBUG << "seed " << seed << std::endl;
@@ -50,18 +48,7 @@ unreachable_reach_prog(bool to_exit)
     
     std::ofstream file, req_time;
     file.open("requests.rec");
-    req_time.open("time.rec");
-    wclock::get_clock(&t1);
-    first = t1;
     for (i = 0; i < URP_REQUESTS; i++) {
-        wclock::get_clock(&t2);
-        dif = diff(t1, t2);
-        WDEBUG << "Test: i = " << i << ", " << dif.tv_sec << ":" << dif.tv_nsec << std::endl;
-        if (i % 10 == 0) {
-            dif = diff(first, t2);
-            req_time << dif.tv_sec << '.' << dif.tv_nsec << std::endl;
-        }
-        t1 = t2;
         int first = rand() % num_nodes;
         file << first << " " << num_nodes << std::endl;
         std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args;
@@ -72,12 +59,5 @@ unreachable_reach_prog(bool to_exit)
         assert(!res->reachable);
     }
     file.close();
-    req_time.close();
-    dif = diff(first, t2);
-    WDEBUG << "Total time taken " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
-    std::ofstream stat_file;
-    stat_file.open("stats.rec", std::ios::out | std::ios::app);
-    stat_file << num_nodes << " " << dif.tv_sec << "." << dif.tv_nsec << std::endl;
-    stat_file.close();
     g.end_test();
 }

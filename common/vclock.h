@@ -33,11 +33,11 @@ namespace vc
             uint64_t vt_id;
             vclock_t clock;
 
-            vclock();
+            vclock() : vt_id(UINT64_MAX) { }
             vclock(uint64_t vt_id, uint64_t clk_init);
             vclock(uint64_t vt_id, vclock_t &vclk);
-            vclock_t get_clock();
-            void increment_clock();
+            vclock_t get_clock() { return clock; }
+            void increment_clock() { clock[vt_id]++; }
             void increment_counter(uint64_t index);
             void update_clock(uint64_t vt_id, uint64_t new_clock);
 
@@ -45,9 +45,6 @@ namespace vc
                 return vt_id == rhs.vt_id && clock == rhs.clock;
             }
     };
-
-    inline
-    vclock :: vclock() : vt_id(UINT64_MAX) { }
 
     inline
     vclock :: vclock(uint64_t vtid, uint64_t clk_init)
@@ -63,18 +60,6 @@ namespace vc
         , clock(vclk)
     {
         assert(vt_id < NUM_VTS || vt_id == UINT64_MAX);
-    }
-
-    inline vclock_t
-    vclock :: get_clock()
-    {
-        return clock;
-    }
-
-    inline void
-    vclock :: increment_clock()
-    {
-        clock[vt_id]++;
     }
 
     inline void
