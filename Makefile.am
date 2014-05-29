@@ -50,6 +50,7 @@ timestamper_SOURCES=common/comm_wrapper.cc \
                     common/nmap_stub.cc \
                     common/message.cc \
                     node_prog/edge_list.cc \
+                    node_prog/prop_list.cc \
                     node_prog/reach_program.cc \
                     node_prog/pathless_reach_program.cc \
                     node_prog/two_neighborhood_program.cc \
@@ -87,6 +88,7 @@ shard_SOURCES=	common/ids.cc \
                 common/message_graph_elem.cc \
                 common/message_cache_context.cc \
                 node_prog/edge_list.cc \
+                node_prog/prop_list.cc \
                 node_prog/reach_program.cc \
                 node_prog/pathless_reach_program.cc \
                 node_prog/two_neighborhood_program.cc \

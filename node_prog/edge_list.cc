@@ -11,6 +11,7 @@
  * ===============================================================
  */
 
+#include "common/event_order.h"
 #include "node_prog/edge_list.h"
 
 using node_prog::edge_map_iter;
@@ -30,7 +31,9 @@ edge_map_iter :: operator++()
 
 edge_map_iter :: edge_map_iter(edge_map_t::iterator begin, edge_map_t::iterator end,
     std::shared_ptr<vc::vclock> &req_time)
-    : internal_cur(begin), internal_end(end), req_time(req_time)
+    : internal_cur(begin)
+    , internal_end(end)
+    , req_time(req_time)
 {
     if (internal_cur != internal_end
      && !order::clock_creat_before_del_after(*req_time, internal_cur->second->base.get_creat_time(), internal_cur->second->base.get_del_time())) {

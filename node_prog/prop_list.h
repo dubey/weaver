@@ -1,5 +1,12 @@
 /*
  * ===============================================================
+ *    Description:  Node prog prop list implementation.
+ *
+ *        Created:  2014-05-29 19:08:19
+ *
+ *         Author:  Ayush Dubey, dubey@cs.cornell.edu
+ *                  Greg Hill, gdh39@cornell.edu
+ *
  * Copyright (C) 2013, Cornell University, see the LICENSE file
  *                     for licensing agreement
  * ===============================================================
@@ -8,70 +15,44 @@
 #ifndef weaver_node_prog_prop_list_h_
 #define weaver_node_prog_prop_list_h_
 
-#include <stdint.h>
-#include <iostream>
 #include <iterator>
 #include <vector>
-#include <unordered_map>
 
-#include "common/event_order.h"
-#include "node_prog/property.h"
 #include "db/element/property.h"
 
 namespace node_prog
 {
-    // TODO take off node_prog:: tags
-    class prop_iter : public std::iterator<std::input_iterator_tag, node_prog::property>
+    typedef std::vector<db::element::property> prop_vec_t;
+    class prop_iter : public std::iterator<std::input_iterator_tag, property>
     {
         private:
-            std::vector<db::element::property>::iterator internal_cur;
-            std::vector<db::element::property>::iterator internal_end;
-            vc::vclock& req_time;
+            prop_vec_t::iterator internal_cur;
+            prop_vec_t::iterator internal_end;
+            vc::vclock &req_time;
 
         public:
-            prop_iter& operator++() {
-                while (internal_cur != internal_end) {
-                    internal_cur++;
-                    if (internal_cur != internal_end && order::clock_creat_before_del_after(req_time,
-                                internal_cur->get_creat_time(), internal_cur->get_del_time())) {
-                        break;
-                    }
-                }
-                return *this;
-            }
-
-            prop_iter(std::vector<db::element::property>::iterator begin,
-                    std::vector<db::element::property>::iterator end, vc::vclock& req_time)
-                : internal_cur(begin), internal_end(end), req_time(req_time)
-            {
-
-                if (internal_cur != internal_end && !order::clock_creat_before_del_after(req_time,
-                            internal_cur->get_creat_time(), internal_cur->get_del_time())) {
-                    ++(*this);
-                }
-            }
-
-            bool operator!=(const prop_iter& rhs) const {return internal_cur != rhs.internal_cur || !(req_time == rhs.req_time);} // TODO == for req time?
-
-            node_prog::property& operator*() {return (node_prog::property &) *internal_cur;} // XXX change to static cast?
+            prop_iter& operator++();
+            prop_iter(prop_vec_t::iterator begin, prop_vec_t::iterator end, vc::vclock& req_time);
+            bool operator!=(const prop_iter& rhs) const;
+            property& operator*();
     };
 
     class prop_list
     {
         private:
-            std::vector<db::element::property>& wrapped;
+            prop_vec_t &wrapped;
             vc::vclock &req_time;
 
         public:
-            prop_list(std::vector<db::element::property>& prop_list, vc::vclock& req_time)
-                : wrapped(prop_list), req_time(req_time) {}
+            prop_list(prop_vec_t &prop_list, vc::vclock &req_time)
+                : wrapped(prop_list), req_time(req_time) { }
 
-            prop_iter begin () //const
+            prop_iter begin()
             {
                 return prop_iter(wrapped.begin(), wrapped.end(), req_time);
             }
 
-            prop_iter end () //const
+            prop_iter end()
             {
                 return prop_iter(wrapped.end(), wrapped.end(), req_time);
             }

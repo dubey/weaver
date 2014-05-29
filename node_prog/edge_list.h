@@ -15,9 +15,7 @@
 #define weaver_node_prog_edge_list_h_
 
 #include <stdint.h>
-#include <iostream>
 #include <iterator>
-#include <vector>
 #include <unordered_map>
 
 #include "node_prog/edge.h"
