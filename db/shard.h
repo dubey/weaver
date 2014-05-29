@@ -122,7 +122,6 @@ namespace db
             void increment_qts(hyper_stub *hs, uint64_t vt_id, uint64_t incr);
             void record_completed_tx(vc::vclock &tx_clk);
             element::node* acquire_node(uint64_t node_id);
-            void node_tx_order(uint64_t node, uint64_t vt_id, uint64_t qts);
             element::node* acquire_node_write(uint64_t node, uint64_t vt_id, uint64_t qts);
             element::node* acquire_node_nonlocking(uint64_t node_id);
             void release_node_write(hyper_stub *hs, element::node *n);
@@ -356,19 +355,6 @@ namespace db
         node_map_mutexes[map_idx].unlock();
 
         return n;
-    }
-
-    inline void
-    shard :: node_tx_order(uint64_t node, uint64_t vt_id, uint64_t qts)
-    {
-        uint64_t map_idx = node % NUM_NODE_MAPS;
-
-        node_map_mutexes[map_idx].lock();
-        auto node_iter = nodes[map_idx].find(node);
-        if (node_iter != nodes[map_idx].end()) {
-            node_iter->second->tx_queue.emplace_back(std::make_pair(vt_id, qts));
-        }
-        node_map_mutexes[map_idx].unlock();
     }
 
     inline element::node*
@@ -933,7 +919,7 @@ namespace db
     shard :: mark_nodes_using_state(uint64_t req_id, std::vector<uint64_t> &node_ids)
     {
         node_prog_state_mutex.lock();
-        bool done_request = done_ids.count(req_id) > 1;
+        bool done_request = (done_ids.find(req_id) != done_ids.end());
         if (!done_request) {
             auto state_list_iter = outstanding_prog_states.find(req_id);
             if (state_list_iter == outstanding_prog_states.end()) {
@@ -987,7 +973,7 @@ namespace db
     shard :: check_done_request(uint64_t req_id)
     {
         node_prog_state_mutex.lock();
-        bool done = done_ids.count(req_id) > 0;
+        bool done = (done_ids.find(req_id) != done_ids.end());
         node_prog_state_mutex.unlock();
         return done;
     }

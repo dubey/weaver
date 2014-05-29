@@ -713,7 +713,6 @@ inline bool
 fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<node_prog::node_cache_context>& toFill,
         vc::vclock& time_cached, vc::vclock& cur_time)
 {
-    // TODO maybe make this skip over locked nodes and retry fetching later
     for (uint64_t id : ids){
         db::element::node *node = S->acquire_node(id);
         if (node == NULL || node->state == db::element::node::mode::MOVED ||
