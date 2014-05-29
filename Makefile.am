@@ -48,6 +48,7 @@ timestamper_SOURCES=common/comm_wrapper.cc \
                     common/hyper_stub_base.cc \
                     common/event_order.cc \
                     common/nmap_stub.cc \
+                    common/message.cc \
                     node_prog/reach_program.cc \
                     node_prog/pathless_reach_program.cc \
                     node_prog/two_neighborhood_program.cc \
@@ -81,6 +82,7 @@ shard_SOURCES=	common/ids.cc \
                 common/event_order.cc \
                 common/nmap_stub.cc \
                 common/clock.cc \
+                common/message.cc \
                 node_prog/reach_program.cc \
                 node_prog/pathless_reach_program.cc \
                 node_prog/two_neighborhood_program.cc \
@@ -100,6 +102,7 @@ libclient_la_SOURCES=	common/ids.cc \
                         common/configuration.cc \
                         common/comm_wrapper.cc \
                         common/event_order.cc \
+                        common/message.cc \
                         client/client.cc \
                         bindings/python/libclient.cpp
 bindings/python/libclient.cpp:	bindings/python/libclient.pyx
@@ -112,6 +115,7 @@ libclient_la_LIBS=		-lpython2.7 $(LIBS)
 # cpp tests
 bin_PROGRAMS+=				tests/cpp/tests
 tests_cpp_tests_SOURCES=	tests/cpp/run.cc \
-							common/clock.cc
+							common/clock.cc \
+                            common/message.cc
 tests_cpp_tests_CFLAGS= 	$(AM_CFLAGS)
 tests_cpp_tests_CXXFLAGS= 	$(AM_CXXFLAGS)

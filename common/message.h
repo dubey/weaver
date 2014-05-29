@@ -121,18 +121,47 @@ namespace message
     class message
     {
         public:
-            message();
-            message(enum msg_type t);
-            message(message &copy);
-
-        public:
             enum msg_type type;
             std::auto_ptr<e::buffer> buf;
 
-        public:
-            void change_type(enum msg_type t);
+            message() : type(ERROR), buf(NULL) { }
+            message(enum msg_type t) : type(t), buf(NULL) { }
+            message(message &copy) : type(copy.type) { buf.reset(copy.buf->copy()); }
+
+            void change_type(enum msg_type t) { type = t; }
+
+            void prepare_message(const enum msg_type given_type);
+            template <typename... Args> void prepare_message(const enum msg_type given_type, const Args&... args);
+            template <typename... Args> void unpack_message(const enum msg_type expected_type, Args&... args);
+            template <typename... Args> void unpack_partial_message(const enum msg_type expected_type, Args&... args);
+            enum msg_type unpack_message_type();
+            void unpack_client_tx(transaction::pending_tx &tx);
+
+        private:
+            template <typename... Args> void unpack_message_internal(bool check_empty, const enum msg_type expected_type, Args&... args);
     };
 
+    uint64_t size(const enum msg_type &);
+    uint64_t size(const enum node_prog::prog_type&);
+    uint64_t size(const enum transaction::update_type&);
+    uint64_t size(const node_prog::Node_Parameters_Base &t);
+    uint64_t size(const node_prog::Node_State_Base &t);
+    uint64_t size(const node_prog::Cache_Value_Base &t);
+    uint64_t size(const bool&);
+    uint64_t size(const char&);
+    uint64_t size(const uint16_t&);
+    uint64_t size(const uint32_t&);
+    uint64_t size(const uint64_t&);
+    uint64_t size(const int64_t&);
+    uint64_t size(const int&);
+    uint64_t size(const double&);
+    uint64_t size(const std::string &t);
+    uint64_t size(const vc::vclock &t);
+    uint64_t size(const node_prog::property &t);
+    uint64_t size(const db::element::property &t);
+    uint64_t size(const db::element::remote_node &t);
+    uint64_t size(const std::shared_ptr<transaction::pending_update> &ptr_t);
+    uint64_t size(const transaction::pending_tx &t);
     template <typename T1, typename T2> inline uint64_t size(const std::unordered_map<T1, T2>& t);
     template <typename T> inline uint64_t size(const std::unordered_set<T>& t);
     template <typename T> inline uint64_t size(const std::vector<T>& t);
@@ -148,7 +177,28 @@ namespace message
     uint64_t size(const db::element::edge* const &t);
     uint64_t size(const db::element::node &t);
 
-    template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
+    void pack_buffer(e::buffer::packer &packer, const node_prog::Node_Parameters_Base &t);
+    void pack_buffer(e::buffer::packer &packer, const node_prog::Node_State_Base &t);
+    void pack_buffer(e::buffer::packer &packer, const node_prog::Cache_Value_Base *&t);
+    void pack_buffer(e::buffer::packer &packer, const enum msg_type &t);    
+    void pack_buffer(e::buffer::packer &packer, const enum node_prog::prog_type &t);
+    void pack_buffer(e::buffer::packer &packer, const enum transaction::update_type&t);
+    void pack_buffer(e::buffer::packer &packer, const bool &t);
+    void pack_buffer(e::buffer::packer &packer, const uint8_t &t);
+    void pack_buffer(e::buffer::packer &packer, const uint16_t &t);
+    void pack_buffer(e::buffer::packer &packer, const uint32_t &t);
+    void pack_buffer(e::buffer::packer &packer, const uint64_t &t);
+    void pack_buffer(e::buffer::packer &packer, const int64_t &t);
+    void pack_buffer(e::buffer::packer &packer, const int &t);
+    void pack_buffer(e::buffer::packer &packer, const double &t);
+    void pack_buffer(e::buffer::packer &packer, const std::string &t);
+    void pack_buffer(e::buffer::packer &packer, const vc::vclock &t);
+    void pack_buffer(e::buffer::packer &packer, const node_prog::property &t);
+    void pack_buffer(e::buffer::packer &packer, const db::element::property &t);
+    void pack_buffer(e::buffer::packer &packer, const db::element::remote_node &t);
+    void pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::pending_update> &ptr_t);
+    void pack_buffer(e::buffer::packer &packer, const transaction::pending_tx &t);
+    template <typename T1, typename T2> void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::vector<T>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::deque<T>& t);
@@ -163,174 +213,43 @@ namespace message
     void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::node &t);
 
-    template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
-    template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
-    template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::vector<T>& t);
-    template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::deque<T>& t);
+    void unpack_buffer(e::unpacker &unpacker, node_prog::Node_Parameters_Base &t);
+    void unpack_buffer(e::unpacker &unpacker, node_prog::Node_State_Base &t);
+    void unpack_buffer(e::unpacker &unpacker, node_prog::Cache_Value_Base &t);
+    void unpack_buffer(e::unpacker &unpacker, enum msg_type &t);
+    void unpack_buffer(e::unpacker &unpacker, enum node_prog::prog_type &t);
+    void unpack_buffer(e::unpacker &unpacker, enum transaction::update_type &t);
+    void unpack_buffer(e::unpacker &unpacker, bool &t);
+    void unpack_buffer(e::unpacker &unpacker, uint8_t &t);
+    void unpack_buffer(e::unpacker &unpacker, uint16_t &t);
+    void unpack_buffer(e::unpacker &unpacker, uint32_t &t);
+    void unpack_buffer(e::unpacker &unpacker, uint64_t &t);
+    void unpack_buffer(e::unpacker &unpacker, int64_t &t);
+    void unpack_buffer(e::unpacker &unpacker, int &t);
+    void unpack_buffer(e::unpacker &unpacker, double &t);
+    void unpack_buffer(e::unpacker &unpacker, std::string &t);
+    void unpack_buffer(e::unpacker &unpacker, vc::vclock &t);
+    void unpack_buffer(e::unpacker &unpacker, node_prog::property &t);
+    void unpack_buffer(e::unpacker &unpacker, db::element::property &t);
+    void unpack_buffer(e::unpacker &unpacker, db::element::remote_node& t);
+    void unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::pending_update> &ptr_t);
+    void unpack_buffer(e::unpacker &unpacker, transaction::pending_tx &t);
+    template <typename T1, typename T2> void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
+    template <typename T> void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
+    template <typename T> void unpack_buffer(e::unpacker& unpacker, std::vector<T>& t);
+    template <typename T> void unpack_buffer(e::unpacker& unpacker, std::deque<T>& t);
     template <typename T1, typename T2, typename T3> void unpack_buffer(e::unpacker&, std::priority_queue<T1, T2, T3>&);
-    template <typename T1, typename T2> inline void unpack_buffer(e::unpacker& unpacker, std::pair<T1, T2>& t);
-    template <typename T1, typename T2, typename T3> inline void unpack_buffer(e::unpacker& unpacker, std::tuple<T1, T2, T3>& t);
-    template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::shared_ptr<T> &ptr_t);
-    template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::unique_ptr<T> &ptr_t);
+    template <typename T1, typename T2> void unpack_buffer(e::unpacker& unpacker, std::pair<T1, T2>& t);
+    template <typename T1, typename T2, typename T3> void unpack_buffer(e::unpacker& unpacker, std::tuple<T1, T2, T3>& t);
+    template <typename T> void unpack_buffer(e::unpacker& unpacker, std::shared_ptr<T> &ptr_t);
+    template <typename T> void unpack_buffer(e::unpacker& unpacker, std::unique_ptr<T> &ptr_t);
     void unpack_buffer(e::unpacker &unpacker, node_prog::node_cache_context &t);
     void unpack_buffer(e::unpacker &unpacker, node_prog::edge_cache_context &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge *&t);
     void unpack_buffer(e::unpacker &unpacker, db::element::node &t);
 
-    inline
-    message :: message()
-        : type(ERROR)
-          , buf(NULL)
-    { }
-
-    inline
-    message :: message(enum msg_type t)
-        : type(t)
-          , buf(NULL)
-    { }
-
-    inline 
-    message :: message(message &copy)
-        : type(copy.type)
-    {
-        buf.reset(copy.buf->copy());
-    }
-
-    inline void
-    message :: change_type(enum msg_type t)
-    {
-        type = t;
-    }
-
     // size templates
-
-    inline uint64_t size(const enum msg_type &)
-    {
-        return sizeof(uint8_t);
-    }
-
-    inline uint64_t size(const enum node_prog::prog_type&)
-    {
-        return sizeof(uint8_t);
-    }
-
-    inline uint64_t size(const enum transaction::update_type&)
-    {
-        return sizeof(uint8_t);
-    }
-
-    inline uint64_t size(const node_prog::Node_Parameters_Base &t)
-    {
-        return t.size();
-    }
-
-    inline uint64_t size(const node_prog::Node_State_Base &t)
-    {
-        return t.size();
-    }
-
-    inline uint64_t size(const node_prog::Cache_Value_Base &t)
-    {
-        return t.size();
-    }
-
-    inline uint64_t size(const bool&)
-    {
-        return sizeof(uint8_t);
-    }
-
-    inline uint64_t size(const char&)
-    {
-        return sizeof(uint8_t);
-    }
-
-    inline uint64_t size(const uint16_t&)
-    {
-        return sizeof(uint16_t);
-    }
-
-    inline uint64_t size(const uint32_t&)
-    {
-        return sizeof(uint32_t);
-    }
-
-    inline uint64_t size(const uint64_t&)
-    {
-        return sizeof(uint64_t);
-    }
-
-    inline uint64_t size(const int64_t&)
-    {
-        return sizeof(int64_t);
-    }
-
-    inline uint64_t size(const int&)
-    {
-        return sizeof(int);
-    }
-
-    inline uint64_t size(const double&)
-    {
-        return sizeof(uint64_t);
-    }
-
-    inline uint64_t size(const std::string &t)
-    {
-        return t.size() + sizeof(uint32_t);
-    }
-
-    inline uint64_t size(const vc::vclock &t)
-    {
-        return size(t.vt_id)
-            + size(t.clock);
-    }
-
-    inline uint64_t size(const node_prog::property &t)
-    {
-        return size(t.key)
-            + size(t.value);
-    }
-
-    inline uint64_t size(const db::element::property &t)
-    {
-        return size(t.key)
-            + size(t.value)
-            + 2*size(t.creat_time); // for del time
-    }
-
-    inline uint64_t size(const db::element::remote_node &t)
-    {
-        return size(t.loc) + size(t.id);
-    }
-
-    inline uint64_t
-    size(const std::shared_ptr<transaction::pending_update> &ptr_t)
-    {
-        transaction::pending_update &t = *ptr_t;
-        uint64_t sz = size(t.type)
-             + size(t.qts)
-             + size(t.id)
-             + size(t.elem1)
-             + size(t.elem2)
-             + size(t.loc1)
-             + size(t.loc2);
-        if (t.type == transaction::NODE_SET_PROPERTY
-         || t.type == transaction::EDGE_SET_PROPERTY) {
-            sz += size(*t.key)
-             + size(*t.value);
-        }
-        return sz;
-    }
-
-    inline uint64_t
-    size(const transaction::pending_tx &t)
-    {
-        return size(t.id)
-             + size(t.client_id)
-             + size(t.writes)
-             + size(t.timestamp);
-    }
 
     template <typename T1, typename T2>
     inline uint64_t size(const std::pair<T1, T2> &t)
@@ -433,174 +352,6 @@ namespace message
 
 
     // packing templates
-
-    inline void pack_buffer(e::buffer::packer &packer, const node_prog::Node_Parameters_Base &t)
-    {
-        t.pack(packer);
-    }
-
-    inline void pack_buffer(e::buffer::packer &packer, const node_prog::Node_State_Base &t)
-    {
-        t.pack(packer);
-    }
-
-    inline void pack_buffer(e::buffer::packer &packer, const node_prog::Cache_Value_Base *&t)
-    {
-        t->pack(packer);
-    }
-
-    inline void pack_buffer(e::buffer::packer &packer, const enum msg_type &t)
-    {
-        assert(t <= UINT8_MAX);
-        uint8_t temp = (uint8_t) t;
-        packer = packer << temp;
-    }
-    
-    inline void pack_buffer(e::buffer::packer &packer, const enum node_prog::prog_type &t)
-    {
-        assert(t <= UINT8_MAX);
-        uint8_t temp = (uint8_t) t;
-        packer = packer << temp;
-    }
-
-    inline void pack_buffer(e::buffer::packer &packer, const enum transaction::update_type&t)
-    {
-        assert(t <= UINT8_MAX);
-        uint8_t temp = (uint8_t) t;
-        packer = packer << temp;
-    }
-
-    inline void pack_buffer(e::buffer::packer &packer, const bool &t)
-    {
-        uint8_t to_pack = 0;
-        if (t) {
-            to_pack = 1;
-        }
-        packer = packer << to_pack;
-    }
-
-    inline void 
-    pack_buffer(e::buffer::packer &packer, const uint8_t &t)
-    {
-        packer = packer << t;
-    }
-
-    inline void 
-    pack_buffer(e::buffer::packer &packer, const uint16_t &t)
-    {
-        packer = packer << t;
-    }
-
-    inline void 
-    pack_buffer(e::buffer::packer &packer, const uint32_t &t)
-    {
-        packer = packer << t;
-    }
-
-    inline void 
-    pack_buffer(e::buffer::packer &packer, const uint64_t &t)
-    {
-        packer = packer << t;
-    }
-
-    inline void
-    pack_buffer(e::buffer::packer &packer, const int64_t &t)
-    {
-        packer = packer << t;
-    }
-
-    inline void 
-    pack_buffer(e::buffer::packer &packer, const int &t)
-    {
-        packer = packer << t;
-    }
-
-    inline void 
-    pack_buffer(e::buffer::packer &packer, const double &t)
-    {
-        uint64_t dbl;
-        memcpy(&dbl, &t, sizeof(double)); //to avoid casting issues, probably could avoid copy
-        packer = packer << dbl;
-    }
-
-    inline void 
-    pack_buffer(e::buffer::packer &packer, const std::string &t)
-    {
-        assert(t.size() <= UINT32_MAX);
-        uint32_t strlen = t.size();
-        packer = packer << strlen;
-
-        uint32_t words = strlen / 8;
-        uint32_t leftover_chars = strlen % 8;
-
-        const char *rawchars = t.data();
-        const uint64_t *rawwords = (const uint64_t*) rawchars;
-
-        for (uint32_t i = 0; i < words; i++) {
-            pack_buffer(packer, rawwords[i]);
-        }
-
-        for (uint32_t i = 0; i < leftover_chars; i++) {
-            pack_buffer(packer, (uint8_t) rawchars[words*8+i]);
-        }
-    }
-
-    inline void
-    pack_buffer(e::buffer::packer &packer, const vc::vclock &t)
-    {
-        pack_buffer(packer, t.vt_id);
-        pack_buffer(packer, t.clock);
-    }
-
-    inline void 
-    pack_buffer(e::buffer::packer &packer, const node_prog::property &t)
-    {
-        pack_buffer(packer, t.key);
-        pack_buffer(packer, t.value);
-    }
-
-    inline void 
-    pack_buffer(e::buffer::packer &packer, const db::element::property &t)
-    {
-        pack_buffer(packer, t.key);
-        pack_buffer(packer, t.value);
-        pack_buffer(packer, t.creat_time);
-        pack_buffer(packer, t.del_time);
-    }
-
-    inline void 
-    pack_buffer(e::buffer::packer &packer, const db::element::remote_node &t)
-    {
-        pack_buffer(packer, t.loc);
-        pack_buffer(packer, t.id);
-    }
-
-    inline void
-    pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::pending_update> &ptr_t)
-    {
-        transaction::pending_update &t = *ptr_t;
-        pack_buffer(packer, t.type);
-        pack_buffer(packer, t.qts);
-        pack_buffer(packer, t.id);
-        pack_buffer(packer, t.elem1);
-        pack_buffer(packer, t.elem2);
-        pack_buffer(packer, t.loc1);
-        pack_buffer(packer, t.loc2);
-        if (t.type == transaction::NODE_SET_PROPERTY
-         || t.type == transaction::EDGE_SET_PROPERTY) {
-            pack_buffer(packer, *t.key);
-            pack_buffer(packer, *t.value);
-        }
-    }
-
-    inline void
-    pack_buffer(e::buffer::packer &packer, const transaction::pending_tx &t)
-    {
-        pack_buffer(packer, t.id);
-        pack_buffer(packer, t.client_id);
-        pack_buffer(packer, t.writes);
-        pack_buffer(packer, t.timestamp);
-    }
 
     template <typename T1, typename T2>
     inline void 
@@ -726,7 +477,6 @@ namespace message
         m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
         e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
 
-
         pack_buffer(packer, given_type);
         assert(packer.remain() == 0 && "reserved size for message not same as number of bytes packed");
     }
@@ -745,198 +495,8 @@ namespace message
         assert(packer.remain() == 0 && "reserved size for message not same as number of bytes packed");
     }
 
-    inline void
-    shift_buffer(message &m, uint32_t shift_off)
-    {
-        m.buf->shift(shift_off);
-    }
-
-    inline bool
-    empty_buffer(message &m)
-    {
-        return m.buf->empty();
-    }
-
 
     // unpacking templates
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, node_prog::Node_Parameters_Base &t)
-    {
-        t.unpack(unpacker);
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, node_prog::Node_State_Base &t)
-    {
-        t.unpack(unpacker);
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, node_prog::Cache_Value_Base &t)
-    {
-        t.unpack(unpacker);
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, enum msg_type &t)
-    {
-        uint8_t _type;
-        unpacker = unpacker >> _type;
-        t = (enum msg_type)_type;
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, enum node_prog::prog_type &t)
-    {
-        uint8_t _type;
-        unpacker = unpacker >> _type;
-        t = (enum node_prog::prog_type)_type;
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, enum transaction::update_type &t)
-    {
-        uint8_t _type;
-        unpacker = unpacker >> _type;
-        t = (enum transaction::update_type)_type;
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, bool &t)
-    {
-        uint8_t temp;
-        unpacker = unpacker >> temp;
-        t = (temp != 0);
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, uint8_t &t)
-    {
-        unpacker = unpacker >> t;
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, uint16_t &t)
-    {
-        unpacker = unpacker >> t;
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, uint32_t &t)
-    {
-        unpacker = unpacker >> t;
-    }
-
-    inline void 
-    unpack_buffer(e::unpacker &unpacker, uint64_t &t)
-    {
-        unpacker = unpacker >> t;
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, int64_t &t)
-    {
-        unpacker = unpacker >> t;
-    }
-
-    inline void 
-    unpack_buffer(e::unpacker &unpacker, int &t)
-    {
-        unpacker = unpacker >> t;
-    }
-
-    inline void 
-    unpack_buffer(e::unpacker &unpacker, double &t)
-    {
-        uint64_t dbl;
-        unpacker = unpacker >> dbl;
-        memcpy(&t, &dbl, sizeof(double)); //to avoid casting issues, probably could avoid copy
-    }
-
-    inline void 
-    unpack_buffer(e::unpacker &unpacker, std::string &t)
-    {
-        uint32_t strlen;
-        unpack_buffer(unpacker, strlen);
-        t.resize(strlen);
-
-        uint32_t words = strlen / 8;
-        uint32_t leftover_chars = strlen % 8;
-
-        const char* rawchars = t.data();
-        uint8_t* rawuint8s = (uint8_t*) rawchars;
-        uint64_t* rawwords = (uint64_t*) rawchars;
-
-        for (uint32_t i = 0; i < words; i++) {
-            unpack_buffer(unpacker, rawwords[i]);
-        }
-
-        for (uint32_t i = 0; i < leftover_chars; i++) {
-            unpack_buffer(unpacker, rawuint8s[words*8+i]);
-        }
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, vc::vclock &t)
-    {
-        unpack_buffer(unpacker, t.vt_id);
-        unpack_buffer(unpacker, t.clock);
-    }
-
-    inline void 
-    unpack_buffer(e::unpacker &unpacker, node_prog::property &t)
-    {
-        unpack_buffer(unpacker, t.key);
-        unpack_buffer(unpacker, t.value);
-    }
-    inline void 
-    unpack_buffer(e::unpacker &unpacker, db::element::property &t)
-    {
-        unpack_buffer(unpacker, t.key);
-        unpack_buffer(unpacker, t.value);
-        t.creat_time.clock.clear();
-        t.del_time.clock.clear();
-        unpack_buffer(unpacker, t.creat_time);
-        unpack_buffer(unpacker, t.del_time);
-    }
-
-    inline void 
-    unpack_buffer(e::unpacker &unpacker, db::element::remote_node& t)
-    {
-        unpack_buffer(unpacker, t.loc);
-        unpack_buffer(unpacker, t.id);
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::pending_update> &ptr_t)
-    {
-        ptr_t.reset(new transaction::pending_update());
-        transaction::pending_update &t = *ptr_t;
-        unpack_buffer(unpacker, t.type);
-        unpack_buffer(unpacker, t.qts);
-        unpack_buffer(unpacker, t.id);
-        unpack_buffer(unpacker, t.elem1);
-        unpack_buffer(unpacker, t.elem2);
-        unpack_buffer(unpacker, t.loc1);
-        unpack_buffer(unpacker, t.loc2);
-        if (t.type == transaction::NODE_SET_PROPERTY
-         || t.type == transaction::EDGE_SET_PROPERTY) {
-            t.key.reset(new std::string());
-            t.value.reset(new std::string());
-            unpack_buffer(unpacker, *t.key);
-            unpack_buffer(unpacker, *t.value);
-        }
-    }
-
-    inline void
-    unpack_buffer(e::unpacker &unpacker, transaction::pending_tx &t)
-    {
-        unpack_buffer(unpacker, t.id);
-        unpack_buffer(unpacker, t.client_id);
-        unpack_buffer(unpacker, t.writes);
-        unpack_buffer(unpacker, t.timestamp);
-    }
 
     template <typename T1, typename T2>
     inline void 
