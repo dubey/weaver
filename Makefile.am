@@ -83,6 +83,8 @@ shard_SOURCES=	common/ids.cc \
                 common/nmap_stub.cc \
                 common/clock.cc \
                 common/message.cc \
+                common/message_graph_elem.cc \
+                common/message_cache_context.cc \
                 node_prog/reach_program.cc \
                 node_prog/pathless_reach_program.cc \
                 node_prog/two_neighborhood_program.cc \

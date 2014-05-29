@@ -155,7 +155,7 @@ client :: end_tx(uint64_t tx_id)
             WDEBUG << "tx msg recv fail" << std::endl;
             return false;
         }
-        message::msg_type mtype = message::unpack_message_type(msg);
+        message::msg_type mtype = msg.unpack_message_type();
         assert(mtype == message::CLIENT_TX_DONE
             || mtype == message::CLIENT_TX_FAIL);
         if (mtype == message::CLIENT_TX_DONE) {
@@ -174,7 +174,7 @@ std::unique_ptr<ParamsType>
 client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args)
 {
     message::message msg;
-    message::prepare_message(msg, message::CLIENT_NODE_PROG_REQ, prog_to_run, initial_args);
+    msg.prepare_message(message::CLIENT_NODE_PROG_REQ, prog_to_run, initial_args);
     send_coord(msg.buf);
 
     busybee_returncode recv_code = recv_coord(&msg.buf);
@@ -191,7 +191,7 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
     uint64_t ignore_req_id;
     node_prog::prog_type ignore_type;
     std::unique_ptr<ParamsType> toRet(new ParamsType());
-    message::unpack_message(msg, message::NODE_PROG_RETURN, ignore_type, ignore_req_id, *toRet);
+    msg.unpack_message(message::NODE_PROG_RETURN, ignore_type, ignore_req_id, *toRet);
     return std::move(toRet);
 }
 
@@ -261,7 +261,7 @@ void
 client :: start_migration()
 {
     message::message msg;
-    message::prepare_message(msg, message::START_MIGR);
+    msg.prepare_message(message::START_MIGR);
     send_coord(msg.buf);
 }
 
@@ -269,7 +269,7 @@ void
 client :: single_stream_migration()
 {
     message::message msg;
-    message::prepare_message(msg, message::ONE_STREAM_MIGR);
+    msg.prepare_message(message::ONE_STREAM_MIGR);
     send_coord(msg.buf);
 
     if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
@@ -281,7 +281,7 @@ void
 client :: commit_graph()
 {
     message::message msg;
-    message::prepare_message(msg, message::CLIENT_COMMIT_GRAPH);
+    msg.prepare_message(message::CLIENT_COMMIT_GRAPH);
     send_coord(msg.buf);
 }
 
@@ -290,7 +290,7 @@ void
 client :: exit_weaver()
 {
     message::message msg;
-    message::prepare_message(msg, message::EXIT_WEAVER);
+    msg.prepare_message(message::EXIT_WEAVER);
     send_coord(msg.buf);
 }
 
@@ -298,7 +298,7 @@ void
 client :: print_msgcount()
 {
     message::message msg;
-    message::prepare_message(msg, message::CLIENT_MSG_COUNT);
+    msg.prepare_message(message::CLIENT_MSG_COUNT);
     send_coord(msg.buf);
 }
 
@@ -306,14 +306,14 @@ std::vector<uint64_t>
 client :: get_node_count()
 {
     message::message msg;
-    message::prepare_message(msg, message::CLIENT_NODE_COUNT);
+    msg.prepare_message(message::CLIENT_NODE_COUNT);
     send_coord(msg.buf);
 
     if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
         WDEBUG << "node count return msg fail" << std::endl;
     }
     std::vector<uint64_t> node_count;
-    message::unpack_message(msg, message::NODE_COUNT_REPLY, node_count);
+    msg.unpack_message(message::NODE_COUNT_REPLY, node_count);
     return node_count;
 }
 

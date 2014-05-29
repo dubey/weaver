@@ -241,7 +241,7 @@ namespace coordinator
         //        // only nop was pending, if any
         //        // send msg to advance clock
         //        message::message msg;
-        //        message::prepare_message(msg, message::SET_QTS, vt_id, qts[sid]);
+        //        msg.prepare_message(message::SET_QTS, vt_id, qts[sid]);
         //        comm.send(changed, msg.buf);
         //        WDEBUG << "sent set qts msg to shard " << changed << std::endl;
         //    }
@@ -255,7 +255,7 @@ namespace coordinator
     timestamper :: unpack_tx(nmap::nmap_stub *nmap_cl, message::message &msg, transaction::pending_tx &tx,
         uint64_t client_id, std::vector<uint64_t> &del_elems)
     {
-        message::unpack_client_tx(msg, tx);
+        msg.unpack_client_tx(tx);
         tx.id = generate_id();
         tx.client_id = client_id;
 

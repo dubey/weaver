@@ -23,7 +23,8 @@
 #include <e/buffer.h>
 #include <hyperdex/client.hpp>
 
-#include "common/message_graph_elem.h"
+#include "common/weaver_constants.h"
+#include "common/message.h"
 
 class hyper_stub_base
 {

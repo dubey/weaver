@@ -805,7 +805,7 @@ namespace db
         // this loop isn't executed in case of deletion of migrated nodes
         if (n->state != element::node::mode::MOVED) {
             for (uint64_t shard = SHARD_ID_INCR; shard < SHARD_ID_INCR + NUM_SHARDS; shard++) {
-                message::prepare_message(msg, message::PERMANENTLY_DELETED_NODE, n->base.get_id());
+                msg.prepare_message(message::PERMANENTLY_DELETED_NODE, n->base.get_id());
                 comm.send(shard, msg.buf);
             }
             for (auto &e: n->out_edges) {
@@ -850,7 +850,7 @@ namespace db
         migration_mutex.lock();
         if (old_loc != shard_id) {
             message::message msg;
-            message::prepare_message(msg, message::MIGRATED_NBR_ACK, shard_id, max_prog_id,
+            msg.prepare_message(message::MIGRATED_NBR_ACK, shard_id, max_prog_id,
                     shard_node_count[shard_id-SHARD_ID_INCR]);
             comm.send(old_loc, msg.buf);
         } else {

@@ -38,6 +38,7 @@ namespace db
 {
     namespace element
     {
+        class element;
         class node;
         class edge;
     }
@@ -173,6 +174,7 @@ namespace message
     template <typename T> inline uint64_t size(const std::unique_ptr<T> &ptr_t);
     uint64_t size(const node_prog::node_cache_context &t);
     uint64_t size(const node_prog::edge_cache_context &t);
+    uint64_t size(const db::element::element &t);
     uint64_t size(const db::element::edge &t);
     uint64_t size(const db::element::edge* const &t);
     uint64_t size(const db::element::node &t);
@@ -209,6 +211,7 @@ namespace message
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unique_ptr<T> &ptr_t);
     void pack_buffer(e::buffer::packer &packer, const node_prog::node_cache_context &t);
     void pack_buffer(e::buffer::packer &packer, const node_prog::edge_cache_context &t);
+    void pack_buffer(e::buffer::packer &packer, const db::element::element &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::edge &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::node &t);
@@ -245,6 +248,7 @@ namespace message
     template <typename T> void unpack_buffer(e::unpacker& unpacker, std::unique_ptr<T> &ptr_t);
     void unpack_buffer(e::unpacker &unpacker, node_prog::node_cache_context &t);
     void unpack_buffer(e::unpacker &unpacker, node_prog::edge_cache_context &t);
+    void unpack_buffer(e::unpacker &unpacker, db::element::element &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::edge *&t);
     void unpack_buffer(e::unpacker &unpacker, db::element::node &t);
@@ -470,12 +474,12 @@ namespace message
 
     // prepare message with only message_type and no additional payload
     inline void
-    prepare_message(message &m, const enum msg_type given_type)
+    message :: prepare_message(const enum msg_type given_type)
     {
         uint64_t bytes_to_pack = size(given_type);
-        m.type = given_type;
-        m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
-        e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
+        type = given_type;
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
+        e::buffer::packer packer = buf->pack_at(BUSYBEE_HEADER_SIZE); 
 
         pack_buffer(packer, given_type);
         assert(packer.remain() == 0 && "reserved size for message not same as number of bytes packed");
@@ -483,12 +487,12 @@ namespace message
 
     template <typename... Args>
     inline void
-    prepare_message(message &m, const enum msg_type given_type, const Args&... args)
+    message :: prepare_message(const enum msg_type given_type, const Args&... args)
     {
         uint64_t bytes_to_pack = size_wrapper(args...) + size(given_type);
-        m.type = given_type;
-        m.buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
-        e::buffer::packer packer = m.buf->pack_at(BUSYBEE_HEADER_SIZE); 
+        type = given_type;
+        buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
+        e::buffer::packer packer = buf->pack_at(BUSYBEE_HEADER_SIZE); 
 
         pack_buffer(packer, given_type);
         pack_buffer_wrapper(packer, args...);
@@ -628,10 +632,10 @@ namespace message
 
     template <typename... Args>
     inline void
-    unpack_message_internal(bool check_empty, const message &m, const enum msg_type expected_type, Args&... args)
+    message :: unpack_message_internal(bool check_empty, const enum msg_type expected_type, Args&... args)
     {
         enum msg_type received_type;
-        e::unpacker unpacker = m.buf->unpack_from(BUSYBEE_HEADER_SIZE);
+        e::unpacker unpacker = buf->unpack_from(BUSYBEE_HEADER_SIZE);
         assert(!unpacker.error());
 
         unpack_buffer(unpacker, received_type);
@@ -647,88 +651,18 @@ namespace message
 
     template <typename... Args>
     inline void
-    unpack_message(const message &m, const enum msg_type expected_type, Args&... args)
+    message :: unpack_message(const enum msg_type expected_type, Args&... args)
     {
-        unpack_message_internal(true, m , expected_type, args...);
+        unpack_message_internal(true, expected_type, args...);
     }
 
     template <typename... Args>
     inline void
-    unpack_partial_message(const message &m, const enum msg_type expected_type, Args&... args)
+    message :: unpack_partial_message(const enum msg_type expected_type, Args&... args)
     {
-        unpack_message_internal(false, m , expected_type, args...);
+        unpack_message_internal(false, expected_type, args...);
     }
 
-    inline enum msg_type
-    unpack_message_type(const message &m)
-    {
-        enum msg_type mtype;
-        auto unpacker = m.buf->unpack_from(BUSYBEE_HEADER_SIZE);
-        unpack_buffer(unpacker, mtype);
-        return mtype;
-    }
-
-    inline void
-    unpack_client_tx(message &m, transaction::pending_tx &tx)
-    {
-        uint32_t num_tx;
-        enum msg_type mtype;
-        e::unpacker unpacker = m.buf->unpack_from(BUSYBEE_HEADER_SIZE);
-        unpack_buffer(unpacker, mtype);
-        assert(mtype == CLIENT_TX_INIT);
-        unpack_buffer(unpacker, num_tx);
-
-        while (num_tx-- > 0) {
-            auto upd = *(tx.writes.emplace(tx.writes.end(), std::make_shared<transaction::pending_update>()));
-            unpack_buffer(unpacker, mtype);
-            switch (mtype) {
-                case CLIENT_NODE_CREATE_REQ:
-                    upd->type = transaction::NODE_CREATE_REQ;
-                    unpack_buffer(unpacker, upd->id); 
-                    break;
-
-                case CLIENT_EDGE_CREATE_REQ:
-                    upd->type = transaction::EDGE_CREATE_REQ;
-                    unpack_buffer(unpacker, upd->id);
-                    unpack_buffer(unpacker, upd->elem1);
-                    unpack_buffer(unpacker, upd->elem2);
-                    break;
-
-                case CLIENT_NODE_DELETE_REQ:
-                    upd->type = transaction::NODE_DELETE_REQ;
-                    unpack_buffer(unpacker, upd->elem1);
-                    break;
-
-                case CLIENT_EDGE_DELETE_REQ:
-                    upd->type = transaction::EDGE_DELETE_REQ;
-                    unpack_buffer(unpacker, upd->elem1);
-                    unpack_buffer(unpacker, upd->elem2);
-                    break;
-
-                case CLIENT_NODE_SET_PROP:
-                    upd->type = transaction::NODE_SET_PROPERTY;
-                    upd->key.reset(new std::string());
-                    upd->value.reset(new std::string());
-                    unpack_buffer(unpacker, upd->elem1);
-                    unpack_buffer(unpacker, *upd->key);
-                    unpack_buffer(unpacker, *upd->value);
-                    break;
-
-                case CLIENT_EDGE_SET_PROP:
-                    upd->type = transaction::EDGE_SET_PROPERTY;
-                    upd->key.reset(new std::string());
-                    upd->value.reset(new std::string());
-                    unpack_buffer(unpacker, upd->elem1);
-                    unpack_buffer(unpacker, upd->elem2);
-                    unpack_buffer(unpacker, *upd->key);
-                    unpack_buffer(unpacker, *upd->value);
-                    break;
-
-                default:
-                    WDEBUG << "bad msg type: " << mtype << std::endl;
-            }
-        }
-    }
 }
 
 #endif

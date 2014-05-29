@@ -64,7 +64,7 @@ prepare_del_transaction(transaction::pending_tx &tx, std::vector<uint64_t> &del_
     for (uint64_t i = 0; i < NUM_VTS; i++) {
         if (i != vt_id) {
             message::message msg;
-            message::prepare_message(msg, message::PREP_DEL_TX, vt_id, tx.id, tx.client_id, del_elems);
+            msg.prepare_message(message::PREP_DEL_TX, vt_id, tx.id, tx.client_id, del_elems);
             vts->comm.send(i, msg.buf);
         }
     }
@@ -113,7 +113,7 @@ begin_transaction(transaction::pending_tx &tx, coordinator::hyper_stub *hstub)
         if (!tv[i].writes.empty()) {
             tv[i].timestamp = tx.timestamp;
             tv[i].id = tx.id;
-            message::prepare_message(msg, message::TX_INIT, vt_id, tx.timestamp, tv[i].writes.at(0)->qts, tx.id, tv[i].writes);
+            msg.prepare_message(message::TX_INIT, vt_id, tx.timestamp, tv[i].writes.at(0)->qts, tx.id, tv[i].writes);
             vts->comm.send(tv[i].writes.at(0)->loc1, msg.buf);
         }
     }
@@ -177,7 +177,7 @@ end_transaction(uint64_t tx_id, coordinator::hyper_stub *hstub)
 
         // send response to client
         message::message msg;
-        message::prepare_message(msg, message::CLIENT_TX_DONE);
+        msg.prepare_message(message::CLIENT_TX_DONE);
         vts->comm.send(client_id, msg.buf);
     } else {
         vts->tx_prog_mutex.unlock();
@@ -260,7 +260,7 @@ nop_function()
                 if (vts->to_nop[shard_id]) {
                     assert(vclk.clock.size() == NUM_VTS);
                     assert(max_done_clk.size() == NUM_VTS);
-                    message::prepare_message(msg, message::VT_NOP, vt_id, vclk, qts, req_id,
+                    msg.prepare_message(message::VT_NOP, vt_id, vclk, qts, req_id,
                         done_reqs[shard_id], max_done_id, max_done_clk,
                         num_outstanding_progs, vts->shard_node_count);
                     vts->comm.send(shard_id + SHARD_ID_INCR, msg.buf);
@@ -283,7 +283,7 @@ nop_function()
         //    if (i == vt_id) {
         //        continue;
         //    }
-        //    message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, vclk.clock[vt_id]);
+        //    msg.prepare_message(message::VT_CLOCK_UPDATE, vt_id, vclk.clock[vt_id]);
         //    vts->comm.send(i, msg.buf);
         //}
         ////}
@@ -325,7 +325,7 @@ clk_update_function()
             if (i == vt_id) {
                 continue;
             }
-            message::prepare_message(msg, message::VT_CLOCK_UPDATE, vt_id, vclk.clock[vt_id]);
+            msg.prepare_message(message::VT_CLOCK_UPDATE, vt_id, vclk.clock[vt_id]);
             vts->comm.send(i, msg.buf);
         }
 
@@ -341,7 +341,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     node_prog::prog_type pType;
     std::vector<std::pair<uint64_t, ParamsType>> initial_args;
 
-    message::unpack_message(*msg, message::CLIENT_NODE_PROG_REQ, pType, initial_args);
+    msg->unpack_message(message::CLIENT_NODE_PROG_REQ, pType, initial_args);
     
     // map from locations to a list of start_node_params to send to that shard
     std::unordered_map<uint64_t, std::deque<std::pair<uint64_t, ParamsType>>> initial_batches; 
@@ -381,7 +381,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     message::message msg_to_send;
     for (auto &batch_pair : initial_batches) {
-        message::prepare_message(msg_to_send, message::NODE_PROG, pType, vt_id, req_timestamp, req_id, batch_pair.second);
+        msg_to_send.prepare_message(message::NODE_PROG, pType, vt_id, req_timestamp, req_id, batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
     }
 }
@@ -447,7 +447,7 @@ server_loop(int thread_id)
             continue;
         } else {
             // good to go, unpack msg
-            mtype = message::unpack_message_type(*msg);
+            mtype = msg->unpack_message_type();
             sender -= ID_INCR;
 
             switch (mtype) {
@@ -456,7 +456,7 @@ server_loop(int thread_id)
                     transaction::pending_tx tx;
                     std::vector<uint64_t> del_elems;
                     if (!vts->unpack_tx(nmap_cl, *msg, tx, sender, del_elems)) {
-                        message::prepare_message(*msg, message::CLIENT_TX_FAIL);
+                        msg->prepare_message(message::CLIENT_TX_FAIL);
                         vts->comm.send(sender, msg->buf);
                     } else if (del_elems.size() > 0 && NUM_VTS > 1) {
                         prepare_del_transaction(tx, del_elems);
@@ -469,7 +469,7 @@ server_loop(int thread_id)
                 case message::PREP_DEL_TX: {
                     std::vector<uint64_t> del_elems;
                     uint64_t tx_id, tx_vt, client;
-                    message::unpack_message(*msg, message::PREP_DEL_TX, tx_vt, tx_id, client, del_elems);
+                    msg->unpack_message(message::PREP_DEL_TX, tx_vt, tx_id, client, del_elems);
                     vts->busy_mtx.lock();
                     for (uint64_t d: del_elems) {
                         assert(vts->deleted_elems.find(d) == vts->deleted_elems.end());
@@ -478,14 +478,14 @@ server_loop(int thread_id)
                         vts->other_deleted_elems[d] = client;
                     }
                     vts->busy_mtx.unlock();
-                    message::prepare_message(*msg, message::DONE_DEL_TX, tx_id);
+                    msg->prepare_message(message::DONE_DEL_TX, tx_id);
                     vts->comm.send(tx_vt, msg->buf);
                     break;
                 }
 
                 case message::DONE_DEL_TX: {
                     uint64_t tx_id;
-                    message::unpack_message(*msg, message::DONE_DEL_TX, tx_id);
+                    msg->unpack_message(message::DONE_DEL_TX, tx_id);
                     vts->busy_mtx.lock();
                     assert(vts->del_tx.find(tx_id) != vts->del_tx.end());
                     auto &cur_tx = vts->del_tx[tx_id];
@@ -503,12 +503,12 @@ server_loop(int thread_id)
 
                 case message::VT_CLOCK_UPDATE: {
                     uint64_t rec_vtid, rec_clock;
-                    message::unpack_message(*msg, message::VT_CLOCK_UPDATE, rec_vtid, rec_clock);
+                    msg->unpack_message(message::VT_CLOCK_UPDATE, rec_vtid, rec_clock);
                     vts->clk_rw_mtx.wrlock();
                     vts->clk_updates++;
                     vts->vclk.update_clock(rec_vtid, rec_clock);
                     vts->clk_rw_mtx.unlock();
-                    //message::prepare_message(*msg, message::VT_CLOCK_UPDATE_ACK);
+                    //msg->prepare_message(message::VT_CLOCK_UPDATE_ACK);
                     //vts->comm.send(rec_vtid, msg->buf);
                     break;
                 }
@@ -522,7 +522,7 @@ server_loop(int thread_id)
 
                 case message::VT_NOP_ACK: {
                     uint64_t shard_node_count, nop_qts, sid;
-                    message::unpack_message(*msg, message::VT_NOP_ACK, sender, nop_qts, shard_node_count);
+                    msg->unpack_message(message::VT_NOP_ACK, sender, nop_qts, shard_node_count);
                     sid = sender - SHARD_ID_INCR;
                     vts->periodic_update_mutex.lock();
                     if (nop_qts > vts->nop_ack_qts[sid]) {
@@ -540,7 +540,7 @@ server_loop(int thread_id)
                     vts->msg_count_acks = 0;
                     vts->msg_count_mutex.unlock();
                     for (uint64_t i = SHARD_ID_INCR; i < (SHARD_ID_INCR + NUM_SHARDS); i++) {
-                        message::prepare_message(*msg, message::MSG_COUNT, vt_id);
+                        msg->prepare_message(message::MSG_COUNT, vt_id);
                         vts->comm.send(i, msg->buf);
                     }
                     break;
@@ -548,7 +548,7 @@ server_loop(int thread_id)
 
                 case message::CLIENT_NODE_COUNT: {
                     vts->periodic_update_mutex.lock();
-                    message::prepare_message(*msg, message::NODE_COUNT_REPLY, vts->shard_node_count);
+                    msg->prepare_message(message::NODE_COUNT_REPLY, vts->shard_node_count);
                     vts->periodic_update_mutex.unlock();
                     vts->comm.send(sender, msg->buf);
                     break;
@@ -557,7 +557,7 @@ server_loop(int thread_id)
                 // shard messages
                 case message::LOADED_GRAPH: {
                     uint64_t load_time;
-                    message::unpack_message(*msg, message::LOADED_GRAPH, load_time);
+                    msg->unpack_message(message::LOADED_GRAPH, load_time);
                     vts->graph_load_mutex.lock();
                     if (load_time > vts->max_load_time) {
                         vts->max_load_time = load_time;
@@ -570,13 +570,13 @@ server_loop(int thread_id)
                 }
 
                 case message::TX_DONE:
-                    message::unpack_message(*msg, message::TX_DONE, tx_id);
+                    msg->unpack_message(message::TX_DONE, tx_id);
                     end_transaction(tx_id, hstub);
                     break;
 
                 case message::START_MIGR: {
                     uint64_t hops = UINT64_MAX;
-                    message::prepare_message(*msg, message::MIGRATION_TOKEN, hops, vt_id);
+                    msg->prepare_message(message::MIGRATION_TOKEN, hops, vt_id);
                     vts->comm.send(START_MIGR_ID, msg->buf); 
                     break;
                 }
@@ -586,7 +586,7 @@ server_loop(int thread_id)
                     vts->migr_mutex.lock();
                     vts->migr_client = sender;
                     vts->migr_mutex.unlock();
-                    message::prepare_message(*msg, message::MIGRATION_TOKEN, hops, vt_id);
+                    msg->prepare_message(message::MIGRATION_TOKEN, hops, vt_id);
                     vts->comm.send(START_MIGR_ID, msg->buf);
                     break;
                 }
@@ -595,7 +595,7 @@ server_loop(int thread_id)
                     vts->migr_mutex.lock();
                     uint64_t client = vts->migr_client;
                     vts->migr_mutex.unlock();
-                    message::prepare_message(*msg, message::DONE_MIGR);
+                    msg->prepare_message(message::DONE_MIGR);
                     vts->comm.send(client, msg->buf);
                     WDEBUG << "Shard node counts are:";
                     for (uint64_t &x: vts->shard_node_count) {
@@ -606,7 +606,7 @@ server_loop(int thread_id)
                 }
 
                 case message::CLIENT_NODE_PROG_REQ:
-                    message::unpack_partial_message(*msg, message::CLIENT_NODE_PROG_REQ, pType);
+                    msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
                     node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), sender, nmap_cl);
                     break;
 
@@ -614,7 +614,7 @@ server_loop(int thread_id)
                 case message::NODE_PROG_RETURN: {
                     uint64_t req_id;
                     node_prog::prog_type type;
-                    message::unpack_partial_message(*msg, message::NODE_PROG_RETURN, type, req_id); // don't unpack rest
+                    msg->unpack_partial_message(message::NODE_PROG_RETURN, type, req_id); // don't unpack rest
                     vts->tx_prog_mutex.lock();
                     auto outstanding_prog_iter = vts->outstanding_progs.find(req_id);
                     if (outstanding_prog_iter != vts->outstanding_progs.end()) { 
@@ -631,7 +631,7 @@ server_loop(int thread_id)
 
                 case message::MSG_COUNT: {
                     uint64_t shard, msg_count;
-                    message::unpack_message(*msg, message::MSG_COUNT, shard, msg_count);
+                    msg->unpack_message(message::MSG_COUNT, shard, msg_count);
                     vts->msg_count_mutex.lock();
                     vts->msg_count += msg_count;
                     if (++vts->msg_count_acks == NUM_SHARDS) {

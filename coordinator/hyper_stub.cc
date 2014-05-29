@@ -52,7 +52,7 @@ hyper_stub :: restore_backup(std::unordered_map<uint64_t, transaction::pending_t
     for (uint64_t i = 0; i < tx_ids.size(); i++, tx_iter++) {
         transaction::pending_tx tx;
         buf_wrapper.buf.reset(e::buffer::create(cl_attr_array[i]->value, cl_attr_array[i]->value_sz));
-        message::unpack_client_tx(buf_wrapper, txs[*tx_iter]);
+        buf_wrapper.unpack_client_tx(txs[*tx_iter]);
     }
 
     for (uint64_t i = 0; i < tx_ids.size(); i++) {
