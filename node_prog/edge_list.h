@@ -1,5 +1,11 @@
 /*
  * ===============================================================
+ *    Description:  Node prog edge list declaration.
+ *
+ *        Created:  2014-05-29 18:48:08
+ *
+ *         Author:  Ayush Dubey, dubey@cs.cornell.edu
+ *
  * Copyright (C) 2013, Cornell University, see the LICENSE file
  *                     for licensing agreement
  * ===============================================================
@@ -19,56 +25,31 @@
 
 namespace node_prog
 {
+    typedef std::unordered_map<uint64_t, db::element::edge*> edge_map_t;
     class edge_map_iter : public std::iterator<std::input_iterator_tag, edge>
     {
-        std::unordered_map<uint64_t, db::element::edge*>::iterator internal_cur;
-        std::unordered_map<uint64_t, db::element::edge*>::iterator internal_end;
+        edge_map_t::iterator internal_cur;
+        edge_map_t::iterator internal_end;
         std::shared_ptr<vc::vclock> req_time;
 
         public:
-        edge_map_iter& operator++()
-        {
-            while (internal_cur != internal_end) {
-                internal_cur++;
-                if (internal_cur != internal_end && order::clock_creat_before_del_after(*req_time,
-                            internal_cur->second->base.get_creat_time(), internal_cur->second->base.get_del_time())) {
-                    break;
-                }
-            }
-            return *this;
-        }
-
-        edge_map_iter(std::unordered_map<uint64_t, db::element::edge*>::iterator begin,
-                std::unordered_map<uint64_t, db::element::edge*>::iterator end, std::shared_ptr<vc::vclock> &req_time)
-            : internal_cur(begin), internal_end(end), req_time(req_time)
-        {
-            if (internal_cur != internal_end && !order::clock_creat_before_del_after(*req_time,
-                        internal_cur->second->base.get_creat_time(), internal_cur->second->base.get_del_time())) {
-                ++(*this);
-            }
-        }
-
-        bool operator==(const edge_map_iter& rhs) { return internal_cur == rhs.internal_cur && req_time == rhs.req_time; } // TODO == for req time?
-        bool operator!=(const edge_map_iter& rhs) { return internal_cur != rhs.internal_cur || !(req_time == rhs.req_time); } // TODO == for req time?
-
-        edge& operator*()
-        {
-            db::element::edge& toRet = *internal_cur->second;
-            toRet.base.view_time = req_time;
-            return (edge &) toRet; // XXX problem here?
-        }
+            edge_map_iter& operator++();
+            edge_map_iter(edge_map_t::iterator begin, edge_map_t::iterator end,
+                std::shared_ptr<vc::vclock> &req_time);
+            bool operator==(const edge_map_iter& rhs);
+            bool operator!=(const edge_map_iter& rhs);
+            edge& operator*();
     };
 
     class edge_list
     {
         private:
-            std::unordered_map<uint64_t, db::element::edge*>& wrapped;
-            std::shared_ptr<vc::vclock>& req_time;
+            edge_map_t &wrapped;
+            std::shared_ptr<vc::vclock> &req_time;
 
         public:
-            edge_list(std::unordered_map<uint64_t, db::element::edge*> &edge_list,
-                    std::shared_ptr<vc::vclock> &req_time)
-                : wrapped(edge_list), req_time(req_time) {}
+            edge_list(edge_map_t &edge_list, std::shared_ptr<vc::vclock> &req_time)
+                : wrapped(edge_list), req_time(req_time) { }
 
             edge_map_iter begin()
             {

@@ -25,8 +25,8 @@ namespace node_prog
         uint64_t edge_handle;
         db::element::remote_node nbr;
 
-        edge_cache_context() {};
-        edge_cache_context(uint64_t handle, db::element::remote_node &nbr) : edge_handle(handle), nbr(nbr) {};
+        edge_cache_context() { }
+        edge_cache_context(uint64_t handle, db::element::remote_node &nbr) : edge_handle(handle), nbr(nbr) { }
 
         std::vector<property> props_added;
         std::vector<property> props_deleted;
@@ -38,8 +38,8 @@ namespace node_prog
 
         bool node_deleted;
 
-        node_cache_context() {};
-        node_cache_context(uint64_t loc, uint64_t id, bool deleted) : node(loc, id), node_deleted(deleted) {};
+        node_cache_context() { }
+        node_cache_context(uint64_t loc, uint64_t id, bool deleted) : node(loc, id), node_deleted(deleted) { }
 
         std::vector<property> props_added;
         std::vector<property> props_deleted;
@@ -65,18 +65,20 @@ namespace node_prog
                 std::shared_ptr<std::vector<db::element::remote_node>>>> &came_from, uint64_t key_used, std::shared_ptr<Cache_Value_Base> &val,
                     std::shared_ptr<std::vector<db::element::remote_node>> watch_set_used)
                 : from_cache(came_from)
-                  , key(key_used)
-                  , watch_set(watch_set_used)
-                  { value = std::shared_ptr<CacheValueType>(std::dynamic_pointer_cast<CacheValueType>(val)); };
+              , key(key_used)
+              , watch_set(watch_set_used)
+          {
+              value = std::shared_ptr<CacheValueType>(std::dynamic_pointer_cast<CacheValueType>(val));
+          }
 
             // delete standard copy onstructors
             cache_response (const cache_response &) = delete;
             cache_response& operator=(cache_response const&) = delete;
 
             std::shared_ptr<CacheValueType> get_value() { return value; }
-            std::shared_ptr<std::vector<db::element::remote_node>> get_watch_set() { return watch_set; };
-            std::vector<node_cache_context> &get_context() { return context; };
-            void invalidate() { from_cache.erase(key); };
+            std::shared_ptr<std::vector<db::element::remote_node>> get_watch_set() { return watch_set; }
+            std::vector<node_cache_context> &get_context() { return context; }
+            void invalidate() { from_cache.erase(key); }
     };
 }
 
