@@ -14,15 +14,6 @@
 #include "client/client.h"
 #include "common/message.h"
 
-namespace order
-{
-    chronos_client *kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT);
-    po6::threads::mutex kronos_mutex;
-    std::list<uint64_t> *call_times = new std::list<uint64_t>();
-    uint64_t cache_hits = 0;
-    kronos_cache kcache;
-}
-
 namespace client
 {
 

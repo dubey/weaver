@@ -87,7 +87,6 @@ namespace client
             void reconfigure();
             uint64_t generate_handle();
     };
-
 }
 
 #endif
