@@ -23,15 +23,15 @@
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
 
+#include "common/weaver_constants.h"
 #include "node_prog/node.h"
 #include "node_prog/edge.h"
 #include "node_prog/edge_list.h"
 #include "node_prog/property.h"
 #include "node_prog/base_classes.h"
-#include "common/weaver_constants.h"
-#include "db/prog_cache.h"
-#include "element.h"
-#include "edge.h"
+#include "db/cache_entry.h"
+#include "db/element.h"
+#include "db/edge.h"
 
 namespace message
 {
@@ -80,8 +80,13 @@ namespace element
             // setting up the node
             std::vector<std::unique_ptr<message::message>> pending_requests;
 
-            // for node prog caching
-            db::caching::program_cache cache;
+            // node program cache
+            std::unordered_map<uint64_t, cache_entry> cache;
+            void add_cache_value(std::shared_ptr<vc::vclock> vc,
+                std::shared_ptr<node_prog::Cache_Value_Base> cache_value,
+                std::shared_ptr<std::vector<db::element::remote_node>> watch_set,
+                uint64_t key);
+            //db::caching::programcache cache;
 
             // node program state
             typedef std::unordered_map<uint64_t, std::shared_ptr<node_prog::Node_State_Base>> id_to_state_t;
@@ -125,7 +130,7 @@ namespace element
         , updated(true)
         , already_migr(false)
         , dependent_del(0)
-        , cache()
+        , cache(MAX_CACHE_ENTRIES)
     {
         int num_prog_types = node_prog::END;
         prog_states.resize(num_prog_types);
@@ -140,20 +145,39 @@ namespace element
         out_edges.emplace(e->get_id(), e);
     }
 
-    inline bool
-    compare_msg_cnt(const node *n1, const node *n2)
+    inline void
+    node :: add_cache_value(std::shared_ptr<vc::vclock> vc,
+        std::shared_ptr<node_prog::Cache_Value_Base> cache_value,
+        std::shared_ptr<std::vector<db::element::remote_node>> watch_set,
+        uint64_t key)
     {
-        uint64_t s1 = 0;
-        uint64_t s2 = 0;
-        for (uint32_t i: n1->msg_count) {
-            s1 += (uint64_t)i;
+#if MAX_CACHE_ENTRIES
+        // clear oldest entry if cache is full
+        if (MAX_CACHE_ENTRIES > 0 && cache.size() >= MAX_CACHE_ENTRIES) {
+            vc::vclock &oldest = *vc;
+            uint64_t key_to_del = key;
+            for (auto& kvpair : cache) {
+                vc::vclock &to_cmp = *kvpair.second.clk;
+                // don't talk to kronos just pick one to delete
+                if (order::compare_two_clocks(to_cmp.clock, oldest.clock) <= 0) {
+                    key_to_del = kvpair.first;
+                    oldest = to_cmp;
+                }
+            }
+            cache.erase(key_to_del);
         }
-        for (uint32_t i: n2->msg_count) {
-            s2 += (uint64_t)i;
-        }
-        return (s1<s2);
-    }
 
+        if (cache.size() < MAX_CACHE_ENTRIES) {
+            cache_entry new_entry(cache_value, vc, watch_set);
+            cache.emplace(key, new_entry);
+        }
+#else
+        UNUSED(vc);
+        UNUSED(cache_value);
+        UNUSED(watch_set);
+        UNUSED(key);
+#endif
+    }
 }
 }
 

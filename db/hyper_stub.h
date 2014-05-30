@@ -21,8 +21,8 @@
 #include "common/weaver_constants.h"
 #include "common/hyper_stub_base.h"
 #include "common/vclock.h"
-#include "db/element/node.h"
-#include "db/element/edge.h"
+#include "db/node.h"
+#include "db/edge.h"
 
 namespace db
 {

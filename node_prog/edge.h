@@ -12,8 +12,8 @@
 #include <vector>
 #include <po6/net/location.h>
 
-#include "db/element/remote_node.h"
-#include "property.h"
+#include "db/remote_node.h"
+#include "node_prog/property.h"
 
 namespace node_prog
 {

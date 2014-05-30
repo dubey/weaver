@@ -23,7 +23,7 @@
 
 #include "common/weaver_constants.h"
 #include "common/message.h"
-#include "db/element/remote_node.h"
+#include "db/remote_node.h"
 #include "node_prog/cache_response.h"
 #include "node_prog/node.h"
 #include "node_prog/edge.h"
@@ -75,41 +75,42 @@ namespace node_prog
     };
 
     template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-        struct node_prog_running_state //: public virtual node_prog::Packable XXX can't get making this packable to work
+    struct node_prog_running_state
     {
         private:
-        /* constructs a clone without start_node_params or cache_value */
-        node_prog_running_state(node_prog::prog_type _prog_type_recvd, uint64_t _vt_id, std::shared_ptr<vc::vclock> _req_vclock, uint64_t _req_id)
-            : prog_type_recvd(_prog_type_recvd)
-              , vt_id(_vt_id)
-              , req_vclock(_req_vclock)
-              , req_id(_req_id)
-        { };
+            /* constructs a clone without start_node_params or cache_value */
+            node_prog_running_state(node_prog::prog_type _prog_type_recvd, uint64_t _vt_id, std::shared_ptr<vc::vclock> _req_vclock, uint64_t _req_id)
+                : prog_type_recvd(_prog_type_recvd)
+                  , vt_id(_vt_id)
+                  , req_vclock(_req_vclock)
+                  , req_id(_req_id)
+            { };
         public:
-        node_prog::prog_type prog_type_recvd;
-        uint64_t vt_id;
-        std::shared_ptr<vc::vclock> req_vclock;
-        uint64_t req_id;
-        std::deque<std::pair<uint64_t, ParamsType>> start_node_params;
-        std::unique_ptr<cache_response<CacheValueType>> cache_value; // XXX unique ptr needed?
+            node_prog::prog_type prog_type_recvd;
+            uint64_t vt_id;
+            std::shared_ptr<vc::vclock> req_vclock;
+            uint64_t req_id;
+            std::deque<std::pair<uint64_t, ParamsType>> start_node_params;
+            std::unique_ptr<cache_response<CacheValueType>> cache_value;
 
-        node_prog_running_state() {};
-        // delete standard copy onstructors
-        node_prog_running_state(const node_prog_running_state &) = delete;
-        node_prog_running_state& operator=(node_prog_running_state const&) = delete;
+            node_prog_running_state() { }
+            // delete standard copy onstructors
+            node_prog_running_state(const node_prog_running_state &) = delete;
+            node_prog_running_state& operator=(node_prog_running_state const&) = delete;
 
-        node_prog_running_state clone_without_start_node_params() 
-        {
-            return node_prog_running_state(prog_type_recvd, vt_id, req_vclock, req_id);
-        }
+            node_prog_running_state clone_without_start_node_params() 
+            {
+                return node_prog_running_state(prog_type_recvd, vt_id, req_vclock, req_id);
+            }
 
-        node_prog_running_state(node_prog_running_state&& copy_from)
-            : prog_type_recvd(copy_from.prog_type_recvd)
-              , vt_id(copy_from.vt_id)
-              , req_vclock(copy_from.req_vclock)
-              , req_id(copy_from.req_id)
-              , start_node_params(copy_from.start_node_params)
-              , cache_value(std::move(copy_from.cache_value)){};
+            node_prog_running_state(node_prog_running_state&& copy_from)
+                : prog_type_recvd(copy_from.prog_type_recvd)
+                  , vt_id(copy_from.vt_id)
+                  , req_vclock(copy_from.req_vclock)
+                  , req_id(copy_from.req_id)
+                  , start_node_params(copy_from.start_node_params)
+                  , cache_value(std::move(copy_from.cache_value))
+            { }
    };
 
     class node_program

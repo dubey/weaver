@@ -53,7 +53,7 @@ end_program(int signum)
     exit(0);
 }
 
-inline void
+void
 prepare_del_transaction(transaction::pending_tx &tx, std::vector<uint64_t> &del_elems)
 {
     current_tx cur_tx(tx.client_id, tx);
@@ -73,7 +73,7 @@ prepare_del_transaction(transaction::pending_tx &tx, std::vector<uint64_t> &del_
 // expects an input of list of writes that are part of this transaction
 // for all writes, node mapper lookups should have already been performed
 // for create requests, instead of lookup an entry for new handle should have been inserted
-inline void
+void
 begin_transaction(transaction::pending_tx &tx, coordinator::hyper_stub *hstub)
 {
     typedef std::vector<transaction::pending_tx> tx_vec_t;
@@ -120,7 +120,7 @@ begin_transaction(transaction::pending_tx &tx, coordinator::hyper_stub *hstub)
 }
 
 // decrement reply count. if all replies have been received, ack to client
-inline void
+void
 end_transaction(uint64_t tx_id, coordinator::hyper_stub *hstub)
 {
     vts->tx_prog_mutex.lock();
@@ -185,7 +185,7 @@ end_transaction(uint64_t tx_id, coordinator::hyper_stub *hstub)
 }
 
 // single dedicated thread which wakes up after given timeout, sends updates, and sleeps
-inline void
+void
 nop_function()
 {
     timespec sleep_time;
@@ -298,7 +298,7 @@ nop_function()
     }
 }
 
-inline void
+void
 clk_update_function()
 {
     timespec sleep_time;
@@ -399,7 +399,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 // remove a completed node program from outstanding requests data structure
 // update 'max_done_id' and 'max_done_clk' accordingly
 // caution: need to hold vts->tx_prog_mutex
-inline void
+void
 mark_req_finished(uint64_t req_id)
 {
     assert(vts->seen_done_id.find(req_id) == vts->seen_done_id.end());

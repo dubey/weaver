@@ -13,9 +13,9 @@
 
 #include "common/message.h"
 #include "common/vclock.h"
-#include "db/element/node.h"
-#include "db/element/edge.h"
-#include "db/element/property.h"
+#include "db/node.h"
+#include "db/edge.h"
+#include "db/property.h"
 #include "node_prog/property.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/reach_program.h"

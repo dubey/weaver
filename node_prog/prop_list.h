@@ -18,7 +18,7 @@
 #include <iterator>
 #include <vector>
 
-#include "db/element/property.h"
+#include "db/property.h"
 
 namespace node_prog
 {

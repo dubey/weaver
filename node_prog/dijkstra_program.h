@@ -22,7 +22,7 @@
 #include "common/message.h"
 #include "node.h"
 #include "edge.h"
-#include "db/element/remote_node.h"
+#include "db/remote_node.h"
 
 namespace node_prog
 {

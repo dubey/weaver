@@ -106,7 +106,7 @@ cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
         READ_NODE_PROPS
         READ_EDGES_PROPS
 
-cdef extern from 'db/element/remote_node.h' namespace 'db::element':
+cdef extern from 'db/remote_node.h' namespace 'db::element':
     cdef cppclass remote_node:
         remote_node(uint64_t id, uint64_t handle)
         remote_node()

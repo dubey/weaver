@@ -16,7 +16,8 @@
 
 #include "base_classes.h"
 #include "property.h"
-#include "db/element/remote_node.h"
+#include "db/remote_node.h"
+#include "db/cache_entry.h"
 
 namespace node_prog
 {
@@ -53,20 +54,20 @@ namespace node_prog
     class cache_response
     {
         private:
-            std::unordered_map<uint64_t, std::tuple<std::shared_ptr<Cache_Value_Base>, std::shared_ptr<vc::vclock>,
-                std::shared_ptr<std::vector<db::element::remote_node>>>> &from_cache;
+            std::unordered_map<uint64_t, db::cache_entry> &from_cache;
             uint64_t key;
             std::shared_ptr<CacheValueType> value;
             std::shared_ptr<std::vector<db::element::remote_node>> watch_set;
             std::vector<node_cache_context> context;
 
         public:
-            cache_response(std::unordered_map<uint64_t, std::tuple<std::shared_ptr<Cache_Value_Base>, std::shared_ptr<vc::vclock>,
-                std::shared_ptr<std::vector<db::element::remote_node>>>> &came_from, uint64_t key_used, std::shared_ptr<Cache_Value_Base> &val,
-                    std::shared_ptr<std::vector<db::element::remote_node>> watch_set_used)
+            cache_response(std::unordered_map<uint64_t, db::cache_entry> &came_from,
+                uint64_t key_used,
+                std::shared_ptr<Cache_Value_Base> val,
+                std::shared_ptr<std::vector<db::element::remote_node>> watch_set_used)
                 : from_cache(came_from)
-              , key(key_used)
-              , watch_set(watch_set_used)
+                , key(key_used)
+                , watch_set(watch_set_used)
           {
               value = std::shared_ptr<CacheValueType>(std::dynamic_pointer_cast<CacheValueType>(val));
           }

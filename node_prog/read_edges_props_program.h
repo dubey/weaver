@@ -19,7 +19,7 @@
 #include <vector>
 #include <string>
 
-#include "db/element/remote_node.h"
+#include "db/remote_node.h"
 #include "node_prog/base_classes.h"
 #include "node_prog/node.h"
 #include "node_prog/cache_response.h"

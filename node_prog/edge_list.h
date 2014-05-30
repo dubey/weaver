@@ -18,8 +18,8 @@
 #include <iterator>
 #include <unordered_map>
 
+#include "db/edge.h"
 #include "node_prog/edge.h"
-#include "db/element/edge.h"
 
 namespace node_prog
 {

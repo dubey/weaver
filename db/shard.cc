@@ -27,8 +27,7 @@
 #include "db/shard.h"
 #include "db/nop_data.h"
 #include "db/message_wrapper.h"
-#include "db/element/remote_node.h"
-#include "db/prog_cache.h"
+#include "db/remote_node.h"
 #include "node_prog/node.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
@@ -847,17 +846,17 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
     assert(node_to_check != NULL);
     assert(!np.cache_value); // cache_value is not already assigned
     np.cache_value = NULL; // it is unallocated anyway
-    if (node_to_check->cache.cache.count(cache_key) == 0){
+    if (node_to_check->cache.find(cache_key) == node_to_check->cache.end()){
         return true;
     } else {
-        auto entry = node_to_check->cache.cache.at(cache_key);
-        std::shared_ptr<node_prog::Cache_Value_Base>& cval = std::get<0>(entry);
-        std::shared_ptr<vc::vclock> time_cached(std::get<1>(entry));
-        std::shared_ptr<std::vector<db::element::remote_node>>& watch_set = std::get<2>(entry);
+        auto entry = node_to_check->cache[cache_key];
+        std::shared_ptr<node_prog::Cache_Value_Base> cval = entry.val;
+        std::shared_ptr<vc::vclock> time_cached(entry.clk);
+        std::shared_ptr<std::vector<db::element::remote_node>> watch_set = entry.watch_set;
 
         auto state = get_state_if_exists(*node_to_check, np.req_id, np.prog_type_recvd);
-        if (state != NULL && state->contexts_found.find(np.req_id) != state->contexts_found.end()){
-            np.cache_value.reset(new node_prog::cache_response<CacheValueType>(node_to_check->cache.cache, cache_key, cval, watch_set));
+        if (state != NULL && state->contexts_found.find(np.req_id) != state->contexts_found.end()) {
+            np.cache_value.reset(new node_prog::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
 #ifdef weaver_debug_
             S->watch_set_lookups_mutex.lock();
             S->watch_set_nops++;
@@ -872,8 +871,8 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         }
         assert(cmp_1 == 0);
 
-        if (watch_set->empty()){ // no context needs to be fetched
-            np.cache_value.reset(new node_prog::cache_response<CacheValueType>(node_to_check->cache.cache, cache_key, cval, watch_set));
+        if (watch_set->empty()) { // no context needs to be fetched
+            np.cache_value.reset(new node_prog::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
             return true;
         }
 
@@ -900,7 +899,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
         }
 
         std::unique_ptr<node_prog::cache_response<CacheValueType>> future_cache_response(
-                new node_prog::cache_response<CacheValueType>(node_to_check->cache.cache, cache_key, cval, watch_set));
+                new node_prog::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
         S->release_node(node_to_check);
         node_to_check = NULL;
 
@@ -1024,8 +1023,10 @@ inline void node_prog_loop(
                 }
 
                 using namespace std::placeholders;
-                add_cache_func = std::bind(&db::caching::program_cache::add_cache_value, &(node->cache),
-                        np.prog_type_recvd, np.req_vclock, _1, _2, _3); // 1 is cache value, 2 is watch set, 3 is key
+                add_cache_func = std::bind(&db::element::node::add_cache_value, // function pointer
+                    node, // reference to object whose member-function is invoked
+                    np.req_vclock, // first argument of the function
+                    _1, _2, _3); // 1 is cache value, 2 is watch set, 3 is key
             }
 
             node_state_getter = std::bind(get_or_create_state<NodeStateType>, np.prog_type_recvd, np.req_id, node, &nodes_that_created_state); 

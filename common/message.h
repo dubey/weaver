@@ -31,8 +31,8 @@
 #include "node_prog/node_prog_type.h"
 #include "node_prog/base_classes.h"
 #include "node_prog/property.h"
-#include "db/element/remote_node.h"
-#include "db/element/property.h"
+#include "db/remote_node.h"
+#include "db/property.h"
 
 namespace db
 {
