@@ -18,12 +18,10 @@
 #include <vector>
 #include <string>
 
-#include "common/message.h"
-#include "common/vclock.h"
-#include "node.h"
-#include "edge.h"
-#include "cache_response.h"
+#include "node_prog/base_classes.h"
 #include "db/element/remote_node.h"
+#include "node_prog/node.h"
+#include "node_prog/cache_response.h"
 
 namespace node_prog
 {
@@ -39,47 +37,11 @@ namespace node_prog
             std::vector<std::pair<uint64_t, std::string>> responses;
 
         public:
-            virtual bool search_cache() {
-                return _search_cache;
-            }
-
-            virtual uint64_t cache_key() {
-                return std::hash<std::string>()(prop_key);
-            }
-
-            virtual uint64_t size() const 
-            {
-                uint64_t toRet = message::size(_search_cache)
-                    + message::size(cache_update)
-                    + message::size(prop_key)
-                    + message::size(on_hop)
-                    + message::size(outgoing)
-                    + message::size(prev_node)
-                    + message::size(responses);
-                return toRet;
-            }
-
-            virtual void pack(e::buffer::packer& packer) const 
-            {
-                message::pack_buffer(packer, _search_cache);
-                message::pack_buffer(packer, cache_update);
-                message::pack_buffer(packer, prop_key);
-                message::pack_buffer(packer, on_hop);
-                message::pack_buffer(packer, outgoing);
-                message::pack_buffer(packer, prev_node);
-                message::pack_buffer(packer, responses);
-            }
-
-            virtual void unpack(e::unpacker& unpacker)
-            {
-                message::unpack_buffer(unpacker, _search_cache);
-                message::unpack_buffer(unpacker, cache_update);
-                message::unpack_buffer(unpacker, prop_key);
-                message::unpack_buffer(unpacker, on_hop);
-                message::unpack_buffer(unpacker, outgoing);
-                message::unpack_buffer(unpacker, prev_node);
-                message::unpack_buffer(unpacker, responses);
-            }
+            bool search_cache();
+            uint64_t cache_key();
+            uint64_t size() const;
+            void pack(e::buffer::packer& packer) const;
+            void unpack(e::unpacker& unpacker);
     };
 
     struct two_neighborhood_state : public virtual Node_State_Base
@@ -90,75 +52,23 @@ namespace node_prog
         db::element::remote_node prev_node;
         std::vector<std::pair<uint64_t, std::string>> responses;
 
-        two_neighborhood_state()
-            : one_hop_visited(false)
-            , two_hop_visited(false)
-            , responses_left(0)
-            , prev_node()
-        { }
-
-        virtual ~two_neighborhood_state() { }
-
-        virtual uint64_t size() const
-        {
-            uint64_t toRet = message::size(one_hop_visited)
-                + message::size(two_hop_visited)
-                + message::size(responses_left)
-                + message::size(prev_node)
-                + message::size(responses);
-                return toRet;
-        }
-
-        virtual void pack(e::buffer::packer& packer) const 
-        {
-            message::pack_buffer(packer, one_hop_visited);
-            message::pack_buffer(packer, two_hop_visited);
-            message::pack_buffer(packer, responses_left);
-            message::pack_buffer(packer, prev_node);
-            message::pack_buffer(packer, responses);
-        }
-
-        virtual void unpack(e::unpacker& unpacker)
-        {
-            message::unpack_buffer(unpacker, one_hop_visited);
-            message::unpack_buffer(unpacker, two_hop_visited);
-            message::unpack_buffer(unpacker, responses_left);
-            message::unpack_buffer(unpacker, prev_node);
-            message::unpack_buffer(unpacker, responses);
-        }
+        two_neighborhood_state();
+        ~two_neighborhood_state() { }
+        uint64_t size() const;
+        void pack(e::buffer::packer& packer) const;
+        void unpack(e::unpacker& unpacker);
     };
 
     struct two_neighborhood_cache_value : public virtual Cache_Value_Base 
     {
-        public:
         std::string prop_key;
         std::vector<std::pair<uint64_t, std::string>> responses;
 
-        two_neighborhood_cache_value(std::string &prop_key, std::vector<std::pair<uint64_t, std::string>> &responses)
-            : prop_key(prop_key)
-            , responses(responses)
-        { }
-
-        virtual ~two_neighborhood_cache_value () { }
-
-        virtual uint64_t size() const 
-        {
-            uint64_t toRet = message::size(prop_key)
-                + message::size(responses);
-                return toRet;
-        }
-
-        virtual void pack(e::buffer::packer& packer) const 
-        {
-            message::pack_buffer(packer, prop_key);
-            message::pack_buffer(packer, responses);
-        }
-
-        virtual void unpack(e::unpacker& unpacker)
-        {
-            message::unpack_buffer(unpacker, prop_key);
-            message::unpack_buffer(unpacker, responses);
-        }
+        two_neighborhood_cache_value(std::string &prop_key, std::vector<std::pair<uint64_t, std::string>> &responses);
+        ~two_neighborhood_cache_value () { }
+        uint64_t size() const;
+        void pack(e::buffer::packer& packer) const;
+        void unpack(e::unpacker& unpacker);
     };
 
     std::pair<search_type, std::vector<std::pair<db::element::remote_node, two_neighborhood_params>>>

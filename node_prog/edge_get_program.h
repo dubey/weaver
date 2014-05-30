@@ -15,56 +15,40 @@
 #ifndef weaver_node_prog_edge_get_program_h_
 #define weaver_node_prog_edge_get_program_h_
 
+#include <vector>
+#include <string>
+
+#include "db/element/remote_node.h"
+#include "node_prog/base_classes.h"
+#include "node_prog/node.h"
+#include "node_prog/cache_response.h"
+
 namespace node_prog
 {
-    class edge_get_params : public virtual Node_Parameters_Base 
+    class edge_get_params : public Node_Parameters_Base 
     {
         public:
             uint64_t nbr_id;
             std::vector<std::pair<std::string, std::string>> edges_props;
             std::vector<uint64_t> return_edges;
 
-        public:
-            virtual bool search_cache() {
-                return false; // would never need to cache
-            }
-
-            virtual uint64_t cache_key() {
-                return 0;
-            }
-
-            virtual uint64_t size() const 
-            {
-                uint64_t toRet = message::size(nbr_id)
-                    + message::size(edges_props)
-                    + message::size(return_edges);
-                return toRet;
-            }
-
-            virtual void pack(e::buffer::packer& packer) const 
-            {
-                message::pack_buffer(packer, nbr_id);
-                message::pack_buffer(packer, edges_props);
-                message::pack_buffer(packer, return_edges);
-            }
-
-            virtual void unpack(e::unpacker& unpacker)
-            {
-                message::unpack_buffer(unpacker, nbr_id);
-                message::unpack_buffer(unpacker, edges_props);
-                message::unpack_buffer(unpacker, return_edges);
-            }
+            // would never need to cache
+            bool search_cache() { return false; }
+            uint64_t cache_key() { return 0; }
+            uint64_t size() const;
+            void pack(e::buffer::packer& packer) const;
+            void unpack(e::unpacker& unpacker);
     };
 
-    struct edge_get_state : public virtual Node_State_Base
+    struct edge_get_state : public Node_State_Base
     {
-        virtual ~edge_get_state() { }
-        virtual uint64_t size() const { return 0; }
-        virtual void pack(e::buffer::packer&) const { }
-        virtual void unpack(e::unpacker&) { }
+        ~edge_get_state() { }
+        uint64_t size() const { return 0; }
+        void pack(e::buffer::packer&) const { }
+        void unpack(e::unpacker&) { }
     };
 
-    inline std::pair<search_type, std::vector<std::pair<db::element::remote_node, edge_get_params>>>
+    std::pair<search_type, std::vector<std::pair<db::element::remote_node, edge_get_params>>>
     edge_get_node_program(
             node &n,
             db::element::remote_node &,
@@ -72,18 +56,7 @@ namespace node_prog
             std::function<edge_get_state&()>,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
                 std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
-            cache_response<Cache_Value_Base>*)
-    {
-        auto elist = n.get_edges();
-        for (edge &e : elist) {
-            if (e.get_neighbor().id == params.nbr_id
-             && e.has_all_properties(params.edges_props)) {
-                params.return_edges.emplace_back(e.get_id());
-            }
-        }
-        return std::make_pair(search_type::DEPTH_FIRST, std::vector<std::pair<db::element::remote_node, edge_get_params>>
-                (1, std::make_pair(db::element::coordinator, std::move(params)))); 
-    }
+            cache_response<Cache_Value_Base>*);
 }
 
 #endif

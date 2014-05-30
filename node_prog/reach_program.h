@@ -1,6 +1,6 @@
 /*
  * ===============================================================
- *    Description:  Reachability program.
+ *    Description:  Reachability program: classes declaration.
  *
  *        Created:  Sunday 23 April 2013 11:00:03  EDT
  *
@@ -16,15 +16,12 @@
 #define weaver_node_prog_reach_program_h_
 
 #include <vector>
+#include <string>
 
-#include "node_prog/base_classes.h"
-#include "common/weaver_constants.h"
-#include "common/message.h"
-#include "common/vclock.h"
-#include "node.h"
-#include "edge.h"
-#include "cache_response.h"
 #include "db/element/remote_node.h"
+#include "node_prog/base_classes.h"
+#include "node_prog/node.h"
+#include "node_prog/cache_response.h"
 
 namespace node_prog
 {
@@ -42,63 +39,13 @@ namespace node_prog
             std::vector<db::element::remote_node> path;
 
         public:
-            reach_params()
-                : _search_cache(false)
-                , _cache_key(0)
-                , returning(false)
-                , hops(0)
-                , reachable(false)
-            { }
-            
+            reach_params();
             virtual ~reach_params() { }
-
-            virtual bool search_cache() {
-                return _search_cache;
-            }
-
-            virtual uint64_t cache_key() {
-                return _cache_key;
-            }
-
-            virtual uint64_t size() const 
-            {
-                uint64_t toRet = message::size(_search_cache)
-                    + message::size(_cache_key)
-                    + message::size(returning)
-                    + message::size(prev_node)
-                    + message::size(dest) 
-                    + message::size(edge_props)
-                    + message::size(hops)
-                    + message::size(reachable)
-                    + message::size(path);
-                return toRet;
-            }
-
-            virtual void pack(e::buffer::packer &packer) const 
-            {
-                message::pack_buffer(packer, _search_cache);
-                message::pack_buffer(packer, _cache_key);
-                message::pack_buffer(packer, returning);
-                message::pack_buffer(packer, prev_node);
-                message::pack_buffer(packer, dest);
-                message::pack_buffer(packer, edge_props);
-                message::pack_buffer(packer, hops);
-                message::pack_buffer(packer, reachable);
-                message::pack_buffer(packer, path);
-            }
-
-            virtual void unpack(e::unpacker &unpacker)
-            {
-                message::unpack_buffer(unpacker, _search_cache);
-                message::unpack_buffer(unpacker, _cache_key);
-                message::unpack_buffer(unpacker, returning);
-                message::unpack_buffer(unpacker, prev_node);
-                message::unpack_buffer(unpacker, dest);
-                message::unpack_buffer(unpacker, edge_props);
-                message::unpack_buffer(unpacker, hops);
-                message::unpack_buffer(unpacker, reachable);
-                message::unpack_buffer(unpacker, path);
-            }
+            virtual bool search_cache() { return _search_cache; }
+            virtual uint64_t cache_key() { return _cache_key; }
+            virtual uint64_t size() const;
+            virtual void pack(e::buffer::packer &packer) const; 
+            virtual void unpack(e::unpacker &unpacker);
     };
 
     struct reach_node_state : public virtual Node_State_Base 
@@ -109,67 +56,22 @@ namespace node_prog
         bool reachable;
         uint16_t hops;
 
-        reach_node_state()
-            : visited(false)
-            , out_count(0)
-            , reachable(false)
-            , hops(UINT16_MAX)
-        { }
-
+        reach_node_state();
         virtual ~reach_node_state() { }
-
-        virtual uint64_t size() const 
-        {
-            uint64_t toRet = message::size(visited)
-                + message::size(prev_node)
-                + message::size(out_count)
-                + message::size(reachable)
-                + message::size(hops);
-            return toRet;
-        }
-
-        virtual void pack(e::buffer::packer& packer) const 
-        {
-            message::pack_buffer(packer, visited);
-            message::pack_buffer(packer, prev_node);
-            message::pack_buffer(packer, out_count);
-            message::pack_buffer(packer, reachable);
-            message::pack_buffer(packer, hops);
-        }
-
-        virtual void unpack(e::unpacker& unpacker)
-        {
-            message::unpack_buffer(unpacker, visited);
-            message::unpack_buffer(unpacker, prev_node);
-            message::unpack_buffer(unpacker, out_count);
-            message::unpack_buffer(unpacker, reachable);
-            message::unpack_buffer(unpacker, hops);
-        }
+        virtual uint64_t size() const; 
+        virtual void pack(e::buffer::packer& packer) const ;
+        virtual void unpack(e::unpacker& unpacker);
     };
 
     struct reach_cache_value : public virtual Cache_Value_Base 
     {
-        public:
-            std::vector<db::element::remote_node> path;
+        std::vector<db::element::remote_node> path;
 
-            reach_cache_value(std::vector<db::element::remote_node> &copy_path)
-                : path(copy_path) { };
+        reach_cache_value(std::vector<db::element::remote_node> &cpy);
         virtual ~reach_cache_value () { }
-
-        virtual uint64_t size() const 
-        {
-            return message::size(path);
-        }
-
-        virtual void pack(e::buffer::packer& packer) const 
-        {
-            message::pack_buffer(packer, path);
-        }
-
-        virtual void unpack(e::unpacker& unpacker)
-        {
-            message::unpack_buffer(unpacker, path);
-        }
+        virtual uint64_t size() const;
+        virtual void pack(e::buffer::packer& packer) const;
+        virtual void unpack(e::unpacker& unpacker);
     };
 
     std::pair<search_type, std::vector<std::pair<db::element::remote_node, reach_params>>>

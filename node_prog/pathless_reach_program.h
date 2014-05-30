@@ -16,15 +16,12 @@
 #define weaver_node_prog_pathless_reach_program_h_
 
 #include <vector>
+#include <string>
 
-#include "node_prog/base_classes.h"
-#include "common/weaver_constants.h"
-#include "common/message.h"
-#include "common/vclock.h"
-#include "node.h"
-#include "edge.h"
-#include "cache_response.h"
 #include "db/element/remote_node.h"
+#include "node_prog/base_classes.h"
+#include "node_prog/node.h"
+#include "node_prog/cache_response.h"
 
 namespace node_prog
 {
@@ -38,48 +35,13 @@ namespace node_prog
             bool reachable;
 
         public:
-            pathless_reach_params()
-                : returning(false)
-                , reachable(false)
-            { }
-            
-            virtual ~pathless_reach_params() { }
-
-            virtual bool search_cache() {
-                return false;
-            }
-
-            virtual uint64_t cache_key() {
-                return 0;
-            }
-
-            virtual uint64_t size() const 
-            {
-                uint64_t toRet = message::size(returning)
-                    + message::size(prev_node)
-                    + message::size(dest) 
-                    + message::size(edge_props)
-                    + message::size(reachable);
-                return toRet;
-            }
-
-            virtual void pack(e::buffer::packer &packer) const 
-            {
-                message::pack_buffer(packer, returning);
-                message::pack_buffer(packer, prev_node);
-                message::pack_buffer(packer, dest);
-                message::pack_buffer(packer, edge_props);
-                message::pack_buffer(packer, reachable);
-            }
-
-            virtual void unpack(e::unpacker &unpacker)
-            {
-                message::unpack_buffer(unpacker, returning);
-                message::unpack_buffer(unpacker, prev_node);
-                message::unpack_buffer(unpacker, dest);
-                message::unpack_buffer(unpacker, edge_props);
-                message::unpack_buffer(unpacker, reachable);
-            }
+            pathless_reach_params();
+            ~pathless_reach_params() { }
+            bool search_cache();
+            uint64_t cache_key();
+            uint64_t size() const; 
+            void pack(e::buffer::packer &packer) const;
+            void unpack(e::unpacker &unpacker);
     };
 
     struct pathless_reach_node_state : public virtual Node_State_Base 
@@ -89,38 +51,11 @@ namespace node_prog
         uint32_t out_count; // number of requests propagated
         bool reachable;
 
-        pathless_reach_node_state()
-            : visited(false)
-            , out_count(0)
-            , reachable(false)
-        { }
-
-        virtual ~pathless_reach_node_state() { }
-
-        virtual uint64_t size() const 
-        {
-            uint64_t toRet = message::size(visited)
-                + message::size(prev_node)
-                + message::size(out_count)
-                + message::size(reachable);
-            return toRet;
-        }
-
-        virtual void pack(e::buffer::packer& packer) const 
-        {
-            message::pack_buffer(packer, visited);
-            message::pack_buffer(packer, prev_node);
-            message::pack_buffer(packer, out_count);
-            message::pack_buffer(packer, reachable);
-        }
-
-        virtual void unpack(e::unpacker& unpacker)
-        {
-            message::unpack_buffer(unpacker, visited);
-            message::unpack_buffer(unpacker, prev_node);
-            message::unpack_buffer(unpacker, out_count);
-            message::unpack_buffer(unpacker, reachable);
-        }
+        pathless_reach_node_state();
+        ~pathless_reach_node_state() { }
+        uint64_t size() const;
+        void pack(e::buffer::packer& packer) const;
+        void unpack(e::unpacker& unpacker);
     };
 
     std::pair<search_type, std::vector<std::pair<db::element::remote_node, pathless_reach_params>>>

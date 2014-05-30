@@ -22,23 +22,23 @@
 #include <po6/threads/mutex.h>
 
 #include "common/weaver_constants.h"
-#include "cache_response.h"
-#include "node.h"
-#include "edge.h"
+#include "common/message.h"
 #include "db/element/remote_node.h"
+#include "node_prog/cache_response.h"
+#include "node_prog/node.h"
+#include "node_prog/edge.h"
 
-#include "node_prog_type.h"
-#include "reach_program.h"
-#include "pathless_reach_program.h"
-#include "clustering_program.h"
-//#include "dijkstra_program.h"
-#include "read_node_props_program.h"
-#include "read_edges_props_program.h"
-#include "read_n_edges_program.h"
-#include "edge_count_program.h"
-#include "edge_get_program.h"
-#include "clustering_program.h"
-#include "two_neighborhood_program.h"
+#include "node_prog/node_prog_type.h"
+#include "node_prog/reach_program.h"
+#include "node_prog/pathless_reach_program.h"
+#include "node_prog/clustering_program.h"
+#include "node_prog/read_node_props_program.h"
+#include "node_prog/read_edges_props_program.h"
+#include "node_prog/read_n_edges_program.h"
+#include "node_prog/edge_count_program.h"
+#include "node_prog/edge_get_program.h"
+#include "node_prog/clustering_program.h"
+#include "node_prog/two_neighborhood_program.h"
 
 namespace coordinator
 {

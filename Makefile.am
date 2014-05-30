@@ -52,8 +52,14 @@ timestamper_SOURCES=common/comm_wrapper.cc \
                     node_prog/edge_list.cc \
                     node_prog/prop_list.cc \
                     node_prog/reach_program.cc \
+                    node_prog/clustering_program.cc \
                     node_prog/pathless_reach_program.cc \
                     node_prog/two_neighborhood_program.cc \
+                    node_prog/edge_count_program.cc \
+                    node_prog/edge_get_program.cc \
+                    node_prog/read_edges_props_program.cc \
+                    node_prog/read_n_edges_program.cc \
+                    node_prog/read_node_props_program.cc \
                     coordinator/hyper_stub.cc \
 					coordinator/timestamper.cc
 timestamper_CFLAGS= 	$(AM_CFLAGS)
@@ -90,8 +96,14 @@ shard_SOURCES=	common/ids.cc \
                 node_prog/edge_list.cc \
                 node_prog/prop_list.cc \
                 node_prog/reach_program.cc \
+                node_prog/clustering_program.cc \
                 node_prog/pathless_reach_program.cc \
                 node_prog/two_neighborhood_program.cc \
+                node_prog/edge_count_program.cc \
+                node_prog/edge_get_program.cc \
+                node_prog/read_edges_props_program.cc \
+                node_prog/read_n_edges_program.cc \
+                node_prog/read_node_props_program.cc \
                 db/hyper_stub.cc \
                 db/queue_manager.cc \
 				db/shard.cc
