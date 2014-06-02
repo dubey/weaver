@@ -16,14 +16,12 @@
 
 #include <stdint.h>
 #include <vector>
-#include <po6/net/location.h>
 
 #include "node_prog/edge.h"
 #include "node_prog/prop_list.h"
 #include "node_prog/property.h"
-#include "property.h"
-#include "remote_node.h"
-#include "element.h"
+#include "db/remote_node.h"
+#include "db/element.h"
 
 namespace db
 {
@@ -50,65 +48,6 @@ namespace element
             bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
             uint64_t get_id() const { return base.get_id(); } ;
     };
-
-    // empty constructor for unpacking
-    inline
-    edge :: edge()
-        : base()
-        , msg_count(0)
-        , migr_edge(false)
-    { }
-
-    inline
-    edge :: edge(uint64_t id, vc::vclock &vclk, uint64_t remote_loc, uint64_t remote_id)
-        : base(id, vclk)
-        , nbr(remote_loc, remote_id)
-        , msg_count(0)
-        , migr_edge(false)
-    { }
-
-    inline
-    edge :: edge(uint64_t id, vc::vclock &vclk, remote_node &rn)
-        : base(id, vclk)
-        , nbr(rn)
-        , msg_count(0)
-        , migr_edge(false)
-    { }
-
-    // caution: should be called with node mutex held
-    // should always be called when an edge is traversed in a node program
-    inline void
-    edge :: traverse()
-    {
-        msg_count++;
-    }
-
-    inline remote_node& // TODO, make const, nbr private var
-    edge :: get_neighbor()
-    {
-        return nbr; 
-    }
-
-    inline node_prog::prop_list 
-    edge :: get_properties()
-    {
-        assert(base.view_time != NULL);
-        return node_prog::prop_list(base.properties, *base.view_time);
-    }
-
-    inline bool
-    edge :: has_property(std::pair<std::string, std::string> &p)
-    {
-        assert(base.view_time != NULL);
-        return base.has_property(p, *base.view_time);
-    }
-
-    inline bool
-    edge :: has_all_properties(std::vector<std::pair<std::string, std::string>> &props)
-    {
-        assert(base.view_time != NULL);
-        return base.has_all_properties(props, *base.view_time);
-    }
 }
 }
 

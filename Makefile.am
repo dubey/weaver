@@ -62,6 +62,8 @@ timestamper_SOURCES=common/comm_wrapper.cc \
                     node_prog/read_node_props_program.cc \
                     db/element.cc \
                     db/property.cc \
+                    db/edge.cc \
+                    db/node.cc \
                     coordinator/hyper_stub.cc \
 					coordinator/timestamper.cc
 timestamper_CFLAGS= 	$(AM_CFLAGS)
@@ -110,6 +112,8 @@ shard_SOURCES=	common/ids.cc \
                 db/queue_manager.cc \
                 db/element.cc \
                 db/property.cc \
+                db/edge.cc \
+                db/node.cc \
 				db/shard.cc
 shard_CFLAGS= 	$(AM_CFLAGS)
 shard_CXXFLAGS=	$(AM_CXXFLAGS)
