@@ -66,8 +66,8 @@ timestamper_SOURCES=common/comm_wrapper.cc \
                     db/node.cc \
                     coordinator/hyper_stub.cc \
 					coordinator/timestamper.cc
-timestamper_CFLAGS= 	$(AM_CFLAGS)
-timestamper_CXXFLAGS= 	$(AM_CXXFLAGS)
+#timestamper_CFLAGS= 	$(AM_CFLAGS)
+#timestamper_CXXFLAGS= 	$(AM_CXXFLAGS)
 
 # server manager
 lib_LTLIBRARIES+=			libservermanager.la
@@ -115,8 +115,8 @@ shard_SOURCES=	common/ids.cc \
                 db/edge.cc \
                 db/node.cc \
 				db/shard.cc
-shard_CFLAGS= 	$(AM_CFLAGS)
-shard_CXXFLAGS=	$(AM_CXXFLAGS)
+#shard_CFLAGS= 	$(AM_CFLAGS)
+#shard_CXXFLAGS=	$(AM_CXXFLAGS)
 
 # python client
 pkgpyexec_DATA+=	bindings/python/__init__.py
@@ -143,5 +143,5 @@ bin_PROGRAMS+=				tests/cpp/tests
 tests_cpp_tests_SOURCES=	tests/cpp/run.cc \
 							common/clock.cc \
                             common/message.cc
-tests_cpp_tests_CFLAGS= 	$(AM_CFLAGS)
-tests_cpp_tests_CXXFLAGS= 	$(AM_CXXFLAGS)
+#tests_cpp_tests_CFLAGS= 	$(AM_CFLAGS)
+#tests_cpp_tests_CXXFLAGS= 	$(AM_CXXFLAGS)

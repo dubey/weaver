@@ -3,7 +3,7 @@
 
 AC_PREREQ([2.68])
 AC_INIT([Weaver], [0.1], [dubey@cs.cornell.edu])
-AM_INIT_AUTOMAKE
+AM_INIT_AUTOMAKE([subdir-objects])
 AM_SILENT_RULES([yes])
 LT_INIT
 AM_PATH_PYTHON

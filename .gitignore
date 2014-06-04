@@ -1,3 +1,4 @@
+*.dirstamp
 *.swp
 *.bin
 *.o
