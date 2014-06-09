@@ -22,7 +22,6 @@
 #define weaver_debug_
 #include "common/weaver_constants.h"
 #include "common/event_order.h"
-#include "common/nmap_stub.h"
 #include "common/clock.h"
 #include "db/shard.h"
 #include "db/nop_data.h"
@@ -38,31 +37,21 @@ static uint64_t shard_id;
 // shard pointer for shard.cc
 static db::shard *S;
 
-namespace order
-{
-    chronos_client *kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT);
-    po6::threads::mutex kronos_mutex;
-    std::list<uint64_t> *call_times = new std::list<uint64_t>();
-    uint64_t cache_hits = 0;
-    kronos_cache kcache;
-}
-
 void migrated_nbr_update(std::unique_ptr<message::message> msg);
-bool migrate_node_step1(db::element::node*, std::vector<uint64_t>&);
+bool migrate_node_step1(db::hyper_stub *hs, db::element::node*, std::vector<uint64_t>&);
 void migrate_node_step2_req();
 void migrate_node_step2_resp(db::hyper_stub *hs, std::unique_ptr<message::message> msg);
 bool check_step3();
-void migrate_node_step3();
-void migration_wrapper();
-void shard_daemon_begin();
-void shard_daemon_end();
+void migrate_node_step3(db::hyper_stub *hs);
+void migration_begin(db::hyper_stub *hs);
+void migration_wrapper(db::hyper_stub *hs);
+void migration_end(db::hyper_stub *hs);
 
 // SIGINT idr
 void
 end_program(int param)
 {
-    WDEBUG << "Ending program, param = " << param << ", kronos num calls " << order::call_times->size()
-        << ", kronos num cache hits = " << order::cache_hits << std::endl;
+    WDEBUG << "Ending program, param = " << param << ", kronos num cache hits = " << order::cache_hits << std::endl;
     WDEBUG << "watch_set lookups originated from this shard " << S->watch_set_lookups << std::endl;
     WDEBUG << "watch_set nops originated from this shard " << S->watch_set_nops << std::endl;
     WDEBUG << "watch set piggybacks on this shard " << S->watch_set_piggybacks << std::endl;
@@ -564,11 +553,10 @@ nop(db::hyper_stub *hs, void *noparg)
     // increment qts
     S->increment_qts(hs, nop_arg->vt_id, 1);
 
-    /* state cleanup */
     // note done progs for state clean up
     S->add_done_requests(nop_arg->done_reqs);
 
-    /* migration */
+    // migration
     S->migration_mutex.lock();
 
     // increment nop count, trigger migration step 2 after check
@@ -623,20 +611,6 @@ nop(db::hyper_stub *hs, void *noparg)
     }
     S->migration_mutex.unlock();
 
-    // call appropriate function based on check
-    if (check_move_migr) {
-        migrate_node_step2_req();
-    } else if (check_init_migr) {
-        shard_daemon_begin();
-    } else if (check_migr_step3) {
-        migrate_node_step3();
-    }
-
-    /* done migration */
-
-
-    /* permanent deletion of deleted graph objects */
-
     // initiate permanent deletion
     //S->permanent_delete_loop(nop_arg->vt_id, nop_arg->outstanding_progs != 0);
 
@@ -648,6 +622,15 @@ nop(db::hyper_stub *hs, void *noparg)
     msg.prepare_message(message::VT_NOP_ACK, shard_id, nop_arg->qts[shard_id-SHARD_ID_INCR], cur_node_count);
     S->comm.send(nop_arg->vt_id, msg.buf);
     free(nop_arg);
+
+    // call appropriate function based on check after acked to vt
+    if (check_move_migr) {
+        migrate_node_step2_req();
+    } else if (check_init_migr) {
+        migration_begin(hs);
+    } else if (check_migr_step3) {
+        migrate_node_step3(hs);
+    }
 }
 
 node_prog::Node_State_Base* get_state_if_exists(db::element::node &node, uint64_t req_id, node_prog::prog_type ptype)
@@ -1298,7 +1281,7 @@ get_balanced_assignment(std::vector<uint64_t> &shard_node_count, std::vector<uin
 // send migration information to coordinator mapper
 // return false if no migration happens (max migr score = this shard), else return true
 bool
-migrate_node_step1(db::element::node *n, std::vector<uint64_t> &shard_node_count)
+migrate_node_step1(db::hyper_stub *hs, db::element::node *n, std::vector<uint64_t> &shard_node_count)
 {
     // find arg max migr score
     uint64_t max_pos = shard_id - SHARD_ID_INCR; // don't migrate if all equal
@@ -1319,7 +1302,7 @@ migrate_node_step1(db::element::node *n, std::vector<uint64_t> &shard_node_count
     if (migr_loc > shard_id) {
         n->already_migr = true;
     }
-    
+
     // no migration to self
     if (migr_loc == shard_id) {
         S->release_node(n);
@@ -1352,6 +1335,10 @@ migrate_node_step1(db::element::node *n, std::vector<uint64_t> &shard_node_count
         }
     }
     S->edge_map_mutex.unlock();
+
+    // persist status
+    hs->update_migr_status(S->migr_node, db::MOVING);
+
     S->release_node(n);
 
     // update Hyperdex map for this node
@@ -1444,6 +1431,7 @@ migrate_node_step2_resp(db::hyper_stub *hs, std::unique_ptr<message::message> ms
         S->comm.send(upd_shard, msg->buf);
     }
     n->state = db::element::node::mode::STABLE;
+    hs->update_migr_status(node_id, db::STABLE);
 
     std::vector<uint64_t> prog_state_reqs;
     for (auto &state_map: n->prog_states) {
@@ -1498,10 +1486,10 @@ check_step3()
 
 // successfully migrated node to new location, continue migration process
 void
-migrate_node_step3()
+migrate_node_step3(db::hyper_stub *hs)
 {
     S->delete_migrated_node(S->migr_node);
-    migration_wrapper();
+    migration_wrapper(hs);
 }
 
 inline bool
@@ -1522,8 +1510,9 @@ check_migr_node(db::element::node *n)
     }
 }
 
+// stream list of nodes and cldg repartition
 inline void
-cldg_migration_wrapper(std::vector<uint64_t> &shard_node_count)
+cldg_migration_wrapper(db::hyper_stub *hs, std::vector<uint64_t> &shard_node_count)
 {
     bool no_migr = true;
     while (S->cldg_iter != S->cldg_nodes.end()) {
@@ -1564,18 +1553,19 @@ cldg_migration_wrapper(std::vector<uint64_t> &shard_node_count)
             n->migr_score[j] = n->msg_count[j] * penalty;
         }
 
-        if (migrate_node_step1(n, shard_node_count)) {
+        if (migrate_node_step1(hs, n, shard_node_count)) {
             no_migr = false;
             break;
         }
     }
     if (no_migr) {
-        shard_daemon_end();
+        migration_end(hs);
     }
 }
 
+// stream list of nodes and ldg repartition
 inline void
-ldg_migration_wrapper(std::vector<uint64_t> &shard_node_count)
+ldg_migration_wrapper(db::hyper_stub *hs, std::vector<uint64_t> &shard_node_count)
 {
     bool no_migr = true;
     while (S->ldg_iter != S->ldg_nodes.end()) {
@@ -1599,45 +1589,37 @@ ldg_migration_wrapper(std::vector<uint64_t> &shard_node_count)
             n->migr_score[j] *= (1 - ((double)shard_node_count[j])/SHARD_CAP);
         }
 
-        if (migrate_node_step1(n, shard_node_count)) {
+        if (migrate_node_step1(hs, n, shard_node_count)) {
             no_migr = false;
             break;
         }
     }
     if (no_migr) {
-        shard_daemon_end();
+        migration_end(hs);
     }
 }
 
-// stream list of nodes, decide where to migrate each node
-// graph partitioning logic here
+// sort nodes in order of number of requests propagated
 void
-migration_wrapper()
+migration_wrapper(db::hyper_stub *hs)
 {
     S->migration_mutex.lock();
     std::vector<uint64_t> shard_node_count = S->shard_node_count;
     S->migration_mutex.unlock();
 
 #ifdef WEAVER_CLDG
-    cldg_migration_wrapper(shard_node_count);
+    cldg_migration_wrapper(hs, shard_node_count);
 #endif
+
 #ifdef WEAVER_NEW_CLDG
-    cldg_migration_wrapper(shard_node_count);
+    cldg_migration_wrapper(hs, shard_node_count);
 #else
-    ldg_migration_wrapper(shard_node_count);
+    ldg_migration_wrapper(hs, shard_node_count);
 #endif
 }
 
-// method to sort pairs based on second coordinate
-bool agg_count_compare(std::pair<uint64_t, uint32_t> p1, std::pair<uint64_t, uint32_t> p2)
-{
-    return (p1.second > p2.second);
-}
-
-// sort nodes in order of number of requests propagated
-// and (implicitly) pass sorted deque to migration wrapper
 void
-shard_daemon_begin()
+migration_begin(db::hyper_stub *hs)
 {
     S->meta_update_mutex.lock();
     S->ldg_nodes = S->node_list;
@@ -1659,6 +1641,7 @@ shard_daemon_begin()
     S->cldg_nodes = std::move(sorted_nodes);
     S->cldg_iter = S->cldg_nodes.begin();
 #endif
+
 #ifdef WEAVER_NEW_CLDG
     uint64_t mcnt;
     for (uint64_t nid: S->ldg_nodes) {
@@ -1676,13 +1659,20 @@ shard_daemon_begin()
     S->ldg_iter = S->ldg_nodes.begin();
 #endif
 
-    migration_wrapper();
+    migration_wrapper(hs);
 }
 
-// pass migration token to next shard
-void
-shard_daemon_end()
+// method to sort pairs based on second coordinate
+bool agg_count_compare(std::pair<uint64_t, uint32_t> p1, std::pair<uint64_t, uint32_t> p2)
 {
+    return (p1.second > p2.second);
+}
+
+void
+migration_end(db::hyper_stub *hs)
+{
+    hs->update_migr_token(db::INACTIVE); // persist token
+
     message::message msg;
     S->migration_mutex.lock();
     S->migr_token = false;
@@ -1813,6 +1803,7 @@ recv_loop(uint64_t thread_id)
                     break;
 
                 case message::MIGRATION_TOKEN:
+                    hs->update_migr_token(db::ACTIVE);
                     S->migration_mutex.lock();
                     rec_msg->unpack_message(mtype, S->migr_token_hops, S->migr_vt);
                     S->migr_token = true;

@@ -13,8 +13,8 @@
 
 #ifndef weaver_db_hyper_stub_h_
 #define weaver_db_hyper_stub_h_
-#define NUM_GRAPH_ATTRS 6
-#define NUM_SHARD_ATTRS 2
+#define NUM_GRAPH_ATTRS 7
+#define NUM_SHARD_ATTRS 3
 
 #include <po6/threads/mutex.h>
 
@@ -26,6 +26,18 @@
 
 namespace db
 {
+    enum persist_node_state
+    {
+        STABLE = 0,
+        MOVING
+    };
+
+    enum persist_migr_token
+    {
+        INACTIVE = 0, // this shard does not have the token
+        ACTIVE // this shard does have the token
+    };
+
     class hyper_stub : private hyper_stub_base
     {
         private:
@@ -60,11 +72,13 @@ namespace db
             void add_in_nbr(uint64_t n_hndl, uint64_t nbr);
             void remove_in_nbr(uint64_t n_hndl, uint64_t nbr);
             void update_tx_queue(element::node &n);
+            void update_migr_status(uint64_t n_hndl, enum persist_node_state status);
             // bulk loading
             void bulk_load(std::unordered_map<uint64_t, element::node*> nodes, std::unordered_map<uint64_t, std::unordered_set<uint64_t>> edge_map);
             // shard updates
             void increment_qts(uint64_t vt_id, uint64_t incr);
             void update_last_clocks(uint64_t vt_id, vc::vclock_t &vclk);
+            void update_migr_token(enum persist_migr_token token);
     };
 }
 

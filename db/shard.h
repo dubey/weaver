@@ -32,6 +32,7 @@
 #include "common/ids.h"
 #include "common/vclock.h"
 #include "common/message.h"
+#include "common/nmap_stub.h"
 #include "common/comm_wrapper.h"
 #include "common/event_order.h"
 #include "common/configuration.h"
@@ -185,9 +186,8 @@ namespace db
             std::vector<uint64_t> nop_count;
             vc::vclock max_clk // to compare against for checking if node is deleted
                 , zero_clk; // all zero clock for migration thread in queue
-            const char *loc_space = "weaver_loc_mapping";
-            const char *loc_attrName = "shard";
-            hyperdex::Client cl;
+            nmap::nmap_stub remapper;
+            std::unordered_map<uint64_t, uint64_t> remap;
             void update_migrated_nbr_nonlocking(element::node *n, uint64_t migr_node, uint64_t old_loc, uint64_t new_loc);
             void update_migrated_nbr(uint64_t node, uint64_t old_loc, uint64_t new_loc);
             void update_node_mapping(uint64_t node, uint64_t shard);
@@ -246,7 +246,6 @@ namespace db
         , nop_count(NUM_VTS, 0)
         , max_clk(UINT64_MAX, UINT64_MAX)
         , zero_clk(0, 0)
-        , cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT)
         , max_prog_id(NUM_VTS, 0)
         , target_prog_id(NUM_VTS, 0)
         , max_done_id(NUM_VTS, 0)
@@ -867,26 +866,9 @@ namespace db
     inline void
     shard :: update_node_mapping(uint64_t node, uint64_t shard)
     {
-        const char *space = loc_space;
-        const char *attrName = loc_attrName;
-        hyperdex_client_attribute attrs_to_add;
-        hyperdex_client_returncode status;
-
-        attrs_to_add.attr = attrName;
-        attrs_to_add.value = (char*)&shard;
-        attrs_to_add.value_sz = sizeof(int64_t);
-        attrs_to_add.datatype = HYPERDATATYPE_INT64;
-
-        int64_t op_id = cl.put(space, (const char*)&node, sizeof(int64_t), &attrs_to_add, 1, &status);
-        if (op_id < 0) {
-            WDEBUG << "\"put\" returned " << op_id << " with status " << status << std::endl;
-            return;
-        }
-
-        int64_t loop_id = cl.loop(-1, &status);
-        if (loop_id < 0) {
-            WDEBUG << "put \"loop\" returned " << loop_id << " with status " << status << std::endl;
-        }
+        remap.clear();
+        remap[node] = shard;
+        remapper.put_mappings(remap);
     }
 
     // node program

@@ -13,6 +13,14 @@
 
 #include "common/event_order.h"
 
+namespace order
+{
+    chronos_client *kronos_cl = chronos_client_create(KRONOS_IPADDR, KRONOS_PORT);
+    po6::threads::mutex kronos_mutex;
+    uint64_t cache_hits = 0;
+    kronos_cache kcache;
+}
+
 // return the smaller of the two clocks
 // return -1 if clocks cannot be compared
 // return 2 if clocks are identical

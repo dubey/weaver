@@ -24,15 +24,18 @@ hyper_stub :: hyper_stub(uint64_t sid)
         "properties",
         "out_edges",
         "in_nbrs",
-        "tx_queue"}
+        "tx_queue",
+        "migr_status"} // 0 for stable, 1 for moving
     , graph_dtypes{HYPERDATATYPE_STRING,
         HYPERDATATYPE_STRING,
         HYPERDATATYPE_STRING, // can change to map(int, string) to simulate vector with random access
         HYPERDATATYPE_MAP_INT64_STRING,
         HYPERDATATYPE_SET_INT64,
-        HYPERDATATYPE_STRING}
-    , shard_attrs{"qts", "last_clocks"}
-    , shard_dtypes{HYPERDATATYPE_MAP_INT64_INT64, HYPERDATATYPE_MAP_INT64_STRING}
+        HYPERDATATYPE_STRING,
+        HYPERDATATYPE_INT64}
+    , shard_attrs{"qts", "last_clocks", "migr_token"}
+    , shard_dtypes{HYPERDATATYPE_MAP_INT64_INT64,
+        HYPERDATATYPE_MAP_INT64_STRING}
 { }
 
 void
@@ -50,8 +53,9 @@ hyper_stub :: init()
     uint64_t qts_buf_sz, lck_buf_sz;
     prepare_buffer(qts_map, qts_buf, qts_buf_sz);
     prepare_buffer(last_clocks, lck_buf, lck_buf_sz);
+    int64_t migr_token = INACTIVE;
 
-    hyperdex_client_attribute *cl_attr = (hyperdex_client_attribute*)malloc(2 * sizeof(hyperdex_client_attribute));
+    hyperdex_client_attribute *cl_attr = (hyperdex_client_attribute*)malloc(NUM_SHARD_ATTRS * sizeof(hyperdex_client_attribute));
     cl_attr[0].attr = shard_attrs[0];
     cl_attr[0].value = qts_buf.get();
     cl_attr[0].value_sz = qts_buf_sz;
@@ -60,8 +64,12 @@ hyper_stub :: init()
     cl_attr[1].value = lck_buf.get();
     cl_attr[1].value_sz = lck_buf_sz;
     cl_attr[1].datatype = shard_dtypes[1];
+    cl_attr[2].attr = shard_attrs[2];
+    cl_attr[2].value = (const char*)&migr_token;
+    cl_attr[2].value_sz = sizeof(int64_t);
+    cl_attr[2].datatype = shard_dtypes[2];
 
-    hyper_call_and_loop(&hyperdex::Client::put, shard_space, shard_id, cl_attr, 2);
+    hyper_call_and_loop(&hyperdex::Client::put, shard_space, shard_id, cl_attr, NUM_SHARD_ATTRS);
     free(cl_attr);
 }
 
@@ -264,6 +272,12 @@ hyper_stub :: put_node(element::node &n, std::unordered_set<uint64_t> &nbr_map)
     cl_attr[5].value = (const char*)txq_buf->data();
     cl_attr[5].value_sz = txq_buf->size();
     cl_attr[5].datatype = graph_dtypes[5];
+    // migr status
+    int64_t status = STABLE;
+    cl_attr[6].attr = graph_attrs[6];
+    cl_attr[6].value = (const char*)&status;
+    cl_attr[6].value_sz = sizeof(int64_t);
+    cl_attr[6].datatype = graph_dtypes[6];
 
     hyper_call_and_loop(&hyperdex::Client::put, graph_space, n.base.get_id(), cl_attr, NUM_GRAPH_ATTRS);
     free(cl_attr);
@@ -381,6 +395,19 @@ hyper_stub :: update_tx_queue(element::node &n)
 }
 
 void
+hyper_stub :: update_migr_status(uint64_t n_hndl, enum persist_node_state status)
+{
+    int64_t int_status = status;
+    hyperdex_client_attribute cl_attr;
+    cl_attr.attr = graph_attrs[6];
+    cl_attr.value = (const char*)&int_status;
+    cl_attr.value_sz = sizeof(int64_t);
+    cl_attr.datatype = graph_dtypes[6];
+
+    hyper_call_and_loop(&hyperdex::Client::put, graph_space, n_hndl, &cl_attr, 1);
+}
+
+void
 hyper_stub :: bulk_load(std::unordered_map<uint64_t, element::node*> nodes, std::unordered_map<uint64_t, std::unordered_set<uint64_t>> edge_map)
 {
     std::vector<hyper_func> funcs(nodes.size(), &hyperdex::Client::put);
@@ -481,6 +508,19 @@ hyper_stub :: update_last_clocks(uint64_t vt_id, vc::vclock_t &vclk)
     map_attr.value_datatype = HYPERDATATYPE_STRING;
 
     hypermap_call_and_loop(&hyperdex::Client::map_add, shard_space, shard_id, &map_attr, 1);
+}
+
+void
+hyper_stub :: update_migr_token(enum persist_migr_token token)
+{
+    int64_t int_token = token;
+    hyperdex_client_attribute cl_attr;
+    cl_attr.attr = shard_attrs[2];
+    cl_attr.value = (const char*)&int_token;
+    cl_attr.value_sz = sizeof(int64_t);
+    cl_attr.datatype = shard_dtypes[2];
+
+    hyper_call_and_loop(&hyperdex::Client::put, shard_space, shard_id, &cl_attr, 1);
 }
 
 #undef weaver_debug_

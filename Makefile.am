@@ -127,8 +127,21 @@ libclient_la_SOURCES=	common/ids.cc \
                         common/server.cc \
                         common/configuration.cc \
                         common/comm_wrapper.cc \
-                        common/event_order.cc \
                         common/message.cc \
+                        common/event_order.cc \
+                        node_prog/prop_list.cc \
+                        node_prog/edge_list.cc \
+                        node_prog/clustering_program.cc \
+                        node_prog/edge_count_program.cc \
+                        node_prog/edge_get_program.cc \
+                        node_prog/pathless_reach_program.cc \
+                        node_prog/reach_program.cc \
+                        node_prog/read_edges_props_program.cc \
+                        node_prog/read_n_edges_program.cc \
+                        node_prog/read_node_props_program.cc \
+                        node_prog/two_neighborhood_program.cc \
+                        db/element.cc \
+                        db/property.cc \
                         client/client.cc \
                         bindings/python/libclient.cpp
 bindings/python/libclient.cpp:	bindings/python/libclient.pyx
