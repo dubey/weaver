@@ -100,7 +100,8 @@ namespace db
                 , edge_map_mutex
                 , perm_del_mutex
                 , config_mutex
-                , restore_mutex;
+                , restore_mutex
+                , exit_mutex;
             po6::threads::mutex node_map_mutexes[NUM_NODE_MAPS];
         private:
             po6::threads::mutex clock_mutex; // vector clock/queue timestamp mutex
@@ -200,7 +201,6 @@ namespace db
             
             // node programs
         private:
-
             po6::threads::mutex node_prog_state_mutex;
             std::unordered_set<uint64_t> done_ids; // request ids that have finished
             std::unordered_map<uint64_t, std::vector<uint64_t>> outstanding_prog_states; // maps request_id to list of nodes that have created prog state for that req id
@@ -224,6 +224,9 @@ namespace db
             bool restore_done;
             po6::threads::cond restore_cv;
             void restore_backup();
+
+            // exit
+            bool to_exit;
     };
 
     inline
@@ -256,6 +259,7 @@ namespace db
         , watch_set_piggybacks(0)
         , restore_done(false)
         , restore_cv(&restore_mutex)
+        , to_exit(false)
     {
         assert(NUM_VTS == KRONOS_NUM_VTS);
         for (int i = 0; i < NUM_THREADS; i++) {

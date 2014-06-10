@@ -47,7 +47,6 @@ void migration_begin(db::hyper_stub *hs);
 void migration_wrapper(db::hyper_stub *hs);
 void migration_end(db::hyper_stub *hs);
 
-// SIGINT idr
 void
 end_program(int param)
 {
@@ -55,7 +54,14 @@ end_program(int param)
     WDEBUG << "watch_set lookups originated from this shard " << S->watch_set_lookups << std::endl;
     WDEBUG << "watch_set nops originated from this shard " << S->watch_set_nops << std::endl;
     WDEBUG << "watch set piggybacks on this shard " << S->watch_set_piggybacks << std::endl;
-    exit(0);
+    if (param == SIGINT) {
+        S->exit_mutex.lock();
+        S->to_exit = true;
+        S->exit_mutex.unlock();
+    } else {
+        WDEBUG << "Not SIGINT, exiting immediately." << std::endl;
+        exit(0);
+    }
 }
 
 
@@ -1884,6 +1890,13 @@ server_manager_link_loop(po6::net::hostname sm_host)
 
     while (!S->sm_stub.should_exit())
     {
+        S->exit_mutex.lock();
+        if (S->to_exit) {
+            S->sm_stub.request_shutdown();
+            S->to_exit = false;
+        }
+        S->exit_mutex.unlock();
+
         if (!S->sm_stub.maintain_link())
         {
             continue;
@@ -1925,20 +1938,28 @@ server_manager_link_loop(po6::net::hostname sm_host)
         S->sm_stub.config_ack(new_config.version());
     }
 
-    WDEBUG << "going to exit server manager link loop" << std::endl;
+    WDEBUG << "exiting server manager link loop" << std::endl;
     if (cluster_jump)
     {
         WDEBUG << "\n================================================================================\n"
                << "Exiting because the server manager changed on us.\n"
                << "This is most likely an operations error."
-               << "================================================================================";
+               << "================================================================================\n";
     }
     else if (S->sm_stub.should_exit() && !S->sm_stub.config().exists(S->server))
     {
         WDEBUG << "\n================================================================================\n"
                << "Exiting because the server manager says it doesn't know about this node.\n"
-               << "================================================================================";
+               << "================================================================================\n";
     }
+    else if (S->sm_stub.should_exit())
+    {
+        WDEBUG << "\n================================================================================\n"
+               << "Exiting because server manager stub says we should exit.\n"
+               << "Most likely because we requested shutdown due to program interrupt.\n"
+               << "================================================================================\n";
+    }
+    exit(0);
 }
 
 void

@@ -103,7 +103,8 @@ namespace coordinator
                     , msg_count_mutex
                     , migr_mutex
                     , graph_load_mutex
-                    , config_mutex;
+                    , config_mutex
+                    , exit_mutex;
             po6::threads::rwlock clk_rw_mtx;
 
             // initial graph loading
@@ -114,6 +115,9 @@ namespace coordinator
             uint64_t migr_client;
             std::vector<uint64_t> shard_node_count;
             uint64_t msg_count, msg_count_acks;
+
+            // exit
+            bool to_exit;
 
             // testing
             std::unordered_set<uint64_t> seen_done_id;
@@ -154,6 +158,7 @@ namespace coordinator
         , shard_node_count(NUM_SHARDS, 0)
         , msg_count(0)
         , msg_count_acks(0)
+        , to_exit(false)
     {
         // initialize empty vector of done reqs for each prog type
         std::unordered_map<uint64_t, std::bitset<NUM_SHARDS>> empty_map;

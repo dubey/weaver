@@ -41,7 +41,14 @@ end_program(int signum)
     vts->clk_rw_mtx.wrlock();
     WDEBUG << "num vclk updates " << vts->clk_updates << std::endl;
     vts->clk_rw_mtx.unlock();
-    exit(0);
+    if (signum == SIGINT) {
+        vts->exit_mutex.lock();
+        vts->to_exit = true;
+        vts->exit_mutex.unlock();
+    } else {
+        WDEBUG << "Got interrupt signal other than SIGINT, exiting immediately." << std::endl;
+        exit(0);
+    }
 }
 
 void
@@ -657,6 +664,13 @@ server_manager_link_loop(po6::net::hostname sm_host)
 
     while (!vts->sm_stub.should_exit())
     {
+        vts->exit_mutex.lock();
+        if (vts->to_exit) {
+            vts->sm_stub.request_shutdown();
+            vts->to_exit = false;
+        }
+        vts->exit_mutex.unlock();
+
         if (!vts->sm_stub.maintain_link())
         {
             continue;
@@ -710,6 +724,14 @@ server_manager_link_loop(po6::net::hostname sm_host)
                << "Exiting because the server manager says it doesn't know about this node.\n"
                << "================================================================================";
     }
+    else if (vts->sm_stub.should_exit())
+    {
+        WDEBUG << "\n================================================================================\n"
+               << "Exiting because server manager stub says we should exit.\n"
+               << "Most likely because we requested shutdown due to program interrupt.\n"
+               << "================================================================================\n";
+    }
+    exit(0);
 }
 
 void

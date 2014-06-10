@@ -35,7 +35,8 @@ hyper_stub :: hyper_stub(uint64_t sid)
         HYPERDATATYPE_INT64}
     , shard_attrs{"qts", "last_clocks", "migr_token"}
     , shard_dtypes{HYPERDATATYPE_MAP_INT64_INT64,
-        HYPERDATATYPE_MAP_INT64_STRING}
+        HYPERDATATYPE_MAP_INT64_STRING,
+        HYPERDATATYPE_INT64}
 { }
 
 void
@@ -53,7 +54,7 @@ hyper_stub :: init()
     uint64_t qts_buf_sz, lck_buf_sz;
     prepare_buffer(qts_map, qts_buf, qts_buf_sz);
     prepare_buffer(last_clocks, lck_buf, lck_buf_sz);
-    int64_t migr_token = INACTIVE;
+    int64_t migr_token = (int64_t)INACTIVE;
 
     hyperdex_client_attribute *cl_attr = (hyperdex_client_attribute*)malloc(NUM_SHARD_ATTRS * sizeof(hyperdex_client_attribute));
     cl_attr[0].attr = shard_attrs[0];
@@ -119,6 +120,7 @@ hyper_stub :: recreate_node(const hyperdex_client_attribute *cl_attr, element::n
 void
 hyper_stub :: restore_backup(std::unordered_map<uint64_t, uint64_t> &qts_map,
             std::unordered_map<uint64_t, vc::vclock_t> &last_clocks,
+            bool &migr_token,
             std::unordered_map<uint64_t, element::node*> &nodes,
             std::unordered_map<uint64_t, std::unordered_set<uint64_t>> &edge_map,
             po6::threads::mutex *shard_mutex)
@@ -129,21 +131,31 @@ hyper_stub :: restore_backup(std::unordered_map<uint64_t, uint64_t> &qts_map,
 
     // clocks
     hyper_get_and_loop(shard_space, shard_id, &cl_attr, &num_attrs);
-    assert(num_attrs == 2);
+    assert(num_attrs == NUM_SHARD_ATTRS);
     for (uint64_t i = 0; i < num_attrs; i++) {
         assert(strcmp(cl_attr[i].attr, shard_attrs[i]) == 0);
     }
 
-    uint64_t qts_idx, lck_idx;
-    if (strcmp(cl_attr[0].attr, shard_attrs[0]) == 0) {
-        qts_idx = 0;
-        lck_idx = 1;
-    } else {
-        qts_idx = 1;
-        lck_idx = 0;
+    std::vector<int64_t> idx_perm(NUM_SHARD_ATTRS, -1);
+    for (int i = 0; i < NUM_SHARD_ATTRS; i++) {
+        for (int j = 0; j < NUM_SHARD_ATTRS; j++) {
+            if (strcmp(cl_attr[i].attr, shard_attrs[j]) == 0) {
+                idx_perm[j] = i;
+            }
+        }
     }
-    unpack_buffer(cl_attr[qts_idx].value, cl_attr[qts_idx].value_sz, qts_map);
-    unpack_buffer(cl_attr[lck_idx].value, cl_attr[lck_idx].value_sz, last_clocks);
+    std::vector<bool> check_idx(NUM_SHARD_ATTRS, false);
+    for (int i = 0; i < NUM_SHARD_ATTRS; i++) {
+        assert(idx_perm[i] != -1);
+        assert(!check_idx[idx_perm[i]]);
+        check_idx[idx_perm[i]] = true;
+    }
+
+    unpack_buffer(cl_attr[idx_perm[0]].value, cl_attr[idx_perm[0]].value_sz, qts_map);
+    unpack_buffer(cl_attr[idx_perm[1]].value, cl_attr[idx_perm[1]].value_sz, last_clocks);
+    assert(cl_attr[idx_perm[2]].value_sz == sizeof(int64_t));
+    int64_t *m_token = (int64_t*)cl_attr[idx_perm[2]].value;
+    migr_token = ((enum persist_migr_token)*m_token) == ACTIVE;
 
     hyperdex_client_destroy_attrs(cl_attr, num_attrs);
 
@@ -513,7 +525,7 @@ hyper_stub :: update_last_clocks(uint64_t vt_id, vc::vclock_t &vclk)
 void
 hyper_stub :: update_migr_token(enum persist_migr_token token)
 {
-    int64_t int_token = token;
+    int64_t int_token = (int64_t)token;
     hyperdex_client_attribute cl_attr;
     cl_attr.attr = shard_attrs[2];
     cl_attr.value = (const char*)&int_token;

@@ -58,12 +58,12 @@ namespace db
             void init();
             void restore_backup(std::unordered_map<uint64_t, uint64_t> &qts_map,
                 std::unordered_map<uint64_t, vc::vclock_t> &last_clocks,
+                bool &migr_token,
                 std::unordered_map<uint64_t, element::node*> &nodes,
                 std::unordered_map<uint64_t, std::unordered_set<uint64_t>> &edge_map,
                 po6::threads::mutex *shard_mutex);
             // graph updates
             void put_node(element::node &n, std::unordered_set<uint64_t> &nbr_map);
-            element::node* get_node(uint64_t node);
             void update_creat_time(element::node &n);
             void update_del_time(element::node &n);
             void update_properties(element::node &n);
