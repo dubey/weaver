@@ -59,9 +59,9 @@ namespace db
             void restore_backup(std::unordered_map<uint64_t, uint64_t> &qts_map,
                 std::unordered_map<uint64_t, vc::vclock_t> &last_clocks,
                 bool &migr_token,
-                std::unordered_map<uint64_t, element::node*> &nodes,
+                std::unordered_map<uint64_t, element::node*> *nodes,
                 std::unordered_map<uint64_t, std::unordered_set<uint64_t>> &edge_map,
-                po6::threads::mutex *shard_mutex);
+                po6::threads::mutex *shard_mutexes);
             // graph updates
             void put_node(element::node &n, std::unordered_set<uint64_t> &nbr_map);
             void update_creat_time(element::node &n);
@@ -74,7 +74,8 @@ namespace db
             void update_tx_queue(element::node &n);
             void update_migr_status(uint64_t n_hndl, enum persist_node_state status);
             // bulk loading
-            void bulk_load(std::unordered_map<uint64_t, element::node*> nodes, std::unordered_map<uint64_t, std::unordered_set<uint64_t>> edge_map);
+            void bulk_load(std::unordered_map<uint64_t, element::node*> *nodes,
+                std::unordered_map<uint64_t, std::unordered_set<uint64_t>> &edge_map);
             // shard updates
             void increment_qts(uint64_t vt_id, uint64_t incr);
             void update_last_clocks(uint64_t vt_id, vc::vclock_t &vclk);

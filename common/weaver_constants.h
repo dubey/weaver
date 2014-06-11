@@ -55,7 +55,7 @@
 #define NUM_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
 #define ID_BITS 16 // max client id
 #define TOP_MASK (0x0000ffffffffffffULL)
-#define GRAPH_FILE "graph.rec"
+#define NUM_NODE_MAPS 1024
 #define NANO (1000000000ULL)
 #define GIGA (1000000000ULL)
 #define MEGA (1000000UL)

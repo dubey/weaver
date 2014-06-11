@@ -15,8 +15,6 @@
 #ifndef weaver_db_shard_h_
 #define weaver_db_shard_h_
 
-#define NUM_NODE_MAPS 1024
-
 #include <set>
 #include <map>
 #include <bitset>
@@ -298,6 +296,7 @@ namespace db
 
         if (comm.reconfigure(config) == server.get()) {
             if (!active_backup && server.get() > (NUM_VTS+NUM_SHARDS)) {
+                WDEBUG << "Now active for shard " << shard_id << std::endl;
                 // this server is now primary for the shard
                 active_backup = true;
                 //restore_backup();
@@ -309,16 +308,7 @@ namespace db
     inline void
     shard :: bulk_load_persistent()
     {
-        //hstub[0]->bulk_load(nodes, edge_map);
-
-        //std::unordered_set<uint64_t> empty_set;
-        //uint64_t cnt = 0;
-        //for (auto &x: nodes) {
-        //    //hstub[0]->put_node(*x.second, empty_set);
-        //    if (++cnt % 10000 == 0) {
-        //        WDEBUG << "wrote " << cnt << " nodes to HyperDex" << std::endl;
-        //    }
-        //}
+        hstub[0]->bulk_load(nodes, edge_map);
     }
 
     // Consistency methods
@@ -928,7 +918,7 @@ namespace db
         if (completed_requests.size() == 0) {
             return;
         }
-        std::vector<uint64_t> completed_request_ids; // XXX temp, later have completed requets not include prog type
+        std::vector<uint64_t> completed_request_ids;
         for (auto &p: completed_requests) {
             uint64_t rid = p.first;
             completed_request_ids.push_back(rid);
@@ -973,8 +963,9 @@ namespace db
     {
         std::unordered_map<uint64_t, uint64_t> qts_map;
         std::unordered_map<uint64_t, vc::vclock_t> last_clocks;
+        bool migr_token;
         restore_mutex.lock();
-        // TODO hstub.back()->restore_backup(qts_map, last_clocks, nodes, edge_map, &update_mutex);
+        hstub.back()->restore_backup(qts_map, last_clocks, migr_token, nodes, edge_map, node_map_mutexes);
         qm.restore_backup(qts_map, last_clocks);
         restore_done = true;
         restore_cv.signal();

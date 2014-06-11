@@ -652,7 +652,10 @@ node_prog::Node_State_Base* get_state_if_exists(db::element::node &node, uint64_
 
 // assumes holding node lock
 template <typename NodeStateType>
-NodeStateType& get_or_create_state(node_prog::prog_type ptype, uint64_t req_id, db::element::node *node, std::vector<uint64_t> *nodes_that_created_state)
+NodeStateType& get_or_create_state(node_prog::prog_type ptype,
+    uint64_t req_id,
+    db::element::node *node,
+    std::vector<uint64_t> *nodes_that_created_state)
 {
     auto &state_map = node->prog_states[(int)ptype];
     auto state_iter = state_map.find(req_id);
@@ -669,7 +672,11 @@ NodeStateType& get_or_create_state(node_prog::prog_type ptype, uint64_t req_id, 
 
 // vector pointers can be null if we don't want to fill that vector
 inline void
-fill_changed_properties(std::vector<db::element::property> &props, std::vector<node_prog::property> *props_added, std::vector<node_prog::property> *props_deleted, vc::vclock &time_cached, vc::vclock &cur_time)
+fill_changed_properties(std::vector<db::element::property> &props,
+    std::vector<node_prog::property> *props_added,
+    std::vector<node_prog::property> *props_deleted,
+    vc::vclock &time_cached,
+    vc::vclock &cur_time)
 {
     for (db::element::property &prop : props)
     {
@@ -697,8 +704,11 @@ fill_changed_properties(std::vector<db::element::property> &props, std::vector<n
 // records all changes to nodes given in ids vector between time_cached and cur_time
 // returns false if cache should be invalidated
 inline bool
-fetch_node_cache_contexts(uint64_t loc, std::vector<uint64_t>& ids, std::vector<node_prog::node_cache_context>& toFill,
-        vc::vclock& time_cached, vc::vclock& cur_time)
+fetch_node_cache_contexts(uint64_t loc,
+    std::vector<uint64_t>& ids,
+    std::vector<node_prog::node_cache_context>& toFill,
+    vc::vclock& time_cached,
+    vc::vclock& cur_time)
 {
     for (uint64_t id : ids){
         db::element::node *node = S->acquire_node(id);
@@ -810,14 +820,15 @@ unpack_and_fetch_context(db::hyper_stub*, void *req)
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-struct fetch_state{
+struct fetch_state
+{
     node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> prog_state;
     po6::threads::mutex monitor;
     uint64_t replies_left;
     bool cache_valid;
 
     fetch_state(node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> & copy_from)
-        : prog_state(copy_from.clone_without_start_node_params()), cache_valid(false) {};
+        : prog_state(copy_from.clone_without_start_node_params()), cache_valid(false) { }
 
     // delete standard copy onstructors
     fetch_state (const fetch_state&) = delete;
@@ -829,8 +840,12 @@ struct fetch_state{
    returns false and frees node if it needs to fetch context on other shards, saves required state to continue node program later
  */
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType>& np,
-        std::pair<uint64_t, ParamsType>& cur_node_params)
+inline bool cache_lookup(db::element::node*& node_to_check,
+    uint64_t cache_key,
+    node_prog::node_prog_running_state<ParamsType,
+    NodeStateType,
+    CacheValueType>& np,
+    std::pair<uint64_t, ParamsType>& cur_node_params)
 {
     assert(node_to_check != NULL);
     assert(!np.cache_value); // cache_value is not already assigned
@@ -933,8 +948,7 @@ inline bool cache_lookup(db::element::node*& node_to_check, uint64_t cache_key, 
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-inline void node_prog_loop(
-        typename node_prog::node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type func,
+inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type func,
         node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> &np)
 {
     message::message out_msg;
@@ -1138,8 +1152,8 @@ unpack_context_reply(db::hyper_stub*, void *req)
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> ::
-    unpack_context_reply_db(std::unique_ptr<message::message> msg)
+void
+node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_context_reply_db(std::unique_ptr<message::message> msg)
 {
     vc::vclock req_vclock;
     node_prog::prog_type pType;
@@ -1191,8 +1205,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
-    unpack_and_run_db(std::unique_ptr<message::message> msg)
+void
+node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_and_run_db(std::unique_ptr<message::message> msg)
 {
     node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> np;
 
@@ -1223,8 +1237,8 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
-    unpack_and_start_coord(std::unique_ptr<message::message>, uint64_t, nmap::nmap_stub*)
+void
+node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_and_start_coord(std::unique_ptr<message::message>, uint64_t, nmap::nmap_stub*)
 { }
 
 // delete all in-edges for a permanently deleted node
@@ -1287,7 +1301,9 @@ get_balanced_assignment(std::vector<uint64_t> &shard_node_count, std::vector<uin
 // send migration information to coordinator mapper
 // return false if no migration happens (max migr score = this shard), else return true
 bool
-migrate_node_step1(db::hyper_stub *hs, db::element::node *n, std::vector<uint64_t> &shard_node_count)
+migrate_node_step1(db::hyper_stub *hs,
+    db::element::node *n,
+    std::vector<uint64_t> &shard_node_count)
 {
     // find arg max migr score
     uint64_t max_pos = shard_id - SHARD_ID_INCR; // don't migrate if all equal
