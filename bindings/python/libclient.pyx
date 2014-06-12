@@ -288,14 +288,14 @@ cdef extern from 'client/client.h' namespace 'client':
     cdef cppclass client:
         client(uint64_t my_id, uint64_t vt_id)
 
-        uint64_t begin_tx()
-        uint64_t create_node(uint64_t tx_id)
-        uint64_t create_edge(uint64_t tx_id, uint64_t node1, uint64_t node2)
-        void delete_node(uint64_t tx_id, uint64_t node)
-        void delete_edge(uint64_t tx_id, uint64_t edge, uint64_t node)
-        void set_node_property(uint64_t tx_id, uint64_t node, string &key, string &value)
-        void set_edge_property(uint64_t tx_id, uint64_t node, uint64_t edge, string &key, string &value)
-        bint end_tx(uint64_t tx_id) nogil
+        void begin_tx()
+        uint64_t create_node()
+        uint64_t create_edge(uint64_t node1, uint64_t node2)
+        void delete_node(uint64_t node)
+        void delete_edge(uint64_t edge, uint64_t node)
+        void set_node_property(uint64_t node, string &key, string &value)
+        void set_edge_property(uint64_t node, uint64_t edge, string &key, string &value)
+        bint end_tx() nogil
         reach_params run_reach_program(vector[pair[uint64_t, reach_params]] initial_args) nogil
         pathless_reach_params run_pathless_reach_program(vector[pair[uint64_t, pathless_reach_params]] initial_args) nogil
         clustering_params run_clustering_program(vector[pair[uint64_t, clustering_params]] initial_args) nogil
@@ -322,24 +322,23 @@ cdef class Client:
     def __dealloc__(self):
         del self.thisptr
     def begin_tx(self):
-        return self.thisptr.begin_tx()
-    def create_node(self, tx_id):
-        return self.thisptr.create_node(tx_id)
-    def create_edge(self, tx_id, node1, node2):
-        return self.thisptr.create_edge(tx_id, node1, node2)
-    def delete_node(self, tx_id, node):
-        self.thisptr.delete_node(tx_id, node)
-    def delete_edge(self, tx_id, edge, node):
-        self.thisptr.delete_edge(tx_id, edge, node)
-    def set_node_property(self, tx_id, node, key, value):
-        self.thisptr.set_node_property(tx_id, node, key, value)
-    def set_edge_property(self, tx_id, node, edge, key, value):
-        self.thisptr.set_edge_property(tx_id, node, edge, key, value)
-    def end_tx(self, tx_id):
-        cdef uint64_t txid = tx_id
+        self.thisptr.begin_tx()
+    def create_node(self):
+        return self.thisptr.create_node()
+    def create_edge(self, node1, node2):
+        return self.thisptr.create_edge(node1, node2)
+    def delete_node(self, node):
+        self.thisptr.delete_node(node)
+    def delete_edge(self, edge, node):
+        self.thisptr.delete_edge(edge, node)
+    def set_node_property(self, node, key, value):
+        self.thisptr.set_node_property(node, key, value)
+    def set_edge_property(self, node, edge, key, value):
+        self.thisptr.set_edge_property(node, edge, key, value)
+    def end_tx(self):
         cdef bint ret
         with nogil:
-            ret = self.thisptr.end_tx(txid)
+            ret = self.thisptr.end_tx()
         return ret
     def run_reach_program(self, init_args):
         cdef vector[pair[uint64_t, reach_params]] c_args

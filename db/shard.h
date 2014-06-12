@@ -456,7 +456,7 @@ namespace db
     {
         uint64_t map_idx = node_id % NUM_NODE_MAPS;
         element::node *new_node = new element::node(node_id, vclk, &node_map_mutexes[map_idx]);
-        
+
         if (!init_load) {
             node_map_mutexes[map_idx].lock();
         }

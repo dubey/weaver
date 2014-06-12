@@ -639,7 +639,8 @@ nop(db::hyper_stub *hs, void *noparg)
     }
 }
 
-node_prog::Node_State_Base* get_state_if_exists(db::element::node &node, uint64_t req_id, node_prog::prog_type ptype)
+node_prog::Node_State_Base*
+get_state_if_exists(db::element::node &node, uint64_t req_id, node_prog::prog_type ptype)
 {
     auto &state_map = node.prog_states[(int)ptype];
     std::shared_ptr<node_prog::Node_State_Base> toRet;
@@ -678,15 +679,14 @@ fill_changed_properties(std::vector<db::element::property> &props,
     vc::vclock &time_cached,
     vc::vclock &cur_time)
 {
-    for (db::element::property &prop : props)
-    {
+    for (db::element::property &prop : props) {
         bool del_before_cur = (order::compare_two_vts(prop.get_del_time(), cur_time) == 0);
 
         if (props_added != NULL) {
             bool creat_after_cached = (order::compare_two_vts(prop.get_creat_time(), time_cached) == 1);
             bool creat_before_cur = (order::compare_two_vts(prop.get_creat_time(), cur_time) == 0);
 
-            if (creat_after_cached && creat_before_cur && !del_before_cur){
+            if (creat_after_cached && creat_before_cur && !del_before_cur) {
                 props_added->emplace_back(prop.key, prop.value);
             }
         }
@@ -710,7 +710,7 @@ fetch_node_cache_contexts(uint64_t loc,
     vc::vclock& time_cached,
     vc::vclock& cur_time)
 {
-    for (uint64_t id : ids){
+    for (uint64_t id : ids) {
         db::element::node *node = S->acquire_node(id);
         if (node == NULL || node->state == db::element::node::mode::MOVED ||
                 (node->last_perm_deletion != NULL && order::compare_two_vts(time_cached, *node->last_perm_deletion) == 0)) {
@@ -750,7 +750,7 @@ fetch_node_cache_contexts(uint64_t loc,
                     bool del_before_cur = (order::compare_two_vts(e->base.get_del_time(), cur_time) == 0);
                     bool creat_before_cur = (order::compare_two_vts(e->base.get_creat_time(), cur_time) == 0);
 
-                    if (creat_after_cached && creat_before_cur && !del_before_cur){
+                    if (creat_after_cached && creat_before_cur && !del_before_cur) {
                         WDEBUG << "edge created!" << std::endl;
                         if (context == NULL) {
                             toFill.emplace_back(loc, id, false);
@@ -850,7 +850,7 @@ inline bool cache_lookup(db::element::node*& node_to_check,
     assert(node_to_check != NULL);
     assert(!np.cache_value); // cache_value is not already assigned
     np.cache_value = NULL; // it is unallocated anyway
-    if (node_to_check->cache.find(cache_key) == node_to_check->cache.end()){
+    if (node_to_check->cache.find(cache_key) == node_to_check->cache.end()) {
         return true;
     } else {
         auto entry = node_to_check->cache[cache_key];
@@ -870,7 +870,7 @@ inline bool cache_lookup(db::element::node*& node_to_check,
         }
 
         int64_t cmp_1 = order::compare_two_vts(*time_cached, *np.req_vclock);
-        if (cmp_1 >= 1){ // cached value is newer or from this same request
+        if (cmp_1 >= 1) { // cached value is newer or from this same request
             return true;
         }
         assert(cmp_1 == 0);
@@ -1411,7 +1411,7 @@ migrate_node_step2_resp(db::hyper_stub *hs, std::unique_ptr<message::message> ms
         WDEBUG << "bad_alloc caught " << ba.what() << std::endl;
         return;
     }
-    
+
     // updating edge map
     S->edge_map_mutex.lock();
     for (auto &e: n->out_edges) {

@@ -22,142 +22,120 @@ client :: client(uint64_t my_id, uint64_t vt_id)
     , shifted_id(myid << (64-ID_BITS))
     , vtid(vt_id)
     , comm(my_id, 1, CLIENT_MSGRECV_TIMEOUT, true)
+    , cur_tx_id(UINT64_MAX)
     , tx_id_ctr(0)
     , temp_handle_ctr(0)
 {
     comm.client_init();
 }
 
-uint64_t
+void
 client :: begin_tx()
 {
-    uint64_t tx_id = ++tx_id_ctr;
-    tx_map.emplace(tx_id, std::vector<std::shared_ptr<pending_update>>());
-    return tx_id;
+    assert(cur_tx_id == UINT64_MAX && "only one concurrent transaction per client");
+    cur_tx_id = ++tx_id_ctr;
 }
 
 uint64_t
-client :: create_node(uint64_t tx_id)
+client :: create_node()
 {
-    if (tx_map.find(tx_id) == tx_map.end()) {
-        WDEBUG << "transaction id " << tx_id << " not found" << std::endl;
-        return 0;
-    } else {
-        auto upd = std::make_shared<pending_update>();
-        upd->type = message::CLIENT_NODE_CREATE_REQ;
-        upd->handle = generate_handle();
-        tx_map[tx_id].emplace_back(upd);
-        return upd->handle;
-    }
+    assert(cur_tx_id != UINT64_MAX);
+    auto upd = std::make_shared<pending_update>();
+    upd->type = message::CLIENT_NODE_CREATE_REQ;
+    upd->handle = generate_handle();
+    cur_tx.emplace_back(upd);
+    return upd->handle;
 }
 
 uint64_t
-client :: create_edge(uint64_t tx_id, uint64_t node1, uint64_t node2)
+client :: create_edge(uint64_t node1, uint64_t node2)
 {
-    if (tx_map.find(tx_id) == tx_map.end()) {
-        WDEBUG << "transaction id " << tx_id << " not found" << std::endl;
-        return 0;
-    } else {
-        auto upd = std::make_shared<pending_update>();
-        upd->type = message::CLIENT_EDGE_CREATE_REQ;
-        upd->handle = generate_handle();
-        upd->elem1 = node1;
-        upd->elem2 = node2;
-        tx_map[tx_id].emplace_back(upd);
-        return upd->handle;
-    }
+    assert(cur_tx_id != UINT64_MAX);
+    auto upd = std::make_shared<pending_update>();
+    upd->type = message::CLIENT_EDGE_CREATE_REQ;
+    upd->handle = generate_handle();
+    upd->elem1 = node1;
+    upd->elem2 = node2;
+    cur_tx.emplace_back(upd);
+    return upd->handle;
 }
 
 void
-client :: delete_node(uint64_t tx_id, uint64_t node)
+client :: delete_node(uint64_t node)
 {
-    if (tx_map.find(tx_id) != tx_map.end()) {
-        auto upd = std::make_shared<pending_update>();
-        upd->type = message::CLIENT_NODE_DELETE_REQ;
-        upd->elem1 = node;
-        tx_map[tx_id].emplace_back(upd);
-    } else {
-        WDEBUG << "transaction id " << tx_id << " not found" << std::endl;
-    }
+    assert(cur_tx_id != UINT64_MAX);
+    auto upd = std::make_shared<pending_update>();
+    upd->type = message::CLIENT_NODE_DELETE_REQ;
+    upd->elem1 = node;
+    cur_tx.emplace_back(upd);
 }
 
 void
-client :: delete_edge(uint64_t tx_id, uint64_t edge, uint64_t node)
+client :: delete_edge(uint64_t edge, uint64_t node)
 {
-    if (tx_map.find(tx_id) != tx_map.end()) {
-        auto upd = std::make_shared<pending_update>();
-        upd->type = message::CLIENT_EDGE_DELETE_REQ;
-        upd->elem1 = edge;
-        upd->elem2 = node;
-        tx_map[tx_id].emplace_back(upd);
-    } else {
-        WDEBUG << "transaction id " << tx_id << " not found" << std::endl;
-    }
+    assert(cur_tx_id != UINT64_MAX);
+    auto upd = std::make_shared<pending_update>();
+    upd->type = message::CLIENT_EDGE_DELETE_REQ;
+    upd->elem1 = edge;
+    upd->elem2 = node;
+    cur_tx.emplace_back(upd);
 }
 
 void
-client :: set_node_property(uint64_t tx_id, uint64_t node,
+client :: set_node_property(uint64_t node,
     std::string &key, std::string &value)
 {
-    if (tx_map.find(tx_id) != tx_map.end()) {
-        auto upd = std::make_shared<pending_update>();
-        upd->type = message::CLIENT_NODE_SET_PROP;
-        upd->elem1 = node;
-        upd->key = std::move(key);
-        upd->value = std::move(value);
-        tx_map[tx_id].emplace_back(upd);
-    } else {
-        WDEBUG << "transaction id " << tx_id << " not found" << std::endl;
-    }
+    assert(cur_tx_id != UINT64_MAX);
+    auto upd = std::make_shared<pending_update>();
+    upd->type = message::CLIENT_NODE_SET_PROP;
+    upd->elem1 = node;
+    upd->key = std::move(key);
+    upd->value = std::move(value);
+    cur_tx.emplace_back(upd);
 }
 
 void
-client :: set_edge_property(uint64_t tx_id, uint64_t node, uint64_t edge,
+client :: set_edge_property(uint64_t node, uint64_t edge,
     std::string &key, std::string &value)
 {
-    if (tx_map.find(tx_id) != tx_map.end()) {
-        auto upd = std::make_shared<pending_update>();
-        upd->type = message::CLIENT_EDGE_SET_PROP;
-        upd->elem1 = edge;
-        upd->elem2 = node;
-        upd->key = std::move(key);
-        upd->value = std::move(value);
-        tx_map[tx_id].emplace_back(upd);
-    } else {
-        WDEBUG << "transaction id " << tx_id << " not found" << std::endl;
-    }
+    assert(cur_tx_id != UINT64_MAX);
+    auto upd = std::make_shared<pending_update>();
+    upd->type = message::CLIENT_EDGE_SET_PROP;
+    upd->elem1 = edge;
+    upd->elem2 = node;
+    upd->key = std::move(key);
+    upd->value = std::move(value);
+    cur_tx.emplace_back(upd);
 }
 
 bool
-client :: end_tx(uint64_t tx_id)
+client :: end_tx()
 {
-    if (tx_map.find(tx_id) != tx_map.end()) {
-        message::message msg;
-        message::prepare_tx_message_client(msg, tx_map[tx_id]);
-        send_coord(msg.buf);
+    assert(cur_tx_id != UINT64_MAX);
+    bool success = false;
+    message::message msg;
+    message::prepare_tx_message_client(msg, cur_tx);
+    send_coord(msg.buf);
 
-        busybee_returncode recv_code = recv_coord(&msg.buf);
-        if (recv_code == BUSYBEE_TIMEOUT) {
-            // assume vt is dead, fail tx
-            reconfigure();
-            return false;
-        }
-        if (recv_code != BUSYBEE_SUCCESS) {
-            WDEBUG << "tx msg recv fail" << std::endl;
-            return false;
-        }
+    busybee_returncode recv_code = recv_coord(&msg.buf);
+    if (recv_code == BUSYBEE_TIMEOUT) {
+        // assume vt is dead, fail tx
+        reconfigure();
+    } else if (recv_code != BUSYBEE_SUCCESS) {
+        WDEBUG << "tx msg recv fail" << std::endl;
+    } else {
         message::msg_type mtype = msg.unpack_message_type();
         assert(mtype == message::CLIENT_TX_DONE
             || mtype == message::CLIENT_TX_FAIL);
         if (mtype == message::CLIENT_TX_DONE) {
-            return true;
-        } else {
-            return false;
+            success = true;
         }
-    } else {
-        WDEBUG << "transaction id " << tx_id << " not found" << std::endl;
-        return false;
     }
+
+    cur_tx_id = UINT64_MAX;
+    cur_tx.clear();
+
+    return success;
 }
 
 template <typename ParamsType>

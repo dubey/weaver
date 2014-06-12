@@ -40,17 +40,17 @@ def line_requests(eprops, exp_reach):
     print 'Num reachable ' + str(num_reach) + ', expected ' + str(exp_reach) + ', time taken = ' + str(timer)
 
 print 'calling begin tx'
-tx_id = c.begin_tx()
+c.begin_tx()
 for i in range(num_nodes):
-    nodes.append(c.create_node(tx_id))
+    nodes.append(c.create_node())
 print 'calling end tx'
-c.end_tx(tx_id)
+c.end_tx()
 print 'calling begin tx'
-tx_id = c.begin_tx()
+c.begin_tx()
 for i in range(num_nodes-1):
-    edges.append(c.create_edge(tx_id, nodes[i], nodes[i+1]))
+    edges.append(c.create_edge(nodes[i], nodes[i+1]))
 print 'calling end tx'
-c.end_tx(tx_id)
+c.end_tx()
 print 'Created graph\n'
 
 node_count = c.get_node_count()
@@ -67,10 +67,10 @@ print 'Now testing with edge props'
 line_requests([('color','blue')], 0)
 
 # adding edge props
-tx_id = c.begin_tx()
+c.begin_tx()
 for i in range(num_nodes-1):
-    c.set_edge_property(tx_id, nodes[i], edges[i], 'color', 'blue')
-c.end_tx(tx_id)
+    c.set_edge_property(nodes[i], edges[i], 'color', 'blue')
+c.end_tx()
 print 'All edge properties set'
 
 print 'Now testing without edge props'

@@ -44,18 +44,18 @@ namespace client
         private:
             uint64_t myid, shifted_id, vtid;
             common::comm_wrapper comm;
-            std::unordered_map<uint64_t, tx_list_t> tx_map;
-            uint64_t tx_id_ctr, temp_handle_ctr;
+            tx_list_t cur_tx;
+            uint64_t cur_tx_id, tx_id_ctr, temp_handle_ctr;
 
         public:
-            uint64_t begin_tx();
-            uint64_t create_node(uint64_t tx_id);
-            uint64_t create_edge(uint64_t tx_id, uint64_t node1, uint64_t node2);
-            void delete_node(uint64_t tx_id, uint64_t node); 
-            void delete_edge(uint64_t tx_id, uint64_t edge, uint64_t node);
-            void set_node_property(uint64_t tx_id, uint64_t node, std::string &key, std::string &value);
-            void set_edge_property(uint64_t tx_id, uint64_t node, uint64_t edge, std::string &key, std::string &value);
-            bool end_tx(uint64_t tx_id);
+            void begin_tx();
+            uint64_t create_node();
+            uint64_t create_edge(uint64_t node1, uint64_t node2);
+            void delete_node(uint64_t node); 
+            void delete_edge(uint64_t edge, uint64_t node);
+            void set_node_property(uint64_t node, std::string &key, std::string &value);
+            void set_edge_property(uint64_t node, uint64_t edge, std::string &key, std::string &value);
+            bool end_tx();
 
             template <typename ParamsType>
             std::unique_ptr<ParamsType> 
