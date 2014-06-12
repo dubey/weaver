@@ -14,73 +14,24 @@
 #define weaver_debug_
 #include "comm_wrapper.h"
 
-using common::comm_wrapper;
+#define ID_INCR (1ULL << 32ULL)
+#define WEAVER_TO_BUSYBEE(x) (x+ID_INCR)
+#define BUSYBEE_TO_WEAVER(x) (x-ID_INCR)
 
-comm_wrapper :: weaver_mapper :: weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster, uint64_t my_id)
-{
-    for (uint64_t i = 0; i < NUM_VTS+NUM_SHARDS; i++) {
-        active_server_idx[i] = UINT64_MAX;
-    }
-    uint64_t incr_id = my_id + ID_INCR;
-    assert(cluster.find(incr_id) != cluster.end());
-    mlist[incr_id] = cluster[incr_id];
-    for (auto &s: cluster) {
-        uint64_t id = s.first - ID_INCR;
-        if (id >= CLIENT_ID) {
-            // clients do not register with server manager
-            mlist[s.first] = cluster[s.first];
-        }
-    }
-}
+using common::comm_wrapper;
 
 bool
 comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *loc)
 {
-    uint64_t incr_id = ID_INCR + server_id;
-    auto mlist_iter = mlist.find(incr_id);
-    if (mlist_iter != mlist.end()) {
-        *loc = mlist_iter->second;
-        return true;
-    } else {
-        WDEBUG << "returning false from mapper lookup for id " << server_id << ", incr id " << incr_id << std::endl;
-        while(1);
-        return false;
+    //uint64_t incr_id = ID_INCR + server_id;
+    auto mlist_iter = mlist.find(WEAVER_TO_BUSYBEE(server_id));
+    if (mlist_iter == mlist.end()) {
+        WDEBUG << "busybee map lookup failed for orig id " << server_id
+               << ", busybee id " << WEAVER_TO_BUSYBEE(server_id) << std::endl;
     }
-}
-
-void
-comm_wrapper :: weaver_mapper :: reconfigure(configuration &new_config, uint64_t &primary)
-{
-    config = new_config;
-    for (uint64_t i = 0; i < NUM_VTS+NUM_SHARDS; i++) {
-        if (active_server_idx[i] < UINT64_MAX) {
-            uint64_t srv_idx = active_server_idx[i];
-            while (config.get_state(server_id(srv_idx)) != server::AVAILABLE) {
-                srv_idx = srv_idx + NUM_VTS + NUM_SHARDS;
-                if (srv_idx > NUM_SERVERS) {
-                    // all backups dead, not contactable
-                    // cannot do anything
-                    WDEBUG << "Caution! All backups for server " << i << " are dead\n";
-                    break;
-                }
-            }
-            if (srv_idx != active_server_idx[i]) {
-                mlist[ID_INCR + i] = config.get_address(server_id(srv_idx));
-                active_server_idx[i] = srv_idx;
-            }
-        } else {
-            // server i is not yet up
-            // check only i in the new config
-            if (config.get_state(server_id(i)) == server::AVAILABLE) {
-                mlist[ID_INCR + i] = config.get_address(server_id(i));
-                active_server_idx[i] = i;
-            }
-        }
-    }
-    while (primary >= NUM_VTS + NUM_SHARDS) {
-        primary -= (NUM_VTS+NUM_SHARDS);
-    }
-    primary = active_server_idx[primary];
+    assert(mlist_iter != mlist.end() && "busybee mapper lookup");
+    *loc = mlist_iter->second;
+    return true;
 }
 
 
@@ -105,8 +56,7 @@ comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr, int to, bool client=false)
         assert(file.good());
 
         while (file >> id >> ipaddr >> inport) {
-            uint64_t incr_id = ID_INCR + id;
-            cluster[incr_id] = po6::net::location(ipaddr.c_str(), inport);
+            cluster[WEAVER_TO_BUSYBEE(id)] = po6::net::location(ipaddr.c_str(), inport);
             if (id == bb_id) {
                 loc.reset(new po6::net::location(ipaddr.c_str(), inport));
             }
@@ -115,16 +65,23 @@ comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr, int to, bool client=false)
     } catch (std::ifstream::failure e) {
         WDEBUG << "file exception" << std::endl;
     }
+
+    for (uint64_t i = 0; i < NUM_VTS+NUM_SHARDS; i++) {
+        active_server_idx[i] = UINT64_MAX;
+    }
+    for (uint64_t i = 0; i < NUM_SERVERS; i++) {
+        reverse_server_idx[i] = UINT64_MAX;
+    }
 }
 
 void
 comm_wrapper :: init(configuration &config)
 {
     uint64_t primary = bb_id;
-    wmap.reset(new weaver_mapper(cluster, bb_id));
-    wmap->reconfigure(config, primary);
+    wmap.reset(new weaver_mapper(cluster));
+    reconfigure_internal(config, primary);
     WDEBUG << "Busybee attaching to loc " << loc->address << ":" << loc->port << std::endl;
-    bb.reset(new busybee_mta(&bb_gc, wmap.get(), *loc, bb_id+ID_INCR, num_threads));
+    bb.reset(new busybee_mta(&bb_gc, wmap.get(), *loc, WEAVER_TO_BUSYBEE(bb_id), num_threads));
     bb->set_timeout(timeout);
 
     std::unique_ptr<e::garbage_collector::thread_state> gc_ts_ptr;
@@ -138,9 +95,11 @@ comm_wrapper :: init(configuration &config)
 void
 comm_wrapper :: client_init()
 {
-    wmap.reset(new weaver_mapper(cluster, bb_id));
-    wmap->client_configure(cluster);
-    bb.reset(new busybee_mta(&bb_gc, wmap.get(), *loc, bb_id+ID_INCR, num_threads));
+    wmap.reset(new weaver_mapper(cluster));
+    for (uint64_t i = 0; i < NUM_VTS; i++) {
+        active_server_idx[i] = i;
+    }
+    bb.reset(new busybee_mta(&bb_gc, wmap.get(), *loc, WEAVER_TO_BUSYBEE(bb_id), num_threads));
 
     std::unique_ptr<e::garbage_collector::thread_state> gc_ts_ptr;
     gc_ts_ptr.reset(new e::garbage_collector::thread_state());
@@ -153,9 +112,44 @@ comm_wrapper :: reconfigure(configuration &new_config)
 {
     uint64_t primary = bb_id;
     bb->pause();
-    wmap->reconfigure(new_config, primary);
+    reconfigure_internal(new_config, primary);
     bb->unpause();
     return primary;
+}
+
+void
+comm_wrapper :: reconfigure_internal(configuration &new_config, uint64_t &primary)
+{
+    config = new_config;
+    for (uint64_t i = 0; i < NUM_VTS+NUM_SHARDS; i++) {
+        if (active_server_idx[i] < UINT64_MAX) {
+            uint64_t srv_idx = active_server_idx[i];
+            while (config.get_state(server_id(srv_idx)) != server::AVAILABLE) {
+                srv_idx = srv_idx + NUM_VTS + NUM_SHARDS;
+                if (srv_idx > NUM_SERVERS) {
+                    // all backups dead, not contactable
+                    // cannot do anything
+                    WDEBUG << "Caution! All backups for server " << i << " are dead\n";
+                    break;
+                }
+            }
+            if (srv_idx != active_server_idx[i]) {
+                active_server_idx[i] = srv_idx;
+                reverse_server_idx[srv_idx] = i;
+            }
+        } else {
+            // server i is not yet up
+            // check only i in the new config
+            if (config.get_state(server_id(i)) == server::AVAILABLE) {
+                active_server_idx[i] = i;
+                reverse_server_idx[i] = i;
+            }
+        }
+    }
+    while (primary >= NUM_VTS + NUM_SHARDS) {
+        primary -= (NUM_VTS+NUM_SHARDS);
+    }
+    primary = active_server_idx[primary];
 }
 
 #pragma GCC diagnostic push
@@ -163,7 +157,7 @@ comm_wrapper :: reconfigure(configuration &new_config)
 busybee_returncode
 comm_wrapper :: send(uint64_t send_to, std::auto_ptr<e::buffer> msg)
 {
-    busybee_returncode code = bb->send(send_to, msg);
+    busybee_returncode code = bb->send(send_to < CLIENT_ID? active_server_idx[send_to] : send_to, msg);
     if (code != BUSYBEE_SUCCESS) {
         WDEBUG << "busybee send returned " << code << std::endl;
     }
@@ -173,8 +167,12 @@ comm_wrapper :: send(uint64_t send_to, std::auto_ptr<e::buffer> msg)
 busybee_returncode
 comm_wrapper :: recv(uint64_t *recv_from, std::auto_ptr<e::buffer> *msg)
 {
-    busybee_returncode code = bb->recv(recv_from, msg);
-    if (code != BUSYBEE_SUCCESS && code != BUSYBEE_TIMEOUT) {
+    uint64_t actual_server_id;
+    busybee_returncode code = bb->recv(&actual_server_id, msg);
+    if (code == BUSYBEE_SUCCESS) {
+        *recv_from = actual_server_id < CLIENT_ID?
+                     reverse_server_idx[BUSYBEE_TO_WEAVER(actual_server_id)] : BUSYBEE_TO_WEAVER(actual_server_id);
+    } else if (code != BUSYBEE_TIMEOUT) {
         WDEBUG << "busybee recv returned " << code << std::endl;
     }
     return code;

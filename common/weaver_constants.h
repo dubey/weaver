@@ -34,7 +34,6 @@
 #define MAX_TIME UINT64_MAX
 
 // messaging constants
-#define ID_INCR (1ULL << 32ULL)
 #define COORD_ID (0ULL)
 #define COORD_SM_ID (0ULL)
 #define CLIENT_ID (100ULL)

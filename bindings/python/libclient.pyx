@@ -56,7 +56,6 @@ cdef extern from '<vector>' namespace 'std':
 
 cdef extern from 'common/weaver_constants.h':
     # messaging constants
-    cdef uint64_t ID_INCR
     cdef uint64_t COORD_ID
     cdef uint64_t COORD_SM_ID
     cdef uint64_t CLIENT_ID
@@ -82,7 +81,6 @@ cdef extern from 'common/weaver_constants.h':
     cdef char *KRONOS_IPADDR
     cdef uint64_t KRONOS_PORT
 
-_ID_INCR                    = ID_INCR
 _COORD_ID                   = COORD_ID
 _COORD_SM_ID                = COORD_SM_ID
 _CLIENT_ID                  = CLIENT_ID

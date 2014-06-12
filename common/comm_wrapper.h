@@ -35,16 +35,14 @@ class comm_wrapper
         class weaver_mapper : public busybee_mapper
         {
             private:
-                std::unordered_map<uint64_t, po6::net::location> mlist; // active servers only
-                uint64_t active_server_idx[NUM_VTS+NUM_SHARDS]; // for each vt/shard, index of the active server
-                configuration config;
+                std::unordered_map<uint64_t, po6::net::location> mlist;
 
             public:
-                weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster, uint64_t my_id);
-                virtual ~weaver_mapper() throw () {}
+                weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster) : mlist(cluster) { }
+                virtual ~weaver_mapper() throw () { }
                 virtual bool lookup(uint64_t server_id, po6::net::location *loc);
-                void reconfigure(configuration &new_config, uint64_t &now_primary);
-                void client_configure(std::unordered_map<uint64_t, po6::net::location> &cluster) { mlist = cluster; }
+                //void reconfigure(configuration &new_config, uint64_t &now_primary);
+                //void client_configure(std::unordered_map<uint64_t, po6::net::location> &cluster) { mlist = cluster; }
 
             private:
                 weaver_mapper(const weaver_mapper&);
@@ -52,6 +50,9 @@ class comm_wrapper
         };
 
     private:
+        uint64_t active_server_idx[NUM_VTS+NUM_SHARDS]; // for each vt/shard, index of the active server
+        uint64_t reverse_server_idx[NUM_SERVERS]; // for each server, the corresponding vt/shard number for which it is active
+        configuration config;
         e::garbage_collector bb_gc;
         std::vector<std::unique_ptr<e::garbage_collector::thread_state>> bb_gc_ts;
         std::unique_ptr<busybee_mta> bb;
@@ -61,6 +62,7 @@ class comm_wrapper
         uint64_t bb_id;
         int num_threads;
         int timeout;
+        void reconfigure_internal(configuration&, uint64_t&);
 
     public:
         comm_wrapper(uint64_t bbid, int nthr, int timeout, bool client);

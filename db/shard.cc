@@ -1736,12 +1736,11 @@ recv_loop(uint64_t thread_id)
             auto unpacker = rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE);
             unpack_buffer(unpacker, mtype);
             rec_msg->change_type(mtype);
-            sender -= ID_INCR;
+            //sender -= ID_INCR;
             vclk.clock.clear();
             qts.clear();
 
-            switch (mtype)
-            {
+            switch (mtype) {
                 case message::TX_INIT: {
                     rec_msg->unpack_partial_message(message::TX_INIT, vt_id, vclk, qts);
                     assert(qts.size() == NUM_SHARDS);

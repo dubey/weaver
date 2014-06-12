@@ -446,7 +446,7 @@ server_loop(int thread_id)
         } else {
             // good to go, unpack msg
             mtype = msg->unpack_message_type();
-            sender -= ID_INCR;
+            //sender -= ID_INCR;
 
             switch (mtype) {
                 // client messages
