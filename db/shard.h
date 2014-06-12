@@ -299,7 +299,7 @@ namespace db
                 WDEBUG << "Now active for shard " << shard_id << std::endl;
                 // this server is now primary for the shard
                 active_backup = true;
-                //restore_backup();
+                restore_backup();
                 backup_cond.signal();
             }
         }
