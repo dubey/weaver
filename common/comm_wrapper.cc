@@ -23,7 +23,6 @@ using common::comm_wrapper;
 bool
 comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *loc)
 {
-    //uint64_t incr_id = ID_INCR + server_id;
     auto mlist_iter = mlist.find(WEAVER_TO_BUSYBEE(server_id));
     if (mlist_iter == mlist.end()) {
         WDEBUG << "busybee map lookup failed for orig id " << server_id
