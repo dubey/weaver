@@ -41,7 +41,6 @@ namespace nmap
             void put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add);
             std::vector<std::pair<uint64_t, uint64_t>> get_mappings(std::unordered_set<uint64_t> &toGet);
             void del_mappings(std::vector<uint64_t> &toDel);
-            void clean_up_space();
     };
 }
 

@@ -88,7 +88,7 @@ nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
             const hyperdex_client_attribute *attr;
             size_t attr_size;
 
-            async_get() { status = (hyperdex_client_returncode)0; }
+            async_get() : status(static_cast<hyperdex_client_returncode>(0)) { }
     };
 
     int64_t num_nodes = toGet.size();
@@ -155,41 +155,38 @@ nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
 void
 nmap_stub :: del_mappings(std::vector<uint64_t> &toDel)
 {
-    int numNodes = toDel.size();
-    std::vector<int64_t> results(numNodes);
-    hyperdex_client_returncode get_status;
+    int64_t num_nodes = toDel.size();
+    std::unordered_map<int64_t, int64_t> opid_to_idx;
+    opid_to_idx.reserve(num_nodes);
+    hyperdex_client_returncode del_status[num_nodes];
+    int64_t del_id;
 
-    for (int i = 0; i < numNodes; i++) {
-        results[i] = cl.del(space, (char *) &(toDel[i]), sizeof(uint64_t), &get_status);
-        if (results[i] < 0)
-        {
-            WDEBUG << "\"del\" returned " << results[i] << " with status " << get_status << std::endl;
-            return;
-        }
+    for (int64_t i = 0; i < num_nodes; i++) {
+        do {
+            del_id = cl.del(space, (char*)&(toDel[i]), sizeof(int64_t), del_status+i);
+        } while (del_id < 0);
+        assert(opid_to_idx.find(del_id) == opid_to_idx.end());
+        opid_to_idx[del_id] = i;
     }
 
-    hyperdex_client_returncode loop_status;
     int64_t loop_id;
+    hyperdex_client_returncode loop_status;
     // call loop once for every get
-    for (int i = 0; i < numNodes; i++) {
-        loop_id = cl.loop(-1, &loop_status);
-        if (loop_id < 0) {
-            WDEBUG << "get \"loop\" returned " << loop_id << " with status " << loop_status << std::endl;
-            return;
+    for (int64_t i = 0; i < num_nodes; i++) {
+        do {
+            loop_id = cl.loop(-1, &loop_status);
+        } while(loop_id < 0);
+        assert(opid_to_idx.find(loop_id) != opid_to_idx.end());
+        int64_t &loop_idx = opid_to_idx[loop_id];
+        assert(loop_idx >= 0);
+
+        if (loop_status != HYPERDEX_CLIENT_SUCCESS || del_status[loop_idx] != HYPERDEX_CLIENT_SUCCESS) {
+            WDEBUG << "bad del for node at idx " << loop_idx
+                   << ", node: " << toDel[loop_idx]
+                   << ", del status: " << del_status[loop_idx]
+                   << ", loop status: " << loop_status << std::endl;
         }
 
-        // double check this ID exists
-        bool found = false;
-        for (int i = 0; i < numNodes; i++) {
-            found = found || (results[i] == loop_id);
-        }
-        assert(found);
+        loop_idx = -1;
     }
-}
-
-// TODO
-void
-nmap_stub :: clean_up_space()
-{
-    //cl.rm_space(space);
 }
