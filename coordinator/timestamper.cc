@@ -757,6 +757,7 @@ main(int argc, char *argv[])
     install_signal_handler(SIGINT, end_program);
     install_signal_handler(SIGHUP, end_program);
     install_signal_handler(SIGTERM, end_program);
+    install_signal_handler(SIGTSTP, end_program);
 
     sigset_t ss;
     if (sigfillset(&ss) < 0) {
