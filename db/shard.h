@@ -501,8 +501,10 @@ namespace db
     {
         n->base.update_del_time(tdel);
         n->updated = true;
-        // store in Hyperdex
-        hs->update_del_time(*n);
+        // persist changes
+        // we permanently delete node from HyperDex
+        // since if shard crashes, concurrent node progs are dropped
+        hs->del_node(*n);
     }
 
     inline void
@@ -539,7 +541,7 @@ namespace db
         if (!init_load) {
             // store in Hyperdex
             hs->add_out_edge(*n, new_edge);
-            hs->add_in_nbr(remote_node, n->base.get_id());
+            hs->add_in_nbr(n->base.get_id(), remote_node);
             edge_map_mutex.unlock();
         }
     }
@@ -578,9 +580,8 @@ namespace db
         n->dependent_del++;
 
         // update edge map
-        uint64_t remote = e->nbr.id;
+        uint64_t remote = e->nbr.get_id();
         edge_map_mutex.lock();
-        // XXX fault tolerance: need to check
         if (edge_map.find(remote) != edge_map.end()) {
             auto &node_set = edge_map[remote];
             node_set.erase(n->base.get_id());
@@ -588,9 +589,12 @@ namespace db
                 edge_map.erase(remote);
             }
         }
+        // persist changes
+        // we permanently delete edge from HyperDex
+        // since if shard crashes, concurrent node progs are dropped
+        hs->remove_out_edge(*n, e);
+        hs->remove_in_nbr(n->base.get_id(), remote);
         edge_map_mutex.unlock();
-        // store in Hyperdex
-        hs->add_out_edge(*n, e);
     }
 
     inline void
@@ -962,11 +966,10 @@ namespace db
     shard :: restore_backup()
     {
         std::unordered_map<uint64_t, uint64_t> qts_map;
-        std::unordered_map<uint64_t, vc::vclock_t> last_clocks;
         bool migr_token;
         restore_mutex.lock();
-        hstub.back()->restore_backup(qts_map, last_clocks, migr_token, nodes, edge_map, node_map_mutexes);
-        qm.restore_backup(qts_map, last_clocks);
+        hstub.back()->restore_backup(qts_map, migr_token, nodes, edge_map, node_map_mutexes);
+        qm.restore_backup(qts_map);
         restore_done = true;
         restore_cv.signal();
         restore_mutex.unlock();

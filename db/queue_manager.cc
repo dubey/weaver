@@ -108,11 +108,8 @@ queue_manager :: exec_queued_request(db::hyper_stub *hstub)
         return false;
     }
     (*req->func)(hstub, req->arg);
-    // queue timestamp is incremented by the thread, upon finishing
-    // because the decision to increment or not is based on thread-specific knowledge
-    // moreover, when to increment can also be decided by thread only
-    // this could potentially decrease throughput, because other ops in the
-    // threadpool are blocked, waiting for this thread to increment qts
+    // queue timestamp is incremented by the thread, upon enqueueing this tx on node queue
+    // when to increment qts depends on the tx components
     delete req;
     return true;
 }
@@ -137,15 +134,14 @@ queue_manager :: record_completed_tx(vc::vclock &tx_clk)
     queue_mutex.unlock();
 }
 
-// initialize queue manager qts/last_clocks from backup
+// initialize queue manager qts from backup
+// last clocks is not made persistent because nops will reinitialize them
 void
-queue_manager :: restore_backup(std::unordered_map<uint64_t, uint64_t> &map_qts, std::unordered_map<uint64_t, vc::vclock_t> &map_lstclk)
+queue_manager :: restore_backup(std::unordered_map<uint64_t, uint64_t> &map_qts)
 {
     for (uint64_t i = 0; i < NUM_VTS; i++) {
         assert(map_qts.find(i) != map_qts.end());
-        assert(map_lstclk.find(i) != map_lstclk.end());
         qts[i] = map_qts[i];
-        last_clocks[i] = map_lstclk[i];
     }
 }
 

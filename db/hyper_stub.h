@@ -14,7 +14,7 @@
 #ifndef weaver_db_hyper_stub_h_
 #define weaver_db_hyper_stub_h_
 #define NUM_GRAPH_ATTRS 7
-#define NUM_SHARD_ATTRS 3
+#define NUM_SHARD_ATTRS 2
 
 #include <po6/threads/mutex.h>
 
@@ -57,7 +57,6 @@ namespace db
             hyper_stub(uint64_t sid);
             void init();
             void restore_backup(std::unordered_map<uint64_t, uint64_t> &qts_map,
-                std::unordered_map<uint64_t, vc::vclock_t> &last_clocks,
                 bool &migr_token,
                 std::unordered_map<uint64_t, element::node*> *nodes,
                 std::unordered_map<uint64_t, std::unordered_set<uint64_t>> &edge_map,
@@ -65,7 +64,7 @@ namespace db
             // graph updates
             void put_node(element::node &n, std::unordered_set<uint64_t> &nbr_map);
             void update_creat_time(element::node &n);
-            void update_del_time(element::node &n);
+            void del_node(element::node &n);
             void update_properties(element::node &n);
             void add_out_edge(element::node &n, element::edge *e);
             void remove_out_edge(element::node &n, element::edge *e);
@@ -78,7 +77,6 @@ namespace db
                 std::unordered_map<uint64_t, std::unordered_set<uint64_t>> &edge_map);
             // shard updates
             void increment_qts(uint64_t vt_id, uint64_t incr);
-            void update_last_clocks(uint64_t vt_id, vc::vclock_t &vclk);
             void update_migr_token(enum persist_migr_token token);
     };
 }

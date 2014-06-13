@@ -44,7 +44,16 @@ for i in range(grid_sz):
             edges[nodes[i][j]].append(e)
         c.end_tx()
 
-dummy = raw_input('Press a key when shards are killed ')
+# read the graph written
+param = client.ReadNEdgesParams()
+for i in range(grid_sz):
+    for j in range(grid_sz):
+        prog_args = [(nodes[i][j], param)]
+        response = c.read_n_edges(prog_args)
+        for e in response.return_edges:
+            assert (e in edges[nodes[i][j]])
+            
+dummy = raw_input('Press a key when shards and/or timestampers are killed ')
 
 # read the graph written
 param = client.ReadNEdgesParams()
