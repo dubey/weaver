@@ -25,14 +25,10 @@ namespace coordinator
         std::bitset<NUM_VTS> locks;
         std::unique_ptr<transaction::pending_tx> tx;
 
-        current_tx() 
-            : client(UINT64_MAX)
-            , count(0)
-        { }
+        current_tx() : count(0) { }
 
-        current_tx(uint64_t cl, std::unique_ptr<transaction::pending_tx> t)
-            : client(cl)
-            , count(0)
+        current_tx(std::unique_ptr<transaction::pending_tx> t)
+            : count(0)
             , tx(std::move(t))
         { }
     };
