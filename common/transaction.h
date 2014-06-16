@@ -47,6 +47,7 @@ namespace transaction
             , client_id; // client to which we need to reply
         tx_list_t writes;
         vc::vclock timestamp; // vector timestamp
+        std::vector<uint64_t> del_elems;
     };
 }
 

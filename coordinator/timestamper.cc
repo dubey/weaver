@@ -51,58 +51,390 @@ end_program(int signum)
     }
 }
 
+// send an abort msg to the waiting client
+// all elems should be unlocked, no residual tx state after this
 void
-prepare_del_transaction(transaction::pending_tx &tx, std::vector<uint64_t> &del_elems)
+send_abort(uint64_t cl_id)
 {
-    current_tx cur_tx(tx.client_id, tx);
-    cur_tx.count = NUM_VTS - 1;
+    msg->prepare_message(message::CLIENT_TX_ABORT);
+    vts->comm.send(cl_id, msg->buf);
+}
+
+// caution: assuming caller holds vts->busy_mtx
+bool
+lock_del_elems(std::vector<uint64_t> &del_elems)
+{
+    bool fail = false;
+    uint64_t i = 0;
+    for (; i < del_elems.size(); i++) {
+        if (vts->deleted_elems.find(del_elems[i]) != vts->deleted_elems.end()
+         || vts->busy_elems.find(del_elems[i]) != vts->busy_elems.end()) {
+            i--;
+            fail = true;
+            break;
+        } else {
+            vts->deleted_elems.emplace(del_elems[i]);
+        }
+    }
+
+    if (fail) {
+        // one of the del_elems locked by a concurrent tx
+        // undo all locks by this transaction and abort
+        for (; i >= 0; i--) {
+            vts->deleted_elems.erase(del_elems[i]);
+        }
+        return false;
+    }
+
+    return true;
+}
+
+// caution: assuming caller holds vts->busy_mtx
+void
+unlock_del_elems(std::vector<uint64_t> &del_elems)
+{
+    for (uint64_t d: del_elems) {
+        assert(vts->deleted_elems.find(d) != vts->deleted_elems.end());
+        vts->deleted_elems.erase(d);
+    }
+}
+
+void
+prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
+    nmap::nmap_stub *nmstub,
+    coordinator::hyper_stub *hstub)
+{
+    bool fail = false;
+    std::vector<uint64_t> del_elems;
+    bool dist_lock = (tx->del_elems.size() > 0) && (NUM_VTS > 1);
+    uint64_t tx_id = tx->id;
+    uint64_t cl_id = tx->client_id;
+    if (dist_lock) {
+        del_elems = tx->del_elems;
+    }
+
     vts->busy_mtx.lock();
-    vts->del_tx[tx.id] = cur_tx;
+
+    if (!lock_del_elems(tx->del_elems)) {
+        vts->busy_mtx.unlock();
+        fail = true;
+    }
+
+    if (!fail && dist_lock) {
+        vts->del_tx.emplace(tx.id, current_tx(std::move(tx)));
+        vts->del_tx[tx_id].locks.set(vt_id);
+        vts->del_tx[tx_id].count = NUM_VTS-1; // dist_lock ensures count > 0
+    }
+
     vts->busy_mtx.unlock();
+
+    if (fail) {
+        send_abort(cl_id);
+    } else if (dist_lock) {
+        // successfully locked all del_elems on this shard
+        // now send lock request to other shards
+        for (uint64_t i = 0; i < NUM_VTS; i++) {
+            if (i != vt_id) {
+                message::message msg;
+                msg.prepare_message(message::PREP_DEL_TX, vt_id, tx_id, del_elems);
+                vts->comm.send(i, msg.buf);
+            }
+        }
+    } else {
+        // no distributed locks, can go ahead with next step
+        prepare_tx_step2(std::move(tx), nmstub, hstub);
+    }
+}
+
+// caution: assuming caller holds vts->busy_mtx
+void
+release_locks_and_abort(uint64_t tx_id)
+{
+    message::message msg;
+    auto &cur_tx = vts->del_tx[tx_id];
+    uint64_t cl_id = cur_tx.tx->client_id;
+
     for (uint64_t i = 0; i < NUM_VTS; i++) {
-        if (i != vt_id) {
-            message::message msg;
-            msg.prepare_message(message::PREP_DEL_TX, vt_id, tx.id, tx.client_id, del_elems);
-            vts->comm.send(i, msg.buf);
+        if (i == vt_id) {
+            assert(cur_tx.locks[i]);
+            unlock_del_elems(cur_tx.del_elems);
+        } else {
+            if (cur_tx.locks[i]) {
+                msg.prepare_message(message::UNPREP_DEL_TX, cur_tx.tx->del_elems);
+                vts->comm.send(i, msg.buf);
+            }
+        }
+    }
+
+    vts->del_tx.erase(tx_id);
+
+    send_abort(cl_id);
+}
+
+void
+done_prepare_tx_step1(uint64_t tx_id,
+    uint64_t from_vt,
+    nmap::nmap_stub *nmstub,
+    coordinator::hyper_stub *hstub)
+{
+    vts->busy_mtx.lock();
+    assert(vts->del_tx.find(tx_id) != vts->del_tx.end());
+    auto &cur_tx = vts->del_tx[tx_id];
+
+    assert(--cur_tx.count >= 0);
+    cur_tx.locks.set(from_vt);
+
+    if (cur_tx.locks.all()) {
+        // ready to run
+        auto tx = std::move(cur_tx.tx);
+        vts->del_tx.erase(tx_id);
+        vts->busy_mtx.unlock();
+
+        prepare_tx_step2(std::move(tx), nmstub, hstub);
+    } else if (cur_tx.count == 0) {
+        // all replies received
+        // acquire locks failed on some vts, abort tx
+        release_locks_and_abort(tx_id);
+        vts->busy_mtx.unlock();
+    } else {
+        // some replies pending
+        vts->busy_mtx.unlock();
+    }
+}
+
+void
+fail_prepare_tx_step1()
+{
+    vts->busy_mtx.lock();
+    assert(vts->del_tx.find(tx_id) != vts->del_tx.end());
+    auto &cur_tx = vts->del_tx[tx_id];
+
+    assert(--cur_tx.count >= 0);
+
+    if (cur_tx.count == 0) {
+        // some lock acquires failed, release locks and fail tx
+        release_locks_and_abort(tx_id);
+    }
+
+    vts->busy_mtx.lock();
+}
+
+// caution: assuming caller holds vts->busy_mtx
+void
+unbusy_elems(std::vector<uint64_t> &busy_all)
+{
+    auto &busy_elems = vts->busy_elems;
+    for (uint64_t e: busy_all) {
+        assert(busy_elems.find(e) != busy_elems.end());
+        if (--busy_elems[e] == 0) {
+            busy_elems.erase(e);
         }
     }
 }
 
-// expects an input of list of writes that are part of this transaction
-// for all writes, node mapper lookups should have already been performed
-// for create requests, instead of lookup an entry for new handle should have been inserted
+// input: list of writes that are part of this transaction
+// for all delete writes, distributed locks on node/edge have been acquired
+// acquire local locks for all other graph elems in this transaction (can fail)
+// perform node map lookups for all graph elems (can fail)
+// remove node mappings for delete_nodes (can fail)
+// if all previous succeeds, send out transaction components to shards
 void
-begin_transaction(transaction::pending_tx &tx, coordinator::hyper_stub *hstub)
+prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
+    nmap::nmap_stub *nmstub,
+    coordinator::hyper_stub *hstub)
 {
-    typedef std::vector<transaction::pending_tx> tx_vec_t;
-    std::shared_ptr<tx_vec_t> tx_vec(new tx_vec_t(NUM_SHARDS, transaction::pending_tx()));
-    tx_vec_t &tv = *tx_vec;
+    std::unordered_map<uint64_t, uint64_t> put_map;
+    std::unordered_set<uint64_t> get_set;
+    std::unordered_set<uint64_t> del_set;
+    std::vector<uint64_t> busy_all;
+    busy_all.reserve(tx->writes.size());
+    uint64_t busy_single[3];
+    busy_single[0] = UINT64_MAX;
+    busy_single[1] = UINT64_MAX;
+    busy_single[2] = UINT64_MAX;
 
-    vts->clk_rw_mtx.wrlock();
-    for (std::shared_ptr<transaction::pending_update> upd: tx.writes) {
-        vts->qts.at(upd->loc1-SHARD_ID_INCR)++;
-        upd->qts = vts->qts;
-        tv[upd->loc1-SHARD_ID_INCR].writes.emplace_back(upd);
-    }
-    vts->vclk.increment_clock();
-    tx.timestamp = vts->vclk;
-    vts->clk_rw_mtx.unlock();
+    vts->busy_mtx.lock();
 
-    current_tx cur_tx(tx.client_id, tx);
-    for (uint64_t i = 0; i < NUM_SHARDS; i++) {
-        if (!tv[i].writes.empty()) {
-            cur_tx.count++;
+    bool success = true;
+    auto &deleted_elems = vts->deleted_elems;
+    auto &busy_elems = vts->busy_elems;
+    assert(vts->del_tx.find(tx->id) == vts->del_tx.end());
+
+    for (auto upd: tx->writes) {
+        switch (upd->type) {
+
+            case transaction::NODE_CREATE_REQ:
+                // randomly assign shard for this node
+                loc_gen_mutex.lock();
+                loc_gen = (loc_gen + 1) % NUM_SHARDS;
+                upd->loc1 = loc_gen + SHARD_ID_INCR; // node will be placed on this shard
+                loc_gen_mutex.unlock();
+                put_map.emplace(upd->id, upd->loc1);
+
+                assert(deleted_elems.find(upd->id) == deleted_elems.end());
+                assert(busy_elems.find(upd->id) == deleted_elems.end());
+                busy_single[0] = upd->id;
+                break;
+
+            case transaction::EDGE_CREATE_REQ:
+                if (put_map.find(upd->elem1) == put_map.end()) {
+                    get_set.insert(upd->elem1);
+                }
+                if (put_map.find(upd->elem2) == put_map.end()) {
+                    get_set.insert(upd->elem2);
+                }
+
+                busy_single[0] = upd->id;
+                busy_single[1] = upd->elem1;
+                busy_single[2] = upd->elem2;
+                break;
+
+            case transaction::NODE_DELETE_REQ:
+            case transaction::NODE_SET_PROPERTY:
+                if (put_map.find(upd->elem1) == put_map.end()) {
+                    get_set.insert(upd->elem1);
+                }
+
+                if (upd->type != transaction::NODE_DELETE_REQ) {
+                    busy_single[0] = upd->elem1;
+                } else {
+                    del_set.emplace(upd->elem1);
+                }
+                break;
+
+            case transaction::EDGE_DELETE_REQ:
+            case transaction::EDGE_SET_PROPERTY:
+                if (put_map.find(upd->elem2) == put_map.end()) {
+                    get_set.insert(upd->elem2);
+                }
+
+                if (upd->type != transaction::EDGE_DELETE_REQ) {
+                    busy_single[1] = upd->elem1;
+                }
+                busy_single[0] = upd->elem2;
+                break;
+
+            default:
+                WDEBUG << "bad type" << std::endl;
+        }
+
+        for (int i = 0; i < 3; i++) {
+            uint64_t &e = busy_single[i];
+            if ((e < UINT64_MAX) && (deleted_elems.find(e) == deleted_elems.end())) {
+                if (busy_elems.find(e) == busy_elems.end()) {
+                    busy_elems[e] = 1;
+                } else {
+                    busy_elems[e]++;
+                }
+                busy_all.emplace_back(e);
+                e = UINT64_MAX;
+            } else if (e < UINT64_MAX) {
+                success = false;
+                break;
+            }
+        }
+
+        if (!success) {
+            // some elems deleted, unbusy all busy_elems and abort
+            break;
         }
     }
 
+    if (!success) {
+        unbusy_elems(busy_all);
+        vts->busy_mtx.unlock();
+        send_abort(tx->client_id);
+        return;
+    }
+
+    vts->busy_mtx.unlock();
+
+    // get mappings
+    std::vector<std::pair<uint64_t, uint64_t>> get_map;
+    if (!get_set.empty()) {
+        get_map = nmstub->get_mappings(get_set);
+        success = get_map.size() == get_set.size();
+    }
+
+    if (success) {
+        // put and delete mappings
+        assert(nmstub->put_mappings(put_map));
+        assert(nmstub->del_mappings(del_set));
+    }
+
+    if (!success) {
+        vts->busy_mtx.lock();
+        unbusy_elems(busy_all);
+        vts->busy_mtx.unlock();
+        send_abort(tx->client_id);
+        return;
+    }
+
+    // all checks complete, tx has to succeed now
+
+    auto &small_map = put_map.size() > get_map.size() ? get_map : put_map;
+    auto &big_map = put_map.size() > get_map.size() ? put_map : get_map;
+    std::unordered_map<uint64_t, uint64_t> all_map = std::move(big_map);
+    for (auto &entry: small_map) {
+        all_map.emplace(entry);
+    }
+
+    std::vector<transaction::pending_tx> tv(NUM_SHARDS, transaction::pending_tx());
+    std::vector<bool> shard_write(NUM_SHARDS, false);
+    uint64_t shard_count = 0;
+    vts->clk_rw_mtx.wrlock();
+
+    for (auto upd: tx->writes) {
+        switch (upd->type) {
+
+            case transaction::EDGE_CREATE_REQ:
+                assert(all_map.find(upd->elem1) != all_map.end());
+                assert(all_map.find(upd->elem2) != all_map.end());
+                upd->loc1 = put_map[upd->elem1];
+                upd->loc2 = put_map[upd->elem2];
+                break;
+
+            case transaction::NODE_DELETE_REQ:
+            case transaction::NODE_SET_PROPERTY:
+                assert(all_map.find(upd->elem1) != all_map.end());
+                upd->loc1 = put_map[upd->elem1];
+                break;
+
+            case transaction::EDGE_DELETE_REQ:
+            case transaction::EDGE_SET_PROPERTY:
+                assert(all_map.find(upd->elem2) != all_map.end());
+                upd->loc1 = put_map[upd->elem2];
+                break;
+
+            default:
+                break;
+        }
+
+        uint64_t shard_idx = upd->loc1-SHARD_ID_INCR;
+        vts->qts[shard_idx]++;
+        upd->qts = vts->qts;
+        tv[shard_idx].writes.emplace_back(upd);
+        if (!shard_write[shard_idx]) {
+            shard_count++;
+            shard_write[upd->loc1-SHARD_ID_INCR] = true;
+        }
+    }
+
+    vts->vclk.increment_clock();
+    tx->timestamp = vts->vclk;
+    vts->clk_rw_mtx.unlock();
+
     // record txs as outstanding for reply bookkeeping and fault tolerance
+    // XXX can leave elems locked if crash before this
     uint64_t buf_sz = message::size(tx);
     std::unique_ptr<e::buffer> buf(e::buffer::create(buf_sz));
     e::buffer::packer packer = buf->pack_at(0);
     message::pack_buffer(packer, tx);
     hstub->put_tx(tx.id, buf);
+
     vts->tx_prog_mutex.lock();
-    vts->outstanding_tx.emplace(tx.id, cur_tx);
+    vts->outstanding_tx.emplace(tx.id, current_tx(std::move(tx)));
+    vts->outstanding_tx[tx.id].count = shard_count;
     vts->tx_prog_mutex.unlock();
 
     // send tx batches
@@ -346,14 +678,14 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     // lookup mappings
     std::unordered_map<uint64_t, uint64_t> request_element_mappings;
-    std::unordered_set<uint64_t> mappings_to_get;
+    std::unordered_set<uint64_t> get_set;
     for (auto &initial_arg : initial_args) {
         uint64_t c_id = initial_arg.first;
-        mappings_to_get.insert(c_id);
+        get_set.insert(c_id);
     }
-    if (!mappings_to_get.empty()) {
-        auto results = nmap_cl->get_mappings(mappings_to_get);
-        assert(results.size() == mappings_to_get.size());
+    if (!get_set.empty()) {
+        auto results = nmap_cl->get_mappings(get_set);
+        assert(results.size() == get_set.size());
         for (auto &toAdd : results) {
             request_element_mappings.emplace(toAdd);
         }
@@ -435,7 +767,7 @@ server_loop(int thread_id)
     uint64_t sender, tx_id;
     node_prog::prog_type pType;
     coordinator::hyper_stub *hstub = vts->hstub[thread_id];
-    nmap::nmap_stub *nmap_cl = vts->nmap_client[thread_id];
+    nmap::nmap_stub *nmstub = vts->nmap_client[thread_id];
 
     while (true) {
         vts->comm.quiesce_thread(thread_id);
@@ -451,51 +783,60 @@ server_loop(int thread_id)
             switch (mtype) {
                 // client messages
                 case message::CLIENT_TX_INIT: {
-                    transaction::pending_tx tx;
-                    std::vector<uint64_t> del_elems;
-                    if (!vts->unpack_tx(nmap_cl, *msg, tx, sender, del_elems)) {
-                        msg->prepare_message(message::CLIENT_TX_FAIL);
-                        vts->comm.send(sender, msg->buf);
-                    } else if (del_elems.size() > 0 && NUM_VTS > 1) {
-                        prepare_del_transaction(tx, del_elems);
-                    } else {
-                        begin_transaction(tx, hstub);
+                    std::unique_ptr<transaction::pending_tx> tx(new transaction::pending_tx());
+
+                    if (!vts->only_unpack_tx(*msg, sender, *tx)) {
+                        // tx fail because multiple deletes for same node/edge
+                        send_abort(sender);
                     }
+                    prepare_tx_step1(std::move(tx), nmstub, hstub);
+
                     break;
                 }
 
                 case message::PREP_DEL_TX: {
                     std::vector<uint64_t> del_elems;
-                    uint64_t tx_id, tx_vt, client;
-                    msg->unpack_message(message::PREP_DEL_TX, tx_vt, tx_id, client, del_elems);
+                    uint64_t tx_id, tx_vt;
+                    msg->unpack_message(message::PREP_DEL_TX, tx_vt, tx_id, del_elems);
+
                     vts->busy_mtx.lock();
-                    for (uint64_t d: del_elems) {
-                        assert(vts->deleted_elems.find(d) == vts->deleted_elems.end());
-                        assert(vts->other_deleted_elems.find(d) == vts->other_deleted_elems.end());
-                        assert(vts->busy_elems.find(d) == vts->busy_elems.end());
-                        vts->other_deleted_elems[d] = client;
-                    }
+                    bool success = lock_del_elems(del_elems);
                     vts->busy_mtx.unlock();
-                    msg->prepare_message(message::DONE_DEL_TX, tx_id);
-                    vts->comm.send(tx_vt, msg->buf);
+
+                    if (success) {
+                        msg->prepare_message(message::DONE_DEL_TX, tx_id, vt_id);
+                        vts->comm.send(tx_vt, msg->buf);
+                    } else {
+                        msg->prepare_message(message::FAIL_DEL_TX, tx_id, vt_id);
+                        vts->comm.send(tx_vt, msg->buf);
+                    }
+                    break;
+                }
+
+                case message::UNPREP_DEL_TX: {
+                    std::vector<uint64_t> del_elems;
+                    msg->unpack_message(message::UNPREP_DEL_TX, del_elems);
+
+                    vts->busy_mtx.lock();
+                    unlock_del_elems(del_elems);
+                    vts->busy_mtx.unlock();
+
                     break;
                 }
 
                 case message::DONE_DEL_TX: {
-                    uint64_t tx_id;
-                    msg->unpack_message(message::DONE_DEL_TX, tx_id);
-                    vts->busy_mtx.lock();
-                    assert(vts->del_tx.find(tx_id) != vts->del_tx.end());
-                    auto &cur_tx = vts->del_tx[tx_id];
-                    if (--cur_tx.count == 0) {
-                        // ready to run
-                        auto tx = cur_tx.tx;
-                        vts->del_tx.erase(tx_id);
-                        vts->busy_mtx.unlock();
-                        begin_transaction(tx, hstub);
-                    } else {
-                        vts->busy_mtx.unlock();
-                    }
+                    uint64_t tx_id, from_vt;
+                    msg->unpack_message(message::DONE_DEL_TX, tx_id, from_vt);
+
+                    done_prepare_tx_step1(tx_id, from_vt, nmstub, hstub);
+                    break;
+                }
+
+                case message::FAIL_DEL_TX: {
+                    uint64_t tx_id, from_vt;
+                    msg->unpack_message(message::FAIL_DEL_TX, tx_id, from_vt);
+
+                    fail_prepare_tx_step1(tx_id, from_vt);
                     break;
                 }
 
@@ -605,7 +946,7 @@ server_loop(int thread_id)
 
                 case message::CLIENT_NODE_PROG_REQ:
                     msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
-                    node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), sender, nmap_cl);
+                    node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), sender, nmstub);
                     break;
 
                 // node program response from a shard

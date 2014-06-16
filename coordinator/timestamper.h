@@ -73,7 +73,6 @@ namespace coordinator
 
             // write transactions
             std::unordered_map<uint64_t, current_tx> outstanding_tx;
-            std::unordered_map<uint64_t, current_tx> del_tx;
             po6::threads::mutex busy_mtx;
             std::unordered_set<uint64_t> deleted_elems;
             std::unordered_map<uint64_t, uint64_t> other_deleted_elems;
@@ -129,6 +128,9 @@ namespace coordinator
             void reconfigure();
             bool unpack_tx(nmap::nmap_stub *nmap_cl, message::message &msg, transaction::pending_tx &tx,
                 uint64_t client_id, std::vector<uint64_t> &del_elems);
+            bool only_unpack_tx(message::message &msg,
+                uint64_t client_id,
+                transaction::pending_tx &tx)
             uint64_t generate_id();
     };
 
@@ -387,6 +389,30 @@ namespace coordinator
             deleted_elems.emplace(d);
         }
         busy_mtx.unlock();
+
+        return true;
+    }
+
+    // unpack transaction and return list of writes and delete-affected nodes
+    inline bool
+    timestamper :: only_unpack_tx(message::message &msg,
+        uint64_t client_id,
+        transaction::pending_tx &tx)
+    {
+        msg.unpack_client_tx(tx);
+        tx.id = generate_id();
+        tx.client_id = client_id;
+
+        for (auto upd: tx.writes) {
+            if (upd->type == transaction::NODE_DELETE_REQ || upd->type == transaction::EDGE_DELETE_REQ) {
+                // for delete_node, lock node
+                // for delete_edge, lock edge
+                if (tx.del_elems.find(upd->elem1) != tx.del_elems.end()) {
+                    return false;
+                }
+                tx.del_elems.emplace(upd->elem1);
+            }
+        }
 
         return true;
     }

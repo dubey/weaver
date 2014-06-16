@@ -38,9 +38,9 @@ namespace nmap
             hyperdex::Client cl;
 
         public:
-            void put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add);
+            bool put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add);
             std::vector<std::pair<uint64_t, uint64_t>> get_mappings(std::unordered_set<uint64_t> &toGet);
-            void del_mappings(std::vector<uint64_t> &toDel);
+            bool del_mappings(std::unordered_set<uint64_t> &toDel);
     };
 }
 

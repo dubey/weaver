@@ -18,9 +18,10 @@
 
 using nmap::nmap_stub;
 
-void
+bool
 nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add)
 {
+    bool success = true;
     int num_pairs = pairs_to_add.size();
     hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute *)malloc(num_pairs * sizeof(hyperdex_client_attribute));
     hyperdex_client_returncode put_status[num_pairs];
@@ -44,7 +45,7 @@ nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add)
         put_idx++;
         
         if (put_idx % 2000 == 0) {
-            WDEBUG << "completed " << put_idx << " puts\n";
+            WDEBUG << "completed " << put_idx << " puts" << std::endl;
         }
     }
 
@@ -65,15 +66,18 @@ nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add)
                    << ", loop status: " << loop_status << std::endl;
             WDEBUG << "error message: " << cl.error_message() << std::endl;
             WDEBUG << "error loc: " << cl.error_location() << std::endl;
+            success = false;
         }
         loop_idx = -1;
 
         if (i > 0 && i % 2000 == 0) {
-            WDEBUG << "completed " << i << " put loops\n";
+            WDEBUG << "completed " << i << " put loops" << std::endl;
         }
     }
 
     free(attrs_to_add);
+
+    return success;
 }
 
 std::vector<std::pair<uint64_t, uint64_t>>
@@ -109,7 +113,7 @@ nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
         opid_to_idx[results[i].op_id] = i;
 
         if (i > 0 && i % 2000 == 0) {
-            WDEBUG << "completed " << i << " gets\n";
+            WDEBUG << "completed " << i << " gets" << std::endl;
         }
     }
 
@@ -145,25 +149,31 @@ nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
         loop_idx = -1;
 
         if (i > 0 && i % 2000 == 0) {
-            WDEBUG << "completed " << i << " get loops\n";
+            WDEBUG << "completed " << i << " get loops" << std::endl;
         }
     }
 
     return mappings;
 }
 
-void
-nmap_stub :: del_mappings(std::vector<uint64_t> &toDel)
+bool
+nmap_stub :: del_mappings(std::unordered_set<uint64_t> &toDel)
 {
+    bool success = true;
     int64_t num_nodes = toDel.size();
+    int64_t del_nodes[num_nodes];
     std::unordered_map<int64_t, int64_t> opid_to_idx;
     opid_to_idx.reserve(num_nodes);
     hyperdex_client_returncode del_status[num_nodes];
     int64_t del_id;
 
+    auto todel_iter = toDel.begin();
     for (int64_t i = 0; i < num_nodes; i++) {
+        assert(todel_iter != toDel.end());
+        del_nodes[i] = *todel_iter;
+        todel_iter++;
         do {
-            del_id = cl.del(space, (char*)&(toDel[i]), sizeof(int64_t), del_status+i);
+            del_id = cl.del(space, (char*)(del_nodes+i), sizeof(int64_t), del_status+i);
         } while (del_id < 0);
         assert(opid_to_idx.find(del_id) == opid_to_idx.end());
         opid_to_idx[del_id] = i;
@@ -182,11 +192,14 @@ nmap_stub :: del_mappings(std::vector<uint64_t> &toDel)
 
         if (loop_status != HYPERDEX_CLIENT_SUCCESS || del_status[loop_idx] != HYPERDEX_CLIENT_SUCCESS) {
             WDEBUG << "bad del for node at idx " << loop_idx
-                   << ", node: " << toDel[loop_idx]
+                   << ", node: " << del_nodes[loop_idx]
                    << ", del status: " << del_status[loop_idx]
                    << ", loop status: " << loop_status << std::endl;
+            success = false;
         }
 
         loop_idx = -1;
     }
+
+    return success;
 }
