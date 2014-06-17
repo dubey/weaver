@@ -76,7 +76,6 @@ namespace coordinator
             std::unordered_map<uint64_t, current_tx> del_tx;
             po6::threads::mutex busy_mtx;
             std::unordered_set<uint64_t> deleted_elems;
-            std::unordered_map<uint64_t, uint64_t> other_deleted_elems;
             std::unordered_map<uint64_t, uint64_t> busy_elems;
 
             // node prog

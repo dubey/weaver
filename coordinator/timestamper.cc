@@ -42,6 +42,8 @@ void unlock_del_elems(std::unordered_set<uint64_t> &del_elems);
 void prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
     nmap::nmap_stub *nmstub,
     coordinator::hyper_stub *hstub);
+void release_dist_del_locks(std::bitset<NUM_VTS> &locks,
+    std::unordered_set<uint64_t> &del_elems);
 void release_locks_and_abort(uint64_t tx_id);
 void done_prepare_tx_step1(uint64_t tx_id,
     uint64_t from_vt,
@@ -164,7 +166,6 @@ prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
     vts->busy_mtx.lock();
 
     if (!lock_del_elems(tx->del_elems)) {
-        vts->busy_mtx.unlock();
         fail = true;
     }
 
@@ -196,22 +197,33 @@ prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
 
 // caution: assuming caller holds vts->busy_mtx
 void
-release_locks_and_abort(uint64_t tx_id)
+release_dist_del_locks(std::bitset<NUM_VTS> &locks,
+    std::unordered_set<uint64_t> &del_elems)
 {
     message::message msg;
-    auto &cur_tx = vts->del_tx[tx_id];
-    uint64_t cl_id = cur_tx.tx->client_id;
-
     for (uint64_t i = 0; i < NUM_VTS; i++) {
         if (i == vt_id) {
-            assert(cur_tx.locks[i]);
-            unlock_del_elems(cur_tx.tx->del_elems);
+            assert(locks[i]);
+            unlock_del_elems(del_elems);
         } else {
-            if (cur_tx.locks[i]) {
-                msg.prepare_message(message::UNPREP_DEL_TX, cur_tx.tx->del_elems);
+            if (locks[i]) {
+                msg.prepare_message(message::UNPREP_DEL_TX, del_elems);
                 vts->comm.send(i, msg.buf);
             }
         }
+    }
+}
+
+// caution: assuming caller holds vts->busy_mtx
+void
+release_locks_and_abort(uint64_t tx_id)
+{
+    auto &cur_tx = vts->del_tx[tx_id];
+    uint64_t cl_id = cur_tx.tx->client_id;
+    bool dist_lock = (cur_tx.tx->del_elems.size() > 0) && (NUM_VTS > 1);
+
+    if (dist_lock) {
+        release_dist_del_locks(cur_tx.locks, cur_tx.tx->del_elems);
     }
 
     vts->del_tx.erase(tx_id);
@@ -264,7 +276,7 @@ fail_prepare_tx_step1(uint64_t tx_id)
         release_locks_and_abort(tx_id);
     }
 
-    vts->busy_mtx.lock();
+    vts->busy_mtx.unlock();
 }
 
 // caution: assuming caller holds vts->busy_mtx
@@ -291,9 +303,6 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     nmap::nmap_stub *nmstub,
     coordinator::hyper_stub *hstub)
 {
-    if (!tx) {
-        WDEBUG << "tx NULL!" << std::endl;
-    }
     std::unordered_map<uint64_t, uint64_t> put_map;
     std::unordered_set<uint64_t> get_set;
     std::unordered_set<uint64_t> del_set;
@@ -390,8 +399,14 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
         }
     }
 
+    bool dist_lock = (tx->del_elems.size() > 0) && (NUM_VTS > 1);
     if (!success) {
         unbusy_elems(tx->busy_elems);
+        if (dist_lock) {
+            std::bitset<NUM_VTS> locks;
+            locks.set();
+            release_dist_del_locks(locks, tx->del_elems);
+        }
         vts->busy_mtx.unlock();
         send_abort(tx->client_id);
         return;
@@ -415,6 +430,11 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     if (!success) {
         vts->busy_mtx.lock();
         unbusy_elems(tx->busy_elems);
+        if (dist_lock) {
+            std::bitset<NUM_VTS> locks;
+            locks.set();
+            release_dist_del_locks(locks, tx->del_elems);
+        }
         vts->busy_mtx.unlock();
         send_abort(tx->client_id);
         return;
@@ -512,16 +532,17 @@ end_transaction(uint64_t tx_id, coordinator::hyper_stub *hstub)
         vts->outstanding_tx.erase(tx_id);
         vts->tx_prog_mutex.unlock();
 
+        bool dist_lock = (tx->del_elems.size() > 0) && (NUM_VTS > 1);
         vts->busy_mtx.lock();
         unbusy_elems(tx->busy_elems);
-        if (!tx->del_elems.empty()) {
+        if (dist_lock) {
             unlock_del_elems(tx->del_elems);
         }
         vts->busy_mtx.unlock();
 
         // release distributed del locks
         message::message msg;
-        if (!tx->del_elems.empty()) {
+        if (dist_lock) {
             for (uint64_t i = 0; i < NUM_VTS; i++) {
                 if (i == vt_id) {
                     continue;
