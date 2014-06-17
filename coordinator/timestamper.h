@@ -126,9 +126,6 @@ namespace coordinator
             void init();
             void restore_backup();
             void reconfigure();
-            bool only_unpack_tx(message::message &msg,
-                uint64_t client_id,
-                transaction::pending_tx &tx);
             uint64_t generate_id();
     };
 
@@ -251,30 +248,6 @@ namespace coordinator
         //        WDEBUG << "sent set qts msg to shard " << changed << std::endl;
         //    }
         //}
-    }
-
-    // unpack transaction and return list of writes and delete-affected nodes
-    inline bool
-    timestamper :: only_unpack_tx(message::message &msg,
-        uint64_t client_id,
-        transaction::pending_tx &tx)
-    {
-        msg.unpack_client_tx(tx);
-        tx.id = generate_id();
-        tx.client_id = client_id;
-
-        for (auto upd: tx.writes) {
-            if (upd->type == transaction::NODE_DELETE_REQ || upd->type == transaction::EDGE_DELETE_REQ) {
-                // for delete_node, lock node
-                // for delete_edge, lock edge
-                if (tx.del_elems.find(upd->elem1) != tx.del_elems.end()) {
-                    return false;
-                }
-                tx.del_elems.emplace(upd->elem1);
-            }
-        }
-
-        return true;
     }
 
     inline uint64_t

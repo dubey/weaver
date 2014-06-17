@@ -34,6 +34,8 @@ static coordinator::timestamper *vts;
 static uint64_t vt_id;
 
 // tx functions
+bool
+unpack_tx(message::message &msg, uint64_t client_id, transaction::pending_tx &tx);
 void send_abort(uint64_t cl_id);
 bool lock_del_elems(std::unordered_set<uint64_t> &del_elems);
 void unlock_del_elems(std::unordered_set<uint64_t> &del_elems);
@@ -69,6 +71,30 @@ end_program(int signum)
         WDEBUG << "Got interrupt signal other than SIGINT, exiting immediately." << std::endl;
         exit(0);
     }
+}
+
+// unpack transaction and return list of writes and delete-affected nodes
+bool
+unpack_tx(message::message &msg,
+    uint64_t client_id,
+    transaction::pending_tx &tx)
+{
+    msg.unpack_client_tx(tx);
+    tx.id = vts->generate_id();
+    tx.client_id = client_id;
+
+    for (auto upd: tx.writes) {
+        if (upd->type == transaction::NODE_DELETE_REQ || upd->type == transaction::EDGE_DELETE_REQ) {
+            // for delete_node, lock node
+            // for delete_edge, lock edge
+            if (tx.del_elems.find(upd->elem1) != tx.del_elems.end()) {
+                return false;
+            }
+            tx.del_elems.emplace(upd->elem1);
+        }
+    }
+
+    return true;
 }
 
 // send an abort msg to the waiting client
@@ -804,7 +830,7 @@ server_loop(int thread_id)
                 case message::CLIENT_TX_INIT: {
                     std::unique_ptr<transaction::pending_tx> tx(new transaction::pending_tx());
 
-                    if (!vts->only_unpack_tx(*msg, sender, *tx)) {
+                    if (!unpack_tx(*msg, sender, *tx)) {
                         // tx fail because multiple deletes for same node/edge
                         send_abort(sender);
                     }
