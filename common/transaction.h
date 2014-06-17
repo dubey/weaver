@@ -49,6 +49,7 @@ namespace transaction
         tx_list_t writes;
         vc::vclock timestamp; // vector timestamp
         std::unordered_set<uint64_t> del_elems;
+        std::vector<uint64_t> busy_elems;
     };
 }
 

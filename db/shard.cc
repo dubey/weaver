@@ -1793,10 +1793,11 @@ recv_loop(uint64_t thread_id)
 
                 case message::VT_NOP: {
                     db::nop_data *nop_arg = new db::nop_data();
-                    rec_msg->unpack_message(mtype, vt_id, nop_arg->vclk, qts, nop_arg->req_id,
+                    rec_msg->unpack_message(mtype, vt_id, vclk, qts, nop_arg->req_id,
                         nop_arg->done_reqs, nop_arg->max_done_id, nop_arg->max_done_clk,
                         nop_arg->outstanding_progs, nop_arg->shard_node_count);
                     nop_arg->vt_id = vt_id;
+                    nop_arg->vclk = vclk;
                     nop_arg->qts = qts;
                     assert(nop_arg->vclk.clock.size() == NUM_VTS);
                     assert(nop_arg->max_done_clk.size() == NUM_VTS);

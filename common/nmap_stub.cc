@@ -92,7 +92,11 @@ nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
             const hyperdex_client_attribute *attr;
             size_t attr_size;
 
-            async_get() : status(static_cast<hyperdex_client_returncode>(0)) { }
+            async_get()
+                : status(static_cast<hyperdex_client_returncode>(0))
+                , attr(NULL)
+                , attr_size(-1)
+            { }
     };
 
     int64_t num_nodes = toGet.size();
@@ -132,19 +136,21 @@ nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
         assert(loop_idx >= 0);
 
         if (loop_status != HYPERDEX_CLIENT_SUCCESS || results[loop_idx].status != HYPERDEX_CLIENT_SUCCESS) {
-            WDEBUG << "bad get for node at idx " << loop_idx
-                   << ", get status: " << results[loop_idx].status
-                   << ", loop status: " << loop_status << std::endl;
-        }
-
-        if (results[loop_idx].attr_size == 0) {
-            WDEBUG << "Key " << results[loop_idx].key << " did not exist in hyperdex" << std::endl;
+            if (results[loop_idx].status == HYPERDEX_CLIENT_NOTFOUND) {
+                assert(results[loop_idx].attr_size == (size_t)-1);
+                assert(results[loop_idx].attr == NULL);
+            } else {
+                WDEBUG << "bad get for node at idx " << loop_idx
+                       << ", get status: " << results[loop_idx].status
+                       << ", loop status: " << loop_status << std::endl;
+                hyperdex_client_destroy_attrs(results[loop_idx].attr, results[loop_idx].attr_size);
+            }
         } else {
             assert(results[loop_idx].attr_size == 1);
             val = (uint64_t*)results[loop_idx].attr->value;
             mappings.emplace_back(std::make_pair(results[loop_idx].key, *val));
+            hyperdex_client_destroy_attrs(results[loop_idx].attr, results[loop_idx].attr_size);
         }
-        hyperdex_client_destroy_attrs(results[loop_idx].attr, results[loop_idx].attr_size);
 
         loop_idx = -1;
 

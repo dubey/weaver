@@ -48,7 +48,7 @@ void done_prepare_tx_step1(uint64_t tx_id,
     nmap::nmap_stub *nmstub,
     coordinator::hyper_stub *hstub);
 void fail_prepare_tx_step1(uint64_t tx_id);
-void unbusy_elems(std::vector<uint64_t> &busy_all);
+void unbusy_elems(std::vector<uint64_t> &busy_elems);
 void prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     nmap::nmap_stub *nmstub,
     coordinator::hyper_stub *hstub);
@@ -291,11 +291,13 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     nmap::nmap_stub *nmstub,
     coordinator::hyper_stub *hstub)
 {
+    if (!tx) {
+        WDEBUG << "tx NULL!" << std::endl;
+    }
     std::unordered_map<uint64_t, uint64_t> put_map;
     std::unordered_set<uint64_t> get_set;
     std::unordered_set<uint64_t> del_set;
-    std::vector<uint64_t> busy_all;
-    busy_all.reserve(tx->writes.size());
+    tx->busy_elems.reserve(tx->writes.size());
     uint64_t busy_single[3];
     busy_single[0] = UINT64_MAX;
     busy_single[1] = UINT64_MAX;
@@ -374,7 +376,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
                 } else {
                     busy_elems[e]++;
                 }
-                busy_all.emplace_back(e);
+                tx->busy_elems.emplace_back(e);
                 e = UINT64_MAX;
             } else if (e < UINT64_MAX) {
                 success = false;
@@ -389,7 +391,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     }
 
     if (!success) {
-        unbusy_elems(busy_all);
+        unbusy_elems(tx->busy_elems);
         vts->busy_mtx.unlock();
         send_abort(tx->client_id);
         return;
@@ -412,7 +414,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
 
     if (!success) {
         vts->busy_mtx.lock();
-        unbusy_elems(busy_all);
+        unbusy_elems(tx->busy_elems);
         vts->busy_mtx.unlock();
         send_abort(tx->client_id);
         return;
@@ -478,24 +480,27 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     message::pack_buffer(packer, *tx);
     hstub->put_tx(tx->id, buf);
 
+    uint64_t tx_id = tx->id;
+    vc::vclock tx_clk = tx->timestamp;
     vts->tx_prog_mutex.lock();
-    vts->outstanding_tx.emplace(tx->id, current_tx(std::move(tx)));
-    vts->outstanding_tx[tx->id].count = shard_count;
+    vts->outstanding_tx.emplace(tx_id, current_tx(std::move(tx)));
+    vts->outstanding_tx[tx_id].count = shard_count;
     vts->tx_prog_mutex.unlock();
 
     // send tx batches
     message::message msg;
     for (uint64_t i = 0; i < NUM_SHARDS; i++) {
         if (!tv[i].writes.empty()) {
-            tv[i].timestamp = tx->timestamp;
-            tv[i].id = tx->id;
-            msg.prepare_message(message::TX_INIT, vt_id, tx->timestamp, tv[i].writes.at(0)->qts, tx->id, tv[i].writes);
+            tv[i].timestamp = tx_clk;
+            tv[i].id = tx_id;
+            msg.prepare_message(message::TX_INIT, vt_id, tx_clk, tv[i].writes.at(0)->qts, tx_id, tv[i].writes);
             vts->comm.send(tv[i].writes.at(0)->loc1, msg.buf);
         }
     }
 }
 
-// decrement reply count. if all replies have been received, ack to client
+// if all replies have been received, ack to client
+// also clean up tx state---local and distributed
 void
 end_transaction(uint64_t tx_id, coordinator::hyper_stub *hstub)
 {
@@ -507,51 +512,26 @@ end_transaction(uint64_t tx_id, coordinator::hyper_stub *hstub)
         vts->outstanding_tx.erase(tx_id);
         vts->tx_prog_mutex.unlock();
 
-        // unbusy elements
-        std::vector<uint64_t> busy;
-        for (auto upd: tx->writes) {
-            switch (upd->type) {
-                case transaction::NODE_CREATE_REQ:
-                    busy.emplace_back(upd->id);
-                    break;
-
-                case transaction::EDGE_CREATE_REQ:
-                    busy.emplace_back(upd->id);
-                    busy.emplace_back(upd->elem1);
-                    busy.emplace_back(upd->elem2);
-                    break;
-
-                case transaction::NODE_SET_PROPERTY:
-                    busy.emplace_back(upd->elem1);
-                    break;
-
-                case transaction::EDGE_DELETE_REQ:
-                    busy.emplace_back(upd->elem2);
-                    break;
-
-                case transaction::EDGE_SET_PROPERTY:
-                    busy.emplace_back(upd->elem1);
-                    busy.emplace_back(upd->elem2);
-                    break;
-
-                default:
-                    WDEBUG << "bad type" << std::endl;
-            }
-        }
-
         vts->busy_mtx.lock();
-        for (uint64_t e: busy) {
-            assert(vts->deleted_elems.find(e) == vts->deleted_elems.end());
-            assert(vts->other_deleted_elems.find(e) == vts->other_deleted_elems.end());
-            assert(vts->busy_elems.find(e) != vts->busy_elems.end());
-            if (--vts->busy_elems[e] == 0) {
-                vts->busy_elems.erase(e);
-            }
+        unbusy_elems(tx->busy_elems);
+        if (!tx->del_elems.empty()) {
+            unlock_del_elems(tx->del_elems);
         }
         vts->busy_mtx.unlock();
 
-        // send response to client
+        // release distributed del locks
         message::message msg;
+        if (!tx->del_elems.empty()) {
+            for (uint64_t i = 0; i < NUM_VTS; i++) {
+                if (i == vt_id) {
+                    continue;
+                }
+                msg.prepare_message(message::UNPREP_DEL_TX, tx->del_elems);
+                vts->comm.send(i, msg.buf);
+            }
+        }
+
+        // send response to client
         msg.prepare_message(message::CLIENT_TX_SUCCESS);
         vts->comm.send(tx->client_id, msg.buf);
     } else {

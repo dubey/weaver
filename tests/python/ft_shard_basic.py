@@ -52,7 +52,7 @@ for i in range(grid_sz):
         response = c.read_n_edges(prog_args)
         for e in response.return_edges:
             assert (e in edges[nodes[i][j]])
-            
+
 dummy = raw_input('Press a key when shards and/or timestampers are killed ')
 
 # read the graph written
