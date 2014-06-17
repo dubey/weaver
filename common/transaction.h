@@ -15,6 +15,7 @@
 #define weaver_common_transaction_h_
 
 #include <vector>
+#include <unordered_set>
 
 #include "common/vclock.h"
 
@@ -47,7 +48,7 @@ namespace transaction
             , client_id; // client to which we need to reply
         tx_list_t writes;
         vc::vclock timestamp; // vector timestamp
-        std::vector<uint64_t> del_elems;
+        std::unordered_set<uint64_t> del_elems;
     };
 }
 

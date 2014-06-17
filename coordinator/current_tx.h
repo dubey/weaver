@@ -15,13 +15,15 @@
 #ifndef weaver_coordinator_current_tx_h_
 #define weaver_coordinator_current_tx_h_
 
+#include <bitset>
+
 #include "common/transaction.h"
 
 namespace coordinator
 {
     struct current_tx
     {
-        uint64_t count;
+        int count;
         std::bitset<NUM_VTS> locks;
         std::unique_ptr<transaction::pending_tx> tx;
 

@@ -73,6 +73,7 @@ namespace coordinator
 
             // write transactions
             std::unordered_map<uint64_t, current_tx> outstanding_tx;
+            std::unordered_map<uint64_t, current_tx> del_tx;
             po6::threads::mutex busy_mtx;
             std::unordered_set<uint64_t> deleted_elems;
             std::unordered_map<uint64_t, uint64_t> other_deleted_elems;
@@ -92,10 +93,9 @@ namespace coordinator
             std::vector<nmap::nmap_stub*> nmap_client;
 
             // mutexes
-        private:
-            po6::threads::mutex loc_gen_mutex;
         public:
             po6::threads::mutex clk_mutex // vclock and queue timestamp
+                    , loc_gen_mutex
                     , tx_prog_mutex // state for outstanding and completed node progs, transactions
                     , periodic_update_mutex // make sure to not send out clock update before getting ack from other VTs
                     , id_gen_mutex
@@ -126,11 +126,9 @@ namespace coordinator
             void init();
             void restore_backup();
             void reconfigure();
-            bool unpack_tx(nmap::nmap_stub *nmap_cl, message::message &msg, transaction::pending_tx &tx,
-                uint64_t client_id, std::vector<uint64_t> &del_elems);
             bool only_unpack_tx(message::message &msg,
                 uint64_t client_id,
-                transaction::pending_tx &tx)
+                transaction::pending_tx &tx);
             uint64_t generate_id();
     };
 
@@ -253,144 +251,6 @@ namespace coordinator
         //        WDEBUG << "sent set qts msg to shard " << changed << std::endl;
         //    }
         //}
-    }
-
-    // return false if the main node in the transaction is not found in node map
-    // this is not a complete sanity check, e.g. create_edge(n1, n2) will succeed even if n2 is garbage
-    // similarly edge ids are not checked
-    inline bool
-    timestamper :: unpack_tx(nmap::nmap_stub *nmap_cl, message::message &msg, transaction::pending_tx &tx,
-        uint64_t client_id, std::vector<uint64_t> &del_elems)
-    {
-        msg.unpack_client_tx(tx);
-        tx.id = generate_id();
-        tx.client_id = client_id;
-
-        // lookup mappings
-        std::unordered_map<uint64_t, uint64_t> mappings_to_put;
-        std::unordered_set<uint64_t> mappings_to_get;
-        std::vector<uint64_t> busy;
-        for (auto upd: tx.writes) {
-            switch (upd->type) {
-                case transaction::NODE_CREATE_REQ:
-                    // randomly assign shard for this node
-                    loc_gen_mutex.lock();
-                    loc_gen = (loc_gen + 1) % NUM_SHARDS;
-                    upd->loc1 = loc_gen + SHARD_ID_INCR; // node will be placed on this shard
-                    loc_gen_mutex.unlock();
-                    mappings_to_put.emplace(upd->id, upd->loc1);
-                    busy.emplace_back(upd->id);
-                    break;
-
-                case transaction::EDGE_CREATE_REQ:
-                    if (mappings_to_put.find(upd->elem1) == mappings_to_put.end()) {
-                        mappings_to_get.insert(upd->elem1);
-                    }
-                    if (mappings_to_put.find(upd->elem2) == mappings_to_put.end()) {
-                        mappings_to_get.insert(upd->elem2);
-                    }
-                    busy.emplace_back(upd->id);
-                    busy.emplace_back(upd->elem1);
-                    busy.emplace_back(upd->elem2);
-                    break;
-
-                case transaction::NODE_DELETE_REQ:
-                case transaction::NODE_SET_PROPERTY:
-                    if (mappings_to_put.find(upd->elem1) == mappings_to_put.end()) {
-                        mappings_to_get.insert(upd->elem1);
-                    }
-                    if (upd->type != transaction::NODE_DELETE_REQ) {
-                        busy.emplace_back(upd->elem1);
-                    }
-                    break;
-
-                case transaction::EDGE_DELETE_REQ:
-                case transaction::EDGE_SET_PROPERTY:
-                    if (mappings_to_put.find(upd->elem2) == mappings_to_put.end()) {
-                        mappings_to_get.insert(upd->elem2);
-                    }
-                    if (upd->type != transaction::EDGE_DELETE_REQ) {
-                        busy.emplace_back(upd->elem1);
-                    }
-                    busy.emplace_back(upd->elem2);
-                    break;
-
-                default:
-                    WDEBUG << "bad type" << std::endl;
-            }
-            if (upd->type == transaction::NODE_DELETE_REQ || upd->type == transaction::EDGE_DELETE_REQ) {
-                del_elems.emplace_back(upd->elem1);
-            }
-        }
-
-        // insert mappings
-        nmap_cl->put_mappings(mappings_to_put);
-
-        // get mappings
-        if (!mappings_to_get.empty()) {
-            for (auto &toAdd: nmap_cl->get_mappings(mappings_to_get)) {
-                mappings_to_put.emplace(toAdd);
-            }
-        }
-
-        // unpack get responses from hyperdex
-        for (auto upd: tx.writes) {
-            switch (upd->type) {
-
-                case transaction::EDGE_CREATE_REQ:
-                    if (mappings_to_put.find(upd->elem1) == mappings_to_put.end()) {
-                        return false;
-                    }
-                    if (mappings_to_put.find(upd->elem2) == mappings_to_put.end()) {
-                        return false;
-                    }
-                    upd->loc1 = mappings_to_put.at(upd->elem1);
-                    upd->loc2 = mappings_to_put.at(upd->elem2);
-                    break;
-
-                case transaction::NODE_DELETE_REQ:
-                case transaction::NODE_SET_PROPERTY:
-                    if (mappings_to_put.find(upd->elem1) == mappings_to_put.end()) {
-                        return false;
-                    }
-                    upd->loc1 = mappings_to_put.at(upd->elem1);
-                    break;
-
-                case transaction::EDGE_DELETE_REQ:
-                case transaction::EDGE_SET_PROPERTY:
-                    if (mappings_to_put.find(upd->elem2) == mappings_to_put.end()) {
-                        return false;
-                    }
-                    upd->loc1 = mappings_to_put.at(upd->elem2);
-                    break;
-
-                default:
-                    continue;
-            }
-        }
-
-        busy_mtx.lock();
-        for (uint64_t e: busy) {
-            assert(deleted_elems.find(e) == deleted_elems.end());
-            if (other_deleted_elems.find(e) != other_deleted_elems.end()) {
-                WDEBUG << "Bad deletion of edge " << e << " by client " << other_deleted_elems[e] << std::endl;
-            }
-            assert(other_deleted_elems.find(e) == other_deleted_elems.end());
-            if (busy_elems.find(e) == busy_elems.end()) {
-                busy_elems[e] = 1;
-            } else {
-                busy_elems[e]++;
-            }
-        }
-        for (uint64_t d: del_elems) {
-            assert(deleted_elems.find(d) == deleted_elems.end());
-            assert(other_deleted_elems.find(d) == other_deleted_elems.end());
-            assert(busy_elems.find(d) == busy_elems.end());
-            deleted_elems.emplace(d);
-        }
-        busy_mtx.unlock();
-
-        return true;
     }
 
     // unpack transaction and return list of writes and delete-affected nodes

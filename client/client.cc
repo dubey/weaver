@@ -125,9 +125,9 @@ client :: end_tx()
         WDEBUG << "tx msg recv fail" << std::endl;
     } else {
         message::msg_type mtype = msg.unpack_message_type();
-        assert(mtype == message::CLIENT_TX_DONE
-            || mtype == message::CLIENT_TX_FAIL);
-        if (mtype == message::CLIENT_TX_DONE) {
+        assert(mtype == message::CLIENT_TX_SUCCESS
+            || mtype == message::CLIENT_TX_ABORT);
+        if (mtype == message::CLIENT_TX_SUCCESS) {
             success = true;
         }
     }
