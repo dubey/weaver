@@ -11,6 +11,7 @@
  * ===============================================================
  */
 
+#define weaver_debug_
 #include "common/hyper_stub_base.h"
 
 // call hyperdex function h using key hndl, attributes cl_attr, and then loop for response
@@ -24,6 +25,7 @@ hyper_stub_base :: hyper_call_and_loop(hyper_func h, const char *space,
     int64_t hdex_id = (cl.*h)(space, (const char*)key_buf.get(), sizeof(int64_t), cl_attr, num_attrs, &call_status);
     if (hdex_id < 0) {
         WDEBUG << "Hyperdex function failed, op id = " << hdex_id << ", status = " << call_status << std::endl;
+        assert(false);
         return;
     }
 
@@ -66,6 +68,7 @@ hyper_stub_base :: hypermap_call_and_loop(hyper_map_func h, const char *space,
                << ", loop status: " << loop_status << std::endl;
         WDEBUG << "error message: " << cl.error_message() << std::endl;
         WDEBUG << "error loc: " << cl.error_location() << std::endl;
+        assert(false);
     }
 }
 
@@ -112,14 +115,19 @@ hyper_stub_base :: hyper_multiple_call_and_loop(std::vector<hyper_func> &funcs,
 
     hyperdex_client_returncode call_status[num_calls+map_num_calls];
     int hdex_id;
+    std::unordered_map<int64_t, int64_t> opid_to_idx;
+    opid_to_idx.reserve(num_calls);
 
     uint64_t i = 0;
     for (; i < num_calls; i++) {
         hdex_id = (cl.*funcs[i])(spaces[i], (const char*)&keys[i], sizeof(int64_t), attrs[i], num_attrs[i], call_status+i);
         if (hdex_id < 0) {
             WDEBUG << "Hyperdex function failed, op id = " << hdex_id << ", status = " << call_status[i] << std::endl;
+            assert(false);
             break;
         }
+        assert(opid_to_idx.find(hdex_id) == opid_to_idx.end());
+        opid_to_idx[hdex_id] = i;
     }
 
     for (uint64_t j = 0; j < map_num_calls; j++, i++) {
@@ -128,6 +136,8 @@ hyper_stub_base :: hyper_multiple_call_and_loop(std::vector<hyper_func> &funcs,
             WDEBUG << "Hyperdex map function failed, op id = " << hdex_id << ", status = " << call_status[i] << std::endl;
             return;
         }
+        assert(opid_to_idx.find(hdex_id) == opid_to_idx.end());
+        opid_to_idx[hdex_id] = i;
     }
 
     hyperdex_client_returncode loop_status;
@@ -136,14 +146,18 @@ hyper_stub_base :: hyper_multiple_call_and_loop(std::vector<hyper_func> &funcs,
         if (hdex_id < 0) {
             WDEBUG << "Hyperdex loop failed, op id = " << hdex_id << ", status = " << loop_status << std::endl;
         }
+        assert(opid_to_idx.find(hdex_id) != opid_to_idx.end());
+        int64_t &idx = opid_to_idx[hdex_id];
+        assert(idx >= 0);
 
-        if (loop_status != HYPERDEX_CLIENT_SUCCESS || call_status[i] != HYPERDEX_CLIENT_SUCCESS) {
-            WDEBUG << "hyperdex error at call " << i
-                   << ", call status: " << call_status
+        if (loop_status != HYPERDEX_CLIENT_SUCCESS || call_status[idx] != HYPERDEX_CLIENT_SUCCESS) {
+            WDEBUG << "hyperdex error at call " << idx
+                   << ", call status: " << call_status[idx]
                    << ", loop status: " << loop_status << std::endl;
             WDEBUG << "error message: " << cl.error_message() << std::endl;
             WDEBUG << "error loc: " << cl.error_location() << std::endl;
         }
+        idx = -1;
     }
 }
 
@@ -187,6 +201,8 @@ hyper_stub_base :: hyper_multiple_get_and_loop(std::vector<const char*> &spaces,
 
     hyperdex_client_returncode get_status[num_calls];
     int64_t hdex_id;
+    std::unordered_map<int64_t, int64_t> opid_to_idx;
+    opid_to_idx.reserve(num_calls);
     
     uint64_t i = 0;
     for (; i < num_calls; i++) {
@@ -195,6 +211,8 @@ hyper_stub_base :: hyper_multiple_get_and_loop(std::vector<const char*> &spaces,
             WDEBUG << "Hyperdex get failed, op id = " << hdex_id << ", status = " << get_status[i] << std::endl;
             break;
         }
+        assert(opid_to_idx.find(hdex_id) == opid_to_idx.end());
+        opid_to_idx[hdex_id] = i;
     }
 
     hyperdex_client_returncode loop_status;
@@ -204,14 +222,19 @@ hyper_stub_base :: hyper_multiple_get_and_loop(std::vector<const char*> &spaces,
             WDEBUG << "Hyperdex loop failed, op id = " << hdex_id << ", status = " << loop_status << std::endl;
             continue;
         }
+        assert(opid_to_idx.find(hdex_id) != opid_to_idx.end());
+        int64_t &idx = opid_to_idx[hdex_id];
+        assert(idx >= 0);
 
-        if (loop_status != HYPERDEX_CLIENT_SUCCESS || get_status[i] != HYPERDEX_CLIENT_SUCCESS) {
+        if (loop_status != HYPERDEX_CLIENT_SUCCESS || get_status[idx] != HYPERDEX_CLIENT_SUCCESS) {
             WDEBUG << "hyperdex error"
-                   << ", call status: " << get_status[i]
+                   << ", call status: " << get_status[idx]
                    << ", loop status: " << loop_status << std::endl;
             WDEBUG << "error message: " << cl.error_message() << std::endl;
             WDEBUG << "error loc: " << cl.error_location() << std::endl;
         }
+
+        idx = -1;
     }
 }
 
@@ -244,13 +267,20 @@ hyper_stub_base :: hyper_del_and_loop(const char *space, uint64_t key)
 void
 hyper_stub_base :: prepare_buffer(const std::unordered_map<uint64_t, uint64_t> &map, std::unique_ptr<char> &ret_buf, uint64_t &buf_sz)
 {
+    std::vector<uint64_t> sorted;
+    sorted.reserve(map.size());
+    for (auto &p: map) {
+        sorted.emplace_back(p.first);
+    }
+    std::sort(sorted.begin(), sorted.end());
+
     buf_sz = map.size() * (sizeof(int64_t) + sizeof(int64_t));
     char *buf = (char*)malloc(buf_sz);
     ret_buf.reset(buf);
     
-    for (auto &p: map) {
-        buf = e::pack64le(p.first, buf);
-        buf = e::pack64le(p.second, buf);
+    for (uint64_t key: sorted) {
+        buf = e::pack64le(key, buf);
+        buf = e::pack64le(map.at(key), buf);
     }
 }
 
@@ -273,12 +303,14 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordere
 void
 hyper_stub_base :: prepare_buffer(const std::unordered_set<uint64_t> &set, std::unique_ptr<char> &ret_buf, uint64_t &buf_sz)
 {
-    buf_sz = sizeof(uint64_t) * set.size();
-    std::set<uint64_t> sorted;
+    std::vector<uint64_t> sorted;
+    sorted.reserve(set.size());
     for (uint64_t x: set) {
-        sorted.emplace(x);
+        sorted.emplace_back(x);
     }
+    std::sort(sorted.begin(), sorted.end());
 
+    buf_sz = sizeof(uint64_t) * set.size();
     char *buf = (char*)malloc(buf_sz);
     ret_buf.reset(buf);
     // now iterate in sorted order

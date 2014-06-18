@@ -16,7 +16,7 @@
 #define weaver_common_hyper_stub_base_h_
 
 #include <memory>
-#include <set>
+#include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
 #include <e/endian.h>
@@ -107,27 +107,29 @@ inline void
 hyper_stub_base :: prepare_buffer(const std::unordered_map<uint64_t, T> &map, std::unique_ptr<char> &ret_buf, uint64_t &buf_sz)
 {
     buf_sz = 0;
-    std::set<uint64_t> sorted;
+    std::vector<uint64_t> sorted;
+    sorted.reserve(map.size());
     std::vector<uint32_t> val_sz;
     for (auto &p: map) {
-        sorted.emplace(p.first);
+        sorted.emplace_back(p.first);
         val_sz.emplace_back(message::size(p.second));
         buf_sz += sizeof(p.first) // map key
                 + sizeof(uint32_t) // map val encoding sz
                 + val_sz.back(); // map val encoding
     }
+    std::sort(sorted.begin(), sorted.end());
 
     char *buf = (char*)malloc(buf_sz);
     ret_buf.reset(buf);
     // now iterate in sorted order
     uint64_t i = 0;
     std::unique_ptr<e::buffer> temp_buf;
-    for (uint64_t hndl: sorted) {
-        buf = e::pack64le(hndl, buf);
+    for (uint64_t key: sorted) {
+        buf = e::pack64le(key, buf);
         buf = e::pack32le(val_sz[i], buf);
         temp_buf.reset(e::buffer::create(val_sz[i]));
         e::buffer::packer packer = temp_buf->pack_at(0);
-        message::pack_buffer(packer, map.at(hndl));
+        message::pack_buffer(packer, map.at(key));
         memmove(buf, temp_buf->data(), val_sz[i]);
         buf += val_sz[i];
         i++;

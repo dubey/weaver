@@ -22,7 +22,6 @@
 #include <vector>
 #include <bitset>
 #include <unordered_map>
-#include <unordered_set>
 #include <po6/threads/mutex.h>
 #include <po6/threads/rwlock.h>
 #include <po6/threads/cond.h>
@@ -75,8 +74,8 @@ namespace coordinator
             std::unordered_map<uint64_t, current_tx> outstanding_tx;
             std::unordered_map<uint64_t, current_tx> del_tx;
             po6::threads::mutex busy_mtx;
-            std::unordered_set<uint64_t> deleted_elems;
-            std::unordered_map<uint64_t, uint64_t> busy_elems;
+            std::unordered_map<uint64_t, uint64_t> deleted_elems; // del_elem -> tx that locked it
+            std::unordered_map<uint64_t, uint64_t> busy_elems; // busy_elem -> num of busy locks
 
             // node prog
             std::unordered_map<uint64_t, current_prog> outstanding_progs;
@@ -116,9 +115,6 @@ namespace coordinator
 
             // exit
             bool to_exit;
-
-            // testing
-            std::unordered_set<uint64_t> seen_done_id;
 
         public:
             timestamper(uint64_t vt, uint64_t server);

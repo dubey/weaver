@@ -111,18 +111,22 @@ send_abort(uint64_t cl_id)
 
 // caution: assuming caller holds vts->busy_mtx
 bool
-lock_del_elems(std::unordered_set<uint64_t> &del_elems)
+lock_del_elems(uint64_t tx_id, std::unordered_set<uint64_t> &del_elems)
 {
     bool fail = false;
     std::vector<uint64_t> added;
     added.reserve(del_elems.size());
     for (uint64_t d: del_elems) {
-        if (vts->deleted_elems.find(d) != vts->deleted_elems.end()
-         || vts->busy_elems.find(d) != vts->busy_elems.end()) {
+        if (vts->deleted_elems.find(d) != vts->deleted_elems.end()) {
+            if (vts->deleted_elems[d] != tx_id) {
+                fail = true;
+                break;
+            }
+        } else if (vts->busy_elems.find(d) != vts->busy_elems.end()) {
             fail = true;
             break;
         } else {
-            vts->deleted_elems.emplace(d);
+            vts->deleted_elems[d] = tx_id;
             added.emplace_back(d);
         }
     }
@@ -154,6 +158,7 @@ prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
     nmap::nmap_stub *nmstub,
     coordinator::hyper_stub *hstub)
 {
+    hstub->prepare_tx(*tx);
     bool fail = false;
     std::unordered_set<uint64_t> del_elems;
     bool dist_lock = (tx->del_elems.size() > 0) && (NUM_VTS > 1);
@@ -165,7 +170,7 @@ prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
 
     vts->busy_mtx.lock();
 
-    if (!lock_del_elems(tx->del_elems)) {
+    if (!lock_del_elems(tx->id, tx->del_elems)) {
         fail = true;
     }
 
@@ -494,11 +499,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
 
     // record txs as outstanding for reply bookkeeping and fault tolerance
     // XXX can leave elems locked if crash before this
-    uint64_t buf_sz = message::size(tx);
-    std::unique_ptr<e::buffer> buf(e::buffer::create(buf_sz));
-    e::buffer::packer packer = buf->pack_at(0);
-    message::pack_buffer(packer, *tx);
-    hstub->put_tx(tx->id, buf);
+    hstub->commit_tx(*tx);
 
     uint64_t tx_id = tx->id;
     vc::vclock tx_clk = tx->timestamp;
@@ -778,8 +779,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 void
 mark_req_finished(uint64_t req_id)
 {
-    assert(vts->seen_done_id.find(req_id) == vts->seen_done_id.end());
-    vts->seen_done_id.emplace(req_id);
     if (vts->pend_prog_queue.top() == req_id) {
         assert(vts->max_done_id < vts->pend_prog_queue.top());
         vts->max_done_id = req_id;
@@ -846,7 +845,7 @@ server_loop(int thread_id)
                     msg->unpack_message(message::PREP_DEL_TX, tx_vt, tx_id, del_elems);
 
                     vts->busy_mtx.lock();
-                    bool success = lock_del_elems(del_elems);
+                    bool success = lock_del_elems(tx_id, del_elems);
                     vts->busy_mtx.unlock();
 
                     if (success) {

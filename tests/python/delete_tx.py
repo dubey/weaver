@@ -62,8 +62,11 @@ for i in range(num_cls):
     thr.start()
     threads.append(thr)
 
+num_finished = 0
 for thr in threads:
     thr.join()
+    num_finished += 1
+    print 'Thread finished #' + str(num_finished)
 
 # check that only one transaction per node succeeded
 for i in range(num_node_groups):

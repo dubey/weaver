@@ -17,6 +17,8 @@
 #include "common/weaver_constants.h"
 #include "common/hyper_stub_base.h"
 
+#define NUM_MAP_ATTRS 2
+
 namespace coordinator
 {
     class hyper_stub : private hyper_stub_base
@@ -25,17 +27,20 @@ namespace coordinator
             const uint64_t vt_id;
             // vt id -> set of outstanding tx ids
             const char *vt_set_space = "weaver_vt_tx_set_data";
+            const char *set_attr = "tx_id_set";
             // tx id -> tx data
             const char *vt_map_space = "weaver_vt_tx_map_data";
-            const char *attr = "tx";
+            const char *tx_data_attr = "tx_data";
+            const char *tx_status_attr = "status"; // 0 for prepare, 1 for commit
             const enum hyperdatatype set_dtype = HYPERDATATYPE_SET_INT64;
-            const enum hyperdatatype map_dtype = HYPERDATATYPE_STRING;
+            const enum hyperdatatype map_dtypes[NUM_MAP_ATTRS];
 
         public:
-            hyper_stub(uint64_t sid) : vt_id(sid) { }
-            void restore_backup(std::unordered_map<uint64_t, transaction::pending_tx> &txs);
-            void put_tx(uint64_t tx_id, std::unique_ptr<e::buffer> &buf);
+            hyper_stub(uint64_t vtid);
+            void prepare_tx(transaction::pending_tx &tx);
+            void commit_tx(transaction::pending_tx &tx);
             void del_tx(uint64_t tx_id);
+            void restore_backup(std::unordered_map<uint64_t, transaction::pending_tx> &txs);
     };
 }
 
