@@ -12,6 +12,7 @@
  */
 
 #include "common/event_order.h"
+#include "common/config_constants.h"
 
 namespace order
 {

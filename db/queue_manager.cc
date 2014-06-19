@@ -14,6 +14,8 @@
 #include <unordered_map>
 
 #define weaver_debug_
+#include "common/weaver_constants.h"
+#include "common/config_constants.h"
 #include "common/event_order.h"
 #include "db/queue_manager.h"
 

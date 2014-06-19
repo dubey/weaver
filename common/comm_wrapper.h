@@ -22,8 +22,9 @@
 #include <busybee_mapper.h>
 #include <busybee_mta.h>
 
-#include "weaver_constants.h"
-#include "configuration.h"
+#include "common/config_constants.h"
+#include "common/message_constants.h"
+#include "common/configuration.h"
 
 namespace common
 {

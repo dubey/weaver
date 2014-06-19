@@ -181,8 +181,10 @@ namespace coordinator
     inline void
     timestamper :: restore_backup()
     {
-        std::unordered_map<uint64_t, transaction::pending_tx> txs;
-        hstub.back()->restore_backup(txs);
+        std::unordered_map<uint64_t, current_tx> prepare_txs;
+        hstub.back()->restore_backup(prepare_txs, outstanding_tx);
+        WDEBUG << "num prep " << prepare_txs.size()
+               << ", outst txs " << outstanding_tx.size() << std::endl;
         // TODO restore tx state
     }
 

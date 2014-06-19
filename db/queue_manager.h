@@ -20,7 +20,6 @@
 #include <thread>
 #include <po6/threads/mutex.h>
 
-#include "common/weaver_constants.h"
 #include "db/queued_request.h"
 #include "db/hyper_stub.h"
 

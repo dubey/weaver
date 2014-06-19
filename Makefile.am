@@ -48,6 +48,7 @@ timestamper_SOURCES=common/comm_wrapper.cc \
                     common/hyper_stub_base.cc \
                     common/event_order.cc \
                     common/nmap_stub.cc \
+                    common/vclock.cc \
                     common/message.cc \
                     node_prog/edge_list.cc \
                     node_prog/prop_list.cc \
@@ -94,6 +95,7 @@ shard_SOURCES=	common/ids.cc \
                 common/event_order.cc \
                 common/nmap_stub.cc \
                 common/clock.cc \
+                common/vclock.cc \
                 common/message.cc \
                 common/message_graph_elem.cc \
                 common/message_cache_context.cc \
@@ -127,6 +129,7 @@ libclient_la_SOURCES=	common/ids.cc \
                         common/server.cc \
                         common/configuration.cc \
                         common/comm_wrapper.cc \
+                        common/vclock.cc \
                         common/message.cc \
                         common/event_order.cc \
                         node_prog/prop_list.cc \

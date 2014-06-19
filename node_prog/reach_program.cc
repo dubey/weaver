@@ -13,6 +13,7 @@
  */
 
 #include "common/message.h"
+#include "common/cache_constants.h"
 #include "node_prog/edge.h"
 #include "node_prog/reach_program.h"
 

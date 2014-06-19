@@ -18,7 +18,6 @@
 
 #include <po6/threads/mutex.h>
 
-#include "common/weaver_constants.h"
 #include "common/hyper_stub_base.h"
 #include "common/vclock.h"
 #include "db/node.h"

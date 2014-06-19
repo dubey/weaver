@@ -14,9 +14,15 @@
 #define weaver_debug_
 
 #include <assert.h>
+#include "common/weaver_constants.h"
+#include "common/config_constants.h"
 #include "common/nmap_stub.h"
 
 using nmap::nmap_stub;
+
+nmap_stub :: nmap_stub()
+    : cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT)
+{ }
 
 bool
 nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add)

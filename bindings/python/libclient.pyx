@@ -54,42 +54,42 @@ cdef extern from '<vector>' namespace 'std':
         iterator end()
         size_t size()
 
-cdef extern from 'common/weaver_constants.h':
+cdef extern from 'common/message_constants.h':
     # messaging constants
     cdef uint64_t COORD_ID
     cdef uint64_t COORD_SM_ID
     cdef uint64_t CLIENT_ID
     # weaver setup
-    cdef uint64_t NUM_SHARDS
-    cdef uint64_t NUM_VTS
-    cdef uint64_t SHARD_ID_INCR
-    cdef uint64_t NUM_THREADS
-    cdef uint64_t ID_BITS
-    cdef uint64_t TOP_MASK
-    # node programs
-    cdef uint64_t BATCH_MSG_SIZE
-    # migration
-    cdef uint64_t START_MIGR_ID
-    # coordinator
-    cdef uint64_t VT_BB_TIMEOUT
-    cdef uint64_t VT_NOP_TIMEOUT
-    cdef uint64_t VT_INITIAL_CLKUPDATE_DELAY
-    # hyperdex
-    cdef char *HYPERDEX_COORD_IPADDR
-    cdef uint64_t HYPERDEX_COORD_PORT
-    # kronos
-    cdef char *KRONOS_IPADDR
-    cdef uint64_t KRONOS_PORT
+    #cdef uint64_t NUM_SHARDS
+    #cdef uint64_t NUM_VTS
+    #cdef uint64_t SHARD_ID_INCR
+    #cdef uint64_t NUM_THREADS
+    #cdef uint64_t ID_BITS
+    #cdef uint64_t TOP_MASK
+    ## node programs
+    #cdef uint64_t BATCH_MSG_SIZE
+    ## migration
+    #cdef uint64_t START_MIGR_ID
+    ## coordinator
+    #cdef uint64_t VT_BB_TIMEOUT
+    #cdef uint64_t VT_NOP_TIMEOUT
+    #cdef uint64_t VT_INITIAL_CLKUPDATE_DELAY
+    ## hyperdex
+    #cdef char *HYPERDEX_COORD_IPADDR
+    #cdef uint64_t HYPERDEX_COORD_PORT
+    ## kronos
+    #cdef char *KRONOS_IPADDR
+    #cdef uint64_t KRONOS_PORT
 
 _COORD_ID                   = COORD_ID
 _COORD_SM_ID                = COORD_SM_ID
 _CLIENT_ID                  = CLIENT_ID
-_NUM_SHARDS                 = NUM_SHARDS
-_NUM_VTS                    = NUM_VTS
-_ID_BITS                    = ID_BITS
-_TOP_MASK                   = TOP_MASK
-_HYPERDEX_COORD_IPADDR      = HYPERDEX_COORD_IPADDR
-_HYPERDEX_COORD_PORT        = HYPERDEX_COORD_PORT
+#_NUM_SHARDS                 = NUM_SHARDS
+#_NUM_VTS                    = NUM_VTS
+#_ID_BITS                    = ID_BITS
+#_TOP_MASK                   = TOP_MASK
+#_HYPERDEX_COORD_IPADDR      = HYPERDEX_COORD_IPADDR
+#_HYPERDEX_COORD_PORT        = HYPERDEX_COORD_PORT
 
 cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
     cdef enum prog_type:

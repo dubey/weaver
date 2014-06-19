@@ -14,8 +14,8 @@
 #ifndef weaver_coordinator_hyper_stub_h_
 #define weaver_coordinator_hyper_stub_h_
 
-#include "common/weaver_constants.h"
 #include "common/hyper_stub_base.h"
+#include "coordinator/current_tx.h"
 
 #define NUM_MAP_ATTRS 2
 
@@ -40,7 +40,11 @@ namespace coordinator
             void prepare_tx(transaction::pending_tx &tx);
             void commit_tx(transaction::pending_tx &tx);
             void del_tx(uint64_t tx_id);
-            void restore_backup(std::unordered_map<uint64_t, transaction::pending_tx> &txs);
+            void restore_backup(std::unordered_map<uint64_t, current_tx> &prepare_tx,
+                std::unordered_map<uint64_t, current_tx> &outstanding_tx);
+        private:
+            void recreate_tx(const hyperdex_client_attribute *attr, size_t num_attrs,
+                coordinator::current_tx &cur_tx, bool &status);
     };
 }
 

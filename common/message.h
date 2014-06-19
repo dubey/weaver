@@ -25,7 +25,6 @@
 #include <po6/net/location.h>
 #include <busybee_constants.h>
 
-#include "common/weaver_constants.h"
 #include "common/vclock.h"
 #include "common/transaction.h"
 #include "node_prog/node_prog_type.h"

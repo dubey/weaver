@@ -20,8 +20,6 @@
 #include <algorithm>
 #include <assert.h>
 
-#include "common/weaver_constants.h"
-
 namespace vc
 {
     typedef std::vector<uint64_t> vclock_t;
@@ -45,38 +43,6 @@ namespace vc
                 return vt_id == rhs.vt_id && clock == rhs.clock;
             }
     };
-
-    inline
-    vclock :: vclock(uint64_t vtid, uint64_t clk_init)
-        : vt_id(vtid)
-        , clock(std::vector<uint64_t>(NUM_VTS, clk_init))
-    {
-        assert(vt_id < NUM_VTS || vt_id == UINT64_MAX);
-    }
-
-    inline
-    vclock :: vclock(uint64_t vtid, vclock_t &vclk)
-        : vt_id(vtid)
-        , clock(vclk)
-    {
-        assert(vt_id < NUM_VTS || vt_id == UINT64_MAX);
-    }
-
-    inline void
-    vclock :: increment_counter(uint64_t index)
-    {
-        assert(index < NUM_VTS);
-        clock[index]++;
-    }
-
-    inline void
-    vclock :: update_clock(uint64_t vtid, uint64_t new_clock)
-    {
-        assert(vtid < NUM_VTS);
-        if (clock[vtid] < new_clock) {
-            clock[vtid] = new_clock;
-        }
-    }
 }
 
 namespace std

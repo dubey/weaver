@@ -13,6 +13,8 @@
 
 #include <memory>
 #include "common/message.h"
+#include "common/cache_constants.h"
+#include "common/config_constants.h"
 #include "db/node.h"
 
 using db::element::remote_node;

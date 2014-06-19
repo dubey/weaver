@@ -12,7 +12,8 @@
  */
 
 #define weaver_debug_
-#include "comm_wrapper.h"
+#include "common/weaver_constants.h"
+#include "common/comm_wrapper.h"
 
 #define ID_INCR (1ULL << 32ULL)
 #define WEAVER_TO_BUSYBEE(x) (x+ID_INCR)

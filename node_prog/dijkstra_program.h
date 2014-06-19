@@ -230,7 +230,7 @@ namespace node_prog
             } else { 
                 // starting the request, add source neighbors to priority queue
                 params.src_handle = rn;
-                params.cost = params.is_widest_path ? MAX_TIME : 0; // don't want source node to be bottleneck in path
+                params.cost = params.is_widest_path ? UINT64_MAX : 0; // don't want source node to be bottleneck in path
                 node_state.visited.emplace(params.src_handle, std::make_pair(params.src_handle, params.cost)); // handles same at source
 
                 for (edge &edge: n.get_edges()) {

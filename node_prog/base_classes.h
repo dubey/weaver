@@ -6,7 +6,6 @@
 #include <unordered_set>
 #include <iostream>
 
-#include "common/weaver_constants.h"
 #include "db/remote_node.h"
 
 namespace node_prog

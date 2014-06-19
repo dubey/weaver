@@ -13,6 +13,11 @@
 
 #define weaver_debug_
 #include "common/hyper_stub_base.h"
+#include "common/config_constants.h"
+
+hyper_stub_base :: hyper_stub_base()
+    : cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT)
+{ }
 
 // call hyperdex function h using key hndl, attributes cl_attr, and then loop for response
 void

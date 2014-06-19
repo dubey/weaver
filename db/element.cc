@@ -20,7 +20,7 @@ using db::element::property;
 element :: element(uint64_t hndl, vc::vclock &vclk)
     : id(hndl)
     , creat_time(vclk)
-    , del_time(UINT64_MAX, MAX_TIME)
+    , del_time(UINT64_MAX, UINT64_MAX)
     , view_time(NULL)
 { }
 

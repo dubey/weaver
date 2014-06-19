@@ -21,7 +21,6 @@
 #include <unordered_map>
 #include <po6/threads/mutex.h>
 
-#include "common/weaver_constants.h"
 #include "common/message.h"
 #include "db/remote_node.h"
 #include "node_prog/cache_response.h"

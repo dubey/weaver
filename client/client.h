@@ -18,8 +18,7 @@
 #include <unordered_map>
 #include <po6/net/location.h>
 
-#include "common/weaver_constants.h"
-#include "common/message.h"
+#include "common/message_constants.h"
 #include "common/comm_wrapper.h"
 #include "transaction.h"
 #include "node_prog/node_prog_type.h"

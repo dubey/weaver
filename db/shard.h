@@ -27,6 +27,8 @@
 
 #include "node_prog/base_classes.h"
 #include "common/weaver_constants.h"
+#include "common/config_constants.h"
+#include "common/cache_constants.h"
 #include "common/ids.h"
 #include "common/vclock.h"
 #include "common/message.h"
@@ -35,6 +37,7 @@
 #include "common/event_order.h"
 #include "common/configuration.h"
 #include "common/server_manager_link_wrapper.h"
+#include "db/shard_constants.h"
 #include "db/element.h"
 #include "db/node.h"
 #include "db/edge.h"

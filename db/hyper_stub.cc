@@ -12,7 +12,9 @@
  */
 
 #define weaver_debug_
-
+#include "common/weaver_constants.h"
+#include "common/config_constants.h"
+#include "db/shard_constants.h"
 #include "db/hyper_stub.h"
 
 using db::hyper_stub;

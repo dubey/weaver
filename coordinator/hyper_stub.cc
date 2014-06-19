@@ -14,9 +14,12 @@
 #include <e/buffer.h>
 
 #define weaver_debug_
+#include "common/config_constants.h"
+#include "common/weaver_constants.h"
 #include "coordinator/hyper_stub.h"
 
 using coordinator::hyper_stub;
+using coordinator::current_tx;
 
 hyper_stub :: hyper_stub(uint64_t vtid)
     : vt_id(vtid)
@@ -120,44 +123,90 @@ hyper_stub :: del_tx(uint64_t tx_id)
     hyper_del_and_loop(vt_map_space, tx_id);
 }
 
+// status = false if not prepared
 void
-hyper_stub :: restore_backup(std::unordered_map<uint64_t, transaction::pending_tx> &txs)
+hyper_stub :: recreate_tx(const hyperdex_client_attribute *cl_attr,
+    size_t num_attrs,
+    current_tx &cur_tx,
+    bool &status)
 {
-    const hyperdex_client_attribute *cl_attr;
-    size_t num_attrs;
-    hyper_get_and_loop(vt_set_space, vt_id, &cl_attr, &num_attrs);
-    assert(num_attrs == 1);
-    assert(strcmp(cl_attr->attr, set_attr) == 0);
+    assert(num_attrs == NUM_MAP_ATTRS);
+    int idx[2];
+    idx[0] = -1;
+    idx[1] = -1;
+    if (strcmp(cl_attr[0].attr, tx_data_attr) == 0) {
+        assert(strcmp(cl_attr[1].attr, tx_status_attr) == 0);
+        idx[0] = 0;
+        idx[1] = 1;
+    } else if (strcmp(cl_attr[1].attr, tx_data_attr) == 0) {
+        assert(strcmp(cl_attr[0].attr, tx_status_attr) == 0);
+        idx[0] = 1;
+        idx[1] = 0;
+    } else {
+        WDEBUG << "unexpected attrs" << std::endl;
+        assert(false);
+    }
+    assert(cl_attr[idx[0]].datatype == map_dtypes[0]);
+    assert(cl_attr[idx[1]].datatype == map_dtypes[1]);
+
+    cur_tx.tx.reset(new transaction::pending_tx());
+    std::unique_ptr<e::buffer> buf(e::buffer::create(cl_attr[idx[0]].value,
+                                                     cl_attr[idx[0]].value_sz));
+    e::unpacker unpacker = buf->unpack_from(0);
+    message::unpack_buffer(unpacker, *cur_tx.tx);
+
+    assert(cl_attr[idx[1]].value_sz == sizeof(int64_t));
+    int64_t *status_ptr = (int64_t*)cl_attr[idx[1]].value;
+    assert(*status_ptr == 0 || *status_ptr == 1);
+    status = (*status_ptr == 1);
+}
+
+void
+hyper_stub :: restore_backup(std::unordered_map<uint64_t, current_tx> &prepare_tx,
+    std::unordered_map<uint64_t, current_tx> &outstanding_tx)
+{
+    const hyperdex_client_attribute *cl_set_attr;
+    size_t num_set_attrs;
+    hyper_get_and_loop(vt_set_space, vt_id, &cl_set_attr, &num_set_attrs);
+    assert(num_set_attrs == 1);
+    assert(strcmp(cl_set_attr->attr, set_attr) == 0);
 
     std::unordered_set<uint64_t> tx_ids;
-    unpack_buffer(cl_attr->value, cl_attr->value_sz, tx_ids);
-    hyperdex_client_destroy_attrs(cl_attr, 1);
+    unpack_buffer(cl_set_attr->value, cl_set_attr->value_sz, tx_ids);
+    hyperdex_client_destroy_attrs(cl_set_attr, 1);
 
     std::vector<const char*> spaces(tx_ids.size(), vt_map_space);
     std::vector<uint64_t> keys(tx_ids.begin(), tx_ids.end());
-    std::vector<const hyperdex_client_attribute**> cl_attrs;
-    std::vector<size_t*> num_attrss;
-    cl_attrs.reserve(tx_ids.size());
-    num_attrss.reserve(tx_ids.size());
-    const hyperdex_client_attribute *cl_attr_array[tx_ids.size()];
-    size_t num_attr_array[tx_ids.size()];
+    std::vector<const hyperdex_client_attribute**> cl_attrs_vec;
+    std::vector<size_t*> num_attrs_vec;
+    cl_attrs_vec.reserve(tx_ids.size());
+    num_attrs_vec.reserve(tx_ids.size());
+    const hyperdex_client_attribute *cl_attr[tx_ids.size()];
+    size_t num_attr[tx_ids.size()];
     for (uint64_t i = 0; i < tx_ids.size(); i++) {
-        cl_attrs.emplace_back(cl_attr_array + i);
-        num_attrss.emplace_back(num_attr_array + i);
+        cl_attrs_vec.emplace_back(cl_attr + i);
+        num_attrs_vec.emplace_back(num_attr + i);
     }
 
-    hyper_multiple_get_and_loop(spaces, keys, cl_attrs, num_attrss);
+    hyper_multiple_get_and_loop(spaces, keys, cl_attrs_vec, num_attrs_vec);
 
-    txs.reserve(tx_ids.size());
-    message::message buf_wrapper(message::CLIENT_TX_INIT);
     auto tx_iter = tx_ids.begin();
+    uint64_t tx_id;
     for (uint64_t i = 0; i < tx_ids.size(); i++, tx_iter++) {
-        transaction::pending_tx tx;
-        buf_wrapper.buf.reset(e::buffer::create(cl_attr_array[i]->value, cl_attr_array[i]->value_sz));
-        buf_wrapper.unpack_client_tx(txs[*tx_iter]);
+        tx_id = *tx_iter;
+        current_tx cur_tx;
+        bool status;
+        recreate_tx(cl_attr[i], num_attr[i], cur_tx, status);
+        assert(cur_tx.tx->id == tx_id);
+
+        if (status) {
+            outstanding_tx.emplace(tx_id, std::move(cur_tx));
+        } else {
+            prepare_tx.emplace(tx_id, std::move(cur_tx));
+        }
     }
 
     for (uint64_t i = 0; i < tx_ids.size(); i++) {
-        hyperdex_client_destroy_attrs(cl_attr_array[i], 1);
+        hyperdex_client_destroy_attrs(cl_attr[i], num_attr[i]);
     }
 }

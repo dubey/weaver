@@ -23,7 +23,6 @@
 #include <e/buffer.h>
 #include <hyperdex/client.hpp>
 
-#include "common/weaver_constants.h"
 #include "common/message.h"
 
 class hyper_stub_base
@@ -77,7 +76,7 @@ class hyper_stub_base
         void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<uint64_t> &set);
 
     public:
-        hyper_stub_base() : cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT) { }
+        hyper_stub_base();
 };
 
 // store the given t as a HYPERDATATYPE_STRING

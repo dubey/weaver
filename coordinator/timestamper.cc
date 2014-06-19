@@ -24,14 +24,21 @@
 #include "common/vclock.h"
 #include "common/transaction.h"
 #include "common/event_order.h"
+#include "common/config_constants.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
-#include "timestamper.h"
+#include "coordinator/vt_constants.h"
+#include "coordinator/timestamper.h"
 
 using coordinator::current_prog;
 using coordinator::current_tx;
 static coordinator::timestamper *vts;
 static uint64_t vt_id;
+
+#ifdef weaver_debug_
+static int num_prep, num_comm;
+static po6::threads::mutex tx_count_mtx;
+#endif
 
 // tx functions
 bool
@@ -158,6 +165,13 @@ prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
     nmap::nmap_stub *nmstub,
     coordinator::hyper_stub *hstub)
 {
+#ifdef weaver_debug_
+    tx_count_mtx.lock();
+    num_prep++;
+    WDEBUG << "num prep " << num_prep << ", num outst " << num_comm << std::endl;
+    tx_count_mtx.unlock();
+#endif
+
     hstub->prepare_tx(*tx);
     bool fail = false;
     std::unordered_set<uint64_t> del_elems;
@@ -497,6 +511,14 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     tx->timestamp = vts->vclk;
     vts->clk_rw_mtx.unlock();
 
+#ifdef weaver_debug_
+    tx_count_mtx.lock();
+    num_prep--;
+    num_comm++;
+    WDEBUG << "num prep " << num_prep << ", num outst " << num_comm << std::endl;
+    tx_count_mtx.unlock();
+#endif
+
     // record txs as outstanding for reply bookkeeping and fault tolerance
     // XXX can leave elems locked if crash before this
     hstub->commit_tx(*tx);
@@ -528,6 +550,14 @@ end_transaction(uint64_t tx_id, coordinator::hyper_stub *hstub)
     vts->tx_prog_mutex.lock();
     if (--vts->outstanding_tx.at(tx_id).count == 0) {
         // done tx
+
+#ifdef weaver_debug_
+        tx_count_mtx.lock();
+        num_comm--;
+        WDEBUG << "num prep " << num_prep << ", num outst " << num_comm << std::endl;
+        tx_count_mtx.unlock();
+#endif
+
         hstub->del_tx(tx_id);
         auto tx = std::move(vts->outstanding_tx[tx_id].tx);
         vts->outstanding_tx.erase(tx_id);
@@ -961,7 +991,7 @@ server_loop(int thread_id)
                 case message::START_MIGR: {
                     uint64_t hops = UINT64_MAX;
                     msg->prepare_message(message::MIGRATION_TOKEN, hops, vt_id);
-                    vts->comm.send(START_MIGR_ID, msg->buf); 
+                    vts->comm.send(SHARD_ID_INCR, msg->buf); 
                     break;
                 }
 
@@ -971,7 +1001,7 @@ server_loop(int thread_id)
                     vts->migr_client = sender;
                     vts->migr_mutex.unlock();
                     msg->prepare_message(message::MIGRATION_TOKEN, hops, vt_id);
-                    vts->comm.send(START_MIGR_ID, msg->buf);
+                    vts->comm.send(SHARD_ID_INCR, msg->buf);
                     break;
                 }
 
@@ -1139,6 +1169,11 @@ main(int argc, char *argv[])
                << "          backup vt:" << argv[0] << " <vector_timestamper_id> <backup_number>" << std::endl; 
         return -1;
     }
+
+#ifdef weaver_debug_
+    num_prep = 0;
+    num_comm = 0;
+#endif
 
     install_signal_handler(SIGINT, end_program);
     install_signal_handler(SIGHUP, end_program);
