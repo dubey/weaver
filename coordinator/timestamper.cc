@@ -21,6 +21,7 @@
 #include <sys/time.h>
 
 #define weaver_debug_
+//#define weaver_test_
 #include "common/vclock.h"
 #include "common/transaction.h"
 #include "common/event_order.h"
@@ -35,7 +36,7 @@ using coordinator::current_tx;
 static coordinator::timestamper *vts;
 static uint64_t vt_id;
 
-#ifdef weaver_debug_
+#ifdef weaver_test_
 static int num_prep, num_comm;
 static po6::threads::mutex tx_count_mtx;
 #endif
@@ -51,12 +52,12 @@ void prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
     coordinator::hyper_stub *hstub);
 void release_dist_del_locks(std::bitset<NUM_VTS> &locks,
     std::unordered_set<uint64_t> &del_elems);
-void release_locks_and_abort(uint64_t tx_id);
+void release_locks_and_abort(uint64_t tx_id, coordinator::hyper_stub *hstub);
 void done_prepare_tx_step1(uint64_t tx_id,
     uint64_t from_vt,
     nmap::nmap_stub *nmstub,
     coordinator::hyper_stub *hstub);
-void fail_prepare_tx_step1(uint64_t tx_id);
+void fail_prepare_tx_step1(uint64_t tx_id, coordinator::hyper_stub *hstub);
 void unbusy_elems(std::vector<uint64_t> &busy_elems);
 void prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     nmap::nmap_stub *nmstub,
@@ -165,7 +166,7 @@ prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
     nmap::nmap_stub *nmstub,
     coordinator::hyper_stub *hstub)
 {
-#ifdef weaver_debug_
+#ifdef weaver_test_
     tx_count_mtx.lock();
     num_prep++;
     WDEBUG << "num prep " << num_prep << ", num outst " << num_comm << std::endl;
@@ -197,6 +198,13 @@ prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
     vts->busy_mtx.unlock();
 
     if (fail) {
+#ifdef weaver_test_
+        tx_count_mtx.lock();
+        num_prep--;
+        WDEBUG << "num prep " << num_prep << ", num outst " << num_comm << std::endl;
+        tx_count_mtx.unlock();
+#endif
+        hstub->del_tx(tx->id);
         send_abort(cl_id);
     } else if (dist_lock) {
         // successfully locked all del_elems on this shard
@@ -235,7 +243,7 @@ release_dist_del_locks(std::bitset<NUM_VTS> &locks,
 
 // caution: assuming caller holds vts->busy_mtx
 void
-release_locks_and_abort(uint64_t tx_id)
+release_locks_and_abort(uint64_t tx_id, coordinator::hyper_stub *hstub)
 {
     auto &cur_tx = vts->del_tx[tx_id];
     uint64_t cl_id = cur_tx.tx->client_id;
@@ -246,6 +254,13 @@ release_locks_and_abort(uint64_t tx_id)
     }
 
     vts->del_tx.erase(tx_id);
+#ifdef weaver_test_
+    tx_count_mtx.lock();
+    num_prep--;
+    WDEBUG << "num prep " << num_prep << ", num outst " << num_comm << std::endl;
+    tx_count_mtx.unlock();
+#endif
+    hstub->del_tx(tx_id);
 
     send_abort(cl_id);
 }
@@ -273,7 +288,7 @@ done_prepare_tx_step1(uint64_t tx_id,
     } else if (cur_tx.count == 0) {
         // all replies received
         // acquire locks failed on some vts, abort tx
-        release_locks_and_abort(tx_id);
+        release_locks_and_abort(tx_id, hstub);
         vts->busy_mtx.unlock();
     } else {
         // some replies pending
@@ -282,7 +297,7 @@ done_prepare_tx_step1(uint64_t tx_id,
 }
 
 void
-fail_prepare_tx_step1(uint64_t tx_id)
+fail_prepare_tx_step1(uint64_t tx_id, coordinator::hyper_stub *hstub)
 {
     vts->busy_mtx.lock();
     assert(vts->del_tx.find(tx_id) != vts->del_tx.end());
@@ -292,7 +307,7 @@ fail_prepare_tx_step1(uint64_t tx_id)
 
     if (cur_tx.count == 0) {
         // some lock acquires failed, release locks and fail tx
-        release_locks_and_abort(tx_id);
+        release_locks_and_abort(tx_id, hstub);
     }
 
     vts->busy_mtx.unlock();
@@ -427,6 +442,14 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
             release_dist_del_locks(locks, tx->del_elems);
         }
         vts->busy_mtx.unlock();
+
+#ifdef weaver_test_
+        tx_count_mtx.lock();
+        num_prep--;
+        WDEBUG << "num prep " << num_prep << ", num outst " << num_comm << std::endl;
+        tx_count_mtx.unlock();
+#endif
+        hstub->del_tx(tx->id);
         send_abort(tx->client_id);
         return;
     }
@@ -455,6 +478,14 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
             release_dist_del_locks(locks, tx->del_elems);
         }
         vts->busy_mtx.unlock();
+
+#ifdef weaver_test_
+        tx_count_mtx.lock();
+        num_prep--;
+        WDEBUG << "num prep " << num_prep << ", num outst " << num_comm << std::endl;
+        tx_count_mtx.unlock();
+#endif
+        hstub->del_tx(tx->id);
         send_abort(tx->client_id);
         return;
     }
@@ -511,7 +542,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     tx->timestamp = vts->vclk;
     vts->clk_rw_mtx.unlock();
 
-#ifdef weaver_debug_
+#ifdef weaver_test_
     tx_count_mtx.lock();
     num_prep--;
     num_comm++;
@@ -551,7 +582,7 @@ end_transaction(uint64_t tx_id, coordinator::hyper_stub *hstub)
     if (--vts->outstanding_tx.at(tx_id).count == 0) {
         // done tx
 
-#ifdef weaver_debug_
+#ifdef weaver_test_
         tx_count_mtx.lock();
         num_comm--;
         WDEBUG << "num prep " << num_prep << ", num outst " << num_comm << std::endl;
@@ -911,7 +942,7 @@ server_loop(int thread_id)
                     uint64_t tx_id;
                     msg->unpack_message(message::FAIL_DEL_TX, tx_id);
 
-                    fail_prepare_tx_step1(tx_id);
+                    fail_prepare_tx_step1(tx_id, hstub);
                     break;
                 }
 
@@ -1170,7 +1201,7 @@ main(int argc, char *argv[])
         return -1;
     }
 
-#ifdef weaver_debug_
+#ifdef weaver_test_
     num_prep = 0;
     num_comm = 0;
 #endif
@@ -1259,4 +1290,4 @@ main(int argc, char *argv[])
     nop_function();
 }
 
-#undef weaver_debug_
+#undef weaver_test_

@@ -237,6 +237,7 @@ hyper_stub_base :: hyper_multiple_get_and_loop(std::vector<const char*> &spaces,
                    << ", loop status: " << loop_status << std::endl;
             WDEBUG << "error message: " << cl.error_message() << std::endl;
             WDEBUG << "error loc: " << cl.error_location() << std::endl;
+            assert(false);
         }
 
         idx = -1;

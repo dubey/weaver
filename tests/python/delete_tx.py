@@ -21,9 +21,9 @@ sys.path.append('../../.libs')
 import libclient as client
 
 # grid graph params
-num_node_groups = 100
+num_node_groups = 1000
 nodes_per_group = 5
-num_vts = 2
+num_vts = 1
 num_cls = 10
 clients = []
 for i in range(num_cls):

@@ -175,6 +175,9 @@ hyper_stub :: restore_backup(std::unordered_map<uint64_t, current_tx> &prepare_t
     unpack_buffer(cl_set_attr->value, cl_set_attr->value_sz, tx_ids);
     hyperdex_client_destroy_attrs(cl_set_attr, 1);
 
+    assert(tx_ids.find(INT64_MAX) != tx_ids.end());
+    tx_ids.erase(INT64_MAX);
+
     std::vector<const char*> spaces(tx_ids.size(), vt_map_space);
     std::vector<uint64_t> keys(tx_ids.begin(), tx_ids.end());
     std::vector<const hyperdex_client_attribute**> cl_attrs_vec;
