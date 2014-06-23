@@ -185,7 +185,8 @@ namespace coordinator
         hstub.back()->restore_backup(prepare_txs, outstanding_tx);
         WDEBUG << "num prep " << prepare_txs.size()
                << ", outst txs " << outstanding_tx.size() << std::endl;
-        // TODO restore tx state
+        // TODO learn qts, clk values from shards
+        // TODO restore tx state, reexec prepared txs
     }
 
     // reconfigure timestamper according to new cluster configuration
