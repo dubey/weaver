@@ -65,6 +65,20 @@ node :: get_properties()
     return node_prog::prop_list(base.properties, *base.view_time);
 };
 
+bool
+node :: has_property(std::pair<std::string, std::string> &p)
+{
+    assert(base.view_time != NULL);
+    return base.has_property(p, *base.view_time);
+}
+
+bool
+node :: has_all_properties(std::vector<std::pair<std::string, std::string>> &props)
+{
+    assert(base.view_time != NULL);
+    return base.has_all_properties(props, *base.view_time);
+}
+
 void
 node :: add_cache_value(std::shared_ptr<vc::vclock> vc,
     std::shared_ptr<node_prog::Cache_Value_Base> cache_value,

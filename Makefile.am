@@ -61,6 +61,7 @@ timestamper_SOURCES=common/comm_wrapper.cc \
                     node_prog/read_edges_props_program.cc \
                     node_prog/read_n_edges_program.cc \
                     node_prog/read_node_props_program.cc \
+                    node_prog/traverse_with_props.cc \
                     db/element.cc \
                     db/property.cc \
                     db/edge.cc \
@@ -110,6 +111,7 @@ shard_SOURCES=	common/ids.cc \
                 node_prog/read_edges_props_program.cc \
                 node_prog/read_n_edges_program.cc \
                 node_prog/read_node_props_program.cc \
+                node_prog/traverse_with_props.cc \
                 db/hyper_stub.cc \
                 db/queue_manager.cc \
                 db/element.cc \
@@ -143,6 +145,7 @@ libclient_la_SOURCES=	common/ids.cc \
                         node_prog/read_n_edges_program.cc \
                         node_prog/read_node_props_program.cc \
                         node_prog/two_neighborhood_program.cc \
+                        node_prog/traverse_with_props.cc \
                         db/element.cc \
                         db/property.cc \
                         client/client.cc \

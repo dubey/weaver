@@ -34,7 +34,7 @@ namespace element
             edge(uint64_t id, vc::vclock &vclk, uint64_t remote_loc, uint64_t remote_id);
             edge(uint64_t id, vc::vclock &vclk, remote_node &rn);
             ~edge() { }
-        
+
         public:
             element base;
             remote_node nbr; // out-neighbor for this edge
@@ -46,7 +46,7 @@ namespace element
             node_prog::prop_list get_properties();
             bool has_property(std::pair<std::string, std::string> &p);
             bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
-            uint64_t get_id() const { return base.get_id(); } ;
+            uint64_t get_id() const { return base.get_id(); }
     };
 }
 }

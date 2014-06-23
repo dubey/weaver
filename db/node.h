@@ -99,6 +99,9 @@ namespace element
             void add_edge(edge *e);
             node_prog::edge_list get_edges();
             node_prog::prop_list get_properties();
+            bool has_property(std::pair<std::string, std::string> &p);
+            bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
+            uint64_t get_id() const { return base.get_id(); }
     };
 }
 }

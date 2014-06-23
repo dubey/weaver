@@ -28,6 +28,7 @@
 #include "node_prog/edge_get_program.h"
 #include "node_prog/clustering_program.h"
 #include "node_prog/two_neighborhood_program.h"
+#include "node_prog/traverse_with_props.h"
 
 // size methods
 uint64_t
@@ -211,6 +212,10 @@ message :: unpack_buffer(e::unpacker &unpacker, db::element::node &t)
 
                 case node_prog::EDGE_GET:
                     val = unpack_single_node_state<node_prog::edge_get_state>(unpacker);
+                    break;
+
+                case node_prog::TRAVERSE_PROPS:
+                    val = unpack_single_node_state<node_prog::traverse_props_state>(unpacker);
                     break;
 
                 default:

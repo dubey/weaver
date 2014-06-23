@@ -53,6 +53,20 @@ cdef extern from '<vector>' namespace 'std':
         iterator begin()
         iterator end()
         size_t size()
+        void reserve(size_t)
+        void clear()
+
+cdef extern from '<deque>' namespace 'std':
+    cdef cppclass deque[T]:
+        cppclass iterator:
+            T operator*()
+            iterator operator++()
+            bint operator==(iterator)
+            bint operator!=(iterator)
+        iterator begin()
+        iterator end()
+        void push_back(T&)
+        void clear()
 
 cdef extern from 'common/message_constants.h':
     # messaging constants
@@ -282,6 +296,20 @@ class EdgeGetParams:
         self.edges_props = edges_props
         self.return_edges = return_edges
 
+cdef extern from 'node_prog/traverse_with_props.h' namespace 'node_prog':
+    cdef cppclass traverse_props_params:
+        traverse_props_params()
+        remote_node prev_node
+        deque[vector[pair[string, string]]] node_props
+        deque[vector[pair[string, string]]] edge_props
+        vector[uint64_t] return_nodes
+
+class TraversePropsParams:
+    def __init__(self, node_props=[[]], edge_props=[], return_nodes=[]):
+        self.node_props = node_props
+        self.edge_props = edge_props
+        self.return_nodes = return_nodes
+
 cdef extern from 'client/client.h' namespace 'client':
     cdef cppclass client:
         client(uint64_t my_id, uint64_t vt_id)
@@ -294,16 +322,17 @@ cdef extern from 'client/client.h' namespace 'client':
         void set_node_property(uint64_t node, string &key, string &value)
         void set_edge_property(uint64_t node, uint64_t edge, string &key, string &value)
         bint end_tx() nogil
-        reach_params run_reach_program(vector[pair[uint64_t, reach_params]] initial_args) nogil
-        pathless_reach_params run_pathless_reach_program(vector[pair[uint64_t, pathless_reach_params]] initial_args) nogil
-        clustering_params run_clustering_program(vector[pair[uint64_t, clustering_params]] initial_args) nogil
-        two_neighborhood_params run_two_neighborhood_program(vector[pair[uint64_t, two_neighborhood_params]] initial_args) nogil
-        #dijkstra_params run_dijkstra_program(vector[pair[uint64_t, dijkstra_params]] initial_args) nogil
-        read_node_props_params read_node_props_program(vector[pair[uint64_t, read_node_props_params]] initial_args) nogil
-        read_edges_props_params read_edges_props_program(vector[pair[uint64_t, read_edges_props_params]] initial_args) nogil
-        read_n_edges_params read_n_edges_program(vector[pair[uint64_t, read_n_edges_params]] initial_args) nogil
-        edge_count_params edge_count_program(vector[pair[uint64_t, edge_count_params]] initial_args) nogil
-        edge_get_params edge_get_program(vector[pair[uint64_t, edge_get_params]] initial_args) nogil
+        reach_params run_reach_program(vector[pair[uint64_t, reach_params]] &initial_args) nogil
+        pathless_reach_params run_pathless_reach_program(vector[pair[uint64_t, pathless_reach_params]] &initial_args) nogil
+        clustering_params run_clustering_program(vector[pair[uint64_t, clustering_params]] &initial_args) nogil
+        two_neighborhood_params run_two_neighborhood_program(vector[pair[uint64_t, two_neighborhood_params]] &initial_args) nogil
+        #dijkstra_params run_dijkstra_program(vector[pair[uint64_t, dijkstra_params]] &initial_args) nogil
+        read_node_props_params read_node_props_program(vector[pair[uint64_t, read_node_props_params]] &initial_args) nogil
+        read_edges_props_params read_edges_props_program(vector[pair[uint64_t, read_edges_props_params]] &initial_args) nogil
+        read_n_edges_params read_n_edges_program(vector[pair[uint64_t, read_n_edges_params]] &initial_args) nogil
+        edge_count_params edge_count_program(vector[pair[uint64_t, edge_count_params]] &initial_args) nogil
+        edge_get_params edge_get_program(vector[pair[uint64_t, edge_get_params]] &initial_args) nogil
+        traverse_props_params traverse_props_program(vector[pair[uint64_t, traverse_props_params]] &initial_args) nogil
         void start_migration()
         void single_stream_migration()
         void commit_graph()
@@ -340,6 +369,7 @@ cdef class Client:
         return ret
     def run_reach_program(self, init_args):
         cdef vector[pair[uint64_t, reach_params]] c_args
+        c_args.reserve(len(init_args))
         cdef pair[uint64_t, reach_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
@@ -349,6 +379,8 @@ cdef class Client:
             arg_pair.second.dest= rp[1].dest
             arg_pair.second.reachable = rp[1].reachable
             arg_pair.second.prev_node = coordinator
+            arg_pair.second.edge_props.clear()
+            arg_pair.second.edge_props.reserve(len(rp[1].edge_props))
             for p in rp[1].edge_props:
                 arg_pair.second.edge_props.push_back(p)
             c_args.push_back(arg_pair)
@@ -362,6 +394,7 @@ cdef class Client:
     # warning! set prev_node loc to vt_id if somewhere in params
     def run_pathless_reach_program(self, init_args):
         cdef vector[pair[uint64_t, pathless_reach_params]] c_args
+        c_args.reserve(len(init_args))
         cdef pair[uint64_t, pathless_reach_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
@@ -369,6 +402,8 @@ cdef class Client:
             arg_pair.second.dest= rp[1].dest
             arg_pair.second.reachable = rp[1].reachable
             arg_pair.second.prev_node = coordinator
+            arg_pair.second.edge_props.clear()
+            arg_pair.second.edge_props.reserve(len(rp[1].edge_props))
             for p in rp[1].edge_props:
                 arg_pair.second.edge_props.push_back(p)
             c_args.push_back(arg_pair)
@@ -378,6 +413,7 @@ cdef class Client:
         return response
     def run_clustering_program(self, init_args):
         cdef vector[pair[uint64_t, clustering_params]] c_args
+        c_args.reserve(len(init_args))
         cdef pair[uint64_t, clustering_params] arg_pair
         for cp in init_args:
             arg_pair.first = cp[0]
@@ -392,6 +428,7 @@ cdef class Client:
         return response
     def run_two_neighborhood_program(self, init_args):
         cdef vector[pair[uint64_t, two_neighborhood_params]] c_args
+        c_args.reserve(len(init_args))
         cdef pair[uint64_t, two_neighborhood_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
@@ -424,6 +461,7 @@ cdef class Client:
     '''
     def read_node_props(self, init_args):
         cdef vector[pair[uint64_t, read_node_props_params]] c_args
+        c_args.reserve(len(init_args))
         cdef pair[uint64_t, read_node_props_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
@@ -436,6 +474,7 @@ cdef class Client:
 
     def read_edges_props(self, init_args):
         cdef vector[pair[uint64_t, read_edges_props_params]] c_args
+        c_args.reserve(len(init_args))
         cdef pair[uint64_t, read_edges_props_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
@@ -449,10 +488,13 @@ cdef class Client:
 
     def read_n_edges(self, init_args):
         cdef vector[pair[uint64_t, read_n_edges_params]] c_args
+        c_args.reserve(len(init_args))
         cdef pair[uint64_t, read_n_edges_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
             arg_pair.second.num_edges = rp[1].num_edges
+            arg_pair.second.edges_props.clear()
+            arg_pair.second.edges_props.reserve(len(rp[1].edges_props))
             for p in rp[1].edges_props:
                 arg_pair.second.edges_props.push_back(p)
             c_args.push_back(arg_pair)
@@ -463,9 +505,12 @@ cdef class Client:
 
     def edge_count(self, init_args):
         cdef vector[pair[uint64_t, edge_count_params]] c_args
+        c_args.reserve(len(init_args))
         cdef pair[uint64_t, edge_count_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
+            arg_pair.second.edges_props.clear()
+            arg_pair.second.edges_props.reserve(len(rp[1].edges_props))
             for p in rp[1].edges_props:
                 arg_pair.second.edges_props.push_back(p)
             c_args.push_back(arg_pair)
@@ -476,16 +521,47 @@ cdef class Client:
 
     def edge_get(self, init_args):
         cdef vector[pair[uint64_t, edge_get_params]] c_args
+        c_args.reserve(len(init_args))
         cdef pair[uint64_t, edge_get_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
             arg_pair.second.nbr_id = rp[1].nbr_id
+            arg_pair.second.edges_props.clear()
+            arg_pair.second.edges_props.reserve(len(rp[1].edges_props))
             for p in rp[1].edges_props:
                 arg_pair.second.edges_props.push_back(p)
             c_args.push_back(arg_pair)
         with nogil:
             c_rp = self.thisptr.edge_get_program(c_args)
         response = EdgeGetParams(return_edges=c_rp.return_edges)
+        return response
+
+    def traverse_props(self, init_args):
+        cdef vector[pair[uint64_t, traverse_props_params]] c_args
+        c_args.reserve(len(init_args))
+        cdef pair[uint64_t, traverse_props_params] arg_pair
+        cdef vector[pair[string, string]] props
+        for rp in init_args:
+            arg_pair.first = rp[0]
+            arg_pair.second.prev_node = coordinator
+            arg_pair.second.node_props.clear()
+            arg_pair.second.edge_props.clear()
+            for p_vec in rp[1].node_props:
+                props.clear()
+                props.reserve(len(p_vec))
+                for p in p_vec:
+                    props.push_back(p)
+                arg_pair.second.node_props.push_back(props)
+            for p_vec in rp[1].edge_props:
+                props.clear()
+                props.reserve(len(p_vec))
+                for p in p_vec:
+                    props.push_back(p)
+                arg_pair.second.edge_props.push_back(props)
+            c_args.push_back(arg_pair)
+        with nogil:
+            c_rp = self.thisptr.traverse_props_program(c_args)
+        response = TraversePropsParams(return_nodes=c_rp.return_nodes)
         return response
 
     def start_migration(self):

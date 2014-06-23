@@ -41,6 +41,7 @@ namespace node_prog
         READ_N_EDGES,
         EDGE_COUNT,
         EDGE_GET,
+        TRAVERSE_PROPS,
         END
     };
 

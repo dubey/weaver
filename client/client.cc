@@ -141,7 +141,7 @@ client :: end_tx()
 
 template <typename ParamsType>
 std::unique_ptr<ParamsType>
-client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> initial_args)
+client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<uint64_t, ParamsType>> &initial_args)
 {
     message::message msg;
     msg.prepare_message(message::CLIENT_NODE_PROG_REQ, prog_to_run, initial_args);
@@ -166,25 +166,25 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
 }
 
 node_prog::reach_params
-client :: run_reach_program(std::vector<std::pair<uint64_t, node_prog::reach_params>> initial_args)
+client :: run_reach_program(std::vector<std::pair<uint64_t, node_prog::reach_params>> &initial_args)
 {
     return *run_node_program(node_prog::REACHABILITY, initial_args);
 }
 
 node_prog::pathless_reach_params
-client :: run_pathless_reach_program(std::vector<std::pair<uint64_t, node_prog::pathless_reach_params>> initial_args)
+client :: run_pathless_reach_program(std::vector<std::pair<uint64_t, node_prog::pathless_reach_params>> &initial_args)
 {
     return *run_node_program(node_prog::PATHLESS_REACHABILITY, initial_args);
 }
 
 node_prog::clustering_params
-client :: run_clustering_program(std::vector<std::pair<uint64_t, node_prog::clustering_params>> initial_args)
+client :: run_clustering_program(std::vector<std::pair<uint64_t, node_prog::clustering_params>> &initial_args)
 {
     return *run_node_program(node_prog::CLUSTERING, initial_args);
 }
 
 node_prog::two_neighborhood_params
-client :: run_two_neighborhood_program(std::vector<std::pair<uint64_t, node_prog::two_neighborhood_params>> initial_args)
+client :: run_two_neighborhood_program(std::vector<std::pair<uint64_t, node_prog::two_neighborhood_params>> &initial_args)
 {
     return *run_node_program(node_prog::TWO_NEIGHBORHOOD, initial_args);
 }
@@ -198,33 +198,39 @@ client :: run_dijkstra_program(std::vector<std::pair<uint64_t, node_prog::dijkst
 */
 
 node_prog::read_node_props_params
-client :: read_node_props_program(std::vector<std::pair<uint64_t, node_prog::read_node_props_params>> initial_args)
+client :: read_node_props_program(std::vector<std::pair<uint64_t, node_prog::read_node_props_params>> &initial_args)
 {
     return *run_node_program(node_prog::READ_NODE_PROPS, initial_args);
 }
 
 node_prog::read_edges_props_params
-client :: read_edges_props_program(std::vector<std::pair<uint64_t, node_prog::read_edges_props_params>> initial_args)
+client :: read_edges_props_program(std::vector<std::pair<uint64_t, node_prog::read_edges_props_params>> &initial_args)
 {
     return *run_node_program(node_prog::READ_EDGES_PROPS, initial_args);
 }
 
 node_prog::read_n_edges_params
-client :: read_n_edges_program(std::vector<std::pair<uint64_t, node_prog::read_n_edges_params>> initial_args)
+client :: read_n_edges_program(std::vector<std::pair<uint64_t, node_prog::read_n_edges_params>> &initial_args)
 {
     return *run_node_program(node_prog::READ_N_EDGES, initial_args);
 }
 
 node_prog::edge_count_params
-client :: edge_count_program(std::vector<std::pair<uint64_t, node_prog::edge_count_params>> initial_args)
+client :: edge_count_program(std::vector<std::pair<uint64_t, node_prog::edge_count_params>> &initial_args)
 {
     return *run_node_program(node_prog::EDGE_COUNT, initial_args);
 }
 
 node_prog::edge_get_params
-client :: edge_get_program(std::vector<std::pair<uint64_t, node_prog::edge_get_params>> initial_args)
+client :: edge_get_program(std::vector<std::pair<uint64_t, node_prog::edge_get_params>> &initial_args)
 {
     return *run_node_program(node_prog::EDGE_GET, initial_args);
+}
+
+node_prog::traverse_props_params
+client :: traverse_props_program(std::vector<std::pair<uint64_t, node_prog::traverse_props_params>> &initial_args)
+{
+    return *run_node_program(node_prog::TRAVERSE_PROPS, initial_args);
 }
 
 void

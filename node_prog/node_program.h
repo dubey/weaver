@@ -38,6 +38,7 @@
 #include "node_prog/edge_get_program.h"
 #include "node_prog/clustering_program.h"
 #include "node_prog/two_neighborhood_program.h"
+#include "node_prog/traverse_with_props.h"
 
 namespace coordinator
 {
@@ -172,6 +173,8 @@ namespace node_prog
             new particular_node_program<edge_count_params, edge_count_state, Cache_Value_Base>(EDGE_COUNT, node_prog::edge_count_node_program) },
         { EDGE_GET,
             new particular_node_program<edge_get_params, edge_get_state, Cache_Value_Base>(EDGE_GET, node_prog::edge_get_node_program) },
+        { TRAVERSE_PROPS,
+            new particular_node_program<traverse_props_params, traverse_props_state, Cache_Value_Base>(TRAVERSE_PROPS, node_prog::traverse_props_node_program) },
     };
 }
 #endif //__NODE_PROG__
