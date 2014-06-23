@@ -41,9 +41,9 @@ print 'Created graph'
 reach_requests()
 # delete bunch of nodes now and redo reachability
 for i in range(num_nodes/2):
-    tx_id = clients[0].begin_tx()
-    clients[0].delete_node(tx_id, tg.nodes[i])
-    clients[0].end_tx(tx_id)
+    clients[0].begin_tx()
+    clients[0].delete_node(tg.nodes[i])
+    clients[0].end_tx()
 tg.nodes = tg.nodes[num_nodes/2:]
 num_nodes = num_nodes/2
 print 'Done deletion'

@@ -124,16 +124,15 @@ class test_graph:
         with self.lock:
             while not self.startThread:
                 self.cv.wait()
-        tx_id = 0
         cntr = 0
         w_nodes = []
         for node in nx_nodes:
             if cntr % TX_SIZE == 0:
-                tx_id = client.begin_tx()
-            wnode = client.create_node(tx_id)
+                client.begin_tx()
+            wnode = client.create_node()
             w_nodes.append(wnode)
             if cntr % TX_SIZE == (TX_SIZE-1) or TX_SIZE == 1 or cntr == (len(nx_nodes)-1):
-                client.end_tx(tx_id)
+                client.end_tx()
             if cntr % 1000 == 0:
                 print 'Client ' + str(client_id) + ' created ' + str(cntr) + ' nodes'
             cntr += 1
@@ -148,18 +147,17 @@ class test_graph:
         with self.lock:
             while not self.startThread:
                 self.cv.wait()
-        tx_id = 0
         cntr = 0
         edges = {}
         for edge in nx_edges:
             if cntr % TX_SIZE == 0:
-                tx_id = client.begin_tx()
-            self.edge_handles[node_map[edge[0]]].append(client.create_edge(tx_id, node_map[edge[0]], node_map[edge[1]]))
+                client.begin_tx()
+            self.edge_handles[node_map[edge[0]]].append(client.create_edge(node_map[edge[0]], node_map[edge[1]]))
             if node_map[edge[0]] not in edges:
                 edges[node_map[edge[0]]] = []
             edges[node_map[edge[0]]].append(node_map[edge[1]])
             if cntr % TX_SIZE == (TX_SIZE-1) or TX_SIZE == 1 or cntr == (len(nx_edges)-1):
-                client.end_tx(tx_id)
+                client.end_tx()
             if cntr % 1000 == 0:
                 print 'Client ' + str(client_id) + ' created ' + str(cntr) + ' edges'
             cntr += 1

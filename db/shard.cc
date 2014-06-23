@@ -618,7 +618,7 @@ nop(db::hyper_stub *hs, void *noparg)
     S->migration_mutex.unlock();
 
     // initiate permanent deletion
-    //S->permanent_delete_loop(nop_arg->vt_id, nop_arg->outstanding_progs != 0);
+    S->permanent_delete_loop(nop_arg->vt_id, nop_arg->outstanding_progs != 0);
 
     // record clock; reads go through
     S->record_completed_tx(nop_arg->vclk);
