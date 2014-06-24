@@ -16,9 +16,8 @@ import random
 import sys
 import time
 import threading
-sys.path.append('../../.libs')
 
-import libclient as client
+import weaver.client as client
 import simple_client
 
 random.seed(42)

@@ -12,9 +12,8 @@
 # 
 
 import sys
-sys.path.append('../../.libs')
 
-import libclient as client
+import weaver.client as client
 
 # creating line graph
 nodes = []

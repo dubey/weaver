@@ -1,8 +1,7 @@
 import sys
-sys.path.append('../../.libs')
 
 import time
-import libclient as client
+import weaver.client as client
 import simple_client
 
 # creating graph

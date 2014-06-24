@@ -13,7 +13,6 @@
 # 
 
 import sys
-sys.path.append('../../.libs')
 import libweaverpyclient as client
 
 # create client object

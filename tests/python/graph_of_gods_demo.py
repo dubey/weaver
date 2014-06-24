@@ -9,12 +9,11 @@
 import sys
 import time
 import code
-sys.path.append('../../.libs')
 
 print "interactive demo, start with -i flag"
 
-import libclient as client
-print "import libclient as client"
+import weaver.client as client
+print "import weaver.client as client"
 import simple_client
 print "import simple_client"
 

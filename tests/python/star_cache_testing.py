@@ -1,7 +1,6 @@
 import sys
-sys.path.append('../../.libs')
 
-import libclient as client
+import weaver.client as client
 import time
 
 # creating star graph, tests one source many destinations with disjoint paths (aka max cache size)

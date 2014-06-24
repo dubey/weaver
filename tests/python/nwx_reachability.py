@@ -13,9 +13,8 @@
 import random
 import sys
 import time
-sys.path.append('../../.libs')
 
-import libclient as client
+import weaver.client as client
 import simple_client
 import test_base
 import random

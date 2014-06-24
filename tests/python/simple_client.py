@@ -8,9 +8,8 @@
 
 import sys
 import time
-sys.path.append('../../.libs')
 
-import libclient as client
+import weaver.client as client
 
 class simple_client:
     def __init__(self, client_to_wrap):

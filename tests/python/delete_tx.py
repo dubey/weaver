@@ -17,8 +17,7 @@ import sys
 import time
 import random
 import threading
-sys.path.append('../../.libs')
-import libclient as client
+import weaver.client as client
 
 # grid graph params
 num_node_groups = 1000

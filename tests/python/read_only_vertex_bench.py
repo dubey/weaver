@@ -17,9 +17,8 @@ import random
 import sys
 import time
 import threading
-sys.path.append('../../.libs')
 
-import libclient as client
+import weaver.client as client
 
 num_started = 0
 num_finished = 0

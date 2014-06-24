@@ -14,9 +14,8 @@
 # 
 
 import sys
-sys.path.append('../../.libs')
 
-import libclient as client
+import weaver.client as client
 
 coord_id = 0
 c = client.Client(client._CLIENT_ID, coord_id)

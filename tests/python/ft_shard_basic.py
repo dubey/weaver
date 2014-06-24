@@ -16,8 +16,7 @@
 
 import sys
 import time
-sys.path.append('../../.libs')
-import libclient as client
+import weaver.client as client
 
 # grid graph params
 grid_sz = 10 # grid_sz*grid_sz nodes
