@@ -7,7 +7,7 @@ AM_INIT_AUTOMAKE([subdir-objects])
 AM_SILENT_RULES([yes])
 LT_INIT
 AM_PATH_PYTHON
-AC_CONFIG_SRCDIR([tests/cpp/nmap_unit_tests.h])
+AC_CONFIG_SRCDIR([db/shard.h])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
 : ${CFLAGS=""}

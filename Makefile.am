@@ -19,6 +19,8 @@ CYTHON=cython
 
 AM_CFLAGS=-Wall -Wextra
 AM_CXXFLAGS=-std=c++0x -Wall -Wextra
+#AM_CPPFLAGS=-I$(abs_top_srcdir)
+AM_CPPFLAGS=
 CYTHON_FLAGS=--cplus
 LIBS=-lbusybee -le -pthread -lrt -lhyperdex-client -lchronos -lreplicant
 
@@ -36,9 +38,62 @@ pkgpyexec_LTLIBRARIES=
 pkgpyexec_DATA=
 CLEANFILES=
 include_HEADERS=
+noinst_HEADERS=
 sysconf_DATA=
+EXTRA_DIST=
+
+noinst_HEADERS+=	node_prog/base_classes.h \
+					node_prog/edge_count_program.h \
+					node_prog/n_hop_reach_program.h \
+					node_prog/pathless_reach_program.h \
+					node_prog/read_edges_props_program.h \
+					node_prog/triangle_program.h \
+					node_prog/cache_response.h \
+					node_prog/edge_get_program.h \
+					node_prog/node.h \
+					node_prog/property.h \
+					node_prog/read_n_edges_program.h \
+					node_prog/two_neighborhood_program.h \
+					node_prog/clustering_program.h \
+					node_prog/edge.h \
+					node_prog/node_program.h \
+					node_prog/prop_list.h \
+					node_prog/read_node_props_program.h \
+					node_prog/dijkstra_program.h \
+					node_prog/edge_list.h \
+					node_prog/node_prog_type.h \
+					node_prog/reach_program.h \
+					node_prog/traverse_with_props.h \
+					common/cache_constants.h \
+					common/config_constants.h \
+					common/hyper_stub_base.h \
+					common/message.h \
+					common/server.h \
+					common/server_manager_returncode.h \
+					common/weaver_constants.h \
+					common/clock.h \
+					common/configuration.h \
+					common/ids.h \
+					common/nmap_stub.h \
+					common/server_manager_link.h \
+					common/transaction.h \
+					common/comm_wrapper.h \
+					common/event_order.h \
+					common/message_constants.h \
+					common/serialization.h \
+					common/server_manager_link_wrapper.h \
+					common/vclock.h
 
 # timestamper
+noinst_HEADERS+=	coordinator/current_prog.h \
+					coordinator/current_tx.h \
+					coordinator/hyper_stub.h  \
+					coordinator/server_barrier.h  \
+					coordinator/server_manager.h  \
+					coordinator/timestamper.h  \
+					coordinator/transitions.h  \
+					coordinator/util.h  \
+					coordinator/vt_constants.h
 bin_PROGRAMS+=				weaver-timestamper
 weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    common/configuration.cc \
@@ -84,6 +139,21 @@ libweaverservermanager_la_CFLAGS= 	$(AM_CFLAGS)
 libweaverservermanager_la_CXXFLAGS=	$(AM_CXXFLAGS)
 
 # shard
+noinst_HEADERS+=	db/cache_entry.h \
+					db/del_obj.h \
+					db/element.h \
+					db/message_wrapper.h \
+					db/nop_data.h \
+					db/queued_request.h \
+					db/remote_node.h \
+					db/shard.h \
+					db/deferred_write.h \
+					db/edge.h \
+					db/hyper_stub.h \
+					db/node.h \
+					db/property.h \
+					db/queue_manager.h \
+					db/shard_constants.h
 bin_PROGRAMS+=	weaver-shard
 weaver_shard_SOURCES=	common/ids.cc \
 						common/serialization.cc \
@@ -121,6 +191,9 @@ weaver_shard_SOURCES=	common/ids.cc \
 						db/shard.cc
 
 # c++ client
+noinst_HEADERS+=	client/client_constants.h \
+					client/transaction.h \
+					client/weaver_client.h
 lib_LTLIBRARIES+=			libweaverclient.la
 libweaverclient_la_SOURCES=	common/ids.cc \
 		                    common/serialization.cc \
@@ -150,6 +223,8 @@ libweaverclient_la_CXXFLAGS=$(AM_CXXFLAGS)
 include_HEADERS+=			client/weaver_client.h
 
 # python client
+EXTRA_DIST+=						bindings/python/__init__.py \
+									bindings/python/client.pyx
 pkgpyexec_DATA+=					bindings/python/__init__.py
 pkgpyexec_LTLIBRARIES+=				bindings/python/client.la
 CLEANFILES+=						bindings/python/client.cpp
@@ -159,9 +234,10 @@ bindings/python/client.cpp:			bindings/python/client.pyx
 	$(CYTHON) $(CYTHON_FLAGS) $<
 bindings_python_client_la_CFLAGS= 	-fno-strict-aliasing $(AM_CFLAGS)
 bindings_python_client_la_CXXFLAGS=	-fno-strict-aliasing $(AM_CXXFLAGS)
-bindings_python_client_la_CPPFLAGS=	-I/usr/include/python2.7
+bindings_python_client_la_CPPFLAGS=	-I/usr/include/python2.7 $(AM_CPPFLAGS)
 bindings_python_client_la_LDFLAGS=	-module
 bindings_python_client_la_LIBS=		-lpython2.7 $(LIBS)
 
 # configuration files
-sysconf_DATA+=conf/weaver_shards.conf
+EXTRA_DIST+=	conf/weaver_shards.conf
+sysconf_DATA+=	conf/weaver_shards.conf
