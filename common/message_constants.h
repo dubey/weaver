@@ -17,7 +17,5 @@
 #define COORD_ID (0ULL)
 #define COORD_SM_ID (0ULL)
 #define CLIENT_ID (100ULL)
-#define SHARDS_FILE "common/shards"
-#define CLIENT_SHARDS_FILE "shards"
 
 #endif

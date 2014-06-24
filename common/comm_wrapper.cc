@@ -49,11 +49,12 @@ comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr, int to, bool client=false)
     file.exceptions(std::ifstream::badbit);
 
     try {
-        if (client) {
-            file.open(CLIENT_SHARDS_FILE, std::ifstream::in);
-        } else {
-            file.open(SHARDS_FILE, std::ifstream::in);
+        file.open("/usr/local/etc/weaver_shards.conf", std::ifstream::in);
+        if (file == NULL || !file.good()) {
+            file.open("/etc/weaver_shards.conf", std::ifstream::in);
         }
+        // one of these locations should contain the shards configuration
+        // TODO hardcoded for now, try to get sysconfdir
         assert(file != NULL);
         assert(file.good());
 
