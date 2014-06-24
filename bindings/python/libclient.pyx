@@ -281,7 +281,7 @@ class TraversePropsParams:
         self.edge_props = edge_props
         self.return_nodes = return_nodes
 
-cdef extern from 'client/client.h' namespace 'client':
+cdef extern from 'client/weaver_client.h' namespace 'client':
     cdef cppclass client:
         client(uint64_t my_id, uint64_t vt_id)
 

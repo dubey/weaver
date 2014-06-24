@@ -39,86 +39,86 @@ include_HEADERS=
 sysconf_DATA=
 
 # timestamper
-bin_PROGRAMS+=		timestamper
-timestamper_SOURCES=common/comm_wrapper.cc \
-                    common/configuration.cc \
-                    common/server.cc \
-                    common/ids.cc \
-                    common/serialization.cc \
-                    common/server_manager_link.cc \
-                    common/server_manager_link_wrapper.cc \
-                    common/hyper_stub_base.cc \
-                    common/event_order.cc \
-                    common/nmap_stub.cc \
-                    common/vclock.cc \
-                    common/message.cc \
-                    node_prog/edge_list.cc \
-                    node_prog/prop_list.cc \
-                    node_prog/reach_program.cc \
-                    node_prog/clustering_program.cc \
-                    node_prog/pathless_reach_program.cc \
-                    node_prog/two_neighborhood_program.cc \
-                    node_prog/edge_count_program.cc \
-                    node_prog/edge_get_program.cc \
-                    node_prog/read_edges_props_program.cc \
-                    node_prog/read_n_edges_program.cc \
-                    node_prog/read_node_props_program.cc \
-                    node_prog/traverse_with_props.cc \
-                    db/element.cc \
-                    db/property.cc \
-                    db/edge.cc \
-                    db/node.cc \
-                    coordinator/hyper_stub.cc \
-					coordinator/timestamper.cc
+bin_PROGRAMS+=				weaver-timestamper
+weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
+		                    common/configuration.cc \
+		                    common/server.cc \
+		                    common/ids.cc \
+		                    common/serialization.cc \
+		                    common/server_manager_link.cc \
+		                    common/server_manager_link_wrapper.cc \
+		                    common/hyper_stub_base.cc \
+		                    common/event_order.cc \
+		                    common/nmap_stub.cc \
+		                    common/vclock.cc \
+		                    common/message.cc \
+		                    node_prog/edge_list.cc \
+		                    node_prog/prop_list.cc \
+		                    node_prog/reach_program.cc \
+		                    node_prog/clustering_program.cc \
+		                    node_prog/pathless_reach_program.cc \
+		                    node_prog/two_neighborhood_program.cc \
+		                    node_prog/edge_count_program.cc \
+		                    node_prog/edge_get_program.cc \
+		                    node_prog/read_edges_props_program.cc \
+		                    node_prog/read_n_edges_program.cc \
+		                    node_prog/read_node_props_program.cc \
+		                    node_prog/traverse_with_props.cc \
+		                    db/element.cc \
+		                    db/property.cc \
+		                    db/edge.cc \
+		                    db/node.cc \
+		                    coordinator/hyper_stub.cc \
+							coordinator/timestamper.cc
 
 # server manager
-lib_LTLIBRARIES+=			libservermanager.la
-libservermanager_la_SOURCES=coordinator/server_barrier.cc \
-							coordinator/server_manager.cc \
-							coordinator/transitions.cc \
-							coordinator/symtable.c \
-							common/server.cc \
-							common/ids.cc \
-							common/serialization.cc
-libservermanager_la_CFLAGS= 	$(AM_CFLAGS)
-libservermanager_la_CXXFLAGS= 	$(AM_CXXFLAGS)
+lib_LTLIBRARIES+=					libweaverservermanager.la
+libweaverservermanager_la_SOURCES=	coordinator/server_barrier.cc \
+									coordinator/server_manager.cc \
+									coordinator/transitions.cc \
+									coordinator/symtable.c \
+									common/server.cc \
+									common/ids.cc \
+									common/serialization.cc
+libweaverservermanager_la_CFLAGS= 	$(AM_CFLAGS)
+libweaverservermanager_la_CXXFLAGS=	$(AM_CXXFLAGS)
 
 # shard
-bin_PROGRAMS+=	shard
-shard_SOURCES=	common/ids.cc \
-				common/serialization.cc \
-				common/server.cc \
-				common/configuration.cc \
-                common/comm_wrapper.cc \
-				common/server_manager_link.cc \
-				common/server_manager_link_wrapper.cc \
-                common/hyper_stub_base.cc \
-                common/event_order.cc \
-                common/nmap_stub.cc \
-                common/clock.cc \
-                common/vclock.cc \
-                common/message.cc \
-                common/message_graph_elem.cc \
-                common/message_cache_context.cc \
-                node_prog/edge_list.cc \
-                node_prog/prop_list.cc \
-                node_prog/reach_program.cc \
-                node_prog/clustering_program.cc \
-                node_prog/pathless_reach_program.cc \
-                node_prog/two_neighborhood_program.cc \
-                node_prog/edge_count_program.cc \
-                node_prog/edge_get_program.cc \
-                node_prog/read_edges_props_program.cc \
-                node_prog/read_n_edges_program.cc \
-                node_prog/read_node_props_program.cc \
-                node_prog/traverse_with_props.cc \
-                db/hyper_stub.cc \
-                db/queue_manager.cc \
-                db/element.cc \
-                db/property.cc \
-                db/edge.cc \
-                db/node.cc \
-				db/shard.cc
+bin_PROGRAMS+=	weaver-shard
+weaver_shard_SOURCES=	common/ids.cc \
+						common/serialization.cc \
+						common/server.cc \
+						common/configuration.cc \
+		                common/comm_wrapper.cc \
+						common/server_manager_link.cc \
+						common/server_manager_link_wrapper.cc \
+		                common/hyper_stub_base.cc \
+		                common/event_order.cc \
+		                common/nmap_stub.cc \
+		                common/clock.cc \
+		                common/vclock.cc \
+		                common/message.cc \
+		                common/message_graph_elem.cc \
+		                common/message_cache_context.cc \
+		                node_prog/edge_list.cc \
+		                node_prog/prop_list.cc \
+		                node_prog/reach_program.cc \
+		                node_prog/clustering_program.cc \
+		                node_prog/pathless_reach_program.cc \
+		                node_prog/two_neighborhood_program.cc \
+		                node_prog/edge_count_program.cc \
+		                node_prog/edge_get_program.cc \
+		                node_prog/read_edges_props_program.cc \
+		                node_prog/read_n_edges_program.cc \
+		                node_prog/read_node_props_program.cc \
+		                node_prog/traverse_with_props.cc \
+		                db/hyper_stub.cc \
+		                db/queue_manager.cc \
+		                db/element.cc \
+		                db/property.cc \
+		                db/edge.cc \
+		                db/node.cc \
+						db/shard.cc
 
 # c++ client
 lib_LTLIBRARIES+=			libweaverclient.la
@@ -128,45 +128,39 @@ libweaverclient_la_CXXFLAGS=$(AM_CXXFLAGS)
 include_HEADERS+=			client/client.h
 
 # python client
-pkgpyexec_DATA+=	bindings/python/__init__.py
-pkgpyexec_LTLIBRARIES+=	libclient.la
-CLEANFILES+=	bindings/python/libclient.cpp
-libclient_la_SOURCES=	common/ids.cc \
-                        common/serialization.cc \
-                        common/server.cc \
-                        common/configuration.cc \
-                        common/comm_wrapper.cc \
-                        common/vclock.cc \
-                        common/message.cc \
-                        common/event_order.cc \
-                        node_prog/prop_list.cc \
-                        node_prog/edge_list.cc \
-                        node_prog/clustering_program.cc \
-                        node_prog/edge_count_program.cc \
-                        node_prog/edge_get_program.cc \
-                        node_prog/pathless_reach_program.cc \
-                        node_prog/reach_program.cc \
-                        node_prog/read_edges_props_program.cc \
-                        node_prog/read_n_edges_program.cc \
-                        node_prog/read_node_props_program.cc \
-                        node_prog/two_neighborhood_program.cc \
-                        node_prog/traverse_with_props.cc \
-                        db/element.cc \
-                        db/property.cc \
-                        client/client.cc \
-                        bindings/python/libclient.cpp
+pkgpyexec_DATA+=				bindings/python/__init__.py
+pkgpyexec_LTLIBRARIES+=			libweaverpyclient.la
+CLEANFILES+=					bindings/python/libclient.cpp
+libweaverpyclient_la_SOURCES=	common/ids.cc \
+		                        common/serialization.cc \
+		                        common/server.cc \
+		                        common/configuration.cc \
+		                        common/comm_wrapper.cc \
+		                        common/vclock.cc \
+		                        common/message.cc \
+		                        common/event_order.cc \
+		                        node_prog/prop_list.cc \
+		                        node_prog/edge_list.cc \
+		                        node_prog/clustering_program.cc \
+		                        node_prog/edge_count_program.cc \
+		                        node_prog/edge_get_program.cc \
+		                        node_prog/pathless_reach_program.cc \
+		                        node_prog/reach_program.cc \
+		                        node_prog/read_edges_props_program.cc \
+		                        node_prog/read_n_edges_program.cc \
+		                        node_prog/read_node_props_program.cc \
+		                        node_prog/two_neighborhood_program.cc \
+		                        node_prog/traverse_with_props.cc \
+		                        db/element.cc \
+		                        db/property.cc \
+		                        client/client.cc \
+		                        bindings/python/libclient.cpp
 bindings/python/libclient.cpp:	bindings/python/libclient.pyx
 	$(CYTHON) $(CYTHON_FLAGS) $<
-libclient_la_CFLAGS= 	-fno-strict-aliasing $(AM_CFLAGS)
-libclient_la_CXXFLAGS=	-fno-strict-aliasing $(AM_CXXFLAGS)
-libclient_la_CPPFLAGS=	-I/usr/include/python2.7
-libclient_la_LIBS=		-lpython2.7 $(LIBS)
-
-# cpp tests
-bin_PROGRAMS+=				tests/cpp/tests
-tests_cpp_tests_SOURCES=	tests/cpp/run.cc \
-							common/clock.cc \
-                            common/message.cc
+libweaverpyclient_la_CFLAGS= 	-fno-strict-aliasing $(AM_CFLAGS)
+libweaverpyclient_la_CXXFLAGS=	-fno-strict-aliasing $(AM_CXXFLAGS)
+libweaverpyclient_la_CPPFLAGS=	-I/usr/include/python2.7
+libweaverpyclient_la_LIBS=		-lpython2.7 $(LIBS)
 
 # configuration files
-sysconf_DATA+=		conf/weaver_shards.conf
+sysconf_DATA+=conf/weaver_shards.conf

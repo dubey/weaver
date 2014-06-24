@@ -13,7 +13,7 @@
 
 #include "common/message.h"
 #include "client/client_constants.h"
-#include "client/client.h"
+#include "client/weaver_client.h"
 
 namespace client
 {

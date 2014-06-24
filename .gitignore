@@ -34,8 +34,8 @@ libtool
 .libs
 m4/*.m4
 missing
-shard
 stamp-h1
 tests/cpp/.dirstamp
 tests/hyperdex_test
-timestamper
+weaver-shard
+weaver-timestamper
