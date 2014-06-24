@@ -14,7 +14,7 @@
 
 import sys
 sys.path.append('../../.libs')
-import libclient as client
+import libweaverpyclient as client
 
 # create client object
 c = client.Client(client.CL_ID, 0)

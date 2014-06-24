@@ -122,45 +122,46 @@ weaver_shard_SOURCES=	common/ids.cc \
 
 # c++ client
 lib_LTLIBRARIES+=			libweaverclient.la
-libweaverclient_la_SOURCES=	client/client.cc
+libweaverclient_la_SOURCES=	common/ids.cc \
+		                    common/serialization.cc \
+		                    common/server.cc \
+		                    common/configuration.cc \
+		                    common/comm_wrapper.cc \
+		                    common/vclock.cc \
+		                    common/message.cc \
+		                    common/event_order.cc \
+		                    node_prog/prop_list.cc \
+		                    node_prog/edge_list.cc \
+		                    node_prog/clustering_program.cc \
+		                    node_prog/edge_count_program.cc \
+		                    node_prog/edge_get_program.cc \
+		                    node_prog/pathless_reach_program.cc \
+		                    node_prog/reach_program.cc \
+		                    node_prog/read_edges_props_program.cc \
+		                    node_prog/read_n_edges_program.cc \
+		                    node_prog/read_node_props_program.cc \
+		                    node_prog/two_neighborhood_program.cc \
+		                    node_prog/traverse_with_props.cc \
+		                    db/element.cc \
+		                    db/property.cc \
+		                    client/client.cc
 libweaverclient_la_CFLAGS=	$(AM_CFLAGS)
 libweaverclient_la_CXXFLAGS=$(AM_CXXFLAGS)
 include_HEADERS+=			client/weaver_client.h
 
 # python client
-pkgpyexec_DATA+=						bindings/python/__init__.py
-pkgpyexec_LTLIBRARIES+=					libweaverpyclient.la
-CLEANFILES+=							bindings/python/libweaverpyclient.cpp
-libweaverpyclient_la_SOURCES=			common/ids.cc \
-		                        		common/serialization.cc \
-		                        		common/server.cc \
-		                        		common/configuration.cc \
-		                        		common/comm_wrapper.cc \
-		                        		common/vclock.cc \
-		                        		common/message.cc \
-		                        		common/event_order.cc \
-		                        		node_prog/prop_list.cc \
-		                        		node_prog/edge_list.cc \
-		                        		node_prog/clustering_program.cc \
-		                        		node_prog/edge_count_program.cc \
-		                        		node_prog/edge_get_program.cc \
-		                        		node_prog/pathless_reach_program.cc \
-		                        		node_prog/reach_program.cc \
-		                        		node_prog/read_edges_props_program.cc \
-		                        		node_prog/read_n_edges_program.cc \
-		                        		node_prog/read_node_props_program.cc \
-		                        		node_prog/two_neighborhood_program.cc \
-		                        		node_prog/traverse_with_props.cc \
-		                        		db/element.cc \
-		                        		db/property.cc \
-		                        		client/client.cc \
-		                        		bindings/python/libweaverpyclient.cpp
-bindings/python/libweaverpyclient.cpp:	bindings/python/libweaverpyclient.pyx
+pkgpyexec_DATA+=					bindings/python/__init__.py
+pkgpyexec_LTLIBRARIES+=				bindings/python/client.la
+CLEANFILES+=						bindings/python/client.cpp
+bindings_python_client_la_SOURCES=	bindings/python/client.cpp
+bindings_python_client_la_LIBADD=	libweaverclient.la
+bindings/python/client.cpp:			bindings/python/client.pyx
 	$(CYTHON) $(CYTHON_FLAGS) $<
-libweaverpyclient_la_CFLAGS= 			-fno-strict-aliasing $(AM_CFLAGS)
-libweaverpyclient_la_CXXFLAGS=			-fno-strict-aliasing $(AM_CXXFLAGS)
-libweaverpyclient_la_CPPFLAGS=			-I/usr/include/python2.7
-libweaverpyclient_la_LIBS=				-lpython2.7 $(LIBS)
+bindings_python_client_la_CFLAGS= 	-fno-strict-aliasing $(AM_CFLAGS)
+bindings_python_client_la_CXXFLAGS=	-fno-strict-aliasing $(AM_CXXFLAGS)
+bindings_python_client_la_CPPFLAGS=	-I/usr/include/python2.7
+bindings_python_client_la_LDFLAGS=	-module
+bindings_python_client_la_LIBS=		-lpython2.7 $(LIBS)
 
 # configuration files
 sysconf_DATA+=conf/weaver_shards.conf
