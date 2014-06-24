@@ -516,10 +516,10 @@ hyper_stub :: update_migr_token(enum persist_migr_token token)
 {
     int64_t int_token = (int64_t)token;
     hyperdex_client_attribute cl_attr;
-    cl_attr.attr = shard_attrs[2];
+    cl_attr.attr = shard_attrs[1];
     cl_attr.value = (const char*)&int_token;
     cl_attr.value_sz = sizeof(int64_t);
-    cl_attr.datatype = shard_dtypes[2];
+    cl_attr.datatype = shard_dtypes[1];
 
     hyper_call_and_loop(&hyperdex::Client::put, shard_space, shard_id, &cl_attr, 1);
 }
