@@ -232,7 +232,7 @@ namespace db
 
     inline
     shard :: shard(uint64_t shardid, uint64_t serverid)
-        : comm(serverid, NUM_THREADS, SHARD_MSGRECV_TIMEOUT, false)
+        : comm(serverid, NUM_THREADS, SHARD_MSGRECV_TIMEOUT)
         , sm_stub(server_id(serverid), comm.get_loc())
         , active_backup(false)
         , first_config(false)

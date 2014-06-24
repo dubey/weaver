@@ -125,7 +125,7 @@ lib_LTLIBRARIES+=			libweaverclient.la
 libweaverclient_la_SOURCES=	client/client.cc
 libweaverclient_la_CFLAGS=	$(AM_CFLAGS)
 libweaverclient_la_CXXFLAGS=$(AM_CXXFLAGS)
-include_HEADERS+=			client/client.h
+include_HEADERS+=			client/weaver_client.h
 
 # python client
 pkgpyexec_DATA+=				bindings/python/__init__.py

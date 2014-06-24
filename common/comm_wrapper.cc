@@ -37,7 +37,7 @@ comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *
 }
 
 
-comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr, int to, bool client=false)
+comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr, int to)
     : bb_id(bbid)
     , num_threads(nthr)
     , timeout(to)

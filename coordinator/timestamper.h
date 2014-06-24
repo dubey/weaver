@@ -126,7 +126,7 @@ namespace coordinator
 
     inline
     timestamper :: timestamper(uint64_t vtid, uint64_t serverid)
-        : comm(serverid, NUM_THREADS, -1, false)
+        : comm(serverid, NUM_THREADS, -1)
         , sm_stub(server_id(serverid), comm.get_loc())
         , active_backup(false)
         , first_config(false)

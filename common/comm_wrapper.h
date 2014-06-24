@@ -42,8 +42,6 @@ class comm_wrapper
                 weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster) : mlist(cluster) { }
                 virtual ~weaver_mapper() throw () { }
                 virtual bool lookup(uint64_t server_id, po6::net::location *loc);
-                //void reconfigure(configuration &new_config, uint64_t &now_primary);
-                //void client_configure(std::unordered_map<uint64_t, po6::net::location> &cluster) { mlist = cluster; }
 
             private:
                 weaver_mapper(const weaver_mapper&);
@@ -66,7 +64,7 @@ class comm_wrapper
         void reconfigure_internal(configuration&, uint64_t&);
 
     public:
-        comm_wrapper(uint64_t bbid, int nthr, int timeout, bool client);
+        comm_wrapper(uint64_t bbid, int nthr, int timeout);
         void init(configuration &config);
         void client_init();
         uint64_t reconfigure(configuration &config);
