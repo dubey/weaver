@@ -12,8 +12,7 @@
 # ===============================================================
 # 
 
-import sys
-import libweaverpyclient as client
+import weaver.client as client
 
 # create client object
 c = client.Client(client.CL_ID, 0)
