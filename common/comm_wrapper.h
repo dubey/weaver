@@ -51,8 +51,8 @@ class comm_wrapper
         };
 
     private:
-        uint64_t active_server_idx[NUM_VTS+NUM_SHARDS]; // for each vt/shard, index of the active server
-        uint64_t reverse_server_idx[NUM_SERVERS]; // for each server, the corresponding vt/shard number for which it is active
+        uint64_t active_server_idx[NUM_EFFECTIVE_SERVERS]; // for each vt/shard, index of the active server
+        uint64_t reverse_server_idx[NUM_ACTUAL_SERVERS]; // for each server, the corresponding vt/shard number for which it is active
         configuration config;
         e::garbage_collector bb_gc;
         std::vector<std::unique_ptr<e::garbage_collector::thread_state>> bb_gc_ts;

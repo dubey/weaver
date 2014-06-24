@@ -196,7 +196,7 @@ namespace coordinator
         WDEBUG << "Cluster reconfigure triggered\n";
 
         // print cluster info
-        for (uint64_t i = 0; i < NUM_SERVERS; i++) {
+        for (uint64_t i = 0; i < NUM_ACTUAL_SERVERS; i++) {
             server::state_t st = config.get_state(server_id(i));
             if (st != server::AVAILABLE) {
                 WDEBUG << "Server " << i << " is in trouble, has state " << st << std::endl;

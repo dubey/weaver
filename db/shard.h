@@ -288,7 +288,7 @@ namespace db
     {
         WDEBUG << "Cluster reconfigure" << std::endl;
 
-        for (uint64_t i = 0; i < NUM_SERVERS; i++) {
+        for (uint64_t i = 0; i < NUM_ACTUAL_SERVERS; i++) {
             server::state_t st = config.get_state(server_id(i));
             if (st != server::AVAILABLE) {
                 WDEBUG << "Server " << i << " is in trouble, has state " << st << std::endl;
@@ -298,7 +298,7 @@ namespace db
         }
 
         if (comm.reconfigure(config) == server.get()) {
-            if (!active_backup && server.get() > (NUM_VTS+NUM_SHARDS)) {
+            if (!active_backup && server.get() > (NUM_EFFECTIVE_SERVERS)) {
                 WDEBUG << "Now active for shard " << shard_id << std::endl;
                 // this server is now primary for the shard
                 active_backup = true;

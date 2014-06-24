@@ -1226,7 +1226,7 @@ main(int argc, char *argv[])
     vt_id = atoi(argv[1]);
     if (argc == 3) {
         vts = new coordinator::timestamper(vt_id, atoi(argv[2]));
-        assert((atoi(argv[2]) - vt_id) % (NUM_VTS+NUM_SHARDS) == 0);
+        assert((atoi(argv[2]) - vt_id) % (NUM_EFFECTIVE_SERVERS) == 0);
     } else {
         vts = new coordinator::timestamper(vt_id, vt_id);
     }

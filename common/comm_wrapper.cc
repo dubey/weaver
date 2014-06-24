@@ -18,6 +18,8 @@
 #define ID_INCR (1ULL << 32ULL)
 #define WEAVER_TO_BUSYBEE(x) (x+ID_INCR)
 #define BUSYBEE_TO_WEAVER(x) (x-ID_INCR)
+#define CLIENT_ID_INCR (CLIENT_ID + ID_INCR)
+#define NUM_ACTUAL_SERVERS_INCR (NUM_ACTUAL_SERVERS + ID_INCR)
 
 using common::comm_wrapper;
 
@@ -66,10 +68,10 @@ comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr, int to, bool client=false)
         WDEBUG << "file exception" << std::endl;
     }
 
-    for (uint64_t i = 0; i < NUM_VTS+NUM_SHARDS; i++) {
+    for (uint64_t i = 0; i < NUM_EFFECTIVE_SERVERS; i++) {
         active_server_idx[i] = UINT64_MAX;
     }
-    for (uint64_t i = 0; i < NUM_SERVERS; i++) {
+    for (uint64_t i = 0; i < NUM_ACTUAL_SERVERS; i++) {
         reverse_server_idx[i] = UINT64_MAX;
     }
 }
@@ -121,12 +123,12 @@ void
 comm_wrapper :: reconfigure_internal(configuration &new_config, uint64_t &primary)
 {
     config = new_config;
-    for (uint64_t i = 0; i < NUM_VTS+NUM_SHARDS; i++) {
+    for (uint64_t i = 0; i < NUM_EFFECTIVE_SERVERS; i++) {
         if (active_server_idx[i] < UINT64_MAX) {
             uint64_t srv_idx = active_server_idx[i];
             while (config.get_state(server_id(srv_idx)) != server::AVAILABLE) {
-                srv_idx = srv_idx + NUM_VTS + NUM_SHARDS;
-                if (srv_idx > NUM_SERVERS) {
+                srv_idx = srv_idx + NUM_EFFECTIVE_SERVERS;
+                if (srv_idx > NUM_ACTUAL_SERVERS) {
                     // all backups dead, not contactable
                     // cannot do anything
                     WDEBUG << "Caution! All backups for server " << i << " are dead\n";
@@ -146,8 +148,8 @@ comm_wrapper :: reconfigure_internal(configuration &new_config, uint64_t &primar
             }
         }
     }
-    while (primary >= NUM_VTS + NUM_SHARDS) {
-        primary -= (NUM_VTS+NUM_SHARDS);
+    while (primary >= NUM_EFFECTIVE_SERVERS) {
+        primary -= (NUM_EFFECTIVE_SERVERS);
     }
     primary = active_server_idx[primary];
 }
@@ -170,7 +172,7 @@ comm_wrapper :: recv(uint64_t *recv_from, std::auto_ptr<e::buffer> *msg)
     uint64_t actual_server_id;
     busybee_returncode code = bb->recv(&actual_server_id, msg);
     if (code == BUSYBEE_SUCCESS) {
-        *recv_from = actual_server_id < CLIENT_ID?
+        *recv_from = actual_server_id < CLIENT_ID_INCR?
                      reverse_server_idx[BUSYBEE_TO_WEAVER(actual_server_id)] : BUSYBEE_TO_WEAVER(actual_server_id);
     } else if (code != BUSYBEE_TIMEOUT) {
         WDEBUG << "busybee recv returned " << code << std::endl;

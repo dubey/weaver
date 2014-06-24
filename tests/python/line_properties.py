@@ -23,7 +23,7 @@ nodes = []
 edges = []
 num_nodes = 400
 coord_id = 0
-c = client.Client(client._CLIENT_ID, coord_id)
+c = client.Client(client.CL_ID, coord_id)
 
 print 'created client'
 
