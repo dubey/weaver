@@ -23,6 +23,7 @@ extern uint64_t NumBackups;
 extern uint64_t NumEffectiveServers;
 extern uint64_t NumActualServers;
 extern uint64_t ShardIdIncr;
+extern char *ShardsFile;
 
 void init_config_constants(const char *config_file_name);
 

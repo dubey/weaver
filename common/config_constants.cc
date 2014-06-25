@@ -23,6 +23,7 @@ init_config_constants(const char *config_file_name)
     NumVts = UINT64_MAX;
     NumShards = UINT64_MAX;
     NumBackups = UINT64_MAX;
+    ShardsFile = NULL;
 
     FILE *config_file = fopen(config_file_name, "r");
     yaml_parser_t parser;
@@ -46,24 +47,31 @@ init_config_constants(const char *config_file_name)
             case YAML_KEY_TOKEN:
                 yaml_parser_scan(&parser, &token);
                 assert(token.type == YAML_SCALAR_TOKEN);
-                if (strcmp((const char*)token.data.scalar.value, "num_vts") == 0) {
+                if (strncmp((const char*)token.data.scalar.value, "num_vts", 7) == 0) {
                     yaml_parser_scan(&parser, &token);
                     assert(token.type == YAML_VALUE_TOKEN);
                     yaml_parser_scan(&parser, &token);
                     assert(token.type == YAML_SCALAR_TOKEN);
                     NumVts = atoi((const char*)token.data.scalar.value);
-                } else if (strcmp((const char*)token.data.scalar.value, "num_shards") == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, "num_shards", 10) == 0) {
                     yaml_parser_scan(&parser, &token);
                     assert(token.type == YAML_VALUE_TOKEN);
                     yaml_parser_scan(&parser, &token);
                     assert(token.type == YAML_SCALAR_TOKEN);
                     NumShards = atoi((const char*)token.data.scalar.value);
-                } else if (strcmp((const char*)token.data.scalar.value, "num_backups") == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, "num_backups", 11) == 0) {
                     yaml_parser_scan(&parser, &token);
                     assert(token.type == YAML_VALUE_TOKEN);
                     yaml_parser_scan(&parser, &token);
                     assert(token.type == YAML_SCALAR_TOKEN);
                     NumBackups = atoi((const char*)token.data.scalar.value);
+                } else if (strncmp((const char*)token.data.scalar.value, "shards_file", 11) == 0) {
+                    yaml_parser_scan(&parser, &token);
+                    assert(token.type == YAML_VALUE_TOKEN);
+                    yaml_parser_scan(&parser, &token);
+                    assert(token.type == YAML_SCALAR_TOKEN);
+                    ShardsFile = (char*)malloc(256);
+                    strncpy(ShardsFile, (const char*)token.data.scalar.value, 255);
                 } else {
                     WDEBUG << "unexpected token" << std::endl;
                     return;
@@ -86,7 +94,8 @@ init_config_constants(const char *config_file_name)
     assert(UINT64_MAX != NumVts);
     assert(UINT64_MAX != NumShards);
     assert(UINT64_MAX != NumBackups);
-    WDEBUG << "num vts " << NumVts << ", NumShards " << NumShards << std::endl;
+    assert(NULL != ShardsFile);
+    printf("shard file name %s\n", ShardsFile);
 
     NumEffectiveServers = NumVts + NumShards;
     NumActualServers = NumEffectiveServers * (1+NumBackups);

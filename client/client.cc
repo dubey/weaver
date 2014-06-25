@@ -25,6 +25,7 @@ uint64_t NumBackups;
 uint64_t NumEffectiveServers;
 uint64_t NumActualServers;
 uint64_t ShardIdIncr;
+char *ShardsFile;
 
 namespace client
 {
