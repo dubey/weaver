@@ -24,10 +24,10 @@ using db::queue_manager;
 using db::queued_request;
 
 queue_manager :: queue_manager()
-    : rd_queues(NUM_VTS, pqueue_t())
-    , wr_queues(NUM_VTS, pqueue_t())
-    , last_clocks(NUM_VTS, vc::vclock_t(NUM_VTS, 0))
-    , qts(NUM_VTS, 0)
+    : rd_queues(NumVts, pqueue_t())
+    , wr_queues(NumVts, pqueue_t())
+    , last_clocks(NumVts, vc::vclock_t(NumVts, 0))
+    , qts(NumVts, 0)
 { }
 
 void
@@ -68,13 +68,13 @@ queue_manager :: check_wr_request(vc::vclock &vclk, uint64_t qt)
         ret = PAST;
     } else if (cur_order == PRESENT) {
         // all write queues (possibly except vt_id) good to go
-        if (NUM_VTS == 1) {
+        if (NumVts == 1) {
             ret = PRESENT;
         } else {
             // compare vector clocks, NO Kronos call
             std::vector<vc::vclock> timestamps;
-            timestamps.reserve(NUM_VTS);
-            for (uint64_t i = 0; i < NUM_VTS; i++) {
+            timestamps.reserve(NumVts);
+            for (uint64_t i = 0; i < NumVts; i++) {
                 if (i == vclk.vt_id) {
                     timestamps.emplace_back(vclk);
                 } else {
@@ -141,7 +141,7 @@ queue_manager :: record_completed_tx(vc::vclock &tx_clk)
 void
 queue_manager :: restore_backup(std::unordered_map<uint64_t, uint64_t> &map_qts)
 {
-    for (uint64_t i = 0; i < NUM_VTS; i++) {
+    for (uint64_t i = 0; i < NumVts; i++) {
         assert(map_qts.find(i) != map_qts.end());
         qts[i] = map_qts[i];
     }
@@ -163,7 +163,7 @@ queue_manager :: set_qts(uint64_t vt_id, uint64_t rec_qts)
 bool
 queue_manager :: check_rd_req_nonlocking(vc::vclock_t &clk)
 {
-    for (uint64_t i = 0; i < NUM_VTS; i++) {
+    for (uint64_t i = 0; i < NumVts; i++) {
         if (order::compare_two_clocks(clk, last_clocks[i]) != 0) {
             return false;
         }
@@ -175,7 +175,7 @@ queued_request*
 queue_manager :: get_rd_req()
 {
     queued_request *req;
-    for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
+    for (uint64_t vt_id = 0; vt_id < NumVts; vt_id++) {
         pqueue_t &pq = rd_queues[vt_id];
         // execute read request after all write queues have processed write which happens after this read
         if (!pq.empty()) {
@@ -193,7 +193,7 @@ enum queue_order
 queue_manager :: check_wr_queues_timestamps(uint64_t vt_id, uint64_t qt)
 {
     // check each write queue ready to go
-    for (uint64_t i = 0; i < NUM_VTS; i++) {
+    for (uint64_t i = 0; i < NumVts; i++) {
         if (vt_id == i) {
             if (qt <= qts[i]) {
                 return PAST;
@@ -229,15 +229,15 @@ queue_manager :: get_wr_req()
 
     // all write queues are good to go
     uint64_t exec_vt_id;
-    if (NUM_VTS == 1) {
+    if (NumVts == 1) {
         exec_vt_id = 0; // only one timestamper
     } else {
         // compare timestamps, may call Kronos
         std::vector<vc::vclock> timestamps;
-        timestamps.reserve(NUM_VTS);
-        for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
+        timestamps.reserve(NumVts);
+        for (uint64_t vt_id = 0; vt_id < NumVts; vt_id++) {
             timestamps.emplace_back(wr_queues[vt_id].top()->vclock);
-            assert(timestamps.back().clock.size() == NUM_VTS);
+            assert(timestamps.back().clock.size() == NumVts);
         }
         exec_vt_id = order::compare_vts(timestamps);
     }

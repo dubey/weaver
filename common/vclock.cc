@@ -18,29 +18,29 @@ using vc::vclock;
 
 vclock :: vclock(uint64_t vtid, uint64_t clk_init)
     : vt_id(vtid)
-    , clock(std::vector<uint64_t>(NUM_VTS, clk_init))
+    , clock(std::vector<uint64_t>(NumVts, clk_init))
 {
-    assert(vt_id < NUM_VTS || vt_id == UINT64_MAX);
+    assert(vt_id < NumVts || vt_id == UINT64_MAX);
 }
 
 vclock :: vclock(uint64_t vtid, vclock_t &vclk)
     : vt_id(vtid)
     , clock(vclk)
 {
-    assert(vt_id < NUM_VTS || vt_id == UINT64_MAX);
+    assert(vt_id < NumVts || vt_id == UINT64_MAX);
 }
 
 void
 vclock :: increment_counter(uint64_t index)
 {
-    assert(index < NUM_VTS);
+    assert(index < NumVts);
     clock[index]++;
 }
 
 void
 vclock :: update_clock(uint64_t vtid, uint64_t new_clock)
 {
-    assert(vtid < NUM_VTS);
+    assert(vtid < NumVts);
     if (clock[vtid] < new_clock) {
         clock[vtid] = new_clock;
     }

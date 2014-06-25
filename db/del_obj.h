@@ -22,7 +22,7 @@ namespace db
         enum message::msg_type type;
         vc::vclock vclk;
         uint64_t node, edge;
-        std::bitset<NUM_VTS> no_outstanding_progs;
+        std::vector<bool> no_outstanding_progs;
 
         inline
         del_obj(enum message::msg_type t, vc::vclock &vc, uint64_t n, uint64_t e=0)
@@ -30,6 +30,7 @@ namespace db
             , vclk(vc)
             , node(n)
             , edge(e)
+            , no_outstanding_progs(NumVts, false)
         { }
     };
 
@@ -39,9 +40,9 @@ namespace db
     {
         bool operator()(const del_obj* const &dw1, const del_obj* const &dw2)
         {
-            assert(dw1->vclk.clock.size() == NUM_VTS);
-            assert(dw2->vclk.clock.size() == NUM_VTS);
-            for (uint64_t i = 0; i < NUM_VTS; i++) {
+            assert(dw1->vclk.clock.size() == NumVts);
+            assert(dw2->vclk.clock.size() == NumVts);
+            for (uint64_t i = 0; i < NumVts; i++) {
                 if (dw1->vclk.clock[i] <= dw2->vclk.clock[i]) {
                     return false;
                 }

@@ -20,7 +20,6 @@
 #define VT_CLK_TIMEOUT_NANO 1000000 // number of nanoseconds between vt gossip
 
 #include <vector>
-#include <bitset>
 #include <unordered_map>
 #include <po6/threads/mutex.h>
 #include <po6/threads/rwlock.h>
@@ -43,7 +42,7 @@ namespace coordinator
     class timestamper
     {
         typedef std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> req_queue_t;
-        typedef std::unordered_map<uint64_t, std::bitset<NUM_SHARDS>> prog_reply_t;
+        typedef std::unordered_map<uint64_t, std::vector<bool>> prog_reply_t;
 
         public:
             // messaging
@@ -67,8 +66,8 @@ namespace coordinator
             vc::vclock vclk; // vector clock
             vc::qtimestamp_t qts; // queue timestamp
             uint64_t clock_update_acks, clk_updates;
-            std::bitset<NUM_SHARDS> to_nop;
-            uint64_t nop_ack_qts[NUM_SHARDS];
+            std::vector<bool> to_nop;
+            std::vector<uint64_t> nop_ack_qts;
 
             // write transactions
             std::unordered_map<uint64_t, current_tx> outstanding_tx;
@@ -140,29 +139,27 @@ namespace coordinator
         , server(serverid)
         , loc_gen(0)
         , vclk(vtid, 0)
-        , qts(NUM_SHARDS, 0)
-        , clock_update_acks(NUM_VTS-1)
+        , qts(NumShards, 0)
+        , clock_update_acks(NumVts-1)
         , clk_updates(0)
+        , to_nop(NumShards, true)
+        , nop_ack_qts(NumShards, 0)
         , max_done_id(0)
-        , max_done_clk(new vc::vclock_t(NUM_VTS, 0))
+        , max_done_clk(new vc::vclock_t(NumVts, 0))
         , load_count(0)
         , max_load_time(0)
-        , shard_node_count(NUM_SHARDS, 0)
+        , shard_node_count(NumShards, 0)
         , msg_count(0)
         , msg_count_acks(0)
         , to_exit(false)
     {
         // initialize empty vector of done reqs for each prog type
-        std::unordered_map<uint64_t, std::bitset<NUM_SHARDS>> empty_map;
+        std::unordered_map<uint64_t, std::vector<bool>> empty_map;
         done_reqs.emplace(node_prog::REACHABILITY, empty_map);
         done_reqs.emplace(node_prog::DIJKSTRA, empty_map);
         done_reqs.emplace(node_prog::CLUSTERING, empty_map);
         for (int i = 0; i < NUM_THREADS; i++) {
             nmap_client.push_back(new nmap::nmap_stub());
-        }
-        to_nop.set(); // set to_nop to 1 for each shard
-        for (int i = 0; i < NUM_SHARDS; i++) {
-            nop_ack_qts[i] = 0;
         }
         for (int i = 0; i < NUM_THREADS; i++) {
             hstub.push_back(new hyper_stub(vt_id));
@@ -196,7 +193,7 @@ namespace coordinator
         WDEBUG << "Cluster reconfigure triggered\n";
 
         // print cluster info
-        for (uint64_t i = 0; i < NUM_ACTUAL_SERVERS; i++) {
+        for (uint64_t i = 0; i < NumActualServers; i++) {
             server::state_t st = config.get_state(server_id(i));
             if (st != server::AVAILABLE) {
                 WDEBUG << "Server " << i << " is in trouble, has state " << st << std::endl;
@@ -205,8 +202,10 @@ namespace coordinator
             }
         }
 
-        if (comm.reconfigure(config) == server.get()) {
-            // this server is now primary for the shard
+        if (comm.reconfigure(config) == server.get()
+         && !active_backup
+         && server.get() > NumEffectiveServers) {
+            // this server is now primary for the timestamper 
             active_backup = true;
             backup_cond.signal();
         }
@@ -215,9 +214,9 @@ namespace coordinator
         // TODO flesh out
         //uint64_t max_qts = 0;
         //bool pending_tx = false;
-        //if (changed >= SHARD_ID_INCR && changed < (SHARD_ID_INCR+NUM_SHARDS)) {
+        //if (changed >= ShardIdIncr && changed < (ShardIdIncr+NumShards)) {
         //    // transactions
-        //    uint64_t sid = changed - SHARD_ID_INCR;
+        //    uint64_t sid = changed - ShardIdIncr;
         //    for (auto &entry: outstanding_tx) {
         //        std::vector<transaction::pending_tx> &tv = *entry.second.tx_vec;
         //        if (!tv[sid].writes.empty()) {

@@ -29,23 +29,23 @@ int
 order :: compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
 {
     int ret = 2;
-    if (clk1.size() != NUM_VTS) {
+    if (clk1.size() != NumVts) {
         for (uint64_t c: clk1) {
             std::cerr << c << " ";
         }
         std::cerr << std::endl;
         assert(false);
     }
-    if (clk2.size() != NUM_VTS) {
+    if (clk2.size() != NumVts) {
         for (uint64_t c: clk2) {
             std::cerr << c << " ";
         }
         std::cerr << std::endl;
         assert(false);
     }
-    assert(clk1.size() == NUM_VTS);
-    assert(clk2.size() == NUM_VTS);
-    for (uint64_t i = 0; i < NUM_VTS; i++) {
+    assert(clk1.size() == NumVts);
+    assert(clk2.size() == NumVts);
+    for (uint64_t i = 0; i < NumVts; i++) {
         if ((clk1.at(i) < clk2.at(i)) && (ret != 0)) {
             if (ret == 2) {
                 ret = 0;
@@ -165,9 +165,9 @@ order :: compare_vts(const std::vector<vc::vclock> &clocks)
         for (uint64_t i = 0; i < num_clks; i++) {
             for (uint64_t j = i+1; j < num_clks; j++) {
                 if (!large.at(i) && !large.at(j)) {
-                    wp->lhs = (uint64_t*)malloc(sizeof(uint64_t) * NUM_VTS);
-                    wp->rhs = (uint64_t*)malloc(sizeof(uint64_t) * NUM_VTS);
-                    for (uint64_t k = 0; k < NUM_VTS; k++) {
+                    wp->lhs = (uint64_t*)malloc(sizeof(uint64_t) * NumVts);
+                    wp->rhs = (uint64_t*)malloc(sizeof(uint64_t) * NumVts);
+                    for (uint64_t k = 0; k < NumVts; k++) {
                         wp->lhs[k] = clocks.at(i).clock.at(k);
                         wp->rhs[k] = clocks.at(j).clock.at(k);
                     }

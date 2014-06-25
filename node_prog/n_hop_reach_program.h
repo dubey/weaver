@@ -153,7 +153,7 @@ namespace node_prog
                 // we found the node we are looking for, prepare a reply
                 params.returning = true;
                 params.reachable = true;
-        //        if (prev_node.loc < NUM_VTS) { // sending back to vt
+        //        if (prev_node.loc < NumVts) { // sending back to vt
         // XXX THIS BREAKS MIGRATION
          //           next_node = &prev_node;
                     WDEBUG << "returning to vt\n";
@@ -225,7 +225,7 @@ namespace node_prog
                 WDEBUG << "returning negative reply\n";
                 params.reachable = false;
                 /*
-                if (prev_node.loc < NUM_VTS) { // never got out of source node, sending back to vt
+                if (prev_node.loc < NumVts) { // never got out of source node, sending back to vt
                     next_node = &prev_node;
                 } else {
                     for (auto &x: n.in_edges) {
@@ -249,7 +249,7 @@ namespace node_prog
             if (((--state.out_count == 0) || params.reachable) && !state.reachable) {
                 state.reachable |= params.reachable;
                 /*
-                if (state.prev_node.loc < NUM_VTS) { // sending back to vt
+                if (state.prev_node.loc < NumVts) { // sending back to vt
                     next_node = &state.prev_node;
                 } else {
                     for (auto &x: n.in_edges) {

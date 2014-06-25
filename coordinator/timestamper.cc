@@ -26,10 +26,19 @@
 #include "common/transaction.h"
 #include "common/event_order.h"
 #include "common/config_constants.h"
+#include "common/bool_vector.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
 #include "coordinator/vt_constants.h"
 #include "coordinator/timestamper.h"
+
+// extern global variables
+uint64_t NumVts;
+uint64_t NumShards;
+uint64_t NumBackups;
+uint64_t NumEffectiveServers;
+uint64_t NumActualServers;
+uint64_t ShardIdIncr;
 
 using coordinator::current_prog;
 using coordinator::current_tx;
@@ -50,7 +59,7 @@ void unlock_del_elems(std::unordered_set<uint64_t> &del_elems);
 void prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
     nmap::nmap_stub *nmstub,
     coordinator::hyper_stub *hstub);
-void release_dist_del_locks(std::bitset<NUM_VTS> &locks,
+void release_dist_del_locks(const std::vector<bool> &locks,
     std::unordered_set<uint64_t> &del_elems);
 void release_locks_and_abort(uint64_t tx_id, coordinator::hyper_stub *hstub);
 void done_prepare_tx_step1(uint64_t tx_id,
@@ -176,7 +185,7 @@ prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
     hstub->prepare_tx(*tx);
     bool fail = false;
     std::unordered_set<uint64_t> del_elems;
-    bool dist_lock = (tx->del_elems.size() > 0) && (NUM_VTS > 1);
+    bool dist_lock = (tx->del_elems.size() > 0) && (NumVts > 1);
     uint64_t tx_id = tx->id;
     uint64_t cl_id = tx->client_id;
     if (dist_lock) {
@@ -191,8 +200,8 @@ prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
 
     if (!fail && dist_lock) {
         vts->del_tx.emplace(tx_id, current_tx(std::move(tx)));
-        vts->del_tx[tx_id].locks.set(vt_id);
-        vts->del_tx[tx_id].count = NUM_VTS-1; // dist_lock ensures count > 0
+        vts->del_tx[tx_id].locks[vt_id] = true;
+        vts->del_tx[tx_id].count = NumVts-1; // dist_lock ensures count > 0
     }
 
     vts->busy_mtx.unlock();
@@ -209,7 +218,7 @@ prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
     } else if (dist_lock) {
         // successfully locked all del_elems on this shard
         // now send lock request to other shards
-        for (uint64_t i = 0; i < NUM_VTS; i++) {
+        for (uint64_t i = 0; i < NumVts; i++) {
             if (i != vt_id) {
                 message::message msg;
                 msg.prepare_message(message::PREP_DEL_TX, vt_id, tx_id, del_elems);
@@ -224,11 +233,12 @@ prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
 
 // caution: assuming caller holds vts->busy_mtx
 void
-release_dist_del_locks(std::bitset<NUM_VTS> &locks,
+release_dist_del_locks(const std::vector<bool> &locks,
     std::unordered_set<uint64_t> &del_elems)
 {
+    assert(locks.size() == NumVts);
     message::message msg;
-    for (uint64_t i = 0; i < NUM_VTS; i++) {
+    for (uint64_t i = 0; i < NumVts; i++) {
         if (i == vt_id) {
             assert(locks[i]);
             unlock_del_elems(del_elems);
@@ -247,7 +257,7 @@ release_locks_and_abort(uint64_t tx_id, coordinator::hyper_stub *hstub)
 {
     auto &cur_tx = vts->del_tx[tx_id];
     uint64_t cl_id = cur_tx.tx->client_id;
-    bool dist_lock = (cur_tx.tx->del_elems.size() > 0) && (NUM_VTS > 1);
+    bool dist_lock = (cur_tx.tx->del_elems.size() > 0) && (NumVts > 1);
 
     if (dist_lock) {
         release_dist_del_locks(cur_tx.locks, cur_tx.tx->del_elems);
@@ -276,9 +286,9 @@ done_prepare_tx_step1(uint64_t tx_id,
     auto &cur_tx = vts->del_tx[tx_id];
 
     assert(--cur_tx.count >= 0);
-    cur_tx.locks.set(from_vt);
+    cur_tx.locks[from_vt] = true;
 
-    if (cur_tx.locks.all()) {
+    if (weaver_util::all(cur_tx.locks)) {
         // ready to run
         auto tx = std::move(cur_tx.tx);
         vts->del_tx.erase(tx_id);
@@ -359,8 +369,8 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
             case transaction::NODE_CREATE_REQ:
                 // randomly assign shard for this node
                 vts->loc_gen_mutex.lock();
-                vts->loc_gen = (vts->loc_gen + 1) % NUM_SHARDS;
-                upd->loc1 = vts->loc_gen + SHARD_ID_INCR; // node will be placed on this shard
+                vts->loc_gen = (vts->loc_gen + 1) % NumShards;
+                upd->loc1 = vts->loc_gen + ShardIdIncr; // node will be placed on this shard
                 vts->loc_gen_mutex.unlock();
                 put_map.emplace(upd->id, upd->loc1);
 
@@ -433,13 +443,12 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
         }
     }
 
-    bool dist_lock = (tx->del_elems.size() > 0) && (NUM_VTS > 1);
+    bool dist_lock = (tx->del_elems.size() > 0) && (NumVts > 1);
     if (!success) {
         unbusy_elems(tx->busy_elems);
         if (dist_lock) {
-            std::bitset<NUM_VTS> locks;
-            locks.set();
-            release_dist_del_locks(locks, tx->del_elems);
+            auto temp = std::vector<bool>(NumVts, true);
+            release_dist_del_locks(temp, tx->del_elems);
         }
         vts->busy_mtx.unlock();
 
@@ -473,9 +482,8 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
         vts->busy_mtx.lock();
         unbusy_elems(tx->busy_elems);
         if (dist_lock) {
-            std::bitset<NUM_VTS> locks;
-            locks.set();
-            release_dist_del_locks(locks, tx->del_elems);
+            auto temp = std::vector<bool>(NumVts, true);
+            release_dist_del_locks(temp, tx->del_elems);
         }
         vts->busy_mtx.unlock();
 
@@ -497,8 +505,8 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
         all_map.emplace(entry);
     }
 
-    std::vector<transaction::pending_tx> tv(NUM_SHARDS, transaction::pending_tx());
-    std::vector<bool> shard_write(NUM_SHARDS, false);
+    std::vector<transaction::pending_tx> tv(NumShards, transaction::pending_tx());
+    std::vector<bool> shard_write(NumShards, false);
     int shard_count = 0;
     vts->clk_rw_mtx.wrlock();
 
@@ -528,7 +536,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
                 break;
         }
 
-        uint64_t shard_idx = upd->loc1-SHARD_ID_INCR;
+        uint64_t shard_idx = upd->loc1-ShardIdIncr;
         vts->qts[shard_idx]++;
         upd->qts = vts->qts;
         tv[shard_idx].writes.emplace_back(upd);
@@ -563,7 +571,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
 
     // send tx batches
     message::message msg;
-    for (uint64_t i = 0; i < NUM_SHARDS; i++) {
+    for (uint64_t i = 0; i < NumShards; i++) {
         if (!tv[i].writes.empty()) {
             tv[i].timestamp = tx_clk;
             tv[i].id = tx_id;
@@ -594,7 +602,7 @@ end_transaction(uint64_t tx_id, coordinator::hyper_stub *hstub)
         vts->outstanding_tx.erase(tx_id);
         vts->tx_prog_mutex.unlock();
 
-        bool dist_lock = (tx->del_elems.size() > 0) && (NUM_VTS > 1);
+        bool dist_lock = (tx->del_elems.size() > 0) && (NumVts > 1);
         vts->busy_mtx.lock();
         unbusy_elems(tx->busy_elems);
         if (dist_lock) {
@@ -605,7 +613,7 @@ end_transaction(uint64_t tx_id, coordinator::hyper_stub *hstub)
         // release distributed del locks
         message::message msg;
         if (dist_lock) {
-            for (uint64_t i = 0; i < NUM_VTS; i++) {
+            for (uint64_t i = 0; i < NumVts; i++) {
                 if (i == vt_id) {
                     continue;
                 }
@@ -635,7 +643,7 @@ nop_function()
     vc::vclock_t max_done_clk;
     uint64_t num_outstanding_progs;
     typedef std::vector<std::pair<uint64_t, node_prog::prog_type>> done_req_t;
-    std::vector<done_req_t> done_reqs(NUM_SHARDS, done_req_t());
+    std::vector<done_req_t> done_reqs(NumShards, done_req_t());
     std::vector<uint64_t> del_done_reqs;
     message::message msg;
     //bool nop_sent, clock_synced;
@@ -653,12 +661,12 @@ nop_function()
         vts->periodic_update_mutex.lock();
 
         // send nops and state cleanup info to shards
-        if (vts->to_nop.any()) {
+        if (weaver_util::any(vts->to_nop)) {
             req_id = vts->generate_id();
             vts->clk_rw_mtx.wrlock();
             vts->vclk.increment_clock();
             vclk.clock = vts->vclk.clock;
-            for (uint64_t shard_id = 0; shard_id < NUM_SHARDS; shard_id++) {
+            for (uint64_t shard_id = 0; shard_id < NumShards; shard_id++) {
                 if (vts->to_nop[shard_id]) {
                     vts->qts[shard_id]++;
                     done_reqs[shard_id].clear();
@@ -674,17 +682,17 @@ nop_function()
             num_outstanding_progs = vts->pend_prog_queue.size();
             for (auto &x: vts->done_reqs) {
                 // x.first = node prog type
-                // x.second = unordered_map <req_id -> bitset<NUM_SHARDS>>
+                // x.second = unordered_map <req_id -> vector<bool>(NumShards)>
                 for (auto &reply: x.second) {
                     // reply.first = req_id
-                    // reply.second = bitset<NUM_SHARDS>
-                    for (uint64_t shard_id = 0; shard_id < NUM_SHARDS; shard_id++) {
+                    // reply.second = vector<bool>(NumShards)
+                    for (uint64_t shard_id = 0; shard_id < NumShards; shard_id++) {
                         if (vts->to_nop[shard_id] && !reply.second[shard_id]) {
-                            reply.second.set(shard_id);
+                            reply.second[shard_id] = true;
                             done_reqs[shard_id].emplace_back(std::make_pair(reply.first, x.first));
                         }
                     }
-                    if (reply.second.all()) {
+                    if (weaver_util::all(reply.second)) {
                         del_done_reqs.emplace_back(reply.first);
                     }
                 }
@@ -694,22 +702,21 @@ nop_function()
             }
             vts->tx_prog_mutex.unlock();
 
-            for (uint64_t shard_id = 0; shard_id < NUM_SHARDS; shard_id++) {
+            for (uint64_t shard_id = 0; shard_id < NumShards; shard_id++) {
                 if (vts->to_nop[shard_id]) {
-                    assert(vclk.clock.size() == NUM_VTS);
-                    assert(max_done_clk.size() == NUM_VTS);
+                    assert(vclk.clock.size() == NumVts);
+                    assert(max_done_clk.size() == NumVts);
                     msg.prepare_message(message::VT_NOP, vt_id, vclk, qts, req_id,
                         done_reqs[shard_id], max_done_id, max_done_clk,
                         num_outstanding_progs, vts->shard_node_count);
-                    vts->comm.send(shard_id + SHARD_ID_INCR, msg.buf);
+                    vts->comm.send(shard_id + ShardIdIncr, msg.buf);
                 }
             }
-            vts->to_nop.reset();
-            //nop_sent = true;
+            weaver_util::reset_all(vts->to_nop);
         }
 
         // update vclock at other timestampers
-        //if (vts->clock_update_acks == (NUM_VTS-1) && NUM_VTS > 1) {
+        //if (vts->clock_update_acks == (NumVts-1) && NumVts > 1) {
         //clock_synced = true;
         //vts->clock_update_acks = 0;
         //if (!nop_sent) {
@@ -717,7 +724,7 @@ nop_function()
         //    vclk.clock = vts->vclk.clock;
         //    vts->clk_mutex.unlock();
         //}
-        //for (uint64_t i = 0; i < NUM_VTS; i++) {
+        //for (uint64_t i = 0; i < NumVts; i++) {
         //    if (i == vt_id) {
         //        continue;
         //    }
@@ -759,7 +766,7 @@ clk_update_function()
         vts->clk_rw_mtx.rdlock();
         vclk.clock = vts->vclk.clock;
         vts->clk_rw_mtx.unlock();
-        for (uint64_t i = 0; i < NUM_VTS; i++) {
+        for (uint64_t i = 0; i < NumVts; i++) {
             if (i == vt_id) {
                 continue;
             }
@@ -808,7 +815,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     vts->clk_rw_mtx.wrlock();
     vts->vclk.increment_clock();
     vc::vclock req_timestamp = vts->vclk;
-    assert(req_timestamp.clock.size() == NUM_VTS);
+    assert(req_timestamp.clock.size() == NumVts);
     vts->clk_rw_mtx.unlock();
 
     vts->tx_prog_mutex.lock();
@@ -961,18 +968,18 @@ server_loop(int thread_id)
                 //case message::VT_CLOCK_UPDATE_ACK:
                 //    vts->periodic_update_mutex.lock();
                 //    vts->clock_update_acks++;
-                //    assert(vts->clock_update_acks < NUM_VTS);
+                //    assert(vts->clock_update_acks < NumVts);
                 //    vts->periodic_update_mutex.unlock();
                 //    break;
 
                 case message::VT_NOP_ACK: {
                     uint64_t shard_node_count, nop_qts, sid;
                     msg->unpack_message(message::VT_NOP_ACK, sender, nop_qts, shard_node_count);
-                    sid = sender - SHARD_ID_INCR;
+                    sid = sender - ShardIdIncr;
                     vts->periodic_update_mutex.lock();
                     if (nop_qts > vts->nop_ack_qts[sid]) {
                         vts->shard_node_count[sid] = shard_node_count;
-                        vts->to_nop.set(sid);
+                        vts->to_nop[sid] = true;
                         vts->nop_ack_qts[sid] = nop_qts;
                     }
                     vts->periodic_update_mutex.unlock();
@@ -984,7 +991,7 @@ server_loop(int thread_id)
                     vts->msg_count = 0;
                     vts->msg_count_acks = 0;
                     vts->msg_count_mutex.unlock();
-                    for (uint64_t i = SHARD_ID_INCR; i < (SHARD_ID_INCR + NUM_SHARDS); i++) {
+                    for (uint64_t i = ShardIdIncr; i < (ShardIdIncr + NumShards); i++) {
                         msg->prepare_message(message::MSG_COUNT, vt_id);
                         vts->comm.send(i, msg->buf);
                     }
@@ -1007,7 +1014,7 @@ server_loop(int thread_id)
                     if (load_time > vts->max_load_time) {
                         vts->max_load_time = load_time;
                     }
-                    if (++vts->load_count == NUM_SHARDS) {
+                    if (++vts->load_count == NumShards) {
                         WDEBUG << "Graph loaded on all machines, time taken = " << vts->max_load_time << " nanosecs." << std::endl;
                     }
                     vts->graph_load_mutex.unlock();
@@ -1022,17 +1029,17 @@ server_loop(int thread_id)
                 case message::START_MIGR: {
                     uint64_t hops = UINT64_MAX;
                     msg->prepare_message(message::MIGRATION_TOKEN, hops, vt_id);
-                    vts->comm.send(SHARD_ID_INCR, msg->buf); 
+                    vts->comm.send(ShardIdIncr, msg->buf); 
                     break;
                 }
 
                 case message::ONE_STREAM_MIGR: {
-                    uint64_t hops = NUM_SHARDS;
+                    uint64_t hops = NumShards;
                     vts->migr_mutex.lock();
                     vts->migr_client = sender;
                     vts->migr_mutex.unlock();
                     msg->prepare_message(message::MIGRATION_TOKEN, hops, vt_id);
-                    vts->comm.send(SHARD_ID_INCR, msg->buf);
+                    vts->comm.send(ShardIdIncr, msg->buf);
                     break;
                 }
 
@@ -1064,7 +1071,7 @@ server_loop(int thread_id)
                     auto outstanding_prog_iter = vts->outstanding_progs.find(req_id);
                     if (outstanding_prog_iter != vts->outstanding_progs.end()) { 
                         uint64_t client = outstanding_prog_iter->second.client;
-                        vts->done_reqs[type].emplace(req_id, std::bitset<NUM_SHARDS>());
+                        vts->done_reqs[type].emplace(req_id, std::vector<bool>(NumShards, false));
                         vts->comm.send(client, msg->buf);
                         mark_req_finished(req_id);
                     } else {
@@ -1079,7 +1086,7 @@ server_loop(int thread_id)
                     msg->unpack_message(message::MSG_COUNT, shard, msg_count);
                     vts->msg_count_mutex.lock();
                     vts->msg_count += msg_count;
-                    if (++vts->msg_count_acks == NUM_SHARDS) {
+                    if (++vts->msg_count_acks == NumShards) {
                         WDEBUG << "Msg count = " << vts->msg_count << std::endl;
                     }
                     vts->msg_count_mutex.unlock();
@@ -1201,6 +1208,10 @@ main(int argc, char *argv[])
         return -1;
     }
 
+    NumVts = 1;
+    NumShards = 1;
+    NumBackups = 1;
+    init_config_constants();
 #ifdef weaver_test_
     num_prep = 0;
     num_comm = 0;
@@ -1226,7 +1237,7 @@ main(int argc, char *argv[])
     vt_id = atoi(argv[1]);
     if (argc == 3) {
         vts = new coordinator::timestamper(vt_id, atoi(argv[2]));
-        assert((atoi(argv[2]) - vt_id) % (NUM_EFFECTIVE_SERVERS) == 0);
+        assert((atoi(argv[2]) - vt_id) % NumEffectiveServers == 0);
     } else {
         vts = new coordinator::timestamper(vt_id, vt_id);
     }

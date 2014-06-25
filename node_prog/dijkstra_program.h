@@ -324,7 +324,6 @@ namespace node_prog
                         std::stringstream(prop.get_value()) >> edge_weight;
                         WDEBUG << "got edge weight " << edge_weight << " from string " << prop.get_value() << std::endl;
                         uint64_t priority = calculate_priority(params.cost, edge_weight, params.is_widest_path);
-                        //assert(e->nbr.loc < NUM_SHARDS + SHARD_ID_INCR); //XXX
                         params.entries_to_add.emplace_back(std::make_pair(priority, edge.get_neighbor()));
                     }
                 }

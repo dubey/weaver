@@ -15,12 +15,21 @@
 #ifndef weaver_common_config_constants_h_
 #define weaver_common_config_constants_h_
 
-#define NUM_BACKUPS 1
-#define NUM_SHARDS 1
-#define NUM_VTS 1
-#define NUM_EFFECTIVE_SERVERS (NUM_VTS + NUM_SHARDS)
-#define NUM_ACTUAL_SERVERS (NUM_EFFECTIVE_SERVERS * (1 + NUM_BACKUPS))
-#define SHARD_ID_INCR NUM_VTS
+extern uint64_t NumVts;
+extern uint64_t NumShards;
+extern uint64_t NumBackups;
+extern uint64_t NumEffectiveServers;
+extern uint64_t NumActualServers;
+extern uint64_t ShardIdIncr;
+
+inline void
+init_config_constants()
+{
+    NumEffectiveServers = NumVts + NumShards;
+    NumActualServers = NumEffectiveServers * (1+NumBackups);
+    ShardIdIncr = NumVts;
+}
+
 #define NUM_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
 #define ID_BITS 16 // max client id
 #define TOP_MASK (0x0000ffffffffffffULL)

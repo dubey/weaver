@@ -17,7 +17,6 @@
 
 #include <set>
 #include <map>
-#include <bitset>
 #include <vector>
 #include <unordered_map>
 #include <po6/threads/mutex.h>
@@ -37,6 +36,7 @@
 #include "common/event_order.h"
 #include "common/configuration.h"
 #include "common/server_manager_link_wrapper.h"
+#include "common/bool_vector.h"
 #include "db/shard_constants.h"
 #include "db/element.h"
 #include "db/node.h"
@@ -197,7 +197,7 @@ namespace db
                 , target_prog_id
                 , max_done_id; // max id done from each VT
             std::vector<vc::vclock_t> max_done_clk; // vclk of cumulative last node program completed
-            std::bitset<NUM_SHARDS> migr_edge_acks;
+            std::vector<bool> migr_edge_acks;
             uint64_t msg_count;
             
             // node programs
@@ -246,14 +246,15 @@ namespace db
         , migr_token(false)
         , migrated(false)
         , migr_chance(0)
-        , shard_node_count(NUM_SHARDS, 0)
-        , nop_count(NUM_VTS, 0)
+        , shard_node_count(NumShards, 0)
+        , nop_count(NumVts, 0)
         , max_clk(UINT64_MAX, UINT64_MAX)
         , zero_clk(0, 0)
-        , max_prog_id(NUM_VTS, 0)
-        , target_prog_id(NUM_VTS, 0)
-        , max_done_id(NUM_VTS, 0)
-        , max_done_clk(NUM_VTS, vc::vclock_t(NUM_VTS, 0))
+        , max_prog_id(NumVts, 0)
+        , target_prog_id(NumVts, 0)
+        , max_done_id(NumVts, 0)
+        , max_done_clk(NumVts, vc::vclock_t(NumVts, 0))
+        , migr_edge_acks(NumShards, false)
         , msg_count(0)
         , watch_set_lookups(0)
         , watch_set_nops(0)
@@ -262,7 +263,6 @@ namespace db
         , restore_cv(&restore_mutex)
         , to_exit(false)
     {
-        assert(NUM_VTS == KRONOS_NUM_VTS);
         for (int i = 0; i < NUM_THREADS; i++) {
             hstub.push_back(new hyper_stub(shard_id));
         }
@@ -288,7 +288,7 @@ namespace db
     {
         WDEBUG << "Cluster reconfigure" << std::endl;
 
-        for (uint64_t i = 0; i < NUM_ACTUAL_SERVERS; i++) {
+        for (uint64_t i = 0; i < NumActualServers; i++) {
             server::state_t st = config.get_state(server_id(i));
             if (st != server::AVAILABLE) {
                 WDEBUG << "Server " << i << " is in trouble, has state " << st << std::endl;
@@ -297,14 +297,14 @@ namespace db
             }
         }
 
-        if (comm.reconfigure(config) == server.get()) {
-            if (!active_backup && server.get() > (NUM_EFFECTIVE_SERVERS)) {
+        if (comm.reconfigure(config) == server.get()
+         && !active_backup
+         && server.get() > NumEffectiveServers) {
                 WDEBUG << "Now active for shard " << shard_id << std::endl;
                 // this server is now primary for the shard
                 active_backup = true;
                 restore_backup();
                 backup_cond.signal();
-            }
         }
     }
 
@@ -437,7 +437,7 @@ namespace db
             node_map_mutexes[map_idx].unlock();
 
             migration_mutex.lock();
-            shard_node_count[shard_id - SHARD_ID_INCR]--;
+            shard_node_count[shard_id - ShardIdIncr]--;
             migration_mutex.unlock();
             
             msg_count_mutex.lock();
@@ -479,14 +479,14 @@ namespace db
         if (!init_load) {
             migration_mutex.lock();
         }
-        shard_node_count[shard_id - SHARD_ID_INCR]++;
+        shard_node_count[shard_id - ShardIdIncr]++;
         if (!init_load) {
             migration_mutex.unlock();
         }
 
         if (!migrate) {
             new_node->state = element::node::mode::STABLE;
-            new_node->msg_count.resize(NUM_SHARDS, 0);
+            new_node->msg_count.resize(NumShards, 0);
             if (!init_load) {
                 // store in Hyperdex
                 std::unordered_set<uint64_t> empty_set;
@@ -722,12 +722,12 @@ namespace db
             if (to_del) {
                 dobj = perm_del_queue.top();
                 if (!outstanding_progs) {
-                    dobj->no_outstanding_progs.set(vt_id);
+                    dobj->no_outstanding_progs[vt_id] = true;
                 }
                 // if all VTs have no outstanding node progs, then everything can be permanently deleted
-                if (!dobj->no_outstanding_progs.all()) {
-                    for (uint64_t i = 0; (i < NUM_VTS) && to_del; i++) {
-                        if (max_done_clk[i].size() < NUM_VTS) {
+                if (!weaver_util::all(dobj->no_outstanding_progs)) {
+                    for (uint64_t i = 0; (i < NumVts) && to_del; i++) {
+                        if (max_done_clk[i].size() < NumVts) {
                             to_del = false;
                             break;
                         }
@@ -786,7 +786,7 @@ namespace db
             auto copy_del_queue = perm_del_queue;
             while (!copy_del_queue.empty()) {
                 dobj = copy_del_queue.top();
-                dobj->no_outstanding_progs.set(vt_id);
+                dobj->no_outstanding_progs[vt_id] = true;
                 copy_del_queue.pop();
             }
         }
@@ -804,7 +804,7 @@ namespace db
         // users should explicitly delete edges before nodes if the program requires
         // this loop isn't executed in case of deletion of migrated nodes
         if (n->state != element::node::mode::MOVED) {
-            for (uint64_t shard = SHARD_ID_INCR; shard < SHARD_ID_INCR + NUM_SHARDS; shard++) {
+            for (uint64_t shard = ShardIdIncr; shard < ShardIdIncr + NumShards; shard++) {
                 msg.prepare_message(message::PERMANENTLY_DELETED_NODE, n->base.get_id());
                 comm.send(shard, msg.buf);
             }
@@ -851,15 +851,15 @@ namespace db
         if (old_loc != shard_id) {
             message::message msg;
             msg.prepare_message(message::MIGRATED_NBR_ACK, shard_id, max_prog_id,
-                    shard_node_count[shard_id-SHARD_ID_INCR]);
+                    shard_node_count[shard_id-ShardIdIncr]);
             comm.send(old_loc, msg.buf);
         } else {
-            for (int i = 0; i < NUM_VTS; i++) {
+            for (uint64_t i = 0; i < NumVts; i++) {
                 if (target_prog_id[i] < max_prog_id[i]) {
                     target_prog_id[i] = max_prog_id[i];
                 }
             }
-            migr_edge_acks.set(shard_id - SHARD_ID_INCR);
+            migr_edge_acks[shard_id - ShardIdIncr] = true;
         }
         migration_mutex.unlock();
     }

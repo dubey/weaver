@@ -20,7 +20,6 @@
 #define BATCH_MSG_SIZE 1 // 1 == no batching
 
 // migration
-#define SHARD_CAP (90000ULL/NUM_SHARDS)
 //#define WEAVER_CLDG // defined if communication-based LDG, undef otherwise
 //#define WEAVER_NEW_CLDG // defined if communication-based LDG, undef otherwise
 //#define WEAVER_MSG_COUNT // defined if client msg count call will take place

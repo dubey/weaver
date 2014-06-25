@@ -12,8 +12,19 @@
  */
 
 #include "common/message.h"
+#include "common/config_constants.h"
 #include "client/client_constants.h"
 #include "client/weaver_client.h"
+
+// global extern variables
+// ugly, defined only to get rid of undefined symbol error
+// not used in client
+uint64_t NumVts;
+uint64_t NumShards;
+uint64_t NumBackups;
+uint64_t NumEffectiveServers;
+uint64_t NumActualServers;
+uint64_t ShardIdIncr;
 
 namespace client
 {
@@ -27,6 +38,10 @@ client :: client(uint64_t my_id, uint64_t vt_id)
     , tx_id_ctr(0)
     , temp_handle_ctr(0)
 {
+    NumVts = 1;
+    NumShards = 1;
+    NumBackups = 1;
+    init_config_constants();
     comm.client_init();
 }
 
@@ -332,7 +347,7 @@ client :: reconfigure()
 {
     // our vt is probably dead
     // set vtid to next backup, client has to retry
-    vtid += (NUM_SHARDS + NUM_VTS);
+    // TODO vtid += (NumShards + NumVts);
 }
 
 // to generate 64 bit graph element handles

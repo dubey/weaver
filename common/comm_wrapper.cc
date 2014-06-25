@@ -13,13 +13,13 @@
 
 #define weaver_debug_
 #include "common/weaver_constants.h"
+#include "common/config_constants.h"
 #include "common/comm_wrapper.h"
 
 #define ID_INCR (1ULL << 32ULL)
 #define WEAVER_TO_BUSYBEE(x) (x+ID_INCR)
 #define BUSYBEE_TO_WEAVER(x) (x-ID_INCR)
 #define CLIENT_ID_INCR (CLIENT_ID + ID_INCR)
-#define NUM_ACTUAL_SERVERS_INCR (NUM_ACTUAL_SERVERS + ID_INCR)
 
 using common::comm_wrapper;
 
@@ -38,7 +38,9 @@ comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *
 
 
 comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr, int to)
-    : bb_id(bbid)
+    : active_server_idx(NumEffectiveServers, UINT64_MAX)
+    , reverse_server_idx(NumActualServers, UINT64_MAX)
+    , bb_id(bbid)
     , num_threads(nthr)
     , timeout(to)
 {
@@ -68,13 +70,6 @@ comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr, int to)
     } catch (std::ifstream::failure e) {
         WDEBUG << "file exception" << std::endl;
     }
-
-    for (uint64_t i = 0; i < NUM_EFFECTIVE_SERVERS; i++) {
-        active_server_idx[i] = UINT64_MAX;
-    }
-    for (uint64_t i = 0; i < NUM_ACTUAL_SERVERS; i++) {
-        reverse_server_idx[i] = UINT64_MAX;
-    }
 }
 
 void
@@ -99,8 +94,11 @@ void
 comm_wrapper :: client_init()
 {
     wmap.reset(new weaver_mapper(cluster));
-    for (uint64_t i = 0; i < NUM_VTS; i++) {
+    active_server_idx.resize(NumVts, 0);
+    reverse_server_idx.resize(NumVts, 0);
+    for (uint64_t i = 0; i < NumVts; i++) {
         active_server_idx[i] = i;
+        reverse_server_idx[i] = i;
     }
     bb.reset(new busybee_mta(&bb_gc, wmap.get(), *loc, WEAVER_TO_BUSYBEE(bb_id), num_threads));
 
@@ -124,12 +122,12 @@ void
 comm_wrapper :: reconfigure_internal(configuration &new_config, uint64_t &primary)
 {
     config = new_config;
-    for (uint64_t i = 0; i < NUM_EFFECTIVE_SERVERS; i++) {
+    for (uint64_t i = 0; i < NumEffectiveServers; i++) {
         if (active_server_idx[i] < UINT64_MAX) {
             uint64_t srv_idx = active_server_idx[i];
             while (config.get_state(server_id(srv_idx)) != server::AVAILABLE) {
-                srv_idx = srv_idx + NUM_EFFECTIVE_SERVERS;
-                if (srv_idx > NUM_ACTUAL_SERVERS) {
+                srv_idx = srv_idx + NumEffectiveServers;
+                if (srv_idx > NumActualServers) {
                     // all backups dead, not contactable
                     // cannot do anything
                     WDEBUG << "Caution! All backups for server " << i << " are dead\n";
@@ -149,8 +147,8 @@ comm_wrapper :: reconfigure_internal(configuration &new_config, uint64_t &primar
             }
         }
     }
-    while (primary >= NUM_EFFECTIVE_SERVERS) {
-        primary -= (NUM_EFFECTIVE_SERVERS);
+    while (primary >= NumEffectiveServers) {
+        primary -= (NumEffectiveServers);
     }
     primary = active_server_idx[primary];
 }

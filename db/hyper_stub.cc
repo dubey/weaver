@@ -45,7 +45,7 @@ hyper_stub :: init()
 {
     std::unordered_map<uint64_t, uint64_t> qts_map;
 
-    for (uint64_t vt_id = 0; vt_id < NUM_VTS; vt_id++) {
+    for (uint64_t vt_id = 0; vt_id < NumVts; vt_id++) {
         qts_map.emplace(vt_id, 0);
     }
     std::unique_ptr<char> qts_buf;
