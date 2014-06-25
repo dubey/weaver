@@ -58,7 +58,8 @@
 #endif
 
 // Weaver
-#define KRONOS_NUM_VTS 2
+extern uint64_t KronosNumVts;
+//#define KRONOS_NUM_VTS 2
 
 extern "C" {
 #endif

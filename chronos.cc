@@ -281,7 +281,7 @@ int64_t
 chronos_client :: weaver_order(weaver_pair *pairs, size_t pairs_sz,
         chronos_returncode *status, ssize_t *ret)
 {
-    std::vector<char> buffer(pairs_sz * (2 * sizeof(uint64_t) * KRONOS_NUM_VTS // vector clocks
+    std::vector<char> buffer(pairs_sz * (2 * sizeof(uint64_t) * KronosNumVts // vector clocks
             + 2 * sizeof(uint64_t) // vt_ids
             + sizeof(uint32_t) // flags
             + sizeof(uint8_t))); // preferred order
@@ -289,8 +289,8 @@ chronos_client :: weaver_order(weaver_pair *pairs, size_t pairs_sz,
 
     // pack weaver pairs
     for (size_t i = 0; i < pairs_sz; i++) {
-        p = pack_vector_uint64(pairs[i].lhs, KRONOS_NUM_VTS, p);
-        p = pack_vector_uint64(pairs[i].rhs, KRONOS_NUM_VTS, p);
+        p = pack_vector_uint64(pairs[i].lhs, KronosNumVts, p);
+        p = pack_vector_uint64(pairs[i].rhs, KronosNumVts, p);
         p = e::pack64le(pairs[i].lhs_id, p);
         p = e::pack64le(pairs[i].rhs_id, p);
         p = e::pack32le(pairs[i].flags, p);

@@ -34,8 +34,12 @@
 #include <set>
 #include <unordered_map>
 
+// others
+#include <yaml.h>
+
 // e
 #include <e/endian.h>
+#include <e/popt.h>
 
 // Replicant
 #include <replicant_state_machine.h>
@@ -51,6 +55,9 @@
 #define ERRORMSG1(X, Y) fprintf(stderr, "%s:%i:  " X "\n", __FILE__, __LINE__, Y)
 #define ERRORMSG2(X, Y1, Y2) fprintf(stderr, "%s:%i:  " X "\n", __FILE__, __LINE__, Y1, Y2)
 #define ERRNOMSG(CALL) ERRORMSG2(tostr(CALL) " failed:  %s  [ERRNO=%i]", strerror(errno), errno)
+
+// global externs
+uint64_t KronosNumVts;
 
 // hash function for vector clocks
 namespace std
@@ -131,8 +138,58 @@ chronosd :: chronosd()
     , m_count_weaver_order()
     , pair_comp_ptr(&pair_comp)
 {
+    // parse and get num vts
+    KronosNumVts = UINT64_MAX;
+
+    const char *config_file_name = "/usr/local/etc/weaver.yaml";
+    FILE *config_file = fopen(config_file_name, "r");
+    yaml_parser_t parser;
+
+    if (!yaml_parser_initialize(&parser)) {
+        KDEBUG << "yaml error initialize" << std::endl;
+        return;
+    }
+    if (config_file == NULL) {
+        KDEBUG << "yaml error file open" << std::endl;
+        return;
+    }
+
+    yaml_parser_set_input_file(&parser, config_file);
+
+    yaml_token_t token;
+    do {
+        yaml_parser_scan(&parser, &token);
+        switch (token.type) {
+
+            case YAML_KEY_TOKEN:
+                yaml_parser_scan(&parser, &token);
+                assert(token.type == YAML_SCALAR_TOKEN);
+                if (strncmp((const char*)token.data.scalar.value, "num_vts", 7) == 0) {
+                    yaml_parser_scan(&parser, &token);
+                    assert(token.type == YAML_VALUE_TOKEN);
+                    yaml_parser_scan(&parser, &token);
+                    assert(token.type == YAML_SCALAR_TOKEN);
+                    KronosNumVts = atoi((const char*)token.data.scalar.value);
+                }
+                break;
+
+            default:
+                break;
+        }
+
+        if (token.type != YAML_STREAM_END_TOKEN) {
+            yaml_token_delete(&token);
+        }
+    } while (token.type != YAML_STREAM_END_TOKEN);
+    yaml_token_delete(&token);
+
+    yaml_parser_delete(&parser);
+    fclose(config_file);
+
+    assert(UINT64_MAX != KronosNumVts);
+    
     pair_set_t empty_set(pair_comp_ptr);
-    for (uint64_t vt_id = 0; vt_id < KRONOS_NUM_VTS; vt_id++) {
+    for (uint64_t vt_id = 0; vt_id < KronosNumVts; vt_id++) {
         m_vtlist.emplace(vt_id, empty_set);
     }
 }
@@ -432,7 +489,7 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
                          const char* data, size_t data_sz)
 {
     ++m_count_weaver_order;
-    const size_t NUM_PAIRS = data_sz / (2 * sizeof(uint64_t) * KRONOS_NUM_VTS // vector clocks
+    const size_t NUM_PAIRS = data_sz / (2 * sizeof(uint64_t) * KronosNumVts // vector clocks
             + 2 * sizeof(uint64_t) // vt_ids
             + sizeof(uint32_t) // flags
             + sizeof(uint8_t)); // preferred order
@@ -448,8 +505,8 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
         chronos_pair p;
         weaver_pair wp;
         uint8_t o;
-        data_ptr = unpack_vector_uint64(data_ptr, &wp.lhs, KRONOS_NUM_VTS);
-        data_ptr = unpack_vector_uint64(data_ptr, &wp.rhs, KRONOS_NUM_VTS);
+        data_ptr = unpack_vector_uint64(data_ptr, &wp.lhs, KronosNumVts);
+        data_ptr = unpack_vector_uint64(data_ptr, &wp.rhs, KronosNumVts);
         data_ptr = e::unpack64le(data_ptr, &wp.lhs_id);
         data_ptr = e::unpack64le(data_ptr, &wp.rhs_id);
         data_ptr = e::unpack32le(data_ptr, &p.flags);
@@ -463,9 +520,9 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
         assert(p.flags & CHRONOS_SOFT_FAIL);
 
         std::vector<uint64_t> vc_lhs, vc_rhs;
-        vc_lhs.reserve(KRONOS_NUM_VTS);
-        vc_rhs.reserve(KRONOS_NUM_VTS);
-        for (size_t i = 0; i < KRONOS_NUM_VTS; i++) {
+        vc_lhs.reserve(KronosNumVts);
+        vc_rhs.reserve(KronosNumVts);
+        for (size_t i = 0; i < KronosNumVts; i++) {
             vc_lhs.push_back(wp.lhs[i]);
             vc_rhs.push_back(wp.rhs[i]);
         }

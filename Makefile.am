@@ -40,7 +40,7 @@ lib_LTLIBRARIES = libchronos.la libchronosd.la
 pyexec_LTLIBRARIES = chronos.la
 
 libchronosd_la_SOURCES = chronos_cmp_encode.cc chronos_stats_encode.cc chronosd.cc event_dependency_graph.cc replicant-shim.c
-libchronosd_la_LIBADD = $(E_LIBS) -lrt
+libchronosd_la_LIBADD = $(E_LIBS) -lrt -lyaml
 
 libchronos_la_SOURCES = chronos.cc chronos_c_wrappers.cc chronos_cmp_encode.cc
 libchronos_la_LIBADD = $(E_LIBS) -lreplicant
