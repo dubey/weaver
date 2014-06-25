@@ -22,7 +22,7 @@ AM_CXXFLAGS=-std=c++0x -Wall -Wextra
 #AM_CPPFLAGS=-I$(abs_top_srcdir)
 AM_CPPFLAGS=
 CYTHON_FLAGS=--cplus
-LIBS=-lbusybee -le -pthread -lrt -lhyperdex-client -lchronos -lreplicant
+LIBS=-lbusybee -le -pthread -lrt -lhyperdex-client -lchronos -lreplicant -lyaml
 
 if DEBUG
     AM_CFLAGS += -g3 -gdwarf-2 -Og
@@ -107,6 +107,7 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    common/nmap_stub.cc \
 		                    common/vclock.cc \
 		                    common/message.cc \
+                            common/config_constants.cc \
 		                    node_prog/edge_list.cc \
 		                    node_prog/prop_list.cc \
 		                    node_prog/reach_program.cc \
@@ -170,6 +171,7 @@ weaver_shard_SOURCES=	common/ids.cc \
 		                common/message.cc \
 		                common/message_graph_elem.cc \
 		                common/message_cache_context.cc \
+                        common/config_constants.cc \
 		                node_prog/edge_list.cc \
 		                node_prog/prop_list.cc \
 		                node_prog/reach_program.cc \
@@ -203,6 +205,7 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 		                    common/vclock.cc \
 		                    common/message.cc \
 		                    common/event_order.cc \
+                            common/config_constants.cc \
 		                    node_prog/prop_list.cc \
 		                    node_prog/edge_list.cc \
 		                    node_prog/clustering_program.cc \

@@ -38,10 +38,7 @@ client :: client(uint64_t my_id, uint64_t vt_id)
     , tx_id_ctr(0)
     , temp_handle_ctr(0)
 {
-    NumVts = 1;
-    NumShards = 1;
-    NumBackups = 1;
-    init_config_constants();
+    init_config_constants("/home/dubey/weaver.yaml");
     comm.client_init();
 }
 

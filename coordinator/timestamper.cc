@@ -1208,10 +1208,7 @@ main(int argc, char *argv[])
         return -1;
     }
 
-    NumVts = 1;
-    NumShards = 1;
-    NumBackups = 1;
-    init_config_constants();
+    init_config_constants("/home/dubey/weaver.yaml");
 #ifdef weaver_test_
     num_prep = 0;
     num_comm = 0;

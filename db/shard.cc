@@ -17,7 +17,6 @@
 #include <string>
 #include <signal.h>
 #include <e/buffer.h>
-#include "busybee_constants.h"
 
 #define weaver_debug_
 #include "common/weaver_constants.h"
@@ -2015,10 +2014,7 @@ main(int argc, char *argv[])
     install_signal_handler(SIGTERM, end_program);
     install_signal_handler(SIGTSTP, end_program);
 
-    NumVts = 1;
-    NumShards = 1;
-    NumBackups = 1;
-    init_config_constants();
+    init_config_constants("/home/dubey/weaver.yaml");
 
     sigset_t ss;
     if (sigfillset(&ss) < 0) {

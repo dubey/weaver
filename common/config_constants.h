@@ -15,6 +15,8 @@
 #ifndef weaver_common_config_constants_h_
 #define weaver_common_config_constants_h_
 
+#include <stdint.h>
+
 extern uint64_t NumVts;
 extern uint64_t NumShards;
 extern uint64_t NumBackups;
@@ -22,13 +24,7 @@ extern uint64_t NumEffectiveServers;
 extern uint64_t NumActualServers;
 extern uint64_t ShardIdIncr;
 
-inline void
-init_config_constants()
-{
-    NumEffectiveServers = NumVts + NumShards;
-    NumActualServers = NumEffectiveServers * (1+NumBackups);
-    ShardIdIncr = NumVts;
-}
+void init_config_constants(const char *config_file_name);
 
 #define NUM_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
 #define ID_BITS 16 // max client id
