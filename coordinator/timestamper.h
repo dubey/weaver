@@ -52,7 +52,8 @@ namespace coordinator
             server_manager_link_wrapper sm_stub;
             configuration config;
             bool active_backup, first_config, vts_init;
-            po6::threads::cond backup_cond, first_config_cond, vts_init_cond;
+            uint64_t num_active_vts;
+            po6::threads::cond backup_cond, first_config_cond, vts_init_cond, start_all_vts_cond;
             
             // Hyperdex stub
             std::vector<hyper_stub*> hstub;
@@ -130,9 +131,11 @@ namespace coordinator
         , active_backup(false)
         , first_config(false)
         , vts_init(false)
+        , num_active_vts(0)
         , backup_cond(&config_mutex)
         , first_config_cond(&config_mutex)
         , vts_init_cond(&config_mutex)
+        , start_all_vts_cond(&config_mutex)
         , vt_id(vtid)
         , shifted_id(vtid << (64-ID_BITS))
         , id_gen(0)
@@ -202,12 +205,19 @@ namespace coordinator
             }
         }
 
-        if (comm.reconfigure(config) == server.get()
+        uint64_t prev_active_vts = num_active_vts;
+        if (comm.reconfigure(config, &num_active_vts) == server.get()
          && !active_backup
          && server.get() > NumEffectiveServers) {
             // this server is now primary for the timestamper 
             active_backup = true;
             backup_cond.signal();
+        }
+        assert(prev_active_vts <= num_active_vts);
+        assert(num_active_vts <= NumVts);
+        if (num_active_vts > prev_active_vts) {
+            WDEBUG << "#active vts = " << num_active_vts << std::endl;
+            start_all_vts_cond.signal();
         }
 
         // resend unacked transactions and nop for new shard

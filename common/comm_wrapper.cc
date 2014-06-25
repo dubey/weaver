@@ -111,11 +111,19 @@ comm_wrapper :: client_init()
 }
 
 uint64_t
-comm_wrapper :: reconfigure(configuration &new_config)
+comm_wrapper :: reconfigure(configuration &new_config, uint64_t *num_active_vts)
 {
     uint64_t primary = bb_id;
     bb->pause();
     reconfigure_internal(new_config, primary);
+    if (num_active_vts != NULL) {
+        *num_active_vts = 0;
+        for (uint64_t i = 0; i < NumVts; i++) {
+            if (active_server_idx[i] != UINT64_MAX) {
+                *num_active_vts = (*num_active_vts) + 1;
+            }
+        }
+    }
     bb->unpause();
     return primary;
 }

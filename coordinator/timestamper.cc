@@ -1302,24 +1302,20 @@ main(int argc, const char *argv[])
         while (!vts->active_backup) {
             vts->backup_cond.wait();
         }
+        vts->num_active_vts = NumVts;
         vts->config_mutex.unlock();
         WDEBUG << "backup " << backup_input << " now primary for vt " << vt_id << std::endl;
         vts->restore_backup();
-    } else {
-        // this server is primary vt, start now
-        std::cout << "Vector timestamper " << vt_id << std::endl;
     }
 
     // initial wait for all vector timestampers to start
-    // TODO change this to use config pushed by server manager
-    timespec sleep_time;
-    sleep_time.tv_sec =  INITIAL_TIMEOUT_NANO / NANO;
-    sleep_time.tv_nsec = INITIAL_TIMEOUT_NANO % NANO;
-    int ret = clock_nanosleep(CLOCK_REALTIME, 0, &sleep_time, NULL);
-    assert(ret == 0);
-    WDEBUG << "Initial setup delay complete" << std::endl;
+    vts->config_mutex.lock();
+    while (vts->num_active_vts != NumVts) {
+        vts->start_all_vts_cond.wait();
+    }
+    vts->config_mutex.unlock();
 
-    UNUSED(ret);
+    std::cout << "Vector timestamper " << vt_id << std::endl;
 
     // periodic vector clock update to other timestampers
     std::thread clk_update_thr(clk_update_function);
@@ -1328,5 +1324,3 @@ main(int argc, const char *argv[])
     // periodic nops to shard
     nop_function();
 }
-
-#undef weaver_test_
