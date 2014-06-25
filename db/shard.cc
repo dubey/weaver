@@ -16,6 +16,7 @@
 #include <iostream>
 #include <string>
 #include <signal.h>
+#include <e/popt.h>
 #include <e/buffer.h>
 
 #define weaver_debug_
@@ -2001,22 +2002,15 @@ install_signal_handler(int signum, void (*handler)(int))
 }
 
 int
-main(int argc, char *argv[])
+main(int argc, const char *argv[])
 {
-    if (argc < 2 && argc > 4) {
-        WDEBUG << "Usage,  primary shard: " << argv[0] << " <shard_id>" << std::endl
-               << "         backup shard: " << argv[0] << " <shard_id> <backup_number>" << std::endl
-               << " primary bulk loading: " << argv[0] << " <shard_id> <graph_file_format> <graph_file_name>" << std::endl;
-        return -1;
-    }
-
+    // signal handlers
     install_signal_handler(SIGINT, end_program);
     install_signal_handler(SIGHUP, end_program);
     install_signal_handler(SIGTERM, end_program);
     install_signal_handler(SIGTSTP, end_program);
 
-    init_config_constants("/home/dubey/weaver.yaml");
-
+    // signals
     sigset_t ss;
     if (sigfillset(&ss) < 0) {
         WDEBUG << "sigfillset failed" << std::endl;
@@ -2028,15 +2022,57 @@ main(int argc, char *argv[])
         return -1;
     }
 
-    // shard setup
-    shard_id = atoi(argv[1]);
-    if (argc == 3) {
-        // backup shard
-        S = new db::shard(shard_id, atoi(argv[2]));
-        assert((atoi(argv[2]) - shard_id) % NumEffectiveServers == 0);
-    } else {
-        S = new db::shard(shard_id, shard_id);
+    // command line params
+    const char *config_file = "/usr/local/etc/weaver.yaml";
+    const char *graph_file = NULL;
+    const char *graph_format = "snap";
+    long sid_input = 0;
+    long backup_input = LONG_MAX;
+    // arg parsing borrowed from HyperDex
+    e::argparser ap;
+    ap.autohelp();
+    ap.arg().name('s', "shard-id")
+            .description("shard id number (default 0)")
+            .metavar("num").as_long(&sid_input);
+    ap.arg().name('b', "backup-number")
+            .description("backup number (not backup by default)")
+            .metavar("num").as_long(&backup_input);
+    ap.arg().long_name("config-file")
+            .description("full path of weaver.yaml configuration file (default /usr/local/etc/weaver.yaml)")
+            .metavar("filename").as_string(&config_file);
+    ap.arg().long_name("graph-file")
+            .description("full path of bulk load input graph file (no default)")
+            .metavar("filename").as_string(&graph_file);
+    ap.arg().long_name("graph-format")
+            .description("bulk load input graph format (default snap)")
+            .metavar("filename").as_string(&graph_format);
+
+    if (!ap.parse(argc, argv) || ap.args_sz() != 0) {
+        WDEBUG << "args parsing failure" << std::endl;
+        return -1;
     }
+
+    // configuration file parse
+    init_config_constants(config_file);
+
+    // init shard, also check cmdline params
+    shard_id = (uint64_t)sid_input + ShardIdIncr;
+    if (shard_id >= NumEffectiveServers) {
+        WDEBUG << "bad shard id " << shard_id << std::endl;
+        return -1;
+    }
+
+    uint64_t server_id = shard_id;
+    if (backup_input != LONG_MAX) {
+        assert(graph_file == NULL);
+        // backup shard
+        if ((uint64_t)backup_input > NumBackups) {
+            WDEBUG << "bad backup number" << std::endl;
+            return -1;
+        }
+        server_id = shard_id + NumEffectiveServers*backup_input;
+    }
+    S = new db::shard(shard_id, server_id);
 
     // server manager link
     std::thread sm_thr(server_manager_link_loop,
@@ -2051,7 +2087,7 @@ main(int argc, char *argv[])
     }
 
     // registered this server with server_manager, config has fairly recent value
-    if (argc != 3) {
+    if (backup_input == LONG_MAX) {
         S->init(false); // primary
     } else {
         S->init(true); // backup
@@ -2069,13 +2105,13 @@ main(int argc, char *argv[])
     }
 
     // bulk loading
-    if (argc == 4) {
+    if (graph_file != NULL) {
         db::graph_file_format format = db::SNAP;
-        if (strcmp(argv[2], "tsv") == 0) {
+        if (strcmp(graph_format, "tsv") == 0) {
             format = db::TSV;
-        } else if (strcmp(argv[2], "snap") == 0) {
+        } else if (strcmp(graph_format, "snap") == 0) {
             format = db::SNAP;
-        } else if (strcmp(argv[2], "weaver") == 0) {
+        } else if (strcmp(graph_format, "weaver") == 0) {
             format = db::WEAVER;
         } else {
             WDEBUG << "Invalid graph file format" << std::endl;
@@ -2083,14 +2119,14 @@ main(int argc, char *argv[])
 
         wclock::weaver_timer timer;
         uint64_t load_time = timer.get_time_elapsed();
-        load_graph(format, argv[3]);
+        load_graph(format, graph_file);
         load_time = timer.get_time_elapsed() - load_time;
         message::message msg;
         msg.prepare_message(message::LOADED_GRAPH, load_time);
         S->comm.send(ShardIdIncr, msg.buf);
     }
 
-    if (argc == 3) {
+    if (backup_input != LONG_MAX) {
         // wait till this server becomes primary shard
         S->config_mutex.lock();
         while (!S->active_backup) {

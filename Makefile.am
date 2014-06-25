@@ -22,7 +22,7 @@ AM_CXXFLAGS=-std=c++0x -Wall -Wextra
 #AM_CPPFLAGS=-I$(abs_top_srcdir)
 AM_CPPFLAGS=
 CYTHON_FLAGS=--cplus
-LIBS=-lbusybee -le -pthread -lrt -lhyperdex-client -lchronos -lreplicant -lyaml
+LIBS=-lbusybee -le -pthread -lrt -lhyperdex-client -lchronos -lreplicant -lyaml -lpopt
 
 if DEBUG
     AM_CFLAGS += -g3 -gdwarf-2 -Og
@@ -243,4 +243,6 @@ bindings_python_client_la_LIBS=		-lpython2.7 $(LIBS)
 
 # configuration files
 EXTRA_DIST+=	conf/weaver_shards.conf
+EXTRA_DIST+=	conf/weaver.yaml
 sysconf_DATA+=	conf/weaver_shards.conf
+sysconf_DATA+=	conf/weaver.yaml

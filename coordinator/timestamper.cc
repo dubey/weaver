@@ -19,6 +19,7 @@
 #include <stdlib.h>
 #include <signal.h>
 #include <sys/time.h>
+#include <e/popt.h>
 
 #define weaver_debug_
 //#define weaver_test_
@@ -1201,44 +1202,73 @@ install_signal_handler(int signum, void (*handler)(int))
 }
 
 int
-main(int argc, char *argv[])
+main(int argc, const char *argv[])
 {
-    if (argc < 2 || argc > 3) {
-        WDEBUG << "Usage,   primary vt:" << argv[0] << " <vector_timestamper_id>" << std::endl
-               << "          backup vt:" << argv[0] << " <vector_timestamper_id> <backup_number>" << std::endl; 
-        return -1;
-    }
-
-    init_config_constants("/home/dubey/weaver.yaml");
-#ifdef weaver_test_
-    num_prep = 0;
-    num_comm = 0;
-#endif
-
+    // signal handlers
     install_signal_handler(SIGINT, end_program);
     install_signal_handler(SIGHUP, end_program);
     install_signal_handler(SIGTERM, end_program);
     install_signal_handler(SIGTSTP, end_program);
 
+    // signals
     sigset_t ss;
     if (sigfillset(&ss) < 0) {
         WDEBUG << "sigfillset failed" << std::endl;
         return -1;
     }
-    sigdelset(&ss, SIGPROF);
+    //sigdelset(&ss, SIGPROF);
     if (pthread_sigmask(SIG_SETMASK, &ss, NULL) < 0) {
         WDEBUG << "pthread sigmask failed" << std::endl;
         return -1;
     }
 
-    // vt setup
-    vt_id = atoi(argv[1]);
-    if (argc == 3) {
-        vts = new coordinator::timestamper(vt_id, atoi(argv[2]));
-        assert((atoi(argv[2]) - vt_id) % NumEffectiveServers == 0);
-    } else {
-        vts = new coordinator::timestamper(vt_id, vt_id);
+    // command line params
+    const char *config_file = "/usr/local/etc/weaver.yaml";
+    long vtid_input = 0;
+    long backup_input = LONG_MAX;
+    // arg parsing borrowed from HyperDex
+    e::argparser ap;
+    ap.autohelp();
+    ap.arg().name('t', "timestamper-id")
+            .description("timestamper id number (default 0)")
+            .metavar("num").as_long(&vtid_input);
+    ap.arg().name('b', "backup-number")
+            .description("backup number (not backup by default)")
+            .metavar("num").as_long(&backup_input);
+    ap.arg().long_name("config-file")
+            .description("full path of weaver.yaml configuration file (default /usr/local/etc/weaver.yaml)")
+            .metavar("filename").as_string(&config_file);
+
+    if (!ap.parse(argc, argv) || ap.args_sz() != 0) {
+        WDEBUG << "args parsing failure" << std::endl;
+        return -1;
     }
+
+    // configuration file parse
+    init_config_constants(config_file);
+
+#ifdef weaver_test_
+    num_prep = 0;
+    num_comm = 0;
+#endif
+
+    // init vt, also check cmdline params
+    vt_id = (uint64_t)vtid_input;
+    if (vt_id >= NumVts) {
+        WDEBUG << "bad vt id " << vt_id << std::endl;
+        return -1;
+    }
+
+    uint64_t server_id = vt_id;
+    if (backup_input != LONG_MAX) {
+        // backup shard
+        if ((uint64_t)backup_input > NumBackups) {
+            WDEBUG << "bad backup number" << std::endl;
+            return -1;
+        }
+        server_id = vt_id + NumEffectiveServers*backup_input;
+    }
+    vts = new coordinator::timestamper(vt_id, server_id);
 
     // server manager link
     std::thread sm_thr(server_manager_link_loop,
@@ -1266,14 +1296,14 @@ main(int argc, char *argv[])
         thr->detach();
     }
 
-    if (argc == 3) {
+    if (backup_input != LONG_MAX) {
         // wait till this server becomes primary vt
         vts->config_mutex.lock();
         while (!vts->active_backup) {
             vts->backup_cond.wait();
         }
         vts->config_mutex.unlock();
-        WDEBUG << "backup " << atoi(argv[2]) << " now primary for vt " << vt_id << std::endl;
+        WDEBUG << "backup " << backup_input << " now primary for vt " << vt_id << std::endl;
         vts->restore_backup();
     } else {
         // this server is primary vt, start now

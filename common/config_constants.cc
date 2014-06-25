@@ -95,7 +95,6 @@ init_config_constants(const char *config_file_name)
     assert(UINT64_MAX != NumShards);
     assert(UINT64_MAX != NumBackups);
     assert(NULL != ShardsFile);
-    printf("shard file name %s\n", ShardsFile);
 
     NumEffectiveServers = NumVts + NumShards;
     NumActualServers = NumEffectiveServers * (1+NumBackups);
