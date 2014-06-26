@@ -32,11 +32,11 @@ extern "C"
 {
 
 chronos_client*
-chronos_client_create(const char* host, uint16_t port)
+chronos_client_create(const char* host, uint16_t port, uint64_t num_vts)
 {
     try
     {
-        return new chronos_client(host, port);
+        return new chronos_client(host, port, num_vts);
     }
     catch (po6::error& e)
     {

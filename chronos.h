@@ -123,7 +123,7 @@ struct chronos_stats
  * maintain state necessary for the chronos_client.
  */
 struct chronos_client*
-chronos_client_create(const char* host, uint16_t port);
+chronos_client_create(const char* host, uint16_t port, uint64_t num_vts);
 
 /* Destroy an existing client instance.
  */
@@ -276,7 +276,7 @@ chronos_wait(struct chronos_client* client, int64_t id, int timeout, enum chrono
 class chronos_client
 {
     public:
-        chronos_client(const char* host, uint16_t port);
+        chronos_client(const char* host, uint16_t port, uint64_t num_vts);
         ~chronos_client() throw ();
 
     public:

@@ -47,6 +47,9 @@
 #include "chronos_cmp_encode.h"
 #include "network_constants.h"
 
+// global externs
+uint64_t KronosNumVts;
+
 class chronos_client::pending
 {
     public:
@@ -179,10 +182,11 @@ class chronos_client::pending_get_stats : public pending
         ssize_t* m_ret;
 };
 
-chronos_client :: chronos_client(const char* host, uint16_t port)
+chronos_client :: chronos_client(const char* host, uint16_t port, uint64_t num_vts)
     : m_replicant(new replicant_client(host, port))
     , m_pending()
 {
+    KronosNumVts = num_vts;
 }
 
 chronos_client :: ~chronos_client() throw ()
