@@ -24,7 +24,7 @@ c.begin_tx()
 ayush = c.create_node()
 c.set_node_property(ayush, 'type', 'user')
 c.end_tx()
-print 'User ayush has user id ' + str(ayush)
+print 'User ayush created'
 id_to_name[ayush] = 'ayush'
 
 # create node for user egs
@@ -32,7 +32,7 @@ c.begin_tx()
 egs = c.create_node()
 c.set_node_property(egs, 'type', 'user')
 c.end_tx()
-print 'User egs has user id ' + str(egs)
+print 'User egs created'
 id_to_name[egs] = 'egs'
 
 # ayush follows egs
@@ -62,13 +62,7 @@ c.end_tx()
 print 'ayush likes egs\'s post'
 
 # list all the people who like egs's post
-# for every hop, list the desired node properties
-#NodeProps = [[('type', 'user')], [('type', 'post')], [('type', 'user')]]
-## for every hop, list the desired out-edge properties
-#EdgeProps = [[('type', 'posted')], [('type', 'liked_by')]]
-#params = client.TraversePropsParams(node_props=NodeProps, edge_props=EdgeProps)
-#response = c.traverse_props([(egs, params)])
-#print 'List of users who like egs\'s posts:'
-#for user in response.return_nodes:
-#    print '\t' + id_to_name[user]
-c.traverse(0, [('type','user')]).out_edge([('type','posted')]).node([('type','post')]).out_edge([('type','liked-by')]).node([('type','user')]).execute()
+return_nodes = c.traverse(egs, [('type','user')]).out_edge([('type','posted')]).node([('type','post')]).out_edge([('type','liked_by')]).node([('type','user')]).execute()
+print 'List of users who like egs\'s posts:'
+for user in return_nodes:
+    print '\t' + id_to_name[user]

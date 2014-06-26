@@ -559,7 +559,7 @@ cdef class Client:
     def execute(self):
         assert len(self.traverse_node_props) == (len(self.traverse_edge_props)+1)
         params = TraversePropsParams(node_props=self.traverse_node_props, edge_props=self.traverse_edge_props)
-        return self.traverse_props([(self.traverse_start_node, params)])
+        return self.traverse_props([(self.traverse_start_node, params)]).return_nodes
 
     def start_migration(self):
         self.thisptr.start_migration()

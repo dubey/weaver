@@ -801,7 +801,14 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     }
     if (!get_set.empty()) {
         auto results = nmap_cl->get_mappings(get_set);
-        assert(results.size() == get_set.size());
+        if (results.size() != get_set.size()) {
+            // some node ids bad, return immediately
+            WDEBUG << "bad node ids in node prog request" << std::endl;
+            uint64_t zero = 0;
+            msg->prepare_message(message::NODE_PROG_RETURN, pType, zero, ParamsType());
+            vts->comm.send(clientID, msg->buf);
+            return;
+        }
         for (auto &toAdd : results) {
             request_element_mappings.emplace(toAdd);
         }
