@@ -23,10 +23,11 @@ AC_CHECK_LIB([rt], [clock_gettime], [], [AC_MSG_ERROR([
 Weaver requires the rt library; please install to continue.
 -----------------------------------------------------------])])
 
-PKG_CHECK_MODULES([PO6], [libpo6 >= 0.3.1])
-PKG_CHECK_MODULES([E], [libe >= 0.3.2])
-PKG_CHECK_MODULES([BUSYBEE], [busybee >= 0.3.0])
-PKG_CHECK_MODULES([REPLICANT], [replicant >= 0.2.dev])
+PKG_CHECK_MODULES([PO6], [libpo6 >= 0.5.dev])
+PKG_CHECK_MODULES([E], [libe >= 0.7.dev])
+PKG_CHECK_MODULES([BUSYBEE], [busybee >= 0.5.dev])
+PKG_CHECK_MODULES([HYPERLEVELDB], [libhyperleveldb >= 1.0.dev])
+PKG_CHECK_MODULES([REPLICANT], [replicant >= 0.6.dev])
 PKG_CHECK_MODULES([HYPERDEX], [hyperdex-client >= 1.0.dev])
 # TODO chronos checks after upgrading chronos to use pkg-config
 #PKG_CHECK_MODULES([CHRONOS], )
