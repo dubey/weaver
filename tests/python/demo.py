@@ -66,3 +66,7 @@ return_nodes = c.traverse(egs, [('type','user')]).out_edge([('type','posted')]).
 print 'List of users who like egs\'s posts:'
 for user in return_nodes:
     print '\t' + id_to_name[user]
+
+c.single_stream_migration()
+c.single_stream_migration()
+c.single_stream_migration()

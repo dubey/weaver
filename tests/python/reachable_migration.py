@@ -57,7 +57,7 @@ num_vts = 1
 
 clients = []
 for i in range(num_clients):
-    clients.append(client.Client(client._CLIENT_ID + i, i % num_vts))
+    clients.append(client.Client(client.CL_ID + i, i % num_vts))
 
 reqs = []
 random.seed(42)

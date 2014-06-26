@@ -1338,14 +1338,6 @@ migrate_node_step1(db::hyper_stub *hs,
         return false;
     }
 
-    // begin migration
-    S->migration_mutex.lock();
-    S->current_migr = true;
-    for (uint64_t &x: S->nop_count) {
-        x = 0;
-    }
-    S->migration_mutex.unlock();
-
     // mark node as "moved"
     n->state = db::element::node::mode::MOVED;
     n->new_loc = migr_loc;
@@ -1372,6 +1364,14 @@ migrate_node_step1(db::hyper_stub *hs,
 
     // update Hyperdex map for this node
     S->update_node_mapping(S->migr_node, migr_loc);
+
+    // begin migration
+    S->migration_mutex.lock();
+    S->current_migr = true;
+    for (uint64_t &x: S->nop_count) {
+        x = 0;
+    }
+    S->migration_mutex.unlock();
 
     return true;
 }

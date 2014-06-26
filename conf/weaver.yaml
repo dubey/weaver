@@ -1,4 +1,4 @@
 num_vts     : 1
-num_shards  : 1
-num_backups : 1
+num_shards  : 2
+num_backups : 0
 shards_file : /usr/local/etc/weaver_shards.conf
