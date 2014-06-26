@@ -39,7 +39,7 @@ client :: client(uint64_t my_id, uint64_t vt_id)
     , tx_id_ctr(0)
     , temp_handle_ctr(0)
 {
-    init_config_constants("/home/dubey/weaver.yaml");
+    init_config_constants("/usr/local/etc/weaver.yaml");
     comm.client_init();
 }
 
