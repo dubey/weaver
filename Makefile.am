@@ -92,8 +92,7 @@ noinst_HEADERS+=	coordinator/current_prog.h \
 					coordinator/server_manager.h  \
 					coordinator/timestamper.h  \
 					coordinator/transitions.h  \
-					coordinator/util.h  \
-					coordinator/vt_constants.h
+					coordinator/util.h
 bin_PROGRAMS+=				weaver-timestamper
 weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    common/configuration.cc \

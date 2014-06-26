@@ -317,6 +317,8 @@ cdef class Client:
     def __cinit__(self, uint64_t my_id, uint64_t vt_id):
         self.thisptr = new client(my_id, vt_id)
         self.vtid = vt_id
+        self.traverse_start_node = 0
+        self.traverse_node_props = []
     def __dealloc__(self):
         del self.thisptr
     def begin_tx(self):
@@ -534,6 +536,11 @@ cdef class Client:
             c_rp = self.thisptr.traverse_props_program(c_args)
         response = TraversePropsParams(return_nodes=c_rp.return_nodes)
         return response
+
+    def traverse(self, start_node, node_props=[]):
+        self.traverse_start_node = start_node
+        self.traverse_node_props.append(node_props)
+        return self
 
     def start_migration(self):
         self.thisptr.start_migration()

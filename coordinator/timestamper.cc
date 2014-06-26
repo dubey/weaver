@@ -30,7 +30,6 @@
 #include "common/bool_vector.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
-#include "coordinator/vt_constants.h"
 #include "coordinator/timestamper.h"
 
 // extern global variables
