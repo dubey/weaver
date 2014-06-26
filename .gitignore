@@ -6,7 +6,7 @@
 *.txt
 *.log
 *.profile
-*.sh
+ltmain.sh
 *.depend
 *.out
 *.lo
