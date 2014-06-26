@@ -82,7 +82,8 @@ noinst_HEADERS+=	node_prog/base_classes.h \
 					common/message_constants.h \
 					common/serialization.h \
 					common/server_manager_link_wrapper.h \
-					common/vclock.h
+					common/vclock.h \
+                    common/bool_vector.h
 
 # timestamper
 noinst_HEADERS+=	coordinator/current_prog.h \
@@ -243,5 +244,42 @@ bindings_python_client_la_LIBS=		-lpython2.7 $(LIBS)
 # configuration files
 EXTRA_DIST+=	conf/weaver_shards.conf
 EXTRA_DIST+=	conf/weaver.yaml
+EXTRA_DIST+=	startup_scripts/start_weaver_support.sh
+EXTRA_DIST+=	startup_scripts/kill_weaver_support.sh
+EXTRA_DIST+=	startup_scripts/ps_weaver_support.sh
 sysconf_DATA+=	conf/weaver_shards.conf
 sysconf_DATA+=	conf/weaver.yaml
+
+# python example programs
+EXTRA_DIST+=	assoc_count_basic.py
+EXTRA_DIST+=	delete_tx.py
+EXTRA_DIST+=	ft_shard_deletes.py
+EXTRA_DIST+=	multiline_cache_testing.py
+EXTRA_DIST+=	read_properties.py
+EXTRA_DIST+=	test_base.py
+EXTRA_DIST+=	assoc_range_basic.py
+EXTRA_DIST+=	deletion.py
+EXTRA_DIST+=	graph_of_gods_demo.py
+EXTRA_DIST+=	nwx_reachability.py
+EXTRA_DIST+=	sequential_pathless_reachability_bench.py
+EXTRA_DIST+=	clustering_basic_test.py
+EXTRA_DIST+=	demo.py
+EXTRA_DIST+=	old_reachability_bench.py
+EXTRA_DIST+=	transactions.py
+EXTRA_DIST+=	clustering_bench.py
+EXTRA_DIST+=	dijkstra_basic_test.py
+EXTRA_DIST+=	line_cache_testing.py
+EXTRA_DIST+=	reachability_bench.py
+EXTRA_DIST+=	simple_client.py
+EXTRA_DIST+=	clustering_migration.py
+EXTRA_DIST+=	empty_graph_sanity_checks.py
+EXTRA_DIST+=	line_properties.py
+EXTRA_DIST+=	reachable_migration.py
+EXTRA_DIST+=	soc_net_bench.py
+EXTRA_DIST+=	two_neighborhood_bench.py
+EXTRA_DIST+=	create_graph.py
+EXTRA_DIST+=	ft_shard_basic.py
+EXTRA_DIST+=	line_reachability.py
+EXTRA_DIST+=	read_only_vertex_bench.py
+EXTRA_DIST+=	star_cache_testing.py
+EXTRA_DIST+=	two_neighborhood_testing.py
