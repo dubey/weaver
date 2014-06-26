@@ -314,6 +314,9 @@ cdef extern from 'client/weaver_client.h' namespace 'client':
 cdef class Client:
     cdef client *thisptr
     cdef uint64_t vtid
+    cdef uint64_t traverse_start_node
+    cdef object traverse_node_props
+    cdef object traverse_edge_props
     def __cinit__(self, uint64_t my_id, uint64_t vt_id):
         self.thisptr = new client(my_id, vt_id)
         self.vtid = vt_id
@@ -554,7 +557,7 @@ cdef class Client:
         return self
 
     def execute(self):
-        assert len(self.traverse_node_props) == (len(self.traverse_edge_props)-1)
+        assert len(self.traverse_node_props) == (len(self.traverse_edge_props)+1)
         params = TraversePropsParams(node_props=self.traverse_node_props, edge_props=self.traverse_edge_props)
         return self.traverse_props([(self.traverse_start_node, params)])
 

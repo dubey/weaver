@@ -63,11 +63,12 @@ print 'ayush likes egs\'s post'
 
 # list all the people who like egs's post
 # for every hop, list the desired node properties
-NodeProps = [[('type', 'user')], [('type', 'post')], [('type', 'user')]]
-# for every hop, list the desired out-edge properties
-EdgeProps = [[('type', 'posted')], [('type', 'liked_by')]]
-params = client.TraversePropsParams(node_props=NodeProps, edge_props=EdgeProps)
-response = c.traverse_props([(egs, params)])
-print 'List of users who like egs\'s posts:'
-for user in response.return_nodes:
-    print '\t' + id_to_name[user]
+#NodeProps = [[('type', 'user')], [('type', 'post')], [('type', 'user')]]
+## for every hop, list the desired out-edge properties
+#EdgeProps = [[('type', 'posted')], [('type', 'liked_by')]]
+#params = client.TraversePropsParams(node_props=NodeProps, edge_props=EdgeProps)
+#response = c.traverse_props([(egs, params)])
+#print 'List of users who like egs\'s posts:'
+#for user in response.return_nodes:
+#    print '\t' + id_to_name[user]
+c.traverse(0, [('type','user')]).out_edge([('type','posted')]).node([('type','post')]).out_edge([('type','liked-by')]).node([('type','user')]).execute()
