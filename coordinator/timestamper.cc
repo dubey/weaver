@@ -1222,7 +1222,9 @@ main(int argc, const char *argv[])
         WDEBUG << "sigfillset failed" << std::endl;
         return -1;
     }
-    //sigdelset(&ss, SIGPROF);
+    sigdelset(&ss, SIGPROF);
+    sigdelset(&ss, SIGINT);
+    sigdelset(&ss, SIGTSTP);
     if (pthread_sigmask(SIG_SETMASK, &ss, NULL) < 0) {
         WDEBUG << "pthread sigmask failed" << std::endl;
         return -1;

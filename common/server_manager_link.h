@@ -90,7 +90,7 @@ class server_manager_link
     private:
         replicant_client m_repl;
         configuration m_config;
-        enum { NOTHING, WAITING_ON_BROADCAST, FETCHING_CONFIG } m_state;
+        enum { NOTHING, WAITING_ON_BROADCAST, FETCHING_CONFIG, FETCHING_ID } m_state;
         int64_t m_id;
         replicant_returncode m_status;
         const char* m_output;

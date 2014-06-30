@@ -78,6 +78,7 @@ class server_manager
                         const server_id& sid, uint64_t version);
         void config_stable(replicant_state_machine_context* ctx,
                            const server_id& sid, uint64_t version);
+        void replid_get(replicant_state_machine_context *ctx);
 
     // alarm
     public:
@@ -124,6 +125,8 @@ class server_manager
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         std::auto_ptr<e::buffer> m_latest_config;
 #pragma GCC diagnostic pop
+        // for returning client id
+        std::unique_ptr<e::buffer> m_response;
 
     private:
         server_manager(const server_manager&);

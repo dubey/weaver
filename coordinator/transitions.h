@@ -50,6 +50,7 @@ TRANSITION(init);
 TRANSITION(config_get);
 TRANSITION(config_ack);
 TRANSITION(config_stable);
+TRANSITION(replid_get);
 
 TRANSITION(server_register);
 TRANSITION(server_online);

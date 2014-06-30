@@ -1914,6 +1914,12 @@ server_manager_link_loop(po6::net::hostname sm_host)
         return;
     }
 
+    uint64_t myid = UINT64_MAX;
+    if (!S->sm_stub.get_replid(myid)) {
+        WDEBUG << "fail get_replid" << std::endl;
+        return;
+    }
+
     bool cluster_jump = false;
 
     while (!S->sm_stub.should_exit())
@@ -1964,6 +1970,7 @@ server_manager_link_loop(po6::net::hostname sm_host)
 
         // let the coordinator know we've moved to this config
         S->sm_stub.config_ack(new_config.version());
+
     }
 
     WDEBUG << "exiting server manager link loop" << std::endl;
@@ -2017,6 +2024,9 @@ main(int argc, const char *argv[])
         return -1;
     }
     //sigdelset(&ss, SIGPROF);
+    //sigdelset(&ss, SIGPROF);
+    //sigdelset(&ss, SIGINT);
+    //sigdelset(&ss, SIGTSTP);
     if (pthread_sigmask(SIG_SETMASK, &ss, NULL) < 0) {
         WDEBUG << "pthread sigmask failed" << std::endl;
         return -1;

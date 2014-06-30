@@ -386,6 +386,18 @@ server_manager :: config_stable(replicant_state_machine_context* ctx,
 }
 
 void
+server_manager :: replid_get(replicant_state_machine_context* ctx)
+{
+    assert(m_cluster != 0 && m_version != 0);
+    uint64_t client = replicant_state_machine_get_client(ctx);
+    size_t sz = sizeof(uint64_t);
+    m_response.reset(e::buffer::create(sz));
+    uint8_t *ptr = m_response->data();
+    e::pack64be(client, ptr);
+    replicant_state_machine_set_response(ctx, reinterpret_cast<const char*>(m_response->data()), sz);
+}
+
+void
 server_manager :: alarm(replicant_state_machine_context* ctx)
 {
     replicant_state_machine_alarm(ctx, "alarm", ALARM_INTERVAL);

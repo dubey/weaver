@@ -16,8 +16,10 @@
 // Robert Escriva's HyperDex coordinator.
 // see https://github.com/rescrv/HyperDex for the original code.
 
+#define weaver_debug_
 // Weaver
 #include "common/server_manager_link.h"
+#include "common/weaver_constants.h"
 
 server_manager_link :: server_manager_link(const char* server_manager, uint16_t port)
     : m_repl(server_manager, port)
@@ -144,6 +146,7 @@ server_manager_link :: loop(int timeout, replicant_returncode* status)
 {
     if (!m_pending_ids.empty())
     {
+        WDEBUG << "pending not empty, size " << m_pending_ids.size() << std::endl;
         int64_t ret = m_pending_ids.front();
         m_pending_ids.pop_front();
         return ret;

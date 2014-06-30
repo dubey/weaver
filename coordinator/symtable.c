@@ -33,6 +33,7 @@ struct replicant_state_machine rsm = {
     {{"config_get", weaver_server_manager_config_get},
      {"config_ack", weaver_server_manager_config_ack},
      {"config_stable", weaver_server_manager_config_stable},
+     {"replid_get", weaver_server_manager_replid_get},
      {"server_register", weaver_server_manager_server_register},
      {"server_online", weaver_server_manager_server_online},
      {"server_offline", weaver_server_manager_server_offline},
