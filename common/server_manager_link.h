@@ -59,6 +59,7 @@ class server_manager_link
         //
         // blocks if there's progress to be made toward getting a config
         bool ensure_configuration(replicant_returncode* status);
+        bool get_replid(uint64_t &id);
         int64_t rpc(const char* func,
                     const char* data, size_t data_sz,
                     replicant_returncode* status,

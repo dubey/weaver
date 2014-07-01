@@ -20,6 +20,7 @@
 
 #include "common/message_constants.h"
 #include "common/comm_wrapper.h"
+#include "common/server_manager_link_wrapper.h"
 #include "transaction.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/reach_program.h"
@@ -39,11 +40,13 @@ namespace client
     class client
     {
         public:
-            client(uint64_t my_id, uint64_t vt_id);
+            //client(const char *coordinator, uint16_t port);
+            client(uint64_t, uint64_t);
 
         private:
             uint64_t myid, shifted_id, vtid;
             common::comm_wrapper comm;
+            server_manager_link m_sm;
             tx_list_t cur_tx;
             uint64_t cur_tx_id, tx_id_ctr, temp_handle_ctr;
 
@@ -86,6 +89,7 @@ namespace client
 #pragma GCC diagnostic pop
             void reconfigure();
             uint64_t generate_handle();
+            bool maintain_sm_connection();
     };
 }
 

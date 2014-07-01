@@ -206,6 +206,8 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 		                    common/message.cc \
 		                    common/event_order.cc \
                             common/config_constants.cc \
+                            common/server_manager_link.cc \
+                            common/server_manager_link_wrapper.cc \
 		                    node_prog/prop_list.cc \
 		                    node_prog/edge_list.cc \
 		                    node_prog/clustering_program.cc \

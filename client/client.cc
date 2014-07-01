@@ -11,6 +11,7 @@
  * ===============================================================
  */
 
+#define weaver_debug_
 #include "common/message.h"
 #include "common/config_constants.h"
 #include "client/client_constants.h"
@@ -30,17 +31,37 @@ char *ShardsFile;
 namespace client
 {
 
+//client :: client(const char *coordinator, uint16_t port)
 client :: client(uint64_t my_id, uint64_t vt_id)
     : myid(my_id)
     , shifted_id(myid << (64-ID_BITS))
     , vtid(vt_id)
-    , comm(my_id, 1, CLIENT_MSGRECV_TIMEOUT)
+    , comm(myid, 1, CLIENT_MSGRECV_TIMEOUT)
+    , m_sm("127.0.0.1", 2002)
     , cur_tx_id(UINT64_MAX)
     , tx_id_ctr(0)
     , temp_handle_ctr(0)
 {
     init_config_constants("/usr/local/etc/weaver.yaml");
     comm.client_init();
+
+    uint64_t repl_id;
+    assert(m_sm.get_replid(repl_id) && "get repl_id");
+    WDEBUG << "replicant id " << repl_id << std::endl;
+
+    int try_sm = 0;
+    while (!maintain_sm_connection()) {
+        WDEBUG << "retry sm connection " << try_sm++ << std::endl;
+    }
+
+    for (uint64_t i = 0; i < NumActualServers; i++) {
+        server::state_t st = m_sm.config()->get_state(server_id(i));
+        if (st != server::AVAILABLE) {
+            WDEBUG << "Server " << i << " is in trouble, has state " << st << std::endl;
+        } else {
+            WDEBUG << "Server " << i << " is healthy, has state " << st << std::endl;
+        }
+    }
 }
 
 void
@@ -125,7 +146,11 @@ client :: set_edge_property(uint64_t node, uint64_t edge,
 bool
 client :: end_tx()
 {
-    assert(cur_tx_id != UINT64_MAX);
+    if (cur_tx_id == UINT64_MAX) {
+        WDEBUG << "no active tx to commit" << std::endl;
+        return false;
+    }
+
     bool success = false;
     message::message msg;
     message::prepare_tx_message_client(msg, cur_tx);
@@ -134,7 +159,8 @@ client :: end_tx()
     busybee_returncode recv_code = recv_coord(&msg.buf);
     if (recv_code == BUSYBEE_TIMEOUT) {
         // assume vt is dead, fail tx
-        reconfigure();
+        WDEBUG << "operation timeout, perhaps timestamper is dead?" << std::endl;
+        return false;
     } else if (recv_code != BUSYBEE_SUCCESS) {
         WDEBUG << "tx msg recv fail" << std::endl;
     } else {
@@ -340,14 +366,6 @@ client :: recv_coord(std::auto_ptr<e::buffer> *buf)
 }
 #pragma GCC diagnostic pop
 
-void
-client :: reconfigure()
-{
-    // our vt is probably dead
-    // set vtid to next backup, client has to retry
-    // TODO vtid += (NumShards + NumVts);
-}
-
 // to generate 64 bit graph element handles
 // assuming no more than 2^(ID_BITS) clients
 // assuming no more than 2^(64-ID_BITS) graph nodes and edges created at this client
@@ -357,6 +375,32 @@ client :: generate_handle()
     uint64_t new_handle = (++temp_handle_ctr) & TOP_MASK;
     new_handle |= shifted_id;
     return new_handle;
+}
+
+bool
+client :: maintain_sm_connection()
+{
+    replicant_returncode rc;
+
+    if (!m_sm.ensure_configuration(&rc))
+    {
+        if (rc == REPLICANT_INTERRUPTED)
+        {
+            WDEBUG << "signal received";
+        }
+        else if (rc == REPLICANT_TIMEOUT)
+        {
+            WDEBUG << "operation timed out";
+        }
+        else
+        {
+            WDEBUG << "coordinator failure: " << m_sm.error().msg();
+        }
+
+        return false;
+    }
+
+    return true;
 }
 
 }

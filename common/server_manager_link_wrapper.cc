@@ -134,52 +134,7 @@ server_manager_link_wrapper :: set_server_manager_address(const char* host, uint
 bool
 server_manager_link_wrapper :: get_replid(uint64_t &id)
 {
-#pragma GCC diagnostic push
-#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    std::auto_ptr<sm_rpc> rpc(new sm_rpc);
-#pragma GCC diagnostic pop
-    const char *buf = NULL;
-    size_t zero = 0;
-    int64_t rid = m_sm->rpc("replid_get",
-                            buf, zero,
-                            &rpc->status,
-                            &rpc->output,
-                            &rpc->output_sz);
-
-    if (rid < 0) {
-        e::error err = m_sm->error();
-        WDEBUG << "could not get replicant id: " << err.msg() << " @ " << err.loc() << std::endl;
-        return false;
-    }
-
-    while (true) {
-        replicant_returncode lrc = REPLICANT_GARBAGE;
-        int64_t lid = m_sm->loop(-1, &lrc);
-
-        if (lid < 0) {
-            e::error err = m_sm->error();
-            WDEBUG << "could not get replicant id: " << err.msg() << " @ " << err.loc() << std::endl;
-            return false;
-        } else if (lid == rid) {
-            break;
-        } else {
-            WDEBUG << "retry get replicant id, " << "lid " << lid << ", rid " << rid << std::endl;
-        }
-    }
-
-    if (rpc->status != REPLICANT_SUCCESS) {
-        e::error err = m_sm->error();
-        WDEBUG << "could not get replicant id: " << err.msg() << " @ " << err.loc() << std::endl;
-        return false;
-    }
-
-    if (rpc->output_sz >= sizeof(uint64_t)) {
-        e::unpack64be(rpc->output, &id);
-        return true;
-    } else {
-        WDEBUG << "could not get replicant id: server manager returned invalid message" << std::endl;
-        return false;
-    }
+    return m_sm->get_replid(id);
 }
 
 bool

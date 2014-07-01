@@ -16,6 +16,8 @@
 // Robert Escriva's HyperDex coordinator.
 // see https://github.com/rescrv/HyperDex for the original code.
 
+#include <e/endian.h>
+
 #define weaver_debug_
 // Weaver
 #include "common/server_manager_link.h"
@@ -116,6 +118,56 @@ server_manager_link :: ensure_configuration(replicant_returncode* status)
             m_pending_ids.push_back(lid);
         }
     }
+}
+
+bool
+server_manager_link :: get_replid(uint64_t &id)
+{
+    const char *buf = NULL;
+    size_t zero = 0;
+    replicant_returncode status;
+    const char *output;
+    size_t output_sz;
+    int64_t rid = rpc("replid_get",
+                      buf, zero,
+                      &status,
+                      &output,
+                      &output_sz);
+
+    if (rid < 0) {
+        WDEBUG << "could not get replicant id" << std::endl;
+        return false;
+    }
+
+    while (true) {
+        replicant_returncode lrc = REPLICANT_GARBAGE;
+        int64_t lid = loop(-1, &lrc);
+
+        if (lid < 0) {
+            e::error err = error();
+            WDEBUG << "could not get replicant id: " << err.msg() << " @ " << err.loc() << std::endl;
+            return false;
+        } else if (lid == rid) {
+            break;
+        } else {
+            WDEBUG << "retry get replicant id, " << "lid " << lid << ", rid " << rid << std::endl;
+        }
+    }
+
+    if (status != REPLICANT_SUCCESS) {
+        e::error err = error();
+        WDEBUG << "could not get replicant id: " << err.msg() << " @ " << err.loc() << std::endl;
+        return false;
+    }
+
+    if (output_sz >= sizeof(uint64_t)) {
+        e::unpack64be(output, &id);
+        return true;
+    } else {
+        WDEBUG << "could not get replicant id: server manager returned invalid message" << std::endl;
+        return false;
+    }
+
 }
 
 int64_t
