@@ -52,8 +52,7 @@ client :: client()
     }
 
     po6::net::location loc("127.0.0.1", 6200);
-    comm.reset(new common::comm_wrapper(loc, 1, CLIENT_MSGRECV_TIMEOUT));
-    comm->client_init(*m_sm.config());
+    comm.reset(new cl::comm_wrapper(myid, *m_sm.config()));
 }
 
 void
@@ -146,15 +145,17 @@ client :: end_tx()
     msg.prepare_message(message::CLIENT_TX_INIT, cur_tx);
     send_coord(msg.buf);
 
-    busybee_returncode recv_code = recv_coord(&msg.buf);
+    message::message recv_msg;
+    busybee_returncode recv_code = recv_coord(&recv_msg.buf);
     if (recv_code == BUSYBEE_TIMEOUT) {
         // assume vt is dead, fail tx
         WDEBUG << "operation timeout, perhaps timestamper is dead?" << std::endl;
         success = false;
     } else if (recv_code != BUSYBEE_SUCCESS) {
         WDEBUG << "tx msg recv fail" << std::endl;
+        success = false;
     } else {
-        message::msg_type mtype = msg.unpack_message_type();
+        message::msg_type mtype = recv_msg.unpack_message_type();
         assert(mtype == message::CLIENT_TX_SUCCESS
             || mtype == message::CLIENT_TX_ABORT);
         if (mtype == message::CLIENT_TX_SUCCESS) {
@@ -337,7 +338,7 @@ client :: recv_coord(std::auto_ptr<e::buffer> *buf)
 {
     busybee_returncode ret;
     while (true) {
-        comm->quiesce_thread(0);
+        comm->quiesce_thread();
         ret = comm->recv(buf);
         switch (ret) {
             case BUSYBEE_SUCCESS:

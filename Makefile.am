@@ -194,6 +194,7 @@ weaver_shard_SOURCES=	common/ids.cc \
 
 # c++ client
 noinst_HEADERS+=	client/client_constants.h \
+					client/comm_wrapper.h
 					client/weaver_client.h
 lib_LTLIBRARIES+=			libweaverclient.la
 libweaverclient_la_SOURCES=	common/ids.cc \
@@ -221,6 +222,7 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 		                    node_prog/traverse_with_props.cc \
 		                    db/element.cc \
 		                    db/property.cc \
+		                    client/comm_wrapper.cc \
 		                    client/client.cc
 libweaverclient_la_CFLAGS=	$(AM_CFLAGS)
 libweaverclient_la_CXXFLAGS=$(AM_CXXFLAGS)

@@ -19,9 +19,9 @@
 #include <po6/net/location.h>
 
 #include "common/message_constants.h"
-#include "common/comm_wrapper.h"
 #include "common/server_manager_link_wrapper.h"
 #include "common/transaction.h"
+#include "client/comm_wrapper.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/reach_program.h"
 #include "node_prog/pathless_reach_program.h"
@@ -46,7 +46,7 @@ namespace cl
 
         private:
             uint64_t myid, shifted_id, vtid;
-            std::unique_ptr<common::comm_wrapper> comm;
+            std::unique_ptr<cl::comm_wrapper> comm;
             server_manager_link m_sm;
             transaction::tx_list_t cur_tx;
             uint64_t cur_tx_id, tx_id_ctr, temp_handle_ctr;

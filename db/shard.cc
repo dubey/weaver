@@ -13,7 +13,7 @@
  */
 
 #include <deque>
-#include <iostream>
+#include <fstream>
 #include <string>
 #include <signal.h>
 #include <e/popt.h>

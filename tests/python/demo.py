@@ -15,7 +15,7 @@
 import weaver.client as client
 
 # create client object
-c = client.Client(client.CL_ID, 0)
+c = client.Client()
 print 'created client'
 
 # create node for user ayush

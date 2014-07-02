@@ -68,14 +68,6 @@ cdef extern from '<deque>' namespace 'std':
         void push_back(T&)
         void clear()
 
-cdef extern from 'common/message_constants.h':
-    # messaging constants
-    cdef uint64_t COORD_ID
-    cdef uint64_t CLIENT_ID
-
-VT_ID                   = COORD_ID
-CL_ID                   = CLIENT_ID
-
 cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
     cdef enum prog_type:
         DEFAULT
@@ -313,13 +305,11 @@ cdef extern from 'client/weaver_client.h' namespace 'cl':
 
 cdef class Client:
     cdef client *thisptr
-    cdef uint64_t vtid
     cdef string traverse_start_node
     cdef object traverse_node_props
     cdef object traverse_edge_props
-    def __cinit__(self, uint64_t my_id, uint64_t vt_id):
+    def __cinit__(self):
         self.thisptr = new client()
-        self.vtid = vt_id
         self.traverse_start_node = ''
         self.traverse_node_props = []
         self.traverse_edge_props = []

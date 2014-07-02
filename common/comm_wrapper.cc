@@ -14,6 +14,7 @@
 #define weaver_debug_
 #include "common/weaver_constants.h"
 #include "common/config_constants.h"
+#include "common/message_constants.h"
 #include "common/comm_wrapper.h"
 
 #define ID_INCR (1ULL << 32ULL)
@@ -50,6 +51,13 @@ comm_wrapper :: comm_wrapper(po6::net::location &my_loc, int nthr, int to)
     , num_threads(nthr)
     , timeout(to)
 { }
+
+comm_wrapper :: ~comm_wrapper()
+{
+    for (auto &gc_ptr: bb_gc_ts) {
+        bb_gc.deregister_thread(gc_ptr.get());
+    }
+}
 
 void
 comm_wrapper :: init(configuration &config)
@@ -113,23 +121,22 @@ comm_wrapper :: reconfigure_internal(configuration &new_config, uint64_t &primar
     config.get_all_addresses(&addresses);
 
     for (auto &p: addresses) {
-        if (config.get_weaver_id(p.first) != UINT64_MAX) {
-            uint64_t factor = config.get_shard_or_vt(p.first) ? 1 : 0;
-            uint64_t wid = config.get_weaver_id(p.first) + NumVts*factor;
-            if (active_server_idx[wid] < UINT64_MAX
-             && config.get_state(p.first) != server::AVAILABLE) {
-                // reconfigure to backup
-            } else if (active_server_idx[wid] == UINT64_MAX) {
-                active_server_idx[wid] = wid;
-                wmap->add_mapping(wid, &p.second);
-            }
+        assert(config.get_weaver_id(p.first) != UINT64_MAX);
+        uint64_t factor = config.get_shard_or_vt(p.first) ? 1 : 0;
+        uint64_t wid = config.get_weaver_id(p.first) + NumVts*factor;
+        if (active_server_idx[wid] < UINT64_MAX
+         && config.get_state(p.first) != server::AVAILABLE) {
+            // reconfigure to backup
+        } else if (active_server_idx[wid] == UINT64_MAX) {
+            active_server_idx[wid] = wid;
+            wmap->add_mapping(wid, &p.second);
+        }
 
-            server::state_t st = config.get_state(server_id(p.first));
-            if (st != server::AVAILABLE) {
-                WDEBUG << "Server " << wid << " is in trouble, has state " << st << std::endl;
-            } else {
-                WDEBUG << "Server " << wid << " is healthy, has state " << st << std::endl;
-            }
+        server::state_t st = config.get_state(p.first);
+        if (st != server::AVAILABLE) {
+            WDEBUG << "Server " << wid << " is in trouble, has state " << st << std::endl;
+        } else {
+            WDEBUG << "Server " << wid << " is healthy, has state " << st << std::endl;
         }
     }
 

@@ -14,8 +14,9 @@
 #ifndef weaver_common_message_constants_h_
 #define weaver_common_message_constants_h_
 
-#define COORD_ID (0ULL)
-#define COORD_SM_ID (0ULL)
-#define CLIENT_ID (100ULL)
+#define ID_INCR (1ULL << 32ULL)
+#define WEAVER_TO_BUSYBEE(x) (x+ID_INCR)
+#define BUSYBEE_TO_WEAVER(x) (x-ID_INCR)
+#define CLIENT_ID_INCR (CLIENT_ID + ID_INCR)
 
 #endif
