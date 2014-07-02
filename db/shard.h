@@ -91,8 +91,9 @@ namespace db
     class shard
     {
         public:
-            shard(uint64_t shard, uint64_t server);
-            void init(bool backup);
+            //shard(uint64_t shard, uint64_t server);
+            shard(uint64_t serverid, po6::net::location &loc);
+            void init(uint64_t shardid, bool backup);
             void reconfigure();
             void bulk_load_persistent();
 
@@ -231,8 +232,8 @@ namespace db
     };
 
     inline
-    shard :: shard(uint64_t shardid, uint64_t serverid)
-        : comm(serverid, NUM_THREADS, SHARD_MSGRECV_TIMEOUT)
+    shard :: shard(uint64_t serverid, po6::net::location &loc)
+        : comm(loc, NUM_THREADS, SHARD_MSGRECV_TIMEOUT)
         , sm_stub(server_id(serverid), comm.get_loc())
         , active_backup(false)
         , first_config(false)
@@ -240,7 +241,8 @@ namespace db
         , backup_cond(&config_mutex)
         , first_config_cond(&config_mutex)
         , shard_init_cond(&config_mutex)
-        , shard_id(shardid)
+        , shard_id(UINT64_MAX)
+        //, shard_id(shardid)
         , server(serverid)
         , current_migr(false)
         , migr_token(false)
@@ -263,9 +265,6 @@ namespace db
         , restore_cv(&restore_mutex)
         , to_exit(false)
     {
-        for (int i = 0; i < NUM_THREADS; i++) {
-            hstub.push_back(new hyper_stub(shard_id));
-        }
     }
 
     // initialize: msging layer
@@ -273,9 +272,13 @@ namespace db
     //           , hyperdex stub
     // caution: assume holding config_mutex
     inline void
-    shard :: init(bool backup)
+    shard :: init(uint64_t shardid, bool backup)
     {
+        shard_id = shardid;
         comm.init(config);
+        for (int i = 0; i < NUM_THREADS; i++) {
+            hstub.push_back(new hyper_stub(shard_id));
+        }
         if (!backup) {
             hstub.back()->init(); // put initial vclock, qts
         }
@@ -288,24 +291,27 @@ namespace db
     {
         WDEBUG << "Cluster reconfigure" << std::endl;
 
-        for (uint64_t i = 0; i < NumActualServers; i++) {
-            server::state_t st = config.get_state(server_id(i));
+        std::vector<std::pair<server_id, po6::net::location>> addresses;
+        config.get_all_addresses(&addresses);
+        for (auto &p: addresses) {
+            server::state_t st = config.get_state(server_id(p.first));
             if (st != server::AVAILABLE) {
-                WDEBUG << "Server " << i << " is in trouble, has state " << st << std::endl;
+                WDEBUG << "Server " << p.first << " is in trouble, has state " << st << std::endl;
             } else {
-                WDEBUG << "Server " << i << " is healthy, has state " << st << std::endl;
+                WDEBUG << "Server " << p.first << " is healthy, has state " << st << std::endl;
             }
         }
 
-        if (comm.reconfigure(config) == server.get()
-         && !active_backup
-         && server.get() > NumEffectiveServers) {
-                WDEBUG << "Now active for shard " << shard_id << std::endl;
-                // this server is now primary for the shard
-                active_backup = true;
-                restore_backup();
-                backup_cond.signal();
-        }
+        comm.reconfigure(config);
+        //if (comm.reconfigure(config) == server.get()
+        // && !active_backup
+        // && server.get() > NumEffectiveServers) {
+        //        WDEBUG << "Now active for shard " << shard_id << std::endl;
+        //        // this server is now primary for the shard
+        //        active_backup = true;
+        //        restore_backup();
+        //        backup_cond.signal();
+        //}
     }
 
     inline void

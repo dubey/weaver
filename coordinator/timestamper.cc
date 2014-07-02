@@ -998,7 +998,7 @@ server_loop(int thread_id)
     busybee_returncode ret;
     enum message::msg_type mtype;
     std::unique_ptr<message::message> msg;
-    uint64_t sender, tx_id;
+    uint64_t tx_id, client_sender;
     node_prog::prog_type pType;
     coordinator::hyper_stub *hstub = vts->hstub[thread_id];
     nmap::nmap_stub *nmstub = vts->nmap_client[thread_id];
@@ -1006,23 +1006,22 @@ server_loop(int thread_id)
     while (true) {
         vts->comm.quiesce_thread(thread_id);
         msg.reset(new message::message());
-        ret = vts->comm.recv(&sender, &msg->buf);
+        ret = vts->comm.recv(&client_sender, &msg->buf);
         if (ret != BUSYBEE_SUCCESS && ret != BUSYBEE_TIMEOUT) {
             continue;
         } else {
             // good to go, unpack msg
             mtype = msg->unpack_message_type();
-            //sender -= ID_INCR;
 
             switch (mtype) {
                 // client messages
                 case message::CLIENT_TX_INIT: {
-                    WDEBUG << "client_tx_init, sender = " << sender << std::endl;
+                    WDEBUG << "client_tx_init, sender = " << client_sender << std::endl;
                     std::unique_ptr<transaction::pending_tx> tx(new transaction::pending_tx());
 
-                    if (!unpack_tx(*msg, sender, *tx, nmstub)) {
+                    if (!unpack_tx(*msg, client_sender, *tx, nmstub)) {
                         // tx fail because multiple deletes for same node/edge
-                        send_abort(sender);
+                        send_abort(client_sender);
                     } else {
                         prepare_tx_step1(std::move(tx), nmstub, hstub);
                     }
@@ -1096,7 +1095,7 @@ server_loop(int thread_id)
                 //    break;
 
                 case message::VT_NOP_ACK: {
-                    uint64_t shard_node_count, nop_qts, sid;
+                    uint64_t shard_node_count, nop_qts, sid, sender;
                     msg->unpack_message(message::VT_NOP_ACK, sender, nop_qts, shard_node_count);
                     sid = sender - ShardIdIncr;
                     vts->periodic_update_mutex.lock();
@@ -1125,7 +1124,7 @@ server_loop(int thread_id)
                     vts->periodic_update_mutex.lock();
                     msg->prepare_message(message::NODE_COUNT_REPLY, vts->shard_node_count);
                     vts->periodic_update_mutex.unlock();
-                    vts->comm.send(sender, msg->buf);
+                    vts->comm.send(client_sender, msg->buf);
                     break;
                 }
 
@@ -1159,7 +1158,7 @@ server_loop(int thread_id)
                 case message::ONE_STREAM_MIGR: {
                     uint64_t hops = NumShards;
                     vts->migr_mutex.lock();
-                    vts->migr_client = sender;
+                    vts->migr_client = client_sender;
                     vts->migr_mutex.unlock();
                     msg->prepare_message(message::MIGRATION_TOKEN, hops, vt_id);
                     vts->comm.send(ShardIdIncr, msg->buf);
@@ -1182,7 +1181,7 @@ server_loop(int thread_id)
 
                 case message::CLIENT_NODE_PROG_REQ:
                     msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
-                    node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), sender, nmstub);
+                    node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), client_sender, nmstub);
                     break;
 
                 // node program response from a shard
@@ -1224,8 +1223,26 @@ server_loop(int thread_id)
     }
 }
 
+bool
+generate_token(uint64_t* token)
+{
+    po6::io::fd sysrand(open("/dev/urandom", O_RDONLY));
+
+    if (sysrand.get() < 0)
+    {
+        return false;
+    }
+
+    if (sysrand.read(token, sizeof(*token)) != sizeof(*token))
+    {
+        return false;
+    }
+
+    return true;
+}
+
 void
-server_manager_link_loop(po6::net::hostname sm_host)
+server_manager_link_loop(po6::net::hostname sm_host, po6::net::location loc)
 {
     // Most of the following code has been 'borrowed' from
     // Robert Escriva's HyperDex.
@@ -1233,7 +1250,7 @@ server_manager_link_loop(po6::net::hostname sm_host)
 
     vts->sm_stub.set_server_manager_address(sm_host.address.c_str(), sm_host.port);
 
-    if (!vts->sm_stub.register_id(vts->server, *vts->comm.get_loc(), 1))
+    if (!vts->sm_stub.register_id(vts->server, loc, 1))
     {
         return;
     }
@@ -1347,15 +1364,19 @@ main(int argc, const char *argv[])
     }
 
     // command line params
+    const char* listen_host = "auto";
+    long listen_port = 5000;
     const char *config_file = "/usr/local/etc/weaver.yaml";
-    long vtid_input = 0;
     long backup_input = LONG_MAX;
     // arg parsing borrowed from HyperDex
     e::argparser ap;
     ap.autohelp();
-    ap.arg().name('t', "timestamper-id")
-            .description("timestamper id number (default 0)")
-            .metavar("num").as_long(&vtid_input);
+    ap.arg().name('l', "listen")
+            .description("listen on a specific IP address (default: auto)")
+            .metavar("IP").as_string(&listen_host);
+    ap.arg().name('p', "listen-port")
+            .description("listen on an alternative port (default: 5000)")
+            .metavar("port").as_long(&listen_port);
     ap.arg().name('b', "backup-number")
             .description("backup number (not backup by default)")
             .metavar("num").as_long(&backup_input);
@@ -1377,26 +1398,32 @@ main(int argc, const char *argv[])
 #endif
 
     // init vt, also check cmdline params
-    vt_id = (uint64_t)vtid_input;
-    if (vt_id >= NumVts) {
-        WDEBUG << "bad vt id " << vt_id << std::endl;
-        return -1;
-    }
+    //vt_id = (uint64_t)vtid_input;
+    //if (vt_id >= NumVts) {
+    //    WDEBUG << "bad vt id " << vt_id << std::endl;
+    //    return -1;
+    //}
 
-    uint64_t server_id = vt_id;
+    //uint64_t server_id = vt_id;
+
     if (backup_input != LONG_MAX) {
         // backup shard
         if ((uint64_t)backup_input > NumBackups) {
             WDEBUG << "bad backup number" << std::endl;
             return -1;
         }
-        server_id = vt_id + NumEffectiveServers*backup_input;
+        //server_id = vt_id + NumEffectiveServers*backup_input;
     }
-    vts = new coordinator::timestamper(vt_id, server_id);
+
+    po6::net::location my_loc(listen_host, listen_port);
+    uint64_t sid;
+    assert(generate_token(&sid));
+    vts = new coordinator::timestamper(sid, my_loc);
 
     // server manager link
     std::thread sm_thr(server_manager_link_loop,
-        po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT));
+        po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT),
+        my_loc);
     sm_thr.detach();
 
     vts->config_mutex.lock();
@@ -1406,8 +1433,20 @@ main(int argc, const char *argv[])
         vts->first_config_cond.wait();
     }
 
+    std::vector<std::pair<server_id, po6::net::location>> addresses;
+    vts->config.get_all_addresses(&addresses);
+    vt_id = UINT64_MAX;
+    for (auto &p: addresses) {
+        if (p.second == my_loc) {
+            uint64_t wid = vts->config.get_weaver_id(p.first);
+            assert(!vts->config.get_shard_or_vt(p.first));
+            vt_id = wid;
+        }
+    }
+    assert(vt_id != UINT64_MAX);
+
     // registered this server with server_manager, config has fairly recent value
-    vts->init();
+    vts->init(vt_id);
     vts->vts_init = true;
     vts->vts_init_cond.signal();
 

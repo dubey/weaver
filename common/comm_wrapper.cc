@@ -44,41 +44,41 @@ comm_wrapper :: weaver_mapper :: add_mapping(uint64_t server_id, po6::net::locat
 }
 
 
-comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr, int to)
+comm_wrapper :: comm_wrapper(po6::net::location &my_loc, int nthr, int to)
     : active_server_idx(NumEffectiveServers, UINT64_MAX)
-    , reverse_server_idx(NumActualServers, UINT64_MAX)
-    , bb_id(bbid)
+    //, reverse_server_idx(NumActualServers, UINT64_MAX)
+    , loc(new po6::net::location(my_loc))
     , num_threads(nthr)
     , timeout(to)
 {
-    int inport;
-    uint64_t id;
-    std::string ipaddr;
-    std::ifstream file;
-    file.exceptions(std::ifstream::badbit);
+    //int inport;
+    //uint64_t id;
+    //std::string ipaddr;
+    //std::ifstream file;
+    //file.exceptions(std::ifstream::badbit);
 
-    try {
-        // one of these locations should contain the shards configuration
-        file.open(ShardsFile, std::ifstream::in);
-        if (file == NULL || !file.good()) {
-            file.open("./weaver_shards.conf", std::ifstream::in);
-        }
-        if (file == NULL || !file.good()) {
-            file.open("/usr/local/etc/weaver_shards.conf", std::ifstream::in);
-        }
-        assert(file != NULL);
-        assert(file.good());
+    //try {
+    //    // one of these locations should contain the shards configuration
+    //    file.open(ShardsFile, std::ifstream::in);
+    //    if (file == NULL || !file.good()) {
+    //        file.open("./weaver_shards.conf", std::ifstream::in);
+    //    }
+    //    if (file == NULL || !file.good()) {
+    //        file.open("/usr/local/etc/weaver_shards.conf", std::ifstream::in);
+    //    }
+    //    assert(file != NULL);
+    //    assert(file.good());
 
-        while (file >> id >> ipaddr >> inport) {
-            cluster[WEAVER_TO_BUSYBEE(id)] = po6::net::location(ipaddr.c_str(), inport);
-            if (id == bb_id) {
-                loc.reset(new po6::net::location(ipaddr.c_str(), inport));
-            }
-        }
-        file.close();
-    } catch (std::ifstream::failure e) {
-        WDEBUG << "file exception" << std::endl;
-    }
+    //    while (file >> id >> ipaddr >> inport) {
+    //        cluster[WEAVER_TO_BUSYBEE(id)] = po6::net::location(ipaddr.c_str(), inport);
+    //        if (id == bb_id) {
+    //            loc.reset(new po6::net::location(ipaddr.c_str(), inport));
+    //        }
+    //    }
+    //    file.close();
+    //} catch (std::ifstream::failure e) {
+    //    WDEBUG << "file exception" << std::endl;
+    //}
 }
 
 void
@@ -101,22 +101,30 @@ comm_wrapper :: init(configuration &config)
 }
 
 void
-comm_wrapper :: client_init()
+comm_wrapper :: client_init(configuration config)
 {
     //wmap.reset(new weaver_mapper(cluster));
     wmap.reset(new weaver_mapper());
+    uint64_t dummy = 0;
+    WDEBUG << "here" << std::endl;
+    reconfigure_internal(config, dummy);
+    WDEBUG << "here" << std::endl;
     active_server_idx.resize(NumVts, 0);
-    reverse_server_idx.resize(NumVts, 0);
+    //reverse_server_idx.resize(NumVts, 0);
+    WDEBUG << "here" << std::endl;
     for (uint64_t i = 0; i < NumVts; i++) {
         active_server_idx[i] = i;
-        reverse_server_idx[i] = i;
+        //reverse_server_idx[i] = i;
     }
+    WDEBUG << "here" << std::endl;
     bb.reset(new busybee_mta(&bb_gc, wmap.get(), *loc, WEAVER_TO_BUSYBEE(bb_id), num_threads));
+    WDEBUG << "here" << std::endl;
 
     std::unique_ptr<e::garbage_collector::thread_state> gc_ts_ptr;
     gc_ts_ptr.reset(new e::garbage_collector::thread_state());
     bb_gc.register_thread(gc_ts_ptr.get());
     bb_gc_ts.emplace_back(std::move(gc_ts_ptr));
+    WDEBUG << "here" << std::endl;
 }
 
 uint64_t
@@ -156,7 +164,7 @@ comm_wrapper :: reconfigure_internal(configuration &new_config, uint64_t &primar
             } else if (active_server_idx[wid] == UINT64_MAX) {
                 WDEBUG << "setting up " << wid << " now at loc  " << p.second << std::endl;
                 active_server_idx[wid] = wid;
-                reverse_server_idx[wid] = wid;
+                //reverse_server_idx[wid] = wid;
                 wmap->add_mapping(wid, &p.second);
             }
         }
@@ -200,7 +208,7 @@ comm_wrapper :: reconfigure_internal(configuration &new_config, uint64_t &primar
 busybee_returncode
 comm_wrapper :: send(uint64_t send_to, std::auto_ptr<e::buffer> msg)
 {
-    busybee_returncode code = bb->send(send_to < CLIENT_ID? active_server_idx[send_to] : send_to, msg);
+    busybee_returncode code = bb->send(send_to < NumActualServers? active_server_idx[send_to] : send_to, msg);
     if (code != BUSYBEE_SUCCESS) {
         WDEBUG << "busybee send returned " << code << std::endl;
     }
@@ -210,15 +218,34 @@ comm_wrapper :: send(uint64_t send_to, std::auto_ptr<e::buffer> msg)
 busybee_returncode
 comm_wrapper :: recv(uint64_t *recv_from, std::auto_ptr<e::buffer> *msg)
 {
-    uint64_t actual_server_id;
-    busybee_returncode code = bb->recv(&actual_server_id, msg);
-    if (code == BUSYBEE_SUCCESS) {
-        *recv_from = actual_server_id < CLIENT_ID_INCR?
-                     reverse_server_idx[BUSYBEE_TO_WEAVER(actual_server_id)] : BUSYBEE_TO_WEAVER(actual_server_id);
-    } else if (code != BUSYBEE_TIMEOUT) {
-        WDEBUG << "busybee recv returned " << code << std::endl;
-    }
+    return bb->recv(recv_from, msg);
+    //  uint64_t actual_server_id;
+    //  busybee_returncode code = bb->recv(&actual_server_id, msg);
+    //  if (code == BUSYBEE_SUCCESS) {
+    //      *recv_from = actual_server_id < CLIENT_ID_INCR?
+    //                   reverse_server_idx[BUSYBEE_TO_WEAVER(actual_server_id)] : BUSYBEE_TO_WEAVER(actual_server_id);
+    //  } else if (code != BUSYBEE_TIMEOUT) {
+    //      WDEBUG << "busybee recv returned " << code << std::endl;
+    //  }
+    //  return code;
+}
+
+busybee_returncode
+comm_wrapper :: recv(std::auto_ptr<e::buffer> *msg)
+{
+    uint64_t recv_from;
+    busybee_returncode code = bb->recv(&recv_from, msg);
+    //WDEBUG << "recvd from " << recv_from << std::endl;
     return code;
+    //  uint64_t actual_server_id;
+    //  busybee_returncode code = bb->recv(&actual_server_id, msg);
+    //  if (code == BUSYBEE_SUCCESS) {
+    //      *recv_from = actual_server_id < CLIENT_ID_INCR?
+    //                   reverse_server_idx[BUSYBEE_TO_WEAVER(actual_server_id)] : BUSYBEE_TO_WEAVER(actual_server_id);
+    //  } else if (code != BUSYBEE_TIMEOUT) {
+    //      WDEBUG << "busybee recv returned " << code << std::endl;
+    //  }
+    //  return code;
 }
 #pragma GCC diagnostic pop
 

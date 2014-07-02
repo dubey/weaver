@@ -283,7 +283,7 @@ class TraversePropsParams:
 
 cdef extern from 'client/weaver_client.h' namespace 'cl':
     cdef cppclass client:
-        client(uint64_t my_id, uint64_t vt_id)
+        client()
 
         void begin_tx()
         void create_node(string &handle)
@@ -318,7 +318,7 @@ cdef class Client:
     cdef object traverse_node_props
     cdef object traverse_edge_props
     def __cinit__(self, uint64_t my_id, uint64_t vt_id):
-        self.thisptr = new client(my_id, vt_id)
+        self.thisptr = new client()
         self.vtid = vt_id
         self.traverse_start_node = ''
         self.traverse_node_props = []

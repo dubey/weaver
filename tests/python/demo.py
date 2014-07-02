@@ -16,6 +16,7 @@ import weaver.client as client
 
 # create client object
 c = client.Client(client.CL_ID, 0)
+print 'created client'
 
 # create node for user ayush
 c.begin_tx()

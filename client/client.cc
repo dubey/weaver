@@ -32,36 +32,40 @@ using cl::client;
 using transaction::pending_update;
 
 //client :: client(const char *coordinator, uint16_t port)
-client :: client(uint64_t my_id, uint64_t vt_id)
-    : myid(my_id)
-    , shifted_id(myid << (64-ID_BITS))
-    , vtid(vt_id)
-    , comm(myid, 1, CLIENT_MSGRECV_TIMEOUT)
-    , m_sm("127.0.0.1", 2002)
+client :: client()
+    : m_sm("127.0.0.1", 2002)
     , cur_tx_id(UINT64_MAX)
     , tx_id_ctr(0)
     , temp_handle_ctr(0)
 {
     init_config_constants("/usr/local/etc/weaver.yaml");
-    comm.client_init();
 
-    uint64_t repl_id;
-    assert(m_sm.get_replid(repl_id) && "get repl_id");
-    WDEBUG << "replicant id " << repl_id << std::endl;
+    vtid = rand() % NumVts;
+
+    assert(m_sm.get_replid(myid) && "get repl_id");
+    WDEBUG << "replicant id " << myid << std::endl;
+    assert(myid > NumActualServers);
+    shifted_id = myid << (64-ID_BITS);
 
     int try_sm = 0;
     while (!maintain_sm_connection()) {
         WDEBUG << "retry sm connection " << try_sm++ << std::endl;
     }
 
-    for (uint64_t i = 0; i < NumActualServers; i++) {
-        server::state_t st = m_sm.config()->get_state(server_id(i));
-        if (st != server::AVAILABLE) {
-            WDEBUG << "Server " << i << " is in trouble, has state " << st << std::endl;
-        } else {
-            WDEBUG << "Server " << i << " is healthy, has state " << st << std::endl;
-        }
-    }
+    //for (uint64_t i = 0; i < NumActualServers; i++) {
+    //    server::state_t st = m_sm.config()->get_state(server_id(i));
+    //    if (st != server::AVAILABLE) {
+    //        WDEBUG << "Server " << i << " is in trouble, has state " << st << std::endl;
+    //    } else {
+    //        WDEBUG << "Server " << i << " is healthy, has state " << st << std::endl;
+    //    }
+    //}
+
+    po6::net::location loc("127.0.0.1", 6200);
+    comm.reset(new common::comm_wrapper(loc, 1, CLIENT_MSGRECV_TIMEOUT));
+    WDEBUG << "here" << std::endl;
+    comm->client_init(*m_sm.config());
+    WDEBUG << "client created" << std::endl;
 }
 
 void
@@ -335,7 +339,7 @@ client :: get_node_count()
 void
 client :: send_coord(std::auto_ptr<e::buffer> buf)
 {
-    if (comm.send(vtid, buf) != BUSYBEE_SUCCESS) {
+    if (comm->send(vtid, buf) != BUSYBEE_SUCCESS) {
         return;
     }
 }
@@ -344,10 +348,9 @@ busybee_returncode
 client :: recv_coord(std::auto_ptr<e::buffer> *buf)
 {
     busybee_returncode ret;
-    uint64_t sender;
     while (true) {
-        comm.quiesce_thread(0);
-        ret = comm.recv(&sender, buf);
+        comm->quiesce_thread(0);
+        ret = comm->recv(buf);
         switch (ret) {
             case BUSYBEE_SUCCESS:
             case BUSYBEE_TIMEOUT:

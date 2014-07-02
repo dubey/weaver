@@ -1725,7 +1725,7 @@ migration_end(db::hyper_stub *hs)
 void
 recv_loop(uint64_t thread_id)
 {
-    uint64_t sender, vt_id, req_id;
+    uint64_t vt_id, req_id;
     enum message::msg_type mtype;
     std::unique_ptr<message::message> rec_msg(new message::message());
     db::queued_request *qreq;
@@ -1738,7 +1738,7 @@ recv_loop(uint64_t thread_id)
     busybee_returncode bb_code;
     while (true) {
         S->comm.quiesce_thread(thread_id);
-        bb_code = S->comm.recv(&sender, &rec_msg->buf);
+        bb_code = S->comm.recv(&rec_msg->buf);
         if (bb_code != BUSYBEE_SUCCESS && bb_code != BUSYBEE_TIMEOUT) {
             continue;
         }
@@ -1900,8 +1900,26 @@ recv_loop(uint64_t thread_id)
     }
 }
 
+bool
+generate_token(uint64_t* token)
+{
+    po6::io::fd sysrand(open("/dev/urandom", O_RDONLY));
+
+    if (sysrand.get() < 0)
+    {
+        return false;
+    }
+
+    if (sysrand.read(token, sizeof(*token)) != sizeof(*token))
+    {
+        return false;
+    }
+
+    return true;
+}
+
 void
-server_manager_link_loop(po6::net::hostname sm_host)
+server_manager_link_loop(po6::net::hostname sm_host, po6::net::location my_loc)
 {
     // Most of the following code has been 'borrowed' from
     // Robert Escriva's HyperDex.
@@ -1909,7 +1927,7 @@ server_manager_link_loop(po6::net::hostname sm_host)
 
     S->sm_stub.set_server_manager_address(sm_host.address.c_str(), sm_host.port);
 
-    if (!S->sm_stub.register_id(S->server, *S->comm.get_loc(), 0))
+    if (!S->sm_stub.register_id(S->server, my_loc, 0))
     {
         return;
     }
@@ -2033,17 +2051,21 @@ main(int argc, const char *argv[])
     }
 
     // command line params
+    const char* listen_host = "auto";
+    long listen_port = 5000;
     const char *config_file = "/usr/local/etc/weaver.yaml";
     const char *graph_file = NULL;
     const char *graph_format = "snap";
-    long sid_input = 0;
     long backup_input = LONG_MAX;
     // arg parsing borrowed from HyperDex
     e::argparser ap;
     ap.autohelp();
-    ap.arg().name('s', "shard-id")
-            .description("shard id number (default 0)")
-            .metavar("num").as_long(&sid_input);
+    ap.arg().name('l', "listen")
+            .description("listen on a specific IP address (default: auto)")
+            .metavar("IP").as_string(&listen_host);
+    ap.arg().name('p', "listen-port")
+            .description("listen on an alternative port (default: 5000)")
+            .metavar("port").as_long(&listen_port);
     ap.arg().name('b', "backup-number")
             .description("backup number (not backup by default)")
             .metavar("num").as_long(&backup_input);
@@ -2066,13 +2088,14 @@ main(int argc, const char *argv[])
     init_config_constants(config_file);
 
     // init shard, also check cmdline params
-    shard_id = (uint64_t)sid_input + ShardIdIncr;
-    if (shard_id >= NumEffectiveServers) {
-        WDEBUG << "bad shard id " << shard_id << std::endl;
-        return -1;
-    }
+    //shard_id = (uint64_t)sid_input + ShardIdIncr;
+    //if (shard_id >= NumEffectiveServers) {
+    //    WDEBUG << "bad shard id " << shard_id << std::endl;
+    //    return -1;
+    //}
 
-    uint64_t server_id = shard_id;
+    //uint64_t server_id = shard_id;
+
     if (backup_input != LONG_MAX) {
         assert(graph_file == NULL);
         // backup shard
@@ -2080,13 +2103,19 @@ main(int argc, const char *argv[])
             WDEBUG << "bad backup number" << std::endl;
             return -1;
         }
-        server_id = shard_id + NumEffectiveServers*backup_input;
+        //server_id = shard_id + NumEffectiveServers*backup_input;
     }
-    S = new db::shard(shard_id, server_id);
+
+    //S = new db::shard(shard_id, server_id);
+    po6::net::location my_loc(listen_host, listen_port);
+    uint64_t sid;
+    assert(generate_token(&sid));
+    S = new db::shard(sid, my_loc);
 
     // server manager link
     std::thread sm_thr(server_manager_link_loop,
-        po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT));
+        po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT),
+        my_loc);
     sm_thr.detach();
 
     S->config_mutex.lock();
@@ -2096,11 +2125,23 @@ main(int argc, const char *argv[])
         S->first_config_cond.wait();
     }
 
+    std::vector<std::pair<server_id, po6::net::location>> addresses;
+    S->config.get_all_addresses(&addresses);
+    shard_id = UINT64_MAX;
+    for (auto &p: addresses) {
+        if (p.second == my_loc) {
+            uint64_t wid = S->config.get_weaver_id(p.first);
+            assert(S->config.get_shard_or_vt(p.first));
+            shard_id = wid + NumVts;
+        }
+    }
+    assert(shard_id != UINT64_MAX);
+
     // registered this server with server_manager, config has fairly recent value
     if (backup_input == LONG_MAX) {
-        S->init(false); // primary
+        S->init(shard_id, false); // primary
     } else {
-        S->init(true); // backup
+        S->init(shard_id, true); // backup
     }
 
     S->shard_init = true;

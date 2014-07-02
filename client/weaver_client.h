@@ -41,11 +41,12 @@ namespace cl
     {
         public:
             //client(const char *coordinator, uint16_t port);
-            client(uint64_t, uint64_t);
+            //client(uint64_t, uint64_t);
+            client();
 
         private:
             uint64_t myid, shifted_id, vtid;
-            common::comm_wrapper comm;
+            std::unique_ptr<common::comm_wrapper> comm;
             server_manager_link m_sm;
             transaction::tx_list_t cur_tx;
             uint64_t cur_tx_id, tx_id_ctr, temp_handle_ctr;

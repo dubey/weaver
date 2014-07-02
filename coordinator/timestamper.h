@@ -119,8 +119,8 @@ namespace coordinator
             bool to_exit;
 
         public:
-            timestamper(uint64_t vt, uint64_t server);
-            void init();
+            timestamper(uint64_t serverid, po6::net::location &loc);
+            void init(uint64_t vtid);
             void restore_backup();
             void reconfigure();
             uint64_t generate_req_id();
@@ -129,8 +129,8 @@ namespace coordinator
     };
 
     inline
-    timestamper :: timestamper(uint64_t vtid, uint64_t serverid)
-        : comm(serverid, NUM_THREADS, -1)
+    timestamper :: timestamper(uint64_t serverid, po6::net::location &loc)
+        : comm(loc, NUM_THREADS, -1)
         , sm_stub(server_id(serverid), comm.get_loc())
         , active_backup(false)
         , first_config(false)
@@ -141,12 +141,12 @@ namespace coordinator
         , vts_init_cond(&config_mutex)
         , start_all_vts_cond(&config_mutex)
         , server(serverid)
-        , vt_id(vtid)
-        , shifted_id(vtid << (64-ID_BITS))
+        , vt_id(UINT64_MAX)
+        , shifted_id(UINT64_MAX)
         , reqid_gen(0)
         , loc_gen(0)
         , id_gen(0)
-        , vclk(vtid, 0)
+        , vclk(UINT64_MAX, 0)
         , qts(NumShards, 0)
         , clock_update_acks(NumVts-1)
         , clk_updates(0)
@@ -169,16 +169,19 @@ namespace coordinator
         for (int i = 0; i < NUM_THREADS; i++) {
             nmap_client.push_back(new nmap::nmap_stub());
         }
-        for (int i = 0; i < NUM_THREADS; i++) {
-            hstub.push_back(new hyper_stub(vt_id));
-        }
     }
 
     // initialize msging layer
     // caution: holding config_mutex
     inline void
-    timestamper :: init()
+    timestamper :: init(uint64_t vtid)
     {
+        vt_id = vtid;
+        shifted_id = vt_id << (64-ID_BITS);
+        vclk.vt_id = vt_id;
+        for (int i = 0; i < NUM_THREADS; i++) {
+            hstub.push_back(new hyper_stub(vt_id));
+        }
         comm.init(config);
     }
 
@@ -201,25 +204,26 @@ namespace coordinator
         WDEBUG << "Cluster reconfigure triggered\n";
 
         // print cluster info
-        for (uint64_t i = 0; i < NumActualServers; i++) {
-            server::state_t st = config.get_state(server_id(i));
-            uint64_t wid = config.get_weaver_id(server_id(i));
-            bool is_shard = config.get_shard_or_vt(server_id(i));
+        std::vector<std::pair<server_id, po6::net::location>> addresses;
+        config.get_all_addresses(&addresses);
+        for (auto &p: addresses) {
+            server::state_t st = config.get_state(server_id(p.first));
             if (st != server::AVAILABLE) {
-                WDEBUG << "Server " << i << " is in trouble, has state " << st << ", weaver_id " << wid << ", is_shard " << is_shard << std::endl;
+                WDEBUG << "Server " << p.first << " is in trouble, has state " << st << std::endl;
             } else {
-                WDEBUG << "Server " << i << " is healthy, has state " << st << ", weaver_id " << wid << ", is_shard " << is_shard << std::endl;
+                WDEBUG << "Server " << p.first << " is healthy, has state " << st << std::endl;
             }
         }
 
         uint64_t prev_active_vts = num_active_vts;
-        if (comm.reconfigure(config, &num_active_vts) == server.get()
-         && !active_backup
-         && server.get() > NumEffectiveServers) {
-            // this server is now primary for the timestamper 
-            active_backup = true;
-            backup_cond.signal();
-        }
+        comm.reconfigure(config, &num_active_vts);
+        //if (comm.reconfigure(config, &num_active_vts) == server.get()
+        // && !active_backup
+        // && server.get() > NumEffectiveServers) {
+        //    // this server is now primary for the timestamper 
+        //    active_backup = true;
+        //    backup_cond.signal();
+        //}
         assert(prev_active_vts <= num_active_vts);
         assert(num_active_vts <= NumVts);
         if (num_active_vts > prev_active_vts) {

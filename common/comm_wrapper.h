@@ -58,21 +58,21 @@ class comm_wrapper
         std::unique_ptr<busybee_mta> bb;
         std::unique_ptr<weaver_mapper> wmap;
         std::shared_ptr<po6::net::location> loc;
-        std::unordered_map<uint64_t, po6::net::location> cluster;
         uint64_t bb_id;
         int num_threads;
         int timeout;
         void reconfigure_internal(configuration&, uint64_t&);
 
     public:
-        comm_wrapper(uint64_t bbid, int nthr, int timeout);
+        comm_wrapper(po6::net::location &loc, int nthr, int timeout);
         void init(configuration &config);
-        void client_init();
+        void client_init(configuration config);
         uint64_t reconfigure(configuration &config, uint64_t *num_active_vts=NULL);
         std::shared_ptr<po6::net::location> get_loc() { return loc; }
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         busybee_returncode send(uint64_t send_to, std::auto_ptr<e::buffer> msg);
+        busybee_returncode recv(std::auto_ptr<e::buffer> *msg);
         busybee_returncode recv(uint64_t *recv_from, std::auto_ptr<e::buffer> *msg);
 #pragma GCC diagnostic pop
         void quiesce_thread(int tid);
