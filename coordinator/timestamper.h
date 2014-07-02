@@ -203,18 +203,6 @@ namespace coordinator
     {
         WDEBUG << "Cluster reconfigure triggered\n";
 
-        // print cluster info
-        std::vector<std::pair<server_id, po6::net::location>> addresses;
-        config.get_all_addresses(&addresses);
-        for (auto &p: addresses) {
-            server::state_t st = config.get_state(server_id(p.first));
-            if (st != server::AVAILABLE) {
-                WDEBUG << "Server " << p.first << " is in trouble, has state " << st << std::endl;
-            } else {
-                WDEBUG << "Server " << p.first << " is healthy, has state " << st << std::endl;
-            }
-        }
-
         uint64_t prev_active_vts = num_active_vts;
         comm.reconfigure(config, &num_active_vts);
         //if (comm.reconfigure(config, &num_active_vts) == server.get()

@@ -38,7 +38,6 @@ class comm_wrapper
                 std::unordered_map<uint64_t, po6::net::location> mlist;
 
             public:
-                //weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster) : mlist(cluster) { }
                 weaver_mapper() : mlist() { }
                 virtual ~weaver_mapper() throw () { }
                 virtual bool lookup(uint64_t server_id, po6::net::location *loc);
@@ -51,7 +50,6 @@ class comm_wrapper
 
     private:
         std::vector<uint64_t> active_server_idx; // for each vt/shard, index of the active server
-        std::vector<uint64_t> reverse_server_idx; // for each server, the corresponding vt/shard number for which it is active
         configuration config;
         e::garbage_collector bb_gc;
         std::vector<std::unique_ptr<e::garbage_collector::thread_state>> bb_gc_ts;

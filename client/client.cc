@@ -43,7 +43,6 @@ client :: client()
     vtid = rand() % NumVts;
 
     assert(m_sm.get_replid(myid) && "get repl_id");
-    WDEBUG << "replicant id " << myid << std::endl;
     assert(myid > NumActualServers);
     shifted_id = myid << (64-ID_BITS);
 
@@ -52,20 +51,9 @@ client :: client()
         WDEBUG << "retry sm connection " << try_sm++ << std::endl;
     }
 
-    //for (uint64_t i = 0; i < NumActualServers; i++) {
-    //    server::state_t st = m_sm.config()->get_state(server_id(i));
-    //    if (st != server::AVAILABLE) {
-    //        WDEBUG << "Server " << i << " is in trouble, has state " << st << std::endl;
-    //    } else {
-    //        WDEBUG << "Server " << i << " is healthy, has state " << st << std::endl;
-    //    }
-    //}
-
     po6::net::location loc("127.0.0.1", 6200);
     comm.reset(new common::comm_wrapper(loc, 1, CLIENT_MSGRECV_TIMEOUT));
-    WDEBUG << "here" << std::endl;
     comm->client_init(*m_sm.config());
-    WDEBUG << "client created" << std::endl;
 }
 
 void
