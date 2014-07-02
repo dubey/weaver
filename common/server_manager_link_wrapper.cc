@@ -138,14 +138,14 @@ server_manager_link_wrapper :: get_replid(uint64_t &id)
 }
 
 bool
-server_manager_link_wrapper :: register_id(server_id us, const po6::net::location& bind_to)
+server_manager_link_wrapper :: register_id(server_id us, const po6::net::location& bind_to, int shard_or_vt)
 {
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    std::auto_ptr<e::buffer> buf(e::buffer::create(sizeof(uint64_t) + pack_size(bind_to)));
+    std::auto_ptr<e::buffer> buf(e::buffer::create(sizeof(uint64_t) + pack_size(bind_to) + sizeof(int)));
 #pragma GCC diagnostic pop
     e::buffer::packer pa = buf->pack_at(0);
-    pa = pa << us << bind_to;
+    pa = pa << us << bind_to << shard_or_vt;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     std::auto_ptr<sm_rpc> rpc(new sm_rpc);

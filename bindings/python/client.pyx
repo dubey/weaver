@@ -293,17 +293,17 @@ cdef extern from 'client/weaver_client.h' namespace 'cl':
         void set_node_property(string &node, string key, string value)
         void set_edge_property(string &node, string &edge, string key, string value)
         bint end_tx() nogil
-        reach_params run_reach_program(vector[pair[uint64_t, reach_params]] &initial_args) nogil
-        pathless_reach_params run_pathless_reach_program(vector[pair[uint64_t, pathless_reach_params]] &initial_args) nogil
-        clustering_params run_clustering_program(vector[pair[uint64_t, clustering_params]] &initial_args) nogil
-        two_neighborhood_params run_two_neighborhood_program(vector[pair[uint64_t, two_neighborhood_params]] &initial_args) nogil
-        #dijkstra_params run_dijkstra_program(vector[pair[uint64_t, dijkstra_params]] &initial_args) nogil
-        read_node_props_params read_node_props_program(vector[pair[uint64_t, read_node_props_params]] &initial_args) nogil
-        read_edges_props_params read_edges_props_program(vector[pair[uint64_t, read_edges_props_params]] &initial_args) nogil
-        read_n_edges_params read_n_edges_program(vector[pair[uint64_t, read_n_edges_params]] &initial_args) nogil
-        edge_count_params edge_count_program(vector[pair[uint64_t, edge_count_params]] &initial_args) nogil
-        edge_get_params edge_get_program(vector[pair[uint64_t, edge_get_params]] &initial_args) nogil
-        traverse_props_params traverse_props_program(vector[pair[uint64_t, traverse_props_params]] &initial_args) nogil
+        reach_params run_reach_program(vector[pair[string, reach_params]] &initial_args) nogil
+        pathless_reach_params run_pathless_reach_program(vector[pair[string, pathless_reach_params]] &initial_args) nogil
+        clustering_params run_clustering_program(vector[pair[string, clustering_params]] &initial_args) nogil
+        two_neighborhood_params run_two_neighborhood_program(vector[pair[string, two_neighborhood_params]] &initial_args) nogil
+        #dijkstra_params run_dijkstra_program(vector[pair[string, dijkstra_params]] &initial_args) nogil
+        read_node_props_params read_node_props_program(vector[pair[string, read_node_props_params]] &initial_args) nogil
+        read_edges_props_params read_edges_props_program(vector[pair[string, read_edges_props_params]] &initial_args) nogil
+        read_n_edges_params read_n_edges_program(vector[pair[string, read_n_edges_params]] &initial_args) nogil
+        edge_count_params edge_count_program(vector[pair[string, edge_count_params]] &initial_args) nogil
+        edge_get_params edge_get_program(vector[pair[string, edge_get_params]] &initial_args) nogil
+        traverse_props_params traverse_props_program(vector[pair[string, traverse_props_params]] &initial_args) nogil
         void start_migration()
         void single_stream_migration()
         void commit_graph()
@@ -314,13 +314,13 @@ cdef extern from 'client/weaver_client.h' namespace 'cl':
 cdef class Client:
     cdef client *thisptr
     cdef uint64_t vtid
-    cdef uint64_t traverse_start_node
+    cdef string traverse_start_node
     cdef object traverse_node_props
     cdef object traverse_edge_props
     def __cinit__(self, uint64_t my_id, uint64_t vt_id):
         self.thisptr = new client(my_id, vt_id)
         self.vtid = vt_id
-        self.traverse_start_node = 0
+        self.traverse_start_node = ''
         self.traverse_node_props = []
         self.traverse_edge_props = []
     def __dealloc__(self):
@@ -345,9 +345,9 @@ cdef class Client:
             ret = self.thisptr.end_tx()
         return ret
     def run_reach_program(self, init_args):
-        cdef vector[pair[uint64_t, reach_params]] c_args
+        cdef vector[pair[string, reach_params]] c_args
         c_args.reserve(len(init_args))
-        cdef pair[uint64_t, reach_params] arg_pair
+        cdef pair[string, reach_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
             arg_pair.second._search_cache = rp[1]._search_cache
@@ -370,9 +370,9 @@ cdef class Client:
         return response
     # warning! set prev_node loc to vt_id if somewhere in params
     def run_pathless_reach_program(self, init_args):
-        cdef vector[pair[uint64_t, pathless_reach_params]] c_args
+        cdef vector[pair[string, pathless_reach_params]] c_args
         c_args.reserve(len(init_args))
-        cdef pair[uint64_t, pathless_reach_params] arg_pair
+        cdef pair[string, pathless_reach_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
             arg_pair.second.returning = rp[1].returning
@@ -389,9 +389,9 @@ cdef class Client:
         response = PathlessReachParams(reachable=c_rp.reachable)
         return response
     def run_clustering_program(self, init_args):
-        cdef vector[pair[uint64_t, clustering_params]] c_args
+        cdef vector[pair[string, clustering_params]] c_args
         c_args.reserve(len(init_args))
-        cdef pair[uint64_t, clustering_params] arg_pair
+        cdef pair[string, clustering_params] arg_pair
         for cp in init_args:
             arg_pair.first = cp[0]
             arg_pair.second._search_cache = cp[1]._search_cache 
@@ -404,9 +404,9 @@ cdef class Client:
         response = ClusteringParams(clustering_coeff=c_cp.clustering_coeff)
         return response
     def run_two_neighborhood_program(self, init_args):
-        cdef vector[pair[uint64_t, two_neighborhood_params]] c_args
+        cdef vector[pair[string, two_neighborhood_params]] c_args
         c_args.reserve(len(init_args))
-        cdef pair[uint64_t, two_neighborhood_params] arg_pair
+        cdef pair[string, two_neighborhood_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
             arg_pair.second._search_cache = rp[1]._search_cache
@@ -422,8 +422,8 @@ cdef class Client:
         return response
     '''
     def run_dijkstra_program(self, init_args):
-        cdef vector[pair[uint64_t, dijkstra_params]] c_args
-        cdef pair[uint64_t, dijkstra_params] arg_pair
+        cdef vector[pair[string, dijkstra_params]] c_args
+        cdef pair[string, dijkstra_params] arg_pair
         for cp in init_args:
             arg_pair.first = cp[0]
             arg_pair.second.is_widest_path = cp[1].is_widest_path;
@@ -437,9 +437,9 @@ cdef class Client:
         return response
     '''
     def read_node_props(self, init_args):
-        cdef vector[pair[uint64_t, read_node_props_params]] c_args
+        cdef vector[pair[string, read_node_props_params]] c_args
         c_args.reserve(len(init_args))
-        cdef pair[uint64_t, read_node_props_params] arg_pair
+        cdef pair[string, read_node_props_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
             arg_pair.second.keys = rp[1].keys
@@ -450,9 +450,9 @@ cdef class Client:
         return response
 
     def read_edges_props(self, init_args):
-        cdef vector[pair[uint64_t, read_edges_props_params]] c_args
+        cdef vector[pair[string, read_edges_props_params]] c_args
         c_args.reserve(len(init_args))
-        cdef pair[uint64_t, read_edges_props_params] arg_pair
+        cdef pair[string, read_edges_props_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
             #arg_pair.second.edges = rp[1].edges
@@ -464,9 +464,9 @@ cdef class Client:
         return response
 
     def read_n_edges(self, init_args):
-        cdef vector[pair[uint64_t, read_n_edges_params]] c_args
+        cdef vector[pair[string, read_n_edges_params]] c_args
         c_args.reserve(len(init_args))
-        cdef pair[uint64_t, read_n_edges_params] arg_pair
+        cdef pair[string, read_n_edges_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
             arg_pair.second.num_edges = rp[1].num_edges
@@ -481,9 +481,9 @@ cdef class Client:
         return response
 
     def edge_count(self, init_args):
-        cdef vector[pair[uint64_t, edge_count_params]] c_args
+        cdef vector[pair[string, edge_count_params]] c_args
         c_args.reserve(len(init_args))
-        cdef pair[uint64_t, edge_count_params] arg_pair
+        cdef pair[string, edge_count_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
             arg_pair.second.edges_props.clear()
@@ -497,9 +497,9 @@ cdef class Client:
         return response
 
     def edge_get(self, init_args):
-        cdef vector[pair[uint64_t, edge_get_params]] c_args
+        cdef vector[pair[string, edge_get_params]] c_args
         c_args.reserve(len(init_args))
-        cdef pair[uint64_t, edge_get_params] arg_pair
+        cdef pair[string, edge_get_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
             arg_pair.second.nbr_id = rp[1].nbr_id
@@ -514,9 +514,9 @@ cdef class Client:
         return response
 
     def traverse_props(self, init_args):
-        cdef vector[pair[uint64_t, traverse_props_params]] c_args
+        cdef vector[pair[string, traverse_props_params]] c_args
         c_args.reserve(len(init_args))
-        cdef pair[uint64_t, traverse_props_params] arg_pair
+        cdef pair[string, traverse_props_params] arg_pair
         cdef vector[pair[string, string]] props
         for rp in init_args:
             arg_pair.first = rp[0]

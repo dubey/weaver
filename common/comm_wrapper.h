@@ -38,9 +38,11 @@ class comm_wrapper
                 std::unordered_map<uint64_t, po6::net::location> mlist;
 
             public:
-                weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster) : mlist(cluster) { }
+                //weaver_mapper(std::unordered_map<uint64_t, po6::net::location> &cluster) : mlist(cluster) { }
+                weaver_mapper() : mlist() { }
                 virtual ~weaver_mapper() throw () { }
                 virtual bool lookup(uint64_t server_id, po6::net::location *loc);
+                void add_mapping(uint64_t server_id, po6::net::location *loc);
 
             private:
                 weaver_mapper(const weaver_mapper&);

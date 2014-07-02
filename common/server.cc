@@ -43,6 +43,8 @@ server :: to_string(state_t state)
 server :: server()
     : state(KILLED)
     , id()
+    , weaver_id(UINT64_MAX)
+    , shard_or_vt(-1)
     , bind_to()
 {
 }
@@ -50,6 +52,8 @@ server :: server()
 server :: server(const server_id& sid)
     : state(ASSIGNED)
     , id(sid)
+    , weaver_id(UINT64_MAX)
+    , shard_or_vt(-1)
     , bind_to()
 {
 }
@@ -64,14 +68,14 @@ e::buffer::packer
 operator << (e::buffer::packer lhs, const server& rhs)
 {
     uint8_t s = static_cast<uint8_t>(rhs.state);
-    return lhs << s << rhs.id << rhs.bind_to;
+    return lhs << s << rhs.id << rhs.weaver_id << rhs.shard_or_vt << rhs.bind_to;
 }
 
 e::unpacker
 operator >> (e::unpacker lhs, server& rhs)
 {
     uint8_t s;
-    lhs = lhs >> s >> rhs.id >> rhs.bind_to;
+    lhs = lhs >> s >> rhs.id >> rhs.weaver_id >> rhs.shard_or_vt >> rhs.bind_to;
     rhs.state = static_cast<server::state_t>(s);
     return lhs;
 }
@@ -81,5 +85,7 @@ pack_size(const server& p)
 {
     return sizeof(uint8_t)
          + sizeof(uint64_t)
+         + sizeof(uint64_t)
+         + sizeof(int)
          + pack_size(p.bind_to);
 }

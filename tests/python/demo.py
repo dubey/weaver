@@ -17,56 +17,63 @@ import weaver.client as client
 # create client object
 c = client.Client(client.CL_ID, 0)
 
-id_to_name = {}
-
 # create node for user ayush
 c.begin_tx()
-ayush = c.create_node()
-c.set_node_property(ayush, 'type', 'user')
-c.end_tx()
-print 'User ayush created'
-id_to_name[ayush] = 'ayush'
+c.create_node('ayush')
+c.set_node_property('ayush', 'type', 'user')
+success = c.end_tx()
+if success:
+    print 'User ayush created'
+else:
+    print 'tx fail'
 
 # create node for user egs
 c.begin_tx()
-egs = c.create_node()
-c.set_node_property(egs, 'type', 'user')
-c.end_tx()
-print 'User egs created'
-id_to_name[egs] = 'egs'
+c.create_node('egs')
+c.set_node_property('egs', 'type', 'user')
+success = c.end_tx()
+if success:
+    print 'User egs created'
+else:
+    print 'tx fail'
 
 # ayush follows egs
 c.begin_tx()
-forward_edge = c.create_edge(ayush, egs)
-c.set_edge_property(ayush, forward_edge, 'type', 'follows')
-reverse_edge = c.create_edge(egs, ayush)
-c.set_edge_property(egs, reverse_edge, 'type', 'followed_by')
-c.end_tx()
-print 'ayush follows egs'
+c.create_edge('e1', 'ayush', 'egs')
+c.set_edge_property('ayush', 'e1', 'type', 'follows')
+c.create_edge('e2', 'egs', 'ayush')
+c.set_edge_property('egs', 'e2', 'type', 'followed_by')
+success = c.end_tx()
+if success:
+    print 'ayush follows egs'
+else:
+    print 'tx fail'
 
 # add a post and restrict visibility to followers only
 c.begin_tx()
-post = c.create_node()
-c.set_node_property(post, 'type', 'post')
-c.set_node_property(post, 'visibility', 'followers')
-post_edge = c.create_edge(egs, post)
-c.set_edge_property(egs, post_edge, 'type', 'posted')
-c.end_tx()
-print 'egs posted content'
+c.create_node('post')
+c.set_node_property('post', 'type', 'post')
+c.set_node_property('post', 'visibility', 'followers')
+c.create_edge('e3', 'egs', 'post')
+c.set_edge_property('egs', 'e3', 'type', 'posted')
+success = c.end_tx()
+if success:
+    print 'egs posted content'
+else:
+    print 'tx fail'
 
 # 'like' the post
 c.begin_tx()
-like_edge = c.create_edge(post, ayush)
-c.set_edge_property(post, like_edge, 'type', 'liked_by')
-c.end_tx()
-print 'ayush likes egs\'s post'
+c.create_edge('e4', 'post', 'ayush')
+c.set_edge_property('post', 'e4', 'type', 'liked_by')
+success = c.end_tx()
+if success:
+    print 'ayush likes egs\'s post'
+else:
+    print 'tx fail'
 
 # list all the people who like egs's post
-return_nodes = c.traverse(egs, [('type','user')]).out_edge([('type','posted')]).node([('type','post')]).out_edge([('type','liked_by')]).node([('type','user')]).execute()
+return_nodes = c.traverse('egs', [('type','user')]).out_edge([('type','posted')]).node([('type','post')]).out_edge([('type','liked_by')]).node([('type','user')]).execute()
 print 'List of users who like egs\'s posts:'
 for user in return_nodes:
-    print '\t' + id_to_name[user]
-
-c.single_stream_migration()
-c.single_stream_migration()
-c.single_stream_migration()
+    print user

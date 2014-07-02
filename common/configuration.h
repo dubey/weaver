@@ -51,6 +51,8 @@ class configuration
         bool exists(const server_id& id) const;
         po6::net::location get_address(const server_id& id) const;
         server::state_t get_state(const server_id& id) const;
+        uint64_t get_weaver_id(const server_id &id) const;
+        bool get_shard_or_vt(const server_id &id) const;
 
     public:
         std::string dump() const;

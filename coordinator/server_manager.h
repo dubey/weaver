@@ -53,7 +53,8 @@ class server_manager
     public:
         void server_register(replicant_state_machine_context* ctx,
                              const server_id& sid,
-                             const po6::net::location& bind_to);
+                             const po6::net::location& bind_to,
+                             int shard_or_vt);
         void server_online(replicant_state_machine_context* ctx,
                            const server_id& sid,
                            const po6::net::location* bind_to);
@@ -113,6 +114,8 @@ class server_manager
         uint64_t m_counter;
         uint64_t m_version;
         uint64_t m_flags;
+        uint64_t m_num_shards;
+        uint64_t m_num_vts;
         // servers
         std::vector<server> m_servers;
         // barriers

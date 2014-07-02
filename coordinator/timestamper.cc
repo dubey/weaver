@@ -100,24 +100,24 @@ unpack_tx(message::message &msg,
     transaction::pending_tx &tx,
     nmap::nmap_stub *nmstub)
 {
-    std::vector<std::string> new_handles_v;
-    std::unordered_set<std::string> new_handles, del_handles, get_handles;
+    std::vector<std::string> get_handles_v;
+    std::unordered_set<std::string> new_handles, get_handles;
+    std::unordered_map<std::string, uint64_t> client_map;
     msg.unpack_message(message::CLIENT_TX_INIT, tx.writes);
 
 #define NEW_HANDLE(h) \
     if (new_handles.find(h) != new_handles.end()) { \
+        WDEBUG << "duplicate new handle " << h << std::endl; \
         return false; \
     } \
+    client_map[h] = vts->generate_id(); \
+    WDEBUG << "created new handle,id pair: " << h << "," << client_map[h] << std::endl; \
     new_handles.emplace(h);
+
 #define GET_HANDLE(h) \
     if (new_handles.find(h) == new_handles.end()) { \
         get_handles.emplace(h); \
     }
-#define DEL_HANDLE(h) \
-    if (del_handles.find(h) != del_handles.end()) { \
-        return false; \
-    } \
-    del_handles.emplace(h);
 
     for (auto upd: tx.writes) {
 
@@ -136,13 +136,12 @@ unpack_tx(message::message &msg,
             case transaction::NODE_DELETE_REQ:
                 // for delete_node, lock node
                 GET_HANDLE(upd->handle1);
-                DEL_HANDLE(upd->handle1);
                 break;
 
             case transaction::EDGE_DELETE_REQ:
                 // for delete_edge, lock edge
+                GET_HANDLE(upd->handle1);
                 GET_HANDLE(upd->handle2);
-                DEL_HANDLE(upd->handle1);
                 break;
 
             case transaction::NODE_SET_PROPERTY:
@@ -150,6 +149,7 @@ unpack_tx(message::message &msg,
                 break;
 
             case transaction::EDGE_SET_PROPERTY:
+                GET_HANDLE(upd->handle1);
                 GET_HANDLE(upd->handle2);
                 break;
 
@@ -162,24 +162,36 @@ unpack_tx(message::message &msg,
 
 #undef CHECK_NEW_HANDLE
 #undef GET_HANDLE
-#undef DEL_HANDLE
 
-    new_handles_v.reserve(new_handles.size());
-    for (const std::string &s: new_handles) {
-        new_handles_v.emplace_back(s);
+    if (get_handles.size() > 0) {
+        get_handles_v.reserve(get_handles.size());
+        for (const std::string &s: get_handles) {
+            get_handles_v.emplace_back(s);
+        }
+
+        nmstub->get_client_mappings(get_handles_v, client_map);
     }
-
-    std::unordered_map<std::string, uint64_t> client_map = nmstub->get_client_mappings(new_handles_v);
     std::string empty_string;
+    if (client_map.find(empty_string) != client_map.end()) {
+        WDEBUG << "empty string handle" << std::endl;
+        return false;
+    }
     client_map[empty_string] = 0;
 
     for (auto upd: tx.writes) {
+        if (client_map.find(upd->handle) == client_map.end()) {
+            WDEBUG << "did not find handle " << upd->handle << std::endl;
+            return false;
+        }
         if (client_map.find(upd->handle1) == client_map.end()) {
+            WDEBUG << "did not find handle " << upd->handle1 << std::endl;
             return false;
         }
         if (client_map.find(upd->handle2) == client_map.end()) {
+            WDEBUG << "did not find handle " << upd->handle2 << std::endl;
             return false;
         }
+        upd->id = client_map[upd->handle];
         upd->elem1 = client_map[upd->handle1];
         upd->elem2 = client_map[upd->handle2];
         if (upd->type == transaction::NODE_DELETE_REQ || upd->type == transaction::EDGE_DELETE_REQ) {
@@ -446,7 +458,6 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
             case transaction::NODE_CREATE_REQ:
                 // randomly assign shard for this node
                 upd->loc1 = vts->generate_loc(); // node will be placed on this shard
-                upd->id = vts->generate_id();
                 put_client_map[upd->handle] = upd->id;
                 put_map.emplace(upd->id, upd->loc1);
 
@@ -462,7 +473,6 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
                 if (put_map.find(upd->elem2) == put_map.end()) {
                     get_set.insert(upd->elem2);
                 }
-                upd->id = vts->generate_id();
                 put_client_map[upd->handle] = upd->id;
 
                 busy_single[0] = upd->id;
@@ -888,7 +898,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     if (!get_client_set.empty()) {
         bool success;
         std::vector<std::pair<uint64_t, uint64_t>> loc_results;
-        handle_map = nmap_cl->get_client_mappings(get_client_v);
+        nmap_cl->get_client_mappings(get_client_v, handle_map);
         success = (handle_map.size() == get_client_set.size());
 
         if (success) {
@@ -1007,13 +1017,15 @@ server_loop(int thread_id)
             switch (mtype) {
                 // client messages
                 case message::CLIENT_TX_INIT: {
+                    WDEBUG << "client_tx_init, sender = " << sender << std::endl;
                     std::unique_ptr<transaction::pending_tx> tx(new transaction::pending_tx());
 
                     if (!unpack_tx(*msg, sender, *tx, nmstub)) {
                         // tx fail because multiple deletes for same node/edge
                         send_abort(sender);
+                    } else {
+                        prepare_tx_step1(std::move(tx), nmstub, hstub);
                     }
-                    prepare_tx_step1(std::move(tx), nmstub, hstub);
 
                     break;
                 }
@@ -1205,7 +1217,8 @@ server_loop(int thread_id)
                 }
 
                 default:
-                    std::cerr << "unexpected msg type " << mtype << std::endl;
+                    WDEBUG << "unexpected msg type " << mtype << std::endl;
+                    assert(false);
             }
         }
     }
@@ -1220,7 +1233,7 @@ server_manager_link_loop(po6::net::hostname sm_host)
 
     vts->sm_stub.set_server_manager_address(sm_host.address.c_str(), sm_host.port);
 
-    if (!vts->sm_stub.register_id(vts->server, *vts->comm.get_loc()))
+    if (!vts->sm_stub.register_id(vts->server, *vts->comm.get_loc(), 1))
     {
         return;
     }

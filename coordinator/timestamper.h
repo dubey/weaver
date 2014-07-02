@@ -203,10 +203,12 @@ namespace coordinator
         // print cluster info
         for (uint64_t i = 0; i < NumActualServers; i++) {
             server::state_t st = config.get_state(server_id(i));
+            uint64_t wid = config.get_weaver_id(server_id(i));
+            bool is_shard = config.get_shard_or_vt(server_id(i));
             if (st != server::AVAILABLE) {
-                WDEBUG << "Server " << i << " is in trouble, has state " << st << std::endl;
+                WDEBUG << "Server " << i << " is in trouble, has state " << st << ", weaver_id " << wid << ", is_shard " << is_shard << std::endl;
             } else {
-                WDEBUG << "Server " << i << " is healthy, has state " << st << std::endl;
+                WDEBUG << "Server " << i << " is healthy, has state " << st << ", weaver_id " << wid << ", is_shard " << is_shard << std::endl;
             }
         }
 

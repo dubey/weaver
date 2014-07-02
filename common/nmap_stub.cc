@@ -109,6 +109,8 @@ nmap_stub :: put_client_mappings(std::unordered_map<std::string, uint64_t> &pair
         } while (op_id < 0);
         assert(opid_to_idx.find(op_id) == opid_to_idx.end());
         opid_to_idx[op_id] = put_idx;
+        WDEBUG << "put client map " << entry.first << "," << entry.second << std::endl;
+        WDEBUG << "string size " << entry.first.size() << std::endl;
 
         put_idx++;
         
@@ -230,8 +232,8 @@ nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
     return mappings;
 }
 
-std::unordered_map<std::string, uint64_t>
-nmap_stub :: get_client_mappings(std::vector<std::string> &toGet)
+void
+nmap_stub :: get_client_mappings(std::vector<std::string> &toGet, std::unordered_map<std::string, uint64_t> &client_map)
 {
     class async_get
     {
@@ -256,7 +258,7 @@ nmap_stub :: get_client_mappings(std::vector<std::string> &toGet)
     for (int64_t i = 0; i < num_nodes; i++) {
 
         do {
-            results[i].op_id = cl.get(space, toGet[i].c_str(), toGet[i].size(),
+            results[i].op_id = cl.get(client_space, toGet[i].c_str(), toGet[i].size(),
                 &(results[i].status), &(results[i].attr), &(results[i].attr_size));
         } while (results[i].op_id < 0);
         assert(opid_to_idx.find(results[i].op_id) == opid_to_idx.end());
@@ -270,8 +272,6 @@ nmap_stub :: get_client_mappings(std::vector<std::string> &toGet)
     int64_t loop_id;
     hyperdex_client_returncode loop_status;
     uint64_t *val;
-    std::unordered_map<std::string, uint64_t> mappings;
-    mappings.reserve(num_nodes);
     // call loop once for every get
     for (int64_t i = 0; i < num_nodes; i++) {
         do {
@@ -294,7 +294,7 @@ nmap_stub :: get_client_mappings(std::vector<std::string> &toGet)
         } else {
             assert(results[loop_idx].attr_size == 1);
             val = (uint64_t*)results[loop_idx].attr->value;
-            mappings[toGet[loop_idx]] = *val;
+            client_map[toGet[loop_idx]] = *val;
             hyperdex_client_destroy_attrs(results[loop_idx].attr, results[loop_idx].attr_size);
         }
 
@@ -304,8 +304,6 @@ nmap_stub :: get_client_mappings(std::vector<std::string> &toGet)
             WDEBUG << "completed " << i << " get loops" << std::endl;
         }
     }
-
-    return mappings;
 }
 
 bool

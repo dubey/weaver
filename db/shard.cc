@@ -1909,7 +1909,7 @@ server_manager_link_loop(po6::net::hostname sm_host)
 
     S->sm_stub.set_server_manager_address(sm_host.address.c_str(), sm_host.port);
 
-    if (!S->sm_stub.register_id(S->server, *S->comm.get_loc()))
+    if (!S->sm_stub.register_id(S->server, *S->comm.get_loc(), 0))
     {
         return;
     }

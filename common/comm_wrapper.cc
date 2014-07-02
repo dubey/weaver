@@ -36,6 +36,13 @@ comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *
     return true;
 }
 
+void
+comm_wrapper :: weaver_mapper :: add_mapping(uint64_t server_id, po6::net::location *loc)
+{
+    assert(mlist.find(WEAVER_TO_BUSYBEE(server_id)) == mlist.end());
+    mlist[WEAVER_TO_BUSYBEE(server_id)] = *loc;
+}
+
 
 comm_wrapper :: comm_wrapper(uint64_t bbid, int nthr, int to)
     : active_server_idx(NumEffectiveServers, UINT64_MAX)
@@ -78,7 +85,8 @@ void
 comm_wrapper :: init(configuration &config)
 {
     uint64_t primary = bb_id;
-    wmap.reset(new weaver_mapper(cluster));
+    //wmap.reset(new weaver_mapper(cluster));
+    wmap.reset(new weaver_mapper());
     reconfigure_internal(config, primary);
     WDEBUG << "Busybee attaching to loc " << loc->address << ":" << loc->port << std::endl;
     bb.reset(new busybee_mta(&bb_gc, wmap.get(), *loc, WEAVER_TO_BUSYBEE(bb_id), num_threads));
@@ -95,7 +103,8 @@ comm_wrapper :: init(configuration &config)
 void
 comm_wrapper :: client_init()
 {
-    wmap.reset(new weaver_mapper(cluster));
+    //wmap.reset(new weaver_mapper(cluster));
+    wmap.reset(new weaver_mapper());
     active_server_idx.resize(NumVts, 0);
     reverse_server_idx.resize(NumVts, 0);
     for (uint64_t i = 0; i < NumVts; i++) {
@@ -132,31 +141,54 @@ void
 comm_wrapper :: reconfigure_internal(configuration &new_config, uint64_t &primary)
 {
     config = new_config;
-    for (uint64_t i = 0; i < NumEffectiveServers; i++) {
-        if (active_server_idx[i] < UINT64_MAX) {
-            uint64_t srv_idx = active_server_idx[i];
-            while (config.get_state(server_id(srv_idx)) != server::AVAILABLE) {
-                srv_idx = srv_idx + NumEffectiveServers;
-                if (srv_idx > NumActualServers) {
-                    // all backups dead, not contactable
-                    // cannot do anything
-                    WDEBUG << "Caution! All backups for server " << i << " are dead\n";
-                    break;
-                }
-            }
-            if (srv_idx != active_server_idx[i]) {
-                active_server_idx[i] = srv_idx;
-                reverse_server_idx[srv_idx] = i;
-            }
-        } else {
-            // server i is not yet up
-            // check only i in the new config
-            if (config.get_state(server_id(i)) == server::AVAILABLE) {
-                active_server_idx[i] = i;
-                reverse_server_idx[i] = i;
+    std::vector<std::pair<server_id, po6::net::location>> addresses;
+    config.get_all_addresses(&addresses);
+
+    for (auto &p: addresses) {
+        WDEBUG << "config has " << p.first << "," << p.second << std::endl;
+        if (config.get_weaver_id(p.first) != UINT64_MAX) {
+            uint64_t factor = config.get_shard_or_vt(p.first) ? 1 : 0;
+            uint64_t wid = config.get_weaver_id(p.first) + NumVts*factor;
+            WDEBUG << "wid " << wid << " has been configured at some point" << std::endl;
+            if (active_server_idx[wid] < UINT64_MAX
+             && config.get_state(p.first) != server::AVAILABLE) {
+                // reconfigure to backup
+            } else if (active_server_idx[wid] == UINT64_MAX) {
+                WDEBUG << "setting up " << wid << " now at loc  " << p.second << std::endl;
+                active_server_idx[wid] = wid;
+                reverse_server_idx[wid] = wid;
+                wmap->add_mapping(wid, &p.second);
             }
         }
     }
+
+    //for (uint64_t i = 0; i < NumEffectiveServers; i++) {
+    //    if (active_server_idx[i] < UINT64_MAX) {
+
+
+    //        uint64_t srv_idx = active_server_idx[i];
+    //        while (config.get_state(server_id(srv_idx)) != server::AVAILABLE) {
+    //            srv_idx = srv_idx + NumEffectiveServers;
+    //            if (srv_idx > NumActualServers) {
+    //                // all backups dead, not contactable
+    //                // cannot do anything
+    //                WDEBUG << "Caution! All backups for server " << i << " are dead\n";
+    //                break;
+    //            }
+    //        }
+    //        if (srv_idx != active_server_idx[i]) {
+    //            active_server_idx[i] = srv_idx;
+    //            reverse_server_idx[srv_idx] = i;
+    //        }
+    //    } else {
+    //        // server i is not yet up
+    //        // check only i in the new config
+    //        if (config.get_state(server_id(i)) == server::AVAILABLE) {
+    //            active_server_idx[i] = i;
+    //            reverse_server_idx[i] = i;
+    //        }
+    //    }
+    //}
     while (primary >= NumEffectiveServers) {
         primary -= (NumEffectiveServers);
     }

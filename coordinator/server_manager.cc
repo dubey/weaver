@@ -58,6 +58,8 @@ server_manager :: server_manager()
     , m_counter(1)
     , m_version(0)
     , m_flags(0)
+    , m_num_shards(0)
+    , m_num_vts(0)
     , m_servers()
     , m_config_ack_through(0)
     , m_config_ack_barrier()
@@ -99,7 +101,8 @@ server_manager :: init(replicant_state_machine_context* ctx, uint64_t token)
 void
 server_manager :: server_register(replicant_state_machine_context* ctx,
                                   const server_id& sid,
-                                  const po6::net::location& bind_to)
+                                  const po6::net::location& bind_to,
+                                  int shard_or_vt)
 {
     FILE* log = replicant_state_machine_log_stream(ctx);
     server* srv = get_server(sid);
@@ -115,6 +118,9 @@ server_manager :: server_register(replicant_state_machine_context* ctx,
     srv = new_server(sid);
     srv->state = server::ASSIGNED;
     srv->bind_to = bind_to;
+    srv->weaver_id = (shard_or_vt == 0) ? m_num_shards++ : m_num_vts++;
+    srv->shard_or_vt = shard_or_vt;
+
     fprintf(log, "registered server(%lu)\n", sid.get());
     generate_next_configuration(ctx);
     return generate_response(ctx, COORD_SUCCESS);

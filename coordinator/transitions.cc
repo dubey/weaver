@@ -193,10 +193,11 @@ weaver_server_manager_server_register(struct replicant_state_machine_context* ct
     coordinator::server_manager* c = static_cast<coordinator::server_manager*>(obj);
     server_id sid;
     po6::net::location bind_to;
+    int shard_or_vt;
     e::unpacker up(data, data_sz);
-    up = up >> sid >> bind_to;
+    up = up >> sid >> bind_to >> shard_or_vt;
     CHECK_UNPACK(server_register);
-    c->server_register(ctx, sid, bind_to);
+    c->server_register(ctx, sid, bind_to, shard_or_vt);
 }
 
 void
