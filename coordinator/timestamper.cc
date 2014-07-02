@@ -863,7 +863,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, nmap::nmap_stub *nmap_cl)
 {
     node_prog::prog_type pType;
-    std::vector<std::pair<uint64_t, ParamsType>> initial_args;
+    std::vector<std::pair<std::string, ParamsType>> initial_args;
 
     msg->unpack_message(message::CLIENT_NODE_PROG_REQ, pType, initial_args);
     
@@ -871,31 +871,56 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     std::unordered_map<uint64_t, std::deque<std::pair<uint64_t, ParamsType>>> initial_batches; 
 
     // lookup mappings
-    std::unordered_map<uint64_t, uint64_t> request_element_mappings;
-    std::unordered_set<uint64_t> get_set;
+    std::unordered_map<uint64_t, uint64_t> loc_map;
+    std::unordered_map<std::string, uint64_t> handle_map;
+    std::unordered_set<std::string> get_client_set;
+    std::vector<std::string> get_client_v;
+
     for (auto &initial_arg : initial_args) {
-        uint64_t c_id = initial_arg.first;
-        get_set.insert(c_id);
+        get_client_set.emplace(initial_arg.first);
     }
-    if (!get_set.empty()) {
-        auto results = nmap_cl->get_mappings(get_set);
-        if (results.size() != get_set.size()) {
-            // some node ids bad, return immediately
-            WDEBUG << "bad node ids in node prog request" << std::endl;
+
+    get_client_v.reserve(get_client_set.size());
+    for (const std::string &s: get_client_set) {
+        get_client_v.emplace_back(s);
+    }
+
+    if (!get_client_set.empty()) {
+        bool success;
+        std::vector<std::pair<uint64_t, uint64_t>> loc_results;
+        handle_map = nmap_cl->get_client_mappings(get_client_v);
+        success = (handle_map.size() == get_client_set.size());
+
+        if (success) {
+            std::unordered_set<uint64_t> get_set;
+            get_set.reserve(handle_map.size());
+            for (auto &p: handle_map) {
+                get_set.emplace(p.second);
+            }
+
+            loc_results = nmap_cl->get_mappings(get_set);
+            success = (loc_results.size() == get_set.size());
+        }
+
+        if (!success) {
+            // some node handles bad, return immediately
+            WDEBUG << "bad node handles in node prog request" << std::endl;
             uint64_t zero = 0;
             msg->prepare_message(message::NODE_PROG_RETURN, pType, zero, ParamsType());
             vts->comm.send(clientID, msg->buf);
             return;
         }
-        for (auto &toAdd : results) {
-            request_element_mappings.emplace(toAdd);
+
+        loc_map.reserve(loc_results.size());
+        for (auto &toAdd : loc_results) {
+            loc_map.emplace(toAdd);
         }
     }
 
-    for (std::pair<uint64_t, ParamsType> &node_params_pair: initial_args) {
-        uint64_t loc = request_element_mappings[node_params_pair.first];
-        initial_batches[loc].emplace_back(std::make_pair(node_params_pair.first,
-                    std::move(node_params_pair.second)));
+    for (auto &p: initial_args) {
+        uint64_t id = handle_map[p.first];
+        uint64_t loc = loc_map[id];
+        initial_batches[loc].emplace_back(std::make_pair(id, std::move(p.second)));
     }
     
     vts->clk_rw_mtx.wrlock();
@@ -911,7 +936,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     vts->tx_prog_mutex.unlock();
 
     message::message msg_to_send;
-    for (auto &batch_pair : initial_batches) {
+    for (auto &batch_pair: initial_batches) {
         msg_to_send.prepare_message(message::NODE_PROG, pType, vt_id, req_timestamp, req_id, batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
     }

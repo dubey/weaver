@@ -71,73 +71,71 @@ client :: begin_tx()
     cur_tx_id = ++tx_id_ctr;
 }
 
-uint64_t
-client :: create_node()
+void
+client :: create_node(std::string &handle)
 {
     assert(cur_tx_id != UINT64_MAX);
     auto upd = std::make_shared<pending_update>();
     upd->type = transaction::NODE_CREATE_REQ;
-    upd->id = generate_handle();
+    upd->handle = handle;
     cur_tx.emplace_back(upd);
-    return upd->id;
 }
 
-uint64_t
-client :: create_edge(uint64_t node1, uint64_t node2)
+void
+client :: create_edge(std::string &handle, std::string &node1, std::string &node2)
 {
     assert(cur_tx_id != UINT64_MAX);
     auto upd = std::make_shared<pending_update>();
     upd->type = transaction::EDGE_CREATE_REQ;
-    upd->id = generate_handle();
-    upd->elem1 = node1;
-    upd->elem2 = node2;
+    upd->handle = handle;
+    upd->handle1 = node1;
+    upd->handle2 = node2;
     cur_tx.emplace_back(upd);
-    return upd->id;
 }
 
 void
-client :: delete_node(uint64_t node)
+client :: delete_node(std::string &node)
 {
     assert(cur_tx_id != UINT64_MAX);
     auto upd = std::make_shared<pending_update>();
     upd->type = transaction::NODE_DELETE_REQ;
-    upd->elem1 = node;
+    upd->handle1 = node;
     cur_tx.emplace_back(upd);
 }
 
 void
-client :: delete_edge(uint64_t edge, uint64_t node)
+client :: delete_edge(std::string &edge, std::string &node)
 {
     assert(cur_tx_id != UINT64_MAX);
     auto upd = std::make_shared<pending_update>();
     upd->type = transaction::EDGE_DELETE_REQ;
-    upd->elem1 = edge;
-    upd->elem2 = node;
+    upd->handle1 = edge;
+    upd->handle2 = node;
     cur_tx.emplace_back(upd);
 }
 
 void
-client :: set_node_property(uint64_t node,
+client :: set_node_property(std::string &node,
     std::string key, std::string value)
 {
     assert(cur_tx_id != UINT64_MAX);
     auto upd = std::make_shared<pending_update>();
     upd->type = transaction::NODE_SET_PROPERTY;
-    upd->elem1 = node;
+    upd->handle1 = node;
     upd->key.reset(new std::string(std::move(key)));
     upd->value.reset(new std::string(std::move(value)));
     cur_tx.emplace_back(upd);
 }
 
 void
-client :: set_edge_property(uint64_t node, uint64_t edge,
+client :: set_edge_property(std::string &node, std::string &edge,
     std::string key, std::string value)
 {
     assert(cur_tx_id != UINT64_MAX);
     auto upd = std::make_shared<pending_update>();
     upd->type = transaction::EDGE_SET_PROPERTY;
-    upd->elem1 = edge;
-    upd->elem2 = node;
+    upd->handle1 = edge;
+    upd->handle2 = node;
     upd->key.reset(new std::string(std::move(key)));
     upd->value.reset(new std::string(std::move(value)));
     cur_tx.emplace_back(upd);

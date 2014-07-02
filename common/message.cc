@@ -142,6 +142,7 @@ message :: size(const std::shared_ptr<transaction::pending_update> &ptr_t)
     transaction::pending_update &t = *ptr_t;
     uint64_t sz = size(t.type)
          + size(t.qts)
+         + size(t.handle)
          + size(t.handle1)
          + size(t.handle2)
          + size(t.id)
@@ -323,6 +324,7 @@ message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transact
     transaction::pending_update &t = *ptr_t;
     pack_buffer(packer, t.type);
     pack_buffer(packer, t.qts);
+    pack_buffer(packer, t.handle);
     pack_buffer(packer, t.handle1);
     pack_buffer(packer, t.handle2);
     pack_buffer(packer, t.id);
@@ -504,6 +506,7 @@ message :: unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::pen
     transaction::pending_update &t = *ptr_t;
     unpack_buffer(unpacker, t.type);
     unpack_buffer(unpacker, t.qts);
+    unpack_buffer(unpacker, t.handle);
     unpack_buffer(unpacker, t.handle1);
     unpack_buffer(unpacker, t.handle2);
     unpack_buffer(unpacker, t.id);

@@ -286,12 +286,12 @@ cdef extern from 'client/weaver_client.h' namespace 'cl':
         client(uint64_t my_id, uint64_t vt_id)
 
         void begin_tx()
-        uint64_t create_node()
-        uint64_t create_edge(uint64_t node1, uint64_t node2)
-        void delete_node(uint64_t node)
-        void delete_edge(uint64_t edge, uint64_t node)
-        void set_node_property(uint64_t node, string key, string value)
-        void set_edge_property(uint64_t node, uint64_t edge, string key, string value)
+        void create_node(string &handle)
+        void create_edge(string &handle, string &node1, string &node2)
+        void delete_node(string &node)
+        void delete_edge(string &edge, string &node)
+        void set_node_property(string &node, string key, string value)
+        void set_edge_property(string &node, string &edge, string key, string value)
         bint end_tx() nogil
         reach_params run_reach_program(vector[pair[uint64_t, reach_params]] &initial_args) nogil
         pathless_reach_params run_pathless_reach_program(vector[pair[uint64_t, pathless_reach_params]] &initial_args) nogil
@@ -327,10 +327,10 @@ cdef class Client:
         del self.thisptr
     def begin_tx(self):
         self.thisptr.begin_tx()
-    def create_node(self):
-        return self.thisptr.create_node()
-    def create_edge(self, node1, node2):
-        return self.thisptr.create_edge(node1, node2)
+    def create_node(self, handle):
+        self.thisptr.create_node(handle)
+    def create_edge(self, handle, node1, node2):
+        self.thisptr.create_edge(handle, node1, node2)
     def delete_node(self, node):
         self.thisptr.delete_node(node)
     def delete_edge(self, edge, node):

@@ -52,12 +52,12 @@ namespace cl
 
         public:
             void begin_tx();
-            uint64_t create_node();
-            uint64_t create_edge(uint64_t node1, uint64_t node2);
-            void delete_node(uint64_t node); 
-            void delete_edge(uint64_t edge, uint64_t node);
-            void set_node_property(uint64_t node, std::string key, std::string value);
-            void set_edge_property(uint64_t node, uint64_t edge, std::string key, std::string value);
+            void create_node(std::string &handle);
+            void create_edge(std::string &handle, std::string &node1, std::string &node2);
+            void delete_node(std::string &node); 
+            void delete_edge(std::string &edge, std::string &node);
+            void set_node_property(std::string &node, std::string key, std::string value);
+            void set_edge_property(std::string &node, std::string &edge, std::string key, std::string value);
             bool end_tx();
 
             template <typename ParamsType>
