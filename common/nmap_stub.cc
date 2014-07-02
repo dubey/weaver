@@ -86,6 +86,68 @@ nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add)
     return success;
 }
 
+bool
+nmap_stub :: put_client_mappings(std::unordered_map<std::string, uint64_t> &pairs_to_add)
+{
+    bool success = true;
+    int num_pairs = pairs_to_add.size();
+    hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute *)malloc(num_pairs * sizeof(hyperdex_client_attribute));
+    hyperdex_client_returncode put_status[num_pairs];
+    std::unordered_map<int64_t, int64_t> opid_to_idx;
+    opid_to_idx.reserve(num_pairs);
+
+    int64_t put_idx = 0;
+    int64_t op_id;
+    for (auto &entry: pairs_to_add) {
+        attrs_to_add[put_idx].attr = client_attr;
+        attrs_to_add[put_idx].value = (char*)&entry.second;
+        attrs_to_add[put_idx].value_sz = sizeof(int64_t);
+        attrs_to_add[put_idx].datatype = HYPERDATATYPE_INT64;
+
+        do {
+            op_id = cl.put_if_not_exist(client_space, entry.first.c_str(), entry.first.size(), attrs_to_add+put_idx, 1, put_status+put_idx);
+        } while (op_id < 0);
+        assert(opid_to_idx.find(op_id) == opid_to_idx.end());
+        opid_to_idx[op_id] = put_idx;
+
+        put_idx++;
+        
+        if (put_idx % 2000 == 0) {
+            WDEBUG << "completed " << put_idx << " puts" << std::endl;
+        }
+    }
+
+    int64_t loop_id;
+    hyperdex_client_returncode loop_status;
+    // call loop once for every put
+    for (int64_t i = 0; i < num_pairs; i++) {
+        do {
+            loop_id = cl.loop(-1, &loop_status);
+        } while (loop_id < 0);
+        assert(opid_to_idx.find(loop_id) != opid_to_idx.end());
+        int64_t &loop_idx = opid_to_idx[loop_id];
+        assert(loop_idx >= 0);
+
+        if (loop_status != HYPERDEX_CLIENT_SUCCESS || put_status[loop_idx] != HYPERDEX_CLIENT_SUCCESS) {
+            WDEBUG << "bad put for node at idx " << loop_idx
+                   << ", put status: " << put_status[loop_idx]
+                   << ", loop status: " << loop_status << std::endl;
+            WDEBUG << "error message: " << cl.error_message() << std::endl;
+            WDEBUG << "error loc: " << cl.error_location() << std::endl;
+            success = false;
+        }
+        loop_idx = -1;
+
+        if (i > 0 && i % 2000 == 0) {
+            WDEBUG << "completed " << i << " put loops" << std::endl;
+        }
+    }
+
+    free(attrs_to_add);
+
+    return success;
+}
+
 std::vector<std::pair<uint64_t, uint64_t>>
 nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
 {
@@ -155,6 +217,84 @@ nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
             assert(results[loop_idx].attr_size == 1);
             val = (uint64_t*)results[loop_idx].attr->value;
             mappings.emplace_back(std::make_pair(results[loop_idx].key, *val));
+            hyperdex_client_destroy_attrs(results[loop_idx].attr, results[loop_idx].attr_size);
+        }
+
+        loop_idx = -1;
+
+        if (i > 0 && i % 2000 == 0) {
+            WDEBUG << "completed " << i << " get loops" << std::endl;
+        }
+    }
+
+    return mappings;
+}
+
+std::unordered_map<std::string, uint64_t>
+nmap_stub :: get_client_mappings(std::vector<std::string> &toGet)
+{
+    class async_get
+    {
+        public:
+            int64_t op_id;
+            hyperdex_client_returncode status;
+            const hyperdex_client_attribute *attr;
+            size_t attr_size;
+
+            async_get()
+                : status(static_cast<hyperdex_client_returncode>(0))
+                , attr(NULL)
+                , attr_size(-1)
+            { }
+    };
+
+    int64_t num_nodes = toGet.size();
+    std::vector<async_get> results(num_nodes);
+    std::unordered_map<int64_t, int64_t> opid_to_idx;
+    opid_to_idx.reserve(num_nodes);
+
+    for (int64_t i = 0; i < num_nodes; i++) {
+
+        do {
+            results[i].op_id = cl.get(space, toGet[i].c_str(), toGet[i].size(),
+                &(results[i].status), &(results[i].attr), &(results[i].attr_size));
+        } while (results[i].op_id < 0);
+        assert(opid_to_idx.find(results[i].op_id) == opid_to_idx.end());
+        opid_to_idx[results[i].op_id] = i;
+
+        if (i > 0 && i % 2000 == 0) {
+            WDEBUG << "completed " << i << " gets" << std::endl;
+        }
+    }
+
+    int64_t loop_id;
+    hyperdex_client_returncode loop_status;
+    uint64_t *val;
+    std::unordered_map<std::string, uint64_t> mappings;
+    mappings.reserve(num_nodes);
+    // call loop once for every get
+    for (int64_t i = 0; i < num_nodes; i++) {
+        do {
+            loop_id = cl.loop(-1, &loop_status);
+        } while (loop_id < 0);
+        assert(opid_to_idx.find(loop_id) != opid_to_idx.end());
+        int64_t &loop_idx = opid_to_idx[loop_id];
+        assert(loop_idx >= 0);
+
+        if (loop_status != HYPERDEX_CLIENT_SUCCESS || results[loop_idx].status != HYPERDEX_CLIENT_SUCCESS) {
+            if (results[loop_idx].status == HYPERDEX_CLIENT_NOTFOUND) {
+                assert(results[loop_idx].attr_size == (size_t)-1);
+                assert(results[loop_idx].attr == NULL);
+            } else {
+                WDEBUG << "bad get for node at idx " << loop_idx
+                       << ", get status: " << results[loop_idx].status
+                       << ", loop status: " << loop_status << std::endl;
+                hyperdex_client_destroy_attrs(results[loop_idx].attr, results[loop_idx].attr_size);
+            }
+        } else {
+            assert(results[loop_idx].attr_size == 1);
+            val = (uint64_t*)results[loop_idx].attr->value;
+            mappings[toGet[loop_idx]] = *val;
             hyperdex_client_destroy_attrs(results[loop_idx].attr, results[loop_idx].attr_size);
         }
 

@@ -194,7 +194,6 @@ weaver_shard_SOURCES=	common/ids.cc \
 
 # c++ client
 noinst_HEADERS+=	client/client_constants.h \
-					client/transaction.h \
 					client/weaver_client.h
 lib_LTLIBRARIES+=			libweaverclient.la
 libweaverclient_la_SOURCES=	common/ids.cc \

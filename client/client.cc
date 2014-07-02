@@ -28,8 +28,8 @@ uint64_t NumActualServers;
 uint64_t ShardIdIncr;
 char *ShardsFile;
 
-namespace client
-{
+using cl::client;
+using transaction::pending_update;
 
 //client :: client(const char *coordinator, uint16_t port)
 client :: client(uint64_t my_id, uint64_t vt_id)
@@ -76,10 +76,10 @@ client :: create_node()
 {
     assert(cur_tx_id != UINT64_MAX);
     auto upd = std::make_shared<pending_update>();
-    upd->type = message::CLIENT_NODE_CREATE_REQ;
-    upd->handle = generate_handle();
+    upd->type = transaction::NODE_CREATE_REQ;
+    upd->id = generate_handle();
     cur_tx.emplace_back(upd);
-    return upd->handle;
+    return upd->id;
 }
 
 uint64_t
@@ -87,12 +87,12 @@ client :: create_edge(uint64_t node1, uint64_t node2)
 {
     assert(cur_tx_id != UINT64_MAX);
     auto upd = std::make_shared<pending_update>();
-    upd->type = message::CLIENT_EDGE_CREATE_REQ;
-    upd->handle = generate_handle();
+    upd->type = transaction::EDGE_CREATE_REQ;
+    upd->id = generate_handle();
     upd->elem1 = node1;
     upd->elem2 = node2;
     cur_tx.emplace_back(upd);
-    return upd->handle;
+    return upd->id;
 }
 
 void
@@ -100,7 +100,7 @@ client :: delete_node(uint64_t node)
 {
     assert(cur_tx_id != UINT64_MAX);
     auto upd = std::make_shared<pending_update>();
-    upd->type = message::CLIENT_NODE_DELETE_REQ;
+    upd->type = transaction::NODE_DELETE_REQ;
     upd->elem1 = node;
     cur_tx.emplace_back(upd);
 }
@@ -110,7 +110,7 @@ client :: delete_edge(uint64_t edge, uint64_t node)
 {
     assert(cur_tx_id != UINT64_MAX);
     auto upd = std::make_shared<pending_update>();
-    upd->type = message::CLIENT_EDGE_DELETE_REQ;
+    upd->type = transaction::EDGE_DELETE_REQ;
     upd->elem1 = edge;
     upd->elem2 = node;
     cur_tx.emplace_back(upd);
@@ -118,28 +118,28 @@ client :: delete_edge(uint64_t edge, uint64_t node)
 
 void
 client :: set_node_property(uint64_t node,
-    std::string &key, std::string &value)
+    std::string key, std::string value)
 {
     assert(cur_tx_id != UINT64_MAX);
     auto upd = std::make_shared<pending_update>();
-    upd->type = message::CLIENT_NODE_SET_PROP;
+    upd->type = transaction::NODE_SET_PROPERTY;
     upd->elem1 = node;
-    upd->key = std::move(key);
-    upd->value = std::move(value);
+    upd->key.reset(new std::string(std::move(key)));
+    upd->value.reset(new std::string(std::move(value)));
     cur_tx.emplace_back(upd);
 }
 
 void
 client :: set_edge_property(uint64_t node, uint64_t edge,
-    std::string &key, std::string &value)
+    std::string key, std::string value)
 {
     assert(cur_tx_id != UINT64_MAX);
     auto upd = std::make_shared<pending_update>();
-    upd->type = message::CLIENT_EDGE_SET_PROP;
+    upd->type = transaction::EDGE_SET_PROPERTY;
     upd->elem1 = edge;
     upd->elem2 = node;
-    upd->key = std::move(key);
-    upd->value = std::move(value);
+    upd->key.reset(new std::string(std::move(key)));
+    upd->value.reset(new std::string(std::move(value)));
     cur_tx.emplace_back(upd);
 }
 
@@ -153,14 +153,14 @@ client :: end_tx()
 
     bool success = false;
     message::message msg;
-    message::prepare_tx_message_client(msg, cur_tx);
+    msg.prepare_message(message::CLIENT_TX_INIT, cur_tx);
     send_coord(msg.buf);
 
     busybee_returncode recv_code = recv_coord(&msg.buf);
     if (recv_code == BUSYBEE_TIMEOUT) {
         // assume vt is dead, fail tx
         WDEBUG << "operation timeout, perhaps timestamper is dead?" << std::endl;
-        return false;
+        success = false;
     } else if (recv_code != BUSYBEE_SUCCESS) {
         WDEBUG << "tx msg recv fail" << std::endl;
     } else {
@@ -189,7 +189,7 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
     busybee_returncode recv_code = recv_coord(&msg.buf);
     if (recv_code == BUSYBEE_TIMEOUT) {
         // assume vt is dead
-        reconfigure();
+        //reconfigure();
         return NULL;
     }
     if (recv_code != BUSYBEE_SUCCESS) {
@@ -401,6 +401,4 @@ client :: maintain_sm_connection()
     }
 
     return true;
-}
-
 }

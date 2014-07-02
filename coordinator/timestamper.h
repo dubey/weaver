@@ -28,7 +28,6 @@
 #include "common/ids.h"
 #include "common/vclock.h"
 #include "common/message.h"
-#include "common/transaction.h"
 #include "common/configuration.h"
 #include "common/comm_wrapper.h"
 #include "common/server_manager_link_wrapper.h"
@@ -59,10 +58,15 @@ namespace coordinator
             std::vector<hyper_stub*> hstub;
 
             // timestamper state
-            uint64_t vt_id, shifted_id, id_gen; // this vector timestamper's id
+        public:
             server_id server;
-            uint64_t loc_gen;
+        private:
+            uint64_t vt_id; // this vector timestamper's id
+            uint64_t shifted_id;
+            uint64_t reqid_gen, loc_gen, id_gen;
+            po6::threads::mutex reqid_gen_mtx, loc_gen_mtx, id_gen_mtx;
 
+        public:
             // consistency
             vc::vclock vclk; // vector clock
             vc::qtimestamp_t qts; // queue timestamp
@@ -93,10 +97,8 @@ namespace coordinator
             // mutexes
         public:
             po6::threads::mutex clk_mutex // vclock and queue timestamp
-                    , loc_gen_mutex
                     , tx_prog_mutex // state for outstanding and completed node progs, transactions
                     , periodic_update_mutex // make sure to not send out clock update before getting ack from other VTs
-                    , id_gen_mutex
                     , msg_count_mutex
                     , migr_mutex
                     , graph_load_mutex
@@ -121,6 +123,8 @@ namespace coordinator
             void init();
             void restore_backup();
             void reconfigure();
+            uint64_t generate_req_id();
+            uint64_t generate_loc();
             uint64_t generate_id();
     };
 
@@ -136,11 +140,12 @@ namespace coordinator
         , first_config_cond(&config_mutex)
         , vts_init_cond(&config_mutex)
         , start_all_vts_cond(&config_mutex)
+        , server(serverid)
         , vt_id(vtid)
         , shifted_id(vtid << (64-ID_BITS))
-        , id_gen(0)
-        , server(serverid)
+        , reqid_gen(0)
         , loc_gen(0)
+        , id_gen(0)
         , vclk(vtid, 0)
         , qts(NumShards, 0)
         , clock_update_acks(NumVts-1)
@@ -258,12 +263,34 @@ namespace coordinator
     }
 
     inline uint64_t
+    timestamper :: generate_req_id()
+    {
+        uint64_t new_id;
+        reqid_gen_mtx.lock();
+        new_id = (++reqid_gen) & TOP_MASK;
+        reqid_gen_mtx.unlock();
+        new_id |= shifted_id;
+        return new_id;
+    }
+
+    inline uint64_t
+    timestamper :: generate_loc()
+    {
+        uint64_t new_loc;
+        loc_gen_mtx.lock();
+        loc_gen = (loc_gen+1) % NumShards;
+        new_loc = loc_gen + ShardIdIncr;
+        loc_gen_mtx.unlock();
+        return new_loc;
+    }
+
+    inline uint64_t
     timestamper :: generate_id()
     {
         uint64_t new_id;
-        id_gen_mutex.lock();
+        id_gen_mtx.lock();
         new_id = (++id_gen) & TOP_MASK;
-        id_gen_mutex.unlock();
+        id_gen_mtx.unlock();
         new_id |= shifted_id;
         return new_id;
     }

@@ -32,13 +32,18 @@ namespace nmap
 
         private:
             const char *space = "weaver_loc_mapping";
-            const char *attrName = "shard"; // we get an attribute named "shard" with integer value correspoding to which shard node is placed on
+            const char *attrName = "shard";
+            const char *client_space = "weaver_client_mapping";
+            const char *client_attr = "handle";
             hyperdex::Client cl;
 
         public:
+            bool put_client_mappings(std::unordered_map<std::string, uint64_t> &pairs_to_add);
             bool put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add);
+            std::unordered_map<std::string, uint64_t> get_client_mappings(std::vector<std::string> &toGet);
             std::vector<std::pair<uint64_t, uint64_t>> get_mappings(std::unordered_set<uint64_t> &toGet);
             bool del_mappings(std::unordered_set<uint64_t> &toDel);
+            bool del_mappings(std::unordered_set<std::string> &toDel);
     };
 }
 

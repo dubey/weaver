@@ -281,7 +281,7 @@ class TraversePropsParams:
         self.edge_props = edge_props
         self.return_nodes = return_nodes
 
-cdef extern from 'client/weaver_client.h' namespace 'client':
+cdef extern from 'client/weaver_client.h' namespace 'cl':
     cdef cppclass client:
         client(uint64_t my_id, uint64_t vt_id)
 
@@ -290,8 +290,8 @@ cdef extern from 'client/weaver_client.h' namespace 'client':
         uint64_t create_edge(uint64_t node1, uint64_t node2)
         void delete_node(uint64_t node)
         void delete_edge(uint64_t edge, uint64_t node)
-        void set_node_property(uint64_t node, string &key, string &value)
-        void set_edge_property(uint64_t node, uint64_t edge, string &key, string &value)
+        void set_node_property(uint64_t node, string key, string value)
+        void set_edge_property(uint64_t node, uint64_t edge, string key, string value)
         bint end_tx() nogil
         reach_params run_reach_program(vector[pair[uint64_t, reach_params]] &initial_args) nogil
         pathless_reach_params run_pathless_reach_program(vector[pair[uint64_t, pathless_reach_params]] &initial_args) nogil

@@ -21,7 +21,7 @@
 #include "common/message_constants.h"
 #include "common/comm_wrapper.h"
 #include "common/server_manager_link_wrapper.h"
-#include "transaction.h"
+#include "common/transaction.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/reach_program.h"
 #include "node_prog/pathless_reach_program.h"
@@ -35,7 +35,7 @@
 #include "node_prog/edge_get_program.h"
 #include "node_prog/traverse_with_props.h"
 
-namespace client
+namespace cl
 {
     class client
     {
@@ -47,7 +47,7 @@ namespace client
             uint64_t myid, shifted_id, vtid;
             common::comm_wrapper comm;
             server_manager_link m_sm;
-            tx_list_t cur_tx;
+            transaction::tx_list_t cur_tx;
             uint64_t cur_tx_id, tx_id_ctr, temp_handle_ctr;
 
         public:
@@ -56,8 +56,8 @@ namespace client
             uint64_t create_edge(uint64_t node1, uint64_t node2);
             void delete_node(uint64_t node); 
             void delete_edge(uint64_t edge, uint64_t node);
-            void set_node_property(uint64_t node, std::string &key, std::string &value);
-            void set_edge_property(uint64_t node, uint64_t edge, std::string &key, std::string &value);
+            void set_node_property(uint64_t node, std::string key, std::string value);
+            void set_edge_property(uint64_t node, uint64_t edge, std::string key, std::string value);
             bool end_tx();
 
             template <typename ParamsType>
@@ -87,7 +87,6 @@ namespace client
             void send_coord(std::auto_ptr<e::buffer> buf);
             busybee_returncode recv_coord(std::auto_ptr<e::buffer> *buf);
 #pragma GCC diagnostic pop
-            void reconfigure();
             uint64_t generate_handle();
             bool maintain_sm_connection();
     };

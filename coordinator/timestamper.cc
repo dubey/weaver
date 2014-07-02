@@ -53,7 +53,7 @@ static po6::threads::mutex tx_count_mtx;
 
 // tx functions
 bool
-unpack_tx(message::message &msg, uint64_t client_id, transaction::pending_tx &tx);
+unpack_tx(message::message &msg, uint64_t client_id, transaction::pending_tx &tx, nmap::nmap_stub *nmstub);
 void send_abort(uint64_t cl_id);
 bool lock_del_elems(std::unordered_set<uint64_t> &del_elems);
 void unlock_del_elems(std::unordered_set<uint64_t> &del_elems);
@@ -97,23 +97,98 @@ end_program(int signum)
 bool
 unpack_tx(message::message &msg,
     uint64_t client_id,
-    transaction::pending_tx &tx)
+    transaction::pending_tx &tx,
+    nmap::nmap_stub *nmstub)
 {
-    msg.unpack_client_tx(tx);
-    tx.id = vts->generate_id();
-    tx.client_id = client_id;
+    std::vector<std::string> new_handles_v;
+    std::unordered_set<std::string> new_handles, del_handles, get_handles;
+    msg.unpack_message(message::CLIENT_TX_INIT, tx.writes);
+
+#define NEW_HANDLE(h) \
+    if (new_handles.find(h) != new_handles.end()) { \
+        return false; \
+    } \
+    new_handles.emplace(h);
+#define GET_HANDLE(h) \
+    if (new_handles.find(h) == new_handles.end()) { \
+        get_handles.emplace(h); \
+    }
+#define DEL_HANDLE(h) \
+    if (del_handles.find(h) != del_handles.end()) { \
+        return false; \
+    } \
+    del_handles.emplace(h);
 
     for (auto upd: tx.writes) {
+
+        switch (upd->type) {
+
+            case transaction::NODE_CREATE_REQ:
+                NEW_HANDLE(upd->handle);
+                break;
+
+            case transaction::EDGE_CREATE_REQ:
+                NEW_HANDLE(upd->handle);
+                GET_HANDLE(upd->handle1);
+                GET_HANDLE(upd->handle2);
+                break;
+
+            case transaction::NODE_DELETE_REQ:
+                // for delete_node, lock node
+                GET_HANDLE(upd->handle1);
+                DEL_HANDLE(upd->handle1);
+                break;
+
+            case transaction::EDGE_DELETE_REQ:
+                // for delete_edge, lock edge
+                GET_HANDLE(upd->handle2);
+                DEL_HANDLE(upd->handle1);
+                break;
+
+            case transaction::NODE_SET_PROPERTY:
+                GET_HANDLE(upd->handle1);
+                break;
+
+            case transaction::EDGE_SET_PROPERTY:
+                GET_HANDLE(upd->handle2);
+                break;
+
+            default:
+                WDEBUG << "bad type" << std::endl;
+                break;
+        }
+
+    }
+
+#undef CHECK_NEW_HANDLE
+#undef GET_HANDLE
+#undef DEL_HANDLE
+
+    new_handles_v.reserve(new_handles.size());
+    for (const std::string &s: new_handles) {
+        new_handles_v.emplace_back(s);
+    }
+
+    std::unordered_map<std::string, uint64_t> client_map = nmstub->get_client_mappings(new_handles_v);
+    std::string empty_string;
+    client_map[empty_string] = 0;
+
+    for (auto upd: tx.writes) {
+        if (client_map.find(upd->handle1) == client_map.end()) {
+            return false;
+        }
+        if (client_map.find(upd->handle2) == client_map.end()) {
+            return false;
+        }
+        upd->elem1 = client_map[upd->handle1];
+        upd->elem2 = client_map[upd->handle2];
         if (upd->type == transaction::NODE_DELETE_REQ || upd->type == transaction::EDGE_DELETE_REQ) {
-            // for delete_node, lock node
-            // for delete_edge, lock edge
-            if (tx.del_elems.find(upd->elem1) != tx.del_elems.end()) {
-                return false;
-            }
             tx.del_elems.emplace(upd->elem1);
         }
     }
 
+    tx.id = vts->generate_req_id();
+    tx.client_id = client_id;
     return true;
 }
 
@@ -349,6 +424,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     coordinator::hyper_stub *hstub)
 {
     std::unordered_map<uint64_t, uint64_t> put_map;
+    std::unordered_map<std::string, uint64_t> put_client_map;
     std::unordered_set<uint64_t> get_set;
     std::unordered_set<uint64_t> del_set;
     tx->busy_elems.reserve(tx->writes.size());
@@ -369,10 +445,9 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
 
             case transaction::NODE_CREATE_REQ:
                 // randomly assign shard for this node
-                vts->loc_gen_mutex.lock();
-                vts->loc_gen = (vts->loc_gen + 1) % NumShards;
-                upd->loc1 = vts->loc_gen + ShardIdIncr; // node will be placed on this shard
-                vts->loc_gen_mutex.unlock();
+                upd->loc1 = vts->generate_loc(); // node will be placed on this shard
+                upd->id = vts->generate_id();
+                put_client_map[upd->handle] = upd->id;
                 put_map.emplace(upd->id, upd->loc1);
 
                 assert(deleted_elems.find(upd->id) == deleted_elems.end());
@@ -387,6 +462,8 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
                 if (put_map.find(upd->elem2) == put_map.end()) {
                     get_set.insert(upd->elem2);
                 }
+                upd->id = vts->generate_id();
+                put_client_map[upd->handle] = upd->id;
 
                 busy_single[0] = upd->id;
                 busy_single[1] = upd->elem1;
@@ -477,6 +554,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
         // put and delete mappings
         assert(nmstub->put_mappings(put_map));
         assert(nmstub->del_mappings(del_set));
+        assert(nmstub->put_client_mappings(put_client_map));
     }
 
     if (!success) {
@@ -663,7 +741,7 @@ nop_function()
 
         // send nops and state cleanup info to shards
         if (weaver_util::any(vts->to_nop)) {
-            req_id = vts->generate_id();
+            req_id = vts->generate_req_id();
             vts->clk_rw_mtx.wrlock();
             vts->vclk.increment_clock();
             vclk.clock = vts->vclk.clock;
@@ -827,7 +905,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     vts->clk_rw_mtx.unlock();
 
     vts->tx_prog_mutex.lock();
-    uint64_t req_id = vts->generate_id();
+    uint64_t req_id = vts->generate_req_id();
     vts->outstanding_progs.emplace(req_id, current_prog(clientID, req_timestamp.clock));
     vts->pend_prog_queue.emplace(req_id);
     vts->tx_prog_mutex.unlock();
@@ -906,7 +984,7 @@ server_loop(int thread_id)
                 case message::CLIENT_TX_INIT: {
                     std::unique_ptr<transaction::pending_tx> tx(new transaction::pending_tx());
 
-                    if (!unpack_tx(*msg, sender, *tx)) {
+                    if (!unpack_tx(*msg, sender, *tx, nmstub)) {
                         // tx fail because multiple deletes for same node/edge
                         send_abort(sender);
                     }

@@ -142,6 +142,8 @@ message :: size(const std::shared_ptr<transaction::pending_update> &ptr_t)
     transaction::pending_update &t = *ptr_t;
     uint64_t sz = size(t.type)
          + size(t.qts)
+         + size(t.handle1)
+         + size(t.handle2)
          + size(t.id)
          + size(t.elem1)
          + size(t.elem2)
@@ -321,6 +323,8 @@ message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transact
     transaction::pending_update &t = *ptr_t;
     pack_buffer(packer, t.type);
     pack_buffer(packer, t.qts);
+    pack_buffer(packer, t.handle1);
+    pack_buffer(packer, t.handle2);
     pack_buffer(packer, t.id);
     pack_buffer(packer, t.elem1);
     pack_buffer(packer, t.elem2);
@@ -500,6 +504,8 @@ message :: unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::pen
     transaction::pending_update &t = *ptr_t;
     unpack_buffer(unpacker, t.type);
     unpack_buffer(unpacker, t.qts);
+    unpack_buffer(unpacker, t.handle1);
+    unpack_buffer(unpacker, t.handle2);
     unpack_buffer(unpacker, t.id);
     unpack_buffer(unpacker, t.elem1);
     unpack_buffer(unpacker, t.elem2);
@@ -557,26 +563,26 @@ message :: message :: unpack_client_tx(transaction::pending_tx &tx)
             case CLIENT_EDGE_CREATE_REQ:
                 upd->type = transaction::EDGE_CREATE_REQ;
                 unpack_buffer(unpacker, upd->id);
-                unpack_buffer(unpacker, upd->elem1);
-                unpack_buffer(unpacker, upd->elem2);
+                unpack_buffer(unpacker, upd->handle1);
+                unpack_buffer(unpacker, upd->handle2);
                 break;
 
             case CLIENT_NODE_DELETE_REQ:
                 upd->type = transaction::NODE_DELETE_REQ;
-                unpack_buffer(unpacker, upd->elem1);
+                unpack_buffer(unpacker, upd->handle1);
                 break;
 
             case CLIENT_EDGE_DELETE_REQ:
                 upd->type = transaction::EDGE_DELETE_REQ;
-                unpack_buffer(unpacker, upd->elem1);
-                unpack_buffer(unpacker, upd->elem2);
+                unpack_buffer(unpacker, upd->handle1);
+                unpack_buffer(unpacker, upd->handle2);
                 break;
 
             case CLIENT_NODE_SET_PROP:
                 upd->type = transaction::NODE_SET_PROPERTY;
                 upd->key.reset(new std::string());
                 upd->value.reset(new std::string());
-                unpack_buffer(unpacker, upd->elem1);
+                unpack_buffer(unpacker, upd->handle1);
                 unpack_buffer(unpacker, *upd->key);
                 unpack_buffer(unpacker, *upd->value);
                 break;
@@ -585,8 +591,8 @@ message :: message :: unpack_client_tx(transaction::pending_tx &tx)
                 upd->type = transaction::EDGE_SET_PROPERTY;
                 upd->key.reset(new std::string());
                 upd->value.reset(new std::string());
-                unpack_buffer(unpacker, upd->elem1);
-                unpack_buffer(unpacker, upd->elem2);
+                unpack_buffer(unpacker, upd->handle1);
+                unpack_buffer(unpacker, upd->handle2);
                 unpack_buffer(unpacker, *upd->key);
                 unpack_buffer(unpacker, *upd->value);
                 break;
