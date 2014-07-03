@@ -16,6 +16,7 @@
 #define weaver_db_element_property_h_
 
 #include <string>
+#include <functional>
 
 #include "common/weaver_constants.h"
 #include "common/vclock.h"
