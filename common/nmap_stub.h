@@ -43,7 +43,7 @@ namespace nmap
             void get_client_mappings(std::vector<std::string> &toGet, std::unordered_map<std::string, uint64_t> &client_map);
             std::vector<std::pair<uint64_t, uint64_t>> get_mappings(std::unordered_set<uint64_t> &toGet);
             bool del_mappings(std::unordered_set<uint64_t> &toDel);
-            bool del_mappings(std::unordered_set<std::string> &toDel);
+            bool del_client_mappings(std::unordered_set<std::string> &toDel);
     };
 }
 

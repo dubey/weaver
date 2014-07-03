@@ -338,7 +338,58 @@ nmap_stub :: del_mappings(std::unordered_set<uint64_t> &toDel)
         int64_t &loop_idx = opid_to_idx[loop_id];
         assert(loop_idx >= 0);
 
-        if (loop_status != HYPERDEX_CLIENT_SUCCESS || del_status[loop_idx] != HYPERDEX_CLIENT_SUCCESS) {
+        if (loop_status != HYPERDEX_CLIENT_SUCCESS
+         || (del_status[loop_idx] != HYPERDEX_CLIENT_SUCCESS && del_status[loop_idx] != HYPERDEX_CLIENT_NOTFOUND)) {
+            WDEBUG << "bad del for node at idx " << loop_idx
+                   << ", node: " << del_nodes[loop_idx]
+                   << ", del status: " << del_status[loop_idx]
+                   << ", loop status: " << loop_status << std::endl;
+            success = false;
+        }
+
+        loop_idx = -1;
+    }
+
+    return success;
+}
+
+bool
+nmap_stub :: del_client_mappings(std::unordered_set<std::string> &toDel)
+{
+    bool success = true;
+    int64_t num_nodes = toDel.size();
+    std::vector<const char*> del_entries(toDel.size(), NULL);
+    int64_t del_nodes[num_nodes];
+    std::unordered_map<int64_t, int64_t> opid_to_idx;
+    opid_to_idx.reserve(num_nodes);
+    hyperdex_client_returncode del_status[num_nodes];
+    int64_t del_id;
+
+    auto todel_iter = toDel.begin();
+    for (int64_t i = 0; i < num_nodes; i++) {
+        assert(todel_iter != toDel.end());
+        del_entries[i] = todel_iter->c_str();
+        do {
+            del_id = cl.del(space, todel_iter->c_str(), todel_iter->size(), del_status+i);
+        } while (del_id < 0);
+        todel_iter++;
+        assert(opid_to_idx.find(del_id) == opid_to_idx.end());
+        opid_to_idx[del_id] = i;
+    }
+
+    int64_t loop_id;
+    hyperdex_client_returncode loop_status;
+    // call loop once for every get
+    for (int64_t i = 0; i < num_nodes; i++) {
+        do {
+            loop_id = cl.loop(-1, &loop_status);
+        } while(loop_id < 0);
+        assert(opid_to_idx.find(loop_id) != opid_to_idx.end());
+        int64_t &loop_idx = opid_to_idx[loop_id];
+        assert(loop_idx >= 0);
+
+        if (loop_status != HYPERDEX_CLIENT_SUCCESS
+         || (del_status[loop_idx] != HYPERDEX_CLIENT_SUCCESS && del_status[loop_idx] != HYPERDEX_CLIENT_NOTFOUND)) {
             WDEBUG << "bad del for node at idx " << loop_idx
                    << ", node: " << del_nodes[loop_idx]
                    << ", del status: " << del_status[loop_idx]

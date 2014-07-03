@@ -85,3 +85,13 @@ print 'default created node: ' + c.create_node()
 print 'default created node: ' + c.create_node()
 print 'default created node: ' + c.create_node()
 c.end_tx()
+
+# create node for user egs
+c.begin_tx()
+c.create_node('egs')
+c.set_node_property('egs', 'type', 'user')
+success = c.end_tx()
+if success:
+    print 'User egs created'
+else:
+    print 'tx fail'

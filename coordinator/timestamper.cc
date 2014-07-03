@@ -566,10 +566,23 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     }
 
     if (success) {
+        if (!nmstub->put_client_mappings(put_client_map)) {
+            std::unordered_set<std::string> del_set;
+            del_set.reserve(put_client_map.size());
+            for (auto &p: put_client_map) {
+                del_set.emplace(p.first);
+            }
+            if (!nmstub->del_client_mappings(del_set)) {
+                WDEBUG << "del client mappings fail" << std::endl;
+            }
+            success = false;
+        }
+    }
+
+    if (success) {
         // put and delete mappings
         assert(nmstub->put_mappings(put_map));
         assert(nmstub->del_mappings(del_set));
-        assert(nmstub->put_client_mappings(put_client_map));
     }
 
     if (!success) {

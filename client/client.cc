@@ -276,6 +276,12 @@ client :: edge_get_program(std::vector<std::pair<std::string, node_prog::edge_ge
 node_prog::traverse_props_params
 client :: traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args)
 {
+    for (auto &p: initial_args) {
+        if (p.second.node_props.size() != (p.second.edge_props.size()+1)) {
+            WDEBUG << "bad params, #node_props should be (#edge_props + 1)" << std::endl;
+            return node_prog::traverse_props_params();
+        }
+    }
     return *run_node_program(node_prog::TRAVERSE_PROPS, initial_args);
 }
 
