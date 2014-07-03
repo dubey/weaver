@@ -3,7 +3,7 @@
 
 AC_PREREQ([2.66])
 AC_INIT([chronos], [0.1.dev], [escriva@cs.cornell.edu])
-AM_INIT_AUTOMAKE([foreign subdir-objects dist-bzip2 dist-lzma])
+AM_INIT_AUTOMAKE([foreign subdir-objects dist-bzip2])
 AM_SILENT_RULES([yes])
 AM_PATH_PYTHON([2.6])
 LT_PREREQ([2.2])
