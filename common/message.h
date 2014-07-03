@@ -541,7 +541,7 @@ namespace message
 
         t.resize(elements_left);
 
-        for (int i = 0; i < elements_left; i++) {
+        for (uint32_t i = 0; i < elements_left; i++) {
             unpack_buffer(unpacker, t[i]);
         }
     }
@@ -556,7 +556,7 @@ namespace message
 
         t.resize(elements_left);
 
-        for (int i = 0; i < elements_left; i++) {
+        for (uint32_t i = 0; i < elements_left; i++) {
             unpack_buffer(unpacker, t[i]);
         }
     }
