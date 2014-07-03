@@ -117,7 +117,6 @@ unpack_tx(message::message &msg,
         return false; \
     } \
     client_map[h] = vts->generate_id(); \
-    WDEBUG << "created new handle,id pair: " << h << "," << client_map[h] << std::endl; \
     new_handles.emplace(h);
 
 #define GET_HANDLE(h) \
@@ -1022,7 +1021,6 @@ server_loop(int thread_id)
             switch (mtype) {
                 // client messages
                 case message::CLIENT_TX_INIT: {
-                    WDEBUG << "client_tx_init, sender = " << client_sender << std::endl;
                     std::unique_ptr<transaction::pending_tx> tx(new transaction::pending_tx());
 
                     if (!unpack_tx(*msg, client_sender, *tx, nmstub)) {

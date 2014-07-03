@@ -40,9 +40,9 @@ else:
 
 # ayush follows egs
 c.begin_tx()
-c.create_edge('e1', 'ayush', 'egs')
+c.create_edge('ayush', 'egs', 'e1')
 c.set_edge_property('ayush', 'e1', 'type', 'follows')
-c.create_edge('e2', 'egs', 'ayush')
+c.create_edge('egs', 'ayush', 'e2')
 c.set_edge_property('egs', 'e2', 'type', 'followed_by')
 success = c.end_tx()
 if success:
@@ -55,8 +55,8 @@ c.begin_tx()
 c.create_node('post')
 c.set_node_property('post', 'type', 'post')
 c.set_node_property('post', 'visibility', 'followers')
-c.create_edge('e3', 'egs', 'post')
-c.set_edge_property('egs', 'e3', 'type', 'posted')
+e3 = c.create_edge('egs', 'post')
+c.set_edge_property('egs', e3, 'type', 'posted')
 success = c.end_tx()
 if success:
     print 'egs posted content'
@@ -65,8 +65,8 @@ else:
 
 # 'like' the post
 c.begin_tx()
-c.create_edge('e4', 'post', 'ayush')
-c.set_edge_property('post', 'e4', 'type', 'liked_by')
+e4 = c.create_edge('post', 'ayush')
+c.set_edge_property('post', e4, 'type', 'liked_by')
 success = c.end_tx()
 if success:
     print 'ayush likes egs\'s post'
@@ -77,4 +77,11 @@ else:
 return_nodes = c.traverse('egs', [('type','user')]).out_edge([('type','posted')]).node([('type','post')]).out_edge([('type','liked_by')]).node([('type','user')]).execute()
 print 'List of users who like egs\'s posts:'
 for user in return_nodes:
-    print user
+    print '\t' + user
+
+c.begin_tx()
+print 'default created node: ' + c.create_node()
+print 'default created node: ' + c.create_node()
+print 'default created node: ' + c.create_node()
+print 'default created node: ' + c.create_node()
+c.end_tx()

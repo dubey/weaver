@@ -52,8 +52,8 @@ namespace cl
 
         public:
             void begin_tx();
-            void create_node(std::string &handle);
-            void create_edge(std::string &handle, std::string &node1, std::string &node2);
+            std::string create_node(std::string &handle);
+            std::string create_edge(std::string &handle, std::string &node1, std::string &node2);
             void delete_node(std::string &node); 
             void delete_edge(std::string &edge, std::string &node);
             void set_node_property(std::string &node, std::string key, std::string value);

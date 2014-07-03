@@ -109,8 +109,6 @@ nmap_stub :: put_client_mappings(std::unordered_map<std::string, uint64_t> &pair
         } while (op_id < 0);
         assert(opid_to_idx.find(op_id) == opid_to_idx.end());
         opid_to_idx[op_id] = put_idx;
-        WDEBUG << "put client map " << entry.first << "," << entry.second << std::endl;
-        WDEBUG << "string size " << entry.first.size() << std::endl;
 
         put_idx++;
         

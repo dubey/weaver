@@ -278,8 +278,8 @@ cdef extern from 'client/weaver_client.h' namespace 'cl':
         client(const char *coordinator, uint16_t port, const char *config_file)
 
         void begin_tx()
-        void create_node(string &handle)
-        void create_edge(string &handle, string &node1, string &node2)
+        string create_node(string &handle)
+        string create_edge(string &handle, string &node1, string &node2)
         void delete_node(string &node)
         void delete_edge(string &edge, string &node)
         void set_node_property(string &node, string key, string value)
@@ -317,10 +317,10 @@ cdef class Client:
         del self.thisptr
     def begin_tx(self):
         self.thisptr.begin_tx()
-    def create_node(self, handle):
-        self.thisptr.create_node(handle)
-    def create_edge(self, handle, node1, node2):
-        self.thisptr.create_edge(handle, node1, node2)
+    def create_node(self, handle=''):
+        return self.thisptr.create_node(handle)
+    def create_edge(self, node1, node2, handle=''):
+        return self.thisptr.create_edge(handle, node1, node2)
     def delete_node(self, node):
         self.thisptr.delete_node(node)
     def delete_edge(self, edge, node):

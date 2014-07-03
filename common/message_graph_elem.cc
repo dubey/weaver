@@ -35,7 +35,7 @@ uint64_t
 message :: size(const db::element::element &t)
 {
     uint64_t sz = sizeof(uint64_t) // id
-        + sizeof(t.get_handle()) // client handle
+        + size(t.get_handle()) // client handle
         + size(t.get_creat_time()) + size(t.get_del_time()) // time stamps
         + size(*t.get_props()); // properties
     return sz;

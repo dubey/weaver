@@ -68,26 +68,36 @@ client :: begin_tx()
     cur_tx_id = ++tx_id_ctr;
 }
 
-void
+std::string
 client :: create_node(std::string &handle)
 {
     assert(cur_tx_id != UINT64_MAX);
     auto upd = std::make_shared<pending_update>();
     upd->type = transaction::NODE_CREATE_REQ;
-    upd->handle = handle;
+    if (handle == "") {
+        upd->handle = generate_handle();
+    } else {
+        upd->handle = handle;
+    }
     cur_tx.emplace_back(upd);
+    return upd->handle;
 }
 
-void
+std::string
 client :: create_edge(std::string &handle, std::string &node1, std::string &node2)
 {
     assert(cur_tx_id != UINT64_MAX);
     auto upd = std::make_shared<pending_update>();
     upd->type = transaction::EDGE_CREATE_REQ;
-    upd->handle = handle;
+    if (handle == "") {
+        upd->handle = generate_handle();
+    } else {
+        upd->handle = handle;
+    }
     upd->handle1 = node1;
     upd->handle2 = node2;
     cur_tx.emplace_back(upd);
+    return upd->handle;
 }
 
 void
