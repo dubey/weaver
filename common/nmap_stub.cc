@@ -21,7 +21,7 @@
 using nmap::nmap_stub;
 
 nmap_stub :: nmap_stub()
-    : cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT)
+    : cl(HyperdexCoordIpaddr, HyperdexCoordPort)
 { }
 
 bool

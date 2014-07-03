@@ -45,11 +45,12 @@ namespace cl
             client();
 
         private:
-            uint64_t myid, shifted_id, vtid;
+            uint64_t myid, vtid;
+            std::string myid_str;
             std::unique_ptr<cl::comm_wrapper> comm;
             server_manager_link m_sm;
             transaction::tx_list_t cur_tx;
-            uint64_t cur_tx_id, tx_id_ctr, temp_handle_ctr;
+            uint64_t cur_tx_id, tx_id_ctr, id_ctr;
 
         public:
             void begin_tx();
@@ -88,7 +89,7 @@ namespace cl
             void send_coord(std::auto_ptr<e::buffer> buf);
             busybee_returncode recv_coord(std::auto_ptr<e::buffer> *buf);
 #pragma GCC diagnostic pop
-            uint64_t generate_handle();
+            std::string generate_handle();
             bool maintain_sm_connection();
     };
 }

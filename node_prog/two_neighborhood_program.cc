@@ -195,7 +195,7 @@ node_prog :: two_neighborhood_node_program(
     std::vector<std::pair<db::element::remote_node, two_neighborhood_params>> next;
     two_neighborhood_state &state = state_getter();
 
-    if (MAX_CACHE_ENTRIES && params._search_cache  && cache_response != NULL && cache_response->get_value()->prop_key.compare(params.prop_key) == 0) {
+    if (MaxCacheEntries && params._search_cache  && cache_response != NULL && cache_response->get_value()->prop_key.compare(params.prop_key) == 0) {
         WDEBUG  << "GOT CACHE" << std::endl;
         params._search_cache = false; // only search cache once
         assert(params.on_hop == 0 && params.outgoing);
@@ -302,12 +302,12 @@ node_prog :: two_neighborhood_node_program(
         //WDEBUG<< "GOT RETURNING at " << rn.get_id() << ", responses_left = " << state.responses_left << std::endl;
         if (state.responses_left == 0) {
             params.responses.clear();
-            if (MAX_CACHE_ENTRIES && params.on_hop == 0 && params.cache_update) {
+            if (MaxCacheEntries && params.on_hop == 0 && params.cache_update) {
                 fill_minus_duplicates(state.responses, params.responses);
             } else {
                 params.responses.swap(state.responses);
             }
-            if (MAX_CACHE_ENTRIES && params.on_hop == 0) {
+            if (MaxCacheEntries && params.on_hop == 0) {
                 WDEBUG  << "addin to CACHE" << std::endl;
                 std::shared_ptr<node_prog::two_neighborhood_cache_value> toCache(new two_neighborhood_cache_value(params.prop_key, params.responses));
                 std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<db::element::remote_node>());

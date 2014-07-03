@@ -205,7 +205,7 @@ node_prog :: reach_node_program(
                 state.prev_node = prev_node;
                 state.visited = true;
 
-                if (MAX_CACHE_ENTRIES) {
+                if (MaxCacheEntries) {
                     if (params._search_cache  && cache_response != NULL) {
                         // check context, update cache
                         if (check_cache_context(*cache_response)) { // if context is valid
@@ -257,7 +257,7 @@ node_prog :: reach_node_program(
             if (params.reachable) {
                 params.hops = state.hops + 1;
                 params.path.emplace_back(rn);
-                if (MAX_CACHE_ENTRIES)
+                if (MaxCacheEntries)
                 {
                     // now add to cache
                     std::shared_ptr<node_prog::reach_cache_value> toCache(new reach_cache_value(params.path));

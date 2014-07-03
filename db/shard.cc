@@ -39,7 +39,14 @@ uint64_t NumBackups;
 uint64_t NumEffectiveServers;
 uint64_t NumActualServers;
 uint64_t ShardIdIncr;
-char *ShardsFile;
+char *HyperdexCoordIpaddr;
+uint16_t HyperdexCoordPort;
+char *KronosIpaddr;
+uint16_t KronosPort;
+char *ServerManagerIpaddr;
+uint16_t ServerManagerPort;
+uint16_t MaxCacheEntries;
+
 // global static variables
 static uint64_t shard_id;
 // shard pointer for shard.cc
@@ -1021,7 +1028,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
                 break;
             }
 
-            if (MAX_CACHE_ENTRIES) {
+            if (MaxCacheEntries) {
                 if (params.search_cache() && !np.cache_value) {
                     // cache value not already found, lookup in cache
                     bool run_prog_now = cache_lookup<ParamsType, NodeStateType, CacheValueType>(node, params.cache_key(), np, id_params);
@@ -1049,7 +1056,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
                     params, // actual parameters for this node program
                     node_state_getter, add_cache_func,
                     (node_prog::cache_response<CacheValueType>*) np.cache_value.get());
-            if (MAX_CACHE_ENTRIES) {
+            if (MaxCacheEntries) {
                 if (np.cache_value) {
                     auto state = get_state_if_exists(*node, np.req_id, np.prog_type_recvd);
                     if (state) {
@@ -1109,7 +1116,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
                 loc_progs_pair.second.clear();
             }
         }
-        if (MAX_CACHE_ENTRIES) {
+        if (MaxCacheEntries) {
             assert(np.cache_value == false); // unique ptr is not assigned
         }
     }
@@ -2052,7 +2059,7 @@ main(int argc, const char *argv[])
 
     // command line params
     const char* listen_host = "auto";
-    long listen_port = 5000;
+    long listen_port = 5200;
     const char *config_file = "/usr/local/etc/weaver.yaml";
     const char *graph_file = NULL;
     const char *graph_format = "snap";
@@ -2114,7 +2121,7 @@ main(int argc, const char *argv[])
 
     // server manager link
     std::thread sm_thr(server_manager_link_loop,
-        po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT),
+        po6::net::hostname(ServerManagerIpaddr, ServerManagerPort),
         my_loc);
     sm_thr.detach();
 

@@ -14,6 +14,6 @@
 #ifndef weaver_common_cache_constants_h_
 #define weaver_common_cache_constants_h_
 
-#define MAX_CACHE_ENTRIES 0 // 0 to turn of caching
+extern uint16_t MaxCacheEntries;
 
 #endif

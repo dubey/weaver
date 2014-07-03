@@ -16,7 +16,7 @@
 #include "common/config_constants.h"
 
 hyper_stub_base :: hyper_stub_base()
-    : cl(HYPERDEX_COORD_IPADDR, HYPERDEX_COORD_PORT)
+    : cl(HyperdexCoordIpaddr, HyperdexCoordPort)
 { }
 
 // call hyperdex function h using key hndl, attributes cl_attr, and then loop for response

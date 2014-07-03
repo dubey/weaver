@@ -17,6 +17,5 @@
 #define ID_INCR (1ULL << 32ULL)
 #define WEAVER_TO_BUSYBEE(x) (x+ID_INCR)
 #define BUSYBEE_TO_WEAVER(x) (x-ID_INCR)
-#define CLIENT_ID_INCR (CLIENT_ID + ID_INCR)
 
 #endif

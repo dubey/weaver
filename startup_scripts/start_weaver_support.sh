@@ -31,6 +31,15 @@ tolerate 2 failures
 EOF
 
 hyperdex add-space -h 127.0.0.1 -p 7982 << EOF
+space weaver_client_mapping
+key str_handle
+attributes
+    int handle
+create 8 partitions
+tolerate 2 failures
+EOF
+
+hyperdex add-space -h 127.0.0.1 -p 7982 << EOF
 space weaver_graph_data
 key node
 attributes

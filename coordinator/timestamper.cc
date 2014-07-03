@@ -39,7 +39,13 @@ uint64_t NumBackups;
 uint64_t NumEffectiveServers;
 uint64_t NumActualServers;
 uint64_t ShardIdIncr;
-char *ShardsFile;
+char *HyperdexCoordIpaddr;
+uint16_t HyperdexCoordPort;
+char *KronosIpaddr;
+uint16_t KronosPort;
+char *ServerManagerIpaddr;
+uint16_t ServerManagerPort;
+uint16_t MaxCacheEntries;
 
 using coordinator::current_prog;
 using coordinator::current_tx;
@@ -1365,7 +1371,7 @@ main(int argc, const char *argv[])
 
     // command line params
     const char* listen_host = "auto";
-    long listen_port = 5000;
+    long listen_port = 5200;
     const char *config_file = "/usr/local/etc/weaver.yaml";
     long backup_input = LONG_MAX;
     // arg parsing borrowed from HyperDex
@@ -1422,7 +1428,7 @@ main(int argc, const char *argv[])
 
     // server manager link
     std::thread sm_thr(server_manager_link_loop,
-        po6::net::hostname(SERVER_MANAGER_IPADDR, SERVER_MANAGER_PORT),
+        po6::net::hostname(ServerManagerIpaddr, ServerManagerPort),
         my_loc);
     sm_thr.detach();
 

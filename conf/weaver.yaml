@@ -1,4 +1,10 @@
 num_vts     : 1
 num_shards  : 2
 num_backups : 0
-shards_file : /usr/local/etc/weaver_shards.conf
+max_cache_entries : 0
+hyperdex_coord_ipaddr : 127.0.0.1
+hyperdex_coord_port : 7982
+kronos_ipaddr : 127.0.0.1
+kronos_port : 1992
+server_manager_ipaddr : 127.0.0.1
+server_manager_port : 2012

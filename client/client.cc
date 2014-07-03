@@ -26,7 +26,6 @@ uint64_t NumBackups;
 uint64_t NumEffectiveServers;
 uint64_t NumActualServers;
 uint64_t ShardIdIncr;
-char *ShardsFile;
 
 using cl::client;
 using transaction::pending_update;
@@ -36,7 +35,7 @@ client :: client()
     : m_sm("127.0.0.1", 2002)
     , cur_tx_id(UINT64_MAX)
     , tx_id_ctr(0)
-    , temp_handle_ctr(0)
+    , id_ctr(0)
 {
     init_config_constants("/usr/local/etc/weaver.yaml");
 
@@ -44,14 +43,13 @@ client :: client()
 
     assert(m_sm.get_replid(myid) && "get repl_id");
     assert(myid > NumActualServers);
-    shifted_id = myid << (64-ID_BITS);
+    myid_str = std::to_string(myid);
 
     int try_sm = 0;
     while (!maintain_sm_connection()) {
         WDEBUG << "retry sm connection " << try_sm++ << std::endl;
     }
 
-    po6::net::location loc("127.0.0.1", 6200);
     comm.reset(new cl::comm_wrapper(myid, *m_sm.config()));
 }
 
@@ -356,15 +354,12 @@ client :: recv_coord(std::auto_ptr<e::buffer> *buf)
 }
 #pragma GCC diagnostic pop
 
-// to generate 64 bit graph element handles
-// assuming no more than 2^(ID_BITS) clients
-// assuming no more than 2^(64-ID_BITS) graph nodes and edges created at this client
-uint64_t
+std::string
 client :: generate_handle()
 {
-    uint64_t new_handle = (++temp_handle_ctr) & TOP_MASK;
-    new_handle |= shifted_id;
-    return new_handle;
+    std::string s = std::to_string(id_ctr++);
+    s += myid_str;
+    return s;
 }
 
 bool

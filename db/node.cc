@@ -15,6 +15,7 @@
 #include "common/message.h"
 #include "common/cache_constants.h"
 #include "common/config_constants.h"
+#include "common/event_order.h"
 #include "db/node.h"
 
 using db::element::remote_node;
@@ -36,7 +37,7 @@ node :: node(uint64_t id, vc::vclock &vclk, po6::threads::mutex *mtx)
     , updated(true)
     , already_migr(false)
     , dependent_del(0)
-    , cache(MAX_CACHE_ENTRIES)
+    , cache(MaxCacheEntries)
 {
     int num_prog_types = node_prog::END;
     prog_states.resize(num_prog_types);
@@ -85,31 +86,26 @@ node :: add_cache_value(std::shared_ptr<vc::vclock> vc,
     std::shared_ptr<std::vector<remote_node>> watch_set,
     uint64_t key)
 {
-#if MAX_CACHE_ENTRIES
-    // clear oldest entry if cache is full
-    if (MAX_CACHE_ENTRIES > 0 && cache.size() >= MAX_CACHE_ENTRIES) {
-        vc::vclock &oldest = *vc;
-        uint64_t key_to_del = key;
-        for (auto& kvpair : cache) {
-            vc::vclock &to_cmp = *kvpair.second.clk;
-            // don't talk to kronos just pick one to delete
-            if (order::compare_two_clocks(to_cmp.clock, oldest.clock) <= 0) {
-                key_to_del = kvpair.first;
-                oldest = to_cmp;
+    if (MaxCacheEntries) {
+        // clear oldest entry if cache is full
+        if (cache.size() >= MaxCacheEntries) {
+            vc::vclock &oldest = *vc;
+            uint64_t key_to_del = key;
+            for (auto& kvpair : cache) {
+                vc::vclock &to_cmp = *kvpair.second.clk;
+                // don't talk to kronos just pick one to delete
+                if (order::compare_two_clocks(to_cmp.clock, oldest.clock) <= 0) {
+                    key_to_del = kvpair.first;
+                    oldest = to_cmp;
+                }
             }
+            cache.erase(key_to_del);
         }
-        cache.erase(key_to_del);
-    }
 
-    if (cache.size() < MAX_CACHE_ENTRIES) {
-        cache_entry new_entry(cache_value, vc, watch_set);
-        cache.emplace(key, new_entry);
+        if (cache.size() < MaxCacheEntries) {
+            cache_entry new_entry(cache_value, vc, watch_set);
+            cache.emplace(key, new_entry);
+        }
     }
-#else
-    UNUSED(vc);
-    UNUSED(cache_value);
-    UNUSED(watch_set);
-    UNUSED(key);
-#endif
 }
 
