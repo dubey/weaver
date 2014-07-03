@@ -26,18 +26,26 @@ uint64_t NumBackups;
 uint64_t NumEffectiveServers;
 uint64_t NumActualServers;
 uint64_t ShardIdIncr;
+char *HyperdexCoordIpaddr;
+uint16_t HyperdexCoordPort;
+char *KronosIpaddr;
+uint16_t KronosPort;
+char *ServerManagerIpaddr;
+uint16_t ServerManagerPort;
+uint16_t MaxCacheEntries;
 
 using cl::client;
 using transaction::pending_update;
 
-//client :: client(const char *coordinator, uint16_t port)
-client :: client()
-    : m_sm("127.0.0.1", 2002)
+client :: client(const char *coordinator
+    , uint16_t port
+    , const char *config_file="/usr/local/etc/weaver.yaml")
+    : m_sm(coordinator, port)
     , cur_tx_id(UINT64_MAX)
     , tx_id_ctr(0)
     , id_ctr(0)
 {
-    init_config_constants("/usr/local/etc/weaver.yaml");
+    init_config_constants(config_file);
 
     vtid = rand() % NumVts;
 

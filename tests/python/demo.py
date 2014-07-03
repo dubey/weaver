@@ -15,7 +15,7 @@
 import weaver.client as client
 
 # create client object
-c = client.Client()
+c = client.Client('127.0.0.1', 7982)
 print 'created client'
 
 # create node for user ayush

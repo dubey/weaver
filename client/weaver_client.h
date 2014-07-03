@@ -40,9 +40,7 @@ namespace cl
     class client
     {
         public:
-            //client(const char *coordinator, uint16_t port);
-            //client(uint64_t, uint64_t);
-            client();
+            client(const char *coordinator, uint16_t port, const char *config_file);
 
         private:
             uint64_t myid, vtid;
