@@ -116,7 +116,7 @@ node_prog :: traverse_props_node_program(node &n,
                 // reached the max hop, return now
                 assert(params.node_props.empty());
                 assert(params.return_nodes.empty());
-                params.return_nodes.emplace_back(n.get_id());
+                params.return_nodes.emplace_back(n.get_handle());
             } else {
                 auto edge_props = params.edge_props.front();
                 params.edge_props.pop_front();
@@ -143,14 +143,14 @@ node_prog :: traverse_props_node_program(node &n,
 
     } else {
         // request returning to start node
-        for (uint64_t n: params.return_nodes) {
+        for (std::string &n: params.return_nodes) {
             state.return_nodes.emplace(n);
         }
 
         if (--state.out_count == 0) {
             params.return_nodes.clear();
             params.return_nodes.reserve(state.return_nodes.size());
-            for (uint64_t n: state.return_nodes) {
+            for (const std::string &n: state.return_nodes) {
                 params.return_nodes.emplace_back(n);
             }
             next.emplace_back(std::make_pair(state.prev_node, params));

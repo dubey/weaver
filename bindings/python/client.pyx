@@ -265,7 +265,7 @@ cdef extern from 'node_prog/traverse_with_props.h' namespace 'node_prog':
         remote_node prev_node
         deque[vector[pair[string, string]]] node_props
         deque[vector[pair[string, string]]] edge_props
-        vector[uint64_t] return_nodes
+        vector[string] return_nodes
 
 class TraversePropsParams:
     def __init__(self, node_props=[[]], edge_props=[], return_nodes=[]):

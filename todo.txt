@@ -1,16 +1,6 @@
-DONE
-Fast bulk loading.
-    Pending Hyperdex speedup.
-Shards
-    reverse edges
-        traverse edge to node which doesn't exist - require that all in-edges are deleted
-    Kronos result caching
-Node/edge properties.
-Migration experiments.
-Serializability test with multithreaded client.
-
 TODO
 Fault tolerant coordinator and shards.
+    Node handles for recreating node after failover.
     Fix nops for crashed shard.
     When shard fails in the middle of a tx and/or nop, it will be resent by VT: need a function that 'checks' tx
         and only reexecutes the portion that has not been already executed---need a specialized check for each type of tx.

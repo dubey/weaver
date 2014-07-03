@@ -228,7 +228,8 @@ hyper_stub :: restore_backup(std::unordered_map<uint64_t, uint64_t> &qts_map,
 
         node_id = node_list[i];
         map_idx = node_id % NUM_NODE_MAPS;
-        n = new element::node(node_id, dummy_clock, shard_mutexes+map_idx);
+        // TODO fix node handle
+        n = new element::node(node_id, "", dummy_clock, shard_mutexes+map_idx);
 
         assert(edge_map.find(node_id) == edge_map.end());
         recreate_node(cl_attr_array[i], *n, edge_map[node_id]);

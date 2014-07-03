@@ -17,8 +17,9 @@
 using db::element::element;
 using db::element::property;
 
-element :: element(uint64_t hndl, vc::vclock &vclk)
-    : id(hndl)
+element :: element(uint64_t _id, const std::string &_handle, vc::vclock &vclk)
+    : id(_id)
+    , handle(_handle)
     , creat_time(vclk)
     , del_time(UINT64_MAX, UINT64_MAX)
     , view_time(NULL)
@@ -165,13 +166,25 @@ element :: get_property_value(std::string prop_key, vc::vclock &at_time)
 }
 
 void
-element :: set_id(uint64_t hndl)
+element :: set_id(uint64_t _id)
 {
-    id = hndl;
+    id = _id;
 }
 
 uint64_t
 element :: get_id() const
 {
     return id;
+}
+
+void
+element :: set_handle(const std::string &_handle)
+{
+    handle = _handle;
+}
+
+std::string
+element :: get_handle() const
+{
+    return handle;
 }

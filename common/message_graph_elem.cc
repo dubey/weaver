@@ -35,6 +35,7 @@ uint64_t
 message :: size(const db::element::element &t)
 {
     uint64_t sz = sizeof(uint64_t) // id
+        + sizeof(t.get_handle()) // client handle
         + size(t.get_creat_time()) + size(t.get_del_time()) // time stamps
         + size(*t.get_props()); // properties
     return sz;
@@ -48,6 +49,7 @@ message :: size(const db::element::edge &t)
         + size(t.nbr);
     return sz;
 }
+
 uint64_t
 message :: size(const db::element::edge* const &t)
 {
@@ -71,6 +73,7 @@ message :: size(const db::element::node &t)
 void message :: pack_buffer(e::buffer::packer &packer, const db::element::element &t)
 {
     pack_buffer(packer, t.get_id());
+    pack_buffer(packer, t.get_handle());
     pack_buffer(packer, t.get_creat_time());
     pack_buffer(packer, t.get_del_time());
     pack_buffer(packer, *t.get_props());
@@ -82,6 +85,7 @@ void message :: pack_buffer(e::buffer::packer &packer, const db::element::edge &
     pack_buffer(packer, t.msg_count);
     pack_buffer(packer, t.nbr);
 }
+
 void message :: pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t)
 {
     pack_buffer(packer, *t);
@@ -103,11 +107,15 @@ void
 message :: unpack_buffer(e::unpacker &unpacker, db::element::element &t)
 {
     uint64_t id;
+    std::string handle;
     vc::vclock creat_time, del_time;
     std::vector<db::element::property> props;
 
     unpack_buffer(unpacker, id);
     t.set_id(id);
+
+    unpack_buffer(unpacker, handle);
+    t.set_handle(handle);
 
     unpack_buffer(unpacker, creat_time);
     t.update_creat_time(creat_time);
@@ -133,7 +141,7 @@ void
 message :: unpack_buffer(e::unpacker &unpacker, db::element::edge *&t)
 {
     vc::vclock junk;
-    t = new db::element::edge(0, junk, 0, 0);
+    t = new db::element::edge(0, "", junk, 0, 0);
     unpack_buffer(unpacker, *t);
 }
 

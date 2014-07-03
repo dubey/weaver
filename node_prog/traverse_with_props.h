@@ -34,7 +34,7 @@ namespace node_prog
         db::element::remote_node prev_node;
         std::deque<std::vector<std::pair<std::string, std::string>>> node_props;
         std::deque<std::vector<std::pair<std::string, std::string>>> edge_props;
-        std::vector<uint64_t> return_nodes;
+        std::vector<std::string> return_nodes;
 
         traverse_props_params();
         ~traverse_props_params() { }
@@ -52,7 +52,7 @@ namespace node_prog
         bool visited;
         uint32_t out_count; // number of requests propagated
         db::element::remote_node prev_node; // previous node
-        std::unordered_set<uint64_t> return_nodes;
+        std::unordered_set<std::string> return_nodes;
 
         traverse_props_state();
         ~traverse_props_state() { }

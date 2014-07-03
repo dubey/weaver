@@ -81,15 +81,15 @@ end_program(int param)
 
 
 inline void
-create_node(db::hyper_stub *hs, vc::vclock &t_creat, uint64_t node_id)
+create_node(db::hyper_stub *hs, vc::vclock &t_creat, uint64_t node_id, const std::string &handle)
 {
-    S->create_node(hs, node_id, t_creat, false);
+    S->create_node(hs, node_id, handle, t_creat, false);
 }
 
 inline void
-create_edge(db::hyper_stub *hs, vc::vclock &t_creat, vc::qtimestamp_t &qts, uint64_t edge_id, uint64_t n1, uint64_t n2, uint64_t loc2)
+create_edge(db::hyper_stub *hs, vc::vclock &t_creat, vc::qtimestamp_t &qts, uint64_t edge_id, const std::string &handle, uint64_t n1, uint64_t n2, uint64_t loc2)
 {
-    S->create_edge(hs, edge_id, n1, n2, loc2, t_creat, qts);
+    S->create_edge(hs, edge_id, handle, n1, n2, loc2, t_creat, qts);
 }
 
 inline void
@@ -306,15 +306,15 @@ load_graph(db::graph_file_format format, const char *graph_file)
                     if (loc0 == shard_id) {
                         n = S->acquire_node_nonlocking(node0);
                         if (n == NULL) {
-                            n = S->create_node(0, node0, zero_clk, false, true);
+                            n = S->create_node(0, node0, std::to_string(node0), zero_clk, false, true);
                             node_maps[thread_select][node0] = shard_id;
                             thread_select = (thread_select + 1) % NUM_THREADS;
                         }
-                        S->create_edge_nonlocking(0, n, edge_id, node1, loc1, zero_clk, true);
+                        S->create_edge_nonlocking(0, n, edge_id, std::to_string(edge_id), node1, loc1, zero_clk, true);
                     }
                     if (loc1 == shard_id) {
                         if (!S->node_exists_nonlocking(node1)) {
-                            S->create_node(0, node1, zero_clk, false, true);
+                            S->create_node(0, node1, std::to_string(node1), zero_clk, false, true);
                             node_maps[thread_select][node1] = shard_id;
                             thread_select = (thread_select + 1) % NUM_THREADS;
                         }
@@ -343,7 +343,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                 if (loc == shard_id) {
                     n = S->acquire_node_nonlocking(node0);
                     if (n == NULL) {
-                        n = S->create_node(0, node0, zero_clk, false, true);
+                        n = S->create_node(0, node0, std::to_string(node0), zero_clk, false, true);
                         node_maps[thread_select][node0] = shard_id;
                         thread_select = (thread_select + 1) % NUM_THREADS;
                     }
@@ -366,7 +366,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                 if (loc0 == shard_id) {
                     n = S->acquire_node_nonlocking(node0);
                     assert(n != NULL);
-                    S->create_edge_nonlocking(0, n, edge_id, node1, loc1, zero_clk, true);
+                    S->create_edge_nonlocking(0, n, edge_id, std::to_string(edge_id), node1, loc1, zero_clk, true);
                     for (auto &p: props) {
                         S->set_edge_property_nonlocking(n, edge_id, p.first, p.second, zero_clk);
                     }
@@ -446,7 +446,7 @@ apply_writes(db::hyper_stub *hs, uint64_t vt_id, uint64_t tx_id, vc::vclock &vcl
     for (auto upd: tx.writes) {
         switch (upd->type) {
             case transaction::EDGE_CREATE_REQ:
-                create_edge(hs, vclk, qts, upd->id, upd->elem1, upd->elem2, upd->loc2);
+                create_edge(hs, vclk, qts, upd->id, upd->handle, upd->elem1, upd->elem2, upd->loc2);
                 break;
 
             case transaction::NODE_DELETE_REQ:
@@ -512,7 +512,7 @@ unpack_tx_request(db::hyper_stub *hs, void *req)
         n = NULL;
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ:
-                create_node(hs, vclk, upd->id);
+                create_node(hs, vclk, upd->id, upd->handle);
                 break;
 
             case transaction::EDGE_CREATE_REQ:
@@ -1418,7 +1418,7 @@ migrate_node_step2_resp(db::hyper_stub *hs, std::unique_ptr<message::message> ms
     // create a new node, unpack the message
     vc::vclock dummy_clock;
     msg->unpack_partial_message(message::MIGRATE_SEND_NODE, node_id);
-    n = S->create_node(hs, node_id, dummy_clock, true); // node will be acquired on return
+    n = S->create_node(hs, node_id, "", dummy_clock, true); // node will be acquired on return
     try {
         msg->unpack_message(message::MIGRATE_SEND_NODE, node_id, from_loc, *n);
     } catch (std::bad_alloc& ba) {
@@ -1444,7 +1444,7 @@ migrate_node_step2_resp(db::hyper_stub *hs, std::unique_ptr<message::message> ms
                     break;
 
                 case message::EDGE_CREATE_REQ:
-                    S->create_edge_nonlocking(hs, n, dw.edge, dw.remote_node, dw.remote_loc, dw.vclk);
+                    S->create_edge_nonlocking(hs, n, dw.edge, dw.edge_handle, dw.remote_node, dw.remote_loc, dw.vclk);
                     break;
 
                 case message::EDGE_DELETE_REQ:

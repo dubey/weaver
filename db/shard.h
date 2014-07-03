@@ -141,12 +141,12 @@ namespace db
                 std::unordered_set<uint64_t>> edge_map; // in-neighbors of n
             queue_manager qm;
         public:
-            element::node* create_node(hyper_stub *hs, uint64_t node_id, vc::vclock &vclk, bool migrate, bool init_load);
+            element::node* create_node(hyper_stub *hs, uint64_t node_id, const std::string &handle, vc::vclock &vclk, bool migrate, bool init_load);
             void delete_node_nonlocking(hyper_stub *hs, element::node *n, vc::vclock &tdel);
             void delete_node(hyper_stub *hs, uint64_t node_id, vc::vclock &vclk, vc::qtimestamp_t &qts);
-            void create_edge_nonlocking(hyper_stub *hs, element::node *n, uint64_t edge, uint64_t remote_node,
+            void create_edge_nonlocking(hyper_stub *hs, element::node *n, uint64_t edge, const std::string &handle, uint64_t remote_node,
                     uint64_t remote_loc, vc::vclock &vclk, bool init_load);
-            void create_edge(hyper_stub *hs, uint64_t edge_id, uint64_t local_node,
+            void create_edge(hyper_stub *hs, uint64_t edge_id, const std::string &handle, uint64_t local_node,
                     uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, vc::qtimestamp_t &qts);
             void delete_edge_nonlocking(hyper_stub *hs, element::node *n, uint64_t edge, vc::vclock &tdel);
             void delete_edge(hyper_stub *hs, uint64_t edge_id, uint64_t node_id, vc::vclock &vclk, vc::qtimestamp_t &qts);
@@ -454,10 +454,15 @@ namespace db
     // Graph state update methods
 
     inline element::node*
-    shard :: create_node(hyper_stub *hs, uint64_t node_id, vc::vclock &vclk, bool migrate, bool init_load=false)
+    shard :: create_node(hyper_stub *hs
+        , uint64_t node_id
+        , const std::string &handle
+        , vc::vclock &vclk
+        , bool migrate
+        , bool init_load=false)
     {
         uint64_t map_idx = node_id % NUM_NODE_MAPS;
-        element::node *new_node = new element::node(node_id, vclk, &node_map_mutexes[map_idx]);
+        element::node *new_node = new element::node(node_id, handle, vclk, &node_map_mutexes[map_idx]);
 
         if (!init_load) {
             node_map_mutexes[map_idx].lock();
@@ -529,10 +534,16 @@ namespace db
     }
 
     inline void
-    shard :: create_edge_nonlocking(hyper_stub *hs, element::node *n, uint64_t edge, uint64_t remote_node,
-            uint64_t remote_loc, vc::vclock &vclk, bool init_load=false)
+    shard :: create_edge_nonlocking(hyper_stub *hs
+        , element::node *n
+        , uint64_t edge
+        , const std::string &handle
+        , uint64_t remote_node
+        , uint64_t remote_loc
+        , vc::vclock &vclk
+        , bool init_load=false)
     {
-        element::edge *new_edge = new element::edge(edge, vclk, remote_loc, remote_node);
+        element::edge *new_edge = new element::edge(edge, handle, vclk, remote_loc, remote_node);
         n->add_edge(new_edge);
         n->updated = true;
         // update edge map
@@ -549,8 +560,14 @@ namespace db
     }
 
     inline void
-    shard :: create_edge(hyper_stub *hs, uint64_t edge_id, uint64_t local_node,
-            uint64_t remote_node, uint64_t remote_loc, vc::vclock &vclk, vc::qtimestamp_t &qts)
+    shard :: create_edge(hyper_stub *hs
+        , uint64_t edge_id
+        , const std::string &handle
+        , uint64_t local_node
+        , uint64_t remote_node
+        , uint64_t remote_loc
+        , vc::vclock &vclk
+        , vc::qtimestamp_t &qts)
     {
         // fault tolerance: create_edge is idempotent
         element::node *n = acquire_node_write(local_node, vclk.vt_id, qts[vclk.vt_id]);
@@ -561,12 +578,13 @@ namespace db
             dwl.emplace_back(deferred_write(message::EDGE_CREATE_REQ, vclk));
             deferred_write &dw = dwl[dwl.size()-1];
             dw.edge = edge_id;
+            dw.edge_handle = handle;
             dw.remote_node = remote_node;
             dw.remote_loc = remote_loc; 
             migration_mutex.unlock();
         } else {
             assert(n->base.get_id() == local_node);
-            create_edge_nonlocking(hs, n, edge_id, remote_node, remote_loc, vclk);
+            create_edge_nonlocking(hs, n, edge_id, handle, remote_node, remote_loc, vclk);
             release_node_write(hs, n);
         }
     }

@@ -31,8 +31,8 @@ namespace element
     {
         public:
             edge();
-            edge(uint64_t id, vc::vclock &vclk, uint64_t remote_loc, uint64_t remote_id);
-            edge(uint64_t id, vc::vclock &vclk, remote_node &rn);
+            edge(uint64_t id, const std::string &handle, vc::vclock &vclk, uint64_t remote_loc, uint64_t remote_id);
+            edge(uint64_t id, const std::string &handle, vc::vclock &vclk, remote_node &rn);
             ~edge() { }
 
         public:
