@@ -2059,7 +2059,7 @@ main(int argc, const char *argv[])
 
     // command line params
     const char* listen_host = "auto";
-    long listen_port = 5200;
+    long listen_port = 5201;
     const char *config_file = "/usr/local/etc/weaver.yaml";
     const char *graph_file = NULL;
     const char *graph_format = "snap";
@@ -2071,7 +2071,7 @@ main(int argc, const char *argv[])
             .description("listen on a specific IP address (default: auto)")
             .metavar("IP").as_string(&listen_host);
     ap.arg().name('p', "listen-port")
-            .description("listen on an alternative port (default: 5000)")
+            .description("listen on an alternative port (default: 5201)")
             .metavar("port").as_long(&listen_port);
     ap.arg().name('b', "backup-number")
             .description("backup number (not backup by default)")
@@ -2113,7 +2113,6 @@ main(int argc, const char *argv[])
         //server_id = shard_id + NumEffectiveServers*backup_input;
     }
 
-    //S = new db::shard(shard_id, server_id);
     po6::net::location my_loc(listen_host, listen_port);
     uint64_t sid;
     assert(generate_token(&sid));
@@ -2145,15 +2144,15 @@ main(int argc, const char *argv[])
     assert(shard_id != UINT64_MAX);
 
     // registered this server with server_manager, config has fairly recent value
-    if (backup_input == LONG_MAX) {
-        S->init(shard_id, false); // primary
-    } else {
-        S->init(shard_id, true); // backup
-    }
-
+    S->init(shard_id);
     S->shard_init = true;
     S->shard_init_cond.signal();
+
     S->config_mutex.unlock();
+
+    if (backup_input == LONG_MAX) {
+        S->init_hstub();
+    }
 
     // start all threads
     std::vector<std::thread*> worker_threads;

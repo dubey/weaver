@@ -245,12 +245,10 @@ bindings_python_client_la_LDFLAGS=	-module
 bindings_python_client_la_LIBS=		-lpython2.7 $(LIBS)
 
 # configuration files
-EXTRA_DIST+=	conf/weaver_shards.conf
 EXTRA_DIST+=	conf/weaver.yaml
 EXTRA_DIST+=	startup_scripts/start_weaver_support.sh
 EXTRA_DIST+=	startup_scripts/kill_weaver_support.sh
 EXTRA_DIST+=	startup_scripts/ps_weaver_support.sh
-sysconf_DATA+=	conf/weaver_shards.conf
 sysconf_DATA+=	conf/weaver.yaml
 
 # python example programs

@@ -7,4 +7,4 @@ hyperdex_coord_port : 7982
 kronos_ipaddr : 127.0.0.1
 kronos_port : 1992
 server_manager_ipaddr : 127.0.0.1
-server_manager_port : 2012
+server_manager_port : 2002

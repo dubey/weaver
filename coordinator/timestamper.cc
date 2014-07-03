@@ -1361,9 +1361,9 @@ main(int argc, const char *argv[])
         WDEBUG << "sigfillset failed" << std::endl;
         return -1;
     }
-    sigdelset(&ss, SIGPROF);
-    sigdelset(&ss, SIGINT);
-    sigdelset(&ss, SIGTSTP);
+    //sigdelset(&ss, SIGPROF);
+    //sigdelset(&ss, SIGINT);
+    //sigdelset(&ss, SIGTSTP);
     if (pthread_sigmask(SIG_SETMASK, &ss, NULL) < 0) {
         WDEBUG << "pthread sigmask failed" << std::endl;
         return -1;
@@ -1381,7 +1381,7 @@ main(int argc, const char *argv[])
             .description("listen on a specific IP address (default: auto)")
             .metavar("IP").as_string(&listen_host);
     ap.arg().name('p', "listen-port")
-            .description("listen on an alternative port (default: 5000)")
+            .description("listen on an alternative port (default: 5200)")
             .metavar("port").as_long(&listen_port);
     ap.arg().name('b', "backup-number")
             .description("backup number (not backup by default)")
@@ -1458,11 +1458,13 @@ main(int argc, const char *argv[])
 
     vts->config_mutex.unlock();
 
+    vts->init_hstub(); // initialize late because we write to hyperdex
+
     // start all threads
-    std::thread *thr;
+    std::vector<std::thread*> worker_threads;
     for (int i = 0; i < NUM_THREADS; i++) {
-        thr = new std::thread(server_loop, i);
-        thr->detach();
+        std::thread *t = new std::thread(server_loop, i);
+        worker_threads.emplace_back(t);
     }
 
     if (backup_input != LONG_MAX) {
@@ -1492,4 +1494,10 @@ main(int argc, const char *argv[])
 
     // periodic nops to shard
     nop_function();
+
+    for (auto t: worker_threads) {
+        t->join();
+    }
+
+    return 0;
 }

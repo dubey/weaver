@@ -62,9 +62,8 @@ comm_wrapper :: ~comm_wrapper()
 void
 comm_wrapper :: init(configuration &config)
 {
-    uint64_t primary = bb_id;
     wmap.reset(new weaver_mapper());
-    reconfigure_internal(config, primary);
+    reconfigure_internal(config);
     WDEBUG << "attaching to loc " << loc->address << ":" << loc->port << std::endl;
     bb.reset(new busybee_mta(&bb_gc, wmap.get(), *loc, WEAVER_TO_BUSYBEE(bb_id), num_threads));
     bb->set_timeout(timeout);
@@ -81,8 +80,7 @@ void
 comm_wrapper :: client_init(configuration config)
 {
     wmap.reset(new weaver_mapper());
-    uint64_t dummy = 0;
-    reconfigure_internal(config, dummy);
+    reconfigure_internal(config);
     active_server_idx.resize(NumVts, 0);
     for (uint64_t i = 0; i < NumVts; i++) {
         active_server_idx[i] = i;
@@ -95,12 +93,11 @@ comm_wrapper :: client_init(configuration config)
     bb_gc_ts.emplace_back(std::move(gc_ts_ptr));
 }
 
-uint64_t
+void
 comm_wrapper :: reconfigure(configuration &new_config, uint64_t *num_active_vts)
 {
-    uint64_t primary = bb_id;
     bb->pause();
-    reconfigure_internal(new_config, primary);
+    reconfigure_internal(new_config);
     if (num_active_vts != NULL) {
         *num_active_vts = 0;
         for (uint64_t i = 0; i < NumVts; i++) {
@@ -110,11 +107,10 @@ comm_wrapper :: reconfigure(configuration &new_config, uint64_t *num_active_vts)
         }
     }
     bb->unpause();
-    return primary;
 }
 
 void
-comm_wrapper :: reconfigure_internal(configuration &new_config, uint64_t &primary)
+comm_wrapper :: reconfigure_internal(configuration &new_config)
 {
     config = new_config;
     std::vector<std::pair<server_id, po6::net::location>> addresses;
@@ -140,10 +136,10 @@ comm_wrapper :: reconfigure_internal(configuration &new_config, uint64_t &primar
         }
     }
 
-    while (primary >= NumEffectiveServers) {
-        primary -= (NumEffectiveServers);
-    }
-    primary = active_server_idx[primary];
+    //while (primary >= NumEffectiveServers) {
+    //    primary -= (NumEffectiveServers);
+    //}
+    //primary = active_server_idx[primary];
 }
 
 #pragma GCC diagnostic push

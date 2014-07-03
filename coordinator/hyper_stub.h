@@ -36,7 +36,7 @@ namespace coordinator
             const enum hyperdatatype map_dtypes[NUM_MAP_ATTRS];
 
         public:
-            hyper_stub(uint64_t vtid);
+            hyper_stub(uint64_t vtid, bool put_initial);
             void prepare_tx(transaction::pending_tx &tx);
             void commit_tx(transaction::pending_tx &tx);
             void del_tx(uint64_t tx_id);

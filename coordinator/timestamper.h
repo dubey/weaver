@@ -121,6 +121,7 @@ namespace coordinator
         public:
             timestamper(uint64_t serverid, po6::net::location &loc);
             void init(uint64_t vtid);
+            void init_hstub();
             void restore_backup();
             void reconfigure();
             uint64_t generate_req_id();
@@ -179,10 +180,16 @@ namespace coordinator
         vt_id = vtid;
         shifted_id = vt_id << (64-ID_BITS);
         vclk.vt_id = vt_id;
-        for (int i = 0; i < NUM_THREADS; i++) {
-            hstub.push_back(new hyper_stub(vt_id));
-        }
         comm.init(config);
+    }
+
+    inline void
+    timestamper :: init_hstub()
+    {
+        hstub.push_back(new hyper_stub(vt_id, true));
+        for (int i = 1; i < NUM_THREADS; i++) {
+            hstub.push_back(new hyper_stub(vt_id, false));
+        }
     }
 
     // restore state when backup becomes primary due to failure

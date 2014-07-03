@@ -93,7 +93,8 @@ namespace db
         public:
             //shard(uint64_t shard, uint64_t server);
             shard(uint64_t serverid, po6::net::location &loc);
-            void init(uint64_t shardid, bool backup);
+            void init(uint64_t shardid);
+            void init_hstub();
             void reconfigure();
             void bulk_load_persistent();
 
@@ -272,16 +273,19 @@ namespace db
     //           , hyperdex stub
     // caution: assume holding config_mutex
     inline void
-    shard :: init(uint64_t shardid, bool backup)
+    shard :: init(uint64_t shardid)
     {
         shard_id = shardid;
         comm.init(config);
         for (int i = 0; i < NUM_THREADS; i++) {
             hstub.push_back(new hyper_stub(shard_id));
         }
-        if (!backup) {
-            hstub.back()->init(); // put initial vclock, qts
-        }
+    }
+
+    inline void
+    shard :: init_hstub()
+    {
+        hstub.back()->init(); // put initial vclock, qts
     }
 
     // reconfigure shard according to new cluster configuration

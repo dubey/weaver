@@ -21,23 +21,25 @@
 using coordinator::hyper_stub;
 using coordinator::current_tx;
 
-hyper_stub :: hyper_stub(uint64_t vtid)
+hyper_stub :: hyper_stub(uint64_t vtid, bool put_initial)
     : vt_id(vtid)
     , map_dtypes{HYPERDATATYPE_STRING, HYPERDATATYPE_INT64}
 {
-    std::unordered_set<uint64_t> singleton;
-    singleton.insert(INT64_MAX);
-    std::unique_ptr<char> set_buf;
-    uint64_t buf_sz;
-    prepare_buffer(singleton, set_buf, buf_sz);
+    if (put_initial) {
+        std::unordered_set<uint64_t> singleton;
+        singleton.insert(INT64_MAX);
+        std::unique_ptr<char> set_buf;
+        uint64_t buf_sz;
+        prepare_buffer(singleton, set_buf, buf_sz);
 
-    hyperdex_client_attribute cl_attr;
-    cl_attr.attr = set_attr;
-    cl_attr.value = set_buf.get();
-    cl_attr.value_sz = buf_sz;
-    cl_attr.datatype = set_dtype;
+        hyperdex_client_attribute cl_attr;
+        cl_attr.attr = set_attr;
+        cl_attr.value = set_buf.get();
+        cl_attr.value_sz = buf_sz;
+        cl_attr.datatype = set_dtype;
 
-    hyper_call_and_loop(&hyperdex::Client::put, vt_set_space, vt_id, &cl_attr, 1);
+        hyper_call_and_loop(&hyperdex::Client::put, vt_set_space, vt_id, &cl_attr, 1);
+    }
 }
 
 void
