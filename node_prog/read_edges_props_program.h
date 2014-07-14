@@ -29,13 +29,13 @@ namespace node_prog
     class read_edges_props_params : public Node_Parameters_Base 
     {
         public:
-            std::vector<uint64_t> edges; // empty vector means fetch props for all edges
+            std::vector<edge_id_t> edges; // empty vector means fetch props for all edges
             std::vector<std::string> keys; // empty vector means fetch all props
-            std::vector<std::pair<uint64_t, std::vector<std::pair<std::string, std::string>>>> edges_props;
+            std::vector<std::pair<edge_id_t, std::vector<std::pair<std::string, std::string>>>> edges_props;
 
             // no caching needed
             bool search_cache() { return false; }
-            uint64_t cache_key() { return 0; }
+            cache_key_t cache_key() { return cache_key_t(0); }
             uint64_t size() const;
             void pack(e::buffer::packer& packer) const;
             void unpack(e::unpacker& unpacker);
@@ -56,7 +56,7 @@ namespace node_prog
             read_edges_props_params &params,
             std::function<read_edges_props_state&()>,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
+                std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>&,
             cache_response<Cache_Value_Base>*);
 }
 

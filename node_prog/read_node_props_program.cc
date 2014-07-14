@@ -50,7 +50,7 @@ node_prog :: read_node_props_node_program(
         read_node_props_params &params,
         std::function<read_node_props_state&()>,
         std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-            std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
+            std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>&,
         cache_response<Cache_Value_Base>*)
 {
     bool fetch_all = params.keys.empty();

@@ -34,8 +34,7 @@
 uint64_t
 message :: size(const db::element::element &t)
 {
-    uint64_t sz = sizeof(uint64_t) // id
-        + size(t.get_handle()) // client handle
+    uint64_t sz = size(t.get_handle()) // client handle
         + size(t.get_creat_time()) + size(t.get_del_time()) // time stamps
         + size(*t.get_props()); // properties
     return sz;
@@ -45,6 +44,7 @@ uint64_t
 message :: size(const db::element::edge &t)
 {
     uint64_t sz = size(t.base)
+        + size(t.id)
         + size(t.msg_count)
         + size(t.nbr);
     return sz;
@@ -61,6 +61,7 @@ message :: size(const db::element::node &t)
 {
     uint64_t sz = 0;
     sz += size(t.base);
+    sz += size(t.id);
     sz += size(t.out_edges);
     sz += size(t.update_count);
     sz += size(t.msg_count);
@@ -72,7 +73,6 @@ message :: size(const db::element::node &t)
 // packing methods
 void message :: pack_buffer(e::buffer::packer &packer, const db::element::element &t)
 {
-    pack_buffer(packer, t.get_id());
     pack_buffer(packer, t.get_handle());
     pack_buffer(packer, t.get_creat_time());
     pack_buffer(packer, t.get_del_time());
@@ -82,6 +82,7 @@ void message :: pack_buffer(e::buffer::packer &packer, const db::element::elemen
 void message :: pack_buffer(e::buffer::packer &packer, const db::element::edge &t)
 {
     pack_buffer(packer, t.base);
+    pack_buffer(packer, t.id);
     pack_buffer(packer, t.msg_count);
     pack_buffer(packer, t.nbr);
 }
@@ -95,6 +96,7 @@ void
 message :: pack_buffer(e::buffer::packer &packer, const db::element::node &t)
 {
     pack_buffer(packer, t.base);
+    pack_buffer(packer, t.id);
     pack_buffer(packer, t.out_edges);
     pack_buffer(packer, t.update_count);
     pack_buffer(packer, t.msg_count);
@@ -106,12 +108,10 @@ message :: pack_buffer(e::buffer::packer &packer, const db::element::node &t)
 void
 message :: unpack_buffer(e::unpacker &unpacker, db::element::element &t)
 {
-    uint64_t id;
     std::string handle;
     vc::vclock creat_time, del_time;
     std::vector<db::element::property> props;
 
-    unpack_buffer(unpacker, id);
     t.set_id(id);
 
     unpack_buffer(unpacker, handle);
@@ -132,6 +132,7 @@ void
 message :: unpack_buffer(e::unpacker &unpacker, db::element::edge &t)
 {
     unpack_buffer(unpacker, t.base);
+    unpack_buffer(unpacker, t.id);
     unpack_buffer(unpacker, t.msg_count);
     unpack_buffer(unpacker, t.nbr);
 
@@ -158,6 +159,7 @@ void
 message :: unpack_buffer(e::unpacker &unpacker, db::element::node &t)
 {
     unpack_buffer(unpacker, t.base);
+    unpack_buffer(unpacker, t.id);
     unpack_buffer(unpacker, t.out_edges);
     unpack_buffer(unpacker, t.update_count);
     unpack_buffer(unpacker, t.msg_count);

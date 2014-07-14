@@ -44,7 +44,7 @@ namespace node_prog
 
         // no caching
         bool search_cache() { return false; }
-        uint64_t cache_key() { return 0; }
+        cache_key_t cache_key() { return cache_key_t(0); }
     };
 
     struct traverse_props_state: public virtual Node_State_Base
@@ -66,7 +66,7 @@ namespace node_prog
        db::element::remote_node &rn,
        traverse_props_params &params,
        std::function<traverse_props_state&()> state_getter,
-       std::function<void(std::shared_ptr<Cache_Value_Base>, std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
+       std::function<void(std::shared_ptr<Cache_Value_Base>, std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>&,
        cache_response<Cache_Value_Base>*);
 }
 

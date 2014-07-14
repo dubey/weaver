@@ -179,7 +179,7 @@ node_prog :: reach_node_program(
         reach_params &params,
         std::function<reach_node_state&()> state_getter,
         std::function<void(std::shared_ptr<reach_cache_value>, // TODO make const
-            std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
+            std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>& add_cache_func,
         cache_response<reach_cache_value>*cache_response)
 {
     reach_node_state &state = state_getter();

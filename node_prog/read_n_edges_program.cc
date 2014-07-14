@@ -51,7 +51,7 @@ node_prog :: read_n_edges_node_program(
     db::element::remote_node &,
     read_n_edges_params &params,
     std::function<read_n_edges_state&()>,
-    std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
+    std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>&,
     cache_response<Cache_Value_Base>*)
 {
     auto elist = n.get_edges();

@@ -21,8 +21,10 @@ namespace db
     {
         enum message::msg_type type;
         vc::vclock vclk;
-        uint64_t edge, remote_node, remote_loc;
-        std::string edge_handle;
+        edge_id_t edge;
+        node_id_t remote_node;
+        uint64_t remote_loc;
+        edge_handle_t edge_handle;
         std::unique_ptr<std::string> key, value;
 
         inline

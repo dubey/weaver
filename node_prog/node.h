@@ -14,7 +14,8 @@
 #include <vector>
 #include <unordered_map>
 
-#include "edge_list.h"
+#include "common/types.h"
+#include "node_prog/edge_list.h"
 
 namespace node_prog
 {
@@ -22,8 +23,8 @@ namespace node_prog
     {
         public:
             virtual ~node() { }
-            virtual uint64_t get_id() const = 0;
-            virtual std::string get_handle() const = 0;
+            virtual node_id_t get_id() const = 0;
+            virtual node_handle_t get_handle() const = 0;
             virtual edge_list get_edges() = 0;
             virtual prop_list get_properties() = 0;
             virtual bool has_property(std::pair<std::string, std::string> &p) = 0;

@@ -30,7 +30,7 @@ namespace node_prog
         public:
             bool returning; // false = request, true = reply
             db::element::remote_node prev_node;
-            uint64_t dest;
+            node_id_t dest;
             std::vector<std::pair<std::string, std::string>> edge_props;
             bool reachable;
 
@@ -38,7 +38,7 @@ namespace node_prog
             pathless_reach_params();
             ~pathless_reach_params() { }
             bool search_cache();
-            uint64_t cache_key();
+            cache_key_t cache_key() { return cache_key_t(0); }
             uint64_t size() const; 
             void pack(e::buffer::packer &packer) const;
             void unpack(e::unpacker &unpacker);
@@ -65,7 +65,7 @@ namespace node_prog
             pathless_reach_params &params,
             std::function<pathless_reach_node_state&()> state_getter,
             std::function<void(std::shared_ptr<Cache_Value_Base>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
+                std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>& add_cache_func,
             cache_response<Cache_Value_Base>*cache_response);
 }
 

@@ -31,12 +31,13 @@ namespace element
     {
         public:
             edge();
-            edge(uint64_t id, const std::string &handle, vc::vclock &vclk, uint64_t remote_loc, uint64_t remote_id);
-            edge(uint64_t id, const std::string &handle, vc::vclock &vclk, remote_node &rn);
+            edge(edge_id_t &id, const edge_handle_t &handle, vc::vclock &vclk, uint64_t remote_loc, node_id_t &remote_id);
+            edge(edge_id_t &id, const edge_handle_t &handle, vc::vclock &vclk, remote_node &rn);
             ~edge() { }
 
         public:
             element base;
+            edge_id_t id;
             remote_node nbr; // out-neighbor for this edge
             uint32_t msg_count; // number of messages sent on this link
             bool migr_edge; // true if this edge was migrated along with parent node
@@ -46,7 +47,8 @@ namespace element
             node_prog::prop_list get_properties();
             bool has_property(std::pair<std::string, std::string> &p);
             bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
-            uint64_t get_id() const { return base.get_id(); }
+            void set_id(edge_id_t &_id) { id = _id; }
+            edge_id_t get_id() const { return id; }
     };
 }
 }

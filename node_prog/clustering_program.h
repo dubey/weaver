@@ -28,15 +28,15 @@ namespace node_prog
     {
         public:
             bool _search_cache;
-            uint64_t _cache_key;
+            cache_key_t _cache_key;
             bool is_center;
             db::element::remote_node center;
             bool outgoing;
-            std::vector<uint64_t> neighbors;
+            std::vector<node_id_t> neighbors;
             double clustering_coeff;
 
             bool search_cache() { return _search_cache; }
-            uint64_t cache_key() { return _cache_key; }
+            cache_key_t cache_key() { return _cache_key; }
             uint64_t size() const;
             void pack(e::buffer::packer& packer) const;
             void unpack(e::unpacker& unpacker);
@@ -45,7 +45,7 @@ namespace node_prog
     struct clustering_node_state : public Node_State_Base
     {
         // map from a node id to the number of neighbors who are connected to it
-        std::unordered_map<uint64_t, int> neighbor_counts;
+        std::unordered_map<node_id_t, int> neighbor_counts;
         int responses_left;
 
         ~clustering_node_state() { }
@@ -61,7 +61,7 @@ namespace node_prog
             clustering_params &params,
             std::function<clustering_node_state&()> get_state,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
+                std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>&,
             cache_response<Cache_Value_Base>*);
 }
 

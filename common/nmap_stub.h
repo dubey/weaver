@@ -38,11 +38,11 @@ namespace nmap
             hyperdex::Client cl;
 
         public:
-            bool put_client_mappings(std::unordered_map<std::string, uint64_t> &pairs_to_add);
-            bool put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add);
-            void get_client_mappings(std::vector<std::string> &toGet, std::unordered_map<std::string, uint64_t> &client_map);
-            std::vector<std::pair<uint64_t, uint64_t>> get_mappings(std::unordered_set<uint64_t> &toGet);
-            bool del_mappings(std::unordered_set<uint64_t> &toDel);
+            bool put_client_mappings(std::unordered_map<std::string, node_id_t> &pairs_to_add);
+            bool put_mappings(std::unordered_map<node_id_t, uint64_t> &pairs_to_add);
+            void get_client_mappings(std::vector<std::string> &toGet, std::unordered_map<std::string, node_id_t> &client_map);
+            std::vector<std::pair<node_id_t, uint64_t>> get_mappings(std::unordered_set<node_id_t> &toGet);
+            bool del_mappings(std::unordered_set<node_id_t> &toDel);
             bool del_client_mappings(std::unordered_set<std::string> &toDel);
     };
 }

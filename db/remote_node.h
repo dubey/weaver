@@ -11,6 +11,8 @@
  * ===============================================================
  */
 
+#include "common/types.h"
+
 #ifndef weaver_db_element_remote_node_h_
 #define weaver_db_element_remote_node_h_
 
@@ -22,32 +24,18 @@ namespace element
     {
         public:
             remote_node() { }
-            remote_node(uint64_t l, uint64_t i) : loc(l), id(i) { }
+            remote_node(uint64_t l, node_id_t i) : loc(l), id(i) { }
 
         public:
             uint64_t loc;
-            uint64_t id;
-            uint64_t get_id() { return id; }
+            node_id_t id;
+            node_id_t get_id() { return id; }
             bool operator==(const db::element::remote_node &t) const { return (id == t.id) && (loc == t.loc); }
             bool operator!=(const db::element::remote_node &t) const { return (id != t.id) || (loc != t.loc); }
     };
 
-    static db::element::remote_node coordinator(0,0);
+    static db::element::remote_node coordinator(0, node_id_t(0));
 }
-}
-
-namespace std
-{
-    // used if we want a hash table with a remote node as the key
-    template <>
-    struct hash<db::element::remote_node> 
-    {
-        public:
-            size_t operator()(const db::element::remote_node &x) const throw() 
-            {
-                return (hash<int>()(x.loc) * 6291469) + (hash<size_t>()(x.id) * 393241); // some big primes
-            }
-    };
 }
 
 #endif

@@ -68,7 +68,7 @@ hyper_stub :: init()
 }
 
 void
-hyper_stub :: recreate_node(const hyperdex_client_attribute *cl_attr, element::node &n, std::unordered_set<uint64_t> &nbr_map)
+hyper_stub :: recreate_node(const hyperdex_client_attribute *cl_attr, element::node &n, std::unordered_set<node_id_t> &nbr_map)
 {
     std::vector<int> idx(NUM_GRAPH_ATTRS, -1);    
     for (int i = 0; i < NUM_GRAPH_ATTRS; i++) {
@@ -113,8 +113,8 @@ hyper_stub :: recreate_node(const hyperdex_client_attribute *cl_attr, element::n
 void
 hyper_stub :: restore_backup(std::unordered_map<uint64_t, uint64_t> &qts_map,
             bool &migr_token,
-            std::unordered_map<uint64_t, element::node*> *nodes,
-            std::unordered_map<uint64_t, std::unordered_set<uint64_t>> &edge_map,
+            std::unordered_map<node_id_t, element::node*> *nodes,
+            std::unordered_map<node_id_t, std::unordered_set<node_id_t>> &edge_map,
             po6::threads::mutex *shard_mutexes)
 {
     // TODO everything sequential right now
@@ -167,8 +167,8 @@ hyper_stub :: restore_backup(std::unordered_map<uint64_t, uint64_t> &qts_map,
         return;
     }
 
-    std::vector<uint64_t> node_list;
-    uint64_t *node;
+    std::vector<node_id_t> node_list;
+    node_id_t *node;
     int node_idx;
     bool loop_done = false;
     while (!loop_done) {
@@ -191,7 +191,7 @@ hyper_stub :: restore_backup(std::unordered_map<uint64_t, uint64_t> &qts_map,
                 } else {
                     node_idx = 0;
                 }
-                node = (uint64_t*)cl_attr[node_idx].value;
+                node = (node_id_t*)cl_attr[node_idx].value;
                 node_list.emplace_back(*node);
                 hyperdex_client_destroy_attrs(cl_attr, num_attrs);
                 break;
@@ -221,7 +221,7 @@ hyper_stub :: restore_backup(std::unordered_map<uint64_t, uint64_t> &qts_map,
 
     vc::vclock dummy_clock;
     element::node *n;
-    uint64_t node_id;
+    node_id_t node_id;
     uint64_t map_idx;
     for (uint64_t i = 0; i < node_list.size(); i++) {
         assert(attr_sz_array[i] == NUM_GRAPH_ATTRS);
@@ -243,7 +243,7 @@ hyper_stub :: restore_backup(std::unordered_map<uint64_t, uint64_t> &qts_map,
 }
 
 void
-hyper_stub :: put_node(element::node &n, std::unordered_set<uint64_t> &nbr_map)
+hyper_stub :: put_node(element::node &n, std::unordered_set<node_id_t> &nbr_map)
 {
     hyperdex_client_attribute *cl_attr = (hyperdex_client_attribute*)malloc(NUM_GRAPH_ATTRS * sizeof(hyperdex_client_attribute));
     // create clock
@@ -367,7 +367,7 @@ hyper_stub :: remove_out_edge(element::node &n, element::edge *e)
 }
 
 void
-hyper_stub :: add_in_nbr(uint64_t n_hndl, uint64_t nbr)
+hyper_stub :: add_in_nbr(node_id_t n_hndl, node_id_t nbr)
 {
     hyperdex_client_attribute cl_attr;
     cl_attr.attr = graph_attrs[4];
@@ -379,7 +379,7 @@ hyper_stub :: add_in_nbr(uint64_t n_hndl, uint64_t nbr)
 }
 
 void
-hyper_stub :: remove_in_nbr(uint64_t n_hndl, uint64_t nbr)
+hyper_stub :: remove_in_nbr(node_id_t n_hndl, node_id_t nbr)
 {
     hyperdex_client_attribute cl_attr;
     cl_attr.attr = graph_attrs[4];
@@ -405,7 +405,7 @@ hyper_stub :: update_tx_queue(element::node &n)
 }
 
 void
-hyper_stub :: update_migr_status(uint64_t n_hndl, enum persist_node_state status)
+hyper_stub :: update_migr_status(node_id_t n_hndl, enum persist_node_state status)
 {
     int64_t int_status = status;
     hyperdex_client_attribute cl_attr;
@@ -418,8 +418,8 @@ hyper_stub :: update_migr_status(uint64_t n_hndl, enum persist_node_state status
 }
 
 void
-hyper_stub :: bulk_load(std::unordered_map<uint64_t, element::node*> *nodes_arr,
-    std::unordered_map<uint64_t, std::unordered_set<uint64_t>> &edge_map)
+hyper_stub :: bulk_load(std::unordered_map<node_id_t, element::node*> *nodes_arr,
+    std::unordered_map<node_id_t, std::unordered_set<node_id_t>> &edge_map)
 {
     uint64_t num_nodes = 0;
     for (int i = 0; i < NUM_NODE_MAPS; i++) {
@@ -436,7 +436,7 @@ hyper_stub :: bulk_load(std::unordered_map<uint64_t, element::node*> *nodes_arr,
     for (int i = 0; i < NUM_NODE_MAPS; i++) {
         auto &nodes = nodes_arr[i];
         for (auto &node_pair: nodes) {
-            uint64_t node_id = node_pair.first;
+            node_id_t node_id = node_pair.first;
             element::node &n = *node_pair.second;
             hyperdex_client_attribute *cl_attr = (hyperdex_client_attribute*)malloc(NUM_GRAPH_ATTRS * sizeof(hyperdex_client_attribute));
 

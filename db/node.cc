@@ -22,8 +22,9 @@ using db::element::remote_node;
 using db::element::edge;
 using db::element::node;
 
-node :: node(uint64_t id, const std::string &handle, vc::vclock &vclk, po6::threads::mutex *mtx)
-    : base(id, handle, vclk)
+node :: node(node_id_t &_id, const node_handle_t &handle, vc::vclock &vclk, po6::threads::mutex *mtx)
+    : base(handle, vclk)
+    , id(_id)
     , state(mode::NASCENT)
     , cv(mtx)
     , migr_cv(mtx)
@@ -84,13 +85,13 @@ void
 node :: add_cache_value(std::shared_ptr<vc::vclock> vc,
     std::shared_ptr<node_prog::Cache_Value_Base> cache_value,
     std::shared_ptr<std::vector<remote_node>> watch_set,
-    uint64_t key)
+    cache_key_t key)
 {
     if (MaxCacheEntries) {
         // clear oldest entry if cache is full
         if (cache.size() >= MaxCacheEntries) {
             vc::vclock &oldest = *vc;
-            uint64_t key_to_del = key;
+            cache_key_t key_to_del = key;
             for (auto& kvpair : cache) {
                 vc::vclock &to_cmp = *kvpair.second.clk;
                 // don't talk to kronos just pick one to delete

@@ -29,10 +29,10 @@ namespace node_prog
     {
         public:
             bool _search_cache;
-            uint64_t _cache_key;
+            cache_key_t _cache_key;
             bool returning; // false = request, true = reply
             db::element::remote_node prev_node;
-            uint64_t dest;
+            node_id_t dest;
             std::vector<std::pair<std::string, std::string>> edge_props;
             uint16_t hops;
             bool reachable;
@@ -42,7 +42,7 @@ namespace node_prog
             reach_params();
             virtual ~reach_params() { }
             virtual bool search_cache() { return _search_cache; }
-            virtual uint64_t cache_key() { return _cache_key; }
+            virtual cache_key_t cache_key() { return _cache_key; }
             virtual uint64_t size() const;
             virtual void pack(e::buffer::packer &packer) const; 
             virtual void unpack(e::unpacker &unpacker);
@@ -81,7 +81,7 @@ namespace node_prog
             reach_params &params,
             std::function<reach_node_state&()> state_getter,
             std::function<void(std::shared_ptr<reach_cache_value>, // TODO make const
-                std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
+                std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)> &add_cache_func,
             cache_response<reach_cache_value>*cache_response);
 }
 

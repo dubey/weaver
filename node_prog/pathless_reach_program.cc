@@ -35,12 +35,6 @@ pathless_reach_params :: search_cache()
 }
 
 uint64_t
-pathless_reach_params :: cache_key()
-{
-    return 0;
-}
-
-uint64_t
 pathless_reach_params :: size() const 
 {
     uint64_t toRet = message::size(returning)
@@ -116,7 +110,7 @@ node_prog :: pathless_reach_node_program(
         pathless_reach_params &params,
         std::function<pathless_reach_node_state&()> state_getter,
         std::function<void(std::shared_ptr<Cache_Value_Base>,
-            std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
+            std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>&,
         cache_response<Cache_Value_Base>*)
 {
     pathless_reach_node_state &state = state_getter();

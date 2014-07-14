@@ -21,11 +21,12 @@ namespace db
     {
         enum message::msg_type type;
         vc::vclock vclk;
-        uint64_t node, edge;
+        node_id_t node;
+        edge_id_t edge;
         std::vector<bool> no_outstanding_progs;
 
         inline
-        del_obj(enum message::msg_type t, vc::vclock &vc, uint64_t n, uint64_t e=0)
+        del_obj(enum message::msg_type t, vc::vclock &vc, node_id_t n, edge_id_t e=edge_id_t(0))
             : type(t)
             , vclk(vc)
             , node(n)

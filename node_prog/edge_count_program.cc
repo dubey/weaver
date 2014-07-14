@@ -47,7 +47,7 @@ node_prog :: edge_count_node_program(
     edge_count_params &params,
     std::function<edge_count_state&()>,
     std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-        std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
+        std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>&,
     cache_response<Cache_Value_Base>*)
 {
     auto elist = n.get_edges();

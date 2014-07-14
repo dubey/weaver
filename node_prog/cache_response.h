@@ -14,8 +14,9 @@
 #include <vector>
 #include <unordered_map>
 
-#include "base_classes.h"
-#include "property.h"
+#include "common/types.h"
+#include "node_prog/base_classes.h"
+#include "node_prog/property.h"
 #include "db/remote_node.h"
 #include "db/cache_entry.h"
 
@@ -23,11 +24,11 @@ namespace node_prog
 {
     struct edge_cache_context
     {
-        uint64_t edge_handle;
+        edge_id_t edge_handle;
         db::element::remote_node nbr;
 
         edge_cache_context() { }
-        edge_cache_context(uint64_t handle, db::element::remote_node &nbr) : edge_handle(handle), nbr(nbr) { }
+        edge_cache_context(edge_id_t handle, db::element::remote_node &nbr) : edge_handle(handle), nbr(nbr) { }
 
         std::vector<property> props_added;
         std::vector<property> props_deleted;
@@ -40,7 +41,7 @@ namespace node_prog
         bool node_deleted;
 
         node_cache_context() { }
-        node_cache_context(uint64_t loc, uint64_t id, bool deleted) : node(loc, id), node_deleted(deleted) { }
+        node_cache_context(uint64_t loc, node_id_t id, bool deleted) : node(loc, id), node_deleted(deleted) { }
 
         std::vector<property> props_added;
         std::vector<property> props_deleted;
@@ -54,15 +55,15 @@ namespace node_prog
     class cache_response
     {
         private:
-            std::unordered_map<uint64_t, db::cache_entry> &from_cache;
-            uint64_t key;
+            std::unordered_map<cache_key_t, db::cache_entry> &from_cache;
+            cache_key_t key;
             std::shared_ptr<CacheValueType> value;
             std::shared_ptr<std::vector<db::element::remote_node>> watch_set;
             std::vector<node_cache_context> context;
 
         public:
-            cache_response(std::unordered_map<uint64_t, db::cache_entry> &came_from,
-                uint64_t key_used,
+            cache_response(std::unordered_map<cache_key_t, db::cache_entry> &came_from,
+                cache_key_t key_used,
                 std::shared_ptr<Cache_Value_Base> val,
                 std::shared_ptr<std::vector<db::element::remote_node>> watch_set_used)
                 : from_cache(came_from)

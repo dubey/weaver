@@ -20,6 +20,8 @@
 #include <algorithm>
 #include <assert.h>
 
+#include "common/utils.h"
+
 namespace vc
 {
     typedef std::vector<uint64_t> vclock_t;
@@ -41,23 +43,6 @@ namespace vc
 
             bool operator==(const vclock& rhs) {
                 return vt_id == rhs.vt_id && clock == rhs.clock;
-            }
-    };
-}
-
-namespace std
-{
-    template <>
-    struct hash<vc::vclock_t> 
-    {
-        public:
-            size_t operator()(const vc::vclock_t &vc) const throw() 
-            {
-                size_t hash = std::hash<uint64_t>()(vc[0]);
-                for (size_t i = 1; i < vc.size(); i++) {
-                    hash ^= std::hash<uint64_t>()(vc[i]) + 0x9e3779b9 + (hash<<6) + (hash>>2);
-                }
-                return hash;
             }
     };
 }

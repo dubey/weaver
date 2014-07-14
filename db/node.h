@@ -43,7 +43,7 @@ namespace element
     class node : public node_prog::node
     {
         public:
-            node(uint64_t id, const std::string &handle, vc::vclock &vclk, po6::threads::mutex *mtx);
+            node(node_id_t &id, const node_handle_t &handle, vc::vclock &vclk, po6::threads::mutex *mtx);
             ~node() { }
 
         public:
@@ -56,8 +56,9 @@ namespace element
 
         public:
             element base;
+            node_id_t id;
             enum mode state;
-            std::unordered_map<uint64_t, edge*> out_edges;
+            std::unordered_map<edge_id_t, edge*> out_edges;
             po6::threads::cond cv; // for locking node
             po6::threads::cond migr_cv; // make reads/writes wait while node is being migrated
             std::deque<std::pair<uint64_t, uint64_t>> tx_queue; // queued txs, identified by <vt_id, queue timestamp> tuple
@@ -79,11 +80,11 @@ namespace element
             std::vector<std::unique_ptr<message::message>> pending_requests;
 
             // node program cache
-            std::unordered_map<uint64_t, cache_entry> cache;
+            std::unordered_map<cache_key_t, cache_entry> cache;
             void add_cache_value(std::shared_ptr<vc::vclock> vc,
                 std::shared_ptr<node_prog::Cache_Value_Base> cache_value,
                 std::shared_ptr<std::vector<remote_node>> watch_set,
-                uint64_t key);
+                cache_key_t key);
 
             // node program state
             typedef std::unordered_map<uint64_t, std::shared_ptr<node_prog::Node_State_Base>> id_to_state_t;
@@ -92,7 +93,7 @@ namespace element
 
 #ifdef weaver_debug_
             // testing
-            std::unordered_set<uint64_t> edge_handles;
+            std::unordered_set<edge_id_t> edge_handles;
 #endif
 
         public:
@@ -101,8 +102,9 @@ namespace element
             node_prog::prop_list get_properties();
             bool has_property(std::pair<std::string, std::string> &p);
             bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
-            uint64_t get_id() const { return base.get_id(); }
-            std::string get_handle() const { return base.get_handle(); }
+            void set_id(node_id_t &_id) { id = _id; }
+            node_id_t get_id() const { return id; }
+            node_handle_t get_handle() const { return base.get_handle(); }
     };
 }
 }

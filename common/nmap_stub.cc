@@ -25,7 +25,7 @@ nmap_stub :: nmap_stub()
 { }
 
 bool
-nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add)
+nmap_stub :: put_mappings(std::unordered_map<node_id_t, uint64_t> &pairs_to_add)
 {
     bool success = true;
     int num_pairs = pairs_to_add.size();
@@ -87,7 +87,7 @@ nmap_stub :: put_mappings(std::unordered_map<uint64_t, uint64_t> &pairs_to_add)
 }
 
 bool
-nmap_stub :: put_client_mappings(std::unordered_map<std::string, uint64_t> &pairs_to_add)
+nmap_stub :: put_client_mappings(std::unordered_map<std::string, node_id_t> &pairs_to_add)
 {
     bool success = true;
     int num_pairs = pairs_to_add.size();
@@ -148,13 +148,13 @@ nmap_stub :: put_client_mappings(std::unordered_map<std::string, uint64_t> &pair
     return success;
 }
 
-std::vector<std::pair<uint64_t, uint64_t>>
-nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
+std::vector<std::pair<node_id_t, uint64_t>>
+nmap_stub :: get_mappings(std::unordered_set<node_id_t> &toGet)
 {
     class async_get
     {
         public:
-            uint64_t key;
+            node_id_t key;
             int64_t op_id;
             hyperdex_client_returncode status;
             const hyperdex_client_attribute *attr;
@@ -231,7 +231,7 @@ nmap_stub :: get_mappings(std::unordered_set<uint64_t> &toGet)
 }
 
 void
-nmap_stub :: get_client_mappings(std::vector<std::string> &toGet, std::unordered_map<std::string, uint64_t> &client_map)
+nmap_stub :: get_client_mappings(std::vector<std::string> &toGet, std::unordered_map<std::string, node_id_t> &client_map)
 {
     class async_get
     {
@@ -269,7 +269,7 @@ nmap_stub :: get_client_mappings(std::vector<std::string> &toGet, std::unordered
 
     int64_t loop_id;
     hyperdex_client_returncode loop_status;
-    uint64_t *val;
+    node_id_t *val;
     // call loop once for every get
     for (int64_t i = 0; i < num_nodes; i++) {
         do {
@@ -291,7 +291,7 @@ nmap_stub :: get_client_mappings(std::vector<std::string> &toGet, std::unordered
             }
         } else {
             assert(results[loop_idx].attr_size == 1);
-            val = (uint64_t*)results[loop_idx].attr->value;
+            val = (node_id_t*)results[loop_idx].attr->value;
             client_map[toGet[loop_idx]] = *val;
             hyperdex_client_destroy_attrs(results[loop_idx].attr, results[loop_idx].attr_size);
         }
@@ -305,11 +305,11 @@ nmap_stub :: get_client_mappings(std::vector<std::string> &toGet, std::unordered
 }
 
 bool
-nmap_stub :: del_mappings(std::unordered_set<uint64_t> &toDel)
+nmap_stub :: del_mappings(std::unordered_set<node_id_t> &toDel)
 {
     bool success = true;
     int64_t num_nodes = toDel.size();
-    int64_t del_nodes[num_nodes];
+    node_id_t del_nodes[num_nodes];
     std::unordered_map<int64_t, int64_t> opid_to_idx;
     opid_to_idx.reserve(num_nodes);
     hyperdex_client_returncode del_status[num_nodes];
@@ -358,7 +358,6 @@ nmap_stub :: del_client_mappings(std::unordered_set<std::string> &toDel)
 {
     bool success = true;
     int64_t num_nodes = toDel.size();
-    std::vector<const char*> del_entries(toDel.size(), NULL);
     int64_t del_nodes[num_nodes];
     std::unordered_map<int64_t, int64_t> opid_to_idx;
     opid_to_idx.reserve(num_nodes);
@@ -368,7 +367,6 @@ nmap_stub :: del_client_mappings(std::unordered_set<std::string> &toDel)
     auto todel_iter = toDel.begin();
     for (int64_t i = 0; i < num_nodes; i++) {
         assert(todel_iter != toDel.end());
-        del_entries[i] = todel_iter->c_str();
         do {
             del_id = cl.del(space, todel_iter->c_str(), todel_iter->size(), del_status+i);
         } while (del_id < 0);

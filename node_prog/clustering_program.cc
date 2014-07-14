@@ -89,7 +89,7 @@ node_prog :: clustering_node_program(
     clustering_params &params,
     std::function<clustering_node_state&()> get_state,
     std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-        std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
+        std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>&,
     cache_response<Cache_Value_Base>*)
 {
     // TODO can we change this to a three enum switch to reduce number of if statements
@@ -110,7 +110,7 @@ node_prog :: clustering_node_program(
                 next = {std::make_pair(db::element::coordinator, std::move(params))};
             }
         } else {
-            for (uint64_t &nbr_id : params.neighbors) {
+            for (node_id_t &nbr_id : params.neighbors) {
                 if (cstate.neighbor_counts.count(nbr_id) > 0) {
                     cstate.neighbor_counts[nbr_id]++;
                 }
@@ -119,7 +119,7 @@ node_prog :: clustering_node_program(
                 assert(cstate.neighbor_counts.size() > 1);
                 double denominator = (double) (cstate.neighbor_counts.size() * (cstate.neighbor_counts.size() - 1));
                 uint64_t numerator = 0;
-                for (std::pair<const uint64_t, int>& nbr_count : cstate.neighbor_counts){
+                for (std::pair<const node_id_t, int>& nbr_count : cstate.neighbor_counts){
                     numerator += nbr_count.second;
                 }
                 params.clustering_coeff = (double) numerator / denominator;

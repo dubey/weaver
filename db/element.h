@@ -31,10 +31,9 @@ namespace element
     {
         public:
             element() { }
-            element(uint64_t id, const std::string &handle, vc::vclock &vclk);
+            element(const std::string &handle, vc::vclock &vclk);
 
         protected:
-            uint64_t id;
             std::string handle;
             vc::vclock creat_time;
             vc::vclock del_time;
@@ -59,8 +58,6 @@ namespace element
             void update_creat_time(vc::vclock &creat_time);
             const vc::vclock& get_creat_time() const;
             std::pair<bool, std::string> get_property_value(std::string prop_key, vc::vclock &at_time);
-            void set_id(uint64_t id);
-            uint64_t get_id() const;
             void set_handle(const std::string &handle);
             std::string get_handle() const;
     };

@@ -17,8 +17,7 @@
 using db::element::element;
 using db::element::property;
 
-element :: element(uint64_t _id, const std::string &_handle, vc::vclock &vclk)
-    : id(_id)
+element :: element(const std::string &_handle, vc::vclock &vclk)
     , handle(_handle)
     , creat_time(vclk)
     , del_time(UINT64_MAX, UINT64_MAX)
@@ -163,18 +162,6 @@ element :: get_property_value(std::string prop_key, vc::vclock &at_time)
         } 
     }
     return std::make_pair(false, std::string(""));
-}
-
-void
-element :: set_id(uint64_t _id)
-{
-    id = _id;
-}
-
-uint64_t
-element :: get_id() const
-{
-    return id;
 }
 
 void

@@ -115,7 +115,7 @@ two_neighborhood_state :: unpack(e::unpacker& unpacker)
 
 // cache
 two_neighborhood_cache_value :: two_neighborhood_cache_value(std::string &prop_key,
-    std::vector<std::pair<uint64_t, std::string>> &responses)
+    std::vector<std::pair<node_id_t, std::string>> &responses)
     : prop_key(prop_key)
     , responses(responses)
 { }
@@ -177,7 +177,7 @@ check_cache_context(std::vector<node_cache_context>& contexts, db::element::remo
 }
 
 inline void
-fill_minus_duplicates(std::vector<std::pair<uint64_t, std::string>> &from, std::vector<std::pair<uint64_t, std::string>> &to)
+fill_minus_duplicates(std::vector<std::pair<node_id_t, std::string>> &from, std::vector<std::pair<node_id_t, std::string>> &to)
 {
     to.swap(from); // TODO actually filter
 }
@@ -189,7 +189,7 @@ node_prog :: two_neighborhood_node_program(
     two_neighborhood_params &params,
     std::function<two_neighborhood_state&()> state_getter,
     std::function<void(std::shared_ptr<node_prog::two_neighborhood_cache_value>,
-        std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)> &add_cache_func,
+        std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)> &add_cache_func,
     cache_response<two_neighborhood_cache_value> *cache_response)
 {
     std::vector<std::pair<db::element::remote_node, two_neighborhood_params>> next;

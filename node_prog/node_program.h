@@ -69,7 +69,7 @@ namespace node_prog
                 params_type&,
                 std::function<node_state_type&()>,
                 std::function<void(std::shared_ptr<cache_value_type>,
-                    std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>& add_cache_func,
+                    std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)> &add_cache_func,
                     cache_response<cache_value_type> *cache_response);
 
     };
@@ -90,7 +90,7 @@ namespace node_prog
             uint64_t vt_id;
             std::shared_ptr<vc::vclock> req_vclock;
             uint64_t req_id;
-            std::deque<std::pair<uint64_t, ParamsType>> start_node_params;
+            std::deque<std::pair<node_id_t, ParamsType>> start_node_params;
             std::unique_ptr<cache_response<CacheValueType>> cache_value;
 
             node_prog_running_state() { }

@@ -24,15 +24,17 @@ edge :: edge()
     , migr_edge(false)
 { }
 
-edge :: edge(uint64_t id, const std::string &handle, vc::vclock &vclk, uint64_t remote_loc, uint64_t remote_id)
-    : base(id, handle, vclk)
+edge :: edge(edge_id_t &_id, const edge_handle_t &handle, vc::vclock &vclk, uint64_t remote_loc, node_id_t &remote_id)
+    : base(handle, vclk)
+    , id(_id)
     , nbr(remote_loc, remote_id)
     , msg_count(0)
     , migr_edge(false)
 { }
 
-edge :: edge(uint64_t id, const std::string &handle, vc::vclock &vclk, remote_node &rn)
-    : base(id, handle, vclk)
+edge :: edge(edge_id_t &_id, const edge_handle_t &handle, vc::vclock &vclk, remote_node &rn)
+    : base(handle, vclk)
+    , id(_id)
     , nbr(rn)
     , msg_count(0)
     , migr_edge(false)
