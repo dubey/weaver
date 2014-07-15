@@ -16,6 +16,8 @@
 #ifndef weaver_common_nmap_stub_h_
 #define weaver_common_nmap_stub_h_
 
+#include "common/types.h"
+
 #include <assert.h>
 #include <vector>
 #include <unordered_map>

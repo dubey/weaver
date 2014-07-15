@@ -20,7 +20,12 @@ using db::element::remote_node;
 // empty constructor for unpacking
 edge :: edge()
     : base()
+#ifdef WEAVER_CLDG
     , msg_count(0)
+#endif
+#ifdef WEAVER_NEW_CLDG
+    , msg_count(0)
+#endif
     , migr_edge(false)
 { }
 
@@ -28,7 +33,12 @@ edge :: edge(edge_id_t &_id, const edge_handle_t &handle, vc::vclock &vclk, uint
     : base(handle, vclk)
     , id(_id)
     , nbr(remote_loc, remote_id)
+#ifdef WEAVER_CLDG
     , msg_count(0)
+#endif
+#ifdef WEAVER_NEW_CLDG
+    , msg_count(0)
+#endif
     , migr_edge(false)
 { }
 
@@ -36,7 +46,12 @@ edge :: edge(edge_id_t &_id, const edge_handle_t &handle, vc::vclock &vclk, remo
     : base(handle, vclk)
     , id(_id)
     , nbr(rn)
+#ifdef WEAVER_CLDG
     , msg_count(0)
+#endif
+#ifdef WEAVER_NEW_CLDG
+    , msg_count(0)
+#endif
     , migr_edge(false)
 { }
 
@@ -45,7 +60,12 @@ edge :: edge(edge_id_t &_id, const edge_handle_t &handle, vc::vclock &vclk, remo
 void
 edge :: traverse()
 {
+#ifdef WEAVER_CLDG
     msg_count++;
+#endif
+#ifdef WEAVER_NEW_CLDG
+    msg_count++;
+#endif
 }
 
 remote_node& // TODO, make const, nbr private var

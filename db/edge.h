@@ -22,6 +22,7 @@
 #include "node_prog/property.h"
 #include "db/remote_node.h"
 #include "db/element.h"
+#include "db/shard_constants.h"
 
 namespace db
 {
@@ -39,7 +40,12 @@ namespace element
             element base;
             edge_id_t id;
             remote_node nbr; // out-neighbor for this edge
+#ifdef WEAVER_CLDG
             uint32_t msg_count; // number of messages sent on this link
+#endif
+#ifdef WEAVER_NEW_CLDG
+            uint32_t msg_count; // number of messages sent on this link
+#endif
             bool migr_edge; // true if this edge was migrated along with parent node
             void traverse(); // indicate that this edge was traversed; useful for migration statistics
 

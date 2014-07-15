@@ -263,7 +263,7 @@ init_nmap(std::vector<std::unordered_map<node_id_t, uint64_t>> *node_maps_ptr)
     WDEBUG << "creating " << num_thr << " threads for node map inserts" << std::endl;
     std::vector<std::thread> threads;
     for (int i = 0; i < num_thr; i++) {
-        threads.push_back(std::thread(init_single_nmap, i, node_maps+i));
+        threads.push_back(std::thread(init_single_nmap, i, &node_maps[i]));
     }
     for (int i = 0; i < num_thr; i++) {
         threads[i].join();
@@ -699,7 +699,7 @@ NodeStateType& get_or_create_state(node_prog::prog_type ptype,
         NodeStateType *ptr = new NodeStateType();
         state_map[req_id] = std::unique_ptr<node_prog::Node_State_Base>(ptr);
         assert(nodes_that_created_state != NULL);
-        nodes_that_created_state->emplace_back(node->base.get_id());
+        nodes_that_created_state->emplace_back(node->get_id());
         return *ptr;
     }
 }
@@ -793,7 +793,7 @@ fetch_node_cache_contexts(uint64_t loc,
                             context = &toFill.back();
                         }
 
-                        context->edges_added.emplace_back(e->base.get_id(), e->nbr);
+                        context->edges_added.emplace_back(e->get_id(), e->nbr);
                         node_prog::edge_cache_context &edge_context = context->edges_added.back();
                         // don't care about props deleted before req time for an edge created after cache value was stored
                         fill_changed_properties(e->base.properties, &edge_context.props_added,
@@ -803,7 +803,7 @@ fetch_node_cache_contexts(uint64_t loc,
                             toFill.emplace_back(loc, id, false);
                             context = &toFill.back();
                         }
-                        context->edges_deleted.emplace_back(e->base.get_id(), e->nbr);
+                        context->edges_deleted.emplace_back(e->get_id(), e->nbr);
                         node_prog::edge_cache_context &edge_context = context->edges_deleted.back();
                         // don't care about props added after cache time on a deleted edge
                         fill_changed_properties(e->base.properties, NULL,
@@ -817,7 +817,7 @@ fetch_node_cache_contexts(uint64_t loc,
                                 toFill.emplace_back(loc, id, false);
                                 context = &toFill.back();
                             }
-                            context->edges_modified.emplace_back(e->base.get_id(), e->nbr);
+                            context->edges_modified.emplace_back(e->get_id(), e->nbr);
 
                             context->edges_modified.back().props_added = std::move(temp_props_added);
                             context->edges_modified.back().props_deleted = std::move(temp_props_deleted);
@@ -916,7 +916,7 @@ inline bool cache_lookup(db::element::node*& node_to_check,
             return true;
         }
 
-        std::tuple<cache_key_t, uint64_t, node_id_t> cache_tuple(cache_key, np.req_id, node_to_check->base.get_id());
+        std::tuple<cache_key_t, uint64_t, node_id_t> cache_tuple(cache_key, np.req_id, node_to_check->get_id());
 
         S->node_prog_running_states_mutex.lock();
         if (S->node_prog_running_states.find(cache_tuple) != S->node_prog_running_states.end()) {
@@ -1369,7 +1369,7 @@ migrate_node_step1(db::hyper_stub *hs,
     // mark node as "moved"
     n->state = db::element::node::mode::MOVED;
     n->new_loc = migr_loc;
-    S->migr_node = n->base.get_id();
+    S->migr_node = n->get_id();
     S->migr_shard = migr_loc;
 
     // updating edge map
@@ -1890,6 +1890,7 @@ recv_loop(uint64_t thread_id)
                     break;
                 }
 
+#ifdef WEAVER_MSG_COUNT
                 case message::MSG_COUNT: {
                     rec_msg->unpack_message(message::MSG_COUNT, vt_id);
                     S->meta_update_mutex.lock();
@@ -1899,6 +1900,7 @@ recv_loop(uint64_t thread_id)
                     S->comm.send(vt_id, rec_msg->buf);
                     break;
                 }
+#endif
                 
                 case message::SET_QTS: {
                     uint64_t rec_qts;

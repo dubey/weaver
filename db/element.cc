@@ -18,7 +18,7 @@ using db::element::element;
 using db::element::property;
 
 element :: element(const std::string &_handle, vc::vclock &vclk)
-    , handle(_handle)
+    : handle(_handle)
     , creat_time(vclk)
     , del_time(UINT64_MAX, UINT64_MAX)
     , view_time(NULL)

@@ -78,14 +78,10 @@ namespace db
                 , perm_del_mutex
                 , config_mutex
                 , restore_mutex
-                , exit_mutex;
-            po6::threads::mutex node_map_mutexes[NUM_NODE_MAPS];
-        private:
-            po6::threads::mutex clock_mutex; // vector clock/queue timestamp mutex
-        public:
-            po6::threads::mutex msg_count_mutex
+                , exit_mutex
                 , migration_mutex
                 , graph_load_mutex; // gather load times from all shards
+            po6::threads::mutex node_map_mutexes[NUM_NODE_MAPS];
 
             // Messaging infrastructure
             common::comm_wrapper comm;
@@ -189,11 +185,13 @@ namespace db
             std::unordered_map<node_id_t, uint32_t> agg_msg_count;
             std::vector<std::pair<node_id_t, uint32_t>> cldg_nodes;
             std::vector<std::pair<node_id_t, uint32_t>>::iterator cldg_iter;
+            po6::threads::mutex msg_count_mutex;
 #endif
 #ifdef WEAVER_NEW_CLDG
             std::unordered_map<node_id_t, uint32_t> agg_msg_count;
             std::vector<std::pair<node_id_t, uint32_t>> cldg_nodes;
             std::vector<std::pair<node_id_t, uint32_t>>::iterator cldg_iter;
+            po6::threads::mutex msg_count_mutex;
 #endif
             std::unordered_set<node_id_t> ldg_nodes;
             std::unordered_set<node_id_t>::iterator ldg_iter;
@@ -273,7 +271,9 @@ namespace db
         , max_done_id(NumVts, 0)
         , max_done_clk(NumVts, vc::vclock_t(NumVts, 0))
         , migr_edge_acks(NumShards, false)
+#ifdef WEAVER_MSG_COUNT
         , msg_count(0)
+#endif
         , watch_set_lookups(0)
         , watch_set_nops(0)
         , watch_set_piggybacks(0)
@@ -434,7 +434,7 @@ namespace db
     inline void
     shard :: release_node(element::node *n, bool migr_done=false)
     {
-        uint64_t map_idx = n->base.get_id() % NUM_NODE_MAPS;
+        uint64_t map_idx = n->get_id() % NUM_NODE_MAPS;
 
         node_map_mutexes[map_idx].lock();
         n->in_use = false;
@@ -445,7 +445,7 @@ namespace db
             n->cv.signal();
             node_map_mutexes[map_idx].unlock();
         } else if (n->permanently_deleted) {
-            node_id_t node_id = n->base.get_id();
+            node_id_t node_id = n->get_id();
             nodes[map_idx].erase(node_id);
             node_list.erase(node_id);
             node_map_mutexes[map_idx].unlock();
@@ -454,9 +454,16 @@ namespace db
             shard_node_count[shard_id - ShardIdIncr]--;
             migration_mutex.unlock();
             
+#ifdef WEAVER_CLDG
             msg_count_mutex.lock();
             agg_msg_count.erase(node_id);
             msg_count_mutex.unlock();
+#endif
+#ifdef WEAVER_NEW_CLDG
+            msg_count_mutex.lock();
+            agg_msg_count.erase(node_id);
+            msg_count_mutex.unlock();
+#endif
             
             permanent_node_delete(n);
         } else {
@@ -470,7 +477,7 @@ namespace db
 
     inline element::node*
     shard :: create_node(hyper_stub *hs,
-        node_id_t node_id, const node_handle_t &handle
+        node_id_t node_id, const node_handle_t &handle,
         vc::vclock &vclk,
         bool migrate,
         bool init_load=false)
@@ -504,7 +511,9 @@ namespace db
 
         if (!migrate) {
             new_node->state = element::node::mode::STABLE;
+#ifdef WEAVER_CLDG
             new_node->msg_count.resize(NumShards, 0);
+#endif
             if (!init_load) {
                 // store in Hyperdex
                 std::unordered_set<node_id_t> empty_set;
@@ -533,8 +542,8 @@ namespace db
     inline void
     shard :: delete_node(hyper_stub *hs,
         node_id_t node_id,
-        vc::vclock &vclk,
-        vc::qtimestamp_t &qts);
+        vc::vclock &tdel,
+        vc::qtimestamp_t &qts)
     {
         element::node *n = acquire_node_write(node_id, tdel.vt_id, qts[tdel.vt_id]);
         if (n == NULL) {
@@ -553,7 +562,7 @@ namespace db
     }
 
     inline void
-    shard :: create_edge_nonlocking(hyper_stub *hs
+    shard :: create_edge_nonlocking(hyper_stub *hs,
         element::node *n,
         edge_id_t edge_id, const edge_handle_t &handle,
         uint64_t remote_node, uint64_t remote_loc,
@@ -567,11 +576,11 @@ namespace db
         if (!init_load) {
             edge_map_mutex.lock();
         }
-        edge_map[remote_node].emplace(n->base.get_id());
+        edge_map[remote_node].emplace(n->get_id());
         if (!init_load) {
             // store in Hyperdex
             hs->add_out_edge(*n, new_edge);
-            hs->add_in_nbr(n->base.get_id(), remote_node);
+            hs->add_in_nbr(n->get_id(), remote_node);
             edge_map_mutex.unlock();
         }
     }
@@ -598,7 +607,7 @@ namespace db
             dw.remote_loc = remote_loc; 
             migration_mutex.unlock();
         } else {
-            assert(n->base.get_id() == local_node);
+            assert(n->get_id() == local_node);
             create_edge_nonlocking(hs, n, edge_id, handle, remote_node, remote_loc, vclk);
             release_node_write(hs, n);
         }
@@ -608,7 +617,7 @@ namespace db
     shard :: delete_edge_nonlocking(hyper_stub *hs,
         element::node *n,
         edge_id_t edge_id,
-        vc::vclock &tdel);
+        vc::vclock &tdel)
     {
         // already_exec check for fault tolerance
         assert(n->out_edges.find(edge_id) != n->out_edges.end()); // cannot have been permanently deleted
@@ -622,7 +631,7 @@ namespace db
         edge_map_mutex.lock();
         if (edge_map.find(remote) != edge_map.end()) {
             auto &node_set = edge_map[remote];
-            node_set.erase(n->base.get_id());
+            node_set.erase(n->get_id());
             if (node_set.empty()) {
                 edge_map.erase(remote);
             }
@@ -631,15 +640,15 @@ namespace db
         // we permanently delete edge from HyperDex
         // since if shard crashes, concurrent node progs are dropped
         hs->remove_out_edge(*n, e);
-        hs->remove_in_nbr(n->base.get_id(), remote);
+        hs->remove_in_nbr(n->get_id(), remote);
         edge_map_mutex.unlock();
     }
 
     inline void
     shard :: delete_edge(hyper_stub *hs,
         edge_id_t edge_id, node_id_t node_id,
-        vc::vclock &vclk,
-        vc::qtimestamp_t &qts);
+        vc::vclock &tdel,
+        vc::qtimestamp_t &qts)
     {
         element::node *n = acquire_node_write(node_id, tdel.vt_id, qts[tdel.vt_id]);
         if (n == NULL) {
@@ -662,7 +671,7 @@ namespace db
     inline void
     shard :: set_node_property_nonlocking(element::node *n,
         std::string &key, std::string &value,
-        vc::vclock &vclk);
+        vc::vclock &vclk)
     {
         db::element::property p(key, value, vclk);
         n->base.check_and_add_property(p);
@@ -673,7 +682,7 @@ namespace db
         node_id_t node_id,
         std::unique_ptr<std::string> key, std::unique_ptr<std::string> value,
         vc::vclock &vclk,
-        vc::qtimestamp_t &qts);
+        vc::qtimestamp_t &qts)
     {
         // set_node_prop is idempotent for fault tolerance
         element::node *n = acquire_node_write(node_id, vclk.vt_id, qts[vclk.vt_id]);
@@ -697,7 +706,7 @@ namespace db
     shard :: set_edge_property_nonlocking(element::node *n,
         edge_id_t edge_id,
         std::string &key, std::string &value,
-        vc::vclock &vclk);
+        vc::vclock &vclk)
     {
         if (n->out_edges.find(edge_id) != n->out_edges.end()) {
             db::element::edge *e = n->out_edges[edge_id];
@@ -711,7 +720,7 @@ namespace db
         node_id_t node_id, edge_id_t edge_id,
         std::unique_ptr<std::string> key, std::unique_ptr<std::string> value,
         vc::vclock &vclk,
-        vc::qtimestamp_t &qts);
+        vc::qtimestamp_t &qts)
     {
         element::node *n = acquire_node_write(node_id, vclk.vt_id, qts[vclk.vt_id]);
         if (n == NULL) {
@@ -852,7 +861,7 @@ namespace db
         // this loop isn't executed in case of deletion of migrated nodes
         if (n->state != element::node::mode::MOVED) {
             for (uint64_t shard = ShardIdIncr; shard < ShardIdIncr + NumShards; shard++) {
-                msg.prepare_message(message::PERMANENTLY_DELETED_NODE, n->base.get_id());
+                msg.prepare_message(message::PERMANENTLY_DELETED_NODE, n->get_id());
                 comm.send(shard, msg.buf);
             }
             for (auto &e: n->out_edges) {

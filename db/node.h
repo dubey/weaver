@@ -30,6 +30,7 @@
 #include "db/cache_entry.h"
 #include "db/element.h"
 #include "db/edge.h"
+#include "db/shard_constants.h"
 
 namespace message
 {
@@ -71,7 +72,12 @@ namespace element
             uint64_t new_loc;
             uint64_t update_count;
             std::vector<double> migr_score;
+#ifdef WEAVER_CLDG
             std::vector<uint32_t> msg_count;
+#endif
+#ifdef WEAVER_NEW_CLDG
+            std::vector<uint32_t> msg_count;
+#endif
             bool updated, already_migr;
             uint32_t dependent_del;
             // queued requests, for the time when the node is marked in transit

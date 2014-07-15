@@ -45,7 +45,12 @@ message :: size(const db::element::edge &t)
 {
     uint64_t sz = size(t.base)
         + size(t.id)
+#ifdef WEAVER_CLDG
         + size(t.msg_count)
+#endif
+#ifdef WEAVER_NEW_CLDG
+        + size(t.msg_count)
+#endif
         + size(t.nbr);
     return sz;
 }
@@ -64,7 +69,12 @@ message :: size(const db::element::node &t)
     sz += size(t.id);
     sz += size(t.out_edges);
     sz += size(t.update_count);
+#ifdef WEAVER_CLDG
     sz += size(t.msg_count);
+#endif
+#ifdef WEAVER_NEW_CLDG
+    sz += size(t.msg_count);
+#endif
     sz += size(t.already_migr);
     sz += size(t.prog_states);;
     return sz;
@@ -83,7 +93,12 @@ void message :: pack_buffer(e::buffer::packer &packer, const db::element::edge &
 {
     pack_buffer(packer, t.base);
     pack_buffer(packer, t.id);
+#ifdef WEAVER_CLDG
     pack_buffer(packer, t.msg_count);
+#endif
+#ifdef WEAVER_NEW_CLDG
+    pack_buffer(packer, t.msg_count);
+#endif
     pack_buffer(packer, t.nbr);
 }
 
@@ -99,7 +114,12 @@ message :: pack_buffer(e::buffer::packer &packer, const db::element::node &t)
     pack_buffer(packer, t.id);
     pack_buffer(packer, t.out_edges);
     pack_buffer(packer, t.update_count);
+#ifdef WEAVER_CLDG
     pack_buffer(packer, t.msg_count);
+#endif
+#ifdef WEAVER_NEW_CLDG
+    pack_buffer(packer, t.msg_count);
+#endif
     pack_buffer(packer, t.already_migr);
     pack_buffer(packer, t.prog_states);
 }
@@ -111,8 +131,6 @@ message :: unpack_buffer(e::unpacker &unpacker, db::element::element &t)
     std::string handle;
     vc::vclock creat_time, del_time;
     std::vector<db::element::property> props;
-
-    t.set_id(id);
 
     unpack_buffer(unpacker, handle);
     t.set_handle(handle);
@@ -133,7 +151,12 @@ message :: unpack_buffer(e::unpacker &unpacker, db::element::edge &t)
 {
     unpack_buffer(unpacker, t.base);
     unpack_buffer(unpacker, t.id);
+#ifdef WEAVER_CLDG
     unpack_buffer(unpacker, t.msg_count);
+#endif
+#ifdef WEAVER_NEW_CLDG
+    unpack_buffer(unpacker, t.msg_count);
+#endif
     unpack_buffer(unpacker, t.nbr);
 
     t.migr_edge = true; // need ack from nbr when updated
@@ -141,8 +164,11 @@ message :: unpack_buffer(e::unpacker &unpacker, db::element::edge &t)
 void
 message :: unpack_buffer(e::unpacker &unpacker, db::element::edge *&t)
 {
-    vc::vclock junk;
-    t = new db::element::edge(0, "", junk, 0, 0);
+    vc::vclock temp_clk;
+    edge_id_t temp_edge_id(0);
+    edge_handle_t temp_handle("");
+    node_id_t temp_node_id(0);
+    t = new db::element::edge(temp_edge_id, temp_handle, temp_clk, 0, temp_node_id);
     unpack_buffer(unpacker, *t);
 }
 
@@ -162,7 +188,12 @@ message :: unpack_buffer(e::unpacker &unpacker, db::element::node &t)
     unpack_buffer(unpacker, t.id);
     unpack_buffer(unpacker, t.out_edges);
     unpack_buffer(unpacker, t.update_count);
+#ifdef WEAVER_CLDG
     unpack_buffer(unpacker, t.msg_count);
+#endif
+#ifdef WEAVER_NEW_CLDG
+    unpack_buffer(unpacker, t.msg_count);
+#endif
     unpack_buffer(unpacker, t.already_migr);
 
     // unpack node prog state

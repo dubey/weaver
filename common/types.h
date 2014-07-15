@@ -14,7 +14,7 @@
 #ifndef weaver_common_types_h_
 #define weaver_common_types_h_
 
-#define weaver_strict_type_check_
+//#define weaver_strict_type_check_
 #ifdef weaver_strict_type_check_
 
 #include <e/buffer.h>
