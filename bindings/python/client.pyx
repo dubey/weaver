@@ -127,16 +127,25 @@ cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
         vector[remote_node] path
 
 class ReachParams:
-    def __init__(self, returning=False, prev_node=RemoteNode(0,0), dest=0, hops=0, reachable=False, caching=False, edge_props=[], path=[]):
+    def __init__(self, returning=False, prev_node=None, dest=0, hops=0, reachable=False, caching=False, edge_props=None, path=None):
         self._search_cache = caching
         self._cache_key = dest
         self.returning = returning
-        self.prev_node = prev_node
+        if prev_node is None:
+            self.prev_node = RemoteNode(0,0)
+        else:
+            self.prev_node = prev_node
         self.dest= dest
         self.hops = hops
         self.reachable = reachable
-        self.edge_props = edge_props
-        self.path = path
+        if edge_props is None:
+            self.edge_props = []
+        else:
+            self.edge_props = edge_props
+        if path is None:
+            self.path = []
+        else:
+            self.path = path
 
 cdef extern from 'node_prog/pathless_reach_program.h' namespace 'node_prog':
     cdef cppclass pathless_reach_params:
@@ -148,12 +157,18 @@ cdef extern from 'node_prog/pathless_reach_program.h' namespace 'node_prog':
         bint reachable
 
 class PathlessReachParams:
-    def __init__(self, returning=False, prev_node=RemoteNode(0,0), dest=0, reachable=False, edge_props=[]):
+    def __init__(self, returning=False, prev_node=None, dest=0, reachable=False, edge_props=None):
         self.returning = returning
-        self.prev_node = prev_node
-        self.dest= dest
+        if prev_node is None:
+            self.prev_node = RemoteNode(0,0)
+        else:
+            self.prev_node = prev_node
+        self.dest = dest
         self.reachable = reachable
-        self.edge_props = edge_props
+        if edge_props is None:
+            self.edge_props = []
+        else:
+            self.edge_props = edge_props
 
 cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
     cdef cppclass clustering_params:
@@ -183,14 +198,20 @@ cdef extern from 'node_prog/two_neighborhood_program.h' namespace 'node_prog':
         vector[pair[uint64_t, string]] responses
 
 class TwoNeighborhoodParams:
-    def __init__(self, caching= False, cache_update = False, prop_key="", on_hop=0, outgoing=True, prev_node=RemoteNode(0,0), responses = []):
+    def __init__(self, caching=False, cache_update=False, prop_key="", on_hop=0, outgoing=True, prev_node=None, responses=None):
         self._search_cache = caching;
         self.cache_update = cache_update;
         self.prop_key = prop_key
         self.on_hop = on_hop
         self.outgoing = outgoing
-        self.prev_node = prev_node
-        self.responses = responses
+        if prev_node is None:
+            self.prev_node = RemoteNode(0,0)
+        else:
+            self.prev_node = prev_node
+        if responses is None:
+            self.responses = []
+        else:
+            self.responses = responses
 '''
 cdef extern from 'node_prog/dijkstra_program.h' namespace 'node_prog':
     cdef cppclass dijkstra_params:
@@ -228,9 +249,15 @@ cdef extern from 'node_prog/read_node_props_program.h' namespace 'node_prog':
         vector[pair[string, string]] node_props
 
 class ReadNodePropsParams:
-    def __init__(self, keys=[], node_props=[]):
-        self.keys = keys
-        self.node_props = node_props
+    def __init__(self, keys=None, node_props=None):
+        if keys is None:
+            self.keys = []
+        else:
+            self.keys = keys
+        if node_props is None:
+            self.node_props = []
+        else:
+            self.node_props = node_props
 
 cdef extern from 'node_prog/read_edges_props_program.h' namespace 'node_prog':
     cdef cppclass read_edges_props_params:
@@ -239,10 +266,19 @@ cdef extern from 'node_prog/read_edges_props_program.h' namespace 'node_prog':
         vector[pair[uint64_t, vector[pair[string, string]]]] edges_props
 
 class ReadEdgesPropsParams:
-    def __init__(self, edges=[], keys=[], edges_props=[]):
-        self.edges = edges
-        self.keys = keys
-        self.edges_props = edges_props
+    def __init__(self, edges=None, keys=None, edges_props=None):
+        if edges is None:
+            self.edges = []
+        else:
+            self.edges = edges
+        if edges_props is None:
+            self.edges_props = []
+        else:
+            self.edges_props = edges_props
+        if edges_props is None:
+            self.edges_props = []
+        else:
+            self.edges_props = edges_props
 
 cdef extern from 'node_prog/read_n_edges_program.h' namespace 'node_prog':
     cdef cppclass read_n_edges_params:
@@ -251,10 +287,16 @@ cdef extern from 'node_prog/read_n_edges_program.h' namespace 'node_prog':
         vector[uint64_t] return_edges
 
 class ReadNEdgesParams:
-    def __init__(self, num_edges=UINT64_MAX, edges_props=[], return_edges=[]):
+    def __init__(self, num_edges=UINT64_MAX, edges_props=None, return_edges=None):
         self.num_edges = num_edges
-        self.edges_props = edges_props
-        self.return_edges = return_edges
+        if edges_props is None:
+            self.edges_props = []
+        else:
+            self.edges_props = edges_props
+        if return_edges is None:
+            self.return_edges = []
+        else:
+            self.return_edges = return_edges
 
 cdef extern from 'node_prog/edge_count_program.h' namespace 'node_prog':
     cdef cppclass edge_count_params:
@@ -262,8 +304,11 @@ cdef extern from 'node_prog/edge_count_program.h' namespace 'node_prog':
         uint64_t edge_count
 
 class EdgeCountParams:
-    def __init__(self, edges_props=[], edge_count=0):
-        self.edges_props = edges_props
+    def __init__(self, edges_props=None, edge_count=0):
+        if edges_props is None:
+            self.edges_props = []
+        else:
+            self.edges_props = edges_props
         self.edge_count = edge_count
 
 cdef extern from 'node_prog/edge_get_program.h' namespace 'node_prog':
@@ -273,10 +318,16 @@ cdef extern from 'node_prog/edge_get_program.h' namespace 'node_prog':
         vector[uint64_t] return_edges
 
 class EdgeGetParams:
-    def __init__(self, nbr_id=UINT64_MAX, edges_props=[], return_edges=[]):
+    def __init__(self, nbr_id=UINT64_MAX, edges_props=None, return_edges=None):
         self.nbr_id = nbr_id
-        self.edges_props = edges_props
-        self.return_edges = return_edges
+        if edges_props is None:
+            self.edges_props = []
+        else:
+            self.edges_props = edges_props
+        if return_edges is None:
+            self.return_edges = []
+        else:
+            self.return_edges = return_edges
 
 cdef extern from 'node_prog/traverse_with_props.h' namespace 'node_prog':
     cdef cppclass traverse_props_params:
@@ -290,13 +341,25 @@ cdef extern from 'node_prog/traverse_with_props.h' namespace 'node_prog':
         unordered_set[edge_handle_t] return_edges
 
 class TraversePropsParams:
-    def __init__(self):
-        self.node_props = []
-        self.edge_props = []
-        self.return_nodes = []
-        self.return_edges = []
-        self.collect_nodes = False
-        self.collect_edges = False
+    def __init__(self, node_props=None, edge_props=None, return_nodes=None, return_edges=None, collect_n=False, collect_e=False):
+        if node_props is None:
+            self.node_props = []
+        else:
+            self.node_props = node_props
+        if edge_props is None:
+            self.edge_props = []
+        else:
+            self.edge_props = edge_props
+        if return_nodes is None:
+            self.return_nodes = []
+        else:
+            self.return_nodes = return_nodes
+        if return_edges is None:
+            self.return_edges = []
+        else:
+            self.return_edges = return_edges
+        self.collect_nodes = collect_n
+        self.collect_edges = collect_e
 
 cdef extern from 'client/weaver_client.h' namespace 'cl':
     cdef cppclass client:
@@ -536,6 +599,8 @@ cdef class Client:
         for rp in init_args:
             arg_pair.first = rp[0]
             arg_pair.second.prev_node = coordinator
+            arg_pair.second.collect_nodes = rp[1].collect_nodes
+            arg_pair.second.collect_edges = rp[1].collect_edges
             arg_pair.second.node_props.clear()
             arg_pair.second.edge_props.clear()
             for p_vec in rp[1].node_props:
@@ -560,31 +625,37 @@ cdef class Client:
             response.return_edges.append(e)
         return response
 
-    def traverse(self, start_node, node_props=[]):
+    def traverse(self, start_node, node_props=None):
         self.traverse_start_node = start_node
         self.traverse_node_props = []
         self.traverse_edge_props = []
-        self.traverse_node_props.append(node_props)
+        if node_props is None:
+            self.traverse_node_props.append([])
+        else:
+            self.traverse_node_props.append(node_props)
         return self
 
-    def out_edge(self, edge_props=[]):
-        self.traverse_edge_props.append(edge_props)
+    def out_edge(self, edge_props=None):
+        if edge_props is None:
+            self.traverse_edge_props.append([])
+        else:
+            self.traverse_edge_props.append(edge_props)
         return self
 
-    def node(self, node_props=[]):
-        self.traverse_node_props.append(node_props)
+    def node(self, node_props=None):
+        if node_props is None:
+            self.traverse_node_props.append([])
+        else:
+            self.traverse_node_props.append(node_props)
         return self
 
     def execute(self, collect_nodes=False, collect_edges=False):
         num_node_props = len(self.traverse_node_props)
         num_edge_props = len(self.traverse_edge_props)
         assert ((num_node_props == (num_edge_props+1)) or (num_node_props == num_edge_props))
-        params = TraversePropsParams()
-        params.node_props = self.traverse_node_props
-        params.edge_props = self.traverse_edge_props
-        params.collect_nodes = collect_nodes
-        params.collect_edges = collect_edges
-        return self.traverse_props([(self.traverse_start_node, params)]).return_nodes
+        params = TraversePropsParams(node_props=self.traverse_node_props, edge_props=self.traverse_edge_props, collect_n=collect_nodes, collect_e=collect_edges)
+        response = self.traverse_props([(self.traverse_start_node, params)])
+        return response.return_nodes + response.return_edges
 
     def collect(self):
         return self.execute(collect_nodes=True, collect_edges=True)

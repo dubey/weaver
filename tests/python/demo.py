@@ -79,6 +79,20 @@ print 'List of users who like egs\'s posts:'
 for user in return_nodes:
     print '\t' + user
 
+
+# all 2-hop nodes and edges
+two_hop = c.traverse('egs').out_edge().node().out_edge().node().collect()
+print 'List of 2-hop nodes and edges from egs'
+for elem in two_hop:
+    print '\t' + elem
+
+# 2-hop nodes
+two_hop_nodes = c.traverse('egs').out_edge().node().out_edge().node().collect_nodes()
+print 'List of 2-hop nodes from egs'
+for elem in two_hop_nodes:
+    print '\t' + elem
+
+
 c.begin_tx()
 print 'default created node: ' + c.create_node()
 print 'default created node: ' + c.create_node()
