@@ -24,6 +24,8 @@ using node_prog::cache_response;
 // params
 traverse_props_params :: traverse_props_params()
     : returning(false)
+    , collect_nodes(false)
+    , collect_edges(false)
 { }
 
 uint64_t
@@ -33,7 +35,10 @@ traverse_props_params :: size() const
          + message::size(prev_node)
          + message::size(node_props)
          + message::size(edge_props)
-         + message::size(return_nodes); 
+         + message::size(collect_nodes)
+         + message::size(collect_edges)
+         + message::size(return_nodes)
+         + message::size(return_edges);
 }
 
 void
@@ -43,7 +48,10 @@ traverse_props_params :: pack(e::buffer::packer &packer) const
     message::pack_buffer(packer, prev_node);
     message::pack_buffer(packer, node_props);
     message::pack_buffer(packer, edge_props);
+    message::pack_buffer(packer, collect_nodes);
+    message::pack_buffer(packer, collect_edges);
     message::pack_buffer(packer, return_nodes);
+    message::pack_buffer(packer, return_edges);
 }
 
 void
@@ -53,7 +61,10 @@ traverse_props_params :: unpack(e::unpacker &unpacker)
     message::unpack_buffer(unpacker, prev_node);
     message::unpack_buffer(unpacker, node_props);
     message::unpack_buffer(unpacker, edge_props);
+    message::unpack_buffer(unpacker, collect_nodes);
+    message::unpack_buffer(unpacker, collect_edges);
     message::unpack_buffer(unpacker, return_nodes);
+    message::unpack_buffer(unpacker, return_edges);
 }
 
 // state
@@ -67,7 +78,9 @@ traverse_props_state :: size() const
 {
     return message::size(visited)
          + message::size(out_count)
-         + message::size(prev_node);
+         + message::size(prev_node)
+         + message::size(return_nodes)
+         + message::size(return_edges);
 }
 
 void
@@ -76,6 +89,8 @@ traverse_props_state :: pack(e::buffer::packer &packer) const
     message::pack_buffer(packer, visited);
     message::pack_buffer(packer, out_count);
     message::pack_buffer(packer, prev_node);
+    message::pack_buffer(packer, return_nodes);
+    message::pack_buffer(packer, return_edges);
 }
 
 void
@@ -84,6 +99,8 @@ traverse_props_state :: unpack(e::unpacker &unpacker)
     message::unpack_buffer(unpacker, visited);
     message::unpack_buffer(unpacker, out_count);
     message::unpack_buffer(unpacker, prev_node);
+    message::unpack_buffer(unpacker, return_nodes);
+    message::unpack_buffer(unpacker, return_edges);
 }
 
 std::pair<search_type, std::vector<std::pair<db::element::remote_node, traverse_props_params>>>
@@ -99,7 +116,7 @@ node_prog :: traverse_props_node_program(node &n,
 
     if (!params.returning) {
         // request spreading out
-        assert(params.node_props.size() == (params.edge_props.size()+1));
+        //assert(params.node_props.size() == (params.edge_props.size()+1));
 
         if (state.visited || !n.has_all_properties(params.node_props.front())) {
             // either this node already visited
@@ -115,16 +132,30 @@ node_prog :: traverse_props_node_program(node &n,
             if (params.edge_props.empty()) {
                 // reached the max hop, return now
                 assert(params.node_props.empty());
-                assert(params.return_nodes.empty());
-                params.return_nodes.emplace_back(n.get_handle());
+                params.return_nodes.emplace(n.get_handle());
             } else {
+                if (params.collect_nodes) {
+                    params.return_nodes.emplace(n.get_handle());
+                }
                 auto edge_props = params.edge_props.front();
                 params.edge_props.pop_front();
+                
+                bool collect_edges = params.collect_edges;
+                bool propagate = !params.node_props.empty();
+                if (!propagate) {
+                    assert(params.edge_props.empty());
+                    collect_edges = true;
+                }
 
                 for (edge &e: n.get_edges()) {
                     if (e.has_all_properties(edge_props)) {
-                        next.emplace_back(std::make_pair(e.get_neighbor(), params));
-                        state.out_count++;
+                        if (collect_edges) {
+                            params.return_edges.emplace(e.get_handle());
+                        }
+                        if (propagate) {
+                            next.emplace_back(std::make_pair(e.get_neighbor(), params));
+                            state.out_count++;
+                        }
                     }
                 }
             }
@@ -143,16 +174,16 @@ node_prog :: traverse_props_node_program(node &n,
 
     } else {
         // request returning to start node
-        for (std::string &n: params.return_nodes) {
+        for (const node_handle_t &n: params.return_nodes) {
             state.return_nodes.emplace(n);
+        }
+        for (const edge_handle_t &e: params.return_edges) {
+            state.return_edges.emplace(e);
         }
 
         if (--state.out_count == 0) {
-            params.return_nodes.clear();
-            params.return_nodes.reserve(state.return_nodes.size());
-            for (const std::string &n: state.return_nodes) {
-                params.return_nodes.emplace_back(n);
-            }
+            params.return_nodes = std::move(state.return_nodes);
+            params.return_edges = std::move(state.return_edges);
             next.emplace_back(std::make_pair(state.prev_node, params));
         }
     }

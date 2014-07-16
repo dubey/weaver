@@ -55,6 +55,7 @@ namespace element
             bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
             void set_id(edge_id_t &_id) { id = _id; }
             edge_id_t get_id() const { return id; }
+            edge_handle_t get_handle() const { return base.get_handle(); }
     };
 }
 }

@@ -56,6 +56,18 @@ cdef extern from '<vector>' namespace 'std':
         void reserve(size_t)
         void clear()
 
+cdef extern from '<unordered_set>' namespace 'std':
+    cdef cppclass unordered_set[T]:
+        cppclass iterator:
+            T operator*()
+            iterator operator++()
+            bint operator==(iterator)
+            bint operator!=(iterator)
+        unordered_set()
+        iterator begin()
+        iterator end()
+        size_t size()
+
 cdef extern from '<deque>' namespace 'std':
     cdef cppclass deque[T]:
         cppclass iterator:
@@ -80,6 +92,13 @@ cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
         TWO_NEIGHBORHOOD
         READ_NODE_PROPS
         READ_EDGES_PROPS
+
+cdef extern from 'common/types.h':
+    ctypedef uint64_t node_id_t
+    ctypedef uint64_t edge_id_t
+    ctypedef string node_handle_t
+    ctypedef string edge_handle_t
+    ctypedef uint64_t cache_key_t
 
 cdef extern from 'db/remote_node.h' namespace 'db::element':
     cdef cppclass remote_node:
@@ -265,13 +284,17 @@ cdef extern from 'node_prog/traverse_with_props.h' namespace 'node_prog':
         remote_node prev_node
         deque[vector[pair[string, string]]] node_props
         deque[vector[pair[string, string]]] edge_props
-        vector[string] return_nodes
+        bint collect_nodes
+        bint collect_edges
+        unordered_set[node_handle_t] return_nodes
+        unordered_set[edge_handle_t] return_edges
 
 class TraversePropsParams:
-    def __init__(self, node_props=[[]], edge_props=[], return_nodes=[]):
+    def __init__(self, node_props=[[]], edge_props=[], return_nodes=[], return_edges=[]):
         self.node_props = node_props
         self.edge_props = edge_props
         self.return_nodes = return_nodes
+        self.return_edges = return_edges
 
 cdef extern from 'client/weaver_client.h' namespace 'cl':
     cdef cppclass client:
@@ -528,7 +551,11 @@ cdef class Client:
             c_args.push_back(arg_pair)
         with nogil:
             c_rp = self.thisptr.traverse_props_program(c_args)
-        response = TraversePropsParams(return_nodes=c_rp.return_nodes)
+        response = TraversePropsParams(return_nodes=[], return_edges=[])
+        for n in c_rp.return_nodes:
+            response.return_nodes.append(n)
+        for e in c_rp.return_edges:
+            response.return_edges.append(e)
         return response
 
     def traverse(self, start_node, node_props=[]):
