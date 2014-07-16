@@ -290,11 +290,13 @@ cdef extern from 'node_prog/traverse_with_props.h' namespace 'node_prog':
         unordered_set[edge_handle_t] return_edges
 
 class TraversePropsParams:
-    def __init__(self, node_props=[[]], edge_props=[], return_nodes=[], return_edges=[]):
-        self.node_props = node_props
-        self.edge_props = edge_props
-        self.return_nodes = return_nodes
-        self.return_edges = return_edges
+    def __init__(self):
+        self.node_props = []
+        self.edge_props = []
+        self.return_nodes = []
+        self.return_edges = []
+        self.collect_nodes = False
+        self.collect_edges = False
 
 cdef extern from 'client/weaver_client.h' namespace 'cl':
     cdef cppclass client:
@@ -551,7 +553,7 @@ cdef class Client:
             c_args.push_back(arg_pair)
         with nogil:
             c_rp = self.thisptr.traverse_props_program(c_args)
-        response = TraversePropsParams(return_nodes=[], return_edges=[])
+        response = TraversePropsParams()
         for n in c_rp.return_nodes:
             response.return_nodes.append(n)
         for e in c_rp.return_edges:
@@ -573,10 +575,25 @@ cdef class Client:
         self.traverse_node_props.append(node_props)
         return self
 
-    def execute(self):
-        assert len(self.traverse_node_props) == (len(self.traverse_edge_props)+1)
-        params = TraversePropsParams(node_props=self.traverse_node_props, edge_props=self.traverse_edge_props)
+    def execute(self, collect_nodes=False, collect_edges=False):
+        num_node_props = len(self.traverse_node_props)
+        num_edge_props = len(self.traverse_edge_props)
+        assert ((num_node_props == (num_edge_props+1)) or (num_node_props == num_edge_props))
+        params = TraversePropsParams()
+        params.node_props = self.traverse_node_props
+        params.edge_props = self.traverse_edge_props
+        params.collect_nodes = collect_nodes
+        params.collect_edges = collect_edges
         return self.traverse_props([(self.traverse_start_node, params)]).return_nodes
+
+    def collect(self):
+        return self.execute(collect_nodes=True, collect_edges=True)
+
+    def collect_nodes(self):
+        return self.execute(collect_nodes=True)
+
+    def collect_edges(self):
+        return self.execute(collect_edges=True)
 
     def start_migration(self):
         self.thisptr.start_migration()
