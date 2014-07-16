@@ -284,3 +284,8 @@ EXTRA_DIST+=	tests/python/line_reachability.py
 EXTRA_DIST+=	tests/python/read_only_vertex_bench.py
 EXTRA_DIST+=	tests/python/star_cache_testing.py
 EXTRA_DIST+=	tests/python/two_neighborhood_testing.py
+
+bin_PROGRAMS+=	weaver-parse-config
+weaver_parse_config_SOURCES=	common/config_constants.cc \
+								startup_scripts/parse_config.cc
+
