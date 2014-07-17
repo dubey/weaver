@@ -31,9 +31,11 @@ extern std::vector<std::pair<char*, uint16_t>> HyperdexDaemons;
 
 extern char *KronosIpaddr;
 extern uint16_t KronosPort;
+extern std::vector<std::pair<char*, uint16_t>> KronosLocs;
 
 extern char *ServerManagerIpaddr;
 extern uint16_t ServerManagerPort;
+extern std::vector<std::pair<char*, uint16_t>> ServerManagerLocs;
 
 void init_config_constants(const char *config_file_name);
 

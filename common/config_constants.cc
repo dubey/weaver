@@ -143,25 +143,19 @@ init_config_constants(const char *config_file_name)
                     yaml_token_delete(&token);
                     PARSE_VALUE_IPADDR_PORT_BLOCK(HyperdexDaemons);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "kronos_ipaddr", 13) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, "kronos", 6) == 0) {
                     yaml_token_delete(&token);
-                    PARSE_VALUE_SCALAR;
-                    PARSE_IPADDR(KronosIpaddr);
+                    PARSE_VALUE_IPADDR_PORT_BLOCK(KronosLocs);
+                    assert(!KronosLocs.empty());
+                    KronosIpaddr = KronosLocs[0].first;
+                    KronosPort = KronosLocs[0].second;
 
-                } else if (strncmp((const char*)token.data.scalar.value, "kronos_port", 11) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, "server_manager", 14) == 0) {
                     yaml_token_delete(&token);
-                    PARSE_VALUE_SCALAR;
-                    PARSE_INT(KronosPort);
-
-                } else if (strncmp((const char*)token.data.scalar.value, "server_manager_ipaddr", 21) == 0) {
-                    yaml_token_delete(&token);
-                    PARSE_VALUE_SCALAR;
-                    PARSE_IPADDR(ServerManagerIpaddr);
-
-                } else if (strncmp((const char*)token.data.scalar.value, "server_manager_port", 19) == 0) {
-                    yaml_token_delete(&token);
-                    PARSE_VALUE_SCALAR;
-                    PARSE_INT(ServerManagerPort);
+                    PARSE_VALUE_IPADDR_PORT_BLOCK(ServerManagerLocs);
+                    assert(!ServerManagerLocs.empty());
+                    ServerManagerIpaddr = ServerManagerLocs[0].first;
+                    ServerManagerPort = ServerManagerLocs[0].second;
 
                 } else {
                     WDEBUG << "unexpected key " << token.data.scalar.value << std::endl;

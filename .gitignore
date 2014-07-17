@@ -39,3 +39,4 @@ tests/cpp/.dirstamp
 tests/hyperdex_test
 weaver-shard
 weaver-timestamper
+weaver-parse-config

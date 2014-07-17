@@ -31,8 +31,10 @@ uint16_t HyperdexCoordPort;
 std::vector<std::pair<char*, uint16_t>> HyperdexDaemons;
 char *KronosIpaddr;
 uint16_t KronosPort;
+std::vector<std::pair<char*, uint16_t>> KronosLocs;
 char *ServerManagerIpaddr;
 uint16_t ServerManagerPort;
+std::vector<std::pair<char*, uint16_t>> ServerManagerLocs;
 uint16_t MaxCacheEntries;
 
 using cl::client;

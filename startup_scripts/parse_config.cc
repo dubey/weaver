@@ -30,8 +30,10 @@ uint16_t HyperdexCoordPort;
 std::vector<std::pair<char*, uint16_t>> HyperdexDaemons;
 char *KronosIpaddr;
 uint16_t KronosPort;
+std::vector<std::pair<char*, uint16_t>> KronosLocs;
 char *ServerManagerIpaddr;
 uint16_t ServerManagerPort;
+std::vector<std::pair<char*, uint16_t>> ServerManagerLocs;
 uint16_t MaxCacheEntries;
 
 int
@@ -82,15 +84,27 @@ main(int argc, const char *argv[])
         }
         std::cout << std::endl;
     } else if (config == "kronos_ipaddr") {
-        std::cout << KronosIpaddr << std::endl;
+        for (auto &p: KronosLocs) {
+            std::cout << p.first << " ";
+        }
+        std::cout << std::endl;
     } else if (config == "kronos_port") {
-        std::cout << KronosPort << std::endl;
+        for (auto &p: KronosLocs) {
+            std::cout << p.second << " ";
+        }
+        std::cout << std::endl;
     } else if (config == "server_manager_ipaddr") {
-        std::cout << ServerManagerIpaddr << std::endl;
+        for (auto &p: ServerManagerLocs) {
+            std::cout << p.first << " ";
+        }
+        std::cout << std::endl;
     } else if (config == "server_manager_port") {
-        std::cout << ServerManagerPort << std::endl;
+        for (auto &p: ServerManagerLocs) {
+            std::cout << p.second << " ";
+        }
+        std::cout << std::endl;
     } else {
-        std::cout << "fail_config_parse" << std::endl;
+        std::cout << "bad config name" << std::endl;
     }
 
     return 0;
