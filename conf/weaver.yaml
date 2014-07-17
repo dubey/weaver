@@ -4,6 +4,9 @@ num_backups : 0
 max_cache_entries : 0
 hyperdex_coord_ipaddr : 127.0.0.1
 hyperdex_coord_port : 7982
+hyperdex_daemons:
+    - 127.0.0.1 : 8012
+    - 127.0.0.1 : 8013
 kronos_ipaddr : 127.0.0.1
 kronos_port : 1992
 server_manager_ipaddr : 127.0.0.1

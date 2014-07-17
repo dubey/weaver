@@ -4,6 +4,24 @@
 # Copyright (C) 2014 Ayush Dubey <dubey@cs.cornell.edu>
 #
 
+# get config file location
+if [ $# -eq 1 ]
+then
+    config_file_args="-f $1"
+else
+    config_file_args=""
+fi
+
+# get config params
+hyperdex_coord_ipaddr=$(weaver-parse-config -c hyperdex_coord_ipaddr $config_file_args)
+hyperdex_coord_port=$(weaver-parse-config -c hyperdex_coord_port $config_file_args)
+$(weaver-parse-config -c  $config_file_args)
+$(weaver-parse-config -c  $config_file_args)
+$(weaver-parse-config -c  $config_file_args)
+$(weaver-parse-config -c  $config_file_args)
+$(weaver-parse-config -c  $config_file_args)
+$(weaver-parse-config -c  $config_file_args)
+
 # hyperdex
 mkdir -p hyperdex_start/coord
 mkdir -p hyperdex_start/daemon

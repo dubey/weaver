@@ -41,6 +41,7 @@ uint64_t NumActualServers;
 uint64_t ShardIdIncr;
 char *HyperdexCoordIpaddr;
 uint16_t HyperdexCoordPort;
+std::vector<std::pair<char*, uint16_t>> HyperdexDaemons;
 char *KronosIpaddr;
 uint16_t KronosPort;
 char *ServerManagerIpaddr;

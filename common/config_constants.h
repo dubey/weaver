@@ -16,6 +16,7 @@
 #define weaver_common_config_constants_h_
 
 #include <stdint.h>
+#include <vector>
 
 extern uint64_t NumVts;
 extern uint64_t NumShards;
@@ -26,6 +27,7 @@ extern uint64_t ShardIdIncr;
 
 extern char *HyperdexCoordIpaddr;
 extern uint16_t HyperdexCoordPort;
+extern std::vector<std::pair<char*, uint16_t>> HyperdexDaemons;
 
 extern char *KronosIpaddr;
 extern uint16_t KronosPort;

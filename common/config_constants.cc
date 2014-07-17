@@ -48,88 +48,144 @@ init_config_constants(const char *config_file_name)
 
     yaml_token_t token;
 
-#define PARSE_FILLER \
+#define PARSE_ASSERT_TYPE(t) \
     yaml_parser_scan(&parser, &token); \
-    assert(token.type == YAML_VALUE_TOKEN); \
-    yaml_parser_scan(&parser, &token); \
-    assert(token.type == YAML_SCALAR_TOKEN);
+    assert(token.type == t); \
+
+#define PARSE_ASSERT_TYPE_DELETE(t) \
+    PARSE_ASSERT_TYPE(t); \
+    yaml_token_delete(&token);
+
+#define PARSE_KEY_SCALAR \
+    PARSE_ASSERT_TYPE_DELETE(YAML_KEY_TOKEN); \
+    PARSE_ASSERT_TYPE(YAML_SCALAR_TOKEN);
+
+#define PARSE_VALUE_SCALAR \
+    PARSE_ASSERT_TYPE_DELETE(YAML_VALUE_TOKEN); \
+    PARSE_ASSERT_TYPE(YAML_SCALAR_TOKEN);
 
 #define PARSE_INT(X) \
-    X = atoi((const char*)token.data.scalar.value);
+    X = atoi((const char*)token.data.scalar.value); \
+    yaml_token_delete(&token);
 
 #define PARSE_IPADDR(X) \
     X = (char*)malloc(32); \
-    strncpy(X, (const char*)token.data.scalar.value, 32);
+    strncpy(X, (const char*)token.data.scalar.value, 32); \
+    yaml_token_delete(&token);
+
+#define PARSE_VALUE_IPADDR_PORT_BLOCK(v) \
+    PARSE_ASSERT_TYPE_DELETE(YAML_VALUE_TOKEN); \
+    PARSE_ASSERT_TYPE_DELETE(YAML_BLOCK_SEQUENCE_START_TOKEN); \
+    while (true) { \
+        yaml_parser_scan(&parser, &token); \
+        if (token.type == YAML_BLOCK_END_TOKEN) { \
+            yaml_token_delete(&token); \
+            break; \
+        } \
+        assert(token.type == YAML_BLOCK_ENTRY_TOKEN); \
+        yaml_token_delete(&token); \
+        PARSE_ASSERT_TYPE_DELETE(YAML_BLOCK_MAPPING_START_TOKEN); \
+        PARSE_ASSERT_TYPE_DELETE(YAML_KEY_TOKEN); \
+        PARSE_ASSERT_TYPE(YAML_SCALAR_TOKEN); \
+        char *ipaddr; \
+        PARSE_IPADDR(ipaddr) \
+        PARSE_VALUE_SCALAR \
+        uint16_t port; \
+        PARSE_INT(port) \
+        v.emplace_back(std::make_pair(ipaddr, port)); \
+        PARSE_ASSERT_TYPE_DELETE(YAML_BLOCK_END_TOKEN); \
+    }
+
+    PARSE_ASSERT_TYPE_DELETE(YAML_STREAM_START_TOKEN);
+    PARSE_ASSERT_TYPE_DELETE(YAML_BLOCK_MAPPING_START_TOKEN);
 
     do {
         yaml_parser_scan(&parser, &token);
+
         switch (token.type) {
 
+            case YAML_BLOCK_END_TOKEN:
+                break;
+
             case YAML_KEY_TOKEN:
-                yaml_parser_scan(&parser, &token);
-                assert(token.type == YAML_SCALAR_TOKEN);
+                PARSE_ASSERT_TYPE(YAML_SCALAR_TOKEN);
                 if (strncmp((const char*)token.data.scalar.value, "num_vts", 7) == 0) {
-                    PARSE_FILLER;
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
                     PARSE_INT(NumVts);
 
                 } else if (strncmp((const char*)token.data.scalar.value, "num_shards", 10) == 0) {
-                    PARSE_FILLER;
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
                     PARSE_INT(NumShards);
 
                 } else if (strncmp((const char*)token.data.scalar.value, "num_backups", 11) == 0) {
-                    PARSE_FILLER;
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
                     PARSE_INT(NumBackups);
 
                 } else if (strncmp((const char*)token.data.scalar.value, "max_cache_entries", 17) == 0) {
-                    PARSE_FILLER;
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
                     PARSE_INT(MaxCacheEntries);
 
                 } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_coord_ipaddr", 21) == 0) {
-                    PARSE_FILLER;
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
                     PARSE_IPADDR(HyperdexCoordIpaddr);
 
                 } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_coord_port", 19) == 0) {
-                    PARSE_FILLER;
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
                     PARSE_INT(HyperdexCoordPort);
 
+                } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_daemons", 16) == 0) {
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_IPADDR_PORT_BLOCK(HyperdexDaemons);
+
                 } else if (strncmp((const char*)token.data.scalar.value, "kronos_ipaddr", 13) == 0) {
-                    PARSE_FILLER;
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
                     PARSE_IPADDR(KronosIpaddr);
 
                 } else if (strncmp((const char*)token.data.scalar.value, "kronos_port", 11) == 0) {
-                    PARSE_FILLER;
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
                     PARSE_INT(KronosPort);
 
                 } else if (strncmp((const char*)token.data.scalar.value, "server_manager_ipaddr", 21) == 0) {
-                    PARSE_FILLER;
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
                     PARSE_IPADDR(ServerManagerIpaddr);
 
                 } else if (strncmp((const char*)token.data.scalar.value, "server_manager_port", 19) == 0) {
-                    PARSE_FILLER;
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
                     PARSE_INT(ServerManagerPort);
 
                 } else {
-                    WDEBUG << "unexpected token" << std::endl;
+                    WDEBUG << "unexpected key " << token.data.scalar.value << std::endl;
                     return;
                 }
                 break;
 
             default:
+                WDEBUG << "unexpected token type " << token.type << std::endl;
+                yaml_token_delete(&token);
                 break;
         }
 
-        if (token.type != YAML_STREAM_END_TOKEN) {
-            yaml_token_delete(&token);
-        }
-    } while (token.type != YAML_STREAM_END_TOKEN);
+    } while (token.type != YAML_BLOCK_END_TOKEN);
     yaml_token_delete(&token);
+    PARSE_ASSERT_TYPE_DELETE(YAML_STREAM_END_TOKEN);
 
     yaml_parser_delete(&parser);
     fclose(config_file);
 
-#undef PARSE_FILLER
+#undef PARSE_VALUE_SCALAR
 #undef PARSE_INT
 #undef PARSE_IPADDR
+#undef PARSE_VALUE_IPADDR_PORT_BLOCK
 
     assert(UINT64_MAX != NumVts);
     assert(UINT64_MAX != NumShards);
@@ -137,6 +193,7 @@ init_config_constants(const char *config_file_name)
     assert(UINT16_MAX != MaxCacheEntries);
     assert(NULL != HyperdexCoordIpaddr);
     assert(UINT16_MAX != HyperdexCoordPort);
+    assert(!HyperdexDaemons.empty());
     assert(NULL != KronosIpaddr);
     assert(UINT16_MAX != KronosPort);
     assert(NULL != ServerManagerIpaddr);

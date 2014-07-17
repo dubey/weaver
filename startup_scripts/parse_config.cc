@@ -27,6 +27,7 @@ uint64_t NumActualServers;
 uint64_t ShardIdIncr;
 char *HyperdexCoordIpaddr;
 uint16_t HyperdexCoordPort;
+std::vector<std::pair<char*, uint16_t>> HyperdexDaemons;
 char *KronosIpaddr;
 uint16_t KronosPort;
 char *ServerManagerIpaddr;
@@ -70,6 +71,10 @@ main(int argc, const char *argv[])
         std::cout << HyperdexCoordIpaddr << std::endl;
     } else if (config == "hyperdex_coord_port") {
         std::cout << HyperdexCoordPort << std::endl;
+    } else if (config == "hyperdex_daemons") {
+        for (auto &p: HyperdexDaemons) {
+            std::cout << p.first << ":" << p.second << std::endl;
+        }
     } else if (config == "kronos_ipaddr") {
         std::cout << KronosIpaddr << std::endl;
     } else if (config == "kronos_port") {
