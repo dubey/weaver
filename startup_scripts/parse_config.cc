@@ -71,10 +71,16 @@ main(int argc, const char *argv[])
         std::cout << HyperdexCoordIpaddr << std::endl;
     } else if (config == "hyperdex_coord_port") {
         std::cout << HyperdexCoordPort << std::endl;
-    } else if (config == "hyperdex_daemons") {
+    } else if (config == "hyperdex_daemons_ipaddr") {
         for (auto &p: HyperdexDaemons) {
-            std::cout << p.first << ":" << p.second << std::endl;
+            std::cout << p.first << " ";
         }
+        std::cout << std::endl;
+    } else if (config == "hyperdex_daemons_port") {
+        for (auto &p: HyperdexDaemons) {
+            std::cout << p.second << " ";
+        }
+        std::cout << std::endl;
     } else if (config == "kronos_ipaddr") {
         std::cout << KronosIpaddr << std::endl;
     } else if (config == "kronos_port") {

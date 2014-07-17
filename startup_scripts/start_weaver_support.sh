@@ -15,30 +15,43 @@ fi
 # get config params
 hyperdex_coord_ipaddr=$(weaver-parse-config -c hyperdex_coord_ipaddr $config_file_args)
 hyperdex_coord_port=$(weaver-parse-config -c hyperdex_coord_port $config_file_args)
-$(weaver-parse-config -c  $config_file_args)
-$(weaver-parse-config -c  $config_file_args)
-$(weaver-parse-config -c  $config_file_args)
-$(weaver-parse-config -c  $config_file_args)
-$(weaver-parse-config -c  $config_file_args)
-$(weaver-parse-config -c  $config_file_args)
+hyperdex_daemons_ipaddr=($(weaver-parse-config -c hyperdex_daemons_ipaddr $config_file_args))
+hyperdex_daemons_port=($(weaver-parse-config -c hyperdex_daemons_port $config_file_args))
+server_manager_ipaddr=$(weaver-parse-config -c server_manager_ipaddr $config_file_args)
+server_manager_port=$(weaver-parse-config -c server_manager_port $config_file_args)
+kronos_ipaddr=$(weaver-parse-config -c kronos_ipaddr $config_file_args)
+kronos_port=$(weaver-parse-config -c kronos_port $config_file_args)
 
 # hyperdex
 mkdir -p hyperdex_start/coord
-mkdir -p hyperdex_start/daemon
 cd hyperdex_start
 
+echo "Starting HyperDex coordinator at location $hyperdex_coord_ipaddr : $hyperdex_coord_port"
 cd coord
 rm -f *.log *.sst *.old CURRENT  LOCK  LOG  MANIFEST* replicant-daemon-*
-hyperdex coordinator -l 127.0.0.1 -p 7982
+hyperdex coordinator -l $hyperdex_coord_ipaddr -p $hyperdex_coord_port > /dev/null 2>&1
 sleep 2
 
-cd ../daemon
-rm -f *.log *.sst CURRENT  LOCK  LOG  MANIFEST-000002 hyperdex-daemon-*
-hyperdex daemon --listen=127.0.0.1 --listen-port=8012 --coordinator=127.0.0.1 --coordinator-port=7982
+cd ..
+num_daemons=${#hyperdex_daemons_ipaddr[*]}
+for i in $(seq 1 $num_daemons);
+do
+    idx=$(($i-1))
+    echo "Starting HyperDex daemon $i at location ${hyperdex_daemons_ipaddr[$idx]} : ${hyperdex_daemons_port[$idx]}"
+    mkdir -p daemon$idx
+    cd daemon$idx
+    rm -f *.log *.sst CURRENT  LOCK  LOG  MANIFEST-000002 hyperdex-daemon-*
+    hyperdex daemon --listen=${hyperdex_daemons_ipaddr[$idx]} --listen-port=${hyperdex_daemons_port[$idx]} \
+                    --coordinator=$hyperdex_coord_ipaddr --coordinator-port=$hyperdex_coord_port \
+                    > /dev/null 2>&1
+    cd ..
+done
+
 sleep 1
 
-cd ..
-hyperdex add-space -h 127.0.0.1 -p 7982 << EOF
+echo 'Adding HyperDex spaces'
+
+hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
 space weaver_loc_mapping
 key node
 attributes
@@ -48,7 +61,7 @@ create 8 partitions
 tolerate 2 failures
 EOF
 
-hyperdex add-space -h 127.0.0.1 -p 7982 << EOF
+hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
 space weaver_client_mapping
 key str_handle
 attributes
@@ -57,7 +70,7 @@ create 8 partitions
 tolerate 2 failures
 EOF
 
-hyperdex add-space -h 127.0.0.1 -p 7982 << EOF
+hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
 space weaver_graph_data
 key node
 attributes
@@ -71,7 +84,7 @@ attributes
 tolerate 2 failures
 EOF
 
-hyperdex add-space -h 127.0.0.1 -p 7982 << EOF
+hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
 space weaver_shard_data
 key shard
 attributes
@@ -80,7 +93,7 @@ attributes
 tolerate 2 failures
 EOF
 
-hyperdex add-space -h 127.0.0.1 -p 7982 << EOF
+hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
 space weaver_vt_tx_set_data
 key vt
 attributes
@@ -88,7 +101,7 @@ attributes
 tolerate 2 failures
 EOF
 
-hyperdex add-space -h 127.0.0.1 -p 7982 << EOF
+hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
 space weaver_vt_tx_map_data
 key tx_id
 attributes
@@ -103,14 +116,15 @@ cd ..
 mkdir -p server_manager_start/daemon1
 mkdir -p server_manager_start/client
 
+echo "Starting server manager at location $server_manager_ipaddr : $server_manager_port"
 cd server_manager_start
 cd daemon1
 rm -f *.log *.sst *.old CURRENT  LOCK  LOG  MANIFEST* replicant-daemon-*
-replicant daemon --daemon --listen 127.0.0.1 --listen-port 2002
+replicant daemon --daemon --listen $server_manager_ipaddr --listen-port $server_manager_port > /dev/null 2>&1
 sleep 1
 
 cd ../client
-replicant new-object -h 127.0.0.1 -p 2002 weaver /usr/local/lib/libweaverservermanager.so
+replicant new-object -h $server_manager_ipaddr -p $server_manager_port weaver /usr/local/lib/libweaverservermanager.so
 
 
 # kronos
@@ -118,13 +132,16 @@ cd ../..
 mkdir -p kronos_start/daemon1
 mkdir -p kronos_start/client
 
+echo "Starting Kronos at location $kronos_ipaddr : $kronos_port"
 cd kronos_start
 cd daemon1
 rm -f *.log *.sst *.old CURRENT  LOCK  LOG  MANIFEST* replicant-daemon-*
-replicant daemon --daemon --listen 127.0.0.1 --listen-port 1992
+replicant daemon --daemon --listen $kronos_ipaddr --listen-port $kronos_port > /dev/null 2>&1
 sleep 1
 
 cd ../client
-replicant new-object -h 127.0.0.1 -p 1992 chronosd /usr/local/lib/libchronosd.so
+replicant new-object -h $kronos_ipaddr -p $kronos_port chronosd /usr/local/lib/libchronosd.so
 
 cd ../../
+
+echo 'Done startup.'
