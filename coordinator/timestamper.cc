@@ -64,20 +64,20 @@ static po6::threads::mutex tx_count_mtx;
 bool
 unpack_tx(message::message &msg, uint64_t client_id, transaction::pending_tx &tx, nmap::nmap_stub *nmstub);
 void send_abort(uint64_t cl_id);
-bool lock_del_elems(std::unordered_set<uint64_t> &del_elems);
-void unlock_del_elems(std::unordered_set<uint64_t> &del_elems);
+bool lock_del_elems(std::unordered_set<std::string> &del_elems);
+void unlock_del_elems(std::unordered_set<std::string> &del_elems);
 void prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
     nmap::nmap_stub *nmstub,
     coordinator::hyper_stub *hstub);
 void release_dist_del_locks(const std::vector<bool> &locks,
-    std::unordered_set<uint64_t> &del_elems);
+    std::unordered_set<std::string> &del_elems);
 void release_locks_and_abort(uint64_t tx_id, coordinator::hyper_stub *hstub);
 void done_prepare_tx_step1(uint64_t tx_id,
     uint64_t from_vt,
     nmap::nmap_stub *nmstub,
     coordinator::hyper_stub *hstub);
 void fail_prepare_tx_step1(uint64_t tx_id, coordinator::hyper_stub *hstub);
-void unbusy_elems(std::vector<uint64_t> &busy_elems);
+void unbusy_elems(std::vector<std::string> &busy_elems);
 void prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     nmap::nmap_stub *nmstub,
     coordinator::hyper_stub *hstub);
@@ -109,8 +109,8 @@ unpack_tx(message::message &msg,
     transaction::pending_tx &tx,
     nmap::nmap_stub *nmstub)
 {
-    std::vector<std::string> get_handles_v;
-    std::unordered_set<std::string> new_handles, get_handles;
+    std::vector<node_handle_t> get_handles_v;
+    std::unordered_set<node_handle_t> new_handles, get_handles;
     std::unordered_map<std::string, uint64_t> client_map;
     msg.unpack_message(message::CLIENT_TX_INIT, tx.writes);
 
@@ -136,19 +136,17 @@ unpack_tx(message::message &msg,
                 break;
 
             case transaction::EDGE_CREATE_REQ:
-                NEW_HANDLE(upd->handle);
+                //NEW_HANDLE(upd->handle);
                 GET_HANDLE(upd->handle1);
                 GET_HANDLE(upd->handle2);
                 break;
 
             case transaction::NODE_DELETE_REQ:
-                // for delete_node, lock node
                 GET_HANDLE(upd->handle1);
                 break;
 
             case transaction::EDGE_DELETE_REQ:
-                // for delete_edge, lock edge
-                GET_HANDLE(upd->handle1);
+                //GET_HANDLE(upd->handle1);
                 GET_HANDLE(upd->handle2);
                 break;
 
@@ -157,7 +155,7 @@ unpack_tx(message::message &msg,
                 break;
 
             case transaction::EDGE_SET_PROPERTY:
-                GET_HANDLE(upd->handle1);
+                //GET_HANDLE(upd->handle1);
                 GET_HANDLE(upd->handle2);
                 break;
 
@@ -168,12 +166,12 @@ unpack_tx(message::message &msg,
 
     }
 
-#undef CHECK_NEW_HANDLE
+#undef NEW_HANDLE
 #undef GET_HANDLE
 
     if (get_handles.size() > 0) {
         get_handles_v.reserve(get_handles.size());
-        for (const std::string &s: get_handles) {
+        for (const node_handle_t &s: get_handles) {
             get_handles_v.emplace_back(s);
         }
 
@@ -203,7 +201,7 @@ unpack_tx(message::message &msg,
         upd->elem1 = client_map[upd->handle1];
         upd->elem2 = client_map[upd->handle2];
         if (upd->type == transaction::NODE_DELETE_REQ || upd->type == transaction::EDGE_DELETE_REQ) {
-            tx.del_elems.emplace(upd->elem1);
+            tx.del_elems.emplace(upd->handle1);
         }
     }
 
@@ -224,12 +222,12 @@ send_abort(uint64_t cl_id)
 
 // caution: assuming caller holds vts->busy_mtx
 bool
-lock_del_elems(uint64_t tx_id, std::unordered_set<uint64_t> &del_elems)
+lock_del_elems(uint64_t tx_id, std::unordered_set<std::string> &del_elems)
 {
     bool fail = false;
-    std::vector<uint64_t> added;
+    std::vector<std::string> added;
     added.reserve(del_elems.size());
-    for (uint64_t d: del_elems) {
+    for (const std::string &d: del_elems) {
         if (vts->deleted_elems.find(d) != vts->deleted_elems.end()) {
             if (vts->deleted_elems[d] != tx_id) {
                 fail = true;
@@ -247,7 +245,7 @@ lock_del_elems(uint64_t tx_id, std::unordered_set<uint64_t> &del_elems)
     if (fail) {
         // one of the del_elems locked by a concurrent tx
         // undo all locks by this transaction and abort
-        for (uint64_t a: added) {
+        for (const std::string &a: added) {
             vts->deleted_elems.erase(a);
         }
         return false;
@@ -258,9 +256,9 @@ lock_del_elems(uint64_t tx_id, std::unordered_set<uint64_t> &del_elems)
 
 // caution: assuming caller holds vts->busy_mtx
 void
-unlock_del_elems(std::unordered_set<uint64_t> &del_elems)
+unlock_del_elems(std::unordered_set<std::string> &del_elems)
 {
-    for (uint64_t d: del_elems) {
+    for (const std::string &d: del_elems) {
         assert(vts->deleted_elems.find(d) != vts->deleted_elems.end());
         vts->deleted_elems.erase(d);
     }
@@ -280,7 +278,7 @@ prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
 
     hstub->prepare_tx(*tx);
     bool fail = false;
-    std::unordered_set<uint64_t> del_elems;
+    std::unordered_set<std::string> del_elems;
     bool dist_lock = (tx->del_elems.size() > 0) && (NumVts > 1);
     uint64_t tx_id = tx->id;
     uint64_t cl_id = tx->client_id;
@@ -330,7 +328,7 @@ prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
 // caution: assuming caller holds vts->busy_mtx
 void
 release_dist_del_locks(const std::vector<bool> &locks,
-    std::unordered_set<uint64_t> &del_elems)
+    std::unordered_set<std::string> &del_elems)
 {
     assert(locks.size() == NumVts);
     message::message msg;
@@ -421,13 +419,14 @@ fail_prepare_tx_step1(uint64_t tx_id, coordinator::hyper_stub *hstub)
 
 // caution: assuming caller holds vts->busy_mtx
 void
-unbusy_elems(std::vector<uint64_t> &busy_all)
+unbusy_elems(std::vector<std::string> &busy_all)
 {
     auto &busy_elems = vts->busy_elems;
-    for (uint64_t e: busy_all) {
-        assert(busy_elems.find(e) != busy_elems.end());
-        if (--busy_elems[e] == 0) {
-            busy_elems.erase(e);
+    for (const std::string &e: busy_all) {
+        auto iter = busy_elems.find(e);
+        assert(iter != busy_elems.end());
+        if (--iter->second == 0) {
+            busy_elems.erase(iter);
         }
     }
 }
@@ -448,10 +447,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     std::unordered_set<uint64_t> get_set;
     std::unordered_set<uint64_t> del_set;
     tx->busy_elems.reserve(tx->writes.size());
-    uint64_t busy_single[3];
-    busy_single[0] = UINT64_MAX;
-    busy_single[1] = UINT64_MAX;
-    busy_single[2] = UINT64_MAX;
+    std::string busy_single[3];
 
     vts->busy_mtx.lock();
 
@@ -469,9 +465,12 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
                 put_client_map[upd->handle] = upd->id;
                 put_map.emplace(upd->id, upd->loc1);
 
-                assert(deleted_elems.find(upd->id) == deleted_elems.end());
-                assert(busy_elems.find(upd->id) == busy_elems.end());
-                busy_single[0] = upd->id;
+                //assert(deleted_elems.find(upd->id) == deleted_elems.end());
+                //assert(busy_elems.find(upd->id) == busy_elems.end());
+                //busy_single[0] = upd->id;
+                assert(deleted_elems.find(upd->handle) == deleted_elems.end());
+                assert(busy_elems.find(upd->handle) == busy_elems.end());
+                busy_single[0] = upd->handle;
                 break;
 
             case transaction::EDGE_CREATE_REQ:
@@ -481,11 +480,14 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
                 if (put_map.find(upd->elem2) == put_map.end()) {
                     get_set.insert(upd->elem2);
                 }
-                put_client_map[upd->handle] = upd->id;
+                //put_client_map[upd->handle] = upd->id;
 
-                busy_single[0] = upd->id;
-                busy_single[1] = upd->elem1;
-                busy_single[2] = upd->elem2;
+                //busy_single[0] = upd->id;
+                //busy_single[1] = upd->elem1;
+                //busy_single[2] = upd->elem2;
+                busy_single[0] = upd->handle;
+                busy_single[1] = upd->handle1;
+                busy_single[2] = upd->handle2;
                 break;
 
             case transaction::NODE_DELETE_REQ:
@@ -495,7 +497,8 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
                 }
 
                 if (upd->type != transaction::NODE_DELETE_REQ) {
-                    busy_single[0] = upd->elem1;
+                    //busy_single[0] = upd->elem1;
+                    busy_single[0] = upd->handle1;
                 } else {
                     del_set.emplace(upd->elem1);
                 }
@@ -508,9 +511,11 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
                 }
 
                 if (upd->type != transaction::EDGE_DELETE_REQ) {
-                    busy_single[1] = upd->elem1;
+                    //busy_single[1] = upd->elem1;
+                    busy_single[1] = upd->handle1;
                 }
-                busy_single[0] = upd->elem2;
+                //busy_single[0] = upd->elem2;
+                busy_single[0] = upd->handle2;
                 break;
 
             default:
@@ -518,16 +523,17 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
         }
 
         for (int i = 0; i < 3; i++) {
-            uint64_t &e = busy_single[i];
-            if ((e < UINT64_MAX) && (deleted_elems.find(e) == deleted_elems.end())) {
+            std::string &e = busy_single[i];
+            if (!e.empty() && (deleted_elems.find(e) == deleted_elems.end())) {
                 if (busy_elems.find(e) == busy_elems.end()) {
                     busy_elems[e] = 1;
                 } else {
                     busy_elems[e]++;
                 }
                 tx->busy_elems.emplace_back(e);
-                e = UINT64_MAX;
-            } else if (e < UINT64_MAX) {
+                //e = UINT64_MAX;
+                e = "";
+            } else if (!e.empty()) {
                 success = false;
                 break;
             }
@@ -570,12 +576,12 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
 
     if (success) {
         if (!nmstub->put_client_mappings(put_client_map)) {
-            std::unordered_set<std::string> del_set;
-            del_set.reserve(put_client_map.size());
+            std::unordered_set<std::string> del_client_set;
+            del_client_set.reserve(put_client_map.size());
             for (auto &p: put_client_map) {
-                del_set.emplace(p.first);
+                del_client_set.emplace(p.first);
             }
-            if (!nmstub->del_client_mappings(del_set)) {
+            if (!nmstub->del_client_mappings(del_client_set)) {
                 WDEBUG << "del client mappings fail" << std::endl;
             }
             success = false;
@@ -1050,7 +1056,7 @@ server_loop(int thread_id)
                 }
 
                 case message::PREP_DEL_TX: {
-                    std::unordered_set<uint64_t> del_elems;
+                    std::unordered_set<std::string> del_elems;
                     uint64_t tx_id, tx_vt;
                     msg->unpack_message(message::PREP_DEL_TX, tx_vt, tx_id, del_elems);
 
@@ -1069,7 +1075,7 @@ server_loop(int thread_id)
                 }
 
                 case message::UNPREP_DEL_TX: {
-                    std::unordered_set<uint64_t> del_elems;
+                    std::unordered_set<std::string> del_elems;
                     msg->unpack_message(message::UNPREP_DEL_TX, del_elems);
 
                     vts->busy_mtx.lock();

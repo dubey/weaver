@@ -29,9 +29,9 @@ namespace node_prog
     class read_edges_props_params : public Node_Parameters_Base 
     {
         public:
-            std::vector<edge_id_t> edges; // empty vector means fetch props for all edges
+            std::vector<edge_handle_t> edges; // empty vector means fetch props for all edges
             std::vector<std::string> keys; // empty vector means fetch all props
-            std::vector<std::pair<edge_id_t, std::vector<std::pair<std::string, std::string>>>> edges_props;
+            std::vector<std::pair<edge_handle_t, std::vector<std::pair<std::string, std::string>>>> edges_props;
 
             // no caching needed
             bool search_cache() { return false; }

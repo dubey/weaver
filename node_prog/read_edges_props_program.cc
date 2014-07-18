@@ -57,7 +57,7 @@ node_prog :: read_edges_props_node_program(
     cache_response<Cache_Value_Base>*)
 {
     for (edge &edge : n.get_edges()) {
-        if (params.edges.empty() || (std::find(params.edges.begin(), params.edges.end(), edge.get_id()) != params.edges.end())) {
+        if (params.edges.empty() || (std::find(params.edges.begin(), params.edges.end(), edge.get_handle()) != params.edges.end())) {
             std::vector<std::pair<std::string, std::string>> matching_edge_props;
             for (property &prop : edge.get_properties()) {
                 if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.get_key()) != params.keys.end())) {
@@ -65,7 +65,7 @@ node_prog :: read_edges_props_node_program(
                 }
             }
             if (!matching_edge_props.empty()) {
-                params.edges_props.emplace_back(edge.get_id(), std::move(matching_edge_props));
+                params.edges_props.emplace_back(edge.get_handle(), std::move(matching_edge_props));
             }
         }
     }

@@ -59,7 +59,7 @@ node_prog :: read_n_edges_node_program(
     for (edge &e : elist) {
         if (e.has_all_properties(params.edges_props)) {
             pushcnt++;
-            params.return_edges.emplace_back(e.get_id());
+            params.return_edges.emplace_back(e.get_handle());
             if (--params.num_edges == 0) {
                 break;
             }

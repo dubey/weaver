@@ -23,7 +23,7 @@
 
 namespace node_prog
 {
-    typedef std::unordered_map<edge_id_t, db::element::edge*> edge_map_t;
+    typedef std::unordered_map<edge_handle_t, db::element::edge*> edge_map_t;
     class edge_map_iter : public std::iterator<std::input_iterator_tag, edge>
     {
         edge_map_t::iterator internal_cur;

@@ -24,11 +24,11 @@ namespace node_prog
 {
     struct edge_cache_context
     {
-        edge_id_t edge_handle;
+        edge_handle_t edge_handle;
         db::element::remote_node nbr;
 
         edge_cache_context() { }
-        edge_cache_context(edge_id_t handle, db::element::remote_node &nbr) : edge_handle(handle), nbr(nbr) { }
+        edge_cache_context(const edge_handle_t &handle, db::element::remote_node &nbr) : edge_handle(handle), nbr(nbr) { }
 
         std::vector<property> props_added;
         std::vector<property> props_deleted;

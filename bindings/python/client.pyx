@@ -95,17 +95,16 @@ cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
 
 cdef extern from 'common/types.h':
     ctypedef uint64_t node_id_t
-    ctypedef uint64_t edge_id_t
     ctypedef string node_handle_t
     ctypedef string edge_handle_t
     ctypedef uint64_t cache_key_t
 
 cdef extern from 'db/remote_node.h' namespace 'db::element':
     cdef cppclass remote_node:
-        remote_node(uint64_t id, uint64_t handle)
+        remote_node(uint64_t loc, node_id_t i)
         remote_node()
-        uint64_t id
         uint64_t loc
+        node_id_t id
     cdef remote_node coordinator
 
 class RemoteNode:
@@ -117,10 +116,10 @@ cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
     cdef cppclass reach_params:
         reach_params()
         bint _search_cache
-        uint64_t _cache_key
+        cache_key_t _cache_key
         bint returning
         remote_node prev_node
-        uint64_t dest
+        node_id_t dest
         vector[pair[string, string]] edge_props
         uint32_t hops
         bint reachable
@@ -152,7 +151,7 @@ cdef extern from 'node_prog/pathless_reach_program.h' namespace 'node_prog':
         pathless_reach_params()
         bint returning
         remote_node prev_node
-        uint64_t dest
+        node_id_t dest
         vector[pair[string, string]] edge_props
         bint reachable
 
@@ -173,11 +172,11 @@ class PathlessReachParams:
 cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
     cdef cppclass clustering_params:
         bint _search_cache
-        uint64_t _cache_key
+        cache_key_t _cache_key
         bint is_center
         remote_node center
         bint outgoing
-        vector[uint64_t] neighbors
+        vector[node_id_t] neighbors
         double clustering_coeff
 
 class ClusteringParams:
@@ -195,7 +194,7 @@ cdef extern from 'node_prog/two_neighborhood_program.h' namespace 'node_prog':
         uint32_t on_hop
         bint outgoing
         remote_node prev_node
-        vector[pair[uint64_t, string]] responses
+        vector[pair[node_id_t, string]] responses
 
 class TwoNeighborhoodParams:
     def __init__(self, caching=False, cache_update=False, prop_key="", on_hop=0, outgoing=True, prev_node=None, responses=None):
@@ -261,9 +260,9 @@ class ReadNodePropsParams:
 
 cdef extern from 'node_prog/read_edges_props_program.h' namespace 'node_prog':
     cdef cppclass read_edges_props_params:
-        vector[uint64_t] edges
+        vector[edge_handle_t] edges
         vector[string] keys
-        vector[pair[uint64_t, vector[pair[string, string]]]] edges_props
+        vector[pair[edge_handle_t, vector[pair[string, string]]]] edges_props
 
 class ReadEdgesPropsParams:
     def __init__(self, edges=None, keys=None, edges_props=None):
@@ -284,7 +283,7 @@ cdef extern from 'node_prog/read_n_edges_program.h' namespace 'node_prog':
     cdef cppclass read_n_edges_params:
         uint64_t num_edges
         vector[pair[string, string]] edges_props
-        vector[uint64_t] return_edges
+        vector[edge_handle_t] return_edges
 
 class ReadNEdgesParams:
     def __init__(self, num_edges=UINT64_MAX, edges_props=None, return_edges=None):
@@ -313,9 +312,9 @@ class EdgeCountParams:
 
 cdef extern from 'node_prog/edge_get_program.h' namespace 'node_prog':
     cdef cppclass edge_get_params:
-        uint64_t nbr_id
+        node_id_t nbr_id
         vector[pair[string, string]] edges_props
-        vector[uint64_t] return_edges
+        vector[edge_handle_t] return_edges
 
 class EdgeGetParams:
     def __init__(self, nbr_id=UINT64_MAX, edges_props=None, return_edges=None):

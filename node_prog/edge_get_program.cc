@@ -54,7 +54,7 @@ node_prog :: edge_get_node_program(
     for (edge &e : elist) {
         if (e.get_neighbor().id == params.nbr_id
          && e.has_all_properties(params.edges_props)) {
-            params.return_edges.emplace_back(e.get_id());
+            params.return_edges.emplace_back(e.get_handle());
         }
     }
     return std::make_pair(search_type::DEPTH_FIRST, std::vector<std::pair<db::element::remote_node, edge_get_params>>

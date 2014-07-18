@@ -30,7 +30,7 @@ namespace node_prog
         public:
             uint64_t num_edges;
             std::vector<std::pair<std::string, std::string>> edges_props;
-            std::vector<edge_id_t> return_edges;
+            std::vector<edge_handle_t> return_edges;
 
         public:
             // no caching needed

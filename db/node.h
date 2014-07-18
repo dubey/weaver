@@ -59,7 +59,7 @@ namespace element
             element base;
             node_id_t id;
             enum mode state;
-            std::unordered_map<edge_id_t, edge*> out_edges;
+            std::unordered_map<edge_handle_t, edge*> out_edges;
             po6::threads::cond cv; // for locking node
             po6::threads::cond migr_cv; // make reads/writes wait while node is being migrated
             std::deque<std::pair<uint64_t, uint64_t>> tx_queue; // queued txs, identified by <vt_id, queue timestamp> tuple
@@ -96,11 +96,6 @@ namespace element
             typedef std::unordered_map<uint64_t, std::shared_ptr<node_prog::Node_State_Base>> id_to_state_t;
             typedef std::vector<id_to_state_t> prog_state_t;
             prog_state_t prog_states;
-
-#ifdef weaver_debug_
-            // testing
-            std::unordered_set<edge_id_t> edge_handles;
-#endif
 
         public:
             void add_edge(edge *e);

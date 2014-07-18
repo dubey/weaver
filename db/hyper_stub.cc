@@ -31,7 +31,7 @@ hyper_stub :: hyper_stub(uint64_t sid)
     , graph_dtypes{HYPERDATATYPE_STRING,
         HYPERDATATYPE_STRING,
         HYPERDATATYPE_STRING, // can change to map(int, string) to simulate vector with random access
-        HYPERDATATYPE_MAP_INT64_STRING,
+        HYPERDATATYPE_MAP_STRING_STRING,
         HYPERDATATYPE_SET_INT64,
         HYPERDATATYPE_STRING,
         HYPERDATATYPE_INT64}
@@ -339,13 +339,13 @@ void
 hyper_stub :: add_out_edge(element::node &n, element::edge *e)
 {
     hyperdex_client_map_attribute map_attr;
-    uint64_t key = e->get_id();
-    std::unique_ptr<e::buffer> val_buf;
+    std::unique_ptr<e::buffer> key_buf, val_buf;
+    prepare_buffer(e->get_handle(), key_buf);
     prepare_buffer(e, val_buf);
     map_attr.attr = graph_attrs[3];
-    map_attr.map_key = (const char*)&key;
-    map_attr.map_key_sz = sizeof(int64_t);
-    map_attr.map_key_datatype = HYPERDATATYPE_INT64;
+    map_attr.map_key = (const char*)key_buf->data();
+    map_attr.map_key_sz = key_buf->size();
+    map_attr.map_key_datatype = HYPERDATATYPE_STRING;
     map_attr.value = (const char*)val_buf->data();
     map_attr.value_sz = val_buf->size();
     map_attr.value_datatype = HYPERDATATYPE_STRING;
@@ -357,10 +357,11 @@ void
 hyper_stub :: remove_out_edge(element::node &n, element::edge *e)
 {
     hyperdex_client_attribute cl_attr;
-    uint64_t key = e->get_id();
+    std::unique_ptr<e::buffer> key_buf;
+    prepare_buffer(e->get_handle(), key_buf);
     cl_attr.attr = graph_attrs[3];
-    cl_attr.value = (const char*)&key;
-    cl_attr.value_sz = sizeof(int64_t);
+    cl_attr.value = (const char*)key_buf->data();
+    cl_attr.value_sz = key_buf->size();
     cl_attr.datatype = HYPERDATATYPE_INT64;
 
     hyper_call_and_loop(&hyperdex::Client::map_remove, graph_space, n.get_id(), &cl_attr, 1);

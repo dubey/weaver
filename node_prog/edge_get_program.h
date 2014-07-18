@@ -30,7 +30,7 @@ namespace node_prog
         public:
             node_id_t nbr_id;
             std::vector<std::pair<std::string, std::string>> edges_props;
-            std::vector<edge_id_t> return_edges;
+            std::vector<edge_handle_t> return_edges;
 
             // would never need to cache
             bool search_cache() { return false; }

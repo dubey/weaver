@@ -83,7 +83,7 @@ attributes
     string creat_time,
     string del_time,
     string properties,
-    map(int, string) out_edges,
+    map(string, string) out_edges,
     set(int) in_nbrs,
     string tx_queue,
     int migr_status

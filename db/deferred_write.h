@@ -21,7 +21,6 @@ namespace db
     {
         enum message::msg_type type;
         vc::vclock vclk;
-        edge_id_t edge;
         node_id_t remote_node;
         uint64_t remote_loc;
         edge_handle_t edge_handle;

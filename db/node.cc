@@ -47,10 +47,7 @@ node :: node(node_id_t &_id, const node_handle_t &handle, vc::vclock &vclk, po6:
 void
 node :: add_edge(edge *e)
 {
-#ifdef weaver_debug_
-    edge_handles.emplace(e->get_id());
-#endif
-    out_edges.emplace(e->get_id(), e);
+    out_edges.emplace(e->get_handle(), e);
 }
 
 node_prog::edge_list

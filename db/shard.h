@@ -125,22 +125,22 @@ namespace db
                 vc::qtimestamp_t &qts);
             void create_edge_nonlocking(hyper_stub *hs,
                 element::node *n,
-                edge_id_t edge_id, const edge_handle_t &handle,
+                const edge_handle_t &handle,
                 node_id_t remote_node, uint64_t remote_loc,
                 vc::vclock &vclk,
                 bool init_load);
             void create_edge(hyper_stub *hs,
-                edge_id_t edge_id, const edge_handle_t &handle,
+                const edge_handle_t &handle,
                 node_id_t local_node,
                 node_id_t remote_node, uint64_t remote_loc,
                 vc::vclock &vclk,
                 vc::qtimestamp_t &qts);
             void delete_edge_nonlocking(hyper_stub *hs,
                 element::node *n,
-                edge_id_t edge_id,
+                const edge_handle_t &edge_handle,
                 vc::vclock &tdel);
             void delete_edge(hyper_stub *hs,
-                edge_id_t edge_id, node_id_t node_id,
+                const edge_handle_t &edge_handle, node_id_t node_id,
                 vc::vclock &vclk,
                 vc::qtimestamp_t &qts);
             // properties
@@ -153,11 +153,11 @@ namespace db
                 vc::vclock &vclk,
                 vc::qtimestamp_t &qts);
             void set_edge_property_nonlocking(element::node *n,
-                edge_id_t edge_id,
+                const edge_handle_t &edge_handle,
                 std::string &key, std::string &value,
                 vc::vclock &vclk);
             void set_edge_property(hyper_stub *hs,
-                node_id_t node_id, edge_id_t edge_id,
+                node_id_t node_id, const edge_handle_t &edge_handle,
                 std::unique_ptr<std::string> key, std::unique_ptr<std::string> value,
                 vc::vclock &vclk,
                 vc::qtimestamp_t &qts);
@@ -564,12 +564,12 @@ namespace db
     inline void
     shard :: create_edge_nonlocking(hyper_stub *hs,
         element::node *n,
-        edge_id_t edge_id, const edge_handle_t &handle,
+        const edge_handle_t &handle,
         uint64_t remote_node, uint64_t remote_loc,
         vc::vclock &vclk,
         bool init_load=false)
     {
-        element::edge *new_edge = new element::edge(edge_id, handle, vclk, remote_loc, remote_node);
+        element::edge *new_edge = new element::edge(handle, vclk, remote_loc, remote_node);
         n->add_edge(new_edge);
         n->updated = true;
         // update edge map
@@ -587,7 +587,7 @@ namespace db
 
     inline void
     shard :: create_edge(hyper_stub *hs,
-        edge_id_t edge_id, const edge_handle_t &handle,
+        const edge_handle_t &handle,
         node_id_t local_node,
         node_id_t remote_node, uint64_t remote_loc,
         vc::vclock &vclk,
@@ -601,14 +601,13 @@ namespace db
             def_write_lst &dwl = deferred_writes[local_node];
             dwl.emplace_back(deferred_write(message::EDGE_CREATE_REQ, vclk));
             deferred_write &dw = dwl[dwl.size()-1];
-            dw.edge = edge_id;
             dw.edge_handle = handle;
             dw.remote_node = remote_node;
             dw.remote_loc = remote_loc; 
             migration_mutex.unlock();
         } else {
             assert(n->get_id() == local_node);
-            create_edge_nonlocking(hs, n, edge_id, handle, remote_node, remote_loc, vclk);
+            create_edge_nonlocking(hs, n, handle, remote_node, remote_loc, vclk);
             release_node_write(hs, n);
         }
     }
@@ -616,12 +615,12 @@ namespace db
     inline void
     shard :: delete_edge_nonlocking(hyper_stub *hs,
         element::node *n,
-        edge_id_t edge_id,
+        const edge_handle_t &edge_handle,
         vc::vclock &tdel)
     {
         // already_exec check for fault tolerance
-        assert(n->out_edges.find(edge_id) != n->out_edges.end()); // cannot have been permanently deleted
-        element::edge *e = n->out_edges[edge_id];
+        assert(n->out_edges.find(edge_handle) != n->out_edges.end()); // cannot have been permanently deleted
+        element::edge *e = n->out_edges[edge_handle];
         e->base.update_del_time(tdel);
         n->updated = true;
         n->dependent_del++;
@@ -646,7 +645,7 @@ namespace db
 
     inline void
     shard :: delete_edge(hyper_stub *hs,
-        edge_id_t edge_id, node_id_t node_id,
+        const edge_handle_t &edge_handle, node_id_t node_id,
         vc::vclock &tdel,
         vc::qtimestamp_t &qts)
     {
@@ -656,14 +655,14 @@ namespace db
             def_write_lst &dwl = deferred_writes[node_id];
             dwl.emplace_back(deferred_write(message::EDGE_DELETE_REQ, tdel));
             deferred_write &dw = dwl[dwl.size()-1];
-            dw.edge = edge_id;
+            dw.edge_handle = edge_handle;
             migration_mutex.unlock();
         } else {
-            delete_edge_nonlocking(hs, n, edge_id, tdel);
+            delete_edge_nonlocking(hs, n, edge_handle, tdel);
             release_node_write(hs, n);
             // record object for permanent deletion later on
             perm_del_mutex.lock();
-            perm_del_queue.emplace(new del_obj(message::EDGE_DELETE_REQ, tdel, node_id, edge_id));
+            perm_del_queue.emplace(new del_obj(message::EDGE_DELETE_REQ, tdel, node_id, edge_handle));
             perm_del_mutex.unlock();
         }
     }
@@ -704,12 +703,12 @@ namespace db
 
     inline void
     shard :: set_edge_property_nonlocking(element::node *n,
-        edge_id_t edge_id,
+        const edge_handle_t &edge_handle,
         std::string &key, std::string &value,
         vc::vclock &vclk)
     {
-        if (n->out_edges.find(edge_id) != n->out_edges.end()) {
-            db::element::edge *e = n->out_edges[edge_id];
+        if (n->out_edges.find(edge_handle) != n->out_edges.end()) {
+            db::element::edge *e = n->out_edges[edge_handle];
             db::element::property p(key, value, vclk);
             e->base.check_and_add_property(p);
         }
@@ -717,7 +716,7 @@ namespace db
 
     inline void
     shard :: set_edge_property(hyper_stub *hs,
-        node_id_t node_id, edge_id_t edge_id,
+        node_id_t node_id, const edge_handle_t &edge_handle,
         std::unique_ptr<std::string> key, std::unique_ptr<std::string> value,
         vc::vclock &vclk,
         vc::qtimestamp_t &qts)
@@ -728,15 +727,15 @@ namespace db
             def_write_lst &dwl = deferred_writes[node_id];
             dwl.emplace_back(deferred_write(message::EDGE_SET_PROP, vclk));
             deferred_write &dw = dwl[dwl.size()-1];
-            dw.edge = edge_id;
+            dw.edge_handle = edge_handle;
             dw.key = std::move(key);
             dw.value = std::move(value);
             migration_mutex.unlock();
         } else {
-            set_edge_property_nonlocking(n, edge_id, *key, *value, vclk);
-            if (n->out_edges.find(edge_id) != n->out_edges.end()) {
+            set_edge_property_nonlocking(n, edge_handle, *key, *value, vclk);
+            if (n->out_edges.find(edge_handle) != n->out_edges.end()) {
                 // store in Hyperdex
-                hs->add_out_edge(*n, n->out_edges[edge_id]);
+                hs->add_out_edge(*n, n->out_edges[edge_handle]);
             }
             release_node_write(hs, n);
         }

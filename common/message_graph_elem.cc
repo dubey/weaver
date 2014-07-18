@@ -44,7 +44,6 @@ uint64_t
 message :: size(const db::element::edge &t)
 {
     uint64_t sz = size(t.base)
-        + size(t.id)
 #ifdef WEAVER_CLDG
         + size(t.msg_count)
 #endif
@@ -92,7 +91,6 @@ void message :: pack_buffer(e::buffer::packer &packer, const db::element::elemen
 void message :: pack_buffer(e::buffer::packer &packer, const db::element::edge &t)
 {
     pack_buffer(packer, t.base);
-    pack_buffer(packer, t.id);
 #ifdef WEAVER_CLDG
     pack_buffer(packer, t.msg_count);
 #endif
@@ -150,7 +148,6 @@ void
 message :: unpack_buffer(e::unpacker &unpacker, db::element::edge &t)
 {
     unpack_buffer(unpacker, t.base);
-    unpack_buffer(unpacker, t.id);
 #ifdef WEAVER_CLDG
     unpack_buffer(unpacker, t.msg_count);
 #endif
@@ -165,10 +162,9 @@ void
 message :: unpack_buffer(e::unpacker &unpacker, db::element::edge *&t)
 {
     vc::vclock temp_clk;
-    edge_id_t temp_edge_id(0);
     edge_handle_t temp_handle("");
     node_id_t temp_node_id(0);
-    t = new db::element::edge(temp_edge_id, temp_handle, temp_clk, 0, temp_node_id);
+    t = new db::element::edge(temp_handle, temp_clk, 0, temp_node_id);
     unpack_buffer(unpacker, *t);
 }
 

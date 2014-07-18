@@ -95,11 +95,11 @@ inline void
 create_edge(db::hyper_stub *hs,
     vc::vclock &t_creat,
     vc::qtimestamp_t &qts,
-    edge_id_t edge_id, const edge_handle_t &handle,
+    const edge_handle_t &handle,
     node_id_t n1,
     node_id_t n2, uint64_t loc2)
 {
-    S->create_edge(hs, edge_id, handle, n1, n2, loc2, t_creat, qts);
+    S->create_edge(hs, handle, n1, n2, loc2, t_creat, qts);
 }
 
 inline void
@@ -115,9 +115,9 @@ inline void
 delete_edge(db::hyper_stub *hs,
     vc::vclock &t_del,
     vc::qtimestamp_t &qts,
-    edge_id_t edge_id, node_id_t node_id)
+    const edge_handle_t &edge_handle, node_id_t node_id)
 {
-    S->delete_edge(hs, edge_id, node_id, t_del, qts);
+    S->delete_edge(hs, edge_handle, node_id, t_del, qts);
 }
 
 inline void
@@ -134,10 +134,10 @@ inline void
 set_edge_property(db::hyper_stub *hs,
     vc::vclock &vclk,
     vc::qtimestamp_t &qts,
-    edge_id_t edge_id, node_id_t node_id,
+    const edge_handle_t &edge_handle, node_id_t node_id,
     std::unique_ptr<std::string> key, std::unique_ptr<std::string> value)
 {
-    S->set_edge_property(hs, node_id, edge_id, std::move(key), std::move(value), vclk, qts);
+    S->set_edge_property(hs, node_id, edge_handle, std::move(key), std::move(value), vclk, qts);
 }
 
 // parse the string 'line' as a uint64_t starting at index 'idx' till the first whitespace or end of string
@@ -282,7 +282,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
 {
     std::ifstream file;
     node_id_t node0, node1;
-    edge_id_t edge_id;
+    edge_handle_t edge_handle;
     uint64_t loc;
     std::string line, str_node;
 
@@ -320,7 +320,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                     continue;
                 } else {
                     parse_two_uint64(line, node0, node1);
-                    edge_id = max_node_id + (edge_count++);
+                    edge_handle = std::to_string(max_node_id + (edge_count++));
                     uint64_t loc0 = ((node0 % NumShards) + ShardIdIncr);
                     uint64_t loc1 = ((node1 % NumShards) + ShardIdIncr);
                     assert(loc0 < NumShards + ShardIdIncr);
@@ -332,7 +332,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                             node_maps[thread_select][node0] = shard_id;
                             thread_select = (thread_select + 1) % NUM_THREADS;
                         }
-                        S->create_edge_nonlocking(0, n, edge_id, std::to_string(edge_id), node1, loc1, zero_clk, true);
+                        S->create_edge_nonlocking(0, n, edge_handle, node1, loc1, zero_clk, true);
                     }
                     if (loc1 == shard_id) {
                         if (!S->node_exists_nonlocking(node1)) {
@@ -382,15 +382,15 @@ load_graph(db::graph_file_format format, const char *graph_file)
             while (std::getline(file, line)) {
                 props.clear();
                 parse_weaver_edge(line, node0, node1, props);
-                edge_id = max_node_id + (edge_count++);
+                edge_handle = std::to_string(max_node_id + (edge_count++));
                 uint64_t loc0 = all_node_map[node0];
                 uint64_t loc1 = all_node_map[node1];
                 if (loc0 == shard_id) {
                     n = S->acquire_node_nonlocking(node0);
                     assert(n != NULL);
-                    S->create_edge_nonlocking(0, n, edge_id, std::to_string(edge_id), node1, loc1, zero_clk, true);
+                    S->create_edge_nonlocking(0, n, edge_handle, node1, loc1, zero_clk, true);
                     for (auto &p: props) {
-                        S->set_edge_property_nonlocking(n, edge_id, p.first, p.second, zero_clk);
+                        S->set_edge_property_nonlocking(n, edge_handle, p.first, p.second, zero_clk);
                     }
                 }
             }
@@ -468,7 +468,7 @@ apply_writes(db::hyper_stub *hs, uint64_t vt_id, uint64_t tx_id, vc::vclock &vcl
     for (auto upd: tx.writes) {
         switch (upd->type) {
             case transaction::EDGE_CREATE_REQ:
-                create_edge(hs, vclk, qts, upd->id, upd->handle, upd->elem1, upd->elem2, upd->loc2);
+                create_edge(hs, vclk, qts, upd->handle, upd->elem1, upd->elem2, upd->loc2);
                 break;
 
             case transaction::NODE_DELETE_REQ:
@@ -476,7 +476,7 @@ apply_writes(db::hyper_stub *hs, uint64_t vt_id, uint64_t tx_id, vc::vclock &vcl
                 break;
 
             case transaction::EDGE_DELETE_REQ:
-                delete_edge(hs, vclk, qts, upd->elem1, upd->elem2);
+                delete_edge(hs, vclk, qts, upd->handle1, upd->elem2);
                 break;
 
             case transaction::NODE_SET_PROPERTY:
@@ -484,7 +484,7 @@ apply_writes(db::hyper_stub *hs, uint64_t vt_id, uint64_t tx_id, vc::vclock &vcl
                 break;
 
             case transaction::EDGE_SET_PROPERTY:
-                set_edge_property(hs, vclk, qts, upd->elem1, upd->elem2, std::move(upd->key), std::move(upd->value));
+                set_edge_property(hs, vclk, qts, upd->handle1, upd->elem2, std::move(upd->key), std::move(upd->value));
                 break;
 
             default:
@@ -796,7 +796,7 @@ fetch_node_cache_contexts(uint64_t loc,
                             context = &toFill.back();
                         }
 
-                        context->edges_added.emplace_back(e->get_id(), e->nbr);
+                        context->edges_added.emplace_back(e->get_handle(), e->nbr);
                         node_prog::edge_cache_context &edge_context = context->edges_added.back();
                         // don't care about props deleted before req time for an edge created after cache value was stored
                         fill_changed_properties(e->base.properties, &edge_context.props_added,
@@ -806,7 +806,7 @@ fetch_node_cache_contexts(uint64_t loc,
                             toFill.emplace_back(loc, id, false);
                             context = &toFill.back();
                         }
-                        context->edges_deleted.emplace_back(e->get_id(), e->nbr);
+                        context->edges_deleted.emplace_back(e->get_handle(), e->nbr);
                         node_prog::edge_cache_context &edge_context = context->edges_deleted.back();
                         // don't care about props added after cache time on a deleted edge
                         fill_changed_properties(e->base.properties, NULL,
@@ -820,7 +820,7 @@ fetch_node_cache_contexts(uint64_t loc,
                                 toFill.emplace_back(loc, id, false);
                                 context = &toFill.back();
                             }
-                            context->edges_modified.emplace_back(e->get_id(), e->nbr);
+                            context->edges_modified.emplace_back(e->get_handle(), e->nbr);
 
                             context->edges_modified.back().props_added = std::move(temp_props_added);
                             context->edges_modified.back().props_deleted = std::move(temp_props_deleted);
@@ -1294,7 +1294,7 @@ update_deleted_node(db::hyper_stub*, node_id_t node_id)
     }
     S->edge_map_mutex.unlock();
 
-    std::vector<edge_id_t> to_del;
+    std::vector<edge_handle_t> to_del;
     bool found;
     for (node_id_t nbr: nbrs) {
         n = S->acquire_node(nbr);
@@ -1310,7 +1310,7 @@ update_deleted_node(db::hyper_stub*, node_id_t node_id)
         }
         assert(found);
         UNUSED(found);
-        for (edge_id_t del_edge: to_del) {
+        for (const edge_handle_t &del_edge: to_del) {
             n->out_edges.erase(del_edge);
         }
         S->release_node(n);
@@ -1468,11 +1468,11 @@ migrate_node_step2_resp(db::hyper_stub *hs, std::unique_ptr<message::message> ms
                     break;
 
                 case message::EDGE_CREATE_REQ:
-                    S->create_edge_nonlocking(hs, n, dw.edge, dw.edge_handle, dw.remote_node, dw.remote_loc, dw.vclk);
+                    S->create_edge_nonlocking(hs, n, dw.edge_handle, dw.remote_node, dw.remote_loc, dw.vclk);
                     break;
 
                 case message::EDGE_DELETE_REQ:
-                    S->delete_edge_nonlocking(hs, n, dw.edge, dw.vclk);
+                    S->delete_edge_nonlocking(hs, n, dw.edge_handle, dw.vclk);
                     break;
 
                 default:
