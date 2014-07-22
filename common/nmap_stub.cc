@@ -192,7 +192,7 @@ nmap_stub :: get_mappings(std::unordered_set<node_id_t> &toGet)
     int64_t loop_id;
     hyperdex_client_returncode loop_status;
     uint64_t *val;
-    std::vector<std::pair<uint64_t, uint64_t>> mappings;
+    std::vector<std::pair<node_id_t, uint64_t>> mappings;
     mappings.reserve(num_nodes);
     // call loop once for every get
     for (int64_t i = 0; i < num_nodes; i++) {

@@ -33,8 +33,8 @@ def exec_traversals(reqs, cl, exec_time, idx):
     with cv:
         while num_started < num_clients:
             cv.wait()
-    #rp = client.ReachParams()
-    rp = client.ReachParams(edge_props=[('color','red')])
+    rp = client.ReachParams()
+    #rp = client.ReachParams(edge_props=[('color','red')])
     start = time.time()
     cnt = 0
     for r in reqs:
@@ -57,14 +57,14 @@ num_vts = 1
 
 clients = []
 for i in range(num_clients):
-    clients.append(client.Client(client.CL_ID + i, i % num_vts))
+    clients.append(client.Client('127.0.0.1', 2002))
 
 reqs = []
 random.seed(42)
 for i in range(num_clients):
     cl_reqs = []
     for numr in range(num_requests):
-        cl_reqs.append((random.randint(0, num_nodes-1), random.randint(0, num_nodes-1)))
+        cl_reqs.append((str(random.randint(0, num_nodes-1)), str(random.randint(0, num_nodes-1))))
     reqs.append(cl_reqs)
 
 # run before

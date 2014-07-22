@@ -204,6 +204,7 @@ update_config_constants(uint64_t num_shards)
     NumShardsLock.wrlock();
     assert(num_shards >= NumShards);
     NumShards = num_shards;
+    WDEBUG << "update #shards = " << NumShards << std::endl;
     NumEffectiveServers = NumVts + NumShards;
     NumActualServers = NumEffectiveServers * (1+NumBackups);
     NumShardsLock.unlock();

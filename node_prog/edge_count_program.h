@@ -33,7 +33,7 @@ namespace node_prog
         public:
             // would never need to cache 
             bool search_cache() { return false; }
-            cache_key_t cache_key() { return cache_key_t(0); }
+            cache_key_t cache_key() { return cache_key_t(); }
             uint64_t size() const;
             void pack(e::buffer::packer& packer) const;
             void unpack(e::unpacker& unpacker);

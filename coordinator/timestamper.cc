@@ -443,10 +443,11 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     nmap::nmap_stub *nmstub,
     coordinator::hyper_stub *hstub)
 {
-    std::unordered_map<uint64_t, uint64_t> put_map;
-    std::unordered_map<std::string, uint64_t> put_client_map;
-    std::unordered_set<uint64_t> get_set;
-    std::unordered_set<uint64_t> del_set;
+    std::unordered_map<node_id_t, uint64_t> put_map;
+    std::unordered_map<node_handle_t, node_id_t> put_client_map;
+    std::unordered_set<node_id_t> get_set;
+    std::unordered_set<node_id_t> del_set;
+    std::unordered_set<node_handle_t> del_client_set;
     tx->busy_elems.reserve(tx->writes.size());
     std::string busy_single[3];
 
@@ -502,6 +503,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
                     busy_single[0] = upd->handle1;
                 } else {
                     del_set.emplace(upd->elem1);
+                    del_client_set.emplace(upd->handle1);
                 }
                 break;
 
@@ -569,7 +571,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     vts->busy_mtx.unlock();
 
     // get mappings
-    std::vector<std::pair<uint64_t, uint64_t>> get_map;
+    std::vector<std::pair<node_id_t, uint64_t>> get_map;
     if (!get_set.empty()) {
         get_map = nmstub->get_mappings(get_set);
         success = get_map.size() == get_set.size();
@@ -577,12 +579,12 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
 
     if (success) {
         if (!nmstub->put_client_mappings(put_client_map)) {
-            std::unordered_set<std::string> del_client_set;
-            del_client_set.reserve(put_client_map.size());
+            std::unordered_set<node_handle_t> undo_client_set;
+            undo_client_set.reserve(put_client_map.size());
             for (auto &p: put_client_map) {
-                del_client_set.emplace(p.first);
+                undo_client_set.emplace(p.first);
             }
-            if (!nmstub->del_client_mappings(del_client_set)) {
+            if (!nmstub->del_client_mappings(undo_client_set)) {
                 WDEBUG << "del client mappings fail" << std::endl;
             }
             success = false;
@@ -593,6 +595,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
         // put and delete mappings
         assert(nmstub->put_mappings(put_map));
         assert(nmstub->del_mappings(del_set));
+        assert(nmstub->del_client_mappings(del_client_set));
     }
 
     if (!success) {
@@ -617,7 +620,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
 
     // all checks complete, tx has to succeed now
 
-    std::unordered_map<uint64_t, uint64_t> all_map = std::move(put_map);
+    std::unordered_map<node_id_t, uint64_t> all_map = std::move(put_map);
     for (auto &entry: get_map) {
         all_map.emplace(entry);
     }
@@ -905,36 +908,36 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, nmap::nmap_stub *nmap_cl)
 {
     node_prog::prog_type pType;
-    std::vector<std::pair<std::string, ParamsType>> initial_args;
+    std::vector<std::pair<node_handle_t, ParamsType>> initial_args;
 
     msg->unpack_message(message::CLIENT_NODE_PROG_REQ, pType, initial_args);
     
     // map from locations to a list of start_node_params to send to that shard
-    std::unordered_map<uint64_t, std::deque<std::pair<uint64_t, ParamsType>>> initial_batches; 
+    std::unordered_map<uint64_t, std::deque<std::pair<node_id_t, ParamsType>>> initial_batches; 
 
     // lookup mappings
-    std::unordered_map<uint64_t, uint64_t> loc_map;
-    std::unordered_map<std::string, uint64_t> handle_map;
-    std::unordered_set<std::string> get_client_set;
-    std::vector<std::string> get_client_v;
+    std::unordered_map<node_id_t, uint64_t> loc_map;
+    std::unordered_map<node_handle_t, node_id_t> handle_map;
+    std::unordered_set<node_handle_t> get_client_set;
+    std::vector<node_handle_t> get_client_v;
 
     for (auto &initial_arg : initial_args) {
         get_client_set.emplace(initial_arg.first);
     }
 
     get_client_v.reserve(get_client_set.size());
-    for (const std::string &s: get_client_set) {
-        get_client_v.emplace_back(s);
+    for (const node_handle_t &h: get_client_set) {
+        get_client_v.emplace_back(h);
     }
 
     if (!get_client_set.empty()) {
         bool success;
-        std::vector<std::pair<uint64_t, uint64_t>> loc_results;
+        std::vector<std::pair<node_id_t, uint64_t>> loc_results;
         nmap_cl->get_client_mappings(get_client_v, handle_map);
         success = (handle_map.size() == get_client_set.size());
 
         if (success) {
-            std::unordered_set<uint64_t> get_set;
+            std::unordered_set<node_id_t> get_set;
             get_set.reserve(handle_map.size());
             for (auto &p: handle_map) {
                 get_set.emplace(p.second);
@@ -960,7 +963,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     }
 
     for (auto &p: initial_args) {
-        uint64_t id = handle_map[p.first];
+        node_id_t id = handle_map[p.first];
         uint64_t loc = loc_map[id];
         initial_batches[loc].emplace_back(std::make_pair(id, std::move(p.second)));
     }

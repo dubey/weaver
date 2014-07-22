@@ -31,10 +31,10 @@ two_neighborhood_params :: search_cache()
     return _search_cache;
 }
 
-uint64_t
+cache_key_t
 two_neighborhood_params :: cache_key()
 {
-    return std::hash<std::string>()(prop_key);
+    return prop_key;
 }
 
 uint64_t
@@ -316,7 +316,7 @@ node_prog :: two_neighborhood_node_program(
                     watch_set->emplace_back(e.get_neighbor());
                 }
                 //WDEBUG << "storing cache" << std::endl;
-                add_cache_func(toCache, watch_set, std::hash<std::string>()(params.prop_key));
+                add_cache_func(toCache, watch_set, params.prop_key);
             } else  {
                 params.on_hop--;
             }

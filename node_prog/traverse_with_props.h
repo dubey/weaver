@@ -47,7 +47,7 @@ namespace node_prog
 
         // no caching
         bool search_cache() { return false; }
-        cache_key_t cache_key() { return cache_key_t(0); }
+        cache_key_t cache_key() { return cache_key_t(); }
     };
 
     struct traverse_props_state: public virtual Node_State_Base

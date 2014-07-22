@@ -30,7 +30,7 @@ namespace node_prog
         public:
             bool returning; // false = request, true = reply
             db::element::remote_node prev_node;
-            node_id_t dest;
+            node_handle_t dest;
             std::vector<std::pair<std::string, std::string>> edge_props;
             bool reachable;
 
@@ -38,7 +38,7 @@ namespace node_prog
             pathless_reach_params();
             ~pathless_reach_params() { }
             bool search_cache();
-            cache_key_t cache_key() { return cache_key_t(0); }
+            cache_key_t cache_key() { return cache_key_t(); }
             uint64_t size() const; 
             void pack(e::buffer::packer &packer) const;
             void unpack(e::unpacker &unpacker);

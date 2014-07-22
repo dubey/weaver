@@ -22,9 +22,9 @@ namespace std
     {
         size_t operator()(const tuple<T1, T2, T3>& k) const
         {
-            size_t val = hash<uint64_t>()(get<0>(k));
-            val ^= hash<uint64_t>()(get<1>(k)) + 0x9e3779b9 + (val<<6) + (val>>2);
-            val ^= hash<uint64_t>()(get<2>(k)) + 0x9e3779b9 + (val<<6) + (val>>2);
+            size_t val = hash<T1>()(get<0>(k));
+            val ^= hash<T2>()(get<1>(k)) + 0x9e3779b9 + (val<<6) + (val>>2);
+            val ^= hash<T3>()(get<2>(k)) + 0x9e3779b9 + (val<<6) + (val>>2);
             return val;
         }
     };
@@ -34,8 +34,8 @@ namespace std
     {
         size_t operator()(const pair<T1, T2>& k) const
         {
-            size_t val = hash<uint64_t>()(k.first);
-            val ^= hash<uint64_t>()(k.second) + 0x9e3779b9 + (val<<6) + (val>>2);
+            size_t val = hash<T1>()(k.first);
+            val ^= hash<T2>()(k.second) + 0x9e3779b9 + (val<<6) + (val>>2);
             return val;
         }
     };

@@ -122,7 +122,7 @@ node_prog :: pathless_reach_node_program(
     db::element::remote_node prev_node = params.prev_node;
     params.prev_node = rn;
     if (!params.returning) { // request mode
-        if (params.dest == rn.get_id()) {
+        if (params.dest == n.get_handle()) {
             // we found the node we are looking for, prepare a reply
             params.reachable = true;
             //    WDEBUG  << "found dest!" << std::endl;

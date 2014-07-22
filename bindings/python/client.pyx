@@ -97,7 +97,7 @@ cdef extern from 'common/types.h':
     ctypedef uint64_t node_id_t
     ctypedef string node_handle_t
     ctypedef string edge_handle_t
-    ctypedef uint64_t cache_key_t
+    ctypedef string cache_key_t
 
 cdef extern from 'db/remote_node.h' namespace 'db::element':
     cdef cppclass remote_node:
@@ -119,14 +119,14 @@ cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
         cache_key_t _cache_key
         bint returning
         remote_node prev_node
-        node_id_t dest
+        node_handle_t dest
         vector[pair[string, string]] edge_props
         uint32_t hops
         bint reachable
         vector[remote_node] path
 
 class ReachParams:
-    def __init__(self, returning=False, prev_node=None, dest=0, hops=0, reachable=False, caching=False, edge_props=None, path=None):
+    def __init__(self, returning=False, prev_node=None, dest='', hops=0, reachable=False, caching=False, edge_props=None, path=None):
         self._search_cache = caching
         self._cache_key = dest
         self.returning = returning
@@ -134,7 +134,7 @@ class ReachParams:
             self.prev_node = RemoteNode(0,0)
         else:
             self.prev_node = prev_node
-        self.dest= dest
+        self.dest = dest
         self.hops = hops
         self.reachable = reachable
         if edge_props is None:
@@ -151,12 +151,12 @@ cdef extern from 'node_prog/pathless_reach_program.h' namespace 'node_prog':
         pathless_reach_params()
         bint returning
         remote_node prev_node
-        node_id_t dest
+        node_handle_t dest
         vector[pair[string, string]] edge_props
         bint reachable
 
 class PathlessReachParams:
-    def __init__(self, returning=False, prev_node=None, dest=0, reachable=False, edge_props=None):
+    def __init__(self, returning=False, prev_node=None, dest='', reachable=False, edge_props=None):
         self.returning = returning
         if prev_node is None:
             self.prev_node = RemoteNode(0,0)
@@ -429,7 +429,7 @@ cdef class Client:
             arg_pair.second._search_cache = rp[1]._search_cache
             arg_pair.second._cache_key = rp[1].dest
             arg_pair.second.returning = rp[1].returning
-            arg_pair.second.dest= rp[1].dest
+            arg_pair.second.dest = rp[1].dest
             arg_pair.second.reachable = rp[1].reachable
             arg_pair.second.prev_node = coordinator
             arg_pair.second.edge_props.clear()
@@ -452,7 +452,7 @@ cdef class Client:
         for rp in init_args:
             arg_pair.first = rp[0]
             arg_pair.second.returning = rp[1].returning
-            arg_pair.second.dest= rp[1].dest
+            arg_pair.second.dest = rp[1].dest
             arg_pair.second.reachable = rp[1].reachable
             arg_pair.second.prev_node = coordinator
             arg_pair.second.edge_props.clear()
