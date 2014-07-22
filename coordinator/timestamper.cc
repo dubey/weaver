@@ -137,7 +137,7 @@ unpack_tx(message::message &msg,
                 break;
 
             case transaction::EDGE_CREATE_REQ:
-                //NEW_HANDLE(upd->handle);
+                client_map[upd->handle] = 0;
                 GET_HANDLE(upd->handle1);
                 GET_HANDLE(upd->handle2);
                 break;
@@ -147,7 +147,7 @@ unpack_tx(message::message &msg,
                 break;
 
             case transaction::EDGE_DELETE_REQ:
-                //GET_HANDLE(upd->handle1);
+                client_map[upd->handle1] = 0;
                 GET_HANDLE(upd->handle2);
                 break;
 
@@ -156,7 +156,7 @@ unpack_tx(message::message &msg,
                 break;
 
             case transaction::EDGE_SET_PROPERTY:
-                //GET_HANDLE(upd->handle1);
+                client_map[upd->handle1] = 0;
                 GET_HANDLE(upd->handle2);
                 break;
 

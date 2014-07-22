@@ -182,7 +182,6 @@ init_config_constants(const char *config_file_name)
 #undef PARSE_VALUE_IPADDR_PORT_BLOCK
 
     assert(UINT64_MAX != NumVts);
-    assert(UINT64_MAX != NumShards);
     assert(UINT64_MAX != NumBackups);
     assert(UINT16_MAX != MaxCacheEntries);
     assert(NULL != HyperdexCoordIpaddr);
@@ -193,6 +192,7 @@ init_config_constants(const char *config_file_name)
     assert(NULL != ServerManagerIpaddr);
     assert(UINT16_MAX != ServerManagerPort);
 
+    NumShards = 0;
     NumEffectiveServers = NumVts + NumShards;
     NumActualServers = NumEffectiveServers * (1+NumBackups);
     ShardIdIncr = NumVts;
