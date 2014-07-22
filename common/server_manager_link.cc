@@ -150,7 +150,7 @@ server_manager_link :: get_replid(uint64_t &id)
         } else if (lid == rid) {
             break;
         } else {
-            WDEBUG << "retry get replicant id, " << "lid " << lid << ", rid " << rid << std::endl;
+            //WDEBUG << "retry get replicant id, " << "lid " << lid << ", rid " << rid << std::endl;
         }
     }
 
