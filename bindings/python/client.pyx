@@ -387,7 +387,6 @@ cdef extern from 'client/weaver_client.h' namespace 'cl':
         void single_stream_migration()
         void commit_graph()
         void exit_weaver()
-        void print_msgcount()
         vector[uint64_t] get_node_count()
 
 cdef class Client:
@@ -673,8 +672,6 @@ cdef class Client:
         self.thisptr.commit_graph()
     def exit_weaver(self):
         self.thisptr.exit_weaver()
-    def print_msgcount(self):
-        self.thisptr.print_msgcount()
     def get_node_count(self):
         cdef vector[uint64_t] node_count = self.thisptr.get_node_count()
         count = []

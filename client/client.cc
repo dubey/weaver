@@ -22,6 +22,7 @@
 // not used in client
 uint64_t NumVts;
 uint64_t NumShards;
+po6::threads::rwlock NumShardsLock;
 uint64_t NumBackups;
 uint64_t NumEffectiveServers;
 uint64_t NumActualServers;
@@ -322,14 +323,6 @@ client :: exit_weaver()
 {
     message::message msg;
     msg.prepare_message(message::EXIT_WEAVER);
-    send_coord(msg.buf);
-}
-
-void
-client :: print_msgcount()
-{
-    message::message msg;
-    msg.prepare_message(message::CLIENT_MSG_COUNT);
     send_coord(msg.buf);
 }
 

@@ -99,7 +99,6 @@ namespace coordinator
             po6::threads::mutex clk_mutex // vclock and queue timestamp
                     , tx_prog_mutex // state for outstanding and completed node progs, transactions
                     , periodic_update_mutex // make sure to not send out clock update before getting ack from other VTs
-                    , msg_count_mutex
                     , migr_mutex
                     , graph_load_mutex
                     , config_mutex
@@ -113,7 +112,6 @@ namespace coordinator
             // migration
             uint64_t migr_client;
             std::vector<uint64_t> shard_node_count;
-            uint64_t msg_count, msg_count_acks;
 
             // exit
             bool to_exit;
@@ -124,6 +122,7 @@ namespace coordinator
             void init_hstub();
             void restore_backup();
             void reconfigure();
+            void update_members_new_config();
             uint64_t generate_req_id();
             uint64_t generate_loc();
             uint64_t generate_id();
@@ -158,8 +157,6 @@ namespace coordinator
         , load_count(0)
         , max_load_time(0)
         , shard_node_count(NumShards, 0)
-        , msg_count(0)
-        , msg_count_acks(0)
         , to_exit(false)
     {
         // initialize empty vector of done reqs for each prog type
@@ -181,6 +178,7 @@ namespace coordinator
         shifted_id = vt_id << (64-ID_BITS);
         vclk.vt_id = vt_id;
         comm.init(config);
+        update_members_new_config();
     }
 
     inline void
@@ -212,6 +210,7 @@ namespace coordinator
 
         uint64_t prev_active_vts = num_active_vts;
         comm.reconfigure(config, &num_active_vts);
+        update_members_new_config();
         //if (comm.reconfigure(config, &num_active_vts) == server.get()
         // && !active_backup
         // && server.get() > NumEffectiveServers) {
@@ -263,6 +262,32 @@ namespace coordinator
         //}
     }
 
+    inline void
+    timestamper :: update_members_new_config()
+    {
+        std::vector<std::pair<server_id, po6::net::location>> addresses;
+        config.get_all_addresses(&addresses);
+
+        uint64_t num_shards = 0;
+        for (auto &p: addresses) {
+            if (config.get_type(p.first) == server::SHARD) {
+                num_shards++;
+            }
+        }
+
+        periodic_update_mutex.lock();
+        to_nop.resize(num_shards, true);
+        nop_ack_qts.resize(num_shards, 0);
+        shard_node_count.resize(num_shards, 0);
+        periodic_update_mutex.unlock();
+
+        clk_rw_mtx.wrlock();
+        qts.resize(num_shards, 0);
+        clk_rw_mtx.unlock();
+
+        update_config_constants(num_shards);
+    }
+
     inline uint64_t
     timestamper :: generate_req_id()
     {
@@ -278,8 +303,9 @@ namespace coordinator
     timestamper :: generate_loc()
     {
         uint64_t new_loc;
+        uint64_t num_shards = get_num_shards();
         loc_gen_mtx.lock();
-        loc_gen = (loc_gen+1) % NumShards;
+        loc_gen = (loc_gen+1) % num_shards;
         new_loc = loc_gen + ShardIdIncr;
         loc_gen_mtx.unlock();
         return new_loc;

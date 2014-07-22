@@ -96,8 +96,6 @@ namespace message
         MIGRATED_NBR_UPDATE,
         MIGRATED_NBR_ACK,
         MIGRATION_TOKEN,
-        MSG_COUNT,
-        CLIENT_MSG_COUNT,
         CLIENT_NODE_COUNT,
         NODE_COUNT_REPLY,
         // initial graph loading

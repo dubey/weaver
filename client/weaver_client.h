@@ -78,7 +78,6 @@ namespace cl
             void single_stream_migration();
             void commit_graph();
             void exit_weaver();
-            void print_msgcount();
             std::vector<uint64_t> get_node_count();
 
         private:

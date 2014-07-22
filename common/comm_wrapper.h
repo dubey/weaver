@@ -68,6 +68,7 @@ class comm_wrapper
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         busybee_returncode send(uint64_t send_to, std::auto_ptr<e::buffer> msg);
+        busybee_returncode send_to_client(uint64_t send_to, std::auto_ptr<e::buffer> msg);
         busybee_returncode recv(std::auto_ptr<e::buffer> *msg);
         busybee_returncode recv(uint64_t *recv_from, std::auto_ptr<e::buffer> *msg);
 #pragma GCC diagnostic pop

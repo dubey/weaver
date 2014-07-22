@@ -22,6 +22,5 @@
 // migration
 //#define WEAVER_CLDG // defined if communication-based LDG, undef otherwise
 //#define WEAVER_NEW_CLDG // defined if communication-based LDG, undef otherwise
-//#define WEAVER_MSG_COUNT // defined if client msg count call will take place
 
 #endif

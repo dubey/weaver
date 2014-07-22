@@ -44,7 +44,8 @@ server :: server()
     : state(KILLED)
     , id()
     , weaver_id(UINT64_MAX)
-    , shard_or_vt(-1)
+    , type(UNDEF)
+    //, shard_or_vt(-1)
     , bind_to()
 {
 }
@@ -53,7 +54,8 @@ server :: server(const server_id& sid)
     : state(ASSIGNED)
     , id(sid)
     , weaver_id(UINT64_MAX)
-    , shard_or_vt(-1)
+    , type(UNDEF)
+    //, shard_or_vt(-1)
     , bind_to()
 {
 }
@@ -68,15 +70,19 @@ e::buffer::packer
 operator << (e::buffer::packer lhs, const server& rhs)
 {
     uint8_t s = static_cast<uint8_t>(rhs.state);
-    return lhs << s << rhs.id << rhs.weaver_id << rhs.shard_or_vt << rhs.bind_to;
+    uint8_t t = static_cast<uint8_t>(rhs.type);
+    //return lhs << s << rhs.id << rhs.weaver_id << rhs.shard_or_vt << rhs.bind_to;
+    return lhs << s << rhs.id << rhs.weaver_id << t << rhs.bind_to;
 }
 
 e::unpacker
 operator >> (e::unpacker lhs, server& rhs)
 {
-    uint8_t s;
-    lhs = lhs >> s >> rhs.id >> rhs.weaver_id >> rhs.shard_or_vt >> rhs.bind_to;
+    uint8_t s, t;
+    //lhs = lhs >> s >> rhs.id >> rhs.weaver_id >> rhs.shard_or_vt >> rhs.bind_to;
+    lhs = lhs >> s >> rhs.id >> rhs.weaver_id >> t >> rhs.bind_to;
     rhs.state = static_cast<server::state_t>(s);
+    rhs.type = static_cast<server::type_t>(t);
     return lhs;
 }
 

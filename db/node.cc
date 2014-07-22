@@ -34,7 +34,7 @@ node :: node(node_id_t &_id, const node_handle_t &handle, vc::vclock &vclk, po6:
     , last_perm_deletion(nullptr)
     , new_loc(UINT64_MAX)
     , update_count(1)
-    , migr_score(NumShards, 0)
+    , migr_score(get_num_shards(), 0)
     , updated(true)
     , already_migr(false)
     , dependent_del(0)

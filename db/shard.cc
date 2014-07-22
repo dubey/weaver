@@ -35,6 +35,7 @@
 // global extern variables
 uint64_t NumVts;
 uint64_t NumShards;
+po6::threads::rwlock NumShardsLock;
 uint64_t NumBackups;
 uint64_t NumEffectiveServers;
 uint64_t NumActualServers;
@@ -56,7 +57,7 @@ static uint64_t shard_id;
 static db::shard *S;
 
 void migrated_nbr_update(std::unique_ptr<message::message> msg);
-bool migrate_node_step1(db::hyper_stub *hs, db::element::node*, std::vector<uint64_t>&);
+bool migrate_node_step1(db::hyper_stub *hs, db::element::node*, std::vector<uint64_t>&, uint64_t);
 void migrate_node_step2_req();
 void migrate_node_step2_resp(db::hyper_stub *hs, std::unique_ptr<message::message> msg);
 bool check_step3();
@@ -278,7 +279,7 @@ init_nmap(std::vector<std::unordered_map<node_id_t, uint64_t>> *node_maps_ptr)
 // 'format' stores the format of the graph file
 // 'graph_file' stores the full path filename of the graph file
 inline void
-load_graph(db::graph_file_format format, const char *graph_file)
+load_graph(db::graph_file_format format, const char *graph_file, bool num_shards)
 {
     std::ifstream file;
     node_id_t node0, node1;
@@ -321,10 +322,10 @@ load_graph(db::graph_file_format format, const char *graph_file)
                 } else {
                     parse_two_uint64(line, node0, node1);
                     edge_handle = std::to_string(max_node_id + (edge_count++));
-                    uint64_t loc0 = ((node0 % NumShards) + ShardIdIncr);
-                    uint64_t loc1 = ((node1 % NumShards) + ShardIdIncr);
-                    assert(loc0 < NumShards + ShardIdIncr);
-                    assert(loc1 < NumShards + ShardIdIncr);
+                    uint64_t loc0 = ((node0 % num_shards) + ShardIdIncr);
+                    uint64_t loc1 = ((node1 % num_shards) + ShardIdIncr);
+                    assert(loc0 < num_shards + ShardIdIncr);
+                    assert(loc1 < num_shards + ShardIdIncr);
                     if (loc0 == shard_id) {
                         n = S->acquire_node_nonlocking(node0);
                         if (n == NULL) {
@@ -361,7 +362,7 @@ load_graph(db::graph_file_format format, const char *graph_file)
                 parse_two_uint64(line, node0, loc);
                 loc += ShardIdIncr;
                 all_node_map[node0] = loc;
-                assert(loc < NumShards + ShardIdIncr);
+                assert(loc < num_shards + ShardIdIncr);
                 if (loc == shard_id) {
                     n = S->acquire_node_nonlocking(node0);
                     if (n == NULL) {
@@ -646,7 +647,9 @@ nop(db::hyper_stub *hs, void *noparg)
         && !(check_move_migr && check_migr_step3));
 
     uint64_t cur_node_count = S->shard_node_count[shard_id - ShardIdIncr];
-    for (uint64_t shrd = 0; shrd < NumShards; shrd++) {
+    uint64_t max_idx = S->shard_node_count.size() > nop_arg->shard_node_count.size() ?
+                       S->shard_node_count.size() : nop_arg->shard_node_count.size();
+    for (uint64_t shrd = 0; shrd < max_idx; shrd++) {
         if ((shrd + ShardIdIncr) == shard_id) {
             continue;
         }
@@ -972,8 +975,8 @@ inline bool cache_lookup(db::element::node*& node_to_check,
         assert(fstate->prog_state.start_node_params.size() == 1);
         fstate->monitor.unlock();
 
-
-        for (uint64_t i = ShardIdIncr; i < NumShards + ShardIdIncr; i++) {
+        uint64_t num_shards = get_num_shards();
+        for (uint64_t i = ShardIdIncr; i < num_shards + ShardIdIncr; i++) {
             if (contexts_to_fetch.find(i) != contexts_to_fetch.end()) {
                 auto &context_list = contexts_to_fetch[i];
                 assert(context_list.size() > 0);
@@ -1098,9 +1101,10 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
 #ifdef WEAVER_CLDG
             std::unordered_map<node_id_t, uint32_t> agg_msg_count;
 #endif
+            uint64_t num_shards = get_num_shards();
             for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params.second) {
                 db::element::remote_node& rn = res.first; 
-                assert(rn.loc < NumShards + ShardIdIncr);
+                assert(rn.loc < num_shards + ShardIdIncr);
                 if (rn == db::element::coordinator || rn.loc == np.vt_id) {
                     // mark requests as done, will be done for other shards by no-ops from coordinator
                     std::vector<std::pair<uint64_t, node_prog::prog_type>> completed_request {std::make_pair(np.req_id, np.prog_type_recvd)};
@@ -1130,11 +1134,11 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
             }
             S->msg_count_mutex.unlock();
 #endif
-            // Only per hop batching
         }
-        assert(batched_node_progs.size() < NumShards);
+        uint64_t num_shards = get_num_shards();
+        assert(batched_node_progs.size() < num_shards);
         for (auto &loc_progs_pair : batched_node_progs) {
-            assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < NumShards + ShardIdIncr);
+            assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < num_shards + ShardIdIncr);
             if (loc_progs_pair.second.size() > BATCH_MSG_SIZE) {
                 out_msg.prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, loc_progs_pair.second);
                 S->comm.send(loc_progs_pair.first, out_msg.buf);
@@ -1145,10 +1149,11 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
             assert(np.cache_value == false); // unique ptr is not assigned
         }
     }
+    uint64_t num_shards = get_num_shards();
     if (!done_request) {
         for (auto &loc_progs_pair : batched_node_progs) {
             if (!loc_progs_pair.second.empty()) {
-                assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < NumShards + ShardIdIncr);
+                assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < num_shards + ShardIdIncr);
                 out_msg.prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, loc_progs_pair.second);
                 S->comm.send(loc_progs_pair.first, out_msg.buf);
                 loc_progs_pair.second.clear();
@@ -1159,11 +1164,6 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
     if (!nodes_that_created_state.empty()) {
         S->mark_nodes_using_state(np.req_id, nodes_that_created_state);
     }
-#ifdef WEAVER_MSG_COUNT
-    S->meta_update_mutex.lock();
-    S->msg_count += msg_count;
-    S->meta_update_mutex.unlock();
-#endif
 }
 
 void
@@ -1341,12 +1341,13 @@ get_balanced_assignment(std::vector<uint64_t> &shard_node_count, std::vector<uin
 bool
 migrate_node_step1(db::hyper_stub *hs,
     db::element::node *n,
-    std::vector<uint64_t> &shard_node_count)
+    std::vector<uint64_t> &shard_node_count,
+    uint64_t migr_num_shards)
 {
     // find arg max migr score
     uint64_t max_pos = shard_id - ShardIdIncr; // don't migrate if all equal
     std::vector<uint32_t> max_indices(1, max_pos);
-    for (uint32_t j = 0; j < NumShards; j++) {
+    for (uint32_t j = 0; j < migr_num_shards; j++) {
         if (j == (shard_id - ShardIdIncr)) {
             continue;
         }
@@ -1483,7 +1484,8 @@ migrate_node_step2_resp(db::hyper_stub *hs, std::unique_ptr<message::message> ms
     }
 
     // update nbrs
-    for (uint64_t upd_shard = ShardIdIncr; upd_shard < ShardIdIncr + NumShards; upd_shard++) {
+    S->migr_updating_nbrs = true;
+    for (uint64_t upd_shard = ShardIdIncr; upd_shard < ShardIdIncr + S->migr_edge_acks.size(); upd_shard++) {
         if (upd_shard == shard_id) {
             continue;
         }
@@ -1540,6 +1542,7 @@ check_step3()
     }
     if (init_step3) {
         weaver_util::reset_all(S->migr_edge_acks);
+        S->migr_updating_nbrs = false;
     }
     return init_step3;
 }
@@ -1553,7 +1556,7 @@ migrate_node_step3(db::hyper_stub *hs)
 }
 
 inline bool
-check_migr_node(db::element::node *n)
+check_migr_node(db::element::node *n, uint64_t migr_num_shards)
 {
     if (n == NULL || order::compare_two_clocks(n->base.get_del_time().clock, S->max_clk.clock) != 2 ||
         n->state == db::element::node::mode::MOVED || n->already_migr) {
@@ -1566,6 +1569,7 @@ check_migr_node(db::element::node *n)
         for (double &x: n->migr_score) {
             x = 0;
         }
+        n->migr_score.resize(migr_num_shards, 0);
         return true;
     }
 }
@@ -1573,7 +1577,7 @@ check_migr_node(db::element::node *n)
 #ifdef WEAVER_CLDG
 // stream list of nodes and cldg repartition
 inline void
-cldg_migration_wrapper(db::hyper_stub *hs, std::vector<uint64_t> &shard_node_count, uint64_t shard_cap)
+cldg_migration_wrapper(db::hyper_stub *hs, std::vector<uint64_t> &shard_node_count, uint64_t migr_num_shards, uint64_t shard_cap)
 {
     bool no_migr = true;
     while (S->cldg_iter != S->cldg_nodes.end()) {
@@ -1583,7 +1587,7 @@ cldg_migration_wrapper(db::hyper_stub *hs, std::vector<uint64_t> &shard_node_cou
         n = S->acquire_node(migr_node);
 
         // check if okay to migrate
-        if (!check_migr_node(n)) {
+        if (!check_migr_node(n, migr_num_shards)) {
             continue;
         }
 
@@ -1607,12 +1611,12 @@ cldg_migration_wrapper(db::hyper_stub *hs, std::vector<uint64_t> &shard_node_cou
         //}
 
         // update migration score based on CLDG
-        for (uint64_t j = 0; j < NumShards; j++) {
+        for (uint64_t j = 0; j < migr_num_shards; j++) {
             double penalty = 1.0 - ((double)shard_node_count[j])/shard_cap;
             n->migr_score[j] = n->msg_count[j] * penalty;
         }
 
-        if (migrate_node_step1(hs, n, shard_node_count)) {
+        if (migrate_node_step1(hs, n, shard_node_count, migr_num_shards)) {
             no_migr = false;
             break;
         }
@@ -1625,7 +1629,7 @@ cldg_migration_wrapper(db::hyper_stub *hs, std::vector<uint64_t> &shard_node_cou
 
 // stream list of nodes and ldg repartition
 inline void
-ldg_migration_wrapper(db::hyper_stub *hs, std::vector<uint64_t> &shard_node_count, uint64_t shard_cap)
+ldg_migration_wrapper(db::hyper_stub *hs, std::vector<uint64_t> &shard_node_count, uint64_t migr_num_shards, uint64_t shard_cap)
 {
     bool no_migr = true;
     while (S->ldg_iter != S->ldg_nodes.end()) {
@@ -1635,7 +1639,7 @@ ldg_migration_wrapper(db::hyper_stub *hs, std::vector<uint64_t> &shard_node_coun
         n = S->acquire_node(migr_node);
 
         // check if okay to migrate
-        if (!check_migr_node(n)) {
+        if (!check_migr_node(n, migr_num_shards)) {
             continue;
         }
 
@@ -1645,11 +1649,11 @@ ldg_migration_wrapper(db::hyper_stub *hs, std::vector<uint64_t> &shard_node_coun
             e = e_iter.second;
             n->migr_score[e->nbr.loc - ShardIdIncr] += 1;
         }
-        for (uint64_t j = 0; j < NumShards; j++) {
+        for (uint64_t j = 0; j < migr_num_shards; j++) {
             n->migr_score[j] *= (1 - ((double)shard_node_count[j])/shard_cap);
         }
 
-        if (migrate_node_step1(hs, n, shard_node_count)) {
+        if (migrate_node_step1(hs, n, shard_node_count, migr_num_shards)) {
             no_migr = false;
             break;
         }
@@ -1670,16 +1674,17 @@ migration_wrapper(db::hyper_stub *hs)
         total_node_count += c;
     }
     uint64_t shard_cap = (uint64_t)(1.1 * total_node_count);
+    uint64_t num_shards = S->migr_num_shards;
     S->migration_mutex.unlock();
 
 #ifdef WEAVER_CLDG
-    cldg_migration_wrapper(hs, shard_node_count, shard_cap);
+    cldg_migration_wrapper(hs, shard_node_count, num_shards, shard_cap);
 #endif
 
 #ifdef WEAVER_NEW_CLDG
-    cldg_migration_wrapper(hs, shard_node_count, shard_cap);
+    cldg_migration_wrapper(hs, shard_node_count, num_shards, shard_cap);
 #else
-    ldg_migration_wrapper(hs, shard_node_count, shard_cap);
+    ldg_migration_wrapper(hs, shard_node_count, num_shards, shard_cap);
 #endif
 }
 
@@ -1741,10 +1746,10 @@ migration_end(db::hyper_stub *hs)
     message::message msg;
     S->migration_mutex.lock();
     S->migr_token = false;
-    msg.prepare_message(message::MIGRATION_TOKEN, --S->migr_token_hops, S->migr_vt);
+    msg.prepare_message(message::MIGRATION_TOKEN, --S->migr_token_hops, S->migr_num_shards, S->migr_vt);
     S->migration_mutex.unlock();
     uint64_t next_shard; 
-    if ((shard_id + 1 - ShardIdIncr) >= NumShards) {
+    if ((shard_id + 1 - ShardIdIncr) >= S->migr_num_shards) {
         next_shard = ShardIdIncr;
     } else {
         next_shard = shard_id + 1;
@@ -1786,7 +1791,7 @@ recv_loop(uint64_t thread_id)
             switch (mtype) {
                 case message::TX_INIT: {
                     rec_msg->unpack_partial_message(message::TX_INIT, vt_id, vclk, qts);
-                    assert(qts.size() == NumShards);
+                    //assert(qts.size() == NumShards);
                     assert(vclk.clock.size() == NumVts);
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                     enum db::queue_order tx_order = S->qm.check_wr_request(vclk, qts[shard_id-ShardIdIncr]);
@@ -1870,7 +1875,7 @@ recv_loop(uint64_t thread_id)
                 case message::MIGRATION_TOKEN:
                     hs->update_migr_token(db::ACTIVE);
                     S->migration_mutex.lock();
-                    rec_msg->unpack_message(mtype, S->migr_token_hops, S->migr_vt);
+                    rec_msg->unpack_message(mtype, S->migr_token_hops, S->migr_num_shards, S->migr_vt);
                     S->migr_token = true;
                     S->migrated = false;
                     S->migration_mutex.unlock();
@@ -1883,7 +1888,7 @@ recv_loop(uint64_t thread_id)
                     if (load_time > S->max_load_time) {
                         S->max_load_time = load_time;
                     }
-                    if (++S->load_count == NumShards) {
+                    if (++S->load_count == S->bulk_load_num_shards) {
                         WDEBUG << "Loaded graph on all shards, time taken = " << (S->max_load_time/MEGA) << " ms." << std::endl;
                     } else {
                         WDEBUG << "Loaded graph on " << S->load_count << " shards, current time "
@@ -1893,18 +1898,6 @@ recv_loop(uint64_t thread_id)
                     break;
                 }
 
-#ifdef WEAVER_MSG_COUNT
-                case message::MSG_COUNT: {
-                    rec_msg->unpack_message(message::MSG_COUNT, vt_id);
-                    S->meta_update_mutex.lock();
-                    rec_msg->prepare_message(message::MSG_COUNT, shard_id, S->msg_count);
-                    S->msg_count = 0;
-                    S->meta_update_mutex.unlock();
-                    S->comm.send(vt_id, rec_msg->buf);
-                    break;
-                }
-#endif
-                
                 case message::SET_QTS: {
                     uint64_t rec_qts;
                     rec_msg->unpack_message(message::SET_QTS, vt_id, rec_qts);
@@ -1960,7 +1953,7 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location my_loc)
 
     S->sm_stub.set_server_manager_address(sm_host.address.c_str(), sm_host.port);
 
-    if (!S->sm_stub.register_id(S->server, my_loc, 0))
+    if (!S->sm_stub.register_id(S->server, my_loc, server::SHARD))
     {
         return;
     }
@@ -2090,6 +2083,7 @@ main(int argc, const char *argv[])
     const char *graph_file = NULL;
     const char *graph_format = "snap";
     long backup_input = LONG_MAX;
+    long bulk_load_num_shards = 1;
     // arg parsing borrowed from HyperDex
     e::argparser ap;
     ap.autohelp();
@@ -2111,6 +2105,9 @@ main(int argc, const char *argv[])
     ap.arg().long_name("graph-format")
             .description("bulk load input graph format (default snap)")
             .metavar("filename").as_string(&graph_format);
+    ap.arg().long_name("bulk-load-num-shards")
+            .description("number of shards during bulk loading (default 1)")
+            .metavar("num").as_long(&bulk_load_num_shards);
 
     if (!ap.parse(argc, argv) || ap.args_sz() != 0) {
         WDEBUG << "args parsing failure" << std::endl;
@@ -2127,7 +2124,6 @@ main(int argc, const char *argv[])
             WDEBUG << "bad backup number" << std::endl;
             return -1;
         }
-        //server_id = shard_id + NumEffectiveServers*backup_input;
     }
 
     po6::net::location my_loc(listen_host, listen_port);
@@ -2154,7 +2150,7 @@ main(int argc, const char *argv[])
     for (auto &p: addresses) {
         if (p.second == my_loc) {
             uint64_t wid = S->config.get_weaver_id(p.first);
-            assert(S->config.get_shard_or_vt(p.first));
+            assert(S->config.get_type(p.first) == server::SHARD);
             shard_id = wid + NumVts;
         }
     }
@@ -2180,6 +2176,8 @@ main(int argc, const char *argv[])
 
     // bulk loading
     if (graph_file != NULL) {
+        S->bulk_load_num_shards = (uint64_t)bulk_load_num_shards;
+
         db::graph_file_format format = db::SNAP;
         if (strcmp(graph_format, "tsv") == 0) {
             format = db::TSV;
@@ -2193,7 +2191,7 @@ main(int argc, const char *argv[])
 
         wclock::weaver_timer timer;
         uint64_t load_time = timer.get_time_elapsed();
-        load_graph(format, graph_file);
+        load_graph(format, graph_file, (uint64_t)bulk_load_num_shards);
         load_time = timer.get_time_elapsed() - load_time;
         message::message msg;
         msg.prepare_message(message::LOADED_GRAPH, load_time);

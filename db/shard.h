@@ -70,6 +70,7 @@ namespace db
             void init(uint64_t shardid);
             void init_hstub();
             void reconfigure();
+            void update_members_new_config();
             void bulk_load_persistent();
 
             // Mutexes
@@ -165,7 +166,7 @@ namespace db
             bool node_exists_nonlocking(node_id_t node_id);
 
             // Initial graph loading
-            uint64_t max_load_time;
+            uint64_t max_load_time, bulk_load_num_shards;
             uint32_t load_count;
 
             // Permanent deletion
@@ -179,8 +180,8 @@ namespace db
 
             // Migration
         public:
-            bool current_migr, migr_token, migrated;
-            uint64_t migr_chance, migr_node, migr_shard, migr_token_hops, migr_vt;
+            bool current_migr, migr_updating_nbrs, migr_token, migrated;
+            uint64_t migr_chance, migr_node, migr_shard, migr_token_hops, migr_num_shards, migr_vt;
 #ifdef WEAVER_CLDG
             std::unordered_map<node_id_t, uint32_t> agg_msg_count;
             std::vector<std::pair<node_id_t, uint32_t>> cldg_nodes;
@@ -211,9 +212,6 @@ namespace db
                 , max_done_id; // max id done from each VT
             std::vector<vc::vclock_t> max_done_clk; // vclk of cumulative last node program completed
             std::vector<bool> migr_edge_acks;
-#ifdef WEAVER_MSG_COUNT
-            uint64_t msg_count;
-#endif
             
             // node programs
         private:
@@ -256,13 +254,12 @@ namespace db
         , first_config_cond(&config_mutex)
         , shard_init_cond(&config_mutex)
         , shard_id(UINT64_MAX)
-        //, shard_id(shardid)
         , server(serverid)
         , current_migr(false)
+        , migr_updating_nbrs(false)
         , migr_token(false)
         , migrated(false)
         , migr_chance(0)
-        , shard_node_count(NumShards, 0)
         , nop_count(NumVts, 0)
         , max_clk(UINT64_MAX, UINT64_MAX)
         , zero_clk(0, 0)
@@ -270,10 +267,6 @@ namespace db
         , target_prog_id(NumVts, 0)
         , max_done_id(NumVts, 0)
         , max_done_clk(NumVts, vc::vclock_t(NumVts, 0))
-        , migr_edge_acks(NumShards, false)
-#ifdef WEAVER_MSG_COUNT
-        , msg_count(0)
-#endif
         , watch_set_lookups(0)
         , watch_set_nops(0)
         , watch_set_piggybacks(0)
@@ -292,6 +285,7 @@ namespace db
     {
         shard_id = shardid;
         comm.init(config);
+        update_members_new_config();
         for (int i = 0; i < NUM_THREADS; i++) {
             hstub.push_back(new hyper_stub(shard_id));
         }
@@ -311,6 +305,7 @@ namespace db
         WDEBUG << "Cluster reconfigure" << std::endl;
 
         comm.reconfigure(config);
+        update_members_new_config();
         //if (comm.reconfigure(config) == server.get()
         // && !active_backup
         // && server.get() > NumEffectiveServers) {
@@ -320,6 +315,33 @@ namespace db
         //        restore_backup();
         //        backup_cond.signal();
         //}
+    }
+
+    inline void
+    shard :: update_members_new_config()
+    {
+        std::vector<std::pair<server_id, po6::net::location>> addresses;
+        config.get_all_addresses(&addresses);
+
+        uint64_t num_shards = 0;
+        for (auto &p: addresses) {
+            if (config.get_type(p.first) == server::SHARD) {
+                num_shards++;
+            }
+        }
+
+        migration_mutex.lock();
+        shard_node_count.resize(num_shards, 0);
+        if (migr_updating_nbrs) {
+            // currently sent out request to update nbrs
+            // set all new members to true
+            migr_edge_acks.resize(num_shards, true);
+        } else {
+            migr_edge_acks.resize(num_shards, false);
+        }
+        migration_mutex.unlock();
+
+        update_config_constants(num_shards);
     }
 
     inline void
@@ -512,7 +534,7 @@ namespace db
         if (!migrate) {
             new_node->state = element::node::mode::STABLE;
 #ifdef WEAVER_CLDG
-            new_node->msg_count.resize(NumShards, 0);
+            new_node->msg_count.resize(get_num_shards(), 0);
 #endif
             if (!init_load) {
                 // store in Hyperdex
@@ -851,6 +873,7 @@ namespace db
     inline void
     shard :: permanent_node_delete(element::node *n)
     {
+        uint64_t num_shards = get_num_shards();
         message::message msg;
         assert(n->waiters == 0);
         assert(!n->in_use);
@@ -859,7 +882,7 @@ namespace db
         // users should explicitly delete edges before nodes if the program requires
         // this loop isn't executed in case of deletion of migrated nodes
         if (n->state != element::node::mode::MOVED) {
-            for (uint64_t shard = ShardIdIncr; shard < ShardIdIncr + NumShards; shard++) {
+            for (uint64_t shard = ShardIdIncr; shard < ShardIdIncr + num_shards; shard++) {
                 msg.prepare_message(message::PERMANENTLY_DELETED_NODE, n->get_id());
                 comm.send(shard, msg.buf);
             }

@@ -46,11 +46,12 @@ comm_wrapper :: weaver_mapper :: add_mapping(uint64_t server_id, po6::net::locat
 
 
 comm_wrapper :: comm_wrapper(po6::net::location &my_loc, int nthr, int to)
-    : active_server_idx(NumEffectiveServers, UINT64_MAX)
+    : active_server_idx(NumVts, UINT64_MAX)
     , loc(new po6::net::location(my_loc))
     , num_threads(nthr)
     , timeout(to)
-{ }
+{
+}
 
 comm_wrapper :: ~comm_wrapper()
 {
@@ -116,9 +117,19 @@ comm_wrapper :: reconfigure_internal(configuration &new_config)
     std::vector<std::pair<server_id, po6::net::location>> addresses;
     config.get_all_addresses(&addresses);
 
+    uint64_t num_shards = 0;
+    for (auto &p: addresses) {
+        if (config.get_type(p.first) == server::SHARD) {
+            num_shards++;
+        }
+    }
+    assert(active_server_idx.size() <= (NumVts+num_shards));
+    active_server_idx.resize(NumVts+num_shards, UINT64_MAX);
+
     for (auto &p: addresses) {
         assert(config.get_weaver_id(p.first) != UINT64_MAX);
-        uint64_t factor = config.get_shard_or_vt(p.first) ? 1 : 0;
+        //uint64_t factor = config.get_shard_or_vt(p.first) ? 1 : 0;
+        uint64_t factor = config.get_type(p.first) == server::SHARD ? 1 : 0;
         uint64_t wid = config.get_weaver_id(p.first) + NumVts*factor;
         if (active_server_idx[wid] < UINT64_MAX
          && config.get_state(p.first) != server::AVAILABLE) {
@@ -147,7 +158,17 @@ comm_wrapper :: reconfigure_internal(configuration &new_config)
 busybee_returncode
 comm_wrapper :: send(uint64_t send_to, std::auto_ptr<e::buffer> msg)
 {
-    busybee_returncode code = bb->send(send_to < NumActualServers? active_server_idx[send_to] : send_to, msg);
+    busybee_returncode code = bb->send(active_server_idx[send_to], msg);
+    if (code != BUSYBEE_SUCCESS) {
+        WDEBUG << "busybee send returned " << code << std::endl;
+    }
+    return code;
+}
+
+busybee_returncode
+comm_wrapper :: send_to_client(uint64_t send_to, std::auto_ptr<e::buffer> msg)
+{
+    busybee_returncode code = bb->send(send_to, msg);
     if (code != BUSYBEE_SUCCESS) {
         WDEBUG << "busybee send returned " << code << std::endl;
     }

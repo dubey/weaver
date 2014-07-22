@@ -17,9 +17,11 @@
 
 #include <stdint.h>
 #include <vector>
+#include <po6/threads/rwlock.h>
 
 extern uint64_t NumVts;
 extern uint64_t NumShards;
+extern po6::threads::rwlock NumShardsLock;
 extern uint64_t NumBackups;
 extern uint64_t NumEffectiveServers;
 extern uint64_t NumActualServers;
@@ -38,6 +40,10 @@ extern uint16_t ServerManagerPort;
 extern std::vector<std::pair<char*, uint16_t>> ServerManagerLocs;
 
 void init_config_constants(const char *config_file_name);
+void update_config_constants(uint64_t num_shards);
+uint64_t get_num_shards();
+uint64_t get_num_effective_servers();
+uint64_t get_num_actual_servers();
 
 #define NUM_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
 #define ID_BITS 16 // max 2^16 timestampers

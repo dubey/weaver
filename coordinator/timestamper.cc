@@ -35,6 +35,7 @@
 // extern global variables
 uint64_t NumVts;
 uint64_t NumShards;
+po6::threads::rwlock NumShardsLock;
 uint64_t NumBackups;
 uint64_t NumEffectiveServers;
 uint64_t NumActualServers;
@@ -217,7 +218,7 @@ send_abort(uint64_t cl_id)
 {
     message::message msg;
     msg.prepare_message(message::CLIENT_TX_ABORT);
-    vts->comm.send(cl_id, msg.buf);
+    vts->comm.send_to_client(cl_id, msg.buf);
 }
 
 // caution: assuming caller holds vts->busy_mtx
@@ -621,8 +622,9 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
         all_map.emplace(entry);
     }
 
-    std::vector<transaction::pending_tx> tv(NumShards, transaction::pending_tx());
-    std::vector<bool> shard_write(NumShards, false);
+    uint64_t num_shards = get_num_shards();
+    std::vector<transaction::pending_tx> tv(num_shards, transaction::pending_tx());
+    std::vector<bool> shard_write(num_shards, false);
     int shard_count = 0;
     vts->clk_rw_mtx.wrlock();
 
@@ -687,7 +689,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
 
     // send tx batches
     message::message msg;
-    for (uint64_t i = 0; i < NumShards; i++) {
+    for (uint64_t i = 0; i < num_shards; i++) {
         if (!tv[i].writes.empty()) {
             tv[i].timestamp = tx_clk;
             tv[i].id = tx_id;
@@ -740,7 +742,7 @@ end_transaction(uint64_t tx_id, coordinator::hyper_stub *hstub)
 
         // send response to client
         msg.prepare_message(message::CLIENT_TX_SUCCESS);
-        vts->comm.send(tx->client_id, msg.buf);
+        vts->comm.send_to_client(tx->client_id, msg.buf);
     } else {
         vts->tx_prog_mutex.unlock();
     }
@@ -759,7 +761,7 @@ nop_function()
     vc::vclock_t max_done_clk;
     uint64_t num_outstanding_progs;
     typedef std::vector<std::pair<uint64_t, node_prog::prog_type>> done_req_t;
-    std::vector<done_req_t> done_reqs(NumShards, done_req_t());
+    std::vector<done_req_t> done_reqs(get_num_shards(), done_req_t());
     std::vector<uint64_t> del_done_reqs;
     message::message msg;
     //bool nop_sent, clock_synced;
@@ -776,13 +778,16 @@ nop_function()
         //clock_synced = false;
         vts->periodic_update_mutex.lock();
 
+        uint64_t num_shards = get_num_shards();
+        done_reqs.resize(num_shards, done_req_t());
+
         // send nops and state cleanup info to shards
         if (weaver_util::any(vts->to_nop)) {
             req_id = vts->generate_req_id();
             vts->clk_rw_mtx.wrlock();
             vts->vclk.increment_clock();
             vclk.clock = vts->vclk.clock;
-            for (uint64_t shard_id = 0; shard_id < NumShards; shard_id++) {
+            for (uint64_t shard_id = 0; shard_id < num_shards; shard_id++) {
                 if (vts->to_nop[shard_id]) {
                     vts->qts[shard_id]++;
                     done_reqs[shard_id].clear();
@@ -802,8 +807,8 @@ nop_function()
                 for (auto &reply: x.second) {
                     // reply.first = req_id
                     // reply.second = vector<bool>(NumShards)
-                    for (uint64_t shard_id = 0; shard_id < NumShards; shard_id++) {
-                        if (vts->to_nop[shard_id] && !reply.second[shard_id]) {
+                    for (uint64_t shard_id = 0; shard_id < num_shards; shard_id++) {
+                        if (vts->to_nop[shard_id] && (reply.second.size() > shard_id) && !reply.second[shard_id]) {
                             reply.second[shard_id] = true;
                             done_reqs[shard_id].emplace_back(std::make_pair(reply.first, x.first));
                         }
@@ -818,7 +823,7 @@ nop_function()
             }
             vts->tx_prog_mutex.unlock();
 
-            for (uint64_t shard_id = 0; shard_id < NumShards; shard_id++) {
+            for (uint64_t shard_id = 0; shard_id < num_shards; shard_id++) {
                 if (vts->to_nop[shard_id]) {
                     assert(vclk.clock.size() == NumVts);
                     assert(max_done_clk.size() == NumVts);
@@ -944,7 +949,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             WDEBUG << "bad node handles in node prog request" << std::endl;
             uint64_t zero = 0;
             msg->prepare_message(message::NODE_PROG_RETURN, pType, zero, ParamsType());
-            vts->comm.send(clientID, msg->buf);
+            vts->comm.send_to_client(clientID, msg->buf);
             return;
         }
 
@@ -1134,38 +1139,11 @@ server_loop(int thread_id)
                     break;
                 }
 
-                case message::CLIENT_MSG_COUNT: {
-                    vts->msg_count_mutex.lock();
-                    vts->msg_count = 0;
-                    vts->msg_count_acks = 0;
-                    vts->msg_count_mutex.unlock();
-                    for (uint64_t i = ShardIdIncr; i < (ShardIdIncr + NumShards); i++) {
-                        msg->prepare_message(message::MSG_COUNT, vt_id);
-                        vts->comm.send(i, msg->buf);
-                    }
-                    break;
-                }
-
                 case message::CLIENT_NODE_COUNT: {
                     vts->periodic_update_mutex.lock();
                     msg->prepare_message(message::NODE_COUNT_REPLY, vts->shard_node_count);
                     vts->periodic_update_mutex.unlock();
-                    vts->comm.send(client_sender, msg->buf);
-                    break;
-                }
-
-                // shard messages
-                case message::LOADED_GRAPH: {
-                    uint64_t load_time;
-                    msg->unpack_message(message::LOADED_GRAPH, load_time);
-                    vts->graph_load_mutex.lock();
-                    if (load_time > vts->max_load_time) {
-                        vts->max_load_time = load_time;
-                    }
-                    if (++vts->load_count == NumShards) {
-                        WDEBUG << "Graph loaded on all machines, time taken = " << vts->max_load_time << " nanosecs." << std::endl;
-                    }
-                    vts->graph_load_mutex.unlock();
+                    vts->comm.send_to_client(client_sender, msg->buf);
                     break;
                 }
 
@@ -1174,19 +1152,19 @@ server_loop(int thread_id)
                     end_transaction(tx_id, hstub);
                     break;
 
-                case message::START_MIGR: {
-                    uint64_t hops = UINT64_MAX;
-                    msg->prepare_message(message::MIGRATION_TOKEN, hops, vt_id);
-                    vts->comm.send(ShardIdIncr, msg->buf); 
-                    break;
-                }
+                //case message::START_MIGR: {
+                //    uint64_t hops = UINT64_MAX;
+                //    msg->prepare_message(message::MIGRATION_TOKEN, hops, vt_id);
+                //    vts->comm.send(ShardIdIncr, msg->buf); 
+                //    break;
+                //}
 
                 case message::ONE_STREAM_MIGR: {
-                    uint64_t hops = NumShards;
+                    uint64_t hops = get_num_shards();
                     vts->migr_mutex.lock();
                     vts->migr_client = client_sender;
                     vts->migr_mutex.unlock();
-                    msg->prepare_message(message::MIGRATION_TOKEN, hops, vt_id);
+                    msg->prepare_message(message::MIGRATION_TOKEN, hops, hops, vt_id);
                     vts->comm.send(ShardIdIncr, msg->buf);
                     break;
                 }
@@ -1196,7 +1174,7 @@ server_loop(int thread_id)
                     uint64_t client = vts->migr_client;
                     vts->migr_mutex.unlock();
                     msg->prepare_message(message::DONE_MIGR);
-                    vts->comm.send(client, msg->buf);
+                    vts->comm.send_to_client(client, msg->buf);
                     WDEBUG << "Shard node counts are:";
                     for (uint64_t &x: vts->shard_node_count) {
                         std::cerr << " " << x;
@@ -1219,25 +1197,13 @@ server_loop(int thread_id)
                     auto outstanding_prog_iter = vts->outstanding_progs.find(req_id);
                     if (outstanding_prog_iter != vts->outstanding_progs.end()) { 
                         uint64_t client = outstanding_prog_iter->second.client;
-                        vts->done_reqs[type].emplace(req_id, std::vector<bool>(NumShards, false));
-                        vts->comm.send(client, msg->buf);
+                        vts->done_reqs[type].emplace(req_id, std::vector<bool>(get_num_shards(), false));
+                        vts->comm.send_to_client(client, msg->buf);
                         mark_req_finished(req_id);
                     } else {
                         WDEBUG << "node prog return for already completed or never existed req id" << std::endl;
                     }
                     vts->tx_prog_mutex.unlock();
-                    break;
-                }
-
-                case message::MSG_COUNT: {
-                    uint64_t shard, msg_count;
-                    msg->unpack_message(message::MSG_COUNT, shard, msg_count);
-                    vts->msg_count_mutex.lock();
-                    vts->msg_count += msg_count;
-                    if (++vts->msg_count_acks == NumShards) {
-                        WDEBUG << "Msg count = " << vts->msg_count << std::endl;
-                    }
-                    vts->msg_count_mutex.unlock();
                     break;
                 }
 
@@ -1276,7 +1242,7 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location loc)
 
     vts->sm_stub.set_server_manager_address(sm_host.address.c_str(), sm_host.port);
 
-    if (!vts->sm_stub.register_id(vts->server, loc, 1))
+    if (!vts->sm_stub.register_id(vts->server, loc, server::VT))
     {
         return;
     }
@@ -1438,7 +1404,6 @@ main(int argc, const char *argv[])
             WDEBUG << "bad backup number" << std::endl;
             return -1;
         }
-        //server_id = vt_id + NumEffectiveServers*backup_input;
     }
 
     po6::net::location my_loc(listen_host, listen_port);
@@ -1465,7 +1430,7 @@ main(int argc, const char *argv[])
     for (auto &p: addresses) {
         if (p.second == my_loc) {
             uint64_t wid = vts->config.get_weaver_id(p.first);
-            assert(!vts->config.get_shard_or_vt(p.first));
+            assert(vts->config.get_type(p.first) == server::VT);
             vt_id = wid;
         }
     }

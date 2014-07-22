@@ -114,10 +114,10 @@ init_config_constants(const char *config_file_name)
                     PARSE_VALUE_SCALAR;
                     PARSE_INT(NumVts);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "num_shards", 10) == 0) {
-                    yaml_token_delete(&token);
-                    PARSE_VALUE_SCALAR;
-                    PARSE_INT(NumShards);
+                //} else if (strncmp((const char*)token.data.scalar.value, "num_shards", 10) == 0) {
+                //    yaml_token_delete(&token);
+                //    PARSE_VALUE_SCALAR;
+                //    PARSE_INT(NumShards);
 
                 } else if (strncmp((const char*)token.data.scalar.value, "num_backups", 11) == 0) {
                     yaml_token_delete(&token);
@@ -196,4 +196,45 @@ init_config_constants(const char *config_file_name)
     NumEffectiveServers = NumVts + NumShards;
     NumActualServers = NumEffectiveServers * (1+NumBackups);
     ShardIdIncr = NumVts;
+}
+
+void
+update_config_constants(uint64_t num_shards)
+{
+    NumShardsLock.wrlock();
+    assert(num_shards >= NumShards);
+    NumShards = num_shards;
+    NumEffectiveServers = NumVts + NumShards;
+    NumActualServers = NumEffectiveServers * (1+NumBackups);
+    NumShardsLock.unlock();
+}
+
+uint64_t
+get_num_shards()
+{
+    NumShardsLock.rdlock();
+    uint64_t num_shards = NumShards;
+    NumShardsLock.unlock();
+
+    return num_shards;
+}
+
+uint64_t
+get_num_effective_servers()
+{
+    NumShardsLock.rdlock();
+    uint64_t num_effective_servers = NumEffectiveServers;
+    NumShardsLock.unlock();
+
+    return num_effective_servers;
+}
+
+uint64_t
+get_num_actual_servers()
+{
+    NumShardsLock.rdlock();
+    uint64_t num_actual_servers = NumActualServers;
+    NumShardsLock.unlock();
+
+    return num_actual_servers;
 }

@@ -21,6 +21,7 @@
 // global extern variables
 uint64_t NumVts;
 uint64_t NumShards;
+po6::threads::rwlock NumShardsLock;
 uint64_t NumBackups;
 uint64_t NumEffectiveServers;
 uint64_t NumActualServers;
@@ -63,8 +64,6 @@ main(int argc, const char *argv[])
 
     if (config == "num_vts") {
         std::cout << NumVts << std::endl;
-    } else if (config == "num_shards") {
-        std::cout << NumShards << std::endl;
     } else if (config == "num_backups") {
         std::cout << NumBackups << std::endl;
     } else if (config == "max_cache_entries") {

@@ -39,6 +39,12 @@ class server
             SHUTDOWN = 4,
             KILLED = 5
         };
+        enum type_t
+        {
+            UNDEF = 0,
+            SHARD = 1,
+            VT = 2
+        };
         static const char* to_string(state_t state);
 
     public:
@@ -49,7 +55,8 @@ class server
         state_t state;
         server_id id;
         uint64_t weaver_id;
-        int shard_or_vt; // 0=shard, 1=vt
+        //int shard_or_vt; // 0=shard, 1=vt
+        type_t type;
         po6::net::location bind_to;
 };
 
