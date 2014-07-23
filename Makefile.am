@@ -83,7 +83,9 @@ noinst_HEADERS+=	node_prog/base_classes.h \
 					common/serialization.h \
 					common/server_manager_link_wrapper.h \
 					common/vclock.h \
-                    common/bool_vector.h
+                    common/bool_vector.h \
+                    common/types.h \
+                    common/utils.h
 
 # timestamper
 noinst_HEADERS+=	coordinator/current_prog.h \
