@@ -44,7 +44,7 @@ do
     directory="~/weaver_runtime/hyperdex/daemon$idx"
     echo "Starting HyperDex daemon $i at location $ipaddr : $port, data at $directory"
     ssh $ipaddr "\
-        setopt nullglob && \
+        shopt -s nullglob && \
         mkdir -p $directory && \
         cd $directory && \
         rm -f $rm_patterns hyperdex-daemon-* && \
@@ -127,7 +127,7 @@ do
     directory="~/weaver_runtime/server_manager/daemon$idx"
     echo "Starting server manager at location  $ipaddr: $port, data at $directory"
     ssh $ipaddr "\
-        setopt nullglob && \
+        shopt -s nullglob && \
         mkdir -p $directory && \
         cd $directory && \
         rm -f *.log *.sst *.old CURRENT  LOCK  LOG  MANIFEST* replicant-daemon-* && \
@@ -135,7 +135,7 @@ do
 done
 sleep 1
 
-replicant new-object -h ${server_manager_ipaddr[0]} -p ${server_manager_port[0]} weaver /usr/local/lib/libweaverservermanager.so
+replicant new-object -h ${server_manager_ipaddr[0]} -p ${server_manager_port[0]} weaver /usr/lib/libweaverservermanager.so
 
 
 # kronos
@@ -148,7 +148,7 @@ do
     directory="~/weaver_runtime/kronos/daemon$idx"
     echo "Starting Kronos at location  $ipaddr: $port, data at $directory"
     ssh $ipaddr "\
-        setopt nullglob && \
+        shopt -s nullglob && \
         mkdir -p $directory && \
         cd $directory && \
         rm -f *.log *.sst *.old CURRENT  LOCK  LOG  MANIFEST* replicant-daemon-* && \
@@ -156,6 +156,6 @@ do
 done
 sleep 1
 
-replicant new-object -h ${kronos_ipaddr[0]} -p ${kronos_port[0]} chronosd /usr/local/lib/libchronosd.so
+replicant new-object -h ${kronos_ipaddr[0]} -p ${kronos_port[0]} chronosd /usr/lib/libchronosd.so
 
 echo 'Done startup.'

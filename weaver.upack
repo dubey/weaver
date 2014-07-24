@@ -44,8 +44,11 @@ subpackage libweaverclient
 
 subpackage python-weaver-client
 | summary="Python bindings for Weaver"
-| deb requires="libpython2.7"
+| deb requires="libpython2.7, libweaverclient0"
 + {pythondir}/weaver/client.so
++ {pythondir}/weaver/client.so.0
++ {pythondir}/weaver/client.so.0.0.0
++ {pythondir}/weaver/__init__.py
 '''{summary}'''
 
 subpackage weaver-config
