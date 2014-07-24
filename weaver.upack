@@ -1,0 +1,55 @@
+package weaver
+| source="weaver"
+| section="net"
+| dist="Ubuntu"
+| version="0.1"
+| release="1"
+| epoch="1"
+| license="BSD"
+| copyright="2011-2014 Cornell University"
+| homepage="http://www.cs.cornell.edu/~dubey"
+| tarball="http://www.cs.cornell.edu/~dubey/src/weaver-{version}.tar.gz"
+| configure="--enable-debug=yes"
+| summary="A distributed graph store"
+| build-requires="autoconf, autoconf-archive, build-essential, libtool, python-dev, libyaml-dev, libpopt-dev, cython, sparsehash, libpo6-dev, libe-dev, libbusybee-dev, libhyperleveldb-dev, replicant, libreplicant-dev, libreplicant-state-machine-dev, libhyperdex-dev, libhyperdex-client-dev, chronos"
+| requires="weaver-shard, weaver-timestamper, libweaverclient, python-weaver-client, weaver-config"
+'''{summary}'''
+
+subpackage weaver-shard
+| summary="Shards for Weaver"
++ {bindir}/weaver-shard
+'''{summary}'''
+
+subpackage weaver-timestamper
+| summary="Timestampers for Weaver"
++ {bindir}/weaver-timestamper
+'''{summary}'''
+
+subpackage libweaverservermanager
+| deb name="libweaverservermanager0"
+| summary="Server manager for Weaver"
++ {libdir}/libweaverservermanager.so
++ {libdir}/libweaverservermanager.so.0
++ {libdir}/libweaverservermanager.so.0.0.0
+'''{summary}'''
+
+subpackage libweaverclient
+| deb name="libweaverclient0"
+| summary="C++ client for Weaver"
++ {includedir}/weaver_client.h
++ {libdir}/libweaverclient.so
++ {libdir}/libweaverclient.so.0
++ {libdir}/libweaverclient.so.0.0.0
+'''{summary}'''
+
+subpackage python-weaver-client
+| summary="Python bindings for Weaver"
+| deb requires="libpython2.7"
++ {pythondir}/weaver/client.so
+'''{summary}'''
+
+subpackage weaver-config
+| summary="Parse weaver configuration"
++ {bindir}/weaver-parse-config
++ /etc/weaver.yaml
+'''{summary}'''

@@ -28,7 +28,7 @@ rm_patterns="*.log *.sst *.old CURRENT  LOCK  LOG  MANIFEST*"
 hyperdex_coord_dir="~/weaver_runtime/hyperdex/coord"
 echo "Starting HyperDex coordinator at location $hyperdex_coord_ipaddr : $hyperdex_coord_port, data at $hyperdex_coord_dir"
 ssh $hyperdex_coord_ipaddr "\
-    setopt nullglob && \
+    shopt -s nullglob && \
     mkdir -p $hyperdex_coord_dir && \
     cd $hyperdex_coord_dir && \
     rm -f $rm_patterns replicant-daemon-* && \

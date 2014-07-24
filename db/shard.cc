@@ -2089,7 +2089,7 @@ main(int argc, const char *argv[])
     // command line params
     const char* listen_host = "auto";
     long listen_port = 5201;
-    const char *config_file = "/usr/local/etc/weaver.yaml";
+    const char *config_file = "/etc/weaver.yaml";
     const char *graph_file = NULL;
     const char *graph_format = "snap";
     long backup_input = LONG_MAX;
@@ -2107,7 +2107,7 @@ main(int argc, const char *argv[])
             .description("backup number (not backup by default)")
             .metavar("num").as_long(&backup_input);
     ap.arg().long_name("config-file")
-            .description("full path of weaver.yaml configuration file (default /usr/local/etc/weaver.yaml)")
+            .description("full path of weaver.yaml configuration file (default /etc/weaver.yaml)")
             .metavar("filename").as_string(&config_file);
     ap.arg().long_name("graph-file")
             .description("full path of bulk load input graph file (no default)")

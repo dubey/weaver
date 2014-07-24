@@ -43,7 +43,7 @@ using transaction::pending_update;
 
 client :: client(const char *coordinator
     , uint16_t port
-    , const char *config_file="/usr/local/etc/weaver.yaml")
+    , const char *config_file="/etc/weaver.yaml")
     : m_sm(coordinator, port)
     , cur_tx_id(UINT64_MAX)
     , tx_id_ctr(0)

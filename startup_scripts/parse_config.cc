@@ -41,7 +41,7 @@ int
 main(int argc, const char *argv[])
 {
     const char *config_name = "";
-    const char *config_file = "/usr/local/etc/weaver.yaml";
+    const char *config_file = "/etc/weaver.yaml";
     // arg parsing borrowed from HyperDex
     e::argparser ap;
     ap.autohelp();
@@ -49,7 +49,7 @@ main(int argc, const char *argv[])
             .description("name of configuration parameter")
             .metavar("param").as_string(&config_name);
     ap.arg().name('f', "config-file")
-            .description("full path of weaver.yaml configuration file (default /usr/local/etc/weaver.yaml)")
+            .description("full path of weaver.yaml configuration file (default /etc/weaver.yaml)")
             .metavar("file").as_string(&config_file);
 
     if (!ap.parse(argc, argv) || ap.args_sz() != 0) {

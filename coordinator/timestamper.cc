@@ -1361,7 +1361,7 @@ main(int argc, const char *argv[])
     // command line params
     const char* listen_host = "auto";
     long listen_port = 5200;
-    const char *config_file = "/usr/local/etc/weaver.yaml";
+    const char *config_file = "/etc/weaver.yaml";
     long backup_input = LONG_MAX;
     // arg parsing borrowed from HyperDex
     e::argparser ap;
@@ -1376,7 +1376,7 @@ main(int argc, const char *argv[])
             .description("backup number (not backup by default)")
             .metavar("num").as_long(&backup_input);
     ap.arg().long_name("config-file")
-            .description("full path of weaver.yaml configuration file (default /usr/local/etc/weaver.yaml)")
+            .description("full path of weaver.yaml configuration file (default /etc/weaver.yaml)")
             .metavar("filename").as_string(&config_file);
 
     if (!ap.parse(argc, argv) || ap.args_sz() != 0) {

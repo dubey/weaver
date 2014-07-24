@@ -40,3 +40,5 @@ tests/hyperdex_test
 weaver-shard
 weaver-timestamper
 weaver-parse-config
+Makefile.deb.weaver
+weaver-0.1.tar.gz
