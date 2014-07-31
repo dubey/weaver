@@ -1,0 +1,39 @@
+package chronos
+| source="chronos"
+| section="net"
+| dist="Ubuntu"
+| version="0.1"
+| release="1"
+| epoch="1"
+| license="BSD"
+| copyright="2011-2014 Cornell University"
+| homepage="http://www.cs.cornell.edu/~dubey"
+| tarball="http://www.cs.cornell.edu/~dubey/src/chronos-{version}.tar.gz"
+| configure=""
+| summary="An event ordering service"
+| build-requires="autoconf, autoconf-archive, build-essential, libtool, python-dev, cython, sparsehash, libpo6-dev, libe-dev, libbusybee-dev, replicant, libreplicant-dev, libreplicant-state-machine-dev"
+| requires="libchronos, libchronosd, python-chronos-client"
+'''{summary}'''
+
+subpackage libchronos
+| deb name="libchronos0"
+| summary="Chronos C++ client"
++ {includedir}/chronos.h
++ {libdir}/libchronos.so
++ {libdir}/libchronos.so.0
++ {libdir}/libchronos.so.0.0.0
+'''{summary}'''
+
+subpackage libchronosd
+| deb name="libchronosd0"
+| summary="Chronos daemon"
++ {libdir}/libchronosd.so
++ {libdir}/libchronosd.so.0
++ {libdir}/libchronosd.so.0.0.0
+'''{summary}'''
+
+subpackage python-chronos-client
+| summary="Python bindings for Chronos"
+| deb requires="libpython2.7"
++ {pythondir}/chronos.so
+'''{summary}'''

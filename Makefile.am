@@ -19,10 +19,9 @@ CYTHON=cython
 
 AM_CFLAGS=-Wall -Wextra
 AM_CXXFLAGS=-std=c++0x -Wall -Wextra
-#AM_CPPFLAGS=-I$(abs_top_srcdir)
 AM_CPPFLAGS=
 CYTHON_FLAGS=--cplus
-LIBS=-lbusybee -le -pthread -lrt -lhyperdex-client -lchronos -lreplicant -lyaml -lpopt
+LIBS=-lbusybee -le -pthread -lrt -lhyperdex-client -lreplicant -lyaml -lpopt
 
 if DEBUG
     AM_CFLAGS += -g3 -gdwarf-2 -Og
@@ -40,7 +39,7 @@ CLEANFILES=
 include_HEADERS=
 noinst_HEADERS=
 sysconf_DATA=
-EXTRA_DIST=
+EXTRA_DIST=LICENSE
 
 noinst_HEADERS+=	node_prog/base_classes.h \
 					node_prog/edge_count_program.h \
@@ -174,6 +173,9 @@ weaver_shard_SOURCES=	common/ids.cc \
 		                common/message_graph_elem.cc \
 		                common/message_cache_context.cc \
                         common/config_constants.cc \
+						chronos/chronos.cc \
+						chronos/chronos_c_wrappers.cc \
+						chronos/chronos_cmp_encode.cc \
 		                node_prog/edge_list.cc \
 		                node_prog/prop_list.cc \
 		                node_prog/reach_program.cc \
@@ -291,3 +293,16 @@ bin_PROGRAMS+=	weaver-parse-config
 weaver_parse_config_SOURCES=	common/config_constants.cc \
 								startup_scripts/parse_config.cc
 
+# chronos
+noinst_HEADERS+=	chronos/chronos_cmp_encode.h \
+					chronos/chronos_stats_encode.h \
+					chronos/event_dependency_graph.h \
+					chronos/network_constants.h \
+					chronos/chronos.h
+
+lib_LTLIBRARIES+=	libweaverchronosd.la
+libchronosd_la_SOURCES=	chronos/chronos_cmp_encode.cc \
+						chronos/chronos_stats_encode.cc \
+						chronos/chronosd.cc \
+						chronos/event_dependency_graph.cc \
+						chronos/replicant-shim.c
