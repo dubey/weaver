@@ -12,7 +12,7 @@ package weaver
 | configure="--enable-debug=yes"
 | summary="A distributed graph store"
 | build-requires="autoconf, autoconf-archive, build-essential, libtool, python-dev, libyaml-dev, libpopt-dev, cython, sparsehash, libpo6-dev, libe-dev, libbusybee-dev, libhyperleveldb-dev, replicant, libreplicant-dev, libreplicant-state-machine-dev, libhyperdex-dev, libhyperdex-client-dev, chronos"
-| requires="weaver-shard, weaver-timestamper, libweaverclient, python-weaver-client, weaver-config"
+| requires="weaver-shard, weaver-timestamper, libweaverclient, python-weaver-client, weaver-config, libweaverservermanager, libweaverchronosd"
 + /etc/weaver.yaml
 '''{summary}'''
 
@@ -55,4 +55,12 @@ subpackage python-weaver-client
 subpackage weaver-config
 | summary="Parse weaver configuration"
 + {bindir}/weaver-parse-config
+'''{summary}'''
+
+subpackage libweaverchronosd
+| deb name="libweaverchronosd0"
+| summary="Weaver Chronos daemon"
++ {libdir}/libweaverchronosd.so
++ {libdir}/libweaverchronosd.so.0
++ {libdir}/libweaverchronosd.so.0.0.0
 '''{summary}'''

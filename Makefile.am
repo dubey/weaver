@@ -109,6 +109,9 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    common/vclock.cc \
 		                    common/message.cc \
                             common/config_constants.cc \
+							chronos/chronos.cc \
+							chronos/chronos_c_wrappers.cc \
+							chronos/chronos_cmp_encode.cc \
 		                    node_prog/edge_list.cc \
 		                    node_prog/prop_list.cc \
 		                    node_prog/reach_program.cc \
@@ -212,6 +215,9 @@ libweaverclient_la_SOURCES=	common/ids.cc \
                             common/config_constants.cc \
                             common/server_manager_link.cc \
                             common/server_manager_link_wrapper.cc \
+							chronos/chronos.cc \
+							chronos/chronos_c_wrappers.cc \
+							chronos/chronos_cmp_encode.cc \
 		                    node_prog/prop_list.cc \
 		                    node_prog/edge_list.cc \
 		                    node_prog/clustering_program.cc \
@@ -301,8 +307,10 @@ noinst_HEADERS+=	chronos/chronos_cmp_encode.h \
 					chronos/chronos.h
 
 lib_LTLIBRARIES+=	libweaverchronosd.la
-libchronosd_la_SOURCES=	chronos/chronos_cmp_encode.cc \
-						chronos/chronos_stats_encode.cc \
-						chronos/chronosd.cc \
-						chronos/event_dependency_graph.cc \
-						chronos/replicant-shim.c
+libweaverchronosd_la_SOURCES=	chronos/chronos_cmp_encode.cc \
+		        				chronos/chronos_stats_encode.cc \
+		        				chronos/chronosd.cc \
+		        				chronos/event_dependency_graph.cc \
+		        				chronos/replicant-shim.c
+libweaverchronosd_la_CFLAGS= 	$(AM_CFLAGS)
+libweaverchronosd_la_CXXFLAGS=	$(AM_CXXFLAGS)
