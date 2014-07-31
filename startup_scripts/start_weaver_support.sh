@@ -156,6 +156,6 @@ do
 done
 sleep 1
 
-replicant new-object -h ${kronos_ipaddr[0]} -p ${kronos_port[0]} chronosd /usr/lib/libchronosd.so
+replicant new-object -h ${kronos_ipaddr[0]} -p ${kronos_port[0]} chronosd /usr/lib/libweaverchronosd.so
 
 echo 'Done startup.'
