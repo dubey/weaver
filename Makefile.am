@@ -307,7 +307,8 @@ noinst_HEADERS+=	chronos/chronos_cmp_encode.h \
 					chronos/chronos.h
 
 lib_LTLIBRARIES+=	libweaverchronosd.la
-libweaverchronosd_la_SOURCES=	chronos/chronos_cmp_encode.cc \
+libweaverchronosd_la_SOURCES=	common/config_constants.cc \
+								chronos/chronos_cmp_encode.cc \
 		        				chronos/chronos_stats_encode.cc \
 		        				chronos/chronosd.cc \
 		        				chronos/event_dependency_graph.cc \

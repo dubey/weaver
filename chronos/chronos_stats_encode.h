@@ -35,7 +35,7 @@
 #include <e/buffer.h>
 
 // Chronos
-#include <chronos.h>
+#include "chronos/chronos.h"
 
 e::buffer::packer
 operator << (e::buffer::packer lhs, const chronos_stats& rhs);

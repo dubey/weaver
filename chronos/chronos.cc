@@ -1,5 +1,4 @@
-// Copyright (c) 2012, Cornell University
-// All rights reserved.
+// Copyright (c) 2012, Cornell University // All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are met:
@@ -43,12 +42,11 @@
 #include <replicant.h>
 
 // Chronos
-#include "chronos.h"
-#include "chronos_cmp_encode.h"
-#include "network_constants.h"
-
-// global externs
-uint64_t KronosNumVts;
+#include "common/weaver_constants.h"
+#include "common/config_constants.h"
+#include "chronos/chronos.h"
+#include "chronos/chronos_cmp_encode.h"
+#include "chronos/network_constants.h"
 
 class chronos_client::pending
 {
@@ -182,11 +180,10 @@ class chronos_client::pending_get_stats : public pending
         ssize_t* m_ret;
 };
 
-chronos_client :: chronos_client(const char* host, uint16_t port, uint64_t num_vts)
+chronos_client :: chronos_client(const char* host, uint16_t port)
     : m_replicant(new replicant_client(host, port))
     , m_pending()
 {
-    KronosNumVts = num_vts;
 }
 
 chronos_client :: ~chronos_client() throw ()
@@ -285,7 +282,7 @@ int64_t
 chronos_client :: weaver_order(weaver_pair *pairs, size_t pairs_sz,
         chronos_returncode *status, ssize_t *ret)
 {
-    std::vector<char> buffer(pairs_sz * (2 * sizeof(uint64_t) * KronosNumVts // vector clocks
+    std::vector<char> buffer(pairs_sz * (2 * sizeof(uint64_t) * NumVts // vector clocks
             + 2 * sizeof(uint64_t) // vt_ids
             + sizeof(uint32_t) // flags
             + sizeof(uint8_t))); // preferred order
@@ -293,8 +290,8 @@ chronos_client :: weaver_order(weaver_pair *pairs, size_t pairs_sz,
 
     // pack weaver pairs
     for (size_t i = 0; i < pairs_sz; i++) {
-        p = pack_vector_uint64(pairs[i].lhs, KronosNumVts, p);
-        p = pack_vector_uint64(pairs[i].rhs, KronosNumVts, p);
+        p = pack_vector_uint64(pairs[i].lhs, NumVts, p);
+        p = pack_vector_uint64(pairs[i].rhs, NumVts, p);
         p = e::pack64le(pairs[i].lhs_id, p);
         p = e::pack64le(pairs[i].rhs_id, p);
         p = e::pack32le(pairs[i].flags, p);
@@ -388,10 +385,10 @@ chronos_client :: send(e::intrusive_ptr<pending> pend, chronos_returncode* statu
     }
     else
     {
-        KDEBUG << std::endl;
+        WDEBUG << std::endl;
         e::error send_error = m_replicant->last_error();
-        KDEBUG << send_error.msg();
-        KDEBUG << send_error.loc();
+        WDEBUG << send_error.msg();
+        WDEBUG << send_error.loc();
         *status = CHRONOS_ERROR;
         return ret;
     }

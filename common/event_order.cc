@@ -16,7 +16,7 @@
 
 namespace order
 {
-    chronos_client *kronos_cl = chronos_client_create(KronosIpaddr, KronosPort, NumVts);
+    chronos_client *kronos_cl = chronos_client_create(KronosIpaddr, KronosPort);
     po6::threads::mutex kronos_mutex;
     uint64_t cache_hits = 0;
     kronos_cache kcache;

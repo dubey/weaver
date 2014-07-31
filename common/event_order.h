@@ -18,11 +18,11 @@
 #include <list>
 #include <unordered_map>
 #include <unordered_set>
-#include <chronos.h>
 #include <po6/threads/mutex.h>
 
 #include "common/weaver_constants.h"
 #include "common/vclock.h"
+#include "chronos/chronos.h"
 
 namespace order
 {

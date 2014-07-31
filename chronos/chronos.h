@@ -50,17 +50,6 @@
 // Replicant
 #include <replicant.h>
 
-#define __KRONOS_DEBUG__
-#ifdef __KRONOS_DEBUG__
-#define KDEBUG std::cerr << __FILE__ << ":" << __LINE__ << " "
-#else
-#define KDEBUG if (0) std::cerr << __FILE__ << ":" << __LINE__ << " "
-#endif
-
-// Weaver
-extern uint64_t KronosNumVts;
-//#define KRONOS_NUM_VTS 2
-
 extern "C" {
 #endif
 
@@ -123,7 +112,7 @@ struct chronos_stats
  * maintain state necessary for the chronos_client.
  */
 struct chronos_client*
-chronos_client_create(const char* host, uint16_t port, uint64_t num_vts);
+chronos_client_create(const char* host, uint16_t port);
 
 /* Destroy an existing client instance.
  */
@@ -276,7 +265,7 @@ chronos_wait(struct chronos_client* client, int64_t id, int timeout, enum chrono
 class chronos_client
 {
     public:
-        chronos_client(const char* host, uint16_t port, uint64_t num_vts);
+        chronos_client(const char* host, uint16_t port);
         ~chronos_client() throw ();
 
     public:
