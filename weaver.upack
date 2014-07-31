@@ -11,7 +11,7 @@ package weaver
 | tarball="http://www.cs.cornell.edu/~dubey/src/weaver-{version}.tar.gz"
 | configure="--enable-debug=yes"
 | summary="A distributed graph store"
-| build-requires="autoconf, autoconf-archive, build-essential, libtool, python-dev, libyaml-dev, libpopt-dev, cython, sparsehash, libpo6-dev, libe-dev, libbusybee-dev, libhyperleveldb-dev, replicant, libreplicant-dev, libreplicant-state-machine-dev, libhyperdex-dev, libhyperdex-client-dev, chronos"
+| build-requires="autoconf, autoconf-archive, build-essential, libtool, python-dev, libyaml-dev, libpopt-dev, cython, sparsehash, libpo6-dev, libe-dev, libbusybee-dev, libhyperleveldb-dev, replicant, libreplicant-dev, libreplicant-state-machine-dev, libhyperdex-dev, libhyperdex-client-dev"
 | requires="weaver-shard, weaver-timestamper, libweaverclient, python-weaver-client, weaver-config, libweaverservermanager, libweaverchronosd"
 + /etc/weaver.yaml
 '''{summary}'''

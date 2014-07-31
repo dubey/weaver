@@ -36,7 +36,7 @@
 #include <vector>
 
 // Google SparseHash
-#include <sparsehash/sparse_hash_map>
+#include <google/sparse_hash_map>
 
 struct equint64_t
 {
