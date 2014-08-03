@@ -30,12 +30,12 @@ Weaver requires the popt library; please install to continue.
 -------------------------------------------------------------])])
 
 
-PKG_CHECK_MODULES([PO6], [libpo6 >= 0.5.dev])
-PKG_CHECK_MODULES([E], [libe >= 0.7.dev])
-PKG_CHECK_MODULES([BUSYBEE], [busybee >= 0.5.dev])
-PKG_CHECK_MODULES([HYPERLEVELDB], [libhyperleveldb >= 1.0.dev])
-PKG_CHECK_MODULES([REPLICANT], [replicant >= 0.6.dev])
-PKG_CHECK_MODULES([HYPERDEX], [hyperdex-client >= 1.0.dev])
+PKG_CHECK_MODULES([PO6], [libpo6 >= 0.5])
+PKG_CHECK_MODULES([E], [libe >= 0.7])
+PKG_CHECK_MODULES([BUSYBEE], [busybee >= 0.5])
+PKG_CHECK_MODULES([HYPERLEVELDB], [libhyperleveldb >= 1.0])
+PKG_CHECK_MODULES([REPLICANT], [replicant >= 0.6])
+PKG_CHECK_MODULES([HYPERDEX], [hyperdex-client >= 1.0])
 
 # Checks for header files.
 AC_CHECK_HEADERS([limits.h mach/mach.h stdint.h stdlib.h string.h sys/time.h])
