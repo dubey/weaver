@@ -2218,6 +2218,7 @@ main(int argc, const char *argv[])
     } else {
         // this server is primary shard, start now
         std::cout << "Weaver: shard instance " << S->shard_id << std::endl;
+        std::cout << "THIS IS AN ALPHA RELEASE WHICH DOES NOT SUPPORT FAULT TOLERANCE" << std::endl;
     }
 
     for (auto t: worker_threads) {

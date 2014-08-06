@@ -1475,6 +1475,7 @@ main(int argc, const char *argv[])
     vts->config_mutex.unlock();
 
     std::cout << "Vector timestamper " << vt_id << std::endl;
+    std::cout << "THIS IS AN ALPHA RELEASE WHICH DOES NOT SUPPORT FAULT TOLERANCE" << std::endl;
 
     // periodic vector clock update to other timestampers
     std::thread clk_update_thr(clk_update_function);
