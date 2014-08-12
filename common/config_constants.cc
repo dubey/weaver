@@ -114,11 +114,6 @@ init_config_constants(const char *config_file_name)
                     PARSE_VALUE_SCALAR;
                     PARSE_INT(NumVts);
 
-                //} else if (strncmp((const char*)token.data.scalar.value, "num_shards", 10) == 0) {
-                //    yaml_token_delete(&token);
-                //    PARSE_VALUE_SCALAR;
-                //    PARSE_INT(NumShards);
-
                 } else if (strncmp((const char*)token.data.scalar.value, "num_backups", 11) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
@@ -129,15 +124,12 @@ init_config_constants(const char *config_file_name)
                     PARSE_VALUE_SCALAR;
                     PARSE_INT(MaxCacheEntries);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_coord_ipaddr", 21) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_coord", 14) == 0) {
                     yaml_token_delete(&token);
-                    PARSE_VALUE_SCALAR;
-                    PARSE_IPADDR(HyperdexCoordIpaddr);
-
-                } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_coord_port", 19) == 0) {
-                    yaml_token_delete(&token);
-                    PARSE_VALUE_SCALAR;
-                    PARSE_INT(HyperdexCoordPort);
+                    PARSE_VALUE_IPADDR_PORT_BLOCK(HyperdexCoord);
+                    assert(!HyperdexCoord.empty());
+                    HyperdexCoordIpaddr = HyperdexCoord[0].first;
+                    HyperdexCoordPort = HyperdexCoord[0].second;
 
                 } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_daemons", 16) == 0) {
                     yaml_token_delete(&token);
@@ -150,7 +142,7 @@ init_config_constants(const char *config_file_name)
                     KronosIpaddr = KronosLocs[0].first;
                     KronosPort = KronosLocs[0].second;
 
-                } else if (strncmp((const char*)token.data.scalar.value, "server_manager", 14) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, "weaver_coord", 14) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_IPADDR_PORT_BLOCK(ServerManagerLocs);
                     assert(!ServerManagerLocs.empty());

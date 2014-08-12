@@ -29,6 +29,7 @@ extern uint64_t ShardIdIncr;
 
 extern char *HyperdexCoordIpaddr;
 extern uint16_t HyperdexCoordPort;
+extern std::vector<std::pair<char*, uint16_t>> HyperdexCoord;
 extern std::vector<std::pair<char*, uint16_t>> HyperdexDaemons;
 
 extern char *KronosIpaddr;

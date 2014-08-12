@@ -1,11 +1,11 @@
 num_vts     : 1
 num_backups : 0
 max_cache_entries : 0
-hyperdex_coord_ipaddr : 127.0.0.1
-hyperdex_coord_port : 7982
+hyperdex_coord:
+    - 127.0.0.1 : 7982
 hyperdex_daemons:
     - 127.0.0.1 : 8012
 kronos:
     - 127.0.0.1 : 1992
-server_manager:
+weaver_coord:
     - 127.0.0.1 : 2002
