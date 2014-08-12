@@ -40,12 +40,27 @@ server :: to_string(state_t state)
     }
 }
 
+const char*
+server :: to_string(type_t type)
+{
+    switch (type)
+    {
+        case UNDEF:
+            return "UNDEF";
+        case SHARD:
+            return "SHARD";
+        case VT:
+            return "VT";
+        default:
+            return "BADTYPE";
+    }
+}
+
 server :: server()
     : state(KILLED)
     , id()
     , weaver_id(UINT64_MAX)
     , type(UNDEF)
-    //, shard_or_vt(-1)
     , bind_to()
 {
 }
@@ -55,7 +70,6 @@ server :: server(const server_id& sid)
     , id(sid)
     , weaver_id(UINT64_MAX)
     , type(UNDEF)
-    //, shard_or_vt(-1)
     , bind_to()
 {
 }
@@ -71,7 +85,6 @@ operator << (e::buffer::packer lhs, const server& rhs)
 {
     uint8_t s = static_cast<uint8_t>(rhs.state);
     uint8_t t = static_cast<uint8_t>(rhs.type);
-    //return lhs << s << rhs.id << rhs.weaver_id << rhs.shard_or_vt << rhs.bind_to;
     return lhs << s << rhs.id << rhs.weaver_id << t << rhs.bind_to;
 }
 
@@ -79,7 +92,6 @@ e::unpacker
 operator >> (e::unpacker lhs, server& rhs)
 {
     uint8_t s, t;
-    //lhs = lhs >> s >> rhs.id >> rhs.weaver_id >> rhs.shard_or_vt >> rhs.bind_to;
     lhs = lhs >> s >> rhs.id >> rhs.weaver_id >> t >> rhs.bind_to;
     rhs.state = static_cast<server::state_t>(s);
     rhs.type = static_cast<server::type_t>(t);

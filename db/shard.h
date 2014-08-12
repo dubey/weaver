@@ -97,9 +97,9 @@ namespace db
         public:
             void increment_qts(hyper_stub *hs, uint64_t vt_id, uint64_t incr);
             void record_completed_tx(vc::vclock &tx_clk);
-            element::node* acquire_node(node_id_t node_id);
-            element::node* acquire_node_write(node_id_t node, uint64_t vt_id, uint64_t qts);
-            element::node* acquire_node_nonlocking(node_id_t node_id);
+            element::node* acquire_node(node_id_t &node_id);
+            element::node* acquire_node_write(node_id_t &node, uint64_t vt_id, uint64_t qts);
+            element::node* acquire_node_nonlocking(node_id_t &node_id);
             void release_node_write(hyper_stub *hs, element::node *n);
             void release_node(element::node *n, bool migr_node);
 
@@ -113,7 +113,7 @@ namespace db
             queue_manager qm;
         public:
             element::node* create_node(hyper_stub *hs,
-                node_id_t node_id, const node_handle_t &handle,
+                const node_id_t &node_id
                 vc::vclock &vclk,
                 bool migrate,
                 bool init_load);
@@ -121,19 +121,19 @@ namespace db
                 element::node *n,
                 vc::vclock &tdel);
             void delete_node(hyper_stub *hs,
-                node_id_t node_id,
+                const node_id_t &node_id,
                 vc::vclock &vclk,
                 vc::qtimestamp_t &qts);
             void create_edge_nonlocking(hyper_stub *hs,
                 element::node *n,
                 const edge_handle_t &handle,
-                node_id_t remote_node, uint64_t remote_loc,
+                const node_id_t &remote_node, uint64_t remote_loc,
                 vc::vclock &vclk,
                 bool init_load);
             void create_edge(hyper_stub *hs,
                 const edge_handle_t &handle,
-                node_id_t local_node,
-                node_id_t remote_node, uint64_t remote_loc,
+                const node_id_t &local_node,
+                const node_id_t &remote_node, uint64_t remote_loc,
                 vc::vclock &vclk,
                 vc::qtimestamp_t &qts);
             void delete_edge_nonlocking(hyper_stub *hs,
@@ -141,7 +141,7 @@ namespace db
                 const edge_handle_t &edge_handle,
                 vc::vclock &tdel);
             void delete_edge(hyper_stub *hs,
-                const edge_handle_t &edge_handle, node_id_t node_id,
+                const edge_handle_t &edge_handle, const node_id_t &node_id,
                 vc::vclock &vclk,
                 vc::qtimestamp_t &qts);
             // properties
@@ -149,7 +149,7 @@ namespace db
                 std::string &key, std::string &value,
                 vc::vclock &vclk);
             void set_node_property(hyper_stub *hs,
-                node_id_t node_id,
+                const node_id_t &node_id,
                 std::unique_ptr<std::string> key, std::unique_ptr<std::string> value,
                 vc::vclock &vclk,
                 vc::qtimestamp_t &qts);
@@ -158,12 +158,12 @@ namespace db
                 std::string &key, std::string &value,
                 vc::vclock &vclk);
             void set_edge_property(hyper_stub *hs,
-                node_id_t node_id, const edge_handle_t &edge_handle,
+                const node_id_t &node_id, const edge_handle_t &edge_handle,
                 std::unique_ptr<std::string> key, std::unique_ptr<std::string> value,
                 vc::vclock &vclk,
                 vc::qtimestamp_t &qts);
             uint64_t get_node_count();
-            bool node_exists_nonlocking(node_id_t node_id);
+            bool node_exists_nonlocking(const node_id_t &node_id);
 
             // Initial graph loading
             uint64_t max_load_time, bulk_load_num_shards;
@@ -173,7 +173,7 @@ namespace db
         public:
             typedef std::priority_queue<del_obj*, std::vector<del_obj*>, perm_del_compare> del_queue_t;
             del_queue_t perm_del_queue;
-            void delete_migrated_node(node_id_t migr_node);
+            void delete_migrated_node(const node_id_t &migr_node);
             void permanent_delete_loop(uint64_t vt_id, bool outstanding_progs);
         private:
             void permanent_node_delete(element::node *n);
@@ -368,7 +368,7 @@ namespace db
     // lock and return the node
     // return NULL if node does not exist (possibly permanently deleted)
     inline element::node*
-    shard :: acquire_node(node_id_t node_id)
+    shard :: acquire_node(const node_id_t &node_id)
     {
         uint64_t map_idx = node_id % NUM_NODE_MAPS;
 
@@ -390,7 +390,7 @@ namespace db
     }
 
     inline element::node*
-    shard :: acquire_node_write(node_id_t node_id, uint64_t vt_id, uint64_t qts)
+    shard :: acquire_node_write(const node_id_t &node_id, uint64_t vt_id, uint64_t qts)
     {
         uint64_t map_idx = node_id % NUM_NODE_MAPS;
 
@@ -432,7 +432,7 @@ namespace db
     }
 
     inline element::node*
-    shard :: acquire_node_nonlocking(node_id_t node_id)
+    shard :: acquire_node_nonlocking(const node_id_t &node_id)
     {
         uint64_t map_idx = node_id % NUM_NODE_MAPS;
 
@@ -443,6 +443,8 @@ namespace db
         }
         return n;
     }
+
+    // TODO continue from here
 
     // write n->tx_queue to HyperDex, and then release node
     inline void

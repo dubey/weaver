@@ -46,6 +46,7 @@ class server
             VT = 2
         };
         static const char* to_string(state_t state);
+        static const char* to_string(type_t type);
 
     public:
         server();

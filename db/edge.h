@@ -38,7 +38,6 @@ namespace element
 
         public:
             element base;
-            //edge_id_t id;
             remote_node nbr; // out-neighbor for this edge
 #ifdef WEAVER_CLDG
             uint32_t msg_count; // number of messages sent on this link
@@ -53,8 +52,6 @@ namespace element
             node_prog::prop_list get_properties();
             bool has_property(std::pair<std::string, std::string> &p);
             bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
-            //void set_id(edge_id_t &_id) { id = _id; }
-            //edge_id_t get_id() const { return id; }
             edge_handle_t get_handle() const { return base.get_handle(); }
     };
 }

@@ -38,7 +38,7 @@ hyper_stub :: hyper_stub(uint64_t vtid, bool put_initial)
         cl_attr.value_sz = buf_sz;
         cl_attr.datatype = set_dtype;
 
-        hyper_call_and_loop(&hyperdex::Client::put, vt_set_space, vt_id, &cl_attr, 1);
+        call(&hyperdex::Client::put, vt_set_space, (const char*)&vt_id, sizeof(int64_t), &cl_attr, 1);
     }
 }
 
@@ -50,15 +50,19 @@ hyper_stub :: prepare_tx(transaction::pending_tx &tx)
     std::vector<const char*> spaces;
     std::vector<hyperdex_client_attribute*> attrs;
     std::vector<hyper_func> funcs;
-    std::vector<uint64_t> keys;
+    std::vector<const char*> keys;
+    std::vector<size_t> key_szs(num_calls, sizeof(int64_t));
     std::vector<size_t> num_attrs;
+
     spaces.reserve(num_calls);
     attrs.reserve(num_calls);
     funcs.reserve(num_calls);
     keys.reserve(num_calls);
     num_attrs.reserve(num_calls);
 
-    cl_attr = (hyperdex_client_attribute*)malloc(sizeof(hyperdex_client_attribute));
+    hyperdex_client_attribute attr_array[1 + NUM_MAP_ATTRS];
+
+    cl_attr = attr_array;
     cl_attr->attr = set_attr;
     cl_attr->value = (const char*)&tx.id;
     cl_attr->value_sz = sizeof(int64_t);
@@ -66,7 +70,7 @@ hyper_stub :: prepare_tx(transaction::pending_tx &tx)
     spaces.emplace_back(vt_set_space);
     attrs.emplace_back(cl_attr);
     funcs.emplace_back(&hyperdex::Client::set_add);
-    keys.emplace_back(vt_id);
+    keys.emplace_back((const char*)&vt_id);
     num_attrs.emplace_back(1);
 
     uint64_t buf_sz = message::size(tx);
@@ -74,7 +78,7 @@ hyper_stub :: prepare_tx(transaction::pending_tx &tx)
     e::buffer::packer packer = buf->pack_at(0);
     message::pack_buffer(packer, tx);
 
-    cl_attr = (hyperdex_client_attribute*)malloc(NUM_MAP_ATTRS * sizeof(hyperdex_client_attribute));
+    cl_attr = attr_array + 1;
     cl_attr[0].attr = tx_data_attr;
     cl_attr[0].value = (const char*)buf->data();
     cl_attr[0].value_sz = buf->size();
@@ -87,14 +91,10 @@ hyper_stub :: prepare_tx(transaction::pending_tx &tx)
     spaces.emplace_back(vt_map_space);
     attrs.emplace_back(cl_attr);
     funcs.emplace_back(&hyperdex::Client::put);
-    keys.emplace_back(tx.id);
+    keys.emplace_back((const char*)&tx.id);
     num_attrs.emplace_back(NUM_MAP_ATTRS);
 
-    hyper_multiple_call_and_loop(funcs, spaces, keys, attrs, num_attrs);
-    
-    for (hyperdex_client_attribute *del_attr: attrs) {
-        free(del_attr);
-    }
+    multiple_call(funcs, spaces, keys, key_szs, attrs, num_attrs);
 }
 
 void
@@ -107,7 +107,7 @@ hyper_stub :: commit_tx(transaction::pending_tx &tx)
     cl_attr.value_sz = sizeof(int64_t);
     cl_attr.datatype = map_dtypes[1];
 
-    hyper_call_and_loop(&hyperdex::Client::put, vt_map_space, tx.id, &cl_attr, 1);
+    call(&hyperdex::Client::put, vt_map_space, (const char*)&tx.id, sizeof(int64_t), &cl_attr, 1);
 }
 
 void
@@ -120,9 +120,9 @@ hyper_stub :: del_tx(uint64_t tx_id)
     cl_attr.value_sz = sizeof(int64_t);
     cl_attr.datatype = HYPERDATATYPE_INT64;
 
-    hyper_call_and_loop(&hyperdex::Client::set_remove, vt_set_space, vt_id, &cl_attr, 1);
+    call(&hyperdex::Client::set_remove, vt_set_space, (const char*)&vt_id, sizeof(int64_t), &cl_attr, 1);
 
-    hyper_del_and_loop(vt_map_space, tx_id);
+    del(vt_map_space, (const char*)&tx_id, sizeof(int64_t));
 }
 
 // status = false if not prepared
@@ -169,7 +169,7 @@ hyper_stub :: restore_backup(std::unordered_map<uint64_t, current_tx> &prepare_t
 {
     const hyperdex_client_attribute *cl_set_attr;
     size_t num_set_attrs;
-    hyper_get_and_loop(vt_set_space, vt_id, &cl_set_attr, &num_set_attrs);
+    get(vt_set_space, (const char*)&vt_id, sizeof(int64_t), &cl_set_attr, &num_set_attrs);
     assert(num_set_attrs == 1);
     assert(strcmp(cl_set_attr->attr, set_attr) == 0);
 
@@ -181,19 +181,22 @@ hyper_stub :: restore_backup(std::unordered_map<uint64_t, current_tx> &prepare_t
     tx_ids.erase(INT64_MAX);
 
     std::vector<const char*> spaces(tx_ids.size(), vt_map_space);
-    std::vector<uint64_t> keys(tx_ids.begin(), tx_ids.end());
+    std::vector<const char*> keys(tx_ids.size());
+    std::vector<size_t> key_szs(tx_ids.size(), sizeof(int64_t));
     std::vector<const hyperdex_client_attribute**> cl_attrs_vec;
     std::vector<size_t*> num_attrs_vec;
     cl_attrs_vec.reserve(tx_ids.size());
     num_attrs_vec.reserve(tx_ids.size());
     const hyperdex_client_attribute *cl_attr[tx_ids.size()];
     size_t num_attr[tx_ids.size()];
-    for (uint64_t i = 0; i < tx_ids.size(); i++) {
+    auto iter = tx_ids.begin();
+    for (uint64_t i = 0; i < tx_ids.size(); i++, iter++) {
+        keys[i] = (const char*)&(*iter);
         cl_attrs_vec.emplace_back(cl_attr + i);
         num_attrs_vec.emplace_back(num_attr + i);
     }
 
-    hyper_multiple_get_and_loop(spaces, keys, cl_attrs_vec, num_attrs_vec);
+    multiple_get(spaces, keys, key_szs, cl_attrs_vec, num_attrs_vec);
 
     auto tx_iter = tx_ids.begin();
     uint64_t tx_id;

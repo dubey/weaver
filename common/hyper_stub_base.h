@@ -41,29 +41,36 @@ class hyper_stub_base
             size_t,
             hyperdex_client_returncode*);
         hyperdex::Client cl;        
-        void hyper_call_and_loop(hyper_func h, const char *space, uint64_t key, hyperdex_client_attribute *cl_attr, size_t num_attrs);
-        void hypermap_call_and_loop(hyper_map_func h, const char *space, uint64_t key, hyperdex_client_map_attribute *map_attr, size_t num_attrs);
-        void hyper_multiple_call_and_loop(std::vector<hyper_func> &funcs,
+        bool call(hyper_func h,
+            const char *space,
+            const char *key, size_t key_sz,
+            hyperdex_client_attribute *cl_attr, size_t num_attrs);
+        bool map_call(hyper_map_func h,
+            const char *space,
+            const char *key, size_t key_sz,
+            hyperdex_client_map_attribute *map_attr, size_t num_attrs);
+        bool multiple_call(std::vector<hyper_func> &funcs,
             std::vector<const char*> &spaces,
-            std::vector<uint64_t> &keys,
-            std::vector<hyperdex_client_attribute*> &attrs,
-            std::vector<size_t> &num_attrs);
-        void hyper_multiple_call_and_loop(std::vector<hyper_func> &funcs,
+            std::vector<const char*> &keys, std::vector<size_t> &key_szs,
+            std::vector<hyperdex_client_attribute*> &attrs, std::vector<size_t> &num_attrs);
+        bool multiple_call(std::vector<hyper_func> &funcs,
             std::vector<const char*> &spaces,
-            std::vector<uint64_t> &keys,
-            std::vector<hyperdex_client_attribute*> &attrs,
-            std::vector<size_t> &num_attrs,
+            std::vector<const char*> &keys, std::vector<size_t> &key_szs,
+            std::vector<hyperdex_client_attribute*> &attrs, std::vector<size_t> &num_attrs,
             std::vector<hyper_map_func> &map_funcs,
             std::vector<const char*> &map_spaces,
-            std::vector<uint64_t> &map_keys,
-            std::vector<hyperdex_client_map_attribute*> &map_attrs,
-            std::vector<size_t> &map_num_attrs);
-        void hyper_get_and_loop(const char *space, uint64_t key, const hyperdex_client_attribute **cl_attr, size_t *num_attrs);
-        void hyper_multiple_get_and_loop(std::vector<const char*> &spaces,
-            std::vector<uint64_t> &keys,
-            std::vector<const hyperdex_client_attribute**> &cl_attrs,
-            std::vector<size_t*> &num_attrs);
-        void hyper_del_and_loop(const char* space, uint64_t key);
+            std::vector<const char*> &map_keys, std::vector<size_t> &map_key_szs,
+            std::vector<hyperdex_client_map_attribute*> &map_attrs, std::vector<size_t> &map_num_attrs);
+        bool get(const char *space,
+            const char *key, size_t key_sz,
+            const hyperdex_client_attribute **cl_attr, size_t *num_attrs);
+        bool multiple_get(std::vector<const char*> &spaces,
+            std::vector<const char*> &keys, std::vector<size_t> &key_szs,
+            std::vector<const hyperdex_client_attribute**> &cl_attrs, std::vector<size_t*> &num_attrs);
+        bool del(const char* space,
+            const char *key, size_t key_sz);
+        bool multiple_del(std::vector<const char*> &spaces,
+            std::vector<const char*> &keys, std::vector<size_t> &key_szs);
 
 
         template <typename T> void prepare_buffer(const T &t, std::unique_ptr<e::buffer> &buf);

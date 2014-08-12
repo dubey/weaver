@@ -94,7 +94,7 @@ cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
         READ_EDGES_PROPS
 
 cdef extern from 'common/types.h':
-    ctypedef uint64_t node_id_t
+    ctypedef string node_id_t
     ctypedef string node_handle_t
     ctypedef string edge_handle_t
     ctypedef string cache_key_t
