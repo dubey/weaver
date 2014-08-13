@@ -275,6 +275,7 @@ EXTRA_DIST+=	tests/python/nwx_reachability.py
 EXTRA_DIST+=	tests/python/sequential_pathless_reachability_bench.py
 EXTRA_DIST+=	tests/python/clustering_basic_test.py
 EXTRA_DIST+=	tests/python/demo.py
+EXTRA_DIST+=	tests/python/simple_test.py
 EXTRA_DIST+=	tests/python/old_reachability_bench.py
 EXTRA_DIST+=	tests/python/transactions.py
 EXTRA_DIST+=	tests/python/clustering_bench.py
