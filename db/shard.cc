@@ -2088,7 +2088,7 @@ main(int argc, const char *argv[])
     }
 
     // command line params
-    const char* listen_host = "auto";
+    const char* listen_host = "127.0.0.1";
     long listen_port = 5201;
     const char *config_file = "/etc/weaver.yaml";
     const char *graph_file = NULL;
@@ -2099,7 +2099,7 @@ main(int argc, const char *argv[])
     e::argparser ap;
     ap.autohelp();
     ap.arg().name('l', "listen")
-            .description("listen on a specific IP address (default: auto)")
+            .description("listen on a specific IP address (default: 127.0.0.1)")
             .metavar("IP").as_string(&listen_host);
     ap.arg().name('p', "listen-port")
             .description("listen on an alternative port (default: 5201)")

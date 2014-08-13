@@ -47,10 +47,31 @@ comm_wrapper :: weaver_mapper :: add_mapping(uint64_t server_id, po6::net::locat
 
 comm_wrapper :: comm_wrapper(po6::net::location &my_loc, int nthr, int to)
     : active_server_idx(NumVts, UINT64_MAX)
-    , loc(new po6::net::location(my_loc))
     , num_threads(nthr)
     , timeout(to)
 {
+    wmap.reset(new weaver_mapper());
+
+    bool done = false;
+    while (!done) {
+        done = true;
+        try {
+            bb.reset(new busybee_mta(&bb_gc, wmap.get(), my_loc, WEAVER_TO_BUSYBEE(bb_id), num_threads));
+        } catch (po6::error e) {
+            done = false;
+            if (e == 98) {
+                // retry another port
+                my_loc.port++;
+            } else {
+                WDEBUG << "exception " << e << std::endl;
+                throw e;
+            }
+        }
+    }
+
+    loc.reset(new po6::net::location(my_loc));
+    WDEBUG << "attaching to loc " << loc->address << ":" << loc->port << std::endl;
+    bb->set_timeout(timeout);
 }
 
 comm_wrapper :: ~comm_wrapper()
@@ -63,11 +84,7 @@ comm_wrapper :: ~comm_wrapper()
 void
 comm_wrapper :: init(configuration &config)
 {
-    wmap.reset(new weaver_mapper());
     reconfigure_internal(config);
-    WDEBUG << "attaching to loc " << loc->address << ":" << loc->port << std::endl;
-    bb.reset(new busybee_mta(&bb_gc, wmap.get(), *loc, WEAVER_TO_BUSYBEE(bb_id), num_threads));
-    bb->set_timeout(timeout);
 
     std::unique_ptr<e::garbage_collector::thread_state> gc_ts_ptr;
     for (int i = 0; i < num_threads; i++) {
@@ -75,23 +92,6 @@ comm_wrapper :: init(configuration &config)
         bb_gc.register_thread(gc_ts_ptr.get());
         bb_gc_ts.emplace_back(std::move(gc_ts_ptr));
     }
-}
-
-void
-comm_wrapper :: client_init(configuration config)
-{
-    wmap.reset(new weaver_mapper());
-    reconfigure_internal(config);
-    active_server_idx.resize(NumVts, 0);
-    for (uint64_t i = 0; i < NumVts; i++) {
-        active_server_idx[i] = i;
-    }
-    bb.reset(new busybee_mta(&bb_gc, wmap.get(), *loc, WEAVER_TO_BUSYBEE(bb_id), num_threads));
-
-    std::unique_ptr<e::garbage_collector::thread_state> gc_ts_ptr;
-    gc_ts_ptr.reset(new e::garbage_collector::thread_state());
-    bb_gc.register_thread(gc_ts_ptr.get());
-    bb_gc_ts.emplace_back(std::move(gc_ts_ptr));
 }
 
 void
@@ -141,9 +141,9 @@ comm_wrapper :: reconfigure_internal(configuration &new_config)
 
         server::state_t st = config.get_state(p.first);
         if (st != server::AVAILABLE) {
-            WDEBUG << "Server " << wid << " is in trouble, has state " << st << std::endl;
+            WDEBUG << "Server " << wid << " is in trouble, has state " << server::to_string(st) << std::endl;
         } else {
-            WDEBUG << "Server " << wid << " is healthy, has state " << st << std::endl;
+            WDEBUG << "Server " << wid << " is healthy, has state " << server::to_string(st) << std::endl;
         }
     }
 

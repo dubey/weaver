@@ -42,9 +42,7 @@ uint16_t MaxCacheEntries;
 using cl::client;
 using transaction::pending_update;
 
-client :: client(const char *coordinator
-    , uint16_t port
-    , const char *config_file="/etc/weaver.yaml")
+client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const char *config_file="/etc/weaver.yaml")
     : m_sm(coordinator, port)
     , cur_tx_id(UINT64_MAX)
     , tx_id_ctr(0)
