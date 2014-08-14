@@ -145,9 +145,6 @@ message :: size(const std::shared_ptr<transaction::pending_update> &ptr_t)
          + size(t.handle)
          + size(t.handle1)
          + size(t.handle2)
-         + size(t.id)
-         + size(t.elem1)
-         + size(t.elem2)
          + size(t.loc1)
          + size(t.loc2);
     if (t.type == transaction::NODE_SET_PROPERTY
@@ -327,9 +324,6 @@ message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transact
     pack_buffer(packer, t.handle);
     pack_buffer(packer, t.handle1);
     pack_buffer(packer, t.handle2);
-    pack_buffer(packer, t.id);
-    pack_buffer(packer, t.elem1);
-    pack_buffer(packer, t.elem2);
     pack_buffer(packer, t.loc1);
     pack_buffer(packer, t.loc2);
     if (t.type == transaction::NODE_SET_PROPERTY
@@ -509,9 +503,6 @@ message :: unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::pen
     unpack_buffer(unpacker, t.handle);
     unpack_buffer(unpacker, t.handle1);
     unpack_buffer(unpacker, t.handle2);
-    unpack_buffer(unpacker, t.id);
-    unpack_buffer(unpacker, t.elem1);
-    unpack_buffer(unpacker, t.elem2);
     unpack_buffer(unpacker, t.loc1);
     unpack_buffer(unpacker, t.loc2);
     if (t.type == transaction::NODE_SET_PROPERTY
@@ -542,66 +533,4 @@ message :: message :: unpack_message_type()
     auto unpacker = buf->unpack_from(BUSYBEE_HEADER_SIZE);
     unpack_buffer(unpacker, mtype);
     return mtype;
-}
-
-void
-message :: message :: unpack_client_tx(transaction::pending_tx &tx)
-{
-    uint32_t num_tx;
-    enum msg_type mtype;
-    e::unpacker unpacker = buf->unpack_from(BUSYBEE_HEADER_SIZE);
-    unpack_buffer(unpacker, mtype);
-    assert(mtype == CLIENT_TX_INIT);
-    unpack_buffer(unpacker, num_tx);
-
-    while (num_tx-- > 0) {
-        auto upd = *(tx.writes.emplace(tx.writes.end(), std::make_shared<transaction::pending_update>()));
-        unpack_buffer(unpacker, mtype);
-        switch (mtype) {
-            case CLIENT_NODE_CREATE_REQ:
-                upd->type = transaction::NODE_CREATE_REQ;
-                unpack_buffer(unpacker, upd->id); 
-                break;
-
-            case CLIENT_EDGE_CREATE_REQ:
-                upd->type = transaction::EDGE_CREATE_REQ;
-                unpack_buffer(unpacker, upd->id);
-                unpack_buffer(unpacker, upd->handle1);
-                unpack_buffer(unpacker, upd->handle2);
-                break;
-
-            case CLIENT_NODE_DELETE_REQ:
-                upd->type = transaction::NODE_DELETE_REQ;
-                unpack_buffer(unpacker, upd->handle1);
-                break;
-
-            case CLIENT_EDGE_DELETE_REQ:
-                upd->type = transaction::EDGE_DELETE_REQ;
-                unpack_buffer(unpacker, upd->handle1);
-                unpack_buffer(unpacker, upd->handle2);
-                break;
-
-            case CLIENT_NODE_SET_PROP:
-                upd->type = transaction::NODE_SET_PROPERTY;
-                upd->key.reset(new std::string());
-                upd->value.reset(new std::string());
-                unpack_buffer(unpacker, upd->handle1);
-                unpack_buffer(unpacker, *upd->key);
-                unpack_buffer(unpacker, *upd->value);
-                break;
-
-            case CLIENT_EDGE_SET_PROP:
-                upd->type = transaction::EDGE_SET_PROPERTY;
-                upd->key.reset(new std::string());
-                upd->value.reset(new std::string());
-                unpack_buffer(unpacker, upd->handle1);
-                unpack_buffer(unpacker, upd->handle2);
-                unpack_buffer(unpacker, *upd->key);
-                unpack_buffer(unpacker, *upd->value);
-                break;
-
-            default:
-                WDEBUG << "bad msg type: " << mtype << std::endl;
-        }
-    }
 }

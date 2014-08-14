@@ -135,7 +135,6 @@ namespace message
             template <typename... Args> void unpack_message(const enum msg_type expected_type, Args&... args);
             template <typename... Args> void unpack_partial_message(const enum msg_type expected_type, Args&... args);
             enum msg_type unpack_message_type();
-            void unpack_client_tx(transaction::pending_tx &tx);
 
         private:
             template <typename... Args> void unpack_message_internal(bool check_empty, const enum msg_type expected_type, Args&... args);

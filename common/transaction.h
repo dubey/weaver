@@ -37,7 +37,7 @@ namespace transaction
         update_type type;
         vc::qtimestamp_t qts; // queue timestamp
         std::string handle, handle1, handle2;
-        uint64_t id, elem1, elem2, loc1, loc2, sender;
+        uint64_t loc1, loc2, sender;
         std::unique_ptr<std::string> key, value;
     };
 

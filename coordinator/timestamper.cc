@@ -110,97 +110,10 @@ unpack_tx(message::message &msg,
     transaction::pending_tx &tx,
     nmap::nmap_stub *nmstub)
 {
-    std::vector<node_handle_t> get_handles_v;
-    std::unordered_set<node_handle_t> new_handles, get_handles;
     std::unordered_map<std::string, uint64_t> client_map;
     msg.unpack_message(message::CLIENT_TX_INIT, tx.writes);
 
-#define NEW_HANDLE(h) \
-    if (new_handles.find(h) != new_handles.end()) { \
-        WDEBUG << "duplicate new handle " << h << std::endl; \
-        return false; \
-    } \
-    client_map[h] = vts->generate_id(); \
-    new_handles.emplace(h);
-
-#define GET_HANDLE(h) \
-    if (new_handles.find(h) == new_handles.end()) { \
-        get_handles.emplace(h); \
-    }
-
     for (auto upd: tx.writes) {
-
-        switch (upd->type) {
-
-            case transaction::NODE_CREATE_REQ:
-                NEW_HANDLE(upd->handle);
-                break;
-
-            case transaction::EDGE_CREATE_REQ:
-                client_map[upd->handle] = 0;
-                GET_HANDLE(upd->handle1);
-                GET_HANDLE(upd->handle2);
-                break;
-
-            case transaction::NODE_DELETE_REQ:
-                GET_HANDLE(upd->handle1);
-                break;
-
-            case transaction::EDGE_DELETE_REQ:
-                client_map[upd->handle1] = 0;
-                GET_HANDLE(upd->handle2);
-                break;
-
-            case transaction::NODE_SET_PROPERTY:
-                GET_HANDLE(upd->handle1);
-                break;
-
-            case transaction::EDGE_SET_PROPERTY:
-                client_map[upd->handle1] = 0;
-                GET_HANDLE(upd->handle2);
-                break;
-
-            default:
-                WDEBUG << "bad type" << std::endl;
-                break;
-        }
-
-    }
-
-#undef NEW_HANDLE
-#undef GET_HANDLE
-
-    if (get_handles.size() > 0) {
-        get_handles_v.reserve(get_handles.size());
-        for (const node_handle_t &s: get_handles) {
-            get_handles_v.emplace_back(s);
-        }
-
-        nmstub->get_client_mappings(get_handles_v, client_map);
-    }
-    std::string empty_string;
-    if (client_map.find(empty_string) != client_map.end()) {
-        WDEBUG << "empty string handle" << std::endl;
-        return false;
-    }
-    client_map[empty_string] = 0;
-
-    for (auto upd: tx.writes) {
-        if (client_map.find(upd->handle) == client_map.end()) {
-            WDEBUG << "did not find handle " << upd->handle << std::endl;
-            return false;
-        }
-        if (client_map.find(upd->handle1) == client_map.end()) {
-            WDEBUG << "did not find handle " << upd->handle1 << std::endl;
-            return false;
-        }
-        if (client_map.find(upd->handle2) == client_map.end()) {
-            WDEBUG << "did not find handle " << upd->handle2 << std::endl;
-            return false;
-        }
-        upd->id = client_map[upd->handle];
-        upd->elem1 = client_map[upd->handle1];
-        upd->elem2 = client_map[upd->handle2];
         if (upd->type == transaction::NODE_DELETE_REQ || upd->type == transaction::EDGE_DELETE_REQ) {
             tx.del_elems.emplace(upd->handle1);
         }
@@ -444,10 +357,8 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     coordinator::hyper_stub *hstub)
 {
     std::unordered_map<node_id_t, uint64_t> put_map;
-    std::unordered_map<node_handle_t, node_id_t> put_client_map;
     std::unordered_set<node_id_t> get_set;
     std::unordered_set<node_id_t> del_set;
-    std::unordered_set<node_handle_t> del_client_set;
     tx->busy_elems.reserve(tx->writes.size());
     std::string busy_single[3];
 
@@ -464,29 +375,21 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
             case transaction::NODE_CREATE_REQ:
                 // randomly assign shard for this node
                 upd->loc1 = vts->generate_loc(); // node will be placed on this shard
-                put_client_map[upd->handle] = upd->id;
-                put_map.emplace(upd->id, upd->loc1);
+                put_map.emplace(upd->handle, upd->loc1);
 
-                //assert(deleted_elems.find(upd->id) == deleted_elems.end());
-                //assert(busy_elems.find(upd->id) == busy_elems.end());
-                //busy_single[0] = upd->id;
                 assert(deleted_elems.find(upd->handle) == deleted_elems.end());
                 assert(busy_elems.find(upd->handle) == busy_elems.end());
                 busy_single[0] = upd->handle;
                 break;
 
             case transaction::EDGE_CREATE_REQ:
-                if (put_map.find(upd->elem1) == put_map.end()) {
-                    get_set.insert(upd->elem1);
+                if (put_map.find(upd->handle1) == put_map.end()) {
+                    get_set.insert(upd->handle1);
                 }
-                if (put_map.find(upd->elem2) == put_map.end()) {
-                    get_set.insert(upd->elem2);
+                if (put_map.find(upd->handle2) == put_map.end()) {
+                    get_set.insert(upd->handle2);
                 }
-                //put_client_map[upd->handle] = upd->id;
 
-                //busy_single[0] = upd->id;
-                //busy_single[1] = upd->elem1;
-                //busy_single[2] = upd->elem2;
                 busy_single[0] = upd->handle;
                 busy_single[1] = upd->handle1;
                 busy_single[2] = upd->handle2;
@@ -494,30 +397,26 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
 
             case transaction::NODE_DELETE_REQ:
             case transaction::NODE_SET_PROPERTY:
-                if (put_map.find(upd->elem1) == put_map.end()) {
-                    get_set.insert(upd->elem1);
+                if (put_map.find(upd->handle1) == put_map.end()) {
+                    get_set.insert(upd->handle1);
                 }
 
                 if (upd->type != transaction::NODE_DELETE_REQ) {
-                    //busy_single[0] = upd->elem1;
                     busy_single[0] = upd->handle1;
                 } else {
-                    del_set.emplace(upd->elem1);
-                    del_client_set.emplace(upd->handle1);
+                    del_set.emplace(upd->handle1);
                 }
                 break;
 
             case transaction::EDGE_DELETE_REQ:
             case transaction::EDGE_SET_PROPERTY:
-                if (put_map.find(upd->elem2) == put_map.end()) {
-                    get_set.insert(upd->elem2);
+                if (put_map.find(upd->handle2) == put_map.end()) {
+                    get_set.insert(upd->handle2);
                 }
 
                 if (upd->type != transaction::EDGE_DELETE_REQ) {
-                    //busy_single[1] = upd->elem1;
                     busy_single[1] = upd->handle1;
                 }
-                //busy_single[0] = upd->elem2;
                 busy_single[0] = upd->handle2;
                 break;
 
@@ -534,7 +433,6 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
                     busy_elems[e]++;
                 }
                 tx->busy_elems.emplace_back(e);
-                //e = UINT64_MAX;
                 e = "";
             } else if (!e.empty()) {
                 success = false;
@@ -592,10 +490,26 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     }
 
     if (success) {
-        // put and delete mappings
-        assert(nmstub->put_mappings(put_map));
-        assert(nmstub->del_mappings(del_set));
-        assert(nmstub->del_client_mappings(del_client_set));
+        // put mappings
+        if (!nmstub->put_mappings(put_map)) {
+            std::unordered_set<node_id_t> undo_set;
+            undo_set.reserve(put_map.size());
+            for (auto &p: put_map) {
+                undo_set.emplace(p.first);
+            }
+            if (!nmstub->del_mappings(undo_set)) {
+                WDEBUG << "del undo_set mappings fail" << std::endl;
+            }
+            success = false;
+        }
+    }
+
+    if (success) {
+        // del mappings
+        if (!nmstub->del_mappings(del_set)) {
+            WDEBUG << "del mappings fail" << std::endl;
+            success = false;
+        }
     }
 
     if (!success) {
@@ -631,26 +545,31 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     int shard_count = 0;
     vts->clk_rw_mtx.wrlock();
 
+    auto find_iter = all_map.begin();
     for (auto upd: tx->writes) {
         switch (upd->type) {
 
             case transaction::EDGE_CREATE_REQ:
-                assert(all_map.find(upd->elem1) != all_map.end());
-                assert(all_map.find(upd->elem2) != all_map.end());
-                upd->loc1 = all_map[upd->elem1];
-                upd->loc2 = all_map[upd->elem2];
+                find_iter = all_map.find(upd->handle1);
+                assert(find_iter != all_map.end());
+                upd->loc1 = *find_iter;
+                find_iter = all_map.find(upd->handle2);
+                assert(find_iter != all_map.end());
+                upd->loc2 = *find_iter;
                 break;
 
             case transaction::NODE_DELETE_REQ:
             case transaction::NODE_SET_PROPERTY:
-                assert(all_map.find(upd->elem1) != all_map.end());
-                upd->loc1 = all_map[upd->elem1];
+                find_iter = all_map.find(upd->handle1);
+                assert(find_iter != all_map.end());
+                upd->loc1 = *find_iter;
                 break;
 
             case transaction::EDGE_DELETE_REQ:
             case transaction::EDGE_SET_PROPERTY:
-                assert(all_map.find(upd->elem2) != all_map.end());
-                upd->loc1 = all_map[upd->elem2];
+                find_iter = all_map.find(upd->handle2);
+                assert(find_iter != all_map.end());
+                upd->loc2 = *find_iter;
                 break;
 
             default:
@@ -917,35 +836,15 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     // lookup mappings
     std::unordered_map<node_id_t, uint64_t> loc_map;
-    std::unordered_map<node_handle_t, node_id_t> handle_map;
-    std::unordered_set<node_handle_t> get_client_set;
-    std::vector<node_handle_t> get_client_v;
+    std::unordered_set<node_id_t> get_set;
 
     for (auto &initial_arg : initial_args) {
-        get_client_set.emplace(initial_arg.first);
+        get_set.emplace(initial_arg.first);
     }
 
-    get_client_v.reserve(get_client_set.size());
-    for (const node_handle_t &h: get_client_set) {
-        get_client_v.emplace_back(h);
-    }
-
-    if (!get_client_set.empty()) {
-        bool success;
-        std::vector<std::pair<node_id_t, uint64_t>> loc_results;
-        nmap_cl->get_client_mappings(get_client_v, handle_map);
-        success = (handle_map.size() == get_client_set.size());
-
-        if (success) {
-            std::unordered_set<node_id_t> get_set;
-            get_set.reserve(handle_map.size());
-            for (auto &p: handle_map) {
-                get_set.emplace(p.second);
-            }
-
-            loc_results = nmap_cl->get_mappings(get_set);
-            success = (loc_results.size() == get_set.size());
-        }
+    if (!get_set.empty()) {
+        std::vector<std::pair<node_id_t, uint64_t>> loc_results = nmap_cl->get_client_mappings(get_set);
+        bool success = (loc_results.size() == get_set.size());
 
         if (!success) {
             // some node handles bad, return immediately
@@ -963,9 +862,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     }
 
     for (auto &p: initial_args) {
-        node_id_t id = handle_map[p.first];
-        uint64_t loc = loc_map[id];
-        initial_batches[loc].emplace_back(std::make_pair(id, std::move(p.second)));
+        initial_batches[loc_map[p.first]].emplace_back(p);
     }
     
     vts->clk_rw_mtx.wrlock();
