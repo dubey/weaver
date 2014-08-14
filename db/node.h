@@ -44,7 +44,7 @@ namespace element
     class node : public node_prog::node
     {
         public:
-            node(node_id_t &id, const node_handle_t &handle, vc::vclock &vclk, po6::threads::mutex *mtx);
+            node(const node_id_t &id, vc::vclock &vclk, po6::threads::mutex *mtx);
             ~node() { }
 
         public:
@@ -105,7 +105,6 @@ namespace element
             bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
             void set_id(node_id_t &_id) { id = _id; }
             node_id_t get_id() const { return id; }
-            node_handle_t get_handle() const { return base.get_handle(); }
     };
 }
 }

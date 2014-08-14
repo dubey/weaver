@@ -66,7 +66,7 @@ edge :: traverse()
 #endif
 }
 
-remote_node& // TODO, make const, nbr private var
+remote_node&
 edge :: get_neighbor()
 {
     return nbr; 

@@ -164,7 +164,7 @@
         { \
             unpacker >> t.value; \
         } \
-    } \
+    }
 
 WEAVER_UINT64(node_id_t);
 WEAVER_UINT64(cache_key_t);
@@ -177,6 +177,10 @@ typedef std::string node_id_t;
 typedef std::string node_handle_t;
 typedef std::string edge_handle_t;
 typedef std::string cache_key_t;
+inline uint64_t hash_node_id(const node_id_t &nid)
+{
+    return std::hash<std::string>()(nid);
+}
 
 #endif
 

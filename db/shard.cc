@@ -87,7 +87,7 @@ end_program(int param)
 inline void
 create_node(db::hyper_stub *hs,
     vc::vclock &t_creat,
-    node_id_t node_id, const node_handle_t &handle)
+    const node_id_t &node_id)
 {
     S->create_node(hs, node_id, handle, t_creat, false);
 }
@@ -97,8 +97,8 @@ create_edge(db::hyper_stub *hs,
     vc::vclock &t_creat,
     vc::qtimestamp_t &qts,
     const edge_handle_t &handle,
-    node_id_t n1,
-    node_id_t n2, uint64_t loc2)
+    const node_id_t &n1,
+    const node_id_t &n2, uint64_t loc2)
 {
     S->create_edge(hs, handle, n1, n2, loc2, t_creat, qts);
 }
@@ -107,7 +107,7 @@ inline void
 delete_node(db::hyper_stub *hs,
     vc::vclock &t_del,
     vc::qtimestamp_t &qts,
-    node_id_t node_id)
+    const node_id_t &node_id)
 {
     S->delete_node(hs, node_id, t_del, qts);
 }
@@ -116,7 +116,7 @@ inline void
 delete_edge(db::hyper_stub *hs,
     vc::vclock &t_del,
     vc::qtimestamp_t &qts,
-    const edge_handle_t &edge_handle, node_id_t node_id)
+    const edge_handle_t &edge_handle, const node_id_t &node_id)
 {
     S->delete_edge(hs, edge_handle, node_id, t_del, qts);
 }
@@ -125,7 +125,7 @@ inline void
 set_node_property(db::hyper_stub *hs,
     vc::vclock &vclk,
     vc::qtimestamp_t &qts,
-    node_id_t node_id,
+    const node_id_t &node_id,
     std::unique_ptr<std::string> key, std::unique_ptr<std::string> value)
 {
     S->set_node_property(hs, node_id, std::move(key), std::move(value), vclk, qts);
@@ -135,7 +135,7 @@ inline void
 set_edge_property(db::hyper_stub *hs,
     vc::vclock &vclk,
     vc::qtimestamp_t &qts,
-    const edge_handle_t &edge_handle, node_id_t node_id,
+    const edge_handle_t &edge_handle, const node_id_t &node_id,
     std::unique_ptr<std::string> key, std::unique_ptr<std::string> value)
 {
     S->set_edge_property(hs, node_id, edge_handle, std::move(key), std::move(value), vclk, qts);
@@ -223,7 +223,7 @@ parse_two_uint64(std::string &line, uint64_t &n1, uint64_t &n2)
 }
 
 inline void
-parse_weaver_edge(std::string &line, node_id_t &n1, node_id_t &n2,
+parse_weaver_edge(std::string &line, const node_id_t &n1, const node_id_t &n2,
         std::vector<std::pair<std::string, std::string>> &props)
 {
     size_t i = parse_two_uint64(line, n1, n2);
@@ -251,26 +251,26 @@ parse_weaver_edge(std::string &line, node_id_t &n1, node_id_t &n2,
 // XXX check for FT
 // issues Hyperdex calls to store the node map
 inline void
-init_single_nmap(int thread_id, std::unordered_map<node_id_t, uint64_t> *node_map, std::unordered_map<node_handle_t, node_id_t> *client_map)
+init_single_nmap(int thread_id, std::unordered_map<node_id_t, uint64_t> *node_map)
 {
     WDEBUG << "node map thread " << thread_id << " starting, will put " << node_map->size() << " entries in hdex" << std::endl;
     nmap::nmap_stub node_mapper;
-    assert(node_mapper.put_client_mappings(*client_map));
-    node_mapper.put_mappings(*node_map);
-    WDEBUG << "node map thread " << thread_id << " done" << std::endl;
+    if (!node_mapper.put_mappings(*node_map)) {
+        WDEBUG << "errors in bulk loading (adding HyperDex mappings), cluster restart required" << std::endl;
+    } else {
+        WDEBUG << "node map thread " << thread_id << " done" << std::endl;
+    }
 }
 
 inline void
-init_nmap(std::vector<std::unordered_map<node_id_t, uint64_t>> *node_maps_ptr,
-          std::vector<std::unordered_map<node_handle_t, node_id_t>> *client_maps_ptr)
+init_nmap(std::vector<std::unordered_map<node_id_t, uint64_t>> *node_maps_ptr)
 {
     auto &node_maps = *node_maps_ptr;
-    auto &client_maps = *client_maps_ptr;
     int num_thr = node_maps.size();
     WDEBUG << "creating " << num_thr << " threads for node map inserts" << std::endl;
     std::vector<std::thread> threads;
     for (int i = 0; i < num_thr; i++) {
-        threads.push_back(std::thread(init_single_nmap, i, &node_maps[i], &client_maps[i]));
+        threads.push_back(std::thread(init_single_nmap, i, &node_maps[i]));
     }
     for (int i = 0; i < num_thr; i++) {
         threads[i].join();
@@ -285,7 +285,8 @@ inline void
 load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_shards)
 {
     std::ifstream file;
-    node_id_t node0, node1;
+    uint64_t node0, node1; // int node_ids
+    node_id_t id0, id1;
     edge_handle_t edge_handle;
     uint64_t loc;
     std::string line, str_node;
@@ -295,7 +296,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
         WDEBUG << "File not found" << std::endl;
         return;
     }
-    
+
     // read, validate, and create graph
     db::element::node *n;
     uint64_t line_count = 0;
@@ -303,7 +304,6 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
     node_id_t max_node_id = 0;
     std::unordered_set<node_id_t> seen_nodes;
     std::vector<std::unordered_map<node_id_t, uint64_t>> node_maps(NUM_THREADS, std::unordered_map<node_id_t, uint64_t>());
-    std::vector<std::unordered_map<node_handle_t, node_id_t>> client_maps(NUM_THREADS, std::unordered_map<node_handle_t, node_id_t>());
     vc::vclock zero_clk(0, 0);
     uint8_t thread_select = 0;
 
@@ -325,35 +325,33 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     continue;
                 } else {
                     parse_two_uint64(line, node0, node1);
+                    id0 = std::to_string(node0);
+                    id1 = std::to_string(node1);
                     edge_handle = std::to_string(max_node_id + (edge_count++));
                     uint64_t loc0 = ((node0 % num_shards) + ShardIdIncr);
                     uint64_t loc1 = ((node1 % num_shards) + ShardIdIncr);
                     assert(loc0 < num_shards + ShardIdIncr);
                     assert(loc1 < num_shards + ShardIdIncr);
                     if (loc0 == shard_id) {
-                        n = S->acquire_node_nonlocking(node0);
+                        n = S->acquire_node_nonlocking(id0);
                         if (n == NULL) {
-                            node_handle_t handle = std::to_string(node0);
-                            n = S->create_node(0, node0, handle, zero_clk, false, true);
-                            node_maps[thread_select][node0] = shard_id;
-                            client_maps[thread_select][handle] = node0;
+                            n = S->create_node(0, id0, zero_clk, false, true);
+                            node_maps[thread_select][id0] = shard_id;
                             thread_select = (thread_select + 1) % NUM_THREADS;
                         }
-                        S->create_edge_nonlocking(0, n, edge_handle, node1, loc1, zero_clk, true);
+                        S->create_edge_nonlocking(0, n, edge_handle, id1, loc1, zero_clk, true);
                     }
                     if (loc1 == shard_id) {
-                        if (!S->node_exists_nonlocking(node1)) {
-                            node_handle_t handle = std::to_string(node1);
-                            S->create_node(0, node1, handle, zero_clk, false, true);
-                            node_maps[thread_select][node1] = shard_id;
-                            client_maps[thread_select][handle] = node1;
+                        if (!S->node_exists_nonlocking(id1)) {
+                            S->create_node(0, node1, zero_clk, false, true);
+                            node_maps[thread_select][id1] = shard_id;
                             thread_select = (thread_select + 1) % NUM_THREADS;
                         }
                     }
                 }
             }
             //S->bulk_load_persistent();
-            init_nmap(&node_maps, &client_maps);
+            init_nmap(&node_maps);
             break;
         }
 
@@ -368,16 +366,16 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
             // nodes
             while (std::getline(file, line)) {
                 parse_two_uint64(line, node0, loc);
+                id0 = std::to_string(node0);
                 loc += ShardIdIncr;
-                all_node_map[node0] = loc;
+                all_node_map[id0] = loc;
                 assert(loc < num_shards + ShardIdIncr);
                 if (loc == shard_id) {
-                    n = S->acquire_node_nonlocking(node0);
+                    n = S->acquire_node_nonlocking(id0);
                     if (n == NULL) {
-                        node_handle_t handle = std::to_string(node0);
-                        n = S->create_node(0, node0, handle, zero_clk, false, true);
-                        node_maps[thread_select][node0] = shard_id;
-                        client_maps[thread_select][handle] = node0;
+                        node_handle_t handle = std::to_string(id0);
+                        n = S->create_node(0, id0, zero_clk, false, true);
+                        node_maps[thread_select][id0] = shard_id;
                         thread_select = (thread_select + 1) % NUM_THREADS;
                     }
                 }
@@ -386,7 +384,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                      break;
                 }
             }
-            std::thread nmap_thr(init_nmap, &node_maps, &client_maps);
+            std::thread nmap_thr(init_nmap, &node_maps);
 
             // edges
             std::vector<std::pair<std::string, std::string>> props;
@@ -397,9 +395,10 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 uint64_t loc0 = all_node_map[node0];
                 uint64_t loc1 = all_node_map[node1];
                 if (loc0 == shard_id) {
-                    n = S->acquire_node_nonlocking(node0);
+                    id0 = std::to_string(node0);
+                    n = S->acquire_node_nonlocking(id0);
                     assert(n != NULL);
-                    S->create_edge_nonlocking(0, n, edge_handle, node1, loc1, zero_clk, true);
+                    S->create_edge_nonlocking(0, n, edge_handle, id1, loc1, zero_clk, true);
                     for (auto &p: props) {
                         S->set_edge_property_nonlocking(n, edge_handle, p.first, p.second, zero_clk);
                     }
@@ -715,7 +714,7 @@ NodeStateType& get_or_create_state(node_prog::prog_type ptype,
         NodeStateType *ptr = new NodeStateType();
         state_map[req_id] = std::unique_ptr<node_prog::Node_State_Base>(ptr);
         assert(nodes_that_created_state != NULL);
-        nodes_that_created_state->emplace_back(node->get_id());
+        nodes_that_created_state->emplace_back(node->id);
         return *ptr;
     }
 }
@@ -754,12 +753,12 @@ fill_changed_properties(std::vector<db::element::property> &props,
 // returns false if cache should be invalidated
 inline bool
 fetch_node_cache_contexts(uint64_t loc,
-    std::vector<node_id_t>& ids,
-    std::vector<node_prog::node_cache_context>& toFill,
+    std::vector<node_id_t> &ids,
+    std::vector<node_prog::node_cache_context> &toFill,
     vc::vclock& time_cached,
     vc::vclock& cur_time)
 {
-    for (node_id_t id: ids) {
+    for (node_id_t &id: ids) {
         db::element::node *node = S->acquire_node(id);
 
         if (node == NULL || node->state == db::element::node::mode::MOVED ||
@@ -894,10 +893,8 @@ struct fetch_state
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 inline bool cache_lookup(db::element::node*& node_to_check,
     cache_key_t cache_key,
-    node_prog::node_prog_running_state<ParamsType,
-    NodeStateType,
-    CacheValueType>& np,
-    std::pair<node_id_t, ParamsType>& cur_node_params)
+    node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> &np,
+    std::pair<node_id_t, ParamsType> &cur_node_params)
 {
     assert(node_to_check != NULL);
     assert(!np.cache_value); // cache_value is not already assigned
@@ -972,7 +969,7 @@ inline bool cache_lookup(db::element::node*& node_to_check,
 #endif
 
         // map from loc to list of ids on that shard we need context from for this request
-        std::unordered_map<node_id_t, std::vector<node_id_t>> contexts_to_fetch; 
+        std::unordered_map<uint64_t, std::vector<node_id_t>> contexts_to_fetch; 
 
         for (db::element::remote_node &watch_node : *watch_set) {
             contexts_to_fetch[watch_node.loc].emplace_back(watch_node.id);
@@ -1292,7 +1289,7 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
 
 // delete all in-edges for a permanently deleted node
 inline void
-update_deleted_node(db::hyper_stub*, node_id_t node_id)
+update_deleted_node(db::hyper_stub*, const node_id_t &node_id)
 {
     std::unordered_set<node_id_t> nbrs;
     db::element::node *n;
@@ -1306,7 +1303,7 @@ update_deleted_node(db::hyper_stub*, node_id_t node_id)
 
     std::vector<edge_handle_t> to_del;
     bool found;
-    for (node_id_t nbr: nbrs) {
+    for (const node_id_t &nbr: nbrs) {
         n = S->acquire_node(nbr);
         to_del.clear();
         found = false;
@@ -1383,13 +1380,13 @@ migrate_node_step1(db::hyper_stub *hs,
     // mark node as "moved"
     n->state = db::element::node::mode::MOVED;
     n->new_loc = migr_loc;
-    S->migr_node = n->get_id();
+    S->migr_node = n->id;
     S->migr_shard = migr_loc;
 
     // updating edge map
     S->edge_map_mutex.lock();
     for (auto &e: n->out_edges) {
-        node_id_t node = e.second->nbr.id;
+        const node_id_t &node = e.second->nbr.id;
         assert(S->edge_map.find(node) != S->edge_map.end());
         auto &node_set = S->edge_map[node];
         node_set.erase(S->migr_node);
@@ -1447,13 +1444,13 @@ migrate_node_step2_resp(db::hyper_stub *hs, std::unique_ptr<message::message> ms
 {
     // unpack and place node
     uint64_t from_loc;
-    node_id_t node_id;
+    const node_id_t &node_id;
     db::element::node *n;
 
     // create a new node, unpack the message
     vc::vclock dummy_clock;
     msg->unpack_partial_message(message::MIGRATE_SEND_NODE, node_id);
-    n = S->create_node(hs, node_id, "", dummy_clock, true); // node will be acquired on return
+    n = S->create_node(hs, node_id, dummy_clock, true); // node will be acquired on return
     try {
         msg->unpack_message(message::MIGRATE_SEND_NODE, node_id, from_loc, *n);
     } catch (std::bad_alloc& ba) {
@@ -1464,7 +1461,7 @@ migrate_node_step2_resp(db::hyper_stub *hs, std::unique_ptr<message::message> ms
     // updating edge map
     S->edge_map_mutex.lock();
     for (auto &e: n->out_edges) {
-        node_id_t node = e.second->nbr.id;
+        const node_id_t &node = e.second->nbr.id;
         S->edge_map[node].emplace(node_id);
     }
     S->edge_map_mutex.unlock();
@@ -1644,7 +1641,7 @@ ldg_migration_wrapper(db::hyper_stub *hs, std::vector<uint64_t> &shard_node_coun
     bool no_migr = true;
     while (S->ldg_iter != S->ldg_nodes.end()) {
         db::element::node *n;
-        node_id_t migr_node = *S->ldg_iter;
+        const node_id_t &migr_node = *S->ldg_iter;
         S->ldg_iter++;
         n = S->acquire_node(migr_node);
 
@@ -1716,7 +1713,7 @@ migration_begin(db::hyper_stub *hs)
     auto agg_msg_count = std::move(S->agg_msg_count);
     S->msg_count_mutex.unlock();
     std::vector<std::pair<node_id_t, uint32_t>> sorted_nodes;
-    for (node_id_t n: S->ldg_nodes) {
+    for (const node_id_t &n: S->ldg_nodes) {
         if (agg_msg_count.find(n) != agg_msg_count.end()) {
             sorted_nodes.emplace_back(std::make_pair(n, agg_msg_count[n]));
         } else {
@@ -1730,7 +1727,7 @@ migration_begin(db::hyper_stub *hs)
 
 #ifdef WEAVER_NEW_CLDG
     uint64_t mcnt;
-    for (node_id_t nid: S->ldg_nodes) {
+    for (const node_id_t &nid: S->ldg_nodes) {
         mcnt = 0;
         db::element::node *n = S->acquire_node(nid);
         for (uint64_t cnt: n->msg_count) {
@@ -1758,6 +1755,7 @@ migration_end(db::hyper_stub *hs)
     S->migr_token = false;
     msg.prepare_message(message::MIGRATION_TOKEN, --S->migr_token_hops, S->migr_num_shards, S->migr_vt);
     S->migration_mutex.unlock();
+
     uint64_t next_shard; 
     if ((shard_id + 1 - ShardIdIncr) >= S->migr_num_shards) {
         next_shard = ShardIdIncr;
