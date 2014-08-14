@@ -2070,7 +2070,11 @@ main(int argc, const char *argv[])
     install_signal_handler(SIGINT, end_program);
     install_signal_handler(SIGHUP, end_program);
     install_signal_handler(SIGTERM, end_program);
-    install_signal_handler(SIGTSTP, end_program);
+
+    //google::InitGoogleLogging(argv[0]);
+    //google::InstallFailureSignalHandler();
+    //google::LogToStderr();
+    //google::SetLogDestination(google::INFO, ".");
 
     // signals
     sigset_t ss;

@@ -17,9 +17,10 @@
 // debugging
 #ifndef WDEBUG
 #ifdef weaver_debug_
-#define WDEBUG std::cerr << __FILE__ << ":" << __LINE__ << " "
+#include <glog/logging.h>
+#define WDEBUG LOG(INFO)
 #else
-#define WDEBUG if (0) std::cerr << __FILE__ << ":" << __LINE__ << " "
+#define WDEBUG if (false) std::cerr << __FILE__ << ":" << __LINE__ << " "
 #endif
 #endif
 
