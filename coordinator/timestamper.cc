@@ -1390,7 +1390,10 @@ main(int argc, const char *argv[])
     }
 
     // configuration file parse
-    init_config_constants(config_file);
+    if (!init_config_constants(config_file)) {
+        WDEBUG << "error in init_config_constants, exiting now." << std::endl;
+        return -1;
+    }
 
 #ifdef weaver_test_
     num_prep = 0;

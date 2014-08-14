@@ -157,7 +157,11 @@ chronosd :: chronosd()
     , m_count_weaver_order()
     , pair_comp_ptr(&pair_comp)
 {
-    init_config_constants("/etc/weaver.yaml");
+    // default search paths for config file
+    if (!init_config_constants()) {
+        WDEBUG << "error in init_config_constants, exiting now." << std::endl;
+        exit(-1);
+    }
    
     pair_set_t empty_set(pair_comp_ptr);
     for (uint64_t vt_id = 0; vt_id < NumVts; vt_id++) {

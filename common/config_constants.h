@@ -40,7 +40,7 @@ extern char *ServerManagerIpaddr;
 extern uint16_t ServerManagerPort;
 extern std::vector<std::pair<char*, uint16_t>> ServerManagerLocs;
 
-void init_config_constants(const char *config_file_name);
+bool init_config_constants(const char *config_file_name=NULL);
 void update_config_constants(uint64_t num_shards);
 uint64_t get_num_shards();
 uint64_t get_num_effective_servers();
