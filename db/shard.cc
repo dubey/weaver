@@ -42,6 +42,7 @@ uint64_t NumActualServers;
 uint64_t ShardIdIncr;
 char *HyperdexCoordIpaddr;
 uint16_t HyperdexCoordPort;
+std::vector<std::pair<char*, uint16_t>> HyperdexCoord;
 std::vector<std::pair<char*, uint16_t>> HyperdexDaemons;
 char *KronosIpaddr;
 uint16_t KronosPort;
@@ -2069,7 +2070,11 @@ main(int argc, const char *argv[])
     install_signal_handler(SIGINT, end_program);
     install_signal_handler(SIGHUP, end_program);
     install_signal_handler(SIGTERM, end_program);
-    install_signal_handler(SIGTSTP, end_program);
+
+    //google::InitGoogleLogging(argv[0]);
+    //google::InstallFailureSignalHandler();
+    //google::LogToStderr();
+    //google::SetLogDestination(google::INFO, ".");
 
     // signals
     sigset_t ss;
@@ -2087,7 +2092,7 @@ main(int argc, const char *argv[])
     }
 
     // command line params
-    const char* listen_host = "auto";
+    const char* listen_host = "127.0.0.1";
     long listen_port = 5201;
     const char *config_file = "/etc/weaver.yaml";
     const char *graph_file = NULL;
@@ -2098,7 +2103,7 @@ main(int argc, const char *argv[])
     e::argparser ap;
     ap.autohelp();
     ap.arg().name('l', "listen")
-            .description("listen on a specific IP address (default: auto)")
+            .description("listen on a specific IP address (default: 127.0.0.1)")
             .metavar("IP").as_string(&listen_host);
     ap.arg().name('p', "listen-port")
             .description("listen on an alternative port (default: 5201)")
@@ -2125,7 +2130,10 @@ main(int argc, const char *argv[])
     }
 
     // configuration file parse
-    init_config_constants(config_file);
+    if (!init_config_constants(config_file)) {
+        WDEBUG << "error in init_config_constants, exiting now." << std::endl;
+        return -1;
+    }
 
     if (backup_input != LONG_MAX) {
         assert(graph_file == NULL);

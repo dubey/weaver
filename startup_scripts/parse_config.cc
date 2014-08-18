@@ -28,6 +28,7 @@ uint64_t NumActualServers;
 uint64_t ShardIdIncr;
 char *HyperdexCoordIpaddr;
 uint16_t HyperdexCoordPort;
+std::vector<std::pair<char*, uint16_t>> HyperdexCoord;
 std::vector<std::pair<char*, uint16_t>> HyperdexDaemons;
 char *KronosIpaddr;
 uint16_t KronosPort;
@@ -58,7 +59,10 @@ main(int argc, const char *argv[])
     }
 
     // configuration file parse
-    init_config_constants(config_file);
+    if (!init_config_constants(config_file)) {
+        WDEBUG << "error in init_config_constants, exiting now." << std::endl;
+        return -1;
+    }
 
     std::string config(config_name);
 

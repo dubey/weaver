@@ -38,12 +38,11 @@ comm_wrapper :: weaver_mapper :: weaver_mapper(const configuration &config)
 
         server::state_t st = config.get_state(p.first);
         if (st != server::AVAILABLE) {
-            WDEBUG << "Server " << wid << " is in trouble, has state " << st << std::endl;
+            WDEBUG << "Server " << wid << " is in trouble, has state " << server::to_string(st) << std::endl;
         } else {
-            WDEBUG << "Server " << wid << " is healthy, has state " << st << std::endl;
+            WDEBUG << "Server " << wid << " is healthy, has state " << server::to_string(st) << std::endl;
         }
     }
-
 }
 
 bool

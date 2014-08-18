@@ -18,7 +18,7 @@
 #include "common/config_constants.h"
 #include "common/cache_constants.h"
 
-void
+bool
 init_config_constants(const char *config_file_name)
 {
     NumVts = UINT64_MAX;
@@ -32,16 +32,30 @@ init_config_constants(const char *config_file_name)
     ServerManagerIpaddr = NULL;
     ServerManagerPort = UINT16_MAX;
 
-    FILE *config_file = fopen(config_file_name, "r");
-    yaml_parser_t parser;
-
-    if (!yaml_parser_initialize(&parser)) {
-        WDEBUG << "yaml error initialize" << std::endl;
-        return;
+    FILE *config_file = NULL;
+    if (config_file_name != NULL) {
+        config_file = fopen(config_file_name, "r");
     }
     if (config_file == NULL) {
-        WDEBUG << "yaml error file open" << std::endl;
-        return;
+        // the supplied file name was no good
+        config_file = fopen("/etc/weaver.yaml", "r");
+        if (config_file != NULL) {
+            WDEBUG << "supplied config_file_name was no good, defaulting to /etc/weaver.yaml" << std::endl;
+        } else {
+            config_file = fopen("/usr/etc/weaver.yaml", "r");
+            if (config_file == NULL) {
+                WDEBUG << "Neither the provided config file name nor the defaults exist, exiting now." << std::endl;
+                return false;
+            } else {
+                WDEBUG << "supplied config_file_name was no good, defaulting to /usr/etc/weaver.yaml" << std::endl;
+            }
+        }
+    }
+
+    yaml_parser_t parser;
+    if (!yaml_parser_initialize(&parser)) {
+        WDEBUG << "yaml error initialize" << std::endl;
+        return false;
     }
 
     yaml_parser_set_input_file(&parser, config_file);
@@ -114,11 +128,6 @@ init_config_constants(const char *config_file_name)
                     PARSE_VALUE_SCALAR;
                     PARSE_INT(NumVts);
 
-                //} else if (strncmp((const char*)token.data.scalar.value, "num_shards", 10) == 0) {
-                //    yaml_token_delete(&token);
-                //    PARSE_VALUE_SCALAR;
-                //    PARSE_INT(NumShards);
-
                 } else if (strncmp((const char*)token.data.scalar.value, "num_backups", 11) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
@@ -129,15 +138,12 @@ init_config_constants(const char *config_file_name)
                     PARSE_VALUE_SCALAR;
                     PARSE_INT(MaxCacheEntries);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_coord_ipaddr", 21) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_coord", 14) == 0) {
                     yaml_token_delete(&token);
-                    PARSE_VALUE_SCALAR;
-                    PARSE_IPADDR(HyperdexCoordIpaddr);
-
-                } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_coord_port", 19) == 0) {
-                    yaml_token_delete(&token);
-                    PARSE_VALUE_SCALAR;
-                    PARSE_INT(HyperdexCoordPort);
+                    PARSE_VALUE_IPADDR_PORT_BLOCK(HyperdexCoord);
+                    assert(!HyperdexCoord.empty());
+                    HyperdexCoordIpaddr = HyperdexCoord[0].first;
+                    HyperdexCoordPort = HyperdexCoord[0].second;
 
                 } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_daemons", 16) == 0) {
                     yaml_token_delete(&token);
@@ -150,7 +156,7 @@ init_config_constants(const char *config_file_name)
                     KronosIpaddr = KronosLocs[0].first;
                     KronosPort = KronosLocs[0].second;
 
-                } else if (strncmp((const char*)token.data.scalar.value, "server_manager", 14) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, "weaver_coord", 14) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_IPADDR_PORT_BLOCK(ServerManagerLocs);
                     assert(!ServerManagerLocs.empty());
@@ -159,7 +165,7 @@ init_config_constants(const char *config_file_name)
 
                 } else {
                     WDEBUG << "unexpected key " << token.data.scalar.value << std::endl;
-                    return;
+                    return false;
                 }
                 break;
 
@@ -181,21 +187,25 @@ init_config_constants(const char *config_file_name)
 #undef PARSE_IPADDR
 #undef PARSE_VALUE_IPADDR_PORT_BLOCK
 
-    assert(UINT64_MAX != NumVts);
-    assert(UINT64_MAX != NumBackups);
-    assert(UINT16_MAX != MaxCacheEntries);
-    assert(NULL != HyperdexCoordIpaddr);
-    assert(UINT16_MAX != HyperdexCoordPort);
-    assert(!HyperdexDaemons.empty());
-    assert(NULL != KronosIpaddr);
-    assert(UINT16_MAX != KronosPort);
-    assert(NULL != ServerManagerIpaddr);
-    assert(UINT16_MAX != ServerManagerPort);
+    if (UINT64_MAX == NumVts
+     || UINT64_MAX == NumBackups
+     || UINT16_MAX == MaxCacheEntries
+     || NULL == HyperdexCoordIpaddr
+     || UINT16_MAX == HyperdexCoordPort
+     || HyperdexDaemons.empty()
+     || NULL == KronosIpaddr
+     || UINT16_MAX == KronosPort
+     || NULL == ServerManagerIpaddr
+     || UINT16_MAX == ServerManagerPort) {
+        return false;
+    }
 
     NumShards = 0;
     NumEffectiveServers = NumVts + NumShards;
     NumActualServers = NumEffectiveServers * (1+NumBackups);
     ShardIdIncr = NumVts;
+
+    return true;
 }
 
 void

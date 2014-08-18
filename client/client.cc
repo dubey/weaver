@@ -29,6 +29,7 @@ uint64_t NumActualServers;
 uint64_t ShardIdIncr;
 char *HyperdexCoordIpaddr;
 uint16_t HyperdexCoordPort;
+std::vector<std::pair<char*, uint16_t>> HyperdexCoord;
 std::vector<std::pair<char*, uint16_t>> HyperdexDaemons;
 char *KronosIpaddr;
 uint16_t KronosPort;
@@ -41,15 +42,16 @@ uint16_t MaxCacheEntries;
 using cl::client;
 using transaction::pending_update;
 
-client :: client(const char *coordinator
-    , uint16_t port
-    , const char *config_file="/etc/weaver.yaml")
+client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const char *config_file="/etc/weaver.yaml")
     : m_sm(coordinator, port)
     , cur_tx_id(UINT64_MAX)
     , tx_id_ctr(0)
     , id_ctr(0)
 {
-    init_config_constants(config_file);
+    if (!init_config_constants(config_file)) {
+        WDEBUG << "error in init_config_constants, exiting now." << std::endl;
+        exit(-1);
+    }
 
     vtid = rand() % NumVts;
 

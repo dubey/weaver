@@ -393,7 +393,7 @@ cdef class Client:
     cdef string traverse_start_node
     cdef object traverse_node_props
     cdef object traverse_edge_props
-    def __cinit__(self, coordinator, port, config_file='/etc/weaver.yaml'):
+    def __cinit__(self, coordinator, port, config_file):
         self.thisptr = new client(coordinator, port, config_file)
         self.traverse_start_node = ''
         self.traverse_node_props = []
