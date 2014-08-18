@@ -29,7 +29,7 @@ edge :: edge()
     , migr_edge(false)
 { }
 
-edge :: edge(const edge_handle_t &handle, vc::vclock &vclk, uint64_t remote_loc, node_id_t &remote_id)
+edge :: edge(const edge_handle_t &handle, vc::vclock &vclk, uint64_t remote_loc, const node_id_t &remote_id)
     : base(handle, vclk)
     , nbr(remote_loc, remote_id)
 #ifdef WEAVER_CLDG

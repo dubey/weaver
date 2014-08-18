@@ -181,7 +181,8 @@ namespace db
             // Migration
         public:
             bool current_migr, migr_updating_nbrs, migr_token, migrated;
-            uint64_t migr_chance, migr_node, migr_shard, migr_token_hops, migr_num_shards, migr_vt;
+            node_id_t migr_node;
+            uint64_t migr_chance, migr_shard, migr_token_hops, migr_num_shards, migr_vt;
 #ifdef WEAVER_CLDG
             std::unordered_map<node_id_t, uint32_t> agg_msg_count;
             std::vector<std::pair<node_id_t, uint32_t>> cldg_nodes;
@@ -204,7 +205,7 @@ namespace db
                 , zero_clk; // all zero clock for migration thread in queue
             nmap::nmap_stub remapper;
             std::unordered_map<node_id_t, uint64_t> remap;
-            void update_migrated_nbr_nonlocking(element::node *n, node_id_t migr_node, uint64_t old_loc, uint64_t new_loc);
+            void update_migrated_nbr_nonlocking(element::node *n, const node_id_t &migr_node, uint64_t old_loc, uint64_t new_loc);
             void update_migrated_nbr(const node_id_t &node, uint64_t old_loc, uint64_t new_loc);
             void update_node_mapping(const node_id_t &node, uint64_t shard);
             std::vector<uint64_t> max_prog_id // max prog id seen from each vector timestamper
@@ -587,7 +588,7 @@ namespace db
     shard :: create_edge_nonlocking(hyper_stub *hs,
         element::node *n,
         const edge_handle_t &handle,
-        uint64_t remote_node, uint64_t remote_loc,
+        const node_id_t &remote_node, uint64_t remote_loc,
         vc::vclock &vclk,
         bool init_load=false)
     {
@@ -915,12 +916,12 @@ namespace db
     inline void
     shard :: update_migrated_nbr(const node_id_t &migr_node, uint64_t old_loc, uint64_t new_loc)
     {
-        std::unordered_set<uint64_t> nbrs;
+        std::unordered_set<node_id_t> nbrs;
         element::node *n;
         edge_map_mutex.lock();
         nbrs = edge_map[migr_node];
         edge_map_mutex.unlock();
-        for (uint64_t nbr: nbrs) {
+        for (const node_id_t &nbr: nbrs) {
             n = acquire_node(nbr);
             update_migrated_nbr_nonlocking(n, migr_node, old_loc, new_loc);
             release_node(n);

@@ -63,7 +63,7 @@ static po6::threads::mutex tx_count_mtx;
 
 // tx functions
 bool
-unpack_tx(message::message &msg, uint64_t client_id, transaction::pending_tx &tx, nmap::nmap_stub *nmstub);
+unpack_tx(message::message &msg, uint64_t client_id, transaction::pending_tx &tx);
 void send_abort(uint64_t cl_id);
 bool lock_del_elems(std::unordered_set<std::string> &del_elems);
 void unlock_del_elems(std::unordered_set<std::string> &del_elems);
@@ -107,8 +107,7 @@ end_program(int signum)
 bool
 unpack_tx(message::message &msg,
     uint64_t client_id,
-    transaction::pending_tx &tx,
-    nmap::nmap_stub *nmstub)
+    transaction::pending_tx &tx)
 {
     std::unordered_map<std::string, uint64_t> client_map;
     msg.unpack_message(message::CLIENT_TX_INIT, tx.writes);
@@ -476,20 +475,6 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     }
 
     if (success) {
-        if (!nmstub->put_client_mappings(put_client_map)) {
-            std::unordered_set<node_handle_t> undo_client_set;
-            undo_client_set.reserve(put_client_map.size());
-            for (auto &p: put_client_map) {
-                undo_client_set.emplace(p.first);
-            }
-            if (!nmstub->del_client_mappings(undo_client_set)) {
-                WDEBUG << "del client mappings fail" << std::endl;
-            }
-            success = false;
-        }
-    }
-
-    if (success) {
         // put mappings
         if (!nmstub->put_mappings(put_map)) {
             std::unordered_set<node_id_t> undo_set;
@@ -552,24 +537,24 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
             case transaction::EDGE_CREATE_REQ:
                 find_iter = all_map.find(upd->handle1);
                 assert(find_iter != all_map.end());
-                upd->loc1 = *find_iter;
+                upd->loc1 = find_iter->second;
                 find_iter = all_map.find(upd->handle2);
                 assert(find_iter != all_map.end());
-                upd->loc2 = *find_iter;
+                upd->loc2 = find_iter->second;
                 break;
 
             case transaction::NODE_DELETE_REQ:
             case transaction::NODE_SET_PROPERTY:
                 find_iter = all_map.find(upd->handle1);
                 assert(find_iter != all_map.end());
-                upd->loc1 = *find_iter;
+                upd->loc1 = find_iter->second;
                 break;
 
             case transaction::EDGE_DELETE_REQ:
             case transaction::EDGE_SET_PROPERTY:
                 find_iter = all_map.find(upd->handle2);
                 assert(find_iter != all_map.end());
-                upd->loc2 = *find_iter;
+                upd->loc2 = find_iter->second;
                 break;
 
             default:
@@ -827,7 +812,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, nmap::nmap_stub *nmap_cl)
 {
     node_prog::prog_type pType;
-    std::vector<std::pair<node_handle_t, ParamsType>> initial_args;
+    std::vector<std::pair<node_id_t, ParamsType>> initial_args;
 
     msg->unpack_message(message::CLIENT_NODE_PROG_REQ, pType, initial_args);
     
@@ -843,7 +828,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     }
 
     if (!get_set.empty()) {
-        std::vector<std::pair<node_id_t, uint64_t>> loc_results = nmap_cl->get_client_mappings(get_set);
+        std::vector<std::pair<node_id_t, uint64_t>> loc_results = nmap_cl->get_mappings(get_set);
         bool success = (loc_results.size() == get_set.size());
 
         if (!success) {
@@ -950,7 +935,7 @@ server_loop(int thread_id)
                 case message::CLIENT_TX_INIT: {
                     std::unique_ptr<transaction::pending_tx> tx(new transaction::pending_tx());
 
-                    if (!unpack_tx(*msg, client_sender, *tx, nmstub)) {
+                    if (!unpack_tx(*msg, client_sender, *tx)) {
                         // tx fail because multiple deletes for same node/edge
                         send_abort(client_sender);
                     } else {

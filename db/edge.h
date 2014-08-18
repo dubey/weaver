@@ -32,7 +32,7 @@ namespace element
     {
         public:
             edge();
-            edge(const edge_handle_t &handle, vc::vclock &vclk, uint64_t remote_loc, node_id_t &remote_id);
+            edge(const edge_handle_t &handle, vc::vclock &vclk, uint64_t remote_loc, const node_id_t &remote_id);
             edge(const edge_handle_t &handle, vc::vclock &vclk, remote_node &rn);
             ~edge() { }
 

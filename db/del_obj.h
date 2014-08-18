@@ -26,7 +26,7 @@ namespace db
         std::vector<bool> no_outstanding_progs;
 
         inline
-        del_obj(enum message::msg_type t, vc::vclock &vc, node_id_t &n, edge_handle_t e=edge_handle_t(""))
+        del_obj(enum message::msg_type t, vc::vclock &vc, const node_id_t &n, edge_handle_t e=edge_handle_t(""))
             : type(t)
             , vclk(vc)
             , node(n)

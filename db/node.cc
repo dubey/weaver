@@ -23,7 +23,7 @@ using db::element::edge;
 using db::element::node;
 
 node :: node(const node_id_t &_id, vc::vclock &vclk, po6::threads::mutex *mtx)
-    : base(vclk)
+    : base(id, vclk)
     , id(_id)
     , state(mode::NASCENT)
     , cv(mtx)

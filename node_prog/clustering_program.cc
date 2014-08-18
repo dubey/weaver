@@ -110,7 +110,7 @@ node_prog :: clustering_node_program(
                 next = {std::make_pair(db::element::coordinator, std::move(params))};
             }
         } else {
-            for (node_id_t &nbr_id : params.neighbors) {
+            for (const node_id_t &nbr_id : params.neighbors) {
                 if (cstate.neighbor_counts.count(nbr_id) > 0) {
                     cstate.neighbor_counts[nbr_id]++;
                 }
@@ -119,7 +119,7 @@ node_prog :: clustering_node_program(
                 assert(cstate.neighbor_counts.size() > 1);
                 double denominator = (double) (cstate.neighbor_counts.size() * (cstate.neighbor_counts.size() - 1));
                 uint64_t numerator = 0;
-                for (std::pair<const node_id_t, int>& nbr_count : cstate.neighbor_counts){
+                for (std::pair<const node_id_t, int> &nbr_count : cstate.neighbor_counts){
                     numerator += nbr_count.second;
                 }
                 params.clustering_coeff = (double) numerator / denominator;

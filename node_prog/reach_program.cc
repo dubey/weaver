@@ -191,7 +191,7 @@ node_prog :: reach_node_program(
     db::element::remote_node prev_node = params.prev_node;
     params.prev_node = rn;
     if (!params.returning) { // request mode
-        if (params.dest == n.get_handle()) {
+        if (params.dest == n.get_id()) {
             // we found the node we are looking for, prepare a reply
             params.returning = true;
             params.reachable = true;

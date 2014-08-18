@@ -89,7 +89,7 @@ create_node(db::hyper_stub *hs,
     vc::vclock &t_creat,
     const node_id_t &node_id)
 {
-    S->create_node(hs, node_id, handle, t_creat, false);
+    S->create_node(hs, node_id, t_creat, false);
 }
 
 inline void
@@ -223,7 +223,7 @@ parse_two_uint64(std::string &line, uint64_t &n1, uint64_t &n2)
 }
 
 inline void
-parse_weaver_edge(std::string &line, const node_id_t &n1, const node_id_t &n2,
+parse_weaver_edge(std::string &line, uint64_t &n1, uint64_t &n2,
         std::vector<std::pair<std::string, std::string>> &props)
 {
     size_t i = parse_two_uint64(line, n1, n2);
@@ -301,7 +301,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
     db::element::node *n;
     uint64_t line_count = 0;
     uint64_t edge_count = 1;
-    node_id_t max_node_id = 0;
+    uint64_t max_node_id;
     std::unordered_set<node_id_t> seen_nodes;
     std::vector<std::unordered_map<node_id_t, uint64_t>> node_maps(NUM_THREADS, std::unordered_map<node_id_t, uint64_t>());
     vc::vclock zero_clk(0, 0);
@@ -343,7 +343,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     }
                     if (loc1 == shard_id) {
                         if (!S->node_exists_nonlocking(id1)) {
-                            S->create_node(0, node1, zero_clk, false, true);
+                            S->create_node(0, id1, zero_clk, false, true);
                             node_maps[thread_select][id1] = shard_id;
                             thread_select = (thread_select + 1) % NUM_THREADS;
                         }
@@ -373,7 +373,6 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 if (loc == shard_id) {
                     n = S->acquire_node_nonlocking(id0);
                     if (n == NULL) {
-                        node_handle_t handle = std::to_string(id0);
                         n = S->create_node(0, id0, zero_clk, false, true);
                         node_maps[thread_select][id0] = shard_id;
                         thread_select = (thread_select + 1) % NUM_THREADS;
@@ -391,9 +390,11 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
             while (std::getline(file, line)) {
                 props.clear();
                 parse_weaver_edge(line, node0, node1, props);
+                id0 = std::to_string(node0);
+                id1 = std::to_string(node1);
                 edge_handle = std::to_string(max_node_id + (edge_count++));
-                uint64_t loc0 = all_node_map[node0];
-                uint64_t loc1 = all_node_map[node1];
+                uint64_t loc0 = all_node_map[id0];
+                uint64_t loc1 = all_node_map[id1];
                 if (loc0 == shard_id) {
                     id0 = std::to_string(node0);
                     n = S->acquire_node_nonlocking(id0);
@@ -423,7 +424,8 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
 void
 migrated_nbr_update(std::unique_ptr<message::message> msg)
 {
-    uint64_t node, old_loc, new_loc;
+    node_id_t node;
+    uint64_t old_loc, new_loc;
     msg->unpack_message(message::MIGRATED_NBR_UPDATE, node, old_loc, new_loc);
     S->update_migrated_nbr(node, old_loc, new_loc);
 }
@@ -478,23 +480,23 @@ apply_writes(db::hyper_stub *hs, uint64_t vt_id, uint64_t tx_id, vc::vclock &vcl
     for (auto upd: tx.writes) {
         switch (upd->type) {
             case transaction::EDGE_CREATE_REQ:
-                create_edge(hs, vclk, qts, upd->handle, upd->elem1, upd->elem2, upd->loc2);
+                create_edge(hs, vclk, qts, upd->handle, upd->handle1, upd->handle2, upd->loc2);
                 break;
 
             case transaction::NODE_DELETE_REQ:
-                delete_node(hs, vclk, qts, upd->elem1);
+                delete_node(hs, vclk, qts, upd->handle1);
                 break;
 
             case transaction::EDGE_DELETE_REQ:
-                delete_edge(hs, vclk, qts, upd->handle1, upd->elem2);
+                delete_edge(hs, vclk, qts, upd->handle1, upd->handle2);
                 break;
 
             case transaction::NODE_SET_PROPERTY:
-                set_node_property(hs, vclk, qts, upd->elem1, std::move(upd->key), std::move(upd->value));
+                set_node_property(hs, vclk, qts, upd->handle1, std::move(upd->key), std::move(upd->value));
                 break;
 
             case transaction::EDGE_SET_PROPERTY:
-                set_edge_property(hs, vclk, qts, upd->handle1, upd->elem2, std::move(upd->key), std::move(upd->value));
+                set_edge_property(hs, vclk, qts, upd->handle1, upd->handle2, std::move(upd->key), std::move(upd->value));
                 break;
 
             default:
@@ -544,18 +546,18 @@ unpack_tx_request(db::hyper_stub *hs, void *req)
         n = NULL;
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ:
-                create_node(hs, vclk, upd->id, upd->handle);
+                create_node(hs, vclk, upd->handle);
                 break;
 
             case transaction::EDGE_CREATE_REQ:
             case transaction::NODE_DELETE_REQ:
             case transaction::NODE_SET_PROPERTY: // elem1
-                n = S->acquire_node(upd->elem1);
+                n = S->acquire_node(upd->handle1);
                 break;
 
             case transaction::EDGE_DELETE_REQ:
             case transaction::EDGE_SET_PROPERTY: // elem2
-                n = S->acquire_node(upd->elem2);
+                n = S->acquire_node(upd->handle2);
                 break;
 
             default:
@@ -1011,7 +1013,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
 
     std::vector<node_id_t> nodes_that_created_state;
 
-    uint64_t node_id;
+    node_id_t node_id;
     bool done_request = false;
     db::element::remote_node this_node(S->shard_id, 0);
 
@@ -1444,7 +1446,7 @@ migrate_node_step2_resp(db::hyper_stub *hs, std::unique_ptr<message::message> ms
 {
     // unpack and place node
     uint64_t from_loc;
-    const node_id_t &node_id;
+    node_id_t node_id;
     db::element::node *n;
 
     // create a new node, unpack the message

@@ -321,7 +321,7 @@ hyper_stub_base :: multiple_del(std::vector<const char*> &spaces,
 
 // store the given unordered_map<int, int> as a HYPERDATATYPE_MAP_INT64_INT64
 void
-hyper_stub_base :: prepare_buffer(const std::unordered_map<uint64_t, uint64_t> &map, std::unique_ptr<char> &ret_buf, uint64_t &buf_sz)
+hyper_stub_base :: prepare_buffer(const std::unordered_map<uint64_t, uint64_t> &map, std::unique_ptr<e::buffer> &buf)
 {
     std::vector<uint64_t> sorted;
     sorted.reserve(map.size());
@@ -330,13 +330,13 @@ hyper_stub_base :: prepare_buffer(const std::unordered_map<uint64_t, uint64_t> &
     }
     std::sort(sorted.begin(), sorted.end());
 
-    buf_sz = map.size() * (sizeof(int64_t) + sizeof(int64_t));
-    char *buf = (char*)malloc(buf_sz);
-    ret_buf.reset(buf);
+    uint64_t buf_sz = map.size() * (sizeof(int64_t) + sizeof(int64_t));
+    buf.reset(e::buffer::create(buf_sz));
+    e::buffer::packer packer = buf->pack();
     
     for (uint64_t key: sorted) {
-        buf = e::pack64le(key, buf);
-        buf = e::pack64le(map.at(key), buf);
+        pack_uint64(packer, key);
+        pack_uint64(packer, map.at(key));
     }
 }
 
@@ -357,7 +357,7 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordere
 
 // store the given unordered_set as a HYPERDATATYPE_SET_INT64
 void
-hyper_stub_base :: prepare_buffer(const std::unordered_set<uint64_t> &set, std::unique_ptr<char> &ret_buf, uint64_t &buf_sz)
+hyper_stub_base :: prepare_buffer(const std::unordered_set<uint64_t> &set, std::unique_ptr<e::buffer> &buf)
 {
     std::vector<uint64_t> sorted;
     sorted.reserve(set.size());
@@ -366,12 +366,13 @@ hyper_stub_base :: prepare_buffer(const std::unordered_set<uint64_t> &set, std::
     }
     std::sort(sorted.begin(), sorted.end());
 
-    buf_sz = sizeof(uint64_t) * set.size();
-    char *buf = (char*)malloc(buf_sz);
-    ret_buf.reset(buf);
+    uint64_t buf_sz = sizeof(uint64_t) * set.size();
+    buf.reset(e::buffer::create(buf_sz));
+    e::buffer::packer packer = buf->pack();
+
     // now iterate in sorted order
     for (uint64_t x: sorted) {
-        buf = e::pack64le(x, buf);
+        pack_uint64(packer, x);
     }
 }
 
@@ -385,6 +386,43 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordere
 
     for (uint64_t i = 0; i < set_sz; i++) {
         buf = e::unpack64le(buf, &next);
+        set.emplace(next);
+    }
+}
+
+// store the unordered_set<string> as a HYPERDATATYPE_SET_STRING
+void
+hyper_stub_base :: prepare_buffer(const std::unordered_set<std::string> &set, std::unique_ptr<e::buffer> &buf)
+{
+    std::vector<std::string> sorted;
+    sorted.reserve(set.size());
+    uint64_t buf_sz = 0;
+
+    for (const std::string &s: set) {
+        sorted.emplace_back(s);
+        buf_sz += sizeof(uint32_t) + s.size();
+    }
+    std::sort(sorted.begin(), sorted.end());
+
+    buf.reset(e::buffer::create(buf_sz));
+    e::buffer::packer packer = buf->pack();
+
+    for (const std::string &s: sorted) {
+        message::pack_buffer(packer, s);
+    }
+}
+
+// unpack the HYPERDATATYPE_SET_STRING in to an unordered_set<string>
+void
+hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<std::string> &set)
+{
+    std::unique_ptr<e::buffer> ebuf(e::buffer::create(buf, buf_sz));
+    e::unpacker unpacker = ebuf->unpack_from(0);
+    std::string next;
+
+    while (!unpacker.empty()) {
+        next.erase();
+        message::unpack_buffer(unpacker, next);
         set.emplace(next);
     }
 }

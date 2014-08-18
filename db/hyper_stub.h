@@ -67,10 +67,10 @@ namespace db
             void update_properties(element::node &n);
             void add_out_edge(element::node &n, element::edge *e);
             void remove_out_edge(element::node &n, element::edge *e);
-            void add_in_nbr(node_id_t node, node_id_t nbr);
-            void remove_in_nbr(node_id_t n_hndl, node_id_t nbr);
+            void add_in_nbr(const node_id_t &node, const node_id_t &nbr);
+            void remove_in_nbr(const node_id_t &n_hndl, const node_id_t &nbr);
             void update_tx_queue(element::node &n);
-            void update_migr_status(node_id_t n_hndl, enum persist_node_state status);
+            void update_migr_status(const node_id_t &n_hndl, enum persist_node_state status);
             // bulk loading
             void bulk_load(std::unordered_map<node_id_t, element::node*> *nodes,
                 std::unordered_map<node_id_t, std::unordered_set<node_id_t>> &edge_map);

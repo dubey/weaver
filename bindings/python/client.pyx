@@ -95,13 +95,12 @@ cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
 
 cdef extern from 'common/types.h':
     ctypedef string node_id_t
-    ctypedef string node_handle_t
     ctypedef string edge_handle_t
     ctypedef string cache_key_t
 
 cdef extern from 'db/remote_node.h' namespace 'db::element':
     cdef cppclass remote_node:
-        remote_node(uint64_t loc, node_id_t i)
+        remote_node(uint64_t loc, const node_id_t &i)
         remote_node()
         uint64_t loc
         node_id_t id
@@ -119,7 +118,7 @@ cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
         cache_key_t _cache_key
         bint returning
         remote_node prev_node
-        node_handle_t dest
+        node_id_t dest
         vector[pair[string, string]] edge_props
         uint32_t hops
         bint reachable
@@ -151,7 +150,7 @@ cdef extern from 'node_prog/pathless_reach_program.h' namespace 'node_prog':
         pathless_reach_params()
         bint returning
         remote_node prev_node
-        node_handle_t dest
+        node_id_t dest
         vector[pair[string, string]] edge_props
         bint reachable
 
@@ -336,7 +335,7 @@ cdef extern from 'node_prog/traverse_with_props.h' namespace 'node_prog':
         deque[vector[pair[string, string]]] edge_props
         bint collect_nodes
         bint collect_edges
-        unordered_set[node_handle_t] return_nodes
+        unordered_set[node_id_t] return_nodes
         unordered_set[edge_handle_t] return_edges
 
 class TraversePropsParams:

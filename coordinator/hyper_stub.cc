@@ -28,14 +28,13 @@ hyper_stub :: hyper_stub(uint64_t vtid, bool put_initial)
     if (put_initial) {
         std::unordered_set<uint64_t> singleton;
         singleton.insert(INT64_MAX);
-        std::unique_ptr<char> set_buf;
-        uint64_t buf_sz;
-        prepare_buffer(singleton, set_buf, buf_sz);
+        std::unique_ptr<e::buffer> set_buf;
+        prepare_buffer(singleton, set_buf);
 
         hyperdex_client_attribute cl_attr;
         cl_attr.attr = set_attr;
-        cl_attr.value = set_buf.get();
-        cl_attr.value_sz = buf_sz;
+        cl_attr.value = (const char*)set_buf->data();
+        cl_attr.value_sz = set_buf->size();
         cl_attr.datatype = set_dtype;
 
         call(&hyperdex::Client::put, vt_set_space, (const char*)&vt_id, sizeof(int64_t), &cl_attr, 1);

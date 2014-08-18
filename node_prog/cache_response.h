@@ -41,7 +41,7 @@ namespace node_prog
         bool node_deleted;
 
         node_cache_context() { }
-        node_cache_context(uint64_t loc, node_id_t id, bool deleted) : node(loc, id), node_deleted(deleted) { }
+        node_cache_context(uint64_t loc, const node_id_t &id, bool deleted) : node(loc, id), node_deleted(deleted) { }
 
         std::vector<property> props_added;
         std::vector<property> props_deleted;

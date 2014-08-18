@@ -132,10 +132,10 @@ node_prog :: traverse_props_node_program(node &n,
             if (params.edge_props.empty()) {
                 // reached the max hop, return now
                 assert(params.node_props.empty());
-                params.return_nodes.emplace(n.get_handle());
+                params.return_nodes.emplace(n.get_id());
             } else {
                 if (params.collect_nodes) {
-                    params.return_nodes.emplace(n.get_handle());
+                    params.return_nodes.emplace(n.get_id());
                 }
                 auto edge_props = params.edge_props.front();
                 params.edge_props.pop_front();
@@ -174,7 +174,7 @@ node_prog :: traverse_props_node_program(node &n,
 
     } else {
         // request returning to start node
-        for (const node_handle_t &n: params.return_nodes) {
+        for (const node_id_t &n: params.return_nodes) {
             state.return_nodes.emplace(n);
         }
         for (const edge_handle_t &e: params.return_edges) {

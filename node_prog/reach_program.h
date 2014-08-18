@@ -32,7 +32,7 @@ namespace node_prog
             cache_key_t _cache_key;
             bool returning; // false = request, true = reply
             db::element::remote_node prev_node;
-            node_handle_t dest;
+            node_id_t dest;
             std::vector<std::pair<std::string, std::string>> edge_props;
             uint16_t hops;
             bool reachable;

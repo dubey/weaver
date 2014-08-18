@@ -75,14 +75,19 @@ class hyper_stub_base
 
         template <typename T> void prepare_buffer(const T &t, std::unique_ptr<e::buffer> &buf);
         template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, T &t);
-        template <typename T> void prepare_buffer(const std::unordered_map<uint64_t, T> &map, std::unique_ptr<char> &buf, uint64_t &buf_sz);
+        template <typename T> void prepare_buffer(const std::unordered_map<uint64_t, T> &map, std::unique_ptr<e::buffer> &buf);
         template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<uint64_t, T> &map);
-        template <typename T> void prepare_buffer(const std::unordered_map<std::string, T> &map, std::unique_ptr<char> &buf, uint64_t &buf_sz);
+        template <typename T> void prepare_buffer(const std::unordered_map<std::string, T> &map, std::unique_ptr<e::buffer> &buf);
         template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<std::string, T> &map);
-        void prepare_buffer(const std::unordered_map<uint64_t, uint64_t> &map, std::unique_ptr<char> &buf, uint64_t &buf_sz);
+        void prepare_buffer(const std::unordered_map<uint64_t, uint64_t> &map, std::unique_ptr<e::buffer> &buf);
         void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<uint64_t, uint64_t> &map);
-        void prepare_buffer(const std::unordered_set<uint64_t> &set, std::unique_ptr<char> &buf, uint64_t &buf_sz);
+        void prepare_buffer(const std::unordered_set<uint64_t> &set, std::unique_ptr<e::buffer> &buf);
         void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<uint64_t> &set);
+        void prepare_buffer(const std::unordered_set<std::string> &set, std::unique_ptr<e::buffer> &buf);
+        void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<std::string> &set);
+
+    private:
+        void pack_uint64(e::buffer::packer &packer, uint64_t num);
 
     public:
         hyper_stub_base();
@@ -109,27 +114,12 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, T &t)
     message::unpack_buffer(unpacker, t);
 }
 
-#define PACK_AS_STRING(buf, temp_buf, pkr, sz, str) \
-    buf = e::pack32le(sz, buf); \
-    temp_buf.reset(e::buffer::create(sz)); \
-    e::buffer::packer pkr = temp_buf->pack_at(0); \
-    message::pack_buffer(pkr, str); \
-    memmove(buf, temp_buf->data(), sz); \
-    buf += sz;
-
-#define UNPACK_AS_STRING(buf, temp_buf, unpkr, sz, str) \
-    buf = e::unpack32le(buf, &sz); \
-    temp_buf.reset(e::buffer::create(buf, sz)); \
-    e::unpacker unpkr = temp_buf->unpack_from(0); \
-    message::unpack_buffer(unpkr, str); \
-    buf += sz;
-
 // store the given unordered_map as a HYPERDATATYPE_MAP_INT64_STRING
 template <typename T>
 inline void
-hyper_stub_base :: prepare_buffer(const std::unordered_map<uint64_t, T> &map, std::unique_ptr<char> &ret_buf, uint64_t &buf_sz)
+hyper_stub_base :: prepare_buffer(const std::unordered_map<uint64_t, T> &map, std::unique_ptr<e::buffer> &buf)
 {
-    buf_sz = 0;
+    uint64_t buf_sz = 0;
     std::vector<uint64_t> sorted;
     sorted.reserve(map.size());
     std::vector<uint32_t> val_sz;
@@ -142,14 +132,13 @@ hyper_stub_base :: prepare_buffer(const std::unordered_map<uint64_t, T> &map, st
     }
     std::sort(sorted.begin(), sorted.end());
 
-    char *buf = (char*)malloc(buf_sz);
-    ret_buf.reset(buf);
+    buf.reset(e::buffer::create(buf_sz));
+    e::buffer::packer packer = buf->pack();
     // now iterate in sorted order
     uint64_t i = 0;
-    std::unique_ptr<e::buffer> temp_buf;
     for (uint64_t key: sorted) {
-        buf = e::pack64le(key, buf);
-        PACK_AS_STRING(buf, temp_buf, packer, val_sz[i], map.at(key));
+        pack_uint64(packer, key);
+        message::pack_buffer(packer, map[key]);
         i++;
     }
 }
@@ -159,23 +148,25 @@ template <typename T>
 inline void
 hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<uint64_t, T> &map)
 {
-    const char *end = buf + buf_sz;
+    std::unique_ptr<e::buffer> ebuf(e::buffer::create(buf, buf_sz));
+    const uint8_t *cur = ebuf->data();
+    e::unpacker unpacker = ebuf->unpack_from(0);
     uint64_t key;
-    uint32_t val_sz;
-    std::unique_ptr<e::buffer> temp_buf;
 
-    while (buf != end) {
-        buf = e::unpack64le(buf, &key);
-        UNPACK_AS_STRING(buf, temp_buf, unpacker, val_sz, map[key]);
+    while (!unpacker.empty()) {
+        cur = e::unpack64le(cur, &key);
+        unpacker.advance(8);
+        message::unpack_buffer(unpacker, map[key]);
+        cur += message::size(map[key]);
     }
 }
 
 // store the given unordered_map as a HYPERDATATYPE_MAP_STRING_STRING
 template <typename T>
 inline void
-hyper_stub_base :: prepare_buffer(const std::unordered_map<std::string, T> &map, std::unique_ptr<char> &ret_buf, uint64_t &buf_sz)
+hyper_stub_base :: prepare_buffer(const std::unordered_map<std::string, T> &map, std::unique_ptr<e::buffer> &buf)
 {
-    buf_sz = 0;
+    uint64_t buf_sz = 0;
     std::vector<std::string> sorted;
     sorted.reserve(map.size());
     std::vector<uint32_t> key_sz;
@@ -191,19 +182,13 @@ hyper_stub_base :: prepare_buffer(const std::unordered_map<std::string, T> &map,
     }
     std::sort(sorted.begin(), sorted.end());
 
-    char *buf = (char*)malloc(buf_sz);
-    ret_buf.reset(buf);
+    buf.reset(e::buffer::create(buf_sz));
+    e::buffer::packer packer = buf->pack();
     // now iterate in sorted order
     uint64_t i = 0;
-    std::unique_ptr<e::buffer> temp_buf;
     for (const std::string &key: sorted) {
-
-        // pack key
-        PACK_AS_STRING(buf, temp_buf, key_packer, key_sz[i], key);
-
-        // pack val
-        PACK_AS_STRING(buf, temp_buf, val_packer, val_sz[i], map.at(key));
-
+        message::pack_buffer(packer, key);
+        message::pack_buffer(packer, map.at(key));
         i++;
     }
 }
@@ -213,19 +198,24 @@ template <typename T>
 inline void
 hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<std::string, T> &map)
 {
-    const char *end = buf + buf_sz;
-    uint32_t key_sz, val_sz;
+    std::unique_ptr<e::buffer> ebuf(e::buffer::create(buf, buf_sz));
+    e::unpacker unpacker = ebuf->unpack_from(0);
     std::string key;
-    std::unique_ptr<e::buffer> temp_buf;
 
-    while (buf != end) {
+    while (!unpacker.empty()) {
         key.erase();
-        UNPACK_AS_STRING(buf, temp_buf, key_unpacker, key_sz, key);
-        UNPACK_AS_STRING(buf, temp_buf, val_unpacker, val_sz, map[key]);
+        message::unpack_buffer(unpacker, key);
+        message::unpack_buffer(unpacker, map[key]);
     }
 }
 
-#undef PACK_AS_STRING
-#undef UNPACK_AS_STRING
+inline void
+hyper_stub_base :: pack_uint64(e::buffer::packer &pkr, uint64_t num)
+{
+    uint8_t intbuf[8];
+    e::pack64le(num, intbuf);
+    e::slice intslc(intbuf, 8);
+    pkr = pkr.copy(intslc);
+}
 
 #endif

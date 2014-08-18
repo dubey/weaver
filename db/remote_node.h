@@ -24,7 +24,7 @@ namespace element
     {
         public:
             remote_node() { }
-            remote_node(uint64_t l, node_id_t &i) : loc(l), id(i) { }
+            remote_node(uint64_t l, const node_id_t &i) : loc(l), id(i) { }
 
         public:
             uint64_t loc;
