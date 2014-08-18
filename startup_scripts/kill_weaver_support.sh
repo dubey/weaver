@@ -23,7 +23,7 @@ kronos_ipaddr=($(weaver-parse-config -c kronos_ipaddr $config_file_args))
 kronos_port=($(weaver-parse-config -c kronos_port $config_file_args))
 
 echo "Killing all replicant daemons at $hyperdex_coord_ipaddr"
-ssh $hyperdex_coord_ipaddr "killall replicant-daemon"
+ssh $hyperdex_coord_ipaddr "pidof replicant-daemon | xargs kill -9"
 
 num_daemons=${#hyperdex_daemons_ipaddr[*]}
 for i in $(seq 1 $num_daemons);
@@ -31,7 +31,7 @@ do
     idx=$(($i-1))
     ipaddr=${hyperdex_daemons_ipaddr[$idx]}
     echo "Killing all HyperDex daemons at $ipaddr"
-    ssh $ipaddr "killall hyperdex-daemon"
+    ssh $ipaddr "pidof hyperdex-daemon | xargs kill -9"
 done
 
 num_sm_daemons=${#server_manager_ipaddr[*]}
@@ -40,7 +40,7 @@ do
     idx=$(($i-1))
     ipaddr=${server_manager_ipaddr[$idx]}
     echo "Killing all replicant daemons at $ipaddr"
-    ssh $ipaddr "killall replicant-daemon"
+    ssh $ipaddr "pidof replicant-daemon | xargs kill -9"
 done
 
 num_kronos_daemons=${#kronos_ipaddr[*]}
@@ -49,5 +49,5 @@ do
     idx=$(($i-1))
     ipaddr=${kronos_ipaddr[$idx]}
     echo "Killing all replicant daemons at $ipaddr"
-    ssh $ipaddr "killall replicant-daemon"
+    ssh $ipaddr "pidof replicant-daemon | xargs kill -9"
 done
