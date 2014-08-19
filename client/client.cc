@@ -162,12 +162,14 @@ client :: end_tx()
         return false;
     }
 
-    bool success = false;
+    std::string tx_id = std::to_string(myid) + std::to_string(cur_tx_id);
+
     message::message msg;
-    msg.prepare_message(message::CLIENT_TX_INIT, cur_tx);
+    msg.prepare_message(message::CLIENT_TX_INIT, tx_id, cur_tx);
     send_coord(msg.buf);
 
     message::message recv_msg;
+    bool success = false;
     busybee_returncode recv_code = recv_coord(&recv_msg.buf);
     if (recv_code == BUSYBEE_TIMEOUT) {
         // assume vt is dead, fail tx

@@ -63,8 +63,8 @@ namespace coordinator
         private:
             uint64_t vt_id; // this vector timestamper's id
             uint64_t shifted_id;
-            uint64_t reqid_gen, loc_gen, id_gen;
-            po6::threads::mutex reqid_gen_mtx, loc_gen_mtx, id_gen_mtx;
+            uint64_t reqid_gen, loc_gen;
+            po6::threads::mutex reqid_gen_mtx, loc_gen_mtx;
 
         public:
             // consistency
@@ -125,7 +125,6 @@ namespace coordinator
             void update_members_new_config();
             uint64_t generate_req_id();
             uint64_t generate_loc();
-            uint64_t generate_id();
     };
 
     inline
@@ -145,7 +144,6 @@ namespace coordinator
         , shifted_id(UINT64_MAX)
         , reqid_gen(0)
         , loc_gen(0)
-        , id_gen(0)
         , vclk(UINT64_MAX, 0)
         , qts(NumShards, 0)
         , clock_update_acks(NumVts-1)
@@ -309,17 +307,6 @@ namespace coordinator
         new_loc = loc_gen + ShardIdIncr;
         loc_gen_mtx.unlock();
         return new_loc;
-    }
-
-    inline uint64_t
-    timestamper :: generate_id()
-    {
-        uint64_t new_id;
-        id_gen_mtx.lock();
-        new_id = (++id_gen) & TOP_MASK;
-        id_gen_mtx.unlock();
-        new_id |= shifted_id;
-        return new_id;
     }
 
 }

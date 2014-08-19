@@ -113,7 +113,7 @@ unpack_tx(message::message &msg,
     transaction::pending_tx &tx)
 {
     std::unordered_map<std::string, uint64_t> client_map;
-    msg.unpack_message(message::CLIENT_TX_INIT, tx.writes);
+    msg.unpack_message(message::CLIENT_TX_INIT, tx.client_tx_id, tx.writes);
 
     for (auto upd: tx.writes) {
         if (upd->type == transaction::NODE_DELETE_REQ || upd->type == transaction::EDGE_DELETE_REQ) {

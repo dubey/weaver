@@ -47,6 +47,7 @@ namespace transaction
     {
         uint64_t id // unique tx id
             , client_id; // client to which we need to reply
+        std::string client_tx_id; // unique tx id from client
         tx_list_t writes;
         vc::vclock timestamp; // vector timestamp
         std::unordered_set<std::string> del_elems;
