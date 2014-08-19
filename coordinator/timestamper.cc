@@ -356,9 +356,9 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     nmap::nmap_stub *nmstub,
     coordinator::hyper_stub *hstub)
 {
-    std::unordered_map<node_id_t, uint64_t> put_map;
-    std::unordered_set<node_id_t> get_set;
-    std::unordered_set<node_id_t> del_set;
+    std::unordered_map<node_handle_t, uint64_t> put_map;
+    std::unordered_set<node_handle_t> get_set;
+    std::unordered_set<node_handle_t> del_set;
     tx->busy_elems.reserve(tx->writes.size());
     std::string busy_single[3];
 
@@ -469,7 +469,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     vts->busy_mtx.unlock();
 
     // get mappings
-    std::vector<std::pair<node_id_t, uint64_t>> get_map;
+    std::vector<std::pair<node_handle_t, uint64_t>> get_map;
     if (!get_set.empty()) {
         get_map = nmstub->get_mappings(get_set);
         success = get_map.size() == get_set.size();
@@ -478,7 +478,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
     if (success) {
         // put mappings
         if (!nmstub->put_mappings(put_map)) {
-            std::unordered_set<node_id_t> undo_set;
+            std::unordered_set<node_handle_t> undo_set;
             undo_set.reserve(put_map.size());
             for (auto &p: put_map) {
                 undo_set.emplace(p.first);
@@ -520,7 +520,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
 
     // all checks complete, tx has to succeed now
 
-    std::unordered_map<node_id_t, uint64_t> all_map = std::move(put_map);
+    std::unordered_map<node_handle_t, uint64_t> all_map = std::move(put_map);
     for (auto &entry: get_map) {
         all_map.emplace(entry);
     }
@@ -813,23 +813,23 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, nmap::nmap_stub *nmap_cl)
 {
     node_prog::prog_type pType;
-    std::vector<std::pair<node_id_t, ParamsType>> initial_args;
+    std::vector<std::pair<node_handle_t, ParamsType>> initial_args;
 
     msg->unpack_message(message::CLIENT_NODE_PROG_REQ, pType, initial_args);
     
     // map from locations to a list of start_node_params to send to that shard
-    std::unordered_map<uint64_t, std::deque<std::pair<node_id_t, ParamsType>>> initial_batches; 
+    std::unordered_map<uint64_t, std::deque<std::pair<node_handle_t, ParamsType>>> initial_batches; 
 
     // lookup mappings
-    std::unordered_map<node_id_t, uint64_t> loc_map;
-    std::unordered_set<node_id_t> get_set;
+    std::unordered_map<node_handle_t, uint64_t> loc_map;
+    std::unordered_set<node_handle_t> get_set;
 
     for (const auto &initial_arg : initial_args) {
         get_set.emplace(initial_arg.first);
     }
 
     if (!get_set.empty()) {
-        std::vector<std::pair<node_id_t, uint64_t>> loc_results = nmap_cl->get_mappings(get_set);
+        std::vector<std::pair<node_handle_t, uint64_t>> loc_results = nmap_cl->get_mappings(get_set);
         bool success = (loc_results.size() == get_set.size());
 
         if (!success) {

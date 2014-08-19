@@ -115,7 +115,7 @@ two_neighborhood_state :: unpack(e::unpacker& unpacker)
 
 // cache
 two_neighborhood_cache_value :: two_neighborhood_cache_value(std::string &prop_key,
-    std::vector<std::pair<node_id_t, std::string>> &responses)
+    std::vector<std::pair<node_handle_t, std::string>> &responses)
     : prop_key(prop_key)
     , responses(responses)
 { }
@@ -163,10 +163,10 @@ check_cache_context(std::vector<node_cache_context>& contexts, db::element::remo
         }
         for(auto &new_edge : node_context.edges_added){
             if (node_context.node == center) {
-                WDEBUG << "need to revalidate at 1 hop " << new_edge.nbr.get_id() << std::endl;
+                WDEBUG << "need to revalidate at 1 hop " << new_edge.nbr.handle << std::endl;
                 one_hops_to_check.emplace_back(new_edge.nbr);
             } else  {
-                WDEBUG << "need to revalidate at 2 hops " << new_edge.nbr.get_id() << std::endl;
+                WDEBUG << "need to revalidate at 2 hops " << new_edge.nbr.handle << std::endl;
                 two_hops_to_check.emplace_back(new_edge.nbr);
             }
         }
@@ -177,7 +177,7 @@ check_cache_context(std::vector<node_cache_context>& contexts, db::element::remo
 }
 
 inline void
-fill_minus_duplicates(std::vector<std::pair<node_id_t, std::string>> &from, std::vector<std::pair<node_id_t, std::string>> &to)
+fill_minus_duplicates(std::vector<std::pair<node_handle_t, std::string>> &from, std::vector<std::pair<node_handle_t, std::string>> &to)
 {
     to.swap(from); // TODO actually filter
 }
@@ -233,14 +233,12 @@ node_prog :: two_neighborhood_node_program(
         assert(params.responses.empty());
         switch (params.on_hop){
             case 0:
-                //WDEBUG<< "GOT OUTGOING at hop 0 " << rn.get_id() << std::endl;
                 state.prev_node = db::element::coordinator;
                 state.one_hop_visited = true; // in case of self loops
                 params.prev_node = rn;
                 params.on_hop = 1;
                 for (edge &e: n.get_edges()) {
                     next.emplace_back(std::make_pair(e.get_neighbor(), params));
-                    //WDEBUG<< "at hop 0 sending to " << e.get_neighbor().get_id() << std::endl;
                 }
                 state.responses_left = next.size();
                 if (next.empty()) { // no neighbors
@@ -251,12 +249,10 @@ node_prog :: two_neighborhood_node_program(
                 break;
             case 1:
                 if (state.one_hop_visited) {
-                    //WDEBUG<< "GOT OUTGOING at hop 1 not going out " << rn.get_id() << std::endl;
                     params.on_hop = 0;
                     params.outgoing = false;
                     next.emplace_back(std::make_pair(params.prev_node, params));
                 } else {
-                    //WDEBUG<< "GOT OUTGOING at hop 1 " << rn.get_id() << std::endl;
                     assert(state.responses.size() == 0);
                     state.one_hop_visited = true;
                     state.prev_node = params.prev_node;
@@ -265,7 +261,6 @@ node_prog :: two_neighborhood_node_program(
 
                     for (edge &e: n.get_edges()) {
                         next.emplace_back(std::make_pair(e.get_neighbor(), params));
-                        //WDEBUG<< "at hop 1 sending to " << e.get_neighbor().get_id() << std::endl;
                     }
                     state.responses_left = next.size();
                     if (next.empty()) { // no neighbors
@@ -278,10 +273,9 @@ node_prog :: two_neighborhood_node_program(
             case 2:
                 if (!state.two_hop_visited) {
                     state.two_hop_visited = true;
-                    //WDEBUG<< "checkign for props at " << rn.get_id() << std::endl;
                     for (property &prop : n.get_properties()) {
                         if (prop.get_key().compare(params.prop_key) == 0) {
-                            params.responses.emplace_back(rn.get_id(), prop.get_value());
+                            params.responses.emplace_back(rn.handle, prop.get_value());
                         }
                     }
                 }
@@ -299,7 +293,6 @@ node_prog :: two_neighborhood_node_program(
 
         assert(state.responses_left != 0);
         state.responses_left--;
-        //WDEBUG<< "GOT RETURNING at " << rn.get_id() << ", responses_left = " << state.responses_left << std::endl;
         if (state.responses_left == 0) {
             params.responses.clear();
             if (MaxCacheEntries && params.on_hop == 0 && params.cache_update) {
@@ -321,7 +314,6 @@ node_prog :: two_neighborhood_node_program(
                 params.on_hop--;
             }
             next.emplace_back(std::make_pair(state.prev_node, params));
-            //WDEBUG<< "sending to " << state.prev_node.get_id() << std::endl;
         } else {
             assert(next.size() == 0);
         }

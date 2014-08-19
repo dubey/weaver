@@ -36,7 +36,7 @@ namespace node_prog
         std::deque<std::vector<std::pair<std::string, std::string>>> edge_props;
         bool collect_nodes;
         bool collect_edges;
-        std::unordered_set<node_id_t> return_nodes;
+        std::unordered_set<node_handle_t> return_nodes;
         std::unordered_set<edge_handle_t> return_edges;
 
         traverse_props_params();

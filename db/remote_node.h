@@ -24,17 +24,16 @@ namespace element
     {
         public:
             remote_node() { }
-            remote_node(uint64_t l, const node_id_t &i) : loc(l), id(i) { }
+            remote_node(uint64_t l, const node_handle_t &h) : loc(l), handle(h) { }
 
         public:
             uint64_t loc;
-            node_id_t id;
-            node_id_t get_id() { return id; }
-            bool operator==(const db::element::remote_node &t) const { return (id == t.id) && (loc == t.loc); }
-            bool operator!=(const db::element::remote_node &t) const { return (id != t.id) || (loc != t.loc); }
+            node_handle_t handle;
+            bool operator==(const db::element::remote_node &t) const { return (handle == t.handle) && (loc == t.loc); }
+            bool operator!=(const db::element::remote_node &t) const { return (handle != t.handle) || (loc != t.loc); }
     };
 
-    static db::element::remote_node coordinator(0, node_id_t(""));
+    static db::element::remote_node coordinator(0, node_handle_t(""));
 }
 }
 

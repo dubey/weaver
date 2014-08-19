@@ -94,21 +94,21 @@ cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
         READ_EDGES_PROPS
 
 cdef extern from 'common/types.h':
-    ctypedef string node_id_t
+    ctypedef string node_handle_t
     ctypedef string edge_handle_t
     ctypedef string cache_key_t
 
 cdef extern from 'db/remote_node.h' namespace 'db::element':
     cdef cppclass remote_node:
-        remote_node(uint64_t loc, const node_id_t &i)
+        remote_node(uint64_t loc, const node_handle_t &i)
         remote_node()
         uint64_t loc
-        node_id_t id
+        node_handle_t handle
     cdef remote_node coordinator
 
 class RemoteNode:
-    def __init__(self, id=0, loc=0):
-        self.id = id
+    def __init__(self, handle='', loc=0):
+        self.handle = handle
         self.loc = loc
 
 cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
@@ -118,7 +118,7 @@ cdef extern from 'node_prog/reach_program.h' namespace 'node_prog':
         cache_key_t _cache_key
         bint returning
         remote_node prev_node
-        node_id_t dest
+        node_handle_t dest
         vector[pair[string, string]] edge_props
         uint32_t hops
         bint reachable
@@ -150,7 +150,7 @@ cdef extern from 'node_prog/pathless_reach_program.h' namespace 'node_prog':
         pathless_reach_params()
         bint returning
         remote_node prev_node
-        node_id_t dest
+        node_handle_t dest
         vector[pair[string, string]] edge_props
         bint reachable
 
@@ -175,7 +175,7 @@ cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
         bint is_center
         remote_node center
         bint outgoing
-        vector[node_id_t] neighbors
+        vector[node_handle_t] neighbors
         double clustering_coeff
 
 class ClusteringParams:
@@ -193,7 +193,7 @@ cdef extern from 'node_prog/two_neighborhood_program.h' namespace 'node_prog':
         uint32_t on_hop
         bint outgoing
         remote_node prev_node
-        vector[pair[node_id_t, string]] responses
+        vector[pair[node_handle_t, string]] responses
 
 class TwoNeighborhoodParams:
     def __init__(self, caching=False, cache_update=False, prop_key="", on_hop=0, outgoing=True, prev_node=None, responses=None):
@@ -311,13 +311,13 @@ class EdgeCountParams:
 
 cdef extern from 'node_prog/edge_get_program.h' namespace 'node_prog':
     cdef cppclass edge_get_params:
-        node_id_t nbr_id
+        node_handle_t nbr_handle
         vector[pair[string, string]] edges_props
         vector[edge_handle_t] return_edges
 
 class EdgeGetParams:
-    def __init__(self, nbr_id=UINT64_MAX, edges_props=None, return_edges=None):
-        self.nbr_id = nbr_id
+    def __init__(self, nbr_handle='', edges_props=None, return_edges=None):
+        self.nbr_handle = nbr_handle
         if edges_props is None:
             self.edges_props = []
         else:
@@ -335,7 +335,7 @@ cdef extern from 'node_prog/traverse_with_props.h' namespace 'node_prog':
         deque[vector[pair[string, string]]] edge_props
         bint collect_nodes
         bint collect_edges
-        unordered_set[node_id_t] return_nodes
+        unordered_set[node_handle_t] return_nodes
         unordered_set[edge_handle_t] return_edges
 
 class TraversePropsParams:
@@ -440,7 +440,7 @@ cdef class Client:
             c_rp = self.thisptr.run_reach_program(c_args)
         foundpath = []
         for rn in c_rp.path:
-            foundpath.append(rn.id)
+            foundpath.append(rn.handle)
         response = ReachParams(path=foundpath, hops=c_rp.hops, reachable=c_rp.reachable)
         return response
     # warning! set prev_node loc to vt_id if somewhere in params
@@ -577,7 +577,7 @@ cdef class Client:
         cdef pair[string, edge_get_params] arg_pair
         for rp in init_args:
             arg_pair.first = rp[0]
-            arg_pair.second.nbr_id = rp[1].nbr_id
+            arg_pair.second.nbr_handle = rp[1].nbr_handle
             arg_pair.second.edges_props.clear()
             arg_pair.second.edges_props.reserve(len(rp[1].edges_props))
             for p in rp[1].edges_props:

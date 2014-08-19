@@ -133,7 +133,7 @@ message :: size(const db::element::property &t)
 uint64_t
 message :: size(const db::element::remote_node &t)
 {
-    return size(t.loc) + size(t.id);
+    return size(t.loc) + size(t.handle);
 }
 
 uint64_t
@@ -312,7 +312,7 @@ void
 message :: pack_buffer(e::buffer::packer &packer, const db::element::remote_node &t)
 {
     pack_buffer(packer, t.loc);
-    pack_buffer(packer, t.id);
+    pack_buffer(packer, t.handle);
 }
 
 void
@@ -490,7 +490,7 @@ void
 message :: unpack_buffer(e::unpacker &unpacker, db::element::remote_node& t)
 {
     unpack_buffer(unpacker, t.loc);
-    unpack_buffer(unpacker, t.id);
+    unpack_buffer(unpacker, t.handle);
 }
 
 void

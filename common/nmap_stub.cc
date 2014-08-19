@@ -21,7 +21,7 @@
 using nmap::nmap_stub;
 
 bool
-nmap_stub :: put_mappings(std::unordered_map<node_id_t, uint64_t> &pairs_to_add)
+nmap_stub :: put_mappings(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add)
 {
     int num_pairs = pairs_to_add.size();
     std::vector<hyper_func> funcs(num_pairs, &hyperdex::Client::put);
@@ -53,8 +53,8 @@ nmap_stub :: put_mappings(std::unordered_map<node_id_t, uint64_t> &pairs_to_add)
 }
 
 
-std::vector<std::pair<node_id_t, uint64_t>>
-nmap_stub :: get_mappings(std::unordered_set<node_id_t> &toGet)
+std::vector<std::pair<node_handle_t, uint64_t>>
+nmap_stub :: get_mappings(std::unordered_set<node_handle_t> &toGet)
 {
     int64_t num_nodes = toGet.size();
     std::vector<const char*> spaces(num_nodes, space);
@@ -80,12 +80,12 @@ nmap_stub :: get_mappings(std::unordered_set<node_id_t> &toGet)
     UNUSED(success);
 
     uint64_t *val;
-    std::vector<std::pair<node_id_t, uint64_t>> mappings;
+    std::vector<std::pair<node_handle_t, uint64_t>> mappings;
     mappings.reserve(num_nodes);
     for (int64_t i = 0; i < num_nodes; i++) {
         if (*num_attrs[i] == 1) {
             val = (uint64_t*)attr_array[i]->value;
-            mappings.emplace_back(std::make_pair(node_id_t(keys[i]), *val));
+            mappings.emplace_back(std::make_pair(node_handle_t(keys[i]), *val));
             hyperdex_client_destroy_attrs(attr_array[i], 1);
         } else if (*num_attrs[i] > 0) {
             WDEBUG << "bad num attributes " << *num_attrs[i] << std::endl;
@@ -98,7 +98,7 @@ nmap_stub :: get_mappings(std::unordered_set<node_id_t> &toGet)
 
 
 bool
-nmap_stub :: del_mappings(std::unordered_set<node_id_t> &toDel)
+nmap_stub :: del_mappings(std::unordered_set<node_handle_t> &toDel)
 {
     int64_t num_nodes = toDel.size();
     std::vector<const char*> spaces(num_nodes, space);

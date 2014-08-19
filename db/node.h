@@ -44,7 +44,7 @@ namespace element
     class node : public node_prog::node
     {
         public:
-            node(const node_id_t &id, vc::vclock &vclk, po6::threads::mutex *mtx);
+            node(const node_handle_t &handle, vc::vclock &vclk, po6::threads::mutex *mtx);
             ~node() { }
 
         public:
@@ -57,7 +57,6 @@ namespace element
 
         public:
             element base;
-            node_id_t id;
             enum mode state;
             std::unordered_map<edge_handle_t, edge*> out_edges;
             po6::threads::cond cv; // for locking node
@@ -103,8 +102,8 @@ namespace element
             node_prog::prop_list get_properties();
             bool has_property(std::pair<std::string, std::string> &p);
             bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
-            void set_id(node_id_t &_id) { id = _id; }
-            node_id_t get_id() const { return id; }
+            void set_handle(const node_handle_t &_handle) { base.set_handle(_handle); }
+            node_handle_t get_handle() const { return base.get_handle(); }
     };
 }
 }

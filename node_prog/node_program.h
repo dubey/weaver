@@ -90,7 +90,7 @@ namespace node_prog
             uint64_t vt_id;
             std::shared_ptr<vc::vclock> req_vclock;
             uint64_t req_id;
-            std::deque<std::pair<node_id_t, ParamsType>> start_node_params;
+            std::deque<std::pair<node_handle_t, ParamsType>> start_node_params;
             std::unique_ptr<cache_response<CacheValueType>> cache_value;
 
             node_prog_running_state() { }

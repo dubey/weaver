@@ -28,7 +28,7 @@ namespace node_prog
     class edge_get_params : public Node_Parameters_Base 
     {
         public:
-            node_id_t nbr_id;
+            node_handle_t nbr_handle;
             std::vector<std::pair<std::string, std::string>> edges_props;
             std::vector<edge_handle_t> return_edges;
 

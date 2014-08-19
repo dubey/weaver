@@ -37,9 +37,9 @@ namespace nmap
             const char *client_attr = "handle";
 
         public:
-            bool put_mappings(std::unordered_map<node_id_t, uint64_t> &pairs_to_add);
-            std::vector<std::pair<node_id_t, uint64_t>> get_mappings(std::unordered_set<node_id_t> &toGet);
-            bool del_mappings(std::unordered_set<node_id_t> &toDel);
+            bool put_mappings(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add);
+            std::vector<std::pair<node_handle_t, uint64_t>> get_mappings(std::unordered_set<node_handle_t> &toGet);
+            bool del_mappings(std::unordered_set<node_handle_t> &toDel);
     };
 }
 

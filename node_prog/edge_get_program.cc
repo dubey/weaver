@@ -20,7 +20,7 @@ using node_prog::cache_response;
 
 uint64_t edge_get_params :: size() const 
 {
-    uint64_t toRet = message::size(nbr_id)
+    uint64_t toRet = message::size(nbr_handle)
         + message::size(edges_props)
         + message::size(return_edges);
     return toRet;
@@ -28,14 +28,14 @@ uint64_t edge_get_params :: size() const
 
 void edge_get_params :: pack(e::buffer::packer& packer) const 
 {
-    message::pack_buffer(packer, nbr_id);
+    message::pack_buffer(packer, nbr_handle);
     message::pack_buffer(packer, edges_props);
     message::pack_buffer(packer, return_edges);
 }
 
 void edge_get_params :: unpack(e::unpacker& unpacker)
 {
-    message::unpack_buffer(unpacker, nbr_id);
+    message::unpack_buffer(unpacker, nbr_handle);
     message::unpack_buffer(unpacker, edges_props);
     message::unpack_buffer(unpacker, return_edges);
 }
@@ -52,7 +52,7 @@ node_prog :: edge_get_node_program(
 {
     auto elist = n.get_edges();
     for (edge &e : elist) {
-        if (e.get_neighbor().id == params.nbr_id
+        if (e.get_neighbor().handle == params.nbr_handle
          && e.has_all_properties(params.edges_props)) {
             params.return_edges.emplace_back(e.get_handle());
         }

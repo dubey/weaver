@@ -22,9 +22,8 @@ using db::element::remote_node;
 using db::element::edge;
 using db::element::node;
 
-node :: node(const node_id_t &_id, vc::vclock &vclk, po6::threads::mutex *mtx)
-    : base(_id, vclk)
-    , id(_id)
+node :: node(const node_handle_t &_handle, vc::vclock &vclk, po6::threads::mutex *mtx)
+    : base(_handle, vclk)
     , state(mode::NASCENT)
     , cv(mtx)
     , migr_cv(mtx)

@@ -50,30 +50,30 @@ namespace db
             const char *nmap_space = "weaver_loc_mapping";
             const char *nmap_attr = "shard";
             const enum hyperdatatype nmap_dtype = HYPERDATATYPE_INT64;
-            void recreate_node(const hyperdex_client_attribute *cl_attr, element::node &n, std::unordered_set<node_id_t> &nbr_map);
+            void recreate_node(const hyperdex_client_attribute *cl_attr, element::node &n, std::unordered_set<node_handle_t> &nbr_map);
 
         public:
             hyper_stub(uint64_t sid);
             void init();
             void restore_backup(std::unordered_map<uint64_t, uint64_t> &qts_map,
                 bool &migr_token,
-                std::unordered_map<node_id_t, element::node*> *nodes,
-                std::unordered_map<node_id_t, std::unordered_set<node_id_t>> &edge_map,
+                std::unordered_map<node_handle_t, element::node*> *nodes,
+                std::unordered_map<node_handle_t, std::unordered_set<node_handle_t>> &edge_map,
                 po6::threads::mutex *shard_mutexes);
             // graph updates
-            void put_node(element::node &n, std::unordered_set<node_id_t> &nbr_map);
+            void put_node(element::node &n, std::unordered_set<node_handle_t> &nbr_map);
             void update_creat_time(element::node &n);
             void del_node(element::node &n);
             void update_properties(element::node &n);
             void add_out_edge(element::node &n, element::edge *e);
             void remove_out_edge(element::node &n, element::edge *e);
-            void add_in_nbr(const node_id_t &node, const node_id_t &nbr);
-            void remove_in_nbr(const node_id_t &n_hndl, const node_id_t &nbr);
+            void add_in_nbr(const node_handle_t &node, const node_handle_t &nbr);
+            void remove_in_nbr(const node_handle_t &n_hndl, const node_handle_t &nbr);
             void update_tx_queue(element::node &n);
-            void update_migr_status(const node_id_t &n_hndl, enum persist_node_state status);
+            void update_migr_status(const node_handle_t &n_hndl, enum persist_node_state status);
             // bulk loading
-            void bulk_load(std::unordered_map<node_id_t, element::node*> *nodes,
-                std::unordered_map<node_id_t, std::unordered_set<node_id_t>> &edge_map);
+            void bulk_load(std::unordered_map<node_handle_t, element::node*> *nodes,
+                std::unordered_map<node_handle_t, std::unordered_set<node_handle_t>> &edge_map);
             // shard updates
             void increment_qts(uint64_t vt_id, uint64_t incr);
             void update_migr_token(enum persist_migr_token token);

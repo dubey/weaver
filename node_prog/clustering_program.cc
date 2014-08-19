@@ -102,7 +102,7 @@ node_prog :: clustering_node_program(
             for (edge& edge : n.get_edges()) {
                 edge.traverse();
                 next.emplace_back(std::make_pair(edge.get_neighbor(), params));
-                cstate.neighbor_counts.insert(std::make_pair(edge.get_neighbor().get_id(), 0));
+                cstate.neighbor_counts.insert(std::make_pair(edge.get_neighbor().handle, 0));
                 cstate.responses_left++;
             }
             if (cstate.responses_left < 2) { // if no or one neighbor we know clustering coeff already
@@ -110,7 +110,7 @@ node_prog :: clustering_node_program(
                 next = {std::make_pair(db::element::coordinator, std::move(params))};
             }
         } else {
-            for (const node_id_t &nbr_id : params.neighbors) {
+            for (const node_handle_t &nbr_id : params.neighbors) {
                 if (cstate.neighbor_counts.count(nbr_id) > 0) {
                     cstate.neighbor_counts[nbr_id]++;
                 }
@@ -119,7 +119,7 @@ node_prog :: clustering_node_program(
                 assert(cstate.neighbor_counts.size() > 1);
                 double denominator = (double) (cstate.neighbor_counts.size() * (cstate.neighbor_counts.size() - 1));
                 uint64_t numerator = 0;
-                for (std::pair<const node_id_t, int> &nbr_count : cstate.neighbor_counts){
+                for (std::pair<const node_handle_t, int> &nbr_count : cstate.neighbor_counts){
                     numerator += nbr_count.second;
                 }
                 params.clustering_coeff = (double) numerator / denominator;
@@ -128,7 +128,7 @@ node_prog :: clustering_node_program(
         }
     } else { // not center
         for (edge& edge : n.get_edges()) {
-            params.neighbors.push_back(edge.get_neighbor().get_id());
+            params.neighbors.push_back(edge.get_neighbor().handle);
         }
         params.outgoing = false;
         params.is_center = true;

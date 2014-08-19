@@ -34,7 +34,7 @@ namespace node_prog
             uint32_t on_hop;
             bool outgoing;
             db::element::remote_node prev_node;
-            std::vector<std::pair<node_id_t, std::string>> responses;
+            std::vector<std::pair<node_handle_t, std::string>> responses;
 
         public:
             bool search_cache();
@@ -50,7 +50,7 @@ namespace node_prog
         bool two_hop_visited;
         uint32_t responses_left;
         db::element::remote_node prev_node;
-        std::vector<std::pair<node_id_t, std::string>> responses;
+        std::vector<std::pair<node_handle_t, std::string>> responses;
 
         two_neighborhood_state();
         ~two_neighborhood_state() { }
@@ -62,9 +62,9 @@ namespace node_prog
     struct two_neighborhood_cache_value : public virtual Cache_Value_Base 
     {
         std::string prop_key;
-        std::vector<std::pair<node_id_t, std::string>> responses;
+        std::vector<std::pair<node_handle_t, std::string>> responses;
 
-        two_neighborhood_cache_value(std::string &prop_key, std::vector<std::pair<node_id_t, std::string>> &responses);
+        two_neighborhood_cache_value(std::string &prop_key, std::vector<std::pair<node_handle_t, std::string>> &responses);
         ~two_neighborhood_cache_value () { }
         uint64_t size() const;
         void pack(e::buffer::packer& packer) const;

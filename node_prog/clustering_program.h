@@ -32,7 +32,7 @@ namespace node_prog
             bool is_center;
             db::element::remote_node center;
             bool outgoing;
-            std::vector<node_id_t> neighbors;
+            std::vector<node_handle_t> neighbors;
             double clustering_coeff;
 
             bool search_cache() { return _search_cache; }
@@ -45,7 +45,7 @@ namespace node_prog
     struct clustering_node_state : public Node_State_Base
     {
         // map from a node id to the number of neighbors who are connected to it
-        std::unordered_map<node_id_t, int> neighbor_counts;
+        std::unordered_map<node_handle_t, int> neighbor_counts;
         int responses_left;
 
         ~clustering_node_state() { }
