@@ -95,9 +95,11 @@ end_program(int signum)
     WDEBUG << "num vclk updates " << vts->clk_updates << std::endl;
     vts->clk_rw_mtx.unlock();
     if (signum == SIGINT) {
-        vts->exit_mutex.lock();
-        vts->to_exit = true;
-        vts->exit_mutex.unlock();
+        // TODO proper shutdown
+        //vts->exit_mutex.lock();
+        //vts->to_exit = true;
+        //vts->exit_mutex.unlock();
+        exit(0);
     } else {
         WDEBUG << "Got interrupt signal other than SIGINT, exiting immediately." << std::endl;
         exit(0);
@@ -1232,20 +1234,20 @@ main(int argc, const char *argv[])
     //google::SetLogDestination(google::INFO, ".");
 
     // signals
-    sigset_t ss;
-    if (sigfillset(&ss) < 0) {
-        WDEBUG << "sigfillset failed" << std::endl;
-        return -1;
-    }
-    sigdelset(&ss, SIGPROF);
-    sigdelset(&ss, SIGINT);
-    sigdelset(&ss, SIGHUP);
-    sigdelset(&ss, SIGTERM);
-    sigdelset(&ss, SIGTSTP);
-    if (pthread_sigmask(SIG_SETMASK, &ss, NULL) < 0) {
-        WDEBUG << "pthread sigmask failed" << std::endl;
-        return -1;
-    }
+    //sigset_t ss;
+    //if (sigfillset(&ss) < 0) {
+    //    WDEBUG << "sigfillset failed" << std::endl;
+    //    return -1;
+    //}
+    //sigdelset(&ss, SIGPROF);
+    //sigdelset(&ss, SIGINT);
+    //sigdelset(&ss, SIGHUP);
+    //sigdelset(&ss, SIGTERM);
+    //sigdelset(&ss, SIGTSTP);
+    //if (pthread_sigmask(SIG_SETMASK, &ss, NULL) < 0) {
+    //    WDEBUG << "pthread sigmask failed" << std::endl;
+    //    return -1;
+    //}
 
     // command line params
     const char* listen_host = "127.0.0.1";

@@ -75,9 +75,11 @@ end_program(int param)
     WDEBUG << "watch_set nops originated from this shard " << S->watch_set_nops << std::endl;
     WDEBUG << "watch set piggybacks on this shard " << S->watch_set_piggybacks << std::endl;
     if (param == SIGINT) {
-        S->exit_mutex.lock();
-        S->to_exit = true;
-        S->exit_mutex.unlock();
+        // TODO proper shutdown
+        //S->exit_mutex.lock();
+        //S->to_exit = true;
+        //S->exit_mutex.unlock();
+        exit(0);
     } else {
         WDEBUG << "Not SIGINT, exiting immediately." << std::endl;
         exit(0);
@@ -2077,20 +2079,20 @@ main(int argc, const char *argv[])
     //google::SetLogDestination(google::INFO, ".");
 
     // signals
-    sigset_t ss;
-    if (sigfillset(&ss) < 0) {
-        WDEBUG << "sigfillset failed" << std::endl;
-        return -1;
-    }
-    sigdelset(&ss, SIGPROF);
-    sigdelset(&ss, SIGINT);
-    sigdelset(&ss, SIGHUP);
-    sigdelset(&ss, SIGTERM);
-    sigdelset(&ss, SIGTSTP);
-    if (pthread_sigmask(SIG_SETMASK, &ss, NULL) < 0) {
-        WDEBUG << "pthread sigmask failed" << std::endl;
-        return -1;
-    }
+    //sigset_t ss;
+    //if (sigfillset(&ss) < 0) {
+    //    WDEBUG << "sigfillset failed" << std::endl;
+    //    return -1;
+    //}
+    //sigdelset(&ss, SIGPROF);
+    //sigdelset(&ss, SIGINT);
+    //sigdelset(&ss, SIGHUP);
+    //sigdelset(&ss, SIGTERM);
+    //sigdelset(&ss, SIGTSTP);
+    //if (pthread_sigmask(SIG_SETMASK, &ss, NULL) < 0) {
+    //    WDEBUG << "pthread sigmask failed" << std::endl;
+    //    return -1;
+    //}
 
     // command line params
     const char* listen_host = "127.0.0.1";
