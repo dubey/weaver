@@ -68,15 +68,6 @@ tolerate 2 failures
 EOF
 
 hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
-space weaver_client_mapping
-key str_handle
-attributes
-    int handle
-create 8 partitions
-tolerate 2 failures
-EOF
-
-hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
 space weaver_graph_data
 key node
 attributes
@@ -84,7 +75,7 @@ attributes
     string del_time,
     string properties,
     map(string, string) out_edges,
-    set(int) in_nbrs,
+    set(string) in_nbrs,
     string tx_queue,
     int migr_status
 tolerate 2 failures

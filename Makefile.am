@@ -24,8 +24,8 @@ CYTHON_FLAGS=--cplus
 LIBS=-lbusybee -le -pthread -lrt -lhyperdex-client -lreplicant -lyaml -lpopt -lglog
 
 if DEBUG
-    AM_CFLAGS += -g3 -gdwarf-2 -Og
-    AM_CXXFLAGS += -g3 -gdwarf-2 -Og
+    AM_CFLAGS += -g3 -gdwarf-2 -O0
+    AM_CXXFLAGS += -g3 -gdwarf-2 -O0
 else
     AM_CFLAGS += -O2
     AM_CXXFLAGS += -O2

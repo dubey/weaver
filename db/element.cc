@@ -21,7 +21,6 @@ element :: element(const std::string &_handle, vc::vclock &vclk)
     : handle(_handle)
     , creat_time(vclk)
     , del_time(UINT64_MAX, UINT64_MAX)
-    , view_time(NULL)
 { }
 
 void

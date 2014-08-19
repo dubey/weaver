@@ -1016,7 +1016,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
 
     node_id_t node_id;
     bool done_request = false;
-    db::element::remote_node this_node(S->shard_id, 0);
+    db::element::remote_node this_node(S->shard_id, "");
 
     while (!done_request && !np.start_node_params.empty()) {
         auto &id_params = np.start_node_params.front();

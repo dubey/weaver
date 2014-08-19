@@ -555,7 +555,7 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
             case transaction::EDGE_SET_PROPERTY:
                 find_iter = all_map.find(upd->handle2);
                 assert(find_iter != all_map.end());
-                upd->loc2 = find_iter->second;
+                upd->loc1 = find_iter->second;
                 break;
 
             default:
@@ -824,7 +824,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     std::unordered_map<node_id_t, uint64_t> loc_map;
     std::unordered_set<node_id_t> get_set;
 
-    for (auto &initial_arg : initial_args) {
+    for (const auto &initial_arg : initial_args) {
         get_set.emplace(initial_arg.first);
     }
 
