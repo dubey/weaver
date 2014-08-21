@@ -36,7 +36,7 @@ namespace vc
             vclock() : vt_id(UINT64_MAX) { }
             vclock(uint64_t vt_id, uint64_t clk_init);
             vclock(uint64_t vt_id, vclock_t &vclk);
-            vclock_t get_clock() { return clock; }
+            uint64_t get_clock() { return clock[vt_id]; }
             void increment_clock() { clock[vt_id]++; }
             void increment_counter(uint64_t index);
             void update_clock(uint64_t vt_id, uint64_t new_clock);

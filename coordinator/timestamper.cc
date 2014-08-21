@@ -63,30 +63,13 @@ static po6::threads::mutex tx_count_mtx;
 #endif
 
 // tx functions
-bool
-unpack_tx(message::message &msg, uint64_t client_id, transaction::pending_tx &tx);
-void send_abort(uint64_t cl_id);
-bool lock_del_elems(std::unordered_set<std::string> &del_elems);
-void unlock_del_elems(std::unordered_set<std::string> &del_elems);
-void prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
-    nmap::nmap_stub *nmstub,
-    coordinator::hyper_stub *hstub);
-void release_dist_del_locks(const std::vector<bool> &locks,
-    std::unordered_set<std::string> &del_elems);
-void release_locks_and_abort(uint64_t tx_id, coordinator::hyper_stub *hstub);
-void done_prepare_tx_step1(uint64_t tx_id,
-    uint64_t from_vt,
-    nmap::nmap_stub *nmstub,
-    coordinator::hyper_stub *hstub);
-void fail_prepare_tx_step1(uint64_t tx_id, coordinator::hyper_stub *hstub);
-void unbusy_elems(std::vector<std::string> &busy_elems);
-void prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
-    nmap::nmap_stub *nmstub,
-    coordinator::hyper_stub *hstub);
-void end_transaction(uint64_t tx_id, coordinator::hyper_stub *hstub);
+bool unpack_tx(message::message &msg, uint64_t client_id, transaction::pending_tx &tx);
+void enqueue_tx(uint64_t tx_clk, std::shared_ptr<transaction::pending_tx> tx);
+void process_tx_queue();
+void prepare_tx(std::shared_ptr<transaction::pending_tx> tx, ft::warp_stub *wstub);
+void end_tx(uint64_t tx_id, coordinator::hyper_stub *hstub);
 
 
-// SIGINT handler
 void
 end_program(int signum)
 {
@@ -106,270 +89,28 @@ end_program(int signum)
     }
 }
 
-// unpack transaction and return list of writes and delete-affected nodes
-bool
-unpack_tx(message::message &msg,
-    uint64_t client_id,
-    transaction::pending_tx &tx)
-{
-    std::unordered_map<std::string, uint64_t> client_map;
-    msg.unpack_message(message::CLIENT_TX_INIT, tx.client_tx_id, tx.writes);
-
-    for (auto upd: tx.writes) {
-        if (upd->type == transaction::NODE_DELETE_REQ || upd->type == transaction::EDGE_DELETE_REQ) {
-            tx.del_elems.emplace(upd->handle1);
-        }
-    }
-
-    tx.id = vts->generate_req_id();
-    tx.client_id = client_id;
-    return true;
-}
-
-// send an abort msg to the waiting client
-// all elems should be unlocked, no residual tx state after this
+// put tx into out queue
 void
-send_abort(uint64_t cl_id)
+enqueue_tx(uint64_t tx_clk, std::shared_ptr<transaction::pending_tx> tx)
 {
-    message::message msg;
-    msg.prepare_message(message::CLIENT_TX_ABORT);
-    vts->comm.send_to_client(cl_id, msg.buf);
 }
 
-// caution: assuming caller holds vts->busy_mtx
-bool
-lock_del_elems(uint64_t tx_id, std::unordered_set<std::string> &del_elems)
-{
-    bool fail = false;
-    std::vector<std::string> added;
-    added.reserve(del_elems.size());
-    for (const std::string &d: del_elems) {
-        if (vts->deleted_elems.find(d) != vts->deleted_elems.end()) {
-            if (vts->deleted_elems[d] != tx_id) {
-                fail = true;
-                break;
-            }
-        } else if (vts->busy_elems.find(d) != vts->busy_elems.end()) {
-            fail = true;
-            break;
-        } else {
-            vts->deleted_elems[d] = tx_id;
-            added.emplace_back(d);
-        }
-    }
-
-    if (fail) {
-        // one of the del_elems locked by a concurrent tx
-        // undo all locks by this transaction and abort
-        for (const std::string &a: added) {
-            vts->deleted_elems.erase(a);
-        }
-        return false;
-    }
-
-    return true;
-}
-
-// caution: assuming caller holds vts->busy_mtx
+// process out queue by sending out contiguous prefix of txs
 void
-unlock_del_elems(std::unordered_set<std::string> &del_elems)
+process_tx_queue()
 {
-    for (const std::string &d: del_elems) {
-        assert(vts->deleted_elems.find(d) != vts->deleted_elems.end());
-        vts->deleted_elems.erase(d);
-    }
 }
 
 void
-prepare_tx_step1(std::unique_ptr<transaction::pending_tx> tx,
-    nmap::nmap_stub *nmstub,
-    coordinator::hyper_stub *hstub)
+prepare_tx(std::shared_ptr<transaction::pending_tx> tx,
+    ft::warp_stub *wstub);
 {
-#ifdef weaver_test_
-    tx_count_mtx.lock();
-    num_prep++;
-    WDEBUG << "num prep " << num_prep << ", num outst " << num_comm << std::endl;
-    tx_count_mtx.unlock();
-#endif
-
-    hstub->prepare_tx(*tx);
-    bool fail = false;
-    std::unordered_set<std::string> del_elems;
-    bool dist_lock = (tx->del_elems.size() > 0) && (NumVts > 1);
-    uint64_t tx_id = tx->id;
-    uint64_t cl_id = tx->client_id;
-    if (dist_lock) {
-        del_elems = tx->del_elems;
-    }
-
-    vts->busy_mtx.lock();
-
-    if (!lock_del_elems(tx->id, tx->del_elems)) {
-        fail = true;
-    }
-
-    if (!fail && dist_lock) {
-        vts->del_tx.emplace(tx_id, current_tx(std::move(tx)));
-        vts->del_tx[tx_id].locks[vt_id] = true;
-        vts->del_tx[tx_id].count = NumVts-1; // dist_lock ensures count > 0
-    }
-
-    vts->busy_mtx.unlock();
-
-    if (fail) {
-#ifdef weaver_test_
-        tx_count_mtx.lock();
-        num_prep--;
-        WDEBUG << "num prep " << num_prep << ", num outst " << num_comm << std::endl;
-        tx_count_mtx.unlock();
-#endif
-        hstub->del_tx(tx->id);
-        send_abort(cl_id);
-    } else if (dist_lock) {
-        // successfully locked all del_elems on this shard
-        // now send lock request to other shards
-        for (uint64_t i = 0; i < NumVts; i++) {
-            if (i != vt_id) {
-                message::message msg;
-                msg.prepare_message(message::PREP_DEL_TX, vt_id, tx_id, del_elems);
-                vts->comm.send(i, msg.buf);
-            }
-        }
-    } else {
-        // no distributed locks, can go ahead with next step
-        prepare_tx_step2(std::move(tx), nmstub, hstub);
-    }
-}
-
-// caution: assuming caller holds vts->busy_mtx
-void
-release_dist_del_locks(const std::vector<bool> &locks,
-    std::unordered_set<std::string> &del_elems)
-{
-    assert(locks.size() == NumVts);
-    message::message msg;
-    for (uint64_t i = 0; i < NumVts; i++) {
-        if (i == vt_id) {
-            assert(locks[i]);
-            unlock_del_elems(del_elems);
-        } else {
-            if (locks[i]) {
-                msg.prepare_message(message::UNPREP_DEL_TX, del_elems);
-                vts->comm.send(i, msg.buf);
-            }
-        }
-    }
-}
-
-// caution: assuming caller holds vts->busy_mtx
-void
-release_locks_and_abort(uint64_t tx_id, coordinator::hyper_stub *hstub)
-{
-    auto &cur_tx = vts->del_tx[tx_id];
-    uint64_t cl_id = cur_tx.tx->client_id;
-    bool dist_lock = (cur_tx.tx->del_elems.size() > 0) && (NumVts > 1);
-
-    if (dist_lock) {
-        release_dist_del_locks(cur_tx.locks, cur_tx.tx->del_elems);
-    }
-
-    vts->del_tx.erase(tx_id);
-#ifdef weaver_test_
-    tx_count_mtx.lock();
-    num_prep--;
-    WDEBUG << "num prep " << num_prep << ", num outst " << num_comm << std::endl;
-    tx_count_mtx.unlock();
-#endif
-    hstub->del_tx(tx_id);
-
-    send_abort(cl_id);
-}
-
-void
-done_prepare_tx_step1(uint64_t tx_id,
-    uint64_t from_vt,
-    nmap::nmap_stub *nmstub,
-    coordinator::hyper_stub *hstub)
-{
-    vts->busy_mtx.lock();
-    assert(vts->del_tx.find(tx_id) != vts->del_tx.end());
-    auto &cur_tx = vts->del_tx[tx_id];
-
-    assert(--cur_tx.count >= 0);
-    cur_tx.locks[from_vt] = true;
-
-    if (weaver_util::all(cur_tx.locks)) {
-        // ready to run
-        auto tx = std::move(cur_tx.tx);
-        vts->del_tx.erase(tx_id);
-        vts->busy_mtx.unlock();
-
-        prepare_tx_step2(std::move(tx), nmstub, hstub);
-    } else if (cur_tx.count == 0) {
-        // all replies received
-        // acquire locks failed on some vts, abort tx
-        release_locks_and_abort(tx_id, hstub);
-        vts->busy_mtx.unlock();
-    } else {
-        // some replies pending
-        vts->busy_mtx.unlock();
-    }
-}
-
-void
-fail_prepare_tx_step1(uint64_t tx_id, coordinator::hyper_stub *hstub)
-{
-    vts->busy_mtx.lock();
-    assert(vts->del_tx.find(tx_id) != vts->del_tx.end());
-    auto &cur_tx = vts->del_tx[tx_id];
-
-    assert(--cur_tx.count >= 0);
-
-    if (cur_tx.count == 0) {
-        // some lock acquires failed, release locks and fail tx
-        release_locks_and_abort(tx_id, hstub);
-    }
-
-    vts->busy_mtx.unlock();
-}
-
-// caution: assuming caller holds vts->busy_mtx
-void
-unbusy_elems(std::vector<std::string> &busy_all)
-{
-    auto &busy_elems = vts->busy_elems;
-    for (const std::string &e: busy_all) {
-        auto iter = busy_elems.find(e);
-        assert(iter != busy_elems.end());
-        if (--iter->second == 0) {
-            busy_elems.erase(iter);
-        }
-    }
-}
-
-// input: list of writes that are part of this transaction
-// for all delete writes, distributed locks on node/edge have been acquired
-// acquire local locks for all other graph elems in this transaction (can fail)
-// perform node map lookups for all graph elems (can fail)
-// remove node mappings for delete_nodes (can fail)
-// if all previous succeeds, send out transaction components to shards
-void
-prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
-    nmap::nmap_stub *nmstub,
-    coordinator::hyper_stub *hstub)
-{
-    std::unordered_map<node_handle_t, uint64_t> put_map;
     std::unordered_set<node_handle_t> get_set;
     std::unordered_set<node_handle_t> del_set;
-    tx->busy_elems.reserve(tx->writes.size());
-    std::string busy_single[3];
+    std::unordered_map<node_handle_t, uint64_t> loc_map;
+    std::unordered_map<node_handle_t, uint64_t>::iterator find_iter; 
 
     vts->busy_mtx.lock();
-
-    bool success = true;
-    auto &deleted_elems = vts->deleted_elems;
-    auto &busy_elems = vts->busy_elems;
-    assert(vts->del_tx.find(tx->id) == vts->del_tx.end());
 
     for (auto upd: tx->writes) {
         switch (upd->type) {
@@ -377,236 +118,141 @@ prepare_tx_step2(std::unique_ptr<transaction::pending_tx> tx,
             case transaction::NODE_CREATE_REQ:
                 // randomly assign shard for this node
                 upd->loc1 = vts->generate_loc(); // node will be placed on this shard
-                put_map.emplace(upd->handle, upd->loc1);
-
-                assert(deleted_elems.find(upd->handle) == deleted_elems.end());
-                assert(busy_elems.find(upd->handle) == busy_elems.end());
-                busy_single[0] = upd->handle;
+                loc_map.emplace(upd->handle, upd->loc1);
                 break;
 
             case transaction::EDGE_CREATE_REQ:
-                if (put_map.find(upd->handle1) == put_map.end()) {
+                if ((find_iter = loc_map.find(upd->handle1)) == loc_map.end()) {
+                    upd->loc1 = UINT64_MAX;
                     get_set.insert(upd->handle1);
+                } else {
+                    upd->loc1 = find_iter->second;
                 }
-                if (put_map.find(upd->handle2) == put_map.end()) {
+                if ((find_iter = loc_map.find(upd->handle2)) == loc_map.end()) {
+                    upd->loc2 = UINT64_MAX;
                     get_set.insert(upd->handle2);
+                } else {
+                    upd->loc2 = find_iter->second;
                 }
-
-                busy_single[0] = upd->handle;
-                busy_single[1] = upd->handle1;
-                busy_single[2] = upd->handle2;
                 break;
 
             case transaction::NODE_DELETE_REQ:
             case transaction::NODE_SET_PROPERTY:
-                if (put_map.find(upd->handle1) == put_map.end()) {
+                if ((find_iter = loc_map.find(upd->handle1)) == loc_map.end()) {
+                    upd->loc1 = UINT64_MAX;
                     get_set.insert(upd->handle1);
-                }
-
-                if (upd->type != transaction::NODE_DELETE_REQ) {
-                    busy_single[0] = upd->handle1;
                 } else {
+                    upd->loc1 = find_iter->second;
+                }
+                upd->loc2 = 0;
+                if (upd->type == transaction::NODE_DELETE_REQ) {
                     del_set.emplace(upd->handle1);
                 }
                 break;
 
             case transaction::EDGE_DELETE_REQ:
             case transaction::EDGE_SET_PROPERTY:
-                if (put_map.find(upd->handle2) == put_map.end()) {
+                if ((find_iter = loc_map.find(upd->handle2)) == loc_map.end()) {
+                    upd->loc1 = UINT64_MAX;
                     get_set.insert(upd->handle2);
+                } else {
+                    upd->loc1 = find_iter->second;
                 }
-
-                if (upd->type != transaction::EDGE_DELETE_REQ) {
-                    busy_single[1] = upd->handle1;
-                }
-                busy_single[0] = upd->handle2;
+                upd->loc2 = 0;
                 break;
 
             default:
                 WDEBUG << "bad type" << std::endl;
         }
+    }
 
-        for (int i = 0; i < 3; i++) {
-            std::string &e = busy_single[i];
-            if (!e.empty() && (deleted_elems.find(e) == deleted_elems.end())) {
-                if (busy_elems.find(e) == busy_elems.end()) {
-                    busy_elems[e] = 1;
-                } else {
-                    busy_elems[e]++;
-                }
-                tx->busy_elems.emplace_back(e);
-                e = "";
-            } else if (!e.empty()) {
-                success = false;
-                break;
+    bool ready = false;
+    bool error = false;
+
+    while (!ready && !error) {
+        vts->clk_rw_mtx.wrlock();
+        vts->vclk.increment_clock();
+        tx->timestamp = vts->vclk;
+        vts->clk_rw_mtx.unlock();
+
+        wstub->tx(get_set, loc_map, del_set, tx, ready, error);
+
+        if (!ready !! error) {
+            enqueue_tx(tx->timestamp.get_clock(), vts->fail_tx);
+        }
+    }
+
+    if (error) {
+        // fail tx
+    } else {
+        enqueue_tx(tx->timestamp.get_clock(), tx);
+        process_tx_queue();
+
+        // tx succeeded, send to shards
+        uint64_t num_shards = get_num_shards();
+        std::vector<transaction::pending_tx> tv(num_shards, transaction::pending_tx());
+        std::vector<bool> shard_write(num_shards, false);
+        int shard_count = 0;
+
+#define CHECK_LOC(loc, handle) \
+    if (loc == UINT64_MAX) { \
+        find_iter = loc_map.find(handle); \
+        assert(find_iter != loc_map.end()); \
+        loc = find_iter->second; \
+    }
+        for (auto upd: tx->writes) {
+            switch (upd->type) {
+                case transaction::EDGE_CREATE_REQ:
+                    CHECK_LOC(upd->loc1, upd->handle1);
+                    CHECK_LOC(upd->loc2, upd->handle2);
+                    break;
+
+                case transaction::NODE_DELETE_REQ:
+                case transaction::NODE_SET_PROPERTY:
+                    CHECK_LOC(upd->loc1, upd->handle1);
+                    break;
+
+                case transaction::EDGE_DELETE_REQ:
+                case transaction::EDGE_SET_PROPERTY:
+                    CHECK_LOC(upd->loc1, upd->handle2);
+                    break;
+
+                default:
+                    break;
+            }
+
+            uint64_t shard_idx = upd->loc1-ShardIdIncr;
+            tv[shard_idx].writes.emplace_back(upd);
+            if (!shard_write[shard_idx]) {
+                shard_count++;
+                shard_write[shard_idx] = true;
             }
         }
 
-        if (!success) {
-            // some elems deleted, unbusy all busy_elems and abort
-            break;
-        }
-    }
+        uint64_t tx_id = tx->id;
+        uint64_t tx_clk = tx->timestamp.get_clock();
 
-    bool dist_lock = (tx->del_elems.size() > 0) && (NumVts > 1);
-    if (!success) {
-        unbusy_elems(tx->busy_elems);
-        if (dist_lock) {
-            auto temp = std::vector<bool>(NumVts, true);
-            release_dist_del_locks(temp, tx->del_elems);
-        }
-        vts->busy_mtx.unlock();
+        vts->tx_prog_mutex.lock();
+        vts->outstanding_tx.emplace(tx_id, current_tx(std::move(tx)));
+        vts->outstanding_tx[tx_id].count = shard_count;
+        vts->tx_prog_mutex.unlock();
 
-#ifdef weaver_test_
-        tx_count_mtx.lock();
-        num_prep--;
-        WDEBUG << "num prep " << num_prep << ", num outst " << num_comm << std::endl;
-        tx_count_mtx.unlock();
-#endif
-        hstub->del_tx(tx->id);
-        send_abort(tx->client_id);
-        return;
-    }
+        vts->out_queue_mtx.lock();
+        if (vts->out_queue_clk
+        vts->out_queue_mtx.unlock();
 
-    vts->busy_mtx.unlock();
-
-    // get mappings
-    std::vector<std::pair<node_handle_t, uint64_t>> get_map;
-    if (!get_set.empty()) {
-        get_map = nmstub->get_mappings(get_set);
-        success = get_map.size() == get_set.size();
-    }
-
-    if (success) {
-        // put mappings
-        if (!nmstub->put_mappings(put_map)) {
-            std::unordered_set<node_handle_t> undo_set;
-            undo_set.reserve(put_map.size());
-            for (auto &p: put_map) {
-                undo_set.emplace(p.first);
+        // send tx batches
+        message::message msg;
+        for (uint64_t i = 0; i < num_shards; i++) {
+            if (!tv[i].writes.empty()) {
+                tv[i].timestamp = tx_clk;
+                tv[i].id = tx_id;
+                msg.prepare_message(message::TX_INIT, vt_id, tx_clk, tv[i].writes.at(0)->qts, tx_id, tv[i].writes);
+                vts->comm.send(tv[i].writes.at(0)->loc1, msg.buf);
             }
-            if (!nmstub->del_mappings(undo_set)) {
-                WDEBUG << "del undo_set mappings fail" << std::endl;
-            }
-            success = false;
         }
     }
 
-    if (success) {
-        // del mappings
-        if (!nmstub->del_mappings(del_set)) {
-            WDEBUG << "del mappings fail" << std::endl;
-            success = false;
-        }
-    }
-
-    if (!success) {
-        vts->busy_mtx.lock();
-        unbusy_elems(tx->busy_elems);
-        if (dist_lock) {
-            auto temp = std::vector<bool>(NumVts, true);
-            release_dist_del_locks(temp, tx->del_elems);
-        }
-        vts->busy_mtx.unlock();
-
-#ifdef weaver_test_
-        tx_count_mtx.lock();
-        num_prep--;
-        WDEBUG << "num prep " << num_prep << ", num outst " << num_comm << std::endl;
-        tx_count_mtx.unlock();
-#endif
-        hstub->del_tx(tx->id);
-        send_abort(tx->client_id);
-        return;
-    }
-
-    // all checks complete, tx has to succeed now
-
-    std::unordered_map<node_handle_t, uint64_t> all_map = std::move(put_map);
-    for (auto &entry: get_map) {
-        all_map.emplace(entry);
-    }
-
-    uint64_t num_shards = get_num_shards();
-    std::vector<transaction::pending_tx> tv(num_shards, transaction::pending_tx());
-    std::vector<bool> shard_write(num_shards, false);
-    int shard_count = 0;
-    vts->clk_rw_mtx.wrlock();
-
-    auto find_iter = all_map.begin();
-    for (auto upd: tx->writes) {
-        switch (upd->type) {
-
-            case transaction::EDGE_CREATE_REQ:
-                find_iter = all_map.find(upd->handle1);
-                assert(find_iter != all_map.end());
-                upd->loc1 = find_iter->second;
-                find_iter = all_map.find(upd->handle2);
-                assert(find_iter != all_map.end());
-                upd->loc2 = find_iter->second;
-                break;
-
-            case transaction::NODE_DELETE_REQ:
-            case transaction::NODE_SET_PROPERTY:
-                find_iter = all_map.find(upd->handle1);
-                assert(find_iter != all_map.end());
-                upd->loc1 = find_iter->second;
-                break;
-
-            case transaction::EDGE_DELETE_REQ:
-            case transaction::EDGE_SET_PROPERTY:
-                find_iter = all_map.find(upd->handle2);
-                assert(find_iter != all_map.end());
-                upd->loc1 = find_iter->second;
-                break;
-
-            default:
-                break;
-        }
-
-        uint64_t shard_idx = upd->loc1-ShardIdIncr;
-        vts->qts[shard_idx]++;
-        upd->qts = vts->qts;
-        tv[shard_idx].writes.emplace_back(upd);
-        if (!shard_write[shard_idx]) {
-            shard_count++;
-            shard_write[shard_idx] = true;
-        }
-    }
-
-    vts->vclk.increment_clock();
-    tx->timestamp = vts->vclk;
-    vts->clk_rw_mtx.unlock();
-
-#ifdef weaver_test_
-    tx_count_mtx.lock();
-    num_prep--;
-    num_comm++;
-    WDEBUG << "num prep " << num_prep << ", num outst " << num_comm << std::endl;
-    tx_count_mtx.unlock();
-#endif
-
-    // record txs as outstanding for reply bookkeeping and fault tolerance
-    // XXX can leave elems locked if crash before this
-    hstub->commit_tx(*tx);
-
-    uint64_t tx_id = tx->id;
-    vc::vclock tx_clk = tx->timestamp;
-    vts->tx_prog_mutex.lock();
-    vts->outstanding_tx.emplace(tx_id, current_tx(std::move(tx)));
-    vts->outstanding_tx[tx_id].count = shard_count;
-    vts->tx_prog_mutex.unlock();
-
-    // send tx batches
-    message::message msg;
-    for (uint64_t i = 0; i < num_shards; i++) {
-        if (!tv[i].writes.empty()) {
-            tv[i].timestamp = tx_clk;
-            tv[i].id = tx_id;
-            msg.prepare_message(message::TX_INIT, vt_id, tx_clk, tv[i].writes.at(0)->qts, tx_id, tv[i].writes);
-            vts->comm.send(tv[i].writes.at(0)->loc1, msg.buf);
-        }
-    }
 }
 
 // if all replies have been received, ack to client
@@ -936,61 +582,10 @@ server_loop(int thread_id)
             switch (mtype) {
                 // client messages
                 case message::CLIENT_TX_INIT: {
-                    std::unique_ptr<transaction::pending_tx> tx(new transaction::pending_tx());
-
-                    if (!unpack_tx(*msg, client_sender, *tx)) {
-                        // tx fail because multiple deletes for same node/edge
-                        send_abort(client_sender);
-                    } else {
-                        prepare_tx_step1(std::move(tx), nmstub, hstub);
-                    }
-
-                    break;
-                }
-
-                case message::PREP_DEL_TX: {
-                    std::unordered_set<std::string> del_elems;
-                    uint64_t tx_id, tx_vt;
-                    msg->unpack_message(message::PREP_DEL_TX, tx_vt, tx_id, del_elems);
-
-                    vts->busy_mtx.lock();
-                    bool success = lock_del_elems(tx_id, del_elems);
-                    vts->busy_mtx.unlock();
-
-                    if (success) {
-                        msg->prepare_message(message::DONE_DEL_TX, tx_id, vt_id);
-                        vts->comm.send(tx_vt, msg->buf);
-                    } else {
-                        msg->prepare_message(message::FAIL_DEL_TX, tx_id);
-                        vts->comm.send(tx_vt, msg->buf);
-                    }
-                    break;
-                }
-
-                case message::UNPREP_DEL_TX: {
-                    std::unordered_set<std::string> del_elems;
-                    msg->unpack_message(message::UNPREP_DEL_TX, del_elems);
-
-                    vts->busy_mtx.lock();
-                    unlock_del_elems(del_elems);
-                    vts->busy_mtx.unlock();
-
-                    break;
-                }
-
-                case message::DONE_DEL_TX: {
-                    uint64_t tx_id, from_vt;
-                    msg->unpack_message(message::DONE_DEL_TX, tx_id, from_vt);
-
-                    done_prepare_tx_step1(tx_id, from_vt, nmstub, hstub);
-                    break;
-                }
-
-                case message::FAIL_DEL_TX: {
-                    uint64_t tx_id;
-                    msg->unpack_message(message::FAIL_DEL_TX, tx_id);
-
-                    fail_prepare_tx_step1(tx_id, hstub);
+                    std::shared_ptr<transaction::pending_tx> tx(new transaction::pending_tx());
+                    msg->unpack_message(message::CLIENT_TX_INIT, tx->client_tx_id, tx->writes);
+                    tx->client_id = client_sender;
+                    prepare_tx(std::move(tx), wstub);
                     break;
                 }
 
