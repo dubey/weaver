@@ -128,7 +128,6 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    db/property.cc \
 		                    db/edge.cc \
 		                    db/node.cc \
-		                    coordinator/hyper_stub.cc \
 							coordinator/timestamper.cc
 
 # server manager

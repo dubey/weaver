@@ -19,6 +19,21 @@
 
 #define NUM_MAP_ATTRS 2
 
+namespace ft
+{
+    class warp_stub : private hyper_stub_base
+    {
+        public:
+            void do_tx(std::unordered_set<node_handle_t> &get_set,
+                std::unordered_set<node_handle_t> &del_set,
+                std::unordered_map<node_handle_t, uint64_t> &loc_map,
+                transaction::tx_ptr_t tx,
+                bool &ready,
+                bool &error);
+            void clean_tx(uint64_t tx_id);
+    };
+}
+
 namespace coordinator
 {
     class hyper_stub : private hyper_stub_base

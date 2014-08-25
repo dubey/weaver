@@ -25,11 +25,11 @@ namespace coordinator
     {
         int count;
         std::vector<bool> locks;
-        std::unique_ptr<transaction::pending_tx> tx;
+        std::shared_ptr<transaction::pending_tx> tx;
 
         current_tx() : count(0), locks(NumVts, false) { }
 
-        current_tx(std::unique_ptr<transaction::pending_tx> t)
+        current_tx(std::shared_ptr<transaction::pending_tx> t)
             : count(0)
             , locks(NumVts, false)
             , tx(std::move(t))

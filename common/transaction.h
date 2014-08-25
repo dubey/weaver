@@ -18,6 +18,7 @@
 #include <unordered_set>
 
 #include "common/vclock.h"
+#include "node_prog/node_prog_type.h"
 
 namespace transaction
 {
@@ -35,24 +36,50 @@ namespace transaction
     struct pending_update
     {
         update_type type;
-        vc::qtimestamp_t qts; // queue timestamp
         std::string handle, handle1, handle2;
         uint64_t loc1, loc2, sender;
         std::unique_ptr<std::string> key, value;
     };
 
-    typedef std::vector<std::shared_ptr<pending_update>> tx_list_t;
+    using done_req_t = std::vector<std::pair<uint64_t, node_prog::prog_type>>;
+
+    struct nop_data
+    {
+        uint64_t max_done_id;
+        vc::vclock_t max_done_clk;
+        uint64_t outstanding_progs;
+        std::unordered_map<uint64_t, done_req_t> done_reqs;
+        std::vector<uint64_t> shard_node_count;
+    };
+
+    using upd_ptr_t = std::shared_ptr<pending_update>;
+    using nop_ptr_t = std::shared_ptr<nop_data>;
+    using tx_list_t = std::vector<upd_ptr_t>;
+
+    enum tx_type
+    {
+        FAIL,
+        NOP,
+        UPDATE
+    };
 
     struct pending_tx
     {
-        uint64_t id // unique tx id
-            , client_id; // client to which we need to reply
-        std::string client_tx_id; // unique tx id from client
-        tx_list_t writes;
+        tx_type type;
+        uint64_t id; // unique tx id
         vc::vclock timestamp; // vector timestamp
-        std::unordered_set<std::string> del_elems;
-        std::vector<std::string> busy_elems;
+        uint64_t qts; // queue timestamp
+        std::vector<bool> shard_write; // which shards are involved in the write
+
+        tx_list_t writes; // if this is a write tx
+        uint64_t client_id; // client to which we need to reply for write tx
+
+        nop_ptr_t nop; // if this is a nop
+
+        pending_tx(tx_type t) : type(t) { }
     };
+
+    using tx_ptr_t = std::shared_ptr<pending_tx>;
 }
 
 #endif

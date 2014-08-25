@@ -38,11 +38,23 @@
 
 namespace coordinator
 {
+    using transaction::upd_ptr_t;
+    using transaction::nop_ptr_t;
+    using transaction::tx_ptr_t;
+    class greater_tx_ptr
+    {
+        public:
+            bool operator() (const tx_ptr_t &lhs, const tx_ptr_t &rhs)
+            {
+                return lhs->timestamp.get_clock() > rhs->timestamp.get_clock();
+            }
+    };
+    using req_queue_t = std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>>;
+    using tx_queue_t = std::priority_queue<tx_ptr_t, std::vector<tx_ptr_t>, greater_tx_ptr>;
+    using prog_reply_t = std::unordered_map<uint64_t, std::vector<bool>>;
+
     class timestamper
     {
-        typedef std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>> req_queue_t;
-        typedef std::unordered_map<uint64_t, std::vector<bool>> prog_reply_t;
-
         public:
             // messaging
             common::comm_wrapper comm;
@@ -74,12 +86,8 @@ namespace coordinator
             std::vector<bool> to_nop;
             std::vector<uint64_t> nop_ack_qts;
 
-            // write transactions
+            // transactions
             std::unordered_map<uint64_t, current_tx> outstanding_tx;
-            std::unordered_map<uint64_t, current_tx> del_tx;
-            po6::threads::mutex busy_mtx;
-            std::unordered_map<std::string, uint64_t> deleted_elems; // del_elem -> tx that locked it
-            std::unordered_map<std::string, uint64_t> busy_elems; // busy_elem -> num of busy locks
 
             // node prog
             std::unordered_map<uint64_t, current_prog> outstanding_progs;
@@ -102,7 +110,8 @@ namespace coordinator
                     , migr_mutex
                     , graph_load_mutex
                     , config_mutex
-                    , exit_mutex;
+                    , exit_mutex
+                    , tx_out_queue_mtx;
             po6::threads::rwlock clk_rw_mtx;
 
             // initial graph loading
@@ -112,6 +121,10 @@ namespace coordinator
             // migration
             uint64_t migr_client;
             std::vector<uint64_t> shard_node_count;
+
+            // fault tolerance
+            uint64_t out_queue_clk;
+            tx_queue_t tx_out_queue;
 
             // exit
             bool to_exit;
@@ -125,6 +138,8 @@ namespace coordinator
             void update_members_new_config();
             uint64_t generate_req_id();
             uint64_t generate_loc();
+            void enqueue_tx(tx_ptr_t tx);
+            std::pair<tx_ptr_t, std::vector<tx_ptr_t>> process_tx_queue();
     };
 
     inline
@@ -309,6 +324,88 @@ namespace coordinator
         return new_loc;
     }
 
+    inline void
+    timestamper :: enqueue_tx(tx_ptr_t tx)
+    {
+        uint64_t seq = tx->timestamp.get_clock();
+        tx_out_queue_mtx.lock();
+        bool to_add = (!tx_out_queue.empty()) // queue not empty, have to add
+                   || (seq != out_queue_clk) // not the next expected clk
+                   || (seq == out_queue_clk && tx->type != transaction::FAIL); // next expected clk with non-empty tx, handled by subsequent process_tx_queue()
+        if (to_add) {
+            tx_out_queue.emplace(tx);
+        } else {
+            out_queue_clk++;
+        }
+        tx_out_queue_mtx.unlock();
+    }
+
+    // return list of tx components, factored per shard
+    inline std::pair<tx_ptr_t, std::vector<tx_ptr_t>>
+    timestamper :: process_tx_queue()
+    {
+        tx_ptr_t tx = NULL;
+
+        tx_out_queue_mtx.lock();
+
+        if (!tx_out_queue.empty()) {
+            tx_ptr_t top = tx_out_queue.top();
+            if (top->timestamp.get_clock() == out_queue_clk) {
+                if (top->type != transaction::FAIL) {
+                    tx = top;
+                }
+                out_queue_clk++;
+                tx_out_queue.pop();
+            }
+        }
+
+        std::vector<tx_ptr_t> factored_tx;
+        if (tx != NULL) {
+            assert(tx->type != transaction::FAIL);
+
+            uint64_t num_shards = tx->shard_write.size();
+            factored_tx.reserve(num_shards);
+            for (uint64_t i = 0; i < num_shards; i++) {
+                tx_ptr_t new_tx(new transaction::pending_tx(tx->type));
+                factored_tx.emplace_back(new_tx);
+                new_tx->id = tx->id;
+                new_tx->timestamp = tx->timestamp;
+            }
+
+            if (tx->type == transaction::NOP) {
+                // nop
+                nop_ptr_t nop = tx->nop;
+                for (uint64_t i = 0; i < num_shards; i++) {
+                    tx_ptr_t this_tx = factored_tx[i];
+                    if (tx->shard_write[i]) {
+                        this_tx->qts = qts[i]++;
+                        this_tx->nop.reset(new transaction::nop_data());
+                        nop_ptr_t this_nop = this_tx->nop;
+                        this_nop->max_done_id = nop->max_done_id;
+                        this_nop->max_done_clk = nop->max_done_clk;
+                        this_nop->outstanding_progs = nop->outstanding_progs;
+                        this_nop->done_reqs[i] = nop->done_reqs[i];
+                        this_nop->shard_node_count = nop->shard_node_count;
+                    }
+                }
+            } else {
+                // write tx
+                for (upd_ptr_t upd: tx->writes) {
+                    uint64_t shard_idx = upd->loc1-ShardIdIncr;
+                    tx_ptr_t this_tx = factored_tx[shard_idx];
+                    if (this_tx->writes.empty()) {
+                        this_tx->qts = qts[shard_idx]++;
+                    }
+                    this_tx->writes.emplace_back(upd);
+                }
+            }
+
+        }
+
+        tx_out_queue_mtx.unlock();
+
+        return std::make_pair(tx, factored_tx);
+    }
 }
 
 #endif

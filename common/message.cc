@@ -36,6 +36,12 @@ message :: size(const enum transaction::update_type&)
 }
 
 uint64_t
+message :: size(const enum transaction::tx_type&)
+{
+    return sizeof(uint8_t);
+}
+
+uint64_t
 message :: size(const node_prog::Node_Parameters_Base &t)
 {
     return t.size();
@@ -139,9 +145,8 @@ message :: size(const db::element::remote_node &t)
 uint64_t
 message :: size(const std::shared_ptr<transaction::pending_update> &ptr_t)
 {
-    transaction::pending_update &t = *ptr_t;
+    const transaction::pending_update &t = *ptr_t;
     uint64_t sz = size(t.type)
-         + size(t.qts)
          + size(t.handle)
          + size(t.handle1)
          + size(t.handle2)
@@ -156,12 +161,29 @@ message :: size(const std::shared_ptr<transaction::pending_update> &ptr_t)
 }
 
 uint64_t
+message :: size(const std::shared_ptr<transaction::nop_data> &t)
+{
+    return size(t->max_done_id)
+         + size(t->max_done_clk)
+         + size(t->outstanding_progs)
+         + size(t->done_reqs)
+         + size(t->shard_node_count);
+}
+
+uint64_t
 message :: size(const transaction::pending_tx &t)
 {
-    return size(t.id)
-         + size(t.client_id)
-         + size(t.writes)
-         + size(t.timestamp);
+    uint64_t sz = size(t.type)
+        + size(t.id)
+        + size(t.timestamp)
+        + size(t.qts);
+    if (t.type == transaction::UPDATE) {
+        sz = sz + size(t.writes)
+            + size(t.client_id);
+    } else {
+        sz = sz + size(t.nop);
+    }
+    return sz;
 }
 
 
@@ -202,7 +224,15 @@ message :: pack_buffer(e::buffer::packer &packer, const enum node_prog::prog_typ
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const enum transaction::update_type&t)
+message :: pack_buffer(e::buffer::packer &packer, const enum transaction::update_type &t)
+{
+    assert(t <= UINT8_MAX);
+    uint8_t temp = (uint8_t) t;
+    packer = packer << temp;
+}
+
+void
+message :: pack_buffer(e::buffer::packer &packer, const enum transaction::tx_type &t)
 {
     assert(t <= UINT8_MAX);
     uint8_t temp = (uint8_t) t;
@@ -320,7 +350,6 @@ message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transact
 {
     transaction::pending_update &t = *ptr_t;
     pack_buffer(packer, t.type);
-    pack_buffer(packer, t.qts);
     pack_buffer(packer, t.handle);
     pack_buffer(packer, t.handle1);
     pack_buffer(packer, t.handle2);
@@ -334,12 +363,28 @@ message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transact
 }
 
 void
+message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::nop_data> &t)
+{
+    pack_buffer(packer, t->max_done_id);
+    pack_buffer(packer, t->max_done_clk);
+    pack_buffer(packer, t->outstanding_progs);
+    pack_buffer(packer, t->done_reqs);
+    pack_buffer(packer, t->shard_node_count);
+}
+
+void
 message :: pack_buffer(e::buffer::packer &packer, const transaction::pending_tx &t)
 {
+    pack_buffer(packer, t.type);
     pack_buffer(packer, t.id);
-    pack_buffer(packer, t.client_id);
-    pack_buffer(packer, t.writes);
     pack_buffer(packer, t.timestamp);
+    pack_buffer(packer, t.qts);
+    if (t.type == transaction::UPDATE) {
+        pack_buffer(packer, t.writes);
+        pack_buffer(packer, t.client_id);
+    } else {
+        pack_buffer(packer, t.nop);
+    }
 }
 
 
@@ -385,6 +430,14 @@ message :: unpack_buffer(e::unpacker &unpacker, enum transaction::update_type &t
     uint8_t _type;
     unpacker = unpacker >> _type;
     t = (enum transaction::update_type)_type;
+}
+
+void
+message :: unpack_buffer(e::unpacker &unpacker, enum transaction::tx_type &t)
+{
+    uint8_t _type;
+    unpacker = unpacker >> _type;
+    t = (enum transaction::tx_type)_type;
 }
 
 void
@@ -499,7 +552,6 @@ message :: unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::pen
     ptr_t.reset(new transaction::pending_update());
     transaction::pending_update &t = *ptr_t;
     unpack_buffer(unpacker, t.type);
-    unpack_buffer(unpacker, t.qts);
     unpack_buffer(unpacker, t.handle);
     unpack_buffer(unpacker, t.handle1);
     unpack_buffer(unpacker, t.handle2);
@@ -515,12 +567,29 @@ message :: unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::pen
 }
 
 void
+message :: unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::nop_data> &t)
+{
+    t.reset(new transaction::nop_data());
+    unpack_buffer(unpacker, t->max_done_id);
+    unpack_buffer(unpacker, t->max_done_clk);
+    unpack_buffer(unpacker, t->outstanding_progs);
+    unpack_buffer(unpacker, t->done_reqs);
+    unpack_buffer(unpacker, t->shard_node_count);
+}
+
+void
 message :: unpack_buffer(e::unpacker &unpacker, transaction::pending_tx &t)
 {
+    unpack_buffer(unpacker, t.type);
     unpack_buffer(unpacker, t.id);
-    unpack_buffer(unpacker, t.client_id);
-    unpack_buffer(unpacker, t.writes);
     unpack_buffer(unpacker, t.timestamp);
+    unpack_buffer(unpacker, t.qts);
+    if (t.type == transaction::UPDATE) {
+        unpack_buffer(unpacker, t.writes);
+        unpack_buffer(unpacker, t.client_id);
+    } else {
+        unpack_buffer(unpacker, t.nop);
+    }
 }
 
 
