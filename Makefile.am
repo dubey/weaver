@@ -105,9 +105,9 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    common/server_manager_link_wrapper.cc \
 		                    common/hyper_stub_base.cc \
 		                    common/event_order.cc \
-		                    common/nmap_stub.cc \
 		                    common/vclock.cc \
 		                    common/message.cc \
+		                    common/message_graph_elem.cc \
                             common/config_constants.cc \
 							chronos/chronos.cc \
 							chronos/chronos_c_wrappers.cc \
@@ -128,6 +128,7 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    db/property.cc \
 		                    db/edge.cc \
 		                    db/node.cc \
+                            coordinator/hyper_stub.cc \
 							coordinator/timestamper.cc
 
 # server manager
@@ -168,7 +169,6 @@ weaver_shard_SOURCES=	common/ids.cc \
 						common/server_manager_link_wrapper.cc \
 		                common/hyper_stub_base.cc \
 		                common/event_order.cc \
-		                common/nmap_stub.cc \
 		                common/clock.cc \
 		                common/vclock.cc \
 		                common/message.cc \

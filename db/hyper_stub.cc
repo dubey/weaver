@@ -98,6 +98,7 @@ hyper_stub :: recreate_node(const hyperdex_client_attribute *cl_attr, element::n
     n.in_use = false;
     n.base.update_creat_time(create_clk);
     n.base.update_del_time(delete_clk);
+    // TODO fix this, properties is now a map
     n.base.set_properties(props);
 
     // out edges
@@ -261,6 +262,7 @@ hyper_stub :: put_node(element::node &n, std::unordered_set<node_handle_t> &nbr_
 
     // properties
     std::unique_ptr<e::buffer> props_buf;
+    // TODO fix this, get props returns map now
     prepare_buffer(*n.base.get_props(), props_buf);
     cl_attr[2].attr = graph_attrs[2];
     cl_attr[2].value = (const char*)props_buf->data();

@@ -24,98 +24,68 @@ element :: element(const std::string &_handle, vc::vclock &vclk)
 { }
 
 void
-element :: add_property(property prop)
+element :: add_property(const property &prop)
 {
-    properties.push_back(prop);
+    properties.emplace(prop.key, prop);
 }
 
 void
 element :: delete_property(std::string &key, vc::vclock &tdel)
 {
-    for (auto &iter: properties) {
-        if (iter.key == key) {
-            iter.update_del_time(tdel);
-        }
-    }
+    auto p = properties.find(key);
+    assert(p != properties.end());
+    p->second.update_del_time(tdel);
+}
+
+// caution: assuming mutex access to this element
+void
+element :: remove_property(std::string &key)
+{
+    properties.erase(key);
 }
 
 bool
-check_remove_prop(std::string &key, vc::vclock &vclk, property &prop)
+element :: has_property(const std::string &key, const std::string &value, vc::vclock &vclk)
 {
-    if (prop.key == key) {
-        if (order::compare_two_vts(vclk, prop.get_del_time()) >= 1) {
+    auto p = properties.find(key);
+    if (p != properties.end()
+     && p->second.value == value) {
+        const property &prop = p->second;
+        const vc::vclock& vclk_creat = prop.get_creat_time();
+        const vc::vclock& vclk_del = prop.get_del_time();
+        int64_t cmp1 = order::compare_two_vts(vclk, vclk_creat);
+        int64_t cmp2 = order::compare_two_vts(vclk, vclk_del);
+        if (cmp1 >= 1 && cmp2 == 0) {
             return true;
         }
     }
     return false;
 }
 
-// caution: assuming mutex access to this element
-void
-element :: remove_property(std::string &key, vc::vclock &vclk)
-{
-    auto iter = std::remove_if(properties.begin(), properties.end(),
-            // lambda function to check if property can be removed
-            [&key, &vclk](property &prop) {
-                return check_remove_prop(key, vclk, prop);
-            });
-    properties.erase(iter, properties.end());
-}
-
 bool
-element :: has_property(std::string &key, std::string &value, vc::vclock &vclk)
-{
-    for (auto &p: properties) {
-        if (p.equals(key, value)) {
-            const vc::vclock& vclk_creat = p.get_creat_time();
-            const vc::vclock& vclk_del = p.get_del_time();
-            int64_t cmp1 = order::compare_two_vts(vclk, vclk_creat);
-            int64_t cmp2 = order::compare_two_vts(vclk, vclk_del);
-            if (cmp1 >= 1 && cmp2 == 0) {
-                return true;
-            }
-        }
-    }
-    return false;
-}
-
-bool
-element :: has_property(std::pair<std::string, std::string> &p, vc::vclock &vclk)
+element :: has_property(const std::pair<std::string, std::string> &p, vc::vclock &vclk)
 {
     return has_property(p.first, p.second, vclk);
 }
 
 bool
-element :: has_all_properties(std::vector<std::pair<std::string, std::string>> &props, vc::vclock &vclk)
+element :: has_all_properties(const std::vector<std::pair<std::string, std::string>> &props, vc::vclock &vclk)
 {
-    for (auto &p : props) {
-        if (!has_property(p.first, p.second, vclk)) { 
+    for (const auto &p : props) {
+        if (!has_property(p, vclk)) { 
             return false;
         }
     }
     return true;
 }
 
-// if property with same key-value does not exist, add it
-bool
-element :: check_and_add_property(property prop)
-{
-    for (auto &iter: properties) {
-        if (prop == iter) {
-            return true;
-        }
-    }
-    properties.push_back(prop);
-    return false;
-}
-
 void
-element :: set_properties(std::vector<property> &props)
+element :: set_properties(std::unordered_map<std::string, property> &props)
 {
     properties = props;
 }
 
-const std::vector<property>*
+const std::unordered_map<std::string, property>*
 element :: get_props() const
 {
     return &properties;
@@ -150,15 +120,16 @@ element :: get_creat_time() const
 std::pair<bool, std::string>
 element :: get_property_value(std::string prop_key, vc::vclock &at_time)
 {
-    for (property& prop : properties)
-    {
-        const vc::vclock& vclk_creat = prop.get_creat_time();
-        const vc::vclock& vclk_del = prop.get_del_time();
+    auto p = properties.find(prop_key);
+    if (p != properties.end()) {
+        const property &prop = p->second;
+        const vc::vclock &vclk_creat = prop.get_creat_time();
+        const vc::vclock &vclk_del = prop.get_del_time();
         int64_t cmp1 = order::compare_two_vts(at_time, vclk_creat);
         int64_t cmp2 = order::compare_two_vts(at_time, vclk_del);
-        if (prop_key == prop.key && cmp1 >= 1 && cmp2 == 0) {
+        if (cmp1 >= 1 && cmp2 == 0) {
             return std::make_pair(true, prop.value);
-        } 
+        }
     }
     return std::make_pair(false, std::string(""));
 }

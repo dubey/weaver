@@ -60,9 +60,10 @@ static coordinator::timestamper *vts;
 static uint64_t vt_id;
 
 // tx functions
-void prepare_tx(tx_ptr_t tx, ft::warp_stub *wstub);
+void prepare_tx(tx_ptr_t tx, coordinator::hyper_stub *hstub);
 void send_tx(tx_ptr_t orig_tx, std::vector<tx_ptr_t> factored_tx);
-void end_tx(uint64_t tx_id, ft::warp_stub *wstub);
+void end_tx(uint64_t tx_id, coordinator::hyper_stub *hstub);
+void tx_queue_loop();
 
 
 void
@@ -85,7 +86,7 @@ end_program(int signum)
 }
 
 void
-prepare_tx(tx_ptr_t tx, ft::warp_stub *wstub)
+prepare_tx(tx_ptr_t tx, coordinator::hyper_stub *hstub)
 {
     std::unordered_set<node_handle_t> get_set;
     std::unordered_set<node_handle_t> del_set;
@@ -160,7 +161,7 @@ prepare_tx(tx_ptr_t tx, ft::warp_stub *wstub)
         // sets error if any warp operation returns error
         // sets upd->loc for each upd in tx
         // sets tx->shard_write bool_vector (shard_write[i] = true iff there is a tx component at shard i)
-        wstub->do_tx(get_set, del_set, loc_map, tx, ready, error);
+        hstub->do_tx(get_set, del_set, loc_map, tx, ready, error);
 
         assert(!(ready && error)); // can't be ready after some error
 
@@ -176,61 +177,25 @@ prepare_tx(tx_ptr_t tx, ft::warp_stub *wstub)
 
     if (error) {
         // fail tx
+        message::message msg;
+        msg.prepare_message(message::CLIENT_TX_ABORT);
+        vts->comm.send_to_client(tx->client_id, msg.buf);
     } else {
-        while (true) {
-            auto p = vts->process_tx_queue();
-            if (p.second.empty()) {
-                break;
-            }
-            send_tx(p.first, p.second);
-        }
+        tx_queue_loop();
     }
 }
 
-/*
-    // tx succeeded, send to shards
-    uint64_t num_shards = get_num_shards();
-    std::vector<transaction::pending_tx> tv(num_shards, transaction::pending_tx());
-    std::vector<bool> shard_write(num_shards, false);
-    int shard_count = 0;
-
-#define CHECK_LOC(loc, handle) \
-if (loc == UINT64_MAX) { \
-    find_iter = tx->loc_map.find(handle); \
-    assert(find_iter != tx->loc_map.end()); \
-    loc = find_iter->second; \
-}
-    for (upd_ptr_t upd: tx->writes) {
-        switch (upd->type) {
-            case transaction::EDGE_CREATE_REQ:
-                CHECK_LOC(upd->loc1, upd->handle1);
-                CHECK_LOC(upd->loc2, upd->handle2);
-                break;
-
-            case transaction::NODE_DELETE_REQ:
-            case transaction::NODE_SET_PROPERTY:
-                CHECK_LOC(upd->loc1, upd->handle1);
-                break;
-
-            case transaction::EDGE_DELETE_REQ:
-            case transaction::EDGE_SET_PROPERTY:
-                CHECK_LOC(upd->loc1, upd->handle2);
-                break;
-
-            default:
-                break;
+void
+tx_queue_loop()
+{
+    while (true) {
+        auto p = vts->process_tx_queue();
+        if (p.first == NULL) {
+            break;
         }
-
-#undef CHECK_LOC
-
-        uint64_t shard_idx = upd->loc1-ShardIdIncr;
-        tv[shard_idx].writes.emplace_back(upd);
-        if (!shard_write[shard_idx]) {
-            shard_count++;
-            shard_write[shard_idx] = true;
-        }
+        send_tx(p.first, p.second);
     }
-*/
+}
 
 void
 send_tx(tx_ptr_t orig_tx, std::vector<tx_ptr_t> factored_tx)
@@ -267,12 +232,12 @@ send_tx(tx_ptr_t orig_tx, std::vector<tx_ptr_t> factored_tx)
 
 // if all replies have been received, ack to client
 void
-end_tx(uint64_t tx_id, ft::warp_stub *wstub)
+end_tx(uint64_t tx_id, coordinator::hyper_stub *hstub)
 {
     vts->tx_prog_mutex.lock();
     if (--vts->outstanding_tx.at(tx_id).count == 0) {
         // done tx
-        wstub->clean_tx(tx_id);
+        hstub->clean_tx(tx_id);
 
         auto tx = std::move(vts->outstanding_tx[tx_id].tx);
         vts->outstanding_tx.erase(tx_id);
@@ -288,7 +253,6 @@ end_tx(uint64_t tx_id, ft::warp_stub *wstub)
 }
 
 // single dedicated thread which wakes up after given timeout, sends updates, and sleeps
-// TODO unified nop and tx function
 void
 nop_function()
 {
@@ -356,6 +320,7 @@ nop_function()
         vts->periodic_update_mutex.unlock();
 
         vts->enqueue_tx(tx);
+        tx_queue_loop();
         tx->nop = NULL;
     }
 }
@@ -398,7 +363,7 @@ clk_update_function()
 // unpack client message for a node program, prepare shard msges, and send out
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
-    unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, nmap::nmap_stub *nmap_cl)
+    unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, coordinator::hyper_stub *hstub)
 {
     node_prog::prog_type pType;
     std::vector<std::pair<node_handle_t, ParamsType>> initial_args;
@@ -417,8 +382,9 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     }
 
     if (!get_set.empty()) {
-        std::vector<std::pair<node_handle_t, uint64_t>> loc_results = nmap_cl->get_mappings(get_set);
-        bool success = (loc_results.size() == get_set.size());
+        // TODO fix get_mappings!
+        loc_map = hstub->get_mappings(get_set);
+        bool success = (loc_map.size() == get_set.size());
 
         if (!success) {
             // some node handles bad, return immediately
@@ -427,11 +393,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             msg->prepare_message(message::NODE_PROG_RETURN, pType, zero, ParamsType());
             vts->comm.send_to_client(clientID, msg->buf);
             return;
-        }
-
-        loc_map.reserve(loc_results.size());
-        for (auto &toAdd : loc_results) {
-            loc_map.emplace(toAdd);
         }
     }
 
@@ -507,8 +468,6 @@ server_loop(int thread_id)
     uint64_t tx_id, client_sender;
     node_prog::prog_type pType;
     coordinator::hyper_stub *hstub = vts->hstub[thread_id];
-    ft::warp_stub *wstub = NULL;
-    nmap::nmap_stub *nmstub = vts->nmap_client[thread_id];
 
     while (true) {
         vts->comm.quiesce_thread(thread_id);
@@ -526,7 +485,7 @@ server_loop(int thread_id)
                     tx_ptr_t tx(new transaction::pending_tx(transaction::UPDATE));
                     msg->unpack_message(message::CLIENT_TX_INIT, tx->writes);
                     tx->client_id = client_sender;
-                    prepare_tx(std::move(tx), wstub);
+                    prepare_tx(std::move(tx), hstub);
                     break;
                 }
 
@@ -573,7 +532,7 @@ server_loop(int thread_id)
 
                 case message::TX_DONE:
                     msg->unpack_message(message::TX_DONE, tx_id);
-                    end_tx(tx_id, wstub);
+                    end_tx(tx_id, hstub);
                     break;
 
                 //case message::START_MIGR: {
@@ -609,7 +568,7 @@ server_loop(int thread_id)
 
                 case message::CLIENT_NODE_PROG_REQ:
                     msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
-                    node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), client_sender, nmstub);
+                    node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), client_sender, hstub);
                     break;
 
                 // node program response from a shard

@@ -46,13 +46,13 @@ order :: compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
     assert(clk1.size() == NumVts);
     assert(clk2.size() == NumVts);
     for (uint64_t i = 0; i < NumVts; i++) {
-        if ((clk1.at(i) < clk2.at(i)) && (ret != 0)) {
+        if ((clk1[i] < clk2[i]) && (ret != 0)) {
             if (ret == 2) {
                 ret = 0;
             } else {
                 return -1;
             }
-        } else if ((clk1.at(i) > clk2.at(i)) && (ret != 1)) {
+        } else if ((clk1[i] > clk2[i]) && (ret != 1)) {
             if (ret == 2) {
                 ret = 1;
             } else {
@@ -258,3 +258,65 @@ order :: clock_creat_before_del_after(const vc::vclock &req_vclock, const vc::vc
     }
     return toRet;
 }
+
+// assign 'after' happens after all 'before'
+// will call Kronos if clocks are incomparable
+// returns true if successful, false if assignment impossible
+bool
+order :: assign_vt_order(const std::vector<vc::vclock> &before, const vc::vclock &after)
+{
+    // check if can compare without kronos
+    std::vector<uint64_t> need_kronos;
+    for (uint64_t i = 0; i < before.size(); i++) {
+        int cmp = compare_two_clocks(before[i].clock, after.clock);
+        if (cmp >= 1) {
+            return false;
+        } else if (cmp == -1) {
+            need_kronos.emplace_back(i);
+        }
+    }
+
+    if (need_kronos.empty()) {
+        return true;
+    }
+
+    // need to call Kronos
+
+    uint64_t num_pairs = need_kronos.size();
+    weaver_pair *wpair = (weaver_pair*)malloc(sizeof(weaver_pair) * num_pairs);
+    
+    // prep kronos args
+    for (uint64_t i = 0; i < num_pairs; i++) {
+        weaver_pair &wp = wpair[i];
+        uint64_t idx = need_kronos[i];
+        wp.lhs = (uint64_t*)malloc(sizeof(uint64_t) * NumVts);
+        wp.rhs = (uint64_t*)malloc(sizeof(uint64_t) * NumVts);
+        for (uint64_t k = 0; k < NumVts; k++) {
+            wp.lhs[k] = before[idx].clock[k];
+            wp.rhs[k] = after.clock[k];
+        }
+        wp.lhs_id = before[idx].vt_id;
+        wp.rhs_id = after.vt_id;
+        wp.flags = 0;
+        wp.order = CHRONOS_HAPPENS_BEFORE;
+    }
+
+    // actual kronos call
+    chronos_returncode status;
+    ssize_t cret;
+    kronos_mutex.lock();
+    int64_t ret = kronos_cl->weaver_order(wpair, num_pairs, &status, &cret);
+    ret = kronos_cl->wait(ret, 100000, &status);
+    kronos_mutex.unlock();
+
+    // check kronos returned orders
+    for (uint64_t i = 0; i < num_pairs; i++) {
+        if (wpair[i].order != CHRONOS_HAPPENS_BEFORE) {
+            free(wpair);
+            return false;
+        }
+    }
+    free(wpair);
+    return true;
+}
+

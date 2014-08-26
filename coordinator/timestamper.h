@@ -31,7 +31,6 @@
 #include "common/configuration.h"
 #include "common/comm_wrapper.h"
 #include "common/server_manager_link_wrapper.h"
-#include "common/nmap_stub.h"
 #include "coordinator/current_tx.h"
 #include "coordinator/current_prog.h"
 #include "coordinator/hyper_stub.h"
@@ -98,9 +97,6 @@ namespace coordinator
             uint64_t max_done_id; // permanent deletion of migrated nodes
             std::unique_ptr<vc::vclock_t> max_done_clk; // permanent deletion
             std::unordered_map<node_prog::prog_type, prog_reply_t> done_reqs; // prog state cleanup
-
-            // node map client
-            std::vector<nmap::nmap_stub*> nmap_client;
 
             // mutexes
         public:
@@ -177,9 +173,6 @@ namespace coordinator
         done_reqs.emplace(node_prog::REACHABILITY, empty_map);
         done_reqs.emplace(node_prog::DIJKSTRA, empty_map);
         done_reqs.emplace(node_prog::CLUSTERING, empty_map);
-        for (int i = 0; i < NUM_THREADS; i++) {
-            nmap_client.push_back(new nmap::nmap_stub());
-        }
     }
 
     // initialize msging layer
@@ -197,9 +190,8 @@ namespace coordinator
     inline void
     timestamper :: init_hstub()
     {
-        hstub.push_back(new hyper_stub(vt_id, true));
-        for (int i = 1; i < NUM_THREADS; i++) {
-            hstub.push_back(new hyper_stub(vt_id, false));
+        for (int i = 0; i < NUM_THREADS; i++) {
+            hstub.push_back(new hyper_stub(vt_id));
         }
     }
 
@@ -208,7 +200,7 @@ namespace coordinator
     timestamper :: restore_backup()
     {
         std::unordered_map<uint64_t, current_tx> prepare_txs;
-        hstub.back()->restore_backup(prepare_txs, outstanding_tx);
+        //hstub.back()->restore_backup(prepare_txs, outstanding_tx);
         WDEBUG << "num prep " << prepare_txs.size()
                << ", outst txs " << outstanding_tx.size() << std::endl;
         // TODO learn qts, clk values from shards

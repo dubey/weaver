@@ -44,16 +44,7 @@ namespace coordinator
 {
     class central;
     class pending_req;
-}
-
-namespace db
-{
-    class graph;
-}
-
-namespace nmap
-{
-    class nmap_stub;
+    class hyper_stub;
 }
 
 namespace node_prog
@@ -118,7 +109,7 @@ namespace node_prog
         public:
             virtual void unpack_and_run_db(std::unique_ptr<message::message> msg) = 0;
             virtual void unpack_context_reply_db(std::unique_ptr<message::message> msg) = 0;
-            virtual void unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, nmap::nmap_stub*) = 0;
+            virtual void unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, coordinator::hyper_stub*) = 0;
 
             virtual ~node_program() { }
     };
@@ -145,7 +136,7 @@ namespace node_prog
         public:
             virtual void unpack_and_run_db(std::unique_ptr<message::message> msg);
             virtual void unpack_context_reply_db(std::unique_ptr<message::message> msg);
-            virtual void unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, nmap::nmap_stub*);
+            virtual void unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, coordinator::hyper_stub*);
 
             // delete standard copy onstructors
             particular_node_program(const particular_node_program&) = delete;

@@ -16,23 +16,23 @@
 #define weaver_node_prog_prop_list_h_
 
 #include <iterator>
-#include <vector>
+#include <unordered_map>
 
 #include "db/property.h"
 
 namespace node_prog
 {
-    typedef std::vector<db::element::property> prop_vec_t;
+    typedef std::unordered_map<std::string, db::element::property> prop_map_t;
     class prop_iter : public std::iterator<std::input_iterator_tag, property>
     {
         private:
-            prop_vec_t::iterator internal_cur;
-            prop_vec_t::iterator internal_end;
+            prop_map_t::iterator internal_cur;
+            prop_map_t::iterator internal_end;
             vc::vclock &req_time;
 
         public:
             prop_iter& operator++();
-            prop_iter(prop_vec_t::iterator begin, prop_vec_t::iterator end, vc::vclock& req_time);
+            prop_iter(prop_map_t::iterator begin, prop_map_t::iterator end, vc::vclock& req_time);
             bool operator!=(const prop_iter& rhs) const;
             property& operator*();
     };
@@ -40,11 +40,11 @@ namespace node_prog
     class prop_list
     {
         private:
-            prop_vec_t &wrapped;
+            prop_map_t &wrapped;
             vc::vclock &req_time;
 
         public:
-            prop_list(prop_vec_t &prop_list, vc::vclock &req_time)
+            prop_list(prop_map_t &prop_list, vc::vclock &req_time)
                 : wrapped(prop_list), req_time(req_time) { }
 
             prop_iter begin()

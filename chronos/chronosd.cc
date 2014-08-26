@@ -473,10 +473,14 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
     for (size_t i = 0; i < NUM_PAIRS; i++) {
         m_repl_resp[i] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
     }
+
+    std::vector<std::pair<uint64_t, uint64_t>> edges;
+    edges.reserve(NUM_PAIRS);
     size_t num_pairs = 0;
     const char *data_ptr = data;
 
     for (num_pairs = 0; num_pairs < NUM_PAIRS; ++num_pairs) {
+        // unpack weaver pair
         chronos_pair p;
         weaver_pair wp;
         uint8_t o;
@@ -491,8 +495,9 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
         // Bunch of sanity checks for Weaver provided vector clocks
         // some order should have been provided
         assert((p.order == CHRONOS_HAPPENS_BEFORE) || (p.order == CHRONOS_HAPPENS_AFTER));
-        // CHRONOS_SOFT_FAIL should have been enabled
-        assert(p.flags & CHRONOS_SOFT_FAIL);
+        // we need SOFT_FAIL only for query weaver_order.  For kronos calls
+        // from timestamper it is hard fail
+        //assert(p.flags & CHRONOS_SOFT_FAIL);
 
         std::vector<uint64_t> vc_lhs, vc_rhs;
         vc_lhs.reserve(NumVts);
@@ -501,6 +506,8 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
             vc_lhs.push_back(wp.lhs[i]);
             vc_rhs.push_back(wp.rhs[i]);
         }
+
+        // create vertex in dependency graph if doesn't exist
         if (m_vcmap.find(vc_lhs) == m_vcmap.end()) {
             uint64_t ev_lhs = m_graph.add_vertex();
             m_vcmap[vc_lhs] = ev_lhs;
@@ -520,10 +527,27 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
 
         if (resolve < 0) {
             m_repl_resp[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_BEFORE);
+
+            if (p.order != CHRONOS_HAPPENS_BEFORE) {
+                if (!(p.flags & CHRONOS_SOFT_FAIL)) {
+                    m_repl_resp[num_pairs] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
+                    break;
+                }
+            }
+
         } else if (resolve > 0) {
             m_repl_resp[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_AFTER);
+
+            if (p.order != CHRONOS_HAPPENS_AFTER) {
+                if (!(p.flags & CHRONOS_SOFT_FAIL)) {
+                    m_repl_resp[num_pairs] = chronos_cmp_to_byte(CHRONOS_WOULDLOOP);
+                    break;
+                }
+            }
+
         } else {
             switch (p.order) {
+
                 case CHRONOS_HAPPENS_BEFORE:
                     m_repl_resp[num_pairs] = chronos_cmp_to_byte(CHRONOS_HAPPENS_BEFORE);
                     m_graph.add_edge(p.lhs, p.rhs);
@@ -542,7 +566,12 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
         }
     }
 
-    assert(num_pairs == NUM_PAIRS);
+    //assert(num_pairs == NUM_PAIRS);
+    if (num_pairs != NUM_PAIRS) {
+        for (size_t i = 0; i < edges.size(); ++i) {
+            m_graph.remove_edge(edges[i].first, edges[i].second);
+        }
+    }
 
     char *resp_ptr = &m_repl_resp.front();
     replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);

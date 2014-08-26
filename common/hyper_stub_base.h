@@ -21,26 +21,60 @@
 #include <unordered_set>
 #include <e/endian.h>
 #include <e/buffer.h>
-#include <hyperdex/client.hpp>
+#include <hyperdex/client.h>
 
 #include "common/message.h"
+#include "common/transaction.h"
+#include "db/node.h"
+
+#define NUM_GRAPH_ATTRS 6
+#define NUM_TX_ATTRS 2
+
+using transaction::tx_ptr_t;
+
+enum persist_node_state
+{
+    STABLE = 0,
+    MOVING
+};
 
 class hyper_stub_base
 {
     protected:
-        typedef int64_t (hyperdex::Client::*hyper_func)(const char*,
+        // node handle -> node data
+        const char *graph_space = "weaver_graph_data";
+        const char *graph_attrs[NUM_GRAPH_ATTRS];
+        const enum hyperdatatype graph_dtypes[NUM_GRAPH_ATTRS];
+        // node handle -> shard
+        const char *nmap_space = "weaver_loc_mapping";
+        const char *nmap_attr = "shard";
+        const enum hyperdatatype nmap_dtype = HYPERDATATYPE_INT64;
+        // tx id -> vt id, tx data
+        const char *tx_space = "weaver_tx_data";
+        const char *tx_attrs[NUM_TX_ATTRS];
+        const enum hyperdatatype tx_dtypes[NUM_TX_ATTRS];
+
+        using hyper_func = int64_t (*) (struct hyperdex_client_transaction *client,
+            const char*,
             const char*,
             size_t,
             const struct hyperdex_client_attribute*,
             size_t,
             hyperdex_client_returncode*);
-        typedef int64_t (hyperdex::Client::*hyper_map_func)(const char*,
+        using hyper_map_func = int64_t (*) (struct hyperdex_client_transaction *client,
+            const char*,
             const char*,
             size_t,
             const struct hyperdex_client_map_attribute*,
             size_t,
             hyperdex_client_returncode*);
-        hyperdex::Client cl;        
+
+        hyperdex_client *cl;
+        hyperdex_client_transaction *hyper_tx;
+
+        void begin_tx();
+        bool commit_tx();
+        void abort_tx();
         bool call(hyper_func h,
             const char *space,
             const char *key, size_t key_sz,
@@ -49,6 +83,7 @@ class hyper_stub_base
             const char *space,
             const char *key, size_t key_sz,
             hyperdex_client_map_attribute *map_attr, size_t num_attrs);
+
         bool multiple_call(std::vector<hyper_func> &funcs,
             std::vector<const char*> &spaces,
             std::vector<const char*> &keys, std::vector<size_t> &key_szs,
@@ -72,6 +107,25 @@ class hyper_stub_base
         bool multiple_del(std::vector<const char*> &spaces,
             std::vector<const char*> &keys, std::vector<size_t> &key_szs);
 
+        // graph data functions
+        bool get_node(db::element::node &n);
+        bool put_node(db::element::node &n);
+        void del_node(const node_handle_t &h);
+        void update_creat_time(db::element::node &n);
+        void update_properties(db::element::node &n);
+        void add_out_edge(db::element::node &n, db::element::edge *e);
+        void remove_out_edge(db::element::node &n, db::element::edge *e);
+        void add_in_nbr(const node_handle_t &node, const node_handle_t &nbr);
+        void remove_in_nbr(const node_handle_t &n_hndl, const node_handle_t &nbr);
+
+        // node map functions
+        bool put_mappings(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add);
+        std::unordered_map<node_handle_t, uint64_t> get_mappings(std::unordered_set<node_handle_t> &toGet);
+        bool del_mappings(std::unordered_set<node_handle_t> &toDel);
+
+        // tx data functions
+        bool put_tx_data(tx_ptr_t tx);
+        bool del_tx_data(uint64_t tx_id);
 
         template <typename T> void prepare_buffer(const T &t, std::unique_ptr<e::buffer> &buf);
         template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, T &t);
@@ -87,6 +141,7 @@ class hyper_stub_base
         void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<std::string> &set);
 
     private:
+        bool recreate_node(const hyperdex_client_attribute *cl_attr, db::element::node &n);
         void pack_uint64(e::buffer::packer &packer, uint64_t num);
 
     public:

@@ -14,6 +14,7 @@
 #include "db/property.h"
 
 using db::element::property;
+using db::element::property_key_hasher;
 
 property :: property()
     : creat_time(UINT64_MAX, UINT64_MAX)
@@ -31,48 +32,9 @@ property :: property(std::string &k, std::string &v, vc::vclock &creat)
 { }
 
 bool
-property :: equals(std::string const &key2, std::string const &value2) const
+property :: operator==(property const &other) const
 {
-    if (key.length() != key2.length()
-     || value.length() != value2.length()) {
-        return false;
-    }
-    uint64_t smaller, larger;
-    if (key.length() < value.length()) {
-        smaller = key.length();
-        larger = value.length();
-    } else {
-        smaller = value.length();
-        larger = key.length();
-    }
-    uint64_t i;
-    for (i = 0; i < smaller; i++) {
-        if (key[i] != key2[i]) {
-            return false;
-        } else if (value[i] != value2[i]) {
-            return false;
-        }
-    }
-    if (larger == key.length()) {
-        for (; i < larger; i++) {
-            if (key[i] != key2[i]) {
-                return false;
-            }
-        }
-    } else {
-        for (; i < larger; i++) {
-            if (value[i] != value2[i]) {
-                return false;
-            }
-        }
-    }
-    return true;
-}
-
-bool
-property :: operator==(property const &p2) const
-{
-    return equals(p2.key, p2.value);
+    return (key == other.key) && (value == other.value);
 }
 
 const vc::vclock&
@@ -91,4 +53,10 @@ void
 property :: update_del_time(vc::vclock &tdel)
 {
     del_time = tdel;
+}
+
+size_t
+property_key_hasher :: operator()(const property &p) const
+{
+    return std::hash<std::string>()(p.key);
 }

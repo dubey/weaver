@@ -17,6 +17,7 @@
 #include <limits.h>
 #include <stdint.h>
 #include <vector>
+#include <unordered_map>
 #include <algorithm>
 #include <string.h>
 
@@ -39,20 +40,18 @@ namespace element
             vc::vclock del_time;
 
         public:
-            std::vector<property> properties;
+            std::unordered_map<std::string, property> properties;
             std::shared_ptr<vc::vclock> view_time;
 
         public:
-            void add_property(property prop);
+            void add_property(const property &prop);
             void delete_property(std::string &key, vc::vclock &tdel);
-            void remove_property(std::string &key, vc::vclock &vclk);
-            bool has_property(std::string &key, std::string &value, vc::vclock &vclk);
-            bool has_property(property &prop, vc::vclock &vclk);
-            bool has_property(std::pair<std::string, std::string> &p, vc::vclock &vclk);
-            bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props, vc::vclock &vclk);
-            bool check_and_add_property(property prop);
-            void set_properties(std::vector<property> &props);
-            const std::vector<property>* get_props() const;
+            void remove_property(std::string &key);
+            bool has_property(const std::string &key, const std::string &value, vc::vclock &vclk);
+            bool has_property(const std::pair<std::string, std::string> &p, vc::vclock &vclk);
+            bool has_all_properties(const std::vector<std::pair<std::string, std::string>> &props, vc::vclock &vclk);
+            void set_properties(std::unordered_map<std::string, property> &props);
+            const std::unordered_map<std::string, property>* get_props() const;
             void update_del_time(vc::vclock &del_time);
             const vc::vclock& get_del_time() const;
             void update_creat_time(vc::vclock &creat_time);

@@ -17,13 +17,17 @@
 #include "common/hyper_stub_base.h"
 #include "coordinator/current_tx.h"
 
-#define NUM_MAP_ATTRS 2
-
-namespace ft
+namespace coordinator
 {
-    class warp_stub : private hyper_stub_base
+    class hyper_stub : private hyper_stub_base
     {
+        private:
+            uint64_t vt_id;
+            po6::threads::mutex dummy_mtx;
+            vc::vclock dummy_clk;
+
         public:
+            std::unordered_map<node_handle_t, uint64_t> get_mappings(std::unordered_set<node_handle_t> &get_set);
             void do_tx(std::unordered_set<node_handle_t> &get_set,
                 std::unordered_set<node_handle_t> &del_set,
                 std::unordered_map<node_handle_t, uint64_t> &loc_map,
@@ -31,35 +35,7 @@ namespace ft
                 bool &ready,
                 bool &error);
             void clean_tx(uint64_t tx_id);
-    };
-}
-
-namespace coordinator
-{
-    class hyper_stub : private hyper_stub_base
-    {
-        private:
-            const uint64_t vt_id;
-            // vt id -> set of outstanding tx ids
-            const char *vt_set_space = "weaver_vt_tx_set_data";
-            const char *set_attr = "tx_id_set";
-            // tx id -> tx data
-            const char *vt_map_space = "weaver_vt_tx_map_data";
-            const char *tx_data_attr = "tx_data";
-            const char *tx_status_attr = "status"; // 0 for prepare, 1 for commit
-            const enum hyperdatatype set_dtype = HYPERDATATYPE_SET_INT64;
-            const enum hyperdatatype map_dtypes[NUM_MAP_ATTRS];
-
-        public:
-            hyper_stub(uint64_t vtid, bool put_initial);
-            void prepare_tx(transaction::pending_tx &tx);
-            void commit_tx(transaction::pending_tx &tx);
-            void del_tx(uint64_t tx_id);
-            void restore_backup(std::unordered_map<uint64_t, current_tx> &prepare_tx,
-                std::unordered_map<uint64_t, current_tx> &outstanding_tx);
-        private:
-            void recreate_tx(const hyperdex_client_attribute *attr, size_t num_attrs,
-                coordinator::current_tx &cur_tx, bool &status);
+            hyper_stub(uint64_t vt_id);
     };
 }
 

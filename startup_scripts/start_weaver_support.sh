@@ -75,9 +75,8 @@ attributes
     string del_time,
     string properties,
     map(string, string) out_edges,
-    set(string) in_nbrs,
-    string tx_queue,
-    int migr_status
+    int migr_status,
+    string last_upd_clk
 tolerate 2 failures
 EOF
 
@@ -91,19 +90,11 @@ tolerate 2 failures
 EOF
 
 hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
-space weaver_vt_tx_set_data
-key vt
-attributes
-    set(int) tx_id_set
-tolerate 2 failures
-EOF
-
-hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
-space weaver_vt_tx_map_data
+space weaver_tx_data
 key tx_id
 attributes
-    string tx_data,
-    int status
+    int vt_id,
+    string tx_data
 tolerate 2 failures
 EOF
 

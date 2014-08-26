@@ -696,7 +696,7 @@ namespace db
         vc::vclock &vclk)
     {
         db::element::property p(key, value, vclk);
-        n->base.check_and_add_property(p);
+        n->base.add_property(p);
     }
 
     inline void
@@ -733,7 +733,7 @@ namespace db
         if (n->out_edges.find(edge_handle) != n->out_edges.end()) {
             db::element::edge *e = n->out_edges[edge_handle];
             db::element::property p(key, value, vclk);
-            e->base.check_and_add_property(p);
+            e->base.add_property(p);
         }
     }
 

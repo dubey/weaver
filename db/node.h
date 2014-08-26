@@ -96,6 +96,9 @@ namespace element
             typedef std::vector<id_to_state_t> prog_state_t;
             prog_state_t prog_states;
 
+            // fault tolerance
+            vc::vclock last_upd_clk;
+
         public:
             void add_edge(edge *e);
             node_prog::edge_list get_edges();

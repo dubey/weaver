@@ -126,7 +126,6 @@ message :: unpack_buffer(e::unpacker &unpacker, db::element::element &t)
 {
     std::string handle;
     vc::vclock creat_time, del_time;
-    std::vector<db::element::property> props;
 
     unpack_buffer(unpacker, handle);
     t.set_handle(handle);
@@ -137,9 +136,7 @@ message :: unpack_buffer(e::unpacker &unpacker, db::element::element &t)
     unpack_buffer(unpacker, del_time);
     t.update_del_time(del_time);
 
-    unpack_buffer(unpacker, props);
-    t.set_properties(props);
-
+    unpack_buffer(unpacker, t.properties);
 }
 
 void
