@@ -705,7 +705,7 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordere
 */
 
 bool
-hyper_stub_base :: put_mappings(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add)
+hyper_stub_base :: put_nmap(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add)
 {
     int num_pairs = pairs_to_add.size();
     std::vector<hyper_func> funcs(num_pairs, &hyperdex_client_xact_put);
@@ -738,7 +738,7 @@ hyper_stub_base :: put_mappings(std::unordered_map<node_handle_t, uint64_t> &pai
 
 
 std::unordered_map<node_handle_t, uint64_t>
-hyper_stub_base :: get_mappings(std::unordered_set<node_handle_t> &toGet)
+hyper_stub_base :: get_nmap(std::unordered_set<node_handle_t> &toGet)
 {
     int64_t num_nodes = toGet.size();
     std::vector<const char*> spaces(num_nodes, nmap_space);
@@ -782,7 +782,7 @@ hyper_stub_base :: get_mappings(std::unordered_set<node_handle_t> &toGet)
 
 
 bool
-hyper_stub_base :: del_mappings(std::unordered_set<node_handle_t> &toDel)
+hyper_stub_base :: del_nmap(std::unordered_set<node_handle_t> &toDel)
 {
     int64_t num_nodes = toDel.size();
     std::vector<const char*> spaces(num_nodes, nmap_space);

@@ -31,7 +31,7 @@ std::unordered_map<node_handle_t, uint64_t>
 hyper_stub :: get_mappings(std::unordered_set<node_handle_t> &get_set)
 {
     begin_tx();
-    auto ret = get_mappings(get_set);
+    auto ret = get_nmap(get_set);
     commit_tx();
     return ret;
 }
@@ -54,16 +54,16 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 
     begin_tx();
 
-    std::unordered_map<node_handle_t, uint64_t> get_map = get_mappings(get_set);
+    std::unordered_map<node_handle_t, uint64_t> get_map = get_nmap(get_set);
     if (get_map.size() != get_set.size()) {
         ERROR_FAIL;
     }
 
-    if (!put_mappings(put_map)) {
+    if (!put_nmap(put_map)) {
         ERROR_FAIL;
     }
 
-    if (!del_mappings(del_set)) {
+    if (!del_nmap(del_set)) {
         ERROR_FAIL;
     }
 

@@ -21,7 +21,6 @@
 #include <po6/threads/mutex.h>
 
 #include "db/queued_request.h"
-#include "db/hyper_stub.h"
 
 namespace db
 {
@@ -58,7 +57,7 @@ namespace db
             bool check_rd_request(vc::vclock_t &clk);
             void enqueue_write_request(uint64_t vt_id, queued_request*);
             enum queue_order check_wr_request(vc::vclock &vclk, uint64_t qt);
-            bool exec_queued_request(db::hyper_stub *hstub);
+            bool exec_queued_request();
             void increment_qts(uint64_t vt_id, uint64_t incr);
             void record_completed_tx(vc::vclock &tx_clk);
             // fault tolerance

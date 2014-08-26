@@ -224,7 +224,7 @@ send_tx(tx_ptr_t orig_tx, std::vector<tx_ptr_t> factored_tx)
     message::message msg;
     for (uint64_t i = 0; i < num_shards; i++) {
         if (orig_tx->shard_write[i]) {
-            msg.prepare_message(message::TX_INIT, vt_id, *factored_tx[i]);
+            msg.prepare_message(message::TX_INIT, vt_id, factored_tx[i]->timestamp, factored_tx[i]->qts, *factored_tx[i]);
             vts->comm.send(i+ShardIdIncr, msg.buf);
         }
     }

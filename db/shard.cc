@@ -58,14 +58,14 @@ static uint64_t shard_id;
 static db::shard *S;
 
 void migrated_nbr_update(std::unique_ptr<message::message> msg);
-bool migrate_node_step1(db::hyper_stub *hs, db::element::node*, std::vector<uint64_t>&, uint64_t);
+bool migrate_node_step1(db::element::node*, std::vector<uint64_t>&, uint64_t);
 void migrate_node_step2_req();
-void migrate_node_step2_resp(db::hyper_stub *hs, std::unique_ptr<message::message> msg);
+void migrate_node_step2_resp(std::unique_ptr<message::message> msg);
 bool check_step3();
-void migrate_node_step3(db::hyper_stub *hs);
-void migration_begin(db::hyper_stub *hs);
-void migration_wrapper(db::hyper_stub *hs);
-void migration_end(db::hyper_stub *hs);
+void migrate_node_step3();
+void migration_begin();
+void migration_wrapper();
+void migration_end();
 
 void
 end_program(int param)
@@ -88,60 +88,54 @@ end_program(int param)
 
 
 inline void
-create_node(db::hyper_stub *hs,
-    vc::vclock &t_creat,
+create_node(vc::vclock &t_creat,
     const node_handle_t &node_handle)
 {
-    S->create_node(hs, node_handle, t_creat, false);
+    S->create_node(node_handle, t_creat, false);
 }
 
 inline void
-create_edge(db::hyper_stub *hs,
-    vc::vclock &t_creat,
-    vc::qtimestamp_t &qts,
+create_edge(vc::vclock &t_creat,
+    uint64_t qts,
     const edge_handle_t &handle,
     const node_handle_t &n1,
     const node_handle_t &n2, uint64_t loc2)
 {
-    S->create_edge(hs, handle, n1, n2, loc2, t_creat, qts);
+    S->create_edge(handle, n1, n2, loc2, t_creat, qts);
 }
 
 inline void
-delete_node(db::hyper_stub *hs,
-    vc::vclock &t_del,
-    vc::qtimestamp_t &qts,
+delete_node(vc::vclock &t_del,
+    uint64_t qts,
     const node_handle_t &node_handle)
 {
-    S->delete_node(hs, node_handle, t_del, qts);
+    S->delete_node(node_handle, t_del, qts);
 }
 
 inline void
-delete_edge(db::hyper_stub *hs,
-    vc::vclock &t_del,
-    vc::qtimestamp_t &qts,
+delete_edge(vc::vclock &t_del,
+    uint64_t qts,
     const edge_handle_t &edge_handle, const node_handle_t &node_handle)
 {
-    S->delete_edge(hs, edge_handle, node_handle, t_del, qts);
+    S->delete_edge(edge_handle, node_handle, t_del, qts);
 }
 
 inline void
-set_node_property(db::hyper_stub *hs,
-    vc::vclock &vclk,
-    vc::qtimestamp_t &qts,
+set_node_property(vc::vclock &vclk,
+    uint64_t qts,
     const node_handle_t &node_handle,
     std::unique_ptr<std::string> key, std::unique_ptr<std::string> value)
 {
-    S->set_node_property(hs, node_handle, std::move(key), std::move(value), vclk, qts);
+    S->set_node_property(node_handle, std::move(key), std::move(value), vclk, qts);
 }
 
 inline void
-set_edge_property(db::hyper_stub *hs,
-    vc::vclock &vclk,
-    vc::qtimestamp_t &qts,
+set_edge_property(vc::vclock &vclk,
+    uint64_t qts,
     const edge_handle_t &edge_handle, const node_handle_t &node_handle,
     std::unique_ptr<std::string> key, std::unique_ptr<std::string> value)
 {
-    S->set_edge_property(hs, node_handle, edge_handle, std::move(key), std::move(value), vclk, qts);
+    S->set_edge_property(node_handle, edge_handle, std::move(key), std::move(value), vclk, qts);
 }
 
 // parse the string 'line' as a uint64_t starting at index 'idx' till the first whitespace or end of string
@@ -257,8 +251,8 @@ inline void
 init_single_nmap(int thread_id, std::unordered_map<node_handle_t, uint64_t> *node_map)
 {
     WDEBUG << "node map thread " << thread_id << " starting, will put " << node_map->size() << " entries in hdex" << std::endl;
-    nmap::nmap_stub node_mapper;
-    if (!node_mapper.put_mappings(*node_map)) {
+    db::hyper_stub hstub(shard_id);
+    if (!hstub.put_mappings(*node_map)) {
         WDEBUG << "errors in bulk loading (adding HyperDex mappings), cluster restart required" << std::endl;
     } else {
         WDEBUG << "node map thread " << thread_id << " done" << std::endl;
@@ -338,15 +332,15 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     if (loc0 == shard_id) {
                         n = S->acquire_node_nonlocking(id0);
                         if (n == NULL) {
-                            n = S->create_node(0, id0, zero_clk, false, true);
+                            n = S->create_node(id0, zero_clk, false, true);
                             node_maps[thread_select][id0] = shard_id;
                             thread_select = (thread_select + 1) % NUM_THREADS;
                         }
-                        S->create_edge_nonlocking(0, n, edge_handle, id1, loc1, zero_clk, true);
+                        S->create_edge_nonlocking(n, edge_handle, id1, loc1, zero_clk, true);
                     }
                     if (loc1 == shard_id) {
                         if (!S->node_exists_nonlocking(id1)) {
-                            S->create_node(0, id1, zero_clk, false, true);
+                            S->create_node(id1, zero_clk, false, true);
                             node_maps[thread_select][id1] = shard_id;
                             thread_select = (thread_select + 1) % NUM_THREADS;
                         }
@@ -376,7 +370,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 if (loc == shard_id) {
                     n = S->acquire_node_nonlocking(id0);
                     if (n == NULL) {
-                        n = S->create_node(0, id0, zero_clk, false, true);
+                        n = S->create_node(id0, zero_clk, false, true);
                         node_maps[thread_select][id0] = shard_id;
                         thread_select = (thread_select + 1) % NUM_THREADS;
                     }
@@ -402,7 +396,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     id0 = std::to_string(node0);
                     n = S->acquire_node_nonlocking(id0);
                     assert(n != NULL);
-                    S->create_edge_nonlocking(0, n, edge_handle, id1, loc1, zero_clk, true);
+                    S->create_edge_nonlocking(n, edge_handle, id1, loc1, zero_clk, true);
                     for (auto &p: props) {
                         S->set_edge_property_nonlocking(n, edge_handle, p.first, p.second, zero_clk);
                     }
@@ -448,7 +442,7 @@ migrated_nbr_ack(uint64_t from_loc, std::vector<uint64_t> &target_req_id, uint64
 }
 
 void
-unpack_migrate_request(db::hyper_stub *hs, void *req)
+unpack_migrate_request(void *req)
 {
     db::message_wrapper *request = (db::message_wrapper*)req;
 
@@ -458,7 +452,7 @@ unpack_migrate_request(db::hyper_stub *hs, void *req)
             break;
 
         case message::MIGRATE_SEND_NODE:
-            migrate_node_step2_resp(hs, std::move(request->msg));
+            migrate_node_step2_resp(std::move(request->msg));
             break;
 
         case message::MIGRATED_NBR_ACK: {
@@ -476,30 +470,30 @@ unpack_migrate_request(db::hyper_stub *hs, void *req)
 }
 
 void
-apply_writes(db::hyper_stub *hs, uint64_t vt_id, uint64_t tx_id, vc::vclock &vclk, vc::qtimestamp_t &qts, transaction::pending_tx &tx)
+apply_writes(uint64_t vt_id, vc::vclock &vclk, uint64_t qts, transaction::pending_tx &tx)
 {
     // apply all writes
     // acquire_node_write blocks if a preceding write has not been executed
     for (auto upd: tx.writes) {
         switch (upd->type) {
             case transaction::EDGE_CREATE_REQ:
-                create_edge(hs, vclk, qts, upd->handle, upd->handle1, upd->handle2, upd->loc2);
+                create_edge(vclk, qts, upd->handle, upd->handle1, upd->handle2, upd->loc2);
                 break;
 
             case transaction::NODE_DELETE_REQ:
-                delete_node(hs, vclk, qts, upd->handle1);
+                delete_node(vclk, qts, upd->handle1);
                 break;
 
             case transaction::EDGE_DELETE_REQ:
-                delete_edge(hs, vclk, qts, upd->handle1, upd->handle2);
+                delete_edge(vclk, qts, upd->handle1, upd->handle2);
                 break;
 
             case transaction::NODE_SET_PROPERTY:
-                set_node_property(hs, vclk, qts, upd->handle1, std::move(upd->key), std::move(upd->value));
+                set_node_property(vclk, qts, upd->handle1, std::move(upd->key), std::move(upd->value));
                 break;
 
             case transaction::EDGE_SET_PROPERTY:
-                set_edge_property(hs, vclk, qts, upd->handle1, upd->handle2, std::move(upd->key), std::move(upd->value));
+                set_edge_property(vclk, qts, upd->handle1, upd->handle2, std::move(upd->key), std::move(upd->value));
                 break;
 
             default:
@@ -512,35 +506,35 @@ apply_writes(db::hyper_stub *hs, uint64_t vt_id, uint64_t tx_id, vc::vclock &vcl
 
     // send tx confirmation to coordinator
     message::message conf_msg;
-    conf_msg.prepare_message(message::TX_DONE, tx_id);
+    conf_msg.prepare_message(message::TX_DONE, tx.id);
     S->comm.send(vt_id, conf_msg.buf);
 }
 
 // if tx_order is PAST, then the tx has been ordered and should be stored in node
 // if tx_order is present or future, then we can just go through regular ordering mechanism
 void
-reexec_tx_request(db::hyper_stub *hs, db::message_wrapper *request)
+reexec_tx_request(db::message_wrapper *request)
 {
-    uint64_t vt_id, tx_id;
+    uint64_t vt_id;
     vc::vclock vclk;
-    vc::qtimestamp_t qts;
-    transaction::pending_tx tx;
-    request->msg->unpack_message(message::TX_INIT, vt_id, vclk, qts, tx_id, tx.writes);
+    uint64_t qts;
+    transaction::pending_tx tx(transaction::UPDATE);
+    request->msg->unpack_message(message::TX_INIT, vt_id, vclk, qts, tx);
 
-    apply_writes(hs, vt_id, tx_id, vclk, qts, tx);
+    apply_writes(vt_id, vclk, qts, tx);
 
     delete request;
 }
 
 void
-unpack_tx_request(db::hyper_stub *hs, void *req)
+unpack_tx_request(void *req)
 {
     db::message_wrapper *request = (db::message_wrapper*)req;
-    uint64_t vt_id, tx_id;
+    uint64_t vt_id;
     vc::vclock vclk;
-    vc::qtimestamp_t qts;
-    transaction::pending_tx tx;
-    request->msg->unpack_message(message::TX_INIT, vt_id, vclk, qts, tx_id, tx.writes);
+    uint64_t qts;
+    transaction::pending_tx tx(transaction::UPDATE);
+    request->msg->unpack_message(message::TX_INIT, vt_id, vclk, qts, tx);
 
     // execute all create_node writes
     // establish tx order at all graph nodes for all other writes
@@ -549,7 +543,7 @@ unpack_tx_request(db::hyper_stub *hs, void *req)
         n = NULL;
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ:
-                create_node(hs, vclk, upd->handle);
+                create_node(vclk, upd->handle);
                 break;
 
             case transaction::EDGE_CREATE_REQ:
@@ -569,25 +563,24 @@ unpack_tx_request(db::hyper_stub *hs, void *req)
         if (n != NULL) {
             bool already_ordered = false;
             for (auto &p: n->tx_queue) {
-                if (p.first == vt_id && p.second == qts[vt_id]) {
+                if (p.first == vt_id && p.second == qts) {
                     // tx already exists in queue, due to some previous failure
                     already_ordered = true;
                     break;
                 }
             }
             if (!already_ordered) {
-                n->tx_queue.emplace_back(std::make_pair(vt_id, qts[vt_id]));
+                n->tx_queue.emplace_back(std::make_pair(vt_id, qts));
             }
-            hs->update_tx_queue(*n);
             S->release_node(n);
         }
     }
 
     // increment qts so that threadpool moves forward
     // since tx order has already been established, conflicting txs will be processed in correct order
-    S->increment_qts(hs, vt_id, tx.writes.size());
+    S->increment_qts(vt_id, 1);
 
-    apply_writes(hs, vt_id, tx_id, vclk, qts, tx);
+    apply_writes(vt_id, vclk, qts, tx);
 
     delete request;
 }
@@ -602,17 +595,27 @@ check_nop(uint64_t , db::nop_data *nop_arg)
 // process nop
 // migration-related checks, and possibly initiating migration
 inline void
-nop(db::hyper_stub *hs, void *noparg)
+nop(void *req)
 {
+    db::message_wrapper *request = (db::message_wrapper*)req;
+    uint64_t vt_id;
+    vc::vclock vclk;
+    uint64_t qts;
+    transaction::pending_tx tx(transaction::NOP);
+    request->msg->unpack_message(message::TX_INIT, vt_id, vclk, qts, tx);
+
     message::message msg;
-    db::nop_data *nop_arg = (db::nop_data*)noparg;
+    transaction::nop_ptr_t nop_arg = tx.nop;
     bool check_move_migr, check_init_migr, check_migr_step3;
 
     // increment qts
-    S->increment_qts(hs, nop_arg->vt_id, 1);
+    S->increment_qts(vt_id, 1);
 
     // note done progs for state clean up
-    S->add_done_requests(nop_arg->done_reqs);
+    assert(nop_arg->done_reqs.size() == 1);
+    auto done_req_iter = nop_arg->done_reqs.begin();
+    assert(done_req_iter->first == shard_id-ShardIdIncr);
+    S->add_done_requests(done_req_iter->second);
 
     // migration
     S->migration_mutex.lock();
@@ -621,7 +624,7 @@ nop(db::hyper_stub *hs, void *noparg)
     check_move_migr = true;
     check_init_migr = false;
     if (S->current_migr) {
-        S->nop_count.at(nop_arg->vt_id)++;
+        S->nop_count.at(vt_id)++;
         for (uint64_t &x: S->nop_count) {
             check_move_migr = check_move_migr && (x == 2);
         }
@@ -650,9 +653,9 @@ nop(db::hyper_stub *hs, void *noparg)
     }
 
     // node max done id for migrated node clean up
-    assert(S->max_done_id[nop_arg->vt_id] <= nop_arg->max_done_id);
-    S->max_done_id[nop_arg->vt_id] = nop_arg->max_done_id;
-    S->max_done_clk[nop_arg->vt_id] = std::move(nop_arg->max_done_clk);
+    assert(S->max_done_id[vt_id] <= nop_arg->max_done_id);
+    S->max_done_id[vt_id] = nop_arg->max_done_id;
+    S->max_done_clk[vt_id] = std::move(nop_arg->max_done_clk);
     check_migr_step3 = check_step3();
 
     // atmost one check should be true
@@ -672,24 +675,25 @@ nop(db::hyper_stub *hs, void *noparg)
     S->migration_mutex.unlock();
 
     // initiate permanent deletion
-    S->permanent_delete_loop(nop_arg->vt_id, nop_arg->outstanding_progs != 0);
+    S->permanent_delete_loop(vt_id, nop_arg->outstanding_progs != 0);
 
     // record clock; reads go through
-    S->record_completed_tx(nop_arg->vclk);
+    S->record_completed_tx(tx.timestamp);
 
     // ack to VT
-    msg.prepare_message(message::VT_NOP_ACK, shard_id, nop_arg->qts[shard_id-ShardIdIncr], cur_node_count);
-    S->comm.send(nop_arg->vt_id, msg.buf);
-    free(nop_arg);
+    msg.prepare_message(message::VT_NOP_ACK, shard_id, qts, cur_node_count);
+    S->comm.send(vt_id, msg.buf);
 
     // call appropriate function based on check after acked to vt
     if (check_move_migr) {
         migrate_node_step2_req();
     } else if (check_init_migr) {
-        migration_begin(hs);
+        migration_begin();
     } else if (check_migr_step3) {
-        migrate_node_step3(hs);
+        migrate_node_step3();
     }
+
+    delete request;
 }
 
 node_prog::Node_State_Base*
@@ -726,13 +730,14 @@ NodeStateType& get_or_create_state(node_prog::prog_type ptype,
 
 // vector pointers can be null if we don't want to fill that vector
 inline void
-fill_changed_properties(std::vector<db::element::property> &props,
+fill_changed_properties(std::unordered_map<std::string, db::element::property> &props,
     std::vector<node_prog::property> *props_added,
     std::vector<node_prog::property> *props_deleted,
     vc::vclock &time_cached,
     vc::vclock &cur_time)
 {
-    for (db::element::property &prop : props) {
+    for (auto &p : props) {
+        db::element::property &prop = p.second;
         bool del_before_cur = (order::compare_two_vts(prop.get_del_time(), cur_time) == 0);
 
         if (props_added != NULL) {
@@ -855,7 +860,7 @@ fetch_node_cache_contexts(uint64_t loc,
 }
 
 void
-unpack_and_fetch_context(db::hyper_stub*, void *req)
+unpack_and_fetch_context(void *req)
 {
     db::message_wrapper *request = (db::message_wrapper*) req;
     std::vector<node_handle_t> ids;
@@ -1179,7 +1184,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
 }
 
 void
-unpack_node_program(db::hyper_stub*, void *req)
+unpack_node_program(void *req)
 {
     db::message_wrapper *request = (db::message_wrapper*)req;
     node_prog::prog_type pType;
@@ -1191,7 +1196,7 @@ unpack_node_program(db::hyper_stub*, void *req)
 }
 
 void
-unpack_context_reply(db::hyper_stub*, void *req)
+unpack_context_reply(void *req)
 {
     db::message_wrapper *request = (db::message_wrapper*)req;
     node_prog::prog_type pType;
@@ -1289,12 +1294,12 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void
-node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_and_start_coord(std::unique_ptr<message::message>, uint64_t, nmap::nmap_stub*)
+node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_and_start_coord(std::unique_ptr<message::message>, uint64_t, coordinator::hyper_stub*)
 { }
 
 // delete all in-edges for a permanently deleted node
 inline void
-update_deleted_node(db::hyper_stub*, const node_handle_t &node_handle)
+update_deleted_node(const node_handle_t &node_handle)
 {
     std::unordered_set<node_handle_t> nbrs;
     db::element::node *n;
@@ -1351,8 +1356,7 @@ get_balanced_assignment(std::vector<uint64_t> &shard_node_count, std::vector<uin
 // send migration information to coordinator mapper
 // return false if no migration happens (max migr score = this shard), else return true
 bool
-migrate_node_step1(db::hyper_stub *hs,
-    db::element::node *n,
+migrate_node_step1(db::element::node *n,
     std::vector<uint64_t> &shard_node_count,
     uint64_t migr_num_shards)
 {
@@ -1401,9 +1405,6 @@ migrate_node_step1(db::hyper_stub *hs,
     }
     S->edge_map_mutex.unlock();
 
-    // persist status
-    hs->update_migr_status(S->migr_node, db::MOVING);
-
     S->release_node(n);
 
     // update Hyperdex map for this node
@@ -1445,7 +1446,7 @@ migrate_node_step2_req()
 // apply buffered reads and writes to node
 // update nbrs of migrated nbrs
 void
-migrate_node_step2_resp(db::hyper_stub *hs, std::unique_ptr<message::message> msg)
+migrate_node_step2_resp(std::unique_ptr<message::message> msg)
 {
     // unpack and place node
     uint64_t from_loc;
@@ -1455,7 +1456,7 @@ migrate_node_step2_resp(db::hyper_stub *hs, std::unique_ptr<message::message> ms
     // create a new node, unpack the message
     vc::vclock dummy_clock;
     msg->unpack_partial_message(message::MIGRATE_SEND_NODE, node_handle);
-    n = S->create_node(hs, node_handle, dummy_clock, true); // node will be acquired on return
+    n = S->create_node(node_handle, dummy_clock, true); // node will be acquired on return
     try {
         msg->unpack_message(message::MIGRATE_SEND_NODE, node_handle, from_loc, *n);
     } catch (std::bad_alloc& ba) {
@@ -1477,15 +1478,15 @@ migrate_node_step2_resp(db::hyper_stub *hs, std::unique_ptr<message::message> ms
         for (auto &dw: S->deferred_writes[node_handle]) {
             switch (dw.type) {
                 case message::NODE_DELETE_REQ:
-                    S->delete_node_nonlocking(hs, n, dw.vclk);
+                    S->delete_node_nonlocking(n, dw.vclk);
                     break;
 
                 case message::EDGE_CREATE_REQ:
-                    S->create_edge_nonlocking(hs, n, dw.edge_handle, dw.remote_node, dw.remote_loc, dw.vclk);
+                    S->create_edge_nonlocking(n, dw.edge_handle, dw.remote_node, dw.remote_loc, dw.vclk);
                     break;
 
                 case message::EDGE_DELETE_REQ:
-                    S->delete_edge_nonlocking(hs, n, dw.edge_handle, dw.vclk);
+                    S->delete_edge_nonlocking(n, dw.edge_handle, dw.vclk);
                     break;
 
                 default:
@@ -1505,7 +1506,6 @@ migrate_node_step2_resp(db::hyper_stub *hs, std::unique_ptr<message::message> ms
         S->comm.send(upd_shard, msg->buf);
     }
     n->state = db::element::node::mode::STABLE;
-    hs->update_migr_status(node_handle, db::STABLE);
 
     std::vector<uint64_t> prog_state_reqs;
     for (auto &state_map: n->prog_states) {
@@ -1561,10 +1561,10 @@ check_step3()
 
 // successfully migrated node to new location, continue migration process
 void
-migrate_node_step3(db::hyper_stub *hs)
+migrate_node_step3()
 {
     S->delete_migrated_node(S->migr_node);
-    migration_wrapper(hs);
+    migration_wrapper();
 }
 
 inline bool
@@ -1589,7 +1589,7 @@ check_migr_node(db::element::node *n, uint64_t migr_num_shards)
 #ifdef WEAVER_CLDG
 // stream list of nodes and cldg repartition
 inline void
-cldg_migration_wrapper(db::hyper_stub *hs, std::vector<uint64_t> &shard_node_count, uint64_t migr_num_shards, uint64_t shard_cap)
+cldg_migration_wrapper(std::vector<uint64_t> &shard_node_count, uint64_t migr_num_shards, uint64_t shard_cap)
 {
     bool no_migr = true;
     while (S->cldg_iter != S->cldg_nodes.end()) {
@@ -1628,20 +1628,20 @@ cldg_migration_wrapper(db::hyper_stub *hs, std::vector<uint64_t> &shard_node_cou
             n->migr_score[j] = n->msg_count[j] * penalty;
         }
 
-        if (migrate_node_step1(hs, n, shard_node_count, migr_num_shards)) {
+        if (migrate_node_step1(n, shard_node_count, migr_num_shards)) {
             no_migr = false;
             break;
         }
     }
     if (no_migr) {
-        migration_end(hs);
+        migration_end();
     }
 }
 #endif
 
 // stream list of nodes and ldg repartition
 inline void
-ldg_migration_wrapper(db::hyper_stub *hs, std::vector<uint64_t> &shard_node_count, uint64_t migr_num_shards, uint64_t shard_cap)
+ldg_migration_wrapper(std::vector<uint64_t> &shard_node_count, uint64_t migr_num_shards, uint64_t shard_cap)
 {
     bool no_migr = true;
     while (S->ldg_iter != S->ldg_nodes.end()) {
@@ -1665,19 +1665,19 @@ ldg_migration_wrapper(db::hyper_stub *hs, std::vector<uint64_t> &shard_node_coun
             n->migr_score[j] *= (1 - ((double)shard_node_count[j])/shard_cap);
         }
 
-        if (migrate_node_step1(hs, n, shard_node_count, migr_num_shards)) {
+        if (migrate_node_step1(n, shard_node_count, migr_num_shards)) {
             no_migr = false;
             break;
         }
     }
     if (no_migr) {
-        migration_end(hs);
+        migration_end();
     }
 }
 
 // sort nodes in order of number of requests propagated
 void
-migration_wrapper(db::hyper_stub *hs)
+migration_wrapper()
 {
     S->migration_mutex.lock();
     std::vector<uint64_t> shard_node_count = S->shard_node_count;
@@ -1690,13 +1690,13 @@ migration_wrapper(db::hyper_stub *hs)
     S->migration_mutex.unlock();
 
 #ifdef WEAVER_CLDG
-    cldg_migration_wrapper(hs, shard_node_count, num_shards, shard_cap);
+    cldg_migration_wrapper(shard_node_count, num_shards, shard_cap);
 #endif
 
 #ifdef WEAVER_NEW_CLDG
-    cldg_migration_wrapper(hs, shard_node_count, num_shards, shard_cap);
+    cldg_migration_wrapper(shard_node_count, num_shards, shard_cap);
 #else
-    ldg_migration_wrapper(hs, shard_node_count, num_shards, shard_cap);
+    ldg_migration_wrapper(shard_node_count, num_shards, shard_cap);
 #endif
 }
 
@@ -1707,7 +1707,7 @@ bool agg_count_compare(std::pair<node_handle_t, uint32_t> p1, std::pair<node_han
 }
 
 void
-migration_begin(db::hyper_stub *hs)
+migration_begin()
 {
     S->meta_update_mutex.lock();
     S->ldg_nodes = S->node_list;
@@ -1747,14 +1747,12 @@ migration_begin(db::hyper_stub *hs)
     S->ldg_iter = S->ldg_nodes.begin();
 #endif
 
-    migration_wrapper(hs);
+    migration_wrapper();
 }
 
 void
-migration_end(db::hyper_stub *hs)
+migration_end()
 {
-    hs->update_migr_token(db::INACTIVE); // persist token
-
     message::message msg;
     S->migration_mutex.lock();
     S->migr_token = false;
@@ -1781,8 +1779,8 @@ recv_loop(uint64_t thread_id)
     db::message_wrapper *mwrap;
     node_prog::prog_type pType;
     vc::vclock vclk;
-    vc::qtimestamp_t qts;
-    db::hyper_stub *hs = S->hstub[thread_id];
+    uint64_t qts;
+    transaction::tx_type txtype;
 
     busybee_returncode bb_code;
     while (true) {
@@ -1797,25 +1795,35 @@ recv_loop(uint64_t thread_id)
             auto unpacker = rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE);
             unpack_buffer(unpacker, mtype);
             rec_msg->change_type(mtype);
-            //sender -= ID_INCR;
             vclk.clock.clear();
-            qts.clear();
 
             switch (mtype) {
                 case message::TX_INIT: {
-                    rec_msg->unpack_partial_message(message::TX_INIT, vt_id, vclk, qts);
-                    //assert(qts.size() == NumShards);
+                    rec_msg->unpack_partial_message(message::TX_INIT, vt_id, vclk, qts, txtype);
                     assert(vclk.clock.size() == NumVts);
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
-                    enum db::queue_order tx_order = S->qm.check_wr_request(vclk, qts[shard_id-ShardIdIncr]);
-                    if (tx_order == db::PRESENT) {
-                        unpack_tx_request(hs, (void*)mwrap);
-                    } else if (tx_order == db::PAST) {
-                        // vt resending tx which has been executed
-                        reexec_tx_request(hs, mwrap);
+                    enum db::queue_order tx_order = S->qm.check_wr_request(vclk, qts);
+                    assert(txtype != transaction::FAIL);
+
+                    if (txtype == transaction::UPDATE) {
+
+                        // write tx
+                        if (tx_order == db::PRESENT) {
+                            unpack_tx_request((void*)mwrap);
+                        } else if (tx_order == db::PAST) {
+                            // vt resending tx which has been executed
+                            reexec_tx_request(mwrap);
+                        } else {
+                            // enqueue for future execution
+                            qreq = new db::queued_request(qts, vclk, unpack_tx_request, mwrap);
+                            S->qm.enqueue_write_request(vt_id, qreq);
+                        }
                     } else {
-                        // enqueue for future execution
-                        qreq = new db::queued_request(qts[shard_id-ShardIdIncr], vclk, unpack_tx_request, mwrap);
+
+                        // nop
+                        assert(tx_order != db::PAST);
+                        // nop goes through queues for both PRESENT and FUTURE
+                        qreq = new db::queued_request(qts, vclk, nop, mwrap);
                         S->qm.enqueue_write_request(vt_id, qreq);
                     }
                     break;
@@ -1826,7 +1834,7 @@ recv_loop(uint64_t thread_id)
                     assert(vclk.clock.size() == NumVts);
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                     if (S->qm.check_rd_request(vclk.clock)) {
-                        unpack_node_program(hs, (void*)mwrap);
+                        unpack_node_program((void*)mwrap);
                     } else {
                         qreq = new db::queued_request(req_id, vclk, unpack_node_program, mwrap);
                         S->qm.enqueue_read_request(vt_id, qreq);
@@ -1835,7 +1843,7 @@ recv_loop(uint64_t thread_id)
 
                 case message::NODE_CONTEXT_FETCH:
                 case message::NODE_CONTEXT_REPLY: {
-                    void (*f)(db::hyper_stub*, void*);
+                    void (*f)(void*);
                     if (mtype == message::NODE_CONTEXT_FETCH) {
                         f = unpack_and_fetch_context;
                     } else { // NODE_CONTEXT_REPLY
@@ -1845,7 +1853,7 @@ recv_loop(uint64_t thread_id)
                     assert(vclk.clock.size() == NumVts);
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                     if (S->qm.check_rd_request(vclk.clock)) {
-                        f(hs, mwrap);
+                        f(mwrap);
                     } else {
                         qreq = new db::queued_request(req_id, vclk, f, mwrap);
                         S->qm.enqueue_read_request(vt_id, qreq);
@@ -1853,28 +1861,10 @@ recv_loop(uint64_t thread_id)
                     break;
                 }
 
-                case message::VT_NOP: {
-                    db::nop_data *nop_arg = new db::nop_data();
-                    rec_msg->unpack_message(mtype, vt_id, vclk, qts, nop_arg->req_id,
-                        nop_arg->done_reqs, nop_arg->max_done_id, nop_arg->max_done_clk,
-                        nop_arg->outstanding_progs, nop_arg->shard_node_count);
-                    nop_arg->vt_id = vt_id;
-                    nop_arg->vclk = vclk;
-                    nop_arg->qts = qts;
-                    assert(nop_arg->vclk.clock.size() == NumVts);
-                    assert(nop_arg->max_done_clk.size() == NumVts);
-                    enum db::queue_order tx_order = S->qm.check_wr_request(vclk, qts[shard_id-ShardIdIncr]);
-                    assert(tx_order != db::PAST);
-                    // nop goes through queues for both PRESENT and FUTURE
-                    qreq = new db::queued_request(qts[shard_id-ShardIdIncr], nop_arg->vclk, nop, (void*)nop_arg);
-                    S->qm.enqueue_write_request(vt_id, qreq);
-                    break;
-                }
-
                 case message::PERMANENTLY_DELETED_NODE: {
                     node_handle_t node;
                     rec_msg->unpack_message(mtype, node);
-                    update_deleted_node(hs, node);
+                    update_deleted_node(node);
                     break;
                 }
 
@@ -1882,11 +1872,10 @@ recv_loop(uint64_t thread_id)
                 case message::MIGRATED_NBR_UPDATE:
                 case message::MIGRATED_NBR_ACK:
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
-                    unpack_migrate_request(hs, (void*)mwrap);
+                    unpack_migrate_request((void*)mwrap);
                     break;
 
                 case message::MIGRATION_TOKEN:
-                    hs->update_migr_token(db::ACTIVE);
                     S->migration_mutex.lock();
                     rec_msg->unpack_message(mtype, S->migr_token_hops, S->migr_num_shards, S->migr_vt);
                     S->migr_token = true;
@@ -1911,18 +1900,16 @@ recv_loop(uint64_t thread_id)
                     break;
                 }
 
-                case message::SET_QTS: {
-                    uint64_t rec_qts;
-                    rec_msg->unpack_message(message::SET_QTS, vt_id, rec_qts);
-                    WDEBUG << "got set qts from vt " << vt_id << ", qts " << rec_qts << std::endl;
+                case message::SET_QTS:
+                    rec_msg->unpack_message(message::SET_QTS, vt_id, qts);
+                    WDEBUG << "got set qts from vt " << vt_id << ", qts " << qts << std::endl;
                     S->restore_mutex.lock();
                     while (!S->restore_done) {
                         S->restore_cv.wait();
                     }
-                    S->qm.set_qts(vt_id, rec_qts);
+                    S->qm.set_qts(vt_id, qts);
                     S->restore_mutex.unlock();
                     break;
-                }
 
                 case message::EXIT_WEAVER:
                     exit(0);
@@ -1935,7 +1922,7 @@ recv_loop(uint64_t thread_id)
 
         // execute all queued requests that can be executed now
         // will break from loop when no more requests can be executed, in which case we need to recv
-        while (S->qm.exec_queued_request(hs));
+        while (S->qm.exec_queued_request());
     }
 }
 
@@ -2183,10 +2170,6 @@ main(int argc, const char *argv[])
     S->shard_init_cond.signal();
 
     S->config_mutex.unlock();
-
-    if (backup_input == LONG_MAX) {
-        S->init_hstub();
-    }
 
     // start all threads
     std::vector<std::thread*> worker_threads;

@@ -101,7 +101,7 @@ queue_manager :: check_wr_request(vc::vclock &vclk, uint64_t qt)
 // execute a single queued request which can be run now, and return true
 // else return false
 bool
-queue_manager :: exec_queued_request(db::hyper_stub *hstub)
+queue_manager :: exec_queued_request()
 {
     queue_mutex.lock(); // prevent more jobs from being added
     queued_request *req = get_rw_req();
@@ -109,7 +109,7 @@ queue_manager :: exec_queued_request(db::hyper_stub *hstub)
     if (req == NULL) {
         return false;
     }
-    (*req->func)(hstub, req->arg);
+    (*req->func)(req->arg);
     // queue timestamp is incremented by the thread, upon enqueueing this tx on node queue
     // when to increment qts depends on the tx components
     delete req;

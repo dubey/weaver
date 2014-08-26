@@ -119,9 +119,9 @@ class hyper_stub_base
         void remove_in_nbr(const node_handle_t &n_hndl, const node_handle_t &nbr);
 
         // node map functions
-        bool put_mappings(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add);
-        std::unordered_map<node_handle_t, uint64_t> get_mappings(std::unordered_set<node_handle_t> &toGet);
-        bool del_mappings(std::unordered_set<node_handle_t> &toDel);
+        bool put_nmap(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add);
+        std::unordered_map<node_handle_t, uint64_t> get_nmap(std::unordered_set<node_handle_t> &toGet);
+        bool del_nmap(std::unordered_set<node_handle_t> &toDel);
 
         // tx data functions
         bool put_tx_data(tx_ptr_t tx);

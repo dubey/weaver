@@ -17,14 +17,13 @@
 #define weaver_db_queued_request_h_
 
 #include "common/vclock.h"
-#include "db/hyper_stub.h"
 
 namespace db
 {
     class queued_request
     {
         public:
-            queued_request(uint64_t prio, vc::vclock vclk, void (*f)(hyper_stub*, void*), void *a)
+            queued_request(uint64_t prio, vc::vclock vclk, void (*f)(void*), void *a)
                 : priority(prio)
                 , vclock(vclk)
                 , func(f)
@@ -34,7 +33,7 @@ namespace db
         public:
             uint64_t priority;
             vc::vclock vclock;
-            void (*func)(hyper_stub*, void*);
+            void (*func)(void*);
             void *arg;
     };
 
