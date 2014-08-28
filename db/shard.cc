@@ -1709,9 +1709,9 @@ bool agg_count_compare(std::pair<node_handle_t, uint32_t> p1, std::pair<node_han
 void
 migration_begin()
 {
-    S->meta_update_mutex.lock();
+    S->node_list_mutex.lock();
     S->ldg_nodes = S->node_list;
-    S->meta_update_mutex.unlock();
+    S->node_list_mutex.unlock();
 
 #ifdef WEAVER_CLDG
     S->msg_count_mutex.lock();

@@ -67,29 +67,19 @@ namespace db
         public:
             shard(uint64_t serverid, po6::net::location &loc);
             void init(uint64_t shardid);
-            void reconfigure();
-            void update_members_new_config();
-            void bulk_load_persistent();
-
-            // Mutexes
-            po6::threads::mutex meta_update_mutex // shard update mutex
-                , edge_map_mutex
-                , perm_del_mutex
-                , config_mutex
-                , restore_mutex
-                , exit_mutex
-                , migration_mutex
-                , graph_load_mutex; // gather load times from all shards
-            po6::threads::mutex node_map_mutexes[NUM_NODE_MAPS];
 
             // Messaging infrastructure
             common::comm_wrapper comm;
 
             // Server manager
+            po6::threads::mutex config_mutex, exit_mutex;
             server_manager_link_wrapper sm_stub;
             configuration config;
             bool active_backup, first_config, shard_init;
             po6::threads::cond backup_cond, first_config_cond, shard_init_cond;
+            void reconfigure();
+            void update_members_new_config();
+            bool to_exit;
 
             // Consistency
         public:
@@ -102,6 +92,8 @@ namespace db
             void release_node(element::node *n, bool migr_node);
 
             // Graph state
+            po6::threads::mutex edge_map_mutex, node_list_mutex;
+            po6::threads::mutex node_map_mutexes[NUM_NODE_MAPS];
             uint64_t shard_id;
             server_id server;
             std::unordered_set<node_handle_t> node_list; // list of node ids currently on this shard
@@ -155,11 +147,14 @@ namespace db
             bool node_exists_nonlocking(const node_handle_t &node_handle);
 
             // Initial graph loading
+            po6::threads::mutex graph_load_mutex;
             uint64_t max_load_time, bulk_load_num_shards;
             uint32_t load_count;
+            void bulk_load_persistent();
 
             // Permanent deletion
         public:
+            po6::threads::mutex perm_del_mutex;
             typedef std::priority_queue<del_obj*, std::vector<del_obj*>, perm_del_compare> del_queue_t;
             del_queue_t perm_del_queue;
             void delete_migrated_node(const node_handle_t &migr_node);
@@ -169,6 +164,7 @@ namespace db
 
             // Migration
         public:
+            po6::threads::mutex migration_mutex;
             bool current_migr, migr_updating_nbrs, migr_token, migrated;
             node_handle_t migr_node;
             uint64_t migr_chance, migr_shard, migr_token_hops, migr_num_shards, migr_vt;
@@ -201,7 +197,7 @@ namespace db
                 , max_done_id; // max id done from each VT
             std::vector<vc::vclock_t> max_done_clk; // vclk of cumulative last node program completed
             std::vector<bool> migr_edge_acks;
-            
+
             // node programs
         private:
             po6::threads::mutex node_prog_state_mutex;
@@ -223,13 +219,11 @@ namespace db
 
             // Fault tolerance
         public:
+            po6::threads::mutex restore_mutex;
             std::vector<hyper_stub*> hstub;
             bool restore_done;
             po6::threads::cond restore_cv;
             void restore_backup();
-
-            // exit
-            bool to_exit;
     };
 
     inline
@@ -242,6 +236,7 @@ namespace db
         , backup_cond(&config_mutex)
         , first_config_cond(&config_mutex)
         , shard_init_cond(&config_mutex)
+        , to_exit(false)
         , shard_id(UINT64_MAX)
         , server(serverid)
         , current_migr(false)
@@ -261,7 +256,6 @@ namespace db
         , watch_set_piggybacks(0)
         , restore_done(false)
         , restore_cv(&restore_mutex)
-        , to_exit(false)
     {
     }
 
@@ -451,8 +445,11 @@ namespace db
         } else if (n->permanently_deleted) {
             const node_handle_t &node_handle = n->get_handle();
             nodes[map_idx].erase(node_handle);
-            node_list.erase(node_handle);
             node_map_mutexes[map_idx].unlock();
+
+            node_list_mutex.lock();
+            node_list.erase(node_handle);
+            node_list_mutex.unlock();
 
             migration_mutex.lock();
             shard_node_count[shard_id - ShardIdIncr]--;
@@ -499,9 +496,16 @@ namespace db
             node_map_mutexes[map_idx].unlock();
             return NULL;
         }
-        node_list.emplace(node_handle);
         if (!init_load) {
             node_map_mutexes[map_idx].unlock();
+        }
+
+        if (init_load) {
+            node_list.emplace(node_handle);
+        } else {
+            node_list_mutex.lock();
+            node_list.emplace(node_handle);
+            node_list_mutex.unlock();
         }
 
         if (!init_load) {
