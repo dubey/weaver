@@ -605,7 +605,7 @@ nop(void *req)
     request->msg->unpack_message(message::TX_INIT, vt_id, vclk, qts, tx);
 
     message::message msg;
-    transaction::nop_ptr_t nop_arg = tx.nop;
+    transaction::nop_data *nop_arg = tx.nop;
     bool check_move_migr, check_init_migr, check_migr_step3;
 
     // increment qts
@@ -2060,10 +2060,10 @@ main(int argc, const char *argv[])
     install_signal_handler(SIGHUP, end_program);
     install_signal_handler(SIGTERM, end_program);
 
-    //google::InitGoogleLogging(argv[0]);
+    google::InitGoogleLogging(argv[0]);
     //google::InstallFailureSignalHandler();
-    //google::LogToStderr();
-    //google::SetLogDestination(google::INFO, ".");
+    google::LogToStderr();
+    //google::SetLogDestination(google::INFO, "weaver-shard-");
 
     // signals
     //sigset_t ss;

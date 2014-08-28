@@ -44,7 +44,8 @@ hyper_stub :: put_mappings(std::unordered_map<node_handle_t, uint64_t> &map)
 {
     begin_tx();
     bool ret = put_nmap(map);
-    commit_tx();
+    bool error = false;
+    commit_tx(error);
     return ret;
 }
 

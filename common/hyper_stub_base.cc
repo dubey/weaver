@@ -35,35 +35,13 @@ hyper_stub_base :: hyper_stub_base()
     , cl(hyperdex_client_create(HyperdexCoordIpaddr, HyperdexCoordPort))
 { }
 
-void
-hyper_stub_base :: begin_tx()
-{
-    hyper_tx = hyperdex_client_begin_transaction(cl);
-}
-
-bool
-hyper_stub_base :: commit_tx()
-{
-    hyperdex_client_returncode status;
-    hyperdex_client_commit_transaction(hyper_tx, &status);
-    if (status != HYPERDEX_CLIENT_COMMITTED) {
-        WDEBUG << "warp commit error, status = " << status << std::endl;
-        return false;
-    } else {
-        return true;
-    }
-}
-
-void
-hyper_stub_base :: abort_tx()
-{
-    hyperdex_client_abort_transaction(hyper_tx);
-}
-
 #define HYPERDEX_CHECK_ID(status) \
     if (hdex_id < 0) { \
         WDEBUG << "Hyperdex function failed, op id = " << hdex_id \
                << ", status = " << hyperdex_client_returncode_to_string(status) << std::endl; \
+        WDEBUG << "error message: " << hyperdex_client_error_message(cl) << std::endl; \
+        WDEBUG << "error loc: " << hyperdex_client_error_location(cl) << std::endl; \
+        assert(false); \
         success = false; \
     } else { \
         success_calls++; \
@@ -86,7 +64,7 @@ hyper_stub_base :: abort_tx()
     HYPERDEX_CHECK_ID(loop_status);
 
 #define HYPERDEX_CHECK_STATUSES(status, fail_check) \
-    if ((fail_check)) { \
+    if ((loop_status != HYPERDEX_CLIENT_SUCCESS) || (fail_check)) { \
         WDEBUG << "hyperdex error" \
                << ", call status: " << hyperdex_client_returncode_to_string(status) \
                << ", loop status: " << hyperdex_client_returncode_to_string(loop_status) << std::endl; \
@@ -95,6 +73,57 @@ hyper_stub_base :: abort_tx()
         success = false; \
     }
 
+
+void
+hyper_stub_base :: begin_tx()
+{
+    hyper_tx = hyperdex_client_begin_transaction(cl);
+}
+
+bool
+hyper_stub_base :: commit_tx(bool &error)
+{
+    bool success = true;
+    int success_calls = 0;
+    hyperdex_client_returncode commit_status, loop_status;
+
+    int64_t hdex_id = hyperdex_client_commit_transaction(hyper_tx, &commit_status);
+    HYPERDEX_CHECK_ID(commit_status);
+
+    if (success) {
+        HYPERDEX_LOOP;
+        HYPERDEX_CHECK_STATUSES(commit_status,
+            commit_status != HYPERDEX_CLIENT_ABORTED && commit_status != HYPERDEX_CLIENT_SUCCESS);
+    }
+
+    switch (commit_status) {
+        case HYPERDEX_CLIENT_ABORTED:
+            success = false;
+            WDEBUG << "ABORT" << std::endl;
+            break;
+
+        case HYPERDEX_CLIENT_SUCCESS:
+            break;
+
+        case HYPERDEX_CLIENT_COMMITTED:
+            success = false;
+            error = true;
+            break;
+
+        default:
+            success = false;
+            error = true;
+            break;
+    }
+
+    return success;
+}
+
+void
+hyper_stub_base :: abort_tx()
+{
+    hyperdex_client_abort_transaction(hyper_tx);
+}
 
 // call hyperdex function h using params and then loop for response
 bool
@@ -436,9 +465,15 @@ hyper_stub_base :: put_node(db::element::node &n)
     cl_attr[1].value_sz = del_clk_buf->size();
     cl_attr[1].datatype = graph_dtypes[1];
 
+    /*
     // properties
     std::unique_ptr<e::buffer> props_buf;
-    prepare_buffer<db::element::property>(*n.base.get_props(), props_buf);
+    prepare_buffer<db::element::property>(n.base.properties, props_buf);
+    for (const auto &p: n.base.properties) {
+        WDEBUG << p.second.key << " " << p.second.value << std::endl;
+        WDEBUG << p.second.creat_time.vt_id << " " << p.second.creat_time.clock.size() << std::endl;
+        WDEBUG << p.second.del_time.vt_id << " " << p.second.del_time.clock.size() << std::endl;
+    }
     cl_attr[2].attr = graph_attrs[2];
     cl_attr[2].value = (const char*)props_buf->data();
     cl_attr[2].value_sz = props_buf->size();
@@ -466,9 +501,10 @@ hyper_stub_base :: put_node(db::element::node &n)
     cl_attr[5].value = (const char*)last_clk_buf->data();
     cl_attr[5].value_sz = last_clk_buf->size();
     cl_attr[5].datatype = graph_dtypes[5];
+    */
 
     node_handle_t handle = n.get_handle();
-    return call(&hyperdex_client_xact_put, graph_space, handle.c_str(), handle.size(), cl_attr, NUM_GRAPH_ATTRS);
+    return call(&hyperdex_client_xact_put, graph_space, handle.c_str(), handle.size(), cl_attr, /*NUM_GRAPH_ATTRS*/2);
 }
 
 void
@@ -703,6 +739,18 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordere
     }
 }
 */
+
+bool
+hyper_stub_base :: put_nmap(const node_handle_t &handle, uint64_t loc)
+{
+    hyperdex_client_attribute attr;
+    attr.attr = nmap_attr;
+    attr.value = (const char*)&loc;
+    attr.value_sz = sizeof(int64_t);
+    attr.datatype = HYPERDATATYPE_INT64;
+
+    return call(hyperdex_client_xact_put, nmap_space, handle.c_str(), handle.size(), &attr, 1);
+}
 
 bool
 hyper_stub_base :: put_nmap(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add)

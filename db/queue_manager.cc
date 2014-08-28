@@ -197,12 +197,9 @@ queue_manager :: check_wr_queues_timestamps(uint64_t vt_id, uint64_t qt)
         if (vt_id == i) {
             if (qt <= qts[i]) {
                 return PAST;
-            } else if (qt != (qts[i]+1)) {
+            } else if (qt > (qts[i]+1)) {
                 return FUTURE;
             }
-            //if ((qts[i] + 1) != qt) {
-            //    return false;
-            //}
         } else {
             pqueue_t &pq = wr_queues[i];
             if (pq.empty()) { // can't go on if one of the pq's is empty

@@ -73,19 +73,10 @@ key node
 attributes
     string creat_time,
     string del_time,
-    string properties,
+    map(string, string) properties,
     map(string, string) out_edges,
     int migr_status,
     string last_upd_clk
-tolerate 2 failures
-EOF
-
-hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
-space weaver_shard_data
-key shard
-attributes
-    map(int, int) qts,
-    int migr_token
 tolerate 2 failures
 EOF
 

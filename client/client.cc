@@ -48,6 +48,10 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     , tx_id_ctr(0)
     , id_ctr(0)
 {
+    google::InitGoogleLogging("weaver-client");
+    //google::InstallFailureSignalHandler();
+    google::LogToStderr();
+
     if (!init_config_constants(config_file)) {
         WDEBUG << "error in init_config_constants, exiting now." << std::endl;
         exit(-1);
@@ -78,7 +82,7 @@ std::string
 client :: create_node(std::string &handle)
 {
     assert(cur_tx_id != UINT64_MAX);
-    auto upd = std::make_shared<pending_update>();
+    transaction::pending_update *upd = new pending_update();
     upd->type = transaction::NODE_CREATE_REQ;
     if (handle == "") {
         upd->handle = generate_handle();
@@ -93,7 +97,7 @@ std::string
 client :: create_edge(std::string &handle, std::string &node1, std::string &node2)
 {
     assert(cur_tx_id != UINT64_MAX);
-    auto upd = std::make_shared<pending_update>();
+    transaction::pending_update *upd = new pending_update();
     upd->type = transaction::EDGE_CREATE_REQ;
     if (handle == "") {
         upd->handle = generate_handle();
@@ -110,7 +114,7 @@ void
 client :: delete_node(std::string &node)
 {
     assert(cur_tx_id != UINT64_MAX);
-    auto upd = std::make_shared<pending_update>();
+    transaction::pending_update *upd = new pending_update();
     upd->type = transaction::NODE_DELETE_REQ;
     upd->handle1 = node;
     cur_tx.emplace_back(upd);
@@ -120,7 +124,7 @@ void
 client :: delete_edge(std::string &edge, std::string &node)
 {
     assert(cur_tx_id != UINT64_MAX);
-    auto upd = std::make_shared<pending_update>();
+    transaction::pending_update *upd = new pending_update();
     upd->type = transaction::EDGE_DELETE_REQ;
     upd->handle1 = edge;
     upd->handle2 = node;
@@ -132,7 +136,7 @@ client :: set_node_property(std::string &node,
     std::string key, std::string value)
 {
     assert(cur_tx_id != UINT64_MAX);
-    auto upd = std::make_shared<pending_update>();
+    transaction::pending_update *upd = new pending_update();
     upd->type = transaction::NODE_SET_PROPERTY;
     upd->handle1 = node;
     upd->key.reset(new std::string(std::move(key)));
@@ -145,7 +149,7 @@ client :: set_edge_property(std::string &node, std::string &edge,
     std::string key, std::string value)
 {
     assert(cur_tx_id != UINT64_MAX);
-    auto upd = std::make_shared<pending_update>();
+    transaction::pending_update *upd = new pending_update();
     upd->type = transaction::EDGE_SET_PROPERTY;
     upd->handle1 = edge;
     upd->handle2 = node;
@@ -186,6 +190,9 @@ client :: end_tx()
     }
 
     cur_tx_id = UINT64_MAX;
+    for (transaction::pending_update *upd: cur_tx) {
+        delete upd;
+    }
     cur_tx.clear();
 
     return success;

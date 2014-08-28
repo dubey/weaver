@@ -143,25 +143,24 @@ message :: size(const db::element::remote_node &t)
 }
 
 uint64_t
-message :: size(const std::shared_ptr<transaction::pending_update> &ptr_t)
+message :: size(const transaction::pending_update* const &t)
 {
-    const transaction::pending_update &t = *ptr_t;
-    uint64_t sz = size(t.type)
-         + size(t.handle)
-         + size(t.handle1)
-         + size(t.handle2)
-         + size(t.loc1)
-         + size(t.loc2);
-    if (t.type == transaction::NODE_SET_PROPERTY
-     || t.type == transaction::EDGE_SET_PROPERTY) {
-        sz += size(*t.key)
-         + size(*t.value);
+    uint64_t sz = size(t->type)
+         + size(t->handle)
+         + size(t->handle1)
+         + size(t->handle2)
+         + size(t->loc1)
+         + size(t->loc2);
+    if (t->type == transaction::NODE_SET_PROPERTY
+     || t->type == transaction::EDGE_SET_PROPERTY) {
+        sz += size(*t->key)
+         + size(*t->value);
     }
     return sz;
 }
 
 uint64_t
-message :: size(const std::shared_ptr<transaction::nop_data> &t)
+message :: size(const transaction::nop_data* const &t)
 {
     return size(t->max_done_id)
          + size(t->max_done_clk)
@@ -346,24 +345,23 @@ message :: pack_buffer(e::buffer::packer &packer, const db::element::remote_node
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::pending_update> &ptr_t)
+message :: pack_buffer(e::buffer::packer &packer, const transaction::pending_update* const &t)
 {
-    transaction::pending_update &t = *ptr_t;
-    pack_buffer(packer, t.type);
-    pack_buffer(packer, t.handle);
-    pack_buffer(packer, t.handle1);
-    pack_buffer(packer, t.handle2);
-    pack_buffer(packer, t.loc1);
-    pack_buffer(packer, t.loc2);
-    if (t.type == transaction::NODE_SET_PROPERTY
-     || t.type == transaction::EDGE_SET_PROPERTY) {
-        pack_buffer(packer, *t.key);
-        pack_buffer(packer, *t.value);
+    pack_buffer(packer, t->type);
+    pack_buffer(packer, t->handle);
+    pack_buffer(packer, t->handle1);
+    pack_buffer(packer, t->handle2);
+    pack_buffer(packer, t->loc1);
+    pack_buffer(packer, t->loc2);
+    if (t->type == transaction::NODE_SET_PROPERTY
+     || t->type == transaction::EDGE_SET_PROPERTY) {
+        pack_buffer(packer, *t->key);
+        pack_buffer(packer, *t->value);
     }
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::nop_data> &t)
+message :: pack_buffer(e::buffer::packer &packer, const transaction::nop_data* const &t)
 {
     pack_buffer(packer, t->max_done_id);
     pack_buffer(packer, t->max_done_clk);
@@ -547,29 +545,28 @@ message :: unpack_buffer(e::unpacker &unpacker, db::element::remote_node& t)
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::pending_update> &ptr_t)
+message :: unpack_buffer(e::unpacker &unpacker, transaction::pending_update* &t)
 {
-    ptr_t.reset(new transaction::pending_update());
-    transaction::pending_update &t = *ptr_t;
-    unpack_buffer(unpacker, t.type);
-    unpack_buffer(unpacker, t.handle);
-    unpack_buffer(unpacker, t.handle1);
-    unpack_buffer(unpacker, t.handle2);
-    unpack_buffer(unpacker, t.loc1);
-    unpack_buffer(unpacker, t.loc2);
-    if (t.type == transaction::NODE_SET_PROPERTY
-     || t.type == transaction::EDGE_SET_PROPERTY) {
-        t.key.reset(new std::string());
-        t.value.reset(new std::string());
-        unpack_buffer(unpacker, *t.key);
-        unpack_buffer(unpacker, *t.value);
+    t = new transaction::pending_update();
+    unpack_buffer(unpacker, t->type);
+    unpack_buffer(unpacker, t->handle);
+    unpack_buffer(unpacker, t->handle1);
+    unpack_buffer(unpacker, t->handle2);
+    unpack_buffer(unpacker, t->loc1);
+    unpack_buffer(unpacker, t->loc2);
+    if (t->type == transaction::NODE_SET_PROPERTY
+     || t->type == transaction::EDGE_SET_PROPERTY) {
+        t->key.reset(new std::string());
+        t->value.reset(new std::string());
+        unpack_buffer(unpacker, *t->key);
+        unpack_buffer(unpacker, *t->value);
     }
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::nop_data> &t)
+message :: unpack_buffer(e::unpacker &unpacker, transaction::nop_data* &t)
 {
-    t.reset(new transaction::nop_data());
+    t = new transaction::nop_data();
     unpack_buffer(unpacker, t->max_done_id);
     unpack_buffer(unpacker, t->max_done_clk);
     unpack_buffer(unpacker, t->outstanding_progs);

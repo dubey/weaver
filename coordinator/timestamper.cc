@@ -54,14 +54,12 @@ uint16_t MaxCacheEntries;
 using coordinator::current_prog;
 using coordinator::current_tx;
 using transaction::done_req_t;
-using transaction::tx_ptr_t;
-using transaction::upd_ptr_t;
 static coordinator::timestamper *vts;
 static uint64_t vt_id;
 
 // tx functions
-void prepare_tx(tx_ptr_t tx, coordinator::hyper_stub *hstub);
-void send_tx(tx_ptr_t orig_tx, std::vector<tx_ptr_t> factored_tx);
+void prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub);
+void send_tx(transaction::pending_tx *orig_tx, std::vector<transaction::pending_tx*> factored_tx);
 void end_tx(uint64_t tx_id, coordinator::hyper_stub *hstub);
 void tx_queue_loop();
 
@@ -86,14 +84,14 @@ end_program(int signum)
 }
 
 void
-prepare_tx(tx_ptr_t tx, coordinator::hyper_stub *hstub)
+prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub)
 {
     std::unordered_set<node_handle_t> get_set;
     std::unordered_set<node_handle_t> del_set;
     std::unordered_map<node_handle_t, uint64_t> loc_map;
     std::unordered_map<node_handle_t, uint64_t>::iterator find_iter; 
 
-    for (upd_ptr_t upd: tx->writes) {
+    for (transaction::pending_update *upd: tx->writes) {
         switch (upd->type) {
 
             case transaction::NODE_CREATE_REQ:
@@ -165,9 +163,10 @@ prepare_tx(tx_ptr_t tx, coordinator::hyper_stub *hstub)
 
         assert(!(ready && error)); // can't be ready after some error
 
-        tx_ptr_t to_enq;
+        transaction::pending_tx *to_enq;
         if (!ready || error) {
-            to_enq.reset(new transaction::pending_tx(transaction::FAIL));
+            WDEBUG << "tx ready: " << ready << ", error: " << error << std::endl;
+            to_enq = new transaction::pending_tx(transaction::FAIL);
             to_enq->timestamp = tx->timestamp;
         } else {
             to_enq = tx;
@@ -177,6 +176,7 @@ prepare_tx(tx_ptr_t tx, coordinator::hyper_stub *hstub)
 
     if (error) {
         // fail tx
+        delete tx;
         message::message msg;
         msg.prepare_message(message::CLIENT_TX_ABORT);
         vts->comm.send_to_client(tx->client_id, msg.buf);
@@ -189,31 +189,32 @@ void
 tx_queue_loop()
 {
     while (true) {
-        auto p = vts->process_tx_queue();
+        std::pair<transaction::pending_tx*, std::vector<transaction::pending_tx*>> p = vts->process_tx_queue();
         if (p.first == NULL) {
+            WDEBUG << "process tx fail" << std::endl;
             break;
         }
+        WDEBUG << "call send tx" << std::endl;
         send_tx(p.first, p.second);
     }
 }
 
 void
-send_tx(tx_ptr_t orig_tx, std::vector<tx_ptr_t> factored_tx)
+send_tx(transaction::pending_tx *orig_tx, std::vector<transaction::pending_tx*> factored_tx)
 {
     assert(orig_tx->type != transaction::FAIL);
 
     // tx succeeded, send to shards
-    uint64_t tx_id = orig_tx->id;
     uint64_t num_shards = orig_tx->shard_write.size();
 
     if (orig_tx->type == transaction::UPDATE) {
         vts->tx_prog_mutex.lock();
-        vts->outstanding_tx.emplace(tx_id, current_tx(std::move(orig_tx)));
+        vts->outstanding_tx.emplace(orig_tx->id, current_tx(orig_tx));
 
-        vts->outstanding_tx[tx_id].count = 0;
+        vts->outstanding_tx[orig_tx->id].count = 0;
         for (uint64_t i = 0; i < num_shards; i++) {
             if (orig_tx->shard_write[i]) {
-                vts->outstanding_tx[tx_id].count++;
+                vts->outstanding_tx[orig_tx->id].count++;
             }
         }
 
@@ -239,7 +240,7 @@ end_tx(uint64_t tx_id, coordinator::hyper_stub *hstub)
         // done tx
         hstub->clean_tx(tx_id);
 
-        auto tx = std::move(vts->outstanding_tx[tx_id].tx);
+        transaction::pending_tx *tx = vts->outstanding_tx[tx_id].tx;
         vts->outstanding_tx.erase(tx_id);
         vts->tx_prog_mutex.unlock();
 
@@ -247,6 +248,8 @@ end_tx(uint64_t tx_id, coordinator::hyper_stub *hstub)
         message::message msg;
         msg.prepare_message(message::CLIENT_TX_SUCCESS);
         vts->comm.send_to_client(tx->client_id, msg.buf);
+
+        delete tx;
     } else {
         vts->tx_prog_mutex.unlock();
     }
@@ -262,7 +265,7 @@ nop_function()
     vc::vclock_t max_done_clk;
     std::unordered_map<uint64_t, done_req_t> done_reqs;
     std::vector<uint64_t> del_done_reqs;
-    tx_ptr_t tx(new transaction::pending_tx(transaction::NOP));
+    transaction::pending_tx *tx;
 
     sleep_time.tv_sec  = VT_TIMEOUT_NANO / NANO;
     sleep_time.tv_nsec = VT_TIMEOUT_NANO % NANO;
@@ -278,12 +281,14 @@ nop_function()
 
         // send nops and state cleanup info to shards
         if (weaver_util::any(vts->to_nop)) {
-            tx->nop.reset(new transaction::nop_data());
+            tx = new transaction::pending_tx(transaction::NOP);
+            tx->nop = new transaction::nop_data();
 
             tx->id = vts->generate_req_id();
             vts->clk_rw_mtx.wrlock();
             vts->vclk.increment_clock();
             tx->timestamp = vts->vclk;
+            WDEBUG << "nop clk " << tx->timestamp.clock[0] << std::endl;
             tx->shard_write = vts->to_nop;
             vts->clk_rw_mtx.unlock();
 
@@ -319,9 +324,11 @@ nop_function()
 
         vts->periodic_update_mutex.unlock();
 
-        vts->enqueue_tx(tx);
-        tx_queue_loop();
-        tx->nop = NULL;
+        if (tx != NULL) {
+            vts->enqueue_tx(tx);
+            tx_queue_loop();
+            tx = NULL;
+        }
     }
 }
 
@@ -468,6 +475,7 @@ server_loop(int thread_id)
     uint64_t tx_id, client_sender;
     node_prog::prog_type pType;
     coordinator::hyper_stub *hstub = vts->hstub[thread_id];
+    transaction::pending_tx *tx;
 
     while (true) {
         vts->comm.quiesce_thread(thread_id);
@@ -482,10 +490,10 @@ server_loop(int thread_id)
             switch (mtype) {
                 // client messages
                 case message::CLIENT_TX_INIT: {
-                    tx_ptr_t tx(new transaction::pending_tx(transaction::UPDATE));
+                    tx = new transaction::pending_tx(transaction::UPDATE);
                     msg->unpack_message(message::CLIENT_TX_INIT, tx->writes);
                     tx->client_id = client_sender;
-                    prepare_tx(std::move(tx), hstub);
+                    prepare_tx(tx, hstub);
                     break;
                 }
 
@@ -723,10 +731,10 @@ main(int argc, const char *argv[])
     install_signal_handler(SIGHUP, end_program);
     install_signal_handler(SIGTERM, end_program);
 
-    //google::InitGoogleLogging(argv[0]);
+    google::InitGoogleLogging(argv[0]);
     //google::InstallFailureSignalHandler();
-    //google::LogToStderr();
-    //google::SetLogDestination(google::INFO, ".");
+    google::LogToStderr();
+    //google::SetLogDestination(google::INFO, "weaver-timestamper-");
 
     // signals
     //sigset_t ss;
@@ -868,7 +876,7 @@ main(int argc, const char *argv[])
     // periodic nops to shard
     nop_function();
 
-    for (auto t: worker_threads) {
+    for (std::thread *t: worker_threads) {
         t->join();
     }
 

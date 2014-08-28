@@ -41,6 +41,10 @@ uint16_t MaxCacheEntries;
 int
 main(int argc, const char *argv[])
 {
+    google::InitGoogleLogging(argv[0]);
+    //google::InstallFailureSignalHandler();
+    google::LogToStderr();
+
     const char *config_name = "";
     const char *config_file = "/etc/weaver.yaml";
     // arg parsing borrowed from HyperDex

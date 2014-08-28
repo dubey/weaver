@@ -30,7 +30,6 @@
 #define NUM_GRAPH_ATTRS 6
 #define NUM_TX_ATTRS 2
 
-using transaction::tx_ptr_t;
 
 enum persist_node_state
 {
@@ -73,7 +72,7 @@ class hyper_stub_base
         hyperdex_client_transaction *hyper_tx;
 
         void begin_tx();
-        bool commit_tx();
+        bool commit_tx(bool &error);
         void abort_tx();
         bool call(hyper_func h,
             const char *space,
@@ -120,11 +119,12 @@ class hyper_stub_base
 
         // node map functions
         bool put_nmap(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add);
+        bool put_nmap(const node_handle_t &handle, uint64_t loc);
         std::unordered_map<node_handle_t, uint64_t> get_nmap(std::unordered_set<node_handle_t> &toGet);
         bool del_nmap(std::unordered_set<node_handle_t> &toDel);
 
         // tx data functions
-        bool put_tx_data(tx_ptr_t tx);
+        bool put_tx_data(transaction::pending_tx *tx);
         bool del_tx_data(uint64_t tx_id);
 
         template <typename T> void prepare_buffer(const T &t, std::unique_ptr<e::buffer> &buf);
