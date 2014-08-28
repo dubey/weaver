@@ -21,11 +21,11 @@ property :: property()
     , del_time(UINT64_MAX, UINT64_MAX)
 { }
 
-property :: property(std::string &k, std::string &v)
+property :: property(const std::string &k, const std::string &v)
     : node_prog::property(k, v)
 { }
 
-property :: property(std::string &k, std::string &v, vc::vclock &creat)
+property :: property(const std::string &k, const std::string &v, const vc::vclock &creat)
     : node_prog::property(k, v)
     , creat_time(creat)
     , del_time(UINT64_MAX, UINT64_MAX)

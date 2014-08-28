@@ -776,7 +776,7 @@ fetch_node_cache_contexts(uint64_t loc,
             if (node != NULL) {
                 S->release_node(node);
             }
-            WDEBUG << "node not found or migrated, invalidating cached value" << std::endl;
+            WDEBUG << "node not found or migrated or some data permanently deleted, invalidating cached value" << std::endl;
             toFill.clear(); // contexts aren't valid so don't send back
             return false;
         } else {
@@ -1709,9 +1709,9 @@ bool agg_count_compare(std::pair<node_handle_t, uint32_t> p1, std::pair<node_han
 void
 migration_begin()
 {
-    S->node_list_mutex.lock();
+    S->migration_mutex.lock();
     S->ldg_nodes = S->node_list;
-    S->node_list_mutex.unlock();
+    S->migration_mutex.unlock();
 
 #ifdef WEAVER_CLDG
     S->msg_count_mutex.lock();

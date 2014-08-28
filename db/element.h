@@ -45,6 +45,7 @@ namespace element
 
         public:
             void add_property(const property &prop);
+            void add_property(const std::string &key, const std::string &value, const vc::vclock &vclk);
             void delete_property(std::string &key, vc::vclock &tdel);
             void remove_property(std::string &key);
             bool has_property(const std::string &key, const std::string &value, vc::vclock &vclk);

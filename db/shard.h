@@ -92,11 +92,10 @@ namespace db
             void release_node(element::node *n, bool migr_node);
 
             // Graph state
-            po6::threads::mutex edge_map_mutex, node_list_mutex;
+            po6::threads::mutex edge_map_mutex;
             po6::threads::mutex node_map_mutexes[NUM_NODE_MAPS];
             uint64_t shard_id;
             server_id server;
-            std::unordered_set<node_handle_t> node_list; // list of node ids currently on this shard
             std::unordered_map<node_handle_t, element::node*> nodes[NUM_NODE_MAPS]; // node handle -> ptr to node object
             std::unordered_map<node_handle_t, // node handle n ->
                 std::unordered_set<node_handle_t>> edge_map; // in-neighbors of n
@@ -155,8 +154,7 @@ namespace db
             // Permanent deletion
         public:
             po6::threads::mutex perm_del_mutex;
-            typedef std::priority_queue<del_obj*, std::vector<del_obj*>, perm_del_compare> del_queue_t;
-            del_queue_t perm_del_queue;
+            std::deque<del_obj*> perm_del_queue;
             void delete_migrated_node(const node_handle_t &migr_node);
             void permanent_delete_loop(uint64_t vt_id, bool outstanding_progs);
         private:
@@ -165,6 +163,7 @@ namespace db
             // Migration
         public:
             po6::threads::mutex migration_mutex;
+            std::unordered_set<node_handle_t> node_list; // list of node ids currently on this shard
             bool current_migr, migr_updating_nbrs, migr_token, migrated;
             node_handle_t migr_node;
             uint64_t migr_chance, migr_shard, migr_token_hops, migr_num_shards, migr_vt;
@@ -283,15 +282,6 @@ namespace db
 
         comm.reconfigure(config);
         update_members_new_config();
-        //if (comm.reconfigure(config) == server.get()
-        // && !active_backup
-        // && server.get() > NumEffectiveServers) {
-        //        WDEBUG << "Now active for shard " << shard_id << std::endl;
-        //        // this server is now primary for the shard
-        //        active_backup = true;
-        //        restore_backup();
-        //        backup_cond.signal();
-        //}
     }
 
     inline void
@@ -324,8 +314,7 @@ namespace db
     inline void
     shard :: bulk_load_persistent()
     {
-        // TODO initialize edge_map
-        hstub[0]->bulk_load(nodes);
+        hstub.front()->bulk_load(nodes);
     }
 
     // Consistency methods
@@ -421,7 +410,6 @@ namespace db
         return n;
     }
 
-    // write n->tx_queue to HyperDex, and then release node
     inline void
     shard :: release_node_write(element::node *n)
     {
@@ -447,11 +435,8 @@ namespace db
             nodes[map_idx].erase(node_handle);
             node_map_mutexes[map_idx].unlock();
 
-            node_list_mutex.lock();
-            node_list.erase(node_handle);
-            node_list_mutex.unlock();
-
             migration_mutex.lock();
+            node_list.erase(node_handle);
             shard_node_count[shard_id - ShardIdIncr]--;
             migration_mutex.unlock();
 
@@ -490,27 +475,17 @@ namespace db
         }
 
         bool success = nodes[map_idx].emplace(node_handle, new_node).second;
-        if (!success) {
-            // node already existed because of partially executed tx due to some failure
-            assert(!init_load);
-            node_map_mutexes[map_idx].unlock();
-            return NULL;
-        }
+        assert(success);
+        UNUSED(success);
+
         if (!init_load) {
             node_map_mutexes[map_idx].unlock();
-        }
-
-        if (init_load) {
-            node_list.emplace(node_handle);
-        } else {
-            node_list_mutex.lock();
-            node_list.emplace(node_handle);
-            node_list_mutex.unlock();
         }
 
         if (!init_load) {
             migration_mutex.lock();
         }
+        node_list.emplace(node_handle);
         shard_node_count[shard_id - ShardIdIncr]++;
         if (!init_load) {
             migration_mutex.unlock();
@@ -554,7 +529,7 @@ namespace db
             release_node_write(n);
             // record object for permanent deletion later on
             perm_del_mutex.lock();
-            perm_del_queue.emplace(new del_obj(message::NODE_DELETE_REQ, tdel, node_handle));
+            perm_del_queue.emplace_back(new del_obj(message::NODE_DELETE_REQ, tdel, node_handle));
             perm_del_mutex.unlock();
         }
     }
@@ -569,6 +544,7 @@ namespace db
         element::edge *new_edge = new element::edge(handle, vclk, remote_loc, remote_node);
         n->add_edge(new_edge);
         n->updated = true;
+
         // update edge map
         if (!init_load) {
             edge_map_mutex.lock();
@@ -586,7 +562,6 @@ namespace db
         vc::vclock &vclk,
         uint64_t qts)
     {
-        // fault tolerance: create_edge is idempotent
         element::node *n = acquire_node_write(local_node, vclk.vt_id, qts);
         if (n == NULL) {
             // node is being migrated
@@ -611,21 +586,22 @@ namespace db
         vc::vclock &tdel)
     {
         // already_exec check for fault tolerance
-        assert(n->out_edges.find(edge_handle) != n->out_edges.end()); // cannot have been permanently deleted
-        element::edge *e = n->out_edges[edge_handle];
+        auto out_edge_iter = n->out_edges.find(edge_handle);
+        assert(out_edge_iter != n->out_edges.end());
+        element::edge *e = out_edge_iter->second;
         e->base.update_del_time(tdel);
         n->updated = true;
         n->dependent_del++;
 
         // update edge map
-        node_handle_t remote = e->nbr.handle;
+        const node_handle_t &remote = e->nbr.handle;
         edge_map_mutex.lock();
-        if (edge_map.find(remote) != edge_map.end()) {
-            auto &node_set = edge_map[remote];
-            node_set.erase(n->get_handle());
-            if (node_set.empty()) {
-                edge_map.erase(remote);
-            }
+        auto edge_map_iter = edge_map.find(remote);
+        assert(edge_map_iter != edge_map.end());
+        auto &node_set = edge_map_iter->second;
+        node_set.erase(n->get_handle());
+        if (node_set.empty()) {
+            edge_map.erase(remote);
         }
         edge_map_mutex.unlock();
     }
@@ -648,7 +624,7 @@ namespace db
             release_node_write(n);
             // record object for permanent deletion later on
             perm_del_mutex.lock();
-            perm_del_queue.emplace(new del_obj(message::EDGE_DELETE_REQ, tdel, node_handle, edge_handle));
+            perm_del_queue.emplace_back(new del_obj(message::EDGE_DELETE_REQ, tdel, node_handle, edge_handle));
             perm_del_mutex.unlock();
         }
     }
@@ -658,8 +634,7 @@ namespace db
         std::string &key, std::string &value,
         vc::vclock &vclk)
     {
-        db::element::property p(key, value, vclk);
-        n->base.add_property(p);
+        n->base.add_property(key, value, vclk);
     }
 
     inline void
@@ -668,7 +643,6 @@ namespace db
         vc::vclock &vclk,
         uint64_t qts)
     {
-        // set_node_prop is idempotent for fault tolerance
         element::node *n = acquire_node_write(node_handle, vclk.vt_id, qts);
         if (n == NULL) {
             migration_mutex.lock();
@@ -690,11 +664,10 @@ namespace db
         std::string &key, std::string &value,
         vc::vclock &vclk)
     {
-        if (n->out_edges.find(edge_handle) != n->out_edges.end()) {
-            db::element::edge *e = n->out_edges[edge_handle];
-            db::element::property p(key, value, vclk);
-            e->base.add_property(p);
-        }
+        auto out_edge_iter = n->out_edges.find(edge_handle);
+        assert(out_edge_iter != n->out_edges.end());
+        element::edge *e = out_edge_iter->second;
+        e->base.add_property(key, value, vclk);
     }
 
     inline void
@@ -724,7 +697,7 @@ namespace db
     shard :: node_exists_nonlocking(const node_handle_t &node_handle)
     {
         uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
-        return (nodes[map_idx].count(node_handle) > 0);
+        return (nodes[map_idx].find(node_handle) != nodes[map_idx].end());
     }
 
     // permanent deletion
@@ -744,16 +717,35 @@ namespace db
         release_node(n);
     }
 
+    bool
+    perm_del_less(const del_obj* const o1, const del_obj* const o2)
+    {
+        const vc::vclock_t &clk1 = o1->vclk.clock;
+        const vc::vclock_t &clk2 = o2->vclk.clock;
+        assert(clk1.size() == NumVts);
+        assert(clk2.size() == NumVts);
+        for (uint64_t i = 0; i < NumVts; i++) {
+            if (clk1[i] < clk2[i]) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     inline void
     shard :: permanent_delete_loop(uint64_t vt_id, bool outstanding_progs)
     {
         element::node *n;
-        del_obj *dobj;
+        del_obj *dobj = nullptr;
+
         perm_del_mutex.lock();
+
+        std::sort(perm_del_queue.begin(), perm_del_queue.end(), perm_del_less);
+
         while (true) {
             bool to_del = !perm_del_queue.empty();
             if (to_del) {
-                dobj = perm_del_queue.top();
+                dobj = perm_del_queue.front(); // element with smallest vector clock
                 if (!outstanding_progs) {
                     dobj->no_outstanding_progs[vt_id] = true;
                 }
@@ -771,15 +763,18 @@ namespace db
             if (!to_del) {
                 break;
             }
+
+            // now dobj will be deleted
             switch (dobj->type) {
                 case message::NODE_DELETE_REQ:
                     n = acquire_node(dobj->node);
                     if (n != NULL) {
                         n->permanently_deleted = true;
                         for (auto &e: n->out_edges) {
-                            node_handle_t node = e.second->nbr.handle;
-                            assert(edge_map.find(node) != edge_map.end());
-                            auto &node_set = edge_map[node];
+                            const node_handle_t &node = e.second->nbr.handle;
+                            auto edge_map_iter = edge_map.find(node);
+                            assert(edge_map_iter != edge_map.end());
+                            auto &node_set = edge_map_iter->second;
                             node_set.erase(dobj->node);
                             if (node_set.empty()) {
                                 edge_map.erase(node);
@@ -792,15 +787,15 @@ namespace db
                 case message::EDGE_DELETE_REQ:
                     n = acquire_node(dobj->node);
                     if (n != NULL) {
-                        if (n->out_edges.find(dobj->edge) != n->out_edges.end()) {
-                            if (n->last_perm_deletion == nullptr ||
-                                    order::compare_two_vts(*n->last_perm_deletion,
-                                        n->out_edges.at(dobj->edge)->base.get_del_time()) == 0) {
-                                n->last_perm_deletion.reset(new vc::vclock(std::move(n->out_edges.at(dobj->edge)->base.get_del_time())));
-                            }
-                            delete n->out_edges[dobj->edge];
-                            n->out_edges.erase(dobj->edge);
+                        auto out_edge_iter = n->out_edges.find(dobj->edge);
+                        assert(out_edge_iter != n->out_edges.end());
+                        if (n->last_perm_deletion == nullptr
+                         || order::compare_two_vts(*n->last_perm_deletion,
+                                out_edge_iter->second->base.get_del_time()) == 0) {
+                            n->last_perm_deletion.reset(new vc::vclock(std::move(out_edge_iter->second->base.get_del_time())));
                         }
+                        delete out_edge_iter->second;
+                        n->out_edges.erase(dobj->edge);
                         release_node(n);
                     }
                     break;
@@ -808,21 +803,23 @@ namespace db
                 default:
                     WDEBUG << "invalid type " << dobj->type << " in deleted object" << std::endl;
             }
+
+            // we know dobj will be initialized here
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-            // we know dobj will be initialized here
+            assert(dobj != nullptr);
             delete dobj;
 #pragma GCC diagnostic pop
-            perm_del_queue.pop();
+
+            perm_del_queue.pop_front();
         }
+
         if (!outstanding_progs) {
-            auto copy_del_queue = perm_del_queue;
-            while (!copy_del_queue.empty()) {
-                dobj = copy_del_queue.top();
-                dobj->no_outstanding_progs[vt_id] = true;
-                copy_del_queue.pop();
+            for (del_obj* const o: perm_del_queue) {
+                o->no_outstanding_progs[vt_id] = true;
             }
         }
+
         perm_del_mutex.unlock();
     }
 

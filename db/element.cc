@@ -30,6 +30,12 @@ element :: add_property(const property &prop)
 }
 
 void
+element :: add_property(const std::string &key, const std::string &value, const vc::vclock &vclk)
+{
+    properties.emplace(key, property(key, value, vclk));
+}
+
+void
 element :: delete_property(std::string &key, vc::vclock &tdel)
 {
     auto p = properties.find(key);

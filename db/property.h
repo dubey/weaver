@@ -31,8 +31,8 @@ namespace element
     {
         public:
             property();
-            property(std::string&, std::string&);
-            property(std::string&, std::string&, vc::vclock&);
+            property(const std::string&, const std::string&);
+            property(const std::string&, const std::string&, const vc::vclock&);
 
             vc::vclock creat_time;
             vc::vclock del_time;
