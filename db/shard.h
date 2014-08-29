@@ -138,7 +138,7 @@ namespace db
                 const edge_handle_t &edge_handle,
                 std::string &key, std::string &value,
                 vc::vclock &vclk);
-            void set_edge_property(const node_handle_t &node_handle, const edge_handle_t &edge_handle,
+            void set_edge_property(const edge_handle_t &edge_handle, const node_handle_t &node_handle,
                 std::unique_ptr<std::string> key, std::unique_ptr<std::string> value,
                 vc::vclock &vclk,
                 uint64_t qts);
@@ -671,7 +671,7 @@ namespace db
     }
 
     inline void
-    shard :: set_edge_property(const node_handle_t &node_handle, const edge_handle_t &edge_handle,
+    shard :: set_edge_property(const edge_handle_t &edge_handle, const node_handle_t &node_handle,
         std::unique_ptr<std::string> key, std::unique_ptr<std::string> value,
         vc::vclock &vclk,
         uint64_t qts)

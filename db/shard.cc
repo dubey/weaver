@@ -87,57 +87,6 @@ end_program(int param)
 }
 
 
-inline void
-create_node(vc::vclock &t_creat,
-    const node_handle_t &node_handle)
-{
-    S->create_node(node_handle, t_creat, false);
-}
-
-inline void
-create_edge(vc::vclock &t_creat,
-    uint64_t qts,
-    const edge_handle_t &handle,
-    const node_handle_t &n1,
-    const node_handle_t &n2, uint64_t loc2)
-{
-    S->create_edge(handle, n1, n2, loc2, t_creat, qts);
-}
-
-inline void
-delete_node(vc::vclock &t_del,
-    uint64_t qts,
-    const node_handle_t &node_handle)
-{
-    S->delete_node(node_handle, t_del, qts);
-}
-
-inline void
-delete_edge(vc::vclock &t_del,
-    uint64_t qts,
-    const edge_handle_t &edge_handle, const node_handle_t &node_handle)
-{
-    S->delete_edge(edge_handle, node_handle, t_del, qts);
-}
-
-inline void
-set_node_property(vc::vclock &vclk,
-    uint64_t qts,
-    const node_handle_t &node_handle,
-    std::unique_ptr<std::string> key, std::unique_ptr<std::string> value)
-{
-    S->set_node_property(node_handle, std::move(key), std::move(value), vclk, qts);
-}
-
-inline void
-set_edge_property(vc::vclock &vclk,
-    uint64_t qts,
-    const edge_handle_t &edge_handle, const node_handle_t &node_handle,
-    std::unique_ptr<std::string> key, std::unique_ptr<std::string> value)
-{
-    S->set_edge_property(node_handle, edge_handle, std::move(key), std::move(value), vclk, qts);
-}
-
 // parse the string 'line' as a uint64_t starting at index 'idx' till the first whitespace or end of string
 // store result in 'n'
 // if overflow occurs or unexpected char encountered, store true in 'bad'
@@ -477,23 +426,23 @@ apply_writes(uint64_t vt_id, vc::vclock &vclk, uint64_t qts, transaction::pendin
     for (auto upd: tx.writes) {
         switch (upd->type) {
             case transaction::EDGE_CREATE_REQ:
-                create_edge(vclk, qts, upd->handle, upd->handle1, upd->handle2, upd->loc2);
+                S->create_edge(upd->handle, upd->handle1, upd->handle2, upd->loc2, vclk, qts);
                 break;
 
             case transaction::NODE_DELETE_REQ:
-                delete_node(vclk, qts, upd->handle1);
+                S->delete_node(upd->handle1, vclk, qts);
                 break;
 
             case transaction::EDGE_DELETE_REQ:
-                delete_edge(vclk, qts, upd->handle1, upd->handle2);
+                S->delete_edge(upd->handle1, upd->handle2, vclk, qts);
                 break;
 
             case transaction::NODE_SET_PROPERTY:
-                set_node_property(vclk, qts, upd->handle1, std::move(upd->key), std::move(upd->value));
+                S->set_node_property(upd->handle1, std::move(upd->key), std::move(upd->value), vclk, qts);
                 break;
 
             case transaction::EDGE_SET_PROPERTY:
-                set_edge_property(vclk, qts, upd->handle1, upd->handle2, std::move(upd->key), std::move(upd->value));
+                S->set_edge_property(upd->handle1, upd->handle2, std::move(upd->key), std::move(upd->value), vclk, qts);
                 break;
 
             default:
@@ -543,7 +492,7 @@ unpack_tx_request(void *req)
         n = NULL;
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ:
-                create_node(vclk, upd->handle);
+                S->create_node(upd->handle, vclk, false);
                 break;
 
             case transaction::EDGE_CREATE_REQ:
