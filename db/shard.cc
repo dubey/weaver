@@ -1723,17 +1723,20 @@ recv_loop(uint64_t thread_id)
 {
     uint64_t vt_id, req_id;
     enum message::msg_type mtype;
-    std::unique_ptr<message::message> rec_msg(new message::message());
+    std::unique_ptr<message::message> rec_msg;
     db::queued_request *qreq;
     db::message_wrapper *mwrap;
     node_prog::prog_type pType;
     vc::vclock vclk;
     uint64_t qts;
     transaction::tx_type txtype;
-
     busybee_returncode bb_code;
+    enum db::queue_order tx_order;
+
     while (true) {
+
         S->comm.quiesce_thread(thread_id);
+        rec_msg.reset(new message::message());
         bb_code = S->comm.recv(&rec_msg->buf);
         if (bb_code != BUSYBEE_SUCCESS && bb_code != BUSYBEE_TIMEOUT) {
             continue;
@@ -1751,11 +1754,10 @@ recv_loop(uint64_t thread_id)
                     rec_msg->unpack_partial_message(message::TX_INIT, vt_id, vclk, qts, txtype);
                     assert(vclk.clock.size() == NumVts);
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
-                    enum db::queue_order tx_order = S->qm.check_wr_request(vclk, qts);
+                    tx_order = S->qm.check_wr_request(vclk, qts);
                     assert(txtype != transaction::FAIL);
 
                     if (txtype == transaction::UPDATE) {
-
                         // write tx
                         if (tx_order == db::PRESENT) {
                             unpack_tx_request((void*)mwrap);
@@ -1768,7 +1770,6 @@ recv_loop(uint64_t thread_id)
                             S->qm.enqueue_write_request(vt_id, qreq);
                         }
                     } else {
-
                         // nop
                         assert(tx_order != db::PAST);
                         // nop goes through queues for both PRESENT and FUTURE
@@ -1849,24 +1850,12 @@ recv_loop(uint64_t thread_id)
                     break;
                 }
 
-                case message::SET_QTS:
-                    rec_msg->unpack_message(message::SET_QTS, vt_id, qts);
-                    WDEBUG << "got set qts from vt " << vt_id << ", qts " << qts << std::endl;
-                    S->restore_mutex.lock();
-                    while (!S->restore_done) {
-                        S->restore_cv.wait();
-                    }
-                    S->qm.set_qts(vt_id, qts);
-                    S->restore_mutex.unlock();
-                    break;
-
                 case message::EXIT_WEAVER:
                     exit(0);
                     
                 default:
                     WDEBUG << "unexpected msg type " << mtype << std::endl;
             }
-            rec_msg.reset(new message::message());
         }
 
         // execute all queued requests that can be executed now

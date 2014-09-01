@@ -72,7 +72,7 @@ class hyper_stub_base
         hyperdex_client_transaction *hyper_tx;
 
         void begin_tx();
-        bool commit_tx(bool &error);
+        void commit_tx(hyperdex_client_returncode &commit_status);
         void abort_tx();
         bool call(hyper_func h,
             const char *space,

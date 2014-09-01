@@ -187,7 +187,6 @@ namespace db
             std::vector<uint64_t> nop_count;
             vc::vclock max_clk // to compare against for checking if node is deleted
                 , zero_clk; // all zero clock for migration thread in queue
-            std::unordered_map<node_handle_t, uint64_t> remap;
             void update_migrated_nbr_nonlocking(element::node *n, const node_handle_t &migr_node, uint64_t old_loc, uint64_t new_loc);
             void update_migrated_nbr(const node_handle_t &node, uint64_t old_loc, uint64_t new_loc);
             void update_node_mapping(const node_handle_t &node, uint64_t shard);
@@ -896,11 +895,9 @@ namespace db
     }
 
     inline void
-    shard :: update_node_mapping(const node_handle_t &node_handle, uint64_t shard)
+    shard :: update_node_mapping(const node_handle_t &handle, uint64_t shard)
     {
-        remap.clear();
-        remap[node_handle] = shard;
-        hstub.back()->put_mappings(remap);
+        hstub.back()->put_mapping(handle, shard);
     }
 
     // node program
@@ -1002,7 +999,6 @@ namespace db
         std::unordered_map<uint64_t, uint64_t> qts_map;
         restore_mutex.lock();
         // TODO hstub.back()->restore_backup(qts_map, migr_token, nodes, edge_map, node_map_mutexes);
-        qm.restore_backup(qts_map);
         restore_done = true;
         restore_cv.signal();
         restore_mutex.unlock();

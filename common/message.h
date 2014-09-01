@@ -112,8 +112,6 @@ namespace message
         DONE_DEL_TX,
         FAIL_DEL_TX,
         DONE_MIGR,
-        // fault tolerance
-        SET_QTS,
 
         ERROR
     };

@@ -29,11 +29,7 @@ hyper_stub :: hyper_stub(uint64_t vtid)
 std::unordered_map<node_handle_t, uint64_t>
 hyper_stub :: get_mappings(std::unordered_set<node_handle_t> &get_set)
 {
-    begin_tx();
-    auto ret = get_nmap(get_set);
-    bool error = false;
-    commit_tx(error);
-    return ret;
+    return get_nmap(get_set);
 }
 
 void
@@ -211,7 +207,24 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 
     //call(&hyperdex_client_xact_put, tx_space, (const char*)&tx->id, sizeof(int64_t), attr, NUM_TX_ATTRS);
 
-    ready = commit_tx(error);
+    hyperdex_client_returncode commit_status = HYPERDEX_CLIENT_GARBAGE;
+    commit_tx(commit_status);
+
+    switch(commit_status) {
+        case HYPERDEX_CLIENT_SUCCESS:
+            ready = true;
+            assert(!error);
+            break;
+
+        case HYPERDEX_CLIENT_ABORTED:
+            ready = false;
+            assert(!error);
+            break;
+
+        default:
+            error = true;
+            ready = false;
+    }
 
 #undef ERROR_FAIL
 }

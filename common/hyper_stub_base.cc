@@ -80,43 +80,21 @@ hyper_stub_base :: begin_tx()
     hyper_tx = hyperdex_client_begin_transaction(cl);
 }
 
-bool
-hyper_stub_base :: commit_tx(bool &error)
+void
+hyper_stub_base :: commit_tx(hyperdex_client_returncode &status)
 {
     bool success = true;
     int success_calls = 0;
-    hyperdex_client_returncode commit_status, loop_status;
+    hyperdex_client_returncode loop_status;
 
-    int64_t hdex_id = hyperdex_client_commit_transaction(hyper_tx, &commit_status);
-    HYPERDEX_CHECK_ID(commit_status);
+    int64_t hdex_id = hyperdex_client_commit_transaction(hyper_tx, &status);
+    HYPERDEX_CHECK_ID(status);
 
     if (success) {
         HYPERDEX_LOOP;
-        HYPERDEX_CHECK_STATUSES(commit_status,
-            commit_status != HYPERDEX_CLIENT_ABORTED && commit_status != HYPERDEX_CLIENT_SUCCESS);
+        HYPERDEX_CHECK_STATUSES(status,
+            status != HYPERDEX_CLIENT_ABORTED && status != HYPERDEX_CLIENT_SUCCESS);
     }
-
-    switch (commit_status) {
-        case HYPERDEX_CLIENT_ABORTED:
-            success = false;
-            WDEBUG << "ABORT" << std::endl;
-            break;
-
-        case HYPERDEX_CLIENT_SUCCESS:
-            break;
-
-        case HYPERDEX_CLIENT_COMMITTED:
-            success = false;
-            error = true;
-            break;
-
-        default:
-            success = false;
-            error = true;
-            break;
-    }
-
-    return success;
 }
 
 void

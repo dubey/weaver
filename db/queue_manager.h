@@ -60,9 +60,6 @@ namespace db
             bool exec_queued_request();
             void increment_qts(uint64_t vt_id, uint64_t incr);
             void record_completed_tx(vc::vclock &tx_clk);
-            // fault tolerance
-            void restore_backup(std::unordered_map<uint64_t, uint64_t> &qts);
-            void set_qts(uint64_t vt_id, uint64_t rec_qts);
     };
 
 }
