@@ -142,9 +142,16 @@ hyper_stub :: restore_backup(std::unordered_map<node_handle_t, element::node*> *
 }
 
 void
-hyper_stub :: bulk_load(std::unordered_map<node_handle_t, element::node*> *nodes_arr)
+hyper_stub :: bulk_load(int tid, std::unordered_map<node_handle_t, element::node*> *nodes_arr)
 {
-    UNUSED(nodes_arr);
+    for (; tid <= NUM_NODE_MAPS; tid += NUM_THREADS) {
+        std::unordered_map<node_handle_t, element::node*> &node_map = nodes_arr[tid];
+        for (auto &p: node_map) {
+            // TODO change when single space for mapping and graph data
+            put_mapping(p.first, shard_id);
+            put_node(*p.second);
+        }
+    }
 }
 
 bool

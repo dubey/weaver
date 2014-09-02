@@ -309,7 +309,13 @@ namespace db
     inline void
     shard :: bulk_load_persistent()
     {
-        hstub.front()->bulk_load(nodes);
+        std::vector<std::thread> threads;
+        for (uint64_t i = 0; i < hstub.size(); i++) {
+            threads.emplace_back(std::thread(&hyper_stub::bulk_load, hstub[i], (int)i, nodes));
+        }
+        for (uint64_t i = 0; i < hstub.size(); i++) {
+            threads[i].join();
+        }
     }
 
     // Consistency methods

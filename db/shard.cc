@@ -193,37 +193,6 @@ parse_weaver_edge(std::string &line, uint64_t &n1, uint64_t &n2,
     }
 }
 
-// called on a separate thread during bulk graph loading process
-// XXX check for FT
-// issues Hyperdex calls to store the node map
-inline void
-init_single_nmap(int thread_id, std::unordered_map<node_handle_t, uint64_t> *node_map)
-{
-    WDEBUG << "node map thread " << thread_id << " starting, will put " << node_map->size() << " entries in hdex" << std::endl;
-    db::hyper_stub hstub(shard_id);
-    if (!hstub.put_mappings(*node_map)) {
-        WDEBUG << "errors in bulk loading (adding HyperDex mappings), cluster restart required" << std::endl;
-    } else {
-        WDEBUG << "node map thread " << thread_id << " done" << std::endl;
-    }
-}
-
-inline void
-init_nmap(std::vector<std::unordered_map<node_handle_t, uint64_t>> *node_maps_ptr)
-{
-    auto &node_maps = *node_maps_ptr;
-    int num_thr = node_maps.size();
-    WDEBUG << "creating " << num_thr << " threads for node map inserts" << std::endl;
-    std::vector<std::thread> threads;
-    for (int i = 0; i < num_thr; i++) {
-        threads.push_back(std::thread(init_single_nmap, i, &node_maps[i]));
-    }
-    for (int i = 0; i < num_thr; i++) {
-        threads[i].join();
-    }
-    WDEBUG << "all node map threads done" << std::endl;
-}
-
 // initial bulk graph loading method
 // 'format' stores the format of the graph file
 // 'graph_file' stores the full path filename of the graph file
@@ -296,8 +265,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     }
                 }
             }
-            //S->bulk_load_persistent();
-            init_nmap(&node_maps);
+            S->bulk_load_persistent();
             break;
         }
 
@@ -329,7 +297,6 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                      break;
                 }
             }
-            std::thread nmap_thr(init_nmap, &node_maps);
 
             // edges
             std::vector<std::pair<std::string, std::string>> props;
@@ -352,8 +319,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 }
             }
 
-            //S->bulk_load_persistent();
-            nmap_thr.join();
+            S->bulk_load_persistent();
             break;
         }
 
