@@ -72,11 +72,11 @@ space weaver_graph_data
 key node
 attributes
     string creat_time,
-    string del_time,
     map(string, string) properties,
     map(string, string) out_edges,
     int migr_status,
-    string last_upd_clk
+    string last_upd_clk,
+    string restore_clk
 tolerate 2 failures
 EOF
 

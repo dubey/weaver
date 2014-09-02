@@ -98,6 +98,7 @@ namespace element
 
             // fault tolerance
             vc::vclock last_upd_clk;
+            vc::vclock_t restore_clk;
 
         public:
             void add_edge(edge *e);

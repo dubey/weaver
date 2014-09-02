@@ -128,21 +128,6 @@ configuration :: get_weaver_id(const server_id &id) const
     return UINT64_MAX;
 }
 
-//bool
-//configuration :: get_shard_or_vt(const server_id &id) const
-//{
-//    for (size_t i = 0; i < m_servers.size(); ++i)
-//    {
-//        if (m_servers[i].id == id)
-//        {
-//            assert(m_servers[i].shard_or_vt == 0 || m_servers[i].shard_or_vt == 1);
-//            return m_servers[i].shard_or_vt == 0;
-//        }
-//    }
-//
-//    return false;
-//}
-
 server::type_t
 configuration :: get_type(const server_id &id) const
 {

@@ -1738,6 +1738,7 @@ recv_loop(uint64_t thread_id)
         S->comm.quiesce_thread(thread_id);
         rec_msg.reset(new message::message());
         bb_code = S->comm.recv(&rec_msg->buf);
+
         if (bb_code != BUSYBEE_SUCCESS && bb_code != BUSYBEE_TIMEOUT) {
             continue;
         }
@@ -1885,7 +1886,7 @@ generate_token(uint64_t* token)
 void
 server_manager_link_loop(po6::net::hostname sm_host, po6::net::location my_loc)
 {
-    // Most of the following code has been 'borrowed' from
+    // Most of the following code has been borrowed from
     // Robert Escriva's HyperDex.
     // see https://github.com/rescrv/HyperDex for the original code.
 
@@ -1988,6 +1989,17 @@ install_signal_handler(int signum, void (*handler)(int))
     sa.sa_flags = SA_RESTART;
     int ret = sigaction(signum, &sa, NULL);
     assert(ret == 0);
+}
+
+// caution: assume holding S->config_mutex for S->pause_bb
+void
+init_worker_threads(std::vector<std::thread*> &threads)
+{
+    for (int i = 0; i < NUM_THREADS; i++) {
+        std::thread *t = new std::thread(recv_loop, i);
+        threads.emplace_back(t);
+    }
+    S->pause_bb = true;
 }
 
 int
@@ -2107,51 +2119,50 @@ main(int argc, const char *argv[])
     S->shard_init = true;
     S->shard_init_cond.signal();
 
-    S->config_mutex.unlock();
-
-    // start all threads
     std::vector<std::thread*> worker_threads;
-    for (int i = 0; i < NUM_THREADS; i++) {
-        std::thread *t = new std::thread(recv_loop, i);
-        worker_threads.emplace_back(t);
-    }
-
-    // bulk loading
-    if (graph_file != NULL) {
-        S->bulk_load_num_shards = (uint64_t)bulk_load_num_shards;
-
-        db::graph_file_format format = db::SNAP;
-        if (strcmp(graph_format, "tsv") == 0) {
-            format = db::TSV;
-        } else if (strcmp(graph_format, "snap") == 0) {
-            format = db::SNAP;
-        } else if (strcmp(graph_format, "weaver") == 0) {
-            format = db::WEAVER;
-        } else {
-            WDEBUG << "Invalid graph file format" << std::endl;
-        }
-
-        wclock::weaver_timer timer;
-        uint64_t load_time = timer.get_time_elapsed();
-        load_graph(format, graph_file, (uint64_t)bulk_load_num_shards);
-        load_time = timer.get_time_elapsed() - load_time;
-        message::message msg;
-        msg.prepare_message(message::LOADED_GRAPH, load_time);
-        S->comm.send(ShardIdIncr, msg.buf);
-    }
-
     if (backup_input != LONG_MAX) {
-        // wait till this server becomes primary shard
-        S->config_mutex.lock();
+        // this is backup
         while (!S->active_backup) {
             S->backup_cond.wait();
         }
+
+        S->restore_backup();
+
+        init_worker_threads(worker_threads);
+
         S->config_mutex.unlock();
     } else {
-        // this server is primary shard, start now
-        std::cout << "Weaver: shard instance " << S->shard_id << std::endl;
-        std::cout << "THIS IS AN ALPHA RELEASE WHICH DOES NOT SUPPORT FAULT TOLERANCE" << std::endl;
+        init_worker_threads(worker_threads);
+
+        S->config_mutex.unlock();
+
+        // bulk loading
+        if (graph_file != NULL) {
+            S->bulk_load_num_shards = (uint64_t)bulk_load_num_shards;
+
+            db::graph_file_format format = db::SNAP;
+            if (strcmp(graph_format, "tsv") == 0) {
+                format = db::TSV;
+            } else if (strcmp(graph_format, "snap") == 0) {
+                format = db::SNAP;
+            } else if (strcmp(graph_format, "weaver") == 0) {
+                format = db::WEAVER;
+            } else {
+                WDEBUG << "Invalid graph file format" << std::endl;
+            }
+
+            wclock::weaver_timer timer;
+            uint64_t load_time = timer.get_time_elapsed();
+            load_graph(format, graph_file, (uint64_t)bulk_load_num_shards);
+            load_time = timer.get_time_elapsed() - load_time;
+            message::message msg;
+            msg.prepare_message(message::LOADED_GRAPH, load_time);
+            S->comm.send(ShardIdIncr, msg.buf);
+        }
     }
+
+    std::cout << "Weaver: shard instance " << S->shard_id << std::endl;
+    std::cout << "THIS IS AN ALPHA RELEASE WHICH DOES NOT SUPPORT FAULT TOLERANCE" << std::endl;
 
     for (auto t: worker_threads) {
         t->join();

@@ -54,7 +54,6 @@ class server_manager
         void server_register(replicant_state_machine_context* ctx,
                              const server_id& sid,
                              const po6::net::location& bind_to,
-                             //int shard_or_vt);
                              server::type_t type);
         void server_online(replicant_state_machine_context* ctx,
                            const server_id& sid,

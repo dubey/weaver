@@ -28,7 +28,6 @@ comm_wrapper :: weaver_mapper :: weaver_mapper(const configuration &config)
 
     for (auto &p: addresses) {
         assert(config.get_weaver_id(p.first) != UINT64_MAX);
-        //uint64_t factor = config.get_shard_or_vt(p.first) ? 1 : 0;
         uint64_t factor = config.get_type(p.first) == server::SHARD ? 1 : 0;
         uint64_t wid = config.get_weaver_id(p.first) + NumVts*factor;
         if (config.get_state(p.first) == server::AVAILABLE) {

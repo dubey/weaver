@@ -36,8 +36,8 @@ namespace db
 
         public:
             hyper_stub(uint64_t sid);
-            void restore_backup(bool &migr_token,
-                std::unordered_map<node_handle_t, element::node*> *nodes,
+            void restore_backup(std::unordered_map<node_handle_t, element::node*> *nodes,
+                std::unordered_map<node_handle_t, std::unordered_set<node_handle_t>> &edge_map,
                 po6::threads::mutex *shard_mutexes);
             // bulk loading
             void bulk_load(std::unordered_map<node_handle_t, element::node*> *nodes);

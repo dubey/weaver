@@ -95,9 +95,12 @@ comm_wrapper :: init(configuration &config)
 }
 
 void
-comm_wrapper :: reconfigure(configuration &new_config, uint64_t *num_active_vts)
+comm_wrapper :: reconfigure(configuration &new_config, bool to_pause, uint64_t *num_active_vts)
 {
-    bb->pause();
+    if (to_pause) {
+        bb->pause();
+    }
+
     reconfigure_internal(new_config);
     if (num_active_vts != NULL) {
         *num_active_vts = 0;
@@ -107,7 +110,10 @@ comm_wrapper :: reconfigure(configuration &new_config, uint64_t *num_active_vts)
             }
         }
     }
-    bb->unpause();
+
+    if (to_pause) {
+        bb->unpause();
+    }
 }
 
 void
@@ -128,7 +134,6 @@ comm_wrapper :: reconfigure_internal(configuration &new_config)
 
     for (auto &p: addresses) {
         assert(config.get_weaver_id(p.first) != UINT64_MAX);
-        //uint64_t factor = config.get_shard_or_vt(p.first) ? 1 : 0;
         uint64_t factor = config.get_type(p.first) == server::SHARD ? 1 : 0;
         uint64_t wid = config.get_weaver_id(p.first) + NumVts*factor;
         if (active_server_idx[wid] < UINT64_MAX

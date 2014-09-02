@@ -75,7 +75,7 @@ namespace db
             po6::threads::mutex config_mutex, exit_mutex;
             server_manager_link_wrapper sm_stub;
             configuration config;
-            bool active_backup, first_config, shard_init;
+            bool active_backup, first_config, shard_init, pause_bb;
             po6::threads::cond backup_cond, first_config_cond, shard_init_cond;
             void reconfigure();
             void update_members_new_config();
@@ -217,10 +217,7 @@ namespace db
 
             // Fault tolerance
         public:
-            po6::threads::mutex restore_mutex;
             std::vector<hyper_stub*> hstub;
-            bool restore_done;
-            po6::threads::cond restore_cv;
             void restore_backup();
     };
 
@@ -231,6 +228,7 @@ namespace db
         , active_backup(false)
         , first_config(false)
         , shard_init(false)
+        , pause_bb(false)
         , backup_cond(&config_mutex)
         , first_config_cond(&config_mutex)
         , shard_init_cond(&config_mutex)
@@ -252,8 +250,6 @@ namespace db
         , watch_set_lookups(0)
         , watch_set_nops(0)
         , watch_set_piggybacks(0)
-        , restore_done(false)
-        , restore_cv(&restore_mutex)
     {
     }
 
@@ -279,7 +275,7 @@ namespace db
     {
         WDEBUG << "Cluster reconfigure" << std::endl;
 
-        comm.reconfigure(config);
+        comm.reconfigure(config, pause_bb);
         update_members_new_config();
     }
 
@@ -467,7 +463,7 @@ namespace db
         bool init_load=false)
     {
         uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
-        element::node *new_node = new element::node(node_handle, vclk, &node_map_mutexes[map_idx]);
+        element::node *new_node = new element::node(node_handle, vclk, node_map_mutexes+map_idx);
 
         if (!init_load) {
             node_map_mutexes[map_idx].lock();
@@ -996,12 +992,7 @@ namespace db
     inline void
     shard :: restore_backup()
     {
-        std::unordered_map<uint64_t, uint64_t> qts_map;
-        restore_mutex.lock();
-        // TODO hstub.back()->restore_backup(qts_map, migr_token, nodes, edge_map, node_map_mutexes);
-        restore_done = true;
-        restore_cv.signal();
-        restore_mutex.unlock();
+        hstub.back()->restore_backup(nodes, edge_map, node_map_mutexes);
     }
 }
 

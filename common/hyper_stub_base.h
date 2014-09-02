@@ -116,6 +116,7 @@ class hyper_stub_base
         void remove_out_edge(db::element::node &n, db::element::edge *e);
         void add_in_nbr(const node_handle_t &node, const node_handle_t &nbr);
         void remove_in_nbr(const node_handle_t &n_hndl, const node_handle_t &nbr);
+        bool recreate_node(const hyperdex_client_attribute *cl_attr, db::element::node &n);
 
         // node map functions
         bool put_nmap(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add);
@@ -141,7 +142,6 @@ class hyper_stub_base
         void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<std::string> &set);
 
     private:
-        bool recreate_node(const hyperdex_client_attribute *cl_attr, db::element::node &n);
         void pack_uint64(e::buffer::packer &packer, uint64_t num);
 
     public:

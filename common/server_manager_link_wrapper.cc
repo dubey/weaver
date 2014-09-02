@@ -138,7 +138,6 @@ server_manager_link_wrapper :: get_replid(uint64_t &id)
 }
 
 bool
-//server_manager_link_wrapper :: register_id(server_id us, const po6::net::location& bind_to, int shard_or_vt)
 server_manager_link_wrapper :: register_id(server_id us, const po6::net::location& bind_to, server::type_t type)
 {
     m_us = us;
@@ -148,7 +147,6 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
 #pragma GCC diagnostic pop
     e::buffer::packer pa = buf->pack_at(0);
     uint8_t t = static_cast<uint8_t>(type);
-    //pa = pa << us << bind_to << shard_or_vt;
     pa = pa << us << bind_to << t;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"

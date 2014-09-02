@@ -44,7 +44,6 @@ class server_manager_link_wrapper
     public:
         void set_server_manager_address(const char* host, uint16_t port);
         bool get_replid(uint64_t &id);
-        //bool register_id(server_id us, const po6::net::location& bind_to, int shard_or_vt);
         bool register_id(server_id us, const po6::net::location& bind_to, server::type_t type);
         bool should_exit();
         bool maintain_link();

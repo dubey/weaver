@@ -62,7 +62,7 @@ class comm_wrapper
         comm_wrapper(po6::net::location &loc, int nthr, int timeout);
         ~comm_wrapper();
         void init(configuration &config);
-        void reconfigure(configuration &config, uint64_t *num_active_vts=NULL);
+        void reconfigure(configuration &config, bool to_pause=true, uint64_t *num_active_vts=NULL);
         std::shared_ptr<po6::net::location> get_loc() { return loc; }
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"

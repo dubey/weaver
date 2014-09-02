@@ -17,16 +17,16 @@
 
 hyper_stub_base :: hyper_stub_base()
     : graph_attrs{"creat_time",
-        "del_time",
         "properties",
         "out_edges",
         "migr_status", // 0 for stable, 1 for moving
-        "last_upd_clk"}
+        "last_upd_clk",
+        "restore_clk"}
     , graph_dtypes{HYPERDATATYPE_STRING,
-        HYPERDATATYPE_STRING,
         HYPERDATATYPE_MAP_STRING_STRING,
         HYPERDATATYPE_MAP_STRING_STRING,
         HYPERDATATYPE_INT64,
+        HYPERDATATYPE_STRING,
         HYPERDATATYPE_STRING}
     , tx_attrs{"vt_id",
         "tx_data"}
@@ -81,19 +81,19 @@ hyper_stub_base :: begin_tx()
 }
 
 void
-hyper_stub_base :: commit_tx(hyperdex_client_returncode &status)
+hyper_stub_base :: commit_tx(hyperdex_client_returncode &commit_status)
 {
     bool success = true;
     int success_calls = 0;
     hyperdex_client_returncode loop_status;
 
-    int64_t hdex_id = hyperdex_client_commit_transaction(hyper_tx, &status);
-    HYPERDEX_CHECK_ID(status);
+    int64_t hdex_id = hyperdex_client_commit_transaction(hyper_tx, &commit_status);
+    HYPERDEX_CHECK_ID(commit_status);
 
     if (success) {
         HYPERDEX_LOOP;
-        HYPERDEX_CHECK_STATUSES(status,
-            status != HYPERDEX_CLIENT_ABORTED && status != HYPERDEX_CLIENT_SUCCESS);
+        HYPERDEX_CHECK_STATUSES(commit_status,
+            commit_status != HYPERDEX_CLIENT_ABORTED && commit_status != HYPERDEX_CLIENT_SUCCESS);
     }
 }
 
@@ -388,23 +388,19 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::e
     // create clock
     vc::vclock create_clk;
     unpack_buffer(cl_attr[idx[0]].value, cl_attr[idx[0]].value_sz, create_clk);
-    // delete clock
-    vc::vclock delete_clk;
-    unpack_buffer(cl_attr[idx[1]].value, cl_attr[idx[1]].value_sz, delete_clk);
     // properties
-    std::unordered_map<std::string, db::element::property> props;
-    unpack_buffer<db::element::property>(cl_attr[idx[2]].value, cl_attr[idx[2]].value_sz, props);
+    unpack_buffer<db::element::property>(cl_attr[idx[2]].value, cl_attr[idx[2]].value_sz, n.base.properties);
 
     n.state = db::element::node::mode::STABLE;
     n.in_use = false;
     n.base.update_creat_time(create_clk);
-    n.base.update_del_time(delete_clk);
-    n.base.set_properties(props);
 
     // out edges
     unpack_buffer<db::element::edge*>(cl_attr[idx[3]].value, cl_attr[idx[3]].value_sz, n.out_edges);
     // last update clock
     unpack_buffer(cl_attr[idx[5]].value, cl_attr[idx[5]].value_sz, n.last_upd_clk);
+    // restore clock
+    unpack_buffer(cl_attr[idx[1]].value, cl_attr[idx[1]].value_sz, n.restore_clk);
 
     return true;
 }
@@ -435,54 +431,47 @@ hyper_stub_base :: put_node(db::element::node &n)
     cl_attr[0].value_sz = creat_clk_buf->size();
     cl_attr[0].datatype = graph_dtypes[0];
 
-    // delete clock
-    std::unique_ptr<e::buffer> del_clk_buf;
-    prepare_buffer(n.base.get_del_time(), del_clk_buf);
-    cl_attr[1].attr = graph_attrs[1];
-    cl_attr[1].value = (const char*)del_clk_buf->data();
-    cl_attr[1].value_sz = del_clk_buf->size();
-    cl_attr[1].datatype = graph_dtypes[1];
-
-    /*
     // properties
     std::unique_ptr<e::buffer> props_buf;
     prepare_buffer<db::element::property>(n.base.properties, props_buf);
-    for (const auto &p: n.base.properties) {
-        WDEBUG << p.second.key << " " << p.second.value << std::endl;
-        WDEBUG << p.second.creat_time.vt_id << " " << p.second.creat_time.clock.size() << std::endl;
-        WDEBUG << p.second.del_time.vt_id << " " << p.second.del_time.clock.size() << std::endl;
-    }
-    cl_attr[2].attr = graph_attrs[2];
-    cl_attr[2].value = (const char*)props_buf->data();
-    cl_attr[2].value_sz = props_buf->size();
-    cl_attr[2].datatype = graph_dtypes[2];
+    cl_attr[1].attr = graph_attrs[1];
+    cl_attr[1].value = (const char*)props_buf->data();
+    cl_attr[1].value_sz = props_buf->size();
+    cl_attr[1].datatype = graph_dtypes[1];
 
     // out edges
     std::unique_ptr<e::buffer> out_edges_buf;
     prepare_buffer<db::element::edge*>(n.out_edges, out_edges_buf);
-    cl_attr[3].attr = graph_attrs[3];
-    cl_attr[3].value = (const char*)out_edges_buf->data();
-    cl_attr[3].value_sz = out_edges_buf->size();
-    cl_attr[3].datatype = graph_dtypes[3];
+    cl_attr[2].attr = graph_attrs[2];
+    cl_attr[2].value = (const char*)out_edges_buf->data();
+    cl_attr[2].value_sz = out_edges_buf->size();
+    cl_attr[2].datatype = graph_dtypes[2];
 
     // migr status
     int64_t status = STABLE;
-    cl_attr[4].attr = graph_attrs[4];
-    cl_attr[4].value = (const char*)&status;
-    cl_attr[4].value_sz = sizeof(int64_t);
-    cl_attr[4].datatype = graph_dtypes[4];
+    cl_attr[3].attr = graph_attrs[3];
+    cl_attr[3].value = (const char*)&status;
+    cl_attr[3].value_sz = sizeof(int64_t);
+    cl_attr[3].datatype = graph_dtypes[3];
 
     // last update clock
     std::unique_ptr<e::buffer> last_clk_buf;
     prepare_buffer(n.last_upd_clk, last_clk_buf);
+    cl_attr[4].attr = graph_attrs[4];
+    cl_attr[4].value = (const char*)last_clk_buf->data();
+    cl_attr[4].value_sz = last_clk_buf->size();
+    cl_attr[4].datatype = graph_dtypes[4];
+
+    // restore clock
+    std::unique_ptr<e::buffer> restore_clk_buf;
+    prepare_buffer(n.restore_clk, restore_clk_buf);
     cl_attr[5].attr = graph_attrs[5];
-    cl_attr[5].value = (const char*)last_clk_buf->data();
-    cl_attr[5].value_sz = last_clk_buf->size();
+    cl_attr[5].value = (const char*)restore_clk_buf->data();
+    cl_attr[5].value_sz = restore_clk_buf->size();
     cl_attr[5].datatype = graph_dtypes[5];
-    */
 
     node_handle_t handle = n.get_handle();
-    return call(&hyperdex_client_xact_put, graph_space, handle.c_str(), handle.size(), cl_attr, /*NUM_GRAPH_ATTRS*/2);
+    return call(&hyperdex_client_xact_put, graph_space, handle.c_str(), handle.size(), cl_attr, NUM_GRAPH_ATTRS);
 }
 
 void

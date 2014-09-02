@@ -102,7 +102,6 @@ void
 server_manager :: server_register(replicant_state_machine_context* ctx,
                                   const server_id& sid,
                                   const po6::net::location& bind_to,
-                                  //int shard_or_vt)
                                   server::type_t type)
 {
     FILE* log = replicant_state_machine_log_stream(ctx);
@@ -119,9 +118,7 @@ server_manager :: server_register(replicant_state_machine_context* ctx,
     srv = new_server(sid);
     srv->state = server::ASSIGNED;
     srv->bind_to = bind_to;
-    //srv->weaver_id = (shard_or_vt == 0) ? m_num_shards++ : m_num_vts++;
     srv->weaver_id = (type == server::SHARD) ? m_num_shards++ : m_num_vts++;
-    //srv->shard_or_vt = shard_or_vt;
     srv->type = type;
 
     fprintf(log, "registered server(%lu)\n", sid.get());

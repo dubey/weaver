@@ -212,7 +212,7 @@ namespace coordinator
         WDEBUG << "Cluster reconfigure triggered\n";
 
         uint64_t prev_active_vts = num_active_vts;
-        comm.reconfigure(config, &num_active_vts);
+        comm.reconfigure(config, true, &num_active_vts);
         update_members_new_config();
         //if (comm.reconfigure(config, &num_active_vts) == server.get()
         // && !active_backup
