@@ -128,6 +128,20 @@ configuration :: get_weaver_id(const server_id &id) const
     return UINT64_MAX;
 }
 
+uint64_t
+configuration :: get_virtual_id(const server_id &id) const
+{
+    for (size_t i = 0; i < m_servers.size(); ++i)
+    {
+        if (m_servers[i].id == id)
+        {
+            return m_servers[i].virtual_id;
+        }
+    }
+
+    return UINT64_MAX;
+}
+
 server::type_t
 configuration :: get_type(const server_id &id) const
 {

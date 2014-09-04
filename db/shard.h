@@ -75,8 +75,8 @@ namespace db
             po6::threads::mutex config_mutex, exit_mutex;
             server_manager_link_wrapper sm_stub;
             configuration config;
-            bool active_backup, first_config, shard_init, pause_bb;
-            po6::threads::cond backup_cond, first_config_cond, shard_init_cond;
+            bool active_backup, first_config, pause_bb;
+            po6::threads::cond backup_cond, first_config_cond;
             void reconfigure();
             void update_members_new_config();
             bool to_exit;
@@ -227,11 +227,9 @@ namespace db
         , sm_stub(server_id(serverid), comm.get_loc())
         , active_backup(false)
         , first_config(false)
-        , shard_init(false)
         , pause_bb(false)
         , backup_cond(&config_mutex)
         , first_config_cond(&config_mutex)
-        , shard_init_cond(&config_mutex)
         , to_exit(false)
         , shard_id(UINT64_MAX)
         , server(serverid)
@@ -261,11 +259,10 @@ namespace db
     shard :: init(uint64_t shardid)
     {
         shard_id = shardid;
-        comm.init(config);
-        update_members_new_config();
         for (int i = 0; i < NUM_THREADS; i++) {
             hstub.push_back(new hyper_stub(shard_id));
         }
+        reconfigure();
     }
 
     // reconfigure shard according to new cluster configuration
@@ -285,12 +282,13 @@ namespace db
         std::vector<std::pair<server_id, po6::net::location>> addresses;
         config.get_all_addresses(&addresses);
 
-        uint64_t num_shards = 0;
+        std::unordered_set<uint64_t> shard_set;
         for (auto &p: addresses) {
             if (config.get_type(p.first) == server::SHARD) {
-                num_shards++;
+                shard_set.emplace(config.get_virtual_id(p.first));
             }
         }
+        uint64_t num_shards = shard_set.size();
 
         migration_mutex.lock();
         shard_node_count.resize(num_shards, 0);

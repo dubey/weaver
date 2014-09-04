@@ -52,6 +52,7 @@ class configuration
         po6::net::location get_address(const server_id& id) const;
         server::state_t get_state(const server_id& id) const;
         uint64_t get_weaver_id(const server_id &id) const;
+        uint64_t get_virtual_id(const server_id &id) const;
         server::type_t get_type(const server_id &id) const;
 
     public:

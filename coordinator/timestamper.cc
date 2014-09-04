@@ -625,7 +625,7 @@ generate_token(uint64_t* token)
 }
 
 void
-server_manager_link_loop(po6::net::hostname sm_host, po6::net::location loc)
+server_manager_link_loop(po6::net::hostname sm_host, po6::net::location loc, bool backup)
 {
     // Most of the following code has been 'borrowed' from
     // Robert Escriva's HyperDex.
@@ -633,7 +633,8 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location loc)
 
     vts->sm_stub.set_server_manager_address(sm_host.address.c_str(), sm_host.port);
 
-    if (!vts->sm_stub.register_id(vts->server, loc, server::VT))
+    server::type_t type = backup? server::BACKUP_VT : server::VT;
+    if (!vts->sm_stub.register_id(vts->server, loc, type))
     {
         return;
     }
@@ -678,9 +679,6 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location loc)
             vts->first_config = true;
             vts->first_config_cond.signal();
         } else {
-            while (!vts->vts_init) {
-                vts->vts_init_cond.wait();
-            }
             vts->reconfigure();
         }
         vts->config_mutex.unlock();
@@ -723,6 +721,37 @@ install_signal_handler(int signum, void (*handler)(int))
     assert(ret == 0);
 }
 
+// caution: assume holding vts->config_mutex for vts->pause_bb
+void
+init_worker_threads(std::vector<std::thread*> &threads)
+{
+    for (int i = 0; i < NUM_THREADS; i++) {
+        std::thread *t = new std::thread(server_loop, i);
+        threads.emplace_back(t);
+    }
+    vts->pause_bb = true;
+}
+
+// caution: assume holding vts->config_mutex
+void
+init_vt()
+{
+    std::vector<std::pair<server_id, po6::net::location>> addresses;
+    vts->config.get_all_addresses(&addresses);
+    vt_id = UINT64_MAX;
+    for (auto &p: addresses) {
+        if (p.second == *vts->comm.get_loc()) {
+            uint64_t vid = vts->config.get_virtual_id(p.first);
+            assert(vts->config.get_type(p.first) == server::VT);
+            vt_id = vid;
+        }
+    }
+    assert(vt_id != UINT64_MAX);
+
+    // registered this server with server_manager, we now know the vt_id
+    vts->init(vt_id);
+}
+
 int
 main(int argc, const char *argv[])
 {
@@ -756,7 +785,7 @@ main(int argc, const char *argv[])
     const char* listen_host = "127.0.0.1";
     long listen_port = 5200;
     const char *config_file = "/etc/weaver.yaml";
-    long backup_input = LONG_MAX;
+    bool backup = false;
     // arg parsing borrowed from HyperDex
     e::argparser ap;
     ap.autohelp();
@@ -766,9 +795,9 @@ main(int argc, const char *argv[])
     ap.arg().name('p', "listen-port")
             .description("listen on an alternative port (default: 5200)")
             .metavar("port").as_long(&listen_port);
-    ap.arg().name('b', "backup-number")
-            .description("backup number (not backup by default)")
-            .metavar("num").as_long(&backup_input);
+    ap.arg().name('b', "backup-vt")
+            .description("make this a backup timestamper")
+            .set_true(&backup);
     ap.arg().long_name("config-file")
             .description("full path of weaver.yaml configuration file (default /etc/weaver.yaml)")
             .metavar("filename").as_string(&config_file);
@@ -784,23 +813,6 @@ main(int argc, const char *argv[])
         return -1;
     }
 
-    // init vt, also check cmdline params
-    //vt_id = (uint64_t)vtid_input;
-    //if (vt_id >= NumVts) {
-    //    WDEBUG << "bad vt id " << vt_id << std::endl;
-    //    return -1;
-    //}
-
-    //uint64_t server_id = vt_id;
-
-    if (backup_input != LONG_MAX) {
-        // backup shard
-        if ((uint64_t)backup_input > NumBackups) {
-            WDEBUG << "bad backup number" << std::endl;
-            return -1;
-        }
-    }
-
     po6::net::location my_loc(listen_host, listen_port);
     uint64_t sid;
     assert(generate_token(&sid));
@@ -809,7 +821,8 @@ main(int argc, const char *argv[])
     // server manager link
     std::thread sm_thr(server_manager_link_loop,
         po6::net::hostname(ServerManagerIpaddr, ServerManagerPort),
-        my_loc);
+        my_loc,
+        backup);
     sm_thr.detach();
 
     vts->config_mutex.lock();
@@ -819,48 +832,28 @@ main(int argc, const char *argv[])
         vts->first_config_cond.wait();
     }
 
-    std::vector<std::pair<server_id, po6::net::location>> addresses;
-    vts->config.get_all_addresses(&addresses);
-    vt_id = UINT64_MAX;
-    for (auto &p: addresses) {
-        if (p.second == my_loc) {
-            uint64_t wid = vts->config.get_weaver_id(p.first);
-            assert(vts->config.get_type(p.first) == server::VT);
-            vt_id = wid;
-        }
-    }
-    assert(vt_id != UINT64_MAX);
-
-    // registered this server with server_manager, config has fairly recent value
-    vts->init(vt_id);
-    vts->vts_init = true;
-    vts->vts_init_cond.signal();
-
-    vts->config_mutex.unlock();
-
-    vts->init_hstub(); // initialize late because we write to hyperdex
-
-    // start all threads
     std::vector<std::thread*> worker_threads;
-    for (int i = 0; i < NUM_THREADS; i++) {
-        std::thread *t = new std::thread(server_loop, i);
-        worker_threads.emplace_back(t);
-    }
 
-    if (backup_input != LONG_MAX) {
-        // wait till this server becomes primary vt
-        vts->config_mutex.lock();
+    if (backup) {
         while (!vts->active_backup) {
             vts->backup_cond.wait();
         }
-        vts->num_active_vts = NumVts;
+
+        init_vt();
         vts->config_mutex.unlock();
-        WDEBUG << "backup " << backup_input << " now primary for vt " << vt_id << std::endl;
+
+        // release config_mutex while restoring vt which may take a while
         vts->restore_backup();
+
+        vts->config_mutex.lock();
+        init_worker_threads(worker_threads);
+    } else {
+        init_vt();
+
+        init_worker_threads(worker_threads);
     }
 
     // initial wait for all vector timestampers to start
-    vts->config_mutex.lock();
     while (vts->num_active_vts != NumVts) {
         vts->start_all_vts_cond.wait();
     }

@@ -19,6 +19,7 @@
 // STL
 #include <algorithm>
 #include <sstream>
+#include <unordered_set>
 
 // e
 #include <e/endian.h>
@@ -27,6 +28,7 @@
 #include <replicant_state_machine.h>
 
 // Weaver
+#include "common/weaver_constants.h"
 #include "common/server_manager_returncode.h"
 #include "coordinator/server_manager.h"
 #include "coordinator/util.h"
@@ -60,6 +62,7 @@ server_manager :: server_manager()
     , m_flags(0)
     , m_num_shards(0)
     , m_num_vts(0)
+    , m_num_weaver(0)
     , m_servers()
     , m_config_ack_through(0)
     , m_config_ack_barrier()
@@ -118,8 +121,23 @@ server_manager :: server_register(replicant_state_machine_context* ctx,
     srv = new_server(sid);
     srv->state = server::ASSIGNED;
     srv->bind_to = bind_to;
-    srv->weaver_id = (type == server::SHARD) ? m_num_shards++ : m_num_vts++;
     srv->type = type;
+    srv->weaver_id = m_num_weaver++;
+
+    switch (type) {
+        case server::SHARD:
+            srv->virtual_id = m_num_shards++;
+            break;
+
+        case server::VT:
+            srv->virtual_id = m_num_vts++;
+            break;
+
+        default:
+            break;
+    }
+
+    check_backup(srv);
 
     fprintf(log, "registered server(%lu)\n", sid.get());
     generate_next_configuration(ctx);
@@ -229,6 +247,7 @@ server_manager :: server_offline(replicant_state_machine_context* ctx,
                      sid.get(), server::to_string(srv->state),
                      server::to_string(server::NOT_AVAILABLE));
         srv->state = server::NOT_AVAILABLE;
+        find_backup(srv->type, srv->virtual_id);
         generate_next_configuration(ctx);
     }
 
@@ -259,6 +278,10 @@ server_manager :: server_shutdown(replicant_state_machine_context* ctx,
         return generate_response(ctx, COORD_NO_CAN_DO);
     }
 
+    if (srv->state == server::ASSIGNED && srv->state == server::AVAILABLE) {
+        find_backup(srv->type, srv->virtual_id);
+    }
+
     if (srv->state != server::SHUTDOWN)
     {
         fprintf(log, "changing server(%lu) from %s to %s\n",
@@ -285,6 +308,10 @@ server_manager :: server_kill(replicant_state_machine_context* ctx,
         return generate_response(ctx, COORD_NOT_FOUND);
     }
 
+    if (srv->state == server::ASSIGNED && srv->state == server::AVAILABLE) {
+        find_backup(srv->type, srv->virtual_id);
+    }
+
     if (srv->state != server::KILLED)
     {
         fprintf(log, "changing server(%lu) from %s to %s\n",
@@ -309,6 +336,10 @@ server_manager :: server_forget(replicant_state_machine_context* ctx,
         fprintf(log, "cannot forget server(%lu) because "
                      "the server doesn't exist\n", sid.get());
         return generate_response(ctx, COORD_NOT_FOUND);
+    }
+
+    if (srv->state == server::ASSIGNED && srv->state == server::AVAILABLE) {
+        find_backup(srv->type, srv->virtual_id);
     }
 
     for (size_t i = 0; i < m_servers.size(); ++i)
@@ -359,10 +390,84 @@ server_manager :: server_suspect(replicant_state_machine_context* ctx,
                      sid.get(), server::to_string(srv->state),
                      server::to_string(server::NOT_AVAILABLE));
         srv->state = server::NOT_AVAILABLE;
+        find_backup(srv->type, srv->virtual_id);
         generate_next_configuration(ctx);
     }
 
     return generate_response(ctx, COORD_SUCCESS);
+}
+
+void
+server_manager :: check_backup(server *new_srv)
+{
+    if (new_srv->type != server::BACKUP_SHARD || new_srv->type != server::BACKUP_VT) {
+        return;
+    }
+
+    std::unordered_set<uint64_t> dead_servers;
+    server::type_t server_type = (new_srv->type == server::BACKUP_VT)? server::VT : server::SHARD;
+
+    for (size_t i = 0; m_servers.size(); i++) {
+        if (m_servers[i].state != server::ASSIGNED
+         && m_servers[i].state != server::AVAILABLE
+         && m_servers[i].type == server_type) {
+            dead_servers.emplace(m_servers[i].virtual_id);
+        }
+    }
+
+    for (size_t i = 0; m_servers.size(); i++) {
+        if ((m_servers[i].state == server::AVAILABLE || m_servers[i].state == server::ASSIGNED)
+         && m_servers[i].type == server_type) {
+            dead_servers.erase(m_servers[i].virtual_id);
+        }
+    }
+
+    for (uint64_t vid: dead_servers) {
+        activate_backup(new_srv, server_type, vid);
+        break;
+    }
+}
+
+void
+server_manager :: find_backup(server::type_t type, uint64_t vid)
+{
+    server::type_t target_type;
+
+    switch (type) {
+        case server::SHARD:
+            target_type = server::BACKUP_SHARD;
+            break;
+
+        case server::VT:
+            target_type = server::BACKUP_VT;
+            break;
+
+        default:
+            WDEBUG << "unexpected type: (int) " << type 
+                   << ", (string) " << server::to_string(type) << std::endl;
+            return;
+    }
+
+    for (size_t i = 0; i < m_servers.size(); i++) {
+        if (m_servers[i].type == target_type) {
+            // found backup server
+            activate_backup(&m_servers[i], type, vid);
+            break;
+        }
+    }
+}
+
+void
+server_manager :: activate_backup(server *backup, server::type_t type, uint64_t vid)
+{
+    if (type == server::VT) {
+        assert(backup->type == server::BACKUP_VT);
+    } else {
+        assert(backup->type == server::BACKUP_SHARD);
+    }
+
+    backup->type = type;
+    backup->virtual_id = vid;
 }
 
 void

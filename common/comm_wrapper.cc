@@ -11,6 +11,8 @@
  * ===============================================================
  */
 
+#include <unordered_set>
+
 #define weaver_debug_
 #include "common/weaver_constants.h"
 #include "common/config_constants.h"
@@ -28,20 +30,20 @@ bool
 comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *loc)
 {
     auto mlist_iter = mlist.find(WEAVER_TO_BUSYBEE(server_id));
-    if (mlist_iter == mlist.end()) {
-        WDEBUG << "busybee map lookup failed for orig id " << server_id
-               << ", busybee id " << WEAVER_TO_BUSYBEE(server_id) << std::endl;
-    }
     assert(mlist_iter != mlist.end() && "busybee mapper lookup");
     *loc = mlist_iter->second;
     return true;
 }
 
 void
-comm_wrapper :: weaver_mapper :: add_mapping(uint64_t server_id, po6::net::location *loc)
+comm_wrapper :: weaver_mapper :: add_mapping(uint64_t server_id, const po6::net::location &loc)
 {
-    assert(mlist.find(WEAVER_TO_BUSYBEE(server_id)) == mlist.end());
-    mlist[WEAVER_TO_BUSYBEE(server_id)] = *loc;
+    auto find_iter = mlist.find(server_id);
+    if (find_iter == mlist.end()) {
+        mlist[WEAVER_TO_BUSYBEE(server_id)] = loc;
+    } else {
+        assert(find_iter->second == loc);
+    }
 }
 
 
@@ -72,25 +74,19 @@ comm_wrapper :: comm_wrapper(po6::net::location &my_loc, int nthr, int to)
     loc.reset(new po6::net::location(my_loc));
     WDEBUG << "attaching to loc " << loc->address << ":" << loc->port << std::endl;
     bb->set_timeout(timeout);
-}
-
-comm_wrapper :: ~comm_wrapper()
-{
-    for (auto &gc_ptr: bb_gc_ts) {
-        bb_gc.deregister_thread(gc_ptr.get());
-    }
-}
-
-void
-comm_wrapper :: init(configuration &config)
-{
-    reconfigure_internal(config);
 
     std::unique_ptr<e::garbage_collector::thread_state> gc_ts_ptr;
     for (int i = 0; i < num_threads; i++) {
         gc_ts_ptr.reset(new e::garbage_collector::thread_state());
         bb_gc.register_thread(gc_ts_ptr.get());
         bb_gc_ts.emplace_back(std::move(gc_ts_ptr));
+    }
+}
+
+comm_wrapper :: ~comm_wrapper()
+{
+    for (auto &gc_ptr: bb_gc_ts) {
+        bb_gc.deregister_thread(gc_ptr.get());
     }
 }
 
@@ -102,6 +98,7 @@ comm_wrapper :: reconfigure(configuration &new_config, bool to_pause, uint64_t *
     }
 
     reconfigure_internal(new_config);
+
     if (num_active_vts != NULL) {
         *num_active_vts = 0;
         for (uint64_t i = 0; i < NumVts; i++) {
@@ -123,39 +120,50 @@ comm_wrapper :: reconfigure_internal(configuration &new_config)
     std::vector<std::pair<server_id, po6::net::location>> addresses;
     config.get_all_addresses(&addresses);
 
-    uint64_t num_shards = 0;
+    std::unordered_set<uint64_t> shard_set;
     for (auto &p: addresses) {
         if (config.get_type(p.first) == server::SHARD) {
-            num_shards++;
+            shard_set.emplace(config.get_virtual_id(p.first));
         }
     }
+    uint64_t num_shards = shard_set.size();
     assert(active_server_idx.size() <= (NumVts+num_shards));
     active_server_idx.resize(NumVts+num_shards, UINT64_MAX);
 
     for (auto &p: addresses) {
-        assert(config.get_weaver_id(p.first) != UINT64_MAX);
-        uint64_t factor = config.get_type(p.first) == server::SHARD ? 1 : 0;
-        uint64_t wid = config.get_weaver_id(p.first) + NumVts*factor;
-        if (active_server_idx[wid] < UINT64_MAX
-         && config.get_state(p.first) != server::AVAILABLE) {
-            // reconfigure to backup
-        } else if (active_server_idx[wid] == UINT64_MAX) {
-            active_server_idx[wid] = wid;
-            wmap->add_mapping(wid, &p.second);
+        server::type_t type = config.get_type(p.first);
+        server::state_t state = config.get_state(p.first);
+        uint64_t weaver_id = config.get_weaver_id(p.first);
+        uint64_t virtual_id = config.get_virtual_id(p.first);
+
+        assert(weaver_id != UINT64_MAX);
+
+        if (type != server::SHARD && type != server::VT) {
+            if (type == server::BACKUP_SHARD) {
+                WDEBUG << "Backup shard " << weaver_id
+                       << " has state " << server::to_string(state) << std::endl;
+            } else {
+                WDEBUG << "Backup vt " << weaver_id
+                       << " has state " << server::to_string(state) << std::endl;
+            }
+            continue;
         }
 
-        server::state_t st = config.get_state(p.first);
-        if (st != server::AVAILABLE) {
-            WDEBUG << "Server " << wid << " is in trouble, has state " << server::to_string(st) << std::endl;
+        uint64_t factor = (type == server::SHARD) ? 1 : 0;
+        uint64_t vid = virtual_id + NumVts*factor;
+        if (state == server::AVAILABLE) {
+            active_server_idx[vid] = weaver_id;
+            wmap->add_mapping(weaver_id, p.second);
+        }
+
+        if (state != server::AVAILABLE) {
+            WDEBUG << "Server " << weaver_id << " is in trouble, has state "
+                   << server::to_string(state) << std::endl;
         } else {
-            WDEBUG << "Server " << wid << " is healthy, has state " << server::to_string(st) << std::endl;
+            WDEBUG << "Server " << weaver_id << " is healthy, has state "
+                   << server::to_string(state) << std::endl;
         }
     }
-
-    //while (primary >= NumEffectiveServers) {
-    //    primary -= (NumEffectiveServers);
-    //}
-    //primary = active_server_idx[primary];
 }
 
 #pragma GCC diagnostic push

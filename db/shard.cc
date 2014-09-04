@@ -1850,7 +1850,7 @@ generate_token(uint64_t* token)
 }
 
 void
-server_manager_link_loop(po6::net::hostname sm_host, po6::net::location my_loc)
+server_manager_link_loop(po6::net::hostname sm_host, po6::net::location my_loc, bool backup)
 {
     // Most of the following code has been borrowed from
     // Robert Escriva's HyperDex.
@@ -1858,7 +1858,8 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location my_loc)
 
     S->sm_stub.set_server_manager_address(sm_host.address.c_str(), sm_host.port);
 
-    if (!S->sm_stub.register_id(S->server, my_loc, server::SHARD))
+    server::type_t type = backup? server::BACKUP_SHARD : server::SHARD;
+    if (!S->sm_stub.register_id(S->server, my_loc, type))
     {
         return;
     }
@@ -1910,9 +1911,6 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location my_loc)
             S->first_config = true;
             S->first_config_cond.signal();
         } else {
-            while (!S->shard_init) {
-                S->shard_init_cond.wait();
-            }
             S->reconfigure();
         }
         S->config_mutex.unlock();
@@ -1968,6 +1966,26 @@ init_worker_threads(std::vector<std::thread*> &threads)
     S->pause_bb = true;
 }
 
+// caution: assume holding S->config_mutex
+void
+init_shard()
+{
+    std::vector<std::pair<server_id, po6::net::location>> addresses;
+    S->config.get_all_addresses(&addresses);
+    shard_id = UINT64_MAX;
+    for (auto &p: addresses) {
+        if (p.second == *S->comm.get_loc()) {
+            uint64_t vid = S->config.get_virtual_id(p.first);
+            assert(S->config.get_type(p.first) == server::SHARD);
+            shard_id = vid + NumVts;
+        }
+    }
+    assert(shard_id != UINT64_MAX);
+
+    // registered this server with server_manager, we now know the shard_id
+    S->init(shard_id);
+}
+
 int
 main(int argc, const char *argv[])
 {
@@ -2003,7 +2021,7 @@ main(int argc, const char *argv[])
     const char *config_file = "/etc/weaver.yaml";
     const char *graph_file = NULL;
     const char *graph_format = "snap";
-    long backup_input = LONG_MAX;
+    bool backup = false;
     long bulk_load_num_shards = 1;
     // arg parsing borrowed from HyperDex
     e::argparser ap;
@@ -2014,9 +2032,9 @@ main(int argc, const char *argv[])
     ap.arg().name('p', "listen-port")
             .description("listen on an alternative port (default: 5201)")
             .metavar("port").as_long(&listen_port);
-    ap.arg().name('b', "backup-number")
-            .description("backup number (not backup by default)")
-            .metavar("num").as_long(&backup_input);
+    ap.arg().name('b', "backup-shard")
+            .description("make this a backup shard")
+            .set_true(&backup);
     ap.arg().long_name("config-file")
             .description("full path of weaver.yaml configuration file (default /etc/weaver.yaml)")
             .metavar("filename").as_string(&config_file);
@@ -2041,15 +2059,6 @@ main(int argc, const char *argv[])
         return -1;
     }
 
-    if (backup_input != LONG_MAX) {
-        assert(graph_file == NULL);
-        // backup shard
-        if ((uint64_t)backup_input > NumBackups) {
-            WDEBUG << "bad backup number" << std::endl;
-            return -1;
-        }
-    }
-
     po6::net::location my_loc(listen_host, listen_port);
     uint64_t sid;
     assert(generate_token(&sid));
@@ -2058,7 +2067,8 @@ main(int argc, const char *argv[])
     // server manager link
     std::thread sm_thr(server_manager_link_loop,
         po6::net::hostname(ServerManagerIpaddr, ServerManagerPort),
-        my_loc);
+        my_loc,
+        backup);
     sm_thr.detach();
 
     S->config_mutex.lock();
@@ -2068,36 +2078,25 @@ main(int argc, const char *argv[])
         S->first_config_cond.wait();
     }
 
-    std::vector<std::pair<server_id, po6::net::location>> addresses;
-    S->config.get_all_addresses(&addresses);
-    shard_id = UINT64_MAX;
-    for (auto &p: addresses) {
-        if (p.second == my_loc) {
-            uint64_t wid = S->config.get_weaver_id(p.first);
-            assert(S->config.get_type(p.first) == server::SHARD);
-            shard_id = wid + NumVts;
-        }
-    }
-    assert(shard_id != UINT64_MAX);
-
-    // registered this server with server_manager, config has fairly recent value
-    S->init(shard_id);
-    S->shard_init = true;
-    S->shard_init_cond.signal();
-
     std::vector<std::thread*> worker_threads;
-    if (backup_input != LONG_MAX) {
-        // this is backup
+
+    if (backup) {
         while (!S->active_backup) {
             S->backup_cond.wait();
         }
 
+        init_shard();
+        S->config_mutex.unlock();
+
+        // release config_mutex while restoring shard data which may take a while
         S->restore_backup();
 
+        S->config_mutex.lock();
         init_worker_threads(worker_threads);
-
         S->config_mutex.unlock();
     } else {
+        init_shard();
+
         init_worker_threads(worker_threads);
 
         S->config_mutex.unlock();

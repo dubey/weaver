@@ -27,19 +27,14 @@ comm_wrapper :: weaver_mapper :: weaver_mapper(const configuration &config)
     config.get_all_addresses(&addresses);
 
     for (auto &p: addresses) {
-        assert(config.get_weaver_id(p.first) != UINT64_MAX);
-        uint64_t factor = config.get_type(p.first) == server::SHARD ? 1 : 0;
-        uint64_t wid = config.get_weaver_id(p.first) + NumVts*factor;
-        if (config.get_state(p.first) == server::AVAILABLE) {
-            assert(mlist.find(WEAVER_TO_BUSYBEE(wid)) == mlist.end());
-            mlist[WEAVER_TO_BUSYBEE(wid)] = p.second;
-        }
+        server::type_t type = config.get_type(p.first);
+        uint64_t virtual_id = config.get_virtual_id(p.first);
+        server::state_t state = config.get_state(p.first);
 
-        server::state_t st = config.get_state(p.first);
-        if (st != server::AVAILABLE) {
-            WDEBUG << "Server " << wid << " is in trouble, has state " << server::to_string(st) << std::endl;
-        } else {
-            WDEBUG << "Server " << wid << " is healthy, has state " << server::to_string(st) << std::endl;
+        if (type == server::VT && state == server::AVAILABLE) {
+            assert(mlist.find(WEAVER_TO_BUSYBEE(virtual_id)) == mlist.end());
+            mlist[WEAVER_TO_BUSYBEE(virtual_id)] = p.second;
+            WDEBUG << "VT " << virtual_id << " has state " << server::to_string(state) << std::endl;
         }
     }
 }
@@ -47,11 +42,8 @@ comm_wrapper :: weaver_mapper :: weaver_mapper(const configuration &config)
 bool
 comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *loc)
 {
+    assert(server_id < NumVts);
     auto mlist_iter = mlist.find(WEAVER_TO_BUSYBEE(server_id));
-    if (mlist_iter == mlist.end()) {
-        WDEBUG << "busybee map lookup failed for orig id " << server_id
-               << ", busybee id " << WEAVER_TO_BUSYBEE(server_id) << std::endl;
-    }
     assert(mlist_iter != mlist.end() && "busybee mapper lookup");
     *loc = mlist_iter->second;
     return true;

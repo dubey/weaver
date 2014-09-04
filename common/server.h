@@ -43,7 +43,9 @@ class server
         {
             UNDEF = 0,
             SHARD = 1,
-            VT = 2
+            VT = 2,
+            BACKUP_SHARD = 3,
+            BACKUP_VT = 4
         };
         static const char* to_string(state_t state);
         static const char* to_string(type_t type);
@@ -56,6 +58,7 @@ class server
         state_t state;
         server_id id;
         uint64_t weaver_id;
+        uint64_t virtual_id;
         type_t type;
         po6::net::location bind_to;
 };

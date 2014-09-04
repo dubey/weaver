@@ -38,7 +38,7 @@ class comm_wrapper
                 weaver_mapper() : mlist() { }
                 virtual ~weaver_mapper() throw () { }
                 virtual bool lookup(uint64_t server_id, po6::net::location *loc);
-                void add_mapping(uint64_t server_id, po6::net::location *loc);
+                void add_mapping(uint64_t server_id, const po6::net::location &loc);
 
             private:
                 weaver_mapper(const weaver_mapper&);
@@ -61,7 +61,6 @@ class comm_wrapper
     public:
         comm_wrapper(po6::net::location &loc, int nthr, int timeout);
         ~comm_wrapper();
-        void init(configuration &config);
         void reconfigure(configuration &config, bool to_pause=true, uint64_t *num_active_vts=NULL);
         std::shared_ptr<po6::net::location> get_loc() { return loc; }
 #pragma GCC diagnostic push

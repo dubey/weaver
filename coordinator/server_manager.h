@@ -72,6 +72,11 @@ class server_manager
         //void report_disconnect(replicant_state_machine_context* ctx,
         //                       const server_id& sid, uint64_t version);
 
+    private:
+        void check_backup(server *new_srv);
+        void find_backup(server::type_t type, uint64_t vid);
+        void activate_backup(server *backup_srv, server::type_t type, uint64_t vid);
+
     // config management
     public:
         void config_get(replicant_state_machine_context* ctx);
@@ -116,6 +121,7 @@ class server_manager
         uint64_t m_flags;
         uint64_t m_num_shards;
         uint64_t m_num_vts;
+        uint64_t m_num_weaver;
         // servers
         std::vector<server> m_servers;
         // barriers

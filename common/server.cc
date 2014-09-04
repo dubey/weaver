@@ -51,6 +51,10 @@ server :: to_string(type_t type)
             return "SHARD";
         case VT:
             return "VT";
+        case BACKUP_SHARD:
+            return "BACKUP_SHARD";
+        case BACKUP_VT:
+            return "BACKUP_VT";
         default:
             return "BADTYPE";
     }
@@ -60,6 +64,7 @@ server :: server()
     : state(KILLED)
     , id()
     , weaver_id(UINT64_MAX)
+    , virtual_id(UINT64_MAX)
     , type(UNDEF)
     , bind_to()
 {
@@ -69,6 +74,7 @@ server :: server(const server_id& sid)
     : state(ASSIGNED)
     , id(sid)
     , weaver_id(UINT64_MAX)
+    , virtual_id(UINT64_MAX)
     , type(UNDEF)
     , bind_to()
 {
@@ -85,14 +91,14 @@ operator << (e::buffer::packer lhs, const server& rhs)
 {
     uint8_t s = static_cast<uint8_t>(rhs.state);
     uint8_t t = static_cast<uint8_t>(rhs.type);
-    return lhs << s << rhs.id << rhs.weaver_id << t << rhs.bind_to;
+    return lhs << s << rhs.id << rhs.weaver_id << rhs.virtual_id << t << rhs.bind_to;
 }
 
 e::unpacker
 operator >> (e::unpacker lhs, server& rhs)
 {
     uint8_t s, t;
-    lhs = lhs >> s >> rhs.id >> rhs.weaver_id >> t >> rhs.bind_to;
+    lhs = lhs >> s >> rhs.id >> rhs.weaver_id >> rhs.virtual_id >> t >> rhs.bind_to;
     rhs.state = static_cast<server::state_t>(s);
     rhs.type = static_cast<server::type_t>(t);
     return lhs;
@@ -102,6 +108,7 @@ size_t
 pack_size(const server& p)
 {
     return sizeof(uint8_t)
+         + sizeof(uint64_t)
          + sizeof(uint64_t)
          + sizeof(uint64_t)
          + sizeof(int)

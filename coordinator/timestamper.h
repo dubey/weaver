@@ -58,9 +58,9 @@ namespace coordinator
             // server manager
             server_manager_link_wrapper sm_stub;
             configuration config;
-            bool active_backup, first_config, vts_init;
+            bool active_backup, first_config, pause_bb;
             uint64_t num_active_vts;
-            po6::threads::cond backup_cond, first_config_cond, vts_init_cond, start_all_vts_cond;
+            po6::threads::cond backup_cond, first_config_cond, start_all_vts_cond;
             
             // Hyperdex stub
             std::vector<hyper_stub*> hstub;
@@ -125,7 +125,6 @@ namespace coordinator
         public:
             timestamper(uint64_t serverid, po6::net::location &loc);
             void init(uint64_t vtid);
-            void init_hstub();
             void restore_backup();
             void reconfigure();
             void update_members_new_config();
@@ -141,11 +140,10 @@ namespace coordinator
         , sm_stub(server_id(serverid), comm.get_loc())
         , active_backup(false)
         , first_config(false)
-        , vts_init(false)
+        , pause_bb(false)
         , num_active_vts(0)
         , backup_cond(&config_mutex)
         , first_config_cond(&config_mutex)
-        , vts_init_cond(&config_mutex)
         , start_all_vts_cond(&config_mutex)
         , server(serverid)
         , vt_id(UINT64_MAX)
@@ -181,16 +179,12 @@ namespace coordinator
         vt_id = vtid;
         shifted_id = vt_id << (64-ID_BITS);
         vclk.vt_id = vt_id;
-        comm.init(config);
-        update_members_new_config();
-    }
 
-    inline void
-    timestamper :: init_hstub()
-    {
         for (int i = 0; i < NUM_THREADS; i++) {
             hstub.push_back(new hyper_stub(vt_id));
         }
+
+        reconfigure();
     }
 
     // restore state when backup becomes primary due to failure
@@ -212,7 +206,7 @@ namespace coordinator
         WDEBUG << "Cluster reconfigure triggered\n";
 
         uint64_t prev_active_vts = num_active_vts;
-        comm.reconfigure(config, true, &num_active_vts);
+        comm.reconfigure(config, pause_bb, &num_active_vts);
         update_members_new_config();
         //if (comm.reconfigure(config, &num_active_vts) == server.get()
         // && !active_backup
@@ -271,12 +265,13 @@ namespace coordinator
         std::vector<std::pair<server_id, po6::net::location>> addresses;
         config.get_all_addresses(&addresses);
 
-        uint64_t num_shards = 0;
+        std::unordered_set<uint64_t> shard_set;
         for (auto &p: addresses) {
             if (config.get_type(p.first) == server::SHARD) {
-                num_shards++;
+                shard_set.emplace(config.get_virtual_id(p.first));
             }
         }
+        uint64_t num_shards = shard_set.size();
 
         periodic_update_mutex.lock();
         to_nop.resize(num_shards, true);
