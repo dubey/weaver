@@ -73,8 +73,8 @@ class server_manager
         //                       const server_id& sid, uint64_t version);
 
     private:
-        void check_backup(server *new_srv);
-        void find_backup(server::type_t type, uint64_t vid);
+        void check_backup(FILE *log, server *new_srv);
+        void find_backup(FILE *log, server::type_t type, uint64_t vid);
         void activate_backup(server *backup_srv, server::type_t type, uint64_t vid);
 
     // config management

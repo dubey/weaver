@@ -1910,9 +1910,8 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location my_loc, 
         if (!S->first_config) {
             S->first_config = true;
             S->first_config_cond.signal();
-        } else {
-            S->reconfigure();
         }
+        S->reconfigure();
         S->config_mutex.unlock();
 
         // let the coordinator know we've moved to this config

@@ -139,29 +139,23 @@ comm_wrapper :: reconfigure_internal(configuration &new_config)
         assert(weaver_id != UINT64_MAX);
 
         if (type != server::SHARD && type != server::VT) {
-            if (type == server::BACKUP_SHARD) {
-                WDEBUG << "Backup shard " << weaver_id
-                       << " has state " << server::to_string(state) << std::endl;
-            } else {
-                WDEBUG << "Backup vt " << weaver_id
-                       << " has state " << server::to_string(state) << std::endl;
-            }
-            continue;
-        }
-
-        uint64_t factor = (type == server::SHARD) ? 1 : 0;
-        uint64_t vid = virtual_id + NumVts*factor;
-        if (state == server::AVAILABLE) {
-            active_server_idx[vid] = weaver_id;
-            wmap->add_mapping(weaver_id, p.second);
-        }
-
-        if (state != server::AVAILABLE) {
-            WDEBUG << "Server " << weaver_id << " is in trouble, has state "
-                   << server::to_string(state) << std::endl;
+            WDEBUG << "Server: " << weaver_id
+                   << ", role: " << server::to_string(type)
+                   << ", state: " << server::to_string(state)
+                   << "." << std::endl;
         } else {
-            WDEBUG << "Server " << weaver_id << " is healthy, has state "
-                   << server::to_string(state) << std::endl;
+            uint64_t factor = (type == server::SHARD) ? 1 : 0;
+            uint64_t vid = virtual_id + NumVts*factor;
+
+            WDEBUG << "Server: " << weaver_id
+                   << ", role: " << server::to_string(type) << " " << vid
+                   << ", state: " << server::to_string(state)
+                   << "." << std::endl;
+
+            if (state == server::AVAILABLE) {
+                active_server_idx[vid] = weaver_id;
+                wmap->add_mapping(weaver_id, p.second);
+            }
         }
     }
 }

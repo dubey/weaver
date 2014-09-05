@@ -678,9 +678,8 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location loc, boo
         if (!vts->first_config) {
             vts->first_config = true;
             vts->first_config_cond.signal();
-        } else {
-            vts->reconfigure();
         }
+        vts->reconfigure();
         vts->config_mutex.unlock();
 
         // let the coordinator know we've moved to this config

@@ -183,8 +183,6 @@ namespace coordinator
         for (int i = 0; i < NUM_THREADS; i++) {
             hstub.push_back(new hyper_stub(vt_id));
         }
-
-        reconfigure();
     }
 
     // restore state when backup becomes primary due to failure
@@ -284,6 +282,12 @@ namespace coordinator
         clk_rw_mtx.unlock();
 
         update_config_constants(num_shards);
+
+        uint64_t vid = config.get_virtual_id(server);
+        if (vid != UINT64_MAX) {
+            active_backup = true;
+            backup_cond.signal();
+        }
     }
 
     inline uint64_t

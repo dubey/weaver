@@ -28,7 +28,6 @@
 #include <replicant_state_machine.h>
 
 // Weaver
-#include "common/weaver_constants.h"
 #include "common/server_manager_returncode.h"
 #include "coordinator/server_manager.h"
 #include "coordinator/util.h"
@@ -137,7 +136,7 @@ server_manager :: server_register(replicant_state_machine_context* ctx,
             break;
     }
 
-    check_backup(srv);
+    check_backup(log, srv);
 
     fprintf(log, "registered server(%lu)\n", sid.get());
     generate_next_configuration(ctx);
@@ -247,7 +246,7 @@ server_manager :: server_offline(replicant_state_machine_context* ctx,
                      sid.get(), server::to_string(srv->state),
                      server::to_string(server::NOT_AVAILABLE));
         srv->state = server::NOT_AVAILABLE;
-        find_backup(srv->type, srv->virtual_id);
+        find_backup(log, srv->type, srv->virtual_id);
         generate_next_configuration(ctx);
     }
 
@@ -279,7 +278,7 @@ server_manager :: server_shutdown(replicant_state_machine_context* ctx,
     }
 
     if (srv->state == server::ASSIGNED && srv->state == server::AVAILABLE) {
-        find_backup(srv->type, srv->virtual_id);
+        find_backup(log, srv->type, srv->virtual_id);
     }
 
     if (srv->state != server::SHUTDOWN)
@@ -309,7 +308,7 @@ server_manager :: server_kill(replicant_state_machine_context* ctx,
     }
 
     if (srv->state == server::ASSIGNED && srv->state == server::AVAILABLE) {
-        find_backup(srv->type, srv->virtual_id);
+        find_backup(log, srv->type, srv->virtual_id);
     }
 
     if (srv->state != server::KILLED)
@@ -339,7 +338,7 @@ server_manager :: server_forget(replicant_state_machine_context* ctx,
     }
 
     if (srv->state == server::ASSIGNED && srv->state == server::AVAILABLE) {
-        find_backup(srv->type, srv->virtual_id);
+        find_backup(log, srv->type, srv->virtual_id);
     }
 
     for (size_t i = 0; i < m_servers.size(); ++i)
@@ -390,7 +389,7 @@ server_manager :: server_suspect(replicant_state_machine_context* ctx,
                      sid.get(), server::to_string(srv->state),
                      server::to_string(server::NOT_AVAILABLE));
         srv->state = server::NOT_AVAILABLE;
-        find_backup(srv->type, srv->virtual_id);
+        find_backup(log, srv->type, srv->virtual_id);
         generate_next_configuration(ctx);
     }
 
@@ -398,38 +397,40 @@ server_manager :: server_suspect(replicant_state_machine_context* ctx,
 }
 
 void
-server_manager :: check_backup(server *new_srv)
+server_manager :: check_backup(FILE *log, server *new_srv)
 {
-    if (new_srv->type != server::BACKUP_SHARD || new_srv->type != server::BACKUP_VT) {
+    if (new_srv->type != server::BACKUP_SHARD && new_srv->type != server::BACKUP_VT) {
         return;
     }
 
     std::unordered_set<uint64_t> dead_servers;
     server::type_t server_type = (new_srv->type == server::BACKUP_VT)? server::VT : server::SHARD;
 
-    for (size_t i = 0; m_servers.size(); i++) {
-        if (m_servers[i].state != server::ASSIGNED
-         && m_servers[i].state != server::AVAILABLE
-         && m_servers[i].type == server_type) {
-            dead_servers.emplace(m_servers[i].virtual_id);
+    for (const server &srv: m_servers) {
+        if (srv.state != server::ASSIGNED
+         && srv.state != server::AVAILABLE
+         && srv.type == server_type) {
+            dead_servers.emplace(srv.virtual_id);
         }
     }
 
-    for (size_t i = 0; m_servers.size(); i++) {
-        if ((m_servers[i].state == server::AVAILABLE || m_servers[i].state == server::ASSIGNED)
-         && m_servers[i].type == server_type) {
-            dead_servers.erase(m_servers[i].virtual_id);
+    for (const server &srv: m_servers) {
+        if ((srv.state == server::AVAILABLE || srv.state == server::ASSIGNED)
+         && srv.type == server_type) {
+            dead_servers.erase(srv.virtual_id);
         }
     }
 
     for (uint64_t vid: dead_servers) {
+        fprintf(log, "activating backup %lu for dead %s %lu\n",
+                new_srv->weaver_id, server::to_string(server_type), vid);
         activate_backup(new_srv, server_type, vid);
         break;
     }
 }
 
 void
-server_manager :: find_backup(server::type_t type, uint64_t vid)
+server_manager :: find_backup(FILE *log, server::type_t type, uint64_t vid)
 {
     server::type_t target_type;
 
@@ -443,8 +444,8 @@ server_manager :: find_backup(server::type_t type, uint64_t vid)
             break;
 
         default:
-            WDEBUG << "unexpected type: (int) " << type 
-                   << ", (string) " << server::to_string(type) << std::endl;
+            fprintf(log, "unexpected type: (int) %d, (string) %s\n",
+                    type, server::to_string(type));
             return;
     }
 

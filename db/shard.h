@@ -262,7 +262,6 @@ namespace db
         for (int i = 0; i < NUM_THREADS; i++) {
             hstub.push_back(new hyper_stub(shard_id));
         }
-        reconfigure();
     }
 
     // reconfigure shard according to new cluster configuration
@@ -302,6 +301,12 @@ namespace db
         migration_mutex.unlock();
 
         update_config_constants(num_shards);
+
+        uint64_t vid = config.get_virtual_id(server);
+        if (vid != UINT64_MAX) {
+            active_backup = true;
+            backup_cond.signal();
+        }
     }
 
     inline void
