@@ -54,12 +54,14 @@ class configuration
         uint64_t get_weaver_id(const server_id &id) const;
         uint64_t get_virtual_id(const server_id &id) const;
         server::type_t get_type(const server_id &id) const;
+        std::vector<server> get_servers() const { return m_servers; }
 
     public:
         std::string dump() const;
 
     public:
         configuration& operator = (const configuration& rhs);
+        std::vector<server> delta(const configuration &other);
 
     private:
         void refill_cache();

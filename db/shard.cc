@@ -580,7 +580,7 @@ nop(void *req)
 
     uint64_t cur_node_count = S->shard_node_count[shard_id - ShardIdIncr];
     uint64_t max_idx = S->shard_node_count.size() > nop_arg->shard_node_count.size() ?
-                       S->shard_node_count.size() : nop_arg->shard_node_count.size();
+                       nop_arg->shard_node_count.size() : S->shard_node_count.size();
     for (uint64_t shrd = 0; shrd < max_idx; shrd++) {
         if ((shrd + ShardIdIncr) == shard_id) {
             continue;
@@ -596,6 +596,7 @@ nop(void *req)
     S->record_completed_tx(tx.timestamp);
 
     // ack to VT
+    WDEBUG << "nop ack, qts = " << qts << std::endl;
     msg.prepare_message(message::VT_NOP_ACK, shard_id, qts, cur_node_count);
     S->comm.send(vt_id, msg.buf);
 
@@ -1719,6 +1720,7 @@ recv_loop(uint64_t thread_id)
             switch (mtype) {
                 case message::TX_INIT: {
                     rec_msg->unpack_partial_message(message::TX_INIT, vt_id, vclk, qts, txtype);
+                    WDEBUG << "got tx, qts = " << qts << std::endl;
                     assert(vclk.clock.size() == NumVts);
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                     tx_order = S->qm.check_wr_request(vclk, qts);
@@ -1859,7 +1861,7 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location my_loc, 
     S->sm_stub.set_server_manager_address(sm_host.address.c_str(), sm_host.port);
 
     server::type_t type = backup? server::BACKUP_SHARD : server::SHARD;
-    if (!S->sm_stub.register_id(S->server, my_loc, type))
+    if (!S->sm_stub.register_id(S->serv_id, my_loc, type))
     {
         return;
     }
@@ -1906,6 +1908,7 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location my_loc, 
         // if old_config.version == new_config.version, still fetch
 
         S->config_mutex.lock();
+        S->prev_config = S->config;
         S->config = new_config;
         if (!S->first_config) {
             S->first_config = true;
@@ -1927,7 +1930,7 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location my_loc, 
                << "This is most likely an operations error."
                << "================================================================================\n";
     }
-    else if (S->sm_stub.should_exit() && !S->sm_stub.config().exists(S->server))
+    else if (S->sm_stub.should_exit() && !S->sm_stub.config().exists(S->serv_id))
     {
         WDEBUG << "\n================================================================================\n"
                << "Exiting because the server manager says it doesn't know about this node.\n"

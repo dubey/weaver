@@ -60,6 +60,7 @@ namespace db
             bool exec_queued_request();
             void increment_qts(uint64_t vt_id, uint64_t incr);
             void record_completed_tx(vc::vclock &tx_clk);
+            void reset(uint64_t dead_vt);
     };
 
 }

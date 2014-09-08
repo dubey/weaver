@@ -21,6 +21,7 @@
 // STL
 #include <algorithm>
 #include <sstream>
+#include <unordered_set>
 
 // HyperDex
 #include "common/configuration.h"
@@ -189,6 +190,51 @@ configuration :: operator = (const configuration& rhs)
     m_servers = rhs.m_servers;
     refill_cache();
     return *this;
+}
+
+// change to go from this configuration to other configuration
+// the change should be returned in the form of a vector of servers whose state
+// matches other
+// does not include servers which are in this but not in other
+// does include servers which are in other but not in this
+std::vector<server>
+configuration :: delta(const configuration &other)
+{
+    std::vector<server> other_servers = other.get_servers();
+    size_t search_hint = 0;
+    std::vector<server> delta;
+    std::unordered_set<uint64_t> seen;
+    
+    for (const server &this_srv: m_servers) {
+        for (size_t i = 0; i < other_servers.size(); i++) {
+            size_t idx = (search_hint + i) % other_servers.size();
+            const server &other_srv = other_servers[idx];
+
+            if (this_srv.id == other_srv.id) {
+                // found the server
+                if (this_srv != other_srv) {
+                    delta.emplace_back(other_srv);
+                }
+
+                if (i == 0) {
+                    search_hint++;
+                } else {
+                    search_hint = 0;
+                }
+
+                break;
+            }
+        }
+        seen.emplace(this_srv.weaver_id);
+    }
+
+    for (const server &srv: other_servers) {
+        if (seen.find(srv.weaver_id) == seen.end()) {
+            delta.emplace_back(srv);
+        }
+    }
+
+    return delta;
 }
 
 void

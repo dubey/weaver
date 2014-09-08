@@ -74,7 +74,7 @@ namespace db
             // Server manager
             po6::threads::mutex config_mutex, exit_mutex;
             server_manager_link_wrapper sm_stub;
-            configuration config;
+            configuration config, prev_config;
             bool active_backup, first_config, pause_bb;
             po6::threads::cond backup_cond, first_config_cond;
             void reconfigure();
@@ -95,7 +95,7 @@ namespace db
             po6::threads::mutex edge_map_mutex;
             po6::threads::mutex node_map_mutexes[NUM_NODE_MAPS];
             uint64_t shard_id;
-            server_id server;
+            server_id serv_id;
             std::unordered_map<node_handle_t, element::node*> nodes[NUM_NODE_MAPS]; // node handle -> ptr to node object
             std::unordered_map<node_handle_t, // node handle n ->
                 std::unordered_set<node_handle_t>> edge_map; // in-neighbors of n
@@ -232,7 +232,7 @@ namespace db
         , first_config_cond(&config_mutex)
         , to_exit(false)
         , shard_id(UINT64_MAX)
-        , server(serverid)
+        , serv_id(serverid)
         , current_migr(false)
         , migr_updating_nbrs(false)
         , migr_token(false)
@@ -281,14 +281,17 @@ namespace db
         std::vector<std::pair<server_id, po6::net::location>> addresses;
         config.get_all_addresses(&addresses);
 
+        // get num shards
         std::unordered_set<uint64_t> shard_set;
         for (auto &p: addresses) {
-            if (config.get_type(p.first) == server::SHARD) {
+            if (config.get_type(p.first) == server::SHARD
+             && config.get_state(p.first) != server::ASSIGNED) {
                 shard_set.emplace(config.get_virtual_id(p.first));
             }
         }
         uint64_t num_shards = shard_set.size();
 
+        // resize migration ds
         migration_mutex.lock();
         shard_node_count.resize(num_shards, 0);
         if (migr_updating_nbrs) {
@@ -300,12 +303,29 @@ namespace db
         }
         migration_mutex.unlock();
 
+        // update config constants
         update_config_constants(num_shards);
 
-        uint64_t vid = config.get_virtual_id(server);
+        // activate if backup
+        uint64_t vid = config.get_virtual_id(serv_id);
         if (vid != UINT64_MAX) {
             active_backup = true;
             backup_cond.signal();
+        }
+
+        // reset qts if a VTS died
+        std::vector<server> delta = prev_config.delta(config);
+        for (const server &srv: delta) {
+            if (srv.type == server::VT) {
+                server::state_t prev_state = prev_config.get_state(srv.id);
+                if ((prev_state == server::AVAILABLE || prev_state == server::ASSIGNED)
+                 && (srv.state != server::AVAILABLE && srv.state != server::ASSIGNED)) {
+                    uint64_t vt_id = srv.virtual_id;
+                    // reset qts for vt_id
+                    qm.reset(vt_id);
+                    WDEBUG << "reset qts for vt " << vt_id << std::endl;
+                }
+            }
         }
     }
 

@@ -53,6 +53,8 @@ class server
     public:
         server();
         explicit server(const server_id&);
+        bool operator==(const server &other) const;
+        bool operator!=(const server &other) const;
 
     public:
         state_t state;

@@ -81,6 +81,23 @@ server :: server(const server_id& sid)
 }
 
 bool
+server :: operator==(const server &other) const
+{
+    return state == other.state
+        && id == other.id
+        && weaver_id == other.weaver_id
+        && virtual_id == other.virtual_id
+        && type == other.type
+        && bind_to == other.bind_to;
+}
+
+bool
+server :: operator!=(const server &other) const
+{
+    return !(*this == other);
+}
+
+bool
 operator < (const server& lhs, const server& rhs)
 {
     return lhs.id < rhs.id;

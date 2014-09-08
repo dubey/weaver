@@ -57,7 +57,7 @@ namespace coordinator
 
             // server manager
             server_manager_link_wrapper sm_stub;
-            configuration config;
+            configuration config, prev_config;
             bool active_backup, first_config, pause_bb;
             uint64_t num_active_vts;
             po6::threads::cond backup_cond, first_config_cond, start_all_vts_cond;
@@ -67,7 +67,7 @@ namespace coordinator
 
             // timestamper state
         public:
-            server_id server;
+            server_id serv_id;
         private:
             uint64_t vt_id; // this vector timestamper's id
             uint64_t shifted_id;
@@ -145,7 +145,7 @@ namespace coordinator
         , backup_cond(&config_mutex)
         , first_config_cond(&config_mutex)
         , start_all_vts_cond(&config_mutex)
-        , server(serverid)
+        , serv_id(serverid)
         , vt_id(UINT64_MAX)
         , shifted_id(UINT64_MAX)
         , reqid_gen(0)
@@ -205,14 +205,6 @@ namespace coordinator
 
         uint64_t prev_active_vts = num_active_vts;
         comm.reconfigure(config, pause_bb, &num_active_vts);
-        update_members_new_config();
-        //if (comm.reconfigure(config, &num_active_vts) == server.get()
-        // && !active_backup
-        // && server.get() > NumEffectiveServers) {
-        //    // this server is now primary for the timestamper 
-        //    active_backup = true;
-        //    backup_cond.signal();
-        //}
         assert(prev_active_vts <= num_active_vts);
         assert(num_active_vts <= NumVts);
         if (num_active_vts > prev_active_vts) {
@@ -220,41 +212,7 @@ namespace coordinator
             start_all_vts_cond.signal();
         }
 
-        // resend unacked transactions and nop for new shard
-        // TODO flesh out
-        //uint64_t max_qts = 0;
-        //bool pending_tx = false;
-        //if (changed >= ShardIdIncr && changed < (ShardIdIncr+NumShards)) {
-        //    // transactions
-        //    uint64_t sid = changed - ShardIdIncr;
-        //    for (auto &entry: outstanding_tx) {
-        //        std::vector<transaction::pending_tx> &tv = *entry.second.tx_vec;
-        //        if (!tv[sid].writes.empty()) {
-        //            pending_tx = true;
-        //            // TODO resend transactions
-        //            if (tv[sid].writes.back()->qts[sid] > max_qts) {
-        //                max_qts = tv[sid].writes.back()->qts[sid];
-        //            }
-        //        }
-        //    }
-        //    assert(qts[sid] >= max_qts);
-
-        //    // nop
-        //    if (!to_nop[sid]) {
-        //        nop_ack_qts[sid] = qts[sid]; // artificially 'ack' old nop
-        //        to_nop.set(sid);
-        //        WDEBUG << "resetting to_nop for shard " << changed << std::endl;
-        //    }
-
-        //    if (!pending_tx) {
-        //        // only nop was pending, if any
-        //        // send msg to advance clock
-        //        message::message msg;
-        //        msg.prepare_message(message::SET_QTS, vt_id, qts[sid]);
-        //        comm.send(changed, msg.buf);
-        //        WDEBUG << "sent set qts msg to shard " << changed << std::endl;
-        //    }
-        //}
+        update_members_new_config();
     }
 
     inline void
@@ -263,31 +221,66 @@ namespace coordinator
         std::vector<std::pair<server_id, po6::net::location>> addresses;
         config.get_all_addresses(&addresses);
 
+        // update num shards
         std::unordered_set<uint64_t> shard_set;
         for (auto &p: addresses) {
-            if (config.get_type(p.first) == server::SHARD) {
+            if (config.get_type(p.first) == server::SHARD
+             && config.get_state(p.first) != server::ASSIGNED) {
                 shard_set.emplace(config.get_virtual_id(p.first));
             }
         }
         uint64_t num_shards = shard_set.size();
 
+        // resize periodic msg ds
         periodic_update_mutex.lock();
         to_nop.resize(num_shards, true);
         nop_ack_qts.resize(num_shards, 0);
         shard_node_count.resize(num_shards, 0);
-        periodic_update_mutex.unlock();
 
-        clk_rw_mtx.wrlock();
-        qts.resize(num_shards, 0);
-        clk_rw_mtx.unlock();
-
+        // update config constants
         update_config_constants(num_shards);
 
-        uint64_t vid = config.get_virtual_id(server);
+        // activate if backup
+        uint64_t vid = config.get_virtual_id(serv_id);
         if (vid != UINT64_MAX) {
             active_backup = true;
             backup_cond.signal();
         }
+
+        clk_rw_mtx.wrlock();
+
+        // resize qts
+        qts.resize(num_shards, 0);
+
+        // reset qts if a shard died
+        std::vector<server> delta = prev_config.delta(config);
+        for (const server &srv: delta) {
+            if (srv.type == server::SHARD) {
+                bool to_reset = false;
+
+                if (prev_config.get_state(srv.id) == server::ASSIGNED
+                 && srv.state == server::AVAILABLE) {
+                    // conservatively reset whenever a shard transitions from
+                    // assigned to available
+                    to_reset = true;
+                } else if (prev_config.get_type(srv.id) == server::BACKUP_SHARD) {
+                    // reset if server type changes from backup_shard to shard
+                    to_reset = true;
+                }
+
+                if (to_reset) {
+                    uint64_t shard_id = srv.virtual_id;
+                    // reset qts for shard_id
+                    qts[shard_id] = 0;
+                    to_nop[shard_id] = true;
+                    nop_ack_qts[shard_id] = 0;
+                    WDEBUG << "reset qts for shard " << (shard_id+ShardIdIncr) << std::endl;
+                }
+            }
+        }
+
+        clk_rw_mtx.unlock();
+        periodic_update_mutex.unlock();
     }
 
     inline uint64_t
@@ -342,18 +335,13 @@ namespace coordinator
             transaction::pending_tx *top = tx_out_queue.top();
             uint64_t this_clk = top->timestamp.get_clock();
             if (this_clk == out_queue_clk) {
-                WDEBUG << "here tx->clk " << this_clk << std::endl;
                 tx_out_queue.pop();
                 if (top->type != transaction::FAIL) {
-                    WDEBUG << "here tx->clk " << this_clk << std::endl;
                     tx = top;
                 } else {
                     delete top;
-                    WDEBUG << "here tx->clk " << this_clk << std::endl;
                 }
                 out_queue_clk++;
-            } else {
-                WDEBUG << "here tx->clk " << this_clk << std::endl;
             }
         }
 
@@ -372,7 +360,6 @@ namespace coordinator
 
             if (tx->type == transaction::NOP) {
                 // nop
-                WDEBUG << "NOP tx->type " << tx->type << ", tx->id " << tx->id << std::endl;
                 transaction::nop_data *nop = tx->nop;
                 assert(nop != NULL);
                 for (uint64_t i = 0; i < num_shards; i++) {

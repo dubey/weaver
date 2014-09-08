@@ -191,10 +191,8 @@ tx_queue_loop()
     while (true) {
         std::pair<transaction::pending_tx*, std::vector<transaction::pending_tx*>> p = vts->process_tx_queue();
         if (p.first == NULL) {
-            WDEBUG << "process tx fail" << std::endl;
             break;
         }
-        WDEBUG << "call send tx" << std::endl;
         send_tx(p.first, p.second);
     }
 }
@@ -265,19 +263,19 @@ nop_function()
     vc::vclock_t max_done_clk;
     std::unordered_map<uint64_t, done_req_t> done_reqs;
     std::vector<uint64_t> del_done_reqs;
-    transaction::pending_tx *tx;
+    transaction::pending_tx *tx = NULL;
+    uint64_t num_shards;
 
     sleep_time.tv_sec  = VT_TIMEOUT_NANO / NANO;
     sleep_time.tv_nsec = VT_TIMEOUT_NANO % NANO;
 
     while (true) {
         sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, NULL);
-        if (sleep_ret != 0 && sleep_ret != EINTR) {
-            assert(false);
-        }
+        assert((sleep_ret == 0 || sleep_ret == EINTR) && "error in clock_nanosleep");
+
         vts->periodic_update_mutex.lock();
 
-        uint64_t num_shards = get_num_shards();
+        num_shards = get_num_shards();
 
         // send nops and state cleanup info to shards
         if (weaver_util::any(vts->to_nop)) {
@@ -288,7 +286,6 @@ nop_function()
             vts->clk_rw_mtx.wrlock();
             vts->vclk.increment_clock();
             tx->timestamp = vts->vclk;
-            WDEBUG << "nop clk " << tx->timestamp.clock[0] << std::endl;
             tx->shard_write = vts->to_nop;
             vts->clk_rw_mtx.unlock();
 
@@ -297,6 +294,7 @@ nop_function()
             tx->nop->max_done_id = vts->max_done_id;
             tx->nop->max_done_clk = *vts->max_done_clk;
             tx->nop->outstanding_progs = vts->pend_prog_queue.size();
+            tx->nop->shard_node_count = vts->shard_node_count;
             for (auto &x: vts->done_reqs) {
                 // x.first = node prog type
                 // x.second = unordered_map <req_id -> vector<bool>(NumShards)>
@@ -634,7 +632,7 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location loc, boo
     vts->sm_stub.set_server_manager_address(sm_host.address.c_str(), sm_host.port);
 
     server::type_t type = backup? server::BACKUP_VT : server::VT;
-    if (!vts->sm_stub.register_id(vts->server, loc, type))
+    if (!vts->sm_stub.register_id(vts->serv_id, loc, type))
     {
         return;
     }
@@ -674,6 +672,7 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location loc, boo
         // if old_config.version == new_config.version, still fetch
 
         vts->config_mutex.lock();
+        vts->prev_config = vts->config;
         vts->config = new_config;
         if (!vts->first_config) {
             vts->first_config = true;
@@ -693,7 +692,7 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location loc, boo
                << "This is most likely an operations error."
                << "================================================================================";
     }
-    else if (vts->sm_stub.should_exit() && !vts->sm_stub.config().exists(vts->server))
+    else if (vts->sm_stub.should_exit() && !vts->sm_stub.config().exists(vts->serv_id))
     {
         WDEBUG << "\n================================================================================\n"
                << "Exiting because the server manager says it doesn't know about this node.\n"

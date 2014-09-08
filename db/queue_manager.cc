@@ -229,3 +229,11 @@ queue_manager :: get_rw_req()
     }
     return req;
 }
+
+void
+queue_manager :: reset(uint64_t dead_vt)
+{
+    queue_mutex.lock();
+    qts[dead_vt] = 0;
+    queue_mutex.unlock();
+}
