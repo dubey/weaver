@@ -19,7 +19,7 @@ namespace db
     // state for a deferred write for a migrated node
     struct deferred_write
     {
-        enum message::msg_type type;
+        transaction::update_type type;
         vc::vclock vclk;
         node_handle_t remote_node;
         uint64_t remote_loc;
@@ -27,7 +27,7 @@ namespace db
         std::unique_ptr<std::string> key, value;
 
         inline
-        deferred_write(enum message::msg_type t, vc::vclock &vc) : type(t), vclk(vc) { }
+        deferred_write(transaction::update_type t, vc::vclock &vc) : type(t), vclk(vc) { }
     };
     
     typedef std::vector<deferred_write> def_write_lst;

@@ -15,6 +15,77 @@
 #include "common/weaver_constants.h"
 #include "common/message.h"
 
+const char*
+message :: to_string(const msg_type &t)
+{
+    switch (t) {
+        case CLIENT_TX_INIT:
+            return "CLIENT_TX_INIT";
+        case CLIENT_TX_SUCCESS:
+            return "CLIENT_TX_SUCCESS";
+        case CLIENT_TX_ABORT:
+            return "CLIENT_TX_ABORT";
+        case CLIENT_NODE_PROG_REQ:
+            return "CLIENT_NODE_PROG_REQ";
+        case CLIENT_NODE_PROG_REPLY:
+            return "CLIENT_NODE_PROG_REPLY";
+        case START_MIGR:
+            return "START_MIGR";
+        case ONE_STREAM_MIGR:
+            return "ONE_STREAM_MIGR";
+        case EXIT_WEAVER:
+            return "EXIT_WEAVER";
+        case TX_INIT:
+            return "TX_INIT";
+        case TX_DONE:
+            return "TX_DONE";
+        case PERMANENTLY_DELETED_NODE:
+            return "PERMANENTLY_DELETED_NODE";
+        case NODE_PROG:
+            return "NODE_PROG";
+        case NODE_PROG_RETURN:
+            return "NODE_PROG_RETURN";
+        case NODE_CONTEXT_FETCH:
+            return "NODE_CONTEXT_FETCH";
+        case NODE_CONTEXT_REPLY:
+            return "NODE_CONTEXT_REPLY";
+        case CACHE_UPDATE:
+            return "CACHE_UPDATE";
+        case CACHE_UPDATE_ACK:
+            return "CACHE_UPDATE_ACK";
+        case MIGRATE_SEND_NODE:
+            return "MIGRATE_SEND_NODE";
+        case MIGRATED_NBR_UPDATE:
+            return "MIGRATED_NBR_UPDATE";
+        case MIGRATED_NBR_ACK:
+            return "MIGRATED_NBR_ACK";
+        case MIGRATION_TOKEN:
+            return "MIGRATION_TOKEN";
+        case CLIENT_NODE_COUNT:
+            return "CLIENT_NODE_COUNT";
+        case NODE_COUNT_REPLY:
+            return "NODE_COUNT_REPLY";
+        case LOADED_GRAPH:
+            return "LOADED_GRAPH";
+        case VT_CLOCK_UPDATE:
+            return "VT_CLOCK_UPDATE";
+        case VT_CLOCK_UPDATE_ACK:
+            return "VT_CLOCK_UPDATE_ACK";
+        case VT_NOP:
+            return "VT_NOP";
+        case VT_NOP_ACK:
+            return "VT_NOP_ACK";
+        case DONE_MIGR:
+            return "DONE_MIGR";
+        case ERROR:
+            return "ERROR";
+
+        default:
+            WDEBUG << "unknown msg type " << t << std::endl;
+            return "unknown msg type";
+    }
+}
+
 // size functions
 
 uint64_t

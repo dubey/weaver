@@ -546,14 +546,14 @@ namespace db
         if (n == NULL) {
             // node is being migrated
             migration_mutex.lock();
-            deferred_writes[node_handle].emplace_back(deferred_write(message::NODE_DELETE_REQ, tdel));
+            deferred_writes[node_handle].emplace_back(deferred_write(transaction::NODE_DELETE_REQ, tdel));
             migration_mutex.unlock();
         } else {
             delete_node_nonlocking(n, tdel);
             release_node_write(n);
             // record object for permanent deletion later on
             perm_del_mutex.lock();
-            perm_del_queue.emplace_back(new del_obj(message::NODE_DELETE_REQ, tdel, node_handle));
+            perm_del_queue.emplace_back(new del_obj(transaction::NODE_DELETE_REQ, tdel, node_handle));
             perm_del_mutex.unlock();
         }
     }
@@ -591,7 +591,7 @@ namespace db
             // node is being migrated
             migration_mutex.lock();
             def_write_lst &dwl = deferred_writes[local_node];
-            dwl.emplace_back(deferred_write(message::EDGE_CREATE_REQ, vclk));
+            dwl.emplace_back(deferred_write(transaction::EDGE_CREATE_REQ, vclk));
             deferred_write &dw = dwl[dwl.size()-1];
             dw.edge_handle = handle;
             dw.remote_node = remote_node;
@@ -639,7 +639,7 @@ namespace db
         if (n == NULL) {
             migration_mutex.lock();
             def_write_lst &dwl = deferred_writes[node_handle];
-            dwl.emplace_back(deferred_write(message::EDGE_DELETE_REQ, tdel));
+            dwl.emplace_back(deferred_write(transaction::EDGE_DELETE_REQ, tdel));
             deferred_write &dw = dwl[dwl.size()-1];
             dw.edge_handle = edge_handle;
             migration_mutex.unlock();
@@ -648,7 +648,7 @@ namespace db
             release_node_write(n);
             // record object for permanent deletion later on
             perm_del_mutex.lock();
-            perm_del_queue.emplace_back(new del_obj(message::EDGE_DELETE_REQ, tdel, node_handle, edge_handle));
+            perm_del_queue.emplace_back(new del_obj(transaction::EDGE_DELETE_REQ, tdel, node_handle, edge_handle));
             perm_del_mutex.unlock();
         }
     }
@@ -671,7 +671,7 @@ namespace db
         if (n == NULL) {
             migration_mutex.lock();
             def_write_lst &dwl = deferred_writes[node_handle];
-            dwl.emplace_back(deferred_write(message::NODE_SET_PROP, vclk));
+            dwl.emplace_back(deferred_write(transaction::NODE_SET_PROPERTY, vclk));
             deferred_write &dw = dwl[dwl.size()-1];
             dw.key = std::move(key);
             dw.value = std::move(value);
@@ -704,7 +704,7 @@ namespace db
         if (n == NULL) {
             migration_mutex.lock();
             def_write_lst &dwl = deferred_writes[node_handle];
-            dwl.emplace_back(deferred_write(message::EDGE_SET_PROP, vclk));
+            dwl.emplace_back(deferred_write(transaction::EDGE_SET_PROPERTY, vclk));
             deferred_write &dw = dwl[dwl.size()-1];
             dw.edge_handle = edge_handle;
             dw.key = std::move(key);
@@ -790,7 +790,7 @@ namespace db
 
             // now dobj will be deleted
             switch (dobj->type) {
-                case message::NODE_DELETE_REQ:
+                case transaction::NODE_DELETE_REQ:
                     n = acquire_node(dobj->node);
                     if (n != NULL) {
                         n->permanently_deleted = true;
@@ -808,7 +808,7 @@ namespace db
                     }
                     break;
 
-                case message::EDGE_DELETE_REQ:
+                case transaction::EDGE_DELETE_REQ:
                     n = acquire_node(dobj->node);
                     if (n != NULL) {
                         auto out_edge_iter = n->out_edges.find(dobj->edge);

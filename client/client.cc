@@ -318,14 +318,6 @@ client :: single_stream_migration()
     }
 }
 
-void
-client :: commit_graph()
-{
-    message::message msg;
-    msg.prepare_message(message::CLIENT_COMMIT_GRAPH);
-    send_coord(msg.buf);
-}
-
 
 void
 client :: exit_weaver()

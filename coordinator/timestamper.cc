@@ -597,7 +597,7 @@ server_loop(int thread_id)
                 }
 
                 default:
-                    WDEBUG << "unexpected msg type " << mtype << std::endl;
+                    WDEBUG << "unexpected msg type " << message::to_string(mtype) << std::endl;
                     assert(false);
             }
         }
@@ -782,7 +782,7 @@ main(int argc, const char *argv[])
     // command line params
     const char* listen_host = "127.0.0.1";
     long listen_port = 5200;
-    const char *config_file = "/etc/weaver.yaml";
+    const char *config_file = "./weaver.yaml";
     bool backup = false;
     // arg parsing borrowed from HyperDex
     e::argparser ap;
@@ -797,7 +797,7 @@ main(int argc, const char *argv[])
             .description("make this a backup timestamper")
             .set_true(&backup);
     ap.arg().long_name("config-file")
-            .description("full path of weaver.yaml configuration file (default /etc/weaver.yaml)")
+            .description("full path of weaver.yaml configuration file (default ./weaver.yaml)")
             .metavar("filename").as_string(&config_file);
 
     if (!ap.parse(argc, argv) || ap.args_sz() != 0) {

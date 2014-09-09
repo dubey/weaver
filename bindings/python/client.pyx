@@ -384,7 +384,6 @@ cdef extern from 'client/weaver_client.h' namespace 'cl':
         traverse_props_params traverse_props_program(vector[pair[string, traverse_props_params]] &initial_args) nogil
         void start_migration()
         void single_stream_migration()
-        void commit_graph()
         void exit_weaver()
         vector[uint64_t] get_node_count()
 
@@ -667,8 +666,6 @@ cdef class Client:
         self.thisptr.start_migration()
     def single_stream_migration(self):
         self.thisptr.single_stream_migration()
-    def commit_graph(self):
-        self.thisptr.commit_graph()
     def exit_weaver(self):
         self.thisptr.exit_weaver()
     def get_node_count(self):

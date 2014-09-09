@@ -1393,15 +1393,15 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg)
     if (S->deferred_writes.find(node_handle) != S->deferred_writes.end()) {
         for (auto &dw: S->deferred_writes[node_handle]) {
             switch (dw.type) {
-                case message::NODE_DELETE_REQ:
+                case transaction::NODE_DELETE_REQ:
                     S->delete_node_nonlocking(n, dw.vclk);
                     break;
 
-                case message::EDGE_CREATE_REQ:
+                case transaction::EDGE_CREATE_REQ:
                     S->create_edge_nonlocking(n, dw.edge_handle, dw.remote_node, dw.remote_loc, dw.vclk);
                     break;
 
-                case message::EDGE_DELETE_REQ:
+                case transaction::EDGE_DELETE_REQ:
                     S->delete_edge_nonlocking(n, dw.edge_handle, dw.vclk);
                     break;
 
@@ -1823,7 +1823,7 @@ recv_loop(uint64_t thread_id)
                     exit(0);
                     
                 default:
-                    WDEBUG << "unexpected msg type " << mtype << std::endl;
+                    WDEBUG << "unexpected msg type " << message::to_string(mtype) << std::endl;
             }
         }
 
@@ -2020,7 +2020,7 @@ main(int argc, const char *argv[])
     // command line params
     const char* listen_host = "127.0.0.1";
     long listen_port = 5201;
-    const char *config_file = "/etc/weaver.yaml";
+    const char *config_file = "./weaver.yaml";
     const char *graph_file = NULL;
     const char *graph_format = "snap";
     bool backup = false;
@@ -2038,7 +2038,7 @@ main(int argc, const char *argv[])
             .description("make this a backup shard")
             .set_true(&backup);
     ap.arg().long_name("config-file")
-            .description("full path of weaver.yaml configuration file (default /etc/weaver.yaml)")
+            .description("full path of weaver.yaml configuration file (default ./weaver.yaml)")
             .metavar("filename").as_string(&config_file);
     ap.arg().long_name("graph-file")
             .description("full path of bulk load input graph file (no default)")
