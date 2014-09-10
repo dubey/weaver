@@ -30,20 +30,6 @@ int
 oracle :: compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
 {
     int ret = 2;
-    if (clk1.size() != NumVts) {
-        for (uint64_t c: clk1) {
-            std::cerr << c << " ";
-        }
-        std::cerr << std::endl;
-        assert(false);
-    }
-    if (clk2.size() != NumVts) {
-        for (uint64_t c: clk2) {
-            std::cerr << c << " ";
-        }
-        std::cerr << std::endl;
-        assert(false);
-    }
     assert(clk1.size() == NumVts);
     assert(clk2.size() == NumVts);
     for (uint64_t i = 0; i < NumVts; i++) {
@@ -119,6 +105,17 @@ oracle :: compare_vts_no_kronos(const std::vector<vc::vclock> &clocks, std::vect
         // Kronos not required
         small_idx = get_false_position(large);
     }
+}
+
+bool
+oracle :: happens_before_no_kronos(const vc::vclock_t &vclk, const std::vector<vc::vclock_t*> &others)
+{
+    for (const vc::vclock_t* const other: others) {
+        if (compare_two_clocks(vclk, *other) != 0) {
+            return false;
+        }
+    }
+    return true;
 }
 
 

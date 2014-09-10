@@ -1485,8 +1485,10 @@ migrate_node_step3()
 inline bool
 check_migr_node(db::element::node *n, uint64_t migr_num_shards)
 {
-    if (n == NULL || order::oracle::compare_two_clocks(n->base.get_del_time().clock, S->max_clk.clock) != 2 ||
-        n->state == db::element::node::mode::MOVED || n->already_migr) {
+    if (n == NULL
+     || n->base.get_del_time() != S->max_clk
+     || n->state == db::element::node::mode::MOVED
+     || n->already_migr) {
         if (n != NULL) {
             n->already_migr = false;
             S->release_node(n);

@@ -782,7 +782,8 @@ namespace db
                             to_del = false;
                             break;
                         }
-                        to_del = (order::oracle::compare_two_clocks(dobj->vclk.clock, max_done_clk[i]) == 0);
+                        std::vector<vc::vclock_t*> compare(1, &max_done_clk[i]);
+                        to_del = order::oracle::happens_before_no_kronos(dobj->vclk.clock, compare);
                     }
                 }
             }

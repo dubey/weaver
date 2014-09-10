@@ -45,3 +45,15 @@ vclock :: update_clock(uint64_t vtid, uint64_t new_clock)
         clock[vtid] = new_clock;
     }
 }
+
+bool
+vclock :: operator==(const vclock &other) const
+{
+    return vt_id == other.vt_id && clock == other.clock;
+}
+
+bool
+vclock :: operator!=(const vclock &other) const
+{
+    return !(*this==other);
+}

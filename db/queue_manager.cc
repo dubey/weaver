@@ -72,19 +72,16 @@ queue_manager :: check_wr_request(vc::vclock &vclk, uint64_t qt)
             ret = PRESENT;
         } else {
             // compare vector clocks, NO Kronos call
-            std::vector<vc::vclock> timestamps;
-            timestamps.reserve(NumVts);
+            std::vector<vc::vclock_t*> others;
+            others.reserve(NumVts-1);
             for (uint64_t i = 0; i < NumVts; i++) {
                 if (i == vclk.vt_id) {
-                    timestamps.emplace_back(vclk);
+                    continue;
                 } else {
-                    timestamps.emplace_back(wr_queues[i].top()->vclock);
+                    others.emplace_back(&wr_queues[i].top()->vclock.clock);
                 }
             }
-            std::vector<bool> large;
-            int64_t small_idx = INT64_MAX;
-            order::oracle::compare_vts_no_kronos(timestamps, large, small_idx);
-            if ((uint64_t)small_idx == vclk.vt_id) {
+            if (order::oracle::happens_before_no_kronos(vclk.clock, others)) {
                 ret = PRESENT;
             } else {
                 ret = FUTURE;
@@ -140,13 +137,13 @@ queue_manager :: record_completed_tx(vc::vclock &tx_clk)
 bool
 queue_manager :: check_rd_req_nonlocking(vc::vclock_t &clk)
 {
+    std::vector<vc::vclock_t*> others;
+    others.reserve(NumVts);
     for (uint64_t i = 0; i < NumVts; i++) {
-        // no kronos call
-        if (order::oracle::compare_two_clocks(clk, last_clocks[i]) != 0) {
-            return false;
-        }
+        others.emplace_back(&last_clocks[i]);
     }
-    return true;
+    // no kronos call
+    return order::oracle::happens_before_no_kronos(clk, others);
 }
 
 queued_request*

@@ -41,9 +41,8 @@ namespace vc
             void increment_counter(uint64_t index);
             void update_clock(uint64_t vt_id, uint64_t new_clock);
 
-            bool operator==(const vclock& rhs) {
-                return vt_id == rhs.vt_id && clock == rhs.clock;
-            }
+            bool operator==(const vclock &rhs) const;
+            bool operator!=(const vclock &rhs) const;
     };
 }
 

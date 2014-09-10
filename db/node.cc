@@ -90,14 +90,14 @@ node :: add_cache_value(std::shared_ptr<vc::vclock> vc,
     if (MaxCacheEntries) {
         // clear oldest entry if cache is full
         if (cache.size() >= MaxCacheEntries) {
-            vc::vclock &oldest = *vc;
+            std::vector<vc::vclock_t*> oldest(1, &vc->clock);
             cache_key_t key_to_del = key;
-            for (auto& kvpair : cache) {
+            for (const auto &kvpair : cache) {
                 vc::vclock &to_cmp = *kvpair.second.clk;
                 // don't talk to kronos just pick one to delete
-                if (base.time_oracle->compare_two_clocks(to_cmp.clock, oldest.clock) <= 0) {
+                if (order::oracle::happens_before_no_kronos(to_cmp.clock, oldest)) {
                     key_to_del = kvpair.first;
-                    oldest = to_cmp;
+                    oldest[0] = &to_cmp.clock;
                 }
             }
             cache.erase(key_to_del);
