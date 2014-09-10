@@ -237,5 +237,6 @@ queue_manager :: reset(uint64_t dead_vt)
 {
     queue_mutex.lock();
     qts[dead_vt] = 0;
+    last_clocks[dead_vt] = vc::vclock_t(NumVts, 0);
     queue_mutex.unlock();
 }
