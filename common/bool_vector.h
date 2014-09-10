@@ -20,7 +20,7 @@
 namespace weaver_util
 {
     inline bool
-    all(std::vector<bool> &v)
+    all(const std::vector<bool> &v)
     {
         for (size_t i = 0; i < v.size(); i++) {
             if (!v[i]) {
@@ -31,7 +31,7 @@ namespace weaver_util
     }
 
     inline bool
-    any(std::vector<bool> &v)
+    any(const std::vector<bool> &v)
     {
         for (size_t i = 0; i < v.size(); i++) {
             if (v[i]) {
@@ -39,6 +39,17 @@ namespace weaver_util
             }
         }
         return false;
+    }
+
+    inline bool
+    none(const std::vector<bool> &v)
+    {
+        for (size_t i = 0; i < v.size(); i++) {
+            if (v[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     inline void

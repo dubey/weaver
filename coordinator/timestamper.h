@@ -83,7 +83,7 @@ namespace coordinator
             std::vector<uint64_t> nop_ack_qts;
 
             // transactions
-            std::unordered_map<uint64_t, current_tx> outstanding_tx;
+            std::unordered_map<uint64_t, transaction::pending_tx*> outstanding_tx;
 
             // node prog
             std::unordered_map<uint64_t, current_prog> outstanding_progs;

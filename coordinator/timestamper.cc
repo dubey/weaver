@@ -60,7 +60,7 @@ static uint64_t vt_id;
 // tx functions
 void prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub);
 void send_tx(transaction::pending_tx *orig_tx, std::vector<transaction::pending_tx*> factored_tx);
-void end_tx(uint64_t tx_id, coordinator::hyper_stub *hstub);
+void end_tx(uint64_t tx_id, coordinator::hyper_stub *hstub, uint64_t shard_id);
 void tx_queue_loop();
 
 
@@ -207,15 +207,7 @@ send_tx(transaction::pending_tx *orig_tx, std::vector<transaction::pending_tx*> 
 
     if (orig_tx->type == transaction::UPDATE) {
         vts->tx_prog_mutex.lock();
-        vts->outstanding_tx.emplace(orig_tx->id, current_tx(orig_tx));
-
-        vts->outstanding_tx[orig_tx->id].count = 0;
-        for (uint64_t i = 0; i < num_shards; i++) {
-            if (orig_tx->shard_write[i]) {
-                vts->outstanding_tx[orig_tx->id].count++;
-            }
-        }
-
+        vts->outstanding_tx.emplace(orig_tx->id, orig_tx);
         vts->tx_prog_mutex.unlock();
     }
 
@@ -231,14 +223,21 @@ send_tx(transaction::pending_tx *orig_tx, std::vector<transaction::pending_tx*> 
 
 // if all replies have been received, ack to client
 void
-end_tx(uint64_t tx_id, coordinator::hyper_stub *hstub)
+end_tx(uint64_t tx_id, uint64_t shard_id, coordinator::hyper_stub *hstub)
 {
     vts->tx_prog_mutex.lock();
-    if (--vts->outstanding_tx.at(tx_id).count == 0) {
+    auto find_iter = vts->outstanding_tx.find(tx_id);
+    assert(find_iter != vts->outstanding_tx.end());
+
+    transaction::pending_tx *tx = find_iter->second;
+    uint64_t shard_idx = shard_id - ShardIdIncr;
+    assert(tx->shard_write[shard_idx]);
+    tx->shard_write[shard_idx] = false;
+
+    if (weaver_util::none(tx->shard_write)) {
         // done tx
         hstub->clean_tx(tx_id);
 
-        transaction::pending_tx *tx = vts->outstanding_tx[tx_id].tx;
         vts->outstanding_tx.erase(tx_id);
         vts->tx_prog_mutex.unlock();
 
@@ -404,7 +403,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     for (auto &p: initial_args) {
         initial_batches[loc_map[p.first]].emplace_back(p);
     }
-    
+
     vts->clk_rw_mtx.wrlock();
     vts->vclk.increment_clock();
     vc::vclock req_timestamp = vts->vclk;
@@ -470,7 +469,7 @@ server_loop(int thread_id)
     busybee_returncode ret;
     enum message::msg_type mtype;
     std::unique_ptr<message::message> msg;
-    uint64_t tx_id, client_sender;
+    uint64_t tx_id, client_sender, shard_id;
     node_prog::prog_type pType;
     coordinator::hyper_stub *hstub = vts->hstub[thread_id];
     transaction::pending_tx *tx;
@@ -537,8 +536,8 @@ server_loop(int thread_id)
                 }
 
                 case message::TX_DONE:
-                    msg->unpack_message(message::TX_DONE, tx_id);
-                    end_tx(tx_id, hstub);
+                    msg->unpack_message(message::TX_DONE, tx_id, shard_id);
+                    end_tx(tx_id, shard_id, hstub);
                     break;
 
                 //case message::START_MIGR: {

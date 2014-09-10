@@ -23,16 +23,13 @@ namespace coordinator
 {
     struct current_tx
     {
-        int count;
-        std::vector<bool> locks;
+        std::vector<bool> shard_ack;
         transaction::pending_tx *tx;
 
-        current_tx() : count(0), locks(NumVts, false) { }
+        current_tx() : tx(nullptr) { }
 
         current_tx(transaction::pending_tx *t)
-            : count(0)
-            , locks(NumVts, false)
-            , tx(t)
+            : tx(t)
         { }
     };
 }

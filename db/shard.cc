@@ -419,7 +419,7 @@ apply_writes(uint64_t vt_id, vc::vclock &vclk, uint64_t qts, transaction::pendin
 
     // send tx confirmation to coordinator
     message::message conf_msg;
-    conf_msg.prepare_message(message::TX_DONE, tx.id);
+    conf_msg.prepare_message(message::TX_DONE, tx.id, shard_id);
     S->comm.send(vt_id, conf_msg.buf);
 }
 
