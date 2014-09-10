@@ -20,6 +20,7 @@
 #include <po6/threads/rwlock.h>
 
 extern uint64_t NumVts;
+extern uint64_t ClkSz;
 extern uint64_t NumShards;
 extern po6::threads::rwlock NumShardsLock;
 extern uint64_t NumBackups;
@@ -49,5 +50,27 @@ uint64_t get_num_actual_servers();
 #define NUM_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
 #define ID_BITS 16 // max 2^16 timestampers
 #define TOP_MASK (0x0000ffffffffffffULL)
+
+#define DECLARE_CONFIG_CONSTANTS \
+    uint64_t NumVts; \
+    uint64_t ClkSz; \
+    uint64_t NumShards; \
+    po6::threads::rwlock NumShardsLock; \
+    uint64_t NumBackups; \
+    uint64_t NumEffectiveServers; \
+    uint64_t NumActualServers; \
+    uint64_t ShardIdIncr; \
+    char *HyperdexCoordIpaddr; \
+    uint16_t HyperdexCoordPort; \
+    std::vector<std::pair<char*, uint16_t>> HyperdexCoord; \
+    std::vector<std::pair<char*, uint16_t>> HyperdexDaemons; \
+    char *KronosIpaddr; \
+    uint16_t KronosPort; \
+    std::vector<std::pair<char*, uint16_t>> KronosLocs; \
+    char *ServerManagerIpaddr; \
+    uint16_t ServerManagerPort; \
+    std::vector<std::pair<char*, uint16_t>> ServerManagerLocs; \
+    uint16_t MaxCacheEntries;
+
 
 #endif

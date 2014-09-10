@@ -157,7 +157,7 @@ namespace coordinator
         , to_nop(NumShards, true)
         , nop_ack_qts(NumShards, 0)
         , max_done_id(0)
-        , max_done_clk(new vc::vclock_t(NumVts, 0))
+        , max_done_clk(new vc::vclock_t(ClkSz, 0))
         , load_count(0)
         , max_load_time(0)
         , shard_node_count(NumShards, 0)

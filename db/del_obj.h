@@ -41,9 +41,9 @@ namespace db
     {
         bool operator()(const del_obj* const &dw1, const del_obj* const &dw2)
         {
-            assert(dw1->vclk.clock.size() == NumVts);
-            assert(dw2->vclk.clock.size() == NumVts);
-            for (uint64_t i = 0; i < NumVts; i++) {
+            assert(dw1->vclk.clock.size() == ClkSz);
+            assert(dw2->vclk.clock.size() == ClkSz);
+            for (uint64_t i = 0; i < ClkSz; i++) {
                 if (dw1->vclk.clock[i] <= dw2->vclk.clock[i]) {
                     return false;
                 }

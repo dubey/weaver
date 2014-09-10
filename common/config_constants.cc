@@ -22,6 +22,7 @@ bool
 init_config_constants(const char *config_file_name)
 {
     NumVts = UINT64_MAX;
+    ClkSz = UINT64_MAX;
     NumShards = UINT64_MAX;
     NumBackups = UINT64_MAX;
     MaxCacheEntries = UINT16_MAX;
@@ -200,6 +201,7 @@ init_config_constants(const char *config_file_name)
         return false;
     }
 
+    ClkSz = NumVts+1; // one entry for each vt + an (configuration) epoch number
     NumShards = 0;
     NumEffectiveServers = NumVts + NumShards;
     NumActualServers = NumEffectiveServers * (1+NumBackups);

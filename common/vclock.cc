@@ -18,7 +18,7 @@ using vc::vclock;
 
 vclock :: vclock(uint64_t vtid, uint64_t clk_init)
     : vt_id(vtid)
-    , clock(std::vector<uint64_t>(NumVts, clk_init))
+    , clock(std::vector<uint64_t>(ClkSz, clk_init))
 {
     assert(vt_id < NumVts || vt_id == UINT64_MAX);
 }
@@ -33,7 +33,7 @@ vclock :: vclock(uint64_t vtid, vclock_t &vclk)
 void
 vclock :: increment_counter(uint64_t index)
 {
-    assert(index < NumVts);
+    assert(index < ClkSz);
     clock[index]++;
 }
 
@@ -41,8 +41,8 @@ void
 vclock :: update_clock(uint64_t vtid, uint64_t new_clock)
 {
     assert(vtid < NumVts);
-    if (clock[vtid] < new_clock) {
-        clock[vtid] = new_clock;
+    if (clock[vtid+1] < new_clock) {
+        clock[vtid+1] = new_clock;
     }
 }
 

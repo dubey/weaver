@@ -245,7 +245,7 @@ namespace db
         , max_prog_id(NumVts, 0)
         , target_prog_id(NumVts, 0)
         , max_done_id(NumVts, 0)
-        , max_done_clk(NumVts, vc::vclock_t(NumVts, 0))
+        , max_done_clk(NumVts, vc::vclock_t(ClkSz, 0))
         , watch_set_lookups(0)
         , watch_set_nops(0)
         , watch_set_piggybacks(0)
@@ -748,9 +748,9 @@ namespace db
     {
         const vc::vclock_t &clk1 = o1->vclk.clock;
         const vc::vclock_t &clk2 = o2->vclk.clock;
-        assert(clk1.size() == NumVts);
-        assert(clk2.size() == NumVts);
-        for (uint64_t i = 0; i < NumVts; i++) {
+        assert(clk1.size() == ClkSz);
+        assert(clk2.size() == ClkSz);
+        for (uint64_t i = 0; i < ClkSz; i++) {
             if (clk1[i] < clk2[i]) {
                 return true;
             }
@@ -778,7 +778,7 @@ namespace db
                 // if all VTs have no outstanding node progs, then everything can be permanently deleted
                 if (!weaver_util::all(dobj->no_outstanding_progs)) {
                     for (uint64_t i = 0; (i < NumVts) && to_del; i++) {
-                        if (max_done_clk[i].size() < NumVts) {
+                        if (max_done_clk[i].size() < ClkSz) {
                             to_del = false;
                             break;
                         }

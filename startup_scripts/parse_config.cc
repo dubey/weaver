@@ -18,25 +18,7 @@
 #include "common/weaver_constants.h"
 #include "common/config_constants.h"
 
-// global extern variables
-uint64_t NumVts;
-uint64_t NumShards;
-po6::threads::rwlock NumShardsLock;
-uint64_t NumBackups;
-uint64_t NumEffectiveServers;
-uint64_t NumActualServers;
-uint64_t ShardIdIncr;
-char *HyperdexCoordIpaddr;
-uint16_t HyperdexCoordPort;
-std::vector<std::pair<char*, uint16_t>> HyperdexCoord;
-std::vector<std::pair<char*, uint16_t>> HyperdexDaemons;
-char *KronosIpaddr;
-uint16_t KronosPort;
-std::vector<std::pair<char*, uint16_t>> KronosLocs;
-char *ServerManagerIpaddr;
-uint16_t ServerManagerPort;
-std::vector<std::pair<char*, uint16_t>> ServerManagerLocs;
-uint16_t MaxCacheEntries;
+DECLARE_CONFIG_CONSTANTS;
 
 int
 main(int argc, const char *argv[])

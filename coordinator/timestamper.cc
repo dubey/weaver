@@ -31,25 +31,7 @@
 #include "node_prog/node_program.h"
 #include "coordinator/timestamper.h"
 
-// extern global variables
-uint64_t NumVts;
-uint64_t NumShards;
-po6::threads::rwlock NumShardsLock;
-uint64_t NumBackups;
-uint64_t NumEffectiveServers;
-uint64_t NumActualServers;
-uint64_t ShardIdIncr;
-char *HyperdexCoordIpaddr;
-uint16_t HyperdexCoordPort;
-std::vector<std::pair<char*, uint16_t>> HyperdexCoord;
-std::vector<std::pair<char*, uint16_t>> HyperdexDaemons;
-char *KronosIpaddr;
-uint16_t KronosPort;
-std::vector<std::pair<char*, uint16_t>> KronosLocs;
-char *ServerManagerIpaddr;
-uint16_t ServerManagerPort;
-std::vector<std::pair<char*, uint16_t>> ServerManagerLocs;
-uint16_t MaxCacheEntries;
+DECLARE_CONFIG_CONSTANTS;
 
 using coordinator::current_prog;
 using coordinator::current_tx;
@@ -356,7 +338,7 @@ clk_update_function()
             if (i == vt_id) {
                 continue;
             }
-            msg.prepare_message(message::VT_CLOCK_UPDATE, vt_id, vclk.clock[vt_id]);
+            msg.prepare_message(message::VT_CLOCK_UPDATE, vclk);
             vts->comm.send(i, msg.buf);
         }
 
@@ -407,7 +389,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     vts->clk_rw_mtx.wrlock();
     vts->vclk.increment_clock();
     vc::vclock req_timestamp = vts->vclk;
-    assert(req_timestamp.clock.size() == NumVts);
+    assert(req_timestamp.clock.size() == ClkSz);
     vts->clk_rw_mtx.unlock();
 
     vts->tx_prog_mutex.lock();
@@ -473,6 +455,7 @@ server_loop(int thread_id)
     node_prog::prog_type pType;
     coordinator::hyper_stub *hstub = vts->hstub[thread_id];
     transaction::pending_tx *tx;
+    vc::vclock rec_clk;
 
     while (true) {
         vts->comm.quiesce_thread(thread_id);
@@ -495,14 +478,11 @@ server_loop(int thread_id)
                 }
 
                 case message::VT_CLOCK_UPDATE: {
-                    uint64_t rec_vtid, rec_clock;
-                    msg->unpack_message(message::VT_CLOCK_UPDATE, rec_vtid, rec_clock);
+                    msg->unpack_message(message::VT_CLOCK_UPDATE, rec_clk);
                     vts->clk_rw_mtx.wrlock();
                     vts->clk_updates++;
-                    vts->vclk.update_clock(rec_vtid, rec_clock);
+                    //vts->vclk.update_clock(rec_vtid, rec_clock); // XXX fix this. If epoch is larger then override
                     vts->clk_rw_mtx.unlock();
-                    //msg->prepare_message(message::VT_CLOCK_UPDATE_ACK);
-                    //vts->comm.send(rec_vtid, msg->buf);
                     break;
                 }
 

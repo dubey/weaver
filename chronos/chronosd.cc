@@ -58,25 +58,7 @@
 #define ERRORMSG2(X, Y1, Y2) fprintf(stderr, "%s:%i:  " X "\n", __FILE__, __LINE__, Y1, Y2)
 #define ERRNOMSG(CALL) ERRORMSG2(tostr(CALL) " failed:  %s  [ERRNO=%i]", strerror(errno), errno)
 
-// global extern variables
-uint64_t NumVts;
-uint64_t NumShards;
-po6::threads::rwlock NumShardsLock;
-uint64_t NumBackups;
-uint64_t NumEffectiveServers;
-uint64_t NumActualServers;
-uint64_t ShardIdIncr;
-char *HyperdexCoordIpaddr;
-uint16_t HyperdexCoordPort;
-std::vector<std::pair<char*, uint16_t>> HyperdexCoord;
-std::vector<std::pair<char*, uint16_t>> HyperdexDaemons;
-char *KronosIpaddr;
-uint16_t KronosPort;
-std::vector<std::pair<char*, uint16_t>> KronosLocs;
-char *ServerManagerIpaddr;
-uint16_t ServerManagerPort;
-std::vector<std::pair<char*, uint16_t>> ServerManagerLocs;
-uint16_t MaxCacheEntries;
+DECLARE_CONFIG_CONSTANTS;
 
 // hash function for vector clocks
 namespace std
@@ -464,7 +446,7 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
                          const char* data, size_t data_sz)
 {
     ++m_count_weaver_order;
-    const size_t NUM_PAIRS = data_sz / (2 * sizeof(uint64_t) * NumVts // vector clocks
+    const size_t NUM_PAIRS = data_sz / (2 * sizeof(uint64_t) * ClkSz // vector clocks
             + 2 * sizeof(uint64_t) // vt_ids
             + sizeof(uint32_t) // flags
             + sizeof(uint8_t)); // preferred order
@@ -484,8 +466,8 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
         chronos_pair p;
         weaver_pair wp;
         uint8_t o;
-        data_ptr = unpack_vector_uint64(data_ptr, &wp.lhs, NumVts);
-        data_ptr = unpack_vector_uint64(data_ptr, &wp.rhs, NumVts);
+        data_ptr = unpack_vector_uint64(data_ptr, &wp.lhs, ClkSz);
+        data_ptr = unpack_vector_uint64(data_ptr, &wp.rhs, ClkSz);
         data_ptr = e::unpack64le(data_ptr, &wp.lhs_id);
         data_ptr = e::unpack64le(data_ptr, &wp.rhs_id);
         data_ptr = e::unpack32le(data_ptr, &p.flags);
@@ -500,9 +482,9 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
         //assert(p.flags & CHRONOS_SOFT_FAIL);
 
         std::vector<uint64_t> vc_lhs, vc_rhs;
-        vc_lhs.reserve(NumVts);
-        vc_rhs.reserve(NumVts);
-        for (size_t i = 0; i < NumVts; i++) {
+        vc_lhs.reserve(ClkSz);
+        vc_rhs.reserve(ClkSz);
+        for (size_t i = 0; i < ClkSz; i++) {
             vc_lhs.push_back(wp.lhs[i]);
             vc_rhs.push_back(wp.rhs[i]);
         }

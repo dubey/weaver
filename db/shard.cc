@@ -32,25 +32,7 @@
 #include "node_prog/node_program.h"
 #include "node_prog/base_classes.h"
 
-// global extern variables
-uint64_t NumVts;
-uint64_t NumShards;
-po6::threads::rwlock NumShardsLock;
-uint64_t NumBackups;
-uint64_t NumEffectiveServers;
-uint64_t NumActualServers;
-uint64_t ShardIdIncr;
-char *HyperdexCoordIpaddr;
-uint16_t HyperdexCoordPort;
-std::vector<std::pair<char*, uint16_t>> HyperdexCoord;
-std::vector<std::pair<char*, uint16_t>> HyperdexDaemons;
-char *KronosIpaddr;
-uint16_t KronosPort;
-std::vector<std::pair<char*, uint16_t>> KronosLocs;
-char *ServerManagerIpaddr;
-uint16_t ServerManagerPort;
-std::vector<std::pair<char*, uint16_t>> ServerManagerLocs;
-uint16_t MaxCacheEntries;
+DECLARE_CONFIG_CONSTANTS;
 
 // global static variables
 static uint64_t shard_id;
@@ -1011,7 +993,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
             node->base.view_time = np.req_vclock; 
             node->base.time_oracle = time_oracle;
             assert(np.req_vclock);
-            assert(np.req_vclock->clock.size() == NumVts);
+            assert(np.req_vclock->clock.size() == ClkSz);
             // call node program
             auto next_node_params = func(*node, this_node,
                     params, // actual parameters for this node program
@@ -1184,7 +1166,7 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
     // unpack the node program
     try {
         msg->unpack_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, np.start_node_params);
-        assert(np.req_vclock->clock.size() == NumVts);
+        assert(np.req_vclock->clock.size() == ClkSz);
     } catch (std::bad_alloc& ba) {
         WDEBUG << "bad_alloc caught " << ba.what() << std::endl;
         assert(false);
@@ -1723,7 +1705,7 @@ recv_loop(uint64_t thread_id)
                 case message::TX_INIT: {
                     rec_msg->unpack_partial_message(message::TX_INIT, vt_id, vclk, qts, txtype);
                     WDEBUG << "got tx, qts = " << qts << std::endl;
-                    assert(vclk.clock.size() == NumVts);
+                    assert(vclk.clock.size() == ClkSz);
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                     tx_order = S->qm.check_wr_request(vclk, qts);
                     assert(txtype != transaction::FAIL);
@@ -1752,7 +1734,7 @@ recv_loop(uint64_t thread_id)
 
                 case message::NODE_PROG:
                     rec_msg->unpack_partial_message(message::NODE_PROG, pType, vt_id, vclk, req_id);
-                    assert(vclk.clock.size() == NumVts);
+                    assert(vclk.clock.size() == ClkSz);
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                     if (S->qm.check_rd_request(vclk.clock)) {
                         unpack_node_program(mwrap);
@@ -1771,7 +1753,7 @@ recv_loop(uint64_t thread_id)
                         f = unpack_context_reply;
                     }
                     rec_msg->unpack_partial_message(mtype, pType, req_id, vt_id, vclk);
-                    assert(vclk.clock.size() == NumVts);
+                    assert(vclk.clock.size() == ClkSz);
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                     if (S->qm.check_rd_request(vclk.clock)) {
                         f(mwrap);

@@ -30,9 +30,9 @@ int
 oracle :: compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
 {
     int ret = 2;
-    assert(clk1.size() == NumVts);
-    assert(clk2.size() == NumVts);
-    for (uint64_t i = 0; i < NumVts; i++) {
+    assert(clk1.size() == ClkSz);
+    assert(clk2.size() == ClkSz);
+    for (uint64_t i = 0; i < ClkSz; i++) {
         if ((clk1[i] < clk2[i]) && (ret != 0)) {
             if (ret == 2) {
                 ret = 0;
@@ -166,9 +166,9 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
         for (uint64_t i = 0; i < num_clks; i++) {
             for (uint64_t j = i+1; j < num_clks; j++) {
                 if (!large.at(i) && !large.at(j)) {
-                    wp->lhs = (uint64_t*)malloc(sizeof(uint64_t) * NumVts);
-                    wp->rhs = (uint64_t*)malloc(sizeof(uint64_t) * NumVts);
-                    for (uint64_t k = 0; k < NumVts; k++) {
+                    wp->lhs = (uint64_t*)malloc(sizeof(uint64_t) * ClkSz);
+                    wp->rhs = (uint64_t*)malloc(sizeof(uint64_t) * ClkSz);
+                    for (uint64_t k = 0; k < ClkSz; k++) {
                         wp->lhs[k] = clocks.at(i).clock.at(k);
                         wp->rhs[k] = clocks.at(j).clock.at(k);
                     }
@@ -288,9 +288,9 @@ oracle :: assign_vt_order(const std::vector<vc::vclock> &before, const vc::vcloc
     for (uint64_t i = 0; i < num_pairs; i++) {
         weaver_pair &wp = wpair[i];
         uint64_t idx = need_kronos[i];
-        wp.lhs = (uint64_t*)malloc(sizeof(uint64_t) * NumVts);
-        wp.rhs = (uint64_t*)malloc(sizeof(uint64_t) * NumVts);
-        for (uint64_t k = 0; k < NumVts; k++) {
+        wp.lhs = (uint64_t*)malloc(sizeof(uint64_t) * ClkSz);
+        wp.rhs = (uint64_t*)malloc(sizeof(uint64_t) * ClkSz);
+        for (uint64_t k = 0; k < ClkSz; k++) {
             wp.lhs[k] = before[idx].clock[k];
             wp.rhs[k] = after.clock[k];
         }

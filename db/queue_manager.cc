@@ -26,7 +26,7 @@ using db::queued_request;
 queue_manager :: queue_manager()
     : rd_queues(NumVts, pqueue_t())
     , wr_queues(NumVts, pqueue_t())
-    , last_clocks(NumVts, vc::vclock_t(NumVts, 0))
+    , last_clocks(NumVts, vc::vclock_t(ClkSz, 0))
     , qts(NumVts, 0)
 { }
 
@@ -128,8 +128,10 @@ void
 queue_manager :: record_completed_tx(vc::vclock &tx_clk)
 {
     queue_mutex.lock();
-    if (last_clocks[tx_clk.vt_id][tx_clk.vt_id] < tx_clk.clock[tx_clk.vt_id]) {
-        last_clocks[tx_clk.vt_id] = tx_clk.clock;
+    uint64_t vt_id = tx_clk.vt_id;
+    uint64_t clk_idx = vt_id+1;
+    if (last_clocks[vt_id][clk_idx] < tx_clk.clock[clk_idx]) {
+        last_clocks[vt_id] = tx_clk.clock;
     }
     queue_mutex.unlock();
 }
@@ -234,6 +236,6 @@ queue_manager :: reset(uint64_t dead_vt)
 {
     queue_mutex.lock();
     qts[dead_vt] = 0;
-    last_clocks[dead_vt] = vc::vclock_t(NumVts, 0);
+    last_clocks[dead_vt] = vc::vclock_t(ClkSz, 0);
     queue_mutex.unlock();
 }
