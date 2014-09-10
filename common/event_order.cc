@@ -14,19 +14,20 @@
 #include "common/event_order.h"
 #include "common/config_constants.h"
 
-namespace order
-{
-    chronos_client *kronos_cl = chronos_client_create(KronosIpaddr, KronosPort);
-    po6::threads::mutex kronos_mutex;
-    uint64_t cache_hits = 0;
-    kronos_cache kcache;
-}
+using order::oracle;
+
+oracle :: oracle()
+    : kronos_cl(chronos_client_create(KronosIpaddr, KronosPort))
+    , cache_hits(0)
+{ }
+
+// static members
 
 // return the smaller of the two clocks
 // return -1 if clocks cannot be compared
 // return 2 if clocks are identical
 int
-order :: compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
+oracle :: compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
 {
     int ret = 2;
     if (clk1.size() != NumVts) {
@@ -66,7 +67,7 @@ order :: compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
 // method which only compares vector clocks
 // returns bool vector, with i'th entry as true if that clock is definitely larger than some other clock
 std::vector<bool>
-order :: compare_vector_clocks(const std::vector<vc::vclock> &clocks)
+oracle :: compare_vector_clocks(const std::vector<vc::vclock> &clocks)
 {
     uint64_t num_clks = clocks.size();
     std::vector<bool> large(num_clks, false); // keep track of clocks which are definitely not smallest
@@ -93,7 +94,7 @@ order :: compare_vector_clocks(const std::vector<vc::vclock> &clocks)
 
 // return the index of the (only) 'false' in a bool vector
 uint64_t
-order :: get_false_position(std::vector<bool> &large)
+get_false_position(std::vector<bool> &large)
 {
     for (uint64_t min_pos = 0; min_pos < large.size(); min_pos++) {
         if (!large[min_pos]) {
@@ -109,7 +110,7 @@ order :: get_false_position(std::vector<bool> &large)
 // large[i] is true if clocks[i] is definitely not the earliest clock
 // i.e. large[i] <=> \exists j clock[j] -> clock[i], where -> is the happens before relationship for vector clocks
 void
-order :: compare_vts_no_kronos(const std::vector<vc::vclock> &clocks, std::vector<bool> &large, int64_t &small_idx)
+oracle :: compare_vts_no_kronos(const std::vector<vc::vclock> &clocks, std::vector<bool> &large, int64_t &small_idx)
 {
     large = compare_vector_clocks(clocks);
     assert(clocks.size() == large.size());
@@ -120,11 +121,14 @@ order :: compare_vts_no_kronos(const std::vector<vc::vclock> &clocks, std::vecto
     }
 }
 
+
+// non-static members which use kronos_cl
+
 // vector clock comparison method
 // will call Kronos if clocks are incomparable
 // returns index of earliest clock`
 int64_t
-order :: compare_vts(const std::vector<vc::vclock> &clocks)
+oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
 {
     std::vector<bool> large;
     int64_t ret_idx = INT64_MAX;
@@ -182,10 +186,8 @@ order :: compare_vts(const std::vector<vc::vclock> &clocks)
         chronos_returncode status;
         ssize_t cret;
 
-        kronos_mutex.lock();
         int64_t ret = kronos_cl->weaver_order(wpair, num_pairs, &status, &cret);
         ret = kronos_cl->wait(ret, 100000, &status);
-        kronos_mutex.unlock();
 
         wp = wpair;
         std::vector<bool> large_upd = large;
@@ -232,7 +234,7 @@ order :: compare_vts(const std::vector<vc::vclock> &clocks)
 // compare two vector clocks
 // return 0 if first is smaller, 1 if second is smaller, 2 if identical
 int64_t
-order :: compare_two_vts(const vc::vclock &clk1, const vc::vclock &clk2)
+oracle :: compare_two_vts(const vc::vclock &clk1, const vc::vclock &clk2)
 {
     int cmp = compare_two_clocks(clk1.clock, clk2.clock);
     if (cmp == -1) {
@@ -246,7 +248,7 @@ order :: compare_two_vts(const vc::vclock &clk1, const vc::vclock &clk2)
 
 // return true if the first clock occurred between the second two
 bool
-order :: clock_creat_before_del_after(const vc::vclock &req_vclock, const vc::vclock &creat_time, const vc::vclock &del_time)
+oracle :: clock_creat_before_del_after(const vc::vclock &req_vclock, const vc::vclock &creat_time, const vc::vclock &del_time)
 {
     int64_t cmp_1 = compare_two_vts(del_time, req_vclock);
     assert(cmp_1 != 2);
@@ -263,7 +265,7 @@ order :: clock_creat_before_del_after(const vc::vclock &req_vclock, const vc::vc
 // will call Kronos if clocks are incomparable
 // returns true if successful, false if assignment impossible
 bool
-order :: assign_vt_order(const std::vector<vc::vclock> &before, const vc::vclock &after)
+oracle :: assign_vt_order(const std::vector<vc::vclock> &before, const vc::vclock &after)
 {
     // check if can compare without kronos
     std::vector<uint64_t> need_kronos;
@@ -304,10 +306,8 @@ order :: assign_vt_order(const std::vector<vc::vclock> &before, const vc::vclock
     // actual kronos call
     chronos_returncode status;
     ssize_t cret;
-    kronos_mutex.lock();
     int64_t ret = kronos_cl->weaver_order(wpair, num_pairs, &status, &cret);
     ret = kronos_cl->wait(ret, 100000, &status);
-    kronos_mutex.unlock();
 
     // check kronos returned orders
     for (uint64_t i = 0; i < num_pairs; i++) {

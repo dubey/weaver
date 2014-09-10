@@ -19,6 +19,7 @@
 #include <unordered_map>
 
 #include "db/edge.h"
+#include "common/event_order.h"
 #include "node_prog/edge.h"
 
 namespace node_prog
@@ -29,11 +30,14 @@ namespace node_prog
         edge_map_t::iterator internal_cur;
         edge_map_t::iterator internal_end;
         std::shared_ptr<vc::vclock> req_time;
+        order::oracle *time_oracle;
 
         public:
             edge_map_iter& operator++();
-            edge_map_iter(edge_map_t::iterator begin, edge_map_t::iterator end,
-                std::shared_ptr<vc::vclock> &req_time);
+            edge_map_iter(edge_map_t::iterator begin,
+                edge_map_t::iterator end,
+                std::shared_ptr<vc::vclock> &req_time,
+                order::oracle *time_oracle);
             bool operator==(const edge_map_iter& rhs);
             bool operator!=(const edge_map_iter& rhs);
             edge& operator*();
@@ -44,22 +48,15 @@ namespace node_prog
         private:
             edge_map_t &wrapped;
             std::shared_ptr<vc::vclock> &req_time;
+            order::oracle *time_oracle;
 
         public:
-            edge_list(edge_map_t &edge_list, std::shared_ptr<vc::vclock> &req_time)
-                : wrapped(edge_list), req_time(req_time) { }
-
-            edge_map_iter begin()
-            {
-                return edge_map_iter(wrapped.begin(), wrapped.end(), req_time);
-            }
-
-            edge_map_iter end()
-            {
-                return edge_map_iter(wrapped.end(), wrapped.end(), req_time);
-            }
-
-            uint64_t count() { return wrapped.size(); }
+            edge_list(edge_map_t &edge_list,
+                std::shared_ptr<vc::vclock> &req_time,
+                order::oracle *time_oracle);
+            edge_map_iter begin();
+            edge_map_iter end();
+            uint64_t count();
     };
 }
 

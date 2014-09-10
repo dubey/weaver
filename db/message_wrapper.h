@@ -16,6 +16,7 @@
 #define weaver_db_message_wrapper_h_
 
 #include "common/message.h"
+#include "common/event_order.h"
 
 namespace db
 {
@@ -30,6 +31,7 @@ namespace db
         public:
             enum message::msg_type type;
             std::unique_ptr<message::message> msg;
+            order::oracle *time_oracle;
     };
 }
 

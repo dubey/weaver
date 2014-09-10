@@ -18,6 +18,7 @@
 #include <iterator>
 #include <unordered_map>
 
+#include "common/event_order.h"
 #include "db/property.h"
 
 namespace node_prog
@@ -29,10 +30,11 @@ namespace node_prog
             prop_map_t::iterator internal_cur;
             prop_map_t::iterator internal_end;
             vc::vclock &req_time;
+            order::oracle *time_oracle;
 
         public:
             prop_iter& operator++();
-            prop_iter(prop_map_t::iterator begin, prop_map_t::iterator end, vc::vclock& req_time);
+            prop_iter(prop_map_t::iterator begin, prop_map_t::iterator end, vc::vclock& req_time, order::oracle *time_oracle);
             bool operator!=(const prop_iter& rhs) const;
             property& operator*();
     };
@@ -42,19 +44,20 @@ namespace node_prog
         private:
             prop_map_t &wrapped;
             vc::vclock &req_time;
+            order::oracle *time_oracle;
 
         public:
-            prop_list(prop_map_t &prop_list, vc::vclock &req_time)
-                : wrapped(prop_list), req_time(req_time) { }
+            prop_list(prop_map_t &prop_list, vc::vclock &req_time, order::oracle *to)
+                : wrapped(prop_list), req_time(req_time), time_oracle(to) { }
 
             prop_iter begin()
             {
-                return prop_iter(wrapped.begin(), wrapped.end(), req_time);
+                return prop_iter(wrapped.begin(), wrapped.end(), req_time, time_oracle);
             }
 
             prop_iter end()
             {
-                return prop_iter(wrapped.end(), wrapped.end(), req_time);
+                return prop_iter(wrapped.end(), wrapped.end(), req_time, time_oracle);
             }
     };
 }

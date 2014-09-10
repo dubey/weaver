@@ -11,7 +11,6 @@
  * ===============================================================
  */
 
-#include "common/event_order.h"
 #include "node_prog/property.h"
 #include "node_prog/prop_list.h"
 
@@ -23,21 +22,24 @@ prop_iter :: operator++()
     while (internal_cur != internal_end) {
         internal_cur++;
         if (internal_cur != internal_end
-         && order::clock_creat_before_del_after(req_time, internal_cur->second.get_creat_time(), internal_cur->second.get_del_time())) {
+         && time_oracle->clock_creat_before_del_after(req_time, internal_cur->second.get_creat_time(), internal_cur->second.get_del_time())) {
             break;
         }
     }
     return *this;
 }
 
-prop_iter :: prop_iter(prop_map_t::iterator begin, prop_map_t::iterator end,
-    vc::vclock &req_time)
+prop_iter :: prop_iter(prop_map_t::iterator begin,
+    prop_map_t::iterator end,
+    vc::vclock &req_time,
+    order::oracle *to)
     : internal_cur(begin)
     , internal_end(end)
     , req_time(req_time)
+    , time_oracle(to)
 {
     if (internal_cur != internal_end
-     && !order::clock_creat_before_del_after(req_time, internal_cur->second.get_creat_time(), internal_cur->second.get_del_time())) {
+     && !time_oracle->clock_creat_before_del_after(req_time, internal_cur->second.get_creat_time(), internal_cur->second.get_del_time())) {
         ++(*this);
     }
 }

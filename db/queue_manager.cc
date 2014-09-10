@@ -83,7 +83,7 @@ queue_manager :: check_wr_request(vc::vclock &vclk, uint64_t qt)
             }
             std::vector<bool> large;
             int64_t small_idx = INT64_MAX;
-            order::compare_vts_no_kronos(timestamps, large, small_idx);
+            order::oracle::compare_vts_no_kronos(timestamps, large, small_idx);
             if ((uint64_t)small_idx == vclk.vt_id) {
                 ret = PRESENT;
             } else {
@@ -101,7 +101,7 @@ queue_manager :: check_wr_request(vc::vclock &vclk, uint64_t qt)
 // execute a single queued request which can be run now, and return true
 // else return false
 bool
-queue_manager :: exec_queued_request()
+queue_manager :: exec_queued_request(order::oracle *time_oracle)
 {
     queue_mutex.lock(); // prevent more jobs from being added
     queued_request *req = get_rw_req();
@@ -109,6 +109,7 @@ queue_manager :: exec_queued_request()
     if (req == NULL) {
         return false;
     }
+    req->arg->time_oracle = time_oracle;
     (*req->func)(req->arg);
     // queue timestamp is incremented by the thread, upon enqueueing this tx on node queue
     // when to increment qts depends on the tx components
@@ -140,7 +141,8 @@ bool
 queue_manager :: check_rd_req_nonlocking(vc::vclock_t &clk)
 {
     for (uint64_t i = 0; i < NumVts; i++) {
-        if (order::compare_two_clocks(clk, last_clocks[i]) != 0) {
+        // no kronos call
+        if (order::oracle::compare_two_clocks(clk, last_clocks[i]) != 0) {
             return false;
         }
     }
@@ -212,7 +214,7 @@ queue_manager :: get_wr_req()
             timestamps.emplace_back(wr_queues[vt_id].top()->vclock);
             assert(timestamps.back().clock.size() == NumVts);
         }
-        exec_vt_id = order::compare_vts(timestamps);
+        exec_vt_id = time_oracle.compare_vts(timestamps);
     }
     queued_request *req = wr_queues[exec_vt_id].top();
     wr_queues[exec_vt_id].pop();

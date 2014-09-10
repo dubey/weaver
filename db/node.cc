@@ -52,28 +52,32 @@ node :: add_edge(edge *e)
 node_prog::edge_list
 node :: get_edges()
 {
-    assert(base.view_time != NULL);
-    return node_prog::edge_list(out_edges, base.view_time);
+    assert(base.view_time != nullptr);
+    assert(base.time_oracle != nullptr);
+    return node_prog::edge_list(out_edges, base.view_time, base.time_oracle);
 };
 
 node_prog::prop_list
 node :: get_properties()
 {
-    assert(base.view_time != NULL);
-    return node_prog::prop_list(base.properties, *base.view_time);
+    assert(base.view_time != nullptr);
+    assert(base.time_oracle != nullptr);
+    return node_prog::prop_list(base.properties, *base.view_time, base.time_oracle);
 };
 
 bool
 node :: has_property(std::pair<std::string, std::string> &p)
 {
-    assert(base.view_time != NULL);
+    assert(base.view_time != nullptr);
+    assert(base.time_oracle != nullptr);
     return base.has_property(p, *base.view_time);
 }
 
 bool
 node :: has_all_properties(std::vector<std::pair<std::string, std::string>> &props)
 {
-    assert(base.view_time != NULL);
+    assert(base.view_time != nullptr);
+    assert(base.time_oracle != nullptr);
     return base.has_all_properties(props, *base.view_time);
 }
 
@@ -91,7 +95,7 @@ node :: add_cache_value(std::shared_ptr<vc::vclock> vc,
             for (auto& kvpair : cache) {
                 vc::vclock &to_cmp = *kvpair.second.clk;
                 // don't talk to kronos just pick one to delete
-                if (order::compare_two_clocks(to_cmp.clock, oldest.clock) <= 0) {
+                if (base.time_oracle->compare_two_clocks(to_cmp.clock, oldest.clock) <= 0) {
                     key_to_del = kvpair.first;
                     oldest = to_cmp;
                 }

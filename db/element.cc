@@ -21,6 +21,7 @@ element :: element(const std::string &_handle, vc::vclock &vclk)
     : handle(_handle)
     , creat_time(vclk)
     , del_time(UINT64_MAX, UINT64_MAX)
+    , time_oracle(nullptr)
 { }
 
 void
@@ -59,8 +60,8 @@ element :: has_property(const std::string &key, const std::string &value, vc::vc
         const property &prop = p->second;
         const vc::vclock& vclk_creat = prop.get_creat_time();
         const vc::vclock& vclk_del = prop.get_del_time();
-        int64_t cmp1 = order::compare_two_vts(vclk, vclk_creat);
-        int64_t cmp2 = order::compare_two_vts(vclk, vclk_del);
+        int64_t cmp1 = time_oracle->compare_two_vts(vclk, vclk_creat);
+        int64_t cmp2 = time_oracle->compare_two_vts(vclk, vclk_del);
         if (cmp1 >= 1 && cmp2 == 0) {
             return true;
         }
@@ -120,24 +121,6 @@ const vc::vclock&
 element :: get_creat_time() const
 {
     return creat_time;
-}
-
-// return a pair, first is whether prop exists, second is value
-std::pair<bool, std::string>
-element :: get_property_value(std::string prop_key, vc::vclock &at_time)
-{
-    auto p = properties.find(prop_key);
-    if (p != properties.end()) {
-        const property &prop = p->second;
-        const vc::vclock &vclk_creat = prop.get_creat_time();
-        const vc::vclock &vclk_del = prop.get_del_time();
-        int64_t cmp1 = order::compare_two_vts(at_time, vclk_creat);
-        int64_t cmp2 = order::compare_two_vts(at_time, vclk_del);
-        if (cmp1 >= 1 && cmp2 == 0) {
-            return std::make_pair(true, prop.value);
-        }
-    }
-    return std::make_pair(false, std::string(""));
 }
 
 void

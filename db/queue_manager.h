@@ -43,6 +43,7 @@ namespace db
             std::vector<vc::vclock_t> last_clocks; // records last transaction vclock pulled of queue for each vector timestamper
             vc::qtimestamp_t qts; // queue timestamps
             po6::threads::mutex queue_mutex;
+            order::oracle time_oracle;
 
         private:
             queued_request* get_rd_req();
@@ -57,7 +58,7 @@ namespace db
             bool check_rd_request(vc::vclock_t &clk);
             void enqueue_write_request(uint64_t vt_id, queued_request*);
             enum queue_order check_wr_request(vc::vclock &vclk, uint64_t qt);
-            bool exec_queued_request();
+            bool exec_queued_request(order::oracle *time_oracle);
             void increment_qts(uint64_t vt_id, uint64_t incr);
             void record_completed_tx(vc::vclock &tx_clk);
             void reset(uint64_t dead_vt);

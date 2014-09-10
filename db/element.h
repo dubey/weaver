@@ -22,6 +22,7 @@
 #include <string.h>
 
 #include "common/weaver_constants.h"
+#include "common/event_order.h"
 #include "db/property.h"
 
 namespace db
@@ -42,6 +43,7 @@ namespace element
         public:
             std::unordered_map<std::string, property> properties;
             std::shared_ptr<vc::vclock> view_time;
+            order::oracle *time_oracle;
 
         public:
             void add_property(const property &prop);
@@ -57,7 +59,6 @@ namespace element
             const vc::vclock& get_del_time() const;
             void update_creat_time(vc::vclock &creat_time);
             const vc::vclock& get_creat_time() const;
-            std::pair<bool, std::string> get_property_value(std::string prop_key, vc::vclock &at_time);
             void set_handle(const std::string &handle);
             std::string get_handle() const;
     };

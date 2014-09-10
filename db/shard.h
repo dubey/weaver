@@ -83,6 +83,8 @@ namespace db
 
             // Consistency
         public:
+            queue_manager qm;
+            std::vector<order::oracle*> time_oracles;
             void increment_qts(uint64_t vt_id, uint64_t incr);
             void record_completed_tx(vc::vclock &tx_clk);
             element::node* acquire_node(const node_handle_t &node_handle);
@@ -99,7 +101,6 @@ namespace db
             std::unordered_map<node_handle_t, element::node*> nodes[NUM_NODE_MAPS]; // node handle -> ptr to node object
             std::unordered_map<node_handle_t, // node handle n ->
                 std::unordered_set<node_handle_t>> edge_map; // in-neighbors of n
-            queue_manager qm;
         public:
             element::node* create_node(const node_handle_t &node_handle,
                 vc::vclock &vclk,
@@ -156,7 +157,7 @@ namespace db
             po6::threads::mutex perm_del_mutex;
             std::deque<del_obj*> perm_del_queue;
             void delete_migrated_node(const node_handle_t &migr_node);
-            void permanent_delete_loop(uint64_t vt_id, bool outstanding_progs);
+            void permanent_delete_loop(uint64_t vt_id, bool outstanding_progs, order::oracle *time_oracle);
         private:
             void permanent_node_delete(element::node *n);
 
@@ -261,6 +262,7 @@ namespace db
         shard_id = shardid;
         for (int i = 0; i < NUM_THREADS; i++) {
             hstub.push_back(new hyper_stub(shard_id));
+            time_oracles.push_back(new order::oracle());
         }
     }
 
@@ -757,7 +759,7 @@ namespace db
     }
 
     inline void
-    shard :: permanent_delete_loop(uint64_t vt_id, bool outstanding_progs)
+    shard :: permanent_delete_loop(uint64_t vt_id, bool outstanding_progs, order::oracle *time_oracle)
     {
         element::node *n;
         del_obj *dobj = nullptr;
@@ -780,7 +782,7 @@ namespace db
                             to_del = false;
                             break;
                         }
-                        to_del = (order::compare_two_clocks(dobj->vclk.clock, max_done_clk[i]) == 0);
+                        to_del = (order::oracle::compare_two_clocks(dobj->vclk.clock, max_done_clk[i]) == 0);
                     }
                 }
             }
@@ -814,7 +816,7 @@ namespace db
                         auto out_edge_iter = n->out_edges.find(dobj->edge);
                         assert(out_edge_iter != n->out_edges.end());
                         if (n->last_perm_deletion == nullptr
-                         || order::compare_two_vts(*n->last_perm_deletion,
+                         || time_oracle->compare_two_vts(*n->last_perm_deletion,
                                 out_edge_iter->second->base.get_del_time()) == 0) {
                             n->last_perm_deletion.reset(new vc::vclock(std::move(out_edge_iter->second->base.get_del_time())));
                         }
