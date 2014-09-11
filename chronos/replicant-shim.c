@@ -61,6 +61,10 @@ void
 chronosd_get_stats(struct replicant_state_machine_context* ctx, void* obj,
                        const char* data, size_t data_sz);
 
+void
+chronosd_new_epoch(struct replicant_state_machine_context* ctx, void* obj,
+                       const char* data, size_t data_sz);
+
 struct replicant_state_machine rsm = {
     chronosd_create,
     chronosd_recreate,
@@ -73,5 +77,6 @@ struct replicant_state_machine rsm = {
      {"assign_order", chronosd_assign_order},
      {"weaver_order", chronosd_weaver_order},
      {"get_stats", chronosd_get_stats},
+     {"new_epoch", chronosd_new_epoch},
      {NULL, NULL}}
 };

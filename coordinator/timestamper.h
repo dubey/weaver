@@ -252,6 +252,10 @@ namespace coordinator
         // resize qts
         qts.resize(num_shards, 0);
 
+        // restart vclock with new epoch number from configuration
+        assert(config.version() == (prev_config.version()+1));
+        vclk.new_epoch(config.version());
+
         // reset qts if a shard died
         std::vector<server> delta = prev_config.delta(config);
         for (const server &srv: delta) {

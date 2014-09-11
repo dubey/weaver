@@ -30,9 +30,19 @@ int
 oracle :: compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
 {
     int ret = 2;
+
     assert(clk1.size() == ClkSz);
     assert(clk2.size() == ClkSz);
-    for (uint64_t i = 0; i < ClkSz; i++) {
+
+    // check epoch number
+    if (clk1[0] < clk2[0]) {
+        return 0;
+    } else if (clk1[0] > clk2[0]) {
+        return 1;
+    }
+
+    // same epoch number, compare each entry in vector
+    for (uint64_t i = 1; i < ClkSz; i++) {
         if ((clk1[i] < clk2[i]) && (ret != 0)) {
             if (ret == 2) {
                 ret = 0;
@@ -47,6 +57,7 @@ oracle :: compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
             }
         }
     }
+
     return ret;
 }
 
@@ -108,6 +119,16 @@ oracle :: compare_vts_no_kronos(const std::vector<vc::vclock> &clocks, std::vect
 }
 
 bool
+oracle :: happens_before_no_kronos(const vc::vclock_t &vclk1, const vc::vclock_t &vclk2)
+{
+    if (compare_two_clocks(vclk1, vclk2) != 0) {
+        return false;
+    } else {
+        return true;
+    }
+}
+
+bool
 oracle :: happens_before_no_kronos(const vc::vclock_t &vclk, const std::vector<vc::vclock_t*> &others)
 {
     for (const vc::vclock_t* const other: others) {
@@ -163,23 +184,34 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
         uint64_t num_pairs = ((num_clks - num_large) * (num_clks - num_large - 1)) / 2;
         weaver_pair *wpair = (weaver_pair*)malloc(sizeof(weaver_pair) * num_pairs);
         weaver_pair *wp = wpair;
+        uint64_t epoch_num = UINT64_MAX;
+
         for (uint64_t i = 0; i < num_clks; i++) {
             for (uint64_t j = i+1; j < num_clks; j++) {
                 if (!large.at(i) && !large.at(j)) {
                     wp->lhs = (uint64_t*)malloc(sizeof(uint64_t) * ClkSz);
                     wp->rhs = (uint64_t*)malloc(sizeof(uint64_t) * ClkSz);
-                    for (uint64_t k = 0; k < ClkSz; k++) {
-                        wp->lhs[k] = clocks.at(i).clock.at(k);
-                        wp->rhs[k] = clocks.at(j).clock.at(k);
+
+                    if (epoch_num == UINT64_MAX) {
+                        epoch_num = clocks[i].clock[0];
+                    } else {
+                        assert(clocks[i].clock[0] == epoch_num);
+                        assert(clocks[j].clock[0] == epoch_num);
                     }
-                    wp->lhs_id = clocks.at(i).vt_id;
-                    wp->rhs_id = clocks.at(j).vt_id;
+
+                    for (uint64_t k = 0; k < ClkSz; k++) {
+                        wp->lhs[k] = clocks[i].clock[k];
+                        wp->rhs[k] = clocks[j].clock[k];
+                    }
+                    wp->lhs_id = clocks[i].vt_id;
+                    wp->rhs_id = clocks[j].vt_id;
                     wp->flags = CHRONOS_SOFT_FAIL;
                     wp->order = CHRONOS_HAPPENS_BEFORE;
                     wp++;
                 }
             }
         }
+
         chronos_returncode status;
         ssize_t cret;
 
@@ -316,4 +348,3 @@ oracle :: assign_vt_order(const std::vector<vc::vclock> &before, const vc::vcloc
     free(wpair);
     return true;
 }
-

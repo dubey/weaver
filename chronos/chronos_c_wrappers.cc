@@ -196,6 +196,28 @@ chronos_get_stats(struct chronos_client* client,
 }
 
 int64_t
+chronos_new_epoch(struct chronos_client* client,
+                  enum chronos_returncode* status,
+                  uint32_t *success)
+{
+    try
+    {
+        return client->new_epoch(status, success);
+    }
+    catch (po6::error& e)
+    {
+        *status = CHRONOS_ERROR;
+        errno = e;
+        return -1;
+    }
+    catch (...)
+    {
+        *status = CHRONOS_ERROR;
+        return -1;
+    }
+}
+
+int64_t
 chronos_loop(struct chronos_client* client, int timeout, enum chronos_returncode* status)
 {
     try

@@ -111,6 +111,7 @@ namespace order
         public:
             // no Kronos for these calls, pure vector clock comparison which may be indecisive
             static bool happens_before_no_kronos(const vc::vclock_t &vclk, const std::vector<vc::vclock_t*> &clocks);
+            static bool happens_before_no_kronos(const vc::vclock_t &vclk1, const vc::vclock_t &vclk2);
         private:
             static int compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2);
             static std::vector<bool> compare_vector_clocks(const std::vector<vc::vclock> &clocks);

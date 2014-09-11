@@ -324,11 +324,14 @@ namespace db
                  && (srv.state != server::AVAILABLE && srv.state != server::ASSIGNED)) {
                     uint64_t vt_id = srv.virtual_id;
                     // reset qts for vt_id
-                    qm.reset(vt_id);
+                    qm.reset(vt_id, config.version());
                     WDEBUG << "reset qts for vt " << vt_id << std::endl;
                 }
             }
         }
+
+        // drop reads
+        qm.clear_queued_reads();
     }
 
     inline void

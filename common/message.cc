@@ -79,11 +79,9 @@ message :: to_string(const msg_type &t)
             return "DONE_MIGR";
         case ERROR:
             return "ERROR";
-
-        default:
-            WDEBUG << "unknown msg type " << t << std::endl;
-            return "unknown msg type";
     }
+
+    return "";
 }
 
 // size functions

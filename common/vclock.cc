@@ -31,10 +31,13 @@ vclock :: vclock(uint64_t vtid, vclock_t &vclk)
 }
 
 void
-vclock :: increment_counter(uint64_t index)
+vclock :: new_epoch(uint64_t new_epoch)
 {
-    assert(index < ClkSz);
-    clock[index]++;
+    assert(clock[0] < new_epoch);
+    clock[0] = new_epoch;
+    for (size_t i = 1; i < ClkSz; i++) {
+        clock[i] = 0;
+    }
 }
 
 void

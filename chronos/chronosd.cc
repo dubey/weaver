@@ -107,6 +107,8 @@ class chronosd
                           const char* data, size_t data_sz);
         void get_stats(struct replicant_state_machine_context* ctx,
                        const char* data, size_t data_sz);
+        void new_epoch(struct replicant_state_machine_context* ctx,
+                       const char* data, size_t data_sz);
 
     private:
         event_dependency_graph m_graph;
@@ -125,7 +127,7 @@ class chronosd
         uint64_t m_count_weaver_order;
         std::unordered_map<std::vector<uint64_t>, uint64_t> m_vcmap; // vclk -> kronos id
         bool (*pair_comp_ptr)(std::pair<uint64_t, uint64_t>, std::pair<uint64_t, uint64_t>);
-        std::unordered_map<uint64_t, pair_set_t> m_vtlist; // vt id -> (vclk, corresponding kronos id) seen from that vt
+        std::vector<std::vector<pair_set_t>> m_vtlist; // epoch num -> vt id -> (vclk, corresponding kronos id) seen from that vt
         void assign_vt_dependencies(std::vector<uint64_t> &vclk, uint64_t vt_id);
 };
 
@@ -145,9 +147,12 @@ chronosd :: chronosd()
         exit(-1);
     }
    
+    m_vtlist.emplace_back(std::vector<pair_set_t>()); // epoch num 0
+
     pair_set_t empty_set(pair_comp_ptr);
+    m_vtlist[0].reserve(NumVts);
     for (uint64_t vt_id = 0; vt_id < NumVts; vt_id++) {
-        m_vtlist.emplace(vt_id, empty_set);
+        m_vtlist[0].emplace_back(empty_set);
     }
 }
 
@@ -411,10 +416,18 @@ chronosd :: assign_order(struct replicant_state_machine_context* ctx,
 void
 chronosd :: assign_vt_dependencies(std::vector<uint64_t> &vclk, uint64_t vt_id)
 {
-    uint64_t clk_val = vclk.at(vt_id);
+    uint64_t clk_val = vclk[vt_id+1];
     uint64_t ev_id = m_vcmap[vclk];
-    assert(m_vtlist.find(vt_id) != m_vtlist.end());
-    pair_set_t &vtlist = m_vtlist[vt_id];
+    uint64_t epoch = vclk[0];
+
+    if (epoch >= m_vtlist.size()) {
+        pair_set_t empty_set(pair_comp_ptr);
+        std::vector<pair_set_t> initializer(NumVts, empty_set);
+        m_vtlist.resize(epoch+1, initializer);
+    }
+
+    assert(vt_id < NumVts && m_vtlist[epoch].size() == NumVts);
+    pair_set_t &vtlist = m_vtlist[epoch][vt_id];
     auto res = vtlist.emplace(std::make_pair(clk_val, ev_id));
     assert(res.second);
     auto iter = res.first;
@@ -621,6 +634,25 @@ chronosd :: get_stats(struct replicant_state_machine_context* ctx,
     replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
 }
 
+// not in use right now
+void
+chronosd :: new_epoch(struct replicant_state_machine_context* /*ctx*/,
+                      const char*, size_t)
+{
+    //assert(m_vtlist.size() == NumVts);
+
+    //for (pair_set_t &p: m_vtlist) {
+    //    p.clear();
+    //}
+
+    //const size_t resp_sz = sizeof(uint32_t);
+    //m_repl_resp.resize(resp_sz);
+    //char *resp_ptr = &m_repl_resp.front();
+    //uint32_t success = 0;
+    //e::pack32le(success, resp_ptr);
+    //replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
+}
+
 extern "C"
 {
 
@@ -707,6 +739,13 @@ chronosd_get_stats(struct replicant_state_machine_context* ctx, void* obj,
                        const char* data, size_t data_sz)
 {
     static_cast<chronosd*>(obj)->get_stats(ctx, data, data_sz);
+}
+
+void
+chronosd_new_epoch(struct replicant_state_machine_context* ctx, void* obj,
+                       const char* data, size_t data_sz)
+{
+    static_cast<chronosd*>(obj)->new_epoch(ctx, data, data_sz);
 }
 
 } // extern "C"

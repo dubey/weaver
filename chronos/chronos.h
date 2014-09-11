@@ -252,6 +252,14 @@ chronos_weaver_order(struct chronos_client* client, struct weaver_pair* pairs, s
 int64_t
 chronos_get_stats(struct chronos_client* client, enum chronos_returncode* status, struct chronos_stats* st, ssize_t* ret);
 
+/*
+ * signal a new epoch in the weaver configuration
+ * used to clean up data structures for correct ordering in chronos
+ * returns: 0 on success, UINT32_MAX on error
+ */
+int64_t
+chronos_new_epoch(struct chronos_client *client, enum chronos_returncode *status, uint32_t *success);
+
 int64_t
 chronos_loop(struct chronos_client* client, int timeout, enum chronos_returncode* status);
 
@@ -281,6 +289,7 @@ class chronos_client
         int64_t weaver_order(weaver_pair* pairs, size_t pairs_sz,
                              chronos_returncode* status, ssize_t* ret);
         int64_t get_stats(chronos_returncode* status, chronos_stats* st, ssize_t* ret);
+        int64_t new_epoch(chronos_returncode *status, uint32_t *success);
         int64_t loop(int timeout, chronos_returncode* status);
         int64_t wait(int64_t id, int timeout, chronos_returncode* status);
 
@@ -291,6 +300,7 @@ class chronos_client
         class pending_order;
         class pending_weaver_order;
         class pending_get_stats;
+        class pending_new_epoch;
         typedef std::map<uint64_t, e::intrusive_ptr<pending> > pending_map;
 
     private:

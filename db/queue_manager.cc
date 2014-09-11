@@ -28,7 +28,13 @@ queue_manager :: queue_manager()
     , wr_queues(NumVts, pqueue_t())
     , last_clocks(NumVts, vc::vclock_t(ClkSz, 0))
     , qts(NumVts, 0)
-{ }
+    , min_epoch(NumVts, 0)
+{
+    last_clocks_ptr.reserve(last_clocks.size());
+    for (size_t i = 0; i < last_clocks.size(); i++) {
+        last_clocks_ptr.emplace_back(&last_clocks[i]);
+    }
+}
 
 void
 queue_manager :: enqueue_read_request(uint64_t vt_id, queued_request *t)
@@ -52,7 +58,11 @@ void
 queue_manager :: enqueue_write_request(uint64_t vt_id, queued_request *t)
 {
     queue_mutex.lock();
-    wr_queues[vt_id].push(t);
+
+    if (t->vclock.clock[0] >= min_epoch[vt_id]) {
+        wr_queues[vt_id].push(t);
+    }
+
     queue_mutex.unlock();
 }
 
@@ -128,10 +138,10 @@ void
 queue_manager :: record_completed_tx(vc::vclock &tx_clk)
 {
     queue_mutex.lock();
-    uint64_t vt_id = tx_clk.vt_id;
-    uint64_t clk_idx = vt_id+1;
-    if (last_clocks[vt_id][clk_idx] < tx_clk.clock[clk_idx]) {
-        last_clocks[vt_id] = tx_clk.clock;
+    vc::vclock_t &last_clk = last_clocks[tx_clk.vt_id];
+    vc::vclock_t &this_clk = tx_clk.clock;
+    if (order::oracle::happens_before_no_kronos(last_clk, this_clk)) {
+        last_clk = this_clk;
     }
     queue_mutex.unlock();
 }
@@ -139,13 +149,8 @@ queue_manager :: record_completed_tx(vc::vclock &tx_clk)
 bool
 queue_manager :: check_rd_req_nonlocking(vc::vclock_t &clk)
 {
-    std::vector<vc::vclock_t*> others;
-    others.reserve(NumVts);
-    for (uint64_t i = 0; i < NumVts; i++) {
-        others.emplace_back(&last_clocks[i]);
-    }
     // no kronos call
-    return order::oracle::happens_before_no_kronos(clk, others);
+    return order::oracle::happens_before_no_kronos(clk, last_clocks_ptr);
 }
 
 queued_request*
@@ -232,10 +237,28 @@ queue_manager :: get_rw_req()
 }
 
 void
-queue_manager :: reset(uint64_t dead_vt)
+queue_manager :: reset(uint64_t dead_vt, uint64_t new_epoch)
 {
     queue_mutex.lock();
+
+    assert(new_epoch > min_epoch[dead_vt]);
+    min_epoch[dead_vt] = new_epoch;
+
     qts[dead_vt] = 0;
     last_clocks[dead_vt] = vc::vclock_t(ClkSz, 0);
+    last_clocks_ptr[dead_vt] = &last_clocks[dead_vt];
+
+    pqueue_t &dead_queue = wr_queues[dead_vt];
+    while (!dead_queue.empty()
+        && dead_queue.top()->vclock.clock[0] < min_epoch[dead_vt]) {
+        dead_queue.pop();
+    }
+
     queue_mutex.unlock();
+}
+
+void
+queue_manager :: clear_queued_reads()
+{
+    rd_queues = std::vector<pqueue_t>(NumVts, pqueue_t());
 }

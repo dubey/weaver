@@ -180,6 +180,25 @@ class chronos_client::pending_get_stats : public pending
         ssize_t* m_ret;
 };
 
+class chronos_client::pending_new_epoch : public pending
+{
+    public:
+        pending_new_epoch(chronos_returncode* status, uint32_t *success);
+        virtual ~pending_new_epoch() throw ();
+
+    public:
+        virtual void parse();
+
+    private:
+        pending_new_epoch(const pending_new_epoch&);
+
+    private:
+        pending_new_epoch& operator = (const pending_new_epoch&);
+
+    private:
+        uint32_t *m_success;
+};
+
 chronos_client :: chronos_client(const char* host, uint16_t port)
     : m_replicant(new replicant_client(host, port))
     , m_pending()
@@ -308,6 +327,13 @@ chronos_client :: get_stats(chronos_returncode* status, chronos_stats* st, ssize
 {
     e::intrusive_ptr<pending> pend(new pending_get_stats(status, st, ret));
     return send(pend, status, "get_stats", "", 0);
+}
+
+int64_t
+chronos_client :: new_epoch(chronos_returncode *status, uint32_t *success)
+{
+    e::intrusive_ptr<pending> pend(new pending_new_epoch(status, success));
+    return send(pend, status, "new_epoch", "", 0);
 }
 
 int64_t
@@ -578,5 +604,31 @@ chronos_client :: pending_get_stats :: parse()
         c = e::unpack64le(c, &m_st->count_query_order);
         c = e::unpack64le(c, &m_st->count_assign_order);
         c = e::unpack64le(c, &m_st->count_weaver_order);
+    }
+}
+
+/////////////////////////////// pending_new_epoch //////////////////////////////
+
+chronos_client :: pending_new_epoch :: pending_new_epoch(chronos_returncode* s, uint32_t *success)
+    : pending(s)
+    , m_success(success)
+{ }
+
+chronos_client :: pending_new_epoch :: ~pending_new_epoch() throw ()
+{ }
+
+void
+chronos_client :: pending_new_epoch :: parse()
+{
+    if (repl_status != REPLICANT_SUCCESS ||
+        repl_output_sz != sizeof(uint32_t))
+    {
+        *status = CHRONOS_ERROR;
+        *m_success = UINT32_MAX; // error
+    }
+    else
+    {
+        *status = CHRONOS_SUCCESS;
+        e::unpack32le(repl_output, m_success);
     }
 }
