@@ -38,8 +38,9 @@ namespace vc
             vclock(uint64_t vt_id, vclock_t &vclk);
             void new_epoch(uint64_t epoch_num);
             uint64_t get_clock() const { return clock[vt_id+1]; }
+            uint64_t get_epoch() const { return clock[0]; }
             void increment_clock() { clock[vt_id+1]++; }
-            void update_clock(uint64_t vt_id, uint64_t new_clock);
+            void update_clock(vc::vclock &other);
 
             bool operator==(const vclock &rhs) const;
             bool operator!=(const vclock &rhs) const;

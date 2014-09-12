@@ -177,6 +177,7 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
         uint64_t num_large = std::count(large.begin(), large.end(), true);
         if (num_large == (num_clks-1)) {
             // Kronos not required
+            WDEBUG << "no Kronos call needed for comparion" << std::endl;
             return get_false_position(large);
         }
 

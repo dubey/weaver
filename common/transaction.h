@@ -56,7 +56,10 @@ namespace transaction
 
     enum tx_type
     {
+        // internal
         FAIL,
+        EPOCH_CHANGE,
+        // to shards
         NOP,
         UPDATE
     };
@@ -74,7 +77,9 @@ namespace transaction
 
         nop_data *nop; // if this is a nop
 
-        pending_tx(tx_type t) : type(t), nop(NULL) { }
+        uint64_t new_epoch; // if this is an epoch change
+
+        pending_tx(tx_type t) : type(t), nop(nullptr) { }
 
         ~pending_tx()
         {

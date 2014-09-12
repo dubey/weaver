@@ -41,9 +41,7 @@ static uint64_t vt_id;
 
 // tx functions
 void prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub);
-void send_tx(transaction::pending_tx *orig_tx, std::vector<transaction::pending_tx*> factored_tx);
 void end_tx(uint64_t tx_id, coordinator::hyper_stub *hstub, uint64_t shard_id);
-void tx_queue_loop();
 
 
 void
@@ -163,43 +161,7 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub)
         msg.prepare_message(message::CLIENT_TX_ABORT);
         vts->comm.send_to_client(tx->client_id, msg.buf);
     } else {
-        tx_queue_loop();
-    }
-}
-
-void
-tx_queue_loop()
-{
-    while (true) {
-        std::pair<transaction::pending_tx*, std::vector<transaction::pending_tx*>> p = vts->process_tx_queue();
-        if (p.first == NULL) {
-            break;
-        }
-        send_tx(p.first, p.second);
-    }
-}
-
-void
-send_tx(transaction::pending_tx *orig_tx, std::vector<transaction::pending_tx*> factored_tx)
-{
-    assert(orig_tx->type != transaction::FAIL);
-
-    // tx succeeded, send to shards
-    uint64_t num_shards = orig_tx->shard_write.size();
-
-    if (orig_tx->type == transaction::UPDATE) {
-        vts->tx_prog_mutex.lock();
-        vts->outstanding_tx.emplace(orig_tx->id, orig_tx);
-        vts->tx_prog_mutex.unlock();
-    }
-
-    // send tx batches
-    message::message msg;
-    for (uint64_t i = 0; i < num_shards; i++) {
-        if (orig_tx->shard_write[i]) {
-            msg.prepare_message(message::TX_INIT, vt_id, factored_tx[i]->timestamp, factored_tx[i]->qts, *factored_tx[i]);
-            vts->comm.send(i+ShardIdIncr, msg.buf);
-        }
+        vts->tx_queue_loop();
     }
 }
 
@@ -267,6 +229,11 @@ nop_function()
             vts->clk_rw_mtx.wrlock();
             vts->vclk.increment_clock();
             tx->timestamp = vts->vclk;
+            std::cerr << "nop " << tx->id << " vclk " << tx->timestamp.vt_id << " : ";
+            for (uint64_t c: tx->timestamp.clock) {
+                std::cerr << c << " ";
+            }
+            std::cerr << std::endl;
             tx->shard_write = vts->to_nop;
             vts->clk_rw_mtx.unlock();
 
@@ -305,7 +272,7 @@ nop_function()
 
         if (tx != NULL) {
             vts->enqueue_tx(tx);
-            tx_queue_loop();
+            vts->tx_queue_loop();
             tx = NULL;
         }
     }
@@ -455,7 +422,6 @@ server_loop(int thread_id)
     node_prog::prog_type pType;
     coordinator::hyper_stub *hstub = vts->hstub[thread_id];
     transaction::pending_tx *tx;
-    vc::vclock rec_clk;
 
     while (true) {
         vts->comm.quiesce_thread(thread_id);
@@ -478,10 +444,11 @@ server_loop(int thread_id)
                 }
 
                 case message::VT_CLOCK_UPDATE: {
+                    vc::vclock rec_clk;
                     msg->unpack_message(message::VT_CLOCK_UPDATE, rec_clk);
                     vts->clk_rw_mtx.wrlock();
                     vts->clk_updates++;
-                    //vts->vclk.update_clock(rec_vtid, rec_clock); // XXX fix this. If epoch is larger then override
+                    vts->vclk.update_clock(rec_clk);
                     vts->clk_rw_mtx.unlock();
                     break;
                 }
@@ -656,8 +623,10 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location loc, boo
         if (!vts->first_config) {
             vts->first_config = true;
             vts->first_config_cond.signal();
+            vts->reconfigure(true);
+        } else {
+            vts->reconfigure(false);
         }
-        vts->reconfigure();
         vts->config_mutex.unlock();
 
         // let the coordinator know we've moved to this config
@@ -793,7 +762,7 @@ main(int argc, const char *argv[])
     po6::net::location my_loc(listen_host, listen_port);
     uint64_t sid;
     assert(generate_token(&sid));
-    vts = new coordinator::timestamper(sid, my_loc);
+    vts = new coordinator::timestamper(sid, my_loc, backup);
 
     // server manager link
     std::thread sm_thr(server_manager_link_loop,

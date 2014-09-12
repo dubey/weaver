@@ -574,7 +574,12 @@ nop(db::message_wrapper *request)
     S->record_completed_tx(tx.timestamp);
 
     // ack to VT
-    WDEBUG << "nop ack, qts = " << qts << std::endl;
+    std::cerr << "nop ack, qts = " << qts << ", vclk " << vclk.vt_id << " : ";
+    for (uint64_t c: vclk.clock) {
+        std::cerr << c << " ";
+    }
+    std::cerr << std::endl;
+
     msg.prepare_message(message::VT_NOP_ACK, shard_id, qts, cur_node_count);
     S->comm.send(vt_id, msg.buf);
 
@@ -1704,7 +1709,11 @@ recv_loop(uint64_t thread_id)
             switch (mtype) {
                 case message::TX_INIT: {
                     rec_msg->unpack_partial_message(message::TX_INIT, vt_id, vclk, qts, txtype);
-                    WDEBUG << "got tx, qts = " << qts << std::endl;
+                    std::cerr << "got tx, qts = " << qts << ", vclk " << vt_id << " : ";
+                    for (uint64_t c: vclk.clock) {
+                        std::cerr << c << " ";
+                    }
+                    std::cerr << std::endl;
                     assert(vclk.clock.size() == ClkSz);
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                     tx_order = S->qm.check_wr_request(vclk, qts);

@@ -42,7 +42,11 @@ namespace coordinator
         public:
             bool operator() (const transaction::pending_tx* const lhs, const transaction::pending_tx* const rhs)
             {
-                return lhs->timestamp.get_clock() > rhs->timestamp.get_clock();
+                if (lhs->timestamp.get_epoch() == rhs->timestamp.get_epoch()) {
+                    return lhs->timestamp.get_clock() > rhs->timestamp.get_clock();
+                } else {
+                    return lhs->timestamp.get_epoch() > rhs->timestamp.get_epoch();
+                }
             }
     };
     using req_queue_t = std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>>;
@@ -58,7 +62,7 @@ namespace coordinator
             // server manager
             server_manager_link_wrapper sm_stub;
             configuration config, prev_config;
-            bool active_backup, first_config, pause_bb;
+            bool is_backup, active_backup, first_config, pause_bb;
             uint64_t num_active_vts;
             po6::threads::cond backup_cond, first_config_cond, start_all_vts_cond;
             
@@ -116,28 +120,30 @@ namespace coordinator
             std::vector<uint64_t> shard_node_count;
 
             // fault tolerance
-            uint64_t out_queue_clk;
+            std::pair<uint64_t, uint64_t> out_queue_clk; // (epoch num, out clk)
             tx_queue_t tx_out_queue;
 
             // exit
             bool to_exit;
 
         public:
-            timestamper(uint64_t serverid, po6::net::location &loc);
+            timestamper(uint64_t serverid, po6::net::location &loc, bool backup);
             void init(uint64_t vtid);
             void restore_backup();
-            void reconfigure();
-            void update_members_new_config();
+            void reconfigure(bool first);
+            void update_members_new_config(bool first);
             uint64_t generate_req_id();
             uint64_t generate_loc();
             void enqueue_tx(transaction::pending_tx *tx);
             std::pair<transaction::pending_tx*, std::vector<transaction::pending_tx*>> process_tx_queue();
+            void tx_queue_loop();
     };
 
     inline
-    timestamper :: timestamper(uint64_t serverid, po6::net::location &loc)
+    timestamper :: timestamper(uint64_t serverid, po6::net::location &loc, bool backup)
         : comm(loc, NUM_THREADS, -1)
         , sm_stub(server_id(serverid), comm.get_loc())
+        , is_backup(backup)
         , active_backup(false)
         , first_config(false)
         , pause_bb(false)
@@ -161,7 +167,7 @@ namespace coordinator
         , load_count(0)
         , max_load_time(0)
         , shard_node_count(NumShards, 0)
-        , out_queue_clk(1)
+        , out_queue_clk(std::make_pair(0,1))
         , to_exit(false)
     {
         // initialize empty vector of done reqs for each prog type
@@ -199,7 +205,7 @@ namespace coordinator
 
     // reconfigure timestamper according to new cluster configuration
     inline void
-    timestamper :: reconfigure()
+    timestamper :: reconfigure(bool first)
     {
         WDEBUG << "Cluster reconfigure triggered\n";
 
@@ -212,11 +218,11 @@ namespace coordinator
             start_all_vts_cond.signal();
         }
 
-        update_members_new_config();
+        update_members_new_config(first);
     }
 
     inline void
-    timestamper :: update_members_new_config()
+    timestamper :: update_members_new_config(bool first)
     {
         std::vector<std::pair<server_id, po6::net::location>> addresses;
         config.get_all_addresses(&addresses);
@@ -230,6 +236,7 @@ namespace coordinator
             }
         }
         uint64_t num_shards = shard_set.size();
+        bool direct_reset_out_queue_clk = first;
 
         // resize periodic msg ds
         periodic_update_mutex.lock();
@@ -242,9 +249,12 @@ namespace coordinator
 
         // activate if backup
         uint64_t vid = config.get_virtual_id(serv_id);
-        if (vid != UINT64_MAX) {
-            active_backup = true;
-            backup_cond.signal();
+        if (is_backup && !active_backup) {
+            if (vid != UINT64_MAX) {
+                active_backup = true;
+                backup_cond.signal();
+            }
+            direct_reset_out_queue_clk = true;
         }
 
         clk_rw_mtx.wrlock();
@@ -252,9 +262,25 @@ namespace coordinator
         // resize qts
         qts.resize(num_shards, 0);
 
-        // restart vclock with new epoch number from configuration
-        assert(config.version() == (prev_config.version()+1));
-        vclk.new_epoch(config.version());
+        transaction::pending_tx *epoch_tx = nullptr;
+        if (direct_reset_out_queue_clk) {
+            // out_queue is empty
+            out_queue_clk = std::make_pair(config.version(), 1);
+            vclk.new_epoch(config.version());
+            WDEBUG << "first config, out_queue_clk is now " << out_queue_clk.first << "," << out_queue_clk.second << std::endl;
+        } else {
+            // restart vclock with new epoch number from configuration
+            vclk.increment_clock();
+            std::cerr << "Reconfigure, out_queue_clk : " << out_queue_clk.first << "," << out_queue_clk.second << "; epoch change vclk " << vclk.vt_id << " : ";
+            for (uint64_t c: vclk.clock) {
+                std::cerr << c << " ";
+            }
+            std::cerr << "; new epoch " << config.version() << std::endl;
+            epoch_tx = new transaction::pending_tx(transaction::EPOCH_CHANGE);
+            epoch_tx->timestamp = vclk;
+            epoch_tx->new_epoch = config.version();
+            vclk.new_epoch(config.version());
+        }
 
         // reset qts if a shard died
         std::vector<server> delta = prev_config.delta(config);
@@ -285,6 +311,11 @@ namespace coordinator
 
         clk_rw_mtx.unlock();
         periodic_update_mutex.unlock();
+
+        if (!direct_reset_out_queue_clk) {
+            enqueue_tx(epoch_tx);
+            tx_queue_loop();
+        }
     }
 
     inline uint64_t
@@ -314,16 +345,29 @@ namespace coordinator
     timestamper :: enqueue_tx(transaction::pending_tx *tx)
     {
         uint64_t seq = tx->timestamp.get_clock();
+        uint64_t epoch = tx->timestamp.get_epoch();
+        bool done = false;
+
         tx_out_queue_mtx.lock();
-        bool not_add = tx_out_queue.empty() // empty queue
-                    && seq == out_queue_clk // next expected clk
-                    && tx->type == transaction::FAIL; // empty tx
-        if (not_add) {
-            delete tx;
-            out_queue_clk++;
-        } else {
+
+        if (tx_out_queue.empty()
+         && epoch == out_queue_clk.first
+         && seq == out_queue_clk.second) {
+            if (tx->type == transaction::FAIL) {
+                out_queue_clk.second++;
+                delete tx;
+                done = true;
+            } else if (tx->type == transaction::EPOCH_CHANGE) {
+                out_queue_clk = std::make_pair(tx->new_epoch, 1);
+                delete tx;
+                done = true;
+            }
+        }
+
+        if (!done) {
             tx_out_queue.emplace(tx);
         }
+
         tx_out_queue_mtx.unlock();
     }
 
@@ -338,14 +382,22 @@ namespace coordinator
         if (!tx_out_queue.empty()) {
             transaction::pending_tx *top = tx_out_queue.top();
             uint64_t this_clk = top->timestamp.get_clock();
-            if (this_clk == out_queue_clk) {
+            uint64_t this_epoch = top->timestamp.get_epoch();
+
+            if (this_epoch == out_queue_clk.first && this_clk == out_queue_clk.second) {
                 tx_out_queue.pop();
-                if (top->type != transaction::FAIL) {
-                    tx = top;
-                } else {
+
+                if (top->type == transaction::EPOCH_CHANGE) {
+                    out_queue_clk = std::make_pair(top->new_epoch, 1);
                     delete top;
+                } else {
+                    out_queue_clk.second++;
+                    if (top->type == transaction::FAIL) {
+                        delete top;
+                    } else {
+                        tx = top;
+                    }
                 }
-                out_queue_clk++;
             }
         }
 
@@ -397,6 +449,43 @@ namespace coordinator
 
         return std::make_pair(tx, factored_tx);
     }
+
+    void
+    timestamper :: tx_queue_loop()
+    {
+        while (true) {
+            std::pair<transaction::pending_tx*, std::vector<transaction::pending_tx*>> p = process_tx_queue();
+            if (p.first == NULL) {
+                break;
+            }
+
+            transaction::pending_tx *orig_tx = p.first;
+            std::vector<transaction::pending_tx*> &factored_tx = p.second;
+            assert(orig_tx->type != transaction::FAIL && orig_tx->type != transaction::EPOCH_CHANGE);
+
+            // tx succeeded, send to shards
+            uint64_t num_shards = orig_tx->shard_write.size();
+
+            if (orig_tx->type == transaction::UPDATE) {
+                tx_prog_mutex.lock();
+                outstanding_tx.emplace(orig_tx->id, orig_tx);
+                tx_prog_mutex.unlock();
+            }
+
+            std::cerr << "sending out tx " << orig_tx->id << " to shard: ";
+            // send tx batches
+            message::message msg;
+            for (uint64_t i = 0; i < num_shards; i++) {
+                if (orig_tx->shard_write[i]) {
+                    msg.prepare_message(message::TX_INIT, vt_id, factored_tx[i]->timestamp, factored_tx[i]->qts, *factored_tx[i]);
+                    comm.send(i+ShardIdIncr, msg.buf);
+                    std::cerr << i << " ";
+                }
+            }
+            std::cerr << std::endl;
+        }
+    }
+
 }
 
 #endif

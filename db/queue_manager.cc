@@ -216,7 +216,7 @@ queue_manager :: get_wr_req()
         timestamps.reserve(NumVts);
         for (uint64_t vt_id = 0; vt_id < NumVts; vt_id++) {
             timestamps.emplace_back(wr_queues[vt_id].top()->vclock);
-            assert(timestamps.back().clock.size() == NumVts);
+            assert(timestamps.back().clock.size() == ClkSz);
         }
         exec_vt_id = time_oracle.compare_vts(timestamps);
     }

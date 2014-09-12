@@ -34,18 +34,17 @@ void
 vclock :: new_epoch(uint64_t new_epoch)
 {
     assert(clock[0] < new_epoch);
+    clock = vclock_t(ClkSz, 0);
     clock[0] = new_epoch;
-    for (size_t i = 1; i < ClkSz; i++) {
-        clock[i] = 0;
-    }
 }
 
 void
-vclock :: update_clock(uint64_t vtid, uint64_t new_clock)
+vclock :: update_clock(vc::vclock &other)
 {
+    uint64_t vtid = other.vt_id;
     assert(vtid < NumVts);
-    if (clock[vtid+1] < new_clock) {
-        clock[vtid+1] = new_clock;
+    if (clock[0] == other.clock[0] && clock[vtid+1] < other.clock[vtid+1]) {
+        clock[vtid+1] = other.clock[vtid+1];
     }
 }
 
