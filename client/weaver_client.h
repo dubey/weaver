@@ -48,7 +48,7 @@ namespace cl
             std::unique_ptr<cl::comm_wrapper> comm;
             server_manager_link m_sm;
             transaction::tx_list_t cur_tx;
-            uint64_t cur_tx_id, tx_id_ctr, id_ctr;
+            uint64_t cur_tx_id, tx_id_ctr, handle_ctr;
 
         public:
             void begin_tx();

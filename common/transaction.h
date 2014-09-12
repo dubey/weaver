@@ -67,13 +67,13 @@ namespace transaction
     struct pending_tx
     {
         tx_type type;
-        uint64_t id; // unique tx id
+        uint64_t id; // unique tx id, assigned by client
         vc::vclock timestamp; // vector timestamp
         uint64_t qts; // queue timestamp
         std::vector<bool> shard_write; // which shards are involved in the write
 
         tx_list_t writes; // if this is a write tx
-        uint64_t client_id; // client to which we need to reply for write tx
+        uint64_t sender; // client to which we need to reply for write tx
 
         nop_data *nop; // if this is a nop
 

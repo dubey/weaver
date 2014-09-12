@@ -247,7 +247,7 @@ message :: size(const transaction::pending_tx &t)
         + size(t.qts);
     if (t.type == transaction::UPDATE) {
         sz = sz + size(t.writes)
-            + size(t.client_id);
+            + size(t.sender);
     } else {
         sz = sz + size(t.nop);
     }
@@ -448,7 +448,7 @@ message :: pack_buffer(e::buffer::packer &packer, const transaction::pending_tx 
     pack_buffer(packer, t.qts);
     if (t.type == transaction::UPDATE) {
         pack_buffer(packer, t.writes);
-        pack_buffer(packer, t.client_id);
+        pack_buffer(packer, t.sender);
     } else {
         pack_buffer(packer, t.nop);
     }
@@ -652,7 +652,7 @@ message :: unpack_buffer(e::unpacker &unpacker, transaction::pending_tx &t)
     unpack_buffer(unpacker, t.qts);
     if (t.type == transaction::UPDATE) {
         unpack_buffer(unpacker, t.writes);
-        unpack_buffer(unpacker, t.client_id);
+        unpack_buffer(unpacker, t.sender);
     } else {
         unpack_buffer(unpacker, t.nop);
     }

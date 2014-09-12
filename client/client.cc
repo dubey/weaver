@@ -28,7 +28,7 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     : m_sm(coordinator, port)
     , cur_tx_id(UINT64_MAX)
     , tx_id_ctr(0)
-    , id_ctr(0)
+    , handle_ctr(0)
 {
     google::InitGoogleLogging("weaver-client");
     //google::InstallFailureSignalHandler();
@@ -360,7 +360,7 @@ client :: recv_coord(std::auto_ptr<e::buffer> *buf)
 std::string
 client :: generate_handle()
 {
-    std::string s = std::to_string(id_ctr++);
+    std::string s = std::to_string(handle_ctr++);
     s += myid_str;
     return s;
 }

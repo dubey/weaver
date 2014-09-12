@@ -66,8 +66,6 @@ end_program(int signum)
 void
 prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub)
 {
-    tx->id = vts->generate_req_id();
-
     std::unordered_set<node_handle_t> get_set;
     std::unordered_set<node_handle_t> del_set;
     std::unordered_map<node_handle_t, uint64_t> loc_map;
@@ -161,7 +159,7 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub)
         delete tx;
         message::message msg;
         msg.prepare_message(message::CLIENT_TX_ABORT);
-        vts->comm.send_to_client(tx->client_id, msg.buf);
+        vts->comm.send_to_client(tx->sender, msg.buf);
     } else {
         vts->tx_queue_loop();
     }
@@ -190,7 +188,7 @@ end_tx(uint64_t tx_id, uint64_t shard_id, coordinator::hyper_stub *hstub)
         // send response to client
         message::message msg;
         msg.prepare_message(message::CLIENT_TX_SUCCESS);
-        vts->comm.send_to_client(tx->client_id, msg.buf);
+        vts->comm.send_to_client(tx->sender, msg.buf);
 
         delete tx;
     } else {
@@ -440,7 +438,7 @@ server_loop(int thread_id)
                 case message::CLIENT_TX_INIT: {
                     tx = new transaction::pending_tx(transaction::UPDATE);
                     msg->unpack_message(message::CLIENT_TX_INIT, tx->writes);
-                    tx->client_id = client_sender;
+                    tx->sender = client_sender;
                     prepare_tx(tx, hstub);
                     break;
                 }
