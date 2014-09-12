@@ -1965,14 +1965,12 @@ init_worker_threads(std::vector<std::thread*> &threads)
 void
 init_shard()
 {
-    std::vector<std::pair<server_id, po6::net::location>> addresses;
-    S->config.get_all_addresses(&addresses);
+    std::vector<server> servers = S->config.get_servers();
     shard_id = UINT64_MAX;
-    for (auto &p: addresses) {
-        if (p.second == *S->comm.get_loc()) {
-            uint64_t vid = S->config.get_virtual_id(p.first);
-            assert(S->config.get_type(p.first) == server::SHARD);
-            shard_id = vid + NumVts;
+    for (const server &srv: servers) {
+        if (srv.id == S->serv_id) {
+            assert(srv.type == server::SHARD);
+            shard_id = srv.virtual_id + NumVts;
         }
     }
     assert(shard_id != UINT64_MAX);

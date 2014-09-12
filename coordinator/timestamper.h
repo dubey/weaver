@@ -224,15 +224,14 @@ namespace coordinator
     inline void
     timestamper :: update_members_new_config(bool first)
     {
-        std::vector<std::pair<server_id, po6::net::location>> addresses;
-        config.get_all_addresses(&addresses);
+        std::vector<server> servers = config.get_servers();
 
         // update num shards
         std::unordered_set<uint64_t> shard_set;
-        for (auto &p: addresses) {
-            if (config.get_type(p.first) == server::SHARD
-             && config.get_state(p.first) != server::ASSIGNED) {
-                shard_set.emplace(config.get_virtual_id(p.first));
+        for (const server &srv: servers) {
+            if (srv.type == server::SHARD
+             && srv.state != server::ASSIGNED) {
+                shard_set.emplace(srv.virtual_id);
             }
         }
         uint64_t num_shards = shard_set.size();

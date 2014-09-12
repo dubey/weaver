@@ -23,18 +23,13 @@ using cl::comm_wrapper;
 
 comm_wrapper :: weaver_mapper :: weaver_mapper(const configuration &config)
 {
-    std::vector<std::pair<server_id, po6::net::location>> addresses;
-    config.get_all_addresses(&addresses);
+    std::vector<server> servers = config.get_servers();
 
-    for (auto &p: addresses) {
-        server::type_t type = config.get_type(p.first);
-        uint64_t virtual_id = config.get_virtual_id(p.first);
-        server::state_t state = config.get_state(p.first);
-
-        if (type == server::VT && state == server::AVAILABLE) {
-            assert(mlist.find(WEAVER_TO_BUSYBEE(virtual_id)) == mlist.end());
-            mlist[WEAVER_TO_BUSYBEE(virtual_id)] = p.second;
-            WDEBUG << "VT " << virtual_id << " has state " << server::to_string(state) << std::endl;
+    for (const server &srv: servers) {
+        if (srv.type == server::VT && srv.state == server::AVAILABLE) {
+            assert(mlist.find(WEAVER_TO_BUSYBEE(srv.virtual_id)) == mlist.end());
+            mlist[WEAVER_TO_BUSYBEE(srv.virtual_id)] = srv.bind_to;
+            WDEBUG << "VT " << srv.virtual_id << " has state " << server::to_string(srv.state) << std::endl;
         }
     }
 }

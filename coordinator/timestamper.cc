@@ -682,14 +682,13 @@ init_worker_threads(std::vector<std::thread*> &threads)
 void
 init_vt()
 {
-    std::vector<std::pair<server_id, po6::net::location>> addresses;
-    vts->config.get_all_addresses(&addresses);
+    std::vector<server> servers = vts->config.get_servers();
     vt_id = UINT64_MAX;
-    for (auto &p: addresses) {
-        if (p.second == *vts->comm.get_loc()) {
-            uint64_t vid = vts->config.get_virtual_id(p.first);
-            assert(vts->config.get_type(p.first) == server::VT);
-            vt_id = vid;
+    for (const server &srv: servers) {
+        WDEBUG << "server " << srv.weaver_id << " has address " << srv.bind_to << std::endl;
+        if (srv.id == vts->serv_id) {
+            assert(srv.type == server::VT);
+            vt_id = srv.virtual_id;
         }
     }
     assert(vt_id != UINT64_MAX);

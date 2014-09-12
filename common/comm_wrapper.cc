@@ -117,44 +117,39 @@ void
 comm_wrapper :: reconfigure_internal(configuration &new_config)
 {
     config = new_config;
-    std::vector<std::pair<server_id, po6::net::location>> addresses;
-    config.get_all_addresses(&addresses);
+
+    std::vector<server> servers = config.get_servers();
 
     std::unordered_set<uint64_t> shard_set;
-    for (auto &p: addresses) {
-        if (config.get_type(p.first) == server::SHARD) {
-            shard_set.emplace(config.get_virtual_id(p.first));
+    for (const server &srv: servers) {
+        if (srv.type == server::SHARD) {
+            shard_set.emplace(srv.virtual_id);
         }
     }
     uint64_t num_shards = shard_set.size();
     assert(active_server_idx.size() <= (NumVts+num_shards));
     active_server_idx.resize(NumVts+num_shards, UINT64_MAX);
 
-    for (auto &p: addresses) {
-        server::type_t type = config.get_type(p.first);
-        server::state_t state = config.get_state(p.first);
-        uint64_t weaver_id = config.get_weaver_id(p.first);
-        uint64_t virtual_id = config.get_virtual_id(p.first);
+    for (const server &srv: servers) {
+        assert(srv.weaver_id != UINT64_MAX);
 
-        assert(weaver_id != UINT64_MAX);
-
-        if (type != server::SHARD && type != server::VT) {
-            WDEBUG << "Server: " << weaver_id
-                   << ", role: " << server::to_string(type)
-                   << ", state: " << server::to_string(state)
+        if (srv.type != server::SHARD && srv.type != server::VT) {
+            WDEBUG << "Server: " << srv.weaver_id
+                   << ", role: " << server::to_string(srv.type)
+                   << ", state: " << server::to_string(srv.state)
                    << "." << std::endl;
         } else {
-            uint64_t factor = (type == server::SHARD) ? 1 : 0;
-            uint64_t vid = virtual_id + NumVts*factor;
+            uint64_t factor = (srv.type == server::SHARD) ? 1 : 0;
+            uint64_t vid = srv.virtual_id + NumVts*factor;
 
-            WDEBUG << "Server: " << weaver_id
-                   << ", role: " << server::to_string(type) << " " << vid
-                   << ", state: " << server::to_string(state)
+            WDEBUG << "Server: " << srv.weaver_id
+                   << ", role: " << server::to_string(srv.type) << " " << vid
+                   << ", state: " << server::to_string(srv.state)
                    << "." << std::endl;
 
-            if (state == server::AVAILABLE) {
-                active_server_idx[vid] = weaver_id;
-                wmap->add_mapping(weaver_id, p.second);
+            if (srv.state == server::AVAILABLE) {
+                active_server_idx[vid] = srv.weaver_id;
+                wmap->add_mapping(srv.weaver_id, srv.bind_to);
             }
         }
     }

@@ -452,6 +452,8 @@ server_manager :: find_backup(FILE *log, server::type_t type, uint64_t vid)
     for (size_t i = 0; i < m_servers.size(); i++) {
         if (m_servers[i].type == target_type) {
             // found backup server
+            fprintf(log, "activating backup %lu for dead %s %lu\n",
+                    m_servers[i].weaver_id, server::to_string(type), vid);
             activate_backup(&m_servers[i], type, vid);
             break;
         }
