@@ -72,6 +72,7 @@ namespace coordinator
             // timestamper state
         public:
             server_id serv_id;
+            uint64_t weaver_id; // unique server id that counts up from 0, assigned by server manager
         private:
             uint64_t vt_id; // this vector timestamper's id
             uint64_t shifted_id;
@@ -128,7 +129,7 @@ namespace coordinator
 
         public:
             timestamper(uint64_t serverid, po6::net::location &loc, bool backup);
-            void init(uint64_t vtid);
+            void init(uint64_t vtid, uint64_t weaverid);
             void restore_backup();
             void reconfigure(bool first);
             void update_members_new_config(bool first);
@@ -180,10 +181,11 @@ namespace coordinator
     // initialize msging layer
     // caution: holding config_mutex
     inline void
-    timestamper :: init(uint64_t vtid)
+    timestamper :: init(uint64_t vtid, uint64_t weaverid)
     {
         vt_id = vtid;
-        shifted_id = vt_id << (64-ID_BITS);
+        weaver_id = weaverid;
+        shifted_id = weaver_id << (64-ID_BITS);
         vclk.vt_id = vt_id;
 
         for (int i = 0; i < NUM_THREADS; i++) {

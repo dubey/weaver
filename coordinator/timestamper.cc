@@ -66,6 +66,8 @@ end_program(int signum)
 void
 prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub)
 {
+    tx->id = vts->generate_req_id();
+
     std::unordered_set<node_handle_t> get_set;
     std::unordered_set<node_handle_t> del_set;
     std::unordered_map<node_handle_t, uint64_t> loc_map;
@@ -684,17 +686,19 @@ init_vt()
 {
     std::vector<server> servers = vts->config.get_servers();
     vt_id = UINT64_MAX;
+    uint64_t weaver_id = UINT64_MAX;
     for (const server &srv: servers) {
         WDEBUG << "server " << srv.weaver_id << " has address " << srv.bind_to << std::endl;
         if (srv.id == vts->serv_id) {
             assert(srv.type == server::VT);
             vt_id = srv.virtual_id;
+            weaver_id = srv.weaver_id;
         }
     }
     assert(vt_id != UINT64_MAX);
 
     // registered this server with server_manager, we now know the vt_id
-    vts->init(vt_id);
+    vts->init(vt_id, weaver_id);
 }
 
 int
