@@ -286,9 +286,20 @@ clk_update_function()
     int sleep_flags = 0;
     message::message msg;
     vc::vclock vclk(vt_id, 0);
+    uint64_t config_version;
+    std::vector<server::state_t> vts_state(NumVts, server::NOT_AVAILABLE);
 
     sleep_time.tv_sec  = VT_CLK_TIMEOUT_NANO / NANO;
     sleep_time.tv_nsec = VT_CLK_TIMEOUT_NANO % NANO;
+
+    vts->periodic_update_mutex.lock();
+    config_version = vts->periodic_update_config.version();
+    for (const server &srv: vts->periodic_update_config.get_servers()) {
+        if (srv.type == server::VT && srv.state == server::AVAILABLE) {
+            vts_state[srv.virtual_id] = server::AVAILABLE;
+        }
+    }
+    vts->periodic_update_mutex.unlock();
 
     while (true) {
         sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, NULL);
@@ -297,12 +308,26 @@ clk_update_function()
         }
         vts->periodic_update_mutex.lock();
 
+        if (config_version < vts->periodic_update_config.version()) {
+            config_version = vts->periodic_update_config.version();
+
+            for (server::state_t &s: vts_state) {
+                s = server::NOT_AVAILABLE;
+            }
+
+            for (const server &srv: vts->periodic_update_config.get_servers()) {
+                if (srv.type == server::VT && srv.state == server::AVAILABLE) {
+                    vts_state[srv.virtual_id] = server::AVAILABLE;
+                }
+            }
+        }
+
         // update vclock at other timestampers
         vts->clk_rw_mtx.rdlock();
         vclk.clock = vts->vclk.clock;
         vts->clk_rw_mtx.unlock();
         for (uint64_t i = 0; i < NumVts; i++) {
-            if (i == vt_id) {
+            if (i == vt_id || vts_state[i] != server::AVAILABLE) {
                 continue;
             }
             msg.prepare_message(message::VT_CLOCK_UPDATE, vclk);

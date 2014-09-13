@@ -61,7 +61,7 @@ namespace coordinator
 
             // server manager
             server_manager_link_wrapper sm_stub;
-            configuration config, prev_config;
+            configuration config, prev_config, periodic_update_config;
             bool is_backup, active_backup, first_config, pause_bb;
             uint64_t num_active_vts;
             po6::threads::cond backup_cond, first_config_cond, start_all_vts_cond;
@@ -244,6 +244,9 @@ namespace coordinator
         to_nop.resize(num_shards, true);
         nop_ack_qts.resize(num_shards, 0);
         shard_node_count.resize(num_shards, 0);
+
+        // update the periodic_update_config which is used while sending periodic vt updates
+        periodic_update_config = config;
 
         // update config constants
         update_config_constants(num_shards);
