@@ -39,7 +39,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     transaction::pending_tx *tx,
     bool &ready,
     bool &error,
-    order::oracle *time_oracle)
+    order::oracle *)
 {
 #define ERROR_FAIL \
     error = true; \
@@ -57,61 +57,55 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     }
     WDEBUG << "get set size " << get_set.size() << std::endl;
 
-    //if (!put_nmap(put_map)) {
-    //    WDEBUG << "put nmap fail" << std::endl;
-    //    ERROR_FAIL;
-    //}
-    for (auto &p: put_map) {
-        if (!put_nmap(p.first, p.second)) {
-            WDEBUG << "put nmap fail" << std::endl;
-            ERROR_FAIL;
-        }
+    if (!put_nmap(put_map)) {
+        WDEBUG << "put nmap fail" << std::endl;
+        ERROR_FAIL;
     }
     WDEBUG << "put map size " << put_map.size() << std::endl;
 
-    //if (!del_nmap(del_set)) {
-    //    ERROR_FAIL;
-    //}
+    if (!del_nmap(del_set)) {
+        ERROR_FAIL;
+    }
     WDEBUG << "del set size " << del_set.size() << std::endl;
 
-    std::unordered_map<node_handle_t, std::unique_ptr<db::element::node>> nodes;
-    // get all nodes from Hyperdex (we need at least last upd clk)
-    for (const node_handle_t &h: get_set) {
-        if (put_map.find(h) != put_map.end()) {
-            ERROR_FAIL;
-        }
-        WDEBUG << "going to create empty node for " << h << std::endl;
-        nodes[h].reset(new db::element::node(h, dummy_clk, &dummy_mtx));
-        WDEBUG << "going to get node " << h << std::endl;
-        if (!get_node(*nodes[h])) {
-            ERROR_FAIL;
-        }
-    }
-    for (const node_handle_t &h: del_set) {
-        nodes[h].reset(new db::element::node(h, dummy_clk, &dummy_mtx));
-        if (!get_node(*nodes[h])) {
-            ERROR_FAIL;
-        }
-    }
+    //std::unordered_map<node_handle_t, std::unique_ptr<db::element::node>> nodes;
+    //// get all nodes from Hyperdex (we need at least last upd clk)
+    //for (const node_handle_t &h: get_set) {
+    //    if (put_map.find(h) != put_map.end()) {
+    //        ERROR_FAIL;
+    //    }
+    //    WDEBUG << "going to create empty node for " << h << std::endl;
+    //    nodes[h].reset(new db::element::node(h, dummy_clk, &dummy_mtx));
+    //    WDEBUG << "going to get node " << h << std::endl;
+    //    if (!get_node(*nodes[h])) {
+    //        ERROR_FAIL;
+    //    }
+    //}
+    //for (const node_handle_t &h: del_set) {
+    //    nodes[h].reset(new db::element::node(h, dummy_clk, &dummy_mtx));
+    //    if (!get_node(*nodes[h])) {
+    //        ERROR_FAIL;
+    //    }
+    //}
 
-    WDEBUG << "need to check before clocks for " << nodes.size() << " #nodes" << std::endl;
-    // last upd clk check
-    std::vector<vc::vclock> before;
-    before.reserve(nodes.size());
-    for (const auto &p: nodes) {
-        before.emplace_back(p.second->last_upd_clk);
-    }
-    if (!time_oracle->assign_vt_order(before, tx->timestamp)) {
-        // will retry with higher timestamp
-        abort_tx();
-        return;
-    }
+    //WDEBUG << "need to check before clocks for " << nodes.size() << " #nodes" << std::endl;
+    //// last upd clk check
+    //std::vector<vc::vclock> before;
+    //before.reserve(nodes.size());
+    //for (const auto &p: nodes) {
+    //    before.emplace_back(p.second->last_upd_clk);
+    //}
+    //if (!time_oracle->assign_vt_order(before, tx->timestamp)) {
+    //    // will retry with higher timestamp
+    //    abort_tx();
+    //    return;
+    //}
 
-    for (const auto &p: put_map) {
-        nodes[p.first].reset(new db::element::node(p.first, tx->timestamp, &dummy_mtx));
-        nodes[p.first]->last_upd_clk = tx->timestamp;
-    }
-    WDEBUG << "put map size " << put_map.size() << std::endl;
+    //for (const auto &p: put_map) {
+    //    nodes[p.first].reset(new db::element::node(p.first, tx->timestamp, &dummy_mtx));
+    //    nodes[p.first]->last_upd_clk = tx->timestamp;
+    //}
+    //WDEBUG << "put map size " << put_map.size() << std::endl;
 
 #define CHECK_LOC(loc, handle) \
     if (loc == UINT64_MAX) { \
@@ -130,9 +124,9 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         n = &(*node_iter->second); \
     }
 
-    auto node_iter = nodes.end();
+    //auto node_iter = nodes.end();
+    //db::element::node *n = NULL;
     auto loc_iter = get_map.end();
-    db::element::node *n = NULL;
 
     for (transaction::pending_update *upd: tx->writes) {
         switch (upd->type) {
@@ -142,11 +136,11 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
             case transaction::EDGE_CREATE_REQ:
                 CHECK_LOC(upd->loc1, upd->handle1);
                 CHECK_LOC(upd->loc2, upd->handle2);
-                GET_NODE(upd->handle1);
-                if (n->out_edges.find(upd->handle) != n->out_edges.end()) {
-                    ERROR_FAIL;
-                }
-                n->add_edge(new db::element::edge(upd->handle, tx->timestamp, upd->loc2, upd->handle2));
+                //GET_NODE(upd->handle1);
+                //if (n->out_edges.find(upd->handle) != n->out_edges.end()) {
+                //    ERROR_FAIL;
+                //}
+                //n->add_edge(new db::element::edge(upd->handle, tx->timestamp, upd->loc2, upd->handle2));
                 break;
 
             case transaction::NODE_DELETE_REQ:
@@ -155,20 +149,20 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 
             case transaction::NODE_SET_PROPERTY:
                 CHECK_LOC(upd->loc1, upd->handle1);
-                GET_NODE(upd->handle1);
-                n->base.properties[*upd->key] = db::element::property(*upd->key, *upd->value, tx->timestamp);
+                //GET_NODE(upd->handle1);
+                //n->base.properties[*upd->key] = db::element::property(*upd->key, *upd->value, tx->timestamp);
                 break;
 
             case transaction::EDGE_DELETE_REQ:
                 CHECK_LOC(upd->loc1, upd->handle2);
-                GET_NODE(upd->handle2);
-                n->out_edges.erase(upd->handle1);
+                //GET_NODE(upd->handle2);
+                //n->out_edges.erase(upd->handle1);
                 break;
 
             case transaction::EDGE_SET_PROPERTY:
                 CHECK_LOC(upd->loc1, upd->handle2);
-                GET_NODE(upd->handle2);
-                n->out_edges[upd->handle1]->base.properties[*upd->key] = db::element::property(*upd->key, *upd->value, tx->timestamp);
+                //GET_NODE(upd->handle2);
+                //n->out_edges[upd->handle1]->base.properties[*upd->key] = db::element::property(*upd->key, *upd->value, tx->timestamp);
                 break;
 
             default:
@@ -184,36 +178,36 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 #undef CHECK_LOC
 #undef GET_NODE
 
-    for (auto &p: nodes) {
-        WDEBUG << "put node " << p.first << std::endl;
-        put_node(*p.second);
-    }
+    //for (auto &p: nodes) {
+    //    WDEBUG << "put node " << p.first << std::endl;
+    //    put_node(*p.second);
+    //}
 
-    for (const node_handle_t &h: del_set) {
-        WDEBUG << "del node " << h << std::endl;
-        del_node(h);
-    }
+    //for (const node_handle_t &h: del_set) {
+    //    WDEBUG << "del node " << h << std::endl;
+    //    del_node(h);
+    //}
 
-    hyperdex_client_attribute attr[NUM_TX_ATTRS];
-    attr[0].attr = tx_attrs[0];
-    attr[0].value = (const char*)&vt_id;
-    attr[0].value_sz = sizeof(int64_t);
-    attr[0].datatype = tx_dtypes[0];
+    //hyperdex_client_attribute attr[NUM_TX_ATTRS];
+    //attr[0].attr = tx_attrs[0];
+    //attr[0].value = (const char*)&vt_id;
+    //attr[0].value_sz = sizeof(int64_t);
+    //attr[0].datatype = tx_dtypes[0];
 
-    uint64_t buf_sz = message::size(tx);
-    std::unique_ptr<e::buffer> buf(e::buffer::create(buf_sz));
-    e::buffer::packer packer = buf->pack_at(0);
-    message::pack_buffer(packer, tx);
+    //uint64_t buf_sz = message::size(tx);
+    //std::unique_ptr<e::buffer> buf(e::buffer::create(buf_sz));
+    //e::buffer::packer packer = buf->pack_at(0);
+    //message::pack_buffer(packer, tx);
 
-    attr[1].attr = tx_attrs[1];
-    attr[1].value = (const char*)buf->data();
-    attr[1].value_sz = buf->size();
-    attr[1].datatype = tx_dtypes[1];
+    //attr[1].attr = tx_attrs[1];
+    //attr[1].value = (const char*)buf->data();
+    //attr[1].value_sz = buf->size();
+    //attr[1].datatype = tx_dtypes[1];
 
-    WDEBUG << "going to put tx data for tx " << tx->id << std::endl;
-    if (!call(&hyperdex_client_xact_put, tx_space, (const char*)&tx->id, sizeof(int64_t), attr, NUM_TX_ATTRS)) {
-        ERROR_FAIL;
-    }
+    //WDEBUG << "going to put tx data for tx " << tx->id << std::endl;
+    //if (!call(&hyperdex_client_xact_put, tx_space, (const char*)&tx->id, sizeof(int64_t), attr, NUM_TX_ATTRS)) {
+    //    ERROR_FAIL;
+    //}
 
     WDEBUG << "going to commit tx " << tx->id << std::endl;
     hyperdex_client_returncode commit_status = HYPERDEX_CLIENT_GARBAGE;
@@ -261,89 +255,6 @@ hyper_stub :: clean_tx(uint64_t tx_id)
 }
 
 /*
-void
-hyper_stub :: prepare_tx(transaction::pending_tx &tx)
-{
-    int num_calls = 2;
-    hyperdex_client_attribute *cl_attr;
-    std::vector<const char*> spaces;
-    std::vector<hyperdex_client_attribute*> attrs;
-    std::vector<hyper_func> funcs;
-    std::vector<const char*> keys;
-    std::vector<size_t> key_szs(num_calls, sizeof(int64_t));
-    std::vector<size_t> num_attrs;
-
-    spaces.reserve(num_calls);
-    attrs.reserve(num_calls);
-    funcs.reserve(num_calls);
-    keys.reserve(num_calls);
-    num_attrs.reserve(num_calls);
-
-    hyperdex_client_attribute attr_array[1 + NUM_MAP_ATTRS];
-
-    cl_attr = attr_array;
-    cl_attr->attr = set_attr;
-    cl_attr->value = (const char*)&tx.id;
-    cl_attr->value_sz = sizeof(int64_t);
-    cl_attr->datatype = HYPERDATATYPE_INT64;
-    spaces.emplace_back(vt_set_space);
-    attrs.emplace_back(cl_attr);
-    funcs.emplace_back(&hyperdex::Client::set_add);
-    keys.emplace_back((const char*)&vt_id);
-    num_attrs.emplace_back(1);
-
-    uint64_t buf_sz = message::size(tx);
-    std::unique_ptr<e::buffer> buf(e::buffer::create(buf_sz));
-    e::buffer::packer packer = buf->pack_at(0);
-    message::pack_buffer(packer, tx);
-
-    cl_attr = attr_array + 1;
-    cl_attr[0].attr = tx_data_attr;
-    cl_attr[0].value = (const char*)buf->data();
-    cl_attr[0].value_sz = buf->size();
-    cl_attr[0].datatype = map_dtypes[0];
-    int64_t status = 0;
-    cl_attr[1].attr = tx_status_attr;
-    cl_attr[1].value = (const char*)&status;
-    cl_attr[1].value_sz = sizeof(int64_t);
-    cl_attr[1].datatype = map_dtypes[1];
-    spaces.emplace_back(vt_map_space);
-    attrs.emplace_back(cl_attr);
-    funcs.emplace_back(&hyperdex::Client::put);
-    keys.emplace_back((const char*)&tx.id);
-    num_attrs.emplace_back(NUM_MAP_ATTRS);
-
-    multiple_call(funcs, spaces, keys, key_szs, attrs, num_attrs);
-}
-
-void
-hyper_stub :: commit_tx(transaction::pending_tx &tx)
-{
-    hyperdex_client_attribute cl_attr;
-    int64_t status = 1;
-    cl_attr.attr = tx_status_attr;
-    cl_attr.value = (const char*)&status;
-    cl_attr.value_sz = sizeof(int64_t);
-    cl_attr.datatype = map_dtypes[1];
-
-    call(&hyperdex::Client::put, vt_map_space, (const char*)&tx.id, sizeof(int64_t), &cl_attr, 1);
-}
-
-void
-hyper_stub :: del_tx(uint64_t tx_id)
-{
-    // set remove and del
-    hyperdex_client_attribute cl_attr;
-    cl_attr.attr = set_attr;
-    cl_attr.value = (const char*)&tx_id;
-    cl_attr.value_sz = sizeof(int64_t);
-    cl_attr.datatype = HYPERDATATYPE_INT64;
-
-    call(&hyperdex::Client::set_remove, vt_set_space, (const char*)&vt_id, sizeof(int64_t), &cl_attr, 1);
-
-    del(vt_map_space, (const char*)&tx_id, sizeof(int64_t));
-}
-
 // status = false if not prepared
 void
 hyper_stub :: recreate_tx(const hyperdex_client_attribute *cl_attr,
