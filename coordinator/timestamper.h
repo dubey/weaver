@@ -30,6 +30,7 @@
 #include "common/message.h"
 #include "common/configuration.h"
 #include "common/comm_wrapper.h"
+#include "common/event_order.h"
 #include "common/server_manager_link_wrapper.h"
 #include "coordinator/current_tx.h"
 #include "coordinator/current_prog.h"
@@ -68,6 +69,9 @@ namespace coordinator
             
             // Hyperdex stub
             std::vector<hyper_stub*> hstub;
+
+            // time oracle
+            std::vector<order::oracle*> time_oracles;
 
             // timestamper state
         public:
@@ -131,8 +135,8 @@ namespace coordinator
             timestamper(uint64_t serverid, po6::net::location &loc, bool backup);
             void init(uint64_t vtid, uint64_t weaverid);
             void restore_backup();
-            void reconfigure(bool first);
-            void update_members_new_config(bool first);
+            void reconfigure();
+            void update_members_new_config();
             uint64_t generate_req_id();
             uint64_t generate_loc();
             void enqueue_tx(transaction::pending_tx *tx);
@@ -190,6 +194,7 @@ namespace coordinator
 
         for (int i = 0; i < NUM_THREADS; i++) {
             hstub.push_back(new hyper_stub(vt_id));
+            time_oracles.push_back(new order::oracle());
         }
     }
 
@@ -207,7 +212,7 @@ namespace coordinator
 
     // reconfigure timestamper according to new cluster configuration
     inline void
-    timestamper :: reconfigure(bool first)
+    timestamper :: reconfigure()
     {
         WDEBUG << "Cluster reconfigure triggered\n";
 
@@ -220,11 +225,11 @@ namespace coordinator
             start_all_vts_cond.signal();
         }
 
-        update_members_new_config(first);
+        update_members_new_config();
     }
 
     inline void
-    timestamper :: update_members_new_config(bool first)
+    timestamper :: update_members_new_config()
     {
         std::vector<server> servers = config.get_servers();
 
@@ -237,7 +242,7 @@ namespace coordinator
             }
         }
         uint64_t num_shards = shard_set.size();
-        bool direct_reset_out_queue_clk = first;
+        bool direct_reset_out_queue_clk = (vt_id == UINT64_MAX);
 
         // resize periodic msg ds
         periodic_update_mutex.lock();
@@ -369,6 +374,7 @@ namespace coordinator
         }
 
         if (!done) {
+            WDEBUG << "adding to tx out queue " << tx->id << std::endl;
             tx_out_queue.emplace(tx);
         }
 
@@ -400,6 +406,7 @@ namespace coordinator
                         delete top;
                     } else {
                         tx = top;
+                        WDEBUG << "popped write tx off out_queue " << tx->id << std::endl;
                     }
                 }
             }

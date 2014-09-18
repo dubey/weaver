@@ -12,6 +12,7 @@
  * ===============================================================
  */
 
+#define weaver_debug_
 #include "common/weaver_constants.h"
 #include "common/message.h"
 

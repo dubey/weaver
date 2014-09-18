@@ -27,6 +27,7 @@ if success:
     print 'User ayush created'
 else:
     print 'tx fail'
+raw_input("Press enter.")
 
 # create node for user egs
 c.begin_tx()
@@ -37,6 +38,7 @@ if success:
     print 'User egs created'
 else:
     print 'tx fail'
+raw_input("Press enter.")
 
 # ayush follows egs
 c.begin_tx()
@@ -49,6 +51,7 @@ if success:
     print 'ayush follows egs'
 else:
     print 'tx fail'
+raw_input("Press enter.")
 
 # add a post and restrict visibility to followers only
 c.begin_tx()

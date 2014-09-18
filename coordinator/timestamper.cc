@@ -40,7 +40,7 @@ static coordinator::timestamper *vts;
 static uint64_t vt_id;
 
 // tx functions
-void prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub);
+void prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::oracle *time_oracle);
 void end_tx(uint64_t tx_id, coordinator::hyper_stub *hstub, uint64_t shard_id);
 
 
@@ -64,8 +64,10 @@ end_program(int signum)
 }
 
 void
-prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub)
+prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::oracle *time_oracle)
 {
+    tx->id = vts->generate_req_id();
+
     std::unordered_set<node_handle_t> get_set;
     std::unordered_set<node_handle_t> del_set;
     std::unordered_map<node_handle_t, uint64_t> loc_map;
@@ -139,7 +141,9 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub)
         // sets error if any warp operation returns error
         // sets upd->loc for each upd in tx
         // sets tx->shard_write bool_vector (shard_write[i] = true iff there is a tx component at shard i)
-        hstub->do_tx(get_set, del_set, loc_map, tx, ready, error);
+        WDEBUG << "do tx " << tx->id << std::endl;
+        hstub->do_tx(get_set, del_set, loc_map, tx, ready, error, time_oracle);
+        WDEBUG << "done tx " << tx->id << std::endl;
 
         assert(!(ready && error)); // can't be ready after some error
 
@@ -149,6 +153,7 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub)
             to_enq = new transaction::pending_tx(transaction::FAIL);
             to_enq->timestamp = tx->timestamp;
         } else {
+            WDEBUG << "enqueuing tx " << tx->id << std::endl;
             to_enq = tx;
         }
         vts->enqueue_tx(to_enq);
@@ -446,6 +451,7 @@ server_loop(int thread_id)
     uint64_t tx_id, client_sender, shard_id;
     node_prog::prog_type pType;
     coordinator::hyper_stub *hstub = vts->hstub[thread_id];
+    order::oracle *time_oracle = vts->time_oracles[thread_id];
     transaction::pending_tx *tx;
 
     while (true) {
@@ -464,7 +470,7 @@ server_loop(int thread_id)
                     tx = new transaction::pending_tx(transaction::UPDATE);
                     msg->unpack_message(message::CLIENT_TX_INIT, tx->writes);
                     tx->sender = client_sender;
-                    prepare_tx(tx, hstub);
+                    prepare_tx(tx, hstub, time_oracle);
                     break;
                 }
 
@@ -648,10 +654,8 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location loc, boo
         if (!vts->first_config) {
             vts->first_config = true;
             vts->first_config_cond.signal();
-            vts->reconfigure(true);
-        } else {
-            vts->reconfigure(false);
         }
+        vts->reconfigure();
         vts->config_mutex.unlock();
 
         // let the coordinator know we've moved to this config

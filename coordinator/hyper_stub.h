@@ -14,6 +14,7 @@
 #ifndef weaver_coordinator_hyper_stub_h_
 #define weaver_coordinator_hyper_stub_h_
 
+#include "common/event_order.h"
 #include "common/hyper_stub_base.h"
 #include "coordinator/current_tx.h"
 
@@ -33,7 +34,8 @@ namespace coordinator
                 std::unordered_map<node_handle_t, uint64_t> &loc_map,
                 transaction::pending_tx *tx,
                 bool &ready,
-                bool &error);
+                bool &error,
+                order::oracle *time_oracle);
             void clean_tx(uint64_t tx_id);
             hyper_stub(uint64_t vt_id);
     };

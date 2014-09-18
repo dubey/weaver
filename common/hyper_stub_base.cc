@@ -61,6 +61,7 @@ hyper_stub_base :: hyper_stub_base()
 
 #define HYPERDEX_LOOP \
     hdex_id = hyperdex_client_loop(cl, -1, &loop_status); \
+    WDEBUG << "called loop on client " << cl << std::endl; \
     HYPERDEX_CHECK_ID(loop_status);
 
 #define HYPERDEX_CHECK_STATUSES(status, fail_check) \
@@ -389,18 +390,18 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::e
     vc::vclock create_clk;
     unpack_buffer(cl_attr[idx[0]].value, cl_attr[idx[0]].value_sz, create_clk);
     // properties
-    unpack_buffer<db::element::property>(cl_attr[idx[2]].value, cl_attr[idx[2]].value_sz, n.base.properties);
+    unpack_buffer<db::element::property>(cl_attr[idx[1]].value, cl_attr[idx[1]].value_sz, n.base.properties);
 
     n.state = db::element::node::mode::STABLE;
     n.in_use = false;
     n.base.update_creat_time(create_clk);
 
     // out edges
-    unpack_buffer<db::element::edge*>(cl_attr[idx[3]].value, cl_attr[idx[3]].value_sz, n.out_edges);
+    unpack_buffer<db::element::edge*>(cl_attr[idx[2]].value, cl_attr[idx[2]].value_sz, n.out_edges);
     // last update clock
-    unpack_buffer(cl_attr[idx[5]].value, cl_attr[idx[5]].value_sz, n.last_upd_clk);
+    unpack_buffer(cl_attr[idx[4]].value, cl_attr[idx[4]].value_sz, n.last_upd_clk);
     // restore clock
-    unpack_buffer(cl_attr[idx[1]].value, cl_attr[idx[1]].value_sz, n.restore_clk);
+    unpack_buffer(cl_attr[idx[5]].value, cl_attr[idx[5]].value_sz, n.restore_clk);
 
     return true;
 }
