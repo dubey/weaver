@@ -106,6 +106,7 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    common/hyper_stub_base.cc \
 		                    common/event_order.cc \
 		                    common/vclock.cc \
+                            common/transaction.cc \
 		                    common/message.cc \
 		                    common/message_graph_elem.cc \
                             common/config_constants.cc \
@@ -171,6 +172,7 @@ weaver_shard_SOURCES=	common/ids.cc \
 		                common/event_order.cc \
 		                common/clock.cc \
 		                common/vclock.cc \
+                        common/transaction.cc \
 		                common/message.cc \
 		                common/message_graph_elem.cc \
 		                common/message_cache_context.cc \
@@ -209,6 +211,7 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 		                    common/configuration.cc \
 		                    common/comm_wrapper.cc \
 		                    common/vclock.cc \
+                            common/transaction.cc \
 		                    common/message.cc \
 		                    common/event_order.cc \
                             common/config_constants.cc \

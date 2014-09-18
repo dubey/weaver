@@ -44,7 +44,7 @@ namespace coordinator
             bool operator() (const transaction::pending_tx* const lhs, const transaction::pending_tx* const rhs)
             {
                 if (lhs->timestamp.get_epoch() == rhs->timestamp.get_epoch()) {
-                    return lhs->timestamp.get_clock() > rhs->timestamp.get_clock();
+                    return lhs->vt_seq > rhs->vt_seq;
                 } else {
                     return lhs->timestamp.get_epoch() > rhs->timestamp.get_epoch();
                 }
@@ -126,6 +126,7 @@ namespace coordinator
 
             // fault tolerance
             std::pair<uint64_t, uint64_t> out_queue_clk; // (epoch num, out clk)
+            uint64_t out_queue_counter;
             tx_queue_t tx_out_queue;
 
             // exit
@@ -142,6 +143,7 @@ namespace coordinator
             void enqueue_tx(transaction::pending_tx *tx);
             bool process_tx_queue(transaction::pending_tx **tx_ptr, std::vector<transaction::pending_tx*> &factored_tx);
             void tx_queue_loop();
+            void reset_out_queue_clk(uint64_t epoch);
     };
 
     inline
@@ -173,6 +175,7 @@ namespace coordinator
         , max_load_time(0)
         , shard_node_count(NumShards, 0)
         , out_queue_clk(std::make_pair(0,1))
+        , out_queue_counter(0)
         , to_exit(false)
     {
         // initialize empty vector of done reqs for each prog type
@@ -274,21 +277,24 @@ namespace coordinator
         transaction::pending_tx *epoch_tx = nullptr;
         if (direct_reset_out_queue_clk) {
             // out_queue is empty
-            out_queue_clk = std::make_pair(config.version(), 1);
+            reset_out_queue_clk(config.version());
             vclk.new_epoch(config.version());
             WDEBUG << "first config, out_queue_clk is now " << out_queue_clk.first << "," << out_queue_clk.second << std::endl;
         } else {
             // restart vclock with new epoch number from configuration
             vclk.increment_clock();
+            out_queue_counter++;
+            epoch_tx = new transaction::pending_tx(transaction::EPOCH_CHANGE);
+            epoch_tx->timestamp = vclk;
+            epoch_tx->vt_seq = out_queue_counter;
+            epoch_tx->new_epoch = config.version();
+            vclk.new_epoch(config.version());
+
             std::cerr << "Reconfigure, out_queue_clk : " << out_queue_clk.first << "," << out_queue_clk.second << "; epoch change vclk " << vclk.vt_id << " : ";
             for (uint64_t c: vclk.clock) {
                 std::cerr << c << " ";
             }
             std::cerr << "; new epoch " << config.version() << std::endl;
-            epoch_tx = new transaction::pending_tx(transaction::EPOCH_CHANGE);
-            epoch_tx->timestamp = vclk;
-            epoch_tx->new_epoch = config.version();
-            vclk.new_epoch(config.version());
         }
 
         // reset qts if a shard died
@@ -353,7 +359,7 @@ namespace coordinator
     inline void
     timestamper :: enqueue_tx(transaction::pending_tx *tx)
     {
-        uint64_t seq = tx->timestamp.get_clock();
+        uint64_t seq = tx->vt_seq;
         uint64_t epoch = tx->timestamp.get_epoch();
         bool done = false;
 
@@ -368,7 +374,7 @@ namespace coordinator
                 delete tx;
                 done = true;
             } else if (tx->type == transaction::EPOCH_CHANGE) {
-                out_queue_clk = std::make_pair(tx->new_epoch, 1);
+                reset_out_queue_clk(tx->new_epoch);
                 delete tx;
                 done = true;
             }
@@ -394,15 +400,16 @@ namespace coordinator
 
         if (!tx_out_queue.empty()) {
             transaction::pending_tx *top = tx_out_queue.top();
-            uint64_t this_clk = top->timestamp.get_clock();
+            uint64_t this_clk = top->vt_seq;
             uint64_t this_epoch = top->timestamp.get_epoch();
 
+            WDEBUG << "checking tx seq " << this_clk << ", out_queue_clk " << out_queue_clk.second << std::endl;
             if (this_epoch == out_queue_clk.first && this_clk == out_queue_clk.second) {
                 tx_out_queue.pop();
                 ret = true;
 
                 if (top->type == transaction::EPOCH_CHANGE) {
-                    out_queue_clk = std::make_pair(top->new_epoch, 1);
+                    reset_out_queue_clk(top->new_epoch);
                     delete top;
                 } else {
                     out_queue_clk.second++;
@@ -514,6 +521,13 @@ namespace coordinator
         }
     }
 
+    // assuming hold out_queue_mtx
+    inline void
+    timestamper :: reset_out_queue_clk(uint64_t epoch)
+    {
+        out_queue_clk = std::make_pair(epoch, 1);
+        out_queue_counter = 0;
+    }
 }
 
 #endif

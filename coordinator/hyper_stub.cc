@@ -41,16 +41,17 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     bool &error,
     order::oracle *)
 {
+// needs abort if using Warp txs
 #define ERROR_FAIL \
     error = true; \
-    abort_tx(); \
     return;
 
     ready = false;
     error = false;
 
-    begin_tx();
+    //begin_tx();
 
+    WDEBUG << "going to get " << get_set.size() << " node mappings" << std::endl;
     std::unordered_map<node_handle_t, uint64_t> get_map = get_nmap(get_set);
     if (get_map.size() != get_set.size()) {
         ERROR_FAIL;
@@ -209,25 +210,26 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     //    ERROR_FAIL;
     //}
 
-    WDEBUG << "going to commit tx " << tx->id << std::endl;
-    hyperdex_client_returncode commit_status = HYPERDEX_CLIENT_GARBAGE;
-    commit_tx(commit_status);
+    ready = true;
+    //WDEBUG << "going to commit tx " << tx->id << std::endl;
+    //hyperdex_client_returncode commit_status = HYPERDEX_CLIENT_GARBAGE;
+    //commit_tx(commit_status);
 
-    switch(commit_status) {
-        case HYPERDEX_CLIENT_SUCCESS:
-            ready = true;
-            assert(!error);
-            break;
+    //switch(commit_status) {
+    //    case HYPERDEX_CLIENT_SUCCESS:
+    //        ready = true;
+    //        assert(!error);
+    //        break;
 
-        case HYPERDEX_CLIENT_ABORTED:
-            ready = false;
-            assert(!error);
-            break;
+    //    case HYPERDEX_CLIENT_ABORTED:
+    //        ready = false;
+    //        assert(!error);
+    //        break;
 
-        default:
-            error = true;
-            ready = false;
-    }
+    //    default:
+    //        error = true;
+    //        ready = false;
+    //}
 
 #undef ERROR_FAIL
 }

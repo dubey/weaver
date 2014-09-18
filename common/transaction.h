@@ -14,6 +14,7 @@
 #ifndef weaver_common_transaction_h_
 #define weaver_common_transaction_h_
 
+#include <memory>
 #include <vector>
 #include <unordered_set>
 
@@ -69,6 +70,7 @@ namespace transaction
         tx_type type;
         uint64_t id; // unique tx id, assigned by client
         vc::vclock timestamp; // vector timestamp
+        uint64_t vt_seq; // tx seq number at the timestamper
         uint64_t qts; // queue timestamp
         std::vector<bool> shard_write; // which shards are involved in the write
 
@@ -79,27 +81,10 @@ namespace transaction
 
         uint64_t new_epoch; // if this is an epoch change
 
-        pending_tx(tx_type t) : type(t), nop(nullptr) { }
+        pending_tx(tx_type t);
+        ~pending_tx();
 
-        ~pending_tx()
-        {
-            if (type == NOP) {
-                delete nop;
-            } else if (type == UPDATE) {
-                for (pending_update *upd: writes) {
-                    delete upd;
-                }
-                writes.clear();
-            }
-        }
-
-        pending_tx* copy_fail_transaction()
-        {
-            pending_tx *fail_tx = new pending_tx(FAIL);
-            fail_tx->id = id;
-            fail_tx->timestamp = timestamp;
-            return fail_tx;
-        }
+        pending_tx* copy_fail_transaction();
     };
 
 }

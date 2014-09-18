@@ -47,16 +47,19 @@ hyper_stub_base :: hyper_stub_base()
         success_calls++; \
     }
 
+// XXX change to include hyper_tx when using transactions
 #define HYPERDEX_CALL(h, space, key, key_sz, attr, attr_sz, call_status) \
-    hdex_id = h(hyper_tx, space, key, key_sz, attr, attr_sz, &call_status); \
+    hdex_id = h(cl, space, key, key_sz, attr, attr_sz, &call_status); \
     HYPERDEX_CHECK_ID(call_status);
 
+// XXX change to xact get when using transactions
 #define HYPERDEX_GET(space, key, key_sz, get_status, attr, attr_sz) \
-    hdex_id = hyperdex_client_xact_get(hyper_tx, space, key, key_sz, &get_status, attr, attr_sz); \
+    hdex_id = hyperdex_client_get(cl, space, key, key_sz, &get_status, attr, attr_sz); \
     HYPERDEX_CHECK_ID(get_status);
 
+// XXX change to xact del when using transactions
 #define HYPERDEX_DEL(space, key, key_sz, del_status) \
-    hdex_id = hyperdex_client_xact_del(hyper_tx, space, key, key_sz, &del_status); \
+    hdex_id = hyperdex_client_del(cl, space, key, key_sz, &del_status); \
     HYPERDEX_CHECK_ID(del_status);
 
 #define HYPERDEX_LOOP \
@@ -71,6 +74,7 @@ hyper_stub_base :: hyper_stub_base()
                << ", loop status: " << hyperdex_client_returncode_to_string(loop_status) << std::endl; \
         WDEBUG << "error message: " << hyperdex_client_error_message(cl) << std::endl; \
         WDEBUG << "error loc: " << hyperdex_client_error_location(cl) << std::endl; \
+        assert(false); \
         success = false; \
     }
 
@@ -472,7 +476,8 @@ hyper_stub_base :: put_node(db::element::node &n)
     cl_attr[5].datatype = graph_dtypes[5];
 
     node_handle_t handle = n.get_handle();
-    return call(&hyperdex_client_xact_put, graph_space, handle.c_str(), handle.size(), cl_attr, NUM_GRAPH_ATTRS);
+    //return call(&hyperdex_client_xact_put, graph_space, handle.c_str(), handle.size(), cl_attr, NUM_GRAPH_ATTRS);
+    return call(&hyperdex_client_put, graph_space, handle.c_str(), handle.size(), cl_attr, NUM_GRAPH_ATTRS);
 }
 
 void
@@ -717,14 +722,16 @@ hyper_stub_base :: put_nmap(const node_handle_t &handle, uint64_t loc)
     attr.value_sz = sizeof(int64_t);
     attr.datatype = HYPERDATATYPE_INT64;
 
-    return call(hyperdex_client_xact_put, nmap_space, handle.c_str(), handle.size(), &attr, 1);
+    //return call(hyperdex_client_xact_put, nmap_space, handle.c_str(), handle.size(), &attr, 1);
+    return call(hyperdex_client_put, nmap_space, handle.c_str(), handle.size(), &attr, 1);
 }
 
 bool
 hyper_stub_base :: put_nmap(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add)
 {
     int num_pairs = pairs_to_add.size();
-    std::vector<hyper_func> funcs(num_pairs, &hyperdex_client_xact_put);
+    //std::vector<hyper_func> funcs(num_pairs, &hyperdex_client_xact_put);
+    std::vector<hyper_func> funcs(num_pairs, &hyperdex_client_put);
     std::vector<const char*> spaces(num_pairs, nmap_space);
     std::vector<const char*> keys(num_pairs);
     std::vector<size_t> key_szs(num_pairs);

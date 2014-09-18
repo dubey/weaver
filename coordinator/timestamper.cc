@@ -133,7 +133,9 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
     while (!ready && !error) {
         vts->clk_rw_mtx.wrlock();
         vts->vclk.increment_clock();
+        vts->out_queue_counter++;
         tx->timestamp = vts->vclk;
+        tx->vt_seq = vts->out_queue_counter;
         vts->clk_rw_mtx.unlock();
 
         // write tx in warp
@@ -231,7 +233,9 @@ nop_function()
             tx->id = vts->generate_req_id();
             vts->clk_rw_mtx.wrlock();
             vts->vclk.increment_clock();
+            vts->out_queue_counter++;
             tx->timestamp = vts->vclk;
+            tx->vt_seq = vts->out_queue_counter;
             std::cerr << "nop " << tx->id << " vclk " << tx->timestamp.vt_id << " : ";
             for (uint64_t c: tx->timestamp.clock) {
                 std::cerr << c << " ";

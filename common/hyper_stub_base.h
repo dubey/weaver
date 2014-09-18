@@ -53,14 +53,16 @@ class hyper_stub_base
         const char *tx_attrs[NUM_TX_ATTRS];
         const enum hyperdatatype tx_dtypes[NUM_TX_ATTRS];
 
-        using hyper_func = int64_t (*) (struct hyperdex_client_transaction *client,
+        //using hyper_func = int64_t (*) (struct hyperdex_client_transaction *client,
+        using hyper_func = int64_t (*) (struct hyperdex_client *client,
             const char*,
             const char*,
             size_t,
             const struct hyperdex_client_attribute*,
             size_t,
             hyperdex_client_returncode*);
-        using hyper_map_func = int64_t (*) (struct hyperdex_client_transaction *client,
+        //using hyper_map_func = int64_t (*) (struct hyperdex_client_transaction *client,
+        using hyper_map_func = int64_t (*) (struct hyperdex_client *client,
             const char*,
             const char*,
             size_t,
