@@ -912,6 +912,8 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
         node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> &np,
         order::oracle *time_oracle)
 {
+    assert(time_oracle != nullptr);
+
     message::message out_msg;
     // these are the node programs that will be propagated onwards
     std::unordered_map<uint64_t, std::deque<std::pair<node_handle_t, ParamsType>>> batched_node_progs;

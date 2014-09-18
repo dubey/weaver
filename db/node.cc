@@ -70,7 +70,7 @@ node :: has_property(std::pair<std::string, std::string> &p)
 {
     assert(base.view_time != nullptr);
     assert(base.time_oracle != nullptr);
-    return base.has_property(p, *base.view_time);
+    return base.has_property(p);
 }
 
 bool
@@ -78,7 +78,7 @@ node :: has_all_properties(std::vector<std::pair<std::string, std::string>> &pro
 {
     assert(base.view_time != nullptr);
     assert(base.time_oracle != nullptr);
-    return base.has_all_properties(props, *base.view_time);
+    return base.has_all_properties(props);
 }
 
 void

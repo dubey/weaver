@@ -50,9 +50,9 @@ namespace element
             void add_property(const std::string &key, const std::string &value, const vc::vclock &vclk);
             void delete_property(std::string &key, vc::vclock &tdel);
             void remove_property(std::string &key);
-            bool has_property(const std::string &key, const std::string &value, vc::vclock &vclk);
-            bool has_property(const std::pair<std::string, std::string> &p, vc::vclock &vclk);
-            bool has_all_properties(const std::vector<std::pair<std::string, std::string>> &props, vc::vclock &vclk);
+            bool has_property(const std::string &key, const std::string &value);
+            bool has_property(const std::pair<std::string, std::string> &p);
+            bool has_all_properties(const std::vector<std::pair<std::string, std::string>> &props);
             void set_properties(std::unordered_map<std::string, property> &props);
             const std::unordered_map<std::string, property>* get_props() const;
             void update_del_time(vc::vclock &del_time);

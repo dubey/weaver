@@ -52,7 +52,7 @@ element :: remove_property(std::string &key)
 }
 
 bool
-element :: has_property(const std::string &key, const std::string &value, vc::vclock &vclk)
+element :: has_property(const std::string &key, const std::string &value)
 {
     auto p = properties.find(key);
     if (p != properties.end()
@@ -60,8 +60,8 @@ element :: has_property(const std::string &key, const std::string &value, vc::vc
         const property &prop = p->second;
         const vc::vclock& vclk_creat = prop.get_creat_time();
         const vc::vclock& vclk_del = prop.get_del_time();
-        int64_t cmp1 = time_oracle->compare_two_vts(vclk, vclk_creat);
-        int64_t cmp2 = time_oracle->compare_two_vts(vclk, vclk_del);
+        int64_t cmp1 = time_oracle->compare_two_vts(*view_time, vclk_creat);
+        int64_t cmp2 = time_oracle->compare_two_vts(*view_time, vclk_del);
         if (cmp1 >= 1 && cmp2 == 0) {
             return true;
         }
@@ -70,16 +70,16 @@ element :: has_property(const std::string &key, const std::string &value, vc::vc
 }
 
 bool
-element :: has_property(const std::pair<std::string, std::string> &p, vc::vclock &vclk)
+element :: has_property(const std::pair<std::string, std::string> &p)
 {
-    return has_property(p.first, p.second, vclk);
+    return has_property(p.first, p.second);
 }
 
 bool
-element :: has_all_properties(const std::vector<std::pair<std::string, std::string>> &props, vc::vclock &vclk)
+element :: has_all_properties(const std::vector<std::pair<std::string, std::string>> &props)
 {
     for (const auto &p : props) {
-        if (!has_property(p, vclk)) { 
+        if (!has_property(p)) { 
             return false;
         }
     }
