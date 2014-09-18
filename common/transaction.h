@@ -92,6 +92,14 @@ namespace transaction
                 writes.clear();
             }
         }
+
+        pending_tx* copy_fail_transaction()
+        {
+            pending_tx *fail_tx = new pending_tx(FAIL);
+            fail_tx->id = id;
+            fail_tx->timestamp = timestamp;
+            return fail_tx;
+        }
     };
 
 }

@@ -66,7 +66,7 @@ namespace coordinator
             bool is_backup, active_backup, first_config, pause_bb;
             uint64_t num_active_vts;
             po6::threads::cond backup_cond, first_config_cond, start_all_vts_cond;
-            
+
             // Hyperdex stub
             std::vector<hyper_stub*> hstub;
 
@@ -140,7 +140,7 @@ namespace coordinator
             uint64_t generate_req_id();
             uint64_t generate_loc();
             void enqueue_tx(transaction::pending_tx *tx);
-            std::pair<transaction::pending_tx*, std::vector<transaction::pending_tx*>> process_tx_queue();
+            bool process_tx_queue(transaction::pending_tx **tx_ptr, std::vector<transaction::pending_tx*> &factored_tx);
             void tx_queue_loop();
     };
 
@@ -363,6 +363,7 @@ namespace coordinator
          && epoch == out_queue_clk.first
          && seq == out_queue_clk.second) {
             if (tx->type == transaction::FAIL) {
+                WDEBUG << "not enqueueing fail tx " << tx->id << std::endl;
                 out_queue_clk.second++;
                 delete tx;
                 done = true;
@@ -382,10 +383,12 @@ namespace coordinator
     }
 
     // return list of tx components, factored per shard
-    inline std::pair<transaction::pending_tx*, std::vector<transaction::pending_tx*>>
-    timestamper :: process_tx_queue()
+    // return true if this call did pop off out queue
+    inline bool
+    timestamper :: process_tx_queue(transaction::pending_tx **tx_ptr, std::vector<transaction::pending_tx*> &factored_tx)
     {
-        transaction::pending_tx *tx = NULL;
+        *tx_ptr = nullptr;
+        bool ret = false;
 
         tx_out_queue_mtx.lock();
 
@@ -396,6 +399,7 @@ namespace coordinator
 
             if (this_epoch == out_queue_clk.first && this_clk == out_queue_clk.second) {
                 tx_out_queue.pop();
+                ret = true;
 
                 if (top->type == transaction::EPOCH_CHANGE) {
                     out_queue_clk = std::make_pair(top->new_epoch, 1);
@@ -403,17 +407,20 @@ namespace coordinator
                 } else {
                     out_queue_clk.second++;
                     if (top->type == transaction::FAIL) {
+                        WDEBUG << "fail tx popped off queue, id = " << top->id << ", clk = " << this_clk << std::endl;
                         delete top;
                     } else {
-                        tx = top;
-                        WDEBUG << "popped write tx off out_queue " << tx->id << std::endl;
+                        *tx_ptr = top;
+                        WDEBUG << "popped write tx off out_queue " << (*tx_ptr)->id << std::endl;
                     }
                 }
+            } else {
+                WDEBUG << "top not ready yet, id = " << top->id << ", clk = " << this_clk << ", expected clk = " << out_queue_clk.second << std::endl;
             }
         }
 
-        std::vector<transaction::pending_tx*> factored_tx;
-        if (tx != NULL) {
+        if (*tx_ptr != nullptr) {
+            transaction::pending_tx *tx = *tx_ptr;
             assert(tx->type != transaction::FAIL);
 
             uint64_t num_shards = tx->shard_write.size();
@@ -458,42 +465,52 @@ namespace coordinator
 
         tx_out_queue_mtx.unlock();
 
-        return std::make_pair(tx, factored_tx);
+        return ret;
     }
 
     void
     timestamper :: tx_queue_loop()
     {
         while (true) {
-            std::pair<transaction::pending_tx*, std::vector<transaction::pending_tx*>> p = process_tx_queue();
-            if (p.first == NULL) {
+            transaction::pending_tx *tx;
+            std::vector<transaction::pending_tx*> factored_tx;
+            if (!process_tx_queue(&tx, factored_tx)) {
+                assert(tx == nullptr);
                 break;
+            } else if (tx == nullptr) {
+                continue;
             }
 
-            transaction::pending_tx *orig_tx = p.first;
-            std::vector<transaction::pending_tx*> &factored_tx = p.second;
-            assert(orig_tx->type != transaction::FAIL && orig_tx->type != transaction::EPOCH_CHANGE);
+            assert(tx->type != transaction::FAIL && tx->type != transaction::EPOCH_CHANGE);
 
             // tx succeeded, send to shards
-            uint64_t num_shards = orig_tx->shard_write.size();
+            uint64_t num_shards = tx->shard_write.size();
+            bool nop = (tx->type == transaction::NOP);
 
-            if (orig_tx->type == transaction::UPDATE) {
+            if (!nop) {
+                WDEBUG << "write tx " << tx->id << ", clk = " << tx->timestamp.get_clock() << std::endl;
                 tx_prog_mutex.lock();
-                outstanding_tx.emplace(orig_tx->id, orig_tx);
+                outstanding_tx.emplace(tx->id, tx);
                 tx_prog_mutex.unlock();
+            } else {
+                WDEBUG << "nop " << tx->id << ", clk = " << tx->timestamp.get_clock() << std::endl;
             }
 
-            std::cerr << "sending out tx " << orig_tx->id << " to shard: ";
+            std::cerr << "sending out tx " << tx->id << " to shard: ";
             // send tx batches
             message::message msg;
             for (uint64_t i = 0; i < num_shards; i++) {
-                if (orig_tx->shard_write[i]) {
+                if (tx->shard_write[i]) {
                     msg.prepare_message(message::TX_INIT, vt_id, factored_tx[i]->timestamp, factored_tx[i]->qts, *factored_tx[i]);
                     comm.send(i+ShardIdIncr, msg.buf);
                     std::cerr << i << " ";
                 }
             }
             std::cerr << std::endl;
+
+            if (nop) {
+                delete tx;
+            }
         }
     }
 

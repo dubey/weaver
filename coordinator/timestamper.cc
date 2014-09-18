@@ -150,8 +150,7 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
         transaction::pending_tx *to_enq;
         if (!ready || error) {
             WDEBUG << "tx ready: " << ready << ", error: " << error << std::endl;
-            to_enq = new transaction::pending_tx(transaction::FAIL);
-            to_enq->timestamp = tx->timestamp;
+            to_enq = tx->copy_fail_transaction();
         } else {
             WDEBUG << "enqueuing tx " << tx->id << std::endl;
             to_enq = tx;
@@ -165,14 +164,13 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
         message::message msg;
         msg.prepare_message(message::CLIENT_TX_ABORT);
         vts->comm.send_to_client(tx->sender, msg.buf);
-    } else {
-        vts->tx_queue_loop();
     }
+    vts->tx_queue_loop();
 }
 
 // if all replies have been received, ack to client
 void
-end_tx(uint64_t tx_id, uint64_t shard_id, coordinator::hyper_stub *hstub)
+end_tx(uint64_t tx_id, uint64_t shard_id, coordinator::hyper_stub*)
 {
     vts->tx_prog_mutex.lock();
     auto find_iter = vts->outstanding_tx.find(tx_id);
@@ -185,7 +183,7 @@ end_tx(uint64_t tx_id, uint64_t shard_id, coordinator::hyper_stub *hstub)
 
     if (weaver_util::none(tx->shard_write)) {
         // done tx
-        hstub->clean_tx(tx_id);
+        //hstub->clean_tx(tx_id);
 
         vts->outstanding_tx.erase(tx_id);
         vts->tx_prog_mutex.unlock();
