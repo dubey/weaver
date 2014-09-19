@@ -53,16 +53,16 @@ class hyper_stub_base
         const char *tx_attrs[NUM_TX_ATTRS];
         const enum hyperdatatype tx_dtypes[NUM_TX_ATTRS];
 
-        //using hyper_func = int64_t (*) (struct hyperdex_client_transaction *client,
-        using hyper_func = int64_t (*) (struct hyperdex_client *client,
+        using hyper_func = int64_t (*) (struct hyperdex_client_transaction *client,
+        //using hyper_func = int64_t (*) (struct hyperdex_client *client,
             const char*,
             const char*,
             size_t,
             const struct hyperdex_client_attribute*,
             size_t,
             hyperdex_client_returncode*);
-        //using hyper_map_func = int64_t (*) (struct hyperdex_client_transaction *client,
-        using hyper_map_func = int64_t (*) (struct hyperdex_client *client,
+        using hyper_map_func = int64_t (*) (struct hyperdex_client_transaction *client,
+        //using hyper_map_func = int64_t (*) (struct hyperdex_client *client,
             const char*,
             const char*,
             size_t,
@@ -102,7 +102,8 @@ class hyper_stub_base
             const hyperdex_client_attribute **cl_attr, size_t *num_attrs);
         bool multiple_get(std::vector<const char*> &spaces,
             std::vector<const char*> &keys, std::vector<size_t> &key_szs,
-            std::vector<const hyperdex_client_attribute**> &cl_attrs, std::vector<size_t*> &num_attrs);
+            std::vector<const hyperdex_client_attribute**> &cl_attrs, std::vector<size_t*> &num_attrs,
+            bool tx);
         bool del(const char* space,
             const char *key, size_t key_sz);
         bool multiple_del(std::vector<const char*> &spaces,
@@ -122,8 +123,9 @@ class hyper_stub_base
 
         // node map functions
         bool put_nmap(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add);
+        bool put_nmap(std::vector<node_handle_t> &node_handles, uint64_t shard_id);
         bool put_nmap(const node_handle_t &handle, uint64_t loc);
-        std::unordered_map<node_handle_t, uint64_t> get_nmap(std::unordered_set<node_handle_t> &toGet);
+        std::unordered_map<node_handle_t, uint64_t> get_nmap(std::unordered_set<node_handle_t> &toGet, bool tx);
         bool del_nmap(std::unordered_set<node_handle_t> &toDel);
 
         // tx data functions

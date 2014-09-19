@@ -47,24 +47,27 @@ hyper_stub_base :: hyper_stub_base()
         success_calls++; \
     }
 
-// XXX change to include hyper_tx when using transactions
 #define HYPERDEX_CALL(h, space, key, key_sz, attr, attr_sz, call_status) \
     do { \
-        hdex_id = h(cl, space, key, key_sz, attr, attr_sz, &call_status); \
+        hdex_id = h(hyper_tx, space, key, key_sz, attr, attr_sz, &call_status); \
     } while (hdex_id < 0 && call_status == HYPERDEX_CLIENT_INTERRUPTED); \
     HYPERDEX_CHECK_ID(call_status);
 
-// XXX change to xact get when using transactions
 #define HYPERDEX_GET(space, key, key_sz, get_status, attr, attr_sz) \
+    do { \
+        hdex_id = hyperdex_client_xact_get(hyper_tx, space, key, key_sz, &get_status, attr, attr_sz); \
+    } while (hdex_id < 0 && get_status == HYPERDEX_CLIENT_INTERRUPTED); \
+    HYPERDEX_CHECK_ID(get_status);
+
+#define HYPERDEX_GET_NOTX(space, key, key_sz, get_status, attr, attr_sz) \
     do { \
         hdex_id = hyperdex_client_get(cl, space, key, key_sz, &get_status, attr, attr_sz); \
     } while (hdex_id < 0 && get_status == HYPERDEX_CLIENT_INTERRUPTED); \
     HYPERDEX_CHECK_ID(get_status);
 
-// XXX change to xact del when using transactions
 #define HYPERDEX_DEL(space, key, key_sz, del_status) \
     do { \
-        hdex_id = hyperdex_client_del(cl, space, key, key_sz, &del_status); \
+        hdex_id = hyperdex_client_xact_del(hyper_tx, space, key, key_sz, &del_status); \
     } while (hdex_id < 0 && del_status == HYPERDEX_CLIENT_INTERRUPTED); \
     HYPERDEX_CHECK_ID(del_status);
 
@@ -270,7 +273,8 @@ hyper_stub_base :: get(const char *space,
 bool
 hyper_stub_base :: multiple_get(std::vector<const char*> &spaces,
     std::vector<const char*> &keys, std::vector<size_t> &key_szs,
-    std::vector<const hyperdex_client_attribute**> &cl_attrs, std::vector<size_t*> &num_attrs)
+    std::vector<const hyperdex_client_attribute**> &cl_attrs, std::vector<size_t*> &num_attrs,
+    bool tx)
 {
     uint64_t num_calls = spaces.size();
     assert(num_calls == keys.size());
@@ -287,7 +291,11 @@ hyper_stub_base :: multiple_get(std::vector<const char*> &spaces,
     
     uint64_t i = 0;
     for (; i < num_calls; i++) {
-        HYPERDEX_GET(spaces[i], keys[i], key_szs[i], get_status[i], cl_attrs[i], num_attrs[i]);
+        if (tx) {
+            HYPERDEX_GET(spaces[i], keys[i], key_szs[i], get_status[i], cl_attrs[i], num_attrs[i]);
+        } else {
+            HYPERDEX_GET_NOTX(spaces[i], keys[i], key_szs[i], get_status[i], cl_attrs[i], num_attrs[i]);
+        }
 
         assert(opid_to_idx.find(hdex_id) == opid_to_idx.end());
         opid_to_idx[hdex_id] = i;
@@ -375,6 +383,7 @@ hyper_stub_base :: multiple_del(std::vector<const char*> &spaces,
 #undef HYPERDEX_CHECK_ID
 #undef HYPERDEX_CALL
 #undef HYPERDEX_GET
+#undef HYPERDEX_GET_NOTX
 #undef HYPERDEX_DEL
 #undef HYPERDEX_LOOP
 #undef HYPERDEX_CHECK_STATUSES
@@ -484,8 +493,8 @@ hyper_stub_base :: put_node(db::element::node &n)
     cl_attr[5].datatype = graph_dtypes[5];
 
     node_handle_t handle = n.get_handle();
-    //return call(&hyperdex_client_xact_put, graph_space, handle.c_str(), handle.size(), cl_attr, NUM_GRAPH_ATTRS);
-    return call(&hyperdex_client_put, graph_space, handle.c_str(), handle.size(), cl_attr, NUM_GRAPH_ATTRS);
+    return call(&hyperdex_client_xact_put, graph_space, handle.c_str(), handle.size(), cl_attr, NUM_GRAPH_ATTRS);
+    //return call(&hyperdex_client_put, graph_space, handle.c_str(), handle.size(), cl_attr, NUM_GRAPH_ATTRS);
 }
 
 void
@@ -730,16 +739,49 @@ hyper_stub_base :: put_nmap(const node_handle_t &handle, uint64_t loc)
     attr.value_sz = sizeof(int64_t);
     attr.datatype = HYPERDATATYPE_INT64;
 
-    //return call(hyperdex_client_xact_put, nmap_space, handle.c_str(), handle.size(), &attr, 1);
-    return call(hyperdex_client_put, nmap_space, handle.c_str(), handle.size(), &attr, 1);
+    return call(hyperdex_client_xact_put, nmap_space, handle.c_str(), handle.size(), &attr, 1);
+    //return call(hyperdex_client_put, nmap_space, handle.c_str(), handle.size(), &attr, 1);
+}
+
+bool
+hyper_stub_base :: put_nmap(std::vector<node_handle_t> &node_handles, uint64_t shard_id)
+{
+    int num_pairs = node_handles.size();
+    std::vector<hyper_func> funcs(num_pairs, &hyperdex_client_xact_put);
+    //std::vector<hyper_func> funcs(num_pairs, &hyperdex_client_put);
+    std::vector<const char*> spaces(num_pairs, nmap_space);
+    std::vector<const char*> keys(num_pairs);
+    std::vector<size_t> key_szs(num_pairs);
+    std::vector<hyperdex_client_attribute*> attrs(num_pairs);
+    std::vector<size_t> num_attrs(num_pairs, 1);
+
+    hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute*)malloc(num_pairs * sizeof(hyperdex_client_attribute));
+
+    int i = 0;
+    for (const node_handle_t &h: node_handles) {
+        attrs[i] = attrs_to_add + i;
+        attrs[i]->attr = nmap_attr;
+        attrs[i]->value = (char*)&shard_id;
+        attrs[i]->value_sz = sizeof(int64_t);
+        attrs[i]->datatype = HYPERDATATYPE_INT64;
+        keys[i] = h.c_str();
+        key_szs[i] = h.size();
+        i++;
+    }
+
+    bool success = multiple_call(funcs, spaces, keys, key_szs, attrs, num_attrs);
+
+    free(attrs_to_add);
+
+    return success;
 }
 
 bool
 hyper_stub_base :: put_nmap(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add)
 {
     int num_pairs = pairs_to_add.size();
-    //std::vector<hyper_func> funcs(num_pairs, &hyperdex_client_xact_put);
-    std::vector<hyper_func> funcs(num_pairs, &hyperdex_client_put);
+    std::vector<hyper_func> funcs(num_pairs, &hyperdex_client_xact_put);
+    //std::vector<hyper_func> funcs(num_pairs, &hyperdex_client_put);
     std::vector<const char*> spaces(num_pairs, nmap_space);
     std::vector<const char*> keys(num_pairs);
     std::vector<size_t> key_szs(num_pairs);
@@ -769,7 +811,7 @@ hyper_stub_base :: put_nmap(std::unordered_map<node_handle_t, uint64_t> &pairs_t
 
 
 std::unordered_map<node_handle_t, uint64_t>
-hyper_stub_base :: get_nmap(std::unordered_set<node_handle_t> &toGet)
+hyper_stub_base :: get_nmap(std::unordered_set<node_handle_t> &toGet, bool tx)
 {
     int64_t num_nodes = toGet.size();
     std::vector<const char*> spaces(num_nodes, nmap_space);
@@ -791,7 +833,7 @@ hyper_stub_base :: get_nmap(std::unordered_set<node_handle_t> &toGet)
         i++;
     }
 
-    bool success = multiple_get(spaces, keys, key_szs, attrs, num_attrs);
+    bool success = multiple_get(spaces, keys, key_szs, attrs, num_attrs, tx);
     UNUSED(success);
 
     uint64_t *val;

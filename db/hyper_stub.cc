@@ -113,7 +113,7 @@ hyper_stub :: restore_backup(std::unordered_map<node_handle_t, element::node*> *
         attrs_sz.emplace_back(attr_sz_array + i);
     }
 
-    multiple_get(spaces, keys, key_szs, cl_attrs, attrs_sz);
+    multiple_get(spaces, keys, key_szs, cl_attrs, attrs_sz, false);
 
     vc::vclock dummy_clock;
     element::node *n;
@@ -144,13 +144,25 @@ hyper_stub :: restore_backup(std::unordered_map<node_handle_t, element::node*> *
 void
 hyper_stub :: bulk_load(int tid, std::unordered_map<node_handle_t, element::node*> *nodes_arr)
 {
+    std::vector<node_handle_t> node_handles;
     for (; tid <= NUM_NODE_MAPS; tid += NUM_THREADS) {
         std::unordered_map<node_handle_t, element::node*> &node_map = nodes_arr[tid];
+        node_handles.reserve(node_handles.size() + node_map.size());
         for (auto &p: node_map) {
             // TODO change when single space for mapping and graph data
-            put_mapping(p.first, shard_id);
+            //put_mapping(p.first, shard_id);
             //put_node(*p.second);
+            node_handles.emplace_back(p.first);
         }
+    }
+
+    begin_tx();
+    if (put_nmap(node_handles, shard_id)) {
+        hyperdex_client_returncode commit_status = HYPERDEX_CLIENT_GARBAGE;
+        commit_tx(commit_status);
+        assert(commit_status == HYPERDEX_CLIENT_SUCCESS);
+    } else {
+        abort_tx();
     }
 }
 
