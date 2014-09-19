@@ -1724,6 +1724,7 @@ recv_loop(uint64_t thread_id)
                     if (txtype == transaction::UPDATE) {
                         // write tx
                         if (tx_order == db::PRESENT) {
+                            mwrap->time_oracle = time_oracle;
                             unpack_tx_request(mwrap);
                         } else if (tx_order == db::PAST) {
                             // vt resending tx which has been executed
@@ -1748,6 +1749,7 @@ recv_loop(uint64_t thread_id)
                     assert(vclk.clock.size() == ClkSz);
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                     if (S->qm.check_rd_request(vclk.clock)) {
+                        mwrap->time_oracle = time_oracle;
                         unpack_node_program(mwrap);
                     } else {
                         qreq = new db::queued_request(req_id, vclk, unpack_node_program, mwrap);
@@ -1767,6 +1769,7 @@ recv_loop(uint64_t thread_id)
                     assert(vclk.clock.size() == ClkSz);
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                     if (S->qm.check_rd_request(vclk.clock)) {
+                        mwrap->time_oracle = time_oracle;
                         f(mwrap);
                     } else {
                         qreq = new db::queued_request(req_id, vclk, f, mwrap);
@@ -1786,6 +1789,7 @@ recv_loop(uint64_t thread_id)
                 case message::MIGRATED_NBR_UPDATE:
                 case message::MIGRATED_NBR_ACK:
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
+                    mwrap->time_oracle = time_oracle;
                     unpack_migrate_request(mwrap);
                     break;
 

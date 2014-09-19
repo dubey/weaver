@@ -149,7 +149,7 @@ hyper_stub :: bulk_load(int tid, std::unordered_map<node_handle_t, element::node
         for (auto &p: node_map) {
             // TODO change when single space for mapping and graph data
             put_mapping(p.first, shard_id);
-            put_node(*p.second);
+            //put_node(*p.second);
         }
     }
 }

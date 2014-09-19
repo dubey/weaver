@@ -49,21 +49,29 @@ hyper_stub_base :: hyper_stub_base()
 
 // XXX change to include hyper_tx when using transactions
 #define HYPERDEX_CALL(h, space, key, key_sz, attr, attr_sz, call_status) \
-    hdex_id = h(cl, space, key, key_sz, attr, attr_sz, &call_status); \
+    do { \
+        hdex_id = h(cl, space, key, key_sz, attr, attr_sz, &call_status); \
+    } while (hdex_id < 0 && call_status == HYPERDEX_CLIENT_INTERRUPTED); \
     HYPERDEX_CHECK_ID(call_status);
 
 // XXX change to xact get when using transactions
 #define HYPERDEX_GET(space, key, key_sz, get_status, attr, attr_sz) \
-    hdex_id = hyperdex_client_get(cl, space, key, key_sz, &get_status, attr, attr_sz); \
+    do { \
+        hdex_id = hyperdex_client_get(cl, space, key, key_sz, &get_status, attr, attr_sz); \
+    } while (hdex_id < 0 && get_status == HYPERDEX_CLIENT_INTERRUPTED); \
     HYPERDEX_CHECK_ID(get_status);
 
 // XXX change to xact del when using transactions
 #define HYPERDEX_DEL(space, key, key_sz, del_status) \
-    hdex_id = hyperdex_client_del(cl, space, key, key_sz, &del_status); \
+    do { \
+        hdex_id = hyperdex_client_del(cl, space, key, key_sz, &del_status); \
+    } while (hdex_id < 0 && del_status == HYPERDEX_CLIENT_INTERRUPTED); \
     HYPERDEX_CHECK_ID(del_status);
 
 #define HYPERDEX_LOOP \
-    hdex_id = hyperdex_client_loop(cl, -1, &loop_status); \
+    do { \
+        hdex_id = hyperdex_client_loop(cl, -1, &loop_status); \
+    } while (hdex_id < 0 && loop_status == HYPERDEX_CLIENT_INTERRUPTED); \
     WDEBUG << "called loop on client " << cl << std::endl; \
     HYPERDEX_CHECK_ID(loop_status);
 

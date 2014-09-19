@@ -26,8 +26,7 @@ cv = threading.Condition()
 num_requests = 3000
 num_nodes = 81306 # snap twitter-combined
 # node handles are range(0, num_nodes)
-num_vts = 2
-num_clients = 512
+num_clients = 64
 
 def exec_reads(reqs, cl, exec_time, idx):
     global num_started
@@ -54,7 +53,7 @@ def exec_reads(reqs, cl, exec_time, idx):
 
 clients = []
 for i in range(num_clients):
-    clients.append(client.Client(client._CLIENT_ID + i, i % num_vts))
+    clients.append(client.Client('127.0.0.1', 2002))
 
 # randomly write node props
 # with p = 0.50 nodes have 0 props
@@ -70,18 +69,18 @@ if len(sys.argv) > 1:
             tx_id = c.begin_tx()
         coin_toss = random.random()
         if coin_toss > 0.50:
-            c.set_node_property(tx_id, n, 'color', 'blue')
+            c.set_node_property(str(n), 'color', 'blue')
         if coin_toss > 0.75:
-            c.set_node_property(tx_id, n, 'type', 'photo')
+            c.set_node_property(str(n), 'type', 'photo')
         if n % tx_sz == (tx_sz-1):
-            c.end_tx(tx_id)
+            c.end_tx()
             print 'initial write thread processed ' + str(n+1) + ' nodes'
 
 reqs = []
 for i in range(num_clients):
     cl_reqs = []
     for numr in range(num_requests):
-        cl_reqs.append(random.randint(0, num_nodes-1))
+        cl_reqs.append(str(random.randint(0, num_nodes-1)))
     reqs.append(cl_reqs)
 
 exec_time = [0] * num_clients
