@@ -160,13 +160,15 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
         vts->enqueue_tx(to_enq);
     }
 
+    message::message msg;
     if (error) {
         // fail tx
         delete tx;
-        message::message msg;
         msg.prepare_message(message::CLIENT_TX_ABORT);
-        vts->comm.send_to_client(tx->sender, msg.buf);
+    } else {
+        msg.prepare_message(message::CLIENT_TX_SUCCESS);
     }
+    vts->comm.send_to_client(tx->sender, msg.buf);
     vts->tx_queue_loop();
 }
 
@@ -190,11 +192,6 @@ end_tx(uint64_t tx_id, uint64_t shard_id, coordinator::hyper_stub *hstub)
 
         vts->outstanding_tx.erase(tx_id);
         vts->tx_prog_mutex.unlock();
-
-        // send response to client
-        message::message msg;
-        msg.prepare_message(message::CLIENT_TX_SUCCESS);
-        vts->comm.send_to_client(tx->sender, msg.buf);
 
         delete tx;
     } else {
