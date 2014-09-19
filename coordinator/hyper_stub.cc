@@ -62,32 +62,25 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     std::unordered_map<node_handle_t, db::element::node*> nodes;
     begin_tx();
 
-    WDEBUG << "going to get " << get_set.size() << " node mappings" << std::endl;
     std::unordered_map<node_handle_t, uint64_t> get_map = get_nmap(get_set, true);
     if (get_map.size() != get_set.size()) {
         ERROR_FAIL;
     }
-    WDEBUG << "get set size " << get_set.size() << std::endl;
 
     if (!put_nmap(put_map)) {
-        WDEBUG << "put nmap fail" << std::endl;
         ERROR_FAIL;
     }
-    WDEBUG << "put map size " << put_map.size() << std::endl;
 
     if (!del_nmap(del_set)) {
         ERROR_FAIL;
     }
-    WDEBUG << "del set size " << del_set.size() << std::endl;
 
     // get all nodes from Hyperdex (we need at least last upd clk)
     for (const node_handle_t &h: get_set) {
         if (put_map.find(h) != put_map.end()) {
             ERROR_FAIL;
         }
-        WDEBUG << "going to create empty node for " << h << std::endl;
         nodes[h] = new db::element::node(h, dummy_clk, &dummy_mtx);
-        WDEBUG << "going to get node " << h << std::endl;
         if (!get_node(*nodes[h])) {
             ERROR_FAIL;
         }
@@ -190,13 +183,8 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 #undef GET_NODE
 
     put_nodes(nodes);
-    //for (auto &p: nodes) {
-    //    WDEBUG << "put node " << p.first << std::endl;
-    //    put_node(*p.second);
-    //}
 
     for (const node_handle_t &h: del_set) {
-        WDEBUG << "del node " << h << std::endl;
         del_node(h);
     }
 
@@ -216,7 +204,6 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     attr[1].value_sz = buf->size();
     attr[1].datatype = tx_dtypes[1];
 
-    WDEBUG << "going to put tx data for tx " << tx->id << std::endl;
     if (!call(&hyperdex_client_xact_put, tx_space, (const char*)&tx->id, sizeof(int64_t), attr, NUM_TX_ATTRS)) {
         ERROR_FAIL;
     }

@@ -172,7 +172,7 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
 
 // if all replies have been received, ack to client
 void
-end_tx(uint64_t tx_id, uint64_t shard_id, coordinator::hyper_stub*)
+end_tx(uint64_t tx_id, uint64_t shard_id, coordinator::hyper_stub *hstub)
 {
     vts->tx_prog_mutex.lock();
     auto find_iter = vts->outstanding_tx.find(tx_id);
@@ -185,7 +185,8 @@ end_tx(uint64_t tx_id, uint64_t shard_id, coordinator::hyper_stub*)
 
     if (weaver_util::none(tx->shard_write)) {
         // done tx
-        //hstub->clean_tx(tx_id);
+        WDEBUG << "clean tx " << tx_id << std::endl;
+        hstub->clean_tx(tx_id);
 
         vts->outstanding_tx.erase(tx_id);
         vts->tx_prog_mutex.unlock();
