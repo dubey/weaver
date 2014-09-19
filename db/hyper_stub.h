@@ -41,9 +41,8 @@ namespace db
                 po6::threads::mutex *shard_mutexes);
             // bulk loading
             void bulk_load(int tid, std::unordered_map<node_handle_t, element::node*> *nodes);
-            bool put_mappings(std::unordered_map<node_handle_t, uint64_t> &map);
             // migration
-            bool put_mapping(const node_handle_t &handle, uint64_t loc);
+            bool update_mapping(const node_handle_t &handle, uint64_t loc);
     };
 }
 

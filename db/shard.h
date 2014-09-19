@@ -927,7 +927,7 @@ namespace db
     inline void
     shard :: update_node_mapping(const node_handle_t &handle, uint64_t shard)
     {
-        hstub.back()->put_mapping(handle, shard);
+        hstub.back()->update_mapping(handle, shard);
     }
 
     // node program

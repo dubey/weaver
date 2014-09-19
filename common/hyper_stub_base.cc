@@ -53,6 +53,12 @@ hyper_stub_base :: hyper_stub_base()
     } while (hdex_id < 0 && call_status == HYPERDEX_CLIENT_INTERRUPTED); \
     HYPERDEX_CHECK_ID(call_status);
 
+#define HYPERDEX_CALL_NOTX(h, space, key, key_sz, attr, attr_sz, call_status) \
+    do { \
+        hdex_id = h(cl, space, key, key_sz, attr, attr_sz, &call_status); \
+    } while (hdex_id < 0 && call_status == HYPERDEX_CLIENT_INTERRUPTED); \
+    HYPERDEX_CHECK_ID(call_status);
+
 #define HYPERDEX_GET(space, key, key_sz, get_status, attr, attr_sz) \
     do { \
         hdex_id = hyperdex_client_xact_get(hyper_tx, space, key, key_sz, &get_status, attr, attr_sz); \
@@ -131,6 +137,28 @@ hyper_stub_base :: call(hyper_func h,
     int success_calls = 0;
     bool success = true;
 
+    HYPERDEX_CALL_NOTX(h, space, key, key_sz, cl_attr, num_attrs, call_status);
+
+    if (success_calls == 1) {
+        HYPERDEX_LOOP;
+        HYPERDEX_CHECK_STATUSES(call_status, call_status != HYPERDEX_CLIENT_SUCCESS);
+    }
+
+    return success;
+}
+
+// call hyperdex function h using params and then loop for response
+bool
+hyper_stub_base :: call(hyper_tx_func h,
+    const char *space,
+    const char *key, size_t key_sz,
+    hyperdex_client_attribute *cl_attr, size_t num_attrs)
+{
+    hyperdex_client_returncode call_status, loop_status;
+    int64_t hdex_id;
+    int success_calls = 0;
+    bool success = true;
+
     HYPERDEX_CALL(h, space, key, key_sz, cl_attr, num_attrs, call_status);
 
     if (success_calls == 1) {
@@ -143,7 +171,7 @@ hyper_stub_base :: call(hyper_func h,
 
 // call hyperdex map function h using key hndl, attributes cl_attr, and then loop for response
 bool
-hyper_stub_base :: map_call(hyper_map_func h,
+hyper_stub_base :: map_call(hyper_map_tx_func h,
     const char *space,
     const char *key, size_t key_sz,
     hyperdex_client_map_attribute *map_attr, size_t num_attrs)
@@ -165,13 +193,13 @@ hyper_stub_base :: map_call(hyper_map_func h,
 
 // multiple hyperdex calls
 bool
-hyper_stub_base :: multiple_call(std::vector<hyper_func> &funcs,
+hyper_stub_base :: multiple_call(std::vector<hyper_tx_func> &funcs,
     std::vector<const char*> &spaces,
     std::vector<const char*> &keys, std::vector<size_t> &key_szs,
     std::vector<hyperdex_client_attribute*> &attrs, std::vector<size_t> &num_attrs)
 {
     std::vector<const char*> map_spaces;
-    std::vector<hyper_map_func> map_funcs;
+    std::vector<hyper_map_tx_func> map_funcs;
     std::vector<const char*> map_keys;
     std::vector<size_t> map_key_szs;
     std::vector<hyperdex_client_map_attribute*> map_attrs;
@@ -187,11 +215,11 @@ hyper_stub_base :: multiple_call(std::vector<hyper_func> &funcs,
 }
 
 bool
-hyper_stub_base :: multiple_call(std::vector<hyper_func> &funcs,
+hyper_stub_base :: multiple_call(std::vector<hyper_tx_func> &funcs,
     std::vector<const char*> &spaces,
     std::vector<const char*> &keys, std::vector<size_t> &key_szs,
     std::vector<hyperdex_client_attribute*> &attrs, std::vector<size_t> &num_attrs,
-    std::vector<hyper_map_func> &map_funcs,
+    std::vector<hyper_map_tx_func> &map_funcs,
     std::vector<const char*> &map_spaces,
     std::vector<const char*> &map_keys, std::vector<size_t> &map_key_szs,
     std::vector<hyperdex_client_map_attribute*> &map_attrs, std::vector<size_t> &map_num_attrs)
@@ -494,7 +522,6 @@ hyper_stub_base :: put_node(db::element::node &n)
 
     node_handle_t handle = n.get_handle();
     return call(&hyperdex_client_xact_put, graph_space, handle.c_str(), handle.size(), cl_attr, NUM_GRAPH_ATTRS);
-    //return call(&hyperdex_client_put, graph_space, handle.c_str(), handle.size(), cl_attr, NUM_GRAPH_ATTRS);
 }
 
 void
@@ -731,7 +758,7 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordere
 */
 
 bool
-hyper_stub_base :: put_nmap(const node_handle_t &handle, uint64_t loc)
+hyper_stub_base :: update_nmap(const node_handle_t &handle, uint64_t loc)
 {
     hyperdex_client_attribute attr;
     attr.attr = nmap_attr;
@@ -739,16 +766,15 @@ hyper_stub_base :: put_nmap(const node_handle_t &handle, uint64_t loc)
     attr.value_sz = sizeof(int64_t);
     attr.datatype = HYPERDATATYPE_INT64;
 
-    return call(hyperdex_client_xact_put, nmap_space, handle.c_str(), handle.size(), &attr, 1);
-    //return call(hyperdex_client_put, nmap_space, handle.c_str(), handle.size(), &attr, 1);
+    return call(hyperdex_client_put, nmap_space, handle.c_str(), handle.size(), &attr, 1);
 }
 
 bool
 hyper_stub_base :: put_nmap(std::vector<node_handle_t> &node_handles, uint64_t shard_id)
 {
     int num_pairs = node_handles.size();
-    std::vector<hyper_func> funcs(num_pairs, &hyperdex_client_xact_put);
-    //std::vector<hyper_func> funcs(num_pairs, &hyperdex_client_put);
+    std::vector<hyper_tx_func> funcs(num_pairs, &hyperdex_client_xact_put);
+    //std::vector<hyper_tx_func> funcs(num_pairs, &hyperdex_client_put);
     std::vector<const char*> spaces(num_pairs, nmap_space);
     std::vector<const char*> keys(num_pairs);
     std::vector<size_t> key_szs(num_pairs);
@@ -780,8 +806,8 @@ bool
 hyper_stub_base :: put_nmap(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add)
 {
     int num_pairs = pairs_to_add.size();
-    std::vector<hyper_func> funcs(num_pairs, &hyperdex_client_xact_put);
-    //std::vector<hyper_func> funcs(num_pairs, &hyperdex_client_put);
+    std::vector<hyper_tx_func> funcs(num_pairs, &hyperdex_client_xact_put);
+    //std::vector<hyper_tx_func> funcs(num_pairs, &hyperdex_client_put);
     std::vector<const char*> spaces(num_pairs, nmap_space);
     std::vector<const char*> keys(num_pairs);
     std::vector<size_t> key_szs(num_pairs);

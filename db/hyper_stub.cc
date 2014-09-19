@@ -167,28 +167,9 @@ hyper_stub :: bulk_load(int tid, std::unordered_map<node_handle_t, element::node
 }
 
 bool
-hyper_stub :: put_mapping(const node_handle_t &handle, uint64_t loc)
+hyper_stub :: update_mapping(const node_handle_t &handle, uint64_t loc)
 {
-    return put_nmap(handle, loc);
-}
-
-bool
-hyper_stub :: put_mappings(std::unordered_map<node_handle_t, uint64_t> &map)
-{
-    begin_tx();
-    bool success = put_nmap(map);
-
-    if (success) {
-        hyperdex_client_returncode commit_status = HYPERDEX_CLIENT_GARBAGE;
-        commit_tx(commit_status);
-        if (commit_status == HYPERDEX_CLIENT_SUCCESS) {
-            return true;
-        }
-    } else {
-        abort_tx();
-    }
-
-    return false;
+    return update_nmap(handle, loc);
 }
 
 #undef weaver_debug_
