@@ -33,6 +33,15 @@ hyper_stub :: get_mappings(std::unordered_set<node_handle_t> &get_set)
 }
 
 void
+hyper_stub :: clean_up(std::unordered_map<node_handle_t, db::element::node*> &nodes)
+{
+    for (auto &p: nodes) {
+        delete p.second;
+    }
+    nodes.clear();
+}
+
+void
 hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     std::unordered_set<node_handle_t> &del_set,
     std::unordered_map<node_handle_t, uint64_t> &put_map,
@@ -44,11 +53,13 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 #define ERROR_FAIL \
     error = true; \
     abort(); \
+    clean_up(nodes); \
     return;
 
     ready = false;
     error = false;
 
+    std::unordered_map<node_handle_t, db::element::node*> nodes;
     begin_tx();
 
     WDEBUG << "going to get " << get_set.size() << " node mappings" << std::endl;
@@ -69,21 +80,20 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     }
     WDEBUG << "del set size " << del_set.size() << std::endl;
 
-    std::unordered_map<node_handle_t, std::unique_ptr<db::element::node>> nodes;
     // get all nodes from Hyperdex (we need at least last upd clk)
     for (const node_handle_t &h: get_set) {
         if (put_map.find(h) != put_map.end()) {
             ERROR_FAIL;
         }
         WDEBUG << "going to create empty node for " << h << std::endl;
-        nodes[h].reset(new db::element::node(h, dummy_clk, &dummy_mtx));
+        nodes[h] = new db::element::node(h, dummy_clk, &dummy_mtx);
         WDEBUG << "going to get node " << h << std::endl;
         if (!get_node(*nodes[h])) {
             ERROR_FAIL;
         }
     }
     for (const node_handle_t &h: del_set) {
-        nodes[h].reset(new db::element::node(h, dummy_clk, &dummy_mtx));
+        nodes[h] = new db::element::node(h, dummy_clk, &dummy_mtx);
         if (!get_node(*nodes[h])) {
             ERROR_FAIL;
         }
@@ -103,7 +113,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     }
 
     for (const auto &p: put_map) {
-        nodes[p.first].reset(new db::element::node(p.first, tx->timestamp, &dummy_mtx));
+        nodes[p.first] = new db::element::node(p.first, tx->timestamp, &dummy_mtx);
         nodes[p.first]->last_upd_clk = tx->timestamp;
     }
     WDEBUG << "put map size " << put_map.size() << std::endl;
@@ -179,10 +189,11 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 #undef CHECK_LOC
 #undef GET_NODE
 
-    for (auto &p: nodes) {
-        WDEBUG << "put node " << p.first << std::endl;
-        put_node(*p.second);
-    }
+    put_nodes(nodes);
+    //for (auto &p: nodes) {
+    //    WDEBUG << "put node " << p.first << std::endl;
+    //    put_node(*p.second);
+    //}
 
     for (const node_handle_t &h: del_set) {
         WDEBUG << "del node " << h << std::endl;
@@ -210,7 +221,6 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         ERROR_FAIL;
     }
 
-    //ready = true;
     WDEBUG << "going to commit tx " << tx->id << std::endl;
     hyperdex_client_returncode commit_status = HYPERDEX_CLIENT_GARBAGE;
     commit_tx(commit_status);
@@ -230,6 +240,8 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
             error = true;
             ready = false;
     }
+
+    clean_up(nodes);
 
 #undef ERROR_FAIL
 }

@@ -38,6 +38,9 @@ namespace coordinator
                 order::oracle *time_oracle);
             void clean_tx(uint64_t tx_id);
             hyper_stub(uint64_t vt_id);
+
+        private:
+            void clean_up(std::unordered_map<node_handle_t, db::element::node*> &nodes);
     };
 }
 

@@ -70,7 +70,7 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
 
     std::unordered_set<node_handle_t> get_set;
     std::unordered_set<node_handle_t> del_set;
-    std::unordered_map<node_handle_t, uint64_t> loc_map;
+    std::unordered_map<node_handle_t, uint64_t> put_map;
     std::unordered_map<node_handle_t, uint64_t>::iterator find_iter; 
 
     for (transaction::pending_update *upd: tx->writes) {
@@ -79,17 +79,17 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
             case transaction::NODE_CREATE_REQ:
                 // randomly assign shard for this node
                 upd->loc1 = vts->generate_loc(); // node will be placed on this shard
-                loc_map.emplace(upd->handle, upd->loc1);
+                put_map.emplace(upd->handle, upd->loc1);
                 break;
 
             case transaction::EDGE_CREATE_REQ:
-                if ((find_iter = loc_map.find(upd->handle1)) == loc_map.end()) {
+                if ((find_iter = put_map.find(upd->handle1)) == put_map.end()) {
                     upd->loc1 = UINT64_MAX;
                     get_set.insert(upd->handle1);
                 } else {
                     upd->loc1 = find_iter->second;
                 }
-                if ((find_iter = loc_map.find(upd->handle2)) == loc_map.end()) {
+                if ((find_iter = put_map.find(upd->handle2)) == put_map.end()) {
                     upd->loc2 = UINT64_MAX;
                     get_set.insert(upd->handle2);
                 } else {
@@ -99,7 +99,7 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
 
             case transaction::NODE_DELETE_REQ:
             case transaction::NODE_SET_PROPERTY:
-                if ((find_iter = loc_map.find(upd->handle1)) == loc_map.end()) {
+                if ((find_iter = put_map.find(upd->handle1)) == put_map.end()) {
                     upd->loc1 = UINT64_MAX;
                     get_set.insert(upd->handle1);
                 } else {
@@ -113,7 +113,7 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
 
             case transaction::EDGE_DELETE_REQ:
             case transaction::EDGE_SET_PROPERTY:
-                if ((find_iter = loc_map.find(upd->handle2)) == loc_map.end()) {
+                if ((find_iter = put_map.find(upd->handle2)) == put_map.end()) {
                     upd->loc1 = UINT64_MAX;
                     get_set.insert(upd->handle2);
                 } else {
@@ -144,7 +144,7 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
         // sets upd->loc for each upd in tx
         // sets tx->shard_write bool_vector (shard_write[i] = true iff there is a tx component at shard i)
         WDEBUG << "do tx " << tx->id << std::endl;
-        hstub->do_tx(get_set, del_set, loc_map, tx, ready, error, time_oracle);
+        hstub->do_tx(get_set, del_set, put_map, tx, ready, error, time_oracle);
         WDEBUG << "done tx " << tx->id << std::endl;
 
         assert(!(ready && error)); // can't be ready after some error
@@ -236,11 +236,11 @@ nop_function()
             vts->out_queue_counter++;
             tx->timestamp = vts->vclk;
             tx->vt_seq = vts->out_queue_counter;
-            std::cerr << "nop " << tx->id << " vclk " << tx->timestamp.vt_id << " : ";
-            for (uint64_t c: tx->timestamp.clock) {
-                std::cerr << c << " ";
-            }
-            std::cerr << std::endl;
+            //std::cerr << "nop " << tx->id << " vclk " << tx->timestamp.vt_id << " : ";
+            //for (uint64_t c: tx->timestamp.clock) {
+            //    std::cerr << c << " ";
+            //}
+            //std::cerr << std::endl;
             tx->shard_write = vts->to_nop;
             vts->clk_rw_mtx.unlock();
 

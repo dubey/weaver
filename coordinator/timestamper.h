@@ -290,11 +290,11 @@ namespace coordinator
             epoch_tx->new_epoch = config.version();
             vclk.new_epoch(config.version());
 
-            std::cerr << "Reconfigure, out_queue_clk : " << out_queue_clk.first << "," << out_queue_clk.second << "; epoch change vclk " << vclk.vt_id << " : ";
-            for (uint64_t c: vclk.clock) {
-                std::cerr << c << " ";
-            }
-            std::cerr << "; new epoch " << config.version() << std::endl;
+            //std::cerr << "Reconfigure, out_queue_clk : " << out_queue_clk.first << "," << out_queue_clk.second << "; epoch change vclk " << vclk.vt_id << " : ";
+            //for (uint64_t c: vclk.clock) {
+            //    std::cerr << c << " ";
+            //}
+            //std::cerr << "; new epoch " << config.version() << std::endl;
         }
 
         // reset qts if a shard died
@@ -369,7 +369,6 @@ namespace coordinator
          && epoch == out_queue_clk.first
          && seq == out_queue_clk.second) {
             if (tx->type == transaction::FAIL) {
-                WDEBUG << "not enqueueing fail tx " << tx->id << std::endl;
                 out_queue_clk.second++;
                 delete tx;
                 done = true;
@@ -381,7 +380,6 @@ namespace coordinator
         }
 
         if (!done) {
-            WDEBUG << "adding to tx out queue " << tx->id << std::endl;
             tx_out_queue.emplace(tx);
         }
 
@@ -403,7 +401,6 @@ namespace coordinator
             uint64_t this_clk = top->vt_seq;
             uint64_t this_epoch = top->timestamp.get_epoch();
 
-            WDEBUG << "checking tx seq " << this_clk << ", out_queue_clk " << out_queue_clk.second << std::endl;
             if (this_epoch == out_queue_clk.first && this_clk == out_queue_clk.second) {
                 tx_out_queue.pop();
                 ret = true;
@@ -414,15 +411,11 @@ namespace coordinator
                 } else {
                     out_queue_clk.second++;
                     if (top->type == transaction::FAIL) {
-                        WDEBUG << "fail tx popped off queue, id = " << top->id << ", clk = " << this_clk << std::endl;
                         delete top;
                     } else {
                         *tx_ptr = top;
-                        WDEBUG << "popped write tx off out_queue " << (*tx_ptr)->id << std::endl;
                     }
                 }
-            } else {
-                WDEBUG << "top not ready yet, id = " << top->id << ", clk = " << this_clk << ", expected clk = " << out_queue_clk.second << std::endl;
             }
         }
 
@@ -460,7 +453,6 @@ namespace coordinator
                 // write tx
                 for (transaction::pending_update *upd: tx->writes) {
                     uint64_t shard_idx = upd->loc1-ShardIdIncr;
-                    WDEBUG << "idx " << shard_idx << " vec size " << factored_tx.size() << std::endl;
                     transaction::pending_tx *this_tx = factored_tx[shard_idx];
                     if (this_tx->writes.empty()) {
                         this_tx->qts = ++qts[shard_idx];
@@ -495,25 +487,19 @@ namespace coordinator
             bool nop = (tx->type == transaction::NOP);
 
             if (!nop) {
-                WDEBUG << "write tx " << tx->id << ", clk = " << tx->timestamp.get_clock() << std::endl;
                 tx_prog_mutex.lock();
                 outstanding_tx.emplace(tx->id, tx);
                 tx_prog_mutex.unlock();
-            } else {
-                WDEBUG << "nop " << tx->id << ", clk = " << tx->timestamp.get_clock() << std::endl;
             }
 
-            std::cerr << "sending out tx " << tx->id << " to shard: ";
             // send tx batches
             message::message msg;
             for (uint64_t i = 0; i < num_shards; i++) {
                 if (tx->shard_write[i]) {
                     msg.prepare_message(message::TX_INIT, vt_id, factored_tx[i]->timestamp, factored_tx[i]->qts, *factored_tx[i]);
                     comm.send(i+ShardIdIncr, msg.buf);
-                    std::cerr << i << " ";
                 }
             }
-            std::cerr << std::endl;
 
             if (nop) {
                 delete tx;

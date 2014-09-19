@@ -122,6 +122,7 @@ class hyper_stub_base
         // graph data functions
         bool get_node(db::element::node &n);
         bool put_node(db::element::node &n);
+        bool put_nodes(std::unordered_map<node_handle_t, db::element::node*> &nodes);
         void del_node(const node_handle_t &h);
         void update_creat_time(db::element::node &n);
         void update_properties(db::element::node &n);
@@ -148,6 +149,13 @@ class hyper_stub_base
         template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<std::string, T> &map);
 
     private:
+        void prepare_node(hyperdex_client_attribute *attr,
+            db::element::node &n,
+            std::unique_ptr<e::buffer>&,
+            std::unique_ptr<e::buffer>&,
+            std::unique_ptr<e::buffer>&,
+            std::unique_ptr<e::buffer>&,
+            std::unique_ptr<e::buffer>&);
         void pack_uint64(e::buffer::packer &packer, uint64_t num);
         void unpack_uint64(e::unpacker &unpacker, uint64_t &num);
         void pack_uint32(e::buffer::packer &packer, uint32_t num);

@@ -1,10 +1,6 @@
 TODO
 Fault tolerant coordinator and shards.
-    Node handles for recreating node after failover.
-    Fix nops for crashed shard.
-    When shard fails in the middle of a tx and/or nop, it will be resent by VT: need a function that 'checks' tx
-        and only reexecutes the portion that has not been already executed---need a specialized check for each type of tx.
-        Also need timestamper logic for determining and resending nops/pending txs.
+    RW transactions using Warp: check create node by put_if_not_exist.
 Permanent deletion.
     Node/edge properties
     Kronos events clean up
