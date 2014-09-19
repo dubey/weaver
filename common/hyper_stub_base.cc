@@ -872,3 +872,63 @@ hyper_stub_base :: del_nmap(std::unordered_set<node_handle_t> &toDel)
 
     return multiple_del(spaces, keys, key_szs);
 }
+
+void
+hyper_stub_base :: pack_uint64(e::buffer::packer &pkr, uint64_t num)
+{
+    uint8_t intbuf[8];
+    e::pack64le(num, intbuf);
+    e::slice intslc(intbuf, 8);
+    pkr = pkr.copy(intslc);
+}
+
+void
+hyper_stub_base :: unpack_uint64(e::unpacker &unpacker, uint64_t &num)
+{
+    uint8_t intbuf[8];
+    for (size_t i = 0; i < 8; i++) {
+        unpacker = unpacker >> intbuf[i];
+    }
+    e::unpack64le(intbuf, &num);
+}
+
+void
+hyper_stub_base :: pack_uint32(e::buffer::packer &pkr, uint32_t num)
+{
+    uint8_t intbuf[4];
+    e::pack32le(num, intbuf);
+    e::slice intslc(intbuf, 4);
+    pkr = pkr.copy(intslc);
+}
+
+void
+hyper_stub_base :: unpack_uint32(e::unpacker &unpacker, uint32_t &num)
+{
+    uint8_t intbuf[4];
+    for (size_t i = 0; i < 4; i++) {
+        unpacker = unpacker >> intbuf[i];
+    }
+    e::unpack32le(intbuf, &num);
+}
+
+void
+hyper_stub_base :: pack_string(e::buffer::packer &packer, const std::string &s)
+{
+    uint8_t *rawchars = (uint8_t*)s.data();
+
+    for (size_t i = 0; i < s.size(); i++) {
+        packer = packer << rawchars[i];
+    }
+}
+
+void
+hyper_stub_base :: unpack_string(e::unpacker &unpacker, std::string &s, uint32_t sz)
+{
+    s.resize(sz);
+
+    uint8_t *rawchars = (uint8_t*)s.data();
+
+    for (uint32_t i = 0; i < sz; i++) {
+        unpacker = unpacker >> rawchars[i];
+    }
+}

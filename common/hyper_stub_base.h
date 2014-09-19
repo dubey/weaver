@@ -22,6 +22,7 @@
 #include <e/endian.h>
 #include <e/buffer.h>
 #include <hyperdex/client.h>
+#include <hyperdex/datastructures.h>
 
 #include "common/message.h"
 #include "common/transaction.h"
@@ -147,7 +148,11 @@ class hyper_stub_base
 
     private:
         void pack_uint64(e::buffer::packer &packer, uint64_t num);
+        void unpack_uint64(e::unpacker &unpacker, uint64_t &num);
         void pack_uint32(e::buffer::packer &packer, uint32_t num);
+        void unpack_uint32(e::unpacker &unpacker, uint32_t &num);
+        void pack_string(e::buffer::packer &packer, const std::string &t);
+        void unpack_string(e::unpacker &unpacker, std::string &t, const uint32_t sz);
 
     public:
         hyper_stub_base();
@@ -228,42 +233,67 @@ template <typename T>
 inline void
 hyper_stub_base :: prepare_buffer(const std::unordered_map<std::string, T> &map, std::unique_ptr<e::buffer> &buf)
 {
+    //int hdex_id;
+    //hyperdex_client_returncode encode_status;
+    //hyperdex_ds_arena *arena = hyperdex_ds_arena_create();
+    //hyperdex_ds_map* hmap = hyperdex_ds_allocate_map(arena);
+
+    //for (const auto &p: map) {
+    //    hdex_id = hyperdex_ds_map_insert_key_string(hmap, p.first.c_str(), p.first.size(), encode_status);
+    //    assert(hdex_id >= 0);
+    //    assert(encode_status == HYPERDEX_CLIENT_SUCCESS);
+
+    //    uint32_t val_sz = message::size(p.second);
+    //    buf.reset(e::buffer::create(val_sz));
+    //    e::buffer::packer packer = buf->pack();
+    //    message::pack_buffer(packer, p.second);
+    //    hdex_id = hyperdex_ds_map_insert_val_string(hmap, buffer->data(), buffer->size(), encode_status);
+    //    assert(hdex_id >= 0);
+    //    assert(encode_status == HYPERDEX_CLIENT_SUCCESS);
+    //}
+
+    //const char *str_buf;
+    //size_t buf_sz;
+    //enum hyperdatatype map_type;
+    //int hyperdex_ds_map_finalize(hmap, encode_status, &str_buf, &buf_sz, &map_type);
+
+    //buf.reset(e::buffer::create(str_buf, buf_sz));
+
     uint64_t buf_sz = 0;
     std::vector<std::string> sorted;
     sorted.reserve(map.size());
-    std::vector<uint32_t> key_sz;
-    std::vector<uint32_t> val_sz;
-    for (auto &p: map) {
+
+    for (const auto &p: map) {
         sorted.emplace_back(p.first);
-        key_sz.emplace_back(message::size(p.first));
-        val_sz.emplace_back(message::size(p.second));
-        buf_sz += sizeof(uint32_t) // map key encoding sz
-                + key_sz.back()
-                + sizeof(uint32_t) // map val encoding sz
-                + val_sz.back(); // map val encoding
-        //WDEBUG << "key " << p.first << ", key_sz " << key_sz.back() << std::endl;
-        //WDEBUG << "value_sz " << val_sz.back() << std::endl;
     }
-    //WDEBUG << "Total buf sz = " << buf_sz << std::endl;
     std::sort(sorted.begin(), sorted.end());
+
+    std::vector<uint32_t> val_sz(map.size(), UINT32_MAX);
+    // now iterate in sorted order
+    for (uint64_t i = 0; i < sorted.size(); i++) {
+        val_sz[i] = message::size(map.at(sorted[i]));
+        buf_sz += sizeof(uint32_t) // map key encoding sz
+                + sorted[i].size()
+                + sizeof(uint32_t) // map val encoding sz
+                + val_sz[i]; // map val encoding
+        WDEBUG << "key " << sorted[i] << ", key_sz " << sorted[i].size() << std::endl;
+        WDEBUG << "value_sz " << val_sz[i] << std::endl;
+    }
+    WDEBUG << "Total buf sz = " << buf_sz << std::endl;
 
     buf.reset(e::buffer::create(buf_sz));
     e::buffer::packer packer = buf->pack();
-    // now iterate in sorted order
-    uint64_t i = 0;
-    for (const std::string &key: sorted) {
-        //WDEBUG << "packer remain = " << packer.remain() << std::endl;
-        pack_uint32(packer, key_sz[i]);
-        //WDEBUG << "packer remain = " << packer.remain() << std::endl;
-        message::pack_buffer(packer, key);
-        //WDEBUG << "packer remain = " << packer.remain() << std::endl;
+
+    for (uint64_t i = 0; i < sorted.size(); i++) {
+        pack_uint32(packer, sorted[i].size());
+        pack_string(packer, sorted[i]);
+        WDEBUG << "packed key " << sorted[i] << std::endl;
 
         pack_uint32(packer, val_sz[i]);
-        //WDEBUG << "packer remain = " << packer.remain() << std::endl;
-        message::pack_buffer(packer, map.at(key));
-        //WDEBUG << "packer remain = " << packer.remain() << std::endl;
-        i++;
+        message::pack_buffer(packer, map.at(sorted[i]));
     }
+
+    WDEBUG << "Hex dump: " << buf->hex() << std::endl;
 }
 
 // unpack the HYPERDATATYPE_MAP_STRING_STRING in to the given map
@@ -271,43 +301,23 @@ template <typename T>
 inline void
 hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<std::string, T> &map)
 {
-    //WDEBUG << "Total buf sz = " << buf_sz << std::endl;
     std::unique_ptr<e::buffer> ebuf(e::buffer::create(buf, buf_sz));
     e::unpacker unpacker = ebuf->unpack_from(0);
     std::string key;
-    //uint32_t sz;
+    uint32_t sz;
 
     while (!unpacker.empty()) {
         key.erase();
 
-        unpacker = unpacker.advance(sizeof(uint32_t));
-        //buf = e::unpack32le(buf, &sz);
-        //WDEBUG << "got key sz " << sz << std::endl;
-        message::unpack_buffer(unpacker, key);
-        //WDEBUG << "got key: sz = " << key.size() << ", val = " << key << std::endl;
-        //buf += sz;
+        unpack_uint32(unpacker, sz);
+        WDEBUG << "got key sz " << sz << std::endl;
+        unpack_string(unpacker, key, sz);
+        WDEBUG << "got key: sz = " << key.size() << ", val = " << key << std::endl;
 
-        unpacker = unpacker.advance(sizeof(uint32_t));
+        unpack_uint32(unpacker, sz);
+        WDEBUG << "got val sz " << sz << std::endl;
         message::unpack_buffer(unpacker, map[key]);
     }
-}
-
-inline void
-hyper_stub_base :: pack_uint64(e::buffer::packer &pkr, uint64_t num)
-{
-    uint8_t intbuf[8];
-    e::pack64le(num, intbuf);
-    e::slice intslc(intbuf, 8);
-    pkr = pkr.copy(intslc);
-}
-
-inline void
-hyper_stub_base :: pack_uint32(e::buffer::packer &pkr, uint32_t num)
-{
-    uint8_t intbuf[4];
-    e::pack32le(num, intbuf);
-    e::slice intslc(intbuf, 4);
-    pkr = pkr.copy(intslc);
 }
 
 #endif

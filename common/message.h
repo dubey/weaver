@@ -170,6 +170,7 @@ namespace message
     void pack_buffer(e::buffer::packer &packer, const int64_t &t);
     void pack_buffer(e::buffer::packer &packer, const int &t);
     void pack_buffer(e::buffer::packer &packer, const double &t);
+    void pack_string(e::buffer::packer &packer, const std::string &t, const uint32_t sz);
     void pack_buffer(e::buffer::packer &packer, const std::string &t);
     void pack_buffer(e::buffer::packer &packer, const vc::vclock &t);
     void pack_buffer(e::buffer::packer &packer, const node_prog::property &t);
@@ -209,6 +210,7 @@ namespace message
     void unpack_buffer(e::unpacker &unpacker, int64_t &t);
     void unpack_buffer(e::unpacker &unpacker, int &t);
     void unpack_buffer(e::unpacker &unpacker, double &t);
+    void unpack_string(e::unpacker &unpacker, std::string &t, const uint32_t sz);
     void unpack_buffer(e::unpacker &unpacker, std::string &t);
     void unpack_buffer(e::unpacker &unpacker, vc::vclock &t);
     void unpack_buffer(e::unpacker &unpacker, node_prog::property &t);

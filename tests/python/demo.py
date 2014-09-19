@@ -44,8 +44,9 @@ else:
 c.begin_tx()
 c.create_edge('ayush', 'egs', 'e1')
 c.set_edge_property('ayush', 'e1', 'type', 'follows')
-c.create_edge('egs', 'ayush', 'e2')
-c.set_edge_property('egs', 'e2', 'type', 'followed_by')
+e2 = c.create_edge('egs', 'ayush', 'e2')
+print 'e2: ' + e2
+c.set_edge_property('egs', e2, 'type', 'followed_by')
 success = c.end_tx()
 if success:
     print 'ayush follows egs'
@@ -59,6 +60,8 @@ c.create_node('post')
 c.set_node_property('post', 'type', 'post')
 c.set_node_property('post', 'visibility', 'followers')
 e3 = c.create_edge('egs', 'post')
+#assert e3 == 'e3'
+print 'e3: ' + e3
 c.set_edge_property('egs', e3, 'type', 'posted')
 success = c.end_tx()
 if success:
