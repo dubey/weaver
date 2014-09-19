@@ -135,16 +135,8 @@ class hyper_stub_base
 
         template <typename T> void prepare_buffer(const T &t, std::unique_ptr<e::buffer> &buf);
         template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, T &t);
-        //template <typename T> void prepare_buffer(const std::unordered_map<uint64_t, T> &map, std::unique_ptr<e::buffer> &buf);
-        //template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<uint64_t, T> &map);
         template <typename T> void prepare_buffer(const std::unordered_map<std::string, T> &map, std::unique_ptr<e::buffer> &buf);
         template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<std::string, T> &map);
-        //void prepare_buffer(const std::unordered_map<uint64_t, uint64_t> &map, std::unique_ptr<e::buffer> &buf);
-        //void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<uint64_t, uint64_t> &map);
-        //void prepare_buffer(const std::unordered_set<uint64_t> &set, std::unique_ptr<e::buffer> &buf);
-        //void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<uint64_t> &set);
-        //void prepare_buffer(const std::unordered_set<std::string> &set, std::unique_ptr<e::buffer> &buf);
-        //void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<std::string> &set);
 
     private:
         void pack_uint64(e::buffer::packer &packer, uint64_t num);
@@ -179,86 +171,11 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, T &t)
     message::unpack_buffer(unpacker, t);
 }
 
-/*
-// store the given unordered_map as a HYPERDATATYPE_MAP_INT64_STRING
-template <typename T>
-inline void
-hyper_stub_base :: prepare_buffer(const std::unordered_map<uint64_t, T> &map, std::unique_ptr<e::buffer> &buf)
-{
-    uint64_t buf_sz = 0;
-    std::vector<uint64_t> sorted;
-    sorted.reserve(map.size());
-    std::vector<uint32_t> val_sz;
-    for (auto &p: map) {
-        sorted.emplace_back(p.first);
-        val_sz.emplace_back(message::size(p.second));
-        buf_sz += sizeof(p.first) // map key
-                + sizeof(uint32_t) // map val encoding sz
-                + val_sz.back(); // map val encoding
-    }
-    std::sort(sorted.begin(), sorted.end());
-
-    buf.reset(e::buffer::create(buf_sz));
-    e::buffer::packer packer = buf->pack();
-    // now iterate in sorted order
-    uint64_t i = 0;
-    for (uint64_t key: sorted) {
-        pack_uint64(packer, key);
-        message::pack_buffer(packer, map[key]);
-        i++;
-    }
-}
-
-// unpack the HYPERDATATYPE_MAP_INT64_STRING in to the given map
-template <typename T>
-inline void
-hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<uint64_t, T> &map)
-{
-    std::unique_ptr<e::buffer> ebuf(e::buffer::create(buf, buf_sz));
-    const uint8_t *cur = ebuf->data();
-    e::unpacker unpacker = ebuf->unpack_from(0);
-    uint64_t key;
-
-    while (!unpacker.empty()) {
-        cur = e::unpack64le(cur, &key);
-        unpacker.advance(8);
-        message::unpack_buffer(unpacker, map[key]);
-        cur += message::size(map[key]);
-    }
-}
-*/
-
 // store the given unordered_map as a HYPERDATATYPE_MAP_STRING_STRING
 template <typename T>
 inline void
 hyper_stub_base :: prepare_buffer(const std::unordered_map<std::string, T> &map, std::unique_ptr<e::buffer> &buf)
 {
-    //int hdex_id;
-    //hyperdex_client_returncode encode_status;
-    //hyperdex_ds_arena *arena = hyperdex_ds_arena_create();
-    //hyperdex_ds_map* hmap = hyperdex_ds_allocate_map(arena);
-
-    //for (const auto &p: map) {
-    //    hdex_id = hyperdex_ds_map_insert_key_string(hmap, p.first.c_str(), p.first.size(), encode_status);
-    //    assert(hdex_id >= 0);
-    //    assert(encode_status == HYPERDEX_CLIENT_SUCCESS);
-
-    //    uint32_t val_sz = message::size(p.second);
-    //    buf.reset(e::buffer::create(val_sz));
-    //    e::buffer::packer packer = buf->pack();
-    //    message::pack_buffer(packer, p.second);
-    //    hdex_id = hyperdex_ds_map_insert_val_string(hmap, buffer->data(), buffer->size(), encode_status);
-    //    assert(hdex_id >= 0);
-    //    assert(encode_status == HYPERDEX_CLIENT_SUCCESS);
-    //}
-
-    //const char *str_buf;
-    //size_t buf_sz;
-    //enum hyperdatatype map_type;
-    //int hyperdex_ds_map_finalize(hmap, encode_status, &str_buf, &buf_sz, &map_type);
-
-    //buf.reset(e::buffer::create(str_buf, buf_sz));
-
     uint64_t buf_sz = 0;
     std::vector<std::string> sorted;
     sorted.reserve(map.size());
