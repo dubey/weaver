@@ -337,6 +337,7 @@ namespace db
     shard :: bulk_load_persistent()
     {
         std::vector<std::thread> threads;
+        WDEBUG << "hstub.size " << hstub.size() << ", NUM_THREADS " << NUM_THREADS << std::endl;
         for (uint64_t i = 0; i < hstub.size(); i++) {
             threads.emplace_back(std::thread(&hyper_stub::bulk_load, hstub[i], (int)i, nodes));
         }

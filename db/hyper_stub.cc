@@ -144,8 +144,9 @@ hyper_stub :: restore_backup(std::unordered_map<node_handle_t, element::node*> *
 void
 hyper_stub :: bulk_load(int tid, std::unordered_map<node_handle_t, element::node*> *nodes_arr)
 {
+    assert(NUM_NODE_MAPS % NUM_THREADS == 0);
     std::vector<node_handle_t> node_handles;
-    for (; tid <= NUM_NODE_MAPS; tid += NUM_THREADS) {
+    for (; tid < NUM_NODE_MAPS; tid += NUM_THREADS) {
         std::unordered_map<node_handle_t, element::node*> &node_map = nodes_arr[tid];
         node_handles.reserve(node_handles.size() + node_map.size());
         for (auto &p: node_map) {
@@ -156,14 +157,8 @@ hyper_stub :: bulk_load(int tid, std::unordered_map<node_handle_t, element::node
         }
     }
 
-    begin_tx();
-    if (put_nmap(node_handles, shard_id)) {
-        hyperdex_client_returncode commit_status = HYPERDEX_CLIENT_GARBAGE;
-        commit_tx(commit_status);
-        assert(commit_status == HYPERDEX_CLIENT_SUCCESS);
-    } else {
-        abort_tx();
-    }
+    WDEBUG << "put nmap " << node_handles.size() << std::endl;
+    assert(put_nmap(node_handles, shard_id));
 }
 
 bool

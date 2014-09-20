@@ -214,6 +214,51 @@ hyper_stub_base :: multiple_call(std::vector<hyper_tx_func> &funcs,
 }
 
 bool
+hyper_stub_base :: multiple_call(std::vector<hyper_func> &funcs,
+    std::vector<const char*> &spaces,
+    std::vector<const char*> &keys, std::vector<size_t> &key_szs,
+    std::vector<hyperdex_client_attribute*> &attrs, std::vector<size_t> &num_attrs)
+{
+    uint64_t num_calls = funcs.size();
+    assert(num_calls == spaces.size());
+    assert(num_calls == keys.size());
+    assert(num_calls == key_szs.size());
+    assert(num_calls == num_attrs.size());
+    assert(num_calls == attrs.size());
+
+    hyperdex_client_returncode call_status[num_calls];
+    int hdex_id;
+    std::unordered_map<int64_t, int64_t> opid_to_idx;
+    opid_to_idx.reserve(num_calls);
+    uint64_t success_calls = 0;
+    bool success = true;
+
+    for (uint64_t i = 0; i < num_calls; i++) {
+        HYPERDEX_CALL_NOTX(funcs[i], spaces[i], keys[i], key_szs[i], attrs[i], num_attrs[i], call_status[i]);
+
+        assert(opid_to_idx.find(hdex_id) == opid_to_idx.end());
+        opid_to_idx[hdex_id] = i;
+    }
+
+    hyperdex_client_returncode loop_status;
+    uint64_t num_loops = success_calls;
+    success_calls = 0;
+    for (uint64_t i = 0; i < num_loops; i++) {
+        HYPERDEX_LOOP;
+
+        assert(opid_to_idx.find(hdex_id) != opid_to_idx.end());
+        int64_t &idx = opid_to_idx[hdex_id];
+        assert(idx >= 0);
+
+        HYPERDEX_CHECK_STATUSES(call_status[idx], call_status[idx] != HYPERDEX_CLIENT_SUCCESS);
+
+        idx = -1;
+    }
+
+    return success;
+}
+
+bool
 hyper_stub_base :: multiple_call(std::vector<hyper_tx_func> &funcs,
     std::vector<const char*> &spaces,
     std::vector<const char*> &keys, std::vector<size_t> &key_szs,
@@ -409,6 +454,7 @@ hyper_stub_base :: multiple_del(std::vector<const char*> &spaces,
 
 #undef HYPERDEX_CHECK_ID
 #undef HYPERDEX_CALL
+#undef HYPERDEX_CALL_NOTX
 #undef HYPERDEX_GET
 #undef HYPERDEX_GET_NOTX
 #undef HYPERDEX_DEL
@@ -829,7 +875,7 @@ bool
 hyper_stub_base :: put_nmap(std::vector<node_handle_t> &node_handles, uint64_t shard_id)
 {
     int num_pairs = node_handles.size();
-    std::vector<hyper_tx_func> funcs(num_pairs, &hyperdex_client_xact_put);
+    std::vector<hyper_func> funcs(num_pairs, &hyperdex_client_put);
     std::vector<const char*> spaces(num_pairs, nmap_space);
     std::vector<const char*> keys(num_pairs);
     std::vector<size_t> key_szs(num_pairs);

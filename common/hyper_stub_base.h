@@ -95,6 +95,10 @@ class hyper_stub_base
             const char *key, size_t key_sz,
             hyperdex_client_map_attribute *map_attr, size_t num_attrs);
 
+        bool multiple_call(std::vector<hyper_func> &funcs,
+            std::vector<const char*> &spaces,
+            std::vector<const char*> &keys, std::vector<size_t> &key_szs,
+            std::vector<hyperdex_client_attribute*> &attrs, std::vector<size_t> &num_attrs);
         bool multiple_call(std::vector<hyper_tx_func> &funcs,
             std::vector<const char*> &spaces,
             std::vector<const char*> &keys, std::vector<size_t> &key_szs,
