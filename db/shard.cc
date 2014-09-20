@@ -951,6 +951,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
                 WDEBUG << "Buffering read for node " << node_handle << std::endl;
                 S->migration_mutex.unlock();
             }
+            np.start_node_params.pop_front(); // pop off this one
         } else if (node->state == db::element::node::mode::MOVED) {
             // queueing/forwarding node program
             std::vector<std::pair<node_handle_t, ParamsType>> fwd_node_params;
@@ -960,6 +961,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
             uint64_t new_loc = node->new_loc;
             S->release_node(node);
             S->comm.send(new_loc, m->buf);
+            np.start_node_params.pop_front(); // pop off this one
         } else { // node does exist
             assert(node->state == db::element::node::mode::STABLE);
 #ifdef WEAVER_NEW_CLDG
