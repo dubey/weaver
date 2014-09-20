@@ -53,7 +53,7 @@ def exec_reads(reqs, cl, exec_time, idx):
 
 clients = []
 for i in range(num_clients):
-    clients.append(client.Client('127.0.0.1', 2002))
+    clients.append(client.Client('128.84.167.101', 2002))
 
 # randomly write node props
 # with p = 0.50 nodes have 0 props

@@ -43,12 +43,12 @@ init_config_constants(const char *config_file_name)
         if (config_file != NULL) {
             WDEBUG << "supplied config_file_name was no good, defaulting to /etc/weaver.yaml" << std::endl;
         } else {
-            config_file = fopen("/usr/local/etc/weaver.yaml", "r");
+            config_file = fopen("/home/dubey/installs/etc/weaver.yaml", "r");
             if (config_file == NULL) {
                 WDEBUG << "Neither the provided config file name nor the defaults exist, exiting now." << std::endl;
                 return false;
             } else {
-                WDEBUG << "supplied config_file_name was no good, defaulting to /usr/local/etc/weaver.yaml" << std::endl;
+                WDEBUG << "supplied config_file_name was no good, defaulting to /home/dubey/installs/etc/weaver.yaml" << std::endl;
             }
         }
     }
