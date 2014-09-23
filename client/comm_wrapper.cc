@@ -29,7 +29,6 @@ comm_wrapper :: weaver_mapper :: weaver_mapper(const configuration &config)
         if (srv.type == server::VT && srv.state == server::AVAILABLE) {
             assert(mlist.find(WEAVER_TO_BUSYBEE(srv.virtual_id)) == mlist.end());
             mlist[WEAVER_TO_BUSYBEE(srv.virtual_id)] = srv.bind_to;
-            WDEBUG << "VT " << srv.virtual_id << " has state " << server::to_string(srv.state) << std::endl;
         }
     }
 }
@@ -75,7 +74,6 @@ comm_wrapper :: send(uint64_t send_to, std::auto_ptr<e::buffer> msg)
 busybee_returncode
 comm_wrapper :: recv(std::auto_ptr<e::buffer> *msg)
 {
-    uint64_t recv_from;
     return bb->recv(&recv_from, msg);
 }
 #pragma GCC diagnostic pop
@@ -84,4 +82,10 @@ void
 comm_wrapper :: quiesce_thread()
 {
     bb_gc.quiescent_state(&bb_gc_ts);
+}
+
+void
+comm_wrapper :: drop()
+{
+    bb->drop(recv_from);
 }

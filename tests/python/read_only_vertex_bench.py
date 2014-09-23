@@ -23,7 +23,7 @@ import weaver.client as client
 num_started = 0
 num_finished = 0
 cv = threading.Condition()
-num_requests = 3000
+num_requests = 10000
 num_nodes = 81306 # snap twitter-combined
 # node handles are range(0, num_nodes)
 num_clients = 64
@@ -43,8 +43,8 @@ def exec_reads(reqs, cl, exec_time, idx):
         cnt += 1
         prog_args = [(r, rp)]
         response = cl.read_node_props(prog_args)
-        if cnt % 1000 == 0:
-            print 'done ' + str(cnt) + ' by client ' + str(idx)
+        #if cnt % 1000 == 0:
+        #    print 'done ' + str(cnt) + ' by client ' + str(idx)
     end = time.time()
     with cv:
         num_finished += 1
@@ -85,7 +85,7 @@ for i in range(num_clients):
 
 exec_time = [0] * num_clients
 threads = []
-print "starting requests"
+#print "starting requests"
 for i in range(num_clients):
     thr = threading.Thread(target=exec_reads, args=(reqs[i], clients[i], exec_time, i))
     thr.start()
@@ -100,6 +100,7 @@ end_time = time.time()
 total_time = end_time-start_time
 for thr in threads:
     thr.join()
-print 'Total time = ' + str(total_time)
-throughput = (num_requests * num_clients) / total_time
-print 'Throughput = ' + str(throughput)
+#print 'Total time = ' + str(total_time)
+#throughput = (num_requests * num_clients) / total_time
+#print 'Throughput = ' + str(throughput)
+print num_requests*num_clients,total_time

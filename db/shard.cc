@@ -15,6 +15,7 @@
 #include <deque>
 #include <fstream>
 #include <string>
+#include <random>
 #include <signal.h>
 #include <e/popt.h>
 #include <e/buffer.h>
@@ -200,7 +201,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
     uint64_t edge_count = 1;
     uint64_t max_node_handle;
     std::unordered_set<node_handle_t> seen_nodes;
-    std::vector<std::unordered_map<node_handle_t, uint64_t>> node_maps(NUM_THREADS, std::unordered_map<node_handle_t, uint64_t>());
+    std::vector<std::unordered_map<node_handle_t, uint64_t>> node_maps(NUM_SHARD_THREADS, std::unordered_map<node_handle_t, uint64_t>());
     vc::vclock zero_clk(0, 0);
     uint8_t thread_select = 0;
 
@@ -234,7 +235,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                         if (n == NULL) {
                             n = S->create_node(id0, zero_clk, false, true);
                             node_maps[thread_select][id0] = shard_id;
-                            thread_select = (thread_select + 1) % NUM_THREADS;
+                            thread_select = (thread_select + 1) % NUM_SHARD_THREADS;
                         }
                         S->create_edge_nonlocking(n, edge_handle, id1, loc1, zero_clk, true);
                     }
@@ -242,7 +243,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                         if (!S->node_exists_nonlocking(id1)) {
                             S->create_node(id1, zero_clk, false, true);
                             node_maps[thread_select][id1] = shard_id;
-                            thread_select = (thread_select + 1) % NUM_THREADS;
+                            thread_select = (thread_select + 1) % NUM_SHARD_THREADS;
                         }
                     }
                 }
@@ -271,7 +272,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     if (n == NULL) {
                         n = S->create_node(id0, zero_clk, false, true);
                         node_maps[thread_select][id0] = shard_id;
-                        thread_select = (thread_select + 1) % NUM_THREADS;
+                        thread_select = (thread_select + 1) % NUM_SHARD_THREADS;
                     }
                 }
                 if (++line_count == max_node_handle) {
@@ -1252,7 +1253,11 @@ get_balanced_assignment(std::vector<uint64_t> &shard_node_count, std::vector<uin
             min_indices.emplace_back(idx);
         }
     }
-    int ret_idx = rand() % min_indices.size();
+
+    std::random_device rd;
+    std::default_random_engine generator(rd());
+    std::uniform_int_distribution<uint64_t> distribution(0, min_indices.size()-1);
+    int ret_idx = distribution(generator);
     return min_indices[ret_idx];
 }
 
@@ -1739,6 +1744,7 @@ recv_loop(uint64_t thread_id)
                         // nop
                         assert(tx_order != db::PAST);
                         // nop goes through queues for both PRESENT and FUTURE
+                        //WDEBUG << "enqueue nop " << qts << std::endl;
                         qreq = new db::queued_request(qts, vclk, nop, mwrap);
                         S->qm.enqueue_write_request(vt_id, qreq);
                     }
@@ -1961,7 +1967,7 @@ install_signal_handler(int signum, void (*handler)(int))
 void
 init_worker_threads(std::vector<std::thread*> &threads)
 {
-    for (int i = 0; i < NUM_THREADS; i++) {
+    for (int i = 0; i < NUM_SHARD_THREADS; i++) {
         std::thread *t = new std::thread(recv_loop, i);
         threads.emplace_back(t);
     }

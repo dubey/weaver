@@ -14,8 +14,10 @@
 #ifndef weaver_db_shard_constants_h_
 #define weaver_db_shard_constants_h_
 
+#define NUM_SHARD_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
+
 #define NUM_NODE_MAPS 1024
-#define SHARD_MSGRECV_TIMEOUT 1 // busybee recv timeout (ms) for shard worker threads
+#define SHARD_MSGRECV_TIMEOUT -1 // busybee recv timeout (ms) for shard worker threads
 
 #define BATCH_MSG_SIZE 1 // 1 == no batching
 

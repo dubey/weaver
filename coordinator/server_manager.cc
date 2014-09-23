@@ -32,7 +32,7 @@
 #include "coordinator/server_manager.h"
 #include "coordinator/util.h"
 
-#define ALARM_INTERVAL 30
+#define ALARM_INTERVAL 60
 
 // XXX does this matter for Weaver?
 // ASSUME:  I'm assuming only one server ever changes state at a time for a

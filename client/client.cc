@@ -11,6 +11,8 @@
  * ===============================================================
  */
 
+#include <random>
+
 #define weaver_debug_
 #include "common/message.h"
 #include "common/config_constants.h"
@@ -39,7 +41,10 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
         exit(-1);
     }
 
-    vtid = rand() % NumVts;
+    std::random_device rd;
+    std::default_random_engine generator(rd());
+    std::uniform_int_distribution<uint64_t> distribution(0, NumVts-1);
+    vtid = distribution(generator);
 
     assert(m_sm.get_replid(myid) && "get repl_id");
     assert(myid > NumActualServers);
@@ -154,13 +159,16 @@ client :: end_tx()
 
     message::message recv_msg;
     bool success = false;
-    busybee_returncode recv_code = recv_coord(&recv_msg.buf);
+    busybee_returncode recv_code;
+
+    recv_code = recv_coord(&recv_msg.buf);
+
     if (recv_code == BUSYBEE_TIMEOUT) {
         // assume vt is dead, fail tx
         WDEBUG << "operation timeout, perhaps timestamper is dead?" << std::endl;
         success = false;
     } else if (recv_code != BUSYBEE_SUCCESS) {
-        WDEBUG << "tx msg recv fail" << std::endl;
+        WDEBUG << "tx msg recv fail, busybee code " << recv_code << std::endl;
         success = false;
     } else {
         message::msg_type mtype = recv_msg.unpack_message_type();
@@ -185,19 +193,29 @@ std::unique_ptr<ParamsType>
 client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<std::string, ParamsType>> &initial_args)
 {
     message::message msg;
-    msg.prepare_message(message::CLIENT_NODE_PROG_REQ, prog_to_run, initial_args);
-    send_coord(msg.buf);
+    busybee_returncode recv_code;
 
-    busybee_returncode recv_code = recv_coord(&msg.buf);
-    if (recv_code == BUSYBEE_TIMEOUT) {
-        // assume vt is dead
-        //reconfigure();
-        return NULL;
-    }
-    if (recv_code != BUSYBEE_SUCCESS) {
-        WDEBUG << "node prog return msg fail" << std::endl;
-        return NULL;
-    }
+    //do {
+        msg.prepare_message(message::CLIENT_NODE_PROG_REQ, prog_to_run, initial_args);
+        send_coord(msg.buf);
+
+        recv_code = recv_coord(&msg.buf);
+
+        if (recv_code == BUSYBEE_TIMEOUT) {
+            // assume vt is dead
+            //reconfigure();
+            return NULL;
+        }
+        if (recv_code != BUSYBEE_SUCCESS && recv_code != BUSYBEE_DISRUPTED) {
+            //if (recv_code == BUSYBEE_DISRUPTED) {
+            //    WDEBUG << "node prog recv disrupted" << std::endl;
+            //    comm->drop();
+            //} else {
+                WDEBUG << "node prog return msg fail, recv_code: " << recv_code << std::endl;
+                return NULL;
+            //}
+        }
+    //} while (recv_code == BUSYBEE_DISRUPTED);
 
     uint64_t ignore_req_id;
     node_prog::prog_type ignore_type;

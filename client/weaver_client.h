@@ -77,6 +77,7 @@ namespace cl
             void start_migration();
             void single_stream_migration();
             void exit_weaver();
+            uint64_t get_vt_id() { return vtid; }
             std::vector<uint64_t> get_node_count();
 
         private:

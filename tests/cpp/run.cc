@@ -14,6 +14,7 @@
 #define weaver_debug_
 #include "common/weaver_constants.h"
 
+#include "tests/cpp/read_only_vertex_bench.h"
 //#include "message_test.h"
 //#include "message_tx.h"
 //#include "tx_msg_nmap.h"
@@ -44,7 +45,7 @@ main(int argc, char *argv[])
     UNUSED(argc);
     UNUSED(argv);
 
-    WDEBUG << "Starting tests." << std::endl;
+    run_read_only_vertex_bench(64, 81306, 3000);
 #ifdef __ALL_TESTS__
     //message_test();
     //WDEBUG << "Message packing/unpacking ok." << std::endl;
@@ -92,7 +93,6 @@ main(int argc, char *argv[])
     //clustering_prog_test();
 
 #endif
-    WDEBUG << "All tests completed." << std::endl;
 
     return 0;
 }

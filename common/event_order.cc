@@ -133,6 +133,7 @@ oracle :: happens_before_no_kronos(const vc::vclock_t &vclk, const std::vector<v
 {
     for (const vc::vclock_t* const other: others) {
         if (compare_two_clocks(vclk, *other) != 0) {
+            WDEBUG << "compare clocks failed, this: " << vclk[0] << ", other: " << (*other)[0] << std::endl;
             return false;
         }
     }

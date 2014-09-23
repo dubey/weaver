@@ -50,6 +50,7 @@ class comm_wrapper
         std::unique_ptr<weaver_mapper> wmap;
         std::unique_ptr<busybee_st> bb;
         uint64_t bb_id;
+        uint64_t recv_from;
 
     public:
         comm_wrapper(uint64_t bb_id, const configuration &config);
@@ -60,6 +61,7 @@ class comm_wrapper
         busybee_returncode recv(std::auto_ptr<e::buffer> *msg);
 #pragma GCC diagnostic pop
         void quiesce_thread();
+        void drop();
 };
 
 }

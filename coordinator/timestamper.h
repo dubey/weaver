@@ -32,6 +32,7 @@
 #include "common/comm_wrapper.h"
 #include "common/event_order.h"
 #include "common/server_manager_link_wrapper.h"
+#include "coordinator/vt_constants.h"
 #include "coordinator/current_tx.h"
 #include "coordinator/current_prog.h"
 #include "coordinator/hyper_stub.h"
@@ -148,7 +149,7 @@ namespace coordinator
 
     inline
     timestamper :: timestamper(uint64_t serverid, po6::net::location &loc, bool backup)
-        : comm(loc, NUM_THREADS, -1)
+        : comm(loc, NUM_VT_THREADS, -1)
         , sm_stub(server_id(serverid), comm.get_loc())
         , is_backup(backup)
         , active_backup(false)
@@ -195,7 +196,7 @@ namespace coordinator
         shifted_id = weaver_id << (64-ID_BITS);
         vclk.vt_id = vt_id;
 
-        for (int i = 0; i < NUM_THREADS; i++) {
+        for (int i = 0; i < NUM_VT_THREADS; i++) {
             hstub.push_back(new hyper_stub(vt_id));
             time_oracles.push_back(new order::oracle());
         }

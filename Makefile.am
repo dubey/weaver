@@ -27,8 +27,8 @@ if DEBUG
     AM_CFLAGS += -g3 -gdwarf-2 -O0
     AM_CXXFLAGS += -g3 -gdwarf-2 -O0
 else
-    AM_CFLAGS += -O2
-    AM_CXXFLAGS += -O2
+    AM_CFLAGS += -O3
+    AM_CXXFLAGS += -O3
 endif
 
 bin_PROGRAMS=
@@ -318,3 +318,9 @@ libweaverchronosd_la_SOURCES=	common/config_constants.cc \
 		        				chronos/replicant-shim.c
 libweaverchronosd_la_CFLAGS= 	$(AM_CFLAGS)
 libweaverchronosd_la_CXXFLAGS=	$(AM_CXXFLAGS)
+
+bin_PROGRAMS+=	weaver-test-bench
+noinst_HEADERS+=	tests/cpp/read_only_vertex_bench.h
+weaver_test_bench_SOURCES=	tests/cpp/run.cc \
+							common/clock.cc
+weaver_test_bench_LDADD=	libweaverclient.la

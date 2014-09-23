@@ -207,7 +207,7 @@ nop_function()
     int sleep_ret;
     int sleep_flags = 0;
     vc::vclock_t max_done_clk;
-    std::unordered_map<uint64_t, done_req_t> done_reqs;
+    //std::unordered_map<uint64_t, done_req_t> done_reqs;
     std::vector<uint64_t> del_done_reqs;
     transaction::pending_tx *tx = NULL;
     uint64_t num_shards;
@@ -365,7 +365,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     }
 
     if (!get_set.empty()) {
-        // TODO fix get_mappings!
         loc_map = hstub->get_mappings(get_set);
         bool success = (loc_map.size() == get_set.size());
 
@@ -400,6 +399,9 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         msg_to_send.prepare_message(message::NODE_PROG, pType, vt_id, req_timestamp, req_id, batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
     }
+
+    //msg->prepare_message(message::NODE_PROG_RETURN, pType, req_id, initial_args[0].second);
+    //vts->comm.send_to_client(clientID, msg->buf);
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
@@ -551,6 +553,8 @@ server_loop(int thread_id)
 
                 case message::CLIENT_NODE_PROG_REQ:
                     msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
+                    //msg->prepare_message(message::NODE_PROG_RETURN, 0);
+                    //vts->comm.send_to_client(client_sender, msg->buf);
                     node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), client_sender, hstub);
                     break;
 
@@ -700,7 +704,7 @@ install_signal_handler(int signum, void (*handler)(int))
 void
 init_worker_threads(std::vector<std::thread*> &threads)
 {
-    for (int i = 0; i < NUM_THREADS; i++) {
+    for (int i = 0; i < NUM_VT_THREADS; i++) {
         std::thread *t = new std::thread(server_loop, i);
         threads.emplace_back(t);
     }
@@ -838,9 +842,11 @@ main(int argc, const char *argv[])
     std::cout << "Vector timestamper " << vt_id << std::endl;
     std::cout << "THIS IS AN ALPHA RELEASE WHICH DOES NOT SUPPORT FAULT TOLERANCE" << std::endl;
 
-    // periodic vector clock update to other timestampers
-    std::thread clk_update_thr(clk_update_function);
-    clk_update_thr.detach();
+    if (NumVts > 1) {
+        // periodic vector clock update to other timestampers
+        std::thread clk_update_thr(clk_update_function);
+        clk_update_thr.detach();
+    }
 
     // periodic nops to shard
     nop_function();

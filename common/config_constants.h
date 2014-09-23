@@ -47,7 +47,8 @@ uint64_t get_num_shards();
 uint64_t get_num_effective_servers();
 uint64_t get_num_actual_servers();
 
-#define NUM_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
+//#define NUM_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
+//#define NUM_THREADS 32
 #define ID_BITS 16 // max 2^16 timestampers
 #define TOP_MASK (0x0000ffffffffffffULL)
 

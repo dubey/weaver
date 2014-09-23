@@ -62,13 +62,13 @@ hyper_stub_base :: hyper_stub_base()
 #define HYPERDEX_GET(space, key, key_sz, get_status, attr, attr_sz) \
     do { \
         hdex_id = hyperdex_client_xact_get(hyper_tx, space, key, key_sz, &get_status, attr, attr_sz); \
-    } while (hdex_id < 0 && get_status == HYPERDEX_CLIENT_INTERRUPTED); \
+    } while (hdex_id < 0 && (get_status == HYPERDEX_CLIENT_INTERRUPTED || get_status == HYPERDEX_CLIENT_COORDFAIL)); \
     HYPERDEX_CHECK_ID(get_status);
 
 #define HYPERDEX_GET_NOTX(space, key, key_sz, get_status, attr, attr_sz) \
     do { \
         hdex_id = hyperdex_client_get(cl, space, key, key_sz, &get_status, attr, attr_sz); \
-    } while (hdex_id < 0 && get_status == HYPERDEX_CLIENT_INTERRUPTED); \
+    } while (hdex_id < 0 && (get_status == HYPERDEX_CLIENT_INTERRUPTED || get_status == HYPERDEX_CLIENT_COORDFAIL)); \
     HYPERDEX_CHECK_ID(get_status);
 
 #define HYPERDEX_DEL(space, key, key_sz, del_status) \
@@ -325,14 +325,19 @@ hyper_stub_base :: multiple_call(std::vector<hyper_tx_func> &funcs,
 bool
 hyper_stub_base :: get(const char *space,
     const char *key, size_t key_sz,
-    const hyperdex_client_attribute **cl_attr, size_t *num_attrs)
+    const hyperdex_client_attribute **cl_attr, size_t *num_attrs,
+    bool tx)
 {
     hyperdex_client_returncode get_status, loop_status;
     int64_t hdex_id;
     int success_calls = 0;
     bool success = true;
 
-    HYPERDEX_GET(space, key, key_sz, get_status, cl_attr, num_attrs);
+    if (tx) {
+        HYPERDEX_GET(space, key, key_sz, get_status, cl_attr, num_attrs);
+    } else {
+        HYPERDEX_GET_NOTX(space, key, key_sz, get_status, cl_attr, num_attrs);
+    }
 
     if (success_calls == 1) {
         HYPERDEX_LOOP;
@@ -512,7 +517,7 @@ hyper_stub_base :: get_node(db::element::node &n)
     const hyperdex_client_attribute *attr;
     size_t num_attrs;
     node_handle_t handle = n.get_handle();
-    bool success = get(graph_space, handle.c_str(), handle.size(), &attr, &num_attrs);
+    bool success = get(graph_space, handle.c_str(), handle.size(), &attr, &num_attrs, true);
     if (success) {
         success = recreate_node(attr, n);
     }
@@ -935,6 +940,23 @@ hyper_stub_base :: put_nmap(std::unordered_map<node_handle_t, uint64_t> &pairs_t
     return success;
 }
 
+
+uint64_t
+hyper_stub_base :: get_nmap(node_handle_t &handle)
+{
+    const hyperdex_client_attribute *attr;
+    size_t num_attrs;
+    uint64_t shard = UINT64_MAX;
+
+    bool success = get(nmap_space, handle.c_str(), handle.size(), &attr, &num_attrs, false);
+    if (success) {
+        assert(num_attrs == 1);
+        assert(attr->value_sz == sizeof(int64_t));
+        shard = *((uint64_t*)attr->value);
+    }
+
+    return shard;
+}
 
 std::unordered_map<node_handle_t, uint64_t>
 hyper_stub_base :: get_nmap(std::unordered_set<node_handle_t> &toGet, bool tx)

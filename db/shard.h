@@ -224,7 +224,7 @@ namespace db
 
     inline
     shard :: shard(uint64_t serverid, po6::net::location &loc)
-        : comm(loc, NUM_THREADS, SHARD_MSGRECV_TIMEOUT)
+        : comm(loc, NUM_SHARD_THREADS, SHARD_MSGRECV_TIMEOUT)
         , sm_stub(server_id(serverid), comm.get_loc())
         , active_backup(false)
         , first_config(false)
@@ -260,7 +260,7 @@ namespace db
     shard :: init(uint64_t shardid)
     {
         shard_id = shardid;
-        for (int i = 0; i < NUM_THREADS; i++) {
+        for (int i = 0; i < NUM_SHARD_THREADS; i++) {
             hstub.push_back(new hyper_stub(shard_id));
             time_oracles.push_back(new order::oracle());
         }
@@ -315,29 +315,29 @@ namespace db
         }
 
         // reset qts if a VTS died
-        std::vector<server> delta = prev_config.delta(config);
-        for (const server &srv: delta) {
-            if (srv.type == server::VT) {
-                server::state_t prev_state = prev_config.get_state(srv.id);
-                if ((prev_state == server::AVAILABLE || prev_state == server::ASSIGNED)
-                 && (srv.state != server::AVAILABLE && srv.state != server::ASSIGNED)) {
-                    uint64_t vt_id = srv.virtual_id;
-                    // reset qts for vt_id
-                    qm.reset(vt_id, config.version());
-                    WDEBUG << "reset qts for vt " << vt_id << std::endl;
-                }
-            }
-        }
+        //std::vector<server> delta = prev_config.delta(config);
+        //for (const server &srv: delta) {
+        //    if (srv.type == server::VT) {
+        //        server::state_t prev_state = prev_config.get_state(srv.id);
+        //        if ((prev_state == server::AVAILABLE || prev_state == server::ASSIGNED)
+        //         && (srv.state != server::AVAILABLE && srv.state != server::ASSIGNED)) {
+        //            uint64_t vt_id = srv.virtual_id;
+        //            // reset qts for vt_id
+        //            qm.reset(vt_id, config.version());
+        //            WDEBUG << "reset qts for vt " << vt_id << std::endl;
+        //        }
+        //    }
+        //}
 
         // drop reads
-        qm.clear_queued_reads();
+        //qm.clear_queued_reads();
     }
 
     inline void
     shard :: bulk_load_persistent()
     {
         std::vector<std::thread> threads;
-        WDEBUG << "hstub.size " << hstub.size() << ", NUM_THREADS " << NUM_THREADS << std::endl;
+        WDEBUG << "hstub.size " << hstub.size() << ", NUM_SHARD_THREADS " << NUM_SHARD_THREADS << std::endl;
         for (uint64_t i = 0; i < hstub.size(); i++) {
             threads.emplace_back(std::thread(&hyper_stub::bulk_load, hstub[i], (int)i, nodes));
         }

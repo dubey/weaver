@@ -22,14 +22,72 @@
 using coordinator::hyper_stub;
 using coordinator::current_tx;
 
+//std::unordered_map<node_handle_t, uint64_t> hyper_stub::cached_nmap;
+//po6::threads::mutex hyper_stub::cached_nmap_mutex;
+
 hyper_stub :: hyper_stub(uint64_t vtid)
     : vt_id(vtid)
-{ }
+{
+    cached_nmap.set_empty_key("");
+}
+
+void
+hyper_stub :: cache_nmap(const node_handle_t &h, uint64_t loc)
+{
+    //cached_nmap_mutex.lock();
+    cached_nmap[h] = loc;
+    //cached_nmap.emplace(h, loc);
+    //cached_nmap_mutex.unlock();
+}
+
+void
+hyper_stub :: cache_nmap(const std::unordered_map<node_handle_t, uint64_t> &new_map)
+{
+    //cached_nmap_mutex.lock();
+    for (const auto &p: new_map) {
+        cached_nmap[p.first] = p.second;
+        //cached_nmap.emplace(p.first, p.second);
+    }
+    //cached_nmap_mutex.unlock();
+}
 
 std::unordered_map<node_handle_t, uint64_t>
 hyper_stub :: get_mappings(std::unordered_set<node_handle_t> &get_set)
 {
-    return get_nmap(get_set, false);
+    std::unordered_map<node_handle_t, uint64_t> ret;
+    std::unordered_set<node_handle_t> to_get;
+
+    // check cache
+    auto iter = cached_nmap.end();
+    //cached_nmap_mutex.lock();
+    for (const node_handle_t &h: get_set) {
+        iter = cached_nmap.find(h);
+        if (iter == cached_nmap.end()) {
+            to_get.emplace(h);
+        } else {
+            ret.emplace(h, iter->second);
+        }
+    }
+    //cached_nmap_mutex.unlock();
+
+    if (to_get.size() == 1) {
+        node_handle_t h = *to_get.begin();
+        uint64_t loc = get_nmap(h);
+        if (loc != UINT64_MAX) {
+            ret.emplace(h, loc);
+            cache_nmap(h, loc);
+        } else {
+            ret.clear();
+        }
+    } else if (!to_get.empty()) {
+        auto new_map = get_nmap(to_get, false);
+        for (const auto &p: new_map) {
+            ret.emplace(p.first, p.second);
+        }
+        cache_nmap(new_map);
+    }
+
+    return ret;
 }
 
 void

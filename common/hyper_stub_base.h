@@ -113,7 +113,8 @@ class hyper_stub_base
             std::vector<hyperdex_client_map_attribute*> &map_attrs, std::vector<size_t> &map_num_attrs);
         bool get(const char *space,
             const char *key, size_t key_sz,
-            const hyperdex_client_attribute **cl_attr, size_t *num_attrs);
+            const hyperdex_client_attribute **cl_attr, size_t *num_attrs,
+            bool tx);
         bool multiple_get(std::vector<const char*> &spaces,
             std::vector<const char*> &keys, std::vector<size_t> &key_szs,
             std::vector<const hyperdex_client_attribute**> &cl_attrs, std::vector<size_t*> &num_attrs,
@@ -141,6 +142,7 @@ class hyper_stub_base
         bool put_nmap(std::vector<node_handle_t> &node_handles, uint64_t shard_id);
         bool update_nmap(const node_handle_t &handle, uint64_t loc);
         std::unordered_map<node_handle_t, uint64_t> get_nmap(std::unordered_set<node_handle_t> &toGet, bool tx);
+        uint64_t get_nmap(node_handle_t &handle);
         bool del_nmap(std::unordered_set<node_handle_t> &toDel);
 
         // tx data functions

@@ -144,9 +144,9 @@ hyper_stub :: restore_backup(std::unordered_map<node_handle_t, element::node*> *
 void
 hyper_stub :: bulk_load(int tid, std::unordered_map<node_handle_t, element::node*> *nodes_arr)
 {
-    assert(NUM_NODE_MAPS % NUM_THREADS == 0);
+    assert(NUM_NODE_MAPS % NUM_SHARD_THREADS == 0);
     std::vector<node_handle_t> node_handles;
-    for (; tid < NUM_NODE_MAPS; tid += NUM_THREADS) {
+    for (; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
         std::unordered_map<node_handle_t, element::node*> &node_map = nodes_arr[tid];
         node_handles.reserve(node_handles.size() + node_map.size());
         for (auto &p: node_map) {
