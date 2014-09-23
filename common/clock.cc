@@ -52,3 +52,19 @@ weaver_timer :: get_time_elapsed_millis()
     uint64_t ret = get_time_elapsed() / MEGA;
     return ret;
 }
+
+uint64_t
+weaver_timer :: get_real_time()
+{
+    uint64_t ret = 0;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    ret += ts.tv_sec*GIGA + ts.tv_nsec;
+    return ret;
+}
+
+uint64_t
+weaver_timer :: get_real_time_millis()
+{
+    uint64_t ret = get_real_time() / MEGA;
+    return ret;
+}

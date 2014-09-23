@@ -33,6 +33,8 @@ namespace wclock
             uint64_t get_time_elapsed();
             // get_time_elapsed / 1000000
             uint64_t get_time_elapsed_millis();
+            uint64_t get_real_time();
+            uint64_t get_real_time_millis();
             weaver_timer& operator-=(const weaver_timer &rhs);
     };
 

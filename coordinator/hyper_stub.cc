@@ -55,8 +55,10 @@ std::unordered_map<node_handle_t, uint64_t>
 hyper_stub :: get_mappings(std::unordered_set<node_handle_t> &get_set)
 {
     std::unordered_map<node_handle_t, uint64_t> ret;
-    std::unordered_set<node_handle_t> to_get;
+    //std::unordered_set<node_handle_t> to_get;
+    std::unordered_set<node_handle_t> &to_get = get_set;
 
+    /*
     // check cache
     auto iter = cached_nmap.end();
     //cached_nmap_mutex.lock();
@@ -69,22 +71,26 @@ hyper_stub :: get_mappings(std::unordered_set<node_handle_t> &get_set)
         }
     }
     //cached_nmap_mutex.unlock();
+    */
 
     if (to_get.size() == 1) {
         node_handle_t h = *to_get.begin();
         uint64_t loc = get_nmap(h);
         if (loc != UINT64_MAX) {
             ret.emplace(h, loc);
-            cache_nmap(h, loc);
+            //cache_nmap(h, loc);
         } else {
             ret.clear();
         }
     } else if (!to_get.empty()) {
+        ret = get_nmap(to_get, false);
+        /*
         auto new_map = get_nmap(to_get, false);
         for (const auto &p: new_map) {
             ret.emplace(p.first, p.second);
         }
         cache_nmap(new_map);
+        */
     }
 
     return ret;
