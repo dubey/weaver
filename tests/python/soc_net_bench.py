@@ -21,7 +21,7 @@ import weaver.client as client
 
 num_started = 0
 num_finished = 0
-num_clients = 200
+num_clients = 20
 cv = threading.Condition()
 all_latencies = []
 
@@ -64,8 +64,8 @@ class request_gen:
 
     def get(self):
         coin_toss = random.random()
-        n1 = random.randint(0, self.num_nodes-1)
-        n2 = random.randint(0, self.num_nodes-1)
+        n1 = str(random.randint(0, self.num_nodes-1))
+        n2 = str(random.randint(0, self.num_nodes-1))
         if coin_toss < self.p_read:
             coin_toss = random.random()
             if coin_toss < self.c_assoc_get:
@@ -129,18 +129,18 @@ def exec_work(idx, cl, num_requests):
             prog_args = [(req[1], rnpp)]
             response = cl.read_node_props(prog_args)
         elif req[0] == 4: # assoc_add
-            tx_id = cl.begin_tx()
-            new_edge = cl.create_edge(tx_id, req[1], req[2])
-            cl.end_tx(tx_id)
+            cl.begin_tx()
+            new_edge = cl.create_edge(req[1], req[2])
+            cl.end_tx()
             edge_list.append(new_edge)
             edge_parent_list.append(req[1])
         elif req[0] == 5: # assoc del
             if len(edge_list) > 0:
-                tx_id = cl.begin_tx()
+                cl.begin_tx()
                 del_edge = edge_list.pop()
                 del_edge_node = edge_parent_list.pop()
-                cl.delete_edge(tx_id, del_edge, del_edge_node)
-                cl.end_tx(tx_id)
+                cl.delete_edge(del_edge, del_edge_node)
+                cl.end_tx()
         #elif req[0] == 6: # assoc update
         #    tx_id = cl.begin_tx()
         #    if len(edge_list) > 0:
@@ -173,12 +173,12 @@ def exec_work(idx, cl, num_requests):
         cv.notify_all()
         all_latencies.extend(latencies)
 
-num_vts = 3
+num_vts = 5
 num_requests = 5000
 
 clients = []
 for i in range(num_clients):
-    clients.append(client.Client(client._CLIENT_ID + i, i % num_vts))
+    clients.append(client.Client('128.84.167.101', 2002))
 
 threads = []
 print "starting requests"

@@ -485,14 +485,14 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::e
         check_idx[idx[i]] = true;
     }
 
-    WDEBUG << "here" << std::endl;
+    //WDEBUG << "here" << std::endl;
     // create clock
     vc::vclock create_clk;
     unpack_buffer(cl_attr[idx[0]].value, cl_attr[idx[0]].value_sz, create_clk);
-    WDEBUG << "here" << std::endl;
+    //WDEBUG << "here" << std::endl;
     // properties
     unpack_buffer<db::element::property>(cl_attr[idx[1]].value, cl_attr[idx[1]].value_sz, n.base.properties);
-    WDEBUG << "here" << std::endl;
+    //WDEBUG << "here" << std::endl;
 
     n.state = db::element::node::mode::STABLE;
     n.in_use = false;
@@ -500,14 +500,14 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::e
 
     // out edges
     unpack_buffer<db::element::edge*>(cl_attr[idx[2]].value, cl_attr[idx[2]].value_sz, n.out_edges);
-    WDEBUG << "here" << std::endl;
+    //WDEBUG << "here" << std::endl;
     // last update clock
     unpack_buffer(cl_attr[idx[4]].value, cl_attr[idx[4]].value_sz, n.last_upd_clk);
-    WDEBUG << "here" << std::endl;
+    //WDEBUG << "here" << std::endl;
     // restore clock
-    WDEBUG << "here, value_sz = " << cl_attr[idx[5]].value_sz << std::endl;
+    //WDEBUG << "here, value_sz = " << cl_attr[idx[5]].value_sz << std::endl;
     unpack_buffer(cl_attr[idx[5]].value, cl_attr[idx[5]].value_sz, n.restore_clk);
-    WDEBUG << "here, restore clk size " << n.restore_clk.size() << std::endl;
+    //WDEBUG << "here, restore clk size " << n.restore_clk.size() << std::endl;
 
     return true;
 }
@@ -571,35 +571,71 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
 
     // restore clock
     prepare_buffer(n.restore_clk, restore_clk_buf);
-    WDEBUG << "packing restore clk, clk_size = " << n.restore_clk.size() << ", value_sz = " << restore_clk_buf->size() << std::endl;
-    WDEBUG << "restore clk hex dump = " << restore_clk_buf->hex() << std::endl;
+    //WDEBUG << "packing restore clk, clk_size = " << n.restore_clk.size() << ", value_sz = " << restore_clk_buf->size() << std::endl;
+    //WDEBUG << "restore clk hex dump = " << restore_clk_buf->hex() << std::endl;
     cl_attr[5].attr = graph_attrs[5];
     cl_attr[5].value = (const char*)restore_clk_buf->data();
     cl_attr[5].value_sz = restore_clk_buf->size();
     cl_attr[5].datatype = graph_dtypes[5];
 }
 
-bool
-hyper_stub_base :: put_node(db::element::node &n)
-{
-    hyperdex_client_attribute cl_attr[NUM_GRAPH_ATTRS];
-    std::unique_ptr<e::buffer> creat_clk_buf;
-    std::unique_ptr<e::buffer> props_buf;
-    std::unique_ptr<e::buffer> out_edges_buf;
-    std::unique_ptr<e::buffer> last_clk_buf;
-    std::unique_ptr<e::buffer> restore_clk_buf;
-
-    prepare_node(cl_attr, n, creat_clk_buf, props_buf, out_edges_buf, last_clk_buf, restore_clk_buf);
-
-    node_handle_t handle = n.get_handle();
-    return call(&hyperdex_client_xact_put, graph_space, handle.c_str(), handle.size(), cl_attr, NUM_GRAPH_ATTRS);
-}
+//bool
+//hyper_stub_base :: put_node(db::element::node &n)
+//{
+//    hyperdex_client_attribute cl_attr[NUM_GRAPH_ATTRS];
+//    std::unique_ptr<e::buffer> creat_clk_buf;
+//    std::unique_ptr<e::buffer> props_buf;
+//    std::unique_ptr<e::buffer> out_edges_buf;
+//    std::unique_ptr<e::buffer> last_clk_buf;
+//    std::unique_ptr<e::buffer> restore_clk_buf;
+//
+//    prepare_node(cl_attr, n, creat_clk_buf, props_buf, out_edges_buf, last_clk_buf, restore_clk_buf);
+//
+//    node_handle_t handle = n.get_handle();
+//    return call(&hyperdex_client_xact_put, graph_space, handle.c_str(), handle.size(), cl_attr, NUM_GRAPH_ATTRS);
+//}
 
 bool
 hyper_stub_base :: put_nodes(std::unordered_map<node_handle_t, db::element::node*> &nodes)
 {
     int num_nodes = nodes.size();
     std::vector<hyper_tx_func> funcs(num_nodes, &hyperdex_client_xact_put);
+    std::vector<const char*> spaces(num_nodes, graph_space);
+    std::vector<const char*> keys(num_nodes);
+    std::vector<size_t> key_szs(num_nodes);
+    std::vector<hyperdex_client_attribute*> attrs(num_nodes);
+    std::vector<size_t> num_attrs(num_nodes, NUM_GRAPH_ATTRS);
+    std::vector<std::unique_ptr<e::buffer>> creat_clk_buf(num_nodes);
+    std::vector<std::unique_ptr<e::buffer>> props_buf(num_nodes);
+    std::vector<std::unique_ptr<e::buffer>> out_edges_buf(num_nodes);
+    std::vector<std::unique_ptr<e::buffer>> last_clk_buf(num_nodes);
+    std::vector<std::unique_ptr<e::buffer>> restore_clk_buf(num_nodes);
+
+    hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute*)malloc(num_nodes * NUM_GRAPH_ATTRS * sizeof(hyperdex_client_attribute));
+
+    int i = 0;
+    for (auto &p: nodes) {
+        attrs[i] = attrs_to_add + NUM_GRAPH_ATTRS*i;
+        keys[i] = p.first.c_str();
+        key_szs[i] = p.first.size();
+
+        prepare_node(attrs[i], *p.second, creat_clk_buf[i], props_buf[i], out_edges_buf[i], last_clk_buf[i], restore_clk_buf[i]);
+
+        i++;
+    }
+
+    bool success = multiple_call(funcs, spaces, keys, key_szs, attrs, num_attrs);
+
+    free(attrs_to_add);
+
+    return success;
+}
+
+bool
+hyper_stub_base :: put_nodes_bulk(std::unordered_map<node_handle_t, db::element::node*> &nodes)
+{
+    int num_nodes = nodes.size();
+    std::vector<hyper_func> funcs(num_nodes, &hyperdex_client_put);
     std::vector<const char*> spaces(num_nodes, graph_space);
     std::vector<const char*> keys(num_nodes);
     std::vector<size_t> key_szs(num_nodes);

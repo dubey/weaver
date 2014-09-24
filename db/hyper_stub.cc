@@ -155,6 +155,7 @@ hyper_stub :: bulk_load(int tid, std::unordered_map<node_handle_t, element::node
             //put_node(*p.second);
             node_handles.emplace_back(p.first);
         }
+        put_nodes_bulk(node_map);
     }
 
     WDEBUG << "put nmap " << node_handles.size() << std::endl;
