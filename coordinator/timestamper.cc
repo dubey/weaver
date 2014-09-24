@@ -143,18 +143,16 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
         // sets error if any warp operation returns error
         // sets upd->loc for each upd in tx
         // sets tx->shard_write bool_vector (shard_write[i] = true iff there is a tx component at shard i)
-        WDEBUG << "do tx " << tx->id << std::endl;
         hstub->do_tx(get_set, del_set, put_map, tx, ready, error, time_oracle);
-        WDEBUG << "done tx " << tx->id << std::endl;
 
         assert(!(ready && error)); // can't be ready after some error
 
         transaction::pending_tx *to_enq;
         if (!ready || error) {
-            WDEBUG << "tx ready: " << ready << ", error: " << error << std::endl;
+            //WDEBUG << "tx ready: " << ready << ", error: " << error << std::endl;
             to_enq = tx->copy_fail_transaction();
         } else {
-            WDEBUG << "enqueuing tx " << tx->id << std::endl;
+            //WDEBUG << "enqueuing tx " << tx->id << std::endl;
             to_enq = tx;
         }
         vts->enqueue_tx(to_enq);
@@ -187,7 +185,6 @@ end_tx(uint64_t tx_id, uint64_t shard_id, coordinator::hyper_stub *hstub)
 
     if (weaver_util::none(tx->shard_write)) {
         // done tx
-        WDEBUG << "clean tx " << tx_id << std::endl;
         hstub->clean_tx(tx_id);
 
         vts->outstanding_tx.erase(tx_id);

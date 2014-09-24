@@ -33,25 +33,41 @@ init_config_constants(const char *config_file_name)
     ServerManagerIpaddr = NULL;
     ServerManagerPort = UINT16_MAX;
 
-    FILE *config_file = NULL;
-    if (config_file_name != NULL) {
+    FILE *config_file = nullptr;
+    if (config_file_name != nullptr) {
         config_file = fopen(config_file_name, "r");
     }
-    if (config_file == NULL) {
-        // the supplied file name was no good
-        config_file = fopen("/etc/weaver.yaml", "r");
-        if (config_file != NULL) {
-            WDEBUG << "supplied config_file_name was no good, defaulting to /etc/weaver.yaml" << std::endl;
+
+    std::vector<const char*> other_paths = {"/etc/weaver.yaml", "/usr/local/etc/weaver.yaml", "/home/dubey/installs/etc/weaver.yaml"};
+
+    for (const auto &s: other_paths) {
+        if (config_file == nullptr) {
+            config_file_name = s;
+            config_file = fopen(s, "r");
         } else {
-            config_file = fopen("/home/dubey/installs/etc/weaver.yaml", "r");
-            if (config_file == NULL) {
-                WDEBUG << "Neither the provided config file name nor the defaults exist, exiting now." << std::endl;
-                return false;
-            } else {
-                WDEBUG << "supplied config_file_name was no good, defaulting to /home/dubey/installs/etc/weaver.yaml" << std::endl;
-            }
+            break;
         }
     }
+
+    if (config_file == nullptr) {
+        WDEBUG << "Neither the provided config file name nor the defaults exist, exiting now." << std::endl;
+        return false;
+    } else {
+        WDEBUG << "Using config file name " << config_file_name << std::endl;
+    }
+    //if (config_file == NULL) {
+    //    // the supplied file name was no good
+    //    config_file = fopen("/etc/weaver.yaml", "r");
+    //    if (config_file != NULL) {
+    //        WDEBUG << "supplied config_file_name was no good, defaulting to /etc/weaver.yaml" << std::endl;
+    //    } else {
+    //        config_file = fopen("/home/dubey/installs/etc/weaver.yaml", "r");
+    //        if (config_file == NULL) {
+    //        } else {
+    //            WDEBUG << "supplied config_file_name was no good, defaulting to /home/dubey/installs/etc/weaver.yaml" << std::endl;
+    //        }
+    //    }
+    //}
 
     yaml_parser_t parser;
     if (!yaml_parser_initialize(&parser)) {
