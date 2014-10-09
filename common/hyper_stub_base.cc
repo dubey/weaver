@@ -35,6 +35,9 @@ hyper_stub_base :: hyper_stub_base()
     , cl(hyperdex_client_create(HyperdexCoordIpaddr, HyperdexCoordPort))
 { }
 
+
+#ifdef weaver_benchmark_
+
 #define HYPERDEX_CHECK_ID(status) \
     if (hdex_id < 0) { \
         WDEBUG << "Hyperdex function failed, op id = " << hdex_id \
@@ -42,6 +45,54 @@ hyper_stub_base :: hyper_stub_base()
         WDEBUG << "error message: " << hyperdex_client_error_message(cl) << std::endl; \
         WDEBUG << "error loc: " << hyperdex_client_error_location(cl) << std::endl; \
         assert(false); \
+        success = false; \
+    } else { \
+        success_calls++; \
+    }
+
+#define HYPERDEX_CALL(h, space, key, key_sz, attr, attr_sz, call_status) \
+    hdex_id = h(hyper_tx, space, key, key_sz, attr, attr_sz, &call_status); \
+    HYPERDEX_CHECK_ID(call_status);
+
+#define HYPERDEX_CALL_NOTX(h, space, key, key_sz, attr, attr_sz, call_status) \
+    hdex_id = h(cl, space, key, key_sz, attr, attr_sz, &call_status); \
+    HYPERDEX_CHECK_ID(call_status);
+
+#define HYPERDEX_GET(space, key, key_sz, get_status, attr, attr_sz) \
+    hdex_id = hyperdex_client_xact_get(hyper_tx, space, key, key_sz, &get_status, attr, attr_sz); \
+    HYPERDEX_CHECK_ID(get_status);
+
+#define HYPERDEX_GET_NOTX(space, key, key_sz, get_status, attr, attr_sz) \
+    hdex_id = hyperdex_client_get(cl, space, key, key_sz, &get_status, attr, attr_sz); \
+    HYPERDEX_CHECK_ID(get_status);
+
+#define HYPERDEX_DEL(space, key, key_sz, del_status) \
+    hdex_id = hyperdex_client_xact_del(hyper_tx, space, key, key_sz, &del_status); \
+    HYPERDEX_CHECK_ID(del_status);
+
+#define HYPERDEX_LOOP \
+    hdex_id = hyperdex_client_loop(cl, -1, &loop_status); \
+    HYPERDEX_CHECK_ID(loop_status);
+
+#define HYPERDEX_CHECK_STATUSES(status, fail_check) \
+    if ((loop_status != HYPERDEX_CLIENT_SUCCESS) || (fail_check)) { \
+        WDEBUG << "hyperdex error" \
+               << ", call status: " << hyperdex_client_returncode_to_string(status) \
+               << ", loop status: " << hyperdex_client_returncode_to_string(loop_status) << std::endl; \
+        WDEBUG << "error message: " << hyperdex_client_error_message(cl) << std::endl; \
+        WDEBUG << "error loc: " << hyperdex_client_error_location(cl) << std::endl; \
+        assert(false); \
+        success = false; \
+    }
+
+#else
+
+#define HYPERDEX_CHECK_ID(status) \
+    if (hdex_id < 0) { \
+        WDEBUG << "Hyperdex function failed, op id = " << hdex_id \
+               << ", status = " << hyperdex_client_returncode_to_string(status) << std::endl; \
+        WDEBUG << "error message: " << hyperdex_client_error_message(cl) << std::endl; \
+        WDEBUG << "error loc: " << hyperdex_client_error_location(cl) << std::endl; \
         success = false; \
     } else { \
         success_calls++; \
@@ -90,9 +141,10 @@ hyper_stub_base :: hyper_stub_base()
                << ", loop status: " << hyperdex_client_returncode_to_string(loop_status) << std::endl; \
         WDEBUG << "error message: " << hyperdex_client_error_message(cl) << std::endl; \
         WDEBUG << "error loc: " << hyperdex_client_error_location(cl) << std::endl; \
-        assert(false); \
         success = false; \
     }
+
+#endif
 
 
 void

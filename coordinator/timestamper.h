@@ -290,14 +290,22 @@ namespace coordinator
             epoch_tx->vt_seq = out_queue_counter;
             epoch_tx->new_epoch = config.version();
             vclk.new_epoch(config.version());
-
-            //std::cerr << "Reconfigure, out_queue_clk : " << out_queue_clk.first << "," << out_queue_clk.second << "; epoch change vclk " << vclk.vt_id << " : ";
-            //for (uint64_t c: vclk.clock) {
-            //    std::cerr << c << " ";
-            //}
-            //std::cerr << "; new epoch " << config.version() << std::endl;
         }
 
+#ifdef weaver_benchmark_
+        // kill if server died
+        std::vector<server> delta = prev_config.delta(config);
+        for (const server &srv: delta) {
+            if (srv.type == server::SHARD || srv.type == server::VT) {
+                server::state_t prev_state = prev_config.get_state(srv.id);
+                if ((prev_state == server::AVAILABLE || prev_state == server::ASSIGNED)
+                 && (srv.state != server::AVAILABLE && srv.state != server::ASSIGNED)) {
+                    WDEBUG << server::to_string(srv.type) << " " << srv.virtual_id << " died, exiting now" << std::endl;
+                    exit(-1);
+                }
+            }
+        }
+#else
         // reset qts if a shard died
         std::vector<server> delta = prev_config.delta(config);
         for (const server &srv: delta) {
@@ -324,6 +332,7 @@ namespace coordinator
                 }
             }
         }
+#endif
 
         clk_rw_mtx.unlock();
         periodic_update_mutex.unlock();

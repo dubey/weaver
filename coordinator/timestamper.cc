@@ -204,7 +204,6 @@ nop_function()
     int sleep_ret;
     int sleep_flags = 0;
     vc::vclock_t max_done_clk;
-    //std::unordered_map<uint64_t, done_req_t> done_reqs;
     std::vector<uint64_t> del_done_reqs;
     transaction::pending_tx *tx = NULL;
     uint64_t num_shards;
@@ -231,11 +230,6 @@ nop_function()
             vts->out_queue_counter++;
             tx->timestamp = vts->vclk;
             tx->vt_seq = vts->out_queue_counter;
-            //std::cerr << "nop " << tx->id << " vclk " << tx->timestamp.vt_id << " : ";
-            //for (uint64_t c: tx->timestamp.clock) {
-            //    std::cerr << c << " ";
-            //}
-            //std::cerr << std::endl;
             tx->shard_write = vts->to_nop;
             vts->clk_rw_mtx.unlock();
 
@@ -396,9 +390,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         msg_to_send.prepare_message(message::NODE_PROG, pType, vt_id, req_timestamp, req_id, batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
     }
-
-    //msg->prepare_message(message::NODE_PROG_RETURN, pType, req_id, initial_args[0].second);
-    //vts->comm.send_to_client(clientID, msg->buf);
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
@@ -550,8 +541,6 @@ server_loop(int thread_id)
 
                 case message::CLIENT_NODE_PROG_REQ:
                     msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
-                    //msg->prepare_message(message::NODE_PROG_RETURN, 0);
-                    //vts->comm.send_to_client(client_sender, msg->buf);
                     node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), client_sender, hstub);
                     break;
 

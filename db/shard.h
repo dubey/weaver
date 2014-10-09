@@ -314,23 +314,38 @@ namespace db
             backup_cond.signal();
         }
 
-        // reset qts if a VTS died
-        //std::vector<server> delta = prev_config.delta(config);
-        //for (const server &srv: delta) {
-        //    if (srv.type == server::VT) {
-        //        server::state_t prev_state = prev_config.get_state(srv.id);
-        //        if ((prev_state == server::AVAILABLE || prev_state == server::ASSIGNED)
-        //         && (srv.state != server::AVAILABLE && srv.state != server::ASSIGNED)) {
-        //            uint64_t vt_id = srv.virtual_id;
-        //            // reset qts for vt_id
-        //            qm.reset(vt_id, config.version());
-        //            WDEBUG << "reset qts for vt " << vt_id << std::endl;
-        //        }
-        //    }
-        //}
+#ifdef weaver_benchmark_
+        // kill if a server died
+        std::vector<server> delta = prev_config.delta(config);
+        for (const server &srv: delta) {
+            if (srv.type == server::VT || srv.type == server::SHARD) {
+                server::state_t prev_state = prev_config.get_state(srv.id);
+                if ((prev_state == server::AVAILABLE || prev_state == server::ASSIGNED)
+                 && (srv.state != server::AVAILABLE && srv.state != server::ASSIGNED)) {
+                    WDEBUG << server::to_string(srv.type) << " " << srv.virtual_id << " died, exiting now" << std::endl;
+                    exit(-1);
+                }
+            }
+        }
+#else
+        // reset qts if a VTS died TODO test this
+        std::vector<server> delta = prev_config.delta(config);
+        for (const server &srv: delta) {
+            if (srv.type == server::VT) {
+                server::state_t prev_state = prev_config.get_state(srv.id);
+                if ((prev_state == server::AVAILABLE || prev_state == server::ASSIGNED)
+                 && (srv.state != server::AVAILABLE && srv.state != server::ASSIGNED)) {
+                    uint64_t vt_id = srv.virtual_id;
+                    // reset qts for vt_id
+                    qm.reset(vt_id, config.version());
+                    WDEBUG << "reset qts for vt " << vt_id << std::endl;
+                }
+            }
+        }
 
-        // drop reads
-        //qm.clear_queued_reads();
+        // drop reads TODO test this
+        qm.clear_queued_reads();
+#endif
     }
 
     inline void

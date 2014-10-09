@@ -1744,7 +1744,6 @@ recv_loop(uint64_t thread_id)
                         // nop
                         assert(tx_order != db::PAST);
                         // nop goes through queues for both PRESENT and FUTURE
-                        //WDEBUG << "enqueue nop " << qts << std::endl;
                         qreq = new db::queued_request(qts, vclk, nop, mwrap);
                         S->qm.enqueue_write_request(vt_id, qreq);
                     }

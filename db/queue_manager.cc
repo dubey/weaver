@@ -60,7 +60,6 @@ queue_manager :: enqueue_write_request(uint64_t vt_id, queued_request *t)
     queue_mutex.lock();
 
     if (t->vclock.clock[0] >= min_epoch[vt_id]) {
-        //WDEBUG << "write not enqueued, recv epoch " << t->vclock.clock[0] << ", min_epoch " << min_epoch[vt_id] << std::endl;
         wr_queues[vt_id].push(t);
     }
 
@@ -163,7 +162,6 @@ queue_manager :: get_rd_req()
         // execute read request after all write queues have processed write which happens after this read
         if (!pq.empty()) {
             req = pq.top();
-            //WDEBUG << "checking read req ordering" << std::endl;
             if (check_rd_req_nonlocking(req->vclock.clock)) {
                 pq.pop();
                 return req;
@@ -180,21 +178,17 @@ queue_manager :: check_wr_queues_timestamps(uint64_t vt_id, uint64_t qt)
     for (uint64_t i = 0; i < NumVts; i++) {
         if (vt_id == i) {
             if (qt <= qts[i]) {
-                //WDEBUG << "qt past" << std::endl;
                 return PAST;
             } else if (qt > (qts[i]+1)) {
-                //WDEBUG << "qt future" << std::endl;
                 return FUTURE;
             }
         } else {
             pqueue_t &pq = wr_queues[i];
             if (pq.empty()) { // can't go on if one of the pq's is empty
-                //WDEBUG << "queue empty" << std::endl;
                 return FUTURE;
             } else {
                 // check for correct ordering of queue timestamp (which is priority for thread)
                 if ((qts[i] + 1) != pq.top()->priority) {
-                    //WDEBUG << "qt fail, cur qts " << qts[i] << ", thr priority " << pq.top()->priority << std::endl;
                     return FUTURE;
                 }
             }
@@ -209,14 +203,12 @@ queue_manager :: get_wr_req()
     enum queue_order queue_status = check_wr_queues_timestamps(UINT64_MAX, UINT64_MAX);
     assert(queue_status != PAST);
     if (queue_status == FUTURE) {
-        //WDEBUG << "queues not ready" << std::endl;
         return NULL;
     }
 
     // all write queues are good to go
     uint64_t exec_vt_id;
     if (NumVts == 1) {
-        //WDEBUG << "1vt, execing" << std::endl;
         exec_vt_id = 0; // only one timestamper
     } else {
         // compare timestamps, may call Kronos

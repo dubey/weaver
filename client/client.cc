@@ -194,8 +194,27 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
 {
     message::message msg;
     busybee_returncode recv_code;
+    uint8_t attempts = 0;
 
-    //do {
+#ifdef weaver_benchmark_
+
+    msg.prepare_message(message::CLIENT_NODE_PROG_REQ, prog_to_run, initial_args);
+    send_coord(msg.buf);
+
+    recv_code = recv_coord(&msg.buf);
+
+    if (recv_code = BUSYBEE_TIMEOUT) {
+        //reconfigure();
+    }
+
+    if (recv_code != BUSYBEE_SUCCESS) {
+        WDEBUG << "node prog return msg fail, recv_code: " << recv_code << std::endl;
+        return nullptr;
+    }
+
+#else
+
+    do {
         msg.prepare_message(message::CLIENT_NODE_PROG_REQ, prog_to_run, initial_args);
         send_coord(msg.buf);
 
@@ -204,18 +223,20 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
         if (recv_code == BUSYBEE_TIMEOUT) {
             // assume vt is dead
             //reconfigure();
-            return NULL;
+            return nullptr;
         }
         if (recv_code != BUSYBEE_SUCCESS && recv_code != BUSYBEE_DISRUPTED) {
-            //if (recv_code == BUSYBEE_DISRUPTED) {
-            //    WDEBUG << "node prog recv disrupted" << std::endl;
-            //    comm->drop();
-            //} else {
+            if (recv_code == BUSYBEE_DISRUPTED && attempts++ < 3) {
+                WDEBUG << "node prog recv disrupted" << std::endl;
+                comm->drop();
+            } else {
                 WDEBUG << "node prog return msg fail, recv_code: " << recv_code << std::endl;
-                return NULL;
-            //}
+                return nullptr;
+            }
         }
-    //} while (recv_code == BUSYBEE_DISRUPTED);
+    } while (recv_code == BUSYBEE_DISRUPTED);
+
+#endif
 
     uint64_t ignore_req_id;
     node_prog::prog_type ignore_type;
