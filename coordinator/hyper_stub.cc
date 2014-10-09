@@ -106,7 +106,6 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         }
     }
 
-    //WDEBUG << "need to check before clocks for " << nodes.size() << " #nodes" << std::endl;
     // last upd clk check
     std::vector<vc::vclock> before;
     before.reserve(nodes.size());
@@ -124,7 +123,6 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         nodes[p.first]->last_upd_clk = tx->timestamp;
         nodes[p.first]->restore_clk = tx->timestamp.clock;
     }
-    //WDEBUG << "put map size " << put_map.size() << std::endl;
 
 #define CHECK_LOC(loc, handle) \
     if (loc == UINT64_MAX) { \
@@ -227,7 +225,6 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         ERROR_FAIL;
     }
 
-    //WDEBUG << "going to commit tx " << tx->id << std::endl;
     hyperdex_client_returncode commit_status = HYPERDEX_CLIENT_GARBAGE;
     commit_tx(commit_status);
 

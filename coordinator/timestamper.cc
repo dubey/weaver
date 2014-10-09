@@ -149,10 +149,8 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
 
         transaction::pending_tx *to_enq;
         if (!ready || error) {
-            //WDEBUG << "tx ready: " << ready << ", error: " << error << std::endl;
             to_enq = tx->copy_fail_transaction();
         } else {
-            //WDEBUG << "enqueuing tx " << tx->id << std::endl;
             to_enq = tx;
         }
         vts->enqueue_tx(to_enq);

@@ -537,14 +537,11 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::e
         check_idx[idx[i]] = true;
     }
 
-    //WDEBUG << "here" << std::endl;
     // create clock
     vc::vclock create_clk;
     unpack_buffer(cl_attr[idx[0]].value, cl_attr[idx[0]].value_sz, create_clk);
-    //WDEBUG << "here" << std::endl;
     // properties
     unpack_buffer<db::element::property>(cl_attr[idx[1]].value, cl_attr[idx[1]].value_sz, n.base.properties);
-    //WDEBUG << "here" << std::endl;
 
     n.state = db::element::node::mode::STABLE;
     n.in_use = false;
@@ -552,14 +549,10 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::e
 
     // out edges
     unpack_buffer<db::element::edge*>(cl_attr[idx[2]].value, cl_attr[idx[2]].value_sz, n.out_edges);
-    //WDEBUG << "here" << std::endl;
     // last update clock
     unpack_buffer(cl_attr[idx[4]].value, cl_attr[idx[4]].value_sz, n.last_upd_clk);
-    //WDEBUG << "here" << std::endl;
     // restore clock
-    //WDEBUG << "here, value_sz = " << cl_attr[idx[5]].value_sz << std::endl;
     unpack_buffer(cl_attr[idx[5]].value, cl_attr[idx[5]].value_sz, n.restore_clk);
-    //WDEBUG << "here, restore clk size " << n.restore_clk.size() << std::endl;
 
     return true;
 }
@@ -623,8 +616,6 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
 
     // restore clock
     prepare_buffer(n.restore_clk, restore_clk_buf);
-    //WDEBUG << "packing restore clk, clk_size = " << n.restore_clk.size() << ", value_sz = " << restore_clk_buf->size() << std::endl;
-    //WDEBUG << "restore clk hex dump = " << restore_clk_buf->hex() << std::endl;
     cl_attr[5].attr = graph_attrs[5];
     cl_attr[5].value = (const char*)restore_clk_buf->data();
     cl_attr[5].value_sz = restore_clk_buf->size();

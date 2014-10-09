@@ -55,19 +55,6 @@ init_config_constants(const char *config_file_name)
     } else {
         WDEBUG << "Using config file name " << config_file_name << std::endl;
     }
-    //if (config_file == NULL) {
-    //    // the supplied file name was no good
-    //    config_file = fopen("/etc/weaver.yaml", "r");
-    //    if (config_file != NULL) {
-    //        WDEBUG << "supplied config_file_name was no good, defaulting to /etc/weaver.yaml" << std::endl;
-    //    } else {
-    //        config_file = fopen("/home/dubey/installs/etc/weaver.yaml", "r");
-    //        if (config_file == NULL) {
-    //        } else {
-    //            WDEBUG << "supplied config_file_name was no good, defaulting to /home/dubey/installs/etc/weaver.yaml" << std::endl;
-    //        }
-    //    }
-    //}
 
     yaml_parser_t parser;
     if (!yaml_parser_initialize(&parser)) {
