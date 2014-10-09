@@ -621,6 +621,11 @@ namespace message
         assert(!unpacker.error());
 
         unpack_buffer(unpacker, received_type);
+#ifdef weaver_benchmark_
+        if (received_type != expected_type) {
+            WDEBUG << "recv type = " << to_string(received_type) << ", expected type " << to_string(expected_type) << std::endl;
+        }
+#endif
         assert(received_type == expected_type);
         UNUSED(expected_type);
 

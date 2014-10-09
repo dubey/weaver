@@ -127,6 +127,7 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
         }
     }
 
+    uint64_t sender = tx->sender;
     bool ready = false;
     bool error = false;
 
@@ -164,7 +165,7 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
     } else {
         msg.prepare_message(message::CLIENT_TX_SUCCESS);
     }
-    vts->comm.send_to_client(tx->sender, msg.buf);
+    vts->comm.send_to_client(sender, msg.buf);
     vts->tx_queue_loop();
 }
 

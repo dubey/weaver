@@ -194,6 +194,8 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         if (n != nullptr) {
             n->restore_clk[vt_id] = tx->timestamp.get_clock();
         }
+
+        n = nullptr;
     }
 
 #undef CHECK_LOC
