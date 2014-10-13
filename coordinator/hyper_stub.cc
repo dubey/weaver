@@ -66,7 +66,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 {
 #define ERROR_FAIL \
     error = true; \
-    abort(); \
+    abort_tx(); \
     clean_up(nodes); \
     return;
 

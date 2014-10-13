@@ -194,7 +194,6 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
 {
     message::message msg;
     busybee_returncode recv_code;
-    uint8_t attempts = 0;
 
 #ifdef weaver_benchmark_
 
@@ -203,7 +202,7 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
 
     recv_code = recv_coord(&msg.buf);
 
-    if (recv_code = BUSYBEE_TIMEOUT) {
+    if (recv_code == BUSYBEE_TIMEOUT) {
         //reconfigure();
     }
 
@@ -214,6 +213,7 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
 
 #else
 
+    uint8_t attempts = 0;
     do {
         msg.prepare_message(message::CLIENT_NODE_PROG_REQ, prog_to_run, initial_args);
         send_coord(msg.buf);

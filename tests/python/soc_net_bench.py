@@ -21,7 +21,7 @@ import weaver.client as client
 
 num_started = 0
 num_finished = 0
-num_clients = 20
+num_clients = 100
 cv = threading.Condition()
 all_latencies = []
 
@@ -29,9 +29,9 @@ class request_gen:
     def __init__(self):
         # node handles are range(0, num_nodes)
         self.num_nodes = 81306 # snap twitter-combined
-        #self.num_nodes = 4840000 # snap twitter-combined
+        #self.num_nodes = 4840000 # snap livejournal
 
-        self.p_read = 0.5
+        self.p_read = 1
         self.p_assoc_get = 0.157
         self.p_assoc_range = 0.437
         self.p_assoc_count = 0.117
@@ -178,7 +178,7 @@ num_requests = 5000
 
 clients = []
 for i in range(num_clients):
-    clients.append(client.Client('128.84.167.101', 2002))
+    clients.append(client.Client('127.0.0.1', 2002))
 
 threads = []
 print "starting requests"

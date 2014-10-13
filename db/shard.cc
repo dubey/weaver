@@ -1182,6 +1182,9 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
         return;
     }
 
+    //msg->prepare_message(message::NODE_PROG_RETURN, np.prog_type_recvd, np.req_id);
+    //S->comm.send(np.vt_id, msg->buf);
+
     // update max prog id
     S->migration_mutex.lock();
     if (S->max_prog_id[np.vt_id] < np.req_id) {
@@ -1753,6 +1756,7 @@ recv_loop(uint64_t thread_id)
                 case message::NODE_PROG:
                     rec_msg->unpack_partial_message(message::NODE_PROG, pType, vt_id, vclk, req_id);
                     assert(vclk.clock.size() == ClkSz);
+
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                     if (S->qm.check_rd_request(vclk.clock)) {
                         mwrap->time_oracle = time_oracle;
@@ -1761,6 +1765,9 @@ recv_loop(uint64_t thread_id)
                         qreq = new db::queued_request(req_id, vclk, unpack_node_program, mwrap);
                         S->qm.enqueue_read_request(vt_id, qreq);
                     }
+
+                    //rec_msg->prepare_message(message::NODE_PROG_RETURN, pType, req_id);
+                    //S->comm.send(vt_id, rec_msg->buf);
                     break;
 
                 case message::NODE_CONTEXT_FETCH:

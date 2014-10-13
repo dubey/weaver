@@ -541,6 +541,9 @@ server_loop(int thread_id)
                 case message::CLIENT_NODE_PROG_REQ:
                     msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
                     node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), client_sender, hstub);
+                    //msg.reset(new message::message());
+                    //msg->prepare_message(message::NODE_PROG_RETURN, 0);
+                    //vts->comm.send_to_client(client_sender, msg->buf);
                     break;
 
                 // node program response from a shard
