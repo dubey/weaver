@@ -69,10 +69,10 @@ namespace coordinator
             po6::threads::cond backup_cond, first_config_cond, start_all_vts_cond;
 
             // Hyperdex stub
-            std::vector<hyper_stub*> hstub;
+            std::vector<hyper_stub*> hstub, hstub_uninit;
 
             // time oracle
-            std::vector<order::oracle*> time_oracles;
+            std::vector<order::oracle*> time_oracles, time_oracles_uninit;
 
             // timestamper state
         public:
@@ -184,6 +184,11 @@ namespace coordinator
         done_reqs.emplace(node_prog::REACHABILITY, empty_map);
         done_reqs.emplace(node_prog::DIJKSTRA, empty_map);
         done_reqs.emplace(node_prog::CLUSTERING, empty_map);
+
+        for (int i = 0; i < NUM_VT_THREADS; i++) {
+            hstub_uninit.push_back(new hyper_stub(vt_id));
+            time_oracles_uninit.push_back(new order::oracle());
+        }
     }
 
     // initialize msging layer
@@ -196,10 +201,8 @@ namespace coordinator
         shifted_id = weaver_id << (64-ID_BITS);
         vclk.vt_id = vt_id;
 
-        for (int i = 0; i < NUM_VT_THREADS; i++) {
-            hstub.push_back(new hyper_stub(vt_id));
-            time_oracles.push_back(new order::oracle());
-        }
+        hstub = std::move(hstub_uninit);
+        time_oracles = std::move(time_oracles_uninit);
     }
 
     // restore state when backup becomes primary due to failure

@@ -178,7 +178,7 @@ num_requests = 5000
 
 clients = []
 for i in range(num_clients):
-    clients.append(client.Client('127.0.0.1', 2002))
+    clients.append(client.Client('128.84.167.101', 2002))
 
 threads = []
 print "starting requests"

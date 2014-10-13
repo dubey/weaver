@@ -808,8 +808,8 @@ main(int argc, const char *argv[])
         }
 
         init_vt();
-        vts->config_mutex.unlock();
 
+        vts->config_mutex.unlock();
         // release config_mutex while restoring vt which may take a while
         vts->restore_backup();
 
