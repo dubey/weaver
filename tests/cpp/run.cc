@@ -45,7 +45,7 @@ main(int argc, char *argv[])
     UNUSED(argc);
     UNUSED(argv);
 
-    run_read_only_vertex_bench(64, 81306, 3000);
+    run_read_only_vertex_bench(100, 81306, 25000);
 #ifdef __ALL_TESTS__
     //message_test();
     //WDEBUG << "Message packing/unpacking ok." << std::endl;

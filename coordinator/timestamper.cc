@@ -338,39 +338,39 @@ template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
     unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, coordinator::hyper_stub *hstub)
 {
-    node_prog::prog_type pType;
-    std::vector<std::pair<node_handle_t, ParamsType>> initial_args;
+    //node_prog::prog_type pType;
+    //std::vector<std::pair<node_handle_t, ParamsType>> initial_args;
 
-    msg->unpack_message(message::CLIENT_NODE_PROG_REQ, pType, initial_args);
-    
-    // map from locations to a list of start_node_params to send to that shard
-    std::unordered_map<uint64_t, std::deque<std::pair<node_handle_t, ParamsType>>> initial_batches; 
+    //msg->unpack_message(message::CLIENT_NODE_PROG_REQ, pType, initial_args);
+    //
+    //// map from locations to a list of start_node_params to send to that shard
+    //std::unordered_map<uint64_t, std::deque<std::pair<node_handle_t, ParamsType>>> initial_batches; 
 
-    // lookup mappings
-    std::unordered_map<node_handle_t, uint64_t> loc_map;
-    std::unordered_set<node_handle_t> get_set;
+    //// lookup mappings
+    //std::unordered_map<node_handle_t, uint64_t> loc_map;
+    //std::unordered_set<node_handle_t> get_set;
 
-    for (const auto &initial_arg : initial_args) {
-        get_set.emplace(initial_arg.first);
-    }
+    //for (const auto &initial_arg : initial_args) {
+    //    get_set.emplace(initial_arg.first);
+    //}
 
-    if (!get_set.empty()) {
-        loc_map = hstub->get_mappings(get_set);
-        bool success = (loc_map.size() == get_set.size());
+    //if (!get_set.empty()) {
+    //    loc_map = hstub->get_mappings(get_set);
+    //    bool success = (loc_map.size() == get_set.size());
 
-        if (!success) {
-            // some node handles bad, return immediately
-            WDEBUG << "bad node handles in node prog request" << std::endl;
-            uint64_t zero = 0;
-            msg->prepare_message(message::NODE_PROG_RETURN, pType, zero, ParamsType());
-            vts->comm.send_to_client(clientID, msg->buf);
-            return;
-        }
-    }
+    //    if (!success) {
+    //        // some node handles bad, return immediately
+    //        WDEBUG << "bad node handles in node prog request" << std::endl;
+    //        uint64_t zero = 0;
+    //        msg->prepare_message(message::NODE_PROG_RETURN, pType, zero, ParamsType());
+    //        vts->comm.send_to_client(clientID, msg->buf);
+    //        return;
+    //    }
+    //}
 
-    for (auto &p: initial_args) {
-        initial_batches[loc_map[p.first]].emplace_back(p);
-    }
+    //for (auto &p: initial_args) {
+    //    initial_batches[loc_map[p.first]].emplace_back(p);
+    //}
 
     vts->clk_rw_mtx.wrlock();
     vts->vclk.increment_clock();
@@ -384,11 +384,11 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     vts->pend_prog_queue.emplace(req_id);
     vts->tx_prog_mutex.unlock();
 
-    message::message msg_to_send;
-    for (auto &batch_pair: initial_batches) {
-        msg_to_send.prepare_message(message::NODE_PROG, pType, vt_id, req_timestamp, req_id, batch_pair.second);
-        vts->comm.send(batch_pair.first, msg_to_send.buf);
-    }
+    //message::message msg_to_send;
+    //for (auto &batch_pair: initial_batches) {
+    //    msg_to_send.prepare_message(message::NODE_PROG, pType, vt_id, req_timestamp, req_id, batch_pair.second);
+    //    vts->comm.send(batch_pair.first, msg_to_send.buf);
+    //}
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
@@ -541,9 +541,9 @@ server_loop(int thread_id)
                 case message::CLIENT_NODE_PROG_REQ:
                     msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
                     node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), client_sender, hstub);
-                    //msg.reset(new message::message());
-                    //msg->prepare_message(message::NODE_PROG_RETURN, 0);
-                    //vts->comm.send_to_client(client_sender, msg->buf);
+                    msg.reset(new message::message());
+                    msg->prepare_message(message::NODE_PROG_RETURN, 0);
+                    vts->comm.send_to_client(client_sender, msg->buf);
                     break;
 
                 // node program response from a shard
@@ -837,7 +837,7 @@ main(int argc, const char *argv[])
     }
 
     // periodic nops to shard
-    nop_function();
+    //nop_function();
 
     for (std::thread *t: worker_threads) {
         t->join();

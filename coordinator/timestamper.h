@@ -16,8 +16,6 @@
 
 #ifndef weaver_coordinator_timestamper_h_
 #define weaver_coordinator_timestamper_h_
-#define VT_TIMEOUT_NANO 1000000 // number of nanoseconds between successive nops
-#define VT_CLK_TIMEOUT_NANO 1000000 // number of nanoseconds between vt gossip
 
 #include <vector>
 #include <unordered_map>
