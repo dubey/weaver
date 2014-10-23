@@ -49,7 +49,7 @@ namespace coordinator
                 }
             }
     };
-    using req_queue_t = std::priority_queue<uint64_t, std::vector<uint64_t>, std::greater<uint64_t>>;
+
     using tx_queue_t = std::priority_queue<transaction::pending_tx*, std::vector<transaction::pending_tx*>, greater_tx_ptr>;
     using prog_reply_t = std::unordered_map<uint64_t, std::vector<bool>>;
 
@@ -94,11 +94,11 @@ namespace coordinator
             std::unordered_map<uint64_t, transaction::pending_tx*> outstanding_tx;
 
             // node prog
-            std::unordered_map<uint64_t, current_prog> outstanding_progs;
+            //std::unordered_map<uint64_t, current_prog> outstanding_progs;
 
             // prog cleanup and permanent deletion
-            req_queue_t pend_prog_queue;
-            req_queue_t done_prog_queue;
+            std::vector<current_prog*> pend_progs, done_progs;
+            int prog_done_cnt;
             uint64_t max_done_id; // permanent deletion of migrated nodes
             std::unique_ptr<vc::vclock_t> max_done_clk; // permanent deletion
             std::unordered_map<node_prog::prog_type, prog_reply_t> done_reqs; // prog state cleanup
@@ -174,6 +174,7 @@ namespace coordinator
         , clk_updates(0)
         , to_nop(NumShards, true)
         , nop_ack_qts(NumShards, 0)
+        , prog_done_cnt(0)
         , max_done_id(0)
         , max_done_clk(new vc::vclock_t(ClkSz, 0))
         , load_count(0)

@@ -241,7 +241,7 @@ nop_function()
             vts->tx_prog_mutex.lock();
             tx->nop->max_done_id = vts->max_done_id;
             tx->nop->max_done_clk = *vts->max_done_clk;
-            tx->nop->outstanding_progs = vts->pend_prog_queue.size();
+            tx->nop->outstanding_progs = vts->pend_progs.size();
             tx->nop->shard_node_count = vts->shard_node_count;
             for (auto &x: vts->done_reqs) {
                 // x.first = node prog type
@@ -383,18 +383,15 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     assert(req_timestamp.clock.size() == ClkSz);
     vts->clk_rw_mtx.unlock();
 
+    vts->tx_prog_mutex.lock();
     uint64_t req_id = vts->generate_req_id();
-    //vts->tx_prog_mutex.lock();
-    //vts->outstanding_progs.emplace(req_id, current_prog(clientID, req_timestamp.clock));
-    //current_prog *cp = &vts->outstanding_progs[req_id];
-    //vts->pend_prog_queue.emplace(req_id);
-    //vts->tx_prog_mutex.unlock();
-    current_prog *cp = new current_prog(clientID, req_timestamp.clock);
+    current_prog *cp = new current_prog(req_id, clientID, req_timestamp.clock);
+    uint64_t cp_int = (uint64_t)cp;
+    vts->pend_progs.emplace_back(cp);
+    vts->tx_prog_mutex.unlock();
 
     message::message msg_to_send;
     for (auto &batch_pair: initial_batches) {
-        //msg_to_send.prepare_message(message::NODE_PROG, pType, vt_id, req_timestamp, req_id, batch_pair.second);
-        uint64_t cp_int = (uint64_t)cp;
         msg_to_send.prepare_message(message::NODE_PROG, pType, vt_id, req_timestamp, req_id, cp_int, batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
     }
@@ -419,33 +416,53 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     unpack_context_reply_db(std::unique_ptr<message::message>, order::oracle*)
 { }
 
-// remove a completed node program from outstanding requests data structure
+bool
+compare_current_prog(const current_prog* const lhs, const current_prog* const rhs)
+{
+    return lhs->req_id < rhs->req_id;
+}
+
+// remove a completed node program from pending_prog data structure
 // update 'max_done_id' and 'max_done_clk' accordingly
 // caution: need to hold vts->tx_prog_mutex
 void
-mark_req_finished(uint64_t req_id)
+node_prog_done(current_prog *cp)
 {
-    if (vts->pend_prog_queue.top() == req_id) {
-        assert(vts->max_done_id < vts->pend_prog_queue.top());
-        vts->max_done_id = req_id;
-        auto outstanding_prog_iter = vts->outstanding_progs.find(vts->max_done_id);
-        assert(outstanding_prog_iter != vts->outstanding_progs.end());
-        vts->max_done_clk = std::move(outstanding_prog_iter->second.vclk);
-        vts->pend_prog_queue.pop();
-        vts->outstanding_progs.erase(vts->max_done_id);
-        while (!vts->pend_prog_queue.empty() && !vts->done_prog_queue.empty()
-            && vts->pend_prog_queue.top() == vts->done_prog_queue.top()) {
-            assert(vts->max_done_id < vts->pend_prog_queue.top());
-            vts->max_done_id = vts->pend_prog_queue.top();
-            outstanding_prog_iter = vts->outstanding_progs.find(vts->max_done_id);
-            assert(outstanding_prog_iter != vts->outstanding_progs.end());
-            vts->max_done_clk = std::move(outstanding_prog_iter->second.vclk);
-            vts->pend_prog_queue.pop();
-            vts->done_prog_queue.pop();
-            vts->outstanding_progs.erase(vts->max_done_id);
-        }
+    auto &pend_progs = vts->pend_progs;
+    auto &done_progs = vts->done_progs;
+    done_progs.emplace_back(cp);
+
+    if (++vts->prog_done_cnt % 100 == 0) {
+        vts->prog_done_cnt = 0;
     } else {
-        vts->done_prog_queue.emplace(req_id);
+        return;
+    }
+
+    std::sort(pend_progs.begin(), pend_progs.end(), compare_current_prog);
+    std::sort(done_progs.begin(), done_progs.end(), compare_current_prog);
+
+    auto pend_iter = pend_progs.begin();
+    auto done_iter = done_progs.begin();
+
+    uint32_t i = 0;
+    uint32_t max_idx = pend_progs.size() > done_progs.size() ? done_progs.size() : pend_progs.size();
+    for (i = 0; i < max_idx && pend_progs[i]->req_id == done_progs[i]->req_id; i++, pend_iter++, done_iter++) {
+        assert(vts->max_done_id < pend_progs[i]->req_id);
+        vts->max_done_id = pend_progs[i]->req_id;
+        vts->max_done_clk = std::move(pend_progs[i]->vclk);
+        delete pend_progs[i];
+    }
+
+    if (i == pend_progs.size()) {
+        pend_progs.clear();
+    } else if (i > 0) {
+        pend_progs.erase(pend_progs.begin(), pend_iter);
+    }
+
+    if (i == done_progs.size()) {
+        done_progs.clear();
+    } else if (i > 0) {
+        done_progs.erase(done_progs.begin(), done_iter);
     }
 }
 
@@ -566,32 +583,21 @@ server_loop(int thread_id)
 
                 // node program response from a shard
                 case message::NODE_PROG_RETURN: {
-                    uint64_t req_id;
+                    uint64_t req_id, cp_int, client;
                     node_prog::prog_type type;
-                    //msg->unpack_partial_message(message::NODE_PROG_RETURN, type, req_id); // don't unpack rest
-                    //vts->tx_prog_mutex.lock();
-                    //auto outstanding_prog_iter = vts->outstanding_progs.find(req_id);
-                    //if (outstanding_prog_iter != vts->outstanding_progs.end()) { 
-                    //    uint64_t client = outstanding_prog_iter->second.client;
-                    //    vts->done_reqs[type].emplace(req_id, std::vector<bool>(get_num_shards(), false));
-                    //    vts->comm.send_to_client(client, msg->buf);
-                    //    mark_req_finished(req_id);
-                    //} else {
-                    //    WDEBUG << "node prog return for already completed or never existed req id" << std::endl;
-                    //}
-                    //vts->tx_prog_mutex.unlock();
-
-                    uint64_t cp_int, client;
                     msg->unpack_partial_message(message::NODE_PROG_RETURN, type, req_id, cp_int); // don't unpack rest
                     current_prog *cp = (current_prog*)cp_int;
                     client = cp->client;
-                    delete cp;
+                    vts->comm.send_to_client(client, msg->buf);
+
+                    vts->tx_prog_mutex.lock();
+                    node_prog_done(cp);
+                    vts->tx_prog_mutex.unlock();
 #ifdef weaver_benchmark_
                     vts->test_mtx.lock();
                     vts->outstanding_cnt--;
                     vts->test_mtx.unlock();
 #endif
-                    vts->comm.send_to_client(client, msg->buf);
                     break;
                 }
 
