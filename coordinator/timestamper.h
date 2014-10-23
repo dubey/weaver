@@ -143,6 +143,12 @@ namespace coordinator
             bool process_tx_queue(transaction::pending_tx **tx_ptr, std::vector<transaction::pending_tx*> &factored_tx);
             void tx_queue_loop();
             void reset_out_queue_clk(uint64_t epoch);
+
+#ifdef weaver_benchmark_
+        public:
+            po6::threads::mutex test_mtx;
+            int outstanding_cnt, max_outstanding_cnt;
+#endif
     };
 
     inline
@@ -176,6 +182,10 @@ namespace coordinator
         , out_queue_clk(std::make_pair(0,1))
         , out_queue_counter(0)
         , to_exit(false)
+#ifdef weaver_benchmark_
+        , outstanding_cnt(0)
+        , max_outstanding_cnt(0)
+#endif
     {
         // initialize empty vector of done reqs for each prog type
         std::unordered_map<uint64_t, std::vector<bool>> empty_map;

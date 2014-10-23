@@ -1168,7 +1168,7 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void
-node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_and_run_db(std::unique_ptr<message::message> msg, order::oracle *time_oracle)
+node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_and_run_db(std::unique_ptr<message::message> msg, order::oracle * /*time_oracle*/)
 {
     node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> np;
 
@@ -1716,6 +1716,10 @@ recv_loop(uint64_t thread_id)
             unpack_buffer(unpacker, mtype);
             rec_msg->change_type(mtype);
             vclk.clock.clear();
+            if (mtype != message::NODE_PROG) {
+                WDEBUG << "got mtype " << message::to_string(mtype) << std::endl;
+            }
+            assert(mtype == message::NODE_PROG || mtype == message::LOADED_GRAPH);
 
             switch (mtype) {
                 case message::TX_INIT: {
@@ -1753,8 +1757,9 @@ recv_loop(uint64_t thread_id)
                     break;
                 }
 
-                case message::NODE_PROG:
-                    rec_msg->unpack_partial_message(message::NODE_PROG, pType, vt_id, vclk, req_id);
+                case message::NODE_PROG: {
+                    uint64_t cp_int;
+                    rec_msg->unpack_partial_message(message::NODE_PROG, pType, vt_id, vclk, req_id, cp_int);
                     assert(vclk.clock.size() == ClkSz);
 
                     //mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
@@ -1766,9 +1771,10 @@ recv_loop(uint64_t thread_id)
                     //    S->qm.enqueue_read_request(vt_id, qreq);
                     //}
 
-                    rec_msg->prepare_message(message::NODE_PROG_RETURN, pType, req_id);
+                    rec_msg->prepare_message(message::NODE_PROG_RETURN, pType, req_id, cp_int);
                     S->comm.send(vt_id, rec_msg->buf);
                     break;
+                }
 
                 case message::NODE_CONTEXT_FETCH:
                 case message::NODE_CONTEXT_REPLY: {

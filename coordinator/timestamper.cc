@@ -51,6 +51,11 @@ end_program(int signum)
     vts->clk_rw_mtx.wrlock();
     WDEBUG << "num vclk updates " << vts->clk_updates << std::endl;
     vts->clk_rw_mtx.unlock();
+
+#ifdef weaver_benchmark_
+    WDEBUG << "max outstanding prog cnt = " << vts->max_outstanding_cnt << std::endl;
+#endif
+
     if (signum == SIGINT) {
         // TODO proper shutdown
         //vts->exit_mutex.lock();
@@ -338,39 +343,39 @@ template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
     unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, coordinator::hyper_stub *hstub)
 {
-    //node_prog::prog_type pType;
-    //std::vector<std::pair<node_handle_t, ParamsType>> initial_args;
+    node_prog::prog_type pType;
+    std::vector<std::pair<node_handle_t, ParamsType>> initial_args;
 
-    //msg->unpack_message(message::CLIENT_NODE_PROG_REQ, pType, initial_args);
-    //
-    //// map from locations to a list of start_node_params to send to that shard
-    //std::unordered_map<uint64_t, std::deque<std::pair<node_handle_t, ParamsType>>> initial_batches; 
+    msg->unpack_message(message::CLIENT_NODE_PROG_REQ, pType, initial_args);
+    
+    // map from locations to a list of start_node_params to send to that shard
+    std::unordered_map<uint64_t, std::deque<std::pair<node_handle_t, ParamsType>>> initial_batches; 
 
-    //// lookup mappings
-    //std::unordered_map<node_handle_t, uint64_t> loc_map;
-    //std::unordered_set<node_handle_t> get_set;
+    // lookup mappings
+    std::unordered_map<node_handle_t, uint64_t> loc_map;
+    std::unordered_set<node_handle_t> get_set;
 
-    //for (const auto &initial_arg : initial_args) {
-    //    get_set.emplace(initial_arg.first);
-    //}
+    for (const auto &initial_arg : initial_args) {
+        get_set.emplace(initial_arg.first);
+    }
 
-    //if (!get_set.empty()) {
-    //    loc_map = hstub->get_mappings(get_set);
-    //    bool success = (loc_map.size() == get_set.size());
+    if (!get_set.empty()) {
+        loc_map = hstub->get_mappings(get_set);
+        bool success = (loc_map.size() == get_set.size());
 
-    //    if (!success) {
-    //        // some node handles bad, return immediately
-    //        WDEBUG << "bad node handles in node prog request" << std::endl;
-    //        uint64_t zero = 0;
-    //        msg->prepare_message(message::NODE_PROG_RETURN, pType, zero, ParamsType());
-    //        vts->comm.send_to_client(clientID, msg->buf);
-    //        return;
-    //    }
-    //}
+        if (!success) {
+            // some node handles bad, return immediately
+            WDEBUG << "bad node handles in node prog request" << std::endl;
+            uint64_t zero = 0;
+            msg->prepare_message(message::NODE_PROG_RETURN, pType, zero, ParamsType());
+            vts->comm.send_to_client(clientID, msg->buf);
+            return;
+        }
+    }
 
-    //for (auto &p: initial_args) {
-    //    initial_batches[loc_map[p.first]].emplace_back(p);
-    //}
+    for (auto &p: initial_args) {
+        initial_batches[loc_map[p.first]].emplace_back(p);
+    }
 
     vts->clk_rw_mtx.wrlock();
     vts->vclk.increment_clock();
@@ -378,17 +383,30 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     assert(req_timestamp.clock.size() == ClkSz);
     vts->clk_rw_mtx.unlock();
 
-    vts->tx_prog_mutex.lock();
     uint64_t req_id = vts->generate_req_id();
-    vts->outstanding_progs.emplace(req_id, current_prog(clientID, req_timestamp.clock));
-    vts->pend_prog_queue.emplace(req_id);
-    vts->tx_prog_mutex.unlock();
+    //vts->tx_prog_mutex.lock();
+    //vts->outstanding_progs.emplace(req_id, current_prog(clientID, req_timestamp.clock));
+    //current_prog *cp = &vts->outstanding_progs[req_id];
+    //vts->pend_prog_queue.emplace(req_id);
+    //vts->tx_prog_mutex.unlock();
+    current_prog *cp = new current_prog(clientID, req_timestamp.clock);
 
-    //message::message msg_to_send;
-    //for (auto &batch_pair: initial_batches) {
-    //    msg_to_send.prepare_message(message::NODE_PROG, pType, vt_id, req_timestamp, req_id, batch_pair.second);
-    //    vts->comm.send(batch_pair.first, msg_to_send.buf);
-    //}
+    message::message msg_to_send;
+    for (auto &batch_pair: initial_batches) {
+        //msg_to_send.prepare_message(message::NODE_PROG, pType, vt_id, req_timestamp, req_id, batch_pair.second);
+        uint64_t cp_int = (uint64_t)cp;
+        msg_to_send.prepare_message(message::NODE_PROG, pType, vt_id, req_timestamp, req_id, cp_int, batch_pair.second);
+        vts->comm.send(batch_pair.first, msg_to_send.buf);
+    }
+
+#ifdef weaver_benchmark_
+    vts->test_mtx.lock();
+    vts->outstanding_cnt++;
+    if (vts->outstanding_cnt > vts->max_outstanding_cnt) {
+        vts->max_outstanding_cnt = vts->outstanding_cnt;
+    }
+    vts->test_mtx.unlock();
+#endif
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
@@ -541,27 +559,39 @@ server_loop(int thread_id)
                 case message::CLIENT_NODE_PROG_REQ:
                     msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
                     node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), client_sender, hstub);
-                    msg.reset(new message::message());
-                    msg->prepare_message(message::NODE_PROG_RETURN, 0);
-                    vts->comm.send_to_client(client_sender, msg->buf);
+                    //msg.reset(new message::message());
+                    //msg->prepare_message(message::NODE_PROG_RETURN, 0);
+                    //vts->comm.send_to_client(client_sender, msg->buf);
                     break;
 
                 // node program response from a shard
                 case message::NODE_PROG_RETURN: {
                     uint64_t req_id;
                     node_prog::prog_type type;
-                    msg->unpack_partial_message(message::NODE_PROG_RETURN, type, req_id); // don't unpack rest
-                    vts->tx_prog_mutex.lock();
-                    auto outstanding_prog_iter = vts->outstanding_progs.find(req_id);
-                    if (outstanding_prog_iter != vts->outstanding_progs.end()) { 
-                        uint64_t client = outstanding_prog_iter->second.client;
-                        vts->done_reqs[type].emplace(req_id, std::vector<bool>(get_num_shards(), false));
-                        vts->comm.send_to_client(client, msg->buf);
-                        mark_req_finished(req_id);
-                    } else {
-                        WDEBUG << "node prog return for already completed or never existed req id" << std::endl;
-                    }
-                    vts->tx_prog_mutex.unlock();
+                    //msg->unpack_partial_message(message::NODE_PROG_RETURN, type, req_id); // don't unpack rest
+                    //vts->tx_prog_mutex.lock();
+                    //auto outstanding_prog_iter = vts->outstanding_progs.find(req_id);
+                    //if (outstanding_prog_iter != vts->outstanding_progs.end()) { 
+                    //    uint64_t client = outstanding_prog_iter->second.client;
+                    //    vts->done_reqs[type].emplace(req_id, std::vector<bool>(get_num_shards(), false));
+                    //    vts->comm.send_to_client(client, msg->buf);
+                    //    mark_req_finished(req_id);
+                    //} else {
+                    //    WDEBUG << "node prog return for already completed or never existed req id" << std::endl;
+                    //}
+                    //vts->tx_prog_mutex.unlock();
+
+                    uint64_t cp_int, client;
+                    msg->unpack_partial_message(message::NODE_PROG_RETURN, type, req_id, cp_int); // don't unpack rest
+                    current_prog *cp = (current_prog*)cp_int;
+                    client = cp->client;
+                    delete cp;
+#ifdef weaver_benchmark_
+                    vts->test_mtx.lock();
+                    vts->outstanding_cnt--;
+                    vts->test_mtx.unlock();
+#endif
+                    vts->comm.send_to_client(client, msg->buf);
                     break;
                 }
 
