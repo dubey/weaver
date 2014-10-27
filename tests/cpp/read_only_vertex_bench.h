@@ -128,9 +128,22 @@ run_read_only_vertex_bench(uint64_t num_clients, uint64_t num_nodes, uint64_t nu
         cond.lock();
 
         uint64_t tot_done = 0;
-        for (uint64_t d: done) {
-            tot_done += d;
+        bool some_finished = false;
+        if (some_finished) {
+            std::cout << "threads not yet finished:";
         }
+        for (uint64_t i = 0; i < done.size(); i++) {
+            tot_done += done[i];
+            if (done[i] == num_requests) {
+                some_finished = true;
+            } else if (some_finished) {
+                std::cout << " " << i;
+            }
+        }
+        if (some_finished) {
+            std::cout << std::endl;
+        }
+
         uint64_t cur = timer.get_time_elapsed_millis();
         uint64_t real = timer.get_real_time_millis();
         std::cout << "[progress@" << ip << pid << "@" << real << "=" << (tot_done * 1000 / (cur-start)) << std::endl;

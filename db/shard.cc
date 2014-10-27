@@ -943,7 +943,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
                 std::vector<std::pair<node_handle_t, ParamsType>> buf_node_params;
                 buf_node_params.emplace_back(id_params);
                 std::unique_ptr<message::message> m(new message::message());
-                m->prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, buf_node_params);
+                m->prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, np.vt_prog_ptr, buf_node_params);
                 S->migration_mutex.lock();
                 if (S->deferred_reads.find(node_handle) == S->deferred_reads.end()) {
                     S->deferred_reads.emplace(node_handle, std::vector<std::unique_ptr<message::message>>());
@@ -958,7 +958,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
             std::vector<std::pair<node_handle_t, ParamsType>> fwd_node_params;
             fwd_node_params.emplace_back(id_params);
             std::unique_ptr<message::message> m(new message::message());
-            m->prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, fwd_node_params);
+            m->prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, np.vt_prog_ptr, fwd_node_params);
             uint64_t new_loc = node->new_loc;
             S->release_node(node);
             S->comm.send(new_loc, m->buf);
@@ -1037,7 +1037,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
                     done_request = true;
                     // signal to send back to vector timestamper that issued request
                     std::unique_ptr<message::message> m(new message::message());
-                    m->prepare_message(message::NODE_PROG_RETURN, np.prog_type_recvd, np.req_id, res.second);
+                    m->prepare_message(message::NODE_PROG_RETURN, np.prog_type_recvd, np.req_id, np.vt_prog_ptr, res.second);
                     S->comm.send(np.vt_id, m->buf);
                     break; // can only send one message back
                 } else {
@@ -1065,7 +1065,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
         for (auto &loc_progs_pair : batched_node_progs) {
             assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < num_shards + ShardIdIncr);
             if (loc_progs_pair.second.size() > BATCH_MSG_SIZE) {
-                out_msg.prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, loc_progs_pair.second);
+                out_msg.prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, np.vt_prog_ptr, loc_progs_pair.second);
                 S->comm.send(loc_progs_pair.first, out_msg.buf);
                 loc_progs_pair.second.clear();
             }
@@ -1079,7 +1079,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
         for (auto &loc_progs_pair : batched_node_progs) {
             if (!loc_progs_pair.second.empty()) {
                 assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < num_shards + ShardIdIncr);
-                out_msg.prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, loc_progs_pair.second);
+                out_msg.prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, np.vt_prog_ptr, loc_progs_pair.second);
                 S->comm.send(loc_progs_pair.first, out_msg.buf);
                 loc_progs_pair.second.clear();
             }
@@ -1168,13 +1168,13 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void
-node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_and_run_db(std::unique_ptr<message::message> msg, order::oracle * /*time_oracle*/)
+node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_and_run_db(std::unique_ptr<message::message> msg, order::oracle *time_oracle)
 {
     node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> np;
 
     // unpack the node program
     try {
-        msg->unpack_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, np.start_node_params);
+        msg->unpack_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, np.vt_prog_ptr, np.start_node_params);
         assert(np.req_vclock->clock.size() == ClkSz);
     } catch (std::bad_alloc& ba) {
         WDEBUG << "bad_alloc caught " << ba.what() << std::endl;
@@ -1182,23 +1182,20 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
         return;
     }
 
-    msg->prepare_message(message::NODE_PROG_RETURN, np.prog_type_recvd, np.req_id);
-    S->comm.send(np.vt_id, msg->buf);
+    // update max prog id
+    S->migration_mutex.lock();
+    if (S->max_prog_id[np.vt_id] < np.req_id) {
+        S->max_prog_id[np.vt_id] = np.req_id;
+    }
+    S->migration_mutex.unlock();
 
-    //// update max prog id
-    //S->migration_mutex.lock();
-    //if (S->max_prog_id[np.vt_id] < np.req_id) {
-    //    S->max_prog_id[np.vt_id] = np.req_id;
-    //}
-    //S->migration_mutex.unlock();
+    // check if request completed
+    if (S->check_done_request(np.req_id)) {
+        return; // done request
+    }
 
-    //// check if request completed
-    //if (S->check_done_request(np.req_id)) {
-    //    return; // done request
-    //}
-
-    //assert(!np.cache_value); // a cache value should not be allocated yet
-    //node_prog_loop<ParamsType, NodeStateType, CacheValueType>(enclosed_node_prog_func, np, time_oracle);
+    assert(!np.cache_value); // a cache value should not be allocated yet
+    node_prog_loop<ParamsType, NodeStateType, CacheValueType>(enclosed_node_prog_func, np, time_oracle);
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
@@ -1716,10 +1713,6 @@ recv_loop(uint64_t thread_id)
             unpack_buffer(unpacker, mtype);
             rec_msg->change_type(mtype);
             vclk.clock.clear();
-            if (mtype != message::NODE_PROG) {
-                WDEBUG << "got mtype " << message::to_string(mtype) << std::endl;
-            }
-            assert(mtype == message::NODE_PROG || mtype == message::LOADED_GRAPH);
 
             switch (mtype) {
                 case message::TX_INIT: {
@@ -1758,21 +1751,17 @@ recv_loop(uint64_t thread_id)
                 }
 
                 case message::NODE_PROG: {
-                    uint64_t cp_int;
-                    rec_msg->unpack_partial_message(message::NODE_PROG, pType, vt_id, vclk, req_id, cp_int);
+                    rec_msg->unpack_partial_message(message::NODE_PROG, pType, vt_id, vclk, req_id);
                     assert(vclk.clock.size() == ClkSz);
 
-                    //mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
-                    //if (S->qm.check_rd_request(vclk.clock)) {
-                    //    mwrap->time_oracle = time_oracle;
-                    //    unpack_node_program(mwrap);
-                    //} else {
-                    //    qreq = new db::queued_request(req_id, vclk, unpack_node_program, mwrap);
-                    //    S->qm.enqueue_read_request(vt_id, qreq);
-                    //}
-
-                    rec_msg->prepare_message(message::NODE_PROG_RETURN, pType, req_id, cp_int);
-                    S->comm.send(vt_id, rec_msg->buf);
+                    mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
+                    if (S->qm.check_rd_request(vclk.clock)) {
+                        mwrap->time_oracle = time_oracle;
+                        unpack_node_program(mwrap);
+                    } else {
+                        qreq = new db::queued_request(req_id, vclk, unpack_node_program, mwrap);
+                        S->qm.enqueue_read_request(vt_id, qreq);
+                    }
                     break;
                 }
 

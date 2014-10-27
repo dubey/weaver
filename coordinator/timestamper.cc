@@ -873,7 +873,7 @@ main(int argc, const char *argv[])
     }
 
     // periodic nops to shard
-    //nop_function();
+    nop_function();
 
     for (std::thread *t: worker_threads) {
         t->join();

@@ -71,17 +71,20 @@ namespace node_prog
     {
         private:
             /* constructs a clone without start_node_params or cache_value */
-            node_prog_running_state(node_prog::prog_type _prog_type_recvd, uint64_t _vt_id, std::shared_ptr<vc::vclock> _req_vclock, uint64_t _req_id)
-                : prog_type_recvd(_prog_type_recvd)
-                  , vt_id(_vt_id)
-                  , req_vclock(_req_vclock)
-                  , req_id(_req_id)
-            { };
+            node_prog_running_state(node_prog::prog_type ptype, uint64_t vt, std::shared_ptr<vc::vclock> vclk, uint64_t rid, uint64_t vtptr)
+                : prog_type_recvd(ptype)
+                , vt_id(vt)
+                , req_vclock(vclk)
+                , req_id(rid)
+                , vt_prog_ptr(vtptr)
+            { }
+
         public:
             node_prog::prog_type prog_type_recvd;
             uint64_t vt_id;
             std::shared_ptr<vc::vclock> req_vclock;
             uint64_t req_id;
+            uint64_t vt_prog_ptr;
             std::deque<std::pair<node_handle_t, ParamsType>> start_node_params;
             std::unique_ptr<cache_response<CacheValueType>> cache_value;
 
@@ -92,7 +95,7 @@ namespace node_prog
 
             node_prog_running_state clone_without_start_node_params() 
             {
-                return node_prog_running_state(prog_type_recvd, vt_id, req_vclock, req_id);
+                return node_prog_running_state(prog_type_recvd, vt_id, req_vclock, req_id, vt_prog_ptr);
             }
 
             node_prog_running_state(node_prog_running_state&& copy_from)
@@ -100,6 +103,7 @@ namespace node_prog
                   , vt_id(copy_from.vt_id)
                   , req_vclock(copy_from.req_vclock)
                   , req_id(copy_from.req_id)
+                  , vt_prog_ptr(copy_from.vt_prog_ptr)
                   , start_node_params(copy_from.start_node_params)
                   , cache_value(std::move(copy_from.cache_value))
             { }
