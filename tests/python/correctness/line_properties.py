@@ -24,8 +24,6 @@ num_nodes = 400
 coord_id = 0
 c = client.Client(client.CL_ID, coord_id)
 
-print 'created client'
-
 def line_requests(eprops, exp_reach):
     num_reach = 0
     rp = client.ReachParams(dest=nodes[num_nodes-1], edge_props=eprops)
@@ -36,21 +34,18 @@ def line_requests(eprops, exp_reach):
         if response.reachable:
             num_reach += 1
     timer = time.time() - timer
-    print 'Num reachable ' + str(num_reach) + ', expected ' + str(exp_reach) + ', time taken = ' + str(timer)
+    assert(num_reach == exp_reach)
 
-print 'calling begin tx'
 c.begin_tx()
 for i in range(num_nodes):
     nodes.append(c.create_node())
-print 'calling end tx'
 c.end_tx()
-print 'calling begin tx'
+
 c.begin_tx()
 for i in range(num_nodes-1):
     edges.append(c.create_edge(nodes[i], nodes[i+1]))
-print 'calling end tx'
 c.end_tx()
-print 'Created graph\n'
+print 'Created graph'
 
 node_count = c.get_node_count()
 print 'Node count:'
