@@ -18,68 +18,73 @@ import time
 import weaver.client as client
 
 coord_id = 0
-c = client.Client(client._CLIENT_ID, coord_id)
+c = client.Client('127.0.0.1', 2002)
 
 # adding node properites
-tx_id = c.begin_tx()
-node_id = c.create_node(tx_id)
-c.set_node_property(tx_id, node_id, 'color', 'blue')
-c.set_node_property(tx_id, node_id, 'size', '27')
-c.end_tx(tx_id)
+c.begin_tx()
+node = c.create_node()
+c.set_node_property(node, 'color', 'blue')
+c.set_node_property(node, 'size', '27')
+assert c.end_tx(), 'create node and set properties'
 
 # reading node properites
 rp = client.ReadNodePropsParams()
-prog_args = [(node_id, rp)]
+prog_args = [(node, rp)]
 response = c.read_node_props(prog_args)
-print "All pairs: " + str(response.node_props)
-print ""
-assert(('color', 'blue') in response.node_props and ('size', '27') in response.node_props and len(response.node_props) == 2)
+assert (('color', 'blue') in response.node_props and ('size', '27') in response.node_props and len(response.node_props) == 2)
 
 prog_args[0][1].keys = ['color']
 response = c.read_node_props(prog_args)
-print "Only lookup color : " + str(response.node_props)
-print ""
-assert(('color', 'blue') in response.node_props and len(response.node_props) == 1)
+assert (('color', 'blue') in response.node_props and len(response.node_props) == 1)
 
-tx_id = c.begin_tx()
-c.set_node_property(tx_id, node_id, 'age', '37')
-c.end_tx(tx_id)
-print "adding 'age' property"
+c.begin_tx()
+c.set_node_property(node, 'age', '37')
+assert c.end_tx(), 'add age property'
 
 prog_args[0][1].keys = ['size', 'age']
 response = c.read_node_props(prog_args)
-print "Lookup size, age : " + str(response.node_props)
-print ""
 assert(('age', '37') in response.node_props and ('size', '27') in response.node_props and len(response.node_props) == 2)
 
 
 # adding edges, edge properites
 
-tx_id = c.begin_tx()
+c.begin_tx()
 neighbors = []
-neighbors.append(c.create_node(tx_id))
-neighbors.append(c.create_node(tx_id))
-neighbors.append(c.create_node(tx_id))
+neighbors.append(c.create_node())
+neighbors.append(c.create_node())
+neighbors.append(c.create_node())
 edges = []
-edges.append(c.create_edge(tx_id, node_id, neighbors[0]))
-edges.append(c.create_edge(tx_id, node_id, neighbors[1]))
-edges.append(c.create_edge(tx_id, node_id, neighbors[2]))
-c.set_edge_property(tx_id, node_id, edges[0], 'created', '1')
-c.set_edge_property(tx_id, node_id, edges[1], 'created', '2')
-c.set_edge_property(tx_id, node_id, edges[2], 'created', '3')
-c.set_edge_property(tx_id, node_id, edges[0], 'cost', '7')
-c.set_edge_property(tx_id, node_id, edges[1], 'cost', '8')
-c.set_edge_property(tx_id, node_id, edges[2], 'cost', '9')
-c.end_tx(tx_id)
+edges.append(c.create_edge(node, neighbors[0]))
+edges.append(c.create_edge(node, neighbors[1]))
+edges.append(c.create_edge(node, neighbors[2]))
+c.set_edge_property(node, edges[0], 'created', '1')
+c.set_edge_property(node, edges[1], 'created', '2')
+c.set_edge_property(node, edges[2], 'created', '3')
+c.set_edge_property(node, edges[0], 'cost', '1')
+c.set_edge_property(node, edges[1], 'cost', '2')
+c.set_edge_property(node, edges[2], 'cost', '3')
+assert c.end_tx(), 'add edges and corresponding properties'
 
 # reading edge properties
 rp = client.ReadEdgesPropsParams()
-prog_args = [(node_id, rp)]
+prog_args = [(node, rp)]
 response = c.read_edges_props(prog_args)
-print "All edges and their properties" + str(response.edges_props)
-print ""
+prop_map = {}
+for x in response.edges_props:
+    prop_map[x[0]] = x[1]
+for i in range(3):
+    assert (edges[i] in prop_map), str(edges[i]) + ' in edge handles'
+    assert ('created', str(i+1)) in prop_map[edges[i]], '(created, ' + str(i+1) + ') in edges_props'
+    assert ('cost', str(i+1)) in prop_map[edges[i]], '(cost, ' + str(i+1) + ') in edges_props'
 
 prog_args[0][1].keys = ['cost']
 response = c.read_edges_props(prog_args)
-print "Only cost property for all edges" + str(response.edges_props)
-print ""
+prop_map = {}
+for x in response.edges_props:
+    prop_map[x[0]] = x[1]
+for i in range(3):
+    assert (edges[i] in prop_map), str(edges[i]) + ' in edge handles'
+    assert ('created', str(i+1)) not in prop_map[edges[i]], '(created, ' + str(i+1) + ') in edges_props'
+    assert ('cost', str(i+1)) in prop_map[edges[i]], '(cost, ' + str(i+1) + ') in edges_props'
+
+print 'Pass read_properties.'

@@ -195,7 +195,7 @@ namespace coordinator
         done_reqs.emplace(node_prog::CLUSTERING, empty_map);
 
         for (int i = 0; i < NUM_VT_THREADS; i++) {
-            hstub_uninit.push_back(new hyper_stub(vt_id));
+            hstub_uninit.push_back(new hyper_stub());
             time_oracles_uninit.push_back(new order::oracle());
         }
     }
@@ -211,6 +211,9 @@ namespace coordinator
         vclk.vt_id = vt_id;
 
         hstub = std::move(hstub_uninit);
+        for (hyper_stub *hs: hstub) {
+            hs->init(vt_id);
+        }
         time_oracles = std::move(time_oracles_uninit);
     }
 

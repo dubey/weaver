@@ -28,6 +28,8 @@ namespace coordinator
             vc::vclock dummy_clk;
 
         public:
+            hyper_stub();
+            void init(uint64_t vt_id);
             std::unordered_map<node_handle_t, uint64_t> get_mappings(std::unordered_set<node_handle_t> &get_set);
             void do_tx(std::unordered_set<node_handle_t> &get_set,
                 std::unordered_set<node_handle_t> &del_set,
@@ -37,7 +39,6 @@ namespace coordinator
                 bool &error,
                 order::oracle *time_oracle);
             void clean_tx(uint64_t tx_id);
-            hyper_stub(uint64_t vt_id);
 
         private:
             void clean_up(std::unordered_map<node_handle_t, db::element::node*> &nodes);

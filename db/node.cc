@@ -11,6 +11,7 @@
  * ===============================================================
  */
 
+#define weaver_debug_
 #include <memory>
 #include "common/message.h"
 #include "common/cache_constants.h"
@@ -41,6 +42,11 @@ node :: node(const node_handle_t &_handle, vc::vclock &vclk, po6::threads::mutex
 {
     int num_prog_types = node_prog::END;
     prog_states.resize(num_prog_types);
+}
+
+node :: ~node()
+{
+    assert(out_edges.empty());
 }
 
 void

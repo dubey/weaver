@@ -45,7 +45,7 @@ namespace element
     {
         public:
             node(const node_handle_t &handle, vc::vclock &vclk, po6::threads::mutex *mtx);
-            ~node() { }
+            ~node();
 
         public:
             enum mode

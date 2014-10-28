@@ -269,10 +269,10 @@ class ReadEdgesPropsParams:
             self.edges = []
         else:
             self.edges = edges
-        if edges_props is None:
-            self.edges_props = []
+        if keys is None:
+            self.keys = []
         else:
-            self.edges_props = edges_props
+            self.keys = keys
         if edges_props is None:
             self.edges_props = []
         else:

@@ -583,6 +583,7 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::e
     unpack_buffer(cl_attr[idx[4]].value, cl_attr[idx[4]].value_sz, n.last_upd_clk);
     // restore clock
     unpack_buffer(cl_attr[idx[5]].value, cl_attr[idx[5]].value_sz, n.restore_clk);
+    assert(n.restore_clk.size() == ClkSz);
 
     return true;
 }
@@ -647,6 +648,7 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     cl_attr[4].datatype = graph_dtypes[4];
 
     // restore clock
+    assert(n.restore_clk.size() == ClkSz);
     prepare_buffer(n.restore_clk, restore_clk_buf);
     cl_attr[5].attr = graph_attrs[5];
     cl_attr[5].value = (const char*)restore_clk_buf->data();

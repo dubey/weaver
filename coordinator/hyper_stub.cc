@@ -22,9 +22,15 @@
 using coordinator::hyper_stub;
 using coordinator::current_tx;
 
-hyper_stub :: hyper_stub(uint64_t vtid)
-    : vt_id(vtid)
+hyper_stub :: hyper_stub()
+    : vt_id(UINT64_MAX)
 { }
+
+void
+hyper_stub :: init(uint64_t vtid)
+{
+    vt_id = vtid;
+}
 
 std::unordered_map<node_handle_t, uint64_t>
 hyper_stub :: get_mappings(std::unordered_set<node_handle_t> &get_set)
@@ -50,6 +56,10 @@ void
 hyper_stub :: clean_up(std::unordered_map<node_handle_t, db::element::node*> &nodes)
 {
     for (auto &p: nodes) {
+        for (auto &e: p.second->out_edges) {
+            delete e.second;
+        }
+        p.second->out_edges.clear();
         delete p.second;
     }
     nodes.clear();
@@ -192,7 +202,8 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         tx->shard_write[idx] = true;
 
         if (n != nullptr) {
-            n->restore_clk[vt_id] = tx->timestamp.get_clock();
+            assert(n->restore_clk.size() == ClkSz);
+            n->restore_clk[vt_id+1] = tx->timestamp.get_clock();
         }
 
         n = nullptr;
