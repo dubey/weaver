@@ -11,14 +11,11 @@
 # ===============================================================
 # 
 
-import sys
-
 import weaver.client as client
 
 # creating line graph
 nodes = []
 num_nodes = 200
-coord_id = 0
 c = client.Client('127.0.0.1', 2002)
 
 c.begin_tx()
