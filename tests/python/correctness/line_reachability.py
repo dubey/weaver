@@ -19,33 +19,30 @@ import weaver.client as client
 nodes = []
 num_nodes = 200
 coord_id = 0
-c = client.Client(client._CLIENT_ID, coord_id)
+c = client.Client('127.0.0.1', 2002)
 
-tx_id = c.begin_tx()
+c.begin_tx()
 for i in range(num_nodes):
-    nodes.append(c.create_node(tx_id))
-    print 'Created node ' + str(i)
-c.end_tx(tx_id)
-tx_id = c.begin_tx()
-for i in range(num_nodes-1):
-    c.create_edge(tx_id, nodes[i], nodes[i+1])
-    print 'Created edge ' + str(i)
-c.end_tx(tx_id)
-print 'Created graph'
+    nodes.append(c.create_node())
+assert c.end_tx(), 'create nodes tx'
 
-rp = client.ReachParams(dest=nodes[num_nodes-1], caching=True)
-print 'Created reach param: mode = ' + str(rp.mode) + ', reachable = ' + str(rp.reachable)
+c.begin_tx()
+for i in range(num_nodes-1):
+    c.create_edge(nodes[i], nodes[i+1])
+assert c.end_tx(), 'create edges tx'
+
+rp = client.ReachParams(dest=nodes[num_nodes-1])
 for i in range(num_nodes):
     prog_args = [(nodes[i], rp)]
     response = c.run_reach_program(prog_args)
-    print 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(response.reachable)
     #if i == num_nodes/10:
     #    c.start_migration()
-    assert(response.reachable)
+    assert response.reachable, 'From node ' + str(i) + ' to node ' + str(num_nodes-1) + ', reachable = ' + str(response.reachable)
 
 rp.dest=nodes[0]
 for i in range(1, num_nodes):
     prog_args = [(nodes[i], rp)]
     response = c.run_reach_program(prog_args)
-    print 'From node ' + str(i) + ' to node ' + str(0) + ', reachable = ' + str(response.reachable)
-    assert(not response.reachable)
+    assert (not response.reachable), 'From node ' + str(i) + ' to node ' + str(0) + ', reachable = ' + str(response.reachable)
+
+print 'Pass line_reachability.'

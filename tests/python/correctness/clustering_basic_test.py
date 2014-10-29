@@ -17,7 +17,7 @@ import weaver.client as client
 
 # create graph from file
 coord_id = 0
-c = client.Client(client._CLIENT_ID, coord_id)
+c = client.Client('127.0.0.1', 2002)
 
 use_cache = True
 num_nodes = 200
@@ -86,4 +86,5 @@ for node_skip in range(1, edges_per_node+1):
         response = c.run_clustering_program(prog_args)
         print "want " + str(numerator/denominator) + " got " + str(response.clustering_coeff)
         assert(response.clustering_coeff == (numerator/denominator))
-print "passed all clustering tests"
+
+print 'Pass clustering prog test.'

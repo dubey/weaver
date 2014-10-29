@@ -22,7 +22,7 @@ nodes = []
 edges = []
 num_nodes = 400
 coord_id = 0
-c = client.Client(client.CL_ID, coord_id)
+c = client.Client('127.0.0.1', 2002)
 
 def line_requests(eprops, exp_reach):
     num_reach = 0
@@ -39,20 +39,19 @@ def line_requests(eprops, exp_reach):
 c.begin_tx()
 for i in range(num_nodes):
     nodes.append(c.create_node())
-c.end_tx()
+assert c.end_tx(), 'create node tx'
 
 c.begin_tx()
 for i in range(num_nodes-1):
     edges.append(c.create_edge(nodes[i], nodes[i+1]))
-c.end_tx()
-print 'Created graph'
+assert c.end_tx(), 'create edge tx'
 
 node_count = c.get_node_count()
 print 'Node count:'
 for cnt in node_count:
     print str(cnt)
 
-dummy = raw_input('press a key when shard is killed ')
+#dummy = raw_input('press a key when shard is killed ')
 
 print 'Now testing without edge props'
 line_requests([], num_nodes-1)
@@ -64,8 +63,7 @@ line_requests([('color','blue')], 0)
 c.begin_tx()
 for i in range(num_nodes-1):
     c.set_edge_property(nodes[i], edges[i], 'color', 'blue')
-c.end_tx()
-print 'All edge properties set'
+assert c.end_tx(), 'set edge props tx'
 
 print 'Now testing without edge props'
 line_requests([], num_nodes-1)
@@ -78,3 +76,5 @@ line_requests([('color','abcd')], 0)
 
 print 'Now testing with WRONG edge props'
 line_requests([('color','abc')], 0)
+
+print 'Pass line_properties.'
