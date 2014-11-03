@@ -23,9 +23,7 @@ extern uint64_t NumVts;
 extern uint64_t ClkSz;
 extern uint64_t NumShards;
 extern po6::threads::rwlock NumShardsLock;
-extern uint64_t NumBackups;
-extern uint64_t NumEffectiveServers;
-extern uint64_t NumActualServers;
+extern uint64_t MaxNumServers;
 extern uint64_t ShardIdIncr;
 
 extern char *HyperdexCoordIpaddr;
@@ -44,8 +42,6 @@ extern std::vector<std::pair<char*, uint16_t>> ServerManagerLocs;
 bool init_config_constants(const char *config_file_name=NULL);
 void update_config_constants(uint64_t num_shards);
 uint64_t get_num_shards();
-uint64_t get_num_effective_servers();
-uint64_t get_num_actual_servers();
 
 //#define NUM_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
 //#define NUM_THREADS 32
@@ -57,9 +53,7 @@ uint64_t get_num_actual_servers();
     uint64_t ClkSz; \
     uint64_t NumShards; \
     po6::threads::rwlock NumShardsLock; \
-    uint64_t NumBackups; \
-    uint64_t NumEffectiveServers; \
-    uint64_t NumActualServers; \
+    uint64_t MaxNumServers; \
     uint64_t ShardIdIncr; \
     char *HyperdexCoordIpaddr; \
     uint16_t HyperdexCoordPort; \

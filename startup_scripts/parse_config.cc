@@ -54,8 +54,6 @@ main(int argc, const char *argv[])
 
     if (config == "num_vts") {
         std::cout << NumVts << std::endl;
-    } else if (config == "num_backups") {
-        std::cout << NumBackups << std::endl;
     } else if (config == "max_cache_entries") {
         std::cout << MaxCacheEntries << std::endl;
     } else if (config == "hyperdex_coord_ipaddr") {

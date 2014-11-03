@@ -47,7 +47,7 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     vtid = distribution(generator);
 
     assert(m_sm.get_replid(myid) && "get repl_id");
-    assert(myid > NumActualServers);
+    assert(myid > MaxNumServers);
     myid_str = std::to_string(myid);
 
     int try_sm = 0;

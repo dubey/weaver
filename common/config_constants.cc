@@ -24,7 +24,6 @@ init_config_constants(const char *config_file_name)
     NumVts = UINT64_MAX;
     ClkSz = UINT64_MAX;
     NumShards = UINT64_MAX;
-    NumBackups = UINT64_MAX;
     MaxCacheEntries = UINT16_MAX;
     HyperdexCoordIpaddr = NULL;
     HyperdexCoordPort = UINT16_MAX;
@@ -132,11 +131,6 @@ init_config_constants(const char *config_file_name)
                     PARSE_VALUE_SCALAR;
                     PARSE_INT(NumVts);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "num_backups", 11) == 0) {
-                    yaml_token_delete(&token);
-                    PARSE_VALUE_SCALAR;
-                    PARSE_INT(NumBackups);
-
                 } else if (strncmp((const char*)token.data.scalar.value, "max_cache_entries", 17) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
@@ -192,7 +186,6 @@ init_config_constants(const char *config_file_name)
 #undef PARSE_VALUE_IPADDR_PORT_BLOCK
 
     if (UINT64_MAX == NumVts
-     || UINT64_MAX == NumBackups
      || UINT16_MAX == MaxCacheEntries
      || NULL == HyperdexCoordIpaddr
      || UINT16_MAX == HyperdexCoordPort
@@ -206,8 +199,8 @@ init_config_constants(const char *config_file_name)
 
     ClkSz = NumVts+1; // one entry for each vt + an (configuration) epoch number
     NumShards = 0;
-    NumEffectiveServers = NumVts + NumShards;
-    NumActualServers = NumEffectiveServers * (1+NumBackups);
+    //NumEffectiveServers = NumVts + NumShards;
+    MaxNumServers = 1000; // should be greater than NumActualServers = (NumEffectiveServers * (1+NumBackups))
     ShardIdIncr = NumVts;
 
     return true;
@@ -220,8 +213,6 @@ update_config_constants(uint64_t num_shards)
     assert(num_shards >= NumShards);
     NumShards = num_shards;
     WDEBUG << "update #shards = " << NumShards << std::endl;
-    NumEffectiveServers = NumVts + NumShards;
-    NumActualServers = NumEffectiveServers * (1+NumBackups);
     NumShardsLock.unlock();
 }
 
@@ -233,24 +224,4 @@ get_num_shards()
     NumShardsLock.unlock();
 
     return num_shards;
-}
-
-uint64_t
-get_num_effective_servers()
-{
-    NumShardsLock.rdlock();
-    uint64_t num_effective_servers = NumEffectiveServers;
-    NumShardsLock.unlock();
-
-    return num_effective_servers;
-}
-
-uint64_t
-get_num_actual_servers()
-{
-    NumShardsLock.rdlock();
-    uint64_t num_actual_servers = NumActualServers;
-    NumShardsLock.unlock();
-
-    return num_actual_servers;
 }
