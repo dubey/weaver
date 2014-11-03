@@ -21,7 +21,7 @@ import weaver.client as client
 # grid graph params
 grid_sz = 10 # grid_sz*grid_sz nodes
 coord_id = 0
-c = client.Client(client._CLIENT_ID, coord_id)
+c = client.Client('127.0.0.1', 2002)
 
 # create grid graph
 nodes = [[0] * grid_sz] * grid_sz
@@ -62,3 +62,5 @@ for i in range(grid_sz):
         response = c.read_n_edges(prog_args)
         for e in response.return_edges:
             assert (e in edges[nodes[i][j]])
+
+print 'Pass ft_basic.'
