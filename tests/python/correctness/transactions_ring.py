@@ -83,7 +83,7 @@ for i in range(num_nodes-1):
 assert writer.end_tx(), 'create edges tx'
 
 threads = []
-read_loops = 10000
+read_loops = 3000
 write_loops = 1000
 for i in range(num_readers):
     t = threading.Thread(target=read_loop, args=(readers[i], read_loops))

@@ -406,22 +406,6 @@ apply_writes(uint64_t vt_id, vc::vclock &vclk, uint64_t qts, transaction::pendin
     S->comm.send(vt_id, conf_msg.buf);
 }
 
-// if tx_order is PAST, then the tx has been ordered and should be stored in node
-// if tx_order is present or future, then we can just go through regular ordering mechanism
-void
-reexec_tx_request(db::message_wrapper *request)
-{
-    uint64_t vt_id;
-    vc::vclock vclk;
-    uint64_t qts;
-    transaction::pending_tx tx(transaction::UPDATE);
-    request->msg->unpack_message(message::TX_INIT, vt_id, vclk, qts, tx);
-
-    apply_writes(vt_id, vclk, qts, tx);
-
-    delete request;
-}
-
 void
 unpack_tx_request(db::message_wrapper *request)
 {
@@ -478,13 +462,6 @@ unpack_tx_request(db::message_wrapper *request)
     apply_writes(vt_id, vclk, qts, tx);
 
     delete request;
-}
-
-void
-check_nop(uint64_t , db::nop_data *nop_arg)
-{
-    // TODO
-    S->record_completed_tx(nop_arg->vclk);
 }
 
 // process nop
@@ -1693,6 +1670,7 @@ recv_loop(uint64_t thread_id)
     vc::vclock vclk;
     uint64_t qts;
     transaction::tx_type txtype;
+    uint64_t tx_id;
     busybee_returncode bb_code;
     enum db::queue_order tx_order;
     order::oracle *time_oracle = S->time_oracles[thread_id];
@@ -1716,36 +1694,37 @@ recv_loop(uint64_t thread_id)
 
             switch (mtype) {
                 case message::TX_INIT: {
-                    rec_msg->unpack_partial_message(message::TX_INIT, vt_id, vclk, qts, txtype);
-                    //std::cerr << "got tx, qts = " << qts << ", vclk " << vt_id << " : ";
-                    //for (uint64_t c: vclk.clock) {
-                    //    std::cerr << c << " ";
-                    //}
-                    //std::cerr << std::endl;
+                    rec_msg->unpack_partial_message(message::TX_INIT, vt_id, vclk, qts, txtype, tx_id);
                     assert(vclk.clock.size() == ClkSz);
-                    mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
-                    tx_order = S->qm.check_wr_request(vclk, qts);
                     assert(txtype != transaction::FAIL);
 
-                    if (txtype == transaction::UPDATE) {
-                        // write tx
-                        if (tx_order == db::PRESENT) {
-                            mwrap->time_oracle = time_oracle;
-                            unpack_tx_request(mwrap);
-                        } else if (tx_order == db::PAST) {
-                            // vt resending tx which has been executed
-                            reexec_tx_request(mwrap);
+                    if (S->check_done_tx(tx_id)) {
+                        // tx already executed, this must have been resent because of vt failure
+                        message::message conf_msg;
+                        conf_msg.prepare_message(message::TX_DONE, tx_id, shard_id);
+                        S->comm.send(vt_id, conf_msg.buf);
+                    } else {
+                        mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
+                        tx_order = S->qm.check_wr_request(vclk, qts);
+                        assert(tx_order == db::PRESENT || tx_order == db::FUTURE);
+
+                        if (txtype == transaction::UPDATE) {
+                            // write tx
+                            if (tx_order == db::PRESENT) {
+                                mwrap->time_oracle = time_oracle;
+                                unpack_tx_request(mwrap);
+                            } else {
+                                // enqueue for future execution
+                                qreq = new db::queued_request(qts, vclk, unpack_tx_request, mwrap);
+                                S->qm.enqueue_write_request(vt_id, qreq);
+                            }
                         } else {
-                            // enqueue for future execution
-                            qreq = new db::queued_request(qts, vclk, unpack_tx_request, mwrap);
+                            // nop
+                            assert(tx_order != db::PAST);
+                            // nop goes through queues for both PRESENT and FUTURE
+                            qreq = new db::queued_request(qts, vclk, nop, mwrap);
                             S->qm.enqueue_write_request(vt_id, qreq);
                         }
-                    } else {
-                        // nop
-                        assert(tx_order != db::PAST);
-                        // nop goes through queues for both PRESENT and FUTURE
-                        qreq = new db::queued_request(qts, vclk, nop, mwrap);
-                        S->qm.enqueue_write_request(vt_id, qreq);
                     }
                     break;
                 }

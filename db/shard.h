@@ -200,7 +200,7 @@ namespace db
             // node programs
         private:
             po6::threads::mutex node_prog_state_mutex;
-            std::unordered_set<uint64_t> done_ids; // request ids that have finished
+            std::unordered_set<uint64_t> done_prog_ids; // request ids that have finished
             std::unordered_map<uint64_t, std::vector<node_handle_t>> outstanding_prog_states; // maps request_id to list of nodes that have created prog state for that req id
             void delete_prog_states(uint64_t req_id, std::vector<node_handle_t> &node_handles);
         public:
@@ -219,6 +219,9 @@ namespace db
             // Fault tolerance
         public:
             std::vector<hyper_stub*> hstub;
+            std::unordered_set<uint64_t> done_tx_ids;
+            po6::threads::mutex done_tx_mtx;
+            bool check_done_tx(uint64_t tx_id);
             void restore_backup();
     };
 
@@ -978,7 +981,7 @@ namespace db
     shard :: mark_nodes_using_state(uint64_t req_id, std::vector<node_handle_t> &node_handles)
     {
         node_prog_state_mutex.lock();
-        bool done_request = (done_ids.find(req_id) != done_ids.end());
+        bool done_request = (done_prog_ids.find(req_id) != done_prog_ids.end());
         if (!done_request) {
             auto state_list_iter = outstanding_prog_states.find(req_id);
             if (state_list_iter == outstanding_prog_states.end()) {
@@ -1010,7 +1013,7 @@ namespace db
         std::vector<std::pair<uint64_t, std::vector<node_handle_t>>> to_delete;
 
         node_prog_state_mutex.lock();
-        done_ids.insert(completed_request_ids.begin(), completed_request_ids.end());
+        done_prog_ids.insert(completed_request_ids.begin(), completed_request_ids.end());
 
         for (auto &p: completed_requests) {
             uint64_t req_id = p.first;
@@ -1032,13 +1035,29 @@ namespace db
     shard :: check_done_request(uint64_t req_id)
     {
         node_prog_state_mutex.lock();
-        bool done = (done_ids.find(req_id) != done_ids.end());
+        bool done = (done_prog_ids.find(req_id) != done_prog_ids.end());
         node_prog_state_mutex.unlock();
         return done;
     }
 
 
     // Fault tolerance
+
+    inline bool
+    shard :: check_done_tx(uint64_t tx_id)
+    {
+        bool found = false;
+
+        done_tx_mtx.lock();
+        if (done_tx_ids.find(tx_id) != done_tx_ids.end()) {
+            found = true;
+        } else {
+            done_tx_ids.emplace(tx_id);
+        }
+        done_tx_mtx.unlock();
+
+        return found;
+    }
 
     // restore state when backup becomes primary due to failure
     inline void

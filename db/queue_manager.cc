@@ -74,9 +74,9 @@ queue_manager :: check_wr_request(vc::vclock &vclk, uint64_t qt)
     enum queue_order ret = FUTURE;
     queue_mutex.lock();
     enum queue_order cur_order = check_wr_queues_timestamps(vclk.vt_id, qt);
-    if (cur_order == PAST) {
-        ret = PAST;
-    } else if (cur_order == PRESENT) {
+    assert(cur_order != PAST);
+
+    if (cur_order == PRESENT) {
         // all write queues (possibly except vt_id) good to go
         if (NumVts == 1) {
             ret = PRESENT;
@@ -177,9 +177,8 @@ queue_manager :: check_wr_queues_timestamps(uint64_t vt_id, uint64_t qt)
     // check each write queue ready to go
     for (uint64_t i = 0; i < NumVts; i++) {
         if (vt_id == i) {
-            if (qt <= qts[i]) {
-                return PAST;
-            } else if (qt > (qts[i]+1)) {
+            assert(qt > qts[i]);
+            if (qt > (qts[i]+1)) {
                 return FUTURE;
             }
         } else {

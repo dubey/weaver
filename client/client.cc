@@ -154,7 +154,7 @@ client :: end_tx()
     }
 
     message::message msg;
-    msg.prepare_message(message::CLIENT_TX_INIT, cur_tx);
+    msg.prepare_message(message::CLIENT_TX_INIT, cur_tx_id, cur_tx);
     send_coord(msg.buf);
 
     message::message recv_msg;

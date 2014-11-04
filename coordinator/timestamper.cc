@@ -71,7 +71,7 @@ end_program(int signum)
 void
 prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::oracle *time_oracle)
 {
-    tx->id = vts->generate_req_id();
+    //tx->id = vts->generate_req_id();
 
     std::unordered_set<node_handle_t> get_set;
     std::unordered_set<node_handle_t> del_set;
@@ -492,7 +492,7 @@ server_loop(int thread_id)
                 // client messages
                 case message::CLIENT_TX_INIT: {
                     tx = new transaction::pending_tx(transaction::UPDATE);
-                    msg->unpack_message(message::CLIENT_TX_INIT, tx->writes);
+                    msg->unpack_message(message::CLIENT_TX_INIT, tx->id, tx->writes);
                     tx->sender = client_sender;
                     prepare_tx(tx, hstub, time_oracle);
                     break;

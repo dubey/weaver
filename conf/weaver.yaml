@@ -1,5 +1,4 @@
 num_vts     : 1
-num_backups : 1
 max_cache_entries : 0
 hyperdex_coord:
     - 127.0.0.1 : 7982
