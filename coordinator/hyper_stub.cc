@@ -20,7 +20,6 @@
 #include "coordinator/hyper_stub.h"
 
 using coordinator::hyper_stub;
-using coordinator::current_tx;
 
 hyper_stub :: hyper_stub()
     : vt_id(UINT64_MAX)
@@ -224,10 +223,10 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     attr[0].value_sz = sizeof(int64_t);
     attr[0].datatype = tx_dtypes[0];
 
-    uint64_t buf_sz = message::size(tx);
+    uint64_t buf_sz = message::size(*tx);
     std::unique_ptr<e::buffer> buf(e::buffer::create(buf_sz));
     e::buffer::packer packer = buf->pack_at(0);
-    message::pack_buffer(packer, tx);
+    message::pack_buffer(packer, *tx);
 
     attr[1].attr = tx_attrs[1];
     attr[1].value = (const char*)buf->data();
@@ -284,98 +283,80 @@ hyper_stub :: clean_tx(uint64_t tx_id)
     }
 }
 
-/*
 // status = false if not prepared
 void
 hyper_stub :: recreate_tx(const hyperdex_client_attribute *cl_attr,
-    size_t num_attrs,
-    current_tx &cur_tx,
-    bool &status)
+    transaction::pending_tx &tx)
 {
-    assert(num_attrs == NUM_MAP_ATTRS);
-    int idx[2];
-    idx[0] = -1;
-    idx[1] = -1;
-    if (strcmp(cl_attr[0].attr, tx_data_attr) == 0) {
-        assert(strcmp(cl_attr[1].attr, tx_status_attr) == 0);
-        idx[0] = 0;
-        idx[1] = 1;
-    } else if (strcmp(cl_attr[1].attr, tx_data_attr) == 0) {
-        assert(strcmp(cl_attr[0].attr, tx_status_attr) == 0);
-        idx[0] = 1;
-        idx[1] = 0;
+    int tx_data_idx;
+    if (strncmp(cl_attr[0].attr, tx_attrs[1], 7) == 0) {
+        tx_data_idx = 0;
+    } else if (strncmp(cl_attr[2].attr, tx_attrs[1], 7) == 0) {
+        tx_data_idx = 2;
     } else {
-        WDEBUG << "unexpected attrs" << std::endl;
-        assert(false);
+        assert(strncmp(cl_attr[1].attr, tx_attrs[1], 7) == 0);
+        tx_data_idx = 1;
     }
-    assert(cl_attr[idx[0]].datatype == map_dtypes[0]);
-    assert(cl_attr[idx[1]].datatype == map_dtypes[1]);
+    assert(cl_attr[tx_data_idx].datatype == tx_dtypes[1]);
 
-    cur_tx.tx.reset(new transaction::pending_tx());
-    std::unique_ptr<e::buffer> buf(e::buffer::create(cl_attr[idx[0]].value,
-                                                     cl_attr[idx[0]].value_sz));
+    std::unique_ptr<e::buffer> buf(e::buffer::create(cl_attr[tx_data_idx].value,
+                                                     cl_attr[tx_data_idx].value_sz));
     e::unpacker unpacker = buf->unpack_from(0);
-    message::unpack_buffer(unpacker, *cur_tx.tx);
-
-    assert(cl_attr[idx[1]].value_sz == sizeof(int64_t));
-    int64_t *status_ptr = (int64_t*)cl_attr[idx[1]].value;
-    assert(*status_ptr == 0 || *status_ptr == 1);
-    status = (*status_ptr == 1);
+    message::unpack_buffer(unpacker, tx);
 }
 
 void
-hyper_stub :: restore_backup(std::unordered_map<uint64_t, current_tx> &prepare_tx,
-    std::unordered_map<uint64_t, current_tx> &outstanding_tx)
+hyper_stub :: restore_backup(std::unordered_map<uint64_t, transaction::pending_tx*> &txs)
 {
-    const hyperdex_client_attribute *cl_set_attr;
-    size_t num_set_attrs;
-    get(vt_set_space, (const char*)&vt_id, sizeof(int64_t), &cl_set_attr, &num_set_attrs);
-    assert(num_set_attrs == 1);
-    assert(strcmp(cl_set_attr->attr, set_attr) == 0);
+    const hyperdex_client_attribute *cl_attr;
+    size_t num_attrs;
 
-    std::unordered_set<uint64_t> tx_ids;
-    unpack_buffer(cl_set_attr->value, cl_set_attr->value_sz, tx_ids);
-    hyperdex_client_destroy_attrs(cl_set_attr, 1);
+    // tx list
+    const hyperdex_client_attribute_check attr_check = {tx_attrs[0], (const char*)&vt_id, sizeof(int64_t), tx_dtypes[0], HYPERPREDICATE_EQUALS};
+    enum hyperdex_client_returncode search_status, loop_status;
 
-    assert(tx_ids.find(INT64_MAX) != tx_ids.end());
-    tx_ids.erase(INT64_MAX);
-
-    std::vector<const char*> spaces(tx_ids.size(), vt_map_space);
-    std::vector<const char*> keys(tx_ids.size());
-    std::vector<size_t> key_szs(tx_ids.size(), sizeof(int64_t));
-    std::vector<const hyperdex_client_attribute**> cl_attrs_vec;
-    std::vector<size_t*> num_attrs_vec;
-    cl_attrs_vec.reserve(tx_ids.size());
-    num_attrs_vec.reserve(tx_ids.size());
-    const hyperdex_client_attribute *cl_attr[tx_ids.size()];
-    size_t num_attr[tx_ids.size()];
-    auto iter = tx_ids.begin();
-    for (uint64_t i = 0; i < tx_ids.size(); i++, iter++) {
-        keys[i] = (const char*)&(*iter);
-        cl_attrs_vec.emplace_back(cl_attr + i);
-        num_attrs_vec.emplace_back(num_attr + i);
+    int64_t call_id = hyperdex_client_search(cl, tx_space, &attr_check, 1, &search_status, &cl_attr, &num_attrs);
+    if (call_id < 0) {
+        WDEBUG << "Hyperdex function failed, op id = " << call_id
+               << ", status = " << hyperdex_client_returncode_to_string(search_status) << std::endl;
+        WDEBUG << "error message: " << hyperdex_client_error_message(cl) << std::endl;
+        WDEBUG << "error loc: " << hyperdex_client_error_location(cl) << std::endl;
+        return;
     }
 
-    multiple_get(spaces, keys, key_szs, cl_attrs_vec, num_attrs_vec);
+    int64_t loop_id;
+    bool loop_done = false;
+    while (!loop_done) {
+        // loop until search done
+        loop_id = hyperdex_client_loop(cl, -1, &loop_status);
+        if (loop_id != call_id
+         || loop_status != HYPERDEX_CLIENT_SUCCESS
+         || (search_status != HYPERDEX_CLIENT_SUCCESS && search_status != HYPERDEX_CLIENT_SEARCHDONE)) {
+            WDEBUG << "Hyperdex function failed, call id = " << call_id
+                   << ", loop_id = " << loop_id
+                   << ", loop status = " << hyperdex_client_returncode_to_string(loop_status)
+                   << ", search status = " << hyperdex_client_returncode_to_string(search_status) << std::endl;
+            WDEBUG << "error message: " << hyperdex_client_error_message(cl) << std::endl;
+            WDEBUG << "error loc: " << hyperdex_client_error_location(cl) << std::endl;
+            return;
+        }
 
-    auto tx_iter = tx_ids.begin();
-    uint64_t tx_id;
-    for (uint64_t i = 0; i < tx_ids.size(); i++, tx_iter++) {
-        tx_id = *tx_iter;
-        current_tx cur_tx;
-        bool status;
-        recreate_tx(cl_attr[i], num_attr[i], cur_tx, status);
-        assert(cur_tx.tx->id == tx_id);
+        switch (search_status) {
+            case HYPERDEX_CLIENT_SEARCHDONE:
+            loop_done = true;
+            break;
 
-        if (status) {
-            outstanding_tx.emplace(tx_id, std::move(cur_tx));
-        } else {
-            prepare_tx.emplace(tx_id, std::move(cur_tx));
+            default: // search_status is HYPERDEX_CLIENT_SUCCESS
+            WDEBUG << "search_status = " << hyperdex_client_returncode_to_string(search_status) << ", num attrs: " << num_attrs << std::endl;
+            assert(num_attrs == (NUM_TX_ATTRS+1));
+
+            transaction::pending_tx *tx = new transaction::pending_tx(transaction::UPDATE);
+            recreate_tx(cl_attr, *tx);
+            txs.emplace(tx->id, tx);
+
+            hyperdex_client_destroy_attrs(cl_attr, num_attrs);
         }
     }
 
-    for (uint64_t i = 0; i < tx_ids.size(); i++) {
-        hyperdex_client_destroy_attrs(cl_attr[i], num_attr[i]);
-    }
+    WDEBUG << "Got " << txs.size() << " transactions for vt " << vt_id << std::endl;
 }
-*/

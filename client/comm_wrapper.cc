@@ -59,16 +59,20 @@ comm_wrapper :: ~comm_wrapper()
     bb_gc.deregister_thread(&bb_gc_ts);
 }
 
+void
+comm_wrapper :: reconfigure(const configuration &new_config)
+{
+    config = new_config;
+    wmap.reset(new weaver_mapper(new_config));
+    bb.reset(new busybee_st(&bb_gc, wmap.get(), busybee_generate_id()));
+}
+
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
 busybee_returncode
 comm_wrapper :: send(uint64_t send_to, std::auto_ptr<e::buffer> msg)
 {
-    busybee_returncode code = bb->send(send_to, msg);
-    if (code != BUSYBEE_SUCCESS) {
-        WDEBUG << "busybee send returned " << code << std::endl;
-    }
-    return code;
+    return bb->send(send_to, msg);
 }
 
 busybee_returncode

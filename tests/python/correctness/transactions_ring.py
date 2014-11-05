@@ -38,14 +38,19 @@ def remod_ring(c, edges, old_mod, new_mod):
     c.begin_tx()
     for i in range(0, num_nodes-new_mod, new_mod):
         edges.append(c.create_edge(str(i), str(i+new_mod)))
+    #print 'calling end_tx'
     assert c.end_tx(), 'remod ring create tx'
+    #print 'done end_tx'
+    #print 'remod ring from ' + str(old_mod) + ' to ' + str(new_mod)
 
 
 # get path between src and dst vertices
 # assert that path contains vertices in an arithmetic progression
 def traverse_ring(c, src, dst):
     rp = client.ReachParams(dest=dst)
+    #print 'calling run_prog'
     response = c.run_reach_program([(src, rp)])
+    #print 'done run_prog'
     if response.reachable:
         assert (len(response.path) > 1), 'reachable path length = ' + str(len(response.path))
         diff = abs(int(response.path[1]) - int(response.path[0]))
@@ -64,6 +69,8 @@ def read_loop(c, loops):
         src = min(n1,n2)
         dst = max(n1,n2)
         traverse_ring(c, str(src), str(dst))
+        #if i % 100 == 0:
+            #print 'read loop progress ' + str(i)
 
 num_readers = 20
 readers = []

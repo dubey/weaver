@@ -55,6 +55,7 @@ class comm_wrapper
     public:
         comm_wrapper(uint64_t bb_id, const configuration &config);
         ~comm_wrapper();
+        void reconfigure(const configuration &new_config);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         busybee_returncode send(uint64_t send_to, std::auto_ptr<e::buffer> msg);

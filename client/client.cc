@@ -153,29 +153,53 @@ client :: end_tx()
         return false;
     }
 
-    message::message msg;
-    msg.prepare_message(message::CLIENT_TX_INIT, cur_tx_id, cur_tx);
-    send_coord(msg.buf);
-
+    bool retry;
+    bool success;
     message::message recv_msg;
-    bool success = false;
-    busybee_returncode recv_code;
+    do {
+        message::message msg;
+        msg.prepare_message(message::CLIENT_TX_INIT, cur_tx_id, cur_tx);
+        busybee_returncode send_code = send_coord(msg.buf);
 
-    recv_code = recv_coord(&recv_msg.buf);
+        if (send_code == BUSYBEE_DISRUPTED) {
+            reconfigure();
+            retry = true;
+            continue;
+        } else if (send_code != BUSYBEE_SUCCESS) {
+            WDEBUG << "end_tx() got busybee_send code " << send_code << ", failing tx" << std::endl;
+            return false;
+        }
 
-    if (recv_code == BUSYBEE_TIMEOUT) {
-        // assume vt is dead, fail tx
-        WDEBUG << "operation timeout, perhaps timestamper is dead?" << std::endl;
-        success = false;
-    } else if (recv_code != BUSYBEE_SUCCESS) {
-        WDEBUG << "tx msg recv fail, busybee code " << recv_code << std::endl;
-        success = false;
-    } else {
-        message::msg_type mtype = recv_msg.unpack_message_type();
-        assert(mtype == message::CLIENT_TX_SUCCESS
-            || mtype == message::CLIENT_TX_ABORT);
-        if (mtype == message::CLIENT_TX_SUCCESS) {
+        busybee_returncode recv_code = recv_coord(&recv_msg.buf);
+
+        switch (recv_code) {
+            case BUSYBEE_TIMEOUT:
+            case BUSYBEE_DISRUPTED:
+            reconfigure();
+            retry = true;
+            break;
+
+            case BUSYBEE_SUCCESS:
             success = true;
+            retry = false;
+            break;
+
+            default:
+            WDEBUG << "end_tx() got busybee_recv code " << recv_code << ", failing tx" << std::endl;
+            success = false;
+            retry = false;
+        }
+
+        if (retry) {
+            WDEBUG << "retry end_tx" << std::endl;
+        }
+    } while (retry);
+
+    if (success) {
+        message::msg_type mtype = recv_msg.unpack_message_type();
+        assert(mtype == message::CLIENT_TX_SUCCESS || mtype == message::CLIENT_TX_ABORT);
+        if (mtype == message::CLIENT_TX_ABORT) {
+            success = false;
         }
     }
 
@@ -193,18 +217,19 @@ std::unique_ptr<ParamsType>
 client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<std::string, ParamsType>> &initial_args)
 {
     message::message msg;
-    busybee_returncode recv_code;
+    busybee_returncode send_code, recv_code;
 
 #ifdef weaver_benchmark_
 
     msg.prepare_message(message::CLIENT_NODE_PROG_REQ, prog_to_run, initial_args);
-    send_coord(msg.buf);
+    send_code = send_coord(msg.buf);
+
+    if (send_code != BUSYBEE_SUCCESS) {
+        WDEBUG << "node prog send msg fail, send_code: " << send_code << std::endl;
+        return nullptr;
+    }
 
     recv_code = recv_coord(&msg.buf);
-
-    if (recv_code == BUSYBEE_TIMEOUT) {
-        //reconfigure();
-    }
 
     if (recv_code != BUSYBEE_SUCCESS) {
         WDEBUG << "node prog return msg fail, recv_code: " << recv_code << std::endl;
@@ -213,28 +238,42 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
 
 #else
 
-    uint8_t attempts = 0;
+    bool retry;
     do {
         msg.prepare_message(message::CLIENT_NODE_PROG_REQ, prog_to_run, initial_args);
-        send_coord(msg.buf);
+        send_code = send_coord(msg.buf);
+
+        if (send_code == BUSYBEE_DISRUPTED) {
+            reconfigure();
+            retry = true;
+            continue;
+        } else if (send_code != BUSYBEE_SUCCESS) {
+            WDEBUG << "node prog send msg fail, send_code: " << send_code << std::endl;
+            return nullptr;
+        }
 
         recv_code = recv_coord(&msg.buf);
 
-        if (recv_code == BUSYBEE_TIMEOUT) {
-            // assume vt is dead
-            //reconfigure();
+        switch (recv_code) {
+            case BUSYBEE_TIMEOUT:
+            case BUSYBEE_DISRUPTED:
+            reconfigure();
+            retry = true;
+            break;
+
+            case BUSYBEE_SUCCESS:
+            retry = false;
+            break;
+
+            default:
+            WDEBUG << "node prog return msg fail, recv_code: " << recv_code << std::endl;
             return nullptr;
         }
-        if (recv_code != BUSYBEE_SUCCESS && recv_code != BUSYBEE_DISRUPTED) {
-            if (recv_code == BUSYBEE_DISRUPTED && attempts++ < 3) {
-                WDEBUG << "node prog recv disrupted" << std::endl;
-                comm->drop();
-            } else {
-                WDEBUG << "node prog return msg fail, recv_code: " << recv_code << std::endl;
-                return nullptr;
-            }
+
+        if (retry) {
+            WDEBUG << "retry prog" << std::endl;
         }
-    } while (recv_code == BUSYBEE_DISRUPTED);
+    } while (retry);
 
 #endif
 
@@ -365,12 +404,10 @@ client :: get_node_count()
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-void
+busybee_returncode
 client :: send_coord(std::auto_ptr<e::buffer> buf)
 {
-    if (comm->send(vtid, buf) != BUSYBEE_SUCCESS) {
-        return;
-    }
+    return comm->send(vtid, buf);
 }
 
 busybee_returncode
@@ -389,7 +426,6 @@ client :: recv_coord(std::auto_ptr<e::buffer> *buf)
                 continue;
 
             default:
-                WDEBUG << "msg recv error: " << ret << std::endl;
                 return ret;
         }
     }
@@ -428,4 +464,16 @@ client :: maintain_sm_connection()
     }
 
     return true;
+}
+
+void
+client :: reconfigure()
+{
+    uint32_t try_sm = 0;
+    while (!maintain_sm_connection()) {
+        WDEBUG << "retry sm connection " << try_sm++ << std::endl;
+    }
+
+    comm.reset(new cl::comm_wrapper(myid, *m_sm.config()));
+    comm->reconfigure(*m_sm.config());
 }

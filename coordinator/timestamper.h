@@ -31,7 +31,6 @@
 #include "common/event_order.h"
 #include "common/server_manager_link_wrapper.h"
 #include "coordinator/vt_constants.h"
-#include "coordinator/current_tx.h"
 #include "coordinator/current_prog.h"
 #include "coordinator/hyper_stub.h"
 
@@ -221,12 +220,8 @@ namespace coordinator
     inline void
     timestamper :: restore_backup()
     {
-        std::unordered_map<uint64_t, current_tx> prepare_txs;
-        //hstub.back()->restore_backup(prepare_txs, outstanding_tx);
-        WDEBUG << "num prep " << prepare_txs.size()
-               << ", outst txs " << outstanding_tx.size() << std::endl;
-        // TODO learn qts, clk values from shards
-        // TODO restore tx state, reexec prepared txs
+        hstub.back()->restore_backup(outstanding_tx);
+        // TODO reexec prepared txs
     }
 
     // reconfigure timestamper according to new cluster configuration
@@ -268,6 +263,8 @@ namespace coordinator
         to_nop.resize(num_shards, true);
         nop_ack_qts.resize(num_shards, 0);
         shard_node_count.resize(num_shards, 0);
+        std::fill(max_done_clk->begin(), max_done_clk->end(), 0);
+        max_done_clk->at(0) = config.version(); 
 
         // update the periodic_update_config which is used while sending periodic vt updates
         periodic_update_config = config;

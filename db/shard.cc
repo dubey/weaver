@@ -326,12 +326,12 @@ migrated_nbr_update(std::unique_ptr<message::message> msg)
 }
 
 void
-migrated_nbr_ack(uint64_t from_loc, std::vector<uint64_t> &target_req_id, uint64_t node_count)
+migrated_nbr_ack(uint64_t from_loc, std::vector<vc::vclock_t> &target_prog_clk, uint64_t node_count)
 {
     S->migration_mutex.lock();
     for (uint64_t i = 0; i < NumVts; i++) {
-        if (S->target_prog_id[i] < target_req_id[i]) {
-            S->target_prog_id[i] = target_req_id[i];
+        if (order::oracle::happens_before_no_kronos(S->target_prog_clk[i], target_prog_clk[i])) {
+            S->target_prog_clk[i] = target_prog_clk[i];
         }
     }
     S->migr_edge_acks[from_loc - ShardIdIncr] = true;
@@ -353,9 +353,9 @@ unpack_migrate_request(db::message_wrapper *request)
 
         case message::MIGRATED_NBR_ACK: {
             uint64_t from_loc, node_count;
-            std::vector<uint64_t> done_ids;
-            request->msg->unpack_message(request->type, from_loc, done_ids, node_count);
-            migrated_nbr_ack(from_loc, done_ids, node_count);
+            std::vector<vc::vclock_t> target_prog_clk;
+            request->msg->unpack_message(request->type, from_loc, target_prog_clk, node_count);
+            migrated_nbr_ack(from_loc, target_prog_clk, node_count);
             break;
         }
 
@@ -524,8 +524,7 @@ nop(db::message_wrapper *request)
     }
 
     // node max done id for migrated node clean up
-    assert(S->max_done_id[vt_id] <= nop_arg->max_done_id);
-    S->max_done_id[vt_id] = nop_arg->max_done_id;
+    assert(order::oracle::equal_or_happens_before_no_kronos(S->max_done_clk[vt_id], nop_arg->max_done_clk));
     S->max_done_clk[vt_id] = std::move(nop_arg->max_done_clk);
     check_migr_step3 = check_step3();
 
@@ -1161,8 +1160,8 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
 
     // update max prog id
     S->migration_mutex.lock();
-    if (S->max_prog_id[np.vt_id] < np.req_id) {
-        S->max_prog_id[np.vt_id] = np.req_id;
+    if (order::oracle::happens_before_no_kronos(S->max_seen_clk[np.vt_id], np.req_vclock->clock)) {
+        S->max_seen_clk[np.vt_id] = np.req_vclock->clock;
     }
     S->migration_mutex.unlock();
 
@@ -1318,7 +1317,8 @@ migrate_node_step2_req()
     S->migration_mutex.lock();
     S->current_migr = false;
     for (uint64_t idx = 0; idx < NumVts; idx++) {
-        S->target_prog_id[idx] = 0;
+        vc::vclock_t &target_clk = S->target_prog_clk[idx];
+        std::fill(target_clk.begin(), target_clk.end(), 0);
     }
     S->migration_mutex.unlock();
 
@@ -1437,7 +1437,7 @@ check_step3()
 {
     bool init_step3 = weaver_util::all(S->migr_edge_acks);
     for (uint64_t i = 0; i < NumVts && init_step3; i++) {
-        init_step3 = (S->target_prog_id[i] <= S->max_done_id[i]);
+        init_step3 = order::oracle::happens_before_no_kronos(S->target_prog_clk[i], S->max_done_clk[i]);
     }
     if (init_step3) {
         weaver_util::reset_all(S->migr_edge_acks);
@@ -1700,6 +1700,8 @@ recv_loop(uint64_t thread_id)
 
                     if (S->check_done_tx(tx_id)) {
                         // tx already executed, this must have been resent because of vt failure
+                        S->increment_qts(vt_id, 1);
+
                         message::message conf_msg;
                         conf_msg.prepare_message(message::TX_DONE, tx_id, shard_id);
                         S->comm.send(vt_id, conf_msg.buf);

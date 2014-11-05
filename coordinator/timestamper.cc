@@ -34,7 +34,6 @@
 DECLARE_CONFIG_CONSTANTS;
 
 using coordinator::current_prog;
-using coordinator::current_tx;
 using transaction::done_req_t;
 static coordinator::timestamper *vts;
 static uint64_t vt_id;
@@ -207,7 +206,6 @@ nop_function()
     timespec sleep_time;
     int sleep_ret;
     int sleep_flags = 0;
-    vc::vclock_t max_done_clk;
     std::vector<uint64_t> del_done_reqs;
     transaction::pending_tx *tx = NULL;
     uint64_t num_shards;

@@ -88,7 +88,6 @@ noinst_HEADERS+=	node_prog/base_classes.h \
 
 # timestamper
 noinst_HEADERS+=	coordinator/current_prog.h \
-					coordinator/current_tx.h \
 					coordinator/hyper_stub.h  \
 					coordinator/server_barrier.h  \
 					coordinator/server_manager.h  \

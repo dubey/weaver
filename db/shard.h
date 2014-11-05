@@ -191,10 +191,10 @@ namespace db
             void update_migrated_nbr_nonlocking(element::node *n, const node_handle_t &migr_node, uint64_t old_loc, uint64_t new_loc);
             void update_migrated_nbr(const node_handle_t &node, uint64_t old_loc, uint64_t new_loc);
             void update_node_mapping(const node_handle_t &node, uint64_t shard);
-            std::vector<uint64_t> max_prog_id // max prog id seen from each vector timestamper
-                , target_prog_id
-                , max_done_id; // max id done from each VT
-            std::vector<vc::vclock_t> max_done_clk; // vclk of cumulative last node program completed
+            std::vector<vc::vclock_t> max_seen_clk // largest clock seen from each vector timestamper
+                , target_prog_clk
+                , max_done_clk; // largest clock of completed node prog for each VT
+            //std::vector<vc::vclock_t> max_done_clk; // vclk of cumulative last node program completed
             std::vector<bool> migr_edge_acks;
 
             // node programs
@@ -245,9 +245,11 @@ namespace db
         , nop_count(NumVts, 0)
         , max_clk(UINT64_MAX, UINT64_MAX)
         , zero_clk(0, 0)
-        , max_prog_id(NumVts, 0)
-        , target_prog_id(NumVts, 0)
-        , max_done_id(NumVts, 0)
+        //, max_prog_id(NumVts, 0)
+        //, target_prog_id(NumVts, 0)
+        //, max_done_id(NumVts, 0)
+        , max_seen_clk(NumVts, vc::vclock_t(ClkSz, 0))
+        , target_prog_clk(NumVts, vc::vclock_t(ClkSz, 0))
         , max_done_clk(NumVts, vc::vclock_t(ClkSz, 0))
         , watch_set_lookups(0)
         , watch_set_nops(0)
@@ -805,8 +807,7 @@ namespace db
                             to_del = false;
                             break;
                         }
-                        std::vector<vc::vclock_t*> compare(1, &max_done_clk[i]);
-                        to_del = order::oracle::happens_before_no_kronos(dobj->vclk.clock, compare);
+                        to_del = order::oracle::happens_before_no_kronos(dobj->vclk.clock, max_done_clk[i]);
                     }
                 }
             }
@@ -931,13 +932,12 @@ namespace db
         migration_mutex.lock();
         if (old_loc != shard_id) {
             message::message msg;
-            msg.prepare_message(message::MIGRATED_NBR_ACK, shard_id, max_prog_id,
-                    shard_node_count[shard_id-ShardIdIncr]);
+            msg.prepare_message(message::MIGRATED_NBR_ACK, shard_id, max_seen_clk, shard_node_count[shard_id-ShardIdIncr]);
             comm.send(old_loc, msg.buf);
         } else {
             for (uint64_t i = 0; i < NumVts; i++) {
-                if (target_prog_id[i] < max_prog_id[i]) {
-                    target_prog_id[i] = max_prog_id[i];
+                if (order::oracle::happens_before_no_kronos(target_prog_clk[i], max_seen_clk[i])) {
+                    target_prog_clk[i] = max_seen_clk[i];
                 }
             }
             migr_edge_acks[shard_id - ShardIdIncr] = true;

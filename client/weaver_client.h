@@ -83,11 +83,12 @@ namespace cl
         private:
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-            void send_coord(std::auto_ptr<e::buffer> buf);
+            busybee_returncode send_coord(std::auto_ptr<e::buffer> buf);
             busybee_returncode recv_coord(std::auto_ptr<e::buffer> *buf);
 #pragma GCC diagnostic pop
             std::string generate_handle();
             bool maintain_sm_connection();
+            void reconfigure();
     };
 }
 
