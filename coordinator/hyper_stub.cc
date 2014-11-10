@@ -90,7 +90,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         ERROR_FAIL;
     }
 
-    if (!put_nmap(put_map)) {
+    if (!put_nmap_if_not_exist(put_map)) {
         ERROR_FAIL;
     }
 
@@ -182,12 +182,18 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
             case transaction::EDGE_DELETE_REQ:
                 CHECK_LOC(upd->loc1, upd->handle2);
                 GET_NODE(upd->handle2);
+                if (n->out_edges.find(upd->handle1) == n->out_edges.end()) {
+                    ERROR_FAIL;
+                }
                 n->out_edges.erase(upd->handle1);
                 break;
 
             case transaction::EDGE_SET_PROPERTY:
                 CHECK_LOC(upd->loc1, upd->handle2);
                 GET_NODE(upd->handle2);
+                if (n->out_edges.find(upd->handle1) == n->out_edges.end()) {
+                    ERROR_FAIL;
+                }
                 n->out_edges[upd->handle1]->base.properties[*upd->key] = db::element::property(*upd->key, *upd->value, tx->timestamp);
                 break;
 

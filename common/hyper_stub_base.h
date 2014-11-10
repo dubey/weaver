@@ -139,7 +139,7 @@ class hyper_stub_base
         bool recreate_node(const hyperdex_client_attribute *cl_attr, db::element::node &n);
 
         // node map functions
-        bool put_nmap(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add);
+        bool put_nmap_if_not_exist(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add);
         bool put_nmap(std::vector<node_handle_t> &node_handles, uint64_t shard_id);
         bool update_nmap(const node_handle_t &handle, uint64_t loc);
         std::unordered_map<node_handle_t, uint64_t> get_nmap(std::unordered_set<node_handle_t> &toGet, bool tx);

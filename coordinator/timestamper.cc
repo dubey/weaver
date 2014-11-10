@@ -84,6 +84,7 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
                 // randomly assign shard for this node
                 upd->loc1 = vts->generate_loc(); // node will be placed on this shard
                 put_map.emplace(upd->handle, upd->loc1);
+                WDEBUG << "put map has " << upd->handle << " -> " << upd->loc1 << std::endl;
                 break;
 
             case transaction::EDGE_CREATE_REQ:

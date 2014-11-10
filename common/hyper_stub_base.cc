@@ -373,6 +373,9 @@ hyper_stub_base :: multiple_call(std::vector<hyper_tx_func> &funcs,
 
     uint64_t i = 0;
     for (; i < num_calls; i++) {
+        if (funcs[i] == hyperdex_client_xact_put_if_not_exist) {
+            WDEBUG << "execing xact_put_if_not_exist" << std::endl;
+        }
         HYPERDEX_CALL(funcs[i], spaces[i], keys[i], key_szs[i], attrs[i], num_attrs[i], call_status[i]);
 
         assert(opid_to_idx.find(hdex_id) == opid_to_idx.end());
@@ -1022,10 +1025,10 @@ hyper_stub_base :: put_nmap(std::vector<node_handle_t> &node_handles, uint64_t s
 }
 
 bool
-hyper_stub_base :: put_nmap(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add)
+hyper_stub_base :: put_nmap_if_not_exist(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add)
 {
     int num_pairs = pairs_to_add.size();
-    std::vector<hyper_tx_func> funcs(num_pairs, &hyperdex_client_xact_put);
+    std::vector<hyper_tx_func> funcs(num_pairs, &hyperdex_client_xact_put_if_not_exist);
     std::vector<const char*> spaces(num_pairs, nmap_space);
     std::vector<const char*> keys(num_pairs);
     std::vector<size_t> key_szs(num_pairs);
