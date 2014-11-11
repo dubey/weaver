@@ -215,7 +215,7 @@ message :: size(const db::element::remote_node &t)
 }
 
 uint64_t
-message :: size(const transaction::pending_update* const &t)
+message :: size(const std::shared_ptr<transaction::pending_update> &t)
 {
     uint64_t sz = size(t->type)
          + size(t->handle)
@@ -232,7 +232,7 @@ message :: size(const transaction::pending_update* const &t)
 }
 
 uint64_t
-message :: size(const transaction::nop_data* const &t)
+message :: size(const std::shared_ptr<transaction::nop_data> &t)
 {
     return size(t->max_done_id)
          + size(t->max_done_clk)
@@ -424,7 +424,7 @@ message :: pack_buffer(e::buffer::packer &packer, const db::element::remote_node
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const transaction::pending_update* const &t)
+message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::pending_update> &t)
 {
     pack_buffer(packer, t->type);
     pack_buffer(packer, t->handle);
@@ -440,7 +440,7 @@ message :: pack_buffer(e::buffer::packer &packer, const transaction::pending_upd
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const transaction::nop_data* const &t)
+message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::nop_data> &t)
 {
     pack_buffer(packer, t->max_done_id);
     pack_buffer(packer, t->max_done_clk);
@@ -632,9 +632,9 @@ message :: unpack_buffer(e::unpacker &unpacker, db::element::remote_node& t)
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, transaction::pending_update* &t)
+message :: unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::pending_update> &t)
 {
-    t = new transaction::pending_update();
+    t = std::make_shared<transaction::pending_update>();
     unpack_buffer(unpacker, t->type);
     unpack_buffer(unpacker, t->handle);
     unpack_buffer(unpacker, t->handle1);
@@ -651,9 +651,9 @@ message :: unpack_buffer(e::unpacker &unpacker, transaction::pending_update* &t)
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, transaction::nop_data* &t)
+message :: unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::nop_data> &t)
 {
-    t = new transaction::nop_data();
+    t = std::make_shared<transaction::nop_data>();
     unpack_buffer(unpacker, t->max_done_id);
     unpack_buffer(unpacker, t->max_done_clk);
     unpack_buffer(unpacker, t->outstanding_progs);

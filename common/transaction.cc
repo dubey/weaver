@@ -22,21 +22,12 @@ pending_tx :: pending_tx(tx_type t)
 { }
 
 pending_tx :: ~pending_tx()
-{
-    if (type == NOP) {
-        delete nop;
-    } else if (type == UPDATE) {
-        for (pending_update *upd: writes) {
-            delete upd;
-        }
-        writes.clear();
-    }
-}
+{ }
 
-pending_tx*
+std::shared_ptr<pending_tx>
 pending_tx :: copy_fail_transaction()
 {
-    pending_tx *fail_tx = new pending_tx(FAIL);
+    std::shared_ptr<pending_tx> fail_tx = std::make_shared<pending_tx>(FAIL);
     fail_tx->id = id;
     fail_tx->timestamp = timestamp;
     fail_tx->vt_seq = vt_seq;

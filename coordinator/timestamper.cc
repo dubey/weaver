@@ -40,7 +40,7 @@ static coordinator::timestamper *vts;
 static uint64_t vt_id;
 
 // tx functions
-void prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::oracle *time_oracle);
+void prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub *hstub, order::oracle *time_oracle);
 void end_tx(uint64_t tx_id, coordinator::hyper_stub *hstub, uint64_t shard_id);
 
 
@@ -69,7 +69,7 @@ end_program(int signum)
 }
 
 void
-prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::oracle *time_oracle)
+prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub *hstub, order::oracle *time_oracle)
 {
     //tx->id = vts->generate_req_id();
 
@@ -78,14 +78,13 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
     std::unordered_map<node_handle_t, uint64_t> put_map;
     std::unordered_map<node_handle_t, uint64_t>::iterator find_iter; 
 
-    for (transaction::pending_update *upd: tx->writes) {
+    for (std::shared_ptr<transaction::pending_update> upd: tx->writes) {
         switch (upd->type) {
 
             case transaction::NODE_CREATE_REQ:
                 // randomly assign shard for this node
                 upd->loc1 = vts->generate_loc(); // node will be placed on this shard
                 put_map.emplace(upd->handle, upd->loc1);
-                WDEBUG << "put map has " << upd->handle << " -> " << upd->loc1 << std::endl;
                 break;
 
             case transaction::EDGE_CREATE_REQ:
@@ -154,7 +153,7 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
 
         assert(!(ready && error)); // can't be ready after some error
 
-        transaction::pending_tx *to_enq;
+        std::shared_ptr<transaction::pending_tx> to_enq;
         if (!ready || error) {
             to_enq = tx->copy_fail_transaction();
         } else {
@@ -166,7 +165,6 @@ prepare_tx(transaction::pending_tx *tx, coordinator::hyper_stub *hstub, order::o
     message::message msg;
     if (error) {
         // fail tx
-        delete tx;
         msg.prepare_message(message::CLIENT_TX_ABORT);
     } else {
         msg.prepare_message(message::CLIENT_TX_SUCCESS);
@@ -183,7 +181,7 @@ end_tx(uint64_t tx_id, uint64_t shard_id, coordinator::hyper_stub *hstub)
     auto find_iter = vts->outstanding_tx.find(tx_id);
     assert(find_iter != vts->outstanding_tx.end());
 
-    transaction::pending_tx *tx = find_iter->second;
+    std::shared_ptr<transaction::pending_tx> tx = find_iter->second;
     uint64_t shard_idx = shard_id - ShardIdIncr;
     assert(tx->shard_write[shard_idx]);
     tx->shard_write[shard_idx] = false;
@@ -193,12 +191,8 @@ end_tx(uint64_t tx_id, uint64_t shard_id, coordinator::hyper_stub *hstub)
         hstub->clean_tx(tx_id);
 
         vts->outstanding_tx.erase(tx_id);
-        vts->tx_prog_mutex.unlock();
-
-        delete tx;
-    } else {
-        vts->tx_prog_mutex.unlock();
     }
+    vts->tx_prog_mutex.unlock();
 }
 
 // single dedicated thread which wakes up after given timeout, sends updates, and sleeps
@@ -209,7 +203,7 @@ nop_function()
     int sleep_ret;
     int sleep_flags = 0;
     std::vector<uint64_t> del_done_reqs;
-    transaction::pending_tx *tx = NULL;
+    std::shared_ptr<transaction::pending_tx> tx = nullptr;
     uint64_t num_shards;
 
     sleep_time.tv_sec  = VT_TIMEOUT_NANO / NANO;
@@ -225,8 +219,8 @@ nop_function()
 
         // send nops and state cleanup info to shards
         if (weaver_util::any(vts->to_nop)) {
-            tx = new transaction::pending_tx(transaction::NOP);
-            tx->nop = new transaction::nop_data();
+            tx = std::make_shared<transaction::pending_tx>(transaction::NOP);
+            tx->nop = std::make_shared<transaction::nop_data>();
 
             tx->id = vts->generate_req_id();
             vts->clk_rw_mtx.wrlock();
@@ -270,10 +264,10 @@ nop_function()
 
         vts->periodic_update_mutex.unlock();
 
-        if (tx != NULL) {
+        if (tx != nullptr) {
             vts->enqueue_tx(tx);
             vts->tx_queue_loop();
-            tx = NULL;
+            tx = nullptr;
         }
     }
 }
@@ -486,7 +480,7 @@ server_loop(int thread_id)
     node_prog::prog_type pType;
     coordinator::hyper_stub *hstub = vts->hstub[thread_id];
     order::oracle *time_oracle = vts->time_oracles[thread_id];
-    transaction::pending_tx *tx;
+    std::shared_ptr<transaction::pending_tx> tx;
 
     while (true) {
         vts->comm.quiesce_thread(thread_id);
@@ -501,7 +495,7 @@ server_loop(int thread_id)
             switch (mtype) {
                 // client messages
                 case message::CLIENT_TX_INIT: {
-                    tx = new transaction::pending_tx(transaction::UPDATE);
+                    tx = std::make_shared<transaction::pending_tx>(transaction::UPDATE);
                     msg->unpack_message(message::CLIENT_TX_INIT, tx->id, tx->writes);
                     tx->sender = client_sender;
                     prepare_tx(tx, hstub, time_oracle);
@@ -611,7 +605,7 @@ server_loop(int thread_id)
                     break;
                 }
 
-                case message::RESTORE_DONE:
+                case message::RESTORE_DONE: {
                     vts->restore_mtx.wrlock();
                     assert(vts->restore_status > 0);
                     vts->restore_status--;
@@ -624,6 +618,7 @@ server_loop(int thread_id)
                         node_prog::programs.at(pType)->unpack_and_start_coord(std::move(bp->msg), bp->client, hstub);
                     }
                     break;
+                }
 
                 default:
                     WDEBUG << "unexpected msg type " << message::to_string(mtype) << std::endl;

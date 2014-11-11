@@ -53,7 +53,7 @@ namespace transaction
         std::vector<uint64_t> shard_node_count;
     };
 
-    using tx_list_t = std::vector<pending_update*>;
+    using tx_list_t = std::vector<std::shared_ptr<pending_update>>;
 
     enum tx_type
     {
@@ -77,14 +77,14 @@ namespace transaction
         tx_list_t writes; // if this is a write tx
         uint64_t sender; // client to which we need to reply for write tx
 
-        nop_data *nop; // if this is a nop
+        std::shared_ptr<nop_data> nop; // if this is a nop
 
         uint64_t new_epoch; // if this is an epoch change
 
         pending_tx(tx_type t);
         ~pending_tx();
 
-        pending_tx* copy_fail_transaction();
+        std::shared_ptr<pending_tx> copy_fail_transaction();
     };
 
 }

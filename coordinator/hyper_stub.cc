@@ -68,7 +68,7 @@ void
 hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     std::unordered_set<node_handle_t> &del_set,
     std::unordered_map<node_handle_t, uint64_t> &put_map,
-    transaction::pending_tx *tx,
+    std::shared_ptr<transaction::pending_tx> tx,
     bool &ready,
     bool &error,
     order::oracle *time_oracle)
@@ -154,7 +154,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     db::element::node *n = nullptr;
     auto loc_iter = get_map.end();
 
-    for (transaction::pending_update *upd: tx->writes) {
+    for (std::shared_ptr<transaction::pending_update> upd: tx->writes) {
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ:
                 break;
@@ -312,7 +312,7 @@ hyper_stub :: recreate_tx(const hyperdex_client_attribute *cl_attr,
 }
 
 void
-hyper_stub :: restore_backup(std::vector<transaction::pending_tx*> &txs)
+hyper_stub :: restore_backup(std::vector<std::shared_ptr<transaction::pending_tx>> &txs)
 {
     const hyperdex_client_attribute *cl_attr;
     size_t num_attrs;
@@ -332,6 +332,7 @@ hyper_stub :: restore_backup(std::vector<transaction::pending_tx*> &txs)
 
     int64_t loop_id;
     bool loop_done = false;
+    std::shared_ptr<transaction::pending_tx> tx;
     while (!loop_done) {
         // loop until search done
         loop_id = hyperdex_client_loop(cl, -1, &loop_status);
@@ -352,14 +353,15 @@ hyper_stub :: restore_backup(std::vector<transaction::pending_tx*> &txs)
             loop_done = true;
             break;
 
-            default: // search_status is HYPERDEX_CLIENT_SUCCESS
-            WDEBUG << "search_status = " << hyperdex_client_returncode_to_string(search_status) << ", num attrs: " << num_attrs << std::endl;
+            case HYPERDEX_CLIENT_SUCCESS:
             assert(num_attrs == (NUM_TX_ATTRS+1));
 
-            transaction::pending_tx *tx = new transaction::pending_tx(transaction::UPDATE);
+            tx = std::make_shared<transaction::pending_tx>(transaction::UPDATE);
             recreate_tx(cl_attr, *tx);
             txs.emplace_back(tx);
 
+            default:
+            WDEBUG << "unexpected hyperdex client status on search: " << search_status << std::endl;
             hyperdex_client_destroy_attrs(cl_attr, num_attrs);
         }
     }

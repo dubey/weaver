@@ -69,7 +69,7 @@ std::string
 client :: create_node(std::string &handle)
 {
     assert(cur_tx_id != UINT64_MAX);
-    transaction::pending_update *upd = new pending_update();
+    std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
     upd->type = transaction::NODE_CREATE_REQ;
     if (handle == "") {
         upd->handle = generate_handle();
@@ -84,7 +84,7 @@ std::string
 client :: create_edge(std::string &handle, std::string &node1, std::string &node2)
 {
     assert(cur_tx_id != UINT64_MAX);
-    transaction::pending_update *upd = new pending_update();
+    std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
     upd->type = transaction::EDGE_CREATE_REQ;
     if (handle == "") {
         upd->handle = generate_handle();
@@ -101,7 +101,7 @@ void
 client :: delete_node(std::string &node)
 {
     assert(cur_tx_id != UINT64_MAX);
-    transaction::pending_update *upd = new pending_update();
+    std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
     upd->type = transaction::NODE_DELETE_REQ;
     upd->handle1 = node;
     cur_tx.emplace_back(upd);
@@ -111,7 +111,7 @@ void
 client :: delete_edge(std::string &edge, std::string &node)
 {
     assert(cur_tx_id != UINT64_MAX);
-    transaction::pending_update *upd = new pending_update();
+    std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
     upd->type = transaction::EDGE_DELETE_REQ;
     upd->handle1 = edge;
     upd->handle2 = node;
@@ -123,7 +123,7 @@ client :: set_node_property(std::string &node,
     std::string key, std::string value)
 {
     assert(cur_tx_id != UINT64_MAX);
-    transaction::pending_update *upd = new pending_update();
+    std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
     upd->type = transaction::NODE_SET_PROPERTY;
     upd->handle1 = node;
     upd->key.reset(new std::string(std::move(key)));
@@ -136,7 +136,7 @@ client :: set_edge_property(std::string &node, std::string &edge,
     std::string key, std::string value)
 {
     assert(cur_tx_id != UINT64_MAX);
-    transaction::pending_update *upd = new pending_update();
+    std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
     upd->type = transaction::EDGE_SET_PROPERTY;
     upd->handle1 = edge;
     upd->handle2 = node;
@@ -208,9 +208,6 @@ client :: end_tx()
     }
 
     cur_tx_id = UINT64_MAX;
-    for (transaction::pending_update *upd: cur_tx) {
-        delete upd;
-    }
     cur_tx.clear();
 
     return success;

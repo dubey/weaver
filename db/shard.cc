@@ -476,7 +476,7 @@ nop(db::message_wrapper *request)
     request->msg->unpack_message(message::TX_INIT, vt_id, vclk, qts, tx);
 
     message::message msg;
-    transaction::nop_data *nop_arg = tx.nop;
+    std::shared_ptr<transaction::nop_data> nop_arg = tx.nop;
     bool check_move_migr, check_init_migr, check_migr_step3;
 
     // increment qts

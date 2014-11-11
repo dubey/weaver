@@ -40,7 +40,7 @@ namespace coordinator
     class greater_tx_ptr
     {
         public:
-            bool operator() (const transaction::pending_tx* const lhs, const transaction::pending_tx* const rhs)
+            bool operator() (const std::shared_ptr<const transaction::pending_tx> lhs, const std::shared_ptr<const transaction::pending_tx> rhs)
             {
                 if (lhs->timestamp.get_epoch() == rhs->timestamp.get_epoch()) {
                     return lhs->vt_seq > rhs->vt_seq;
@@ -50,7 +50,7 @@ namespace coordinator
             }
     };
 
-    using tx_queue_t = std::priority_queue<transaction::pending_tx*, std::vector<transaction::pending_tx*>, greater_tx_ptr>;
+    using tx_queue_t = std::priority_queue<std::shared_ptr<transaction::pending_tx>, std::vector<std::shared_ptr<transaction::pending_tx>>, greater_tx_ptr>;
     using prog_queue_t = std::vector<std::unique_ptr<blocked_prog>>;
     using prog_reply_t = std::unordered_map<uint64_t, std::vector<bool>>;
 
@@ -92,7 +92,7 @@ namespace coordinator
             std::vector<uint64_t> nop_ack_qts;
 
             // transactions
-            std::unordered_map<uint64_t, transaction::pending_tx*> outstanding_tx;
+            std::unordered_map<uint64_t, std::shared_ptr<transaction::pending_tx>> outstanding_tx;
 
             // node prog
             //std::unordered_map<uint64_t, current_prog> outstanding_progs;
@@ -143,9 +143,9 @@ namespace coordinator
             void update_members_new_config();
             uint64_t generate_req_id();
             uint64_t generate_loc();
-            void enqueue_tx(transaction::pending_tx *tx);
-            bool process_tx_queue(transaction::pending_tx **tx_ptr, std::vector<transaction::pending_tx*> &factored_tx);
-            void factor_tx(transaction::pending_tx *tx, std::vector<transaction::pending_tx*> &factored_tx);
+            void enqueue_tx(std::shared_ptr<transaction::pending_tx> tx);
+            bool process_tx_queue(std::shared_ptr<transaction::pending_tx> &tx_ptr, std::vector<std::shared_ptr<transaction::pending_tx>> &factored_tx);
+            void factor_tx(std::shared_ptr<transaction::pending_tx> tx, std::vector<std::shared_ptr<transaction::pending_tx>> &factored_tx);
             void tx_queue_loop();
             void reset_out_queue_clk(uint64_t epoch);
 
@@ -226,17 +226,17 @@ namespace coordinator
     inline void
     timestamper :: restore_backup()
     {
-        std::vector<transaction::pending_tx*> txs;
+        std::vector<std::shared_ptr<transaction::pending_tx>> txs;
         hstub.back()->restore_backup(txs);
 
         greater_tx_ptr comp_obj;
         std::sort(txs.begin(), txs.end(), comp_obj);
 
-        message::message msg;
-        std::vector<transaction::pending_tx*> factored_tx;
-        for (transaction::pending_tx *tx: txs) {
-            factored_tx.clear();
+        for (std::shared_ptr<transaction::pending_tx> tx: txs) {
+            message::message msg;
+            std::vector<std::shared_ptr<transaction::pending_tx>> factored_tx;
             factor_tx(tx, factored_tx);
+
             for (uint64_t i = 0; i < tx->shard_write.size(); i++) {
                 if (tx->shard_write[i]) {
                     msg.prepare_message(message::TX_INIT, vt_id, factored_tx[i]->timestamp, factored_tx[i]->qts, *factored_tx[i]);
@@ -309,7 +309,7 @@ namespace coordinator
         // resize qts
         qts.resize(num_shards, 0);
 
-        transaction::pending_tx *epoch_tx = nullptr;
+        std::shared_ptr<transaction::pending_tx> epoch_tx;
         if (direct_reset_out_queue_clk) {
             // out_queue is empty
             reset_out_queue_clk(config.version());
@@ -319,7 +319,7 @@ namespace coordinator
             // restart vclock with new epoch number from configuration
             vclk.increment_clock();
             out_queue_counter++;
-            epoch_tx = new transaction::pending_tx(transaction::EPOCH_CHANGE);
+            epoch_tx = std::make_shared<transaction::pending_tx>(transaction::EPOCH_CHANGE);
             epoch_tx->timestamp = vclk;
             epoch_tx->vt_seq = out_queue_counter;
             epoch_tx->new_epoch = config.version();
@@ -411,7 +411,7 @@ namespace coordinator
     }
 
     inline void
-    timestamper :: enqueue_tx(transaction::pending_tx *tx)
+    timestamper :: enqueue_tx(std::shared_ptr<transaction::pending_tx> tx)
     {
         uint64_t seq = tx->vt_seq;
         uint64_t epoch = tx->timestamp.get_epoch();
@@ -424,11 +424,9 @@ namespace coordinator
          && seq == out_queue_clk.second) {
             if (tx->type == transaction::FAIL) {
                 out_queue_clk.second++;
-                delete tx;
                 done = true;
             } else if (tx->type == transaction::EPOCH_CHANGE) {
                 reset_out_queue_clk(tx->new_epoch);
-                delete tx;
                 done = true;
             }
         }
@@ -443,15 +441,15 @@ namespace coordinator
     // return list of tx components, factored per shard
     // return true if this call did pop off out queue
     inline bool
-    timestamper :: process_tx_queue(transaction::pending_tx **tx_ptr, std::vector<transaction::pending_tx*> &factored_tx)
+    timestamper :: process_tx_queue(std::shared_ptr<transaction::pending_tx> &tx_ptr, std::vector<std::shared_ptr<transaction::pending_tx>> &factored_tx)
     {
-        *tx_ptr = nullptr;
+        tx_ptr = nullptr;
         bool ret = false;
 
         tx_out_queue_mtx.lock();
 
         if (!tx_out_queue.empty()) {
-            transaction::pending_tx *top = tx_out_queue.top();
+            std::shared_ptr<transaction::pending_tx> top = tx_out_queue.top();
             uint64_t this_clk = top->vt_seq;
             uint64_t this_epoch = top->timestamp.get_epoch();
 
@@ -461,20 +459,17 @@ namespace coordinator
 
                 if (top->type == transaction::EPOCH_CHANGE) {
                     reset_out_queue_clk(top->new_epoch);
-                    delete top;
                 } else {
                     out_queue_clk.second++;
-                    if (top->type == transaction::FAIL) {
-                        delete top;
-                    } else {
-                        *tx_ptr = top;
+                    if (top->type != transaction::FAIL) {
+                        tx_ptr = top;
                     }
                 }
             }
         }
 
-        if (*tx_ptr != nullptr) {
-            factor_tx(*tx_ptr, factored_tx);
+        if (tx_ptr != nullptr) {
+            factor_tx(tx_ptr, factored_tx);
         }
 
         tx_out_queue_mtx.unlock();
@@ -483,7 +478,7 @@ namespace coordinator
     }
 
     inline void
-    timestamper :: factor_tx(transaction::pending_tx *tx, std::vector<transaction::pending_tx*> &factored_tx)
+    timestamper :: factor_tx(std::shared_ptr<transaction::pending_tx> tx, std::vector<std::shared_ptr<transaction::pending_tx>> &factored_tx)
     {
         assert(tx != nullptr);
         assert(tx->type != transaction::FAIL);
@@ -491,7 +486,7 @@ namespace coordinator
         uint64_t num_shards = tx->shard_write.size();
         factored_tx.reserve(num_shards);
         for (uint64_t i = 0; i < num_shards; i++) {
-            transaction::pending_tx *new_tx = new transaction::pending_tx(tx->type);
+            std::shared_ptr<transaction::pending_tx> new_tx = std::make_shared<transaction::pending_tx>(tx->type);
             factored_tx.emplace_back(new_tx);
             new_tx->id = tx->id;
             new_tx->timestamp = tx->timestamp;
@@ -499,14 +494,14 @@ namespace coordinator
 
         if (tx->type == transaction::NOP) {
             // nop
-            transaction::nop_data *nop = tx->nop;
-            assert(nop != NULL);
+            std::shared_ptr<transaction::nop_data> nop = tx->nop;
+            assert(nop != nullptr);
             for (uint64_t i = 0; i < num_shards; i++) {
-                transaction::pending_tx *this_tx = factored_tx[i];
+                std::shared_ptr<transaction::pending_tx> this_tx = factored_tx[i];
                 if (tx->shard_write[i]) {
                     this_tx->qts = ++qts[i];
-                    this_tx->nop = new transaction::nop_data();
-                    transaction::nop_data *this_nop = this_tx->nop;
+                    this_tx->nop = std::make_shared<transaction::nop_data>();
+                    std::shared_ptr<transaction::nop_data> this_nop = this_tx->nop;
                     this_nop->max_done_id = nop->max_done_id;
                     this_nop->max_done_clk = nop->max_done_clk;
                     this_nop->outstanding_progs = nop->outstanding_progs;
@@ -516,9 +511,9 @@ namespace coordinator
             }
         } else {
             // write tx
-            for (transaction::pending_update *upd: tx->writes) {
+            for (std::shared_ptr<transaction::pending_update> upd: tx->writes) {
                 uint64_t shard_idx = upd->loc1-ShardIdIncr;
-                transaction::pending_tx *this_tx = factored_tx[shard_idx];
+                std::shared_ptr<transaction::pending_tx> this_tx = factored_tx[shard_idx];
                 if (this_tx->writes.empty()) {
                     this_tx->qts = ++qts[shard_idx];
                 }
@@ -539,9 +534,9 @@ namespace coordinator
         }
 
         while (true) {
-            transaction::pending_tx *tx;
-            std::vector<transaction::pending_tx*> factored_tx;
-            if (!process_tx_queue(&tx, factored_tx)) {
+            std::shared_ptr<transaction::pending_tx> tx;
+            std::vector<std::shared_ptr<transaction::pending_tx>> factored_tx;
+            if (!process_tx_queue(tx, factored_tx)) {
                 assert(tx == nullptr);
                 break;
             } else if (tx == nullptr) {
@@ -567,10 +562,6 @@ namespace coordinator
                     msg.prepare_message(message::TX_INIT, vt_id, factored_tx[i]->timestamp, factored_tx[i]->qts, *factored_tx[i]);
                     comm.send(i+ShardIdIncr, msg.buf);
                 }
-            }
-
-            if (nop) {
-                delete tx;
             }
         }
     }

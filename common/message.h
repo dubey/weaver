@@ -138,8 +138,8 @@ namespace message
     uint64_t size(const node_prog::property &t);
     uint64_t size(const db::element::property &t);
     uint64_t size(const db::element::remote_node &t);
-    uint64_t size(const transaction::pending_update* const &ptr_t);
-    uint64_t size(const transaction::nop_data* const &ptr_t);
+    uint64_t size(const std::shared_ptr<transaction::pending_update> &ptr_t);
+    uint64_t size(const std::shared_ptr<transaction::nop_data> &ptr_t);
     uint64_t size(const transaction::pending_tx &t);
     template <typename T1, typename T2> inline uint64_t size(const std::unordered_map<T1, T2>& t);
     template <typename T> inline uint64_t size(const std::unordered_set<T>& t);
@@ -178,8 +178,8 @@ namespace message
     void pack_buffer(e::buffer::packer &packer, const node_prog::property &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::property &t);
     void pack_buffer(e::buffer::packer &packer, const db::element::remote_node &t);
-    void pack_buffer(e::buffer::packer &packer, const transaction::pending_update* const &ptr_t);
-    void pack_buffer(e::buffer::packer &packer, const transaction::nop_data* const &ptr_t);
+    void pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::pending_update> &ptr_t);
+    void pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::nop_data> &ptr_t);
     void pack_buffer(e::buffer::packer &packer, const transaction::pending_tx &t);
     template <typename T1, typename T2> void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T>& t);
@@ -218,8 +218,8 @@ namespace message
     void unpack_buffer(e::unpacker &unpacker, node_prog::property &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::property &t);
     void unpack_buffer(e::unpacker &unpacker, db::element::remote_node& t);
-    void unpack_buffer(e::unpacker &unpacker, transaction::pending_update* &ptr_t);
-    void unpack_buffer(e::unpacker &unpacker, transaction::nop_data* &ptr_t);
+    void unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::pending_update> &ptr_t);
+    void unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::nop_data> &ptr_t);
     void unpack_buffer(e::unpacker &unpacker, transaction::pending_tx &t);
     template <typename T1, typename T2> void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
     template <typename T> void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
