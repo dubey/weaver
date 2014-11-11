@@ -373,9 +373,6 @@ hyper_stub_base :: multiple_call(std::vector<hyper_tx_func> &funcs,
 
     uint64_t i = 0;
     for (; i < num_calls; i++) {
-        if (funcs[i] == hyperdex_client_xact_put_if_not_exist) {
-            WDEBUG << "execing xact_put_if_not_exist" << std::endl;
-        }
         HYPERDEX_CALL(funcs[i], spaces[i], keys[i], key_szs[i], attrs[i], num_attrs[i], call_status[i]);
 
         assert(opid_to_idx.find(hdex_id) == opid_to_idx.end());

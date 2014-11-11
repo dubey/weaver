@@ -32,6 +32,7 @@
 #include "common/server_manager_link_wrapper.h"
 #include "coordinator/vt_constants.h"
 #include "coordinator/current_prog.h"
+#include "coordinator/blocked_prog.h"
 #include "coordinator/hyper_stub.h"
 
 namespace coordinator
@@ -50,6 +51,7 @@ namespace coordinator
     };
 
     using tx_queue_t = std::priority_queue<transaction::pending_tx*, std::vector<transaction::pending_tx*>, greater_tx_ptr>;
+    using prog_queue_t = std::vector<std::unique_ptr<blocked_prog>>;
     using prog_reply_t = std::unordered_map<uint64_t, std::vector<bool>>;
 
     class timestamper
@@ -126,6 +128,9 @@ namespace coordinator
             std::pair<uint64_t, uint64_t> out_queue_clk; // (epoch num, out clk)
             uint64_t out_queue_counter;
             tx_queue_t tx_out_queue;
+            prog_queue_t prog_queue;
+            po6::threads::rwlock restore_mtx;
+            uint16_t restore_status;
 
             // exit
             bool to_exit;
@@ -140,6 +145,7 @@ namespace coordinator
             uint64_t generate_loc();
             void enqueue_tx(transaction::pending_tx *tx);
             bool process_tx_queue(transaction::pending_tx **tx_ptr, std::vector<transaction::pending_tx*> &factored_tx);
+            void factor_tx(transaction::pending_tx *tx, std::vector<transaction::pending_tx*> &factored_tx);
             void tx_queue_loop();
             void reset_out_queue_clk(uint64_t epoch);
 
@@ -220,8 +226,24 @@ namespace coordinator
     inline void
     timestamper :: restore_backup()
     {
-        hstub.back()->restore_backup(outstanding_tx);
-        // TODO reexec prepared txs
+        std::vector<transaction::pending_tx*> txs;
+        hstub.back()->restore_backup(txs);
+
+        greater_tx_ptr comp_obj;
+        std::sort(txs.begin(), txs.end(), comp_obj);
+
+        message::message msg;
+        std::vector<transaction::pending_tx*> factored_tx;
+        for (transaction::pending_tx *tx: txs) {
+            factored_tx.clear();
+            factor_tx(tx, factored_tx);
+            for (uint64_t i = 0; i < tx->shard_write.size(); i++) {
+                if (tx->shard_write[i]) {
+                    msg.prepare_message(message::TX_INIT, vt_id, factored_tx[i]->timestamp, factored_tx[i]->qts, *factored_tx[i]);
+                    comm.send(i+ShardIdIncr, msg.buf);
+                }
+            }
+        }
     }
 
     // reconfigure timestamper according to new cluster configuration
@@ -317,21 +339,26 @@ namespace coordinator
                 }
             }
         }
-#else
+#endif
+
         // reset qts if a shard died
         std::vector<server> delta = prev_config.delta(config);
         for (const server &srv: delta) {
             if (srv.type == server::SHARD) {
                 bool to_reset = false;
+                bool restore = false;
+                server::state_t prv_state = prev_config.get_state(srv.id);
+                server::type_t prv_type = prev_config.get_type(srv.id);
 
-                if (prev_config.get_state(srv.id) == server::ASSIGNED
+                if (prv_state == server::ASSIGNED
                  && srv.state == server::AVAILABLE) {
                     // conservatively reset whenever a shard transitions from
                     // assigned to available
                     to_reset = true;
-                } else if (prev_config.get_type(srv.id) == server::BACKUP_SHARD) {
+                } else if (prv_type == server::BACKUP_SHARD) {
                     // reset if server type changes from backup_shard to shard
                     to_reset = true;
+                    restore = true;
                 }
 
                 if (to_reset) {
@@ -342,9 +369,14 @@ namespace coordinator
                     nop_ack_qts[shard_id] = 0;
                     WDEBUG << "reset qts for shard " << (shard_id+ShardIdIncr) << std::endl;
                 }
+
+                if (restore) {
+                    restore_mtx.wrlock();
+                    restore_status++;
+                    restore_mtx.unlock();
+                }
             }
         }
-#endif
 
         clk_rw_mtx.unlock();
         periodic_update_mutex.unlock();
@@ -442,46 +474,7 @@ namespace coordinator
         }
 
         if (*tx_ptr != nullptr) {
-            transaction::pending_tx *tx = *tx_ptr;
-            assert(tx->type != transaction::FAIL);
-
-            uint64_t num_shards = tx->shard_write.size();
-            factored_tx.reserve(num_shards);
-            for (uint64_t i = 0; i < num_shards; i++) {
-                transaction::pending_tx *new_tx = new transaction::pending_tx(tx->type);
-                factored_tx.emplace_back(new_tx);
-                new_tx->id = tx->id;
-                new_tx->timestamp = tx->timestamp;
-            }
-
-            if (tx->type == transaction::NOP) {
-                // nop
-                transaction::nop_data *nop = tx->nop;
-                assert(nop != NULL);
-                for (uint64_t i = 0; i < num_shards; i++) {
-                    transaction::pending_tx *this_tx = factored_tx[i];
-                    if (tx->shard_write[i]) {
-                        this_tx->qts = ++qts[i];
-                        this_tx->nop = new transaction::nop_data();
-                        transaction::nop_data *this_nop = this_tx->nop;
-                        this_nop->max_done_id = nop->max_done_id;
-                        this_nop->max_done_clk = nop->max_done_clk;
-                        this_nop->outstanding_progs = nop->outstanding_progs;
-                        this_nop->done_reqs[i] = nop->done_reqs[i];
-                        this_nop->shard_node_count = nop->shard_node_count;
-                    }
-                }
-            } else {
-                // write tx
-                for (transaction::pending_update *upd: tx->writes) {
-                    uint64_t shard_idx = upd->loc1-ShardIdIncr;
-                    transaction::pending_tx *this_tx = factored_tx[shard_idx];
-                    if (this_tx->writes.empty()) {
-                        this_tx->qts = ++qts[shard_idx];
-                    }
-                    this_tx->writes.emplace_back(upd);
-                }
-            }
+            factor_tx(*tx_ptr, factored_tx);
         }
 
         tx_out_queue_mtx.unlock();
@@ -489,9 +482,62 @@ namespace coordinator
         return ret;
     }
 
+    inline void
+    timestamper :: factor_tx(transaction::pending_tx *tx, std::vector<transaction::pending_tx*> &factored_tx)
+    {
+        assert(tx != nullptr);
+        assert(tx->type != transaction::FAIL);
+
+        uint64_t num_shards = tx->shard_write.size();
+        factored_tx.reserve(num_shards);
+        for (uint64_t i = 0; i < num_shards; i++) {
+            transaction::pending_tx *new_tx = new transaction::pending_tx(tx->type);
+            factored_tx.emplace_back(new_tx);
+            new_tx->id = tx->id;
+            new_tx->timestamp = tx->timestamp;
+        }
+
+        if (tx->type == transaction::NOP) {
+            // nop
+            transaction::nop_data *nop = tx->nop;
+            assert(nop != NULL);
+            for (uint64_t i = 0; i < num_shards; i++) {
+                transaction::pending_tx *this_tx = factored_tx[i];
+                if (tx->shard_write[i]) {
+                    this_tx->qts = ++qts[i];
+                    this_tx->nop = new transaction::nop_data();
+                    transaction::nop_data *this_nop = this_tx->nop;
+                    this_nop->max_done_id = nop->max_done_id;
+                    this_nop->max_done_clk = nop->max_done_clk;
+                    this_nop->outstanding_progs = nop->outstanding_progs;
+                    this_nop->done_reqs[i] = nop->done_reqs[i];
+                    this_nop->shard_node_count = nop->shard_node_count;
+                }
+            }
+        } else {
+            // write tx
+            for (transaction::pending_update *upd: tx->writes) {
+                uint64_t shard_idx = upd->loc1-ShardIdIncr;
+                transaction::pending_tx *this_tx = factored_tx[shard_idx];
+                if (this_tx->writes.empty()) {
+                    this_tx->qts = ++qts[shard_idx];
+                }
+                this_tx->writes.emplace_back(upd);
+            }
+        }
+    }
+
     void
     timestamper :: tx_queue_loop()
     {
+        restore_mtx.rdlock();
+        if (restore_status > 0) {
+            restore_mtx.unlock();
+            return;
+        } else {
+            restore_mtx.unlock();
+        }
+
         while (true) {
             transaction::pending_tx *tx;
             std::vector<transaction::pending_tx*> factored_tx;

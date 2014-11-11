@@ -66,6 +66,8 @@ message :: to_string(const msg_type &t)
             return "CLIENT_NODE_COUNT";
         case NODE_COUNT_REPLY:
             return "NODE_COUNT_REPLY";
+        case RESTORE_DONE:
+            return "RESTORE_DONE";
         case LOADED_GRAPH:
             return "LOADED_GRAPH";
         case VT_CLOCK_UPDATE:
@@ -245,6 +247,7 @@ message :: size(const transaction::pending_tx &t)
     uint64_t sz = size(t.type)
         + size(t.id)
         + size(t.timestamp)
+        + size(t.vt_seq)
         + size(t.qts);
     if (t.type == transaction::UPDATE) {
         sz = sz + size(t.writes)
@@ -452,6 +455,7 @@ message :: pack_buffer(e::buffer::packer &packer, const transaction::pending_tx 
     pack_buffer(packer, t.type);
     pack_buffer(packer, t.id);
     pack_buffer(packer, t.timestamp);
+    pack_buffer(packer, t.vt_seq);
     pack_buffer(packer, t.qts);
     if (t.type == transaction::UPDATE) {
         pack_buffer(packer, t.writes);
@@ -663,6 +667,7 @@ message :: unpack_buffer(e::unpacker &unpacker, transaction::pending_tx &t)
     unpack_buffer(unpacker, t.type);
     unpack_buffer(unpacker, t.id);
     unpack_buffer(unpacker, t.timestamp);
+    unpack_buffer(unpacker, t.vt_seq);
     unpack_buffer(unpacker, t.qts);
     if (t.type == transaction::UPDATE) {
         unpack_buffer(unpacker, t.writes);

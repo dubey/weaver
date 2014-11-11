@@ -156,6 +156,8 @@ client :: end_tx()
     bool retry;
     bool success;
     message::message recv_msg;
+    // currently no retry on timeout/disrupted, pass error to client
+    // so it is responsibility of client to ensure that they do not reexec tx that was completed
     do {
         message::message msg;
         msg.prepare_message(message::CLIENT_TX_INIT, cur_tx_id, cur_tx);
@@ -163,8 +165,9 @@ client :: end_tx()
 
         if (send_code == BUSYBEE_DISRUPTED) {
             reconfigure();
-            retry = true;
-            continue;
+            //retry = true;
+            //continue;
+            return false;
         } else if (send_code != BUSYBEE_SUCCESS) {
             WDEBUG << "end_tx() got busybee_send code " << send_code << ", failing tx" << std::endl;
             return false;
@@ -176,7 +179,8 @@ client :: end_tx()
             case BUSYBEE_TIMEOUT:
             case BUSYBEE_DISRUPTED:
             reconfigure();
-            retry = true;
+            //retry = true;
+            return false;
             break;
 
             case BUSYBEE_SUCCESS:

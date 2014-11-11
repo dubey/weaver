@@ -38,7 +38,7 @@ namespace coordinator
                 bool &error,
                 order::oracle *time_oracle);
             void clean_tx(uint64_t tx_id);
-            void restore_backup(std::unordered_map<uint64_t, transaction::pending_tx*> &txs);
+            void restore_backup(std::vector<transaction::pending_tx*> &txs);
 
         private:
             void clean_up(std::unordered_map<node_handle_t, db::element::node*> &nodes);

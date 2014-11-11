@@ -34,6 +34,7 @@
 DECLARE_CONFIG_CONSTANTS;
 
 using coordinator::current_prog;
+using coordinator::blocked_prog;
 using transaction::done_req_t;
 static coordinator::timestamper *vts;
 static uint64_t vt_id;
@@ -342,6 +343,16 @@ template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
     unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, coordinator::hyper_stub *hstub)
 {
+    vts->restore_mtx.rdlock();
+    if (vts->restore_status > 0) {
+        std::unique_ptr<blocked_prog> to_save(new blocked_prog(clientID, std::move(msg)));
+        vts->prog_queue.emplace_back(std::move(to_save));
+        vts->restore_mtx.unlock();
+        return;
+    } else {
+        vts->restore_mtx.unlock();
+    }
+
     node_prog::prog_type pType;
     std::vector<std::pair<node_handle_t, ParamsType>> initial_args;
 
@@ -599,6 +610,20 @@ server_loop(int thread_id)
 #endif
                     break;
                 }
+
+                case message::RESTORE_DONE:
+                    vts->restore_mtx.wrlock();
+                    assert(vts->restore_status > 0);
+                    vts->restore_status--;
+                    coordinator::prog_queue_t blocked_progs = std::move(vts->prog_queue);
+                    vts->restore_mtx.unlock();
+
+                    vts->tx_queue_loop();
+                    for (std::unique_ptr<blocked_prog> &bp: blocked_progs) {
+                        bp->msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
+                        node_prog::programs.at(pType)->unpack_and_start_coord(std::move(bp->msg), bp->client, hstub);
+                    }
+                    break;
 
                 default:
                     WDEBUG << "unexpected msg type " << message::to_string(mtype) << std::endl;

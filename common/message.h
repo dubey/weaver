@@ -80,6 +80,8 @@ namespace message
         MIGRATION_TOKEN,
         CLIENT_NODE_COUNT,
         NODE_COUNT_REPLY,
+        // ft messages
+        RESTORE_DONE,
         // initial graph loading
         LOADED_GRAPH,
         // coordinator group

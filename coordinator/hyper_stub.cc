@@ -312,7 +312,7 @@ hyper_stub :: recreate_tx(const hyperdex_client_attribute *cl_attr,
 }
 
 void
-hyper_stub :: restore_backup(std::unordered_map<uint64_t, transaction::pending_tx*> &txs)
+hyper_stub :: restore_backup(std::vector<transaction::pending_tx*> &txs)
 {
     const hyperdex_client_attribute *cl_attr;
     size_t num_attrs;
@@ -358,7 +358,7 @@ hyper_stub :: restore_backup(std::unordered_map<uint64_t, transaction::pending_t
 
             transaction::pending_tx *tx = new transaction::pending_tx(transaction::UPDATE);
             recreate_tx(cl_attr, *tx);
-            txs.emplace(tx->id, tx);
+            txs.emplace_back(tx);
 
             hyperdex_client_destroy_attrs(cl_attr, num_attrs);
         }
