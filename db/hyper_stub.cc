@@ -68,8 +68,7 @@ hyper_stub :: restore_backup(std::unordered_map<node_handle_t, element::node*> *
 
         if (search_status == HYPERDEX_CLIENT_SEARCHDONE) {
             loop_done = true;
-        } else {
-            // search_status is HYPERDEX_CLIENT_SUCCESS
+        } else if (search_status == HYPERDEX_CLIENT_SUCCESS) {
             assert(num_attrs == 2); // node and shard
             if (strncmp(cl_attr[0].attr, nmap_attr, 5) == 0) {
                 node_idx = 1;
@@ -91,6 +90,8 @@ hyper_stub :: restore_backup(std::unordered_map<node_handle_t, element::node*> *
             node_list.emplace_back(node_handle_t(handle_str));
 
             hyperdex_client_destroy_attrs(cl_attr, num_attrs);
+        } else {
+            WDEBUG << "unexpected search status " << search_status << std::endl;
         }
     }
 

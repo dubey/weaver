@@ -593,12 +593,12 @@ hyper_stub_base :: get_node(db::element::node &n)
     const hyperdex_client_attribute *attr;
     size_t num_attrs;
     node_handle_t handle = n.get_handle();
+
     bool success = get(graph_space, handle.c_str(), handle.size(), &attr, &num_attrs, true);
     if (success) {
         success = recreate_node(attr, n);
+        hyperdex_client_destroy_attrs(attr, num_attrs);
     }
-
-    hyperdex_client_destroy_attrs(attr, num_attrs);
 
     return success;
 }
@@ -1066,9 +1066,8 @@ hyper_stub_base :: get_nmap(node_handle_t &handle)
         assert(num_attrs == 1);
         assert(attr->value_sz == sizeof(int64_t));
         shard = *((uint64_t*)attr->value);
+        hyperdex_client_destroy_attrs(attr, num_attrs);
     }
-
-    hyperdex_client_destroy_attrs(attr, num_attrs);
 
     return shard;
 }

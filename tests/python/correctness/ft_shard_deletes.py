@@ -21,10 +21,12 @@ import weaver.client as client
 # grid graph params
 grid_sz = 10 # grid_sz*grid_sz nodes
 coord_id = 0
-c = client.Client(client._CLIENT_ID, coord_id)
+c = client.Client('127.0.0.1', 2002)
 
 # create grid graph
-nodes = [[0] * grid_sz] * grid_sz
+nodes = []
+for i in range(grid_sz):
+    nodes.append([0]*grid_sz)
 edges = {}
 for i in range(grid_sz):
     for j in range(grid_sz):
@@ -86,7 +88,7 @@ tot_count = 0
 for cnt in node_count:
     tot_count += cnt
 assert (tot_count == (grid_sz*grid_sz - 1))
-print 'total node count = ' + str(tot_cnt)
+print 'total node count = ' + str(tot_count)
 
 # read the graph written
 param = client.ReadNEdgesParams()
@@ -98,3 +100,5 @@ for i in range(grid_sz):
         response = c.read_n_edges(prog_args)
         for e in response.return_edges:
             assert (e in edges[nodes[i][j]])
+
+print 'Pass ft_shard_deletes.'

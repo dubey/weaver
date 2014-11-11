@@ -73,7 +73,6 @@ noinst_HEADERS+=	node_prog/base_classes.h \
 					common/clock.h \
 					common/configuration.h \
 					common/ids.h \
-					common/nmap_stub.h \
 					common/server_manager_link.h \
 					common/transaction.h \
 					common/comm_wrapper.h \

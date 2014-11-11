@@ -359,10 +359,11 @@ hyper_stub :: restore_backup(std::vector<std::shared_ptr<transaction::pending_tx
             tx = std::make_shared<transaction::pending_tx>(transaction::UPDATE);
             recreate_tx(cl_attr, *tx);
             txs.emplace_back(tx);
+            hyperdex_client_destroy_attrs(cl_attr, num_attrs);
+            break;
 
             default:
             WDEBUG << "unexpected hyperdex client status on search: " << search_status << std::endl;
-            hyperdex_client_destroy_attrs(cl_attr, num_attrs);
         }
     }
 

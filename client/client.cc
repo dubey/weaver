@@ -391,16 +391,38 @@ client :: exit_weaver()
 std::vector<uint64_t>
 client :: get_node_count()
 {
-    message::message msg;
-    msg.prepare_message(message::CLIENT_NODE_COUNT);
-    send_coord(msg.buf);
-
-    if (recv_coord(&msg.buf) != BUSYBEE_SUCCESS) {
-        WDEBUG << "node count return msg fail" << std::endl;
-    }
     std::vector<uint64_t> node_count;
-    msg.unpack_message(message::NODE_COUNT_REPLY, node_count);
-    return node_count;
+
+    while(true) {
+        message::message msg;
+        msg.prepare_message(message::CLIENT_NODE_COUNT);
+        busybee_returncode send_code = send_coord(msg.buf);
+
+        if (send_code == BUSYBEE_DISRUPTED) {
+            reconfigure();
+            continue;
+        } else if (send_code != BUSYBEE_SUCCESS) {
+            WDEBUG << "node count send msg fail with " << send_code << std::endl;
+            return node_count;
+        }
+
+        busybee_returncode recv_code = recv_coord(&msg.buf);
+
+        switch (recv_code) {
+            case BUSYBEE_DISRUPTED:
+            case BUSYBEE_TIMEOUT:
+            reconfigure();
+            break;
+
+            case BUSYBEE_SUCCESS:
+            msg.unpack_message(message::NODE_COUNT_REPLY, node_count);
+            return node_count;
+
+            default:
+            WDEBUG << "node count recv msg fail with " << recv_code << std::endl;
+            return node_count;
+        }
+    }
 }
 
 #pragma GCC diagnostic push
