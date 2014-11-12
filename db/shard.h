@@ -202,11 +202,12 @@ namespace db
             po6::threads::mutex node_prog_state_mutex;
             std::unordered_set<uint64_t> done_prog_ids; // request ids that have finished
             std::unordered_map<uint64_t, std::vector<node_handle_t>> outstanding_prog_states; // maps request_id to list of nodes that have created prog state for that req id
+            void clear_all_state(const std::unordered_map<uint64_t, std::vector<node_handle_t>> &outstanding_prog_states);
             void delete_prog_states(uint64_t req_id, std::vector<node_handle_t> &node_handles);
         public:
             void mark_nodes_using_state(uint64_t req_id, std::vector<node_handle_t> &node_handles);
             void add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
-            bool check_done_request(uint64_t req_id);
+            bool check_done_request(uint64_t req_id, vc::vclock &clk);
 
             std::unordered_map<std::tuple<cache_key_t, uint64_t, node_handle_t>, void *> node_prog_running_states; // used for fetching cache contexts
             po6::threads::mutex node_prog_running_states_mutex;
@@ -216,9 +217,10 @@ namespace db
             uint64_t watch_set_nops;
             uint64_t watch_set_piggybacks;
 
-            // Fault tolerance
+            // fault tolerance
         public:
             std::vector<hyper_stub*> hstub;
+            uint64_t min_prog_epoch; // protected by node_prog_state_mutex
             std::unordered_set<uint64_t> done_tx_ids;
             po6::threads::mutex done_tx_mtx;
             bool check_done_tx(uint64_t tx_id);
@@ -332,25 +334,43 @@ namespace db
                 }
             }
         }
-#else
-        // reset qts if a VTS died TODO test this
+#endif
+        // reset qts if a VTS died
         std::vector<server> delta = prev_config.delta(config);
+        bool clear_queued = false;
+        std::unordered_map<uint64_t, std::vector<node_handle_t>> clear_map;
         for (const server &srv: delta) {
             if (srv.type == server::VT) {
                 server::state_t prev_state = prev_config.get_state(srv.id);
+
                 if ((prev_state == server::AVAILABLE || prev_state == server::ASSIGNED)
                  && (srv.state != server::AVAILABLE && srv.state != server::ASSIGNED)) {
                     uint64_t vt_id = srv.virtual_id;
                     // reset qts for vt_id
                     qm.reset(vt_id, config.version());
                     WDEBUG << "reset qts for vt " << vt_id << std::endl;
+
+                    clear_queued = true;
+                }
+            } else if (srv.type == server::SHARD) {
+                server::type_t prev_type = prev_config.get_type(srv.id);
+
+                if (prev_type == server::BACKUP_SHARD) {
+                    node_prog_state_mutex.lock();
+                    min_prog_epoch = config.version();
+                    clear_map = std::move(outstanding_prog_states);
+                    node_prog_state_mutex.unlock();
+
+                    clear_queued = true;
                 }
             }
         }
 
-        // drop reads TODO test this
-        qm.clear_queued_reads();
-#endif
+        if (clear_queued) {
+            // drop reads
+            qm.clear_queued_reads();
+            clear_all_state(clear_map);
+        }
     }
 
     inline void
@@ -954,9 +974,29 @@ namespace db
     // node program
 
     inline void
+    shard :: clear_all_state(const std::unordered_map<uint64_t, std::vector<node_handle_t>> &outstanding_prog_states)
+    {
+        std::unordered_set<node_handle_t> to_clean;
+
+        for (auto &p: outstanding_prog_states) {
+            for (const node_handle_t &h: p.second) {
+                to_clean.emplace(h);
+            }
+        }
+
+        for (const node_handle_t &h: to_clean) {
+            db::element::node *n = acquire_node(h);
+            int num_prog_types = n->prog_states.size();
+            n->prog_states.clear();
+            n->prog_states.resize(num_prog_types);
+            release_node(n);
+        }
+    }
+
+    inline void
     shard :: delete_prog_states(uint64_t req_id, std::vector<node_handle_t> &node_handles)
     {
-        for (node_handle_t node_handle: node_handles) {
+        for (const node_handle_t &node_handle: node_handles) {
             db::element::node *node = acquire_node(node_handle);
 
             // check that node not migrated or permanently deleted
@@ -1032,10 +1072,10 @@ namespace db
     }
 
     inline bool
-    shard :: check_done_request(uint64_t req_id)
+    shard :: check_done_request(uint64_t req_id, vc::vclock &clk)
     {
         node_prog_state_mutex.lock();
-        bool done = (done_prog_ids.find(req_id) != done_prog_ids.end());
+        bool done = (clk.get_epoch() < min_prog_epoch) || (done_prog_ids.find(req_id) != done_prog_ids.end());
         node_prog_state_mutex.unlock();
         return done;
     }

@@ -263,7 +263,11 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
             break;
 
             case BUSYBEE_SUCCESS:
-            retry = false;
+            if (msg.unpack_message_type() == message::NODE_PROG_FAIL) {
+                retry = true;
+            } else {
+                retry = false;
+            }
             break;
 
             default:

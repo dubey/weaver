@@ -94,9 +94,6 @@ namespace coordinator
             // transactions
             std::unordered_map<uint64_t, std::shared_ptr<transaction::pending_tx>> outstanding_tx;
 
-            // node prog
-            //std::unordered_map<uint64_t, current_prog> outstanding_progs;
-
             // prog cleanup and permanent deletion
             std::vector<current_prog*> pend_progs, done_progs;
             int prog_done_cnt;
@@ -187,6 +184,7 @@ namespace coordinator
         , shard_node_count(NumShards, 0)
         , out_queue_clk(std::make_pair(0,1))
         , out_queue_counter(0)
+        , restore_status(0)
         , to_exit(false)
 #ifdef weaver_benchmark_
         , outstanding_cnt(0)
@@ -345,10 +343,11 @@ namespace coordinator
 
         // reset qts if a shard died
         std::vector<server> delta = prev_config.delta(config);
+        bool restore = false;
+        bool kill_progs = false;
         for (const server &srv: delta) {
             if (srv.type == server::SHARD) {
                 bool to_reset = false;
-                bool restore = false;
                 server::state_t prv_state = prev_config.get_state(srv.id);
                 server::type_t prv_type = prev_config.get_type(srv.id);
 
@@ -361,6 +360,7 @@ namespace coordinator
                     // reset if server type changes from backup_shard to shard
                     to_reset = true;
                     restore = true;
+                    kill_progs = true;
                 }
 
                 if (to_reset) {
@@ -371,13 +371,36 @@ namespace coordinator
                     nop_ack_qts[shard_id] = 0;
                     WDEBUG << "reset qts for shard " << (shard_id+ShardIdIncr) << std::endl;
                 }
-
-                if (restore) {
-                    restore_mtx.wrlock();
-                    restore_status++;
-                    restore_mtx.unlock();
+            } else if (srv.type == server::VT) {
+                server::state_t prv_state = prev_config.get_state(srv.id);
+                if ((prv_state == server::AVAILABLE || prv_state == server::ASSIGNED)
+                 && (srv.state != server::AVAILABLE && srv.state != server::ASSIGNED)) {
+                    kill_progs = true;
                 }
             }
+        }
+
+        if (restore) {
+            restore_mtx.wrlock();
+            restore_status++;
+            restore_mtx.unlock();
+        }
+
+        if (kill_progs) {
+            // TODO clean up outstanding_tx
+            tx_prog_mutex.lock();
+            for (current_prog *cp: pend_progs) {
+                message::message msg;
+                msg.prepare_message(message::NODE_PROG_FAIL);
+                comm.send_to_client(cp->client, msg.buf);
+                delete cp;
+            }
+            for (current_prog *cp: done_progs) {
+                delete cp;
+            }
+            pend_progs.clear();
+            done_progs.clear();
+            tx_prog_mutex.unlock();
         }
 
         clk_rw_mtx.unlock();

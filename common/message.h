@@ -69,6 +69,7 @@ namespace message
         // node program messages
         NODE_PROG,
         NODE_PROG_RETURN,
+        NODE_PROG_FAIL,
         NODE_CONTEXT_FETCH,
         NODE_CONTEXT_REPLY,
         CACHE_UPDATE,

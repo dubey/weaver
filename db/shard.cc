@@ -89,7 +89,7 @@ parse_single_uint64(std::string &line, size_t &idx, uint64_t &n, bool &bad)
         if (next_digit > 9) { // unexpected char
             bad = true;
             WDEBUG << "Unexpected char with ascii " << (int)line[idx]
-                << " in parsing int, num currently is " << n << std::endl;
+                   << " in parsing int, num currently is " << n << std::endl;
             break;
         }
         if (n > max64_div10) { // multiplication overflow
@@ -949,7 +949,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
                 }
                 */
 #endif
-            if (S->check_done_request(np.req_id)) {
+            if (S->check_done_request(np.req_id, *np.req_vclock)) {
                 done_request = true;
                 S->release_node(node);
                 break;
@@ -1166,7 +1166,7 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
     S->migration_mutex.unlock();
 
     // check if request completed
-    if (S->check_done_request(np.req_id)) {
+    if (S->check_done_request(np.req_id, *np.req_vclock)) {
         return; // done request
     }
 
@@ -2078,6 +2078,11 @@ main(int argc, const char *argv[])
 
         // release config_mutex while restoring shard data which may take a while
         S->restore_backup();
+        for (uint64_t i = 0; i < NumVts; i++) {
+            message::message msg;
+            msg.prepare_message(message::RESTORE_DONE);
+            S->comm.send(i, msg.buf);
+        }
 
         S->config_mutex.lock();
         init_worker_threads(worker_threads);
