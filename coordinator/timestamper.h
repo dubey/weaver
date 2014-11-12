@@ -233,6 +233,8 @@ namespace coordinator
         std::sort(txs.begin(), txs.end(), comp_obj);
 
         for (std::shared_ptr<transaction::pending_tx> tx: txs) {
+            outstanding_tx.emplace(tx->id, tx);
+
             message::message msg;
             std::vector<std::shared_ptr<transaction::pending_tx>> factored_tx;
             factor_tx(tx, factored_tx);

@@ -141,6 +141,7 @@ namespace message
     uint64_t size(const std::shared_ptr<transaction::pending_update> &ptr_t);
     uint64_t size(const std::shared_ptr<transaction::nop_data> &ptr_t);
     uint64_t size(const transaction::pending_tx &t);
+    uint64_t size(const std::vector<bool> &t);
     template <typename T1, typename T2> inline uint64_t size(const std::unordered_map<T1, T2>& t);
     template <typename T> inline uint64_t size(const std::unordered_set<T>& t);
     template <typename T> inline uint64_t size(const std::vector<T>& t);
@@ -181,6 +182,7 @@ namespace message
     void pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::pending_update> &ptr_t);
     void pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::nop_data> &ptr_t);
     void pack_buffer(e::buffer::packer &packer, const transaction::pending_tx &t);
+    void pack_buffer(e::buffer::packer &packer, const std::vector<bool> &t);
     template <typename T1, typename T2> void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::vector<T>& t);
@@ -221,6 +223,7 @@ namespace message
     void unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::pending_update> &ptr_t);
     void unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::nop_data> &ptr_t);
     void unpack_buffer(e::unpacker &unpacker, transaction::pending_tx &t);
+    void unpack_buffer(e::unpacker &unpacker, std::vector<bool> &t);
     template <typename T1, typename T2> void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
     template <typename T> void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
     template <typename T> void unpack_buffer(e::unpacker& unpacker, std::vector<T>& t);

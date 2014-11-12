@@ -248,7 +248,8 @@ message :: size(const transaction::pending_tx &t)
         + size(t.id)
         + size(t.timestamp)
         + size(t.vt_seq)
-        + size(t.qts);
+        + size(t.qts)
+        + size(t.shard_write);
     if (t.type == transaction::UPDATE) {
         sz = sz + size(t.writes)
             + size(t.sender);
@@ -256,6 +257,12 @@ message :: size(const transaction::pending_tx &t)
         sz = sz + size(t.nop);
     }
     return sz;
+}
+
+uint64_t
+message :: size(const std::vector<bool> &t)
+{
+    return sizeof(uint32_t) + t.size()*sizeof(uint8_t);
 }
 
 
@@ -457,11 +464,22 @@ message :: pack_buffer(e::buffer::packer &packer, const transaction::pending_tx 
     pack_buffer(packer, t.timestamp);
     pack_buffer(packer, t.vt_seq);
     pack_buffer(packer, t.qts);
+    pack_buffer(packer, t.shard_write);
     if (t.type == transaction::UPDATE) {
         pack_buffer(packer, t.writes);
         pack_buffer(packer, t.sender);
     } else {
         pack_buffer(packer, t.nop);
+    }
+}
+
+void
+message :: pack_buffer(e::buffer::packer &packer, const std::vector<bool> &t)
+{
+    uint32_t sz = t.size();
+    pack_buffer(packer, sz);
+    for (bool b: t) {
+        pack_buffer(packer, b);
     }
 }
 
@@ -669,11 +687,25 @@ message :: unpack_buffer(e::unpacker &unpacker, transaction::pending_tx &t)
     unpack_buffer(unpacker, t.timestamp);
     unpack_buffer(unpacker, t.vt_seq);
     unpack_buffer(unpacker, t.qts);
+    unpack_buffer(unpacker, t.shard_write);
     if (t.type == transaction::UPDATE) {
         unpack_buffer(unpacker, t.writes);
         unpack_buffer(unpacker, t.sender);
     } else {
         unpack_buffer(unpacker, t.nop);
+    }
+}
+
+void
+message :: unpack_buffer(e::unpacker &unpacker, std::vector<bool> &t)
+{
+    uint32_t sz;
+    unpack_buffer(unpacker, sz);
+    t.reserve(sz);
+    bool b;
+    for (uint32_t i = 0; i < sz; i++) {
+        unpack_buffer(unpacker, b);
+        t.push_back(b);
     }
 }
 
