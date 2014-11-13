@@ -337,10 +337,10 @@ template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
     unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, coordinator::hyper_stub *hstub)
 {
-    vts->restore_mtx.rdlock();
+    vts->restore_mtx.lock();
     if (vts->restore_status > 0) {
-        std::unique_ptr<blocked_prog> to_save(new blocked_prog(clientID, std::move(msg)));
-        vts->prog_queue.emplace_back(std::move(to_save));
+        //std::unique_ptr<blocked_prog> to_save(new blocked_prog(clientID, std::move(msg)));
+        vts->prog_queue->emplace_back(blocked_prog(clientID, std::move(msg)));
         vts->restore_mtx.unlock();
         return;
     } else {
@@ -392,6 +392,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     current_prog *cp = new current_prog(req_id, clientID, req_timestamp.clock);
     uint64_t cp_int = (uint64_t)cp;
     vts->pend_progs.emplace_back(cp);
+    vts->outstanding_progs.emplace(req_id);
     vts->tx_prog_mutex.unlock();
 
     message::message msg_to_send;
@@ -420,54 +421,32 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     unpack_context_reply_db(std::unique_ptr<message::message>, order::oracle*)
 { }
 
-bool
-compare_current_prog(const current_prog* const lhs, const current_prog* const rhs)
-{
-    return lhs->req_id < rhs->req_id;
-}
-
 // remove a completed node program from pending_prog data structure
 // update 'max_done_id' and 'max_done_clk' accordingly
+// return true if successfully process prog_done, false if already processed this prog
 // caution: need to hold vts->tx_prog_mutex
-void
-node_prog_done(current_prog *cp)
+bool
+node_prog_done(uint64_t req_id, current_prog *cp)
 {
-    auto &pend_progs = vts->pend_progs;
     auto &done_progs = vts->done_progs;
+    auto &outstanding_progs = vts->outstanding_progs;
+
+    if (outstanding_progs.find(req_id) == outstanding_progs.end()) {
+        return false;
+    }
+
+    outstanding_progs.erase(req_id);
     done_progs.emplace_back(cp);
 
     if (++vts->prog_done_cnt % 100 == 0) {
         vts->prog_done_cnt = 0;
     } else {
-        return;
+        return true;
     }
 
-    std::sort(pend_progs.begin(), pend_progs.end(), compare_current_prog);
-    std::sort(done_progs.begin(), done_progs.end(), compare_current_prog);
+    vts->process_pend_progs();
 
-    auto pend_iter = pend_progs.begin();
-    auto done_iter = done_progs.begin();
-
-    uint32_t i = 0;
-    uint32_t max_idx = pend_progs.size() > done_progs.size() ? done_progs.size() : pend_progs.size();
-    for (i = 0; i < max_idx && pend_progs[i]->req_id == done_progs[i]->req_id; i++, pend_iter++, done_iter++) {
-        assert(vts->max_done_id < pend_progs[i]->req_id);
-        vts->max_done_id = pend_progs[i]->req_id;
-        vts->max_done_clk = std::move(pend_progs[i]->vclk);
-        delete pend_progs[i];
-    }
-
-    if (i == pend_progs.size()) {
-        pend_progs.clear();
-    } else if (i > 0) {
-        pend_progs.erase(pend_progs.begin(), pend_iter);
-    }
-
-    if (i == done_progs.size()) {
-        done_progs.clear();
-    } else if (i > 0) {
-        done_progs.erase(done_progs.begin(), done_iter);
-    }
+    return true;
 }
 
 void
@@ -591,31 +570,35 @@ server_loop(int thread_id)
                     node_prog::prog_type type;
                     msg->unpack_partial_message(message::NODE_PROG_RETURN, type, req_id, cp_int); // don't unpack rest
                     current_prog *cp = (current_prog*)cp_int;
-                    client = cp->client;
-                    vts->comm.send_to_client(client, msg->buf);
 
                     vts->tx_prog_mutex.lock();
-                    node_prog_done(cp);
+                    bool to_process = node_prog_done(req_id, cp);
                     vts->tx_prog_mutex.unlock();
+
+                    if (to_process) {
+                        client = cp->client;
+                        vts->comm.send_to_client(client, msg->buf);
 #ifdef weaver_benchmark_
-                    vts->test_mtx.lock();
-                    vts->outstanding_cnt--;
-                    vts->test_mtx.unlock();
+                        vts->test_mtx.lock();
+                        vts->outstanding_cnt--;
+                        vts->test_mtx.unlock();
 #endif
+                    }
                     break;
                 }
 
                 case message::RESTORE_DONE: {
-                    vts->restore_mtx.wrlock();
+                    vts->restore_mtx.lock();
                     assert(vts->restore_status > 0);
                     vts->restore_status--;
-                    coordinator::prog_queue_t blocked_progs = std::move(vts->prog_queue);
+                    coordinator::prog_queue_t progs = std::move(vts->prog_queue);
+                    vts->prog_queue.reset(new std::vector<blocked_prog>());
                     vts->restore_mtx.unlock();
 
                     vts->tx_queue_loop();
-                    for (std::unique_ptr<blocked_prog> &bp: blocked_progs) {
-                        bp->msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
-                        node_prog::programs.at(pType)->unpack_and_start_coord(std::move(bp->msg), bp->client, hstub);
+                    for (blocked_prog &bp: *progs) {
+                        bp.msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
+                        node_prog::programs.at(pType)->unpack_and_start_coord(std::move(bp.msg), bp.client, hstub);
                     }
                     break;
                 }

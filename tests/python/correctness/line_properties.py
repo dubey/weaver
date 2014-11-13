@@ -31,10 +31,13 @@ def line_requests(eprops, exp_reach):
     for i in range(num_nodes-1):
         prog_args = [(nodes[i], rp)]
         response = c.run_reach_program(prog_args)
+        #print 'done line req'
         if response.reachable:
             num_reach += 1
+            if exp_reach == 0:
+                print 'bad reach'
     timer = time.time() - timer
-    assert(num_reach == exp_reach)
+    assert (num_reach == exp_reach), 'expected reachable ' + str(exp_reach) + ', actually reachable ' + str(num_reach)
 
 c.begin_tx()
 for i in range(num_nodes):
@@ -55,9 +58,11 @@ for cnt in node_count:
 
 print 'Now testing without edge props'
 line_requests([], num_nodes-1)
+print 'Done testing without edge props'
 
 print 'Now testing with edge props'
 line_requests([('color','blue')], 0)
+print 'Done testing with edge props'
 
 # adding edge props
 c.begin_tx()

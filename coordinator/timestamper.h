@@ -51,7 +51,7 @@ namespace coordinator
     };
 
     using tx_queue_t = std::priority_queue<std::shared_ptr<transaction::pending_tx>, std::vector<std::shared_ptr<transaction::pending_tx>>, greater_tx_ptr>;
-    using prog_queue_t = std::vector<std::unique_ptr<blocked_prog>>;
+    using prog_queue_t = std::unique_ptr<std::vector<blocked_prog>>;
     using prog_reply_t = std::unordered_map<uint64_t, std::vector<bool>>;
 
     class timestamper
@@ -95,6 +95,7 @@ namespace coordinator
             std::unordered_map<uint64_t, std::shared_ptr<transaction::pending_tx>> outstanding_tx;
 
             // prog cleanup and permanent deletion
+            std::unordered_set<uint64_t> outstanding_progs; // for multiple returns and ft
             std::vector<current_prog*> pend_progs, done_progs;
             int prog_done_cnt;
             uint64_t max_done_id; // permanent deletion of migrated nodes
@@ -126,7 +127,7 @@ namespace coordinator
             uint64_t out_queue_counter;
             tx_queue_t tx_out_queue;
             prog_queue_t prog_queue;
-            po6::threads::rwlock restore_mtx;
+            po6::threads::mutex restore_mtx;
             uint16_t restore_status;
 
             // exit
@@ -144,6 +145,7 @@ namespace coordinator
             bool process_tx_queue(std::shared_ptr<transaction::pending_tx> &tx_ptr, std::vector<std::shared_ptr<transaction::pending_tx>> &factored_tx);
             void factor_tx(std::shared_ptr<transaction::pending_tx> tx, std::vector<std::shared_ptr<transaction::pending_tx>> &factored_tx);
             void tx_queue_loop();
+            void process_pend_progs();
             void reset_out_queue_clk(uint64_t epoch);
 
 #ifdef weaver_benchmark_
@@ -184,6 +186,7 @@ namespace coordinator
         , shard_node_count(NumShards, 0)
         , out_queue_clk(std::make_pair(0,1))
         , out_queue_counter(0)
+        , prog_queue(new std::vector<blocked_prog>())
         , restore_status(0)
         , to_exit(false)
 #ifdef weaver_benchmark_
@@ -250,7 +253,7 @@ namespace coordinator
     inline void
     timestamper :: reconfigure()
     {
-        WDEBUG << "Cluster reconfigure triggered\n";
+        WDEBUG << "Cluster reconfigure!" << std::endl;
 
         uint64_t prev_active_vts = num_active_vts;
         comm.reconfigure(config, pause_bb, &num_active_vts);
@@ -314,7 +317,6 @@ namespace coordinator
             // out_queue is empty
             reset_out_queue_clk(config.version());
             vclk.new_epoch(config.version());
-            WDEBUG << "first config, out_queue_clk is now " << out_queue_clk.first << "," << out_queue_clk.second << std::endl;
         } else {
             // restart vclock with new epoch number from configuration
             vclk.increment_clock();
@@ -345,6 +347,7 @@ namespace coordinator
         std::vector<server> delta = prev_config.delta(config);
         bool restore = false;
         bool kill_progs = false;
+        uint64_t dead_shard = 0;
         for (const server &srv: delta) {
             if (srv.type == server::SHARD) {
                 bool to_reset = false;
@@ -361,6 +364,7 @@ namespace coordinator
                     to_reset = true;
                     restore = true;
                     kill_progs = true;
+                    dead_shard = srv.weaver_id;
                 }
 
                 if (to_reset) {
@@ -369,7 +373,6 @@ namespace coordinator
                     qts[shard_id] = 0;
                     to_nop[shard_id] = true;
                     nop_ack_qts[shard_id] = 0;
-                    WDEBUG << "reset qts for shard " << (shard_id+ShardIdIncr) << std::endl;
                 }
             } else if (srv.type == server::VT) {
                 server::state_t prv_state = prev_config.get_state(srv.id);
@@ -381,25 +384,58 @@ namespace coordinator
         }
 
         if (restore) {
-            restore_mtx.wrlock();
+            restore_mtx.lock();
             restore_status++;
             restore_mtx.unlock();
         }
 
         if (kill_progs) {
-            // TODO clean up outstanding_tx
             tx_prog_mutex.lock();
+
+            process_pend_progs();
+
             for (current_prog *cp: pend_progs) {
+                bool cont = false;
+                for (uint32_t i = 0; i < done_progs.size(); i++) {
+                    if (cp->req_id == done_progs[i]->req_id) {
+                        cont = true;
+                        break;
+                    } else if (cp->req_id < done_progs[i]->req_id) {
+                        break;
+                    }
+                }
+
+                if (cont) {
+                    continue;
+                }
+
                 message::message msg;
-                msg.prepare_message(message::NODE_PROG_FAIL);
+                msg.prepare_message(message::NODE_PROG_FAIL, cp->req_id);
                 comm.send_to_client(cp->client, msg.buf);
-                delete cp;
-            }
-            for (current_prog *cp: done_progs) {
                 delete cp;
             }
             pend_progs.clear();
             done_progs.clear();
+            outstanding_progs.clear();
+
+            if (restore) {
+                std::vector<uint64_t> to_clean;
+                for (auto &p: outstanding_tx) {
+                    uint64_t shard_idx = dead_shard - ShardIdIncr;
+                    std::shared_ptr<transaction::pending_tx> tx = p.second;
+                    tx->shard_write[shard_idx] = false;
+
+                    if (weaver_util::none(tx->shard_write)) {
+                        hstub.front()->clean_tx(p.first);
+                        to_clean.emplace_back(p.first);
+                    }
+                }
+
+                for (uint64_t tc: to_clean) {
+                    outstanding_tx.erase(tc);
+                }
+            }
+
             tx_prog_mutex.unlock();
         }
 
@@ -550,7 +586,7 @@ namespace coordinator
     void
     timestamper :: tx_queue_loop()
     {
-        restore_mtx.rdlock();
+        restore_mtx.lock();
         if (restore_status > 0) {
             restore_mtx.unlock();
             return;
@@ -588,6 +624,44 @@ namespace coordinator
                     comm.send(i+ShardIdIncr, msg.buf);
                 }
             }
+        }
+    }
+
+    bool
+    compare_current_prog(const current_prog* const lhs, const current_prog* const rhs)
+    {
+        return lhs->req_id < rhs->req_id;
+    }
+
+    // assuming hold tx_prog_mtx
+    inline void
+    timestamper :: process_pend_progs()
+    {
+        std::sort(pend_progs.begin(), pend_progs.end(), compare_current_prog);
+        std::sort(done_progs.begin(), done_progs.end(), compare_current_prog);
+
+        auto pend_iter = pend_progs.begin();
+        auto done_iter = done_progs.begin();
+
+        uint32_t i = 0;
+        uint32_t max_idx = pend_progs.size() > done_progs.size() ? done_progs.size() : pend_progs.size();
+        for (i = 0; i < max_idx && pend_progs[i]->req_id == done_progs[i]->req_id; i++, pend_iter++, done_iter++) {
+            assert(max_done_id < pend_progs[i]->req_id);
+            max_done_id = pend_progs[i]->req_id;
+            max_done_clk = std::move(pend_progs[i]->vclk);
+            delete pend_progs[i];
+        }
+
+        if (i == pend_progs.size()) {
+            pend_progs.clear();
+        } else if (i > 0) {
+            pend_progs.erase(pend_progs.begin(), pend_iter);
+        }
+
+        if (i == done_progs.size()) {
+            done_progs.clear();
+        } else if (i > 0) {
+            done_progs.erase(done_progs.begin(), done_iter);
         }
     }
 

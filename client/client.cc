@@ -264,6 +264,8 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
 
             case BUSYBEE_SUCCESS:
             if (msg.unpack_message_type() == message::NODE_PROG_FAIL) {
+                uint64_t fail_req_id;
+                msg.unpack_message(message::NODE_PROG_FAIL, fail_req_id);
                 retry = true;
             } else {
                 retry = false;
@@ -273,10 +275,6 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
             default:
             WDEBUG << "node prog return msg fail, recv_code: " << recv_code << std::endl;
             return nullptr;
-        }
-
-        if (retry) {
-            WDEBUG << "retry prog" << std::endl;
         }
     } while (retry);
 

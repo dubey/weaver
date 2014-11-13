@@ -30,7 +30,9 @@ bool
 comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *loc)
 {
     auto mlist_iter = mlist.find(WEAVER_TO_BUSYBEE(server_id));
-    assert(mlist_iter != mlist.end() && "busybee mapper lookup");
+    if (mlist_iter == mlist.end()) {
+        return false;
+    }
     *loc = mlist_iter->second;
     return true;
 }
