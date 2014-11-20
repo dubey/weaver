@@ -39,6 +39,7 @@ CLEANFILES=
 include_HEADERS=
 noinst_HEADERS=
 sysconf_DATA=
+TESTS =
 EXTRA_DIST=LICENSE
 
 noinst_HEADERS+=	node_prog/base_classes.h \
@@ -322,3 +323,7 @@ noinst_HEADERS+=	tests/cpp/read_only_vertex_bench.h
 weaver_test_bench_SOURCES=	tests/cpp/run.cc \
 							common/clock.cc
 weaver_test_bench_LDADD=	libweaverclient.la
+
+TESTS +=	tests/sh/empty_graph.sh
+EXTRA_DIST+=	tests/sh/setup.sh \
+				tests/sh/clean.sh
