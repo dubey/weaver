@@ -73,3 +73,4 @@ weaver-test-bench
 Makefile.deb.weaver
 weaver-0.1.tar.gz
 compile
+test-driver
