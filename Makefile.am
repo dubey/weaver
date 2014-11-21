@@ -324,6 +324,11 @@ weaver_test_bench_SOURCES=	tests/cpp/run.cc \
 							common/clock.cc
 weaver_test_bench_LDADD=	libweaverclient.la
 
-TESTS +=	tests/sh/empty_graph.sh
+TESTS +=	tests/sh/empty_graph.sh \
+			tests/sh/simple_test.sh \
+			tests/sh/read_properties.sh \
+			tests/sh/line_reachability.sh \
+			tests/sh/line_properties.sh \
+			tests/sh/transactions.sh
 EXTRA_DIST+=	tests/sh/setup.sh \
 				tests/sh/clean.sh

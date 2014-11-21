@@ -1,2 +1,4 @@
 tests
 *.pyc
+*.log
+*.trs

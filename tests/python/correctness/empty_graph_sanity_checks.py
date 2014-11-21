@@ -22,22 +22,22 @@ c = client.Client('127.0.0.1', 2002)
 
 c.begin_tx()
 c.create_edge('ayush', '42')
-assert (not c.end_tx()), 'create edge'
+assert not c.end_tx(), 'create edge'
 
 c.begin_tx()
 c.delete_node('298437')
-assert (not c.end_tx()), 'delete node'
+assert not c.end_tx(), 'delete node'
 
 c.begin_tx()
 c.delete_edge('42', '298437')
-assert (not c.end_tx()), 'delete edge'
+assert not c.end_tx(), 'delete edge'
 
 c.begin_tx()
 c.set_node_property('egs', 'type', 'user')
-assert (not c.end_tx()), 'set node property'
+assert not c.end_tx(), 'set node property'
 
 c.begin_tx()
 c.set_edge_property('84', '42', 'color', 'blue')
-assert (not c.end_tx()), 'set edge property'
+assert not c.end_tx(), 'set edge property'
 
 print 'Pass empty_graph_sanity_checks.'
