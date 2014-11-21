@@ -339,7 +339,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 {
     vts->restore_mtx.lock();
     if (vts->restore_status > 0) {
-        //std::unique_ptr<blocked_prog> to_save(new blocked_prog(clientID, std::move(msg)));
         vts->prog_queue->emplace_back(blocked_prog(clientID, std::move(msg)));
         vts->restore_mtx.unlock();
         return;
@@ -570,13 +569,13 @@ server_loop(int thread_id)
                     node_prog::prog_type type;
                     msg->unpack_partial_message(message::NODE_PROG_RETURN, type, req_id, cp_int); // don't unpack rest
                     current_prog *cp = (current_prog*)cp_int;
+                    client = cp->client;
 
                     vts->tx_prog_mutex.lock();
                     bool to_process = node_prog_done(req_id, cp);
                     vts->tx_prog_mutex.unlock();
 
                     if (to_process) {
-                        client = cp->client;
                         vts->comm.send_to_client(client, msg->buf);
 #ifdef weaver_benchmark_
                         vts->test_mtx.lock();
