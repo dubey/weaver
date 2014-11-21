@@ -40,6 +40,7 @@ include_HEADERS=
 noinst_HEADERS=
 sysconf_DATA=
 TESTS =
+TESTS_ENVIRONMENT= . $(abs_top_srcdir)/tests/sh/env.sh "${abs_top_srcdir}" "${abs_top_builddir}";
 EXTRA_DIST=LICENSE
 
 noinst_HEADERS+=	node_prog/base_classes.h \
@@ -88,12 +89,14 @@ noinst_HEADERS+=	node_prog/base_classes.h \
 
 # timestamper
 noinst_HEADERS+=	coordinator/current_prog.h \
+					coordinator/blocked_prog.h \
 					coordinator/hyper_stub.h  \
 					coordinator/server_barrier.h  \
 					coordinator/server_manager.h  \
 					coordinator/timestamper.h  \
 					coordinator/transitions.h  \
-					coordinator/util.h
+					coordinator/util.h \
+					coordinator/vt_constants.h
 bin_PROGRAMS+=				weaver-timestamper
 weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    common/configuration.cc \
@@ -263,39 +266,35 @@ EXTRA_DIST+=	startup_scripts/ps_weaver_support.sh
 sysconf_DATA+=	conf/weaver.yaml
 
 # python example programs
-EXTRA_DIST+=	tests/python/assoc_count_basic.py
-EXTRA_DIST+=	tests/python/delete_tx.py
-EXTRA_DIST+=	tests/python/ft_shard_deletes.py
-EXTRA_DIST+=	tests/python/multiline_cache_testing.py
-EXTRA_DIST+=	tests/python/read_properties.py
 EXTRA_DIST+=	tests/python/test_base.py
-EXTRA_DIST+=	tests/python/assoc_range_basic.py
-EXTRA_DIST+=	tests/python/deletion.py
-EXTRA_DIST+=	tests/python/graph_of_gods_demo.py
-EXTRA_DIST+=	tests/python/nwx_reachability.py
-EXTRA_DIST+=	tests/python/sequential_pathless_reachability_bench.py
-EXTRA_DIST+=	tests/python/clustering_basic_test.py
 EXTRA_DIST+=	tests/python/demo.py
-EXTRA_DIST+=	tests/python/simple_test.py
-EXTRA_DIST+=	tests/python/old_reachability_bench.py
-EXTRA_DIST+=	tests/python/transactions.py
-EXTRA_DIST+=	tests/python/clustering_bench.py
-EXTRA_DIST+=	tests/python/dijkstra_basic_test.py
-EXTRA_DIST+=	tests/python/line_cache_testing.py
-EXTRA_DIST+=	tests/python/reachability_bench.py
 EXTRA_DIST+=	tests/python/simple_client.py
-EXTRA_DIST+=	tests/python/clustering_migration.py
-EXTRA_DIST+=	tests/python/empty_graph_sanity_checks.py
-EXTRA_DIST+=	tests/python/line_properties.py
-EXTRA_DIST+=	tests/python/reachable_migration.py
-EXTRA_DIST+=	tests/python/soc_net_bench.py
-EXTRA_DIST+=	tests/python/two_neighborhood_bench.py
 EXTRA_DIST+=	tests/python/create_graph.py
-EXTRA_DIST+=	tests/python/ft_shard_basic.py
-EXTRA_DIST+=	tests/python/line_reachability.py
-EXTRA_DIST+=	tests/python/read_only_vertex_bench.py
-EXTRA_DIST+=	tests/python/star_cache_testing.py
-EXTRA_DIST+=	tests/python/two_neighborhood_testing.py
+EXTRA_DIST+=	tests/python/assoc_count_basic.py
+EXTRA_DIST+=	tests/python/assoc_range_basic.py
+EXTRA_DIST+=	tests/python/correctness/simple_test.py
+EXTRA_DIST+=	tests/python/correctness/delete_tx.py
+EXTRA_DIST+=	tests/python/correctness/transactions.py
+EXTRA_DIST+=	tests/python/correctness/transactions_ring.py
+EXTRA_DIST+=	tests/python/correctness/ft_shard_deletes.py
+EXTRA_DIST+=	tests/python/correctness/multiline_cache_testing.py
+EXTRA_DIST+=	tests/python/correctness/read_properties.py
+EXTRA_DIST+=	tests/python/correctness/line_properties.py
+EXTRA_DIST+=	tests/python/correctness/ft_shard_basic.py
+EXTRA_DIST+=	tests/python/correctness/line_reachability.py
+EXTRA_DIST+=	tests/python/correctness/clustering_basic_test.py
+EXTRA_DIST+=	tests/python/correctness/dijkstra_basic_test.py
+EXTRA_DIST+=	tests/python/correctness/empty_graph_sanity_checks.py
+EXTRA_DIST+=	tests/python/correctness/two_neighborhood_testing.py
+EXTRA_DIST+=	tests/python/benchmarks/nwx_reachability.py
+EXTRA_DIST+=	tests/python/benchmarks/sequential_pathless_reachability_bench.py
+EXTRA_DIST+=	tests/python/benchmarks/clustering_bench.py
+EXTRA_DIST+=	tests/python/benchmarks/reachability_bench.py
+EXTRA_DIST+=	tests/python/benchmarks/clustering_migration.py
+EXTRA_DIST+=	tests/python/benchmarks/reachable_migration.py
+EXTRA_DIST+=	tests/python/benchmarks/soc_net_bench.py
+EXTRA_DIST+=	tests/python/benchmarks/two_neighborhood_bench.py
+EXTRA_DIST+=	tests/python/benchmarks/read_only_vertex_bench.py
 
 bin_PROGRAMS+=	weaver-parse-config
 weaver_parse_config_SOURCES=	common/config_constants.cc \
@@ -330,5 +329,12 @@ TESTS +=	tests/sh/empty_graph.sh \
 			tests/sh/line_reachability.sh \
 			tests/sh/line_properties.sh \
 			tests/sh/transactions.sh
-EXTRA_DIST+=	tests/sh/setup.sh \
-				tests/sh/clean.sh
+EXTRA_DIST+=	tests/sh/env.sh \
+				tests/sh/setup.sh \
+				tests/sh/clean.sh \
+				tests/sh/empty_graph.sh \
+				tests/sh/simple_test.sh \
+				tests/sh/read_properties.sh \
+				tests/sh/line_reachability.sh \
+				tests/sh/line_properties.sh \
+				tests/sh/transactions.sh

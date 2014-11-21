@@ -7,7 +7,7 @@
 #
 
 echo 'Setup weaver support infrastructure.'
-/home/dubey/start_weaver_support.sh
+"$WEAVER_SRCDIR"/startup_scripts/start_weaver_support.sh
 echo 'Start weaver-shard.'
 weaver-shard &
 sleep 1

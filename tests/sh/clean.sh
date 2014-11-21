@@ -11,5 +11,5 @@ pidof weaver-timestamper | xargs kill -9
 pidof weaver-shard | xargs kill -9
 sleep 1
 echo 'Killing weaver support infrastructure.'
-/home/dubey/kill_weaver_support.sh
+"$WEAVER_SRCDIR"/startup_scripts/kill_weaver_support.sh
 echo 'Done cleanup.'

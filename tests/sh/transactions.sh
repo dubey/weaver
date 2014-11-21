@@ -6,9 +6,9 @@
 # See the LICENSE file for licensing agreement
 #
 
-tests/sh/setup.sh
-python tests/python/correctness/transactions_ring.py
+"$WEAVER_SRCDIR"/tests/sh/setup.sh
+python "$WEAVER_SRCDIR"/tests/python/correctness/transactions_ring.py
 status=$?
-tests/sh/clean.sh
+"$WEAVER_SRCDIR"/tests/sh/clean.sh
 
 exit $status
