@@ -1,4 +1,4 @@
-# Weaver
+<img src=weaver_alpha.png />
 
 Weaver is a distributed, scalable, and strongly consistent graph store.
 
