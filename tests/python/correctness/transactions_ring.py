@@ -15,9 +15,13 @@
 # ===============================================================
 #
 
+import sys
 import random
 import threading
-import weaver.client as client
+try:
+    import weaver.client as client
+except ImportError:
+    import client
 
 num_nodes = 200
 
@@ -72,11 +76,16 @@ def read_loop(c, loops):
         #if i % 100 == 0:
             #print 'read loop progress ' + str(i)
 
+config_file=''
+
+if len(sys.argv) > 1:
+    config_file = sys.argv[1]
+
 num_readers = 20
 readers = []
 for i in range(num_readers):
-    readers.append(client.Client('127.0.0.1', 2002))
-writer = client.Client('127.0.0.1', 2002)
+    readers.append(client.Client('127.0.0.1', 2002, config_file))
+writer = client.Client('127.0.0.1', 2002, config_file)
 
 writer.begin_tx()
 for i in range(num_nodes):

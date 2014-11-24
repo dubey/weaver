@@ -1,13 +1,12 @@
 #                                               -*- Autoconf -*-
 # Process this file with autoconf to produce a configure script.
 
-<<<<<<< HEAD
 AC_PREREQ([2.68])
 AC_INIT([Weaver], [0.1], [dubey@cs.cornell.edu])
 AM_INIT_AUTOMAKE([foreign subdir-objects])
 AM_SILENT_RULES([yes])
 LT_INIT
-AM_PATH_PYTHON
+AM_PATH_PYTHON([2.6])
 AC_CONFIG_SRCDIR([db/shard.h])
 AC_CONFIG_HEADERS([config.h])
 AC_CONFIG_MACRO_DIR([m4])
@@ -39,6 +38,10 @@ PKG_CHECK_MODULES([HYPERDEX], [hyperdex-client >= 1.0])
 
 # Checks for header files.
 AC_CHECK_HEADERS([limits.h mach/mach.h stdint.h stdlib.h string.h sys/time.h])
+#AC_CHECK_HEADER([glog/logging.h],,[AC_MSG_ERROR([
+#-------------------------------------------------------------
+#Weaver requires the glog library; please install to continue.
+#-------------------------------------------------------------])])
 AC_CHECK_HEADER([popt.h],,[AC_MSG_ERROR([
 -------------------------------------------------------------
 Weaver requires the popt library; please install to continue.

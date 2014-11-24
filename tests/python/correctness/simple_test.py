@@ -13,10 +13,19 @@
 # 
 
 import sys
-import weaver.client as client
+
+try:
+    import weaver.client as client
+except ImportError:
+    import client
+
+config_file=''
+
+if len(sys.argv) > 1:
+    config_file = sys.argv[1]
 
 # create client object
-c = client.Client('127.0.0.1', 2002)
+c = client.Client('127.0.0.1', 2002, config_file)
 
 # create node for user ayush
 c.begin_tx()

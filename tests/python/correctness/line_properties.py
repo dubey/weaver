@@ -15,14 +15,22 @@
 import sys
 import time
 
-import weaver.client as client
+try:
+    import weaver.client as client
+except ImportError:
+    import client
+
+config_file=''
+
+if len(sys.argv) > 1:
+    config_file = sys.argv[1]
 
 # creating line graph
 nodes = []
 edges = []
 num_nodes = 400
 coord_id = 0
-c = client.Client('127.0.0.1', 2002)
+c = client.Client('127.0.0.1', 2002, config_file)
 
 def line_requests(eprops, exp_reach):
     num_reach = 0

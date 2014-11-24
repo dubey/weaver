@@ -7,7 +7,7 @@
 #
 
 "$WEAVER_SRCDIR"/tests/sh/setup.sh
-python "$WEAVER_SRCDIR"/tests/python/correctness/read_properties.py
+python "$WEAVER_SRCDIR"/tests/python/correctness/read_properties.py "$WEAVER_SRCDIR"/conf/weaver.yaml
 status=$?
 "$WEAVER_SRCDIR"/tests/sh/clean.sh
 

@@ -35,6 +35,7 @@ bin_PROGRAMS=
 lib_LTLIBRARIES=
 pkgpyexec_LTLIBRARIES=
 pkgpyexec_DATA=
+pkgpyexecdir = $(pyexecdir)/weaver
 CLEANFILES=
 include_HEADERS=
 noinst_HEADERS=

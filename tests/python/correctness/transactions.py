@@ -15,7 +15,10 @@
 
 import sys
 
-import weaver.client as client
+try:
+    import weaver.client as client
+except ImportError:
+    import client
 import time
 import random
 import threading

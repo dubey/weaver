@@ -12,6 +12,27 @@ else
     config_file_args=""
 fi
 
+if [ -z "$WEAVER_BUILDDIR" ]
+then
+    if [ -e /usr/local/lib/libweaverservermanager.so ]
+    then
+        weaver_libdir=/usr/local/lib
+    else
+        if [ -e /usr/lib/libweaverservermanager.so ]
+        then
+            weaver_libdir=/usr/lib
+        else
+            echo 'Did not find libweaverservermanager.so at /usr/lib and /usr/local/lib.  Also, WEAVER_BUILDDIR not set.  Exiting now.'
+            exit 1
+        fi
+    fi
+else
+    weaver_libdir="$WEAVER_BUILDDIR"/.libs
+fi
+
+echo 'weaver libdir:'
+echo $weaver_libdir
+
 
 # get config params
 hyperdex_coord_ipaddr=$(weaver-parse-config -c hyperdex_coord_ipaddr $config_file_args)
@@ -112,7 +133,7 @@ EOF
 done
 sleep 1
 
-replicant new-object -h ${server_manager_ipaddr[0]} -p ${server_manager_port[0]} weaver /usr/local/lib/libweaverservermanager.so
+replicant new-object -h ${server_manager_ipaddr[0]} -p ${server_manager_port[0]} weaver "$weaver_libdir"/libweaverservermanager.so
 
 
 # kronos
@@ -134,6 +155,6 @@ EOF
 done
 sleep 1
 
-replicant new-object -h ${kronos_ipaddr[0]} -p ${kronos_port[0]} chronosd /usr/local/lib/libweaverchronosd.so
+replicant new-object -h ${kronos_ipaddr[0]} -p ${kronos_port[0]} chronosd "$weaver_libdir"/libweaverchronosd.so
 
 echo 'Done startup.'

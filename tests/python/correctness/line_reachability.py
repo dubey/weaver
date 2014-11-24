@@ -11,12 +11,22 @@
 # ===============================================================
 # 
 
-import weaver.client as client
+import sys
+
+try:
+    import weaver.client as client
+except ImportError:
+    import client
+
+config_file=''
+
+if len(sys.argv) > 1:
+    config_file = sys.argv[1]
 
 # creating line graph
 nodes = []
 num_nodes = 200
-c = client.Client('127.0.0.1', 2002)
+c = client.Client('127.0.0.1', 2002, config_file)
 
 c.begin_tx()
 for i in range(num_nodes):
