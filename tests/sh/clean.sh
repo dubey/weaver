@@ -7,6 +7,7 @@
 #
 
 echo 'Killing shard and timestamper.'
+pidof weaver | xargs kill -9
 pidof weaver-timestamper | xargs kill -9
 pidof weaver-shard | xargs kill -9
 sleep 1

@@ -44,6 +44,10 @@ TESTS =
 TESTS_ENVIRONMENT= . $(abs_top_srcdir)/tests/sh/env.sh "${abs_top_srcdir}" "${abs_top_builddir}";
 EXTRA_DIST=LICENSE
 
+weaverexecdir = $(libexecdir)/$(PACKAGE)-$(VERSION)
+weaverheaderdir = $(includedir)/weaver
+pkgconfigdir = $(libdir)/pkgconfig
+
 noinst_HEADERS+=	node_prog/base_classes.h \
 					node_prog/edge_count_program.h \
 					node_prog/n_hop_reach_program.h \
@@ -89,15 +93,15 @@ noinst_HEADERS+=	node_prog/base_classes.h \
                     common/utils.h
 
 # timestamper
-noinst_HEADERS+=	coordinator/current_prog.h \
-					coordinator/blocked_prog.h \
-					coordinator/hyper_stub.h  \
-					coordinator/server_barrier.h  \
-					coordinator/server_manager.h  \
-					coordinator/timestamper.h  \
-					coordinator/transitions.h  \
-					coordinator/util.h \
-					coordinator/vt_constants.h
+noinst_HEADERS+=			coordinator/current_prog.h \
+							coordinator/blocked_prog.h \
+							coordinator/hyper_stub.h  \
+							coordinator/server_barrier.h  \
+							coordinator/server_manager.h  \
+							coordinator/timestamper.h  \
+							coordinator/transitions.h  \
+							coordinator/util.h \
+							coordinator/vt_constants.h
 bin_PROGRAMS+=				weaver-timestamper
 weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    common/configuration.cc \
@@ -148,22 +152,22 @@ libweaverservermanager_la_CFLAGS= 	$(AM_CFLAGS)
 libweaverservermanager_la_CXXFLAGS=	$(AM_CXXFLAGS)
 
 # shard
-noinst_HEADERS+=	db/cache_entry.h \
-					db/del_obj.h \
-					db/element.h \
-					db/message_wrapper.h \
-					db/nop_data.h \
-					db/queued_request.h \
-					db/remote_node.h \
-					db/shard.h \
-					db/deferred_write.h \
-					db/edge.h \
-					db/hyper_stub.h \
-					db/node.h \
-					db/property.h \
-					db/queue_manager.h \
-					db/shard_constants.h
-bin_PROGRAMS+=	weaver-shard
+noinst_HEADERS+=		db/cache_entry.h \
+						db/del_obj.h \
+						db/element.h \
+						db/message_wrapper.h \
+						db/nop_data.h \
+						db/queued_request.h \
+						db/remote_node.h \
+						db/shard.h \
+						db/deferred_write.h \
+						db/edge.h \
+						db/hyper_stub.h \
+						db/node.h \
+						db/property.h \
+						db/queue_manager.h \
+						db/shard_constants.h
+bin_PROGRAMS+=			weaver-shard
 weaver_shard_SOURCES=	common/ids.cc \
 						common/serialization.cc \
 						common/server.cc \
@@ -204,9 +208,9 @@ weaver_shard_SOURCES=	common/ids.cc \
 						db/shard.cc
 
 # c++ client
-noinst_HEADERS+=	client/client_constants.h \
-					client/comm_wrapper.h
-					client/weaver_client.h
+noinst_HEADERS+=			client/client_constants.h \
+							client/comm_wrapper.h
+							client/weaver_client.h
 lib_LTLIBRARIES+=			libweaverclient.la
 libweaverclient_la_SOURCES=	common/ids.cc \
 		                    common/serialization.cc \
@@ -297,7 +301,7 @@ EXTRA_DIST+=	tests/python/benchmarks/soc_net_bench.py
 EXTRA_DIST+=	tests/python/benchmarks/two_neighborhood_bench.py
 EXTRA_DIST+=	tests/python/benchmarks/read_only_vertex_bench.py
 
-bin_PROGRAMS+=	weaver-parse-config
+bin_PROGRAMS+=					weaver-parse-config
 weaver_parse_config_SOURCES=	common/config_constants.cc \
 								startup_scripts/parse_config.cc
 
@@ -308,7 +312,7 @@ noinst_HEADERS+=	chronos/chronos_cmp_encode.h \
 					chronos/network_constants.h \
 					chronos/chronos.h
 
-lib_LTLIBRARIES+=	libweaverchronosd.la
+lib_LTLIBRARIES+=				libweaverchronosd.la
 libweaverchronosd_la_SOURCES=	common/config_constants.cc \
 								chronos/chronos_cmp_encode.cc \
 		        				chronos/chronos_stats_encode.cc \
@@ -318,18 +322,18 @@ libweaverchronosd_la_SOURCES=	common/config_constants.cc \
 libweaverchronosd_la_CFLAGS= 	$(AM_CFLAGS)
 libweaverchronosd_la_CXXFLAGS=	$(AM_CXXFLAGS)
 
-bin_PROGRAMS+=	weaver-test-bench
-noinst_HEADERS+=	tests/cpp/read_only_vertex_bench.h
+bin_PROGRAMS+=				weaver-test-bench
+noinst_HEADERS+=			tests/cpp/read_only_vertex_bench.h
 weaver_test_bench_SOURCES=	tests/cpp/run.cc \
 							common/clock.cc
 weaver_test_bench_LDADD=	libweaverclient.la
 
-TESTS +=	tests/sh/empty_graph.sh \
-			tests/sh/simple_test.sh \
-			tests/sh/read_properties.sh \
-			tests/sh/line_reachability.sh \
-			tests/sh/line_properties.sh \
-			tests/sh/transactions.sh
+TESTS +=		tests/sh/empty_graph.sh \
+				tests/sh/simple_test.sh \
+				tests/sh/read_properties.sh \
+				tests/sh/line_reachability.sh \
+				tests/sh/line_properties.sh \
+				tests/sh/transactions.sh
 EXTRA_DIST+=	tests/sh/env.sh \
 				tests/sh/setup.sh \
 				tests/sh/clean.sh \
@@ -339,3 +343,7 @@ EXTRA_DIST+=	tests/sh/env.sh \
 				tests/sh/line_reachability.sh \
 				tests/sh/line_properties.sh \
 				tests/sh/transactions.sh
+
+bin_PROGRAMS+=		weaver
+weaver_SOURCES=		weaver.cc
+weaver_CPPFLAGS=	-DWEAVER_EXEC_DIR=\""$(weaverexecdir)\""
