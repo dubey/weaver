@@ -1,6 +1,6 @@
 #! /bin/bash
 #
-# start_weaver_support.sh
+# start_weaver.sh
 # Copyright (C) 2014 Ayush Dubey <dubey@cs.cornell.edu>
 #
 

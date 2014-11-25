@@ -865,7 +865,7 @@ main(int argc, const char *argv[])
     vts->config_mutex.unlock();
 
     std::cout << "Vector timestamper " << vt_id << std::endl;
-    std::cout << "THIS IS AN ALPHA RELEASE WHICH DOES NOT SUPPORT FAULT TOLERANCE" << std::endl;
+    std::cout << "THIS IS AN ALPHA RELEASE WHICH SHOULD NOT BE USED IN PRODUCTION" << std::endl;
 
     if (NumVts > 1) {
         // periodic vector clock update to other timestampers

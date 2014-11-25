@@ -1,6 +1,6 @@
 #! /bin/bash
 #
-# stop_weaver_support.sh
+# kill_weaver.sh
 # Copyright (C) 2014 Ayush Dubey <dubey@cs.cornell.edu>
 #
 

@@ -2120,7 +2120,7 @@ main(int argc, const char *argv[])
     }
 
     std::cout << "Weaver: shard instance " << S->shard_id << std::endl;
-    std::cout << "THIS IS AN ALPHA RELEASE WHICH DOES NOT SUPPORT FAULT TOLERANCE" << std::endl;
+    std::cout << "THIS IS AN ALPHA RELEASE WHICH SHOULD NOT BE USED IN PRODUCTION" << std::endl;
 
     for (auto t: worker_threads) {
         t->join();
