@@ -151,3 +151,5 @@ sleep 1
 replicant new-object -h ${kronos_ipaddr[0]} -p ${kronos_port[0]} chronosd "$weaver_libdir"/libweaverchronosd.so
 
 echo 'Done startup.'
+
+read dummy
