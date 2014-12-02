@@ -18,13 +18,20 @@ package weaver
 + /etc/weaver.yaml
 '''{summary}'''
 
+subpackage weaver-common
+| summary="Weaver command"
++ {bindir}/weaver
+'''{summary}'''
+
 subpackage weaver-shard
 | summary="Shards for Weaver"
+| requires="weaver-common"
 + {bindir}/weaver-shard
 '''{summary}'''
 
 subpackage weaver-timestamper
 | summary="Timestampers for Weaver"
+| requires="weaver-common"
 + {bindir}/weaver-timestamper
 '''{summary}'''
 
@@ -56,6 +63,7 @@ subpackage python-weaver-client
 
 subpackage weaver-config
 | summary="Parse weaver configuration"
+| requires="weaver-common"
 + {bindir}/weaver-parse-config
 '''{summary}'''
 
