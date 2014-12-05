@@ -38,11 +38,12 @@
 #include <queue>
 
 // Chronos
+#include "common/weaver_constants.h"
 #include "event_dependency_graph.h"
 
 #define EDGES_EMPTY (UINT64_MAX - 1)
 #define EDGES_END (UINT64_MAX - 1)
-#define CACHE_SIZE 16777216ULL
+#define CACHE_SIZE 16384ULL
 
 event_dependency_graph :: event_dependency_graph()
     : m_nextid(1)
@@ -61,7 +62,9 @@ event_dependency_graph :: event_dependency_graph()
     , m_event_to_inner()
 {
     m_event_to_inner.set_deleted_key(0);
+
     m_cache = static_cast<uint64_t*>(mmap(NULL, CACHE_SIZE * 64ULL, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_POPULATE, -1, 0));
+
     assert(m_cache != MAP_FAILED);
     memset(m_cache, 0, CACHE_SIZE * 64ULL);
 }
