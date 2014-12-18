@@ -19,6 +19,7 @@
 #include <signal.h>
 #include <e/popt.h>
 #include <e/buffer.h>
+#include <pugixml.hpp>
 
 #define weaver_debug_
 #include "common/weaver_constants.h"
@@ -200,8 +201,6 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
     uint64_t line_count = 0;
     uint64_t edge_count = 1;
     uint64_t max_node_handle;
-    std::unordered_set<node_handle_t> seen_nodes;
-    std::vector<std::unordered_map<node_handle_t, uint64_t>> node_maps(NUM_SHARD_THREADS, std::unordered_map<node_handle_t, uint64_t>());
     vc::vclock zero_clk(0, 0);
     uint8_t thread_select = 0;
 
@@ -228,13 +227,10 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     edge_handle = std::to_string(max_node_handle + (edge_count++));
                     uint64_t loc0 = ((node0 % num_shards) + ShardIdIncr);
                     uint64_t loc1 = ((node1 % num_shards) + ShardIdIncr);
-                    assert(loc0 < num_shards + ShardIdIncr);
-                    assert(loc1 < num_shards + ShardIdIncr);
                     if (loc0 == shard_id) {
                         n = S->acquire_node_nonlocking(id0);
                         if (n == NULL) {
                             n = S->create_node(id0, zero_clk, false, true);
-                            node_maps[thread_select][id0] = shard_id;
                             thread_select = (thread_select + 1) % NUM_SHARD_THREADS;
                         }
                         S->create_edge_nonlocking(n, edge_handle, id1, loc1, zero_clk, true);
@@ -242,7 +238,6 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     if (loc1 == shard_id) {
                         if (!S->node_exists_nonlocking(id1)) {
                             S->create_node(id1, zero_clk, false, true);
-                            node_maps[thread_select][id1] = shard_id;
                             thread_select = (thread_select + 1) % NUM_SHARD_THREADS;
                         }
                     }
@@ -269,9 +264,8 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 assert(loc < num_shards + ShardIdIncr);
                 if (loc == shard_id) {
                     n = S->acquire_node_nonlocking(id0);
-                    if (n == NULL) {
+                    if (n == nullptr) {
                         n = S->create_node(id0, zero_clk, false, true);
-                        node_maps[thread_select][id0] = shard_id;
                         thread_select = (thread_select + 1) % NUM_SHARD_THREADS;
                     }
                 }
@@ -292,14 +286,63 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 uint64_t loc0 = all_node_map[id0];
                 uint64_t loc1 = all_node_map[id1];
                 if (loc0 == shard_id) {
-                    id0 = std::to_string(node0);
                     n = S->acquire_node_nonlocking(id0);
-                    assert(n != NULL);
+                    assert(n != nullptr);
                     S->create_edge_nonlocking(n, edge_handle, id1, loc1, zero_clk, true);
                     for (auto &p: props) {
                         S->set_edge_property_nonlocking(n, edge_handle, p.first, p.second, zero_clk);
                     }
                 }
+            }
+
+            S->bulk_load_persistent();
+            break;
+        }
+
+        case db::GRAPHML: {
+            auto hash_string = std::hash<std::string>();
+            pugi::xml_document doc;
+            assert(doc.load_file(graph_file));
+            pugi::xml_node graph_wrapper = doc.child("graphml");
+            pugi::xml_node graph = graph_wrapper.child("graph");
+
+            // nodes
+            for (pugi::xml_node node: graph.children("node")) {
+                id0 = node.attribute("id").value();
+                loc = (hash_string(id0) % num_shards) + ShardIdIncr;
+                if (loc == shard_id) {
+                    n = S->acquire_node_nonlocking(id0);
+                    assert(n == nullptr);
+                    n = S->create_node(id0, zero_clk, false, true);
+                    thread_select = (thread_select + 1) % NUM_SHARD_THREADS;
+                }
+
+                for (pugi::xml_node prop: node.children("data")) {
+                    std::string key = prop.attribute("key").value();
+                    std::string value = prop.child_value();
+                    S->set_node_property_nonlocking(n, key, value, zero_clk);
+                }
+            }
+
+            // edges
+            for (pugi::xml_node edge: graph.children("edge")) {
+                id0 = edge.attribute("source").value();
+                id1 = edge.attribute("target").value();
+                edge_handle = edge.attribute("id").value();
+                uint64_t loc0 = (hash_string(id0) % num_shards) + ShardIdIncr;
+                uint64_t loc1 = (hash_string(id1) % num_shards) + ShardIdIncr;
+                if (loc0 == shard_id) {
+                    n = S->acquire_node_nonlocking(id0);
+                    assert(n != nullptr);
+                    S->create_edge_nonlocking(n, edge_handle, id1, loc1, zero_clk, true);
+
+                    for (pugi::xml_node prop: edge.children("data")) {
+                        std::string key = prop.attribute("key").value();
+                        std::string value = prop.child_value();
+                        S->set_edge_property_nonlocking(n, edge_handle, key, value, zero_clk);
+                    }
+                }
+                edge_count++;
             }
 
             S->bulk_load_persistent();
@@ -2105,6 +2148,8 @@ main(int argc, const char *argv[])
                 format = db::SNAP;
             } else if (strcmp(graph_format, "weaver") == 0) {
                 format = db::WEAVER;
+            } else if (strcmp(graph_format, "graphml") == 0) {
+                format = db::GRAPHML;
             } else {
                 WDEBUG << "Invalid graph file format" << std::endl;
             }

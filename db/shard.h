@@ -58,7 +58,9 @@ namespace db
         // list of node ids with corresponding shard ids, then edge list
         // first line must be of format "#<num_nodes>", e.g. "#42"
         // each edge followed by list of props (list of key-value pairs)
-        WEAVER
+        WEAVER,
+        // xml based format for graphs. see http://graphml.graphdrawing.org/
+        GRAPHML
     };
 
     // graph partition state and associated data structures
