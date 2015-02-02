@@ -26,8 +26,8 @@
 
 #include "node_prog/base_classes.h"
 #include "common/weaver_constants.h"
-#include "common/config_constants.h"
 #include "common/cache_constants.h"
+#include "common/config_constants.h"
 #include "common/ids.h"
 #include "common/vclock.h"
 #include "common/message.h"

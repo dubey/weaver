@@ -30,9 +30,6 @@ else
     weaver_libdir="$WEAVER_BUILDDIR"/.libs
 fi
 
-echo 'weaver libdir:'
-echo $weaver_libdir
-
 
 # get config params
 hyperdex_coord_ipaddr=$(weaver-parse-config -c hyperdex_coord_ipaddr $config_file_args)
@@ -43,6 +40,7 @@ server_manager_ipaddr=($(weaver-parse-config -c server_manager_ipaddr $config_fi
 server_manager_port=($(weaver-parse-config -c server_manager_port $config_file_args))
 kronos_ipaddr=($(weaver-parse-config -c kronos_ipaddr $config_file_args))
 kronos_port=($(weaver-parse-config -c kronos_port $config_file_args))
+edge_index=($(weaver-parse-config -c edge_index $config_file_args))
 
 rm_patterns="*.log *.sst *.old CURRENT  LOCK  LOG  MANIFEST*"
 
@@ -90,6 +88,11 @@ subspace shard
 create 8 partitions
 tolerate 2 failures
 EOF
+
+if [ $edge_index == '1' ]
+then
+    echo 'yay we got edge index'
+fi
 
 hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
 space weaver_graph_data

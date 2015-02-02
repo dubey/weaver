@@ -15,8 +15,8 @@
 #include <assert.h>
 #include <yaml.h>
 #include "common/weaver_constants.h"
-#include "common/config_constants.h"
 #include "common/cache_constants.h"
+#include "common/config_constants.h"
 
 bool
 init_config_constants(const char *config_file_name)
@@ -31,6 +31,7 @@ init_config_constants(const char *config_file_name)
     KronosPort = UINT16_MAX;
     ServerManagerIpaddr = NULL;
     ServerManagerPort = UINT16_MAX;
+    EdgeIndex = UINT8_MAX;
 
     FILE *config_file = nullptr;
     if (config_file_name != nullptr) {
@@ -88,6 +89,17 @@ init_config_constants(const char *config_file_name)
 #define PARSE_IPADDR(X) \
     X = (char*)malloc(32); \
     strncpy(X, (const char*)token.data.scalar.value, 32); \
+    yaml_token_delete(&token);
+
+#define PARSE_BOOL(X) \
+    X = strncmp((const char*)token.data.scalar.value, "true", 4) == 0 \
+     || strncmp((const char*)token.data.scalar.value, "t", 1) == 0 \
+     || strncmp((const char*)token.data.scalar.value, "True", 4) == 0 \
+     || strncmp((const char*)token.data.scalar.value, "T", 1) == 0 \
+     || strncmp((const char*)token.data.scalar.value, "Yes", 3) == 0 \
+     || strncmp((const char*)token.data.scalar.value, "Y", 1) == 0 \
+     || strncmp((const char*)token.data.scalar.value, "yes", 3) == 0 \
+     || strncmp((const char*)token.data.scalar.value, "y", 1) == 0; \
     yaml_token_delete(&token);
 
 #define PARSE_VALUE_IPADDR_PORT_BLOCK(v) \
@@ -161,9 +173,19 @@ init_config_constants(const char *config_file_name)
                     ServerManagerIpaddr = ServerManagerLocs[0].first;
                     ServerManagerPort = ServerManagerLocs[0].second;
 
+                } else if (strncmp((const char*)token.data.scalar.value, "edge_index", 10) == 0) {
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
+                    bool edge_index = false;
+                    PARSE_BOOL(edge_index);
+                    if (edge_index) {
+                        EdgeIndex = 1;
+                    } else {
+                        EdgeIndex = 0;
+                    }
+
                 } else {
                     WDEBUG << "unexpected key " << token.data.scalar.value << std::endl;
-                    return false;
                 }
                 break;
 
@@ -193,13 +215,13 @@ init_config_constants(const char *config_file_name)
      || NULL == KronosIpaddr
      || UINT16_MAX == KronosPort
      || NULL == ServerManagerIpaddr
-     || UINT16_MAX == ServerManagerPort) {
+     || UINT16_MAX == ServerManagerPort
+     || UINT8_MAX == EdgeIndex) {
         return false;
     }
 
     ClkSz = NumVts+1; // one entry for each vt + an (configuration) epoch number
     NumShards = 0;
-    //NumEffectiveServers = NumVts + NumShards;
     MaxNumServers = 1000; // should be greater than NumActualServers = (NumEffectiveServers * (1+NumBackups))
     ShardIdIncr = NumVts;
 

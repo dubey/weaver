@@ -202,7 +202,6 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
     uint64_t edge_count = 1;
     uint64_t max_node_handle;
     vc::vclock zero_clk(0, 0);
-    uint8_t thread_select = 0;
 
     switch(format) {
 
@@ -231,14 +230,12 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                         n = S->acquire_node_nonlocking(id0);
                         if (n == NULL) {
                             n = S->create_node(id0, zero_clk, false, true);
-                            thread_select = (thread_select + 1) % NUM_SHARD_THREADS;
                         }
                         S->create_edge_nonlocking(n, edge_handle, id1, loc1, zero_clk, true);
                     }
                     if (loc1 == shard_id) {
                         if (!S->node_exists_nonlocking(id1)) {
                             S->create_node(id1, zero_clk, false, true);
-                            thread_select = (thread_select + 1) % NUM_SHARD_THREADS;
                         }
                     }
                 }
@@ -266,7 +263,6 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     n = S->acquire_node_nonlocking(id0);
                     if (n == nullptr) {
                         n = S->create_node(id0, zero_clk, false, true);
-                        thread_select = (thread_select + 1) % NUM_SHARD_THREADS;
                     }
                 }
                 if (++line_count == max_node_handle) {
@@ -314,7 +310,6 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     n = S->acquire_node_nonlocking(id0);
                     assert(n == nullptr);
                     n = S->create_node(id0, zero_clk, false, true);
-                    thread_select = (thread_select + 1) % NUM_SHARD_THREADS;
                 }
 
                 for (pugi::xml_node prop: node.children("data")) {

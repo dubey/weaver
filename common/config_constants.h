@@ -39,12 +39,12 @@ extern char *ServerManagerIpaddr;
 extern uint16_t ServerManagerPort;
 extern std::vector<std::pair<char*, uint16_t>> ServerManagerLocs;
 
+extern uint8_t EdgeIndex;
+
 bool init_config_constants(const char *config_file_name=NULL);
 void update_config_constants(uint64_t num_shards);
 uint64_t get_num_shards();
 
-//#define NUM_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
-//#define NUM_THREADS 32
 #define ID_BITS 16 // max 2^16 timestampers
 #define TOP_MASK (0x0000ffffffffffffULL)
 
@@ -65,6 +65,7 @@ uint64_t get_num_shards();
     char *ServerManagerIpaddr; \
     uint16_t ServerManagerPort; \
     std::vector<std::pair<char*, uint16_t>> ServerManagerLocs; \
+    uint8_t EdgeIndex; \
     uint16_t MaxCacheEntries;
 
 

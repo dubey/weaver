@@ -90,6 +90,8 @@ main(int argc, const char *argv[])
             std::cout << p.second << " ";
         }
         std::cout << std::endl;
+    } else if (config == "edge_index") {
+        std::cout << (EdgeIndex == 1? 1:0) << std::endl;
     } else {
         std::cout << "bad config name" << std::endl;
     }
