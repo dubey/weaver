@@ -31,7 +31,7 @@ init_config_constants(const char *config_file_name)
     KronosPort = UINT16_MAX;
     ServerManagerIpaddr = NULL;
     ServerManagerPort = UINT16_MAX;
-    EdgeIndex = UINT8_MAX;
+    AuxIndex = UINT8_MAX;
 
     FILE *config_file = nullptr;
     if (config_file_name != nullptr) {
@@ -173,15 +173,15 @@ init_config_constants(const char *config_file_name)
                     ServerManagerIpaddr = ServerManagerLocs[0].first;
                     ServerManagerPort = ServerManagerLocs[0].second;
 
-                } else if (strncmp((const char*)token.data.scalar.value, "edge_index", 10) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, "aux_index", 10) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
-                    bool edge_index = false;
-                    PARSE_BOOL(edge_index);
-                    if (edge_index) {
-                        EdgeIndex = 1;
+                    bool aux_index = false;
+                    PARSE_BOOL(aux_index);
+                    if (aux_index) {
+                        AuxIndex = 1;
                     } else {
-                        EdgeIndex = 0;
+                        AuxIndex = 0;
                     }
 
                 } else {
@@ -216,7 +216,7 @@ init_config_constants(const char *config_file_name)
      || UINT16_MAX == KronosPort
      || NULL == ServerManagerIpaddr
      || UINT16_MAX == ServerManagerPort
-     || UINT8_MAX == EdgeIndex) {
+     || UINT8_MAX == AuxIndex) {
         return false;
     }
 

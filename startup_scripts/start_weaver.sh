@@ -40,7 +40,7 @@ server_manager_ipaddr=($(weaver-parse-config -c server_manager_ipaddr $config_fi
 server_manager_port=($(weaver-parse-config -c server_manager_port $config_file_args))
 kronos_ipaddr=($(weaver-parse-config -c kronos_ipaddr $config_file_args))
 kronos_port=($(weaver-parse-config -c kronos_port $config_file_args))
-edge_index=($(weaver-parse-config -c edge_index $config_file_args))
+aux_index=($(weaver-parse-config -c aux_index $config_file_args))
 
 rm_patterns="*.log *.sst *.old CURRENT  LOCK  LOG  MANIFEST*"
 
@@ -79,25 +79,31 @@ sleep 1
 
 echo 'Adding HyperDex spaces'
 
+#hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
+#space weaver_loc_mapping
+#key node
+#attributes
+#    int shard
+#subspace shard
+#tolerate 2 failures
+#EOF
+
+if [ $aux_index == '1' ] then
 hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
-space weaver_loc_mapping
-key node
+space weaver_index_data
+key index
 attributes
+    string node,
     int shard
-subspace shard
-create 8 partitions
 tolerate 2 failures
 EOF
-
-if [ $edge_index == '1' ]
-then
-    echo 'yay we got edge index'
 fi
 
 hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
 space weaver_graph_data
 key node
 attributes
+    int shard,
     string creat_time,
     map(string, string) properties,
     map(string, string) out_edges,

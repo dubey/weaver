@@ -8,4 +8,4 @@ kronos:
     - 127.0.0.1 : 1992
 weaver_coord:
     - 127.0.0.1 : 2002
-edge_index: true
+aux_index: true
