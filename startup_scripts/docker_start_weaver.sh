@@ -78,20 +78,22 @@ sleep 1
 
 echo 'Adding HyperDex spaces'
 
+if [ $aux_index == '1' ] then
 hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
-space weaver_loc_mapping
-key node
+space weaver_index_data
+key index
 attributes
+    string node,
     int shard
-subspace shard
-create 8 partitions
 tolerate 2 failures
 EOF
+fi
 
 hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
 space weaver_graph_data
 key node
 attributes
+    int shard,
     string creat_time,
     map(string, string) properties,
     map(string, string) out_edges,

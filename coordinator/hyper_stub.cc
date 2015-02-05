@@ -76,49 +76,36 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 #define ERROR_FAIL \
     error = true; \
     abort_tx(); \
-    clean_up(nodes); \
+    clean_up(old_nodes); \
+    clean_up(new_nodes); \
     return;
 
     ready = false;
     error = false;
 
-    std::unordered_map<node_handle_t, db::element::node*> nodes;
+    std::unordered_map<node_handle_t, db::element::node*> old_nodes, new_nodes;
     begin_tx();
-
-    std::unordered_map<node_handle_t, uint64_t> get_map = get_nmap(get_set, true);
-    if (get_map.size() != get_set.size()) {
-        ERROR_FAIL;
-    }
-
-    if (!put_nmap_if_not_exist(put_map)) {
-        ERROR_FAIL;
-    }
-
-    if (!del_nmap(del_set)) {
-        ERROR_FAIL;
-    }
 
     // get all nodes from Hyperdex (we need at least last upd clk)
     for (const node_handle_t &h: get_set) {
         if (put_map.find(h) != put_map.end()) {
             ERROR_FAIL;
         }
-        nodes[h] = new db::element::node(h, dummy_clk, &dummy_mtx);
-        if (!get_node(*nodes[h])) {
-            ERROR_FAIL;
-        }
+        old_nodes[h] = new db::element::node(h, UINT64_MAX, dummy_clk, &dummy_mtx);
     }
     for (const node_handle_t &h: del_set) {
-        nodes[h] = new db::element::node(h, dummy_clk, &dummy_mtx);
-        if (!get_node(*nodes[h])) {
-            ERROR_FAIL;
+        if (old_nodes.find(h) == old_nodes.end()) {
+            old_nodes[h] = new db::element::node(h, UINT64_MAX, dummy_clk, &dummy_mtx);
         }
+    }
+    if (!get_nodes(old_nodes, true)) {
+        ERROR_FAIL;
     }
 
     // last upd clk check
     std::vector<vc::vclock> before;
-    before.reserve(nodes.size());
-    for (const auto &p: nodes) {
+    before.reserve(old_nodes.size());
+    for (const auto &p: old_nodes) {
         before.emplace_back(p.second->last_upd_clk);
     }
     if (!time_oracle->assign_vt_order(before, tx->timestamp)) {
@@ -128,31 +115,35 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     }
 
     for (const auto &p: put_map) {
-        nodes[p.first] = new db::element::node(p.first, tx->timestamp, &dummy_mtx);
-        nodes[p.first]->last_upd_clk = tx->timestamp;
-        nodes[p.first]->restore_clk = tx->timestamp.clock;
+        new_nodes[p.first] = new db::element::node(p.first, p.second, tx->timestamp, &dummy_mtx);
+        new_nodes[p.first]->last_upd_clk = tx->timestamp;
+        new_nodes[p.first]->restore_clk = tx->timestamp.clock;
     }
 
 #define CHECK_LOC(loc, handle) \
     if (loc == UINT64_MAX) { \
-        loc_iter = get_map.find(handle); \
-        if (loc_iter == get_map.end()) { \
-            ERROR_FAIL; \
+        node_iter = old_nodes.find(handle); \
+        if (node_iter == old_nodes.end()) { \
+            node_iter = new_nodes.find(handle); \
+            if (node_iter == new_nodes.end()) { \
+                ERROR_FAIL; \
+            } \
         } \
-        loc = loc_iter->second; \
+        loc = node_iter->second->shard; \
     }
 
 #define GET_NODE(handle) \
-    node_iter = nodes.find(handle); \
-    if (node_iter == nodes.end()) { \
-        ERROR_FAIL; \
-    } else { \
-        n = &(*node_iter->second); \
-    }
+    node_iter = old_nodes.find(handle); \
+    if (node_iter == old_nodes.end()) { \
+        node_iter = new_nodes.find(handle); \
+        if (node_iter == new_nodes.end()) { \
+            ERROR_FAIL; \
+        } \
+    } \
+    n = &(*node_iter->second);
 
-    auto node_iter = nodes.end();
+    auto node_iter = old_nodes.end();
     db::element::node *n = nullptr;
-    auto loc_iter = get_map.end();
 
     for (std::shared_ptr<transaction::pending_update> upd: tx->writes) {
         switch (upd->type) {
@@ -217,10 +208,27 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 #undef CHECK_LOC
 #undef GET_NODE
 
-    put_nodes(nodes);
-
     for (const node_handle_t &h: del_set) {
-        del_node(h);
+        node_iter = old_nodes.find(h);
+        if (node_iter == old_nodes.end()) {
+            node_iter = new_nodes.find(h);
+            assert(node_iter != new_nodes.end());
+            n = node_iter->second;
+            new_nodes.erase(h);
+        } else {
+            n = node_iter->second;
+            old_nodes.erase(h);
+        }
+
+        for (auto &e: n->out_edges) {
+            delete e.second;
+        }
+        n->out_edges.clear();
+        delete n;
+    }
+
+    if (!put_nodes(old_nodes, false) || !put_nodes(new_nodes, true) || !del_nodes(del_set)) {
+        ERROR_FAIL;
     }
 
     hyperdex_client_attribute attr[NUM_TX_ATTRS];
@@ -262,7 +270,8 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
             ready = false;
     }
 
-    clean_up(nodes);
+    clean_up(old_nodes);
+    clean_up(new_nodes);
 
 #undef ERROR_FAIL
 }

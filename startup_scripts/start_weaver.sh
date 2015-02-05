@@ -79,19 +79,10 @@ sleep 1
 
 echo 'Adding HyperDex spaces'
 
-#hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
-#space weaver_loc_mapping
-#key node
-#attributes
-#    int shard
-#subspace shard
-#tolerate 2 failures
-#EOF
-
-if [ $aux_index == '1' ] then
+if [ $aux_index == '1' ]; then
 hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
 space weaver_index_data
-key index
+key idx
 attributes
     string node,
     int shard

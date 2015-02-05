@@ -44,7 +44,7 @@ namespace element
     class node : public node_prog::node
     {
         public:
-            node(const node_handle_t &handle, vc::vclock &vclk, po6::threads::mutex *mtx);
+            node(const node_handle_t &handle, uint64_t shard, vc::vclock &vclk, po6::threads::mutex *mtx);
             ~node();
 
         public:
@@ -57,6 +57,7 @@ namespace element
 
         public:
             element base;
+            uint64_t shard;
             enum mode state;
             std::unordered_map<edge_handle_t, edge*> out_edges;
             po6::threads::cond cv; // for locking node

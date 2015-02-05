@@ -16,13 +16,15 @@
 #include "common/config_constants.h"
 
 hyper_stub_base :: hyper_stub_base()
-    : graph_attrs{"creat_time",
+    : graph_attrs{"shard",
+        "creat_time",
         "properties",
         "out_edges",
         "migr_status", // 0 for stable, 1 for moving
         "last_upd_clk",
         "restore_clk"}
-    , graph_dtypes{HYPERDATATYPE_STRING,
+    , graph_dtypes{HYPERDATATYPE_INT64,
+        HYPERDATATYPE_STRING,
         HYPERDATATYPE_MAP_STRING_STRING,
         HYPERDATATYPE_MAP_STRING_STRING,
         HYPERDATATYPE_INT64,
@@ -32,11 +34,15 @@ hyper_stub_base :: hyper_stub_base()
         "tx_data"}
     , tx_dtypes{HYPERDATATYPE_INT64,
         HYPERDATATYPE_STRING}
+    , index_attrs{"node",
+        "shard"}
+    , index_dtypes{HYPERDATATYPE_STRING,
+        HYPERDATATYPE_INT64}
     , cl(hyperdex_client_create(HyperdexCoordIpaddr, HyperdexCoordPort))
 { }
 
 
-#ifdef weaver_benchmark_
+#ifdef weaver_benchmark_ // assert false on error
 
 #define HYPERDEX_CHECK_ID(status) \
     if (hdex_id < 0) { \
@@ -82,6 +88,24 @@ hyper_stub_base :: hyper_stub_base()
         int num_hdex_calls = 0; \
         do { \
             hdex_id = hyperdex_client_get(cl, space, key, key_sz, &get_status, attr, attr_sz); \
+        } while (hdex_id < 0 && (get_status == HYPERDEX_CLIENT_INTERRUPTED) && num_hdex_calls++ < 5); \
+    } \
+    HYPERDEX_CHECK_ID(get_status);
+
+#define HYPERDEX_GET_PARTIAL(space, key, key_sz, attrnames, attrnames_sz, get_status, attr, attr_sz) \
+    { \
+        int num_hdex_calls = 0; \
+        do { \
+            hdex_id = hyperdex_client_xact_get_partial(hyper_tx, space, key, key_sz, attrnames, attrnames_sz, &get_status, attr, attr_sz); \
+        } while (hdex_id < 0 && (get_status == HYPERDEX_CLIENT_INTERRUPTED) && num_hdex_calls++ < 5); \
+    } \
+    HYPERDEX_CHECK_ID(get_status);
+
+#define HYPERDEX_GET_PARTIAL_NOTX(space, key, key_sz, attrnames, attrnames_sz, get_status, attr, attr_sz) \
+    { \
+        int num_hdex_calls = 0; \
+        do { \
+            hdex_id = hyperdex_client_get_partial(cl, space, key, key_sz, attrnames, attrnames_sz, &get_status, attr, attr_sz); \
         } while (hdex_id < 0 && (get_status == HYPERDEX_CLIENT_INTERRUPTED) && num_hdex_calls++ < 5); \
     } \
     HYPERDEX_CHECK_ID(get_status);
@@ -149,6 +173,18 @@ hyper_stub_base :: hyper_stub_base()
 #define HYPERDEX_GET_NOTX(space, key, key_sz, get_status, attr, attr_sz) \
     do { \
         hdex_id = hyperdex_client_get(cl, space, key, key_sz, &get_status, attr, attr_sz); \
+    } while (hdex_id < 0 && (get_status == HYPERDEX_CLIENT_INTERRUPTED || get_status == HYPERDEX_CLIENT_COORDFAIL)); \
+    HYPERDEX_CHECK_ID(get_status);
+
+#define HYPERDEX_GET_PARTIAL(space, key, key_sz, attrnames, attrnames_sz, get_status, attr, attr_sz) \
+    do { \
+        hdex_id = hyperdex_client_xact_get_partial(hyper_tx, space, key, key_sz, attrnames, attrnames_sz, &get_status, attr, attr_sz); \
+    } while (hdex_id < 0 && (get_status == HYPERDEX_CLIENT_INTERRUPTED || get_status == HYPERDEX_CLIENT_COORDFAIL)); \
+    HYPERDEX_CHECK_ID(get_status);
+
+#define HYPERDEX_GET_PARTIAL_NOTX(space, key, key_sz, attrnames, attrnames_sz, get_status, attr, attr_sz) \
+    do { \
+        hdex_id = hyperdex_client_get_partial(cl, space, key, key_sz, attrnames, attrnames_sz, &get_status, attr, attr_sz); \
     } while (hdex_id < 0 && (get_status == HYPERDEX_CLIENT_INTERRUPTED || get_status == HYPERDEX_CLIENT_COORDFAIL)); \
     HYPERDEX_CHECK_ID(get_status);
 
@@ -430,6 +466,32 @@ hyper_stub_base :: get(const char *space,
 }
 
 bool
+hyper_stub_base :: get_partial(const char *space,
+    const char *key, size_t key_sz,
+    const char** attrnames, size_t attrnames_sz,
+    const hyperdex_client_attribute **cl_attr, size_t *num_attrs,
+    bool tx)
+{
+    hyperdex_client_returncode get_status, loop_status;
+    int64_t hdex_id;
+    int success_calls = 0;
+    bool success = true;
+
+    if (tx) {
+        HYPERDEX_GET_PARTIAL(space, key, key_sz, attrnames, attrnames_sz, get_status, cl_attr, num_attrs);
+    } else {
+        HYPERDEX_GET_PARTIAL_NOTX(space, key, key_sz, attrnames, attrnames_sz, get_status, cl_attr, num_attrs);
+    }
+
+    if (success_calls == 1) {
+        HYPERDEX_LOOP;
+        HYPERDEX_CHECK_STATUSES(get_status, get_status != HYPERDEX_CLIENT_SUCCESS);
+    }
+
+    return success;
+}
+
+bool
 hyper_stub_base :: multiple_get(std::vector<const char*> &spaces,
     std::vector<const char*> &keys, std::vector<size_t> &key_szs,
     std::vector<const hyperdex_client_attribute**> &cl_attrs, std::vector<size_t*> &num_attrs,
@@ -454,6 +516,56 @@ hyper_stub_base :: multiple_get(std::vector<const char*> &spaces,
             HYPERDEX_GET(spaces[i], keys[i], key_szs[i], get_status[i], cl_attrs[i], num_attrs[i]);
         } else {
             HYPERDEX_GET_NOTX(spaces[i], keys[i], key_szs[i], get_status[i], cl_attrs[i], num_attrs[i]);
+        }
+
+        assert(opid_to_idx.find(hdex_id) == opid_to_idx.end());
+        opid_to_idx[hdex_id] = i;
+    }
+
+    hyperdex_client_returncode loop_status;
+    uint64_t num_loops = success_calls;
+    success_calls = 0;
+    for (i = 0; i < num_loops; i++) {
+        HYPERDEX_LOOP;
+
+        assert(opid_to_idx.find(hdex_id) != opid_to_idx.end());
+        int64_t &idx = opid_to_idx[hdex_id];
+        assert(idx >= 0);
+
+        HYPERDEX_CHECK_STATUSES(get_status[idx], get_status[idx] != HYPERDEX_CLIENT_SUCCESS);
+
+        idx = -1;
+    }
+
+    return success;
+}
+
+bool
+hyper_stub_base :: multiple_get_partial(std::vector<const char*> &spaces,
+    std::vector<const char*> &keys, std::vector<size_t> &key_szs,
+    const char** attrnames, size_t attrnames_sz, // all have same attrname
+    std::vector<const hyperdex_client_attribute**> &cl_attrs, std::vector<size_t*> &num_attrs,
+    bool tx)
+{
+    uint64_t num_calls = spaces.size();
+    assert(num_calls == keys.size());
+    assert(num_calls == key_szs.size());
+    assert(num_calls == num_attrs.size());
+    assert(num_calls == cl_attrs.size());
+
+    hyperdex_client_returncode get_status[num_calls];
+    int64_t hdex_id;
+    std::unordered_map<int64_t, int64_t> opid_to_idx;
+    opid_to_idx.reserve(num_calls);
+    uint64_t success_calls = 0;
+    bool success = true;
+
+    uint64_t i = 0;
+    for (; i < num_calls; i++) {
+        if (tx) {
+            HYPERDEX_GET_PARTIAL(spaces[i], keys[i], key_szs[i], attrnames, attrnames_sz, get_status[i], cl_attrs[i], num_attrs[i]);
+        } else {
+            HYPERDEX_GET_PARTIAL_NOTX(spaces[i], keys[i], key_szs[i], attrnames, attrnames_sz, get_status[i], cl_attrs[i], num_attrs[i]);
         }
 
         assert(opid_to_idx.find(hdex_id) == opid_to_idx.end());
@@ -567,26 +679,29 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::e
         check_idx[idx[i]] = true;
     }
 
+    // shard
+    n.shard = *((uint64_t*)cl_attr[idx[0]].value);
     // create clock
     vc::vclock create_clk;
-    unpack_buffer(cl_attr[idx[0]].value, cl_attr[idx[0]].value_sz, create_clk);
+    unpack_buffer(cl_attr[idx[1]].value, cl_attr[idx[1]].value_sz, create_clk);
     // properties
-    unpack_buffer<db::element::property>(cl_attr[idx[1]].value, cl_attr[idx[1]].value_sz, n.base.properties);
+    unpack_buffer<db::element::property>(cl_attr[idx[2]].value, cl_attr[idx[2]].value_sz, n.base.properties);
 
     n.state = db::element::node::mode::STABLE;
     n.in_use = false;
     n.base.update_creat_time(create_clk);
 
     // out edges
-    unpack_buffer<db::element::edge*>(cl_attr[idx[2]].value, cl_attr[idx[2]].value_sz, n.out_edges);
+    unpack_buffer<db::element::edge*>(cl_attr[idx[3]].value, cl_attr[idx[3]].value_sz, n.out_edges);
     // last update clock
-    unpack_buffer(cl_attr[idx[4]].value, cl_attr[idx[4]].value_sz, n.last_upd_clk);
+    unpack_buffer(cl_attr[idx[5]].value, cl_attr[idx[5]].value_sz, n.last_upd_clk);
     // restore clock
-    unpack_buffer(cl_attr[idx[5]].value, cl_attr[idx[5]].value_sz, n.restore_clk);
+    unpack_buffer(cl_attr[idx[6]].value, cl_attr[idx[6]].value_sz, n.restore_clk);
     assert(n.restore_clk.size() == ClkSz);
 
     return true;
 }
+
 bool
 hyper_stub_base :: get_node(db::element::node &n)
 {
@@ -603,6 +718,49 @@ hyper_stub_base :: get_node(db::element::node &n)
     return success;
 }
 
+bool
+hyper_stub_base :: get_nodes(std::unordered_map<node_handle_t, db::element::node*> &nodes, bool tx)
+{
+    int64_t num_nodes = nodes.size();
+    std::vector<const char*> spaces(num_nodes, graph_space);
+    std::vector<const char*> keys(num_nodes);
+    std::vector<size_t> key_szs(num_nodes);
+    std::vector<const hyperdex_client_attribute**> attrs(num_nodes, NULL);
+    std::vector<size_t*> num_attrs(num_nodes, NULL);
+
+    const hyperdex_client_attribute *attr_array[num_nodes];
+    size_t num_attrs_array[num_nodes];
+
+    int64_t i = 0;
+    for (auto &x: nodes) {
+        keys[i] = x.first.c_str();
+        key_szs[i] = x.first.size();
+        attrs[i] = attr_array + i;
+        num_attrs[i] = num_attrs_array + i;
+
+        i++;
+    }
+
+    bool success = multiple_get(spaces, keys, key_szs, attrs, num_attrs, tx);
+
+    if (success) {
+        for (i = 0; i < num_nodes; i++) {
+            if (*num_attrs[i] == NUM_GRAPH_ATTRS) {
+                bool recr_success = recreate_node(attr_array[i], *nodes[node_handle_t(keys[i])]);
+                hyperdex_client_destroy_attrs(attr_array[i], NUM_GRAPH_ATTRS);
+                success = success && recr_success;
+            } else {
+                WDEBUG << "bad num attributes " << *num_attrs[i] << std::endl;
+                if (*num_attrs[i] > 0) {
+                    hyperdex_client_destroy_attrs(attr_array[i], *num_attrs[i]);
+                }
+            }
+        }
+    }
+
+    return success;
+}
+
 void
 hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     db::element::node &n,
@@ -612,48 +770,54 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     std::unique_ptr<e::buffer> &last_clk_buf,
     std::unique_ptr<e::buffer> &restore_clk_buf)
 {
+    // shard
+    cl_attr[0].attr = graph_attrs[0];
+    cl_attr[0].value = (const char*)&n.shard;
+    cl_attr[0].value_sz = sizeof(int64_t);
+    cl_attr[0].datatype = graph_dtypes[0];
+
     // create clock
     prepare_buffer(n.base.get_creat_time(), creat_clk_buf);
-    cl_attr[0].attr = graph_attrs[0];
-    cl_attr[0].value = (const char*)creat_clk_buf->data();
-    cl_attr[0].value_sz = creat_clk_buf->size();
-    cl_attr[0].datatype = graph_dtypes[0];
+    cl_attr[1].attr = graph_attrs[1];
+    cl_attr[1].value = (const char*)creat_clk_buf->data();
+    cl_attr[1].value_sz = creat_clk_buf->size();
+    cl_attr[1].datatype = graph_dtypes[1];
 
     // properties
     prepare_buffer<db::element::property>(n.base.properties, props_buf);
-    cl_attr[1].attr = graph_attrs[1];
-    cl_attr[1].value = (const char*)props_buf->data();
-    cl_attr[1].value_sz = props_buf->size();
-    cl_attr[1].datatype = graph_dtypes[1];
+    cl_attr[2].attr = graph_attrs[2];
+    cl_attr[2].value = (const char*)props_buf->data();
+    cl_attr[2].value_sz = props_buf->size();
+    cl_attr[2].datatype = graph_dtypes[2];
 
     // out edges
     prepare_buffer<db::element::edge*>(n.out_edges, out_edges_buf);
-    cl_attr[2].attr = graph_attrs[2];
-    cl_attr[2].value = (const char*)out_edges_buf->data();
-    cl_attr[2].value_sz = out_edges_buf->size();
-    cl_attr[2].datatype = graph_dtypes[2];
+    cl_attr[3].attr = graph_attrs[3];
+    cl_attr[3].value = (const char*)out_edges_buf->data();
+    cl_attr[3].value_sz = out_edges_buf->size();
+    cl_attr[3].datatype = graph_dtypes[3];
 
     // migr status
     int64_t status = STABLE;
-    cl_attr[3].attr = graph_attrs[3];
-    cl_attr[3].value = (const char*)&status;
-    cl_attr[3].value_sz = sizeof(int64_t);
-    cl_attr[3].datatype = graph_dtypes[3];
+    cl_attr[4].attr = graph_attrs[4];
+    cl_attr[4].value = (const char*)&status;
+    cl_attr[4].value_sz = sizeof(int64_t);
+    cl_attr[4].datatype = graph_dtypes[4];
 
     // last update clock
     prepare_buffer(n.last_upd_clk, last_clk_buf);
-    cl_attr[4].attr = graph_attrs[4];
-    cl_attr[4].value = (const char*)last_clk_buf->data();
-    cl_attr[4].value_sz = last_clk_buf->size();
-    cl_attr[4].datatype = graph_dtypes[4];
+    cl_attr[5].attr = graph_attrs[5];
+    cl_attr[5].value = (const char*)last_clk_buf->data();
+    cl_attr[5].value_sz = last_clk_buf->size();
+    cl_attr[5].datatype = graph_dtypes[5];
 
     // restore clock
     assert(n.restore_clk.size() == ClkSz);
     prepare_buffer(n.restore_clk, restore_clk_buf);
-    cl_attr[5].attr = graph_attrs[5];
-    cl_attr[5].value = (const char*)restore_clk_buf->data();
-    cl_attr[5].value_sz = restore_clk_buf->size();
-    cl_attr[5].datatype = graph_dtypes[5];
+    cl_attr[6].attr = graph_attrs[6];
+    cl_attr[6].value = (const char*)restore_clk_buf->data();
+    cl_attr[6].value_sz = restore_clk_buf->size();
+    cl_attr[6].datatype = graph_dtypes[6];
 }
 
 //bool
@@ -673,10 +837,15 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
 //}
 
 bool
-hyper_stub_base :: put_nodes(std::unordered_map<node_handle_t, db::element::node*> &nodes)
+hyper_stub_base :: put_nodes(std::unordered_map<node_handle_t, db::element::node*> &nodes, bool if_not_exist)
 {
     int num_nodes = nodes.size();
-    std::vector<hyper_tx_func> funcs(num_nodes, &hyperdex_client_xact_put);
+    std::vector<hyper_tx_func> funcs;
+    if (if_not_exist) {
+         funcs = std::vector<hyper_tx_func>(num_nodes, &hyperdex_client_xact_put_if_not_exist);
+    } else {
+         funcs = std::vector<hyper_tx_func>(num_nodes, &hyperdex_client_xact_put);
+    }
     std::vector<const char*> spaces(num_nodes, graph_space);
     std::vector<const char*> keys(num_nodes);
     std::vector<size_t> key_szs(num_nodes);
@@ -744,10 +913,29 @@ hyper_stub_base :: put_nodes_bulk(std::unordered_map<node_handle_t, db::element:
     return success;
 }
 
-void
+bool
 hyper_stub_base :: del_node(const node_handle_t &handle)
 {
-    del(graph_space, handle.c_str(), handle.size());
+    return del(graph_space, handle.c_str(), handle.size());
+}
+
+bool
+hyper_stub_base :: del_nodes(std::unordered_set<node_handle_t> &to_del)
+{
+    int64_t num_nodes = to_del.size();
+    std::vector<const char*> spaces(num_nodes, graph_space);
+    std::vector<const char*> keys(num_nodes);
+    std::vector<size_t> key_szs(num_nodes);
+
+    int i = 0;
+    for (const node_handle_t &n: to_del) {
+        keys[i] = n.c_str();
+        key_szs[i] = n.size();
+
+        i++;
+    }
+
+    return multiple_del(spaces, keys, key_szs);
 }
 
 /*
@@ -981,78 +1169,13 @@ bool
 hyper_stub_base :: update_nmap(const node_handle_t &handle, uint64_t loc)
 {
     hyperdex_client_attribute attr;
-    attr.attr = nmap_attr;
+    attr.attr = graph_attrs[0];
     attr.value = (const char*)&loc;
     attr.value_sz = sizeof(int64_t);
-    attr.datatype = HYPERDATATYPE_INT64;
+    attr.datatype = graph_dtypes[0];
 
-    return call(hyperdex_client_put, nmap_space, handle.c_str(), handle.size(), &attr, 1);
+    return call(hyperdex_client_put, graph_space, handle.c_str(), handle.size(), &attr, 1);
 }
-
-bool
-hyper_stub_base :: put_nmap(std::vector<node_handle_t> &node_handles, uint64_t shard_id)
-{
-    int num_pairs = node_handles.size();
-    std::vector<hyper_func> funcs(num_pairs, &hyperdex_client_put);
-    std::vector<const char*> spaces(num_pairs, nmap_space);
-    std::vector<const char*> keys(num_pairs);
-    std::vector<size_t> key_szs(num_pairs);
-    std::vector<hyperdex_client_attribute*> attrs(num_pairs);
-    std::vector<size_t> num_attrs(num_pairs, 1);
-
-    hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute*)malloc(num_pairs * sizeof(hyperdex_client_attribute));
-
-    int i = 0;
-    for (const node_handle_t &h: node_handles) {
-        attrs[i] = attrs_to_add + i;
-        attrs[i]->attr = nmap_attr;
-        attrs[i]->value = (char*)&shard_id;
-        attrs[i]->value_sz = sizeof(int64_t);
-        attrs[i]->datatype = HYPERDATATYPE_INT64;
-        keys[i] = h.c_str();
-        key_szs[i] = h.size();
-        i++;
-    }
-
-    bool success = multiple_call(funcs, spaces, keys, key_szs, attrs, num_attrs);
-
-    free(attrs_to_add);
-
-    return success;
-}
-
-bool
-hyper_stub_base :: put_nmap_if_not_exist(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add)
-{
-    int num_pairs = pairs_to_add.size();
-    std::vector<hyper_tx_func> funcs(num_pairs, &hyperdex_client_xact_put_if_not_exist);
-    std::vector<const char*> spaces(num_pairs, nmap_space);
-    std::vector<const char*> keys(num_pairs);
-    std::vector<size_t> key_szs(num_pairs);
-    std::vector<hyperdex_client_attribute*> attrs(num_pairs);
-    std::vector<size_t> num_attrs(num_pairs, 1);
-
-    hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute*)malloc(num_pairs * sizeof(hyperdex_client_attribute));
-
-    int i = 0;
-    for (auto &entry: pairs_to_add) {
-        attrs[i] = attrs_to_add + i;
-        attrs[i]->attr = nmap_attr;
-        attrs[i]->value = (char*)&entry.second;
-        attrs[i]->value_sz = sizeof(int64_t);
-        attrs[i]->datatype = HYPERDATATYPE_INT64;
-        keys[i] = entry.first.c_str();
-        key_szs[i] = entry.first.size();
-        i++;
-    }
-
-    bool success = multiple_call(funcs, spaces, keys, key_szs, attrs, num_attrs);
-
-    free(attrs_to_add);
-
-    return success;
-}
-
 
 uint64_t
 hyper_stub_base :: get_nmap(node_handle_t &handle)
@@ -1061,7 +1184,7 @@ hyper_stub_base :: get_nmap(node_handle_t &handle)
     size_t num_attrs;
     uint64_t shard = UINT64_MAX;
 
-    bool success = get(nmap_space, handle.c_str(), handle.size(), &attr, &num_attrs, false);
+    bool success = get_partial(graph_space, handle.c_str(), handle.size(), graph_attrs, 1, &attr, &num_attrs, false);
     if (success) {
         assert(num_attrs == 1);
         assert(attr->value_sz == sizeof(int64_t));
@@ -1076,7 +1199,7 @@ std::unordered_map<node_handle_t, uint64_t>
 hyper_stub_base :: get_nmap(std::unordered_set<node_handle_t> &toGet, bool tx)
 {
     int64_t num_nodes = toGet.size();
-    std::vector<const char*> spaces(num_nodes, nmap_space);
+    std::vector<const char*> spaces(num_nodes, graph_space);
     std::vector<const char*> keys(num_nodes);
     std::vector<size_t> key_szs(num_nodes);
     std::vector<const hyperdex_client_attribute**> attrs(num_nodes, NULL);
@@ -1095,7 +1218,7 @@ hyper_stub_base :: get_nmap(std::unordered_set<node_handle_t> &toGet, bool tx)
         i++;
     }
 
-    bool success = multiple_get(spaces, keys, key_szs, attrs, num_attrs, tx);
+    bool success = multiple_get_partial(spaces, keys, key_szs, graph_attrs, 1, attrs, num_attrs, tx);
     UNUSED(success);
 
     uint64_t *val;
@@ -1115,25 +1238,6 @@ hyper_stub_base :: get_nmap(std::unordered_set<node_handle_t> &toGet, bool tx)
     return mappings;
 }
 
-
-bool
-hyper_stub_base :: del_nmap(std::unordered_set<node_handle_t> &toDel)
-{
-    int64_t num_nodes = toDel.size();
-    std::vector<const char*> spaces(num_nodes, nmap_space);
-    std::vector<const char*> keys(num_nodes);
-    std::vector<size_t> key_szs(num_nodes);
-
-    int i = 0;
-    for (auto &n: toDel) {
-        keys[i] = n.c_str();
-        key_szs[i] = n.size();
-
-        i++;
-    }
-
-    return multiple_del(spaces, keys, key_szs);
-}
 
 void
 hyper_stub_base :: pack_uint64(e::buffer::packer &pkr, uint64_t num)

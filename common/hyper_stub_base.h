@@ -28,9 +28,9 @@
 #include "common/transaction.h"
 #include "db/node.h"
 
-#define NUM_GRAPH_ATTRS 6
+#define NUM_INDEX_ATTRS 2
+#define NUM_GRAPH_ATTRS 7
 #define NUM_TX_ATTRS 2
-
 
 enum persist_node_state
 {
@@ -44,15 +44,18 @@ class hyper_stub_base
         // node handle -> node data
         const char *graph_space = "weaver_graph_data";
         const char *graph_attrs[NUM_GRAPH_ATTRS];
+        const char *graph_key = "node";
         const enum hyperdatatype graph_dtypes[NUM_GRAPH_ATTRS];
-        // node handle -> shard
-        const char *nmap_space = "weaver_loc_mapping";
-        const char *nmap_attr = "shard";
-        const enum hyperdatatype nmap_dtype = HYPERDATATYPE_INT64;
         // tx id -> vt id, tx data
         const char *tx_space = "weaver_tx_data";
         const char *tx_attrs[NUM_TX_ATTRS];
+        const char *tx_key = "tx_id";
         const enum hyperdatatype tx_dtypes[NUM_TX_ATTRS];
+        // aux index: index -> node,shard
+        const char *index_space = "weaver_index_data";
+        const char *index_attrs[NUM_INDEX_ATTRS];
+        const char *index_key = "idx";
+        const enum hyperdatatype index_dtypes[NUM_INDEX_ATTRS];
 
         using hyper_func = int64_t (*) (struct hyperdex_client *client,
             const char*,
@@ -115,8 +118,18 @@ class hyper_stub_base
             const char *key, size_t key_sz,
             const hyperdex_client_attribute **cl_attr, size_t *num_attrs,
             bool tx);
+        bool get_partial(const char *space,
+            const char *key, size_t key_sz,
+            const char** attrnames, size_t attrnames_sz,
+            const hyperdex_client_attribute **cl_attr, size_t *num_attrs,
+            bool tx);
         bool multiple_get(std::vector<const char*> &spaces,
             std::vector<const char*> &keys, std::vector<size_t> &key_szs,
+            std::vector<const hyperdex_client_attribute**> &cl_attrs, std::vector<size_t*> &num_attrs,
+            bool tx);
+        bool multiple_get_partial(std::vector<const char*> &spaces,
+            std::vector<const char*> &keys, std::vector<size_t> &key_szs,
+            const char** attrnames, size_t attrnames_sz,
             std::vector<const hyperdex_client_attribute**> &cl_attrs, std::vector<size_t*> &num_attrs,
             bool tx);
         bool del(const char* space,
@@ -126,10 +139,12 @@ class hyper_stub_base
 
         // graph data functions
         bool get_node(db::element::node &n);
+        bool get_nodes(std::unordered_map<node_handle_t, db::element::node*> &nodes, bool tx);
         //bool put_node(db::element::node &n);
-        bool put_nodes(std::unordered_map<node_handle_t, db::element::node*> &nodes);
+        bool put_nodes(std::unordered_map<node_handle_t, db::element::node*> &nodes, bool if_not_exist);
         bool put_nodes_bulk(std::unordered_map<node_handle_t, db::element::node*> &nodes);
-        void del_node(const node_handle_t &h);
+        bool del_node(const node_handle_t &h);
+        bool del_nodes(std::unordered_set<node_handle_t> &to_del);
         void update_creat_time(db::element::node &n);
         void update_properties(db::element::node &n);
         void add_out_edge(db::element::node &n, db::element::edge *e);
@@ -139,12 +154,9 @@ class hyper_stub_base
         bool recreate_node(const hyperdex_client_attribute *cl_attr, db::element::node &n);
 
         // node map functions
-        bool put_nmap_if_not_exist(std::unordered_map<node_handle_t, uint64_t> &pairs_to_add);
-        bool put_nmap(std::vector<node_handle_t> &node_handles, uint64_t shard_id);
         bool update_nmap(const node_handle_t &handle, uint64_t loc);
         std::unordered_map<node_handle_t, uint64_t> get_nmap(std::unordered_set<node_handle_t> &toGet, bool tx);
         uint64_t get_nmap(node_handle_t &handle);
-        bool del_nmap(std::unordered_set<node_handle_t> &toDel);
 
         // tx data functions
         bool put_tx_data(transaction::pending_tx *tx);

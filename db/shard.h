@@ -539,7 +539,7 @@ namespace db
         bool init_load=false)
     {
         uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
-        element::node *new_node = new element::node(node_handle, vclk, node_map_mutexes+map_idx);
+        element::node *new_node = new element::node(node_handle, shard_id, vclk, node_map_mutexes+map_idx);
         new_node->last_upd_clk = vclk;
         new_node->restore_clk = vclk.clock;
 
