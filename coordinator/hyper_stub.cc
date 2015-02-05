@@ -144,6 +144,8 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 
     auto node_iter = old_nodes.end();
     db::element::node *n = nullptr;
+    std::vector<std::string> idx_add, idx_del;
+    std::vector<db::element::node*> idx_add_nodes;
 
     for (std::shared_ptr<transaction::pending_update> upd: tx->writes) {
         switch (upd->type) {
@@ -158,6 +160,11 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                     ERROR_FAIL;
                 }
                 n->add_edge(new db::element::edge(upd->handle, tx->timestamp, upd->loc2, upd->handle2));
+
+                if (AuxIndex) {
+                    idx_add.emplace_back(upd->handle);
+                    idx_add_nodes.emplace_back(n);
+                }
                 break;
 
             case transaction::NODE_DELETE_REQ:
@@ -177,6 +184,10 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                     ERROR_FAIL;
                 }
                 n->out_edges.erase(upd->handle1);
+
+                if (AuxIndex) {
+                    idx_del.emplace_back(upd->handle1);
+                }
                 break;
 
             case transaction::EDGE_SET_PROPERTY:
@@ -227,7 +238,11 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         delete n;
     }
 
-    if (!put_nodes(old_nodes, false) || !put_nodes(new_nodes, true) || !del_nodes(del_set)) {
+    if (!put_nodes(old_nodes, false)
+     || !put_nodes(new_nodes, true)
+     || !add_indices(idx_add, idx_add_nodes, true)
+     || !del_nodes(del_set)
+     || !del_indices(idx_del)) {
         ERROR_FAIL;
     }
 

@@ -158,6 +158,10 @@ class hyper_stub_base
         std::unordered_map<node_handle_t, uint64_t> get_nmap(std::unordered_set<node_handle_t> &toGet, bool tx);
         uint64_t get_nmap(node_handle_t &handle);
 
+        // auxiliary index functions
+        bool add_indices(std::vector<std::string> &indices, std::vector<db::element::node*> &nodes, bool tx);
+        bool del_indices(std::vector<std::string> &indices);
+
         // tx data functions
         bool put_tx_data(transaction::pending_tx *tx);
         bool del_tx_data(uint64_t tx_id);

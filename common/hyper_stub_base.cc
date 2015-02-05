@@ -1238,6 +1238,77 @@ hyper_stub_base :: get_nmap(std::unordered_set<node_handle_t> &toGet, bool tx)
     return mappings;
 }
 
+bool
+hyper_stub_base :: add_indices(std::vector<std::string> &indices,
+    std::vector<db::element::node*> &nodes,
+    bool tx)
+{
+    assert(AuxIndex == 1);
+    uint64_t num_indices = indices.size();
+    assert(num_indices == nodes.size());
+
+    std::vector<const char*> spaces(num_indices, index_space);
+    std::vector<const char*> keys(num_indices);
+    std::vector<size_t> key_szs(num_indices);
+    std::vector<hyperdex_client_attribute*> attrs(num_indices);
+    std::vector<size_t> num_attrs(num_indices, NUM_INDEX_ATTRS);
+
+    hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute*)malloc(num_indices * NUM_INDEX_ATTRS * sizeof(hyperdex_client_attribute));
+
+    for (uint64_t i = 0; i < num_indices; i++) {
+        attrs[i] = attrs_to_add + NUM_INDEX_ATTRS*i;
+        keys[i] = indices[i].c_str();
+        key_szs[i] = indices[i].size();
+
+        // node handle
+        node_handle_t handle = nodes[i]->get_handle();
+        attrs[i][0].attr = index_attrs[0];
+        attrs[i][0].value = handle.c_str();
+        attrs[i][0].value_sz = handle.size();
+        attrs[i][0].datatype = index_dtypes[0];
+
+        // shard
+        attrs[i][1].attr = index_attrs[1];
+        attrs[i][1].value = (const char*)&nodes[i]->shard;
+        attrs[i][1].value_sz = sizeof(int64_t);
+        attrs[i][1].datatype = index_dtypes[1];
+    }
+
+    bool success;
+    if (tx) {
+        std::vector<hyper_tx_func> funcs = std::vector<hyper_tx_func>(num_indices, &hyperdex_client_xact_put_if_not_exist);
+        success = multiple_call(funcs, spaces, keys, key_szs, attrs, num_attrs);
+    } else {
+        std::vector<hyper_func> funcs = std::vector<hyper_func>(num_indices, &hyperdex_client_put_if_not_exist);
+        success = multiple_call(funcs, spaces, keys, key_szs, attrs, num_attrs);
+    }
+
+    free(attrs_to_add);
+
+    return success;
+}
+
+bool
+hyper_stub_base :: del_indices(std::vector<std::string> &indices)
+{
+    assert(AuxIndex == 1);
+
+    int64_t num_indices = indices.size();
+    std::vector<const char*> spaces(num_indices, index_space);
+    std::vector<const char*> keys(num_indices);
+    std::vector<size_t> key_szs(num_indices);
+
+    int i = 0;
+    for (const std::string &idx: indices) {
+        keys[i] = idx.c_str();
+        key_szs[i] = idx.size();
+
+        i++;
+    }
+
+    return multiple_del(spaces, keys, key_szs);
+}
+
 
 void
 hyper_stub_base :: pack_uint64(e::buffer::packer &pkr, uint64_t num)

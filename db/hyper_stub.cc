@@ -123,12 +123,28 @@ hyper_stub :: restore_backup(std::unordered_map<node_handle_t, element::node*> *
 }
 
 void
-hyper_stub :: bulk_load(int tid, std::unordered_map<node_handle_t, element::node*> *nodes_arr)
+hyper_stub :: bulk_load(int thread_id, std::unordered_map<node_handle_t, element::node*> *nodes_arr)
 {
     assert(NUM_NODE_MAPS % NUM_SHARD_THREADS == 0);
 
-    for (; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
+    for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
         put_nodes_bulk(nodes_arr[tid]);
+    }
+
+    if (AuxIndex) {
+        std::vector<std::string> idx_add;
+        std::vector<element::node*> idx_add_nodes;
+        for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
+            for (auto &p: nodes_arr[tid]) {
+                idx_add.reserve(idx_add.size() + p.second->out_edges.size());
+                idx_add_nodes.resize(idx_add_nodes.size() + p.second->out_edges.size(), p.second);
+                for (auto &e: p.second->out_edges) {
+                    idx_add.emplace_back(e.first);
+                }
+            }
+        }
+
+        add_indices(idx_add, idx_add_nodes, false);
     }
 }
 
