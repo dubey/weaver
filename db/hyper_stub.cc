@@ -132,19 +132,17 @@ hyper_stub :: bulk_load(int thread_id, std::unordered_map<node_handle_t, element
     }
 
     if (AuxIndex) {
-        std::vector<std::string> idx_add;
-        std::vector<element::node*> idx_add_nodes;
+        std::unordered_map<std::string, element::node*> idx_add;
         for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
             for (auto &p: nodes_arr[tid]) {
-                idx_add.reserve(idx_add.size() + p.second->out_edges.size());
-                idx_add_nodes.resize(idx_add_nodes.size() + p.second->out_edges.size(), p.second);
                 for (auto &e: p.second->out_edges) {
-                    idx_add.emplace_back(e.first);
+                    assert(idx_add.find(e.first) == idx_add.end());
+                    idx_add[e.first] = p.second;
                 }
             }
         }
 
-        add_indices(idx_add, idx_add_nodes, false);
+        add_indices(idx_add, false);
     }
 }
 

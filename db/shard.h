@@ -325,8 +325,7 @@ namespace db
 
 #ifdef weaver_benchmark_
         // kill if a server died
-        std::vector<server> delta = prev_config.delta(config);
-        for (const server &srv: delta) {
+        for (const server &srv: prev_config.delta(config)) {
             if (srv.type == server::VT || srv.type == server::SHARD) {
                 server::state_t prev_state = prev_config.get_state(srv.id);
                 if ((prev_state == server::AVAILABLE || prev_state == server::ASSIGNED)

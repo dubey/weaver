@@ -159,7 +159,11 @@ class hyper_stub_base
         uint64_t get_nmap(node_handle_t &handle);
 
         // auxiliary index functions
-        bool add_indices(std::vector<std::string> &indices, std::vector<db::element::node*> &nodes, bool tx);
+    private:
+        bool recreate_index(const hyperdex_client_attribute *cl_attr, std::pair<node_handle_t, uint64_t> &value);
+    public:
+        bool add_indices(std::unordered_map<std::string, db::element::node*> &indices, bool tx);
+        bool get_indices(std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> &indices, bool tx);
         bool del_indices(std::vector<std::string> &indices);
 
         // tx data functions

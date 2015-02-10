@@ -31,7 +31,7 @@ init_config_constants(const char *config_file_name)
     KronosPort = UINT16_MAX;
     ServerManagerIpaddr = NULL;
     ServerManagerPort = UINT16_MAX;
-    AuxIndex = UINT8_MAX;
+    AuxIndex = false;
 
     FILE *config_file = nullptr;
     if (config_file_name != nullptr) {
@@ -176,13 +176,8 @@ init_config_constants(const char *config_file_name)
                 } else if (strncmp((const char*)token.data.scalar.value, "aux_index", 10) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
-                    bool aux_index = false;
-                    PARSE_BOOL(aux_index);
-                    if (aux_index) {
-                        AuxIndex = 1;
-                    } else {
-                        AuxIndex = 0;
-                    }
+                    AuxIndex = false;
+                    PARSE_BOOL(AuxIndex);
 
                 } else {
                     WDEBUG << "unexpected key " << token.data.scalar.value << std::endl;
@@ -215,8 +210,7 @@ init_config_constants(const char *config_file_name)
      || NULL == KronosIpaddr
      || UINT16_MAX == KronosPort
      || NULL == ServerManagerIpaddr
-     || UINT16_MAX == ServerManagerPort
-     || UINT8_MAX == AuxIndex) {
+     || UINT16_MAX == ServerManagerPort) {
         return false;
     }
 

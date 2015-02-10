@@ -13,6 +13,9 @@
 # ===============================================================
 # 
 
+from __future__ import print_function
+import sys
+
 # begin <stolen from Hyperdex/bindings/client.pyx>
 cdef extern from 'stdint.h':
 
@@ -368,8 +371,10 @@ cdef extern from 'client/weaver_client.h' namespace 'cl':
         string create_edge(string &handle, string &node1, string &node2)
         void delete_node(string &node)
         void delete_edge(string &edge, string &node)
+        void delete_edge(string &edge)
         void set_node_property(string &node, string key, string value)
         void set_edge_property(string &node, string &edge, string key, string value)
+        void set_edge_property(string &edge, string key, string value)
         bint end_tx() nogil
         reach_params run_reach_program(vector[pair[string, reach_params]] &initial_args) nogil
         pathless_reach_params run_pathless_reach_program(vector[pair[string, pathless_reach_params]] &initial_args) nogil
@@ -386,6 +391,7 @@ cdef extern from 'client/weaver_client.h' namespace 'cl':
         void single_stream_migration()
         void exit_weaver()
         vector[uint64_t] get_node_count()
+        bint aux_index()
 
 cdef class Client:
     cdef client *thisptr
@@ -407,12 +413,21 @@ cdef class Client:
         return self.thisptr.create_edge(handle, node1, node2)
     def delete_node(self, node):
         self.thisptr.delete_node(node)
-    def delete_edge(self, edge, node):
-        self.thisptr.delete_edge(edge, node)
+    def delete_edge(self, edge, node=None):
+        if node is None:
+            self.thisptr.delete_edge(edge)
+        else:
+            self.thisptr.delete_edge(edge, node)
     def set_node_property(self, node, key, value):
         self.thisptr.set_node_property(node, key, value)
-    def set_edge_property(self, node, edge, key, value):
-        self.thisptr.set_edge_property(node, edge, key, value)
+    def set_edge_property(self, node=None, edge=None, key=None, value=None):
+        if edge is None or key is None or value is None:
+            print("at least one of edge, key, and value is None, please specify the value", file=sys.stderr)
+            return
+        if node is None:
+            self.thisptr.set_edge_property(edge, key, value)
+        else:
+            self.thisptr.set_edge_property(node, edge, key, value)
     def end_tx(self):
         cdef bint ret
         with nogil:
@@ -676,3 +691,5 @@ cdef class Client:
             count.append(deref(iter))
             inc(iter)
         return count
+    def aux_index(self):
+        return self.thisptr.aux_index()

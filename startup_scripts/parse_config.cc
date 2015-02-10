@@ -91,7 +91,7 @@ main(int argc, const char *argv[])
         }
         std::cout << std::endl;
     } else if (config == "aux_index") {
-        std::cout << (AuxIndex == 1? 1:0) << std::endl;
+        std::cout << (AuxIndex? 1:0) << std::endl;
     } else {
         std::cout << "bad config name" << std::endl;
     }

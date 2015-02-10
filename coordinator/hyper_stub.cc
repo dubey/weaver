@@ -68,6 +68,8 @@ void
 hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     std::unordered_set<node_handle_t> &del_set,
     std::unordered_map<node_handle_t, uint64_t> &put_map,
+    std::unordered_set<std::string> &idx_get_set,
+    std::unordered_map<std::string, db::element::node*> &idx_add,
     std::shared_ptr<transaction::pending_tx> tx,
     bool &ready,
     bool &error,
@@ -85,6 +87,30 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 
     std::unordered_map<node_handle_t, db::element::node*> old_nodes, new_nodes;
     begin_tx();
+
+    // get aux indices from HyperDex
+    if (AuxIndex) {
+        std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> indices;
+        indices.reserve(idx_get_set.size());
+        std::pair<node_handle_t, uint64_t> empty_pair;
+        for (const std::string &i: idx_get_set) {
+            if (idx_add.find(i) == idx_add.end()) {
+                indices.emplace(i, empty_pair);
+            }
+        }
+        if (!indices.empty()) {
+            if (!get_indices(indices, true)) {
+                ERROR_FAIL;
+            }
+        }
+
+        for (const auto &p: indices) {
+            if (put_map.find(p.second.first) == put_map.end()
+             && get_set.find(p.second.first) == get_set.end()) {
+                get_set.emplace(p.second.first);
+            }
+        }
+    }
 
     // get all nodes from Hyperdex (we need at least last upd clk)
     for (const node_handle_t &h: get_set) {
@@ -142,10 +168,18 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     } \
     n = &(*node_iter->second);
 
+#define CHECK_AUX_INDEX \
+    if (AuxIndex) { \
+        idx_add_iter = idx_add.find(upd->handle1); \
+        if (idx_add_iter != idx_add.end()) { \
+            upd->handle2 = idx_add_iter->second->get_handle(); \
+        } \
+    }
+
     auto node_iter = old_nodes.end();
+    auto idx_add_iter = idx_add.end();
     db::element::node *n = nullptr;
-    std::vector<std::string> idx_add, idx_del;
-    std::vector<db::element::node*> idx_add_nodes;
+    std::vector<std::string> idx_del;
 
     for (std::shared_ptr<transaction::pending_update> upd: tx->writes) {
         switch (upd->type) {
@@ -162,8 +196,9 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 n->add_edge(new db::element::edge(upd->handle, tx->timestamp, upd->loc2, upd->handle2));
 
                 if (AuxIndex) {
-                    idx_add.emplace_back(upd->handle);
-                    idx_add_nodes.emplace_back(n);
+                    idx_add_iter = idx_add.find(upd->handle);
+                    assert(idx_add_iter != idx_add.end());
+                    idx_add[upd->handle] = n;
                 }
                 break;
 
@@ -178,6 +213,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 break;
 
             case transaction::EDGE_DELETE_REQ:
+                CHECK_AUX_INDEX;
                 CHECK_LOC(upd->loc1, upd->handle2);
                 GET_NODE(upd->handle2);
                 if (n->out_edges.find(upd->handle1) == n->out_edges.end()) {
@@ -191,6 +227,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 break;
 
             case transaction::EDGE_SET_PROPERTY:
+                CHECK_AUX_INDEX;
                 CHECK_LOC(upd->loc1, upd->handle2);
                 GET_NODE(upd->handle2);
                 if (n->out_edges.find(upd->handle1) == n->out_edges.end()) {
@@ -240,7 +277,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 
     if (!put_nodes(old_nodes, false)
      || !put_nodes(new_nodes, true)
-     || !add_indices(idx_add, idx_add_nodes, true)
+     || !add_indices(idx_add, true)
      || !del_nodes(del_set)
      || !del_indices(idx_del)) {
         ERROR_FAIL;

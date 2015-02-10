@@ -61,14 +61,21 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
 void
 client :: begin_tx()
 {
-    assert(cur_tx_id == UINT64_MAX && "only one concurrent transaction per client");
-    cur_tx_id = ++tx_id_ctr;
+    if (cur_tx_id != UINT64_MAX) {
+        WDEBUG << "only one concurrent transaction per client, currently processing " << cur_tx_id << std::endl;
+    } else {
+        cur_tx_id = ++tx_id_ctr;
+    }
 }
 
 std::string
 client :: create_node(std::string &handle)
 {
-    assert(cur_tx_id != UINT64_MAX);
+    if (cur_tx_id == UINT64_MAX) {
+        WDEBUG << "No active transaction on this client.  You need to enclose ops in begin_tx-end_tx block." << std::endl;
+        return "";
+    }
+
     std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
     upd->type = transaction::NODE_CREATE_REQ;
     if (handle == "") {
@@ -83,7 +90,11 @@ client :: create_node(std::string &handle)
 std::string
 client :: create_edge(std::string &handle, std::string &node1, std::string &node2)
 {
-    assert(cur_tx_id != UINT64_MAX);
+    if (cur_tx_id == UINT64_MAX) {
+        WDEBUG << "No active transaction on this client.  You need to enclose ops in begin_tx-end_tx block." << std::endl;
+        return "";
+    }
+
     std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
     upd->type = transaction::EDGE_CREATE_REQ;
     if (handle == "") {
@@ -100,7 +111,11 @@ client :: create_edge(std::string &handle, std::string &node1, std::string &node
 void
 client :: delete_node(std::string &node)
 {
-    assert(cur_tx_id != UINT64_MAX);
+    if (cur_tx_id == UINT64_MAX) {
+        WDEBUG << "No active transaction on this client.  You need to enclose ops in begin_tx-end_tx block." << std::endl;
+        return;
+    }
+
     std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
     upd->type = transaction::NODE_DELETE_REQ;
     upd->handle1 = node;
@@ -110,7 +125,11 @@ client :: delete_node(std::string &node)
 void
 client :: delete_edge(std::string &edge, std::string &node)
 {
-    assert(cur_tx_id != UINT64_MAX);
+    if (cur_tx_id == UINT64_MAX) {
+        WDEBUG << "No active transaction on this client.  You need to enclose ops in begin_tx-end_tx block." << std::endl;
+        return;
+    }
+
     std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
     upd->type = transaction::EDGE_DELETE_REQ;
     upd->handle1 = edge;
@@ -118,11 +137,35 @@ client :: delete_edge(std::string &edge, std::string &node)
     cur_tx.emplace_back(upd);
 }
 
+// AuxIndex = true
+void
+client :: delete_edge(std::string &edge)
+{
+    if (cur_tx_id == UINT64_MAX) {
+        WDEBUG << "No active transaction on this client.  You need to enclose ops in begin_tx-end_tx block." << std::endl;
+        return;
+    }
+
+    if (!AuxIndex) {
+        WDEBUG << "Cannot access edge by edge_handle without auxiliary indexing turned on.  See weaver.yaml config file." << std::endl;
+        return;
+    }
+
+    std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
+    upd->type = transaction::EDGE_DELETE_REQ;
+    upd->handle1 = edge;
+    cur_tx.emplace_back(upd);
+}
+
 void
 client :: set_node_property(std::string &node,
     std::string key, std::string value)
 {
-    assert(cur_tx_id != UINT64_MAX);
+    if (cur_tx_id == UINT64_MAX) {
+        WDEBUG << "No active transaction on this client.  You need to enclose ops in begin_tx-end_tx block." << std::endl;
+        return;
+    }
+
     std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
     upd->type = transaction::NODE_SET_PROPERTY;
     upd->handle1 = node;
@@ -135,11 +178,37 @@ void
 client :: set_edge_property(std::string &node, std::string &edge,
     std::string key, std::string value)
 {
-    assert(cur_tx_id != UINT64_MAX);
+    if (cur_tx_id == UINT64_MAX) {
+        WDEBUG << "No active transaction on this client.  You need to enclose ops in begin_tx-end_tx block." << std::endl;
+        return;
+    }
+
     std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
     upd->type = transaction::EDGE_SET_PROPERTY;
     upd->handle1 = edge;
     upd->handle2 = node;
+    upd->key.reset(new std::string(std::move(key)));
+    upd->value.reset(new std::string(std::move(value)));
+    cur_tx.emplace_back(upd);
+}
+
+void
+client :: set_edge_property(std::string &edge,
+    std::string key, std::string value)
+{
+    if (cur_tx_id == UINT64_MAX) {
+        WDEBUG << "No active transaction on this client.  You need to enclose ops in begin_tx-end_tx block." << std::endl;
+        return;
+    }
+
+    if (!AuxIndex) {
+        WDEBUG << "Cannot access edge by edge_handle without auxiliary indexing turned on.  See weaver.yaml config file." << std::endl;
+        return;
+    }
+
+    std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
+    upd->type = transaction::EDGE_SET_PROPERTY;
+    upd->handle1 = edge;
     upd->key.reset(new std::string(std::move(key)));
     upd->value.reset(new std::string(std::move(value)));
     cur_tx.emplace_back(upd);
@@ -425,6 +494,12 @@ client :: get_node_count()
             return node_count;
         }
     }
+}
+
+bool
+client :: aux_index()
+{
+    return AuxIndex;
 }
 
 #pragma GCC diagnostic push

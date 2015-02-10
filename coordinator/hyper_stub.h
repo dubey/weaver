@@ -32,7 +32,9 @@ namespace coordinator
             std::unordered_map<node_handle_t, uint64_t> get_mappings(std::unordered_set<node_handle_t> &get_set);
             void do_tx(std::unordered_set<node_handle_t> &get_set,
                 std::unordered_set<node_handle_t> &del_set,
-                std::unordered_map<node_handle_t, uint64_t> &loc_map,
+                std::unordered_map<node_handle_t, uint64_t> &put_map,
+                std::unordered_set<std::string> &idx_get_set,
+                std::unordered_map<std::string, db::element::node*> &idx_add,
                 std::shared_ptr<transaction::pending_tx> tx,
                 bool &ready,
                 bool &error,

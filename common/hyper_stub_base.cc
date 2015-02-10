@@ -751,6 +751,7 @@ hyper_stub_base :: get_nodes(std::unordered_map<node_handle_t, db::element::node
                 success = success && recr_success;
             } else {
                 WDEBUG << "bad num attributes " << *num_attrs[i] << std::endl;
+                success = false;
                 if (*num_attrs[i] > 0) {
                     hyperdex_client_destroy_attrs(attr_array[i], *num_attrs[i]);
                 }
@@ -1239,14 +1240,11 @@ hyper_stub_base :: get_nmap(std::unordered_set<node_handle_t> &toGet, bool tx)
 }
 
 bool
-hyper_stub_base :: add_indices(std::vector<std::string> &indices,
-    std::vector<db::element::node*> &nodes,
-    bool tx)
+hyper_stub_base :: add_indices(std::unordered_map<std::string, db::element::node*> &indices, bool tx)
 {
-    assert(AuxIndex == 1);
-    uint64_t num_indices = indices.size();
-    assert(num_indices == nodes.size());
+    assert(AuxIndex);
 
+    uint64_t num_indices = indices.size();
     std::vector<const char*> spaces(num_indices, index_space);
     std::vector<const char*> keys(num_indices);
     std::vector<size_t> key_szs(num_indices);
@@ -1255,13 +1253,14 @@ hyper_stub_base :: add_indices(std::vector<std::string> &indices,
 
     hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute*)malloc(num_indices * NUM_INDEX_ATTRS * sizeof(hyperdex_client_attribute));
 
-    for (uint64_t i = 0; i < num_indices; i++) {
+    uint64_t i = 0;
+    for (auto &p: indices) {
         attrs[i] = attrs_to_add + NUM_INDEX_ATTRS*i;
-        keys[i] = indices[i].c_str();
-        key_szs[i] = indices[i].size();
+        keys[i] = p.first.c_str();
+        key_szs[i] = p.first.size();
 
         // node handle
-        node_handle_t handle = nodes[i]->get_handle();
+        node_handle_t handle = p.second->get_handle();
         attrs[i][0].attr = index_attrs[0];
         attrs[i][0].value = handle.c_str();
         attrs[i][0].value_sz = handle.size();
@@ -1269,9 +1268,11 @@ hyper_stub_base :: add_indices(std::vector<std::string> &indices,
 
         // shard
         attrs[i][1].attr = index_attrs[1];
-        attrs[i][1].value = (const char*)&nodes[i]->shard;
+        attrs[i][1].value = (const char*)&p.second->shard;
         attrs[i][1].value_sz = sizeof(int64_t);
         attrs[i][1].datatype = index_dtypes[1];
+
+        i++;
     }
 
     bool success;
@@ -1289,9 +1290,81 @@ hyper_stub_base :: add_indices(std::vector<std::string> &indices,
 }
 
 bool
+hyper_stub_base :: recreate_index(const hyperdex_client_attribute *cl_attr, std::pair<node_handle_t, uint64_t> &val)
+{
+    std::vector<int> idx(NUM_INDEX_ATTRS, -1);    
+    for (int i = 0; i < NUM_INDEX_ATTRS; i++) {
+        for (int j = 0; j < NUM_INDEX_ATTRS; j++) {
+            if (strcmp(cl_attr[i].attr, index_attrs[j]) == 0) {
+                idx[j] = i;
+                break;
+            }
+        }
+    }
+    std::vector<bool> check_idx(NUM_INDEX_ATTRS, false);
+    for (int i = 0; i < NUM_INDEX_ATTRS; i++) {
+        assert(idx[i] != -1);
+        assert(!check_idx[idx[i]]);
+        check_idx[idx[i]] = true;
+    }
+
+    // node handle
+    val.first = node_handle_t(cl_attr[idx[0]].value, cl_attr[idx[0]].value_sz);
+    val.second = *((uint64_t*)cl_attr[idx[1]].value);
+
+    return true;
+}
+
+bool
+hyper_stub_base :: get_indices(std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> &indices, bool tx)
+{
+    assert(AuxIndex);
+
+    int64_t num_indices = indices.size();
+    std::vector<const char*> spaces(num_indices, index_space);
+    std::vector<const char*> keys(num_indices);
+    std::vector<size_t> key_szs(num_indices);
+    std::vector<const hyperdex_client_attribute**> attrs(num_indices, NULL);
+    std::vector<size_t*> num_attrs(num_indices, NULL);
+
+    const hyperdex_client_attribute *attr_array[num_indices];
+    size_t num_attrs_array[num_indices];
+
+    int64_t i = 0;
+    for (auto &x: indices) {
+        keys[i] = x.first.c_str();
+        key_szs[i] = x.first.size();
+        attrs[i] = attr_array + i;
+        num_attrs[i] = num_attrs_array + i;
+
+        i++;
+    }
+
+    bool success = multiple_get(spaces, keys, key_szs, attrs, num_attrs, tx);
+
+    if (success) {
+        for (i = 0; i < num_indices; i++) {
+            if (*num_attrs[i] == NUM_INDEX_ATTRS) {
+                bool recr_success = recreate_index(attr_array[i], indices[std::string(keys[i])]);
+                hyperdex_client_destroy_attrs(attr_array[i], NUM_INDEX_ATTRS);
+                success = success && recr_success;
+            } else {
+                WDEBUG << "bad num attributes " << *num_attrs[i] << std::endl;
+                success = false;
+                if (*num_attrs[i] > 0) {
+                    hyperdex_client_destroy_attrs(attr_array[i], *num_attrs[i]);
+                }
+            }
+        }
+    }
+
+    return success;
+}
+
+bool
 hyper_stub_base :: del_indices(std::vector<std::string> &indices)
 {
-    assert(AuxIndex == 1);
+    assert(AuxIndex);
 
     int64_t num_indices = indices.size();
     std::vector<const char*> spaces(num_indices, index_space);

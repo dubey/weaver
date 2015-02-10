@@ -56,8 +56,10 @@ namespace cl
             std::string create_edge(std::string &handle, std::string &node1, std::string &node2);
             void delete_node(std::string &node); 
             void delete_edge(std::string &edge, std::string &node);
+            void delete_edge(std::string &edge); // AuxIndex = true
             void set_node_property(std::string &node, std::string key, std::string value);
             void set_edge_property(std::string &node, std::string &edge, std::string key, std::string value);
+            void set_edge_property(std::string &edge, std::string key, std::string value); // AuxIndex = true
             bool end_tx();
 
             template <typename ParamsType>
@@ -79,6 +81,7 @@ namespace cl
             void exit_weaver();
             uint64_t get_vt_id() { return vtid; }
             std::vector<uint64_t> get_node_count();
+            bool aux_index();
 
         private:
 #pragma GCC diagnostic push

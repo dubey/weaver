@@ -71,11 +71,13 @@ end_program(int signum)
 void
 prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub *hstub, order::oracle *time_oracle)
 {
-    //tx->id = vts->generate_req_id();
+    tx->id = vts->generate_req_id();
 
     std::unordered_set<node_handle_t> get_set;
     std::unordered_set<node_handle_t> del_set;
     std::unordered_map<node_handle_t, uint64_t> put_map;
+    std::unordered_set<std::string> idx_get;
+    std::unordered_map<std::string, db::element::node*> idx_add;
     std::unordered_map<node_handle_t, uint64_t>::iterator find_iter; 
 
     for (std::shared_ptr<transaction::pending_update> upd: tx->writes) {
@@ -100,6 +102,10 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
                 } else {
                     upd->loc2 = find_iter->second;
                 }
+
+                if (AuxIndex) {
+                    idx_add.emplace(upd->handle, nullptr);
+                }
                 break;
 
             case transaction::NODE_DELETE_REQ:
@@ -118,11 +124,16 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
 
             case transaction::EDGE_DELETE_REQ:
             case transaction::EDGE_SET_PROPERTY:
-                if ((find_iter = put_map.find(upd->handle2)) == put_map.end()) {
+                if (AuxIndex && upd->handle2 == "") {
+                    idx_get.emplace(upd->handle1);
                     upd->loc1 = UINT64_MAX;
-                    get_set.insert(upd->handle2);
                 } else {
-                    upd->loc1 = find_iter->second;
+                    if ((find_iter = put_map.find(upd->handle2)) == put_map.end()) {
+                        upd->loc1 = UINT64_MAX;
+                        get_set.insert(upd->handle2);
+                    } else {
+                        upd->loc1 = find_iter->second;
+                    }
                 }
                 upd->loc2 = 0;
                 break;
@@ -149,7 +160,7 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
         // sets error if any warp operation returns error
         // sets upd->loc for each upd in tx
         // sets tx->shard_write bool_vector (shard_write[i] = true iff there is a tx component at shard i)
-        hstub->do_tx(get_set, del_set, put_map, tx, ready, error, time_oracle);
+        hstub->do_tx(get_set, del_set, put_map, idx_get, idx_add, tx, ready, error, time_oracle);
 
         assert(!(ready && error)); // can't be ready after some error
 
