@@ -278,6 +278,7 @@ EXTRA_DIST+=	tests/python/create_graph.py
 EXTRA_DIST+=	tests/python/assoc_count_basic.py
 EXTRA_DIST+=	tests/python/assoc_range_basic.py
 EXTRA_DIST+=	tests/python/correctness/simple_test.py
+EXTRA_DIST+=	tests/python/correctness/simple_test_aux_index.py
 EXTRA_DIST+=	tests/python/correctness/delete_tx.py
 EXTRA_DIST+=	tests/python/correctness/transactions.py
 EXTRA_DIST+=	tests/python/correctness/transactions_ring.py
@@ -330,6 +331,7 @@ weaver_test_bench_LDADD=	libweaverclient.la
 
 TESTS +=		tests/sh/empty_graph.sh \
 				tests/sh/simple_test.sh \
+				tests/sh/simple_test_aux_index.sh \
 				tests/sh/read_properties.sh \
 				tests/sh/line_reachability.sh \
 				tests/sh/line_properties.sh \
@@ -339,6 +341,7 @@ EXTRA_DIST+=	tests/sh/env.sh \
 				tests/sh/clean.sh \
 				tests/sh/empty_graph.sh \
 				tests/sh/simple_test.sh \
+				tests/sh/simple_test_aux_index.sh \
 				tests/sh/read_properties.sh \
 				tests/sh/line_reachability.sh \
 				tests/sh/line_properties.sh \
