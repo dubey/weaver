@@ -68,11 +68,27 @@ client :: begin_tx()
     }
 }
 
-std::string
-client :: create_node(std::string &handle)
+bool
+client :: check_active_tx()
 {
     if (cur_tx_id == UINT64_MAX) {
         WDEBUG << "No active transaction on this client.  You need to enclose ops in begin_tx-end_tx block." << std::endl;
+        return false;
+    } else {
+        return true;
+    }
+}
+
+#define CHECK_AUX_INDEX \
+    if (!AuxIndex) { \
+        WDEBUG << "Cannot access edge by edge_handle without auxiliary indexing turned on.  See weaver.yaml config file." << std::endl; \
+        return; \
+    }
+
+std::string
+client :: create_node(std::string &handle, std::vector<std::string> &aliases)
+{
+    if (!check_active_tx()) {
         return "";
     }
 
@@ -84,14 +100,19 @@ client :: create_node(std::string &handle)
         upd->handle = handle;
     }
     cur_tx.emplace_back(upd);
-    return upd->handle;
+    auto new_node = upd->handle;
+
+    for (const std::string &a: aliases) {
+        add_handle(new_node, a);
+    }
+
+    return new_node;
 }
 
 std::string
-client :: create_edge(std::string &handle, std::string &node1, std::string &node2)
+client :: create_edge(std::string &handle, std::string &node1, std::string &node1_alias, std::string &node2, std::string &node2_alias)
 {
-    if (cur_tx_id == UINT64_MAX) {
-        WDEBUG << "No active transaction on this client.  You need to enclose ops in begin_tx-end_tx block." << std::endl;
+    if (!check_active_tx()) {
         return "";
     }
 
@@ -104,29 +125,30 @@ client :: create_edge(std::string &handle, std::string &node1, std::string &node
     }
     upd->handle1 = node1;
     upd->handle2 = node2;
+    upd->alias1 = node1_alias;
+    upd->alias2 = node2_alias;
     cur_tx.emplace_back(upd);
     return upd->handle;
 }
 
 void
-client :: delete_node(std::string &node)
+client :: delete_node(std::string &node, std::string &alias)
 {
-    if (cur_tx_id == UINT64_MAX) {
-        WDEBUG << "No active transaction on this client.  You need to enclose ops in begin_tx-end_tx block." << std::endl;
+    if (!check_active_tx()) {
         return;
     }
 
     std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
     upd->type = transaction::NODE_DELETE_REQ;
     upd->handle1 = node;
+    upd->alias1 = alias;
     cur_tx.emplace_back(upd);
 }
 
 void
-client :: delete_edge(std::string &edge, std::string &node)
+client :: delete_edge(std::string &edge, std::string &node, std::string &alias)
 {
-    if (cur_tx_id == UINT64_MAX) {
-        WDEBUG << "No active transaction on this client.  You need to enclose ops in begin_tx-end_tx block." << std::endl;
+    if (!check_active_tx()) {
         return;
     }
 
@@ -134,52 +156,31 @@ client :: delete_edge(std::string &edge, std::string &node)
     upd->type = transaction::EDGE_DELETE_REQ;
     upd->handle1 = edge;
     upd->handle2 = node;
-    cur_tx.emplace_back(upd);
-}
-
-// AuxIndex = true
-void
-client :: delete_edge(std::string &edge)
-{
-    if (cur_tx_id == UINT64_MAX) {
-        WDEBUG << "No active transaction on this client.  You need to enclose ops in begin_tx-end_tx block." << std::endl;
-        return;
-    }
-
-    if (!AuxIndex) {
-        WDEBUG << "Cannot access edge by edge_handle without auxiliary indexing turned on.  See weaver.yaml config file." << std::endl;
-        return;
-    }
-
-    std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
-    upd->type = transaction::EDGE_DELETE_REQ;
-    upd->handle1 = edge;
+    upd->alias2 = alias;
     cur_tx.emplace_back(upd);
 }
 
 void
-client :: set_node_property(std::string &node,
-    std::string key, std::string value)
+client :: set_node_property(std::string &node, std::string &alias, std::string key, std::string value)
 {
-    if (cur_tx_id == UINT64_MAX) {
-        WDEBUG << "No active transaction on this client.  You need to enclose ops in begin_tx-end_tx block." << std::endl;
+    if (!check_active_tx()) {
         return;
     }
 
     std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
     upd->type = transaction::NODE_SET_PROPERTY;
     upd->handle1 = node;
+    upd->alias1 = alias;
     upd->key.reset(new std::string(std::move(key)));
     upd->value.reset(new std::string(std::move(value)));
     cur_tx.emplace_back(upd);
 }
 
 void
-client :: set_edge_property(std::string &node, std::string &edge,
+client :: set_edge_property(std::string &node, std::string &alias, std::string &edge,
     std::string key, std::string value)
 {
-    if (cur_tx_id == UINT64_MAX) {
-        WDEBUG << "No active transaction on this client.  You need to enclose ops in begin_tx-end_tx block." << std::endl;
+    if (!check_active_tx()) {
         return;
     }
 
@@ -187,32 +188,28 @@ client :: set_edge_property(std::string &node, std::string &edge,
     upd->type = transaction::EDGE_SET_PROPERTY;
     upd->handle1 = edge;
     upd->handle2 = node;
+    upd->alias2 = alias;
     upd->key.reset(new std::string(std::move(key)));
     upd->value.reset(new std::string(std::move(value)));
     cur_tx.emplace_back(upd);
 }
 
 void
-client :: set_edge_property(std::string &edge,
-    std::string key, std::string value)
+client :: add_handle(std::string &handle, node_handle_t &node)
 {
-    if (cur_tx_id == UINT64_MAX) {
-        WDEBUG << "No active transaction on this client.  You need to enclose ops in begin_tx-end_tx block." << std::endl;
+    if (!check_active_tx()) {
         return;
     }
-
-    if (!AuxIndex) {
-        WDEBUG << "Cannot access edge by edge_handle without auxiliary indexing turned on.  See weaver.yaml config file." << std::endl;
-        return;
-    }
+    CHECK_AUX_INDEX;
 
     std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
-    upd->type = transaction::EDGE_SET_PROPERTY;
-    upd->handle1 = edge;
-    upd->key.reset(new std::string(std::move(key)));
-    upd->value.reset(new std::string(std::move(value)));
+    upd->type = transaction::ADD_AUX_INDEX;
+    upd->handle = handle;
+    upd->handle1 = node;
     cur_tx.emplace_back(upd);
 }
+
+#undef CHECK_AUX_INDEX
 
 bool
 client :: end_tx()

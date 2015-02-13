@@ -223,6 +223,8 @@ message :: size(const std::shared_ptr<transaction::pending_update> &t)
          + size(t->handle)
          + size(t->handle1)
          + size(t->handle2)
+         + size(t->alias1)
+         + size(t->alias2)
          + size(t->loc1)
          + size(t->loc2);
     if (t->type == transaction::NODE_SET_PROPERTY
@@ -439,6 +441,8 @@ message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transact
     pack_buffer(packer, t->handle);
     pack_buffer(packer, t->handle1);
     pack_buffer(packer, t->handle2);
+    pack_buffer(packer, t->alias1);
+    pack_buffer(packer, t->alias2);
     pack_buffer(packer, t->loc1);
     pack_buffer(packer, t->loc2);
     if (t->type == transaction::NODE_SET_PROPERTY
@@ -659,6 +663,8 @@ message :: unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::pen
     unpack_buffer(unpacker, t->handle);
     unpack_buffer(unpacker, t->handle1);
     unpack_buffer(unpacker, t->handle2);
+    unpack_buffer(unpacker, t->alias1);
+    unpack_buffer(unpacker, t->alias2);
     unpack_buffer(unpacker, t->loc1);
     unpack_buffer(unpacker, t->loc2);
     if (t->type == transaction::NODE_SET_PROPERTY

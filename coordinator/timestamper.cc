@@ -138,6 +138,12 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
                 upd->loc2 = 0;
                 break;
 
+            case transaction::ADD_AUX_INDEX:
+                assert(AuxIndex);
+                get_set.insert(upd->handle1);
+                upd->loc1 = UINT64_MAX;
+                break;
+
             default:
                 WDEBUG << "bad type" << std::endl;
         }

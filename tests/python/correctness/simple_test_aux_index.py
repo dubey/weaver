@@ -80,5 +80,11 @@ c.begin_tx()
 c.create_edge('ayush', 'egs', 'e1')
 assert not c.end_tx(), 'create edge passed'
 
+# add auxiliary handles to nodes
+c.begin_tx()
+c.add_handle('ad688', 'ayush')
+c.add_handle('el33th4x04', 'egs')
+assert c.end_tx(), 'add aux handles'
+
 print 'Correctly executed 8 transactions of varying complexity, pass simple_test.'
 print 'Success, you have a working Weaver setup!'

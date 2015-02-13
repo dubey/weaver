@@ -375,6 +375,7 @@ cdef extern from 'client/weaver_client.h' namespace 'cl':
         void set_node_property(string &node, string key, string value)
         void set_edge_property(string &node, string &edge, string key, string value)
         void set_edge_property(string &edge, string key, string value)
+        void add_handle(string &handle, string &node)
         bint end_tx() nogil
         reach_params run_reach_program(vector[pair[string, reach_params]] &initial_args) nogil
         pathless_reach_params run_pathless_reach_program(vector[pair[string, pathless_reach_params]] &initial_args) nogil
@@ -403,36 +404,83 @@ cdef class Client:
         self.traverse_start_node = ''
         self.traverse_node_props = []
         self.traverse_edge_props = []
+
     def __dealloc__(self):
         del self.thisptr
+
     def begin_tx(self):
         self.thisptr.begin_tx()
-    def create_node(self, handle=''):
-        return self.thisptr.create_node(handle)
-    def create_edge(self, node1, node2, handle=''):
-        return self.thisptr.create_edge(handle, node1, node2)
-    def delete_node(self, node):
-        self.thisptr.delete_node(node)
-    def delete_edge(self, edge, node=None):
-        if node is None:
-            self.thisptr.delete_edge(edge)
+
+    def create_node(self, handle, **kwargs):
+        aliases = []
+        if 'aliases' in kwargs:
+            aliases = kwargs['aliases'].split(',')
+        return self.thisptr.create_node(handle, aliases)
+
+    def create_edge(self, handle, node1=None, node2=None, **kwargs):
+        handle1 = ''
+        handle2 = ''
+        alias1 = ''
+        alias2 = ''
+        if node1 is None:
+            if 'node1_alias' not in kwargs or 'node2_alias' not in kwargs:
+                print("please provide either node handles or node aliases", file=sys.stderr)
+            else:
+                alias1 = kwargs['node1_alias']
+                alias2 = kwargs['node2_alias']
+        elif node2 is None:
+            if 'node2_alias' not in kwargs:
+                print("please provide either node handles or node aliases", file=sys.stderr)
+            else:
+                handle1 = node1
+                alias2 = kwargs['node2_alias']
         else:
-            self.thisptr.delete_edge(edge, node)
-    def set_node_property(self, node, key, value):
-        self.thisptr.set_node_property(node, key, value)
-    def set_edge_property(self, node=None, edge=None, key=None, value=None):
-        if edge is None or key is None or value is None:
-            print("at least one of edge, key, and value is None, please specify the value", file=sys.stderr)
-            return
-        if node is None:
-            self.thisptr.set_edge_property(edge, key, value)
+            handle1 = node1
+            handle2 = node2
+        return self.thisptr.create_edge(handle, node1, alias1, node2, alias2)
+
+    def delete_node(self, handle=None, **kwargs):
+        if handle is None:
+            if 'alias' not in kwargs:
+                print("please provide either node handle or node alias", file=sys.stderr)
+            else:
+                self.thisptr.delete_node('', kwargs['alias'])
         else:
-            self.thisptr.set_edge_property(node, edge, key, value)
+            self.thisptr.delete_node(handle, '')
+
+    def delete_edge(self, edge, node=None, **kwargs):
+        if node is None and 'node_alias' not in kwargs:
+            self.thisptr.delete_edge(edge, '', '')
+        elif node is None:
+            self.thisptr.delete_edge(edge, '', kwargs['node_alias'])
+        else:
+            self.thisptr.delete_edge(edge, node, '')
+
+    def set_node_property(self, key, value, node=None, **kwargs):
+        if node is None and 'node_alias' not in kwargs:
+            print("please provide either node handle or node alias", file=sys.stderr)
+        elif node is None:
+            self.thisptr.set_node_property('', kwargs['node_alias'], key, value)
+        else:
+            self.thisptr.set_node_property(node, '', key, value)
+
+    def set_edge_property(self, edge, key, value, node=None, **kwargs):
+        if node is None and 'node_alias' not in kwargs:
+            self.thisptr.set_edge_property('', '', edge, key, value)
+        elif node is None:
+            self.thisptr.set_edge_property('', kwargs['node_alias'], edge, key, value)
+        else:
+            self.thisptr.set_edge_property(node, '', edge, key, value)
+
+    def add_handle(self, handle, node):
+        self.thisptr.add_handle(handle, node)
+
     def end_tx(self):
         cdef bint ret
         with nogil:
             ret = self.thisptr.end_tx()
         return ret
+
     def run_reach_program(self, init_args):
         cdef vector[pair[string, reach_params]] c_args
         c_args.reserve(len(init_args))
@@ -457,6 +505,7 @@ cdef class Client:
             foundpath.append(rn.handle)
         response = ReachParams(path=foundpath, hops=c_rp.hops, reachable=c_rp.reachable)
         return response
+
     # warning! set prev_node loc to vt_id if somewhere in params
     def run_pathless_reach_program(self, init_args):
         cdef vector[pair[string, pathless_reach_params]] c_args
@@ -477,6 +526,7 @@ cdef class Client:
             c_rp = self.thisptr.run_pathless_reach_program(c_args)
         response = PathlessReachParams(reachable=c_rp.reachable)
         return response
+
     def run_clustering_program(self, init_args):
         cdef vector[pair[string, clustering_params]] c_args
         c_args.reserve(len(init_args))
@@ -492,6 +542,7 @@ cdef class Client:
             c_cp = self.thisptr.run_clustering_program(c_args)
         response = ClusteringParams(clustering_coeff=c_cp.clustering_coeff)
         return response
+
     def run_two_neighborhood_program(self, init_args):
         cdef vector[pair[string, two_neighborhood_params]] c_args
         c_args.reserve(len(init_args))
@@ -509,6 +560,7 @@ cdef class Client:
             c_rp = self.thisptr.run_two_neighborhood_program(c_args)
         response = TwoNeighborhoodParams(responses = c_rp.responses)
         return response
+
     '''
     def run_dijkstra_program(self, init_args):
         cdef vector[pair[string, dijkstra_params]] c_args

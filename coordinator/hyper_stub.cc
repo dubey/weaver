@@ -191,6 +191,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 CHECK_LOC(upd->loc2, upd->handle2);
                 GET_NODE(upd->handle1);
                 if (n->out_edges.find(upd->handle) != n->out_edges.end()) {
+                    WDEBUG << "edge with handle " << upd->handle1 << " already exists at node " << upd->handle2 << std::endl;
                     ERROR_FAIL;
                 }
                 n->add_edge(new db::element::edge(upd->handle, tx->timestamp, upd->loc2, upd->handle2));
@@ -217,6 +218,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 CHECK_LOC(upd->loc1, upd->handle2);
                 GET_NODE(upd->handle2);
                 if (n->out_edges.find(upd->handle1) == n->out_edges.end()) {
+                    WDEBUG << "edge with handle " << upd->handle1 << " does not exist at node " << upd->handle2 << std::endl;
                     ERROR_FAIL;
                 }
                 n->out_edges.erase(upd->handle1);
@@ -231,9 +233,20 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 CHECK_LOC(upd->loc1, upd->handle2);
                 GET_NODE(upd->handle2);
                 if (n->out_edges.find(upd->handle1) == n->out_edges.end()) {
+                    WDEBUG << "edge with handle " << upd->handle1 << " does not exist at node " << upd->handle2 << std::endl;
                     ERROR_FAIL;
                 }
                 n->out_edges[upd->handle1]->base.properties[*upd->key] = db::element::property(*upd->key, *upd->value, tx->timestamp);
+                break;
+
+            case transaction::ADD_AUX_INDEX:
+                CHECK_LOC(upd->loc1, upd->handle1);
+                GET_NODE(upd->handle1);
+                if (idx_add.find(upd->handle) != idx_add.end()) {
+                    WDEBUG << "cannot add two identical handles" << std::endl;
+                    ERROR_FAIL;
+                }
+                idx_add.emplace(upd->handle, n);
                 break;
 
             default:

@@ -30,14 +30,15 @@ namespace transaction
         NODE_DELETE_REQ,
         EDGE_DELETE_REQ,
         NODE_SET_PROPERTY,
-        EDGE_SET_PROPERTY
+        EDGE_SET_PROPERTY,
+        ADD_AUX_INDEX
     };
 
     // store state for update received from client but not yet completed
     struct pending_update
     {
         update_type type;
-        std::string handle, handle1, handle2;
+        std::string handle, handle1, handle2, alias1, alias2;
         uint64_t loc1, loc2, sender;
         std::unique_ptr<std::string> key, value;
     };

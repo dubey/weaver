@@ -49,17 +49,17 @@ namespace cl
             server_manager_link m_sm;
             transaction::tx_list_t cur_tx;
             uint64_t cur_tx_id, tx_id_ctr, handle_ctr;
+            bool check_active_tx();
 
         public:
             void begin_tx();
-            std::string create_node(std::string &handle);
-            std::string create_edge(std::string &handle, std::string &node1, std::string &node2);
-            void delete_node(std::string &node); 
-            void delete_edge(std::string &edge, std::string &node);
-            void delete_edge(std::string &edge); // AuxIndex = true
-            void set_node_property(std::string &node, std::string key, std::string value);
-            void set_edge_property(std::string &node, std::string &edge, std::string key, std::string value);
-            void set_edge_property(std::string &edge, std::string key, std::string value); // AuxIndex = true
+            std::string create_node(std::string &handle, std::vector<std::string> &aliases);
+            std::string create_edge(std::string &handle, std::string &node1, std::string &node1_alias, std::string &node2, std::string &node2_alias);
+            void delete_node(std::string &node, std::string &alias);
+            void delete_edge(std::string &edge, std::string &node, std::string &node_alias);
+            void set_node_property(std::string &node, std::string &alias, std::string key, std::string value);
+            void set_edge_property(std::string &node, std::string &alias, std::string &edge, std::string key, std::string value);
+            void add_handle(std::string &handle, node_handle_t &node);
             bool end_tx();
 
             template <typename ParamsType>
