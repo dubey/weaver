@@ -51,24 +51,4 @@ namespace element
 }
 }
 
-//namespace std
-//{
-//    template <>
-//    struct hash<db::element::property> 
-//    {
-//        private:
-//            std::function<size_t(const std::string&)> string_hasher;
-//
-//        public:
-//            hash<db::element::property>() : string_hasher(std::hash<std::string>()) { }
-//
-//            size_t operator()(const db::element::property &p) const throw() 
-//            {
-//                size_t hkey = string_hasher(p.key);
-//                size_t hvalue = string_hasher(p.value);
-//                return ((hkey + 0x9e3779b9 + (hvalue<<6) + (hvalue>>2)) ^ hvalue);
-//            }
-//    };
-//}
-
 #endif
