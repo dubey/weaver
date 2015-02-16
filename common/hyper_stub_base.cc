@@ -685,7 +685,7 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::e
     vc::vclock create_clk;
     unpack_buffer(cl_attr[idx[1]].value, cl_attr[idx[1]].value_sz, create_clk);
     // properties
-    unpack_buffer<db::element::property>(cl_attr[idx[2]].value, cl_attr[idx[2]].value_sz, n.base.properties);
+    unpack_buffer<std::vector<std::shared_ptr<db::element::property>>>(cl_attr[idx[2]].value, cl_attr[idx[2]].value_sz, n.base.properties);
 
     n.state = db::element::node::mode::STABLE;
     n.in_use = false;
@@ -785,7 +785,7 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     cl_attr[1].datatype = graph_dtypes[1];
 
     // properties
-    prepare_buffer<db::element::property>(n.base.properties, props_buf);
+    prepare_buffer<std::vector<std::shared_ptr<db::element::property>>>(n.base.properties, props_buf);
     cl_attr[2].attr = graph_attrs[2];
     cl_attr[2].value = (const char*)props_buf->data();
     cl_attr[2].value_sz = props_buf->size();

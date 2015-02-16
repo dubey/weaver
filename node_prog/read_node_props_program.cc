@@ -54,9 +54,12 @@ node_prog :: read_node_props_node_program(
         cache_response<Cache_Value_Base>*)
 {
     bool fetch_all = params.keys.empty();
-    for (property &prop : n.get_properties()) {
-        if (fetch_all || (std::find(params.keys.begin(), params.keys.end(), prop.get_key()) != params.keys.end())) {
-            params.node_props.emplace_back(prop.get_key(), prop.get_value());
+    for (std::vector<std::shared_ptr<property>> prop_vec : n.get_properties()) {
+        std::string key = prop_vec[0]->get_key();
+        if (fetch_all || (std::find(params.keys.begin(), params.keys.end(), key) != params.keys.end())) {
+            for (std::shared_ptr<property> prop: prop_vec) {
+                params.node_props.emplace_back(key, prop->get_value());
+            }
         }
     }
 

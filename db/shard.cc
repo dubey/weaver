@@ -177,6 +177,16 @@ parse_weaver_edge(std::string &line, uint64_t &n1, uint64_t &n2,
     }
 }
 
+inline void
+split(const std::string &s, char delim, std::vector<std::string> &elems)
+{
+    std::stringstream ss(s);
+    std::string item;
+    while (std::getline(ss, item, delim)) {
+        elems.push_back(item);
+    }
+}
+
 // initial bulk graph loading method
 // 'format' stores the format of the graph file
 // 'graph_file' stores the full path filename of the graph file
@@ -315,7 +325,15 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 for (pugi::xml_node prop: node.children("data")) {
                     std::string key = prop.attribute("key").value();
                     std::string value = prop.child_value();
-                    S->set_node_property_nonlocking(n, key, value, zero_clk);
+                    if (BulkLoadPropertyValueDelimiter != '\0') {
+                        std::vector<std::string> values;
+                        split(value, BulkLoadPropertyValueDelimiter, values);
+                        for (std::string &v: values) {
+                            S->set_node_property_nonlocking(n, key, v, zero_clk);
+                        }
+                    } else {
+                        S->set_node_property_nonlocking(n, key, value, zero_clk);
+                    }
                 }
             }
 
@@ -334,7 +352,15 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     for (pugi::xml_node prop: edge.children("data")) {
                         std::string key = prop.attribute("key").value();
                         std::string value = prop.child_value();
-                        S->set_edge_property_nonlocking(n, edge_handle, key, value, zero_clk);
+                        if (BulkLoadPropertyValueDelimiter != '\0') {
+                            std::vector<std::string> values;
+                            split(value, BulkLoadPropertyValueDelimiter, values);
+                            for (std::string &v: values) {
+                                S->set_edge_property_nonlocking(n, edge_handle, key, v, zero_clk);
+                            }
+                        } else {
+                            S->set_edge_property_nonlocking(n, edge_handle, key, value, zero_clk);
+                        }
                     }
                 }
                 edge_count++;
@@ -643,31 +669,33 @@ NodeStateType& get_or_create_state(node_prog::prog_type ptype,
 
 // vector pointers can be null if we don't want to fill that vector
 inline void
-fill_changed_properties(std::unordered_map<std::string, db::element::property> &props,
+fill_changed_properties(std::unordered_map<std::string, std::vector<std::shared_ptr<db::element::property>>> &props,
     std::vector<node_prog::property> *props_added,
     std::vector<node_prog::property> *props_deleted,
     vc::vclock &time_cached,
     vc::vclock &cur_time,
     order::oracle *time_oracle)
 {
-    for (auto &p : props) {
-        db::element::property &prop = p.second;
-        bool del_before_cur = (time_oracle->compare_two_vts(prop.get_del_time(), cur_time) == 0);
+    for (auto &iter : props) {
+        for (std::shared_ptr<db::element::property> p: iter.second) {
+            db::element::property &prop = *p;
+            bool del_before_cur = (time_oracle->compare_two_vts(prop.get_del_time(), cur_time) == 0);
 
-        if (props_added != NULL) {
-            bool creat_after_cached = (time_oracle->compare_two_vts(prop.get_creat_time(), time_cached) == 1);
-            bool creat_before_cur = (time_oracle->compare_two_vts(prop.get_creat_time(), cur_time) == 0);
+            if (props_added != NULL) {
+                bool creat_after_cached = (time_oracle->compare_two_vts(prop.get_creat_time(), time_cached) == 1);
+                bool creat_before_cur = (time_oracle->compare_two_vts(prop.get_creat_time(), cur_time) == 0);
 
-            if (creat_after_cached && creat_before_cur && !del_before_cur) {
-                props_added->emplace_back(prop.key, prop.value);
+                if (creat_after_cached && creat_before_cur && !del_before_cur) {
+                    props_added->emplace_back(prop.key, prop.value);
+                }
             }
-        }
 
-        if (props_deleted != NULL) {
-            bool del_after_cached = (time_oracle->compare_two_vts(prop.get_del_time(), time_cached) == 1);
+            if (props_deleted != NULL) {
+                bool del_after_cached = (time_oracle->compare_two_vts(prop.get_del_time(), time_cached) == 1);
 
-            if (del_after_cached && del_before_cur) {
-                props_deleted->emplace_back(prop.key, prop.value);
+                if (del_after_cached && del_before_cur) {
+                    props_deleted->emplace_back(prop.key, prop.value);
+                }
             }
         }
     }

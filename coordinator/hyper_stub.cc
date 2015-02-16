@@ -191,7 +191,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 CHECK_LOC(upd->loc2, upd->handle2);
                 GET_NODE(upd->handle1);
                 if (n->out_edges.find(upd->handle) != n->out_edges.end()) {
-                    WDEBUG << "edge with handle " << upd->handle1 << " already exists at node " << upd->handle2 << std::endl;
+                    WDEBUG << "edge with handle " << upd->handle << " already exists at node " << upd->handle1 << std::endl;
                     ERROR_FAIL;
                 }
                 n->add_edge(new db::element::edge(upd->handle, tx->timestamp, upd->loc2, upd->handle2));
@@ -210,7 +210,10 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
             case transaction::NODE_SET_PROPERTY:
                 CHECK_LOC(upd->loc1, upd->handle1);
                 GET_NODE(upd->handle1);
-                n->base.properties[*upd->key] = db::element::property(*upd->key, *upd->value, tx->timestamp);
+                if (!n->base.add_property(*upd->key, *upd->value, tx->timestamp)) {
+                    WDEBUG << "property " << *upd->key << ": " << *upd->value << " already exists at node " << upd->handle1 << std::endl;
+                    ERROR_FAIL;
+                }
                 break;
 
             case transaction::EDGE_DELETE_REQ:
@@ -236,7 +239,10 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                     WDEBUG << "edge with handle " << upd->handle1 << " does not exist at node " << upd->handle2 << std::endl;
                     ERROR_FAIL;
                 }
-                n->out_edges[upd->handle1]->base.properties[*upd->key] = db::element::property(*upd->key, *upd->value, tx->timestamp);
+                if (!n->out_edges[upd->handle1]->base.add_property(*upd->key, *upd->value, tx->timestamp)) {
+                    WDEBUG << "property " << *upd->key << ": " << *upd->value << " already exists at edge " << upd->handle1 << std::endl;
+                    ERROR_FAIL;
+                }
                 break;
 
             case transaction::ADD_AUX_INDEX:

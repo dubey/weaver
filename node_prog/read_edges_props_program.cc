@@ -59,11 +59,16 @@ node_prog :: read_edges_props_node_program(
     for (edge &edge : n.get_edges()) {
         if (params.edges.empty() || (std::find(params.edges.begin(), params.edges.end(), edge.get_handle()) != params.edges.end())) {
             std::vector<std::pair<std::string, std::string>> matching_edge_props;
-            for (property &prop : edge.get_properties()) {
-                if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), prop.get_key()) != params.keys.end())) {
-                    matching_edge_props.emplace_back(prop.get_key(), prop.get_value());
+
+            for (std::vector<std::shared_ptr<property>> prop_vec : edge.get_properties()) {
+                std::string key = prop_vec[0]->get_key();
+                if (params.keys.empty() || (std::find(params.keys.begin(), params.keys.end(), key) != params.keys.end())) {
+                    for (std::shared_ptr<property> prop: prop_vec) {
+                        matching_edge_props.emplace_back(key, prop->get_value());
+                    }
                 }
             }
+
             if (!matching_edge_props.empty()) {
                 params.edges_props.emplace_back(edge.get_handle(), std::move(matching_edge_props));
             }

@@ -21,11 +21,22 @@ prop_iter :: operator++()
 {
     while (internal_cur != internal_end) {
         internal_cur++;
-        if (internal_cur != internal_end
-         && time_oracle->clock_creat_before_del_after(req_time, internal_cur->second.get_creat_time(), internal_cur->second.get_del_time())) {
-            break;
+
+        if (internal_cur != internal_end) {
+            bool to_break = false;
+            for (const std::shared_ptr<db::element::property> p: internal_cur->second) {
+                if (time_oracle->clock_creat_before_del_after(req_time, p->get_creat_time(), p->get_del_time())) {
+                    to_break = true;
+                    break;
+                }
+            }
+
+            if (to_break) {
+                break;
+            }
         }
     }
+
     return *this;
 }
 
@@ -38,9 +49,19 @@ prop_iter :: prop_iter(prop_map_t::iterator begin,
     , req_time(req_time)
     , time_oracle(to)
 {
-    if (internal_cur != internal_end
-     && !time_oracle->clock_creat_before_del_after(req_time, internal_cur->second.get_creat_time(), internal_cur->second.get_del_time())) {
-        ++(*this);
+    if (internal_cur != internal_end) {
+        bool to_break = false;
+
+        for (const std::shared_ptr<db::element::property> p: internal_cur->second) {
+            if (time_oracle->clock_creat_before_del_after(req_time, p->get_creat_time(), p->get_del_time())) {
+                to_break = true;
+                break;
+            }
+        }
+
+        if (!to_break) {
+            ++(*this);
+        }
     }
 }
 
@@ -50,8 +71,17 @@ prop_iter :: operator!=(const prop_iter& rhs) const
     return internal_cur != rhs.internal_cur || !(req_time == rhs.req_time);
 }
 
-node_prog::property&
+std::vector<std::shared_ptr<node_prog::property>>
 prop_iter :: operator*()
 {
-    return (property &)internal_cur->second;
+    std::vector<std::shared_ptr<property>> ret;
+    ret.reserve(internal_cur->second.size());
+
+    for (const std::shared_ptr<db::element::property> p: internal_cur->second) {
+        if (time_oracle->clock_creat_before_del_after(req_time, p->get_creat_time(), p->get_del_time())) {
+            ret.emplace_back(p);
+        }
+    }
+
+    return ret;
 }
