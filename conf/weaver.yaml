@@ -32,3 +32,7 @@ weaver_coord:
 # Auxiliary indexing can be used to access edges and attach arbitrary handles to nodes.
 # Default: false
 aux_index: true
+
+# BulkLoadPropertyValueDelimiter is a character used to delimit property lists while bulk loading graphml graphs.
+# Default: '\0'
+bulk_load_property_value_delimiter: ","

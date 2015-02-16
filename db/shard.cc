@@ -177,6 +177,16 @@ parse_weaver_edge(std::string &line, uint64_t &n1, uint64_t &n2,
     }
 }
 
+inline void
+split(const std::string &s, char delim, std::vector<std::string> &elems)
+{
+    std::stringstream ss(s);
+    std::string item;
+    while (std::getline(ss, item, delim)) {
+        elems.push_back(item);
+    }
+}
+
 // initial bulk graph loading method
 // 'format' stores the format of the graph file
 // 'graph_file' stores the full path filename of the graph file
@@ -315,7 +325,15 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 for (pugi::xml_node prop: node.children("data")) {
                     std::string key = prop.attribute("key").value();
                     std::string value = prop.child_value();
-                    S->set_node_property_nonlocking(n, key, value, zero_clk);
+                    if (BulkLoadPropertyValueDelimiter != '\0') {
+                        std::vector<std::string> values;
+                        split(value, BulkLoadPropertyValueDelimiter, values);
+                        for (std::string &v: values) {
+                            S->set_node_property_nonlocking(n, key, v, zero_clk);
+                        }
+                    } else {
+                        S->set_node_property_nonlocking(n, key, value, zero_clk);
+                    }
                 }
             }
 
@@ -334,7 +352,15 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     for (pugi::xml_node prop: edge.children("data")) {
                         std::string key = prop.attribute("key").value();
                         std::string value = prop.child_value();
-                        S->set_edge_property_nonlocking(n, edge_handle, key, value, zero_clk);
+                        if (BulkLoadPropertyValueDelimiter != '\0') {
+                            std::vector<std::string> values;
+                            split(value, BulkLoadPropertyValueDelimiter, values);
+                            for (std::string &v: values) {
+                                S->set_edge_property_nonlocking(n, edge_handle, key, v, zero_clk);
+                            }
+                        } else {
+                            S->set_edge_property_nonlocking(n, edge_handle, key, value, zero_clk);
+                        }
                     }
                 }
                 edge_count++;

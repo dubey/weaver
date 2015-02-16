@@ -32,6 +32,7 @@ init_config_constants(const char *config_file_name)
     ServerManagerIpaddr = NULL;
     ServerManagerPort = UINT16_MAX;
     AuxIndex = false;
+    BulkLoadPropertyValueDelimiter = (char)0;
 
     FILE *config_file = nullptr;
     if (config_file_name != nullptr) {
@@ -102,6 +103,14 @@ init_config_constants(const char *config_file_name)
      || strncmp((const char*)token.data.scalar.value, "y", 1) == 0; \
     yaml_token_delete(&token);
 
+#define PARSE_CHAR(X) \
+    if (token.data.scalar.length == 1) { \
+        X = *((char*)token.data.scalar.value); \
+    } else { \
+        WDEBUG << "unexpected token length " << token.data.scalar.length << " for char value"; \
+    } \
+    yaml_token_delete(&token);
+
 #define PARSE_VALUE_IPADDR_PORT_BLOCK(v) \
     PARSE_ASSERT_TYPE_DELETE(YAML_VALUE_TOKEN); \
     PARSE_ASSERT_TYPE_DELETE(YAML_BLOCK_SEQUENCE_START_TOKEN); \
@@ -125,6 +134,9 @@ init_config_constants(const char *config_file_name)
         PARSE_ASSERT_TYPE_DELETE(YAML_BLOCK_END_TOKEN); \
     }
 
+#define TOKEN_STRCMP_LEN(n) \
+    (token.data.scalar.length < n ? token.data.scalar.length : n)
+
     PARSE_ASSERT_TYPE_DELETE(YAML_STREAM_START_TOKEN);
     PARSE_ASSERT_TYPE_DELETE(YAML_BLOCK_MAPPING_START_TOKEN);
 
@@ -138,46 +150,50 @@ init_config_constants(const char *config_file_name)
 
             case YAML_KEY_TOKEN:
                 PARSE_ASSERT_TYPE(YAML_SCALAR_TOKEN);
-                if (strncmp((const char*)token.data.scalar.value, "num_vts", 7) == 0) {
+                if (strncmp((const char*)token.data.scalar.value, "num_vts", TOKEN_STRCMP_LEN(7)) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_INT(NumVts);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "max_cache_entries", 17) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, "max_cache_entries", TOKEN_STRCMP_LEN(17)) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_INT(MaxCacheEntries);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_coord", 14) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_coord", TOKEN_STRCMP_LEN(14)) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_IPADDR_PORT_BLOCK(HyperdexCoord);
                     assert(!HyperdexCoord.empty());
                     HyperdexCoordIpaddr = HyperdexCoord[0].first;
                     HyperdexCoordPort = HyperdexCoord[0].second;
 
-                } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_daemons", 16) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_daemons", TOKEN_STRCMP_LEN(16)) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_IPADDR_PORT_BLOCK(HyperdexDaemons);
 
-                } else if (strncmp((const char*)token.data.scalar.value, "kronos", 6) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, "kronos", TOKEN_STRCMP_LEN(6)) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_IPADDR_PORT_BLOCK(KronosLocs);
                     assert(!KronosLocs.empty());
                     KronosIpaddr = KronosLocs[0].first;
                     KronosPort = KronosLocs[0].second;
 
-                } else if (strncmp((const char*)token.data.scalar.value, "weaver_coord", 14) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, "weaver_coord", TOKEN_STRCMP_LEN(14)) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_IPADDR_PORT_BLOCK(ServerManagerLocs);
                     assert(!ServerManagerLocs.empty());
                     ServerManagerIpaddr = ServerManagerLocs[0].first;
                     ServerManagerPort = ServerManagerLocs[0].second;
 
-                } else if (strncmp((const char*)token.data.scalar.value, "aux_index", 10) == 0) {
+                } else if (strncmp((const char*)token.data.scalar.value, "aux_index", TOKEN_STRCMP_LEN(10)) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
-                    AuxIndex = false;
                     PARSE_BOOL(AuxIndex);
+
+                } else if (strncmp((const char*)token.data.scalar.value, "bulk_load_property_value_delimiter", TOKEN_STRCMP_LEN(34)) == 0) {
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
+                    PARSE_CHAR(BulkLoadPropertyValueDelimiter);
 
                 } else {
                     WDEBUG << "unexpected key " << token.data.scalar.value << std::endl;
@@ -199,8 +215,11 @@ init_config_constants(const char *config_file_name)
 
 #undef PARSE_VALUE_SCALAR
 #undef PARSE_INT
+#undef PARSE_BOOL
+#undef PARSE_CHAR
 #undef PARSE_IPADDR
 #undef PARSE_VALUE_IPADDR_PORT_BLOCK
+#undef TOKEN_STRCMP_LEN
 
     if (UINT64_MAX == NumVts
      || UINT16_MAX == MaxCacheEntries
