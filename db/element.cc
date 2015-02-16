@@ -17,36 +17,81 @@
 using db::element::element;
 using db::element::property;
 
-element :: element(const std::string &_handle, vc::vclock &vclk)
+element :: element(const std::string &_handle, const vc::vclock &vclk)
     : handle(_handle)
     , creat_time(vclk)
     , del_time(UINT64_MAX, UINT64_MAX)
     , time_oracle(nullptr)
 { }
 
-void
+bool
 element :: add_property(const property &prop)
 {
-    properties.emplace(prop.key, prop);
+    auto find_iter = properties.find(prop.key);
+    if (find_iter == properties.end()) {
+        std::vector<std::shared_ptr<property>> new_vec;
+        new_vec.emplace_back(std::make_shared<property>(prop));
+        properties.emplace(prop.key, new_vec);
+        return true;
+    } else {
+        bool exists = false;
+        for (const std::shared_ptr<property> p: find_iter->second) {
+            if (*p == prop && p->del_time.vt_id != UINT64_MAX) {
+                exists = true;
+                break;
+            }
+        }
+
+        if (!exists) {
+            find_iter->second.emplace_back(std::make_shared<property>(prop));
+            return true;
+        } else {
+            return false;
+        }
+    }
 }
 
-void
+bool
 element :: add_property(const std::string &key, const std::string &value, const vc::vclock &vclk)
 {
-    properties.emplace(key, property(key, value, vclk));
+    property prop(key, value, vclk);
+    return add_property(prop);
 }
 
-void
-element :: delete_property(std::string &key, vc::vclock &tdel)
+bool
+element :: delete_property(const std::string &key, const vc::vclock &tdel)
 {
-    auto p = properties.find(key);
-    assert(p != properties.end());
-    p->second.update_del_time(tdel);
+    auto iter = properties.find(key);
+    if (iter == properties.end()) {
+        return false;
+    } else {
+        for (std::shared_ptr<property> p: iter->second) {
+            p->update_del_time(tdel);
+        }
+        return true;
+    }
+}
+
+bool
+element :: delete_property(const std::string &key, const std::string &value, const vc::vclock &tdel)
+{
+    auto iter = properties.find(key);
+    if (iter == properties.end()) {
+        return false;
+    } else {
+        for (std::shared_ptr<property> p: iter->second) {
+            if (p->key == key && p->value == value && p->del_time.vt_id != UINT64_MAX) {
+                p->update_del_time(tdel);
+                return true;
+            }
+        }
+        return false;
+    }
 }
 
 // caution: assuming mutex access to this element
 void
-element :: remove_property(std::string &key)
+element :: remove_property(const std::string &key)
 {
     properties.erase(key);
 }
@@ -54,18 +99,21 @@ element :: remove_property(std::string &key)
 bool
 element :: has_property(const std::string &key, const std::string &value)
 {
-    auto p = properties.find(key);
-    if (p != properties.end()
-     && p->second.value == value) {
-        const property &prop = p->second;
-        const vc::vclock& vclk_creat = prop.get_creat_time();
-        const vc::vclock& vclk_del = prop.get_del_time();
-        int64_t cmp1 = time_oracle->compare_two_vts(*view_time, vclk_creat);
-        int64_t cmp2 = time_oracle->compare_two_vts(*view_time, vclk_del);
-        if (cmp1 >= 1 && cmp2 == 0) {
-            return true;
+    auto iter = properties.find(key);
+    if (iter != properties.end()) {
+        for (const std::shared_ptr<property> p: iter->second) {
+            if (p->value == value) {
+                const vc::vclock &vclk_creat = p->get_creat_time();
+                const vc::vclock &vclk_del = p->get_del_time();
+                int64_t cmp1 = time_oracle->compare_two_vts(*view_time, vclk_creat);
+                int64_t cmp2 = time_oracle->compare_two_vts(*view_time, vclk_del);
+                if (cmp1 >= 1 && cmp2 == 0) {
+                    return true;
+                }
+            }
         }
     }
+
     return false;
 }
 
@@ -87,19 +135,19 @@ element :: has_all_properties(const std::vector<std::pair<std::string, std::stri
 }
 
 void
-element :: set_properties(std::unordered_map<std::string, property> &props)
+element :: set_properties(std::unordered_map<std::string, std::vector<std::shared_ptr<property>>> &props)
 {
     properties = props;
 }
 
-const std::unordered_map<std::string, property>*
+const std::unordered_map<std::string, std::vector<std::shared_ptr<property>>>*
 element :: get_props() const
 {
     return &properties;
 }
 
 void
-element :: update_del_time(vc::vclock &tdel)
+element :: update_del_time(const vc::vclock &tdel)
 {
     assert(del_time.vt_id == UINT64_MAX);
     del_time = tdel;
@@ -112,7 +160,7 @@ element :: get_del_time() const
 }
 
 void
-element :: update_creat_time(vc::vclock &tcreat)
+element :: update_creat_time(const vc::vclock &tcreat)
 {
     creat_time = tcreat;
 }

@@ -31,6 +31,12 @@ property :: property(const std::string &k, const std::string &v, const vc::vcloc
     , del_time(UINT64_MAX, UINT64_MAX)
 { }
 
+property :: property(const property &other)
+    : node_prog::property(other.key, other.value)
+    , creat_time(other.creat_time)
+    , del_time(other.del_time)
+{ }
+
 bool
 property :: operator==(property const &other) const
 {
@@ -50,7 +56,7 @@ property :: get_del_time() const
 }
 
 void
-property :: update_del_time(vc::vclock &tdel)
+property :: update_del_time(const vc::vclock &tdel)
 {
     del_time = tdel;
 }

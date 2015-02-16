@@ -273,9 +273,11 @@ node_prog :: two_neighborhood_node_program(
             case 2:
                 if (!state.two_hop_visited) {
                     state.two_hop_visited = true;
-                    for (property &prop : n.get_properties()) {
-                        if (prop.get_key().compare(params.prop_key) == 0) {
-                            params.responses.emplace_back(rn.handle, prop.get_value());
+                    for (std::vector<std::shared_ptr<property>> prop_vec : n.get_properties()) {
+                        if (prop_vec[0]->get_key().compare(params.prop_key) == 0) {
+                            for (std::shared_ptr<property> prop: prop_vec) {
+                                params.responses.emplace_back(rn.handle, prop->get_value());
+                            }
                         }
                     }
                 }

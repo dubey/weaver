@@ -23,7 +23,7 @@
 
 namespace node_prog
 {
-    typedef std::unordered_map<std::string, db::element::property> prop_map_t;
+    typedef std::unordered_map<std::string, std::vector<std::shared_ptr<db::element::property>>> prop_map_t;
     class prop_iter : public std::iterator<std::input_iterator_tag, property>
     {
         private:
@@ -36,7 +36,7 @@ namespace node_prog
             prop_iter& operator++();
             prop_iter(prop_map_t::iterator begin, prop_map_t::iterator end, vc::vclock& req_time, order::oracle *time_oracle);
             bool operator!=(const prop_iter& rhs) const;
-            property& operator*();
+            std::vector<std::shared_ptr<property>> operator*();
     };
 
     class prop_list

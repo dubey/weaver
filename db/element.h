@@ -29,11 +29,28 @@ namespace db
 {
 namespace element
 {
+    //struct property_hasher
+    //{
+    //    private:
+    //        std::function<size_t(const std::string&)> string_hasher;
+
+    //    public:
+    //        property_hasher() : string_hasher(std::hash<std::string>()) { }
+
+    //        size_t
+    //        operator()(const property &p) const
+    //        {
+    //            size_t hkey = string_hasher(p.key);
+    //            size_t hvalue = string_hasher(p.value);
+    //            return ((hkey + 0x9e3779b9 + (hvalue<<6) + (hvalue>>2)) ^ hvalue);
+    //        }
+    //};
+    
     class element
     {
         public:
             element() { }
-            element(const std::string &handle, vc::vclock &vclk);
+            element(const std::string &handle, const vc::vclock &vclk);
 
         protected:
             std::string handle;
@@ -41,23 +58,24 @@ namespace element
             vc::vclock del_time;
 
         public:
-            std::unordered_map<std::string, property> properties;
+            std::unordered_map<std::string, std::vector<std::shared_ptr<property>>> properties;
             std::shared_ptr<vc::vclock> view_time;
             order::oracle *time_oracle;
 
         public:
-            void add_property(const property &prop);
-            void add_property(const std::string &key, const std::string &value, const vc::vclock &vclk);
-            void delete_property(std::string &key, vc::vclock &tdel);
-            void remove_property(std::string &key);
+            bool add_property(const property &prop);
+            bool add_property(const std::string &key, const std::string &value, const vc::vclock &vclk);
+            bool delete_property(const std::string &key, const vc::vclock &tdel);
+            bool delete_property(const std::string &key, const std::string &value, const vc::vclock &tdel);
+            void remove_property(const std::string &key);
             bool has_property(const std::string &key, const std::string &value);
             bool has_property(const std::pair<std::string, std::string> &p);
             bool has_all_properties(const std::vector<std::pair<std::string, std::string>> &props);
-            void set_properties(std::unordered_map<std::string, property> &props);
-            const std::unordered_map<std::string, property>* get_props() const;
-            void update_del_time(vc::vclock &del_time);
+            void set_properties(std::unordered_map<std::string, std::vector<std::shared_ptr<property>>> &props);
+            const std::unordered_map<std::string, std::vector<std::shared_ptr<property>>>* get_props() const;
+            void update_del_time(const vc::vclock &del_time);
             const vc::vclock& get_del_time() const;
-            void update_creat_time(vc::vclock &creat_time);
+            void update_creat_time(const vc::vclock &creat_time);
             const vc::vclock& get_creat_time() const;
             void set_handle(const std::string &handle);
             std::string get_handle() const;

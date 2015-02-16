@@ -33,6 +33,7 @@ namespace element
             property();
             property(const std::string&, const std::string&);
             property(const std::string&, const std::string&, const vc::vclock&);
+            property(const property &other);
 
             vc::vclock creat_time;
             vc::vclock del_time;
@@ -41,7 +42,7 @@ namespace element
 
             const vc::vclock& get_creat_time() const;
             const vc::vclock& get_del_time() const;
-            void update_del_time(vc::vclock&);
+            void update_del_time(const vc::vclock&);
     };
 
     class property_key_hasher
