@@ -112,7 +112,7 @@ namespace element
             node_handle_t get_handle() const { return base.get_handle(); }
             void add_alias(const node_handle_t &alias);
             bool del_alias(const node_handle_t &alias);
-            bool is_alias(const node_handle_t &alias);
+            bool is_alias(const node_handle_t &alias) const;
     };
 }
 }

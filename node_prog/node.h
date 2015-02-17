@@ -28,7 +28,7 @@ namespace node_prog
             virtual prop_list get_properties() = 0;
             virtual bool has_property(std::pair<std::string, std::string> &p) = 0;
             virtual bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props) = 0;
-            virtual bool is_alias(const node_handle_t &alias) = 0;
+            virtual bool is_alias(const node_handle_t &alias) const = 0;
     };
 }
 

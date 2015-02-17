@@ -32,6 +32,7 @@ namespace node_prog
     {
         bool returning; // false = request spreading out, true = request return
         db::element::remote_node prev_node;
+        std::deque<std::vector<std::string>> node_aliases;
         std::deque<std::vector<std::pair<std::string, std::string>>> node_props;
         std::deque<std::vector<std::pair<std::string, std::string>>> edge_props;
         bool collect_nodes;

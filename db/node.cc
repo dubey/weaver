@@ -101,7 +101,7 @@ node :: del_alias(const node_handle_t &alias)
 }
 
 bool
-node :: is_alias(const node_handle_t &alias)
+node :: is_alias(const node_handle_t &alias) const
 {
     return (aliases.find(alias) != aliases.end());
 }

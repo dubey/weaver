@@ -11,6 +11,7 @@
  * ===============================================================
  */
 
+#define weaver_debug_
 #include "common/message.h"
 #include "common/cache_constants.h"
 #include "node_prog/edge.h"
@@ -33,6 +34,7 @@ traverse_props_params :: size() const
 {
     return message::size(returning)
          + message::size(prev_node)
+         + message::size(node_aliases)
          + message::size(node_props)
          + message::size(edge_props)
          + message::size(collect_nodes)
@@ -46,6 +48,7 @@ traverse_props_params :: pack(e::buffer::packer &packer) const
 {
     message::pack_buffer(packer, returning);
     message::pack_buffer(packer, prev_node);
+    message::pack_buffer(packer, node_aliases);
     message::pack_buffer(packer, node_props);
     message::pack_buffer(packer, edge_props);
     message::pack_buffer(packer, collect_nodes);
@@ -59,6 +62,7 @@ traverse_props_params :: unpack(e::unpacker &unpacker)
 {
     message::unpack_buffer(unpacker, returning);
     message::unpack_buffer(unpacker, prev_node);
+    message::unpack_buffer(unpacker, node_aliases);
     message::unpack_buffer(unpacker, node_props);
     message::unpack_buffer(unpacker, edge_props);
     message::unpack_buffer(unpacker, collect_nodes);
@@ -103,6 +107,18 @@ traverse_props_state :: unpack(e::unpacker &unpacker)
     message::unpack_buffer(unpacker, return_edges);
 }
 
+bool
+check_aliases(const node_prog::node &n, const std::vector<std::string> &aliases)
+{
+    for (const std::string &alias: aliases) {
+        if (!n.is_alias(alias)) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 std::pair<search_type, std::vector<std::pair<db::element::remote_node, traverse_props_params>>>
 node_prog :: traverse_props_node_program(node &n,
    db::element::remote_node &rn,
@@ -116,9 +132,8 @@ node_prog :: traverse_props_node_program(node &n,
 
     if (!params.returning) {
         // request spreading out
-        //assert(params.node_props.size() == (params.edge_props.size()+1));
 
-        if (state.visited || !n.has_all_properties(params.node_props.front())) {
+        if (state.visited || !n.has_all_properties(params.node_props.front()) || !check_aliases(n, params.node_aliases.front())) {
             // either this node already visited
             // or node does not have requisite params
             // return now
@@ -127,6 +142,7 @@ node_prog :: traverse_props_node_program(node &n,
         } else {
             state.prev_node = params.prev_node;
             params.prev_node = rn; // this node
+            params.node_aliases.pop_front();
             params.node_props.pop_front();
 
             if (params.edge_props.empty()) {

@@ -63,7 +63,7 @@ c.set_edge_property(e4, 'type', 'liked_by', 'post')
 assert c.end_tx(), 'create edge failed'
 
 # list all the people who like egs's post
-return_nodes = c.traverse('egs', [('type','user')]).out_edge([('type','posted')]).node([('type','post')]).out_edge([('type','liked_by')]).node([('type','user')]).execute()
+return_nodes = c.traverse('egs', {'type': 'user'}).out_edge({'type': 'posted'}).node({'type': 'post'}).out_edge({'type': 'liked_by'}).node({'type': 'user'}).execute()
 assert len(return_nodes) == 1, 'traversal returned incorrect #nodes'
 assert 'ayush' in return_nodes, 'traversal returned bad node handle'
 

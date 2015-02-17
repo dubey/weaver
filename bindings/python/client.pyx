@@ -334,6 +334,7 @@ cdef extern from 'node_prog/traverse_with_props.h' namespace 'node_prog':
     cdef cppclass traverse_props_params:
         traverse_props_params()
         remote_node prev_node
+        deque[vector[string]] node_aliases
         deque[vector[pair[string, string]]] node_props
         deque[vector[pair[string, string]]] edge_props
         bint collect_nodes
@@ -342,7 +343,11 @@ cdef extern from 'node_prog/traverse_with_props.h' namespace 'node_prog':
         unordered_set[edge_handle_t] return_edges
 
 class TraversePropsParams:
-    def __init__(self, node_props=None, edge_props=None, return_nodes=None, return_edges=None, collect_n=False, collect_e=False):
+    def __init__(self, node_aliases=None, node_props=None, edge_props=None, return_nodes=None, return_edges=None, collect_n=False, collect_e=False):
+        if node_aliases is None:
+            self.node_aliases = []
+        else:
+            self.node_aliases = node_aliases
         if node_props is None:
             self.node_props = []
         else:
@@ -395,11 +400,13 @@ cdef extern from 'client/weaver_client.h' namespace 'cl':
 cdef class Client:
     cdef client *thisptr
     cdef string traverse_start_node
+    cdef object traverse_node_aliases
     cdef object traverse_node_props
     cdef object traverse_edge_props
     def __cinit__(self, coordinator, port, config_file=''):
         self.thisptr = new client(coordinator, port, config_file)
         self.traverse_start_node = ''
+        self.traverse_node_aliases = []
         self.traverse_node_props = []
         self.traverse_edge_props = []
 
@@ -659,13 +666,21 @@ cdef class Client:
         c_args.reserve(len(init_args))
         cdef pair[string, traverse_props_params] arg_pair
         cdef vector[pair[string, string]] props
+        cdef vector[string] aliases
         for rp in init_args:
             arg_pair.first = rp[0]
             arg_pair.second.prev_node = coordinator
             arg_pair.second.collect_nodes = rp[1].collect_nodes
             arg_pair.second.collect_edges = rp[1].collect_edges
+            arg_pair.second.node_aliases.clear()
             arg_pair.second.node_props.clear()
             arg_pair.second.edge_props.clear()
+            for p_vec in rp[1].node_aliases:
+                aliases.clear()
+                aliases.reserve(len(p_vec))
+                for p in p_vec:
+                    aliases.push_back(p)
+                arg_pair.second.node_aliases.push_back(aliases)
             for p_vec in rp[1].node_props:
                 props.clear()
                 props.reserve(len(p_vec))
@@ -688,35 +703,65 @@ cdef class Client:
             response.return_edges.append(e)
         return response
 
-    def traverse(self, start_node, node_props=None):
+    def traverse(self, start_node, node_props=None, node_aliases=None):
         self.traverse_start_node = start_node
+        self.traverse_node_aliases = []
         self.traverse_node_props = []
         self.traverse_edge_props = []
+        if node_aliases is None:
+            self.traverse_node_aliases.append([])
+        else:
+            self.traverse_node_aliases.append(node_aliases)
         if node_props is None:
-            self.traverse_node_props.append([])
+            self.traverse_node_props.append({})
         else:
             self.traverse_node_props.append(node_props)
         return self
 
     def out_edge(self, edge_props=None):
         if edge_props is None:
-            self.traverse_edge_props.append([])
+            self.traverse_edge_props.append({})
         else:
             self.traverse_edge_props.append(edge_props)
         return self
 
-    def node(self, node_props=None):
+    def node(self, node_props=None, node_aliases=None):
+        if node_aliases is None:
+            self.traverse_node_aliases.append([])
+        else:
+            self.traverse_node_aliases.append(node_aliases)
         if node_props is None:
-            self.traverse_node_props.append([])
+            self.traverse_node_props.append({})
         else:
             self.traverse_node_props.append(node_props)
         return self
 
+    def __convert_props_dict_to_list(self, dprops):
+        lprops = []
+        for d in dprops:
+            cur_list = []
+            if d:
+                for k in d:
+                    if isinstance(d[k], list):
+                        for v in d[k]:
+                            cur_list.append((k,v))
+                    else:
+                        cur_list.append((k, d[k]))
+            lprops.append(cur_list)
+        return lprops
+
     def execute(self, collect_nodes=False, collect_edges=False):
+        num_node_aliases = len(self.traverse_node_aliases)
         num_node_props = len(self.traverse_node_props)
         num_edge_props = len(self.traverse_edge_props)
+        assert (num_node_aliases == num_node_props)
         assert ((num_node_props == (num_edge_props+1)) or (num_node_props == num_edge_props))
-        params = TraversePropsParams(node_props=self.traverse_node_props, edge_props=self.traverse_edge_props, collect_n=collect_nodes, collect_e=collect_edges)
+
+        params = TraversePropsParams(self.traverse_node_aliases, \
+                                     self.__convert_props_dict_to_list(self.traverse_node_props), \
+                                     self.__convert_props_dict_to_list(self.traverse_edge_props), \
+                                     collect_n=collect_nodes, \
+                                     collect_e=collect_edges)
         response = self.traverse_props([(self.traverse_start_node, params)])
         return response.return_nodes + response.return_edges
 
