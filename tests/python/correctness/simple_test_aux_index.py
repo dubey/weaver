@@ -33,13 +33,13 @@ assert c.aux_index()
 # create node for user ayush
 c.begin_tx()
 c.create_node('ayush')
-c.set_node_property('ayush', 'type', 'user')
+c.set_node_property('type', 'user', 'ayush')
 assert c.end_tx(), 'create node failed'
 
 # create node for user egs
 c.begin_tx()
 c.create_node('egs')
-c.set_node_property('egs', 'type', 'user')
+c.set_node_property('type', 'user', 'egs')
 assert c.end_tx(), 'create node failed'
 
 # ayush follows egs
@@ -53,8 +53,8 @@ assert c.end_tx(), 'tx fail, something is wrong'
 # add a post and restrict visibility to followers only
 c.begin_tx()
 c.create_node('post')
-c.set_node_property('post', 'type', 'post')
-c.set_node_property('post', 'visibility', 'followers')
+c.set_node_property('type', 'post', 'post')
+c.set_node_property('visibility', 'followers', 'post')
 e3 = c.create_edge('egs', 'post')
 c.set_edge_property(edge=e3, key='type', value='posted')
 assert c.end_tx(), 'tx fail, something is wrong'
@@ -82,9 +82,9 @@ assert not c.end_tx(), 'create edge passed'
 
 # add auxiliary handles to nodes
 c.begin_tx()
-c.add_handle('ad688', 'ayush')
-c.add_handle('el33th4x04', 'egs')
+c.add_alias('ad688', 'ayush')
+c.add_alias('el33th4x04', 'egs')
 assert c.end_tx(), 'add aux handles'
 
-print 'Correctly executed 8 transactions of varying complexity, pass simple_test.'
+print 'Correctly executed 9 transactions of varying complexity, pass simple_test.'
 print 'Success, you have a working Weaver setup!'

@@ -457,7 +457,7 @@ apply_writes(uint64_t vt_id, vc::vclock &vclk, uint64_t qts, transaction::pendin
                 break;
 
             case transaction::ADD_AUX_INDEX:
-                S->add_node_alias(upd->handle, upd->handle1);
+                S->add_node_alias(upd->handle, upd->handle1, vclk, qts);
                 break;
 
             default:
@@ -510,7 +510,9 @@ unpack_tx_request(db::message_wrapper *request)
             default:
                 WDEBUG << "unknown type" << std::endl;
         }
-        if (n != NULL) {
+
+        if (upd->type != transaction::NODE_CREATE_REQ) {
+            assert(n != nullptr);
             n->tx_queue.emplace_back(std::make_pair(vt_id, qts));
             S->release_node(n);
         }

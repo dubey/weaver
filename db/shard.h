@@ -148,7 +148,9 @@ namespace db
             void add_node_alias_nonlocking(element::node *n,
                 node_handle_t &alias);
             void add_node_alias(const node_handle_t &node_handle,
-                node_handle_t &alias);
+                node_handle_t &alias,
+                vc::vclock &vclk,
+                uint64_t qts);
             uint64_t get_node_count();
             bool node_exists_nonlocking(const node_handle_t &node_handle);
 
@@ -777,12 +779,26 @@ namespace db
     void
     shard :: add_node_alias_nonlocking(element::node *n, node_handle_t &alias)
     {
+        n->add_alias(alias);
     }
 
     void
-    shard :: add_node_alias(const node_handle_t &node_handle, node_handle_t &alias)
+    shard :: add_node_alias(const node_handle_t &node_handle, node_handle_t &alias,
+        vc::vclock &vclk,
+        uint64_t qts)
     {
-        //element::node *n = acquire_node_write(node_handle,
+        element::node *n = acquire_node_write(node_handle, vclk.vt_id, qts);
+        if (n == NULL) {
+            migration_mutex.lock();
+            def_write_lst &dwl = deferred_writes[node_handle];
+            dwl.emplace_back(deferred_write(transaction::ADD_AUX_INDEX, vclk));
+            deferred_write &dw = dwl[dwl.size()-1];
+            dw.alias = alias;
+            migration_mutex.unlock();
+        } else {
+            add_node_alias_nonlocking(n, alias);
+            release_node_write(n);
+        }
     }
 
     // return true if node already created
