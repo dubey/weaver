@@ -51,6 +51,12 @@ hyper_stub :: get_mappings(std::unordered_set<node_handle_t> &get_set)
     return ret;
 }
 
+bool
+hyper_stub :: get_idx(std::unordered_map<std::string, std::pair<std::string, uint64_t>> &idx_map)
+{
+    return get_indices(idx_map, false);
+}
+
 void
 hyper_stub :: clean_up(std::unordered_map<node_handle_t, db::element::node*> &nodes)
 {

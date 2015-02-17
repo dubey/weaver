@@ -381,7 +381,33 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     if (!get_set.empty()) {
         loc_map = hstub->get_mappings(get_set);
-        bool success = (loc_map.size() == get_set.size());
+
+        bool success = true;
+        if (loc_map.size() < get_set.size()) {
+            std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> alias_map;
+            std::pair<node_handle_t, uint64_t> empty;
+            for (const node_handle_t &h: get_set) {
+                if (loc_map.find(h) == loc_map.end()) {
+                    alias_map.emplace(h, empty);
+                }
+            }
+
+            assert((alias_map.size() + loc_map.size()) == get_set.size());
+
+            success = hstub->get_idx(alias_map);
+
+            if (success) {
+                for (auto &arg: initial_args) {
+                    auto iter = alias_map.find(arg.first);
+                    if (iter != alias_map.end()) {
+                        arg.first = iter->second.first;
+                        loc_map.emplace(iter->second.first, iter->second.second);
+                    } else {
+                        assert(loc_map.find(arg.first) != loc_map.end());
+                    }
+                }
+            }
+        }
 
         if (!success) {
             // some node handles bad, return immediately
@@ -393,7 +419,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         }
     }
 
-    for (auto &p: initial_args) {
+    for (const auto &p: initial_args) {
         initial_batches[loc_map[p.first]].emplace_back(p);
     }
 

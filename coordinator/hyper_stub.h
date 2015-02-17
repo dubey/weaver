@@ -30,6 +30,7 @@ namespace coordinator
             hyper_stub();
             void init(uint64_t vt_id);
             std::unordered_map<node_handle_t, uint64_t> get_mappings(std::unordered_set<node_handle_t> &get_set);
+            bool get_idx(std::unordered_map<std::string, std::pair<std::string, uint64_t>>&);
             void do_tx(std::unordered_set<node_handle_t> &get_set,
                 std::unordered_set<node_handle_t> &del_set,
                 std::unordered_map<node_handle_t, uint64_t> &put_map,
