@@ -33,6 +33,7 @@ init_config_constants(const char *config_file_name)
     ServerManagerPort = UINT16_MAX;
     AuxIndex = false;
     BulkLoadPropertyValueDelimiter = (char)0;
+    BulkLoadNodeAliasKey = "";
 
     FILE *config_file = nullptr;
     if (config_file_name != nullptr) {
@@ -108,6 +109,12 @@ init_config_constants(const char *config_file_name)
         X = *((char*)token.data.scalar.value); \
     } else { \
         WDEBUG << "unexpected token length " << token.data.scalar.length << " for char value"; \
+    } \
+    yaml_token_delete(&token);
+
+#define PARSE_STRING(X) \
+    if (token.data.scalar.length > 0) { \
+        X = (const char*)token.data.scalar.value; \
     } \
     yaml_token_delete(&token);
 
@@ -194,6 +201,11 @@ init_config_constants(const char *config_file_name)
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_CHAR(BulkLoadPropertyValueDelimiter);
+
+                } else if (strncmp((const char*)token.data.scalar.value, "bulk_load_node_alias_key", TOKEN_STRCMP_LEN(24)) == 0) {
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
+                    PARSE_STRING(BulkLoadNodeAliasKey);
 
                 } else {
                     WDEBUG << "unexpected key " << token.data.scalar.value << std::endl;

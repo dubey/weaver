@@ -135,6 +135,14 @@ hyper_stub :: bulk_load(int thread_id, std::unordered_map<node_handle_t, element
         std::unordered_map<std::string, element::node*> idx_add;
         for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
             for (auto &p: nodes_arr[tid]) {
+                assert(idx_add.find(p.first) == idx_add.end());
+                idx_add[p.first] = p.second;
+
+                for (const node_handle_t &alias: p.second->aliases) {
+                    assert(idx_add.find(alias) == idx_add.end());
+                    idx_add[alias] = p.second;
+                }
+
                 for (auto &e: p.second->out_edges) {
                     assert(idx_add.find(e.first) == idx_add.end());
                     idx_add[e.first] = p.second;

@@ -94,6 +94,8 @@ main(int argc, const char *argv[])
         std::cout << (AuxIndex? 1:0) << std::endl;
     } else if (config == "bulk_load_property_value_delimiter") {
         std::cout << BulkLoadPropertyValueDelimiter << std::endl;
+    } else if (config == "bulk_load_node_alias_key") {
+        std::cout << BulkLoadNodeAliasKey << std::endl;
     } else {
         std::cout << "bad config name" << std::endl;
     }

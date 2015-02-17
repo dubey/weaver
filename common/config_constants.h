@@ -41,6 +41,7 @@ extern std::vector<std::pair<char*, uint16_t>> ServerManagerLocs;
 
 extern bool AuxIndex;
 extern char BulkLoadPropertyValueDelimiter;
+extern std::string BulkLoadNodeAliasKey;
 
 bool init_config_constants(const char *config_file_name=NULL);
 void update_config_constants(uint64_t num_shards);
@@ -68,6 +69,7 @@ uint64_t get_num_shards();
     std::vector<std::pair<char*, uint16_t>> ServerManagerLocs; \
     bool AuxIndex; \
     char BulkLoadPropertyValueDelimiter; \
+    std::string BulkLoadNodeAliasKey; \
     uint16_t MaxCacheEntries;
 
 
