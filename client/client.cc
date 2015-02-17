@@ -86,7 +86,7 @@ client :: check_active_tx()
     }
 
 std::string
-client :: create_node(std::string &handle, std::vector<std::string> &aliases)
+client :: create_node(const std::string &handle, const std::vector<std::string> &aliases)
 {
     if (!check_active_tx()) {
         return "";
@@ -103,14 +103,14 @@ client :: create_node(std::string &handle, std::vector<std::string> &aliases)
     auto new_node = upd->handle;
 
     for (const std::string &a: aliases) {
-        add_handle(new_node, a);
+        add_alias(a, new_node);
     }
 
     return new_node;
 }
 
 std::string
-client :: create_edge(std::string &handle, std::string &node1, std::string &node1_alias, std::string &node2, std::string &node2_alias)
+client :: create_edge(const std::string &handle, const std::string &node1, const std::string &node1_alias, const std::string &node2, const std::string &node2_alias)
 {
     if (!check_active_tx()) {
         return "";
@@ -132,7 +132,7 @@ client :: create_edge(std::string &handle, std::string &node1, std::string &node
 }
 
 void
-client :: delete_node(std::string &node, std::string &alias)
+client :: delete_node(const std::string &node, const std::string &alias)
 {
     if (!check_active_tx()) {
         return;
@@ -146,7 +146,7 @@ client :: delete_node(std::string &node, std::string &alias)
 }
 
 void
-client :: delete_edge(std::string &edge, std::string &node, std::string &alias)
+client :: delete_edge(const std::string &edge, const std::string &node, const std::string &alias)
 {
     if (!check_active_tx()) {
         return;
@@ -161,7 +161,7 @@ client :: delete_edge(std::string &edge, std::string &node, std::string &alias)
 }
 
 void
-client :: set_node_property(std::string &node, std::string &alias, std::string key, std::string value)
+client :: set_node_property(const std::string &node, const std::string &alias, std::string key, std::string value)
 {
     if (!check_active_tx()) {
         return;
@@ -177,7 +177,7 @@ client :: set_node_property(std::string &node, std::string &alias, std::string k
 }
 
 void
-client :: set_edge_property(std::string &node, std::string &alias, std::string &edge,
+client :: set_edge_property(const std::string &node, const std::string &alias, const std::string &edge,
     std::string key, std::string value)
 {
     if (!check_active_tx()) {
@@ -195,7 +195,7 @@ client :: set_edge_property(std::string &node, std::string &alias, std::string &
 }
 
 void
-client :: add_handle(std::string &handle, node_handle_t &node)
+client :: add_alias(const std::string &alias, const std::string &node)
 {
     if (!check_active_tx()) {
         return;
@@ -204,7 +204,7 @@ client :: add_handle(std::string &handle, node_handle_t &node)
 
     std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
     upd->type = transaction::ADD_AUX_INDEX;
-    upd->handle = handle;
+    upd->handle = alias;
     upd->handle1 = node;
     cur_tx.emplace_back(upd);
 }

@@ -30,36 +30,36 @@ c = client.Client('127.0.0.1', 2002, config_file)
 # create node for user ayush
 c.begin_tx()
 c.create_node('ayush')
-c.set_node_property('ayush', 'type', 'user')
+c.set_node_property('type', 'user', 'ayush')
 assert c.end_tx(), 'create node failed'
 
 # create node for user egs
 c.begin_tx()
 c.create_node('egs')
-c.set_node_property('egs', 'type', 'user')
+c.set_node_property('type', 'user', 'egs')
 assert c.end_tx(), 'create node failed'
 
 # ayush follows egs
 c.begin_tx()
 c.create_edge('ayush', 'egs', 'e1')
-c.set_edge_property('ayush', 'e1', 'type', 'follows')
+c.set_edge_property('e1', 'type', 'follows', 'ayush')
 c.create_edge('egs', 'ayush', 'e2')
-c.set_edge_property('egs', 'e2', 'type', 'followed_by')
+c.set_edge_property('e2', 'type', 'followed_by', 'egs')
 assert c.end_tx(), 'tx fail, something is wrong'
 
 # add a post and restrict visibility to followers only
 c.begin_tx()
 c.create_node('post')
-c.set_node_property('post', 'type', 'post')
-c.set_node_property('post', 'visibility', 'followers')
+c.set_node_property('type', 'post', 'post')
+c.set_node_property('visibility', 'followers', 'post')
 e3 = c.create_edge('egs', 'post')
-c.set_edge_property('egs', e3, 'type', 'posted')
+c.set_edge_property(e3, 'type', 'posted', 'egs')
 assert c.end_tx(), 'tx fail, something is wrong'
 
 # 'like' the post
 c.begin_tx()
 e4 = c.create_edge('post', 'ayush')
-c.set_edge_property('post', e4, 'type', 'liked_by')
+c.set_edge_property(e4, 'type', 'liked_by', 'post')
 assert c.end_tx(), 'create edge failed'
 
 # list all the people who like egs's post

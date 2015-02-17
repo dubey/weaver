@@ -145,6 +145,10 @@ namespace db
                 std::unique_ptr<std::string> key, std::unique_ptr<std::string> value,
                 vc::vclock &vclk,
                 uint64_t qts);
+            void add_node_alias_nonlocking(element::node *n,
+                node_handle_t &alias);
+            void add_node_alias(const node_handle_t &node_handle,
+                node_handle_t &alias);
             uint64_t get_node_count();
             bool node_exists_nonlocking(const node_handle_t &node_handle);
 
@@ -437,11 +441,13 @@ namespace db
         if (node_iter != nodes[map_idx].end()) {
             n = node_iter->second;
             n->waiters++;
+
             // first wait for node to become free
             while (n->in_use) {
                 n->cv.wait();
             }
-            // check if write exists in queue---in case we are recovering from failure
+
+            // assert write exists in queue
             bool exists = false;
             for (auto &p: n->tx_queue) {
                 if (p == comp) {
@@ -449,19 +455,23 @@ namespace db
                     break;
                 }
             }
-            if (exists && n->tx_queue.front() != comp) {
+            assert(exists);
+
+            if (n->tx_queue.front() != comp) {
                 // write exists in queue, but cannot be executed right now
                 while (n->in_use || n->tx_queue.front() != comp) {
                     n->cv.wait();
                 }
                 n->tx_queue.pop_front();
-            } else if (exists) {
+            } else {
                 // write exists in queue and is the first
                 n->tx_queue.pop_front();
             }
+
             n->waiters--;
             n->in_use = true;
         }
+
         node_map_mutexes[map_idx].unlock();
 
         return n;
@@ -762,6 +772,17 @@ namespace db
             set_edge_property_nonlocking(n, edge_handle, *key, *value, vclk);
             release_node_write(n);
         }
+    }
+
+    void
+    shard :: add_node_alias_nonlocking(element::node *n, node_handle_t &alias)
+    {
+    }
+
+    void
+    shard :: add_node_alias(const node_handle_t &node_handle, node_handle_t &alias)
+    {
+        //element::node *n = acquire_node_write(node_handle,
     }
 
     // return true if node already created

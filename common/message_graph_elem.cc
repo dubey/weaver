@@ -66,6 +66,7 @@ message :: size(const db::element::node &t)
     uint64_t sz = 0;
     sz += size(t.base);
     sz += size(t.out_edges);
+    sz += size(t.aliases);
     sz += size(t.update_count);
 #ifdef WEAVER_CLDG
     sz += size(t.msg_count);
@@ -74,7 +75,7 @@ message :: size(const db::element::node &t)
     sz += size(t.msg_count);
 #endif
     sz += size(t.already_migr);
-    sz += size(t.prog_states);;
+    sz += size(t.prog_states);
     return sz;
 }
 
@@ -109,6 +110,7 @@ message :: pack_buffer(e::buffer::packer &packer, const db::element::node &t)
 {
     pack_buffer(packer, t.base);
     pack_buffer(packer, t.out_edges);
+    pack_buffer(packer, t.aliases);
     pack_buffer(packer, t.update_count);
 #ifdef WEAVER_CLDG
     pack_buffer(packer, t.msg_count);
@@ -177,6 +179,7 @@ message :: unpack_buffer(e::unpacker &unpacker, db::element::node &t)
 {
     unpack_buffer(unpacker, t.base);
     unpack_buffer(unpacker, t.out_edges);
+    unpack_buffer(unpacker, t.aliases);
     unpack_buffer(unpacker, t.update_count);
 #ifdef WEAVER_CLDG
     unpack_buffer(unpacker, t.msg_count);

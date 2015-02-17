@@ -53,13 +53,13 @@ namespace cl
 
         public:
             void begin_tx();
-            std::string create_node(std::string &handle, std::vector<std::string> &aliases);
-            std::string create_edge(std::string &handle, std::string &node1, std::string &node1_alias, std::string &node2, std::string &node2_alias);
-            void delete_node(std::string &node, std::string &alias);
-            void delete_edge(std::string &edge, std::string &node, std::string &node_alias);
-            void set_node_property(std::string &node, std::string &alias, std::string key, std::string value);
-            void set_edge_property(std::string &node, std::string &alias, std::string &edge, std::string key, std::string value);
-            void add_handle(std::string &handle, node_handle_t &node);
+            std::string create_node(const std::string &handle, const std::vector<std::string> &aliases);
+            std::string create_edge(const std::string &handle, const std::string &node1, const std::string &node1_alias, const std::string &node2, const std::string &node2_alias);
+            void delete_node(const std::string &node, const std::string &alias);
+            void delete_edge(const std::string &edge, const std::string &node, const std::string &node_alias);
+            void set_node_property(const std::string &node, const std::string &alias, std::string key, std::string value);
+            void set_edge_property(const std::string &node, const std::string &alias, const std::string &edge, std::string key, std::string value);
+            void add_alias(const std::string &alias, const std::string &node);
             bool end_tx();
 
             template <typename ParamsType>

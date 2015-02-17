@@ -456,6 +456,10 @@ apply_writes(uint64_t vt_id, vc::vclock &vclk, uint64_t qts, transaction::pendin
                 S->set_edge_property(upd->handle1, upd->handle2, std::move(upd->key), std::move(upd->value), vclk, qts);
                 break;
 
+            case transaction::ADD_AUX_INDEX:
+                S->add_node_alias(upd->handle, upd->handle1);
+                break;
+
             default:
                 continue;
         }
@@ -483,20 +487,23 @@ unpack_tx_request(db::message_wrapper *request)
     // establish tx order at all graph nodes for all other writes
     db::element::node *n;
     for (auto upd: tx.writes) {
-        n = NULL;
+        n = nullptr;
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ:
                 S->create_node(upd->handle, vclk, false);
                 break;
 
+            // elem1
             case transaction::EDGE_CREATE_REQ:
             case transaction::NODE_DELETE_REQ:
-            case transaction::NODE_SET_PROPERTY: // elem1
+            case transaction::NODE_SET_PROPERTY:
+            case transaction::ADD_AUX_INDEX:
                 n = S->acquire_node(upd->handle1);
                 break;
 
+            // elem2
             case transaction::EDGE_DELETE_REQ:
-            case transaction::EDGE_SET_PROPERTY: // elem2
+            case transaction::EDGE_SET_PROPERTY:
                 n = S->acquire_node(upd->handle2);
                 break;
 
@@ -504,17 +511,7 @@ unpack_tx_request(db::message_wrapper *request)
                 WDEBUG << "unknown type" << std::endl;
         }
         if (n != NULL) {
-            bool already_ordered = false;
-            for (auto &p: n->tx_queue) {
-                if (p.first == vt_id && p.second == qts) {
-                    // tx already exists in queue, due to some previous failure
-                    already_ordered = true;
-                    break;
-                }
-            }
-            if (!already_ordered) {
-                n->tx_queue.emplace_back(std::make_pair(vt_id, qts));
-            }
+            n->tx_queue.emplace_back(std::make_pair(vt_id, qts));
             S->release_node(n);
         }
     }

@@ -89,6 +89,24 @@ node :: has_all_properties(std::vector<std::pair<std::string, std::string>> &pro
 }
 
 void
+node :: add_alias(const node_handle_t &alias)
+{
+    aliases.emplace(alias);
+}
+
+bool
+node :: del_alias(const node_handle_t &alias)
+{
+    return (aliases.erase(alias) != 0);
+}
+
+bool
+node :: is_alias(const node_handle_t &alias)
+{
+    return (aliases.find(alias) != aliases.end());
+}
+
+void
 node :: add_cache_value(std::shared_ptr<vc::vclock> vc,
     std::shared_ptr<node_prog::Cache_Value_Base> cache_value,
     std::shared_ptr<std::vector<remote_node>> watch_set,

@@ -100,7 +100,8 @@ attributes
     map(string, string) out_edges,
     int migr_status,
     string last_upd_clk,
-    string restore_clk
+    string restore_clk,
+    set(string) aliases
 tolerate 2 failures
 EOF
 

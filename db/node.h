@@ -67,6 +67,7 @@ namespace element
             uint32_t waiters; // count of number of waiters
             bool permanently_deleted;
             std::unique_ptr<vc::vclock> last_perm_deletion; // vclock of last edge/property permanently deleted at this node
+            std::unordered_set<node_handle_t> aliases;
 
             // for migration
             uint64_t new_loc;
@@ -109,6 +110,9 @@ namespace element
             bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
             void set_handle(const node_handle_t &_handle) { base.set_handle(_handle); }
             node_handle_t get_handle() const { return base.get_handle(); }
+            void add_alias(const node_handle_t &alias);
+            bool del_alias(const node_handle_t &alias);
+            bool is_alias(const node_handle_t &alias);
     };
 }
 }

@@ -367,15 +367,13 @@ cdef extern from 'client/weaver_client.h' namespace 'cl':
         client(const char *coordinator, uint16_t port, const char *config_file)
 
         void begin_tx()
-        string create_node(string &handle)
-        string create_edge(string &handle, string &node1, string &node2)
-        void delete_node(string &node)
-        void delete_edge(string &edge, string &node)
-        void delete_edge(string &edge)
-        void set_node_property(string &node, string key, string value)
-        void set_edge_property(string &node, string &edge, string key, string value)
-        void set_edge_property(string &edge, string key, string value)
-        void add_handle(string &handle, string &node)
+        string create_node(const string &handle, const vector[string] &aliases)
+        string create_edge(const string &handle, const string &node1, const string &node1_alias, const string &node2, const string &node2_alias)
+        void delete_node(const string &node, const string &alias)
+        void delete_edge(const string &edge, const string &node, const string &node_alias)
+        void set_node_property(const string &node, const string &alias, string key, string value)
+        void set_edge_property(const string &node, const string &alias, const string &edge, string key, string value)
+        void add_alias(const string &alias, const string &node)
         bint end_tx() nogil
         reach_params run_reach_program(vector[pair[string, reach_params]] &initial_args) nogil
         pathless_reach_params run_pathless_reach_program(vector[pair[string, pathless_reach_params]] &initial_args) nogil
@@ -417,27 +415,29 @@ cdef class Client:
             aliases = kwargs['aliases'].split(',')
         return self.thisptr.create_node(handle, aliases)
 
-    def create_edge(self, handle, node1=None, node2=None, **kwargs):
+    def create_edge(self, node1=None, node2=None, handle=None, **kwargs):
         handle1 = ''
         handle2 = ''
         alias1 = ''
         alias2 = ''
+        edge = ''
         if node1 is None:
-            if 'node1_alias' not in kwargs or 'node2_alias' not in kwargs:
+            if 'node1_alias' not in kwargs:
                 print("please provide either node handles or node aliases", file=sys.stderr)
             else:
                 alias1 = kwargs['node1_alias']
-                alias2 = kwargs['node2_alias']
-        elif node2 is None:
+        else:
+            handle1 = node1
+        if node2 is None:
             if 'node2_alias' not in kwargs:
                 print("please provide either node handles or node aliases", file=sys.stderr)
             else:
-                handle1 = node1
                 alias2 = kwargs['node2_alias']
         else:
-            handle1 = node1
             handle2 = node2
-        return self.thisptr.create_edge(handle, node1, alias1, node2, alias2)
+        if handle is not None:
+            edge = handle
+        return self.thisptr.create_edge(edge, handle1, alias1, handle2, alias2)
 
     def delete_node(self, handle=None, **kwargs):
         if handle is None:
@@ -472,8 +472,8 @@ cdef class Client:
         else:
             self.thisptr.set_edge_property(node, '', edge, key, value)
 
-    def add_handle(self, handle, node):
-        self.thisptr.add_handle(handle, node)
+    def add_alias(self, alias, node):
+        self.thisptr.add_alias(alias, node)
 
     def end_tx(self):
         cdef bint ret

@@ -184,6 +184,12 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     for (std::shared_ptr<transaction::pending_update> upd: tx->writes) {
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ:
+                if (idx_add.find(upd->handle) != idx_add.end()) {
+                    WDEBUG << "cannot add two identical handles" << std::endl;
+                    ERROR_FAIL;
+                }
+                GET_NODE(upd->handle);
+                idx_add.emplace(upd->handle, n);
                 break;
 
             case transaction::EDGE_CREATE_REQ:
@@ -205,6 +211,10 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 
             case transaction::NODE_DELETE_REQ:
                 CHECK_LOC(upd->loc1, upd->handle1);
+                GET_NODE(upd->handle1);
+                for (const std::string &alias: n->aliases) {
+                    idx_del.emplace_back(alias);
+                }
                 break;
 
             case transaction::NODE_SET_PROPERTY:
@@ -253,6 +263,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                     ERROR_FAIL;
                 }
                 idx_add.emplace(upd->handle, n);
+                n->add_alias(upd->handle);
                 break;
 
             default:

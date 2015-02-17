@@ -22,14 +22,16 @@ hyper_stub_base :: hyper_stub_base()
         "out_edges",
         "migr_status", // 0 for stable, 1 for moving
         "last_upd_clk",
-        "restore_clk"}
+        "restore_clk",
+        "aliases"}
     , graph_dtypes{HYPERDATATYPE_INT64,
         HYPERDATATYPE_STRING,
         HYPERDATATYPE_MAP_STRING_STRING,
         HYPERDATATYPE_MAP_STRING_STRING,
         HYPERDATATYPE_INT64,
         HYPERDATATYPE_STRING,
-        HYPERDATATYPE_STRING}
+        HYPERDATATYPE_STRING,
+        HYPERDATATYPE_SET_STRING}
     , tx_attrs{"vt_id",
         "tx_data"}
     , tx_dtypes{HYPERDATATYPE_INT64,
@@ -698,6 +700,8 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::e
     // restore clock
     unpack_buffer(cl_attr[idx[6]].value, cl_attr[idx[6]].value_sz, n.restore_clk);
     assert(n.restore_clk.size() == ClkSz);
+    // aliases
+    unpack_buffer(cl_attr[idx[7]].value, cl_attr[idx[7]].value_sz, n.aliases);
 
     return true;
 }
@@ -769,7 +773,8 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     std::unique_ptr<e::buffer> &props_buf,
     std::unique_ptr<e::buffer> &out_edges_buf,
     std::unique_ptr<e::buffer> &last_clk_buf,
-    std::unique_ptr<e::buffer> &restore_clk_buf)
+    std::unique_ptr<e::buffer> &restore_clk_buf,
+    std::unique_ptr<e::buffer> &aliases_buf)
 {
     // shard
     cl_attr[0].attr = graph_attrs[0];
@@ -819,23 +824,14 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     cl_attr[6].value = (const char*)restore_clk_buf->data();
     cl_attr[6].value_sz = restore_clk_buf->size();
     cl_attr[6].datatype = graph_dtypes[6];
-}
 
-//bool
-//hyper_stub_base :: put_node(db::element::node &n)
-//{
-//    hyperdex_client_attribute cl_attr[NUM_GRAPH_ATTRS];
-//    std::unique_ptr<e::buffer> creat_clk_buf;
-//    std::unique_ptr<e::buffer> props_buf;
-//    std::unique_ptr<e::buffer> out_edges_buf;
-//    std::unique_ptr<e::buffer> last_clk_buf;
-//    std::unique_ptr<e::buffer> restore_clk_buf;
-//
-//    prepare_node(cl_attr, n, creat_clk_buf, props_buf, out_edges_buf, last_clk_buf, restore_clk_buf);
-//
-//    node_handle_t handle = n.get_handle();
-//    return call(&hyperdex_client_xact_put, graph_space, handle.c_str(), handle.size(), cl_attr, NUM_GRAPH_ATTRS);
-//}
+    // aliases
+    prepare_buffer(n.aliases, aliases_buf);
+    cl_attr[7].attr = graph_attrs[7];
+    cl_attr[7].value = (const char*)aliases_buf->data();
+    cl_attr[7].value_sz = aliases_buf->size();
+    cl_attr[7].datatype = graph_dtypes[7];
+}
 
 bool
 hyper_stub_base :: put_nodes(std::unordered_map<node_handle_t, db::element::node*> &nodes, bool if_not_exist)
@@ -857,6 +853,7 @@ hyper_stub_base :: put_nodes(std::unordered_map<node_handle_t, db::element::node
     std::vector<std::unique_ptr<e::buffer>> out_edges_buf(num_nodes);
     std::vector<std::unique_ptr<e::buffer>> last_clk_buf(num_nodes);
     std::vector<std::unique_ptr<e::buffer>> restore_clk_buf(num_nodes);
+    std::vector<std::unique_ptr<e::buffer>> aliases_buf(num_nodes);
 
     hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute*)malloc(num_nodes * NUM_GRAPH_ATTRS * sizeof(hyperdex_client_attribute));
 
@@ -866,7 +863,7 @@ hyper_stub_base :: put_nodes(std::unordered_map<node_handle_t, db::element::node
         keys[i] = p.first.c_str();
         key_szs[i] = p.first.size();
 
-        prepare_node(attrs[i], *p.second, creat_clk_buf[i], props_buf[i], out_edges_buf[i], last_clk_buf[i], restore_clk_buf[i]);
+        prepare_node(attrs[i], *p.second, creat_clk_buf[i], props_buf[i], out_edges_buf[i], last_clk_buf[i], restore_clk_buf[i], aliases_buf[i]);
 
         i++;
     }
@@ -893,6 +890,7 @@ hyper_stub_base :: put_nodes_bulk(std::unordered_map<node_handle_t, db::element:
     std::vector<std::unique_ptr<e::buffer>> out_edges_buf(num_nodes);
     std::vector<std::unique_ptr<e::buffer>> last_clk_buf(num_nodes);
     std::vector<std::unique_ptr<e::buffer>> restore_clk_buf(num_nodes);
+    std::vector<std::unique_ptr<e::buffer>> aliases_buf(num_nodes);
 
     hyperdex_client_attribute *attrs_to_add = (hyperdex_client_attribute*)malloc(num_nodes * NUM_GRAPH_ATTRS * sizeof(hyperdex_client_attribute));
 
@@ -902,7 +900,7 @@ hyper_stub_base :: put_nodes_bulk(std::unordered_map<node_handle_t, db::element:
         keys[i] = p.first.c_str();
         key_szs[i] = p.first.size();
 
-        prepare_node(attrs[i], *p.second, creat_clk_buf[i], props_buf[i], out_edges_buf[i], last_clk_buf[i], restore_clk_buf[i]);
+        prepare_node(attrs[i], *p.second, creat_clk_buf[i], props_buf[i], out_edges_buf[i], last_clk_buf[i], restore_clk_buf[i], aliases_buf[i]);
 
         i++;
     }
@@ -938,233 +936,6 @@ hyper_stub_base :: del_nodes(std::unordered_set<node_handle_t> &to_del)
 
     return multiple_del(spaces, keys, key_szs);
 }
-
-/*
-void
-hyper_stub_base :: update_creat_time(db::element::node &n)
-{
-    hyperdex_client_attribute cl_attr;
-    std::unique_ptr<e::buffer> creat_clk_buf;
-    prepare_buffer(n.base.get_creat_time(), creat_clk_buf);
-    cl_attr.attr = graph_attrs[0];
-    cl_attr.value = (const char*)creat_clk_buf->data();
-    cl_attr.value_sz = creat_clk_buf->size();
-    cl_attr.datatype = graph_dtypes[0];
-
-    node_handle_t handle = n.get_handle();
-    call(&hyperdex_client_xact_put, graph_space, handle.c_str(), handle.size(), &cl_attr, 1);
-}
-
-void
-hyper_stub_base :: update_properties(db::element::node &n)
-{
-    hyperdex_client_attribute cl_attr;
-    std::unique_ptr<e::buffer> props_buf;
-    prepare_buffer(*n.base.get_props(), props_buf);
-    cl_attr.attr = graph_attrs[2];
-    cl_attr.value = (const char*)props_buf->data();
-    cl_attr.value_sz = props_buf->size();
-    cl_attr.datatype = graph_dtypes[2];
-
-    node_handle_t handle = n.get_handle();
-    call(&hyperdex_client_xact_put, graph_space, handle.c_str(), handle.size(), &cl_attr, 1);
-}
-
-void
-hyper_stub_base :: add_out_edge(db::element::node &n, db::element::edge *e)
-{
-    hyperdex_client_map_attribute map_attr;
-    std::unique_ptr<e::buffer> key_buf, val_buf;
-    prepare_buffer(e->get_handle(), key_buf);
-    prepare_buffer(e, val_buf);
-    map_attr.attr = graph_attrs[3];
-    map_attr.map_key = (const char*)key_buf->data();
-    map_attr.map_key_sz = key_buf->size();
-    map_attr.map_key_datatype = HYPERDATATYPE_STRING;
-    map_attr.value = (const char*)val_buf->data();
-    map_attr.value_sz = val_buf->size();
-    map_attr.value_datatype = HYPERDATATYPE_STRING;
-
-    node_handle_t handle = n.get_handle();
-    map_call(&hyperdex_client_xact_put, graph_space, handle.c_str(), handle.size(), &map_attr, 1);
-}
-
-void
-hyper_stub_base :: remove_out_edge(db::element::node &n, db::element::edge *e)
-{
-    hyperdex_client_attribute cl_attr;
-    std::unique_ptr<e::buffer> key_buf;
-    prepare_buffer(e->get_handle(), key_buf);
-    cl_attr.attr = graph_attrs[3];
-    cl_attr.value = (const char*)key_buf->data();
-    cl_attr.value_sz = key_buf->size();
-    cl_attr.datatype = HYPERDATATYPE_STRING;
-
-    node_handle_t handle = n.get_handle();
-    call(&hyperdex_client_xact_map_remove, graph_space, handle.c_str(), handle.size(), &cl_attr, 1);
-}
-
-void
-hyper_stub_base :: add_in_nbr(const node_handle_t &n_hndl, const node_handle_t &nbr)
-{
-    hyperdex_client_attribute cl_attr;
-    cl_attr.attr = graph_attrs[4];
-    cl_attr.value = nbr.c_str();
-    cl_attr.value_sz = nbr.size();
-    cl_attr.datatype = HYPERDATATYPE_STRING;
-
-    call(&hyperdex_client_xact_set_add, graph_space, n_hndl.c_str(), n_hndl.size(), &cl_attr, 1);
-}
-
-void
-hyper_stub_base :: remove_in_nbr(const node_handle_t &n_hndl, const node_handle_t &nbr)
-{
-    hyperdex_client_attribute cl_attr;
-    cl_attr.attr = graph_attrs[4];
-    cl_attr.value = nbr.c_str();
-    cl_attr.value_sz = nbr.size();
-    cl_attr.datatype = HYPERDATATYPE_STRING;
-
-    call(&hyperdex_client_xact_set_remove, graph_space, n_hndl.c_str(), n_hndl.size(), &cl_attr, 1);
-}
-
-void
-hyper_stub_base :: update_tx_queue(db::element::node &n)
-{
-    hyperdex_client_attribute cl_attr;
-    std::unique_ptr<e::buffer> txq_buf;
-    prepare_buffer(n.tx_queue, txq_buf);
-    cl_attr.attr = graph_attrs[5];
-    cl_attr.value = (const char*)txq_buf->data();
-    cl_attr.value_sz = txq_buf->size();
-    cl_attr.datatype = graph_dtypes[5];
-
-    node_handle_t handle = n.get_handle();
-    call(&hyperdex_client_xact_put, graph_space, handle.c_str(), handle.size(), &cl_attr, 1);
-}
-
-void
-hyper_stub_base :: update_migr_status(const node_handle_t &n_hndl, enum persist_node_state status)
-{
-    int64_t int_status = status;
-    hyperdex_client_attribute cl_attr;
-    cl_attr.attr = graph_attrs[6];
-    cl_attr.value = (const char*)&int_status;
-    cl_attr.value_sz = sizeof(int64_t);
-    cl_attr.datatype = graph_dtypes[6];
-
-    call(&hyperdex_client_xact_put, graph_space, n_hndl.c_str(), n_hndl.size(), &cl_attr, 1);
-}
-
-
-// store the given unordered_map<int, int> as a HYPERDATATYPE_MAP_INT64_INT64
-void
-hyper_stub_base :: prepare_buffer(const std::unordered_map<uint64_t, uint64_t> &map, std::unique_ptr<e::buffer> &buf)
-{
-    std::vector<uint64_t> sorted;
-    sorted.reserve(map.size());
-    for (auto &p: map) {
-        sorted.emplace_back(p.first);
-    }
-    std::sort(sorted.begin(), sorted.end());
-
-    uint64_t buf_sz = map.size() * (sizeof(int64_t) + sizeof(int64_t));
-    buf.reset(e::buffer::create(buf_sz));
-    e::buffer::packer packer = buf->pack();
-
-    for (uint64_t key: sorted) {
-        pack_uint64(packer, key);
-        pack_uint64(packer, map.at(key));
-    }
-}
-
-// unpack the HYPERDATATYPE_MAP_INT64_INT64 in to an unordered_map<int, int>
-void
-hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<uint64_t, uint64_t> &map)
-{
-    uint64_t num_entries = buf_sz / (sizeof(int64_t) + sizeof(int64_t));
-    map.reserve(num_entries);
-    uint64_t key, val;
-
-    for (uint64_t i = 0; i < num_entries; i++) {
-        buf = e::unpack64le(buf, &key);
-        buf = e::unpack64le(buf, &val);
-        map.emplace(key, val);
-    }
-}
-
-// store the given unordered_set as a HYPERDATATYPE_SET_INT64
-void
-hyper_stub_base :: prepare_buffer(const std::unordered_set<uint64_t> &set, std::unique_ptr<e::buffer> &buf)
-{
-    std::vector<uint64_t> sorted;
-    sorted.reserve(set.size());
-    for (uint64_t x: set) {
-        sorted.emplace_back(x);
-    }
-    std::sort(sorted.begin(), sorted.end());
-
-    uint64_t buf_sz = sizeof(uint64_t) * set.size();
-    buf.reset(e::buffer::create(buf_sz));
-    e::buffer::packer packer = buf->pack();
-
-    // now iterate in sorted order
-    for (uint64_t x: sorted) {
-        pack_uint64(packer, x);
-    }
-}
-
-// unpack the HYPERDATATYPE_SET_INT64 in to an unordered_set
-void
-hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<uint64_t> &set)
-{
-    uint64_t set_sz = buf_sz / sizeof(uint64_t);
-    uint64_t next;
-    set.reserve(set_sz);
-
-    for (uint64_t i = 0; i < set_sz; i++) {
-        buf = e::unpack64le(buf, &next);
-        set.emplace(next);
-    }
-}
-
-// store the unordered_set<string> as a HYPERDATATYPE_SET_STRING
-void
-hyper_stub_base :: prepare_buffer(const std::unordered_set<std::string> &set, std::unique_ptr<e::buffer> &buf)
-{
-    std::vector<std::string> sorted;
-    sorted.reserve(set.size());
-    uint64_t buf_sz = 0;
-
-    for (const std::string &s: set) {
-        sorted.emplace_back(s);
-        buf_sz += sizeof(uint32_t) + s.size();
-    }
-    std::sort(sorted.begin(), sorted.end());
-
-    buf.reset(e::buffer::create(buf_sz));
-    e::buffer::packer packer = buf->pack();
-
-    for (const std::string &s: sorted) {
-        message::pack_buffer(packer, s);
-    }
-}
-
-// unpack the HYPERDATATYPE_SET_STRING in to an unordered_set<string>
-void
-hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<std::string> &set)
-{
-    std::unique_ptr<e::buffer> ebuf(e::buffer::create(buf, buf_sz));
-    e::unpacker unpacker = ebuf->unpack_from(0);
-    std::string next;
-
-    while (!unpacker.empty()) {
-        next.erase();
-        message::unpack_buffer(unpacker, next);
-        set.emplace(next);
-    }
-}
-*/
 
 bool
 hyper_stub_base :: update_nmap(const node_handle_t &handle, uint64_t loc)
@@ -1442,3 +1213,52 @@ hyper_stub_base :: unpack_string(e::unpacker &unpacker, std::string &s, uint32_t
         unpacker = unpacker >> rawchars[i];
     }
 }
+
+// store the given unordered_set as a HYPERDATATYPE_SET_STRING
+inline void
+hyper_stub_base :: prepare_buffer(const std::unordered_set<std::string> &set, std::unique_ptr<e::buffer> &buf)
+{
+    uint64_t buf_sz = 0;
+    std::vector<std::string> sorted;
+    sorted.reserve(set.size());
+
+    for (const std::string &s: set) {
+        sorted.emplace_back(s);
+    }
+    std::sort(sorted.begin(), sorted.end());
+
+    // now iterate in sorted order
+    for (uint64_t i = 0; i < sorted.size(); i++) {
+        buf_sz += sizeof(uint32_t) // each entry encoding sz
+                + sorted[i].size();
+    }
+
+    buf.reset(e::buffer::create(buf_sz));
+    e::buffer::packer packer = buf->pack();
+
+    for (uint64_t i = 0; i < sorted.size(); i++) {
+        pack_uint32(packer, sorted[i].size());
+        pack_string(packer, sorted[i]);
+    }
+}
+
+// unpack the HYPERDATATYPE_SET_STRING in to the given set
+inline void
+hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<std::string> &set)
+{
+    std::unique_ptr<e::buffer> ebuf(e::buffer::create(buf, buf_sz));
+    e::unpacker unpacker = ebuf->unpack_from(0);
+    std::string key;
+    uint32_t sz;
+
+    while (!unpacker.empty()) {
+        key.erase();
+
+        unpack_uint32(unpacker, sz);
+        unpack_string(unpacker, key, sz);
+
+        set.emplace(key);
+    }
+}
+
+

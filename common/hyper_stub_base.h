@@ -29,7 +29,7 @@
 #include "db/node.h"
 
 #define NUM_INDEX_ATTRS 2
-#define NUM_GRAPH_ATTRS 7
+#define NUM_GRAPH_ATTRS 8
 #define NUM_TX_ATTRS 2
 
 enum persist_node_state
@@ -174,10 +174,13 @@ class hyper_stub_base
         template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, T &t);
         template <typename T> void prepare_buffer(const std::unordered_map<std::string, T> &map, std::unique_ptr<e::buffer> &buf);
         template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<std::string, T> &map);
+        void prepare_buffer(const std::unordered_set<std::string> &set, std::unique_ptr<e::buffer> &buf);
+        void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<std::string> &set);
 
     private:
         void prepare_node(hyperdex_client_attribute *attr,
             db::element::node &n,
+            std::unique_ptr<e::buffer>&,
             std::unique_ptr<e::buffer>&,
             std::unique_ptr<e::buffer>&,
             std::unique_ptr<e::buffer>&,
@@ -237,10 +240,7 @@ hyper_stub_base :: prepare_buffer(const std::unordered_map<std::string, T> &map,
                 + sorted[i].size()
                 + sizeof(uint32_t) // map val encoding sz
                 + val_sz[i]; // map val encoding
-        //WDEBUG << "key " << sorted[i] << ", key_sz " << sorted[i].size() << std::endl;
-        //WDEBUG << "value_sz " << val_sz[i] << std::endl;
     }
-    //WDEBUG << "Total buf sz = " << buf_sz << std::endl;
 
     buf.reset(e::buffer::create(buf_sz));
     e::buffer::packer packer = buf->pack();
@@ -248,13 +248,10 @@ hyper_stub_base :: prepare_buffer(const std::unordered_map<std::string, T> &map,
     for (uint64_t i = 0; i < sorted.size(); i++) {
         pack_uint32(packer, sorted[i].size());
         pack_string(packer, sorted[i]);
-        //WDEBUG << "packed key " << sorted[i] << std::endl;
 
         pack_uint32(packer, val_sz[i]);
         message::pack_buffer(packer, map.at(sorted[i]));
     }
-
-    //WDEBUG << "Hex dump: " << buf->hex() << std::endl;
 }
 
 // unpack the HYPERDATATYPE_MAP_STRING_STRING in to the given map
@@ -271,12 +268,9 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordere
         key.erase();
 
         unpack_uint32(unpacker, sz);
-        //WDEBUG << "got key sz " << sz << std::endl;
         unpack_string(unpacker, key, sz);
-        //WDEBUG << "got key: sz = " << key.size() << ", val = " << key << std::endl;
 
         unpack_uint32(unpacker, sz);
-        //WDEBUG << "got val sz " << sz << std::endl;
         message::unpack_buffer(unpacker, map[key]);
     }
 }
