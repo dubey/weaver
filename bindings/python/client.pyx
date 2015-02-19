@@ -260,27 +260,6 @@ class ReadNodePropsParams:
         else:
             self.node_props = node_props
 
-cdef extern from 'node_prog/read_edges_props_program.h' namespace 'node_prog':
-    cdef cppclass read_edges_props_params:
-        vector[edge_handle_t] edges
-        vector[string] keys
-        vector[pair[edge_handle_t, vector[pair[string, string]]]] edges_props
-
-class ReadEdgesPropsParams:
-    def __init__(self, edges=None, keys=None, edges_props=None):
-        if edges is None:
-            self.edges = []
-        else:
-            self.edges = edges
-        if keys is None:
-            self.keys = []
-        else:
-            self.keys = keys
-        if edges_props is None:
-            self.edges_props = []
-        else:
-            self.edges_props = edges_props
-
 cdef extern from 'node_prog/read_n_edges_program.h' namespace 'node_prog':
     cdef cppclass read_n_edges_params:
         uint64_t num_edges
@@ -386,7 +365,6 @@ cdef extern from 'client/client.h' namespace 'cl':
         two_neighborhood_params run_two_neighborhood_program(vector[pair[string, two_neighborhood_params]] &initial_args) nogil
         #dijkstra_params run_dijkstra_program(vector[pair[string, dijkstra_params]] &initial_args) nogil
         read_node_props_params read_node_props_program(vector[pair[string, read_node_props_params]] &initial_args) nogil
-        read_edges_props_params read_edges_props_program(vector[pair[string, read_edges_props_params]] &initial_args) nogil
         read_n_edges_params read_n_edges_program(vector[pair[string, read_n_edges_params]] &initial_args) nogil
         edge_count_params edge_count_program(vector[pair[string, edge_count_params]] &initial_args) nogil
         edge_get_params edge_get_program(vector[pair[string, edge_get_params]] &initial_args) nogil
@@ -595,20 +573,6 @@ cdef class Client:
         with nogil:
             c_rp = self.thisptr.read_node_props_program(c_args)
         response = ReadNodePropsParams(node_props=c_rp.node_props)
-        return response
-
-    def read_edges_props(self, init_args):
-        cdef vector[pair[string, read_edges_props_params]] c_args
-        c_args.reserve(len(init_args))
-        cdef pair[string, read_edges_props_params] arg_pair
-        for rp in init_args:
-            arg_pair.first = rp[0]
-            #arg_pair.second.edges = rp[1].edges
-            arg_pair.second.keys = rp[1].keys
-            c_args.push_back(arg_pair)
-        with nogil:
-            c_rp = self.thisptr.read_edges_props_program(c_args)
-        response = ReadEdgesPropsParams(edges_props=c_rp.edges_props)
         return response
 
     def read_n_edges(self, init_args):

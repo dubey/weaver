@@ -15,6 +15,7 @@
 #define weaver_debug_
 #include "common/weaver_constants.h"
 #include "common/message.h"
+#include "client/datastructures.h"
 
 const char*
 message :: to_string(const msg_type &t)
@@ -269,6 +270,23 @@ message :: size(const std::vector<bool> &t)
     return sizeof(uint32_t) + t.size()*sizeof(uint8_t);
 }
 
+uint64_t
+message :: size(const cl::node &t)
+{
+    return size(t.handle)
+         + size(t.properties)
+         + size(t.out_edges)
+         + size(t.aliases);
+}
+
+uint64_t
+message :: size(const cl::edge &t)
+{
+    return size(t.handle)
+         + size(t.nbr)
+         + size(t.properties);
+}
+
 
 // packing functions
 
@@ -487,6 +505,23 @@ message :: pack_buffer(e::buffer::packer &packer, const std::vector<bool> &t)
     for (bool b: t) {
         pack_buffer(packer, b);
     }
+}
+
+void
+message :: pack_buffer(e::buffer::packer &packer, const cl::node &t)
+{
+    pack_buffer(packer, t.handle);
+    pack_buffer(packer, t.properties);
+    pack_buffer(packer, t.out_edges);
+    pack_buffer(packer, t.aliases);
+}
+
+void
+message :: pack_buffer(e::buffer::packer &packer, const cl::edge &t)
+{
+    pack_buffer(packer, t.handle);
+    pack_buffer(packer, t.nbr);
+    pack_buffer(packer, t.properties);
 }
 
 
@@ -715,6 +750,23 @@ message :: unpack_buffer(e::unpacker &unpacker, std::vector<bool> &t)
         unpack_buffer(unpacker, b);
         t.push_back(b);
     }
+}
+
+void
+message :: unpack_buffer(e::unpacker &unpacker, cl::node &t)
+{
+    unpack_buffer(unpacker, t.handle);
+    unpack_buffer(unpacker, t.properties);
+    unpack_buffer(unpacker, t.out_edges);
+    unpack_buffer(unpacker, t.aliases);
+}
+
+void
+message :: unpack_buffer(e::unpacker &unpacker, cl::edge &t)
+{
+    unpack_buffer(unpacker, t.handle);
+    unpack_buffer(unpacker, t.nbr);
+    unpack_buffer(unpacker, t.properties);
 }
 
 

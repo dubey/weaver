@@ -33,7 +33,6 @@
 #include "node_prog/pathless_reach_program.h"
 #include "node_prog/clustering_program.h"
 #include "node_prog/read_node_props_program.h"
-#include "node_prog/read_edges_props_program.h"
 #include "node_prog/read_n_edges_program.h"
 #include "node_prog/edge_count_program.h"
 #include "node_prog/edge_get_program.h"
@@ -161,8 +160,6 @@ namespace node_prog
             new particular_node_program<two_neighborhood_params, two_neighborhood_state, two_neighborhood_cache_value>(TWO_NEIGHBORHOOD, node_prog::two_neighborhood_node_program) },
         { READ_NODE_PROPS,
             new particular_node_program<read_node_props_params, read_node_props_state, Cache_Value_Base>(READ_NODE_PROPS, node_prog::read_node_props_node_program) },
-        { READ_EDGES_PROPS,
-            new particular_node_program<read_edges_props_params, read_edges_props_state, Cache_Value_Base>(READ_EDGES_PROPS, node_prog::read_edges_props_node_program) },
         { READ_N_EDGES,
             new particular_node_program<read_n_edges_params, read_n_edges_state, Cache_Value_Base>(READ_N_EDGES, node_prog::read_n_edges_node_program) },
         { EDGE_COUNT,

@@ -21,12 +21,6 @@ class simple_client:
         response = self.c.read_node_props(prog_args)
         return response.node_props
 
-    def edges_props(self, id, keys = []):
-        rp = client.ReadEdgesPropsParams(keys = keys)
-        prog_args = [(id, rp)]
-        response = self.c.read_edges_props(prog_args)
-        return response.edges_props
-
     def reachability(self, source, dest, edge_props = [], caching = False):
         rp = client.ReachParams(dest=dest, edge_props=edge_props, caching=caching)
         prog_args = [(source, rp)]

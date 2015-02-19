@@ -40,6 +40,12 @@ namespace db
     class edge;
 }
 
+namespace cl
+{
+    class node;
+    class edge;
+}
+
 namespace node_prog
 {
     struct edge_cache_context;
@@ -155,6 +161,8 @@ namespace message
     uint64_t size(const db::edge &t);
     uint64_t size(const db::edge* const &t);
     uint64_t size(const db::node &t);
+    uint64_t size(const cl::node &t);
+    uint64_t size(const cl::edge &t);
 
     void pack_buffer(e::buffer::packer &packer, const node_prog::Node_Parameters_Base &t);
     void pack_buffer(e::buffer::packer &packer, const node_prog::Node_State_Base &t);
@@ -196,6 +204,8 @@ namespace message
     void pack_buffer(e::buffer::packer &packer, const db::edge &t);
     void pack_buffer(e::buffer::packer &packer, const db::edge* const &t);
     void pack_buffer(e::buffer::packer &packer, const db::node &t);
+    void pack_buffer(e::buffer::packer &packer, const cl::node &t);
+    void pack_buffer(e::buffer::packer &packer, const cl::edge &t);
 
     void unpack_buffer(e::unpacker &unpacker, node_prog::Node_Parameters_Base &t);
     void unpack_buffer(e::unpacker &unpacker, node_prog::Node_State_Base &t);
@@ -237,6 +247,8 @@ namespace message
     void unpack_buffer(e::unpacker &unpacker, db::edge &t);
     void unpack_buffer(e::unpacker &unpacker, db::edge *&t);
     void unpack_buffer(e::unpacker &unpacker, db::node &t);
+    void unpack_buffer(e::unpacker &unpacker, cl::node &t);
+    void unpack_buffer(e::unpacker &unpacker, cl::edge &t);
 
     // size templates
 

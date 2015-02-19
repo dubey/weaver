@@ -1,7 +1,8 @@
 /*
  * ===============================================================
- *    Description:  Get all edges from the node to a particular
- *                  vertex which have specified properties.
+ *    Description:  Get all edges from the node.  Can restrict
+ *                  results based on neighbor vertex and edge
+ *                  handles.
  *
  *        Created:  2014-04-17 11:33:57
  *
@@ -31,11 +32,10 @@ namespace node_prog
             // request params
             // take intersection of all specified predicates
             std::vector<node_handle_t> nbrs; // empty means all nbrs
-            std::vector<edge_handle_t> edges; // empty means fetch props for all edges
-            std::vector<std::string> prop_keys; // empty means fetch all props
-            node_handle_t nbr_handle;
-            std::vector<std::pair<std::string, std::string>> edges_props;
-            std::vector<edge_handle_t> return_edges;
+            std::vector<edge_handle_t> request_edges; // empty means fetch props for all edges
+
+            // response params
+            std::vector<cl::edge> response_edges;
 
             // would never need to cache
             bool search_cache() { return false; }
