@@ -33,7 +33,7 @@ namespace node_prog
             std::string prop_key;
             uint32_t on_hop;
             bool outgoing;
-            db::element::remote_node prev_node;
+            db::remote_node prev_node;
             std::vector<std::pair<node_handle_t, std::string>> responses;
 
         public:
@@ -49,7 +49,7 @@ namespace node_prog
         bool one_hop_visited;
         bool two_hop_visited;
         uint32_t responses_left;
-        db::element::remote_node prev_node;
+        db::remote_node prev_node;
         std::vector<std::pair<node_handle_t, std::string>> responses;
 
         two_neighborhood_state();
@@ -71,14 +71,14 @@ namespace node_prog
         void unpack(e::unpacker& unpacker);
     };
 
-    std::pair<search_type, std::vector<std::pair<db::element::remote_node, two_neighborhood_params>>>
+    std::pair<search_type, std::vector<std::pair<db::remote_node, two_neighborhood_params>>>
     two_neighborhood_node_program(
             node &,
-            db::element::remote_node &,
+            db::remote_node &,
             two_neighborhood_params &,
             std::function<two_neighborhood_state&()>,
             std::function<void(std::shared_ptr<two_neighborhood_cache_value>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)> &,
+                std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)> &,
             cache_response<two_neighborhood_cache_value> *);
 }
 

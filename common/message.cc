@@ -202,7 +202,7 @@ message :: size(const node_prog::property &t)
 }
 
 uint64_t
-message :: size(const db::element::property &t)
+message :: size(const db::property &t)
 {
     return size(t.key)
         + size(t.value)
@@ -211,7 +211,7 @@ message :: size(const db::element::property &t)
 }
 
 uint64_t
-message :: size(const db::element::remote_node &t)
+message :: size(const db::remote_node &t)
 {
     return size(t.loc) + size(t.handle);
 }
@@ -419,7 +419,7 @@ message :: pack_buffer(e::buffer::packer &packer, const node_prog::property &t)
 }
 
 void 
-message :: pack_buffer(e::buffer::packer &packer, const db::element::property &t)
+message :: pack_buffer(e::buffer::packer &packer, const db::property &t)
 {
     pack_buffer(packer, t.key);
     pack_buffer(packer, t.value);
@@ -428,7 +428,7 @@ message :: pack_buffer(e::buffer::packer &packer, const db::element::property &t
 }
 
 void 
-message :: pack_buffer(e::buffer::packer &packer, const db::element::remote_node &t)
+message :: pack_buffer(e::buffer::packer &packer, const db::remote_node &t)
 {
     pack_buffer(packer, t.loc);
     pack_buffer(packer, t.handle);
@@ -638,7 +638,7 @@ message :: unpack_buffer(e::unpacker &unpacker, node_prog::property &t)
     unpack_buffer(unpacker, t.value);
 }
 void 
-message :: unpack_buffer(e::unpacker &unpacker, db::element::property &t)
+message :: unpack_buffer(e::unpacker &unpacker, db::property &t)
 {
     unpack_buffer(unpacker, t.key);
     unpack_buffer(unpacker, t.value);
@@ -649,7 +649,7 @@ message :: unpack_buffer(e::unpacker &unpacker, db::element::property &t)
 }
 
 void 
-message :: unpack_buffer(e::unpacker &unpacker, db::element::remote_node& t)
+message :: unpack_buffer(e::unpacker &unpacker, db::remote_node& t)
 {
     unpack_buffer(unpacker, t.loc);
     unpack_buffer(unpacker, t.handle);

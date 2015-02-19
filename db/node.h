@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef weaver_db_element_node_h_
-#define weaver_db_element_node_h_
+#ifndef weaver_db_node_h_
+#define weaver_db_node_h_
 
 #include <stdint.h>
 #include <vector>
@@ -38,8 +38,6 @@ namespace message
 }
 
 namespace db
-{
-namespace element
 {
     class node : public node_prog::node
     {
@@ -114,7 +112,6 @@ namespace element
             bool del_alias(const node_handle_t &alias);
             bool is_alias(const node_handle_t &alias) const;
     };
-}
 }
 
 #endif

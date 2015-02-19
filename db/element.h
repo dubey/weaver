@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef weaver_db_element_element_h_
-#define weaver_db_element_element_h_
+#ifndef weaver_db_element_h_
+#define weaver_db_element_h_
 
 #include <limits.h>
 #include <stdint.h>
@@ -27,24 +27,22 @@
 
 namespace db
 {
-namespace element
-{
-    //struct property_hasher
-    //{
-    //    private:
-    //        std::function<size_t(const std::string&)> string_hasher;
+    struct property_hasher
+    {
+        private:
+            std::function<size_t(const std::string&)> string_hasher;
 
-    //    public:
-    //        property_hasher() : string_hasher(std::hash<std::string>()) { }
+        public:
+            property_hasher() : string_hasher(std::hash<std::string>()) { }
 
-    //        size_t
-    //        operator()(const property &p) const
-    //        {
-    //            size_t hkey = string_hasher(p.key);
-    //            size_t hvalue = string_hasher(p.value);
-    //            return ((hkey + 0x9e3779b9 + (hvalue<<6) + (hvalue>>2)) ^ hvalue);
-    //        }
-    //};
+            size_t
+            operator()(const property &p) const
+            {
+                size_t hkey = string_hasher(p.key);
+                size_t hvalue = string_hasher(p.value);
+                return ((hkey + 0x9e3779b9 + (hvalue<<6) + (hvalue>>2)) ^ hvalue);
+            }
+    };
     
     class element
     {
@@ -81,7 +79,6 @@ namespace element
             std::string get_handle() const;
     };
 
-}
 }
 
 #endif

@@ -35,7 +35,7 @@ namespace coordinator
                 std::unordered_set<node_handle_t> &del_set,
                 std::unordered_map<node_handle_t, uint64_t> &put_map,
                 std::unordered_set<std::string> &idx_get_set,
-                std::unordered_map<std::string, db::element::node*> &idx_add,
+                std::unordered_map<std::string, db::node*> &idx_add,
                 std::shared_ptr<transaction::pending_tx> tx,
                 bool &ready,
                 bool &error,
@@ -44,7 +44,7 @@ namespace coordinator
             void restore_backup(std::vector<std::shared_ptr<transaction::pending_tx>> &txs);
 
         private:
-            void clean_up(std::unordered_map<node_handle_t, db::element::node*> &nodes);
+            void clean_up(std::unordered_map<node_handle_t, db::node*> &nodes);
             void recreate_tx(const hyperdex_client_attribute *attr, transaction::pending_tx &tx);
     };
 }

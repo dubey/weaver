@@ -14,8 +14,8 @@
 #include "common/event_order.h"
 #include "db/element.h"
 
-using db::element::element;
-using db::element::property;
+using db::element;
+using db::property;
 
 element :: element(const std::string &_handle, const vc::vclock &vclk)
     : handle(_handle)

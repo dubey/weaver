@@ -89,31 +89,31 @@ namespace db
             std::vector<order::oracle*> time_oracles;
             void increment_qts(uint64_t vt_id, uint64_t incr);
             void record_completed_tx(vc::vclock &tx_clk);
-            element::node* acquire_node(const node_handle_t &node_handle);
-            element::node* acquire_node_write(const node_handle_t &node, uint64_t vt_id, uint64_t qts);
-            element::node* acquire_node_nonlocking(const node_handle_t &node_handle);
-            void release_node_write(element::node *n);
-            void release_node(element::node *n, bool migr_node);
+            node* acquire_node(const node_handle_t &node_handle);
+            node* acquire_node_write(const node_handle_t &node, uint64_t vt_id, uint64_t qts);
+            node* acquire_node_nonlocking(const node_handle_t &node_handle);
+            void release_node_write(node *n);
+            void release_node(node *n, bool migr_node);
 
             // Graph state
             po6::threads::mutex edge_map_mutex;
             po6::threads::mutex node_map_mutexes[NUM_NODE_MAPS];
             uint64_t shard_id;
             server_id serv_id;
-            std::unordered_map<node_handle_t, element::node*> nodes[NUM_NODE_MAPS]; // node handle -> ptr to node object
+            std::unordered_map<node_handle_t, node*> nodes[NUM_NODE_MAPS]; // node handle -> ptr to node object
             std::unordered_map<node_handle_t, // node handle n ->
                 std::unordered_set<node_handle_t>> edge_map; // in-neighbors of n
         public:
-            element::node* create_node(const node_handle_t &node_handle,
+            node* create_node(const node_handle_t &node_handle,
                 vc::vclock &vclk,
                 bool migrate,
                 bool init_load);
-            void delete_node_nonlocking(element::node *n,
+            void delete_node_nonlocking(node *n,
                 vc::vclock &tdel);
             void delete_node(const node_handle_t &node_handle,
                 vc::vclock &vclk,
                 uint64_t qts);
-            void create_edge_nonlocking(element::node *n,
+            void create_edge_nonlocking(node *n,
                 const edge_handle_t &handle,
                 const node_handle_t &remote_node, uint64_t remote_loc,
                 vc::vclock &vclk,
@@ -123,21 +123,21 @@ namespace db
                 const node_handle_t &remote_node, uint64_t remote_loc,
                 vc::vclock &vclk,
                 uint64_t qts);
-            void delete_edge_nonlocking(element::node *n,
+            void delete_edge_nonlocking(node *n,
                 const edge_handle_t &edge_handle,
                 vc::vclock &tdel);
             void delete_edge(const edge_handle_t &edge_handle, const node_handle_t &node_handle,
                 vc::vclock &vclk,
                 uint64_t qts);
             // properties
-            void set_node_property_nonlocking(element::node *n,
+            void set_node_property_nonlocking(node *n,
                 std::string &key, std::string &value,
                 vc::vclock &vclk);
             void set_node_property(const node_handle_t &node_handle,
                 std::unique_ptr<std::string> key, std::unique_ptr<std::string> value,
                 vc::vclock &vclk,
                 uint64_t qts);
-            void set_edge_property_nonlocking(element::node *n,
+            void set_edge_property_nonlocking(node *n,
                 const edge_handle_t &edge_handle,
                 std::string &key, std::string &value,
                 vc::vclock &vclk);
@@ -145,7 +145,7 @@ namespace db
                 std::unique_ptr<std::string> key, std::unique_ptr<std::string> value,
                 vc::vclock &vclk,
                 uint64_t qts);
-            void add_node_alias_nonlocking(element::node *n,
+            void add_node_alias_nonlocking(node *n,
                 node_handle_t &alias);
             void add_node_alias(const node_handle_t &node_handle,
                 node_handle_t &alias,
@@ -167,7 +167,7 @@ namespace db
             void delete_migrated_node(const node_handle_t &migr_node);
             void permanent_delete_loop(uint64_t vt_id, bool outstanding_progs, order::oracle *time_oracle);
         private:
-            void permanent_node_delete(element::node *n);
+            void permanent_node_delete(node *n);
 
             // Migration
         public:
@@ -196,7 +196,7 @@ namespace db
             std::vector<uint64_t> nop_count;
             vc::vclock max_clk // to compare against for checking if node is deleted
                 , zero_clk; // all zero clock for migration thread in queue
-            void update_migrated_nbr_nonlocking(element::node *n, const node_handle_t &migr_node, uint64_t old_loc, uint64_t new_loc);
+            void update_migrated_nbr_nonlocking(node *n, const node_handle_t &migr_node, uint64_t old_loc, uint64_t new_loc);
             void update_migrated_nbr(const node_handle_t &node, uint64_t old_loc, uint64_t new_loc);
             void update_node_mapping(const node_handle_t &node, uint64_t shard);
             std::vector<vc::vclock_t> max_seen_clk // largest clock seen from each vector timestamper
@@ -409,12 +409,12 @@ namespace db
     // find the node corresponding to given id
     // lock and return the node
     // return NULL if node does not exist (possibly permanently deleted)
-    inline element::node*
+    inline node*
     shard :: acquire_node(const node_handle_t &node_handle)
     {
         uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
 
-        element::node *n = NULL;
+        node *n = NULL;
         node_map_mutexes[map_idx].lock();
         auto node_iter = nodes[map_idx].find(node_handle);
         if (node_iter != nodes[map_idx].end()) {
@@ -431,12 +431,12 @@ namespace db
         return n;
     }
 
-    inline element::node*
+    inline node*
     shard :: acquire_node_write(const node_handle_t &node_handle, uint64_t vt_id, uint64_t qts)
     {
         uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
 
-        element::node *n = NULL;
+        node *n = NULL;
         auto comp = std::make_pair(vt_id, qts);
         node_map_mutexes[map_idx].lock();
         auto node_iter = nodes[map_idx].find(node_handle);
@@ -479,12 +479,12 @@ namespace db
         return n;
     }
 
-    inline element::node*
+    inline node*
     shard :: acquire_node_nonlocking(const node_handle_t &node_handle)
     {
         uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
 
-        element::node *n = NULL;
+        node *n = NULL;
         auto node_iter = nodes[map_idx].find(node_handle);
         if (node_iter != nodes[map_idx].end()) {
             n = node_iter->second;
@@ -493,14 +493,14 @@ namespace db
     }
 
     inline void
-    shard :: release_node_write(element::node *n)
+    shard :: release_node_write(node *n)
     {
         release_node(n, false);
     }
 
     // unlock the previously acquired node, and wake any waiting threads
     inline void
-    shard :: release_node(element::node *n, bool migr_done=false)
+    shard :: release_node(node *n, bool migr_done=false)
     {
         uint64_t map_idx = hash_node_handle(n->get_handle()) % NUM_NODE_MAPS;
 
@@ -543,14 +543,14 @@ namespace db
 
     // Graph state update methods
 
-    inline element::node*
+    inline node*
     shard :: create_node(const node_handle_t &node_handle,
         vc::vclock &vclk,
         bool migrate,
         bool init_load=false)
     {
         uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
-        element::node *new_node = new element::node(node_handle, shard_id, vclk, node_map_mutexes+map_idx);
+        node *new_node = new node(node_handle, shard_id, vclk, node_map_mutexes+map_idx);
         new_node->last_upd_clk = vclk;
         new_node->restore_clk = vclk.clock;
 
@@ -576,7 +576,7 @@ namespace db
         }
 
         if (!migrate) {
-            new_node->state = element::node::mode::STABLE;
+            new_node->state = node::mode::STABLE;
 #ifdef WEAVER_CLDG
             new_node->msg_count.resize(get_num_shards(), 0);
 #endif
@@ -590,7 +590,7 @@ namespace db
     }
 
     inline void
-    shard :: delete_node_nonlocking(element::node *n,
+    shard :: delete_node_nonlocking(node *n,
         vc::vclock &tdel)
     {
         n->base.update_del_time(tdel);
@@ -602,7 +602,7 @@ namespace db
         vc::vclock &tdel,
         uint64_t qts)
     {
-        element::node *n = acquire_node_write(node_handle, tdel.vt_id, qts);
+        node *n = acquire_node_write(node_handle, tdel.vt_id, qts);
         if (n == NULL) {
             // node is being migrated
             migration_mutex.lock();
@@ -619,13 +619,13 @@ namespace db
     }
 
     inline void
-    shard :: create_edge_nonlocking(element::node *n,
+    shard :: create_edge_nonlocking(node *n,
         const edge_handle_t &handle,
         const node_handle_t &remote_node, uint64_t remote_loc,
         vc::vclock &vclk,
         bool init_load=false)
     {
-        element::edge *new_edge = new element::edge(handle, vclk, remote_loc, remote_node);
+        edge *new_edge = new edge(handle, vclk, remote_loc, remote_node);
         n->add_edge(new_edge);
         n->updated = true;
 
@@ -646,7 +646,7 @@ namespace db
         vc::vclock &vclk,
         uint64_t qts)
     {
-        element::node *n = acquire_node_write(local_node, vclk.vt_id, qts);
+        node *n = acquire_node_write(local_node, vclk.vt_id, qts);
         if (n == NULL) {
             // node is being migrated
             migration_mutex.lock();
@@ -665,14 +665,14 @@ namespace db
     }
 
     inline void
-    shard :: delete_edge_nonlocking(element::node *n,
+    shard :: delete_edge_nonlocking(node *n,
         const edge_handle_t &edge_handle,
         vc::vclock &tdel)
     {
         // already_exec check for fault tolerance
         auto out_edge_iter = n->out_edges.find(edge_handle);
         assert(out_edge_iter != n->out_edges.end());
-        element::edge *e = out_edge_iter->second;
+        edge *e = out_edge_iter->second;
         e->base.update_del_time(tdel);
         n->updated = true;
         n->dependent_del++;
@@ -695,7 +695,7 @@ namespace db
         vc::vclock &tdel,
         uint64_t qts)
     {
-        element::node *n = acquire_node_write(node_handle, tdel.vt_id, qts);
+        node *n = acquire_node_write(node_handle, tdel.vt_id, qts);
         if (n == NULL) {
             migration_mutex.lock();
             def_write_lst &dwl = deferred_writes[node_handle];
@@ -714,7 +714,7 @@ namespace db
     }
 
     inline void
-    shard :: set_node_property_nonlocking(element::node *n,
+    shard :: set_node_property_nonlocking(node *n,
         std::string &key, std::string &value,
         vc::vclock &vclk)
     {
@@ -727,7 +727,7 @@ namespace db
         vc::vclock &vclk,
         uint64_t qts)
     {
-        element::node *n = acquire_node_write(node_handle, vclk.vt_id, qts);
+        node *n = acquire_node_write(node_handle, vclk.vt_id, qts);
         if (n == NULL) {
             migration_mutex.lock();
             def_write_lst &dwl = deferred_writes[node_handle];
@@ -743,14 +743,14 @@ namespace db
     }
 
     inline void
-    shard :: set_edge_property_nonlocking(element::node *n,
+    shard :: set_edge_property_nonlocking(node *n,
         const edge_handle_t &edge_handle,
         std::string &key, std::string &value,
         vc::vclock &vclk)
     {
         auto out_edge_iter = n->out_edges.find(edge_handle);
         assert(out_edge_iter != n->out_edges.end());
-        element::edge *e = out_edge_iter->second;
+        edge *e = out_edge_iter->second;
         e->base.add_property(key, value, vclk);
     }
 
@@ -760,7 +760,7 @@ namespace db
         vc::vclock &vclk,
         uint64_t qts)
     {
-        element::node *n = acquire_node_write(node_handle, vclk.vt_id, qts);
+        node *n = acquire_node_write(node_handle, vclk.vt_id, qts);
         if (n == NULL) {
             migration_mutex.lock();
             def_write_lst &dwl = deferred_writes[node_handle];
@@ -777,7 +777,7 @@ namespace db
     }
 
     void
-    shard :: add_node_alias_nonlocking(element::node *n, node_handle_t &alias)
+    shard :: add_node_alias_nonlocking(node *n, node_handle_t &alias)
     {
         n->add_alias(alias);
     }
@@ -787,7 +787,7 @@ namespace db
         vc::vclock &vclk,
         uint64_t qts)
     {
-        element::node *n = acquire_node_write(node_handle, vclk.vt_id, qts);
+        node *n = acquire_node_write(node_handle, vclk.vt_id, qts);
         if (n == NULL) {
             migration_mutex.lock();
             def_write_lst &dwl = deferred_writes[node_handle];
@@ -814,7 +814,7 @@ namespace db
     inline void
     shard :: delete_migrated_node(const node_handle_t &migr_node)
     {
-        element::node *n;
+        node *n;
         n = acquire_node(migr_node);
         n->permanently_deleted = true;
         // deleting edges now so as to prevent sending messages to neighbors for permanent edge deletion
@@ -844,7 +844,7 @@ namespace db
     inline void
     shard :: permanent_delete_loop(uint64_t vt_id, bool outstanding_progs, order::oracle *time_oracle)
     {
-        element::node *n;
+        node *n;
         del_obj *dobj = nullptr;
 
         perm_del_mutex.lock();
@@ -933,7 +933,7 @@ namespace db
     }
 
     inline void
-    shard :: permanent_node_delete(element::node *n)
+    shard :: permanent_node_delete(node *n)
     {
         uint64_t num_shards = get_num_shards();
         message::message msg;
@@ -943,7 +943,7 @@ namespace db
         // this happens lazily, and there could be dangling edges
         // users should explicitly delete edges before nodes if the program requires
         // this loop isn't executed in case of deletion of migrated nodes
-        if (n->state != element::node::mode::MOVED) {
+        if (n->state != node::mode::MOVED) {
             for (uint64_t shard = ShardIdIncr; shard < ShardIdIncr + num_shards; shard++) {
                 msg.prepare_message(message::PERMANENTLY_DELETED_NODE, n->get_handle());
                 comm.send(shard, msg.buf);
@@ -960,10 +960,10 @@ namespace db
     // migration methods
 
     inline void
-    shard :: update_migrated_nbr_nonlocking(element::node *n, const node_handle_t &migr_node, uint64_t old_loc, uint64_t new_loc)
+    shard :: update_migrated_nbr_nonlocking(node *n, const node_handle_t &migr_node, uint64_t old_loc, uint64_t new_loc)
     {
         bool found = false;
-        element::edge *e;
+        edge *e;
         for (auto &x: n->out_edges) {
             e = x.second;
             if (e->nbr.handle == migr_node && e->nbr.loc == old_loc) {
@@ -978,7 +978,7 @@ namespace db
     shard :: update_migrated_nbr(const node_handle_t &migr_node, uint64_t old_loc, uint64_t new_loc)
     {
         std::unordered_set<node_handle_t> nbrs;
-        element::node *n;
+        node *n;
         edge_map_mutex.lock();
         nbrs = edge_map[migr_node];
         edge_map_mutex.unlock();
@@ -1023,7 +1023,7 @@ namespace db
         }
 
         for (const node_handle_t &h: to_clean) {
-            db::element::node *n = acquire_node(h);
+            db::node *n = acquire_node(h);
             int num_prog_types = n->prog_states.size();
             n->prog_states.clear();
             n->prog_states.resize(num_prog_types);
@@ -1035,7 +1035,7 @@ namespace db
     shard :: delete_prog_states(uint64_t req_id, std::vector<node_handle_t> &node_handles)
     {
         for (const node_handle_t &node_handle: node_handles) {
-            db::element::node *node = acquire_node(node_handle);
+            db::node *node = acquire_node(node_handle);
 
             // check that node not migrated or permanently deleted
             if (node != NULL) {

@@ -138,20 +138,20 @@ class hyper_stub_base
             std::vector<const char*> &keys, std::vector<size_t> &key_szs);
 
         // graph data functions
-        bool get_node(db::element::node &n);
-        bool get_nodes(std::unordered_map<node_handle_t, db::element::node*> &nodes, bool tx);
-        //bool put_node(db::element::node &n);
-        bool put_nodes(std::unordered_map<node_handle_t, db::element::node*> &nodes, bool if_not_exist);
-        bool put_nodes_bulk(std::unordered_map<node_handle_t, db::element::node*> &nodes);
+        bool get_node(db::node &n);
+        bool get_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool tx);
+        //bool put_node(db::node &n);
+        bool put_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool if_not_exist);
+        bool put_nodes_bulk(std::unordered_map<node_handle_t, db::node*> &nodes);
         bool del_node(const node_handle_t &h);
         bool del_nodes(std::unordered_set<node_handle_t> &to_del);
-        void update_creat_time(db::element::node &n);
-        void update_properties(db::element::node &n);
-        void add_out_edge(db::element::node &n, db::element::edge *e);
-        void remove_out_edge(db::element::node &n, db::element::edge *e);
+        void update_creat_time(db::node &n);
+        void update_properties(db::node &n);
+        void add_out_edge(db::node &n, db::edge *e);
+        void remove_out_edge(db::node &n, db::edge *e);
         void add_in_nbr(const node_handle_t &node, const node_handle_t &nbr);
         void remove_in_nbr(const node_handle_t &n_hndl, const node_handle_t &nbr);
-        bool recreate_node(const hyperdex_client_attribute *cl_attr, db::element::node &n);
+        bool recreate_node(const hyperdex_client_attribute *cl_attr, db::node &n);
 
         // node map functions
         bool update_nmap(const node_handle_t &handle, uint64_t loc);
@@ -162,7 +162,7 @@ class hyper_stub_base
     private:
         bool recreate_index(const hyperdex_client_attribute *cl_attr, std::pair<node_handle_t, uint64_t> &value);
     public:
-        bool add_indices(std::unordered_map<std::string, db::element::node*> &indices, bool tx);
+        bool add_indices(std::unordered_map<std::string, db::node*> &indices, bool tx);
         bool get_indices(std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> &indices, bool tx);
         bool del_indices(std::vector<std::string> &indices);
 
@@ -179,7 +179,7 @@ class hyper_stub_base
 
     private:
         void prepare_node(hyperdex_client_attribute *attr,
-            db::element::node &n,
+            db::node &n,
             std::unique_ptr<e::buffer>&,
             std::unique_ptr<e::buffer>&,
             std::unique_ptr<e::buffer>&,

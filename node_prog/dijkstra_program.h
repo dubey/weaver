@@ -30,8 +30,8 @@ namespace node_prog
     {
         public:
             uint64_t cost;
-            db::element::remote_node node;
-            db::element::remote_node prev_node; // used for reconstructing path in coordinator
+            db::remote_node node;
+            db::remote_node prev_node; // used for reconstructing path in coordinator
 
             int operator<(const dijkstra_queue_elem& other) const
             { 
@@ -45,7 +45,7 @@ namespace node_prog
 
             dijkstra_queue_elem() { }
 
-            dijkstra_queue_elem(uint64_t c, db::element::remote_node n, db::element::remote_node prev)
+            dijkstra_queue_elem(uint64_t c, db::remote_node n, db::remote_node prev)
                 : cost(c)
                 , node(n)
                 , prev_node(prev)
@@ -80,15 +80,15 @@ namespace node_prog
     {
         public:
             uint64_t src_id;
-            db::element::remote_node src_handle;
+            db::remote_node src_handle;
             uint64_t dst_handle;
             std::string edge_weight_name; // the name of the property which holds the weight of an an edge
-            std::vector<db::element::property> edge_props;
+            std::vector<db::property> edge_props;
             bool is_widest_path;
             bool adding_nodes;
-            db::element::remote_node prev_node;
-            std::vector<std::pair<uint64_t, db::element::remote_node>> entries_to_add;
-            db::element::remote_node next_node;
+            db::remote_node prev_node;
+            std::vector<std::pair<uint64_t, db::remote_node>> entries_to_add;
+            db::remote_node next_node;
             std::vector<std::pair<uint64_t, uint64_t>> final_path;
             uint64_t cost;
 
@@ -164,7 +164,7 @@ namespace node_prog
                             std::greater<dijkstra_queue_elem>> pq_widest; 
         // map from a node (by its create time) to the req_id of the node
         // that came before it in the shortest path and its cost
-        std::unordered_map<db::element::remote_node, std::pair<db::element::remote_node, uint64_t>> visited; 
+        std::unordered_map<db::remote_node, std::pair<db::remote_node, uint64_t>> visited; 
 
         virtual ~dijkstra_node_state() { }
 
@@ -201,13 +201,13 @@ namespace node_prog
         return priority;
     }
 
-    inline std::vector<std::pair<db::element::remote_node, dijkstra_params>> 
+    inline std::vector<std::pair<db::remote_node, dijkstra_params>> 
     dijkstra_node_program(
             node &n,
-            db::element::remote_node &rn,
+            db::remote_node &rn,
             dijkstra_params &params,
             std::function<dijkstra_node_state&()> get_state,
-            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<std::vector<db::element::remote_node>>, uint64_t)>&,
+            std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<std::vector<db::remote_node>>, uint64_t)>&,
             cache_response<Cache_Value_Base>*)
     {
         WDEBUG << "DIJKSTRAAAAA" << std::endl;
@@ -268,10 +268,10 @@ namespace node_prog
                 if (params.next_node.get_id() == params.dst_handle) {
                     WDEBUG << "DIJKSTRA found dest" << std::endl;
                     // we have found destination! We know it was not deleted as coord checked
-                    std::pair<db::element::remote_node, uint64_t> visited_entry;
+                    std::pair<db::remote_node, uint64_t> visited_entry;
                     // rebuild path based on req_id's in visited
                     if (params.is_widest_path) {
-                        db::element::remote_node &cur_handle = rn;
+                        db::remote_node &cur_handle = rn;
                         uint64_t cur_cost = params.cost;
                         params.final_path.push_back(std::make_pair(cur_handle.get_id(), cur_cost));
                         cur_handle = params.prev_node;
@@ -285,8 +285,8 @@ namespace node_prog
                     } else {
                         // shortest path, have to calculate edge weight based on cumulative cost to node before
                         uint64_t old_cost = params.cost;
-                        db::element::remote_node &old_node = rn; // the node father from sourc
-                        db::element::remote_node &cur_node = params.prev_node;
+                        db::remote_node &old_node = rn; // the node father from sourc
+                        db::remote_node &cur_node = params.prev_node;
                         while (old_node != params.src_handle) {
                             visited_entry = node_state.visited[cur_node];
                             params.final_path.push_back(std::make_pair(old_node.get_id(), old_cost-visited_entry.second));
@@ -295,7 +295,7 @@ namespace node_prog
                             cur_node = visited_entry.first;
                         }
                     }
-                    return {std::make_pair(db::element::coordinator, std::move(params))};
+                    return {std::make_pair(db::coordinator, std::move(params))};
                 } else { // we need to send a prop
                     bool get_neighbors = true;
                     if (node_state.visited.count(params.next_node) > 0) {
@@ -313,7 +313,7 @@ namespace node_prog
             // dest couldn't be reached, send failure to coord
             params.final_path = {}; // empty path
             params.cost = 0;
-            return {std::make_pair(db::element::coordinator, std::move(params))};
+            return {std::make_pair(db::coordinator, std::move(params))};
         } else {
             params.adding_nodes = true;
             WDEBUG << "Dijkstra program: NOT source" <<  std::endl;

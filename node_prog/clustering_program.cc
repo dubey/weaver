@@ -82,18 +82,18 @@ clustering_node_state :: unpack(e::unpacker& unpacker)
 }
 
 // node prog code
-std::pair<search_type, std::vector<std::pair<db::element::remote_node, clustering_params>>>
+std::pair<search_type, std::vector<std::pair<db::remote_node, clustering_params>>>
 node_prog :: clustering_node_program(
     node &n,
-    db::element::remote_node &rn,
+    db::remote_node &rn,
     clustering_params &params,
     std::function<clustering_node_state&()> get_state,
     std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-        std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>&,
+        std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)>&,
     cache_response<Cache_Value_Base>*)
 {
     // TODO can we change this to a three enum switch to reduce number of if statements
-    std::vector<std::pair<db::element::remote_node, clustering_params>> next;
+    std::vector<std::pair<db::remote_node, clustering_params>> next;
     if (params.is_center) {
         node_prog::clustering_node_state &cstate = get_state();
         if (params.outgoing) {
@@ -107,7 +107,7 @@ node_prog :: clustering_node_program(
             }
             if (cstate.responses_left < 2) { // if no or one neighbor we know clustering coeff already
                 params.clustering_coeff = 0;
-                next = {std::make_pair(db::element::coordinator, std::move(params))};
+                next = {std::make_pair(db::coordinator, std::move(params))};
             }
         } else {
             for (const node_handle_t &nbr_id : params.neighbors) {
@@ -123,7 +123,7 @@ node_prog :: clustering_node_program(
                     numerator += nbr_count.second;
                 }
                 params.clustering_coeff = (double) numerator / denominator;
-                next = {std::make_pair(db::element::coordinator, std::move(params))};
+                next = {std::make_pair(db::coordinator, std::move(params))};
             }
         }
     } else { // not center

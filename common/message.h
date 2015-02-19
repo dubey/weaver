@@ -35,12 +35,9 @@
 
 namespace db
 {
-    namespace element
-    {
-        class element;
-        class node;
-        class edge;
-    }
+    class element;
+    class node;
+    class edge;
 }
 
 namespace node_prog
@@ -137,8 +134,8 @@ namespace message
     uint64_t size(const std::string &t);
     uint64_t size(const vc::vclock &t);
     uint64_t size(const node_prog::property &t);
-    uint64_t size(const db::element::property &t);
-    uint64_t size(const db::element::remote_node &t);
+    uint64_t size(const db::property &t);
+    uint64_t size(const db::remote_node &t);
     uint64_t size(const std::shared_ptr<transaction::pending_update> &ptr_t);
     uint64_t size(const std::shared_ptr<transaction::nop_data> &ptr_t);
     uint64_t size(const transaction::pending_tx &t);
@@ -154,10 +151,10 @@ namespace message
     template <typename T> inline uint64_t size(const std::unique_ptr<T> &ptr_t);
     uint64_t size(const node_prog::node_cache_context &t);
     uint64_t size(const node_prog::edge_cache_context &t);
-    uint64_t size(const db::element::element &t);
-    uint64_t size(const db::element::edge &t);
-    uint64_t size(const db::element::edge* const &t);
-    uint64_t size(const db::element::node &t);
+    uint64_t size(const db::element &t);
+    uint64_t size(const db::edge &t);
+    uint64_t size(const db::edge* const &t);
+    uint64_t size(const db::node &t);
 
     void pack_buffer(e::buffer::packer &packer, const node_prog::Node_Parameters_Base &t);
     void pack_buffer(e::buffer::packer &packer, const node_prog::Node_State_Base &t);
@@ -178,8 +175,8 @@ namespace message
     void pack_buffer(e::buffer::packer &packer, const std::string &t);
     void pack_buffer(e::buffer::packer &packer, const vc::vclock &t);
     void pack_buffer(e::buffer::packer &packer, const node_prog::property &t);
-    void pack_buffer(e::buffer::packer &packer, const db::element::property &t);
-    void pack_buffer(e::buffer::packer &packer, const db::element::remote_node &t);
+    void pack_buffer(e::buffer::packer &packer, const db::property &t);
+    void pack_buffer(e::buffer::packer &packer, const db::remote_node &t);
     void pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::pending_update> &ptr_t);
     void pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::nop_data> &ptr_t);
     void pack_buffer(e::buffer::packer &packer, const transaction::pending_tx &t);
@@ -195,10 +192,10 @@ namespace message
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unique_ptr<T> &ptr_t);
     void pack_buffer(e::buffer::packer &packer, const node_prog::node_cache_context &t);
     void pack_buffer(e::buffer::packer &packer, const node_prog::edge_cache_context &t);
-    void pack_buffer(e::buffer::packer &packer, const db::element::element &t);
-    void pack_buffer(e::buffer::packer &packer, const db::element::edge &t);
-    void pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t);
-    void pack_buffer(e::buffer::packer &packer, const db::element::node &t);
+    void pack_buffer(e::buffer::packer &packer, const db::element &t);
+    void pack_buffer(e::buffer::packer &packer, const db::edge &t);
+    void pack_buffer(e::buffer::packer &packer, const db::edge* const &t);
+    void pack_buffer(e::buffer::packer &packer, const db::node &t);
 
     void unpack_buffer(e::unpacker &unpacker, node_prog::Node_Parameters_Base &t);
     void unpack_buffer(e::unpacker &unpacker, node_prog::Node_State_Base &t);
@@ -219,8 +216,8 @@ namespace message
     void unpack_buffer(e::unpacker &unpacker, std::string &t);
     void unpack_buffer(e::unpacker &unpacker, vc::vclock &t);
     void unpack_buffer(e::unpacker &unpacker, node_prog::property &t);
-    void unpack_buffer(e::unpacker &unpacker, db::element::property &t);
-    void unpack_buffer(e::unpacker &unpacker, db::element::remote_node& t);
+    void unpack_buffer(e::unpacker &unpacker, db::property &t);
+    void unpack_buffer(e::unpacker &unpacker, db::remote_node& t);
     void unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::pending_update> &ptr_t);
     void unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::nop_data> &ptr_t);
     void unpack_buffer(e::unpacker &unpacker, transaction::pending_tx &t);
@@ -236,10 +233,10 @@ namespace message
     template <typename T> void unpack_buffer(e::unpacker& unpacker, std::unique_ptr<T> &ptr_t);
     void unpack_buffer(e::unpacker &unpacker, node_prog::node_cache_context &t);
     void unpack_buffer(e::unpacker &unpacker, node_prog::edge_cache_context &t);
-    void unpack_buffer(e::unpacker &unpacker, db::element::element &t);
-    void unpack_buffer(e::unpacker &unpacker, db::element::edge &t);
-    void unpack_buffer(e::unpacker &unpacker, db::element::edge *&t);
-    void unpack_buffer(e::unpacker &unpacker, db::element::node &t);
+    void unpack_buffer(e::unpacker &unpacker, db::element &t);
+    void unpack_buffer(e::unpacker &unpacker, db::edge &t);
+    void unpack_buffer(e::unpacker &unpacker, db::edge *&t);
+    void unpack_buffer(e::unpacker &unpacker, db::node &t);
 
     // size templates
 

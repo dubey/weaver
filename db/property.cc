@@ -13,8 +13,8 @@
 
 #include "db/property.h"
 
-using db::element::property;
-using db::element::property_key_hasher;
+using db::property;
+using db::property_key_hasher;
 
 property :: property()
     : creat_time(UINT64_MAX, UINT64_MAX)

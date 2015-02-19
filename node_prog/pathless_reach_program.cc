@@ -103,30 +103,30 @@ pathless_reach_node_state :: unpack(e::unpacker& unpacker)
 
 // node prog code
 
-std::pair<search_type, std::vector<std::pair<db::element::remote_node, pathless_reach_params>>>
+std::pair<search_type, std::vector<std::pair<db::remote_node, pathless_reach_params>>>
 node_prog :: pathless_reach_node_program(
         node &n,
-        db::element::remote_node &rn,
+        db::remote_node &rn,
         pathless_reach_params &params,
         std::function<pathless_reach_node_state&()> state_getter,
         std::function<void(std::shared_ptr<Cache_Value_Base>,
-            std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>&,
+            std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)>&,
         cache_response<Cache_Value_Base>*)
 {
     pathless_reach_node_state &state = state_getter();
-    std::vector<std::pair<db::element::remote_node, pathless_reach_params>> next;
+    std::vector<std::pair<db::remote_node, pathless_reach_params>> next;
     if (state.reachable == true) {
         return std::make_pair(search_type::BREADTH_FIRST, next);
     }
     bool false_reply = false;
-    db::element::remote_node prev_node = params.prev_node;
+    db::remote_node prev_node = params.prev_node;
     params.prev_node = rn;
     if (!params.returning) { // request mode
         if (params.dest == n.get_handle()) {
             // we found the node we are looking for, prepare a reply
             params.reachable = true;
             //    WDEBUG  << "found dest!" << std::endl;
-            next.emplace_back(std::make_pair(db::element::coordinator, params));
+            next.emplace_back(std::make_pair(db::coordinator, params));
             return std::make_pair(search_type::DEPTH_FIRST, next);
         } else {
             // have not found it yet so follow all out edges

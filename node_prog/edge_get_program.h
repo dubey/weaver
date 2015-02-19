@@ -28,6 +28,11 @@ namespace node_prog
     class edge_get_params : public Node_Parameters_Base 
     {
         public:
+            // request params
+            // take intersection of all specified predicates
+            std::vector<node_handle_t> nbrs; // empty means all nbrs
+            std::vector<edge_handle_t> edges; // empty means fetch props for all edges
+            std::vector<std::string> prop_keys; // empty means fetch all props
             node_handle_t nbr_handle;
             std::vector<std::pair<std::string, std::string>> edges_props;
             std::vector<edge_handle_t> return_edges;
@@ -48,14 +53,14 @@ namespace node_prog
         void unpack(e::unpacker&) { }
     };
 
-    std::pair<search_type, std::vector<std::pair<db::element::remote_node, edge_get_params>>>
+    std::pair<search_type, std::vector<std::pair<db::remote_node, edge_get_params>>>
     edge_get_node_program(
             node &n,
-            db::element::remote_node &,
+            db::remote_node &,
             edge_get_params &params,
             std::function<edge_get_state&()>,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>&,
+                std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)>&,
             cache_response<Cache_Value_Base>*);
 }
 

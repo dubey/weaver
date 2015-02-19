@@ -26,7 +26,7 @@ namespace node_prog
             virtual ~edge() { }
             virtual edge_handle_t get_handle() const = 0;
             virtual void traverse() = 0;
-            virtual db::element::remote_node& get_neighbor() = 0;
+            virtual db::remote_node& get_neighbor() = 0;
             virtual prop_list get_properties() = 0;
             virtual bool has_property(std::pair<std::string, std::string> &p) = 0;
             virtual bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props) = 0;

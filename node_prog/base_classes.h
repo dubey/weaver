@@ -6,7 +6,7 @@
 #include <unordered_set>
 #include <iostream>
 
-#include "db/remote_node.h"
+#include "common/types.h"
 
 namespace node_prog
 {

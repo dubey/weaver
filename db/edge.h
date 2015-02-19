@@ -11,8 +11,8 @@
  * ===============================================================
  */
 
-#ifndef weaver_db_element_edge_h_
-#define weaver_db_element_edge_h_
+#ifndef weaver_db_edge_h_
+#define weaver_db_edge_h_
 
 #include <stdint.h>
 #include <vector>
@@ -25,8 +25,6 @@
 #include "db/shard_constants.h"
 
 namespace db
-{
-namespace element
 {
     class edge : public node_prog::edge
     {
@@ -54,7 +52,6 @@ namespace element
             bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
             edge_handle_t get_handle() const { return base.get_handle(); }
     };
-}
 }
 
 #endif

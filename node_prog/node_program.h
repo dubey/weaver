@@ -55,13 +55,13 @@ namespace node_prog
     struct node_function_type
     {
         public:
-            typedef std::pair<search_type, std::vector<std::pair<db::element::remote_node, params_type>>> (*value_type)(
+            typedef std::pair<search_type, std::vector<std::pair<db::remote_node, params_type>>> (*value_type)(
                 node&, // this node
-                db::element::remote_node&, // this remote node
+                db::remote_node&, // this remote node
                 params_type&,
                 std::function<node_state_type&()>,
                 std::function<void(std::shared_ptr<cache_value_type>,
-                    std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)> &add_cache_func,
+                    std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)> &add_cache_func,
                     cache_response<cache_value_type> *cache_response);
 
     };

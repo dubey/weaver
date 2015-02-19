@@ -46,14 +46,14 @@ read_edges_props_params :: unpack(e::unpacker& unpacker)
     message::unpack_buffer(unpacker, edges_props);
 }
 
-std::pair<search_type, std::vector<std::pair<db::element::remote_node, read_edges_props_params>>>
+std::pair<search_type, std::vector<std::pair<db::remote_node, read_edges_props_params>>>
 node_prog :: read_edges_props_node_program(
     node &n,
-    db::element::remote_node&,
+    db::remote_node&,
     read_edges_props_params &params,
     std::function<read_edges_props_state&()>,
     std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-        std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>&,
+        std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)>&,
     cache_response<Cache_Value_Base>*)
 {
     for (edge &edge : n.get_edges()) {
@@ -74,8 +74,8 @@ node_prog :: read_edges_props_node_program(
             }
         }
     }
-    return std::make_pair(search_type::DEPTH_FIRST, std::vector<std::pair<db::element::remote_node, read_edges_props_params>>
-            (1, std::make_pair(db::element::coordinator, std::move(params)))); 
+    return std::make_pair(search_type::DEPTH_FIRST, std::vector<std::pair<db::remote_node, read_edges_props_params>>
+            (1, std::make_pair(db::coordinator, std::move(params)))); 
 }
 
 

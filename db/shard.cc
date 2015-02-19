@@ -42,7 +42,7 @@ static uint64_t shard_id;
 static db::shard *S;
 
 void migrated_nbr_update(std::unique_ptr<message::message> msg);
-bool migrate_node_step1(db::element::node*, std::vector<uint64_t>&, uint64_t);
+bool migrate_node_step1(db::node*, std::vector<uint64_t>&, uint64_t);
 void migrate_node_step2_req();
 void migrate_node_step2_resp(std::unique_ptr<message::message> msg, order::oracle *time_oracle);
 bool check_step3();
@@ -207,7 +207,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
     }
 
     // read, validate, and create graph
-    db::element::node *n;
+    db::node *n;
     uint64_t line_count = 0;
     uint64_t edge_count = 1;
     uint64_t max_node_handle;
@@ -488,7 +488,7 @@ unpack_tx_request(db::message_wrapper *request)
 
     // execute all create_node writes
     // establish tx order at all graph nodes for all other writes
-    db::element::node *n;
+    db::node *n;
     for (auto upd: tx.writes) {
         n = nullptr;
         switch (upd->type) {
@@ -638,7 +638,7 @@ nop(db::message_wrapper *request)
 }
 
 node_prog::Node_State_Base*
-get_state_if_exists(db::element::node &node, uint64_t req_id, node_prog::prog_type ptype)
+get_state_if_exists(db::node &node, uint64_t req_id, node_prog::prog_type ptype)
 {
     auto &state_map = node.prog_states[(int)ptype];
     std::shared_ptr<node_prog::Node_State_Base> toRet;
@@ -653,7 +653,7 @@ get_state_if_exists(db::element::node &node, uint64_t req_id, node_prog::prog_ty
 template <typename NodeStateType>
 NodeStateType& get_or_create_state(node_prog::prog_type ptype,
     uint64_t req_id,
-    db::element::node *node,
+    db::node *node,
     std::vector<node_handle_t> *nodes_that_created_state)
 {
     auto &state_map = node->prog_states[(int)ptype];
@@ -671,7 +671,7 @@ NodeStateType& get_or_create_state(node_prog::prog_type ptype,
 
 // vector pointers can be null if we don't want to fill that vector
 inline void
-fill_changed_properties(std::unordered_map<std::string, std::vector<std::shared_ptr<db::element::property>>> &props,
+fill_changed_properties(std::unordered_map<std::string, std::vector<std::shared_ptr<db::property>>> &props,
     std::vector<node_prog::property> *props_added,
     std::vector<node_prog::property> *props_deleted,
     vc::vclock &time_cached,
@@ -679,8 +679,8 @@ fill_changed_properties(std::unordered_map<std::string, std::vector<std::shared_
     order::oracle *time_oracle)
 {
     for (auto &iter : props) {
-        for (std::shared_ptr<db::element::property> p: iter.second) {
-            db::element::property &prop = *p;
+        for (std::shared_ptr<db::property> p: iter.second) {
+            db::property &prop = *p;
             bool del_before_cur = (time_oracle->compare_two_vts(prop.get_del_time(), cur_time) == 0);
 
             if (props_added != NULL) {
@@ -714,9 +714,9 @@ fetch_node_cache_contexts(uint64_t loc,
     order::oracle *time_oracle)
 {
     for (node_handle_t &handle: handles) {
-        db::element::node *node = S->acquire_node(handle);
+        db::node *node = S->acquire_node(handle);
 
-        if (node == NULL || node->state == db::element::node::mode::MOVED ||
+        if (node == NULL || node->state == db::node::mode::MOVED ||
                 (node->last_perm_deletion != NULL && time_oracle->compare_two_vts(time_cached, *node->last_perm_deletion) == 0)) {
             if (node != NULL) {
                 S->release_node(node);
@@ -747,7 +747,7 @@ fetch_node_cache_contexts(uint64_t loc,
                 }
                 // now check for any edge changes
                 for (auto &iter: node->out_edges) {
-                    db::element::edge* e = iter.second;
+                    db::edge* e = iter.second;
                     assert(e != NULL);
 
                     bool del_after_cached = (time_oracle->compare_two_vts(time_cached, e->base.get_del_time()) == 0);
@@ -845,7 +845,7 @@ struct fetch_state
    returns false and frees node if it needs to fetch context on other shards, saves required state to continue node program later
  */
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-inline bool cache_lookup(db::element::node*& node_to_check,
+inline bool cache_lookup(db::node*& node_to_check,
     cache_key_t cache_key,
     node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> &np,
     std::pair<node_handle_t, ParamsType> &cur_node_params,
@@ -860,7 +860,7 @@ inline bool cache_lookup(db::element::node*& node_to_check,
         auto entry = node_to_check->cache[cache_key];
         std::shared_ptr<node_prog::Cache_Value_Base> cval = entry.val;
         std::shared_ptr<vc::vclock> time_cached(entry.clk);
-        std::shared_ptr<std::vector<db::element::remote_node>> watch_set = entry.watch_set;
+        std::shared_ptr<std::vector<db::remote_node>> watch_set = entry.watch_set;
 
         auto state = get_state_if_exists(*node_to_check, np.req_id, np.prog_type_recvd);
         if (state != NULL && state->contexts_found.find(np.req_id) != state->contexts_found.end()) {
@@ -926,7 +926,7 @@ inline bool cache_lookup(db::element::node*& node_to_check,
         // map from loc to list of ids on that shard we need context from for this request
         std::unordered_map<uint64_t, std::vector<node_handle_t>> contexts_to_fetch; 
 
-        for (db::element::remote_node &watch_node : *watch_set) {
+        for (db::remote_node &watch_node : *watch_set) {
             contexts_to_fetch[watch_node.loc].emplace_back(watch_node.handle);
         }
 
@@ -964,21 +964,21 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
     // node state function
     std::function<NodeStateType&()> node_state_getter;
     std::function<void(std::shared_ptr<CacheValueType>,
-                       std::shared_ptr<std::vector<db::element::remote_node>>,
+                       std::shared_ptr<std::vector<db::remote_node>>,
                        cache_key_t)> add_cache_func;
 
     std::vector<node_handle_t> nodes_that_created_state;
 
     node_handle_t node_handle;
     bool done_request = false;
-    db::element::remote_node this_node(S->shard_id, "");
+    db::remote_node this_node(S->shard_id, "");
 
     while (!done_request && !np.start_node_params.empty()) {
         auto &id_params = np.start_node_params.front();
         node_handle = id_params.first;
         ParamsType &params = id_params.second;
         this_node.handle = node_handle;
-        db::element::node *node = S->acquire_node(node_handle);
+        db::node *node = S->acquire_node(node_handle);
         if (node == NULL || time_oracle->compare_two_vts(node->base.get_del_time(), *np.req_vclock)==0) {
             if (node != NULL) {
                 S->release_node(node);
@@ -997,7 +997,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
                 S->migration_mutex.unlock();
             }
             np.start_node_params.pop_front(); // pop off this one
-        } else if (node->state == db::element::node::mode::MOVED) {
+        } else if (node->state == db::node::mode::MOVED) {
             // queueing/forwarding node program
             std::vector<std::pair<node_handle_t, ParamsType>> fwd_node_params;
             fwd_node_params.emplace_back(id_params);
@@ -1008,7 +1008,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
             S->comm.send(new_loc, m->buf);
             np.start_node_params.pop_front(); // pop off this one
         } else { // node does exist
-            assert(node->state == db::element::node::mode::STABLE);
+            assert(node->state == db::node::mode::STABLE);
 #ifdef WEAVER_NEW_CLDG
             assert(false && "new_cldg not supported right now");
                 /*
@@ -1035,7 +1035,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
                 }
 
                 using namespace std::placeholders;
-                add_cache_func = std::bind(&db::element::node::add_cache_value, // function pointer
+                add_cache_func = std::bind(&db::node::add_cache_value, // function pointer
                     node, // reference to object whose member-function is invoked
                     np.req_vclock, // first argument of the function
                     _1, _2, _3); // 1 is cache value, 2 is watch set, 3 is key
@@ -1071,10 +1071,10 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
             std::unordered_map<node_handle_t, uint32_t> agg_msg_count;
 #endif
             uint64_t num_shards = get_num_shards();
-            for (std::pair<db::element::remote_node, ParamsType> &res : next_node_params.second) {
-                db::element::remote_node& rn = res.first; 
+            for (std::pair<db::remote_node, ParamsType> &res : next_node_params.second) {
+                db::remote_node& rn = res.first; 
                 assert(rn.loc < num_shards + ShardIdIncr);
-                if (rn == db::element::coordinator || rn.loc == np.vt_id) {
+                if (rn == db::coordinator || rn.loc == np.vt_id) {
                     // mark requests as done, will be done for other shards by no-ops from coordinator
                     std::vector<std::pair<uint64_t, node_prog::prog_type>> completed_request {std::make_pair(np.req_id, np.prog_type_recvd)};
                     S->add_done_requests(completed_request);
@@ -1252,8 +1252,8 @@ inline void
 update_deleted_node(const node_handle_t &node_handle)
 {
     std::unordered_set<node_handle_t> nbrs;
-    db::element::node *n;
-    db::element::edge *e;
+    db::node *n;
+    db::edge *e;
     S->edge_map_mutex.lock();
     if (S->edge_map.find(node_handle) != S->edge_map.end()) {
         nbrs = std::move(S->edge_map[node_handle]);
@@ -1310,7 +1310,7 @@ get_balanced_assignment(std::vector<uint64_t> &shard_node_count, std::vector<uin
 // send migration information to coordinator mapper
 // return false if no migration happens (max migr score = this shard), else return true
 bool
-migrate_node_step1(db::element::node *n,
+migrate_node_step1(db::node *n,
     std::vector<uint64_t> &shard_node_count,
     uint64_t migr_num_shards)
 {
@@ -1341,7 +1341,7 @@ migrate_node_step1(db::element::node *n,
     }
 
     // mark node as "moved"
-    n->state = db::element::node::mode::MOVED;
+    n->state = db::node::mode::MOVED;
     n->new_loc = migr_loc;
     S->migr_node = n->get_handle();
     S->migr_shard = migr_loc;
@@ -1379,7 +1379,7 @@ migrate_node_step1(db::element::node *n,
 void
 migrate_node_step2_req()
 {
-    db::element::node *n;
+    db::node *n;
     message::message msg;
 
     S->migration_mutex.lock();
@@ -1406,7 +1406,7 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg, order::oracle *ti
     // unpack and place node
     uint64_t from_loc;
     node_handle_t node_handle;
-    db::element::node *n;
+    db::node *n;
 
     // create a new node, unpack the message
     vc::vclock dummy_clock;
@@ -1460,7 +1460,7 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg, order::oracle *ti
         msg->prepare_message(message::MIGRATED_NBR_UPDATE, node_handle, from_loc, shard_id);
         S->comm.send(upd_shard, msg->buf);
     }
-    n->state = db::element::node::mode::STABLE;
+    n->state = db::node::mode::STABLE;
 
     std::vector<uint64_t> prog_state_reqs;
     for (auto &state_map: n->prog_states) {
@@ -1523,11 +1523,11 @@ migrate_node_step3()
 }
 
 inline bool
-check_migr_node(db::element::node *n, uint64_t migr_num_shards)
+check_migr_node(db::node *n, uint64_t migr_num_shards)
 {
     if (n == NULL
      || n->base.get_del_time() != S->max_clk
-     || n->state == db::element::node::mode::MOVED
+     || n->state == db::node::mode::MOVED
      || n->already_migr) {
         if (n != NULL) {
             n->already_migr = false;
@@ -1550,7 +1550,7 @@ cldg_migration_wrapper(std::vector<uint64_t> &shard_node_count, uint64_t migr_nu
 {
     bool no_migr = true;
     while (S->cldg_iter != S->cldg_nodes.end()) {
-        db::element::node *n;
+        db::node *n;
         uint64_t migr_node = S->cldg_iter->first;
         S->cldg_iter++;
         n = S->acquire_node(migr_node);
@@ -1565,7 +1565,7 @@ cldg_migration_wrapper(std::vector<uint64_t> &shard_node_count, uint64_t migr_nu
             cnt = 0;
         }
 
-        db::element::edge *e;
+        db::edge *e;
         // get aggregate msg counts per shard
         //std::vector<uint64_t> msg_count(NumShards, 0);
         for (auto &e_iter: n->out_edges) {
@@ -1602,7 +1602,7 @@ ldg_migration_wrapper(std::vector<uint64_t> &shard_node_count, uint64_t migr_num
 {
     bool no_migr = true;
     while (S->ldg_iter != S->ldg_nodes.end()) {
-        db::element::node *n;
+        db::node *n;
         const node_handle_t &migr_node = *S->ldg_iter;
         S->ldg_iter++;
         n = S->acquire_node(migr_node);
@@ -1613,7 +1613,7 @@ ldg_migration_wrapper(std::vector<uint64_t> &shard_node_count, uint64_t migr_num
         }
 
         // regular LDG
-        db::element::edge *e;
+        db::edge *e;
         for (auto &e_iter: n->out_edges) {
             e = e_iter.second;
             n->migr_score[e->nbr.loc - ShardIdIncr] += 1;
@@ -1691,7 +1691,7 @@ migration_begin()
     uint64_t mcnt;
     for (const node_handle_t &nid: S->ldg_nodes) {
         mcnt = 0;
-        db::element::node *n = S->acquire_node(nid);
+        db::node *n = S->acquire_node(nid);
         for (uint64_t cnt: n->msg_count) {
             mcnt += cnt;
         }

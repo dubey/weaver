@@ -47,14 +47,14 @@ namespace node_prog
         virtual void unpack(e::unpacker&) { }
     };
 
-    std::pair<search_type, std::vector<std::pair<db::element::remote_node, edge_count_params>>>
+    std::pair<search_type, std::vector<std::pair<db::remote_node, edge_count_params>>>
     edge_count_node_program(
             node &n,
-            db::element::remote_node &,
+            db::remote_node &,
             edge_count_params &params,
             std::function<edge_count_state&()>,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>&,
+                std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)>&,
             cache_response<Cache_Value_Base>*);
 }
 

@@ -58,7 +58,7 @@ hyper_stub :: get_idx(std::unordered_map<std::string, std::pair<std::string, uin
 }
 
 void
-hyper_stub :: clean_up(std::unordered_map<node_handle_t, db::element::node*> &nodes)
+hyper_stub :: clean_up(std::unordered_map<node_handle_t, db::node*> &nodes)
 {
     for (auto &p: nodes) {
         for (auto &e: p.second->out_edges) {
@@ -75,7 +75,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     std::unordered_set<node_handle_t> &del_set,
     std::unordered_map<node_handle_t, uint64_t> &put_map,
     std::unordered_set<std::string> &idx_get_set,
-    std::unordered_map<std::string, db::element::node*> &idx_add,
+    std::unordered_map<std::string, db::node*> &idx_add,
     std::shared_ptr<transaction::pending_tx> tx,
     bool &ready,
     bool &error,
@@ -91,7 +91,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     ready = false;
     error = false;
 
-    std::unordered_map<node_handle_t, db::element::node*> old_nodes, new_nodes;
+    std::unordered_map<node_handle_t, db::node*> old_nodes, new_nodes;
     begin_tx();
 
     // get aux indices from HyperDex
@@ -123,11 +123,11 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         if (put_map.find(h) != put_map.end()) {
             ERROR_FAIL;
         }
-        old_nodes[h] = new db::element::node(h, UINT64_MAX, dummy_clk, &dummy_mtx);
+        old_nodes[h] = new db::node(h, UINT64_MAX, dummy_clk, &dummy_mtx);
     }
     for (const node_handle_t &h: del_set) {
         if (old_nodes.find(h) == old_nodes.end()) {
-            old_nodes[h] = new db::element::node(h, UINT64_MAX, dummy_clk, &dummy_mtx);
+            old_nodes[h] = new db::node(h, UINT64_MAX, dummy_clk, &dummy_mtx);
         }
     }
     if (!get_nodes(old_nodes, true)) {
@@ -147,7 +147,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     }
 
     for (const auto &p: put_map) {
-        new_nodes[p.first] = new db::element::node(p.first, p.second, tx->timestamp, &dummy_mtx);
+        new_nodes[p.first] = new db::node(p.first, p.second, tx->timestamp, &dummy_mtx);
         new_nodes[p.first]->last_upd_clk = tx->timestamp;
         new_nodes[p.first]->restore_clk = tx->timestamp.clock;
     }
@@ -184,7 +184,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 
     auto node_iter = old_nodes.end();
     auto idx_add_iter = idx_add.end();
-    db::element::node *n = nullptr;
+    db::node *n = nullptr;
     std::vector<std::string> idx_del;
 
     for (std::shared_ptr<transaction::pending_update> upd: tx->writes) {
@@ -206,7 +206,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                     WDEBUG << "edge with handle " << upd->handle << " already exists at node " << upd->handle1 << std::endl;
                     ERROR_FAIL;
                 }
-                n->add_edge(new db::element::edge(upd->handle, tx->timestamp, upd->loc2, upd->handle2));
+                n->add_edge(new db::edge(upd->handle, tx->timestamp, upd->loc2, upd->handle2));
 
                 if (AuxIndex) {
                     idx_add_iter = idx_add.find(upd->handle);

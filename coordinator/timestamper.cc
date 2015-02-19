@@ -77,7 +77,7 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
     std::unordered_set<node_handle_t> del_set;
     std::unordered_map<node_handle_t, uint64_t> put_map;
     std::unordered_set<std::string> idx_get;
-    std::unordered_map<std::string, db::element::node*> idx_add;
+    std::unordered_map<std::string, db::node*> idx_add;
     std::unordered_map<node_handle_t, uint64_t>::iterator find_iter; 
 
     for (std::shared_ptr<transaction::pending_update> upd: tx->writes) {

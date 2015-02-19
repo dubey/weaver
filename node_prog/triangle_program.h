@@ -18,7 +18,7 @@ namespace node_prog
             uint64_t num_edges;
             bool returning;
             std::vector<uint64_t> neighbors;
-            db::element::remote_node super_node;
+            db::remote_node super_node;
 
         public:
             triangle_params()
@@ -93,9 +93,9 @@ namespace node_prog
         }
     };
 
-    inline int get_num_edges(db::element::node &n, vc::vclock &req_vclock) {
+    inline int get_num_edges(db::node &n, vc::vclock &req_vclock) {
         int toRet = 0;
-        db::element::edge *e;
+        db::edge *e;
         for (auto &iter: n.out_edges) {
             e = iter.second;
             // check edge created and deleted in acceptable timeframe
@@ -114,16 +114,16 @@ namespace node_prog
         return toRet;
     }
 
-    std::vector<std::pair<db::element::remote_node, triangle_params>> 
+    std::vector<std::pair<db::remote_node, triangle_params>> 
     triangle_node_program(uint64_t, // TODO used to be req_id, now replaced by vclock
-            db::element::node &n,
-            db::element::remote_node &rn,
+            db::node &n,
+            db::remote_node &rn,
             triangle_params &params,
             std::function<triangle_node_state&()> state_getter,
             vc::vclock &req_vclock)
     {
         WDEBUG << "inside node prog!\n";
-        std::vector<std::pair<db::element::remote_node, triangle_params>> next;
+        std::vector<std::pair<db::remote_node, triangle_params>> next;
         if (rn.handle == params.super_node.handle) {
             triangle_node_state &state = state_getter();
 
@@ -153,9 +153,9 @@ namespace node_prog
     }
 
     /*
-    std::vector<std::pair<db::element::remote_node, reach_params>> 
+    std::vector<std::pair<db::remote_node, reach_params>> 
     reach_node_deleted_program(uint64_t req_id,
-                db::element::node &n, // node who asked to go to deleted node
+                db::node &n, // node who asked to go to deleted node
                 uint64_t deleted_handle, // handle of node that didn't exist
             reach_params &params_given, // params we had sent to deleted node
             std::function<reach_node_state&()> state_getter)
@@ -165,7 +165,7 @@ namespace node_prog
         UNUSED(deleted_handle);
         UNUSED(params_given);
         UNUSED(state_getter);
-        return std::vector<std::pair<db::element::remote_node, reach_params>>(); 
+        return std::vector<std::pair<db::remote_node, reach_params>>(); 
     }
     */
 }

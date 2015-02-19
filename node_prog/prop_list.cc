@@ -24,7 +24,7 @@ prop_iter :: operator++()
 
         if (internal_cur != internal_end) {
             bool to_break = false;
-            for (const std::shared_ptr<db::element::property> p: internal_cur->second) {
+            for (const std::shared_ptr<db::property> p: internal_cur->second) {
                 if (time_oracle->clock_creat_before_del_after(req_time, p->get_creat_time(), p->get_del_time())) {
                     to_break = true;
                     break;
@@ -52,7 +52,7 @@ prop_iter :: prop_iter(prop_map_t::iterator begin,
     if (internal_cur != internal_end) {
         bool to_break = false;
 
-        for (const std::shared_ptr<db::element::property> p: internal_cur->second) {
+        for (const std::shared_ptr<db::property> p: internal_cur->second) {
             if (time_oracle->clock_creat_before_del_after(req_time, p->get_creat_time(), p->get_del_time())) {
                 to_break = true;
                 break;
@@ -77,7 +77,7 @@ prop_iter :: operator*()
     std::vector<std::shared_ptr<property>> ret;
     ret.reserve(internal_cur->second.size());
 
-    for (const std::shared_ptr<db::element::property> p: internal_cur->second) {
+    for (const std::shared_ptr<db::property> p: internal_cur->second) {
         if (time_oracle->clock_creat_before_del_after(req_time, p->get_creat_time(), p->get_del_time())) {
             ret.emplace_back(p);
         }

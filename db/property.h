@@ -12,8 +12,8 @@
  * ===============================================================
  */
 
-#ifndef weaver_db_element_property_h_
-#define weaver_db_element_property_h_
+#ifndef weaver_db_property_h_
+#define weaver_db_property_h_
 
 #include <string>
 #include <functional>
@@ -24,8 +24,6 @@
 #include "node_prog/property.h"
 
 namespace db
-{
-namespace element
 {
     class property : public node_prog::property
     {
@@ -49,7 +47,6 @@ namespace element
     {
         size_t operator() (const property &p) const;
     };
-}
 }
 
 #endif

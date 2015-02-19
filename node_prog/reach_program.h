@@ -31,12 +31,12 @@ namespace node_prog
             bool _search_cache;
             cache_key_t _cache_key;
             bool returning; // false = request, true = reply
-            db::element::remote_node prev_node;
+            db::remote_node prev_node;
             node_handle_t dest;
             std::vector<std::pair<std::string, std::string>> edge_props;
             uint16_t hops;
             bool reachable;
-            std::vector<db::element::remote_node> path;
+            std::vector<db::remote_node> path;
 
         public:
             reach_params();
@@ -51,7 +51,7 @@ namespace node_prog
     struct reach_node_state : public virtual Node_State_Base 
     {
         bool visited;
-        db::element::remote_node prev_node; // previous node
+        db::remote_node prev_node; // previous node
         uint32_t out_count; // number of requests propagated
         bool reachable;
         uint16_t hops;
@@ -65,23 +65,23 @@ namespace node_prog
 
     struct reach_cache_value : public virtual Cache_Value_Base 
     {
-        std::vector<db::element::remote_node> path;
+        std::vector<db::remote_node> path;
 
-        reach_cache_value(std::vector<db::element::remote_node> &cpy);
+        reach_cache_value(std::vector<db::remote_node> &cpy);
         virtual ~reach_cache_value () { }
         virtual uint64_t size() const;
         virtual void pack(e::buffer::packer& packer) const;
         virtual void unpack(e::unpacker& unpacker);
     };
 
-    std::pair<search_type, std::vector<std::pair<db::element::remote_node, reach_params>>>
+    std::pair<search_type, std::vector<std::pair<db::remote_node, reach_params>>>
     reach_node_program(
             node &n,
-            db::element::remote_node &rn,
+            db::remote_node &rn,
             reach_params &params,
             std::function<reach_node_state&()> state_getter,
             std::function<void(std::shared_ptr<reach_cache_value>, // TODO make const
-                std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)> &add_cache_func,
+                std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)> &add_cache_func,
             cache_response<reach_cache_value>*cache_response);
 }
 

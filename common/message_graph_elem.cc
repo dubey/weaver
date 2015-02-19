@@ -32,7 +32,7 @@
 
 // size methods
 uint64_t
-message :: size(const db::element::element &t)
+message :: size(const db::element &t)
 {
     uint64_t sz = size(t.get_handle()) // client handle
         + size(t.get_creat_time()) + size(t.get_del_time()) // time stamps
@@ -41,7 +41,7 @@ message :: size(const db::element::element &t)
 }
 
 uint64_t
-message :: size(const db::element::edge &t)
+message :: size(const db::edge &t)
 {
     uint64_t sz = size(t.base)
 #ifdef WEAVER_CLDG
@@ -55,13 +55,13 @@ message :: size(const db::element::edge &t)
 }
 
 uint64_t
-message :: size(const db::element::edge* const &t)
+message :: size(const db::edge* const &t)
 {
     return size(*t);
 }
 
 uint64_t
-message :: size(const db::element::node &t)
+message :: size(const db::node &t)
 {
     uint64_t sz = 0;
     sz += size(t.base);
@@ -80,7 +80,7 @@ message :: size(const db::element::node &t)
 }
 
 // packing methods
-void message :: pack_buffer(e::buffer::packer &packer, const db::element::element &t)
+void message :: pack_buffer(e::buffer::packer &packer, const db::element &t)
 {
     pack_buffer(packer, t.get_handle());
     pack_buffer(packer, t.get_creat_time());
@@ -88,7 +88,7 @@ void message :: pack_buffer(e::buffer::packer &packer, const db::element::elemen
     pack_buffer(packer, *t.get_props());
 }
 
-void message :: pack_buffer(e::buffer::packer &packer, const db::element::edge &t)
+void message :: pack_buffer(e::buffer::packer &packer, const db::edge &t)
 {
     pack_buffer(packer, t.base);
 #ifdef WEAVER_CLDG
@@ -100,13 +100,13 @@ void message :: pack_buffer(e::buffer::packer &packer, const db::element::edge &
     pack_buffer(packer, t.nbr);
 }
 
-void message :: pack_buffer(e::buffer::packer &packer, const db::element::edge* const &t)
+void message :: pack_buffer(e::buffer::packer &packer, const db::edge* const &t)
 {
     pack_buffer(packer, *t);
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const db::element::node &t)
+message :: pack_buffer(e::buffer::packer &packer, const db::node &t)
 {
     pack_buffer(packer, t.base);
     pack_buffer(packer, t.out_edges);
@@ -124,7 +124,7 @@ message :: pack_buffer(e::buffer::packer &packer, const db::element::node &t)
 
 // unpacking methods
 void
-message :: unpack_buffer(e::unpacker &unpacker, db::element::element &t)
+message :: unpack_buffer(e::unpacker &unpacker, db::element &t)
 {
     std::string handle;
     vc::vclock creat_time, del_time;
@@ -142,7 +142,7 @@ message :: unpack_buffer(e::unpacker &unpacker, db::element::element &t)
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, db::element::edge &t)
+message :: unpack_buffer(e::unpacker &unpacker, db::edge &t)
 {
     unpack_buffer(unpacker, t.base);
 #ifdef WEAVER_CLDG
@@ -156,12 +156,12 @@ message :: unpack_buffer(e::unpacker &unpacker, db::element::edge &t)
     t.migr_edge = true; // need ack from nbr when updated
 }
 void
-message :: unpack_buffer(e::unpacker &unpacker, db::element::edge *&t)
+message :: unpack_buffer(e::unpacker &unpacker, db::edge *&t)
 {
     vc::vclock temp_clk;
     edge_handle_t temp_handle("");
     node_handle_t temp_node_handle("");
-    t = new db::element::edge(temp_handle, temp_clk, 0, temp_node_handle);
+    t = new db::edge(temp_handle, temp_clk, 0, temp_node_handle);
     unpack_buffer(unpacker, *t);
 }
 
@@ -175,7 +175,7 @@ unpack_single_node_state(e::unpacker &unpacker)
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, db::element::node &t)
+message :: unpack_buffer(e::unpacker &unpacker, db::node &t)
 {
     unpack_buffer(unpacker, t.base);
     unpack_buffer(unpacker, t.out_edges);
@@ -201,7 +201,7 @@ message :: unpack_buffer(e::unpacker &unpacker, db::element::node &t)
     uint64_t key;
     std::shared_ptr<node_prog::Node_State_Base> val;
     for (int i = 0; i < node_prog::END; i++) {
-        db::element::node::id_to_state_t &state_map = t.prog_states[i];
+        db::node::id_to_state_t &state_map = t.prog_states[i];
         assert(state_map.size() == 0);
 
         uint32_t elements_left;

@@ -59,7 +59,7 @@ edge_map_iter :: operator!=(const edge_map_iter& rhs)
 node_prog::edge&
 edge_map_iter :: operator*()
 {
-    db::element::edge &toRet = *internal_cur->second;
+    db::edge &toRet = *internal_cur->second;
     toRet.base.view_time = req_time;
     toRet.base.time_oracle = time_oracle;
     return (edge&)toRet;

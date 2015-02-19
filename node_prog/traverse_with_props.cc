@@ -119,16 +119,16 @@ check_aliases(const node_prog::node &n, const std::vector<std::string> &aliases)
     return true;
 }
 
-std::pair<search_type, std::vector<std::pair<db::element::remote_node, traverse_props_params>>>
+std::pair<search_type, std::vector<std::pair<db::remote_node, traverse_props_params>>>
 node_prog :: traverse_props_node_program(node &n,
-   db::element::remote_node &rn,
+   db::remote_node &rn,
    traverse_props_params &params,
    std::function<traverse_props_state&()> state_getter,
-   std::function<void(std::shared_ptr<Cache_Value_Base>, std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>&,
+   std::function<void(std::shared_ptr<Cache_Value_Base>, std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)>&,
    cache_response<Cache_Value_Base>*)
 {
     traverse_props_state &state = state_getter();
-    std::vector<std::pair<db::element::remote_node, traverse_props_params>> next;
+    std::vector<std::pair<db::remote_node, traverse_props_params>> next;
 
     if (!params.returning) {
         // request spreading out

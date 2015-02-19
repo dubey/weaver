@@ -13,12 +13,10 @@
 
 #include "common/types.h"
 
-#ifndef weaver_db_element_remote_node_h_
-#define weaver_db_element_remote_node_h_
+#ifndef weaver_db_remote_node_h_
+#define weaver_db_remote_node_h_
 
 namespace db
-{
-namespace element
 {
     class remote_node
     {
@@ -29,12 +27,11 @@ namespace element
         public:
             uint64_t loc;
             node_handle_t handle;
-            bool operator==(const db::element::remote_node &t) const { return (handle == t.handle) && (loc == t.loc); }
-            bool operator!=(const db::element::remote_node &t) const { return (handle != t.handle) || (loc != t.loc); }
+            bool operator==(const db::remote_node &t) const { return (handle == t.handle) && (loc == t.loc); }
+            bool operator!=(const db::remote_node &t) const { return (handle != t.handle) || (loc != t.loc); }
     };
 
-    static db::element::remote_node coordinator(0, node_handle_t(""));
-}
+    static db::remote_node coordinator(0, node_handle_t(""));
 }
 
 #endif

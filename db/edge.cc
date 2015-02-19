@@ -14,8 +14,8 @@
 #include <memory>
 #include "db/edge.h"
 
-using db::element::edge;
-using db::element::remote_node;
+using db::edge;
+using db::remote_node;
 
 // empty constructor for unpacking
 edge :: edge()

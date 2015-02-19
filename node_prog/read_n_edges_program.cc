@@ -45,13 +45,13 @@ read_n_edges_params :: unpack(e::unpacker& unpacker)
     message::unpack_buffer(unpacker, return_edges);
 }
 
-std::pair<search_type, std::vector<std::pair<db::element::remote_node, read_n_edges_params>>>
+std::pair<search_type, std::vector<std::pair<db::remote_node, read_n_edges_params>>>
 node_prog :: read_n_edges_node_program(
     node &n,
-    db::element::remote_node &,
+    db::remote_node &,
     read_n_edges_params &params,
     std::function<read_n_edges_state&()>,
-    std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>&,
+    std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)>&,
     cache_response<Cache_Value_Base>*)
 {
     auto elist = n.get_edges();
@@ -65,6 +65,6 @@ node_prog :: read_n_edges_node_program(
             }
         }
     }
-    return std::make_pair(search_type::DEPTH_FIRST, std::vector<std::pair<db::element::remote_node, read_n_edges_params>>
-            (1, std::make_pair(db::element::coordinator, std::move(params)))); 
+    return std::make_pair(search_type::DEPTH_FIRST, std::vector<std::pair<db::remote_node, read_n_edges_params>>
+            (1, std::make_pair(db::coordinator, std::move(params)))); 
 }

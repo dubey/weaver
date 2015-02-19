@@ -101,7 +101,7 @@ cdef extern from 'common/types.h':
     ctypedef string edge_handle_t
     ctypedef string cache_key_t
 
-cdef extern from 'db/remote_node.h' namespace 'db::element':
+cdef extern from 'db/remote_node.h' namespace 'db':
     cdef cppclass remote_node:
         remote_node(uint64_t loc, const node_handle_t &i)
         remote_node()

@@ -31,7 +31,7 @@ namespace node_prog
     struct traverse_props_params: public virtual Node_Parameters_Base
     {
         bool returning; // false = request spreading out, true = request return
-        db::element::remote_node prev_node;
+        db::remote_node prev_node;
         std::deque<std::vector<std::string>> node_aliases;
         std::deque<std::vector<std::pair<std::string, std::string>>> node_props;
         std::deque<std::vector<std::pair<std::string, std::string>>> edge_props;
@@ -55,7 +55,7 @@ namespace node_prog
     {
         bool visited;
         uint32_t out_count; // number of requests propagated
-        db::element::remote_node prev_node; // previous node
+        db::remote_node prev_node; // previous node
         std::unordered_set<node_handle_t> return_nodes;
         std::unordered_set<edge_handle_t> return_edges;
 
@@ -66,12 +66,12 @@ namespace node_prog
         void unpack(e::unpacker& unpacker);
     };
 
-   std::pair<search_type, std::vector<std::pair<db::element::remote_node, traverse_props_params>>>
+   std::pair<search_type, std::vector<std::pair<db::remote_node, traverse_props_params>>>
    traverse_props_node_program(node &n,
-       db::element::remote_node &rn,
+       db::remote_node &rn,
        traverse_props_params &params,
        std::function<traverse_props_state&()> state_getter,
-       std::function<void(std::shared_ptr<Cache_Value_Base>, std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>&,
+       std::function<void(std::shared_ptr<Cache_Value_Base>, std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)>&,
        cache_response<Cache_Value_Base>*);
 }
 

@@ -145,8 +145,8 @@ two_neighborhood_cache_value :: unpack(e::unpacker& unpacker)
 
 // node prog code
 bool
-check_cache_context(std::vector<node_cache_context>& contexts, db::element::remote_node &center,
-        std::vector<db::element::remote_node> &one_hops_to_check, std::vector<db::element::remote_node> &two_hops_to_check)
+check_cache_context(std::vector<node_cache_context>& contexts, db::remote_node &center,
+        std::vector<db::remote_node> &one_hops_to_check, std::vector<db::remote_node> &two_hops_to_check)
 {
     if (contexts.size() == 0) {
         return true;
@@ -182,25 +182,25 @@ fill_minus_duplicates(std::vector<std::pair<node_handle_t, std::string>> &from, 
     to.swap(from); // TODO actually filter
 }
 
-std::pair<search_type, std::vector<std::pair<db::element::remote_node, two_neighborhood_params>>>
+std::pair<search_type, std::vector<std::pair<db::remote_node, two_neighborhood_params>>>
 node_prog :: two_neighborhood_node_program(
     node &n,
-    db::element::remote_node &rn,
+    db::remote_node &rn,
     two_neighborhood_params &params,
     std::function<two_neighborhood_state&()> state_getter,
     std::function<void(std::shared_ptr<node_prog::two_neighborhood_cache_value>,
-        std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)> &add_cache_func,
+        std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)> &add_cache_func,
     cache_response<two_neighborhood_cache_value> *cache_response)
 {
-    std::vector<std::pair<db::element::remote_node, two_neighborhood_params>> next;
+    std::vector<std::pair<db::remote_node, two_neighborhood_params>> next;
     two_neighborhood_state &state = state_getter();
 
     if (MaxCacheEntries && params._search_cache  && cache_response != NULL && cache_response->get_value()->prop_key.compare(params.prop_key) == 0) {
         WDEBUG  << "GOT CACHE" << std::endl;
         params._search_cache = false; // only search cache once
         assert(params.on_hop == 0 && params.outgoing);
-        std::vector<db::element::remote_node> one_hops_to_check;
-        std::vector<db::element::remote_node> two_hops_to_check;
+        std::vector<db::remote_node> one_hops_to_check;
+        std::vector<db::remote_node> two_hops_to_check;
         if (check_cache_context(cache_response->get_context(), rn, one_hops_to_check, two_hops_to_check)) { // if context is valid
             params.cache_update = true;
             params.on_hop = 1;
@@ -214,9 +214,9 @@ node_prog :: two_neighborhood_node_program(
             }
             if (next.empty()) { // can reply now
                 params.responses = cache_response->get_value()->responses;
-                next.emplace_back(std::make_pair(db::element::coordinator, params));
+                next.emplace_back(std::make_pair(db::coordinator, params));
             } else { // waiting for new nodes to be checked
-                state.prev_node = db::element::coordinator;
+                state.prev_node = db::coordinator;
                 state.one_hop_visited = true; // in case of self loops
                 state.responses = cache_response->get_value()->responses;
                 WDEBUG  << "GOT CACHE with size " << state.responses.size()<< std::endl;
@@ -233,7 +233,7 @@ node_prog :: two_neighborhood_node_program(
         assert(params.responses.empty());
         switch (params.on_hop){
             case 0:
-                state.prev_node = db::element::coordinator;
+                state.prev_node = db::coordinator;
                 state.one_hop_visited = true; // in case of self loops
                 params.prev_node = rn;
                 params.on_hop = 1;
@@ -305,7 +305,7 @@ node_prog :: two_neighborhood_node_program(
             if (MaxCacheEntries && params.on_hop == 0) {
                 WDEBUG  << "addin to CACHE" << std::endl;
                 std::shared_ptr<node_prog::two_neighborhood_cache_value> toCache(new two_neighborhood_cache_value(params.prop_key, params.responses));
-                std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<db::element::remote_node>());
+                std::shared_ptr<std::vector<db::remote_node>> watch_set(new std::vector<db::remote_node>());
                 watch_set->emplace_back(rn);
                 for (edge &e: n.get_edges()) {
                     watch_set->emplace_back(e.get_neighbor());

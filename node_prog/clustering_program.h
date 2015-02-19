@@ -30,7 +30,7 @@ namespace node_prog
             bool _search_cache;
             cache_key_t _cache_key;
             bool is_center;
-            db::element::remote_node center;
+            db::remote_node center;
             bool outgoing;
             std::vector<node_handle_t> neighbors;
             double clustering_coeff;
@@ -54,14 +54,14 @@ namespace node_prog
         void unpack(e::unpacker& unpacker);
     };
 
-    std::pair<search_type, std::vector<std::pair<db::element::remote_node, clustering_params>>>
+    std::pair<search_type, std::vector<std::pair<db::remote_node, clustering_params>>>
     clustering_node_program(
             node &n,
-            db::element::remote_node &rn,
+            db::remote_node &rn,
             clustering_params &params,
             std::function<clustering_node_state&()> get_state,
             std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>,
-                std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>&,
+                std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)>&,
             cache_response<Cache_Value_Base>*);
 }
 

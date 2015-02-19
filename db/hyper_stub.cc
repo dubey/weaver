@@ -24,7 +24,7 @@ hyper_stub :: hyper_stub(uint64_t sid)
 { }
 
 void
-hyper_stub :: restore_backup(std::unordered_map<node_handle_t, element::node*> *nodes,
+hyper_stub :: restore_backup(std::unordered_map<node_handle_t, node*> *nodes,
     std::unordered_map<node_handle_t, std::unordered_set<node_handle_t>> &edge_map,
     po6::threads::mutex *shard_mutexes)
 {
@@ -52,7 +52,7 @@ hyper_stub :: restore_backup(std::unordered_map<node_handle_t, element::node*> *
     size_t cur_sz;
     node_handle_t node_handle;
     vc::vclock dummy_clock;
-    element::node *n;
+    node *n;
     uint64_t map_idx;
 
     while (!loop_done) {
@@ -100,7 +100,7 @@ hyper_stub :: restore_backup(std::unordered_map<node_handle_t, element::node*> *
 
             // recreate node
             map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
-            n = new element::node(node_handle, UINT64_MAX, dummy_clock, shard_mutexes+map_idx);
+            n = new node(node_handle, UINT64_MAX, dummy_clock, shard_mutexes+map_idx);
             recreate_node(node_attrs, *n);
 
             // edge map
@@ -123,7 +123,7 @@ hyper_stub :: restore_backup(std::unordered_map<node_handle_t, element::node*> *
 }
 
 void
-hyper_stub :: bulk_load(int thread_id, std::unordered_map<node_handle_t, element::node*> *nodes_arr)
+hyper_stub :: bulk_load(int thread_id, std::unordered_map<node_handle_t, node*> *nodes_arr)
 {
     assert(NUM_NODE_MAPS % NUM_SHARD_THREADS == 0);
 
@@ -132,7 +132,7 @@ hyper_stub :: bulk_load(int thread_id, std::unordered_map<node_handle_t, element
     }
 
     if (AuxIndex) {
-        std::unordered_map<std::string, element::node*> idx_add;
+        std::unordered_map<std::string, node*> idx_add;
         for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
             for (auto &p: nodes_arr[tid]) {
                 assert(idx_add.find(p.first) == idx_add.end());

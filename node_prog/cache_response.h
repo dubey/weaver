@@ -25,10 +25,10 @@ namespace node_prog
     struct edge_cache_context
     {
         edge_handle_t edge_handle;
-        db::element::remote_node nbr;
+        db::remote_node nbr;
 
         edge_cache_context() { }
-        edge_cache_context(const edge_handle_t &handle, db::element::remote_node &nbr) : edge_handle(handle), nbr(nbr) { }
+        edge_cache_context(const edge_handle_t &handle, db::remote_node &nbr) : edge_handle(handle), nbr(nbr) { }
 
         std::vector<property> props_added;
         std::vector<property> props_deleted;
@@ -36,7 +36,7 @@ namespace node_prog
 
     struct node_cache_context
     {
-        db::element::remote_node node;
+        db::remote_node node;
 
         bool node_deleted;
 
@@ -58,14 +58,14 @@ namespace node_prog
             std::unordered_map<cache_key_t, db::cache_entry> &from_cache;
             cache_key_t key;
             std::shared_ptr<CacheValueType> value;
-            std::shared_ptr<std::vector<db::element::remote_node>> watch_set;
+            std::shared_ptr<std::vector<db::remote_node>> watch_set;
             std::vector<node_cache_context> context;
 
         public:
             cache_response(std::unordered_map<cache_key_t, db::cache_entry> &came_from,
                 cache_key_t key_used,
                 std::shared_ptr<Cache_Value_Base> val,
-                std::shared_ptr<std::vector<db::element::remote_node>> watch_set_used)
+                std::shared_ptr<std::vector<db::remote_node>> watch_set_used)
                 : from_cache(came_from)
                 , key(key_used)
                 , watch_set(watch_set_used)
@@ -78,7 +78,7 @@ namespace node_prog
             cache_response& operator=(cache_response const&) = delete;
 
             std::shared_ptr<CacheValueType> get_value() { return value; }
-            std::shared_ptr<std::vector<db::element::remote_node>> get_watch_set() { return watch_set; }
+            std::shared_ptr<std::vector<db::remote_node>> get_watch_set() { return watch_set; }
             std::vector<node_cache_context> &get_context() { return context; }
             void invalidate() { from_cache.erase(key); }
     };

@@ -19,9 +19,9 @@
 #include "common/event_order.h"
 #include "db/node.h"
 
-using db::element::remote_node;
-using db::element::edge;
-using db::element::node;
+using db::remote_node;
+using db::edge;
+using db::node;
 
 node :: node(const node_handle_t &_handle, uint64_t shrd, vc::vclock &vclk, po6::threads::mutex *mtx)
     : base(_handle, vclk)

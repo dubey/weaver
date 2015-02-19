@@ -23,13 +23,13 @@ namespace db
     {
         std::shared_ptr<node_prog::Cache_Value_Base> val;
         std::shared_ptr<vc::vclock> clk;
-        std::shared_ptr<std::vector<db::element::remote_node>> watch_set;
+        std::shared_ptr<std::vector<db::remote_node>> watch_set;
 
         cache_entry() { }
 
         cache_entry(std::shared_ptr<node_prog::Cache_Value_Base> v,
             std::shared_ptr<vc::vclock> c,
-            std::shared_ptr<std::vector<db::element::remote_node>> ws)
+            std::shared_ptr<std::vector<db::remote_node>> ws)
             : val(v)
             , clk(c)
             , watch_set(ws)

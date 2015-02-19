@@ -23,7 +23,7 @@
 
 namespace node_prog
 {
-    typedef std::unordered_map<std::string, std::vector<std::shared_ptr<db::element::property>>> prop_map_t;
+    typedef std::unordered_map<std::string, std::vector<std::shared_ptr<db::property>>> prop_map_t;
     class prop_iter : public std::iterator<std::input_iterator_tag, property>
     {
         private:

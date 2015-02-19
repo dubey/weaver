@@ -663,7 +663,7 @@ hyper_stub_base :: multiple_del(std::vector<const char*> &spaces,
 #undef HYPERDEX_CHECK_STATUSES
 
 bool
-hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::element::node &n)
+hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::node &n)
 {
     std::vector<int> idx(NUM_GRAPH_ATTRS, -1);    
     for (int i = 0; i < NUM_GRAPH_ATTRS; i++) {
@@ -687,14 +687,14 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::e
     vc::vclock create_clk;
     unpack_buffer(cl_attr[idx[1]].value, cl_attr[idx[1]].value_sz, create_clk);
     // properties
-    unpack_buffer<std::vector<std::shared_ptr<db::element::property>>>(cl_attr[idx[2]].value, cl_attr[idx[2]].value_sz, n.base.properties);
+    unpack_buffer<std::vector<std::shared_ptr<db::property>>>(cl_attr[idx[2]].value, cl_attr[idx[2]].value_sz, n.base.properties);
 
-    n.state = db::element::node::mode::STABLE;
+    n.state = db::node::mode::STABLE;
     n.in_use = false;
     n.base.update_creat_time(create_clk);
 
     // out edges
-    unpack_buffer<db::element::edge*>(cl_attr[idx[3]].value, cl_attr[idx[3]].value_sz, n.out_edges);
+    unpack_buffer<db::edge*>(cl_attr[idx[3]].value, cl_attr[idx[3]].value_sz, n.out_edges);
     // last update clock
     unpack_buffer(cl_attr[idx[5]].value, cl_attr[idx[5]].value_sz, n.last_upd_clk);
     // restore clock
@@ -707,7 +707,7 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::e
 }
 
 bool
-hyper_stub_base :: get_node(db::element::node &n)
+hyper_stub_base :: get_node(db::node &n)
 {
     const hyperdex_client_attribute *attr;
     size_t num_attrs;
@@ -723,7 +723,7 @@ hyper_stub_base :: get_node(db::element::node &n)
 }
 
 bool
-hyper_stub_base :: get_nodes(std::unordered_map<node_handle_t, db::element::node*> &nodes, bool tx)
+hyper_stub_base :: get_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool tx)
 {
     int64_t num_nodes = nodes.size();
     std::vector<const char*> spaces(num_nodes, graph_space);
@@ -768,7 +768,7 @@ hyper_stub_base :: get_nodes(std::unordered_map<node_handle_t, db::element::node
 
 void
 hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
-    db::element::node &n,
+    db::node &n,
     std::unique_ptr<e::buffer> &creat_clk_buf,
     std::unique_ptr<e::buffer> &props_buf,
     std::unique_ptr<e::buffer> &out_edges_buf,
@@ -790,14 +790,14 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     cl_attr[1].datatype = graph_dtypes[1];
 
     // properties
-    prepare_buffer<std::vector<std::shared_ptr<db::element::property>>>(n.base.properties, props_buf);
+    prepare_buffer<std::vector<std::shared_ptr<db::property>>>(n.base.properties, props_buf);
     cl_attr[2].attr = graph_attrs[2];
     cl_attr[2].value = (const char*)props_buf->data();
     cl_attr[2].value_sz = props_buf->size();
     cl_attr[2].datatype = graph_dtypes[2];
 
     // out edges
-    prepare_buffer<db::element::edge*>(n.out_edges, out_edges_buf);
+    prepare_buffer<db::edge*>(n.out_edges, out_edges_buf);
     cl_attr[3].attr = graph_attrs[3];
     cl_attr[3].value = (const char*)out_edges_buf->data();
     cl_attr[3].value_sz = out_edges_buf->size();
@@ -834,7 +834,7 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
 }
 
 bool
-hyper_stub_base :: put_nodes(std::unordered_map<node_handle_t, db::element::node*> &nodes, bool if_not_exist)
+hyper_stub_base :: put_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool if_not_exist)
 {
     int num_nodes = nodes.size();
     std::vector<hyper_tx_func> funcs;
@@ -876,7 +876,7 @@ hyper_stub_base :: put_nodes(std::unordered_map<node_handle_t, db::element::node
 }
 
 bool
-hyper_stub_base :: put_nodes_bulk(std::unordered_map<node_handle_t, db::element::node*> &nodes)
+hyper_stub_base :: put_nodes_bulk(std::unordered_map<node_handle_t, db::node*> &nodes)
 {
     int num_nodes = nodes.size();
     std::vector<hyper_func> funcs(num_nodes, &hyperdex_client_put);
@@ -1011,7 +1011,7 @@ hyper_stub_base :: get_nmap(std::unordered_set<node_handle_t> &toGet, bool tx)
 }
 
 bool
-hyper_stub_base :: add_indices(std::unordered_map<std::string, db::element::node*> &indices, bool tx)
+hyper_stub_base :: add_indices(std::unordered_map<std::string, db::node*> &indices, bool tx)
 {
     assert(AuxIndex);
 

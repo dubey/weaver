@@ -116,7 +116,7 @@ reach_node_state :: unpack(e::unpacker& unpacker)
 }
 
 // cache
-reach_cache_value :: reach_cache_value(std::vector<db::element::remote_node> &cpy)
+reach_cache_value :: reach_cache_value(std::vector<db::remote_node> &cpy)
     : path(cpy) { }
 
 uint64_t
@@ -157,7 +157,7 @@ check_cache_context(cache_response<reach_cache_value> &cr)
         // edge deletion, see if path was broken
         for (size_t i = 1; i < cv.path.size(); i++) {
             if (node_context.node == cv.path.at(i)) {
-                db::element::remote_node &path_next_node = cv.path.at(i-1);
+                db::remote_node &path_next_node = cv.path.at(i-1);
                 for(auto &edge : node_context.edges_deleted){
                     if (edge.nbr == path_next_node) {
                         WDEBUG  << "Cache entry invalid because of edge deletion" << std::endl;
@@ -172,23 +172,23 @@ check_cache_context(cache_response<reach_cache_value> &cr)
     return true;
 }
 
-std::pair<search_type, std::vector<std::pair<db::element::remote_node, reach_params>>>
+std::pair<search_type, std::vector<std::pair<db::remote_node, reach_params>>>
 node_prog :: reach_node_program(
         node &n,
-        db::element::remote_node &rn,
+        db::remote_node &rn,
         reach_params &params,
         std::function<reach_node_state&()> state_getter,
         std::function<void(std::shared_ptr<reach_cache_value>, // TODO make const
-            std::shared_ptr<std::vector<db::element::remote_node>>, cache_key_t)>& add_cache_func,
+            std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)>& add_cache_func,
         cache_response<reach_cache_value>*cache_response)
 {
     reach_node_state &state = state_getter();
-    std::vector<std::pair<db::element::remote_node, reach_params>> next;
+    std::vector<std::pair<db::remote_node, reach_params>> next;
     if (state.reachable == true) {
         return std::make_pair(search_type::BREADTH_FIRST, next);
     }
     bool false_reply = false;
-    db::element::remote_node prev_node = params.prev_node;
+    db::remote_node prev_node = params.prev_node;
     params.prev_node = rn;
     if (!params.returning) { // request mode
         if (params.dest == n.get_handle()) {
@@ -261,7 +261,7 @@ node_prog :: reach_node_program(
                 {
                     // now add to cache
                     std::shared_ptr<node_prog::reach_cache_value> toCache(new reach_cache_value(params.path));
-                    std::shared_ptr<std::vector<db::element::remote_node>> watch_set(new std::vector<db::element::remote_node>(params.path)); // copy return path from params
+                    std::shared_ptr<std::vector<db::remote_node>> watch_set(new std::vector<db::remote_node>(params.path)); // copy return path from params
                     add_cache_func(toCache, watch_set, params.dest);
                 }
             }
