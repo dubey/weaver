@@ -17,7 +17,7 @@
 #include "common/message.h"
 #include "common/config_constants.h"
 #include "client/client_constants.h"
-#include "client/weaver_client.h"
+#include "client/client.h"
 
 // ugly, declared only to get rid of undefined symbol error
 // not used in client

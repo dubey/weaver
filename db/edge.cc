@@ -95,3 +95,16 @@ edge :: has_all_properties(std::vector<std::pair<std::string, std::string>> &pro
     assert(base.time_oracle != nullptr);
     return base.has_all_properties(props);
 }
+
+// convert this edge into a cl::edge object (see client/weaver_datastructures.h)
+void
+edge :: get_client_edge(cl::edge &e)
+{
+    e.handle = base.get_handle();
+    e.nbr = nbr.handle;
+
+    node_prog::prop_list plist = get_properties();
+    for (std::vector<std::shared_ptr<node_prog::property>> pvec: plist) {
+        e.properties.insert(e.properties.end(), pvec.begin(), pvec.end());
+    }
+}

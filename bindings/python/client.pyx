@@ -367,7 +367,7 @@ class TraversePropsParams:
         self.collect_nodes = collect_n
         self.collect_edges = collect_e
 
-cdef extern from 'client/weaver_client.h' namespace 'cl':
+cdef extern from 'client/client.h' namespace 'cl':
     cdef cppclass client:
         client(const char *coordinator, uint16_t port, const char *config_file)
 

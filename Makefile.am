@@ -31,13 +31,15 @@ else
     AM_CXXFLAGS += -O3
 endif
 
+pkgpyexecdir = $(pyexecdir)/weaver
+weaverincludedir = $(includedir)/weaver
+
 bin_PROGRAMS=
 lib_LTLIBRARIES=
 pkgpyexec_LTLIBRARIES=
 pkgpyexec_DATA=
-pkgpyexecdir = $(pyexecdir)/weaver
 CLEANFILES=
-include_HEADERS=
+weaverinclude_HEADERS=
 noinst_HEADERS=
 sysconf_DATA=
 TESTS =
@@ -210,7 +212,6 @@ weaver_shard_SOURCES=	common/ids.cc \
 # c++ client
 noinst_HEADERS+=			client/client_constants.h \
 							client/comm_wrapper.h
-							client/weaver_client.h
 lib_LTLIBRARIES+=			libweaverclient.la
 libweaverclient_la_SOURCES=	common/ids.cc \
 		                    common/serialization.cc \
@@ -245,7 +246,8 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 		                    client/client.cc
 libweaverclient_la_CFLAGS=	$(AM_CFLAGS)
 libweaverclient_la_CXXFLAGS=$(AM_CXXFLAGS)
-include_HEADERS+=			client/weaver_client.h
+weaverinclude_HEADERS+=		client/client.h \
+							client/datastructures.h
 
 # python client
 EXTRA_DIST+=						bindings/python/__init__.py \

@@ -22,6 +22,7 @@
 #include "common/server_manager_link_wrapper.h"
 #include "common/transaction.h"
 #include "client/comm_wrapper.h"
+#include "client/datastructures.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/reach_program.h"
 #include "node_prog/pathless_reach_program.h"

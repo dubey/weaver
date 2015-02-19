@@ -31,6 +31,7 @@
 #include "db/element.h"
 #include "db/edge.h"
 #include "db/shard_constants.h"
+#include "client/datastructures.h"
 
 namespace message
 {
@@ -111,6 +112,7 @@ namespace db
             void add_alias(const node_handle_t &alias);
             bool del_alias(const node_handle_t &alias);
             bool is_alias(const node_handle_t &alias) const;
+            void get_client_node(cl::node &n);
     };
 }
 

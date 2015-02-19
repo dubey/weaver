@@ -23,6 +23,7 @@
 #include "db/remote_node.h"
 #include "db/element.h"
 #include "db/shard_constants.h"
+#include "client/datastructures.h"
 
 namespace db
 {
@@ -51,6 +52,7 @@ namespace db
             bool has_property(std::pair<std::string, std::string> &p);
             bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
             edge_handle_t get_handle() const { return base.get_handle(); }
+            void get_client_edge(cl::edge &e);
     };
 }
 

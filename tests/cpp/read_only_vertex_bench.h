@@ -19,7 +19,7 @@
 #include <busybee_utils.h>
 
 #include "common/clock.h"
-#include "client/weaver_client.h"
+#include "client/client.h"
 
 using cl::client;
 

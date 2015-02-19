@@ -29,8 +29,8 @@ namespace node_prog
             property() : key(""), value("") { }
             property(const std::string &k, const std::string &v) : key(k), value(v) { }
 
-            const std::string& get_key() { return key; }
-            const std::string& get_value() { return value; }
+            const std::string& get_key() const { return key; }
+            const std::string& get_value() const { return value; }
    };
 }
 
