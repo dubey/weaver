@@ -460,7 +460,7 @@ apply_writes(uint64_t vt_id, vc::vclock &vclk, uint64_t qts, transaction::pendin
                 break;
 
             case transaction::ADD_AUX_INDEX:
-                S->add_node_alias(upd->handle, upd->handle1, vclk, qts);
+                S->add_node_alias(upd->handle1, upd->handle, vclk, qts);
                 break;
 
             default:

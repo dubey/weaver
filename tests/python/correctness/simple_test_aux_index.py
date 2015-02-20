@@ -92,5 +92,9 @@ return_nodes = c.traverse('el33th4x0r', {'type': 'user'}).out_edge({'type': 'pos
 assert len(return_nodes) == 1, 'traversal returned incorrect #nodes'
 assert 'ayush' in return_nodes, 'traversal returned bad node handle'
 
-print 'Correctly executed 9 transactions of varying complexity, pass simple_test.'
+# 11. get node and check it is valid
+ad = c.get_node('ayush')
+assert 'ad688' in ad.aliases
+
+print 'Correctly executed 11 transactions of varying complexity, pass simple_test.'
 print 'Success, you have a working Weaver setup!'
