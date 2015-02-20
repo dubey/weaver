@@ -16,6 +16,7 @@
 
 using node_prog::search_type;
 using node_prog::edge_get_params;
+using node_prog::edge_get_state;
 using node_prog::cache_response;
 
 uint64_t edge_get_params :: size() const 

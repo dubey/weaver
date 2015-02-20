@@ -377,24 +377,10 @@ client :: run_two_neighborhood_program(std::vector<std::pair<std::string, node_p
     return *run_node_program(node_prog::TWO_NEIGHBORHOOD, initial_args);
 }
 
-/*
-node_prog::dijkstra_params
-client :: run_dijkstra_program(std::vector<std::pair<std::string, node_prog::dijkstra_params>> initial_args)
-{
-    return *run_node_program(node_prog::DIJKSTRA, initial_args);
-}
-*/
-
 node_prog::read_node_props_params
 client :: read_node_props_program(std::vector<std::pair<std::string, node_prog::read_node_props_params>> &initial_args)
 {
     return *run_node_program(node_prog::READ_NODE_PROPS, initial_args);
-}
-
-node_prog::read_edges_props_params
-client :: read_edges_props_program(std::vector<std::pair<std::string, node_prog::read_edges_props_params>> &initial_args)
-{
-    return *run_node_program(node_prog::READ_EDGES_PROPS, initial_args);
 }
 
 node_prog::read_n_edges_params
@@ -413,6 +399,12 @@ node_prog::edge_get_params
 client :: edge_get_program(std::vector<std::pair<std::string, node_prog::edge_get_params>> &initial_args)
 {
     return *run_node_program(node_prog::EDGE_GET, initial_args);
+}
+
+node_prog::node_get_params
+client :: node_get_program(std::vector<std::pair<std::string, node_prog::node_get_params>> &initial_args)
+{
+    return *run_node_program(node_prog::NODE_GET, initial_args);
 }
 
 node_prog::traverse_props_params

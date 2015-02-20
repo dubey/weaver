@@ -41,10 +41,14 @@ cdef extern from '<utility>' namespace 'std':
 cdef extern from '<memory>' namespace 'std':
     cdef cppclass unique_ptr[T]:
         pass
+    cdef cppclass shared_ptr[T]:
+        T& operator*()
+        pass
 
 cdef extern from '<vector>' namespace 'std':
     cdef cppclass vector[T]:
         cppclass iterator:
+            iterator()
             T operator*()
             iterator operator++()
             bint operator==(iterator)
@@ -58,6 +62,19 @@ cdef extern from '<vector>' namespace 'std':
         size_t size()
         void reserve(size_t)
         void clear()
+
+cdef extern from '<unordered_map>' namespace 'std':
+    cdef cppclass unordered_map[T1, T2]:
+        cppclass iterator:
+            pair[T1, T2] operator*()
+            iterator operator++()
+            bint operator==(iterator)
+            bint operator!=(iterator)
+        unordered_map()
+        iterator begin()
+        iterator end()
+        size_t size()
+        pair[iterator, bint] emplace(T1, T2)
 
 cdef extern from '<unordered_set>' namespace 'std':
     cdef cppclass unordered_set[T]:
@@ -82,6 +99,31 @@ cdef extern from '<deque>' namespace 'std':
         iterator end()
         void push_back(T&)
         void clear()
+
+def initialize_member(param, member, default):
+    if param is None:
+        member = default
+    else:
+        member = param
+
+def initialize_member_dict(param, member, name):
+        if param is None:
+            member = {}
+        elif not isinstance(param, dict):
+            print(name + " needs to be a dict", file=sys.stderr)
+            member = {}
+        else:
+            member = param
+
+def initialize_member_list(param, member, name):
+        if param is None:
+            member = []
+        elif not isinstance(param, list):
+            print(name + " needs to be a list", file=sys.stderr)
+            member = []
+        else:
+            member = param
+
 
 cdef extern from 'node_prog/node_prog_type.h' namespace 'node_prog':
     cdef enum prog_type:
@@ -109,6 +151,38 @@ cdef extern from 'db/remote_node.h' namespace 'db':
         node_handle_t handle
     cdef remote_node coordinator
 
+cdef extern from 'node_prog/property.h' namespace 'node_prog':
+    cdef cppclass property:
+        string key
+        string value
+        property()
+        property(const string &k, const string &v)
+
+cdef extern from 'client/datastructures.h' namespace 'cl':
+    cdef cppclass edge:
+        string handle
+        string nbr
+        vector[shared_ptr[property]] properties
+
+    cdef cppclass node:
+        string handle
+        vector[shared_ptr[property]] properties
+        unordered_map[string, edge] out_edges
+        unordered_set[string] aliases
+
+class Edge:
+    def __init__(self, handle='', nbr='', properties=None):
+        self.handle = handle
+        self.nbr = nbr
+        initialize_member_dict(properties, self.properties, 'properties')
+
+class Node:
+    def __init__(self, handle='', properties=None, out_edges=None, aliases=None):
+        self.handle = handle
+        initialize_member_dict(properties, self.properties, 'properties')
+        initialize_member_dict(out_edges, self.out_edges, 'out_edges')
+        initialize_member_list(aliases, self.aliases, 'aliases')
+
 class RemoteNode:
     def __init__(self, handle='', loc=0):
         self.handle = handle
@@ -132,21 +206,12 @@ class ReachParams:
         self._search_cache = caching
         self._cache_key = dest
         self.returning = returning
-        if prev_node is None:
-            self.prev_node = RemoteNode(0,0)
-        else:
-            self.prev_node = prev_node
+        initialize_member(prev_node, self.prev_node, RemoteNode(0,0))
         self.dest = dest
         self.hops = hops
         self.reachable = reachable
-        if edge_props is None:
-            self.edge_props = []
-        else:
-            self.edge_props = edge_props
-        if path is None:
-            self.path = []
-        else:
-            self.path = path
+        initialize_member_list(edge_props, self.edge_props, 'edge_props')
+        initialize_member_list(path, self.path, 'path')
 
 cdef extern from 'node_prog/pathless_reach_program.h' namespace 'node_prog':
     cdef cppclass pathless_reach_params:
@@ -160,16 +225,10 @@ cdef extern from 'node_prog/pathless_reach_program.h' namespace 'node_prog':
 class PathlessReachParams:
     def __init__(self, returning=False, prev_node=None, dest='', reachable=False, edge_props=None):
         self.returning = returning
-        if prev_node is None:
-            self.prev_node = RemoteNode(0,0)
-        else:
-            self.prev_node = prev_node
+        initialize_member(prev_node, self.prev_node, RemoteNode(0,0))
         self.dest = dest
         self.reachable = reachable
-        if edge_props is None:
-            self.edge_props = []
-        else:
-            self.edge_props = edge_props
+        initialize_member_list(edge_props, self.edge_props, 'edge_props')
 
 cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
     cdef cppclass clustering_params:
@@ -205,44 +264,8 @@ class TwoNeighborhoodParams:
         self.prop_key = prop_key
         self.on_hop = on_hop
         self.outgoing = outgoing
-        if prev_node is None:
-            self.prev_node = RemoteNode(0,0)
-        else:
-            self.prev_node = prev_node
-        if responses is None:
-            self.responses = []
-        else:
-            self.responses = responses
-'''
-cdef extern from 'node_prog/dijkstra_program.h' namespace 'node_prog':
-    cdef cppclass dijkstra_params:
-        uint64_t src_id
-        remote_node src_handle
-        uint64_t dst_handle
-        string edge_weight_name
-        bint is_widest_path
-        bint adding_nodes
-        uint64_t prev_node
-        vector[pair[uint64_t, remote_node]] entries_to_add
-        remote_node next_node
-        vector[pair[uint64_t, uint64_t]] final_path
-        uint64_t cost
-
-class DijkstraParams:
-    def __init__(self, src_id=0, src_handle=RemoteNode(), dst_handle=0, edge_weight_name="weight", is_widest_path=False,
-            adding_nodes=False, prev_node=RemoteNode(), entries_to_add=[], next_node=0, final_path=[], cost=0):
-        self.src_id = src_id
-        self.src_handle = src_handle
-        self.dst_handle = dst_handle
-        self.edge_weight_name = edge_weight_name
-        self.is_widest_path = is_widest_path
-        self.adding_nodes = adding_nodes
-        self.prev_node = prev_node
-        self.entries_to_add = entries_to_add
-        self.next_node = next_node
-        self.final_path = final_path
-        self.cost = cost
-'''
+        initialize_member(prev_node, self.prev_node, RemoteNode(0,0))
+        initialize_member_list(responses, self.responses, 'responses')
 
 cdef extern from 'node_prog/read_node_props_program.h' namespace 'node_prog':
     cdef cppclass read_node_props_params:
@@ -251,14 +274,8 @@ cdef extern from 'node_prog/read_node_props_program.h' namespace 'node_prog':
 
 class ReadNodePropsParams:
     def __init__(self, keys=None, node_props=None):
-        if keys is None:
-            self.keys = []
-        else:
-            self.keys = keys
-        if node_props is None:
-            self.node_props = []
-        else:
-            self.node_props = node_props
+        initialize_member_list(keys, self.keys, 'keys')
+        initialize_member_list(node_props, self.node_props, 'node_props')
 
 cdef extern from 'node_prog/read_n_edges_program.h' namespace 'node_prog':
     cdef cppclass read_n_edges_params:
@@ -269,14 +286,8 @@ cdef extern from 'node_prog/read_n_edges_program.h' namespace 'node_prog':
 class ReadNEdgesParams:
     def __init__(self, num_edges=UINT64_MAX, edges_props=None, return_edges=None):
         self.num_edges = num_edges
-        if edges_props is None:
-            self.edges_props = []
-        else:
-            self.edges_props = edges_props
-        if return_edges is None:
-            self.return_edges = []
-        else:
-            self.return_edges = return_edges
+        initialize_member_list(edges_props, self.edges_props, 'edge_props')
+        initialize_member_list(return_edges, self.return_edges, 'edge_props')
 
 cdef extern from 'node_prog/edge_count_program.h' namespace 'node_prog':
     cdef cppclass edge_count_params:
@@ -285,29 +296,24 @@ cdef extern from 'node_prog/edge_count_program.h' namespace 'node_prog':
 
 class EdgeCountParams:
     def __init__(self, edges_props=None, edge_count=0):
-        if edges_props is None:
-            self.edges_props = []
-        else:
-            self.edges_props = edges_props
+        initialize_member_list(edges_props, self.edges_props, 'edge_props')
         self.edge_count = edge_count
 
 cdef extern from 'node_prog/edge_get_program.h' namespace 'node_prog':
     cdef cppclass edge_get_params:
-        node_handle_t nbr_handle
-        vector[pair[string, string]] edges_props
-        vector[edge_handle_t] return_edges
+        vector[node_handle_t] nbrs
+        vector[edge_handle_t] request_edges
+        vector[edge] response_edges
 
 class EdgeGetParams:
-    def __init__(self, nbr_handle='', edges_props=None, return_edges=None):
-        self.nbr_handle = nbr_handle
-        if edges_props is None:
-            self.edges_props = []
-        else:
-            self.edges_props = edges_props
-        if return_edges is None:
-            self.return_edges = []
-        else:
-            self.return_edges = return_edges
+    def __init__(self, nbrs=None, request_edges=None, response_edges=None):
+        initialize_member_list(nbrs, self.nbrs, 'nbrs')
+        initialize_member_list(request_edges, self.request_edges, 'request_edges')
+        initialize_member_list(response_edges, self.response_edges, 'response_edges')
+
+cdef extern from 'node_prog/node_get_program.h' namespace 'node_prog':
+    cdef cppclass node_get_params:
+        node node
 
 cdef extern from 'node_prog/traverse_with_props.h' namespace 'node_prog':
     cdef cppclass traverse_props_params:
@@ -323,26 +329,11 @@ cdef extern from 'node_prog/traverse_with_props.h' namespace 'node_prog':
 
 class TraversePropsParams:
     def __init__(self, node_aliases=None, node_props=None, edge_props=None, return_nodes=None, return_edges=None, collect_n=False, collect_e=False):
-        if node_aliases is None:
-            self.node_aliases = []
-        else:
-            self.node_aliases = node_aliases
-        if node_props is None:
-            self.node_props = []
-        else:
-            self.node_props = node_props
-        if edge_props is None:
-            self.edge_props = []
-        else:
-            self.edge_props = edge_props
-        if return_nodes is None:
-            self.return_nodes = []
-        else:
-            self.return_nodes = return_nodes
-        if return_edges is None:
-            self.return_edges = []
-        else:
-            self.return_edges = return_edges
+        initialize_member_list(node_aliases, self.node_aliases, 'node_aliases')
+        initialize_member_list(node_props, self.node_props, 'node_props')
+        initialize_member_list(edge_props, self.edge_props, 'edge_props')
+        initialize_member_list(return_nodes, self.return_nodes, 'return_nodes')
+        initialize_member_list(return_edges, self.return_edges, 'return_edges')
         self.collect_nodes = collect_n
         self.collect_edges = collect_e
 
@@ -368,6 +359,7 @@ cdef extern from 'client/client.h' namespace 'cl':
         read_n_edges_params read_n_edges_program(vector[pair[string, read_n_edges_params]] &initial_args) nogil
         edge_count_params edge_count_program(vector[pair[string, edge_count_params]] &initial_args) nogil
         edge_get_params edge_get_program(vector[pair[string, edge_get_params]] &initial_args) nogil
+        node_get_params node_get_program(vector[pair[string, node_get_params]] &initial_args) nogil
         traverse_props_params traverse_props_program(vector[pair[string, traverse_props_params]] &initial_args) nogil
         void start_migration()
         void single_stream_migration()
@@ -546,22 +538,6 @@ cdef class Client:
         response = TwoNeighborhoodParams(responses = c_rp.responses)
         return response
 
-    '''
-    def run_dijkstra_program(self, init_args):
-        cdef vector[pair[string, dijkstra_params]] c_args
-        cdef pair[string, dijkstra_params] arg_pair
-        for cp in init_args:
-            arg_pair.first = cp[0]
-            arg_pair.second.is_widest_path = cp[1].is_widest_path;
-            arg_pair.second.src_id = cp[1].src_id;
-            arg_pair.second.dst_handle = cp[1].dst_handle;
-            arg_pair.second.edge_weight_name = cp[1].edge_weight_name;
-            c_args.push_back(arg_pair)
-        with nogil:
-            c_dp = self.thisptr.run_dijkstra_program(c_args)
-        response = DijkstraParams(final_path=c_dp.final_path, cost=c_dp.cost)
-        return response
-    '''
     def read_node_props(self, init_args):
         cdef vector[pair[string, read_node_props_params]] c_args
         c_args.reserve(len(init_args))
@@ -608,22 +584,80 @@ cdef class Client:
         response = EdgeCountParams(edge_count=c_rp.edge_count)
         return response
 
-    def edge_get(self, init_args):
-        cdef vector[pair[string, edge_get_params]] c_args
-        c_args.reserve(len(init_args))
+    cdef __convert_vector_props_to_dict(self, vector[shared_ptr[property]] pvec, pdict):
+        cdef vector[shared_ptr[property]].iterator prop_iter = pvec.begin()
+        while prop_iter != pvec.end():
+            key = str(deref(deref(prop_iter)).key)
+            value = str(deref(deref(prop_iter)).value)
+            if key in pdict:
+                pdict[key].append(value)
+            else:
+                pdict[key] = [value]
+            inc(prop_iter)
+
+    cdef __convert_edge_to_client_edge(self, edge c_edge, py_edge):
+        py_edge.handle = c_edge.handle
+        py_edge.nbr = c_edge.nbr
+        self.__convert_vector_props_to_dict(c_edge.properties, py_edge.properties)
+
+    cdef get_edges(self, nbrs=None, edges=None, node=''):
         cdef pair[string, edge_get_params] arg_pair
-        for rp in init_args:
-            arg_pair.first = rp[0]
-            arg_pair.second.nbr_handle = rp[1].nbr_handle
-            arg_pair.second.edges_props.clear()
-            arg_pair.second.edges_props.reserve(len(rp[1].edges_props))
-            for p in rp[1].edges_props:
-                arg_pair.second.edges_props.push_back(p)
-            c_args.push_back(arg_pair)
+        arg_pair.first = node
+        if nbrs is not None:
+            arg_pair.second.nbrs.reserve(len(nbrs))
+            for nbr in nbrs:
+                arg_pair.second.nbrs.push_back(nbr)
+        if edges is not None:
+            arg_pair.second.request_edges.reserve(len(edges))
+            for e in edges:
+                arg_pair.second.request_edges.push_back(e)
+        cdef vector[pair[string, edge_get_params]] c_args
+        c_args.push_back(arg_pair)
+
         with nogil:
             c_rp = self.thisptr.edge_get_program(c_args)
-        response = EdgeGetParams(return_edges=c_rp.return_edges)
+
+        response = []
+        cdef vector[edge].iterator resp_iter = c_rp.response_edges.begin()
+        while resp_iter != c_rp.response_edges.end():
+            response.append(Edge())
+            self.__convert_edge_to_client_edge(deref(resp_iter), response[-1])
+            inc(resp_iter)
         return response
+
+    def get_edge(self, edge, node=''):
+        response = self.get_edges(nbrs=None, edges=[edge], node=node)
+        assert(len(response) < 2)
+        if len(response) == 1:
+            return response[0]
+        else:
+            print('edge not found or some other error', file=sys.stderr)
+            return Edge()
+
+    cdef __convert_node_to_client_node(self, node c_node, py_node):
+        self.__convert_vector_props_to_dict(c_node.properties, py_node.properties)
+        cdef unordered_map[string, edge].iterator edge_iter = c_node.out_edges.begin()
+        while edge_iter != c_node.out_edges.end():
+            new_edge = Edge()
+            self.__convert_edge_to_client_edge(deref(edge_iter).second, new_edge)
+            py_node.out_edge[str(deref(edge_iter).first)] = new_edge
+            inc(edge_iter)
+        cdef unordered_set[string].iterator alias_iter = c_node.aliases.begin()
+        while alias_iter != c_node.aliases.end():
+            py_node.aliases.append(str(deref(alias_iter)))
+
+    def get_node(self, node):
+        cdef pair[string, node_get_params] arg_pair
+        arg_pair.first = node
+        cdef vector[pair[string, node_get_params]] c_args
+        c_args.push_back(arg_pair)
+
+        with nogil:
+            c_rp = self.thisptr.node_get_program(c_args)
+
+        new_node = Node()
+        self.__convert_node_to_client_node(c_rp.node, new_node)
+        return new_node
 
     def traverse_props(self, init_args):
         cdef vector[pair[string, traverse_props_params]] c_args

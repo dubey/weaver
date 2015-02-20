@@ -36,6 +36,7 @@
 #include "node_prog/read_n_edges_program.h"
 #include "node_prog/edge_count_program.h"
 #include "node_prog/edge_get_program.h"
+#include "node_prog/node_get_program.h"
 #include "node_prog/clustering_program.h"
 #include "node_prog/two_neighborhood_program.h"
 #include "node_prog/traverse_with_props.h"
@@ -152,8 +153,6 @@ namespace node_prog
             new particular_node_program<reach_params, reach_node_state, reach_cache_value>(REACHABILITY, node_prog::reach_node_program) },
         { PATHLESS_REACHABILITY,
             new particular_node_program<pathless_reach_params, pathless_reach_node_state, Cache_Value_Base>(PATHLESS_REACHABILITY, node_prog::pathless_reach_node_program) },
-//        { DIJKSTRA,
-//           new particular_node_program<dijkstra_params, dijkstra_node_state, Cache_Value_Base>(DIJKSTRA, node_prog::dijkstra_node_program) },
         { CLUSTERING,
             new particular_node_program<clustering_params, clustering_node_state, Cache_Value_Base>(CLUSTERING, node_prog::clustering_node_program) },
         { TWO_NEIGHBORHOOD,
@@ -166,8 +165,11 @@ namespace node_prog
             new particular_node_program<edge_count_params, edge_count_state, Cache_Value_Base>(EDGE_COUNT, node_prog::edge_count_node_program) },
         { EDGE_GET,
             new particular_node_program<edge_get_params, edge_get_state, Cache_Value_Base>(EDGE_GET, node_prog::edge_get_node_program) },
+        { NODE_GET,
+            new particular_node_program<node_get_params, node_get_state, Cache_Value_Base>(NODE_GET, node_prog::node_get_node_program) },
         { TRAVERSE_PROPS,
             new particular_node_program<traverse_props_params, traverse_props_state, Cache_Value_Base>(TRAVERSE_PROPS, node_prog::traverse_props_node_program) },
     };
 }
-#endif //__NODE_PROG__
+
+#endif

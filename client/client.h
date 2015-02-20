@@ -30,10 +30,10 @@
 #include "node_prog/two_neighborhood_program.h"
 //#include "node_prog/dijkstra_program.h"
 #include "node_prog/read_node_props_program.h"
-#include "node_prog/read_edges_props_program.h"
 #include "node_prog/read_n_edges_program.h"
 #include "node_prog/edge_count_program.h"
 #include "node_prog/edge_get_program.h"
+#include "node_prog/node_get_program.h"
 #include "node_prog/traverse_with_props.h"
 
 namespace cl
@@ -71,10 +71,10 @@ namespace cl
             node_prog::two_neighborhood_params run_two_neighborhood_program(std::vector<std::pair<std::string, node_prog::two_neighborhood_params>> &initial_args);
             //node_prog::dijkstra_params run_dijkstra_program(std::vector<std::pair<std::string, node_prog::dijkstra_params>> &initial_args);
             node_prog::read_node_props_params read_node_props_program(std::vector<std::pair<std::string, node_prog::read_node_props_params>> &initial_args);
-            node_prog::read_edges_props_params read_edges_props_program(std::vector<std::pair<std::string, node_prog::read_edges_props_params>> &initial_args);
             node_prog::read_n_edges_params read_n_edges_program(std::vector<std::pair<std::string, node_prog::read_n_edges_params>> &initial_args);
             node_prog::edge_count_params edge_count_program(std::vector<std::pair<std::string, node_prog::edge_count_params>> &initial_args);
             node_prog::edge_get_params edge_get_program(std::vector<std::pair<std::string, node_prog::edge_get_params>> &initial_args);
+            node_prog::node_get_params node_get_program(std::vector<std::pair<std::string, node_prog::node_get_params>> &initial_args);
             node_prog::traverse_props_params traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args);
 
             void start_migration();

@@ -22,10 +22,10 @@
 #include "node_prog/pathless_reach_program.h"
 #include "node_prog/clustering_program.h"
 #include "node_prog/read_node_props_program.h"
-#include "node_prog/read_edges_props_program.h"
 #include "node_prog/read_n_edges_program.h"
 #include "node_prog/edge_count_program.h"
 #include "node_prog/edge_get_program.h"
+#include "node_prog/node_get_program.h"
 #include "node_prog/clustering_program.h"
 #include "node_prog/two_neighborhood_program.h"
 #include "node_prog/traverse_with_props.h"
@@ -232,10 +232,6 @@ message :: unpack_buffer(e::unpacker &unpacker, db::node &t)
                     val = unpack_single_node_state<node_prog::read_node_props_state>(unpacker);
                     break;
 
-                case node_prog::READ_EDGES_PROPS:
-                    val = unpack_single_node_state<node_prog::read_edges_props_state>(unpacker);
-                    break;
-
                 case node_prog::READ_N_EDGES:
                     val = unpack_single_node_state<node_prog::read_n_edges_state>(unpacker);
                     break;
@@ -246,6 +242,10 @@ message :: unpack_buffer(e::unpacker &unpacker, db::node &t)
 
                 case node_prog::EDGE_GET:
                     val = unpack_single_node_state<node_prog::edge_get_state>(unpacker);
+                    break;
+
+                case node_prog::NODE_GET:
+                    val = unpack_single_node_state<node_prog::node_get_state>(unpacker);
                     break;
 
                 case node_prog::TRAVERSE_PROPS:

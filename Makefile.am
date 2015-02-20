@@ -57,6 +57,7 @@ noinst_HEADERS+=	node_prog/base_classes.h \
 					node_prog/triangle_program.h \
 					node_prog/cache_response.h \
 					node_prog/edge_get_program.h \
+					node_prog/node_get_program.h \
 					node_prog/node.h \
 					node_prog/property.h \
 					node_prog/read_n_edges_program.h \
@@ -129,6 +130,7 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    node_prog/two_neighborhood_program.cc \
 		                    node_prog/edge_count_program.cc \
 		                    node_prog/edge_get_program.cc \
+		                    node_prog/node_get_program.cc \
 		                    node_prog/read_n_edges_program.cc \
 		                    node_prog/read_node_props_program.cc \
 		                    node_prog/traverse_with_props.cc \
@@ -195,6 +197,7 @@ weaver_shard_SOURCES=	common/ids.cc \
 		                node_prog/two_neighborhood_program.cc \
 		                node_prog/edge_count_program.cc \
 		                node_prog/edge_get_program.cc \
+                        node_prog/node_get_program.cc \
 		                node_prog/read_n_edges_program.cc \
 		                node_prog/read_node_props_program.cc \
 		                node_prog/traverse_with_props.cc \
@@ -230,6 +233,7 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 		                    node_prog/clustering_program.cc \
 		                    node_prog/edge_count_program.cc \
 		                    node_prog/edge_get_program.cc \
+		                    node_prog/node_get_program.cc \
 		                    node_prog/pathless_reach_program.cc \
 		                    node_prog/reach_program.cc \
 		                    node_prog/read_n_edges_program.cc \
