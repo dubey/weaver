@@ -409,7 +409,7 @@ namespace coordinator
                 }
 
                 message::message msg;
-                msg.prepare_message(message::NODE_PROG_FAIL, cp->req_id);
+                msg.prepare_message(message::NODE_PROG_RETRY, cp->req_id);
                 comm.send_to_client(cp->client, msg.buf);
                 delete cp;
             }

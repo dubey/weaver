@@ -329,9 +329,7 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
             break;
 
             case BUSYBEE_SUCCESS:
-            if (msg.unpack_message_type() == message::NODE_PROG_FAIL) {
-                uint64_t fail_req_id;
-                msg.unpack_message(message::NODE_PROG_FAIL, fail_req_id);
+            if (msg.unpack_message_type() == message::NODE_PROG_RETRY) {
                 retry = true;
             } else {
                 retry = false;
@@ -348,9 +346,15 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
 
     uint64_t ignore_req_id, ignore_vt_ptr;
     node_prog::prog_type ignore_type;
-    std::unique_ptr<ParamsType> toRet(new ParamsType());
-    msg.unpack_message(message::NODE_PROG_RETURN, ignore_type, ignore_req_id, ignore_vt_ptr, *toRet);
-    return std::move(toRet);
+    auto ret_status = msg.unpack_message_type();
+    if (ret_status == message::NODE_PROG_RETURN) {
+        std::unique_ptr<ParamsType> toRet(new ParamsType());
+        msg.unpack_message(message::NODE_PROG_RETURN, ignore_type, ignore_req_id, ignore_vt_ptr, *toRet);
+        return std::move(toRet);
+    } else {
+        assert(ret_status == message::NODE_PROG_NOTFOUND);
+        return nullptr;
+    }
 }
 
 node_prog::reach_params

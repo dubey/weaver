@@ -47,8 +47,10 @@ message :: to_string(const msg_type &t)
             return "NODE_PROG";
         case NODE_PROG_RETURN:
             return "NODE_PROG_RETURN";
-        case NODE_PROG_FAIL:
-            return "NODE_PROG_FAIL";
+        case NODE_PROG_RETRY:
+            return "NODE_PROG_RETRY";
+        case NODE_PROG_NOTFOUND:
+            return "NODE_PROG_NOTFOUND";
         case NODE_CONTEXT_FETCH:
             return "NODE_CONTEXT_FETCH";
         case NODE_CONTEXT_REPLY:
