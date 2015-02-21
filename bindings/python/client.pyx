@@ -252,7 +252,7 @@ cdef extern from 'node_prog/two_neighborhood_program.h' namespace 'node_prog':
         vector[pair[node_handle_t, string]] responses
 
 class TwoNeighborhoodParams:
-    def __init__(self, caching=False, cache_update=False, prop_key="", on_hop=0, outgoing=True, prev_node=None, responses=None):
+    def __init__(self, caching=False, cache_update=False, prop_key='', on_hop=0, outgoing=True, prev_node=None, responses=None):
         self._search_cache = caching;
         self.cache_update = cache_update;
         self.prop_key = prop_key
@@ -394,14 +394,14 @@ cdef class Client:
         edge = ''
         if node1 is None:
             if 'node1_alias' not in kwargs:
-                print("please provide either node handles or node aliases", file=sys.stderr)
+                print('please provide either node handles or node aliases', file=sys.stderr)
             else:
                 alias1 = kwargs['node1_alias']
         else:
             handle1 = node1
         if node2 is None:
             if 'node2_alias' not in kwargs:
-                print("please provide either node handles or node aliases", file=sys.stderr)
+                print('please provide either node handles or node aliases', file=sys.stderr)
             else:
                 alias2 = kwargs['node2_alias']
         else:
@@ -413,7 +413,7 @@ cdef class Client:
     def delete_node(self, handle=None, **kwargs):
         if handle is None:
             if 'alias' not in kwargs:
-                print("please provide either node handle or node alias", file=sys.stderr)
+                print('please provide either node handle or node alias', file=sys.stderr)
             else:
                 self.thisptr.delete_node('', kwargs['alias'])
         else:
@@ -429,11 +429,25 @@ cdef class Client:
 
     def set_node_property(self, key, value, node=None, **kwargs):
         if node is None and 'node_alias' not in kwargs:
-            print("please provide either node handle or node alias", file=sys.stderr)
+            print('please provide either node handle or node alias', file=sys.stderr)
         elif node is None:
             self.thisptr.set_node_property('', kwargs['node_alias'], key, value)
         else:
             self.thisptr.set_node_property(node, '', key, value)
+
+    def set_node_properties(self, properties, node=None, **kwargs):
+        alias = None
+        if 'node_alias' in kwargs:
+            alias = kwargs['node_alias']
+        if not isinstance(properties, dict):
+            print('properties should be a dictionary', file=sys.stderr)
+        else:
+            for k in properties:
+                if isinstance(properties[k], list):
+                    for v in properties[k]:
+                        self.set_node_property(k, v, node, node_alias=alias)
+                else:
+                    self.set_node_property(k, properties[k], node, node_alias=alias)
 
     def set_edge_property(self, edge, key, value, node=None, **kwargs):
         if node is None and 'node_alias' not in kwargs:
@@ -442,6 +456,20 @@ cdef class Client:
             self.thisptr.set_edge_property('', kwargs['node_alias'], edge, key, value)
         else:
             self.thisptr.set_edge_property(node, '', edge, key, value)
+
+    def set_edge_properties(self, edge, properties, node=None, **kwargs):
+        alias = None
+        if 'node_alias' in kwargs:
+            alias = kwargs['node_alias']
+        if not isinstance(properties, dict):
+            print('properties should be a dictionary', file=sys.stderr)
+        else:
+            for k in properties:
+                if isinstance(properties[k], list):
+                    for v in properties[k]:
+                        self.set_edge_property(edge, k, v, node, node_alias=alias)
+                else:
+                    self.set_edge_property(edge, k, properties[k], node, node_alias=alias)
 
     def add_alias(self, alias, node):
         self.thisptr.add_alias(alias, node)

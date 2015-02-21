@@ -33,7 +33,7 @@ assert c.aux_index()
 # 1. create node for user ayush
 c.begin_tx()
 c.create_node('ayush')
-c.set_node_property('type', 'user', 'ayush')
+c.set_node_properties({'type': 'user', 'age': '25'}, 'ayush')
 assert c.end_tx(), 'create node failed'
 
 # 2. create node for user egs
@@ -95,6 +95,11 @@ assert 'ayush' in return_nodes, 'traversal returned bad node handle'
 # 11. get node and check it is valid
 ad = c.get_node('ayush')
 assert 'ad688' in ad.aliases
+assert 'type' in ad.properties
+assert 'user' in ad.properties['type']
+assert 'age' in ad.properties
+assert '25' in ad.properties['age']
+assert 'e1' in ad.out_edges
 
 print 'Correctly executed 11 transactions of varying complexity, pass simple_test.'
 print 'Success, you have a working Weaver setup!'
