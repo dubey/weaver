@@ -335,31 +335,33 @@ cdef extern from 'client/client.h' namespace 'cl':
     cdef cppclass client:
         client(const char *coordinator, uint16_t port, const char *config_file)
 
-        void begin_tx()
-        string create_node(const string &handle, const vector[string] &aliases)
-        string create_edge(const string &handle, const string &node1, const string &node1_alias, const string &node2, const string &node2_alias)
-        void delete_node(const string &node, const string &alias)
-        void delete_edge(const string &edge, const string &node, const string &node_alias)
-        void set_node_property(const string &node, const string &alias, string key, string value)
-        void set_edge_property(const string &node, const string &alias, const string &edge, string key, string value)
-        void add_alias(const string &alias, const string &node)
+        bint begin_tx()
+        bint create_node(string &handle, const vector[string] &aliases)
+        bint create_edge(string &handle, const string &node1, const string &node1_alias, const string &node2, const string &node2_alias)
+        bint delete_node(const string &node, const string &alias)
+        bint delete_edge(const string &edge, const string &node, const string &node_alias)
+        bint set_node_property(const string &node, const string &alias, string key, string value)
+        bint set_edge_property(const string &node, const string &alias, const string &edge, string key, string value)
+        bint add_alias(const string &alias, const string &node)
         bint end_tx() nogil
-        reach_params run_reach_program(vector[pair[string, reach_params]] &initial_args) nogil
-        pathless_reach_params run_pathless_reach_program(vector[pair[string, pathless_reach_params]] &initial_args) nogil
-        clustering_params run_clustering_program(vector[pair[string, clustering_params]] &initial_args) nogil
-        two_neighborhood_params run_two_neighborhood_program(vector[pair[string, two_neighborhood_params]] &initial_args) nogil
-        #dijkstra_params run_dijkstra_program(vector[pair[string, dijkstra_params]] &initial_args) nogil
-        read_node_props_params read_node_props_program(vector[pair[string, read_node_props_params]] &initial_args) nogil
-        read_n_edges_params read_n_edges_program(vector[pair[string, read_n_edges_params]] &initial_args) nogil
-        edge_count_params edge_count_program(vector[pair[string, edge_count_params]] &initial_args) nogil
-        edge_get_params edge_get_program(vector[pair[string, edge_get_params]] &initial_args) nogil
-        node_get_params node_get_program(vector[pair[string, node_get_params]] &initial_args) nogil
-        traverse_props_params traverse_props_program(vector[pair[string, traverse_props_params]] &initial_args) nogil
+        bint run_reach_program(vector[pair[string, reach_params]] &initial_args, reach_params&) nogil
+        bint run_pathless_reach_program(vector[pair[string, pathless_reach_params]] &initial_args, pathless_reach_params&) nogil
+        bint run_clustering_program(vector[pair[string, clustering_params]] &initial_args, clustering_params&) nogil
+        bint run_two_neighborhood_program(vector[pair[string, two_neighborhood_params]] &initial_args, two_neighborhood_params&) nogil
+        bint read_node_props_program(vector[pair[string, read_node_props_params]] &initial_args, read_node_props_params&) nogil
+        bint read_n_edges_program(vector[pair[string, read_n_edges_params]] &initial_args, read_n_edges_params&) nogil
+        bint edge_count_program(vector[pair[string, edge_count_params]] &initial_args, edge_count_params&) nogil
+        bint edge_get_program(vector[pair[string, edge_get_params]] &initial_args, edge_get_params&) nogil
+        bint node_get_program(vector[pair[string, node_get_params]] &initial_args, node_get_params&) nogil
+        bint traverse_props_program(vector[pair[string, traverse_props_params]] &initial_args, traverse_props_params&) nogil
         void start_migration()
         void single_stream_migration()
         void exit_weaver()
         vector[uint64_t] get_node_count()
         bint aux_index()
+
+class WeaverError(Exception):
+    pass
 
 cdef class Client:
     cdef client *thisptr
@@ -378,69 +380,84 @@ cdef class Client:
         del self.thisptr
 
     def begin_tx(self):
-        self.thisptr.begin_tx()
+        if not self.thisptr.begin_tx():
+            raise WeaverError('no more than one concurrent transaction per client')
 
-    def create_node(self, handle, **kwargs):
+    def create_node(self, handle='', **kwargs):
+        cdef string cc_handle
         aliases = []
+        if handle != '':
+            cc_handle = handle
         if 'aliases' in kwargs:
             aliases = kwargs['aliases'].split(',')
-        return self.thisptr.create_node(handle, aliases)
+        if self.thisptr.create_node(cc_handle, aliases):
+            return str(cc_handle)
+        else:
+            raise WeaverError('no active transaction')
 
     def create_edge(self, node1=None, node2=None, handle=None, **kwargs):
         handle1 = ''
         handle2 = ''
         alias1 = ''
         alias2 = ''
-        edge = ''
+        cdef string cc_handle
         if node1 is None:
             if 'node1_alias' not in kwargs:
-                print('please provide either node handles or node aliases', file=sys.stderr)
+                raise WeaverError('provide either node handle or node alias')
             else:
                 alias1 = kwargs['node1_alias']
         else:
             handle1 = node1
         if node2 is None:
             if 'node2_alias' not in kwargs:
-                print('please provide either node handles or node aliases', file=sys.stderr)
+                raise WeaverError('provide either node handle or node alias')
             else:
                 alias2 = kwargs['node2_alias']
         else:
             handle2 = node2
         if handle is not None:
-            edge = handle
-        return self.thisptr.create_edge(edge, handle1, alias1, handle2, alias2)
+            cc_handle = handle
+        if self.thisptr.create_edge(cc_handle, handle1, alias1, handle2, alias2):
+            return str(cc_handle)
+        else:
+            raise WeaverError('no active transaction')
 
-    def delete_node(self, handle=None, **kwargs):
+    def delete_node(self, handle='', **kwargs):
+        alias = ''
         if handle is None:
             if 'alias' not in kwargs:
-                print('please provide either node handle or node alias', file=sys.stderr)
+                raise WeaverError('provide either node handle or node alias')
             else:
-                self.thisptr.delete_node('', kwargs['alias'])
-        else:
-            self.thisptr.delete_node(handle, '')
+                alias = kwargs['alias']
+        if not self.thisptr.delete_node(handle, alias):
+            raise WeaverError('no active transaction')
 
-    def delete_edge(self, edge, node=None, **kwargs):
-        if node is None and 'node_alias' not in kwargs:
-            self.thisptr.delete_edge(edge, '', '')
-        elif node is None:
-            self.thisptr.delete_edge(edge, '', kwargs['node_alias'])
-        else:
-            self.thisptr.delete_edge(edge, node, '')
-
-    def set_node_property(self, key, value, node=None, **kwargs):
-        if node is None and 'node_alias' not in kwargs:
-            print('please provide either node handle or node alias', file=sys.stderr)
-        elif node is None:
-            self.thisptr.set_node_property('', kwargs['node_alias'], key, value)
-        else:
-            self.thisptr.set_node_property(node, '', key, value)
-
-    def set_node_properties(self, properties, node=None, **kwargs):
-        alias = None
-        if 'node_alias' in kwargs:
+    def delete_edge(self, edge, node='', **kwargs):
+        alias = ''
+        if node == '' and 'node_alias' in kwargs:
             alias = kwargs['node_alias']
+        if not self.thisptr.delete_edge(edge, node, alias):
+            raise WeaverError('no active transaction')
+
+    def set_node_property(self, key, value, node='', **kwargs):
+        alias = ''
+        if node == '':
+            if 'node_alias' not in kwargs:
+                raise WeaverError('provide either node handle or node alias')
+            else:
+                alias = kwargs['node_alias']
+        if not self.thisptr.set_node_property(node, alias, key, value):
+            raise WeaverError('no active transaction')
+
+    def set_node_properties(self, properties, node='', **kwargs):
+        alias = ''
+        if node == '':
+            if 'node_alias' not in kwargs:
+                raise WeaverError('provide either node handle or node alias')
+            else:
+                alias = kwargs['node_alias']
         if not isinstance(properties, dict):
-            print('properties should be a dictionary', file=sys.stderr)
+            raise WeaverError('properties should be a dictionary')
         else:
             for k in properties:
                 if isinstance(properties[k], list):
@@ -449,20 +466,19 @@ cdef class Client:
                 else:
                     self.set_node_property(k, properties[k], node, node_alias=alias)
 
-    def set_edge_property(self, edge, key, value, node=None, **kwargs):
-        if node is None and 'node_alias' not in kwargs:
-            self.thisptr.set_edge_property('', '', edge, key, value)
-        elif node is None:
-            self.thisptr.set_edge_property('', kwargs['node_alias'], edge, key, value)
-        else:
-            self.thisptr.set_edge_property(node, '', edge, key, value)
+    def set_edge_property(self, edge, key, value, node='', **kwargs):
+        alias = ''
+        if node == '' and 'node_alias' in kwargs:
+            alias = kwargs['node_alias']
+        if not self.thisptr.set_edge_property(node, alias, edge, key, value):
+            raise WeaverError('no active transaction')
 
-    def set_edge_properties(self, edge, properties, node=None, **kwargs):
-        alias = None
+    def set_edge_properties(self, edge, properties, node='', **kwargs):
+        alias = ''
         if 'node_alias' in kwargs:
             alias = kwargs['node_alias']
         if not isinstance(properties, dict):
-            print('properties should be a dictionary', file=sys.stderr)
+            raise WeaverError('properties should be a dictionary')
         else:
             for k in properties:
                 if isinstance(properties[k], list):
@@ -472,13 +488,15 @@ cdef class Client:
                     self.set_edge_property(edge, k, properties[k], node, node_alias=alias)
 
     def add_alias(self, alias, node):
-        self.thisptr.add_alias(alias, node)
+        if not self.thisptr.add_alias(alias, node):
+            raise WeaverError('add_alias transaction error')
 
     def end_tx(self):
         cdef bint ret
         with nogil:
             ret = self.thisptr.end_tx()
-        return ret
+        if not ret:
+            raise WeaverError('transaction commit error')
 
     def run_reach_program(self, init_args):
         cdef vector[pair[string, reach_params]] c_args
@@ -497,8 +515,15 @@ cdef class Client:
             for p in rp[1].edge_props:
                 arg_pair.second.edge_props.push_back(p)
             c_args.push_back(arg_pair)
+
+        cdef reach_params c_rp
+        cdef bint success
         with nogil:
-            c_rp = self.thisptr.run_reach_program(c_args)
+            success = self.thisptr.run_reach_program(c_args, c_rp)
+
+        if not success:
+            raise WeaverError('node prog error')
+
         foundpath = []
         for rn in c_rp.path:
             foundpath.append(rn.handle)
@@ -521,8 +546,15 @@ cdef class Client:
             for p in rp[1].edge_props:
                 arg_pair.second.edge_props.push_back(p)
             c_args.push_back(arg_pair)
+
+        cdef pathless_reach_params c_rp
+        cdef bint success
         with nogil:
-            c_rp = self.thisptr.run_pathless_reach_program(c_args)
+            success = self.thisptr.run_pathless_reach_program(c_args, c_rp)
+
+        if not success:
+            raise WeaverError('node prog error')
+
         response = PathlessReachParams(reachable=c_rp.reachable)
         return response
 
@@ -537,9 +569,16 @@ cdef class Client:
             arg_pair.second.is_center = cp[1].is_center
             arg_pair.second.outgoing = cp[1].outgoing
             c_args.push_back(arg_pair)
+
+        cdef clustering_params c_rp
+        cdef bint success
         with nogil:
-            c_cp = self.thisptr.run_clustering_program(c_args)
-        response = ClusteringParams(clustering_coeff=c_cp.clustering_coeff)
+            success = self.thisptr.run_clustering_program(c_args, c_rp)
+
+        if not success:
+            raise WeaverError('node prog error')
+
+        response = ClusteringParams(clustering_coeff=c_rp.clustering_coeff)
         return response
 
     def run_two_neighborhood_program(self, init_args):
@@ -555,8 +594,15 @@ cdef class Client:
             arg_pair.second.outgoing = rp[1].outgoing
             arg_pair.second.prev_node = coordinator
             c_args.push_back(arg_pair)
+
+        cdef two_neighborhood_params c_rp
+        cdef bint success
         with nogil:
-            c_rp = self.thisptr.run_two_neighborhood_program(c_args)
+            success = self.thisptr.run_two_neighborhood_program(c_args, c_rp)
+
+        if not success:
+            raise WeaverError('node prog error')
+
         response = TwoNeighborhoodParams(responses = c_rp.responses)
         return response
 
@@ -568,8 +614,15 @@ cdef class Client:
             arg_pair.first = rp[0]
             arg_pair.second.keys = rp[1].keys
             c_args.push_back(arg_pair)
+
+        cdef read_node_props_params c_rp
+        cdef bint success
         with nogil:
-            c_rp = self.thisptr.read_node_props_program(c_args)
+            success = self.thisptr.read_node_props_program(c_args, c_rp)
+
+        if not success:
+            raise WeaverError('node prog error')
+
         response = ReadNodePropsParams(node_props=c_rp.node_props)
         return response
 
@@ -585,8 +638,15 @@ cdef class Client:
             for p in rp[1].edges_props:
                 arg_pair.second.edges_props.push_back(p)
             c_args.push_back(arg_pair)
+
+        cdef read_n_edges_params c_rp
+        cdef bint success
         with nogil:
-            c_rp = self.thisptr.read_n_edges_program(c_args)
+            success = self.thisptr.read_n_edges_program(c_args, c_rp)
+
+        if not success:
+            raise WeaverError('node prog error')
+
         response = ReadNEdgesParams(return_edges=c_rp.return_edges)
         return response
 
@@ -601,8 +661,15 @@ cdef class Client:
             for p in rp[1].edges_props:
                 arg_pair.second.edges_props.push_back(p)
             c_args.push_back(arg_pair)
+
+        cdef edge_count_params c_rp
+        cdef bint success
         with nogil:
-            c_rp = self.thisptr.edge_count_program(c_args)
+            success = self.thisptr.edge_count_program(c_args, c_rp)
+
+        if not success:
+            raise WeaverError('node prog error')
+
         response = EdgeCountParams(edge_count=c_rp.edge_count)
         return response
 
@@ -636,8 +703,13 @@ cdef class Client:
         cdef vector[pair[string, edge_get_params]] c_args
         c_args.push_back(arg_pair)
 
+        cdef edge_get_params c_rp
+        cdef bint success
         with nogil:
-            c_rp = self.thisptr.edge_get_program(c_args)
+            success = self.thisptr.edge_get_program(c_args, c_rp)
+
+        if not success:
+            raise WeaverError('node prog error')
 
         response = []
         cdef vector[edge].iterator resp_iter = c_rp.response_edges.begin()
@@ -653,8 +725,7 @@ cdef class Client:
         if len(response) == 1:
             return response[0]
         else:
-            print('edge not found or some other error', file=sys.stderr)
-            return Edge()
+            raise WeaverError('edge not found or some other error')
 
     cdef __convert_node_to_client_node(self, node c_node, py_node):
         py_node.handle = str(c_node.handle)
@@ -676,8 +747,13 @@ cdef class Client:
         cdef vector[pair[string, node_get_params]] c_args
         c_args.push_back(arg_pair)
 
+        cdef node_get_params c_rp
+        cdef bint success
         with nogil:
-            c_rp = self.thisptr.node_get_program(c_args)
+            success = self.thisptr.node_get_program(c_args, c_rp)
+
+        if not success:
+            raise WeaverError('node prog error')
 
         new_node = Node()
         self.__convert_node_to_client_node(c_rp.node, new_node)
@@ -716,8 +792,15 @@ cdef class Client:
                     props.push_back(p)
                 arg_pair.second.edge_props.push_back(props)
             c_args.push_back(arg_pair)
+
+        cdef traverse_props_params c_rp
+        cdef bint success
         with nogil:
-            c_rp = self.thisptr.traverse_props_program(c_args)
+            success = self.thisptr.traverse_props_program(c_args, c_rp)
+
+        if not success:
+            raise WeaverError('node prog error')
+
         response = TraversePropsParams()
         for n in c_rp.return_nodes:
             response.return_nodes.append(n)

@@ -53,29 +53,28 @@ namespace cl
             bool check_active_tx();
 
         public:
-            void begin_tx();
-            std::string create_node(const std::string &handle, const std::vector<std::string> &aliases);
-            std::string create_edge(const std::string &handle, const std::string &node1, const std::string &node1_alias, const std::string &node2, const std::string &node2_alias);
-            void delete_node(const std::string &node, const std::string &alias);
-            void delete_edge(const std::string &edge, const std::string &node, const std::string &node_alias);
-            void set_node_property(const std::string &node, const std::string &alias, std::string key, std::string value);
-            void set_edge_property(const std::string &node, const std::string &alias, const std::string &edge, std::string key, std::string value);
-            void add_alias(const std::string &alias, const std::string &node);
+            bool begin_tx();
+            bool create_node(std::string &handle, const std::vector<std::string> &aliases);
+            bool create_edge(std::string &handle, const std::string &node1, const std::string &node1_alias, const std::string &node2, const std::string &node2_alias);
+            bool delete_node(const std::string &node, const std::string &alias);
+            bool delete_edge(const std::string &edge, const std::string &node, const std::string &node_alias);
+            bool set_node_property(const std::string &node, const std::string &alias, std::string key, std::string value);
+            bool set_edge_property(const std::string &node, const std::string &alias, const std::string &edge, std::string key, std::string value);
+            bool add_alias(const std::string &alias, const std::string &node);
             bool end_tx();
 
             template <typename ParamsType>
             std::unique_ptr<ParamsType> run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<std::string, ParamsType>> &initial_args);
-            node_prog::reach_params run_reach_program(std::vector<std::pair<std::string, node_prog::reach_params>> &initial_args);
-            node_prog::pathless_reach_params run_pathless_reach_program(std::vector<std::pair<std::string, node_prog::pathless_reach_params>> &initial_args);
-            node_prog::clustering_params run_clustering_program(std::vector<std::pair<std::string, node_prog::clustering_params>> &initial_args);
-            node_prog::two_neighborhood_params run_two_neighborhood_program(std::vector<std::pair<std::string, node_prog::two_neighborhood_params>> &initial_args);
-            //node_prog::dijkstra_params run_dijkstra_program(std::vector<std::pair<std::string, node_prog::dijkstra_params>> &initial_args);
-            node_prog::read_node_props_params read_node_props_program(std::vector<std::pair<std::string, node_prog::read_node_props_params>> &initial_args);
-            node_prog::read_n_edges_params read_n_edges_program(std::vector<std::pair<std::string, node_prog::read_n_edges_params>> &initial_args);
-            node_prog::edge_count_params edge_count_program(std::vector<std::pair<std::string, node_prog::edge_count_params>> &initial_args);
-            node_prog::edge_get_params edge_get_program(std::vector<std::pair<std::string, node_prog::edge_get_params>> &initial_args);
-            node_prog::node_get_params node_get_program(std::vector<std::pair<std::string, node_prog::node_get_params>> &initial_args);
-            node_prog::traverse_props_params traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args);
+            bool run_reach_program(std::vector<std::pair<std::string, node_prog::reach_params>> &initial_args, node_prog::reach_params&);
+            bool run_pathless_reach_program(std::vector<std::pair<std::string, node_prog::pathless_reach_params>> &initial_args, node_prog::pathless_reach_params&);
+            bool run_clustering_program(std::vector<std::pair<std::string, node_prog::clustering_params>> &initial_args, node_prog::clustering_params&);
+            bool run_two_neighborhood_program(std::vector<std::pair<std::string, node_prog::two_neighborhood_params>> &initial_args, node_prog::two_neighborhood_params&);
+            bool read_node_props_program(std::vector<std::pair<std::string, node_prog::read_node_props_params>> &initial_args, node_prog::read_node_props_params&);
+            bool read_n_edges_program(std::vector<std::pair<std::string, node_prog::read_n_edges_params>> &initial_args, node_prog::read_n_edges_params&);
+            bool edge_count_program(std::vector<std::pair<std::string, node_prog::edge_count_params>> &initial_args, node_prog::edge_count_params&);
+            bool edge_get_program(std::vector<std::pair<std::string, node_prog::edge_get_params>> &initial_args, node_prog::edge_get_params&);
+            bool node_get_program(std::vector<std::pair<std::string, node_prog::node_get_params>> &initial_args, node_prog::node_get_params&);
+            bool traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args, node_prog::traverse_props_params&);
 
             void start_migration();
             void single_stream_migration();

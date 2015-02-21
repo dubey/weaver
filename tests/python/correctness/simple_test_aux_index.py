@@ -34,13 +34,13 @@ assert c.aux_index()
 c.begin_tx()
 c.create_node('ayush')
 c.set_node_properties({'type': 'user', 'age': '25'}, 'ayush')
-assert c.end_tx(), 'create node failed'
+c.end_tx()
 
 # 2. create node for user egs
 c.begin_tx()
 c.create_node('egs')
 c.set_node_property('type', 'user', 'egs')
-assert c.end_tx(), 'create node failed'
+c.end_tx()
 
 # 3. ayush follows egs
 c.begin_tx()
@@ -48,7 +48,7 @@ c.create_edge('ayush', 'egs', 'e1')
 c.set_edge_property(edge='e1', key='type', value='follows')
 c.create_edge('egs', 'ayush', 'e2')
 c.set_edge_property(edge='e2', key='type', value='followed_by')
-assert c.end_tx(), 'tx fail, something is wrong'
+c.end_tx()
 
 # 4. add a post and restrict visibility to followers only
 c.begin_tx()
@@ -57,13 +57,13 @@ c.set_node_property('type', 'post', 'post')
 c.set_node_property('visibility', 'followers', 'post')
 e3 = c.create_edge('egs', 'post')
 c.set_edge_property(edge=e3, key='type', value='posted')
-assert c.end_tx(), 'tx fail, something is wrong'
+c.end_tx()
 
 # 5. 'like' the post
 c.begin_tx()
 e4 = c.create_edge('post', 'ayush')
 c.set_edge_property(edge=e4, key='type', value='liked_by')
-assert c.end_tx(), 'create edge failed'
+c.end_tx()
 
 # 6. list all the people who like egs's post
 return_nodes = c.traverse('egs', {'type': 'user'}).out_edge({'type': 'posted'}).node({'type': 'post'}).out_edge({'type': 'liked_by'}).node({'type': 'user'}).execute()
@@ -73,18 +73,27 @@ assert 'ayush' in return_nodes, 'traversal returned bad node handle'
 # 7. try to create node with same handle as before
 c.begin_tx()
 c.create_node('ayush')
-assert not c.end_tx(), 'create node passed'
+try:
+    c.end_tx()
+    assert False, 'create node passed'
+except client.WeaverError:
+    pass
+
 
 # 8. try to create edge with same handle as before
 c.begin_tx()
 c.create_edge('ayush', 'egs', 'e1')
-assert not c.end_tx(), 'create edge passed'
+try:
+    c.end_tx()
+    assert False, 'create edge passed'
+except client.WeaverError:
+    pass
 
 # 9. add auxiliary handles to nodes
 c.begin_tx()
 c.add_alias('ad688', 'ayush')
 c.add_alias('el33th4x0r', 'egs')
-assert c.end_tx(), 'add aux handles'
+c.end_tx()
 
 # 10. list all the people who like egs's post
 # this time with aliases instead of handles

@@ -58,13 +58,15 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     comm.reset(new cl::comm_wrapper(myid, *m_sm.config()));
 }
 
-void
+bool
 client :: begin_tx()
 {
     if (cur_tx_id != UINT64_MAX) {
         WDEBUG << "only one concurrent transaction per client, currently processing " << cur_tx_id << std::endl;
+        return false;
     } else {
         cur_tx_id = ++tx_id_ctr;
+        return true;
     }
 }
 
@@ -82,60 +84,57 @@ client :: check_active_tx()
 #define CHECK_AUX_INDEX \
     if (!AuxIndex) { \
         WDEBUG << "Cannot access edge by edge_handle without auxiliary indexing turned on.  See weaver.yaml config file." << std::endl; \
-        return; \
+        return false; \
     }
 
-std::string
-client :: create_node(const std::string &handle, const std::vector<std::string> &aliases)
+bool
+client :: create_node(std::string &handle, const std::vector<std::string> &aliases)
 {
     if (!check_active_tx()) {
-        return "";
+        return false;
     }
 
     std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
     upd->type = transaction::NODE_CREATE_REQ;
     if (handle == "") {
-        upd->handle = generate_handle();
-    } else {
-        upd->handle = handle;
+        handle = generate_handle();
     }
+    upd->handle = handle;
     cur_tx.emplace_back(upd);
-    auto new_node = upd->handle;
 
     for (const std::string &a: aliases) {
-        add_alias(a, new_node);
+        add_alias(a, upd->handle);
     }
 
-    return new_node;
+    return true;
 }
 
-std::string
-client :: create_edge(const std::string &handle, const std::string &node1, const std::string &node1_alias, const std::string &node2, const std::string &node2_alias)
+bool
+client :: create_edge(std::string &handle, const std::string &node1, const std::string &node1_alias, const std::string &node2, const std::string &node2_alias)
 {
     if (!check_active_tx()) {
-        return "";
+        return false;
     }
 
     std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
     upd->type = transaction::EDGE_CREATE_REQ;
     if (handle == "") {
-        upd->handle = generate_handle();
-    } else {
-        upd->handle = handle;
+        handle = generate_handle();
     }
+    upd->handle = handle;
     upd->handle1 = node1;
     upd->handle2 = node2;
     upd->alias1 = node1_alias;
     upd->alias2 = node2_alias;
     cur_tx.emplace_back(upd);
-    return upd->handle;
+    return true;
 }
 
-void
+bool
 client :: delete_node(const std::string &node, const std::string &alias)
 {
     if (!check_active_tx()) {
-        return;
+        return false;
     }
 
     std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
@@ -143,13 +142,15 @@ client :: delete_node(const std::string &node, const std::string &alias)
     upd->handle1 = node;
     upd->alias1 = alias;
     cur_tx.emplace_back(upd);
+
+    return true;
 }
 
-void
+bool
 client :: delete_edge(const std::string &edge, const std::string &node, const std::string &alias)
 {
     if (!check_active_tx()) {
-        return;
+        return false;
     }
 
     std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
@@ -158,13 +159,15 @@ client :: delete_edge(const std::string &edge, const std::string &node, const st
     upd->handle2 = node;
     upd->alias2 = alias;
     cur_tx.emplace_back(upd);
+
+    return true;
 }
 
-void
+bool
 client :: set_node_property(const std::string &node, const std::string &alias, std::string key, std::string value)
 {
     if (!check_active_tx()) {
-        return;
+        return false;
     }
 
     std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
@@ -174,14 +177,16 @@ client :: set_node_property(const std::string &node, const std::string &alias, s
     upd->key.reset(new std::string(std::move(key)));
     upd->value.reset(new std::string(std::move(value)));
     cur_tx.emplace_back(upd);
+
+    return true;
 }
 
-void
+bool
 client :: set_edge_property(const std::string &node, const std::string &alias, const std::string &edge,
     std::string key, std::string value)
 {
     if (!check_active_tx()) {
-        return;
+        return false;
     }
 
     std::shared_ptr<pending_update> upd = std::make_shared<pending_update>();
@@ -192,13 +197,15 @@ client :: set_edge_property(const std::string &node, const std::string &alias, c
     upd->key.reset(new std::string(std::move(key)));
     upd->value.reset(new std::string(std::move(value)));
     cur_tx.emplace_back(upd);
+
+    return true;
 }
 
-void
+bool
 client :: add_alias(const std::string &alias, const std::string &node)
 {
     if (!check_active_tx()) {
-        return;
+        return false;
     }
     CHECK_AUX_INDEX;
 
@@ -207,6 +214,8 @@ client :: add_alias(const std::string &alias, const std::string &node)
     upd->handle = alias;
     upd->handle1 = node;
     cur_tx.emplace_back(upd);
+
+    return true;
 }
 
 #undef CHECK_AUX_INDEX
@@ -357,71 +366,82 @@ client :: run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pa
     }
 }
 
-node_prog::reach_params
-client :: run_reach_program(std::vector<std::pair<std::string, node_prog::reach_params>> &initial_args)
+#define SPECIFIC_NODE_PROG(type) \
+    auto ret = run_node_program(type, initial_args); \
+    if (ret) { \
+        return_param = *ret; \
+        return true; \
+    } else { \
+        return false; \
+    }
+
+bool
+client :: run_reach_program(std::vector<std::pair<std::string, node_prog::reach_params>> &initial_args, node_prog::reach_params &return_param)
 {
-    return *run_node_program(node_prog::REACHABILITY, initial_args);
+    SPECIFIC_NODE_PROG(node_prog::REACHABILITY);
 }
 
-node_prog::pathless_reach_params
-client :: run_pathless_reach_program(std::vector<std::pair<std::string, node_prog::pathless_reach_params>> &initial_args)
+bool
+client :: run_pathless_reach_program(std::vector<std::pair<std::string, node_prog::pathless_reach_params>> &initial_args, node_prog::pathless_reach_params &return_param)
 {
-    return *run_node_program(node_prog::PATHLESS_REACHABILITY, initial_args);
+    SPECIFIC_NODE_PROG(node_prog::PATHLESS_REACHABILITY);
 }
 
-node_prog::clustering_params
-client :: run_clustering_program(std::vector<std::pair<std::string, node_prog::clustering_params>> &initial_args)
+bool
+client :: run_clustering_program(std::vector<std::pair<std::string, node_prog::clustering_params>> &initial_args, node_prog::clustering_params &return_param)
 {
-    return *run_node_program(node_prog::CLUSTERING, initial_args);
+    SPECIFIC_NODE_PROG(node_prog::CLUSTERING);
 }
 
-node_prog::two_neighborhood_params
-client :: run_two_neighborhood_program(std::vector<std::pair<std::string, node_prog::two_neighborhood_params>> &initial_args)
+bool
+client :: run_two_neighborhood_program(std::vector<std::pair<std::string, node_prog::two_neighborhood_params>> &initial_args, node_prog::two_neighborhood_params &return_param)
 {
-    return *run_node_program(node_prog::TWO_NEIGHBORHOOD, initial_args);
+    SPECIFIC_NODE_PROG(node_prog::TWO_NEIGHBORHOOD);
 }
 
-node_prog::read_node_props_params
-client :: read_node_props_program(std::vector<std::pair<std::string, node_prog::read_node_props_params>> &initial_args)
+bool
+client :: read_node_props_program(std::vector<std::pair<std::string, node_prog::read_node_props_params>> &initial_args, node_prog::read_node_props_params &return_param)
 {
-    return *run_node_program(node_prog::READ_NODE_PROPS, initial_args);
+    SPECIFIC_NODE_PROG(node_prog::READ_NODE_PROPS);
 }
 
-node_prog::read_n_edges_params
-client :: read_n_edges_program(std::vector<std::pair<std::string, node_prog::read_n_edges_params>> &initial_args)
+bool
+client :: read_n_edges_program(std::vector<std::pair<std::string, node_prog::read_n_edges_params>> &initial_args, node_prog::read_n_edges_params &return_param)
 {
-    return *run_node_program(node_prog::READ_N_EDGES, initial_args);
+    SPECIFIC_NODE_PROG(node_prog::READ_N_EDGES);
 }
 
-node_prog::edge_count_params
-client :: edge_count_program(std::vector<std::pair<std::string, node_prog::edge_count_params>> &initial_args)
+bool
+client :: edge_count_program(std::vector<std::pair<std::string, node_prog::edge_count_params>> &initial_args, node_prog::edge_count_params &return_param)
 {
-    return *run_node_program(node_prog::EDGE_COUNT, initial_args);
+    SPECIFIC_NODE_PROG(node_prog::EDGE_COUNT);
 }
 
-node_prog::edge_get_params
-client :: edge_get_program(std::vector<std::pair<std::string, node_prog::edge_get_params>> &initial_args)
+bool
+client :: edge_get_program(std::vector<std::pair<std::string, node_prog::edge_get_params>> &initial_args, node_prog::edge_get_params &return_param)
 {
-    return *run_node_program(node_prog::EDGE_GET, initial_args);
+    SPECIFIC_NODE_PROG(node_prog::EDGE_GET);
 }
 
-node_prog::node_get_params
-client :: node_get_program(std::vector<std::pair<std::string, node_prog::node_get_params>> &initial_args)
+bool
+client :: node_get_program(std::vector<std::pair<std::string, node_prog::node_get_params>> &initial_args, node_prog::node_get_params &return_param)
 {
-    return *run_node_program(node_prog::NODE_GET, initial_args);
+    SPECIFIC_NODE_PROG(node_prog::NODE_GET);
 }
 
-node_prog::traverse_props_params
-client :: traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args)
+bool
+client :: traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args, node_prog::traverse_props_params &return_param)
 {
     for (auto &p: initial_args) {
         if (p.second.node_props.size() != (p.second.edge_props.size()+1)) {
             WDEBUG << "bad params, #node_props should be (#edge_props + 1)" << std::endl;
-            return node_prog::traverse_props_params();
+            return false;
         }
     }
-    return *run_node_program(node_prog::TRAVERSE_PROPS, initial_args);
+    SPECIFIC_NODE_PROG(node_prog::TRAVERSE_PROPS);
 }
+
+#undef SPECIFIC_NODE_PROG
 
 void
 client :: start_migration()

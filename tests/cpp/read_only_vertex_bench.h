@@ -41,12 +41,12 @@ exec_reads(std::vector<std::string> *reqs,
     cond->broadcast();
     cond->unlock();
 
-    node_prog::read_node_props_params rp;
+    node_prog::read_node_props_params rp, return_params;
 
     uint64_t cnt = 0;
     for (const std::string &h: *reqs) {
         std::vector<std::pair<std::string, node_prog::read_node_props_params>> args(1, std::make_pair(h, rp));
-        cl->read_node_props_program(args);
+        cl->read_node_props_program(args, return_params);
         //if (++cnt % 100 == 0) {
         //    std::cout << "client " << tid << " completed " << cnt << std::endl;
         //}
