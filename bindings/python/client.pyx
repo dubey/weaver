@@ -391,7 +391,7 @@ cdef class Client:
         if handle != '':
             cc_handle = handle
         if 'aliases' in kwargs:
-            aliases = kwargs['aliases'].split(',')
+            aliases = kwargs['aliases']
         if self.thisptr.create_node(cc_handle, aliases):
             return str(cc_handle)
         else:
@@ -693,6 +693,13 @@ cdef class Client:
         self.__convert_vector_props_to_dict(c_edge.properties, py_edge.properties)
 
     cdef get_edges(self, nbrs=None, edges=None, node=''):
+        if node == '':
+            if edges is None:
+                raise WeaverError('provide one of node handle, node alias, or edge handle')
+            elif not isinstance(edges, list):
+                raise WeaverError('edges should be list')
+            else:
+                node = edges[0]
         cdef pair[string, edge_get_params] arg_pair
         arg_pair.first = node
         if nbrs is not None:
@@ -723,6 +730,8 @@ cdef class Client:
         return response
 
     def get_edge(self, edge, node=''):
+        if node == '':
+            node = edge
         response = self.get_edges(nbrs=None, edges=[edge], node=node)
         assert(len(response) < 2)
         if len(response) == 1:

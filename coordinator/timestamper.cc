@@ -80,6 +80,16 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
     std::unordered_map<std::string, db::node*> idx_add;
     std::unordered_map<node_handle_t, uint64_t>::iterator find_iter; 
 
+#define CHECK_LOC(handle, loc) \
+    find_iter = put_map.find(handle); \
+    if (find_iter == put_map.end()) { \
+        loc = UINT64_MAX; \
+        get_set.emplace(handle); \
+    } else { \
+        loc = find_iter->second; \
+    }
+
+    bool error = false;
     for (std::shared_ptr<transaction::pending_update> upd: tx->writes) {
         switch (upd->type) {
 
@@ -90,18 +100,8 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
                 break;
 
             case transaction::EDGE_CREATE_REQ:
-                if ((find_iter = put_map.find(upd->handle1)) == put_map.end()) {
-                    upd->loc1 = UINT64_MAX;
-                    get_set.insert(upd->handle1);
-                } else {
-                    upd->loc1 = find_iter->second;
-                }
-                if ((find_iter = put_map.find(upd->handle2)) == put_map.end()) {
-                    upd->loc2 = UINT64_MAX;
-                    get_set.insert(upd->handle2);
-                } else {
-                    upd->loc2 = find_iter->second;
-                }
+                CHECK_LOC(upd->handle1, upd->loc1);
+                CHECK_LOC(upd->handle2, upd->loc2);
 
                 if (AuxIndex) {
                     idx_add.emplace(upd->handle, nullptr);
@@ -110,12 +110,7 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
 
             case transaction::NODE_DELETE_REQ:
             case transaction::NODE_SET_PROPERTY:
-                if ((find_iter = put_map.find(upd->handle1)) == put_map.end()) {
-                    upd->loc1 = UINT64_MAX;
-                    get_set.insert(upd->handle1);
-                } else {
-                    upd->loc1 = find_iter->second;
-                }
+                CHECK_LOC(upd->handle1, upd->loc1);
                 upd->loc2 = 0;
                 if (upd->type == transaction::NODE_DELETE_REQ) {
                     del_set.emplace(upd->handle1);
@@ -128,30 +123,31 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
                     idx_get.emplace(upd->handle1);
                     upd->loc1 = UINT64_MAX;
                 } else {
-                    if ((find_iter = put_map.find(upd->handle2)) == put_map.end()) {
-                        upd->loc1 = UINT64_MAX;
-                        get_set.insert(upd->handle2);
-                    } else {
-                        upd->loc1 = find_iter->second;
-                    }
+                    CHECK_LOC(upd->handle2, upd->loc1);
                 }
                 upd->loc2 = 0;
                 break;
 
             case transaction::ADD_AUX_INDEX:
-                assert(AuxIndex);
-                get_set.insert(upd->handle1);
-                upd->loc1 = UINT64_MAX;
+                if (!AuxIndex) {
+                    error = true;
+                    WDEBUG << "cannot add alias with auxiliary indexing turned off, check weaver.yaml file" << std::endl;
+                    break;
+                }
+                CHECK_LOC(upd->handle1, upd->loc1);
                 break;
 
             default:
                 WDEBUG << "bad type" << std::endl;
         }
+
+        if (error) {
+            break;
+        }
     }
 
     uint64_t sender = tx->sender;
     bool ready = false;
-    bool error = false;
 
     while (!ready && !error) {
         vts->clk_rw_mtx.wrlock();

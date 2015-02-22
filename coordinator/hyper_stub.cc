@@ -106,6 +106,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         }
         if (!indices.empty()) {
             if (!get_indices(indices, true)) {
+                WDEBUG << "get_indices" << std::endl;
                 ERROR_FAIL;
             }
         }
@@ -121,6 +122,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     // get all nodes from Hyperdex (we need at least last upd clk)
     for (const node_handle_t &h: get_set) {
         if (put_map.find(h) != put_map.end()) {
+            WDEBUG << "logical error, get node already in put map " << h << std::endl;
             ERROR_FAIL;
         }
         old_nodes[h] = new db::node(h, UINT64_MAX, dummy_clk, &dummy_mtx);
@@ -131,6 +133,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         }
     }
     if (!get_nodes(old_nodes, true)) {
+        WDEBUG << "get nodes" << std::endl;
         ERROR_FAIL;
     }
 
@@ -158,6 +161,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         if (node_iter == old_nodes.end()) { \
             node_iter = new_nodes.find(handle); \
             if (node_iter == new_nodes.end()) { \
+                WDEBUG << "check loc, node = " << handle << std::endl; \
                 ERROR_FAIL; \
             } \
         } \
@@ -169,6 +173,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     if (node_iter == old_nodes.end()) { \
         node_iter = new_nodes.find(handle); \
         if (node_iter == new_nodes.end()) { \
+            WDEBUG << "get node " << handle << std::endl; \
             ERROR_FAIL; \
         } \
     } \
@@ -191,7 +196,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ:
                 if (idx_add.find(upd->handle) != idx_add.end()) {
-                    WDEBUG << "cannot add two identical handles" << std::endl;
+                    WDEBUG << "cannot add two identical handles " << upd->handle << std::endl;
                     ERROR_FAIL;
                 }
                 GET_NODE(upd->handle);
@@ -265,7 +270,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 CHECK_LOC(upd->loc1, upd->handle1);
                 GET_NODE(upd->handle1);
                 if (idx_add.find(upd->handle) != idx_add.end()) {
-                    WDEBUG << "cannot add two identical handles" << std::endl;
+                    WDEBUG << "cannot add two identical handles " << upd->handle << std::endl;
                     ERROR_FAIL;
                 }
                 idx_add.emplace(upd->handle, n);
@@ -316,6 +321,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
      || !add_indices(idx_add, true)
      || !del_nodes(del_set)
      || !del_indices(idx_del)) {
+        WDEBUG << "hyperdex error with put_nodes/add_indices/del_nodes/del_indices" << std::endl;
         ERROR_FAIL;
     }
 
@@ -336,6 +342,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     attr[1].datatype = tx_dtypes[1];
 
     if (!call(&hyperdex_client_xact_put, tx_space, (const char*)&tx->id, sizeof(int64_t), attr, NUM_TX_ATTRS)) {
+        WDEBUG << "hyperdex tx put error, tx id " << tx->id << std::endl;
         ERROR_FAIL;
     }
 
