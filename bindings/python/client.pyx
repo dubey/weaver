@@ -448,7 +448,7 @@ cdef class Client:
                 raise WeaverError('provide either node handle or node alias')
             else:
                 alias = kwargs['node_alias']
-        if not self.thisptr.set_node_property(node, alias, key, value):
+        if not self.thisptr.set_node_property(node, alias, str(key), str(value)):
             raise WeaverError('no active transaction')
 
     def set_node_properties(self, properties, node='', **kwargs):
@@ -464,15 +464,15 @@ cdef class Client:
             for k in properties:
                 if isinstance(properties[k], list):
                     for v in properties[k]:
-                        self.set_node_property(k, v, node, node_alias=alias)
+                        self.set_node_property(str(k), str(v), node, node_alias=alias)
                 else:
-                    self.set_node_property(k, properties[k], node, node_alias=alias)
+                    self.set_node_property(str(k), str(properties[k]), node, node_alias=alias)
 
     def set_edge_property(self, edge, key, value, node='', **kwargs):
         alias = ''
         if node == '' and 'node_alias' in kwargs:
             alias = kwargs['node_alias']
-        if not self.thisptr.set_edge_property(node, alias, edge, key, value):
+        if not self.thisptr.set_edge_property(node, alias, edge, str(key), str(value)):
             raise WeaverError('no active transaction')
 
     def set_edge_properties(self, edge, properties, node='', **kwargs):
@@ -485,9 +485,9 @@ cdef class Client:
             for k in properties:
                 if isinstance(properties[k], list):
                     for v in properties[k]:
-                        self.set_edge_property(edge, k, v, node, node_alias=alias)
+                        self.set_edge_property(edge, str(k), str(v), node, node_alias=alias)
                 else:
-                    self.set_edge_property(edge, k, properties[k], node, node_alias=alias)
+                    self.set_edge_property(edge, str(k), str(properties[k]), node, node_alias=alias)
 
     def add_alias(self, alias, node):
         if not self.thisptr.add_alias(alias, node):
