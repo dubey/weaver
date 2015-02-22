@@ -412,8 +412,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         if (!success) {
             // some node handles bad, return immediately
             WDEBUG << "bad node handles in node prog request" << std::endl;
-            uint64_t zero = 0;
-            msg->prepare_message(message::NODE_PROG_RETURN, pType, zero, zero, ParamsType());
+            msg->prepare_message(message::NODE_PROG_NOTFOUND);
             vts->comm.send_to_client(clientID, msg->buf);
             return;
         }
