@@ -27,7 +27,7 @@ namespace cl
     struct edge
     {
         std::string handle;
-        std::string nbr;
+        std::string start_node, end_node;
         std::vector<std::shared_ptr<property>> properties;
     };
 

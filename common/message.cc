@@ -285,7 +285,8 @@ uint64_t
 message :: size(const cl::edge &t)
 {
     return size(t.handle)
-         + size(t.nbr)
+         + size(t.start_node)
+         + size(t.end_node)
          + size(t.properties);
 }
 
@@ -522,7 +523,8 @@ void
 message :: pack_buffer(e::buffer::packer &packer, const cl::edge &t)
 {
     pack_buffer(packer, t.handle);
-    pack_buffer(packer, t.nbr);
+    pack_buffer(packer, t.start_node);
+    pack_buffer(packer, t.end_node);
     pack_buffer(packer, t.properties);
 }
 
@@ -767,7 +769,8 @@ void
 message :: unpack_buffer(e::unpacker &unpacker, cl::edge &t)
 {
     unpack_buffer(unpacker, t.handle);
-    unpack_buffer(unpacker, t.nbr);
+    unpack_buffer(unpacker, t.start_node);
+    unpack_buffer(unpacker, t.end_node);
     unpack_buffer(unpacker, t.properties);
 }
 

@@ -31,7 +31,7 @@ namespace node_prog
             virtual prop_list get_properties() = 0;
             virtual bool has_property(std::pair<std::string, std::string> &p) = 0;
             virtual bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props) = 0;
-            virtual void get_client_edge(cl::edge&) = 0;
+            virtual void get_client_edge(const std::string &node, cl::edge&) = 0;
    };
 }
 

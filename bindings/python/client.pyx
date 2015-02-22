@@ -155,7 +155,8 @@ cdef extern from 'node_prog/property.h' namespace 'node_prog':
 cdef extern from 'client/datastructures.h' namespace 'cl':
     cdef cppclass edge:
         string handle
-        string nbr
+        string start_node
+        string end_node
         vector[shared_ptr[property]] properties
 
     cdef cppclass node:
@@ -165,9 +166,10 @@ cdef extern from 'client/datastructures.h' namespace 'cl':
         unordered_set[string] aliases
 
 class Edge:
-    def __init__(self, handle='', nbr='', properties=None):
+    def __init__(self, handle='', start_node='', end_node='', properties=None):
         self.handle = handle
-        self.nbr = nbr
+        self.start_node = start_node
+        self.end_node = end_node
         self.properties = initialize_member_dict(properties, 'properties')
 
 class Node:
@@ -686,7 +688,8 @@ cdef class Client:
 
     cdef __convert_edge_to_client_edge(self, edge c_edge, py_edge):
         py_edge.handle = str(c_edge.handle)
-        py_edge.nbr = str(c_edge.nbr)
+        py_edge.start_node = str(c_edge.start_node)
+        py_edge.end_node = str(c_edge.end_node)
         self.__convert_vector_props_to_dict(c_edge.properties, py_edge.properties)
 
     cdef get_edges(self, nbrs=None, edges=None, node=''):

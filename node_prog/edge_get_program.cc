@@ -85,7 +85,8 @@ node_prog :: edge_get_node_program(
 
         if (select) {
             cl::edge cl_edge;
-            e.get_client_edge(cl_edge);
+            node_handle_t node_handle = n.get_handle();
+            e.get_client_edge(node_handle, cl_edge);
             params.response_edges.emplace_back(cl_edge);
         }
     }

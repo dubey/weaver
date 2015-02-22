@@ -148,7 +148,7 @@ node :: get_client_node(cl::node &n)
     node_prog::edge_list elist = get_edges();
     for (node_prog::edge &e: elist) {
         std::string edge_handle = e.get_handle();
-        e.get_client_edge(n.out_edges[e.get_handle()]);
+        e.get_client_edge(n.handle, n.out_edges[e.get_handle()]);
     }
 
     n.aliases = aliases;

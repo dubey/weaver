@@ -52,7 +52,7 @@ namespace db
             bool has_property(std::pair<std::string, std::string> &p);
             bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
             edge_handle_t get_handle() const { return base.get_handle(); }
-            void get_client_edge(cl::edge &e);
+            void get_client_edge(const std::string &node, cl::edge &e);
     };
 }
 
