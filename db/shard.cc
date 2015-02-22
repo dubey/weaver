@@ -320,22 +320,22 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     n = S->acquire_node_nonlocking(id0);
                     assert(n == nullptr);
                     n = S->create_node(id0, zero_clk, false, true);
-                }
 
-                bool prop_delim = (BulkLoadPropertyValueDelimiter != '\0');
-                for (pugi::xml_node prop: node.children("data")) {
-                    std::string key = prop.attribute("key").value();
-                    std::string value = prop.child_value();
-                    if (prop_delim) {
-                        std::vector<std::string> values;
-                        split(value, BulkLoadPropertyValueDelimiter, values);
-                        for (std::string &v: values) {
-                            (key == BulkLoadNodeAliasKey)? S->add_node_alias_nonlocking(n, v) :
-                                                           S->set_node_property_nonlocking(n, key, v, zero_clk);
+                    bool prop_delim = (BulkLoadPropertyValueDelimiter != '\0');
+                    for (pugi::xml_node prop: node.children("data")) {
+                        std::string key = prop.attribute("key").value();
+                        std::string value = prop.child_value();
+                        if (prop_delim) {
+                            std::vector<std::string> values;
+                            split(value, BulkLoadPropertyValueDelimiter, values);
+                            for (std::string &v: values) {
+                                (key == BulkLoadNodeAliasKey)? S->add_node_alias_nonlocking(n, v) :
+                                                               S->set_node_property_nonlocking(n, key, v, zero_clk);
+                            }
+                        } else {
+                            (key == BulkLoadNodeAliasKey)? S->add_node_alias_nonlocking(n, value) :
+                                                           S->set_node_property_nonlocking(n, key, value, zero_clk);
                         }
-                    } else {
-                        (key == BulkLoadNodeAliasKey)? S->add_node_alias_nonlocking(n, value) :
-                                                       S->set_node_property_nonlocking(n, key, value, zero_clk);
                     }
                 }
             }
