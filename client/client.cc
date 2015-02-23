@@ -87,6 +87,55 @@ client :: check_active_tx()
         return false; \
     }
 
+void
+client :: print_cur_tx()
+{
+    for (auto upd: cur_tx) {
+        switch (upd->type) {
+            case transaction::NODE_CREATE_REQ:
+                WDEBUG << "NODE CREATE" << std::endl;
+                WDEBUG << "\thandle = " << upd->handle <<  std::endl;
+                break;
+
+            case transaction::EDGE_CREATE_REQ:
+                WDEBUG << "EDGE CREATE" << std::endl;
+                WDEBUG << "\thandle = " << upd->handle;
+                WDEBUG << "\tstart node,alias = " << upd->handle1 << "," << upd->alias1
+                       << " end node,alias = " << upd->handle2 << "," << upd->alias2 << std::endl;
+                break;
+
+            case transaction::NODE_DELETE_REQ:
+                WDEBUG << "NODE DELETE" << std::endl;
+                WDEBUG << "\tnode,alias = " << upd->handle1 << "," << upd->alias1 << std::endl;
+                break;
+
+            case transaction::EDGE_DELETE_REQ:
+                WDEBUG << "EDGE DELETE" << std::endl;
+                WDEBUG << "\tedge = " << upd->handle1 << std::endl;
+                WDEBUG << "\tnode,alias = " << upd->handle2 << "," << upd->alias2 << std::endl;
+                break;
+
+            case transaction::NODE_SET_PROPERTY:
+                WDEBUG << "NODE SET PROPERTY" << std::endl;
+                WDEBUG << "\tnode,alias = " << upd->handle1 << "," << upd->alias1 << std::endl;
+                WDEBUG << "\tkey,value = " << *upd->key << "," << *upd->value << std::endl;
+                break;
+
+            case transaction::EDGE_SET_PROPERTY:
+                WDEBUG << "EDGE SET PROPERTY" << std::endl;
+                WDEBUG << "\tedge = " << upd->handle1 << std::endl;
+                WDEBUG << "\tnode,alias = " << upd->handle2 << "," << upd->alias2 << std::endl;
+                WDEBUG << "\tkey,value = " << *upd->key << "," << *upd->value << std::endl;
+                break;
+
+            case transaction::ADD_AUX_INDEX:
+                WDEBUG << "ADD ALIAS" << std::endl;
+                WDEBUG << "\tnode,alias = " << upd->handle1 << "," << upd->handle << std::endl;
+                break;
+        }
+    }
+}
+
 bool
 client :: create_node(std::string &handle, const std::vector<std::string> &aliases)
 {
@@ -280,6 +329,10 @@ client :: end_tx()
         if (mtype == message::CLIENT_TX_ABORT) {
             success = false;
         }
+    }
+
+    if (!success) {
+        print_cur_tx();
     }
 
     cur_tx_id = UINT64_MAX;

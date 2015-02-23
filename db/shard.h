@@ -676,18 +676,6 @@ namespace db
         e->base.update_del_time(tdel);
         n->updated = true;
         n->dependent_del++;
-
-        // update edge map
-        const node_handle_t &remote = e->nbr.handle;
-        edge_map_mutex.lock();
-        auto edge_map_iter = edge_map.find(remote);
-        assert(edge_map_iter != edge_map.end());
-        auto &node_set = edge_map_iter->second;
-        node_set.erase(n->get_handle());
-        if (node_set.empty()) {
-            edge_map.erase(remote);
-        }
-        edge_map_mutex.unlock();
     }
 
     inline void
@@ -935,19 +923,11 @@ namespace db
     inline void
     shard :: permanent_node_delete(node *n)
     {
-        uint64_t num_shards = get_num_shards();
         message::message msg;
         assert(n->waiters == 0);
         assert(!n->in_use);
-        // send msg to each shard to delete incoming edges
-        // this happens lazily, and there could be dangling edges
-        // users should explicitly delete edges before nodes if the program requires
-        // this loop isn't executed in case of deletion of migrated nodes
+        // this code isn't executed in case of deletion of migrated nodes
         if (n->state != node::mode::MOVED) {
-            for (uint64_t shard = ShardIdIncr; shard < ShardIdIncr + num_shards; shard++) {
-                msg.prepare_message(message::PERMANENTLY_DELETED_NODE, n->get_handle());
-                comm.send(shard, msg.buf);
-            }
             for (auto &e: n->out_edges) {
                 delete e.second;
             }
@@ -962,16 +942,13 @@ namespace db
     inline void
     shard :: update_migrated_nbr_nonlocking(node *n, const node_handle_t &migr_node, uint64_t old_loc, uint64_t new_loc)
     {
-        bool found = false;
         edge *e;
         for (auto &x: n->out_edges) {
             e = x.second;
             if (e->nbr.handle == migr_node && e->nbr.loc == old_loc) {
                 e->nbr.loc = new_loc;
-                found = true;
             }
         }
-        assert(found);
     }
 
     inline void
@@ -980,8 +957,12 @@ namespace db
         std::unordered_set<node_handle_t> nbrs;
         node *n;
         edge_map_mutex.lock();
-        nbrs = edge_map[migr_node];
+        auto find_iter = edge_map.find(migr_node);
+        if (find_iter != edge_map.end()) {
+            nbrs = find_iter->second;
+        }
         edge_map_mutex.unlock();
+
         for (const node_handle_t &nbr: nbrs) {
             n = acquire_node(nbr);
             update_migrated_nbr_nonlocking(n, migr_node, old_loc, new_loc);

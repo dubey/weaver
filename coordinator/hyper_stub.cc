@@ -95,8 +95,8 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     begin_tx();
 
     // get aux indices from HyperDex
+    std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> indices;
     if (AuxIndex) {
-        std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> indices;
         indices.reserve(idx_get_set.size());
         std::pair<node_handle_t, uint64_t> empty_pair;
         for (const std::string &i: idx_get_set) {
@@ -155,17 +155,28 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         new_nodes[p.first]->restore_clk = tx->timestamp.clock;
     }
 
-#define CHECK_LOC(loc, handle) \
+#define CHECK_LOC(loc, handle, alias) \
     if (loc == UINT64_MAX) { \
-        node_iter = old_nodes.find(handle); \
-        if (node_iter == old_nodes.end()) { \
-            node_iter = new_nodes.find(handle); \
-            if (node_iter == new_nodes.end()) { \
-                WDEBUG << "check loc, node = " << handle << std::endl; \
+        if (handle != "") { \
+            node_iter = old_nodes.find(handle); \
+            if (node_iter == old_nodes.end()) { \
+                node_iter = new_nodes.find(handle); \
+                if (node_iter == new_nodes.end()) { \
+                    WDEBUG << "check loc, node = " << handle << std::endl; \
+                    ERROR_FAIL; \
+                } \
+            } \
+            loc = node_iter->second->shard; \
+        } else { \
+            idx_get_iter = indices.find(alias); \
+            if (idx_get_iter == indices.end()) { \
+                WDEBUG << "check loc, alias = " << alias << std::endl; \
                 ERROR_FAIL; \
+            } else { \
+                handle = idx_get_iter->second.first; \
+                loc = idx_get_iter->second.second; \
             } \
         } \
-        loc = node_iter->second->shard; \
     }
 
 #define GET_NODE(handle) \
@@ -188,6 +199,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     }
 
     auto node_iter = old_nodes.end();
+    auto idx_get_iter = indices.end();
     auto idx_add_iter = idx_add.end();
     db::node *n = nullptr;
     std::vector<std::string> idx_del;
@@ -204,9 +216,10 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 break;
 
             case transaction::EDGE_CREATE_REQ:
-                CHECK_LOC(upd->loc1, upd->handle1);
-                CHECK_LOC(upd->loc2, upd->handle2);
+                CHECK_LOC(upd->loc1, upd->handle1, upd->alias1);
+                CHECK_LOC(upd->loc2, upd->handle2, upd->alias2);
                 GET_NODE(upd->handle1);
+
                 if (n->out_edges.find(upd->handle) != n->out_edges.end()) {
                     WDEBUG << "edge with handle " << upd->handle << " already exists at node " << upd->handle1 << std::endl;
                     ERROR_FAIL;
@@ -221,16 +234,18 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 break;
 
             case transaction::NODE_DELETE_REQ:
-                CHECK_LOC(upd->loc1, upd->handle1);
+                CHECK_LOC(upd->loc1, upd->handle1, upd->alias1);
                 GET_NODE(upd->handle1);
+
                 for (const std::string &alias: n->aliases) {
                     idx_del.emplace_back(alias);
                 }
                 break;
 
             case transaction::NODE_SET_PROPERTY:
-                CHECK_LOC(upd->loc1, upd->handle1);
+                CHECK_LOC(upd->loc1, upd->handle1, upd->alias1);
                 GET_NODE(upd->handle1);
+
                 if (!n->base.add_property(*upd->key, *upd->value, tx->timestamp)) {
                     WDEBUG << "property " << *upd->key << ": " << *upd->value << " already exists at node " << upd->handle1 << std::endl;
                     ERROR_FAIL;
@@ -239,8 +254,14 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 
             case transaction::EDGE_DELETE_REQ:
                 CHECK_AUX_INDEX;
-                CHECK_LOC(upd->loc1, upd->handle2);
+                if (upd->alias2 != "") {
+                    CHECK_LOC(upd->loc1, upd->handle2, upd->alias2);
+                } else {
+                    // if no alias provided, use edge handle as alias
+                    CHECK_LOC(upd->loc1, upd->handle2, upd->handle1);
+                }
                 GET_NODE(upd->handle2);
+
                 if (n->out_edges.find(upd->handle1) == n->out_edges.end()) {
                     WDEBUG << "edge with handle " << upd->handle1 << " does not exist at node " << upd->handle2 << std::endl;
                     ERROR_FAIL;
@@ -254,8 +275,14 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 
             case transaction::EDGE_SET_PROPERTY:
                 CHECK_AUX_INDEX;
-                CHECK_LOC(upd->loc1, upd->handle2);
+                if (upd->alias2 != "") {
+                    CHECK_LOC(upd->loc1, upd->handle2, upd->alias2);
+                } else {
+                    // if no alias provided, use edge handle as alias
+                    CHECK_LOC(upd->loc1, upd->handle2, upd->handle1);
+                }
                 GET_NODE(upd->handle2);
+
                 if (n->out_edges.find(upd->handle1) == n->out_edges.end()) {
                     WDEBUG << "edge with handle " << upd->handle1 << " does not exist at node " << upd->handle2 << std::endl;
                     ERROR_FAIL;
@@ -267,7 +294,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 break;
 
             case transaction::ADD_AUX_INDEX:
-                CHECK_LOC(upd->loc1, upd->handle1);
+                CHECK_LOC(upd->loc1, upd->handle1, upd->alias1);
                 GET_NODE(upd->handle1);
                 if (idx_add.find(upd->handle) != idx_add.end()) {
                     WDEBUG << "cannot add two identical handles " << upd->handle << std::endl;
@@ -276,9 +303,6 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 idx_add.emplace(upd->handle, n);
                 n->add_alias(upd->handle);
                 break;
-
-            default:
-                WDEBUG << "bad upd type" << std::endl;
         }
         uint64_t idx = upd->loc1-ShardIdIncr;
         if (tx->shard_write.size() < idx+1) {

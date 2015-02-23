@@ -82,6 +82,7 @@ namespace cl
             uint64_t get_vt_id() { return vtid; }
             std::vector<uint64_t> get_node_count();
             bool aux_index();
+            void print_cur_tx();
 
         private:
 #pragma GCC diagnostic push

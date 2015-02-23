@@ -54,7 +54,7 @@ ssh $hyperdex_coord_ipaddr 'bash -s' << EOF
     rm -f $rm_patterns replicant-daemon-*
     hyperdex coordinator -l $hyperdex_coord_ipaddr -p $hyperdex_coord_port > /dev/null 2>&1
 EOF
-sleep 2
+sleep 3
 
 num_daemons=${#hyperdex_daemons_ipaddr[*]}
 for i in $(seq 1 $num_daemons);
@@ -75,7 +75,7 @@ do
 EOF
 done
 
-sleep 1
+sleep 3
 
 echo 'Adding HyperDex spaces'
 
@@ -132,7 +132,7 @@ do
         replicant daemon --daemon --listen $ipaddr --listen-port $port > /dev/null 2>&1
 EOF
 done
-sleep 1
+sleep 2
 
 replicant new-object -h ${server_manager_ipaddr[0]} -p ${server_manager_port[0]} weaver "$weaver_libdir"/libweaverservermanager.so
 
@@ -154,7 +154,7 @@ do
         replicant daemon --daemon --listen $ipaddr --listen-port $port > /dev/null 2>&1
 EOF
 done
-sleep 1
+sleep 2
 
 replicant new-object -h ${kronos_ipaddr[0]} -p ${kronos_port[0]} chronosd "$weaver_libdir"/libweaverchronosd.so
 

@@ -89,6 +89,24 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
         loc = find_iter->second; \
     }
 
+#define HANDLE_OR_ALIAS(handle, loc, alias) \
+    if (handle == "") { \
+        if (alias == "") { \
+            error = true; \
+            WDEBUG << "both handle and alias are empty" << std::endl; \
+            break; \
+        } else if (!AuxIndex) { \
+            error = true; \
+            WDEBUG << "cannot use alias with auxiliary indexing turned off, check weaver.yaml file" << std::endl; \
+            break; \
+        } else { \
+            idx_get.emplace(alias); \
+            loc = UINT64_MAX; \
+        } \
+    } else { \
+        CHECK_LOC(handle, loc); \
+    }
+
     bool error = false;
     for (std::shared_ptr<transaction::pending_update> upd: tx->writes) {
         switch (upd->type) {
@@ -100,8 +118,8 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
                 break;
 
             case transaction::EDGE_CREATE_REQ:
-                CHECK_LOC(upd->handle1, upd->loc1);
-                CHECK_LOC(upd->handle2, upd->loc2);
+                HANDLE_OR_ALIAS(upd->handle1, upd->loc1, upd->alias1);
+                HANDLE_OR_ALIAS(upd->handle2, upd->loc2, upd->alias2);
 
                 if (AuxIndex) {
                     idx_add.emplace(upd->handle, nullptr);
@@ -110,7 +128,7 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
 
             case transaction::NODE_DELETE_REQ:
             case transaction::NODE_SET_PROPERTY:
-                CHECK_LOC(upd->handle1, upd->loc1);
+                HANDLE_OR_ALIAS(upd->handle1, upd->loc1, upd->alias1);
                 upd->loc2 = 0;
                 if (upd->type == transaction::NODE_DELETE_REQ) {
                     del_set.emplace(upd->handle1);
@@ -119,11 +137,11 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
 
             case transaction::EDGE_DELETE_REQ:
             case transaction::EDGE_SET_PROPERTY:
-                if (AuxIndex && upd->handle2 == "") {
-                    idx_get.emplace(upd->handle1);
-                    upd->loc1 = UINT64_MAX;
+                if (upd->alias2 != "") {
+                    HANDLE_OR_ALIAS(upd->handle2, upd->loc1, upd->alias2);
                 } else {
-                    CHECK_LOC(upd->handle2, upd->loc1);
+                    // if no alias provided, use edge as node alias
+                    HANDLE_OR_ALIAS(upd->handle2, upd->loc1, upd->handle1);
                 }
                 upd->loc2 = 0;
                 break;
@@ -145,6 +163,9 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
             break;
         }
     }
+
+#undef CHECK_LOC
+#undef HANDLE_OR_ALIAS
 
     uint64_t sender = tx->sender;
     bool ready = false;

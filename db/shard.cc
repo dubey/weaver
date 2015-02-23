@@ -1262,21 +1262,16 @@ update_deleted_node(const node_handle_t &node_handle)
     S->edge_map_mutex.unlock();
 
     std::vector<edge_handle_t> to_del;
-    bool found;
     for (const node_handle_t &nbr: nbrs) {
         n = S->acquire_node(nbr);
         to_del.clear();
-        found = false;
         for (auto &x: n->out_edges) {
             e = x.second;
             if (e->nbr.handle == node_handle) {
                 delete e;
                 to_del.emplace_back(x.first);
-                found = true;
             }
         }
-        assert(found);
-        UNUSED(found);
         for (const edge_handle_t &del_edge: to_del) {
             n->out_edges.erase(del_edge);
         }
