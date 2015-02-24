@@ -70,10 +70,9 @@ node_prog :: edge_get_node_program(
         }
 
         if (select && !params.request_edges.empty()) {
-            edge_handle_t this_hndl = e.get_handle();
             bool found = false;
             for (const edge_handle_t &h: params.request_edges) {
-                if (this_hndl == h) {
+                if (e.get_handle() == h) {
                     found = true;
                     break;
                 }
@@ -85,8 +84,7 @@ node_prog :: edge_get_node_program(
 
         if (select) {
             cl::edge cl_edge;
-            node_handle_t node_handle = n.get_handle();
-            e.get_client_edge(node_handle, cl_edge);
+            e.get_client_edge(n.get_handle(), cl_edge);
             params.response_edges.emplace_back(cl_edge);
         }
     }

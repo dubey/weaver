@@ -66,12 +66,6 @@ edge :: traverse()
 #endif
 }
 
-remote_node&
-edge :: get_neighbor()
-{
-    return nbr; 
-}
-
 node_prog::prop_list 
 edge :: get_properties()
 {

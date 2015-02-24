@@ -76,7 +76,7 @@ namespace db
             void update_creat_time(const vc::vclock &creat_time);
             const vc::vclock& get_creat_time() const;
             void set_handle(const std::string &handle);
-            std::string get_handle() const;
+            const std::string& get_handle() const;
     };
 
 }

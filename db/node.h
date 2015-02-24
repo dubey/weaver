@@ -108,7 +108,7 @@ namespace db
             bool has_property(std::pair<std::string, std::string> &p);
             bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
             void set_handle(const node_handle_t &_handle) { base.set_handle(_handle); }
-            node_handle_t get_handle() const { return base.get_handle(); }
+            const node_handle_t& get_handle() const { return base.get_handle(); }
             void add_alias(const node_handle_t &alias);
             bool del_alias(const node_handle_t &alias);
             bool is_alias(const node_handle_t &alias) const;

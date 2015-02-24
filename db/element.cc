@@ -177,7 +177,7 @@ element :: set_handle(const std::string &_handle)
     handle = _handle;
 }
 
-std::string
+const std::string&
 element :: get_handle() const
 {
     return handle;

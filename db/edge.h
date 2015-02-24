@@ -47,11 +47,11 @@ namespace db
             bool migr_edge; // true if this edge was migrated along with parent node
             void traverse(); // indicate that this edge was traversed; useful for migration statistics
 
-            remote_node &get_neighbor();
+            const remote_node& get_neighbor() { return nbr; }
             node_prog::prop_list get_properties();
             bool has_property(std::pair<std::string, std::string> &p);
             bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
-            edge_handle_t get_handle() const { return base.get_handle(); }
+            const edge_handle_t& get_handle() const { return base.get_handle(); }
             void get_client_edge(const std::string &node, cl::edge &e);
     };
 }

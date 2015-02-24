@@ -711,7 +711,7 @@ hyper_stub_base :: get_node(db::node &n)
 {
     const hyperdex_client_attribute *attr;
     size_t num_attrs;
-    node_handle_t handle = n.get_handle();
+    const node_handle_t &handle = n.get_handle();
 
     bool success = get(graph_space, handle.c_str(), handle.size(), &attr, &num_attrs, true);
     if (success) {
@@ -1031,7 +1031,7 @@ hyper_stub_base :: add_indices(std::unordered_map<std::string, db::node*> &indic
         key_szs[i] = p.first.size();
 
         // node handle
-        node_handle_t handle = p.second->get_handle();
+        const node_handle_t &handle = p.second->get_handle();
         attrs[i][0].attr = index_attrs[0];
         attrs[i][0].value = handle.c_str();
         attrs[i][0].value_sz = handle.size();
