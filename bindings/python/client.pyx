@@ -309,6 +309,9 @@ class EdgeGetParams:
 
 cdef extern from 'node_prog/node_get_program.h' namespace 'node_prog':
     cdef cppclass node_get_params:
+        bint props
+        bint edges
+        bint aliases
         node node
 
 cdef extern from 'node_prog/traverse_with_props.h' namespace 'node_prog':
@@ -753,8 +756,11 @@ cdef class Client:
             py_node.aliases.append(str(deref(alias_iter)))
             inc(alias_iter)
 
-    def get_node(self, node):
+    def get_node(self, node, get_props=True, get_edges=True, get_aliases=True):
         cdef pair[string, node_get_params] arg_pair
+        arg_pair.second.props = get_props
+        arg_pair.second.edges = get_edges
+        arg_pair.second.aliases = get_aliases
         arg_pair.first = node
         cdef vector[pair[string, node_get_params]] c_args
         c_args.push_back(arg_pair)
@@ -770,6 +776,15 @@ cdef class Client:
         new_node = Node()
         self.__convert_node_to_client_node(c_rp.node, new_node)
         return new_node
+
+    def get_node_properties(self, node):
+        return self.get_node(node, get_edges=False, get_aliases=False).properties
+
+    def get_node_edges(self, node):
+        return self.get_node(node, get_props=False, get_aliases=False).out_edges
+
+    def get_node_aliases(self, node):
+        return self.get_node(node, get_props=False, get_edges=False).aliases
 
     def traverse_props(self, init_args):
         cdef vector[pair[string, traverse_props_params]] c_args

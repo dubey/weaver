@@ -112,7 +112,7 @@ namespace db
             void add_alias(const node_handle_t &alias);
             bool del_alias(const node_handle_t &alias);
             bool is_alias(const node_handle_t &alias) const;
-            void get_client_node(cl::node &n);
+            void get_client_node(cl::node &n, bool, bool, bool);
     };
 }
 

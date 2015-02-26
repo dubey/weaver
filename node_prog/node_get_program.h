@@ -25,6 +25,7 @@ namespace node_prog
     class node_get_params: public Node_Parameters_Base
     {
         public:
+            bool props, edges, aliases;
             cl::node node;
 
             // no caching needed

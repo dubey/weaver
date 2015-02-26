@@ -136,20 +136,26 @@ node :: add_cache_value(std::shared_ptr<vc::vclock> vc,
 }
 
 void
-node :: get_client_node(cl::node &n)
+node :: get_client_node(cl::node &n, bool get_p, bool get_e, bool get_a)
 {
     n.handle = base.get_handle();
 
-    node_prog::prop_list plist = get_properties();
-    for (std::vector<std::shared_ptr<node_prog::property>> pvec: plist) {
-        n.properties.insert(n.properties.end(), pvec.begin(), pvec.end());
+    if (get_p) {
+        node_prog::prop_list plist = get_properties();
+        for (std::vector<std::shared_ptr<node_prog::property>> pvec: plist) {
+            n.properties.insert(n.properties.end(), pvec.begin(), pvec.end());
+        }
     }
 
-    node_prog::edge_list elist = get_edges();
-    for (node_prog::edge &e: elist) {
-        std::string edge_handle = e.get_handle();
-        e.get_client_edge(n.handle, n.out_edges[e.get_handle()]);
+    if (get_e) {
+        node_prog::edge_list elist = get_edges();
+        for (node_prog::edge &e: elist) {
+            std::string edge_handle = e.get_handle();
+            e.get_client_edge(n.handle, n.out_edges[e.get_handle()]);
+        }
     }
 
-    n.aliases = aliases;
+    if (get_a) {
+        n.aliases = aliases;
+    }
 }

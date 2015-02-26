@@ -20,18 +20,27 @@ using node_prog::cache_response;
 uint64_t
 node_get_params :: size() const 
 {
-    return message::size(node);
+    return message::size(props)
+         + message::size(edges)
+         + message::size(aliases)
+         + message::size(node);
 }
 
 void
 node_get_params :: pack(e::buffer::packer& packer) const
 {
+    message::pack_buffer(packer, props);
+    message::pack_buffer(packer, edges);
+    message::pack_buffer(packer, aliases);
     message::pack_buffer(packer, node);
 }
 
 void
 node_get_params :: unpack(e::unpacker& unpacker)
 {
+    message::unpack_buffer(unpacker, props);
+    message::unpack_buffer(unpacker, edges);
+    message::unpack_buffer(unpacker, aliases);
     message::unpack_buffer(unpacker, node);
 }
 
@@ -45,7 +54,7 @@ node_prog :: node_get_node_program(
             std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)>&,
         cache_response<Cache_Value_Base>*)
 {
-    n.get_client_node(params.node);
+    n.get_client_node(params.node, params.props, params.edges, params.aliases);
 
     return std::make_pair(search_type::DEPTH_FIRST, std::vector<std::pair<db::remote_node, node_get_params>>
             (1, std::make_pair(db::coordinator, std::move(params)))); 
