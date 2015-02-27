@@ -14,6 +14,9 @@
 #ifndef weaver_common_utils_h_
 #define weaver_common_utils_h_
 
+#include <unordered_set>
+#include <unordered_map>
+
 // hash functions
 namespace std
 {
@@ -56,6 +59,24 @@ namespace std
                 return val;
             }
     };
+}
+
+namespace weaver_util
+{
+    template<typename K, typename V>
+    inline bool
+    exists(const std::unordered_map<K, V> &map, const K &key)
+    {
+        return map.find(key) != map.end();
+    }
+
+
+    template<typename T>
+    inline bool
+    exists(const std::unordered_set<T> &set, const T &t)
+    {
+        return set.find(t) != set.end();
+    }
 }
 
 
