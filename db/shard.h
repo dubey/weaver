@@ -613,7 +613,7 @@ namespace db
             release_node_write(n);
             // record object for permanent deletion later on
             perm_del_mutex.lock();
-            perm_del_queue.emplace_back(new del_obj(transaction::NODE_DELETE_REQ, tdel, node_handle));
+            perm_del_queue.emplace_back(new del_obj(transaction::NODE_DELETE_REQ, tdel, node_handle, nullptr));
             perm_del_mutex.unlock();
         }
     }
@@ -672,7 +672,8 @@ namespace db
         // already_exec check for fault tolerance
         auto out_edge_iter = n->out_edges.find(edge_handle);
         assert(out_edge_iter != n->out_edges.end());
-        edge *e = out_edge_iter->second;
+        edge *e = out_edge_iter->second.back();
+        assert(e->base.get_del_time().vt_id == UINT64_MAX);
         e->base.update_del_time(tdel);
         n->updated = true;
         n->dependent_del++;
@@ -693,10 +694,11 @@ namespace db
             migration_mutex.unlock();
         } else {
             delete_edge_nonlocking(n, edge_handle, tdel);
+            edge *del_edge = n->out_edges[edge_handle].back();
             release_node_write(n);
             // record object for permanent deletion later on
             perm_del_mutex.lock();
-            perm_del_queue.emplace_back(new del_obj(transaction::EDGE_DELETE_REQ, tdel, node_handle, edge_handle));
+            perm_del_queue.emplace_back(new del_obj(transaction::EDGE_DELETE_REQ, tdel, node_handle, del_edge));
             perm_del_mutex.unlock();
         }
     }
@@ -738,7 +740,8 @@ namespace db
     {
         auto out_edge_iter = n->out_edges.find(edge_handle);
         assert(out_edge_iter != n->out_edges.end());
-        edge *e = out_edge_iter->second;
+        edge *e = out_edge_iter->second.back();
+        assert(e->base.get_del_time().vt_id == UINT64_MAX);
         e->base.add_property(key, value, vclk);
     }
 
@@ -807,8 +810,10 @@ namespace db
         n->permanently_deleted = true;
         // deleting edges now so as to prevent sending messages to neighbors for permanent edge deletion
         // rest of deletion happens in release_node()
-        for (auto &e: n->out_edges) {
-            delete e.second;
+        for (auto &x: n->out_edges) {
+            for (db::edge *e: x.second) {
+                delete e;
+            }
         }
         n->out_edges.clear();
         release_node(n);
@@ -867,14 +872,16 @@ namespace db
                     n = acquire_node(dobj->node);
                     if (n != NULL) {
                         n->permanently_deleted = true;
-                        for (auto &e: n->out_edges) {
-                            const node_handle_t &node = e.second->nbr.handle;
-                            auto edge_map_iter = edge_map.find(node);
-                            assert(edge_map_iter != edge_map.end());
-                            auto &node_set = edge_map_iter->second;
-                            node_set.erase(dobj->node);
-                            if (node_set.empty()) {
-                                edge_map.erase(node);
+                        for (auto &x: n->out_edges) {
+                            for (db::edge *e: x.second) {
+                                const node_handle_t &node = e->nbr.handle;
+                                auto edge_map_iter = edge_map.find(node);
+                                assert(edge_map_iter != edge_map.end());
+                                auto &node_set = edge_map_iter->second;
+                                node_set.erase(dobj->node);
+                                if (node_set.empty()) {
+                                    edge_map.erase(node);
+                                }
                             }
                         }
                         release_node(n);
@@ -884,15 +891,30 @@ namespace db
                 case transaction::EDGE_DELETE_REQ:
                     n = acquire_node(dobj->node);
                     if (n != NULL) {
-                        auto out_edge_iter = n->out_edges.find(dobj->edge);
-                        assert(out_edge_iter != n->out_edges.end());
-                        if (n->last_perm_deletion == nullptr
-                         || time_oracle->compare_two_vts(*n->last_perm_deletion,
-                                out_edge_iter->second->base.get_del_time()) == 0) {
-                            n->last_perm_deletion.reset(new vc::vclock(std::move(out_edge_iter->second->base.get_del_time())));
+                        edge_handle_t del_handle = dobj->e->get_handle();
+                        auto map_iter = n->out_edges.find(del_handle);
+                        assert(map_iter != n->out_edges.end());
+
+                        bool found = false;
+                        auto edge_iter = map_iter->second.begin();
+                        for (; edge_iter != map_iter->second.end(); edge_iter++) {
+                            if (*edge_iter == dobj->e) {
+                                found = true;
+                                break;
+                            }
                         }
-                        delete out_edge_iter->second;
-                        n->out_edges.erase(dobj->edge);
+                        assert(found);
+
+                        if (n->last_perm_deletion == nullptr
+                         || time_oracle->compare_two_vts(*n->last_perm_deletion, dobj->e->base.get_del_time()) == 0) {
+                            n->last_perm_deletion.reset(new vc::vclock(std::move(dobj->e->base.get_del_time())));
+                        }
+
+                        delete dobj->e;
+                        map_iter->second.erase(edge_iter);
+                        if (map_iter->second.empty()) {
+                            n->out_edges.erase(del_handle);
+                        }
                         release_node(n);
                     }
                     break;
@@ -928,8 +950,10 @@ namespace db
         assert(!n->in_use);
         // this code isn't executed in case of deletion of migrated nodes
         if (n->state != node::mode::MOVED) {
-            for (auto &e: n->out_edges) {
-                delete e.second;
+            for (auto &x: n->out_edges) {
+                for (db::edge *e: x.second) {
+                    delete e;
+                }
             }
             n->out_edges.clear();
         }
@@ -942,11 +966,11 @@ namespace db
     inline void
     shard :: update_migrated_nbr_nonlocking(node *n, const node_handle_t &migr_node, uint64_t old_loc, uint64_t new_loc)
     {
-        edge *e;
         for (auto &x: n->out_edges) {
-            e = x.second;
-            if (e->nbr.handle == migr_node && e->nbr.loc == old_loc) {
-                e->nbr.loc = new_loc;
+            for (db::edge *e: x.second) {
+                if (e->nbr.handle == migr_node && e->nbr.loc == old_loc) {
+                    e->nbr.loc = new_loc;
+                }
             }
         }
     }

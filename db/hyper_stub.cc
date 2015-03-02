@@ -105,7 +105,8 @@ hyper_stub :: restore_backup(std::unordered_map<node_handle_t, node*> *nodes,
 
             // edge map
             for (const auto &p: n->out_edges) {
-                edge_map[p.second->nbr.handle].emplace(node_handle);
+                assert(p.second.size() == 1);
+                edge_map[p.second.front()->nbr.handle].emplace(node_handle);
             }
 
             // node map
@@ -143,9 +144,10 @@ hyper_stub :: bulk_load(int thread_id, std::unordered_map<node_handle_t, node*> 
                     idx_add[alias] = p.second;
                 }
 
-                for (auto &e: p.second->out_edges) {
-                    assert(idx_add.find(e.first) == idx_add.end());
-                    idx_add[e.first] = p.second;
+                for (auto &x: p.second->out_edges) {
+                    assert(x.second.size() == 1);
+                    assert(idx_add.find(x.first) == idx_add.end());
+                    idx_add[x.first] = p.second;
                 }
             }
         }

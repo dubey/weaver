@@ -19,10 +19,18 @@ using node_prog::edge_list;
 edge_map_iter&
 edge_map_iter :: operator++()
 {
-    while (internal_cur != internal_end) {
-        internal_cur++;
-        if (internal_cur != internal_end
-         && time_oracle->clock_creat_before_del_after(*req_time, internal_cur->second->base.get_creat_time(), internal_cur->second->base.get_del_time())) {
+    while (++internal_cur != internal_end) {
+        bool to_break = false;
+
+        for (db::edge *e: internal_cur->second) {
+            if (time_oracle->clock_creat_before_del_after(*req_time, e->base.get_creat_time(), e->base.get_del_time())) {
+                cur_edge = e;
+                to_break = true;
+                break;
+            }
+        }
+
+        if (to_break) {
             break;
         }
     }
@@ -33,14 +41,26 @@ edge_map_iter :: edge_map_iter(edge_map_t::iterator begin,
     edge_map_t::iterator end,
     std::shared_ptr<vc::vclock> &req_time,
     order::oracle *to)
-    : internal_cur(begin)
+    : cur_edge(nullptr)
+    , internal_cur(begin)
     , internal_end(end)
     , req_time(req_time)
     , time_oracle(to)
 {
-    if (internal_cur != internal_end
-     && !time_oracle->clock_creat_before_del_after(*req_time, internal_cur->second->base.get_creat_time(), internal_cur->second->base.get_del_time())) {
-        ++(*this);
+    if (internal_cur != internal_end) {
+        bool to_break = false;
+
+        for (db::edge *e: internal_cur->second) {
+            if (time_oracle->clock_creat_before_del_after(*req_time, e->base.get_creat_time(), e->base.get_del_time())) {
+                cur_edge = e;
+                to_break = true;
+                break;
+            }
+        }
+
+        if (!to_break) {
+            ++(*this);
+        }
     }
 }
 
@@ -59,7 +79,7 @@ edge_map_iter :: operator!=(const edge_map_iter& rhs)
 node_prog::edge&
 edge_map_iter :: operator*()
 {
-    db::edge &toRet = *internal_cur->second;
+    db::edge &toRet = *cur_edge;
     toRet.base.view_time = req_time;
     toRet.base.time_oracle = time_oracle;
     return toRet;
@@ -90,4 +110,3 @@ edge_list :: count()
 {
     return wrapped.size();
 }
-

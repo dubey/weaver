@@ -22,15 +22,15 @@ namespace db
         transaction::update_type type;
         vc::vclock vclk;
         node_handle_t node;
-        edge_handle_t edge;
+        edge *e;
         std::vector<bool> no_outstanding_progs;
 
         inline
-        del_obj(transaction::update_type t, vc::vclock &vc, const node_handle_t &n, edge_handle_t e=edge_handle_t(""))
+        del_obj(transaction::update_type t, vc::vclock &vc, const node_handle_t &n, edge *del_edge)
             : type(t)
             , vclk(vc)
             , node(n)
-            , edge(e)
+            , e(del_edge)
             , no_outstanding_progs(NumVts, false)
         { }
     };

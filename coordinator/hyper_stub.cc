@@ -61,8 +61,10 @@ void
 hyper_stub :: clean_up(std::unordered_map<node_handle_t, db::node*> &nodes)
 {
     for (auto &p: nodes) {
-        for (auto &e: p.second->out_edges) {
-            delete e.second;
+        for (auto &x: p.second->out_edges) {
+            for (db::edge *e: x.second) {
+                delete e;
+            }
         }
         p.second->out_edges.clear();
         delete p.second;
@@ -287,7 +289,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                     WDEBUG << "edge with handle " << upd->handle1 << " does not exist at node " << upd->handle2 << std::endl;
                     ERROR_FAIL;
                 }
-                if (!n->out_edges[upd->handle1]->base.add_property(*upd->key, *upd->value, tx->timestamp)) {
+                if (!n->out_edges[upd->handle1].front()->base.add_property(*upd->key, *upd->value, tx->timestamp)) {
                     WDEBUG << "property " << *upd->key << ": " << *upd->value << " already exists at edge " << upd->handle1 << std::endl;
                     ERROR_FAIL;
                 }
@@ -333,8 +335,10 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
             old_nodes.erase(h);
         }
 
-        for (auto &e: n->out_edges) {
-            delete e.second;
+        for (auto &x: n->out_edges) {
+            for (db::edge *e: x.second) {
+                delete e;
+            }
         }
         n->out_edges.clear();
         delete n;

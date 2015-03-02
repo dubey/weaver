@@ -19,21 +19,17 @@ using node_prog::prop_iter;
 prop_iter&
 prop_iter :: operator++()
 {
-    while (internal_cur != internal_end) {
-        internal_cur++;
-
-        if (internal_cur != internal_end) {
-            bool to_break = false;
-            for (const std::shared_ptr<db::property> p: internal_cur->second) {
-                if (time_oracle->clock_creat_before_del_after(req_time, p->get_creat_time(), p->get_del_time())) {
-                    to_break = true;
-                    break;
-                }
-            }
-
-            if (to_break) {
+    while (++internal_cur != internal_end) {
+        bool to_break = false;
+        for (const std::shared_ptr<db::property> p: internal_cur->second) {
+            if (time_oracle->clock_creat_before_del_after(req_time, p->get_creat_time(), p->get_del_time())) {
+                to_break = true;
                 break;
             }
+        }
+
+        if (to_break) {
+            break;
         }
     }
 

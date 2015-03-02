@@ -53,7 +53,14 @@ node :: ~node()
 void
 node :: add_edge(edge *e)
 {
-    out_edges.emplace(e->get_handle(), e);
+    auto iter = out_edges.find(e->get_handle());
+    if (iter == out_edges.end()) {
+        std::vector<edge*> new_vec(1, e);
+        out_edges.emplace(e->get_handle(), new_vec);
+    } else {
+        assert(iter->second.back()->base.get_del_time().vt_id != UINT64_MAX && "cannot create two concurrent edges with same handle");
+        iter->second.emplace_back(e);
+    }
 }
 
 node_prog::edge_list

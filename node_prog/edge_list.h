@@ -24,9 +24,10 @@
 
 namespace node_prog
 {
-    typedef std::unordered_map<edge_handle_t, db::edge*> edge_map_t;
+    typedef std::unordered_map<edge_handle_t, std::vector<db::edge*>> edge_map_t;
     class edge_map_iter : public std::iterator<std::input_iterator_tag, edge>
     {
+        db::edge *cur_edge;
         edge_map_t::iterator internal_cur;
         edge_map_t::iterator internal_end;
         std::shared_ptr<vc::vclock> req_time;

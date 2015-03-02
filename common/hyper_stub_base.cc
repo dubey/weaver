@@ -694,7 +694,7 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::n
     n.base.update_creat_time(create_clk);
 
     // out edges
-    unpack_buffer<db::edge*>(cl_attr[idx[3]].value, cl_attr[idx[3]].value_sz, n.out_edges);
+    unpack_buffer<std::vector<db::edge*>>(cl_attr[idx[3]].value, cl_attr[idx[3]].value_sz, n.out_edges);
     // last update clock
     unpack_buffer(cl_attr[idx[5]].value, cl_attr[idx[5]].value_sz, n.last_upd_clk);
     // restore clock
@@ -797,7 +797,7 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     cl_attr[2].datatype = graph_dtypes[2];
 
     // out edges
-    prepare_buffer<db::edge*>(n.out_edges, out_edges_buf);
+    prepare_buffer<std::vector<db::edge*>>(n.out_edges, out_edges_buf);
     cl_attr[3].attr = graph_attrs[3];
     cl_attr[3].value = (const char*)out_edges_buf->data();
     cl_attr[3].value_sz = out_edges_buf->size();

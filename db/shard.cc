@@ -730,7 +730,7 @@ fetch_node_cache_contexts(uint64_t loc,
             if (time_oracle->compare_two_vts(node->base.get_del_time(), cur_time) == 0) { // node has been deleted
                 toFill.emplace_back(loc, handle, true);
             } else {
-                node_prog::node_cache_context *context = NULL;
+                node_prog::node_cache_context *context = nullptr;
                 std::vector<node_prog::property> temp_props_added;
                 std::vector<node_prog::property> temp_props_deleted;
 
@@ -747,53 +747,51 @@ fetch_node_cache_contexts(uint64_t loc,
                 }
                 // now check for any edge changes
                 for (auto &iter: node->out_edges) {
-                    db::edge* e = iter.second;
-                    assert(e != NULL);
+                    for (db::edge *e: iter.second) {
+                        assert(e != nullptr);
 
-                    bool del_after_cached = (time_oracle->compare_two_vts(time_cached, e->base.get_del_time()) == 0);
-                    bool creat_after_cached = (time_oracle->compare_two_vts(time_cached, e->base.get_creat_time()) == 0);
+                        bool del_after_cached = (time_oracle->compare_two_vts(time_cached, e->base.get_del_time()) == 0);
+                        bool creat_after_cached = (time_oracle->compare_two_vts(time_cached, e->base.get_creat_time()) == 0);
 
-                    bool del_before_cur = (time_oracle->compare_two_vts(e->base.get_del_time(), cur_time) == 0);
-                    bool creat_before_cur = (time_oracle->compare_two_vts(e->base.get_creat_time(), cur_time) == 0);
+                        bool del_before_cur = (time_oracle->compare_two_vts(e->base.get_del_time(), cur_time) == 0);
+                        bool creat_before_cur = (time_oracle->compare_two_vts(e->base.get_creat_time(), cur_time) == 0);
 
-                    if (creat_after_cached && creat_before_cur && !del_before_cur) {
-                        WDEBUG << "edge created!" << std::endl;
-                        if (context == NULL) {
-                            toFill.emplace_back(loc, handle, false);
-                            context = &toFill.back();
-                        }
-
-                        context->edges_added.emplace_back(e->get_handle(), e->nbr);
-                        node_prog::edge_cache_context &edge_context = context->edges_added.back();
-                        // don't care about props deleted before req time for an edge created after cache value was stored
-                        fill_changed_properties(e->base.properties, &edge_context.props_added,
-                                NULL, time_cached, cur_time, time_oracle);
-                    } else if (del_after_cached && del_before_cur) {
-                        if (context == NULL) {
-                            toFill.emplace_back(loc, handle, false);
-                            context = &toFill.back();
-                        }
-                        context->edges_deleted.emplace_back(e->get_handle(), e->nbr);
-                        node_prog::edge_cache_context &edge_context = context->edges_deleted.back();
-                        // don't care about props added after cache time on a deleted edge
-                        fill_changed_properties(e->base.properties, NULL,
-                                &edge_context.props_deleted, time_cached, cur_time, time_oracle);
-                    } else if (del_after_cached && !creat_after_cached) {
-                        // see if any properties changed on edge that didnt change
-                        fill_changed_properties(e->base.properties, &temp_props_added,
-                                &temp_props_deleted, time_cached, cur_time, time_oracle);
-                        if (!temp_props_added.empty() || !temp_props_deleted.empty()) {
-                            if (context == NULL) {
+                        if (creat_after_cached && creat_before_cur && !del_before_cur) {
+                            if (context == nullptr) {
                                 toFill.emplace_back(loc, handle, false);
                                 context = &toFill.back();
                             }
-                            context->edges_modified.emplace_back(e->get_handle(), e->nbr);
 
-                            context->edges_modified.back().props_added = std::move(temp_props_added);
-                            context->edges_modified.back().props_deleted = std::move(temp_props_deleted);
+                            context->edges_added.emplace_back(e->get_handle(), e->nbr);
+                            node_prog::edge_cache_context &edge_context = context->edges_added.back();
+                            // don't care about props deleted before req time for an edge created after cache value was stored
+                            fill_changed_properties(e->base.properties, &edge_context.props_added, nullptr, time_cached, cur_time, time_oracle);
+                        } else if (del_after_cached && del_before_cur) {
+                            if (context == nullptr) {
+                                toFill.emplace_back(loc, handle, false);
+                                context = &toFill.back();
+                            }
+                            context->edges_deleted.emplace_back(e->get_handle(), e->nbr);
+                            node_prog::edge_cache_context &edge_context = context->edges_deleted.back();
+                            // don't care about props added after cache time on a deleted edge
+                            fill_changed_properties(e->base.properties, nullptr, &edge_context.props_deleted, time_cached, cur_time, time_oracle);
+                        } else if (del_after_cached && !creat_after_cached) {
+                            // see if any properties changed on edge that didnt change
+                            fill_changed_properties(e->base.properties, &temp_props_added,
+                                    &temp_props_deleted, time_cached, cur_time, time_oracle);
+                            if (!temp_props_added.empty() || !temp_props_deleted.empty()) {
+                                if (context == nullptr) {
+                                    toFill.emplace_back(loc, handle, false);
+                                    context = &toFill.back();
+                                }
+                                context->edges_modified.emplace_back(e->get_handle(), e->nbr);
 
-                            temp_props_added.clear();
-                            temp_props_deleted.clear();
+                                context->edges_modified.back().props_added = std::move(temp_props_added);
+                                context->edges_modified.back().props_deleted = std::move(temp_props_deleted);
+
+                                temp_props_added.clear();
+                                temp_props_deleted.clear();
+                            }
                         }
                     }
                 }
@@ -1253,7 +1251,6 @@ update_deleted_node(const node_handle_t &node_handle)
 {
     std::unordered_set<node_handle_t> nbrs;
     db::node *n;
-    db::edge *e;
     S->edge_map_mutex.lock();
     if (S->edge_map.find(node_handle) != S->edge_map.end()) {
         nbrs = std::move(S->edge_map[node_handle]);
@@ -1266,10 +1263,11 @@ update_deleted_node(const node_handle_t &node_handle)
         n = S->acquire_node(nbr);
         to_del.clear();
         for (auto &x: n->out_edges) {
-            e = x.second;
-            if (e->nbr.handle == node_handle) {
-                delete e;
-                to_del.emplace_back(x.first);
+            for (db::edge *e: x.second) {
+                if (e->nbr.handle == node_handle) {
+                    delete e;
+                    to_del.emplace_back(x.first);
+                }
             }
         }
         for (const edge_handle_t &del_edge: to_del) {
@@ -1343,13 +1341,15 @@ migrate_node_step1(db::node *n,
 
     // updating edge map
     S->edge_map_mutex.lock();
-    for (auto &e: n->out_edges) {
-        const node_handle_t &node = e.second->nbr.handle;
-        assert(S->edge_map.find(node) != S->edge_map.end());
-        auto &node_set = S->edge_map[node];
-        node_set.erase(S->migr_node);
-        if (node_set.empty()) {
-            S->edge_map.erase(node);
+    for (auto &x: n->out_edges) {
+        for (db::edge *e: x.second) {
+            const node_handle_t &node = e->nbr.handle;
+            assert(S->edge_map.find(node) != S->edge_map.end());
+            auto &node_set = S->edge_map[node];
+            node_set.erase(S->migr_node);
+            if (node_set.empty()) {
+                S->edge_map.erase(node);
+            }
         }
     }
     S->edge_map_mutex.unlock();
@@ -1416,9 +1416,11 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg, order::oracle *ti
 
     // updating edge map
     S->edge_map_mutex.lock();
-    for (auto &e: n->out_edges) {
-        const node_handle_t &node = e.second->nbr.handle;
-        S->edge_map[node].emplace(node_handle);
+    for (auto &x: n->out_edges) {
+        for (db::edge *e: x.second) {
+            const node_handle_t &node = e->nbr.handle;
+            S->edge_map[node].emplace(node_handle);
+        }
     }
     S->edge_map_mutex.unlock();
 
@@ -1608,10 +1610,10 @@ ldg_migration_wrapper(std::vector<uint64_t> &shard_node_count, uint64_t migr_num
         }
 
         // regular LDG
-        db::edge *e;
         for (auto &e_iter: n->out_edges) {
-            e = e_iter.second;
-            n->migr_score[e->nbr.loc - ShardIdIncr] += 1;
+            for (db::edge *e: e_iter.second) {
+                n->migr_score[e->nbr.loc - ShardIdIncr] += 1;
+            }
         }
         for (uint64_t j = 0; j < migr_num_shards; j++) {
             n->migr_score[j] *= (1 - ((double)shard_node_count[j])/shard_cap);
