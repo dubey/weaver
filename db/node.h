@@ -114,6 +114,16 @@ namespace db
             bool is_alias(const node_handle_t &alias) const;
             void get_client_node(cl::node &n, bool, bool, bool);
     };
+
+    using node_version_t = std::pair<node_handle_t, vc::vclock>;
+
+    struct node_version_hash
+    {
+        size_t operator()(const node_version_t &nv) const
+        {
+            return std::hash<std::string>()(nv.first);
+        }
+    };
 }
 
 #endif

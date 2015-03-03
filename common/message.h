@@ -68,7 +68,6 @@ namespace message
         // graph update messages
         TX_INIT,
         TX_DONE,
-        PERMANENTLY_DELETED_NODE,
         // node program messages
         NODE_PROG,
         NODE_PROG_RETURN,

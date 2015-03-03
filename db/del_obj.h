@@ -20,17 +20,19 @@ namespace db
     struct del_obj
     {
         transaction::update_type type;
-        vc::vclock vclk;
+        vc::vclock tdel;
+        vc::vclock version; // creat time of the node
         node_handle_t node;
-        edge *e;
+        edge_handle_t edge;
         std::vector<bool> no_outstanding_progs;
 
         inline
-        del_obj(transaction::update_type t, vc::vclock &vc, const node_handle_t &n, edge *del_edge)
+        del_obj(transaction::update_type t, const vc::vclock &td, const vc::vclock &ver, const node_handle_t &n, const edge_handle_t &e)
             : type(t)
-            , vclk(vc)
+            , tdel(td)
+            , version(ver)
             , node(n)
-            , e(del_edge)
+            , edge(e)
             , no_outstanding_progs(NumVts, false)
         { }
     };
@@ -41,10 +43,10 @@ namespace db
     {
         bool operator()(const del_obj* const &dw1, const del_obj* const &dw2)
         {
-            assert(dw1->vclk.clock.size() == ClkSz);
-            assert(dw2->vclk.clock.size() == ClkSz);
+            assert(dw1->tdel.clock.size() == ClkSz);
+            assert(dw2->tdel.clock.size() == ClkSz);
             for (uint64_t i = 0; i < ClkSz; i++) {
-                if (dw1->vclk.clock[i] <= dw2->vclk.clock[i]) {
+                if (dw1->tdel.clock[i] <= dw2->tdel.clock[i]) {
                     return false;
                 }
             }

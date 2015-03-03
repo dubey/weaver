@@ -41,8 +41,6 @@ message :: to_string(const msg_type &t)
             return "TX_INIT";
         case TX_DONE:
             return "TX_DONE";
-        case PERMANENTLY_DELETED_NODE:
-            return "PERMANENTLY_DELETED_NODE";
         case NODE_PROG:
             return "NODE_PROG";
         case NODE_PROG_RETURN:

@@ -289,6 +289,7 @@ oracle :: compare_two_vts(const vc::vclock &clk1, const vc::vclock &clk2)
 }
 
 // return true if the first clock occurred between the second two
+// assert not equal because vector clocks are unique.  no two clock are the same in every coordinate of the vector.
 bool
 oracle :: clock_creat_before_del_after(const vc::vclock &req_vclock, const vc::vclock &creat_time, const vc::vclock &del_time)
 {

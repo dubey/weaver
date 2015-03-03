@@ -36,6 +36,8 @@
 
 DECLARE_CONFIG_CONSTANTS;
 
+using db::node_version_t;
+
 // global static variables
 static uint64_t shard_id;
 // shard pointer for shard.cc
@@ -237,14 +239,14 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     uint64_t loc0 = ((node0 % num_shards) + ShardIdIncr);
                     uint64_t loc1 = ((node1 % num_shards) + ShardIdIncr);
                     if (loc0 == shard_id) {
-                        n = S->acquire_node_nonlocking(id0);
+                        n = S->bulk_load_acquire_node_nonlocking(id0);
                         if (n == NULL) {
                             n = S->create_node(id0, zero_clk, false, true);
                         }
                         S->create_edge_nonlocking(n, edge_handle, id1, loc1, zero_clk, true);
                     }
                     if (loc1 == shard_id) {
-                        if (!S->node_exists_nonlocking(id1)) {
+                        if (!S->bulk_load_node_exists_nonlocking(id1)) {
                             S->create_node(id1, zero_clk, false, true);
                         }
                     }
@@ -270,7 +272,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 all_node_map[id0] = loc;
                 assert(loc < num_shards + ShardIdIncr);
                 if (loc == shard_id) {
-                    n = S->acquire_node_nonlocking(id0);
+                    n = S->bulk_load_acquire_node_nonlocking(id0);
                     if (n == nullptr) {
                         n = S->create_node(id0, zero_clk, false, true);
                     }
@@ -292,7 +294,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 uint64_t loc0 = all_node_map[id0];
                 uint64_t loc1 = all_node_map[id1];
                 if (loc0 == shard_id) {
-                    n = S->acquire_node_nonlocking(id0);
+                    n = S->bulk_load_acquire_node_nonlocking(id0);
                     assert(n != nullptr);
                     S->create_edge_nonlocking(n, edge_handle, id1, loc1, zero_clk, true);
                     for (auto &p: props) {
@@ -317,7 +319,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 id0 = node.attribute("id").value();
                 loc = (hash_string(id0) % num_shards) + ShardIdIncr;
                 if (loc == shard_id) {
-                    n = S->acquire_node_nonlocking(id0);
+                    n = S->bulk_load_acquire_node_nonlocking(id0);
                     assert(n == nullptr);
                     n = S->create_node(id0, zero_clk, false, true);
 
@@ -348,7 +350,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 uint64_t loc0 = (hash_string(id0) % num_shards) + ShardIdIncr;
                 uint64_t loc1 = (hash_string(id1) % num_shards) + ShardIdIncr;
                 if (loc0 == shard_id) {
-                    n = S->acquire_node_nonlocking(id0);
+                    n = S->bulk_load_acquire_node_nonlocking(id0);
                     assert(n != nullptr);
                     S->create_edge_nonlocking(n, edge_handle, id1, loc1, zero_clk, true);
 
@@ -501,13 +503,13 @@ unpack_tx_request(db::message_wrapper *request)
             case transaction::NODE_DELETE_REQ:
             case transaction::NODE_SET_PROPERTY:
             case transaction::ADD_AUX_INDEX:
-                n = S->acquire_node(upd->handle1);
+                n = S->acquire_node_latest(upd->handle1);
                 break;
 
             // elem2
             case transaction::EDGE_DELETE_REQ:
             case transaction::EDGE_SET_PROPERTY:
-                n = S->acquire_node(upd->handle2);
+                n = S->acquire_node_latest(upd->handle2);
                 break;
 
             default:
@@ -654,7 +656,7 @@ template <typename NodeStateType>
 NodeStateType& get_or_create_state(node_prog::prog_type ptype,
     uint64_t req_id,
     db::node *node,
-    std::vector<node_handle_t> *nodes_that_created_state)
+    std::vector<db::node_version_t> *nodes_that_created_state)
 {
     auto &state_map = node->prog_states[(int)ptype];
     auto state_iter = state_map.find(req_id);
@@ -664,7 +666,7 @@ NodeStateType& get_or_create_state(node_prog::prog_type ptype,
         NodeStateType *ptr = new NodeStateType();
         state_map[req_id] = std::unique_ptr<node_prog::Node_State_Base>(ptr);
         assert(nodes_that_created_state != NULL);
-        nodes_that_created_state->emplace_back(node->get_handle());
+        nodes_that_created_state->emplace_back(std::make_pair(node->get_handle(), node->base.get_creat_time()));
         return *ptr;
     }
 }
@@ -714,11 +716,12 @@ fetch_node_cache_contexts(uint64_t loc,
     order::oracle *time_oracle)
 {
     for (node_handle_t &handle: handles) {
-        db::node *node = S->acquire_node(handle);
+        db::node *node = S->acquire_node_version(handle, time_cached, time_oracle);
 
-        if (node == NULL || node->state == db::node::mode::MOVED ||
-                (node->last_perm_deletion != NULL && time_oracle->compare_two_vts(time_cached, *node->last_perm_deletion) == 0)) {
-            if (node != NULL) {
+        if (node == nullptr
+         || node->state == db::node::mode::MOVED
+         || (node->last_perm_deletion != NULL && time_oracle->compare_two_vts(time_cached, *node->last_perm_deletion) == 0)) {
+            if (node != nullptr) {
                 S->release_node(node);
             }
             WDEBUG << "node not found or migrated or some data permanently deleted, invalidating cached value" << std::endl;
@@ -965,7 +968,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
                        std::shared_ptr<std::vector<db::remote_node>>,
                        cache_key_t)> add_cache_func;
 
-    std::vector<node_handle_t> nodes_that_created_state;
+    std::vector<node_version_t> nodes_that_created_state;
 
     node_handle_t node_handle;
     bool done_request = false;
@@ -976,7 +979,9 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
         node_handle = id_params.first;
         ParamsType &params = id_params.second;
         this_node.handle = node_handle;
-        db::node *node = S->acquire_node(node_handle);
+
+        db::node *node = S->acquire_node_version(node_handle, *np.req_vclock, time_oracle);
+
         if (node == NULL || time_oracle->compare_two_vts(node->base.get_del_time(), *np.req_vclock)==0) {
             if (node != NULL) {
                 S->release_node(node);
@@ -1245,38 +1250,6 @@ void
 node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_and_start_coord(std::unique_ptr<message::message>, uint64_t, coordinator::hyper_stub*)
 { }
 
-// delete all in-edges for a permanently deleted node
-inline void
-update_deleted_node(const node_handle_t &node_handle)
-{
-    std::unordered_set<node_handle_t> nbrs;
-    db::node *n;
-    S->edge_map_mutex.lock();
-    if (S->edge_map.find(node_handle) != S->edge_map.end()) {
-        nbrs = std::move(S->edge_map[node_handle]);
-        S->edge_map.erase(node_handle);
-    }
-    S->edge_map_mutex.unlock();
-
-    std::vector<edge_handle_t> to_del;
-    for (const node_handle_t &nbr: nbrs) {
-        n = S->acquire_node(nbr);
-        to_del.clear();
-        for (auto &x: n->out_edges) {
-            for (db::edge *e: x.second) {
-                if (e->nbr.handle == node_handle) {
-                    delete e;
-                    to_del.emplace_back(x.first);
-                }
-            }
-        }
-        for (const edge_handle_t &del_edge: to_del) {
-            n->out_edges.erase(del_edge);
-        }
-        S->release_node(n);
-    }
-}
-
 inline uint64_t
 get_balanced_assignment(std::vector<uint64_t> &shard_node_count, std::vector<uint32_t> &max_indices)
 {
@@ -1343,13 +1316,9 @@ migrate_node_step1(db::node *n,
     S->edge_map_mutex.lock();
     for (auto &x: n->out_edges) {
         for (db::edge *e: x.second) {
-            const node_handle_t &node = e->nbr.handle;
-            assert(S->edge_map.find(node) != S->edge_map.end());
-            auto &node_set = S->edge_map[node];
-            node_set.erase(S->migr_node);
-            if (node_set.empty()) {
-                S->edge_map.erase(node);
-            }
+            const node_handle_t &remote_node = e->nbr.handle;
+            node_version_t local_node = std::make_pair(S->migr_node, e->base.get_creat_time());
+            S->remove_from_edge_map(remote_node, local_node);
         }
     }
     S->edge_map_mutex.unlock();
@@ -1385,7 +1354,7 @@ migrate_node_step2_req()
     }
     S->migration_mutex.unlock();
 
-    n = S->acquire_node(S->migr_node);
+    n = S->acquire_node_latest(S->migr_node);
     assert(n != NULL);
     msg.prepare_message(message::MIGRATE_SEND_NODE, S->migr_node, shard_id, *n);
     S->release_node(n);
@@ -1418,8 +1387,8 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg, order::oracle *ti
     S->edge_map_mutex.lock();
     for (auto &x: n->out_edges) {
         for (db::edge *e: x.second) {
-            const node_handle_t &node = e->nbr.handle;
-            S->edge_map[node].emplace(node_handle);
+            const node_handle_t &remote_node = e->nbr.handle;
+            S->edge_map[remote_node].emplace(std::make_pair(node_handle, e->base.get_creat_time()));
         }
     }
     S->edge_map_mutex.unlock();
@@ -1467,9 +1436,9 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg, order::oracle *ti
     }
 
     // release node for new reads and writes
+    std::vector<node_version_t> this_node_vec(1, std::make_pair(node_handle, n->base.get_creat_time()));
     S->release_node(n);
 
-    std::vector<node_handle_t> this_node_vec(1, node_handle);
     for (uint64_t req_id: prog_state_reqs) {
         S->mark_nodes_using_state(req_id, this_node_vec);
     }
@@ -1550,7 +1519,7 @@ cldg_migration_wrapper(std::vector<uint64_t> &shard_node_count, uint64_t migr_nu
         db::node *n;
         uint64_t migr_node = S->cldg_iter->first;
         S->cldg_iter++;
-        n = S->acquire_node(migr_node);
+        n = S->acquire_node_latest(migr_node);
 
         // check if okay to migrate
         if (!check_migr_node(n, migr_num_shards)) {
@@ -1602,7 +1571,7 @@ ldg_migration_wrapper(std::vector<uint64_t> &shard_node_count, uint64_t migr_num
         db::node *n;
         const node_handle_t &migr_node = *S->ldg_iter;
         S->ldg_iter++;
-        n = S->acquire_node(migr_node);
+        n = S->acquire_node_latest(migr_node);
 
         // check if okay to migrate
         if (!check_migr_node(n, migr_num_shards)) {
@@ -1688,7 +1657,7 @@ migration_begin()
     uint64_t mcnt;
     for (const node_handle_t &nid: S->ldg_nodes) {
         mcnt = 0;
-        db::node *n = S->acquire_node(nid);
+        db::node *n = S->acquire_node_latest(nid);
         for (uint64_t cnt: n->msg_count) {
             mcnt += cnt;
         }
@@ -1829,13 +1798,6 @@ recv_loop(uint64_t thread_id)
                         qreq = new db::queued_request(req_id, vclk, f, mwrap);
                         S->qm.enqueue_read_request(vt_id, qreq);
                     }
-                    break;
-                }
-
-                case message::PERMANENTLY_DELETED_NODE: {
-                    node_handle_t node;
-                    rec_msg->unpack_message(mtype, node);
-                    update_deleted_node(node);
                     break;
                 }
 

@@ -24,8 +24,8 @@ hyper_stub :: hyper_stub(uint64_t sid)
 { }
 
 void
-hyper_stub :: restore_backup(std::unordered_map<node_handle_t, node*> *nodes,
-    std::unordered_map<node_handle_t, std::unordered_set<node_handle_t>> &edge_map,
+hyper_stub :: restore_backup(std::unordered_map<node_handle_t, std::vector<node*>> *nodes,
+    std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,
     po6::threads::mutex *shard_mutexes)
 {
     const hyperdex_client_attribute *cl_attr;
@@ -106,13 +106,14 @@ hyper_stub :: restore_backup(std::unordered_map<node_handle_t, node*> *nodes,
             // edge map
             for (const auto &p: n->out_edges) {
                 assert(p.second.size() == 1);
-                edge_map[p.second.front()->nbr.handle].emplace(node_handle);
+                edge *e = p.second.front();
+                edge_map[e->nbr.handle].emplace(std::make_pair(node_handle, e->base.get_creat_time()));
             }
 
             // node map
             auto &node_map = nodes[map_idx];
             assert(node_map.find(node_handle) == node_map.end());
-            node_map.emplace(node_handle, n);
+            node_map.emplace(node_handle, std::vector<node*>(1, n));
 
             hyperdex_client_destroy_attrs(cl_attr, num_attrs);
         } else {
@@ -124,31 +125,32 @@ hyper_stub :: restore_backup(std::unordered_map<node_handle_t, node*> *nodes,
 }
 
 void
-hyper_stub :: bulk_load(int thread_id, std::unordered_map<node_handle_t, node*> *nodes_arr)
+hyper_stub :: bulk_load(int thread_id, std::unordered_map<node_handle_t, std::vector<node*>> *nodes_arr)
 {
     assert(NUM_NODE_MAPS % NUM_SHARD_THREADS == 0);
 
+    std::unordered_map<node_handle_t, node*> node_map;
     for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
-        put_nodes_bulk(nodes_arr[tid]);
+        for (const auto &p: nodes_arr[tid]) {
+            assert(p.second.size() == 1);
+            node_map.emplace(p.first, p.second.front());
+        }
     }
 
+    put_nodes_bulk(node_map);
+
     if (AuxIndex) {
-        std::unordered_map<std::string, node*> idx_add;
-        for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
-            for (auto &p: nodes_arr[tid]) {
-                assert(idx_add.find(p.first) == idx_add.end());
-                idx_add[p.first] = p.second;
+        std::unordered_map<std::string, node*> idx_add = node_map;
+        for (auto &p: node_map) {
+            for (const node_handle_t &alias: p.second->aliases) {
+                assert(idx_add.find(alias) == idx_add.end());
+                idx_add.emplace(alias, p.second);
+            }
 
-                for (const node_handle_t &alias: p.second->aliases) {
-                    assert(idx_add.find(alias) == idx_add.end());
-                    idx_add[alias] = p.second;
-                }
-
-                for (auto &x: p.second->out_edges) {
-                    assert(x.second.size() == 1);
-                    assert(idx_add.find(x.first) == idx_add.end());
-                    idx_add[x.first] = p.second;
-                }
+            for (auto &x: p.second->out_edges) {
+                assert(x.second.size() == 1);
+                assert(idx_add.find(x.first) == idx_add.end());
+                idx_add.emplace(x.first, p.second);
             }
         }
 

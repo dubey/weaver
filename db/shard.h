@@ -89,9 +89,12 @@ namespace db
             std::vector<order::oracle*> time_oracles;
             void increment_qts(uint64_t vt_id, uint64_t incr);
             void record_completed_tx(vc::vclock &tx_clk);
-            node* acquire_node(const node_handle_t &node_handle);
+            void node_wait_and_mark_busy(node*);
+            node* acquire_node_latest(const node_handle_t &node_handle);
+            node* acquire_node_specific(const node_handle_t &node_handle, const vc::vclock *tcreat, const vc::vclock *tdel);
+            node* acquire_node_version(const node_handle_t &node_handle, const vc::vclock &vclk, order::oracle*);
             node* acquire_node_write(const node_handle_t &node, uint64_t vt_id, uint64_t qts);
-            node* acquire_node_nonlocking(const node_handle_t &node_handle);
+            node* bulk_load_acquire_node_nonlocking(const node_handle_t &node_handle);
             void release_node_write(node *n);
             void release_node(node *n, bool migr_node);
 
@@ -100,9 +103,9 @@ namespace db
             po6::threads::mutex node_map_mutexes[NUM_NODE_MAPS];
             uint64_t shard_id;
             server_id serv_id;
-            std::unordered_map<node_handle_t, node*> nodes[NUM_NODE_MAPS]; // node handle -> ptr to node object
+            std::unordered_map<node_handle_t, std::vector<node*>> nodes[NUM_NODE_MAPS]; // node handle -> ptr to node object
             std::unordered_map<node_handle_t, // node handle n ->
-                std::unordered_set<node_handle_t>> edge_map; // in-neighbors of n
+                std::unordered_set<node_version_t, node_version_hash>> edge_map; // in-neighbors of n
         public:
             node* create_node(const node_handle_t &node_handle,
                 vc::vclock &vclk,
@@ -152,7 +155,7 @@ namespace db
                 vc::vclock &vclk,
                 uint64_t qts);
             uint64_t get_node_count();
-            bool node_exists_nonlocking(const node_handle_t &node_handle);
+            bool bulk_load_node_exists_nonlocking(const node_handle_t &node_handle);
 
             // Initial graph loading
             po6::threads::mutex graph_load_mutex;
@@ -165,6 +168,7 @@ namespace db
             po6::threads::mutex perm_del_mutex;
             std::deque<del_obj*> perm_del_queue;
             void delete_migrated_node(const node_handle_t &migr_node);
+            void remove_from_edge_map(const node_handle_t &remote_node, const node_version_t &local_node);
             void permanent_delete_loop(uint64_t vt_id, bool outstanding_progs, order::oracle *time_oracle);
         private:
             void permanent_node_delete(node *n);
@@ -209,11 +213,11 @@ namespace db
         private:
             po6::threads::mutex node_prog_state_mutex;
             std::unordered_set<uint64_t> done_prog_ids; // request ids that have finished
-            std::unordered_map<uint64_t, std::vector<node_handle_t>> outstanding_prog_states; // maps request_id to list of nodes that have created prog state for that req id
-            void clear_all_state(const std::unordered_map<uint64_t, std::vector<node_handle_t>> &outstanding_prog_states);
-            void delete_prog_states(uint64_t req_id, std::vector<node_handle_t> &node_handles);
+            std::unordered_map<uint64_t, std::vector<node_version_t>> outstanding_prog_states; // maps request_id to list of nodes that have created prog state for that req id
+            void clear_all_state(const std::unordered_map<uint64_t, std::vector<node_version_t>> &outstanding_prog_states);
+            void delete_prog_states(uint64_t req_id, std::vector<node_version_t> &node_handles);
         public:
-            void mark_nodes_using_state(uint64_t req_id, std::vector<node_handle_t> &node_handles);
+            void mark_nodes_using_state(uint64_t req_id, std::vector<node_version_t> &node_handles);
             void add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
             bool check_done_request(uint64_t req_id, vc::vclock &clk);
 
@@ -345,7 +349,7 @@ namespace db
         // reset qts if a VTS died
         std::vector<server> delta = prev_config.delta(config);
         bool clear_queued = false;
-        std::unordered_map<uint64_t, std::vector<node_handle_t>> clear_map;
+        std::unordered_map<uint64_t, std::vector<node_version_t>> clear_map;
         for (const server &srv: delta) {
             if (srv.type == server::VT) {
                 server::state_t prev_state = prev_config.get_state(srv.id);
@@ -406,25 +410,93 @@ namespace db
         qm.record_completed_tx(tx_clk);
     }
 
-    // find the node corresponding to given id
+    inline void
+    shard :: node_wait_and_mark_busy(node *n)
+    {
+        n->waiters++;
+        while (n->in_use) {
+            n->cv.wait();
+        }
+        n->waiters--;
+        n->in_use = true;
+    }
+
+    // nodes is map<handle, vector<node*>>
+    // multiple nodes with same handle can exist because the node was deleted and then recreated
+    // find the current node corresponding to given id
     // lock and return the node
     // return NULL if node does not exist (possibly permanently deleted)
     inline node*
-    shard :: acquire_node(const node_handle_t &node_handle)
+    shard :: acquire_node_latest(const node_handle_t &node_handle)
     {
         uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
 
-        node *n = NULL;
+        node *n = nullptr;
+        node_map_mutexes[map_idx].lock();
+        auto node_iter = nodes[map_idx].find(node_handle);
+        if (node_iter != nodes[map_idx].end() && !node_iter->second.empty()) {
+            n = node_iter->second.back();
+            node_wait_and_mark_busy(n);
+        }
+        node_map_mutexes[map_idx].unlock();
+
+        return n;
+    }
+
+    // get node with handle node_handle that has either create time == tcreat or delete time == tdel
+    inline node*
+    shard :: acquire_node_specific(const node_handle_t &node_handle, const vc::vclock *tcreat, const vc::vclock *tdel)
+    {
+        uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
+
+        node *n = nullptr;
         node_map_mutexes[map_idx].lock();
         auto node_iter = nodes[map_idx].find(node_handle);
         if (node_iter != nodes[map_idx].end()) {
-            n = node_iter->second;
-            n->waiters++;
-            while (n->in_use) {
-                n->cv.wait();
+            for (node *n_ver: node_iter->second) {
+                node_wait_and_mark_busy(n_ver);
+
+                if ((tcreat != nullptr && n_ver->base.get_creat_time() == *tcreat)
+                 || (tdel != nullptr && n_ver->base.get_del_time() == *tdel)) {
+                    n = n_ver;
+                    break;
+                } else {
+                    n_ver->in_use = false;
+                    if (n_ver->waiters > 0) {
+                        n_ver->cv.signal();
+                    }
+                }
             }
-            n->waiters--;
-            n->in_use = true;
+        }
+        node_map_mutexes[map_idx].unlock();
+
+        return n;
+    }
+
+    // get node that existed at time vclk, i.e. create time < vclk < delete time
+    // strict inequality because vector clocks are unique.  no two clocks have exact same value
+    inline node*
+    shard :: acquire_node_version(const node_handle_t &node_handle, const vc::vclock &vclk, order::oracle *time_oracle)
+    {
+        uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
+
+        node *n = nullptr;
+        node_map_mutexes[map_idx].lock();
+        auto node_iter = nodes[map_idx].find(node_handle);
+        if (node_iter != nodes[map_idx].end()) {
+            for (node *n_ver: node_iter->second) {
+                node_wait_and_mark_busy(n_ver);
+
+                if (time_oracle->clock_creat_before_del_after(vclk, n_ver->base.get_creat_time(), n_ver->base.get_del_time())) {
+                    n = n_ver;
+                    break;
+                } else {
+                    n_ver->in_use = false;
+                    if (n_ver->waiters > 0) {
+                        n_ver->cv.signal();
+                    }
+                }
+            }
         }
         node_map_mutexes[map_idx].unlock();
 
@@ -436,12 +508,12 @@ namespace db
     {
         uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
 
-        node *n = NULL;
+        node *n = nullptr;
         auto comp = std::make_pair(vt_id, qts);
         node_map_mutexes[map_idx].lock();
         auto node_iter = nodes[map_idx].find(node_handle);
-        if (node_iter != nodes[map_idx].end()) {
-            n = node_iter->second;
+        if (node_iter != nodes[map_idx].end() && !node_iter->second.empty()) {
+            n = node_iter->second.back();
             n->waiters++;
 
             // first wait for node to become free
@@ -480,14 +552,14 @@ namespace db
     }
 
     inline node*
-    shard :: acquire_node_nonlocking(const node_handle_t &node_handle)
+    shard :: bulk_load_acquire_node_nonlocking(const node_handle_t &node_handle)
     {
         uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
 
-        node *n = NULL;
+        node *n = nullptr;
         auto node_iter = nodes[map_idx].find(node_handle);
-        if (node_iter != nodes[map_idx].end()) {
-            n = node_iter->second;
+        if (node_iter != nodes[map_idx].end() && !node_iter->second.empty()) {
+            n = node_iter->second.back();
         }
         return n;
     }
@@ -514,7 +586,19 @@ namespace db
             node_map_mutexes[map_idx].unlock();
         } else if (n->permanently_deleted) {
             const node_handle_t &node_handle = n->get_handle();
-            nodes[map_idx].erase(node_handle);
+            auto map_iter = nodes[map_idx].find(node_handle);
+            assert(map_iter != nodes[map_idx].end());
+            auto node_iter = map_iter->second.begin();
+            for (; node_iter != map_iter->second.end(); node_iter++) {
+                if (n == *node_iter) {
+                    break;
+                }
+            }
+            assert(node_iter != map_iter->second.end());
+            map_iter->second.erase(node_iter);
+            if (map_iter->second.empty()) {
+                nodes[map_idx].erase(node_handle);
+            }
             node_map_mutexes[map_idx].unlock();
 
             migration_mutex.lock();
@@ -558,9 +642,12 @@ namespace db
             node_map_mutexes[map_idx].lock();
         }
 
-        bool success = nodes[map_idx].emplace(node_handle, new_node).second;
-        assert(success);
-        UNUSED(success);
+        auto map_iter = nodes[map_idx].find(node_handle);
+        if (map_iter == nodes[map_idx].end()) {
+            nodes[map_idx].emplace(node_handle, std::vector<node*>(1, new_node));
+        } else {
+            map_iter->second.emplace_back(new_node);
+        }
 
         if (!init_load) {
             node_map_mutexes[map_idx].unlock();
@@ -610,10 +697,11 @@ namespace db
             migration_mutex.unlock();
         } else {
             delete_node_nonlocking(n, tdel);
+            del_obj *dobj = new del_obj(transaction::NODE_DELETE_REQ, tdel, n->base.get_creat_time(), node_handle, "");
             release_node_write(n);
             // record object for permanent deletion later on
             perm_del_mutex.lock();
-            perm_del_queue.emplace_back(new del_obj(transaction::NODE_DELETE_REQ, tdel, node_handle, nullptr));
+            perm_del_queue.emplace_back(dobj);
             perm_del_mutex.unlock();
         }
     }
@@ -633,7 +721,7 @@ namespace db
         if (!init_load) {
             edge_map_mutex.lock();
         }
-        edge_map[remote_node].emplace(n->get_handle());
+        edge_map[remote_node].emplace(std::make_pair(n->get_handle(), vclk));
         if (!init_load) {
             edge_map_mutex.unlock();
         }
@@ -672,6 +760,7 @@ namespace db
         // already_exec check for fault tolerance
         auto out_edge_iter = n->out_edges.find(edge_handle);
         assert(out_edge_iter != n->out_edges.end());
+        assert(!out_edge_iter->second.empty());
         edge *e = out_edge_iter->second.back();
         assert(e->base.get_del_time().vt_id == UINT64_MAX);
         e->base.update_del_time(tdel);
@@ -685,7 +774,7 @@ namespace db
         uint64_t qts)
     {
         node *n = acquire_node_write(node_handle, tdel.vt_id, qts);
-        if (n == NULL) {
+        if (n == nullptr) {
             migration_mutex.lock();
             def_write_lst &dwl = deferred_writes[node_handle];
             dwl.emplace_back(deferred_write(transaction::EDGE_DELETE_REQ, tdel));
@@ -694,11 +783,11 @@ namespace db
             migration_mutex.unlock();
         } else {
             delete_edge_nonlocking(n, edge_handle, tdel);
-            edge *del_edge = n->out_edges[edge_handle].back();
+            del_obj *dobj = new del_obj(transaction::EDGE_DELETE_REQ, tdel, n->base.get_creat_time(), node_handle, edge_handle);
             release_node_write(n);
             // record object for permanent deletion later on
             perm_del_mutex.lock();
-            perm_del_queue.emplace_back(new del_obj(transaction::EDGE_DELETE_REQ, tdel, node_handle, del_edge));
+            perm_del_queue.emplace_back(dobj);
             perm_del_mutex.unlock();
         }
     }
@@ -740,6 +829,7 @@ namespace db
     {
         auto out_edge_iter = n->out_edges.find(edge_handle);
         assert(out_edge_iter != n->out_edges.end());
+        assert(!out_edge_iter->second.empty());
         edge *e = out_edge_iter->second.back();
         assert(e->base.get_del_time().vt_id == UINT64_MAX);
         e->base.add_property(key, value, vclk);
@@ -794,7 +884,7 @@ namespace db
 
     // return true if node already created
     inline bool
-    shard :: node_exists_nonlocking(const node_handle_t &node_handle)
+    shard :: bulk_load_node_exists_nonlocking(const node_handle_t &node_handle)
     {
         uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
         return (nodes[map_idx].find(node_handle) != nodes[map_idx].end());
@@ -806,7 +896,7 @@ namespace db
     shard :: delete_migrated_node(const node_handle_t &migr_node)
     {
         node *n;
-        n = acquire_node(migr_node);
+        n = acquire_node_latest(migr_node);
         n->permanently_deleted = true;
         // deleting edges now so as to prevent sending messages to neighbors for permanent edge deletion
         // rest of deletion happens in release_node()
@@ -822,8 +912,8 @@ namespace db
     bool
     perm_del_less(const del_obj* const o1, const del_obj* const o2)
     {
-        const vc::vclock_t &clk1 = o1->vclk.clock;
-        const vc::vclock_t &clk2 = o2->vclk.clock;
+        const vc::vclock_t &clk1 = o1->tdel.clock;
+        const vc::vclock_t &clk2 = o2->tdel.clock;
         assert(clk1.size() == ClkSz);
         assert(clk2.size() == ClkSz);
         for (uint64_t i = 0; i < ClkSz; i++) {
@@ -832,6 +922,19 @@ namespace db
             }
         }
         return false;
+    }
+
+    // assuming caller holds edge_map_mutex
+    inline void
+    shard :: remove_from_edge_map(const node_handle_t &remote_node, const node_version_t &local_node)
+    {
+        auto edge_map_iter = edge_map.find(remote_node);
+        assert(edge_map_iter != edge_map.end());
+        auto &node_version_set = edge_map_iter->second;
+        node_version_set.erase(local_node);
+        if (node_version_set.empty()) {
+            edge_map.erase(remote_node);
+        }
     }
 
     inline void
@@ -858,7 +961,7 @@ namespace db
                             to_del = false;
                             break;
                         }
-                        to_del = order::oracle::happens_before_no_kronos(dobj->vclk.clock, max_done_clk[i]);
+                        to_del = order::oracle::happens_before_no_kronos(dobj->tdel.clock, max_done_clk[i]);
                     }
                 }
             }
@@ -869,19 +972,14 @@ namespace db
             // now dobj will be deleted
             switch (dobj->type) {
                 case transaction::NODE_DELETE_REQ:
-                    n = acquire_node(dobj->node);
-                    if (n != NULL) {
+                    n = acquire_node_specific(dobj->node, &dobj->version, nullptr);
+                    if (n != nullptr) {
                         n->permanently_deleted = true;
                         for (auto &x: n->out_edges) {
                             for (db::edge *e: x.second) {
-                                const node_handle_t &node = e->nbr.handle;
-                                auto edge_map_iter = edge_map.find(node);
-                                assert(edge_map_iter != edge_map.end());
-                                auto &node_set = edge_map_iter->second;
-                                node_set.erase(dobj->node);
-                                if (node_set.empty()) {
-                                    edge_map.erase(node);
-                                }
+                                const node_handle_t &remote_node = e->nbr.handle;
+                                node_version_t local_node = std::make_pair(dobj->node, e->base.get_creat_time());
+                                remove_from_edge_map(remote_node, local_node);
                             }
                         }
                         release_node(n);
@@ -889,16 +987,17 @@ namespace db
                     break;
 
                 case transaction::EDGE_DELETE_REQ:
-                    n = acquire_node(dobj->node);
-                    if (n != NULL) {
-                        edge_handle_t del_handle = dobj->e->get_handle();
-                        auto map_iter = n->out_edges.find(del_handle);
+                    n = acquire_node_specific(dobj->node, &dobj->version, nullptr);
+                    if (n != nullptr) {
+                        auto map_iter = n->out_edges.find(dobj->edge);
                         assert(map_iter != n->out_edges.end());
 
+                        edge *e = nullptr;
                         bool found = false;
                         auto edge_iter = map_iter->second.begin();
                         for (; edge_iter != map_iter->second.end(); edge_iter++) {
-                            if (*edge_iter == dobj->e) {
+                            if ((*edge_iter)->base.get_del_time() == dobj->tdel) {
+                                e = *edge_iter;
                                 found = true;
                                 break;
                             }
@@ -906,14 +1005,14 @@ namespace db
                         assert(found);
 
                         if (n->last_perm_deletion == nullptr
-                         || time_oracle->compare_two_vts(*n->last_perm_deletion, dobj->e->base.get_del_time()) == 0) {
-                            n->last_perm_deletion.reset(new vc::vclock(std::move(dobj->e->base.get_del_time())));
+                         || time_oracle->compare_two_vts(*n->last_perm_deletion, e->base.get_del_time()) == 0) {
+                            n->last_perm_deletion.reset(new vc::vclock(std::move(e->base.get_del_time())));
                         }
 
-                        delete dobj->e;
+                        delete e;
                         map_iter->second.erase(edge_iter);
                         if (map_iter->second.empty()) {
-                            n->out_edges.erase(del_handle);
+                            n->out_edges.erase(dobj->edge);
                         }
                         release_node(n);
                     }
@@ -978,7 +1077,7 @@ namespace db
     inline void
     shard :: update_migrated_nbr(const node_handle_t &migr_node, uint64_t old_loc, uint64_t new_loc)
     {
-        std::unordered_set<node_handle_t> nbrs;
+        std::unordered_set<node_version_t, node_version_hash> nbrs;
         node *n;
         edge_map_mutex.lock();
         auto find_iter = edge_map.find(migr_node);
@@ -987,8 +1086,8 @@ namespace db
         }
         edge_map_mutex.unlock();
 
-        for (const node_handle_t &nbr: nbrs) {
-            n = acquire_node(nbr);
+        for (const node_version_t &nv: nbrs) {
+            n = acquire_node_specific(nv.first, &nv.second, nullptr);
             update_migrated_nbr_nonlocking(n, migr_node, old_loc, new_loc);
             release_node(n);
         }
@@ -1017,35 +1116,44 @@ namespace db
     // node program
 
     inline void
-    shard :: clear_all_state(const std::unordered_map<uint64_t, std::vector<node_handle_t>> &outstanding_prog_states)
+    shard :: clear_all_state(const std::unordered_map<uint64_t, std::vector<node_version_t>> &prog_states)
     {
-        std::unordered_set<node_handle_t> to_clean;
+        std::unordered_map<node_handle_t, std::vector<vc::vclock>> cleared;
 
-        for (auto &p: outstanding_prog_states) {
-            for (const node_handle_t &h: p.second) {
-                to_clean.emplace(h);
+        for (auto &p: prog_states) {
+            for (const node_version_t &nv: p.second) {
+                bool found = false;
+
+                std::vector<vc::vclock> &clk_vec = cleared[nv.first];
+                for (const vc::vclock &vclk: clk_vec) {
+                    if (vclk == nv.second) {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (!found) {
+                    node *n = acquire_node_specific(nv.first, &nv.second, nullptr);
+                    int num_prog_types = n->prog_states.size();
+                    n->prog_states.clear();
+                    n->prog_states.resize(num_prog_types);
+                    release_node(n);
+                    clk_vec.emplace_back(nv.second);
+                }
             }
-        }
-
-        for (const node_handle_t &h: to_clean) {
-            db::node *n = acquire_node(h);
-            int num_prog_types = n->prog_states.size();
-            n->prog_states.clear();
-            n->prog_states.resize(num_prog_types);
-            release_node(n);
         }
     }
 
     inline void
-    shard :: delete_prog_states(uint64_t req_id, std::vector<node_handle_t> &node_handles)
+    shard :: delete_prog_states(uint64_t req_id, std::vector<node_version_t> &state_nodes)
     {
-        for (const node_handle_t &node_handle: node_handles) {
-            db::node *node = acquire_node(node_handle);
+        for (const node_version_t &nv: state_nodes) {
+            node *n = acquire_node_specific(nv.first, &nv.second, nullptr);
 
             // check that node not migrated or permanently deleted
-            if (node != NULL) {
+            if (n != nullptr) {
                 bool found = false;
-                for (auto &state_map: node->prog_states) {
+                for (auto &state_map: n->prog_states) {
                     auto state_iter = state_map.find(req_id);
                     if (state_iter != state_map.end()) {
                         assert(state_map.erase(req_id) > 0);
@@ -1055,45 +1163,44 @@ namespace db
                 }
                 assert(found);
 
-                release_node(node);
+                release_node(n);
             }
         }
     }
 
     inline void
-    shard :: mark_nodes_using_state(uint64_t req_id, std::vector<node_handle_t> &node_handles)
+    shard :: mark_nodes_using_state(uint64_t req_id, std::vector<node_version_t> &state_nodes)
     {
         node_prog_state_mutex.lock();
         bool done_request = (done_prog_ids.find(req_id) != done_prog_ids.end());
         if (!done_request) {
             auto state_list_iter = outstanding_prog_states.find(req_id);
             if (state_list_iter == outstanding_prog_states.end()) {
-                outstanding_prog_states.emplace(req_id, std::move(node_handles));
+                outstanding_prog_states.emplace(req_id, std::move(state_nodes));
             } else {
-                std::vector<node_handle_t> &add_to = state_list_iter->second;
-                add_to.reserve(add_to.size() + node_handles.size());
-                add_to.insert(add_to.end(), node_handles.begin(), node_handles.end());
+                std::vector<node_version_t> &add_to = state_list_iter->second;
+                add_to.reserve(add_to.size() + state_nodes.size());
+                add_to.insert(add_to.end(), state_nodes.begin(), state_nodes.end());
             }
             node_prog_state_mutex.unlock();
         } else { // request is finished, just delete things
             node_prog_state_mutex.unlock();
-            delete_prog_states(req_id, node_handles);
+            delete_prog_states(req_id, state_nodes);
         }
     }
 
     inline void
     shard :: add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests)
     {
-        if (completed_requests.size() == 0) {
+        if (completed_requests.empty()) {
             return;
         }
         std::vector<uint64_t> completed_request_ids;
         for (auto &p: completed_requests) {
-            uint64_t rid = p.first;
-            completed_request_ids.push_back(rid);
+            completed_request_ids.push_back(p.first);
         }
 
-        std::vector<std::pair<uint64_t, std::vector<node_handle_t>>> to_delete;
+        std::vector<std::pair<uint64_t, std::vector<node_version_t>>> to_delete;
 
         node_prog_state_mutex.lock();
         done_prog_ids.insert(completed_request_ids.begin(), completed_request_ids.end());
@@ -1103,8 +1210,7 @@ namespace db
             auto node_list_iter = outstanding_prog_states.find(req_id);
             if (node_list_iter != outstanding_prog_states.end()) {
                 to_delete.emplace_back(std::make_pair(req_id, std::move(node_list_iter->second)));
-                int num_deleted = outstanding_prog_states.erase(req_id);
-                assert(num_deleted == 1);
+                outstanding_prog_states.erase(req_id);
             }
         }
         node_prog_state_mutex.unlock();
