@@ -27,24 +27,31 @@ if len(sys.argv) > 1:
 coord_id = 0
 c = client.Client('127.0.0.1', 2002, config_file)
 
+def try_commit(c, msg):
+    try:
+        c.end_tx()
+        assert False, msg
+    except client.WeaverError:
+        pass
+
 c.begin_tx()
 c.create_edge('ayush', '42')
-assert not c.end_tx(), 'create edge'
+try_commit(c, 'create edge')
 
 c.begin_tx()
 c.delete_node('298437')
-assert not c.end_tx(), 'delete node'
+try_commit(c, 'delete node')
 
 c.begin_tx()
 c.delete_edge('42', '298437')
-assert not c.end_tx(), 'delete edge'
+try_commit(c, 'delete edge')
 
 c.begin_tx()
 c.set_node_property('egs', 'type', 'user')
-assert not c.end_tx(), 'set node property'
+try_commit(c, 'set node property')
 
 c.begin_tx()
 c.set_edge_property('84', '42', 'color', 'blue')
-assert not c.end_tx(), 'set edge property'
+try_commit(c, 'set edge property')
 
 print 'Pass empty_graph_sanity_checks.'

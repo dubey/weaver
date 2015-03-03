@@ -31,12 +31,12 @@ c = client.Client('127.0.0.1', 2002, config_file)
 c.begin_tx()
 for i in range(num_nodes):
     nodes.append(c.create_node())
-assert c.end_tx(), 'create nodes tx'
+c.end_tx()
 
 c.begin_tx()
 for i in range(num_nodes-1):
     c.create_edge(nodes[i], nodes[i+1])
-assert c.end_tx(), 'create edges tx'
+c.end_tx()
 
 rp = client.ReachParams(dest=nodes[num_nodes-1])
 for i in range(num_nodes):

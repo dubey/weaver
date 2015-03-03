@@ -50,12 +50,12 @@ def line_requests(eprops, exp_reach):
 c.begin_tx()
 for i in range(num_nodes):
     nodes.append(c.create_node())
-assert c.end_tx(), 'create node tx'
+c.end_tx()
 
 c.begin_tx()
 for i in range(num_nodes-1):
     edges.append(c.create_edge(nodes[i], nodes[i+1]))
-assert c.end_tx(), 'create edge tx'
+c.end_tx()
 
 node_count = c.get_node_count()
 print 'Node count:'
@@ -75,8 +75,8 @@ print 'Done testing with edge props'
 # adding edge props
 c.begin_tx()
 for i in range(num_nodes-1):
-    c.set_edge_property(nodes[i], edges[i], 'color', 'blue')
-assert c.end_tx(), 'set edge props tx'
+    c.set_edge_property(edges[i], 'color', 'blue', nodes[i])
+c.end_tx()
 
 print 'Now testing without edge props'
 line_requests([], num_nodes-1)

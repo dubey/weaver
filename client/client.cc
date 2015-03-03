@@ -289,8 +289,7 @@ client :: end_tx()
 
         if (send_code == BUSYBEE_DISRUPTED) {
             reconfigure();
-            //retry = true;
-            //continue;
+            WDEBUG << "end_tx() send disrupted" << std::endl;
             return false;
         } else if (send_code != BUSYBEE_SUCCESS) {
             WDEBUG << "end_tx() got busybee_send code " << send_code << ", failing tx" << std::endl;
@@ -303,8 +302,8 @@ client :: end_tx()
             case BUSYBEE_TIMEOUT:
             case BUSYBEE_DISRUPTED:
             reconfigure();
-            //retry = true;
             return false;
+            WDEBUG << "end_tx() recv timeout/disrupted" << std::endl;
             break;
 
             case BUSYBEE_SUCCESS:
@@ -328,6 +327,7 @@ client :: end_tx()
         assert(mtype == message::CLIENT_TX_SUCCESS || mtype == message::CLIENT_TX_ABORT);
         if (mtype == message::CLIENT_TX_ABORT) {
             success = false;
+            WDEBUG << "client abort" << std::endl;
         }
     }
 

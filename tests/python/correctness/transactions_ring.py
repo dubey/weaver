@@ -35,17 +35,14 @@ def remod_ring(c, edges, old_mod, new_mod):
     for e in edges:
         c.delete_edge(e, str(node))
         node += old_mod
-    assert c.end_tx(), 'remod ring delete tx'
+    c.end_tx()
 
     del edges[:]
     
     c.begin_tx()
     for i in range(0, num_nodes-new_mod, new_mod):
         edges.append(c.create_edge(str(i), str(i+new_mod)))
-    #print 'calling end_tx'
-    assert c.end_tx(), 'remod ring create tx'
-    #print 'done end_tx'
-    #print 'remod ring from ' + str(old_mod) + ' to ' + str(new_mod)
+    c.end_tx()
 
 
 # get path between src and dst vertices
@@ -90,13 +87,13 @@ writer = client.Client('127.0.0.1', 2002, config_file)
 writer.begin_tx()
 for i in range(num_nodes):
     writer.create_node(str(i))
-assert writer.end_tx(), 'create nodes tx'
+writer.end_tx()
 
 edges = []
 writer.begin_tx()
 for i in range(num_nodes-1):
     edges.append(writer.create_edge(str(i), str(i+1)))
-assert writer.end_tx(), 'create edges tx'
+writer.end_tx()
 
 threads = []
 read_loops = 3000

@@ -100,19 +100,19 @@ cdef extern from '<deque>' namespace 'std':
         void push_back(T&)
         void clear()
 
-def initialize_member_remotenode(param, member):
+def initialize_member_remotenode(param):
     if param is None:
         return RemoteNode()
     else:
         return param
 
-def initialize_member_dict(param, name):
+def initialize_member_dict(param):
     if isinstance(param, dict):
         return param
     else:
         return {}
 
-def initialize_member_list(param, name):
+def initialize_member_list(param):
     if isinstance(param, list):
         return param
     else:
@@ -170,14 +170,14 @@ class Edge:
         self.handle = handle
         self.start_node = start_node
         self.end_node = end_node
-        self.properties = initialize_member_dict(properties, 'properties')
+        self.properties = initialize_member_dict(properties)
 
 class Node:
     def __init__(self, handle='', properties=None, out_edges=None, aliases=None):
         self.handle = handle
-        self.properties = initialize_member_dict(properties, 'properties')
-        self.out_edges = initialize_member_dict(out_edges, 'out_edges')
-        self.aliases = initialize_member_list(aliases, 'aliases')
+        self.properties = initialize_member_dict(properties)
+        self.out_edges = initialize_member_dict(out_edges)
+        self.aliases = initialize_member_list(aliases)
 
 class RemoteNode:
     def __init__(self, handle='', loc=0):
@@ -206,8 +206,8 @@ class ReachParams:
         self.dest = dest
         self.hops = hops
         self.reachable = reachable
-        self.edge_props = initialize_member_list(edge_props, 'edge_props')
-        self.path = initialize_member_list(path, 'path')
+        self.edge_props = initialize_member_list(edge_props)
+        self.path = initialize_member_list(path)
 
 cdef extern from 'node_prog/pathless_reach_program.h' namespace 'node_prog':
     cdef cppclass pathless_reach_params:
@@ -224,7 +224,7 @@ class PathlessReachParams:
         self.prev_node = initialize_member_remotenode(prev_node)
         self.dest = dest
         self.reachable = reachable
-        self.edge_props = initialize_member_list(edge_props, 'edge_props')
+        self.edge_props = initialize_member_list(edge_props)
 
 cdef extern from 'node_prog/clustering_program.h' namespace 'node_prog':
     cdef cppclass clustering_params:
@@ -261,7 +261,7 @@ class TwoNeighborhoodParams:
         self.on_hop = on_hop
         self.outgoing = outgoing
         self.prev_node = initialize_member_remotenode(prev_node)
-        self.responses = initialize_member_list(responses, 'responses')
+        self.responses = initialize_member_list(responses)
 
 cdef extern from 'node_prog/read_node_props_program.h' namespace 'node_prog':
     cdef cppclass read_node_props_params:
@@ -270,8 +270,8 @@ cdef extern from 'node_prog/read_node_props_program.h' namespace 'node_prog':
 
 class ReadNodePropsParams:
     def __init__(self, keys=None, node_props=None):
-        self.keys = initialize_member_list(keys, 'keys')
-        self.node_props = initialize_member_list(node_props, 'node_props')
+        self.keys = initialize_member_list(keys)
+        self.node_props = initialize_member_list(node_props)
 
 cdef extern from 'node_prog/read_n_edges_program.h' namespace 'node_prog':
     cdef cppclass read_n_edges_params:
@@ -282,8 +282,8 @@ cdef extern from 'node_prog/read_n_edges_program.h' namespace 'node_prog':
 class ReadNEdgesParams:
     def __init__(self, num_edges=UINT64_MAX, edges_props=None, return_edges=None):
         self.num_edges = num_edges
-        self.edges_props = initialize_member_list(edges_props, 'edge_props')
-        self.return_edges = initialize_member_list(return_edges, 'edge_props')
+        self.edges_props = initialize_member_list(edges_props)
+        self.return_edges = initialize_member_list(return_edges)
 
 cdef extern from 'node_prog/edge_count_program.h' namespace 'node_prog':
     cdef cppclass edge_count_params:
@@ -292,7 +292,7 @@ cdef extern from 'node_prog/edge_count_program.h' namespace 'node_prog':
 
 class EdgeCountParams:
     def __init__(self, edges_props=None, edge_count=0):
-        initialize_member_list(edges_props, self.edges_props, 'edge_props')
+        initialize_member_list(edges_props, self.edges_props)
         self.edge_count = edge_count
 
 cdef extern from 'node_prog/edge_get_program.h' namespace 'node_prog':
@@ -303,9 +303,9 @@ cdef extern from 'node_prog/edge_get_program.h' namespace 'node_prog':
 
 class EdgeGetParams:
     def __init__(self, nbrs=None, request_edges=None, response_edges=None):
-        self.nbrs = initialize_member_list(nbrs, 'nbrs')
-        self.request_edges = initialize_member_list(request_edges, 'request_edges')
-        self.response_edges = initialize_member_list(response_edges, 'response_edges')
+        self.nbrs = initialize_member_list(nbrs)
+        self.request_edges = initialize_member_list(request_edges)
+        self.response_edges = initialize_member_list(response_edges)
 
 cdef extern from 'node_prog/node_get_program.h' namespace 'node_prog':
     cdef cppclass node_get_params:
@@ -328,11 +328,11 @@ cdef extern from 'node_prog/traverse_with_props.h' namespace 'node_prog':
 
 class TraversePropsParams:
     def __init__(self, node_aliases=None, node_props=None, edge_props=None, return_nodes=None, return_edges=None, collect_n=False, collect_e=False):
-        self.node_aliases = initialize_member_list(node_aliases, 'node_aliases')
-        self.node_props = initialize_member_list(node_props, 'node_props')
-        self.edge_props = initialize_member_list(edge_props, 'edge_props')
-        self.return_nodes = initialize_member_list(return_nodes, 'return_nodes')
-        self.return_edges = initialize_member_list(return_edges, 'return_edges')
+        self.node_aliases = initialize_member_list(node_aliases)
+        self.node_props = initialize_member_list(node_props)
+        self.edge_props = initialize_member_list(edge_props)
+        self.return_nodes = initialize_member_list(return_nodes)
+        self.return_edges = initialize_member_list(return_edges)
         self.collect_nodes = collect_n
         self.collect_edges = collect_e
 

@@ -31,28 +31,23 @@ c = client.Client('127.0.0.1', 2002, config_file)
 # adding node properites
 c.begin_tx()
 node = c.create_node()
-c.set_node_property(node, 'color', 'blue')
-c.set_node_property(node, 'size', '27')
-assert c.end_tx(), 'create node and set properties'
+c.set_node_property('color', 'blue', node)
+c.set_node_property('size', '27', node)
+c.end_tx()
 
 # reading node properites
-rp = client.ReadNodePropsParams()
-prog_args = [(node, rp)]
-response = c.read_node_props(prog_args)
-assert (('color', 'blue') in response.node_props and ('size', '27') in response.node_props and len(response.node_props) == 2)
-
-prog_args[0][1].keys = ['color']
-response = c.read_node_props(prog_args)
-assert (('color', 'blue') in response.node_props and len(response.node_props) == 1)
+read_props = c.get_node_properties(node)
+assert len(read_props) == 2
+assert read_props['color'] == ['blue']
+assert read_props['size'] == ['27']
 
 c.begin_tx()
-c.set_node_property(node, 'age', '37')
-assert c.end_tx(), 'add age property'
+c.set_node_property('age', '37', node)
+c.end_tx()
 
-prog_args[0][1].keys = ['size', 'age']
-response = c.read_node_props(prog_args)
-assert(('age', '37') in response.node_props and ('size', '27') in response.node_props and len(response.node_props) == 2)
-
+read_props = c.get_node_properties(node)
+assert len(read_props) == 3
+assert read_props['age'] == ['37']
 
 # adding edges, edge properites
 
@@ -65,34 +60,21 @@ edges = []
 edges.append(c.create_edge(node, neighbors[0]))
 edges.append(c.create_edge(node, neighbors[1]))
 edges.append(c.create_edge(node, neighbors[2]))
-c.set_edge_property(node, edges[0], 'created', '1')
-c.set_edge_property(node, edges[1], 'created', '2')
-c.set_edge_property(node, edges[2], 'created', '3')
-c.set_edge_property(node, edges[0], 'cost', '1')
-c.set_edge_property(node, edges[1], 'cost', '2')
-c.set_edge_property(node, edges[2], 'cost', '3')
-assert c.end_tx(), 'add edges and corresponding properties'
+c.set_edge_property(edges[0], 'created', '1')
+c.set_edge_property(edges[1], 'created', '2')
+c.set_edge_property(edges[2], 'created', '3')
+c.set_edge_property(edges[0], 'cost', '1')
+c.set_edge_property(edges[1], 'cost', '2')
+c.set_edge_property(edges[2], 'cost', '3')
+c.end_tx()
 
 # reading edge properties
-rp = client.ReadEdgesPropsParams()
-prog_args = [(node, rp)]
-response = c.read_edges_props(prog_args)
-prop_map = {}
-for x in response.edges_props:
-    prop_map[x[0]] = x[1]
 for i in range(3):
-    assert (edges[i] in prop_map), str(edges[i]) + ' in edge handles'
-    assert ('created', str(i+1)) in prop_map[edges[i]], '(created, ' + str(i+1) + ') in edges_props'
-    assert ('cost', str(i+1)) in prop_map[edges[i]], '(cost, ' + str(i+1) + ') in edges_props'
-
-prog_args[0][1].keys = ['cost']
-response = c.read_edges_props(prog_args)
-prop_map = {}
-for x in response.edges_props:
-    prop_map[x[0]] = x[1]
-for i in range(3):
-    assert (edges[i] in prop_map), str(edges[i]) + ' in edge handles'
-    assert ('created', str(i+1)) not in prop_map[edges[i]], '(created, ' + str(i+1) + ') in edges_props'
-    assert ('cost', str(i+1)) in prop_map[edges[i]], '(cost, ' + str(i+1) + ') in edges_props'
+    read_edge = c.get_edge(edges[i], node)
+    assert read_edge.handle == edges[i]
+    assert read_edge.start_node == node
+    assert read_edge.end_node == neighbors[i]
+    assert read_edge.properties['created'] == [str(i+1)]
+    assert read_edge.properties['cost'] == [str(i+1)]
 
 print 'Pass read_properties.'
