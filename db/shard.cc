@@ -189,6 +189,46 @@ split(const std::string &s, char delim, std::vector<std::string> &elems)
     }
 }
 
+inline bool
+get_xml_element(std::ifstream &file, const std::string &name, std::string &element)
+{
+    std::string line;
+    bool in_elem = false;
+    size_t pos;
+    std::string start = "<"+name;
+    std::string end = "</"+name+">";
+
+    while(std::getline(file, line)) {
+        bool appended = false;
+        if ((pos = line.find(start)) != std::string::npos) {
+            if (in_elem) {
+                return false;
+            }
+            in_elem = true;
+            element.append(line);
+            appended = true;
+        }
+
+        if ((pos = line.find(end)) != std::string::npos) {
+            if (!in_elem) {
+                return false;
+            }
+            if (!appended) {
+                element.append(line);
+                appended = true;
+            }
+            return true;
+        }
+
+        if (!appended && in_elem) {
+            element.append(line);
+            appended = true;
+        }
+    }
+
+    return false;
+}
+
 // initial bulk graph loading method
 // 'format' stores the format of the graph file
 // 'graph_file' stores the full path filename of the graph file
@@ -211,7 +251,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
     // read, validate, and create graph
     db::node *n;
     uint64_t line_count = 0;
-    uint64_t edge_count = 1;
+    uint64_t edge_count = 0;
     uint64_t max_node_handle;
     vc::vclock zero_clk(0, 0);
 
@@ -235,7 +275,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     parse_two_uint64(line, node0, node1);
                     id0 = std::to_string(node0);
                     id1 = std::to_string(node1);
-                    edge_handle = std::to_string(max_node_handle + (edge_count++));
+                    edge_handle = std::to_string(max_node_handle + (++edge_count));
                     uint64_t loc0 = ((node0 % num_shards) + ShardIdIncr);
                     uint64_t loc1 = ((node1 % num_shards) + ShardIdIncr);
                     if (loc0 == shard_id) {
@@ -290,7 +330,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 parse_weaver_edge(line, node0, node1, props);
                 id0 = std::to_string(node0);
                 id1 = std::to_string(node1);
-                edge_handle = std::to_string(max_node_handle + (edge_count++));
+                edge_handle = std::to_string(max_node_handle + (++edge_count));
                 uint64_t loc0 = all_node_map[id0];
                 uint64_t loc1 = all_node_map[id1];
                 if (loc0 == shard_id) {
@@ -310,12 +350,14 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
         case db::GRAPHML: {
             auto hash_string = std::hash<std::string>();
             pugi::xml_document doc;
-            assert(doc.load_file(graph_file));
-            pugi::xml_node graph_wrapper = doc.child("graphml");
-            pugi::xml_node graph = graph_wrapper.child("graph");
+            std::string element;
 
             // nodes
-            for (pugi::xml_node node: graph.children("node")) {
+            int num_nodes = 0;
+            while (get_xml_element(file, "node", element) && !element.empty()) {
+                assert(doc.load_buffer(element.c_str(), element.size()));
+                pugi::xml_node node = doc.child("node");
+
                 id0 = node.attribute("id").value();
                 loc = (hash_string(id0) % num_shards) + ShardIdIncr;
                 if (loc == shard_id) {
@@ -340,10 +382,22 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                         }
                     }
                 }
+
+                element.clear();
+                if (++num_nodes % 10000 == 0) {
+                    WDEBUG << "created " << num_nodes << " nodes, " << id0 << " has size " << message::size(*n) << std::endl;
+                }
             }
 
+
             // edges
-            for (pugi::xml_node edge: graph.children("edge")) {
+            file.close();
+            file.open(graph_file, std::ifstream::in);
+            element.clear();
+            while (get_xml_element(file, "edge", element) && !element.empty()) {
+                assert(doc.load_buffer(element.c_str(), element.size()));
+                pugi::xml_node edge = doc.child("edge");
+
                 id0 = edge.attribute("source").value();
                 id1 = edge.attribute("target").value();
                 edge_handle = edge.attribute("id").value();
@@ -369,6 +423,11 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     }
                 }
                 edge_count++;
+                if (edge_count % 10000 == 0) {
+                    WDEBUG << "edge " << edge_count << std::endl;
+                }
+
+                element.clear();
             }
 
             S->bulk_load_persistent();
