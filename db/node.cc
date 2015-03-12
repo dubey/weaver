@@ -40,10 +40,7 @@ node :: node(const node_handle_t &_handle, uint64_t shrd, vc::vclock &vclk, po6:
     , already_migr(false)
     , dependent_del(0)
     , cache(MaxCacheEntries)
-{
-    int num_prog_types = node_prog::END;
-    prog_states.resize(num_prog_types);
-}
+{ }
 
 node :: ~node()
 {
