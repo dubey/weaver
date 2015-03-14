@@ -1134,9 +1134,7 @@ namespace db
 
                 if (!found) {
                     node *n = acquire_node_specific(nv.first, &nv.second, nullptr);
-                    int num_prog_types = n->prog_states.size();
                     n->prog_states.clear();
-                    n->prog_states.resize(num_prog_types);
                     release_node(n);
                     clk_vec.emplace_back(nv.second);
                 }
@@ -1153,7 +1151,8 @@ namespace db
             // check that node not migrated or permanently deleted
             if (n != nullptr) {
                 bool found = false;
-                for (auto &state_map: n->prog_states) {
+                for (auto &state_pair: n->prog_states) {
+                    auto &state_map = state_pair.second;
                     auto state_iter = state_map.find(req_id);
                     if (state_iter != state_map.end()) {
                         assert(state_map.erase(req_id) > 0);

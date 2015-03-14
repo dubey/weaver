@@ -701,12 +701,16 @@ nop(db::message_wrapper *request)
 node_prog::Node_State_Base*
 get_state_if_exists(db::node &node, uint64_t req_id, node_prog::prog_type ptype)
 {
-    auto &state_map = node.prog_states[(int)ptype];
-    std::shared_ptr<node_prog::Node_State_Base> toRet;
-    auto state_iter = state_map.find(req_id);
-    if (state_iter != state_map.end()) {
-        return state_iter->second.get();
-    } 
+    for (auto &state_pair: node.prog_states) {
+        if (state_pair.first == ptype) {
+            auto &state_map = state_pair.second;
+            std::shared_ptr<node_prog::Node_State_Base> toRet;
+            auto state_iter = state_map.find(req_id);
+            if (state_iter != state_map.end()) {
+                return state_iter->second.get();
+            } 
+        }
+    }
     return NULL;
 }
 
@@ -717,13 +721,24 @@ NodeStateType& get_or_create_state(node_prog::prog_type ptype,
     db::node *node,
     std::vector<db::node_version_t> *nodes_that_created_state)
 {
-    auto &state_map = node->prog_states[(int)ptype];
-    auto state_iter = state_map.find(req_id);
-    if (state_iter != state_map.end()) {
+    db::node::id_to_state_t *state_map = nullptr;
+    for (auto &state_pair: node->prog_states) {
+        if (state_pair.first == ptype) {
+            state_map = &state_pair.second;
+        }
+    }
+
+    if (!state_map) {
+        node->prog_states.push_back(std::make_pair(ptype, db::node::id_to_state_t()));
+        state_map = &node->prog_states.back().second;
+    }
+
+    auto state_iter = state_map->find(req_id);
+    if (state_iter != state_map->end()) {
         return dynamic_cast<NodeStateType &>(*(state_iter->second));
     } else {
         NodeStateType *ptr = new NodeStateType();
-        state_map[req_id] = std::unique_ptr<node_prog::Node_State_Base>(ptr);
+        (*state_map)[req_id] = std::unique_ptr<node_prog::Node_State_Base>(ptr);
         assert(nodes_that_created_state != NULL);
         nodes_that_created_state->emplace_back(std::make_pair(node->get_handle(), node->base.get_creat_time()));
         return *ptr;
@@ -1488,8 +1503,8 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg, order::oracle *ti
     n->state = db::node::mode::STABLE;
 
     std::vector<uint64_t> prog_state_reqs;
-    for (auto &state_map: n->prog_states) {
-        for (auto &state: state_map) {
+    for (auto &state_pair: n->prog_states) {
+        for (auto &state: state_pair.second) {
             prog_state_reqs.emplace_back(state.first);
         }
     }

@@ -194,24 +194,29 @@ message :: unpack_buffer(e::unpacker &unpacker, db::node &t)
     uint32_t num_prog_types = node_prog::END;
     assert(t.prog_states.size() == num_prog_types);
 
-    uint32_t num_unpacked_maps;
-    unpack_buffer(unpacker, num_unpacked_maps);
-    assert(num_unpacked_maps == num_prog_types);
+    uint32_t num_maps;
+    unpack_buffer(unpacker, num_maps);
 
+    node_prog::prog_type ptype;
     uint64_t key;
     std::shared_ptr<node_prog::Node_State_Base> val;
-    for (int i = 0; i < node_prog::END; i++) {
-        db::node::id_to_state_t &state_map = t.prog_states[i];
-        assert(state_map.size() == 0);
+    while (num_maps > 0) {
+        unpack_buffer(unpacker, ptype);
 
         uint32_t elements_left;
         unpack_buffer(unpacker, elements_left);
+        if (elements_left == 0) {
+            continue;
+        }
+
+        t.prog_states.push_back(std::make_pair(ptype, db::node::id_to_state_t()));
+        db::node::id_to_state_t &state_map = t.prog_states.back().second;
         state_map.reserve(elements_left);
 
-        while (elements_left > 0) {
+        while (elements_left-- > 0) {
             unpack_buffer(unpacker, key);
 
-            switch (i) {
+            switch (ptype) {
                 case node_prog::REACHABILITY:
                     val = unpack_single_node_state<node_prog::reach_node_state>(unpacker);
                     break;
@@ -257,7 +262,6 @@ message :: unpack_buffer(e::unpacker &unpacker, db::node &t)
             }
 
             state_map.emplace(key, val);
-            elements_left--;
         }
     }
 }
