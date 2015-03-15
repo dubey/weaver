@@ -60,24 +60,6 @@
 
 DECLARE_CONFIG_CONSTANTS;
 
-// hash function for vector clocks
-namespace std
-{
-    template <>
-    struct hash<std::vector<uint64_t>> 
-    {
-        public:
-            size_t operator()(const std::vector<uint64_t> &v) const throw() 
-            {
-                size_t hash = std::hash<uint64_t>()(v[0]);
-                for (size_t i = 1; i < v.size(); i++) {
-                    hash ^= std::hash<uint64_t>()(v[i]) + 0x9e3779b9 + (hash << 6) + (hash >> 2);
-                }
-                return hash;
-            }
-    };
-}
-
 // comparator for uint64 pair, on the basis of first entry of the pair
 bool
 pair_comp(std::pair<uint64_t, uint64_t> p1, std::pair<uint64_t, uint64_t> p2)

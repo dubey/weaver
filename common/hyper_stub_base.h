@@ -161,6 +161,7 @@ class hyper_stub_base
         // auxiliary index functions
     private:
         bool recreate_index(const hyperdex_client_attribute *cl_attr, std::pair<node_handle_t, uint64_t> &value);
+        void sort_and_pack_as_set(std::vector<std::string>&, std::unique_ptr<e::buffer>&);
     public:
         bool add_indices(std::unordered_map<std::string, db::node*> &indices, bool tx);
         bool get_indices(std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> &indices, bool tx);
@@ -176,6 +177,8 @@ class hyper_stub_base
         template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<std::string, T> &map);
         void prepare_buffer(const std::unordered_set<std::string> &set, std::unique_ptr<e::buffer> &buf);
         void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<std::string> &set);
+        void prepare_buffer(const google::sparse_hash_set<std::string, std::hash<std::string>, weaver_util::eqstr>&, std::unique_ptr<e::buffer> &buf);
+        void unpack_buffer(const char *buf, uint64_t buf_sz, google::sparse_hash_set<std::string, std::hash<std::string>, weaver_util::eqstr>&);
         // properties
         void prepare_buffer(const std::vector<std::shared_ptr<db::property>>&, std::unique_ptr<e::buffer>&);
         void unpack_buffer(const char *buf, uint64_t buf_sz, std::vector<std::shared_ptr<db::property>>&);

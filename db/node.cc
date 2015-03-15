@@ -40,7 +40,10 @@ node :: node(const node_handle_t &_handle, uint64_t shrd, vc::vclock &vclk, po6:
     , already_migr(false)
     , dependent_del(0)
     , cache(MaxCacheEntries)
-{ }
+{
+    std::string empty("");
+    aliases.set_deleted_key(empty);
+}
 
 node :: ~node()
 {
@@ -95,7 +98,7 @@ node :: has_all_properties(std::vector<std::pair<std::string, std::string>> &pro
 void
 node :: add_alias(const node_handle_t &alias)
 {
-    aliases.emplace(alias);
+    aliases.insert(alias);
 }
 
 bool
@@ -160,6 +163,9 @@ node :: get_client_node(cl::node &n, bool get_p, bool get_e, bool get_a)
     }
 
     if (get_a) {
-        n.aliases = aliases;
+        for (const node_handle_t &h: aliases) {
+            n.aliases.emplace(h);
+        }
+        //n.aliases = aliases;
     }
 }

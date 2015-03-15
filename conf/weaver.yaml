@@ -39,4 +39,4 @@ bulk_load_property_value_delimiter: ","
 
 # BulkLoadNodeAliasKey is the key of node properties that corresponds to the node aliases while bulk loading graphml graphs.
 # Default: ""
-bulk_load_node_alias_key: "alias"
+bulk_load_node_alias_key: "key0"

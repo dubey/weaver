@@ -38,13 +38,8 @@
 // Google SparseHash
 #include <google/sparse_hash_map>
 
-struct equint64_t
-{
-    bool operator () (uint64_t u1, uint64_t u2) const
-    {
-        return u1 == u2;
-    }
-};
+// Weaver
+#include "common/utils.h"
 
 class event_dependency_graph
 {
@@ -64,7 +59,7 @@ class event_dependency_graph
 
     public:
         typedef google::sparse_hash_map<uint64_t, uint64_t,
-                std::tr1::hash<uint64_t>, equint64_t> event_map_t;
+                std::tr1::hash<uint64_t>, weaver_util::equint64_t> event_map_t;
 
     private:
         event_dependency_graph(const event_dependency_graph&);

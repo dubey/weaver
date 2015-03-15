@@ -1227,52 +1227,82 @@ hyper_stub_base :: unpack_string(e::unpacker &unpacker, std::string &s, uint32_t
     }
 }
 
+inline void
+hyper_stub_base :: sort_and_pack_as_set(std::vector<std::string> &vec, std::unique_ptr<e::buffer> &buf)
+{
+    std::sort(vec.begin(), vec.end());
+
+    uint64_t buf_sz = 0;
+    // now iterate in vec order
+    for (uint64_t i = 0; i < vec.size(); i++) {
+        buf_sz += sizeof(uint32_t) // each entry encoding sz
+                + vec[i].size();
+    }
+
+    buf.reset(e::buffer::create(buf_sz));
+    e::buffer::packer packer = buf->pack();
+
+    for (uint64_t i = 0; i < vec.size(); i++) {
+        pack_uint32(packer, vec[i].size());
+        pack_string(packer, vec[i]);
+    }
+}
+
 // store the given unordered_set as a HYPERDATATYPE_SET_STRING
 inline void
 hyper_stub_base :: prepare_buffer(const std::unordered_set<std::string> &set, std::unique_ptr<e::buffer> &buf)
 {
-    uint64_t buf_sz = 0;
     std::vector<std::string> sorted;
     sorted.reserve(set.size());
 
     for (const std::string &s: set) {
         sorted.emplace_back(s);
     }
-    std::sort(sorted.begin(), sorted.end());
 
-    // now iterate in sorted order
-    for (uint64_t i = 0; i < sorted.size(); i++) {
-        buf_sz += sizeof(uint32_t) // each entry encoding sz
-                + sorted[i].size();
-    }
-
-    buf.reset(e::buffer::create(buf_sz));
-    e::buffer::packer packer = buf->pack();
-
-    for (uint64_t i = 0; i < sorted.size(); i++) {
-        pack_uint32(packer, sorted[i].size());
-        pack_string(packer, sorted[i]);
-    }
+    sort_and_pack_as_set(sorted, buf);
 }
+
+inline void
+hyper_stub_base :: prepare_buffer(const google::sparse_hash_set<std::string, std::hash<std::string>, weaver_util::eqstr> &set,
+    std::unique_ptr<e::buffer> &buf)
+{
+    std::vector<std::string> sorted;
+    sorted.reserve(set.size());
+
+    for (const std::string &s: set) {
+        sorted.emplace_back(s);
+    }
+
+    sort_and_pack_as_set(sorted, buf);
+}
+
+#define UNPACK_SET \
+    std::unique_ptr<e::buffer> ebuf(e::buffer::create(buf, buf_sz)); \
+    e::unpacker unpacker = ebuf->unpack_from(0); \
+    std::string key; \
+    uint32_t sz; \
+    while (!unpacker.empty()) { \
+        key.erase(); \
+        unpack_uint32(unpacker, sz); \
+        unpack_string(unpacker, key, sz); \
+        set.insert(key); \
+    }
 
 // unpack the HYPERDATATYPE_SET_STRING in to the given set
 inline void
 hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<std::string> &set)
 {
-    std::unique_ptr<e::buffer> ebuf(e::buffer::create(buf, buf_sz));
-    e::unpacker unpacker = ebuf->unpack_from(0);
-    std::string key;
-    uint32_t sz;
-
-    while (!unpacker.empty()) {
-        key.erase();
-
-        unpack_uint32(unpacker, sz);
-        unpack_string(unpacker, key, sz);
-
-        set.emplace(key);
-    }
+    UNPACK_SET;
 }
+
+inline void
+hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz,
+    google::sparse_hash_set<std::string, std::hash<std::string>, weaver_util::eqstr> &set)
+{
+    UNPACK_SET;
+}
+
+#undef UNPACK_SET
 
 // pack as HYPERDATATYPE_LIST_STRING
 inline void

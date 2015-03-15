@@ -17,7 +17,7 @@
 #include <stdint.h>
 #include <vector>
 #include <unordered_map>
-#include <unordered_set>
+#include <google/sparse_hash_set>
 #include <deque>
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
@@ -66,7 +66,7 @@ namespace db
             uint32_t waiters; // count of number of waiters
             bool permanently_deleted;
             std::unique_ptr<vc::vclock> last_perm_deletion; // vclock of last edge/property permanently deleted at this node
-            std::unordered_set<node_handle_t> aliases;
+            google::sparse_hash_set<std::string, std::hash<std::string>, weaver_util::eqstr> aliases;
 
             // for migration
             uint64_t new_loc;

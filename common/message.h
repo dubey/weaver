@@ -19,6 +19,7 @@
 #include <deque>
 #include <unordered_set>
 #include <unordered_map>
+#include <google/sparse_hash_set>
 #include <queue>
 #include <string>
 #include <e/buffer.h>
@@ -148,6 +149,7 @@ namespace message
     uint64_t size(const std::vector<bool> &t);
     template <typename T1, typename T2> inline uint64_t size(const std::unordered_map<T1, T2>& t);
     template <typename T> inline uint64_t size(const std::unordered_set<T>& t);
+    template <typename T1, typename T2, typename T3> inline uint64_t size(const google::sparse_hash_set<T1, T2, T3>& t);
     template <typename T> inline uint64_t size(const std::vector<T>& t);
     template <typename T> inline uint64_t size(const std::deque<T>& t);
     template <typename T1, typename T2, typename T3> uint64_t size(std::priority_queue<T1, T2, T3>);
@@ -191,6 +193,7 @@ namespace message
     void pack_buffer(e::buffer::packer &packer, const std::vector<bool> &t);
     template <typename T1, typename T2> void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T>& t);
+    template <typename T1, typename T2, typename T3> inline void pack_buffer(e::buffer::packer&, const google::sparse_hash_set<T1, T2, T3>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::vector<T>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::deque<T>& t);
     template <typename T1, typename T2, typename T3> void pack_buffer(e::buffer::packer&, std::priority_queue<T1, T2, T3>);
@@ -234,6 +237,7 @@ namespace message
     void unpack_buffer(e::unpacker &unpacker, std::vector<bool> &t);
     template <typename T1, typename T2> void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
     template <typename T> void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
+    template <typename T1, typename T2, typename T3> void unpack_buffer(e::unpacker&, google::sparse_hash_set<T1, T2, T3>& t);
     template <typename T> void unpack_buffer(e::unpacker& unpacker, std::vector<T>& t);
     template <typename T> void unpack_buffer(e::unpacker& unpacker, std::deque<T>& t);
     template <typename T1, typename T2, typename T3> void unpack_buffer(e::unpacker&, std::priority_queue<T1, T2, T3>&);
@@ -291,6 +295,17 @@ namespace message
         // O(n) size operation can handle elements of differing sizes
         uint64_t total_size = sizeof(uint32_t);
         for (const T &elem : t) {
+            total_size += size(elem);
+        }
+        return total_size;
+    }
+
+    template <typename T1, typename T2, typename T3>
+    inline uint64_t size(const google::sparse_hash_set<T1,T2,T3> &t)
+    {
+        // O(n) size operation can handle elements of differing sizes
+        uint64_t total_size = sizeof(uint32_t);
+        for (const T1 &elem : t) {
             total_size += size(elem);
         }
         return total_size;
@@ -445,6 +460,18 @@ namespace message
         uint32_t num_keys = t.size();
         pack_buffer(packer, num_keys);
         for (const T &elem : t) {
+            pack_buffer(packer, elem);
+        }
+    }
+
+    template <typename T1, typename T2, typename T3>
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const google::sparse_hash_set<T1, T2, T3> &t)
+    {
+        assert(t.size() <= UINT32_MAX);
+        uint32_t num_keys = t.size();
+        pack_buffer(packer, num_keys);
+        for (const T1 &elem : t) {
             pack_buffer(packer, elem);
         }
     }
@@ -608,6 +635,22 @@ namespace message
             T new_elem;
             unpack_buffer(unpacker, new_elem);
             t.emplace(new_elem);
+            elements_left--;
+        }
+    }
+
+    template <typename T1, typename T2, typename T3>
+    inline void
+    unpack_buffer(e::unpacker &unpacker, google::sparse_hash_set<T1,T2,T3> &t)
+    {
+        assert(t.size() == 0);
+        uint32_t elements_left;
+        unpack_buffer(unpacker, elements_left);
+
+        while (elements_left > 0) {
+            T1 new_elem;
+            unpack_buffer(unpacker, new_elem);
+            t.insert(new_elem);
             elements_left--;
         }
     }

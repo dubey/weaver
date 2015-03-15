@@ -70,13 +70,28 @@ namespace weaver_util
         return map.find(key) != map.end();
     }
 
-
     template<typename T>
     inline bool
     exists(const std::unordered_set<T> &set, const T &t)
     {
         return set.find(t) != set.end();
     }
+
+    struct equint64_t
+    {
+        bool operator () (uint64_t u1, uint64_t u2) const
+        {
+            return u1 == u2;
+        }
+    };
+
+    struct eqstr
+    {
+        bool operator() (const std::string &s1, const std::string &s2) const
+        {
+            return s1 == s2;
+        }
+    };
 }
 
 
