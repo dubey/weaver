@@ -20,13 +20,15 @@ using db::property;
 element :: element(const std::string &_handle, const vc::vclock &vclk)
     : handle(_handle)
     , creat_time(vclk)
-    , del_time(UINT64_MAX, UINT64_MAX)
+    , del_time(nullptr)
     , time_oracle(nullptr)
 { }
 
 bool
 element :: add_property(const property &prop)
 {
+#ifdef weaver_large_property_maps_
+
     auto find_iter = properties.find(prop.key);
     if (find_iter == properties.end()) {
         std::vector<std::shared_ptr<property>> new_vec;
@@ -36,7 +38,7 @@ element :: add_property(const property &prop)
     } else {
         bool exists = false;
         for (const std::shared_ptr<property> p: find_iter->second) {
-            if (*p == prop && p->del_time.vt_id != UINT64_MAX) {
+            if (*p == prop && !p->is_deleted()) {
                 exists = true;
                 break;
             }
@@ -49,6 +51,25 @@ element :: add_property(const property &prop)
             return false;
         }
     }
+
+#else
+
+    bool exists = false;
+    for (const std::shared_ptr<property> p: properties) {
+        if (*p == prop && !p->is_deleted()) {
+            exists = true;
+            break;
+        }
+    }
+
+    if (exists) {
+        return false;
+    } else {
+        properties.emplace_back(std::make_shared<property>(prop));
+        return true;
+    }
+
+#endif
 }
 
 bool
@@ -61,60 +82,118 @@ element :: add_property(const std::string &key, const std::string &value, const 
 bool
 element :: delete_property(const std::string &key, const vc::vclock &tdel)
 {
+#ifdef weaver_large_property_maps_
+
     auto iter = properties.find(key);
     if (iter == properties.end()) {
         return false;
     } else {
         for (std::shared_ptr<property> p: iter->second) {
-            p->update_del_time(tdel);
+            if (!p->is_deleted()) {
+                p->update_del_time(tdel);
+            }
         }
         return true;
     }
+
+#else
+
+    bool found = false;
+    for (std::shared_ptr<property> p: properties) {
+        if (p->key == key && !p->is_deleted()) {
+            p->update_del_time(tdel);
+            found = true;
+        }
+    }
+    return found;
+
+#endif
 }
 
 bool
 element :: delete_property(const std::string &key, const std::string &value, const vc::vclock &tdel)
 {
+#ifdef weaver_large_property_maps_
+
     auto iter = properties.find(key);
     if (iter == properties.end()) {
         return false;
     } else {
         for (std::shared_ptr<property> p: iter->second) {
-            if (p->key == key && p->value == value && p->del_time.vt_id != UINT64_MAX) {
+            if (p->key == key && p->value == value && !p->is_deleted()) {
                 p->update_del_time(tdel);
                 return true;
             }
         }
         return false;
     }
+
+#else
+
+    for (std::shared_ptr<property> p: properties) {
+        if (p->key == key && p->value == value && !p->is_deleted()) {
+            p->update_del_time(tdel);
+            return true;
+        }
+    }
+    return false;
+
+#endif
 }
 
 // caution: assuming mutex access to this element
 void
 element :: remove_property(const std::string &key)
 {
+#ifdef weaver_large_property_maps_
     properties.erase(key);
+#else
+
+    std::vector<size_t> del_pos;
+    size_t pos = 0;
+
+    for (const std::shared_ptr<property> p: properties) {
+        if (p->key == key) {
+            del_pos.emplace_back(pos);
+        }
+        pos++;
+    }
+
+    for (size_t dp: del_pos) {
+        properties.erase(properties.begin() + dp);
+    }
+
+#endif
 }
 
 bool
 element :: has_property(const std::string &key, const std::string &value)
 {
+#ifdef weaver_large_property_maps_
+
     auto iter = properties.find(key);
     if (iter != properties.end()) {
         for (const std::shared_ptr<property> p: iter->second) {
-            if (p->value == value) {
-                const vc::vclock &vclk_creat = p->get_creat_time();
-                const vc::vclock &vclk_del = p->get_del_time();
-                int64_t cmp1 = time_oracle->compare_two_vts(*view_time, vclk_creat);
-                int64_t cmp2 = time_oracle->compare_two_vts(*view_time, vclk_del);
-                if (cmp1 >= 1 && cmp2 == 0) {
-                    return true;
-                }
+            if (p->value == value
+             && time_oracle->clock_creat_before_del_after(*view_time, p->get_creat_time(), p->get_del_time())) {
+                return true;
             }
         }
     }
 
     return false;
+
+#else
+
+    for (const std::shared_ptr<property> p: properties) {
+        if (p->key == key && p->value == value
+         && time_oracle->clock_creat_before_del_after(*view_time, p->get_creat_time(), p->get_del_time())) {
+            return true;
+        }
+    }
+    return false;
+
+#endif
 }
 
 bool
@@ -135,25 +214,13 @@ element :: has_all_properties(const std::vector<std::pair<std::string, std::stri
 }
 
 void
-element :: set_properties(std::unordered_map<std::string, std::vector<std::shared_ptr<property>>> &props)
-{
-    properties = props;
-}
-
-const std::unordered_map<std::string, std::vector<std::shared_ptr<property>>>*
-element :: get_props() const
-{
-    return &properties;
-}
-
-void
 element :: update_del_time(const vc::vclock &tdel)
 {
-    assert(del_time.vt_id == UINT64_MAX);
-    del_time = tdel;
+    assert(!del_time);
+    del_time.reset(new vc::vclock(tdel));
 }
 
-const vc::vclock&
+const std::unique_ptr<vc::vclock>&
 element :: get_del_time() const
 {
     return del_time;

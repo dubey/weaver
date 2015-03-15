@@ -43,7 +43,7 @@ extern bool AuxIndex;
 extern char BulkLoadPropertyValueDelimiter;
 extern std::string BulkLoadNodeAliasKey;
 
-bool init_config_constants(const char *config_file_name=NULL);
+bool init_config_constants(const char *config_file_name=nullptr);
 void update_config_constants(uint64_t num_shards);
 uint64_t get_num_shards();
 

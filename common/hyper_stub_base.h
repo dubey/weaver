@@ -176,6 +176,9 @@ class hyper_stub_base
         template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<std::string, T> &map);
         void prepare_buffer(const std::unordered_set<std::string> &set, std::unique_ptr<e::buffer> &buf);
         void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<std::string> &set);
+        // properties
+        void prepare_buffer(const std::vector<std::shared_ptr<db::property>>&, std::unique_ptr<e::buffer>&);
+        void unpack_buffer(const char *buf, uint64_t buf_sz, std::vector<std::shared_ptr<db::property>>&);
 
     private:
         void prepare_node(hyperdex_client_attribute *attr,

@@ -21,7 +21,6 @@ namespace node_prog
 {
     class property
     {
-
         public:
             std::string key;
             std::string value;

@@ -69,7 +69,7 @@ edge :: traverse()
 node_prog::prop_list 
 edge :: get_properties()
 {
-    assert(base.view_time != NULL);
+    assert(base.view_time != nullptr);
     assert(base.time_oracle != nullptr);
     return node_prog::prop_list(base.properties, *base.view_time, base.time_oracle);
 }
@@ -77,7 +77,7 @@ edge :: get_properties()
 bool
 edge :: has_property(std::pair<std::string, std::string> &p)
 {
-    assert(base.view_time != NULL);
+    assert(base.view_time != nullptr);
     assert(base.time_oracle != nullptr);
     return base.has_property(p);
 }
@@ -85,7 +85,7 @@ edge :: has_property(std::pair<std::string, std::string> &p)
 bool
 edge :: has_all_properties(std::vector<std::pair<std::string, std::string>> &props)
 {
-    assert(base.view_time != NULL);
+    assert(base.view_time != nullptr);
     assert(base.time_oracle != nullptr);
     return base.has_all_properties(props);
 }

@@ -367,8 +367,8 @@ server_manager_link_wrapper :: do_sleep()
         sigset_t old_signals;
         sigemptyset(&empty_signals); // should never fail
         pthread_sigmask(SIG_SETMASK, &empty_signals, &old_signals); // should never fail
-        nanosleep(&ts, NULL); // nothing to gain by checking output
-        pthread_sigmask(SIG_SETMASK, &old_signals, NULL); // should never fail
+        nanosleep(&ts, nullptr); // nothing to gain by checking output
+        pthread_sigmask(SIG_SETMASK, &old_signals, nullptr); // should never fail
         sleep -= ts.tv_nsec;
     }
 

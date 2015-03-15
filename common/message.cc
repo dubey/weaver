@@ -207,8 +207,8 @@ message :: size(const db::property &t)
 {
     return size(t.key)
         + size(t.value)
-        + size(t.creat_time)
-        + size(t.del_time);
+        + size(t.get_creat_time())
+        + size(t.get_del_time());
 }
 
 uint64_t
@@ -442,8 +442,8 @@ message :: pack_buffer(e::buffer::packer &packer, const db::property &t)
 {
     pack_buffer(packer, t.key);
     pack_buffer(packer, t.value);
-    pack_buffer(packer, t.creat_time);
-    pack_buffer(packer, t.del_time);
+    pack_buffer(packer, t.get_creat_time());
+    pack_buffer(packer, t.get_del_time());
 }
 
 void 
@@ -679,10 +679,17 @@ message :: unpack_buffer(e::unpacker &unpacker, db::property &t)
 {
     unpack_buffer(unpacker, t.key);
     unpack_buffer(unpacker, t.value);
-    t.creat_time.clock.clear();
-    t.del_time.clock.clear();
-    unpack_buffer(unpacker, t.creat_time);
-    unpack_buffer(unpacker, t.del_time);
+
+    vc::vclock tcreat;
+    std::unique_ptr<vc::vclock> tdel;
+
+    unpack_buffer(unpacker, tcreat);
+    t.update_creat_time(tcreat);
+
+    unpack_buffer(unpacker, tdel);
+    if (tdel) {
+        t.update_del_time(*tdel);
+    }
 }
 
 void 

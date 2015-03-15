@@ -21,7 +21,7 @@
 static inline void
 generate_response(replicant_state_machine_context* ctx, server_manager_returncode x)
 {
-    const char* ptr = NULL;
+    const char* ptr = nullptr;
 
     switch (x)
     {

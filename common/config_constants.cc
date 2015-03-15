@@ -25,11 +25,11 @@ init_config_constants(const char *config_file_name)
     ClkSz = UINT64_MAX;
     NumShards = UINT64_MAX;
     MaxCacheEntries = UINT16_MAX;
-    HyperdexCoordIpaddr = NULL;
+    HyperdexCoordIpaddr = nullptr;
     HyperdexCoordPort = UINT16_MAX;
-    KronosIpaddr = NULL;
+    KronosIpaddr = nullptr;
     KronosPort = UINT16_MAX;
-    ServerManagerIpaddr = NULL;
+    ServerManagerIpaddr = nullptr;
     ServerManagerPort = UINT16_MAX;
     AuxIndex = false;
     BulkLoadPropertyValueDelimiter = (char)0;
@@ -235,12 +235,12 @@ init_config_constants(const char *config_file_name)
 
     if (UINT64_MAX == NumVts
      || UINT16_MAX == MaxCacheEntries
-     || NULL == HyperdexCoordIpaddr
+     || nullptr == HyperdexCoordIpaddr
      || UINT16_MAX == HyperdexCoordPort
      || HyperdexDaemons.empty()
-     || NULL == KronosIpaddr
+     || nullptr == KronosIpaddr
      || UINT16_MAX == KronosPort
-     || NULL == ServerManagerIpaddr
+     || nullptr == ServerManagerIpaddr
      || UINT16_MAX == ServerManagerPort) {
         return false;
     }

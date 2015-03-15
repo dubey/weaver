@@ -18,23 +18,29 @@
 #include <iterator>
 #include <unordered_map>
 
+#include "common/weaver_constants.h"
 #include "common/event_order.h"
 #include "db/property.h"
 
 namespace node_prog
 {
-    typedef std::unordered_map<std::string, std::vector<std::shared_ptr<db::property>>> prop_map_t;
+#ifdef weaver_large_property_maps_
+    typedef std::unordered_map<std::string, std::vector<std::shared_ptr<db::property>>> props_ds_t;
+#else
+    typedef std::vector<std::shared_ptr<db::property>> props_ds_t;
+#endif
     class prop_iter : public std::iterator<std::input_iterator_tag, property>
     {
         private:
-            prop_map_t::iterator internal_cur;
-            prop_map_t::iterator internal_end;
+            props_ds_t::iterator internal_cur;
+            props_ds_t::iterator internal_end;
             vc::vclock &req_time;
             order::oracle *time_oracle;
+            bool check_props_iter(props_ds_t::iterator&);
 
         public:
             prop_iter& operator++();
-            prop_iter(prop_map_t::iterator begin, prop_map_t::iterator end, vc::vclock& req_time, order::oracle *time_oracle);
+            prop_iter(props_ds_t::iterator begin, props_ds_t::iterator end, vc::vclock& req_time, order::oracle *time_oracle);
             bool operator!=(const prop_iter& rhs) const;
             std::vector<std::shared_ptr<property>> operator*();
     };
@@ -42,12 +48,12 @@ namespace node_prog
     class prop_list
     {
         private:
-            prop_map_t &wrapped;
+            props_ds_t &wrapped;
             vc::vclock &req_time;
             order::oracle *time_oracle;
 
         public:
-            prop_list(prop_map_t &prop_list, vc::vclock &req_time, order::oracle *to)
+            prop_list(props_ds_t &prop_list, vc::vclock &req_time, order::oracle *to)
                 : wrapped(prop_list), req_time(req_time), time_oracle(to) { }
 
             prop_iter begin()

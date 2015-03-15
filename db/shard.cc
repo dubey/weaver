@@ -262,7 +262,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
             assert(line.length() > 0 && line[0] == '#');
             char *max_node_ptr = new char[line.length()+1];
             std::strcpy(max_node_ptr, line.c_str());
-            max_node_handle = strtoull(++max_node_ptr, NULL, 10);
+            max_node_handle = strtoull(++max_node_ptr, nullptr, 10);
 
             while (std::getline(file, line)) {
                 line_count++;
@@ -280,7 +280,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     uint64_t loc1 = ((node1 % num_shards) + ShardIdIncr);
                     if (loc0 == shard_id) {
                         n = S->bulk_load_acquire_node_nonlocking(id0);
-                        if (n == NULL) {
+                        if (n == nullptr) {
                             n = S->create_node(id0, zero_clk, false, true);
                         }
                         S->create_edge_nonlocking(n, edge_handle, id1, loc1, zero_clk, true);
@@ -302,7 +302,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
             assert(line.length() > 0 && line[0] == '#');
             char *max_node_ptr = new char[line.length()+1];
             std::strcpy(max_node_ptr, line.c_str());
-            max_node_handle = strtoull(++max_node_ptr, NULL, 10);
+            max_node_handle = strtoull(++max_node_ptr, nullptr, 10);
 
             // nodes
             while (std::getline(file, line)) {
@@ -678,11 +678,6 @@ nop(db::message_wrapper *request)
     S->record_completed_tx(tx.timestamp);
 
     // ack to VT
-    //std::cerr << "nop ack, qts = " << qts << ", vclk " << vclk.vt_id << " : ";
-    //for (uint64_t c: vclk.clock) {
-    //    std::cerr << c << " ";
-    //}
-    //std::cerr << std::endl;
     msg.prepare_message(message::VT_NOP_ACK, shard_id, qts, cur_node_count);
     S->comm.send(vt_id, msg.buf);
 
@@ -711,7 +706,7 @@ get_state_if_exists(db::node &node, uint64_t req_id, node_prog::prog_type ptype)
             } 
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 // assumes holding node lock
@@ -739,7 +734,7 @@ NodeStateType& get_or_create_state(node_prog::prog_type ptype,
     } else {
         NodeStateType *ptr = new NodeStateType();
         (*state_map)[req_id] = std::unique_ptr<node_prog::Node_State_Base>(ptr);
-        assert(nodes_that_created_state != NULL);
+        assert(nodes_that_created_state != nullptr);
         nodes_that_created_state->emplace_back(std::make_pair(node->get_handle(), node->base.get_creat_time()));
         return *ptr;
     }
@@ -747,19 +742,29 @@ NodeStateType& get_or_create_state(node_prog::prog_type ptype,
 
 // vector pointers can be null if we don't want to fill that vector
 inline void
-fill_changed_properties(std::unordered_map<std::string, std::vector<std::shared_ptr<db::property>>> &props,
+fill_changed_properties(
+#ifdef weaver_large_property_maps_
+    std::unordered_map<std::string, std::vector<std::shared_ptr<db::property>>> &props,
+#else
+    std::vector<std::shared_ptr<db::property>> &props,
+#endif
     std::vector<node_prog::property> *props_added,
     std::vector<node_prog::property> *props_deleted,
     vc::vclock &time_cached,
     vc::vclock &cur_time,
     order::oracle *time_oracle)
 {
+#ifdef weaver_large_property_maps_
     for (auto &iter : props) {
         for (std::shared_ptr<db::property> p: iter.second) {
+#else
+    for (std::shared_ptr<db::property> p: props) {
+#endif
             db::property &prop = *p;
-            bool del_before_cur = (time_oracle->compare_two_vts(prop.get_del_time(), cur_time) == 0);
+            const std::unique_ptr<vc::vclock> &tdel = prop.get_del_time();
+            bool del_before_cur = (tdel != nullptr) && (time_oracle->compare_two_vts(*tdel, cur_time) == 0);
 
-            if (props_added != NULL) {
+            if (props_added != nullptr) {
                 bool creat_after_cached = (time_oracle->compare_two_vts(prop.get_creat_time(), time_cached) == 1);
                 bool creat_before_cur = (time_oracle->compare_two_vts(prop.get_creat_time(), cur_time) == 0);
 
@@ -768,15 +773,19 @@ fill_changed_properties(std::unordered_map<std::string, std::vector<std::shared_
                 }
             }
 
-            if (props_deleted != NULL) {
-                bool del_after_cached = (time_oracle->compare_two_vts(prop.get_del_time(), time_cached) == 1);
+            if (props_deleted != nullptr) {
+                bool del_after_cached = (tdel != nullptr) && (time_oracle->compare_two_vts(*tdel, time_cached) == 1);
 
                 if (del_after_cached && del_before_cur) {
                     props_deleted->emplace_back(prop.key, prop.value);
                 }
             }
+#ifndef weaver_large_property_maps_
+    }
+#else
         }
     }
+#endif
 }
 
 // records all changes to nodes given in ids vector between time_cached and cur_time
@@ -794,7 +803,7 @@ fetch_node_cache_contexts(uint64_t loc,
 
         if (node == nullptr
          || node->state == db::node::mode::MOVED
-         || (node->last_perm_deletion != NULL && time_oracle->compare_two_vts(time_cached, *node->last_perm_deletion) == 0)) {
+         || (node->last_perm_deletion != nullptr && time_oracle->compare_two_vts(time_cached, *node->last_perm_deletion) == 0)) {
             if (node != nullptr) {
                 S->release_node(node);
             }
@@ -804,7 +813,8 @@ fetch_node_cache_contexts(uint64_t loc,
         } else {
             // node exists
 
-            if (time_oracle->compare_two_vts(node->base.get_del_time(), cur_time) == 0) { // node has been deleted
+            if (node->base.get_del_time()
+             && time_oracle->compare_two_vts(*node->base.get_del_time(), cur_time) == 0) { // node has been deleted
                 toFill.emplace_back(loc, handle, true);
             } else {
                 node_prog::node_cache_context *context = nullptr;
@@ -826,11 +836,12 @@ fetch_node_cache_contexts(uint64_t loc,
                 for (auto &iter: node->out_edges) {
                     for (db::edge *e: iter.second) {
                         assert(e != nullptr);
+                        const std::unique_ptr<vc::vclock> &e_del_time = e->base.get_del_time();
 
-                        bool del_after_cached = (time_oracle->compare_two_vts(time_cached, e->base.get_del_time()) == 0);
+                        bool del_after_cached = (e_del_time != nullptr) && (time_oracle->compare_two_vts(time_cached, *e_del_time) == 0);
                         bool creat_after_cached = (time_oracle->compare_two_vts(time_cached, e->base.get_creat_time()) == 0);
 
-                        bool del_before_cur = (time_oracle->compare_two_vts(e->base.get_del_time(), cur_time) == 0);
+                        bool del_before_cur = (e_del_time != nullptr) && (time_oracle->compare_two_vts(*e_del_time, cur_time) == 0);
                         bool creat_before_cur = (time_oracle->compare_two_vts(e->base.get_creat_time(), cur_time) == 0);
 
                         if (creat_after_cached && creat_before_cur && !del_before_cur) {
@@ -926,9 +937,9 @@ inline bool cache_lookup(db::node*& node_to_check,
     std::pair<node_handle_t, ParamsType> &cur_node_params,
     order::oracle *time_oracle)
 {
-    assert(node_to_check != NULL);
+    assert(node_to_check != nullptr);
     assert(!np.cache_value); // cache_value is not already assigned
-    np.cache_value = NULL; // it is unallocated anyway
+    np.cache_value = nullptr; // it is unallocated anyway
     if (node_to_check->cache.find(cache_key) == node_to_check->cache.end()) {
         return true;
     } else {
@@ -938,7 +949,7 @@ inline bool cache_lookup(db::node*& node_to_check,
         std::shared_ptr<std::vector<db::remote_node>> watch_set = entry.watch_set;
 
         auto state = get_state_if_exists(*node_to_check, np.req_id, np.prog_type_recvd);
-        if (state != NULL && state->contexts_found.find(np.req_id) != state->contexts_found.end()) {
+        if (state != nullptr && state->contexts_found.find(np.req_id) != state->contexts_found.end()) {
             np.cache_value.reset(new node_prog::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
 #ifdef weaver_debug_
             S->watch_set_lookups_mutex.lock();
@@ -971,7 +982,7 @@ inline bool cache_lookup(db::node*& node_to_check,
             fstate->monitor.unlock();
 
             S->release_node(node_to_check);
-            node_to_check = NULL;
+            node_to_check = nullptr;
 
 #ifdef weaver_debug_
             S->watch_set_lookups_mutex.lock();
@@ -984,7 +995,7 @@ inline bool cache_lookup(db::node*& node_to_check,
         std::unique_ptr<node_prog::cache_response<CacheValueType>> future_cache_response(
                 new node_prog::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
         S->release_node(node_to_check);
-        node_to_check = NULL;
+        node_to_check = nullptr;
 
         // add running state to shard global structure while context is being fetched
         fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = new fetch_state<ParamsType, NodeStateType, CacheValueType>(np);
@@ -1018,7 +1029,7 @@ inline bool cache_lookup(db::node*& node_to_check,
                 auto &context_list = contexts_to_fetch[i];
                 assert(context_list.size() > 0);
                 std::unique_ptr<message::message> m(new message::message());
-                m->prepare_message(message::NODE_CONTEXT_FETCH, np.prog_type_recvd, np.req_id, np.vt_id, np.req_vclock, *time_cached, cache_tuple, context_list, S->shard_id);
+                m->prepare_message(message::NODE_CONTEXT_FETCH, np.prog_type_recvd, np.req_id, np.vt_id, *np.req_vclock, *time_cached, cache_tuple, context_list, S->shard_id);
                 S->comm.send(i, m->buf);
             }
         }
@@ -1056,15 +1067,17 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
 
         db::node *node = S->acquire_node_version(node_handle, *np.req_vclock, time_oracle);
 
-        if (node == NULL || time_oracle->compare_two_vts(node->base.get_del_time(), *np.req_vclock)==0) {
-            if (node != NULL) {
+        if (node == nullptr
+         || (node->base.get_del_time() != nullptr && time_oracle->compare_two_vts(*node->base.get_del_time(), *np.req_vclock) == 0)) {
+            if (node != nullptr) {
                 S->release_node(node);
             } else {
                 // node is being migrated here, but not yet completed
                 std::vector<std::pair<node_handle_t, ParamsType>> buf_node_params;
                 buf_node_params.emplace_back(id_params);
                 std::unique_ptr<message::message> m(new message::message());
-                m->prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, np.vt_prog_ptr, buf_node_params);
+                assert(np.req_vclock != nullptr);
+                m->prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, buf_node_params);
                 S->migration_mutex.lock();
                 if (S->deferred_reads.find(node_handle) == S->deferred_reads.end()) {
                     S->deferred_reads.emplace(node_handle, std::vector<std::unique_ptr<message::message>>());
@@ -1079,7 +1092,8 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
             std::vector<std::pair<node_handle_t, ParamsType>> fwd_node_params;
             fwd_node_params.emplace_back(id_params);
             std::unique_ptr<message::message> m(new message::message());
-            m->prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, np.vt_prog_ptr, fwd_node_params);
+            assert(np.req_vclock != nullptr);
+            m->prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, fwd_node_params);
             uint64_t new_loc = node->new_loc;
             S->release_node(node);
             S->comm.send(new_loc, m->buf);
@@ -1122,7 +1136,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
 
             node->base.view_time = np.req_vclock; 
             node->base.time_oracle = time_oracle;
-            assert(np.req_vclock);
+            assert(np.req_vclock != nullptr);
             assert(np.req_vclock->clock.size() == ClkSz);
             // call node program
             auto next_node_params = func(*node, this_node,
@@ -1186,7 +1200,8 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
         for (auto &loc_progs_pair : batched_node_progs) {
             assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < num_shards + ShardIdIncr);
             if (loc_progs_pair.second.size() > BATCH_MSG_SIZE) {
-                out_msg.prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, np.vt_prog_ptr, loc_progs_pair.second);
+                assert(np.req_vclock != nullptr);
+                out_msg.prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, loc_progs_pair.second);
                 S->comm.send(loc_progs_pair.first, out_msg.buf);
                 loc_progs_pair.second.clear();
             }
@@ -1200,7 +1215,8 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
         for (auto &loc_progs_pair : batched_node_progs) {
             if (!loc_progs_pair.second.empty()) {
                 assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < num_shards + ShardIdIncr);
-                out_msg.prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, np.vt_prog_ptr, loc_progs_pair.second);
+                assert(np.req_vclock != nullptr);
+                out_msg.prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, loc_progs_pair.second);
                 S->comm.send(loc_progs_pair.first, out_msg.buf);
                 loc_progs_pair.second.clear();
             }
@@ -1295,9 +1311,10 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
 
     // unpack the node program
     try {
-        msg->unpack_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, np.req_vclock, np.req_id, np.vt_prog_ptr, np.start_node_params);
+        np.req_vclock.reset(new vc::vclock());
+        msg->unpack_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, np.start_node_params);
         assert(np.req_vclock->clock.size() == ClkSz);
-    } catch (std::bad_alloc& ba) {
+    } catch (std::bad_alloc &ba) {
         WDEBUG << "bad_alloc caught " << ba.what() << std::endl;
         assert(false);
         return;
@@ -1429,7 +1446,7 @@ migrate_node_step2_req()
     S->migration_mutex.unlock();
 
     n = S->acquire_node_latest(S->migr_node);
-    assert(n != NULL);
+    assert(n != nullptr);
     msg.prepare_message(message::MIGRATE_SEND_NODE, S->migr_node, shard_id, *n);
     S->release_node(n);
     S->comm.send(S->migr_shard, msg.buf);
@@ -1565,11 +1582,11 @@ migrate_node_step3()
 inline bool
 check_migr_node(db::node *n, uint64_t migr_num_shards)
 {
-    if (n == NULL
-     || n->base.get_del_time() != S->max_clk
+    if (n == nullptr
+     || n->base.get_del_time() != nullptr
      || n->state == db::node::mode::MOVED
      || n->already_migr) {
-        if (n != NULL) {
+        if (n != nullptr) {
             n->already_migr = false;
             S->release_node(n);
         }
@@ -2042,7 +2059,7 @@ install_signal_handler(int signum, void (*handler)(int))
     sa.sa_handler = handler;
     sigfillset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
-    int ret = sigaction(signum, &sa, NULL);
+    int ret = sigaction(signum, &sa, nullptr);
     assert(ret == 0);
 }
 
@@ -2099,7 +2116,7 @@ main(int argc, const char *argv[])
     //sigdelset(&ss, SIGHUP);
     //sigdelset(&ss, SIGTERM);
     //sigdelset(&ss, SIGTSTP);
-    //if (pthread_sigmask(SIG_SETMASK, &ss, NULL) < 0) {
+    //if (pthread_sigmask(SIG_SETMASK, &ss, nullptr) < 0) {
     //    WDEBUG << "pthread sigmask failed" << std::endl;
     //    return -1;
     //}
@@ -2108,7 +2125,7 @@ main(int argc, const char *argv[])
     const char* listen_host = "127.0.0.1";
     long listen_port = 5201;
     const char *config_file = "./weaver.yaml";
-    const char *graph_file = NULL;
+    const char *graph_file = nullptr;
     const char *graph_format = "snap";
     bool backup = false;
     long bulk_load_num_shards = 1;
@@ -2196,7 +2213,7 @@ main(int argc, const char *argv[])
         S->config_mutex.unlock();
 
         // bulk loading
-        if (graph_file != NULL) {
+        if (graph_file != nullptr) {
             S->bulk_load_num_shards = (uint64_t)bulk_load_num_shards;
 
             db::graph_file_format format = db::SNAP;

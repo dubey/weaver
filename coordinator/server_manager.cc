@@ -539,7 +539,7 @@ server_manager :: recreate(replicant_state_machine_context* ctx,
     if (!c.get())
     {
         fprintf(replicant_state_machine_log_stream(ctx), "memory allocation failed\n");
-        return NULL;
+        return nullptr;
     }
 
     e::unpacker up(data, data_sz);
@@ -550,7 +550,7 @@ server_manager :: recreate(replicant_state_machine_context* ctx,
     if (up.error())
     {
         fprintf(replicant_state_machine_log_stream(ctx), "unpacking failed\n");
-        return NULL;
+        return nullptr;
     }
 
     c->generate_cached_configuration(ctx);
@@ -621,7 +621,7 @@ server_manager :: get_server(const server_id& sid)
         }
     }
 
-    return NULL;
+    return nullptr;
 }
 
 void

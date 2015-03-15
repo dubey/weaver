@@ -113,7 +113,7 @@ queue_manager :: exec_queued_request(order::oracle *time_oracle)
     queue_mutex.lock(); // prevent more jobs from being added
     queued_request *req = get_rw_req();
     queue_mutex.unlock();
-    if (req == NULL) {
+    if (req == nullptr) {
         return false;
     }
     req->arg->time_oracle = time_oracle;
@@ -168,7 +168,7 @@ queue_manager :: get_rd_req()
             }
         }
     }
-    return NULL;
+    return nullptr;
 }
 
 enum queue_order
@@ -202,7 +202,7 @@ queue_manager :: get_wr_req()
     enum queue_order queue_status = check_wr_queues_timestamps(UINT64_MAX, UINT64_MAX);
     assert(queue_status != PAST);
     if (queue_status == FUTURE) {
-        return NULL;
+        return nullptr;
     }
 
     // all write queues are good to go
@@ -229,7 +229,7 @@ queued_request*
 queue_manager :: get_rw_req()
 {
     queued_request *req = get_rd_req();
-    if (req == NULL) {
+    if (req == nullptr) {
         req = get_wr_req();
     }
     return req;

@@ -16,7 +16,7 @@
 #define weaver_db_property_h_
 
 #include <string>
-#include <functional>
+#include <memory>
 
 #include "common/weaver_constants.h"
 #include "common/vclock.h"
@@ -27,19 +27,22 @@ namespace db
 {
     class property : public node_prog::property
     {
+        private:
+            vc::vclock creat_time;
+            std::unique_ptr<vc::vclock> del_time;
+
         public:
             property();
             property(const std::string&, const std::string&);
             property(const std::string&, const std::string&, const vc::vclock&);
             property(const property &other);
 
-            vc::vclock creat_time;
-            vc::vclock del_time;
-
             bool operator==(property const &p2) const;
 
             const vc::vclock& get_creat_time() const;
-            const vc::vclock& get_del_time() const;
+            const std::unique_ptr<vc::vclock>& get_del_time() const;
+            bool is_deleted() const;
+            void update_creat_time(const vc::vclock&);
             void update_del_time(const vc::vclock&);
     };
 

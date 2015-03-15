@@ -12,6 +12,7 @@
  */
 
 #define weaver_debug_
+#include "common/weaver_constants.h"
 #include "common/hyper_stub_base.h"
 #include "common/config_constants.h"
 
@@ -26,7 +27,11 @@ hyper_stub_base :: hyper_stub_base()
         "aliases"}
     , graph_dtypes{HYPERDATATYPE_INT64,
         HYPERDATATYPE_STRING,
+#ifdef weaver_large_property_maps_
         HYPERDATATYPE_MAP_STRING_STRING,
+#else
+        HYPERDATATYPE_LIST_STRING,
+#endif
         HYPERDATATYPE_MAP_STRING_STRING,
         HYPERDATATYPE_INT64,
         HYPERDATATYPE_STRING,
@@ -687,7 +692,11 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::n
     vc::vclock create_clk;
     unpack_buffer(cl_attr[idx[1]].value, cl_attr[idx[1]].value_sz, create_clk);
     // properties
+#ifdef weaver_large_property_maps_
     unpack_buffer<std::vector<std::shared_ptr<db::property>>>(cl_attr[idx[2]].value, cl_attr[idx[2]].value_sz, n.base.properties);
+#else
+    unpack_buffer(cl_attr[idx[2]].value, cl_attr[idx[2]].value_sz, n.base.properties);
+#endif
 
     n.state = db::node::mode::STABLE;
     n.in_use = false;
@@ -729,8 +738,8 @@ hyper_stub_base :: get_nodes(std::unordered_map<node_handle_t, db::node*> &nodes
     std::vector<const char*> spaces(num_nodes, graph_space);
     std::vector<const char*> keys(num_nodes);
     std::vector<size_t> key_szs(num_nodes);
-    std::vector<const hyperdex_client_attribute**> attrs(num_nodes, NULL);
-    std::vector<size_t*> num_attrs(num_nodes, NULL);
+    std::vector<const hyperdex_client_attribute**> attrs(num_nodes, nullptr);
+    std::vector<size_t*> num_attrs(num_nodes, nullptr);
 
     const hyperdex_client_attribute *attr_array[num_nodes];
     size_t num_attrs_array[num_nodes];
@@ -790,7 +799,11 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     cl_attr[1].datatype = graph_dtypes[1];
 
     // properties
+#ifdef weaver_large_property_maps_
     prepare_buffer<std::vector<std::shared_ptr<db::property>>>(n.base.properties, props_buf);
+#else
+    prepare_buffer(n.base.properties, props_buf);
+#endif
     cl_attr[2].attr = graph_attrs[2];
     cl_attr[2].value = (const char*)props_buf->data();
     cl_attr[2].value_sz = props_buf->size();
@@ -974,8 +987,8 @@ hyper_stub_base :: get_nmap(std::unordered_set<node_handle_t> &toGet, bool tx)
     std::vector<const char*> spaces(num_nodes, graph_space);
     std::vector<const char*> keys(num_nodes);
     std::vector<size_t> key_szs(num_nodes);
-    std::vector<const hyperdex_client_attribute**> attrs(num_nodes, NULL);
-    std::vector<size_t*> num_attrs(num_nodes, NULL);
+    std::vector<const hyperdex_client_attribute**> attrs(num_nodes, nullptr);
+    std::vector<size_t*> num_attrs(num_nodes, nullptr);
 
     const hyperdex_client_attribute *attr_array[num_nodes];
     size_t num_attrs_array[num_nodes];
@@ -1095,8 +1108,8 @@ hyper_stub_base :: get_indices(std::unordered_map<std::string, std::pair<node_ha
     std::vector<const char*> spaces(num_indices, index_space);
     std::vector<const char*> keys(num_indices);
     std::vector<size_t> key_szs(num_indices);
-    std::vector<const hyperdex_client_attribute**> attrs(num_indices, NULL);
-    std::vector<size_t*> num_attrs(num_indices, NULL);
+    std::vector<const hyperdex_client_attribute**> attrs(num_indices, nullptr);
+    std::vector<size_t*> num_attrs(num_indices, nullptr);
 
     const hyperdex_client_attribute *attr_array[num_indices];
     size_t num_attrs_array[num_indices];
@@ -1261,4 +1274,42 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordere
     }
 }
 
+// pack as HYPERDATATYPE_LIST_STRING
+inline void
+hyper_stub_base :: prepare_buffer(const std::vector<std::shared_ptr<db::property>> &props, std::unique_ptr<e::buffer> &buf)
+{
+    std::vector<uint32_t> sz;
+    sz.reserve(props.size());
+    uint32_t buf_sz = 0;
 
+    for (const std::shared_ptr<db::property> p: props) {
+        sz.emplace_back(message::size(p));
+        buf_sz += sizeof(uint32_t)
+                + sz.back();
+    }
+
+    buf.reset(e::buffer::create(buf_sz));
+    e::buffer::packer packer = buf->pack();
+
+    for (uint64_t i = 0; i < props.size(); i++) {
+        pack_uint32(packer, sz[i]);
+        message::pack_buffer(packer, props[i]);
+    }
+}
+
+// unpack from HYPERDATATYPE_LIST_STRING
+inline void
+hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::vector<std::shared_ptr<db::property>> &props)
+{
+    std::unique_ptr<e::buffer> ebuf(e::buffer::create(buf, buf_sz));
+    e::unpacker unpacker = ebuf->unpack_from(0);
+    uint32_t sz;
+
+    while (!unpacker.empty()) {
+        unpack_uint32(unpacker, sz);
+        std::shared_ptr<db::property> p;
+        message::unpack_buffer(unpacker, p);
+
+        props.emplace_back(std::move(p));
+    }
+}

@@ -18,7 +18,6 @@ using db::property_key_hasher;
 
 property :: property()
     : creat_time(UINT64_MAX, UINT64_MAX)
-    , del_time(UINT64_MAX, UINT64_MAX)
 { }
 
 property :: property(const std::string &k, const std::string &v)
@@ -28,14 +27,16 @@ property :: property(const std::string &k, const std::string &v)
 property :: property(const std::string &k, const std::string &v, const vc::vclock &creat)
     : node_prog::property(k, v)
     , creat_time(creat)
-    , del_time(UINT64_MAX, UINT64_MAX)
 { }
 
 property :: property(const property &other)
     : node_prog::property(other.key, other.value)
     , creat_time(other.creat_time)
-    , del_time(other.del_time)
-{ }
+{
+    if (other.del_time) {
+        del_time.reset(new vc::vclock(*other.del_time));
+    }
+}
 
 bool
 property :: operator==(property const &other) const
@@ -49,16 +50,28 @@ property :: get_creat_time() const
     return creat_time;
 }
 
-const vc::vclock&
+const std::unique_ptr<vc::vclock>&
 property :: get_del_time() const
 {
     return del_time;
 }
 
+bool
+property :: is_deleted() const
+{
+    return (del_time != nullptr);
+}
+
 void
 property :: update_del_time(const vc::vclock &tdel)
 {
-    del_time = tdel;
+    del_time.reset(new vc::vclock(tdel));
+}
+
+void
+property :: update_creat_time(const vc::vclock &tcreat)
+{
+    creat_time = tcreat;
 }
 
 size_t

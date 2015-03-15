@@ -106,8 +106,8 @@ namespace message
             enum msg_type type;
             std::auto_ptr<e::buffer> buf;
 
-            message() : type(ERROR), buf(NULL) { }
-            message(enum msg_type t) : type(t), buf(NULL) { }
+            message() : type(ERROR), buf(nullptr) { }
+            message(enum msg_type t) : type(t), buf(nullptr) { }
             message(message &copy) : type(copy.type) { buf.reset(copy.buf->copy()); }
 
             void change_type(enum msg_type t) { type = t; }
@@ -266,21 +266,23 @@ namespace message
     template <typename T>
     inline uint64_t size(const std::shared_ptr<T> &ptr_t)
     {
-        if (ptr_t.get() == NULL) {
-            return 0;
-        } else {
-            return size(*ptr_t);
+        bool dummy;
+        uint64_t sz = size(dummy);
+        if (ptr_t) {
+            sz += size(*ptr_t);
         }
+        return sz;
     }
 
     template <typename T>
     inline uint64_t size(const std::unique_ptr<T> &ptr_t)
     {
-        if (ptr_t.get() == NULL) {
-            return 0;
-        } else {
-            return size(*ptr_t);
+        bool dummy;
+        uint64_t sz = size(dummy);
+        if (ptr_t) {
+            sz += size(*ptr_t);
         }
+        return sz;
     }
 
     template <typename T>
@@ -372,15 +374,27 @@ namespace message
 
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::shared_ptr<T> &ptr_t)
     {
-        if (ptr_t.get() != NULL) {
+        bool exists;
+        if (ptr_t) {
+            exists = true;
+            pack_buffer(packer, exists);
             pack_buffer(packer, *ptr_t);
+        } else {
+            exists = false;
+            pack_buffer(packer, exists);
         }
     }
 
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unique_ptr<T> &ptr_t)
     {
-        if (ptr_t.get() != NULL) {
+        bool exists;
+        if (ptr_t) {
+            exists = true;
+            pack_buffer(packer, exists);
             pack_buffer(packer, *ptr_t);
+        } else {
+            exists = false;
+            pack_buffer(packer, exists);
         }
     }
 
@@ -517,14 +531,22 @@ namespace message
 
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::shared_ptr<T> &ptr_t)
     {
-        ptr_t.reset(new T());
-        unpack_buffer(unpacker, *ptr_t);
+        bool exists;
+        unpack_buffer(unpacker, exists);
+        if (exists) {
+            ptr_t.reset(new T());
+            unpack_buffer(unpacker, *ptr_t);
+        }
     }
 
     template <typename T> inline void unpack_buffer(e::unpacker& unpacker, std::unique_ptr<T> &ptr_t)
     {
-        ptr_t.reset(new T());
-        unpack_buffer(unpacker, *ptr_t);
+        bool exists;
+        unpack_buffer(unpacker, exists);
+        if (exists) {
+            ptr_t.reset(new T());
+            unpack_buffer(unpacker, *ptr_t);
+        }
     }
 
     template <typename T> 

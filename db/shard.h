@@ -425,7 +425,7 @@ namespace db
     // multiple nodes with same handle can exist because the node was deleted and then recreated
     // find the current node corresponding to given id
     // lock and return the node
-    // return NULL if node does not exist (possibly permanently deleted)
+    // return nullptr if node does not exist (possibly permanently deleted)
     inline node*
     shard :: acquire_node_latest(const node_handle_t &node_handle)
     {
@@ -457,7 +457,7 @@ namespace db
                 node_wait_and_mark_busy(n_ver);
 
                 if ((tcreat != nullptr && n_ver->base.get_creat_time() == *tcreat)
-                 || (tdel != nullptr && n_ver->base.get_del_time() == *tdel)) {
+                 || (tdel != nullptr && n_ver->base.get_del_time() && *n_ver->base.get_del_time() == *tdel)) {
                     n = n_ver;
                     break;
                 } else {
@@ -621,7 +621,7 @@ namespace db
         } else {
             node_map_mutexes[map_idx].unlock();
         }
-        n = NULL;
+        n = nullptr;
     }
 
 
@@ -690,7 +690,7 @@ namespace db
         uint64_t qts)
     {
         node *n = acquire_node_write(node_handle, tdel.vt_id, qts);
-        if (n == NULL) {
+        if (n == nullptr) {
             // node is being migrated
             migration_mutex.lock();
             deferred_writes[node_handle].emplace_back(deferred_write(transaction::NODE_DELETE_REQ, tdel));
@@ -735,7 +735,7 @@ namespace db
         uint64_t qts)
     {
         node *n = acquire_node_write(local_node, vclk.vt_id, qts);
-        if (n == NULL) {
+        if (n == nullptr) {
             // node is being migrated
             migration_mutex.lock();
             def_write_lst &dwl = deferred_writes[local_node];
@@ -762,7 +762,7 @@ namespace db
         assert(out_edge_iter != n->out_edges.end());
         assert(!out_edge_iter->second.empty());
         edge *e = out_edge_iter->second.back();
-        assert(e->base.get_del_time().vt_id == UINT64_MAX);
+        assert(!e->base.get_del_time());
         e->base.update_del_time(tdel);
         n->updated = true;
         n->dependent_del++;
@@ -807,7 +807,7 @@ namespace db
         uint64_t qts)
     {
         node *n = acquire_node_write(node_handle, vclk.vt_id, qts);
-        if (n == NULL) {
+        if (n == nullptr) {
             migration_mutex.lock();
             def_write_lst &dwl = deferred_writes[node_handle];
             dwl.emplace_back(deferred_write(transaction::NODE_SET_PROPERTY, vclk));
@@ -831,7 +831,7 @@ namespace db
         assert(out_edge_iter != n->out_edges.end());
         assert(!out_edge_iter->second.empty());
         edge *e = out_edge_iter->second.back();
-        assert(e->base.get_del_time().vt_id == UINT64_MAX);
+        assert(!e->base.get_del_time());
         e->base.add_property(key, value, vclk);
     }
 
@@ -842,7 +842,7 @@ namespace db
         uint64_t qts)
     {
         node *n = acquire_node_write(node_handle, vclk.vt_id, qts);
-        if (n == NULL) {
+        if (n == nullptr) {
             migration_mutex.lock();
             def_write_lst &dwl = deferred_writes[node_handle];
             dwl.emplace_back(deferred_write(transaction::EDGE_SET_PROPERTY, vclk));
@@ -869,7 +869,7 @@ namespace db
         uint64_t qts)
     {
         node *n = acquire_node_write(node_handle, vclk.vt_id, qts);
-        if (n == NULL) {
+        if (n == nullptr) {
             migration_mutex.lock();
             def_write_lst &dwl = deferred_writes[node_handle];
             dwl.emplace_back(deferred_write(transaction::ADD_AUX_INDEX, vclk));
@@ -993,20 +993,19 @@ namespace db
                         assert(map_iter != n->out_edges.end());
 
                         edge *e = nullptr;
-                        bool found = false;
                         auto edge_iter = map_iter->second.begin();
                         for (; edge_iter != map_iter->second.end(); edge_iter++) {
-                            if ((*edge_iter)->base.get_del_time() == dobj->tdel) {
+                            const std::unique_ptr<vc::vclock> &tdel = (*edge_iter)->base.get_del_time();
+                            if (tdel && *tdel == dobj->tdel) {
                                 e = *edge_iter;
-                                found = true;
                                 break;
                             }
                         }
-                        assert(found);
+                        assert(e);
 
                         if (n->last_perm_deletion == nullptr
-                         || time_oracle->compare_two_vts(*n->last_perm_deletion, e->base.get_del_time()) == 0) {
-                            n->last_perm_deletion.reset(new vc::vclock(std::move(e->base.get_del_time())));
+                         || time_oracle->compare_two_vts(*n->last_perm_deletion, *e->base.get_del_time()) == 0) {
+                            n->last_perm_deletion.reset(new vc::vclock(*e->base.get_del_time()));
                         }
 
                         delete e;

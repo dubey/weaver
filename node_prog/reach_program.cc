@@ -206,7 +206,7 @@ node_prog :: reach_node_program(
                 state.visited = true;
 
                 if (MaxCacheEntries) {
-                    if (params._search_cache  && cache_response != NULL) {
+                    if (params._search_cache  && cache_response != nullptr) {
                         // check context, update cache
                         if (check_cache_context(*cache_response)) { // if context is valid
                             // we found the node we are looking for, prepare a reply

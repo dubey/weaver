@@ -43,7 +43,7 @@ namespace db
                 return ((hkey + 0x9e3779b9 + (hvalue<<6) + (hvalue>>2)) ^ hvalue);
             }
     };
-    
+
     class element
     {
         public:
@@ -53,10 +53,14 @@ namespace db
         protected:
             std::string handle;
             vc::vclock creat_time;
-            vc::vclock del_time;
+            std::unique_ptr<vc::vclock> del_time;
 
         public:
+#ifdef weaver_large_property_maps_
             std::unordered_map<std::string, std::vector<std::shared_ptr<property>>> properties;
+#else
+            std::vector<std::shared_ptr<property>> properties;
+#endif
             std::shared_ptr<vc::vclock> view_time;
             order::oracle *time_oracle;
 
@@ -69,14 +73,19 @@ namespace db
             bool has_property(const std::string &key, const std::string &value);
             bool has_property(const std::pair<std::string, std::string> &p);
             bool has_all_properties(const std::vector<std::pair<std::string, std::string>> &props);
-            void set_properties(std::unordered_map<std::string, std::vector<std::shared_ptr<property>>> &props);
-            const std::unordered_map<std::string, std::vector<std::shared_ptr<property>>>* get_props() const;
             void update_del_time(const vc::vclock &del_time);
-            const vc::vclock& get_del_time() const;
+            const std::unique_ptr<vc::vclock>& get_del_time() const;
             void update_creat_time(const vc::vclock &creat_time);
             const vc::vclock& get_creat_time() const;
             void set_handle(const std::string &handle);
             const std::string& get_handle() const;
+#ifdef weaver_large_property_maps_
+            void set_properties(std::unordered_map<std::string, std::vector<std::shared_ptr<property>>> &props) { properties = props; }
+            const std::unordered_map<std::string, std::vector<std::shared_ptr<property>>>* get_properties() const { return properties; }
+#else
+            void set_properties(std::vector<std::shared_ptr<property>> &props) { properties = props; }
+            const std::vector<std::shared_ptr<property>>* get_properties() const { return &properties; }
+#endif
     };
 
 }

@@ -101,7 +101,7 @@ comm_wrapper :: reconfigure(configuration &new_config, bool to_pause, uint64_t *
 
     reconfigure_internal(new_config);
 
-    if (num_active_vts != NULL) {
+    if (num_active_vts != nullptr) {
         *num_active_vts = 0;
         for (uint64_t i = 0; i < NumVts; i++) {
             if (active_server_idx[i] != UINT64_MAX) {

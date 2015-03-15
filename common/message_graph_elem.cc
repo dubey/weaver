@@ -36,7 +36,7 @@ message :: size(const db::element &t)
 {
     uint64_t sz = size(t.get_handle()) // client handle
         + size(t.get_creat_time()) + size(t.get_del_time()) // time stamps
-        + size(*t.get_props()); // properties
+        + size(*t.get_properties()); // properties
     return sz;
 }
 
@@ -85,7 +85,7 @@ void message :: pack_buffer(e::buffer::packer &packer, const db::element &t)
     pack_buffer(packer, t.get_handle());
     pack_buffer(packer, t.get_creat_time());
     pack_buffer(packer, t.get_del_time());
-    pack_buffer(packer, *t.get_props());
+    pack_buffer(packer, *t.get_properties());
 }
 
 void message :: pack_buffer(e::buffer::packer &packer, const db::edge &t)
@@ -127,7 +127,8 @@ void
 message :: unpack_buffer(e::unpacker &unpacker, db::element &t)
 {
     std::string handle;
-    vc::vclock creat_time, del_time;
+    vc::vclock creat_time;
+    std::unique_ptr<vc::vclock> del_time;
 
     unpack_buffer(unpacker, handle);
     t.set_handle(handle);
@@ -136,7 +137,9 @@ message :: unpack_buffer(e::unpacker &unpacker, db::element &t)
     t.update_creat_time(creat_time);
 
     unpack_buffer(unpacker, del_time);
-    t.update_del_time(del_time);
+    if (del_time) {
+        t.update_del_time(*del_time);
+    }
 
     unpack_buffer(unpacker, t.properties);
 }

@@ -244,7 +244,7 @@ nop_function()
     sleep_time.tv_nsec = VT_TIMEOUT_NANO % NANO;
 
     while (true) {
-        sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, NULL);
+        sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, nullptr);
         assert((sleep_ret == 0 || sleep_ret == EINTR) && "error in clock_nanosleep");
 
         vts->periodic_update_mutex.lock();
@@ -330,7 +330,7 @@ clk_update_function()
     vts->periodic_update_mutex.unlock();
 
     while (true) {
-        sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, NULL);
+        sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, nullptr);
         if (sleep_ret != 0 && sleep_ret != EINTR) {
             assert(false);
         }
@@ -780,7 +780,7 @@ install_signal_handler(int signum, void (*handler)(int))
     sa.sa_handler = handler;
     sigfillset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
-    int ret = sigaction(signum, &sa, NULL);
+    int ret = sigaction(signum, &sa, nullptr);
     assert(ret == 0);
 }
 
@@ -840,7 +840,7 @@ main(int argc, const char *argv[])
     //sigdelset(&ss, SIGHUP);
     //sigdelset(&ss, SIGTERM);
     //sigdelset(&ss, SIGTSTP);
-    //if (pthread_sigmask(SIG_SETMASK, &ss, NULL) < 0) {
+    //if (pthread_sigmask(SIG_SETMASK, &ss, nullptr) < 0) {
     //    WDEBUG << "pthread sigmask failed" << std::endl;
     //    return -1;
     //}

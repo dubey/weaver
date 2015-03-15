@@ -291,17 +291,25 @@ oracle :: compare_two_vts(const vc::vclock &clk1, const vc::vclock &clk2)
 // return true if the first clock occurred between the second two
 // assert not equal because vector clocks are unique.  no two clock are the same in every coordinate of the vector.
 bool
-oracle :: clock_creat_before_del_after(const vc::vclock &req_vclock, const vc::vclock &creat_time, const vc::vclock &del_time)
+oracle :: clock_creat_before_del_after(const vc::vclock &req_vclock,
+    const vc::vclock &creat_time,
+    const std::unique_ptr<vc::vclock> &del_time)
 {
-    int64_t cmp_1 = compare_two_vts(del_time, req_vclock);
-    assert(cmp_1 != 2);
-    bool toRet = (cmp_1 == 1);
-    if (toRet) {
+    bool cmp = true;
+
+    if (del_time) {
+        int64_t cmp_1 = compare_two_vts(*del_time, req_vclock);
+        assert(cmp_1 != 2);
+        cmp = (cmp_1 == 1);
+    }
+
+    if (cmp) {
         int64_t cmp_2 = compare_two_vts(creat_time, req_vclock);
         assert(cmp_2 != 2);
-        toRet = (cmp_2 == 0);
+        cmp = (cmp_2 == 0);
     }
-    return toRet;
+
+    return cmp;
 }
 
 // assign 'after' happens after all 'before'

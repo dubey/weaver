@@ -105,7 +105,7 @@ namespace order
             oracle();
             int64_t compare_vts(const std::vector<vc::vclock> &clocks);
             int64_t compare_two_vts(const vc::vclock &clk1, const vc::vclock &clk2);
-            bool clock_creat_before_del_after(const vc::vclock &req_vclock, const vc::vclock &creat_time, const vc::vclock &del_time);
+            bool clock_creat_before_del_after(const vc::vclock &req_vclock, const vc::vclock &creat_time, const std::unique_ptr<vc::vclock> &del_time);
             bool assign_vt_order(const std::vector<vc::vclock> &before, const vc::vclock &after);
 
         public:

@@ -96,7 +96,7 @@ key node
 attributes
     int shard,
     string creat_time,
-    map(string, string) properties,
+    list(string) properties,
     map(string, string) out_edges,
     int migr_status,
     string last_upd_clk,
