@@ -400,7 +400,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         loc_map = hstub->get_mappings(get_set);
 
         bool success = true;
-        if (loc_map.size() < get_set.size()) {
+        if (loc_map.size() < get_set.size() && AuxIndex) {
             std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> alias_map;
             std::pair<node_handle_t, uint64_t> empty;
             for (const node_handle_t &h: get_set) {
@@ -424,11 +424,17 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                     }
                 }
             }
+        } else {
+            success = false;
         }
 
         if (!success) {
             // some node handles bad, return immediately
-            WDEBUG << "bad node handles in node prog request" << std::endl;
+            WDEBUG << "bad node handles in node prog request: ";
+            for (auto &h: get_set) {
+                std::cerr << h << " ";
+            }
+            std::cerr << std::endl;
             msg->prepare_message(message::NODE_PROG_NOTFOUND);
             vts->comm.send_to_client(clientID, msg->buf);
             return;

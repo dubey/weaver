@@ -13,11 +13,11 @@
 
 #include <stdint.h>
 #include <iostream>
+#include <glog/logging.h>
 
 // debugging
 #ifndef WDEBUG
 #ifdef weaver_debug_
-#include <glog/logging.h>
 #define WDEBUG LOG(INFO)
 #else
 #define WDEBUG if (false) std::cerr << __FILE__ << ":" << __LINE__ << " "

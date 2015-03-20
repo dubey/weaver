@@ -11,7 +11,7 @@
  * ===============================================================
  */
 
-#define weaver_debug_
+//#define weaver_debug_
 #include "common/weaver_constants.h"
 #include "common/hyper_stub_base.h"
 #include "common/config_constants.h"

@@ -24,145 +24,45 @@
 using cl::client;
 
 void
-exec_reads(std::vector<std::string> *reqs,
-    client *cl,
-    uint64_t num_clients,
-    uint64_t *num_start,
-    uint64_t *num_fin,
-    uint64_t *done,
-    po6::threads::cond *cond,
-    uint64_t /*tid*/)
+exec_reads(std::default_random_engine &generator,
+    std::uniform_int_distribution<uint64_t> &distribution,
+    client &cl,
+    uint64_t num_requests,
+    wclock::weaver_timer &timer,
+    std::vector<uint64_t> &durations)
 {
-    cond->lock();
-    *num_start = *num_start + 1;
-    while (*num_start < num_clients) {
-        cond->wait();
-    }
-    cond->broadcast();
-    cond->unlock();
-
     node_prog::read_node_props_params rp, return_params;
 
-    uint64_t cnt = 0;
-    for (const std::string &h: *reqs) {
-        std::vector<std::pair<std::string, node_prog::read_node_props_params>> args(1, std::make_pair(h, rp));
-        cl->read_node_props_program(args, return_params);
-        //if (++cnt % 100 == 0) {
-        //    std::cout << "client " << tid << " completed " << cnt << std::endl;
-        //}
-        if (++cnt % 1000 == 0) {
-            cond->lock();
-            *done = *done + 1000;
-            cond->unlock();
-        }
-    }
+    uint64_t start, end;
+    uint64_t first = timer.get_time_elapsed_millis();
+    for (uint64_t i = 0; i < num_requests; i++) {
+        std::string n = std::to_string(distribution(generator));
+        start = timer.get_time_elapsed_millis();
 
-    cond->lock();
-    *num_fin = *num_fin + 1;
-    cond->signal();
-    cond->unlock();
+        std::vector<std::pair<std::string, node_prog::read_node_props_params>> args(1, std::make_pair(n, rp));
+        cl.read_node_props_program(args, return_params);
+
+        end = timer.get_time_elapsed_millis();
+        durations.emplace_back(end-start);
+    }
+    uint64_t last = timer.get_time_elapsed_millis();
+
+    std::cout << "Time taken for " << num_requests << " requests = " << last-first << std::endl;
 }
 
 void
-run_read_only_vertex_bench(uint64_t num_clients, uint64_t num_nodes, uint64_t num_requests)
+run_read_only_vertex_bench(const std::string &/*output_fname*/, uint64_t num_nodes, uint64_t num_requests)
 {
     po6::net::ipaddr ip;
     busybee_discover(&ip);
-    uint64_t pid = getpid();
-
-    std::vector<client*> clients;
-    std::vector<std::vector<std::string>> requests(num_clients, std::vector<std::string>());
-    clients.reserve(num_clients);
-
-    std::unordered_map<uint64_t, uint64_t> vt_count;
-
-    for (uint64_t i = 0; i < num_clients; i++) {
-        clients.emplace_back(new client("128.84.167.101", 2002, "/home/dubey/installs/etc/weaver.yaml"));
-        requests[i].reserve(num_requests);
-
-        uint64_t vt = clients.back()->get_vt_id();
-        if (vt_count.find(vt) == vt_count.end()) {
-            vt_count[vt] = 0;
-        }
-        vt_count[vt]++;
-    }
-
-    std::cout << "[vt counts]: ";
-    for (const auto &p: vt_count) {
-        std::cout << p.first << " " << p.second << "; ";
-    }
-    std::cout << std::endl;
+    //uint64_t pid = getpid();
 
     std::default_random_engine generator;
-    std::uniform_int_distribution<uint64_t> distribution(0,num_nodes-1);
-    for (uint64_t i = 0; i < num_requests; i++) {
-        for (uint64_t j = 0; j < num_clients; j++) {
-            requests[j].emplace_back(std::to_string(distribution(generator) % num_nodes));
-        }
-    }
-
+    std::uniform_int_distribution<uint64_t> distribution(0, num_nodes-1);
+    client cl("127.0.0.1", 2002, "/home/dubey/installs/etc/weaver.yaml");
     wclock::weaver_timer timer;
-    po6::threads::mutex mtx;
-    po6::threads::cond cond(&mtx);
-    std::vector<std::thread*> threads;
-    std::vector<uint64_t> done(num_clients, 0);
-    threads.reserve(num_clients);
-    uint64_t num_start = 0;
-    uint64_t num_fin = 0;
+    std::vector<uint64_t> durations;
+    durations.reserve(num_requests);
 
-    for (uint64_t i = 0; i < num_clients; i++) {
-        threads.emplace_back(new std::thread(exec_reads, &requests[i], clients[i], num_clients, &num_start, &num_fin, &done[i], &cond, i));
-    }
-
-    cond.lock();
-    while (num_start < num_clients) {
-        cond.wait();
-    }
-
-    uint64_t start = timer.get_time_elapsed_millis();
-    std::chrono::milliseconds duration(1000); // 1 sec
-
-    while (num_fin < num_clients) {
-        cond.unlock();
-        std::this_thread::sleep_for(duration);
-        cond.lock();
-
-        uint64_t tot_done = 0;
-        bool some_finished = false;
-        if (some_finished) {
-            std::cout << "threads not yet finished:";
-        }
-        for (uint64_t i = 0; i < done.size(); i++) {
-            tot_done += done[i];
-            if (done[i] == num_requests) {
-                some_finished = true;
-            } else if (some_finished) {
-                std::cout << " " << i;
-            }
-        }
-        if (some_finished) {
-            std::cout << std::endl;
-        }
-
-        uint64_t cur = timer.get_time_elapsed_millis();
-        uint64_t real = timer.get_real_time_millis();
-        std::cout << "[progress@" << ip << pid << "@" << real << "=" << (tot_done * 1000 / (cur-start)) << std::endl;
-    }
-    cond.unlock();
-
-    uint64_t end = timer.get_time_elapsed_millis();
-
-    for (uint64_t i = 0; i < num_clients; i++) {
-        threads[i]->join();
-        delete threads[i];
-        delete clients[i];
-    }
-
-    uint64_t ops = (num_requests*num_clients);
-    float time = (end-start)/1000;
-    float tput = ops / time;
-
-    std::cout << "[throughput=] " << tput << " , time = " << time << std::endl;
-
-    std::cout << ops << " =tot_requests" << std::endl;
+    exec_reads(generator, distribution, cl, num_requests, timer, durations);
 }

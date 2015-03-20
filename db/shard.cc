@@ -260,9 +260,9 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
         case db::SNAP: {
             std::getline(file, line);
             assert(line.length() > 0 && line[0] == '#');
-            char *max_node_ptr = new char[line.length()+1];
-            std::strcpy(max_node_ptr, line.c_str());
-            max_node_handle = strtoull(++max_node_ptr, nullptr, 10);
+
+            line.erase(line.begin());
+            std::string edge_prefix = line;
 
             while (std::getline(file, line)) {
                 line_count++;
@@ -275,7 +275,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     parse_two_uint64(line, node0, node1);
                     id0 = std::to_string(node0);
                     id1 = std::to_string(node1);
-                    edge_handle = std::to_string(max_node_handle + (++edge_count));
+                    edge_handle = edge_prefix + std::to_string(++edge_count);
                     uint64_t loc0 = ((node0 % num_shards) + ShardIdIncr);
                     uint64_t loc1 = ((node1 % num_shards) + ShardIdIncr);
                     if (loc0 == shard_id) {
