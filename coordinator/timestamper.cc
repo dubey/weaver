@@ -424,7 +424,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                     }
                 }
             }
-        } else {
+        } else if (loc_map.size() < get_set.size()) {
             success = false;
         }
 

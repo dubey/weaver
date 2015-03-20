@@ -45,7 +45,12 @@ main(int argc, char *argv[])
     UNUSED(argc);
     UNUSED(argv);
 
-    run_read_only_vertex_bench("local_bench_01.output", 81306, 25000);
+    if (argc != 2) {
+        WDEBUG << "need exactly 1 arg: name of latency log file" << std::endl;
+        return 1;
+    }
+
+    run_read_only_vertex_bench(argv[1], 81306, 25000);
 #ifdef __ALL_TESTS__
     //message_test();
     //WDEBUG << "Message packing/unpacking ok." << std::endl;

@@ -79,7 +79,6 @@ sleep 3
 
 echo 'Adding HyperDex spaces'
 
-if [ $aux_index == '1' ]; then
 hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
 space weaver_index_data
 key idx
@@ -88,7 +87,6 @@ attributes
     int shard
 tolerate 2 failures
 EOF
-fi
 
 hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
 space weaver_graph_data
