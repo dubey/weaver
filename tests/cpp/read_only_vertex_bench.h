@@ -29,29 +29,28 @@ exec_reads(std::default_random_engine &generator,
     client &cl,
     uint64_t num_requests,
     wclock::weaver_timer &timer,
-    std::vector<uint64_t> &durations)
+    std::vector<uint64_t> &timestamps)
 {
     node_prog::read_node_props_params rp, return_params;
 
-    uint64_t start, end;
-    uint64_t first = timer.get_time_elapsed_millis();
+    uint64_t t;
+    uint64_t first = timer.get_time_elapsed();
+    timestamps.emplace_back(first);
     for (uint64_t i = 0; i < num_requests; i++) {
         std::string n = std::to_string(distribution(generator));
-        start = timer.get_time_elapsed_millis();
 
         std::vector<std::pair<std::string, node_prog::read_node_props_params>> args(1, std::make_pair(n, rp));
         cl.read_node_props_program(args, return_params);
 
-        end = timer.get_time_elapsed_millis();
-        durations.emplace_back(end-start);
+        t = timer.get_time_elapsed();
+        timestamps.emplace_back(t);
     }
-    uint64_t last = timer.get_time_elapsed_millis();
 
-    std::cout << "Time taken for " << num_requests << " requests = " << last-first << std::endl;
+    std::cout << "Time taken for " << num_requests << " requests = " << (t-first)/(1000000) << std::endl;
 }
 
 void
-run_read_only_vertex_bench(const std::string &/*output_fname*/, uint64_t num_nodes, uint64_t num_requests)
+run_read_only_vertex_bench(const std::string &output_fname, uint64_t num_nodes, uint64_t num_requests)
 {
     po6::net::ipaddr ip;
     busybee_discover(&ip);
@@ -61,8 +60,15 @@ run_read_only_vertex_bench(const std::string &/*output_fname*/, uint64_t num_nod
     std::uniform_int_distribution<uint64_t> distribution(0, num_nodes-1);
     client cl("127.0.0.1", 2002, "/home/dubey/installs/etc/weaver.yaml");
     wclock::weaver_timer timer;
-    std::vector<uint64_t> durations;
-    durations.reserve(num_requests);
+    std::vector<uint64_t> timestamps;
+    timestamps.reserve(num_requests+1);
 
-    exec_reads(generator, distribution, cl, num_requests, timer, durations);
+    exec_reads(generator, distribution, cl, num_requests, timer, timestamps);
+
+    std::ofstream file;
+    file.open(output_fname, std::ofstream::out);
+    for (uint64_t t: timestamps) {
+        file << t << std::endl;
+    }
+    file.close();
 }
