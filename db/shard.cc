@@ -1410,16 +1410,16 @@ migrate_node_step1(db::node *n,
     S->migr_node = n->get_handle();
     S->migr_shard = migr_loc;
 
-    // updating edge map
-    S->edge_map_mutex.lock();
-    for (auto &x: n->out_edges) {
-        for (db::edge *e: x.second) {
-            const node_handle_t &remote_node = e->nbr.handle;
-            node_version_t local_node = std::make_pair(S->migr_node, e->base.get_creat_time());
-            S->remove_from_edge_map(remote_node, local_node);
-        }
-    }
-    S->edge_map_mutex.unlock();
+    // XXX updating edge map
+    //S->edge_map_mutex.lock();
+    //for (auto &x: n->out_edges) {
+    //    for (db::edge *e: x.second) {
+    //        const node_handle_t &remote_node = e->nbr.handle;
+    //        node_version_t local_node = std::make_pair(S->migr_node, e->base.get_creat_time());
+    //        S->remove_from_edge_map(remote_node, local_node);
+    //    }
+    //}
+    //S->edge_map_mutex.unlock();
 
     S->release_node(n);
 
@@ -1481,15 +1481,15 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg, order::oracle *ti
         return;
     }
 
-    // updating edge map
-    S->edge_map_mutex.lock();
-    for (auto &x: n->out_edges) {
-        for (db::edge *e: x.second) {
-            const node_handle_t &remote_node = e->nbr.handle;
-            S->edge_map[remote_node].emplace(std::make_pair(node_handle, e->base.get_creat_time()));
-        }
-    }
-    S->edge_map_mutex.unlock();
+    // XXX updating edge map
+    //S->edge_map_mutex.lock();
+    //for (auto &x: n->out_edges) {
+    //    for (db::edge *e: x.second) {
+    //        const node_handle_t &remote_node = e->nbr.handle;
+    //        S->edge_map[remote_node].emplace(std::make_pair(node_handle, e->base.get_creat_time()));
+    //    }
+    //}
+    //S->edge_map_mutex.unlock();
 
     S->migration_mutex.lock();
     // apply buffered writes
@@ -1730,9 +1730,9 @@ bool agg_count_compare(std::pair<node_handle_t, uint32_t> p1, std::pair<node_han
 void
 migration_begin()
 {
-    S->migration_mutex.lock();
-    S->ldg_nodes = S->node_list;
-    S->migration_mutex.unlock();
+    //XXX S->migration_mutex.lock();
+    //S->ldg_nodes = S->node_list;
+    //S->migration_mutex.unlock();
 
 #ifdef WEAVER_CLDG
     S->msg_count_mutex.lock();

@@ -19,6 +19,7 @@
 #include <map>
 #include <vector>
 #include <unordered_map>
+#include <google/sparse_hash_map>
 #include <po6/threads/mutex.h>
 #include <po6/net/location.h>
 #include <hyperdex/client.hpp>
@@ -99,11 +100,13 @@ namespace db
             void release_node(node *n, bool migr_node);
 
             // Graph state
-            po6::threads::mutex edge_map_mutex;
+            //XXX po6::threads::mutex edge_map_mutex;
             po6::threads::mutex node_map_mutexes[NUM_NODE_MAPS];
             uint64_t shard_id;
             server_id serv_id;
-            std::unordered_map<node_handle_t, std::vector<node*>> nodes[NUM_NODE_MAPS]; // node handle -> ptr to node object
+            // node handle -> ptr to node object
+            google::sparse_hash_map<node_handle_t, std::vector<node*>, std::hash<std::string>, weaver_util::eqstr> nodes[NUM_NODE_MAPS];
+            //std::unordered_map<node_handle_t, std::vector<node*>> nodes[NUM_NODE_MAPS]; // node handle -> ptr to node object
             std::unordered_map<node_handle_t, // node handle n ->
                 std::unordered_set<node_version_t, node_version_hash>> edge_map; // in-neighbors of n
         public:
@@ -168,7 +171,7 @@ namespace db
             po6::threads::mutex perm_del_mutex;
             std::deque<del_obj*> perm_del_queue;
             void delete_migrated_node(const node_handle_t &migr_node);
-            void remove_from_edge_map(const node_handle_t &remote_node, const node_version_t &local_node);
+            // XXX void remove_from_edge_map(const node_handle_t &remote_node, const node_version_t &local_node);
             void permanent_delete_loop(uint64_t vt_id, bool outstanding_progs, order::oracle *time_oracle);
         private:
             void permanent_node_delete(node *n);
@@ -176,7 +179,7 @@ namespace db
             // Migration
         public:
             po6::threads::mutex migration_mutex;
-            std::unordered_set<node_handle_t> node_list; // list of node ids currently on this shard
+            //XXX std::unordered_set<node_handle_t> node_list; // list of node ids currently on this shard
             bool current_migr, migr_updating_nbrs, migr_token, migrated;
             node_handle_t migr_node;
             uint64_t migr_chance, migr_shard, migr_token_hops, migr_num_shards, migr_vt;
@@ -269,6 +272,9 @@ namespace db
         , watch_set_nops(0)
         , watch_set_piggybacks(0)
     {
+        for (uint64_t i = 0; i < NUM_NODE_MAPS; i++) {
+            nodes[i].set_deleted_key("");
+        }
     }
 
     // initialize: msging layer
@@ -390,7 +396,7 @@ namespace db
         std::vector<std::thread> threads;
         WDEBUG << "hstub.size " << hstub.size() << ", NUM_SHARD_THREADS " << NUM_SHARD_THREADS << std::endl;
         for (uint64_t i = 0; i < hstub.size(); i++) {
-            threads.emplace_back(std::thread(&hyper_stub::bulk_load, hstub[i], (int)i, nodes));
+            threads.emplace_back(std::thread(&hyper_stub::memory_efficient_bulk_load, hstub[i], (int)i, nodes));
         }
         for (uint64_t i = 0; i < hstub.size(); i++) {
             threads[i].join();
@@ -602,7 +608,7 @@ namespace db
             node_map_mutexes[map_idx].unlock();
 
             migration_mutex.lock();
-            node_list.erase(node_handle);
+            //XXX node_list.erase(node_handle);
             shard_node_count[shard_id - ShardIdIncr]--;
             migration_mutex.unlock();
 
@@ -642,7 +648,7 @@ namespace db
 
         auto map_iter = nodes[map_idx].find(node_handle);
         if (map_iter == nodes[map_idx].end()) {
-            nodes[map_idx].emplace(node_handle, std::vector<node*>(1, new_node));
+            nodes[map_idx][node_handle] = std::vector<node*>(1, new_node);
         } else {
             map_iter->second.emplace_back(new_node);
         }
@@ -654,7 +660,7 @@ namespace db
         if (!init_load) {
             migration_mutex.lock();
         }
-        node_list.emplace(node_handle);
+        //XXX node_list.emplace(node_handle);
         shard_node_count[shard_id - ShardIdIncr]++;
         if (!init_load) {
             migration_mutex.unlock();
@@ -713,14 +719,14 @@ namespace db
         edge *new_edge = new edge(handle, vclk, remote_loc, remote_node);
         n->add_edge(new_edge);
 
-        // update edge map
-        if (!init_load) {
-            edge_map_mutex.lock();
-        }
-        edge_map[remote_node].emplace(std::make_pair(n->get_handle(), vclk));
-        if (!init_load) {
-            edge_map_mutex.unlock();
-        }
+        // XXX update edge map
+        //if (!init_load) {
+        //    edge_map_mutex.lock();
+        //}
+        //edge_map[remote_node].emplace(std::make_pair(n->get_handle(), vclk));
+        //if (!init_load) {
+        //    edge_map_mutex.unlock();
+        //}
     }
 
     inline void
@@ -919,17 +925,18 @@ namespace db
     }
 
     // assuming caller holds edge_map_mutex
-    inline void
-    shard :: remove_from_edge_map(const node_handle_t &remote_node, const node_version_t &local_node)
-    {
-        auto edge_map_iter = edge_map.find(remote_node);
-        assert(edge_map_iter != edge_map.end());
-        auto &node_version_set = edge_map_iter->second;
-        node_version_set.erase(local_node);
-        if (node_version_set.empty()) {
-            edge_map.erase(remote_node);
-        }
-    }
+    // XXX
+    //inline void
+    //shard :: remove_from_edge_map(const node_handle_t &remote_node, const node_version_t &local_node)
+    //{
+    //    auto edge_map_iter = edge_map.find(remote_node);
+    //    assert(edge_map_iter != edge_map.end());
+    //    auto &node_version_set = edge_map_iter->second;
+    //    node_version_set.erase(local_node);
+    //    if (node_version_set.empty()) {
+    //        edge_map.erase(remote_node);
+    //    }
+    //}
 
     inline void
     shard :: permanent_delete_loop(uint64_t vt_id, bool outstanding_progs, order::oracle *time_oracle)
@@ -973,7 +980,7 @@ namespace db
                             for (db::edge *e: x.second) {
                                 const node_handle_t &remote_node = e->nbr.handle;
                                 node_version_t local_node = std::make_pair(dobj->node, e->base.get_creat_time());
-                                remove_from_edge_map(remote_node, local_node);
+                                // XXX remove_from_edge_map(remote_node, local_node);
                             }
                         }
                         release_node(n);
@@ -1068,37 +1075,38 @@ namespace db
     }
 
     inline void
-    shard :: update_migrated_nbr(const node_handle_t &migr_node, uint64_t old_loc, uint64_t new_loc)
-    {
-        std::unordered_set<node_version_t, node_version_hash> nbrs;
-        node *n;
-        edge_map_mutex.lock();
-        auto find_iter = edge_map.find(migr_node);
-        if (find_iter != edge_map.end()) {
-            nbrs = find_iter->second;
-        }
-        edge_map_mutex.unlock();
+    shard :: update_migrated_nbr(const node_handle_t &, uint64_t, uint64_t) { }
+    //XXX shard :: update_migrated_nbr(const node_handle_t &migr_node, uint64_t old_loc, uint64_t new_loc)
+    //{
+    //    std::unordered_set<node_version_t, node_version_hash> nbrs;
+    //    node *n;
+    //    edge_map_mutex.lock();
+    //    auto find_iter = edge_map.find(migr_node);
+    //    if (find_iter != edge_map.end()) {
+    //        nbrs = find_iter->second;
+    //    }
+    //    edge_map_mutex.unlock();
 
-        for (const node_version_t &nv: nbrs) {
-            n = acquire_node_specific(nv.first, &nv.second, nullptr);
-            update_migrated_nbr_nonlocking(n, migr_node, old_loc, new_loc);
-            release_node(n);
-        }
-        migration_mutex.lock();
-        if (old_loc != shard_id) {
-            message::message msg;
-            msg.prepare_message(message::MIGRATED_NBR_ACK, shard_id, max_seen_clk, shard_node_count[shard_id-ShardIdIncr]);
-            comm.send(old_loc, msg.buf);
-        } else {
-            for (uint64_t i = 0; i < NumVts; i++) {
-                if (order::oracle::happens_before_no_kronos(target_prog_clk[i], max_seen_clk[i])) {
-                    target_prog_clk[i] = max_seen_clk[i];
-                }
-            }
-            migr_edge_acks[shard_id - ShardIdIncr] = true;
-        }
-        migration_mutex.unlock();
-    }
+    //    for (const node_version_t &nv: nbrs) {
+    //        n = acquire_node_specific(nv.first, &nv.second, nullptr);
+    //        update_migrated_nbr_nonlocking(n, migr_node, old_loc, new_loc);
+    //        release_node(n);
+    //    }
+    //    migration_mutex.lock();
+    //    if (old_loc != shard_id) {
+    //        message::message msg;
+    //        msg.prepare_message(message::MIGRATED_NBR_ACK, shard_id, max_seen_clk, shard_node_count[shard_id-ShardIdIncr]);
+    //        comm.send(old_loc, msg.buf);
+    //    } else {
+    //        for (uint64_t i = 0; i < NumVts; i++) {
+    //            if (order::oracle::happens_before_no_kronos(target_prog_clk[i], max_seen_clk[i])) {
+    //                target_prog_clk[i] = max_seen_clk[i];
+    //            }
+    //        }
+    //        migr_edge_acks[shard_id - ShardIdIncr] = true;
+    //    }
+    //    migration_mutex.unlock();
+    //}
 
     inline void
     shard :: update_node_mapping(const node_handle_t &handle, uint64_t shard)

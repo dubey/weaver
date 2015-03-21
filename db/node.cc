@@ -42,6 +42,7 @@ node :: node(const node_handle_t &_handle, uint64_t shrd, vc::vclock &vclk, po6:
     , last_perm_deletion(nullptr)
 {
     std::string empty("");
+    out_edges.set_deleted_key(empty);
     aliases.set_deleted_key(empty);
 }
 

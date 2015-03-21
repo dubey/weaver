@@ -24,7 +24,7 @@ hyper_stub :: hyper_stub(uint64_t sid)
 { }
 
 void
-hyper_stub :: restore_backup(std::unordered_map<node_handle_t, std::vector<node*>> *nodes,
+hyper_stub :: restore_backup(google::sparse_hash_map<node_handle_t, std::vector<node*>, std::hash<std::string>, weaver_util::eqstr> *nodes,
     std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,
     po6::threads::mutex *shard_mutexes)
 {
@@ -113,7 +113,7 @@ hyper_stub :: restore_backup(std::unordered_map<node_handle_t, std::vector<node*
             // node map
             auto &node_map = nodes[map_idx];
             assert(node_map.find(node_handle) == node_map.end());
-            node_map.emplace(node_handle, std::vector<node*>(1, n));
+            node_map[node_handle] = std::vector<node*>(1, n);
 
             hyperdex_client_destroy_attrs(cl_attr, num_attrs);
         } else {
@@ -122,6 +122,28 @@ hyper_stub :: restore_backup(std::unordered_map<node_handle_t, std::vector<node*
     }
 
     free(handle_str);
+}
+
+void
+hyper_stub :: memory_efficient_bulk_load(int thread_id, google::sparse_hash_map<node_handle_t, std::vector<node*>, std::hash<std::string>, weaver_util::eqstr> *nodes_arr)
+{
+    assert(NUM_NODE_MAPS % NUM_SHARD_THREADS == 0);
+
+    std::unordered_map<node_handle_t, node*> node_map;
+    uint64_t batch_sz = 0;
+    for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
+        for (const auto &p: nodes_arr[tid]) {
+            assert(p.second.size() == 1);
+            node_map.emplace(p.first, p.second.front());
+        }
+        if (++batch_sz == 1000) {
+            put_nodes_bulk(node_map);
+            node_map.clear();
+            batch_sz = 0;
+        }
+    }
+
+    put_nodes_bulk(node_map);
 }
 
 void
