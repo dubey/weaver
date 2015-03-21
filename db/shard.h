@@ -635,8 +635,6 @@ namespace db
     {
         uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
         node *new_node = new node(node_handle, shard_id, vclk, node_map_mutexes+map_idx);
-        new_node->last_upd_clk = vclk;
-        new_node->restore_clk = vclk.clock;
 
         if (!init_load) {
             node_map_mutexes[map_idx].lock();
@@ -681,7 +679,6 @@ namespace db
         vc::vclock &tdel)
     {
         n->base.update_del_time(tdel);
-        n->updated = true;
     }
 
     inline void
@@ -715,7 +712,6 @@ namespace db
     {
         edge *new_edge = new edge(handle, vclk, remote_loc, remote_node);
         n->add_edge(new_edge);
-        n->updated = true;
 
         // update edge map
         if (!init_load) {
@@ -764,8 +760,6 @@ namespace db
         edge *e = out_edge_iter->second.back();
         assert(!e->base.get_del_time());
         e->base.update_del_time(tdel);
-        n->updated = true;
-        n->dependent_del++;
     }
 
     inline void

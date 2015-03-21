@@ -67,14 +67,12 @@ message :: size(const db::node &t)
     sz += size(t.base);
     sz += size(t.out_edges);
     sz += size(t.aliases);
-    sz += size(t.update_count);
 #ifdef WEAVER_CLDG
     sz += size(t.msg_count);
 #endif
 #ifdef WEAVER_NEW_CLDG
     sz += size(t.msg_count);
 #endif
-    sz += size(t.already_migr);
     sz += size(t.prog_states);
     return sz;
 }
@@ -111,14 +109,12 @@ message :: pack_buffer(e::buffer::packer &packer, const db::node &t)
     pack_buffer(packer, t.base);
     pack_buffer(packer, t.out_edges);
     pack_buffer(packer, t.aliases);
-    pack_buffer(packer, t.update_count);
 #ifdef WEAVER_CLDG
     pack_buffer(packer, t.msg_count);
 #endif
 #ifdef WEAVER_NEW_CLDG
     pack_buffer(packer, t.msg_count);
 #endif
-    pack_buffer(packer, t.already_migr);
     pack_buffer(packer, t.prog_states);
 }
 
@@ -183,14 +179,12 @@ message :: unpack_buffer(e::unpacker &unpacker, db::node &t)
     unpack_buffer(unpacker, t.base);
     unpack_buffer(unpacker, t.out_edges);
     unpack_buffer(unpacker, t.aliases);
-    unpack_buffer(unpacker, t.update_count);
 #ifdef WEAVER_CLDG
     unpack_buffer(unpacker, t.msg_count);
 #endif
 #ifdef WEAVER_NEW_CLDG
     unpack_buffer(unpacker, t.msg_count);
 #endif
-    unpack_buffer(unpacker, t.already_migr);
 
     // unpack node prog state
     // need to unroll because we have to first unpack into particular state type, and then upcast and save as base type

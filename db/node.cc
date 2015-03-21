@@ -22,6 +22,13 @@
 using db::remote_node;
 using db::edge;
 using db::node;
+using db::migr_data;
+
+migr_data :: migr_data()
+    : new_loc(UINT64_MAX)
+    , migr_score(get_num_shards(), 0)
+    , already_migr(false)
+{ }
 
 node :: node(const node_handle_t &_handle, uint64_t shrd, vc::vclock &vclk, po6::threads::mutex *mtx)
     : base(_handle, vclk)
@@ -33,13 +40,6 @@ node :: node(const node_handle_t &_handle, uint64_t shrd, vc::vclock &vclk, po6:
     , waiters(0)
     , permanently_deleted(false)
     , last_perm_deletion(nullptr)
-    , new_loc(UINT64_MAX)
-    , update_count(1)
-    , migr_score(get_num_shards(), 0)
-    , updated(true)
-    , already_migr(false)
-    , dependent_del(0)
-    , cache(MaxCacheEntries)
 {
     std::string empty("");
     aliases.set_deleted_key(empty);
@@ -55,8 +55,7 @@ node :: add_edge(edge *e)
 {
     auto iter = out_edges.find(e->get_handle());
     if (iter == out_edges.end()) {
-        std::vector<edge*> new_vec(1, e);
-        out_edges.emplace(e->get_handle(), new_vec);
+        out_edges[e->get_handle()] = std::vector<edge*>(1, e);
     } else {
         assert(iter->second.back()->base.get_del_time() && "cannot create two concurrent edges with same handle");
         iter->second.emplace_back(e);

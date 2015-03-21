@@ -18,6 +18,7 @@
 #include <vector>
 #include <unordered_map>
 #include <google/sparse_hash_set>
+#include <google/sparse_hash_map>
 #include <deque>
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
@@ -40,6 +41,25 @@ namespace message
 
 namespace db
 {
+    struct migr_data
+    {
+        uint64_t new_loc;
+        std::vector<double> migr_score;
+#ifdef WEAVER_CLDG
+        std::vector<uint32_t> msg_count;
+#endif
+#ifdef WEAVER_NEW_CLDG
+        std::vector<uint32_t> msg_count;
+#endif
+        bool already_migr;
+        // queued requests, for the time when the node is marked in transit
+        // but requests cannot yet be forwarded to new location which is still
+        // setting up the node
+        std::vector<std::unique_ptr<message::message>> pending_requests;
+
+        migr_data();
+    };
+
     class node : public node_prog::node
     {
         public:
@@ -58,7 +78,8 @@ namespace db
             element base;
             uint64_t shard;
             enum mode state;
-            std::unordered_map<edge_handle_t, std::vector<edge*>> out_edges;
+            //std::unordered_map<edge_handle_t, std::vector<edge*>> out_edges;
+            google::sparse_hash_map<edge_handle_t, std::vector<edge*>, std::hash<std::string>, weaver_util::eqstr> out_edges;
             po6::threads::cond cv; // for locking node
             po6::threads::cond migr_cv; // make reads/writes wait while node is being migrated
             std::deque<std::pair<uint64_t, uint64_t>> tx_queue; // queued txs, identified by <vt_id, queue timestamp> tuple
@@ -69,21 +90,7 @@ namespace db
             google::sparse_hash_set<std::string, std::hash<std::string>, weaver_util::eqstr> aliases;
 
             // for migration
-            uint64_t new_loc;
-            uint64_t update_count;
-            std::vector<double> migr_score;
-#ifdef WEAVER_CLDG
-            std::vector<uint32_t> msg_count;
-#endif
-#ifdef WEAVER_NEW_CLDG
-            std::vector<uint32_t> msg_count;
-#endif
-            bool updated, already_migr;
-            uint32_t dependent_del;
-            // queued requests, for the time when the node is marked in transit
-            // but requests cannot yet be forwarded to new location which is still
-            // setting up the node
-            std::vector<std::unique_ptr<message::message>> pending_requests;
+            std::unique_ptr<migr_data> migration;
 
             // node program cache
             std::unordered_map<cache_key_t, cache_entry> cache;
@@ -99,8 +106,8 @@ namespace db
             prog_state_t prog_states;
 
             // fault tolerance
-            vc::vclock last_upd_clk;
-            vc::vclock_t restore_clk;
+            std::unique_ptr<vc::vclock> last_upd_clk;
+            std::unique_ptr<vc::vclock_t> restore_clk;
 
         public:
             void add_edge(edge *e);

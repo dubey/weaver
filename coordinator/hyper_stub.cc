@@ -143,7 +143,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     std::vector<vc::vclock> before;
     before.reserve(old_nodes.size());
     for (const auto &p: old_nodes) {
-        before.emplace_back(p.second->last_upd_clk);
+        before.emplace_back(*p.second->last_upd_clk);
     }
     if (!time_oracle->assign_vt_order(before, tx->timestamp)) {
         // will retry with higher timestamp
@@ -153,8 +153,8 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 
     for (const auto &p: put_map) {
         new_nodes[p.first] = new db::node(p.first, p.second, tx->timestamp, &dummy_mtx);
-        new_nodes[p.first]->last_upd_clk = tx->timestamp;
-        new_nodes[p.first]->restore_clk = tx->timestamp.clock;
+        new_nodes[p.first]->last_upd_clk.reset(new vc::vclock(tx->timestamp));
+        new_nodes[p.first]->restore_clk.reset(new vc::vclock_t(tx->timestamp.clock));
     }
 
 #define CHECK_LOC(loc, handle, alias) \
@@ -313,8 +313,8 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         tx->shard_write[idx] = true;
 
         if (n != nullptr) {
-            assert(n->restore_clk.size() == ClkSz);
-            n->restore_clk[vt_id+1] = tx->timestamp.get_clock();
+            assert(n->restore_clk->size() == ClkSz);
+            (*n->restore_clk)[vt_id+1] = tx->timestamp.get_clock();
         }
 
         n = nullptr;

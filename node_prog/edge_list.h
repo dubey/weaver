@@ -16,15 +16,16 @@
 
 #include <stdint.h>
 #include <iterator>
-#include <unordered_map>
+#include <google/sparse_hash_map>
 
+#include "common/utils.h"
 #include "db/edge.h"
 #include "common/event_order.h"
 #include "node_prog/edge.h"
 
 namespace node_prog
 {
-    typedef std::unordered_map<edge_handle_t, std::vector<db::edge*>> edge_map_t;
+    typedef google::sparse_hash_map<edge_handle_t, std::vector<db::edge*>, std::hash<std::string>, weaver_util::eqstr> edge_map_t;
     class edge_map_iter : public std::iterator<std::input_iterator_tag, edge>
     {
         db::edge *cur_edge;

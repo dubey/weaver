@@ -12,21 +12,34 @@ max_cache_entries : 0
 # HyperDex coordinator ip addrs and corresponding ports.
 # Used for starting up cluster and for connecting to HyperDex.
 hyperdex_coord:
-    - 127.0.0.1 : 7982
+    - 128.84.167.101 : 7982
 
 # HyperDex daemons ip addrs and corresponding ports.
 # Used for starting up cluster.
 hyperdex_daemons:
-    - 127.0.0.1 : 8012
+    - 128.84.167.101 : 8012
+    - 128.84.167.102 : 8012
+    - 128.84.167.103 : 8012
+    - 128.84.167.104 : 8012
+    - 128.84.167.105 : 8012
+    - 128.84.167.106 : 8012
+    - 128.84.167.108 : 8012
+    - 128.84.167.109 : 8012
+    - 128.84.167.110 : 8012
+    - 128.84.167.111 : 8012
+    - 128.84.167.112 : 8012
+    - 128.84.167.113 : 8012
+    - 128.84.167.114 : 8012
+    - 128.84.167.115 : 8012
 
 # Kronos replicated state machine ip addrs and corresponding ports.
 # Used for starting up cluster and connecting to Kronos.
 kronos:
-    - 127.0.0.1 : 1992
+    - 128.84.167.101 : 1992
 
 # Weaver coordinator ip addrs and ports.
 weaver_coord:
-    - 127.0.0.1 : 2002
+    - 128.84.167.101 : 2002
 
 # Boolean aux_index controls whether Weaver maintains auxiliary indexing.
 # Auxiliary indexing can be used to access edges and attach arbitrary handles to nodes.
