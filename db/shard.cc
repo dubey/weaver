@@ -355,7 +355,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
         }
 
         case db::GRAPHML: {
-            auto hash_string = std::hash<std::string>();
+            auto hash_string = weaver_util::murmur_hasher<std::string>();
             pugi::xml_document doc;
             std::string element;
 

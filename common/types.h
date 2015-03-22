@@ -14,6 +14,8 @@
 #ifndef weaver_common_types_h_
 #define weaver_common_types_h_
 
+#include "common/utils.h"
+
 //#define weaver_strict_type_check_
 #ifdef weaver_strict_type_check_
 
@@ -178,7 +180,7 @@ typedef std::string edge_handle_t;
 typedef std::string cache_key_t;
 inline uint64_t hash_node_handle(const node_handle_t &nh)
 {
-    return std::hash<std::string>()(nh);
+    return weaver_util::murmur_hasher<std::string>()(nh);
 }
 
 #endif

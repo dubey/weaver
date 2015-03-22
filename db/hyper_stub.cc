@@ -24,7 +24,7 @@ hyper_stub :: hyper_stub(uint64_t sid)
 { }
 
 void
-hyper_stub :: restore_backup(google::sparse_hash_map<node_handle_t, std::vector<node*>, std::hash<std::string>, weaver_util::eqstr> *nodes,
+hyper_stub :: restore_backup(google::sparse_hash_map<node_handle_t, std::vector<node*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> *nodes,
     std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,
     po6::threads::mutex *shard_mutexes)
 {
@@ -125,7 +125,7 @@ hyper_stub :: restore_backup(google::sparse_hash_map<node_handle_t, std::vector<
 }
 
 void
-hyper_stub :: memory_efficient_bulk_load(int thread_id, google::sparse_hash_map<node_handle_t, std::vector<node*>, std::hash<std::string>, weaver_util::eqstr> *nodes_arr)
+hyper_stub :: memory_efficient_bulk_load(int thread_id, google::sparse_hash_map<node_handle_t, std::vector<node*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> *nodes_arr)
 {
     assert(NUM_NODE_MAPS % NUM_SHARD_THREADS == 0);
 

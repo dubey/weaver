@@ -175,14 +175,14 @@ class hyper_stub_base
         template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, T &t);
         template <typename T> void prepare_buffer(const std::unordered_map<std::string, T> &map, std::unique_ptr<e::buffer> &buf);
         template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_map<std::string, T> &map);
-        template <typename T> void prepare_buffer(const google::sparse_hash_map<std::string, T, std::hash<std::string>, weaver_util::eqstr> &map,
+        template <typename T> void prepare_buffer(const google::sparse_hash_map<std::string, T, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> &map,
                                                  std::unique_ptr<e::buffer> &buf);
         template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz,
-                                                google::sparse_hash_map<std::string, T, std::hash<std::string>, weaver_util::eqstr> &map);
+                                                google::sparse_hash_map<std::string, T, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> &map);
         void prepare_buffer(const std::unordered_set<std::string> &set, std::unique_ptr<e::buffer> &buf);
         void unpack_buffer(const char *buf, uint64_t buf_sz, std::unordered_set<std::string> &set);
-        void prepare_buffer(const google::sparse_hash_set<std::string, std::hash<std::string>, weaver_util::eqstr>&, std::unique_ptr<e::buffer> &buf);
-        void unpack_buffer(const char *buf, uint64_t buf_sz, google::sparse_hash_set<std::string, std::hash<std::string>, weaver_util::eqstr>&);
+        void prepare_buffer(const google::sparse_hash_set<std::string, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr>&, std::unique_ptr<e::buffer> &buf);
+        void unpack_buffer(const char *buf, uint64_t buf_sz, google::sparse_hash_set<std::string, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr>&);
         // properties
         void prepare_buffer(const std::vector<std::shared_ptr<db::property>>&, std::unique_ptr<e::buffer>&);
         void unpack_buffer(const char *buf, uint64_t buf_sz, std::vector<std::shared_ptr<db::property>>&);
@@ -288,7 +288,7 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordere
 // store the given unordered_map as a HYPERDATATYPE_MAP_STRING_STRING
 template <typename T>
 inline void
-hyper_stub_base :: prepare_buffer(const google::sparse_hash_map<std::string, T, std::hash<std::string>, weaver_util::eqstr> &map, std::unique_ptr<e::buffer> &buf)
+hyper_stub_base :: prepare_buffer(const google::sparse_hash_map<std::string, T, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> &map, std::unique_ptr<e::buffer> &buf)
 {
     uint64_t buf_sz = 0;
     std::vector<std::string> sorted;
@@ -324,7 +324,7 @@ hyper_stub_base :: prepare_buffer(const google::sparse_hash_map<std::string, T, 
 // unpack the HYPERDATATYPE_MAP_STRING_STRING in to the given map
 template <typename T>
 inline void
-hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, google::sparse_hash_map<std::string, T, std::hash<std::string>, weaver_util::eqstr> &map)
+hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, google::sparse_hash_map<std::string, T, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> &map)
 {
     std::unique_ptr<e::buffer> ebuf(e::buffer::create(buf, buf_sz));
     e::unpacker unpacker = ebuf->unpack_from(0);

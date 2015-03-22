@@ -33,7 +33,7 @@ namespace db
             std::function<size_t(const std::string&)> string_hasher;
 
         public:
-            property_hasher() : string_hasher(std::hash<std::string>()) { }
+            property_hasher() : string_hasher(weaver_util::murmur_hasher<std::string>()) { }
 
             size_t
             operator()(const property &p) const

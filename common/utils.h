@@ -17,6 +17,8 @@
 #include <unordered_set>
 #include <unordered_map>
 
+#include "common/MurmurHash3.h"
+
 // hash functions
 namespace std
 {
@@ -90,6 +92,28 @@ namespace weaver_util
         bool operator() (const std::string &s1, const std::string &s2) const
         {
             return s1 == s2;
+        }
+    };
+
+    template<typename T>
+    struct murmur_hasher
+    {
+        size_t operator()(const T &t) const
+        {
+            uint64_t hash[2];
+            MurmurHash3_x64_128(&t, sizeof(t), 0, hash);
+            return hash[0];
+        }
+    };
+
+    template<>
+    struct murmur_hasher<std::string>
+    {
+        size_t operator()(const std::string &t) const
+        {
+            uint64_t hash[2];
+            MurmurHash3_x64_128(t.c_str(), t.size(), 0, hash);
+            return hash[0];
         }
     };
 }

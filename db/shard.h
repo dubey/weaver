@@ -105,7 +105,7 @@ namespace db
             uint64_t shard_id;
             server_id serv_id;
             // node handle -> ptr to node object
-            google::sparse_hash_map<node_handle_t, std::vector<node*>, std::hash<std::string>, weaver_util::eqstr> nodes[NUM_NODE_MAPS];
+            google::sparse_hash_map<node_handle_t, std::vector<node*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> nodes[NUM_NODE_MAPS];
             //std::unordered_map<node_handle_t, std::vector<node*>> nodes[NUM_NODE_MAPS]; // node handle -> ptr to node object
             std::unordered_map<node_handle_t, // node handle n ->
                 std::unordered_set<node_version_t, node_version_hash>> edge_map; // in-neighbors of n

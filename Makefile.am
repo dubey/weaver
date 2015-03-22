@@ -119,6 +119,7 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    common/message.cc \
 		                    common/message_graph_elem.cc \
                             common/config_constants.cc \
+                            common/MurmurHash3.cpp \
 							chronos/chronos.cc \
 							chronos/chronos_c_wrappers.cc \
 							chronos/chronos_cmp_encode.cc \
@@ -186,6 +187,7 @@ weaver_shard_SOURCES=	common/ids.cc \
 		                common/message_graph_elem.cc \
 		                common/message_cache_context.cc \
                         common/config_constants.cc \
+                        common/MurmurHash3.cpp \
 						chronos/chronos.cc \
 						chronos/chronos_c_wrappers.cc \
 						chronos/chronos_cmp_encode.cc \
@@ -225,6 +227,7 @@ libweaverclient_la_SOURCES=	common/ids.cc \
                             common/config_constants.cc \
                             common/server_manager_link.cc \
                             common/server_manager_link_wrapper.cc \
+                            common/MurmurHash3.cpp \
 							chronos/chronos.cc \
 							chronos/chronos_c_wrappers.cc \
 							chronos/chronos_cmp_encode.cc \

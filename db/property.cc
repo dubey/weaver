@@ -77,5 +77,5 @@ property :: update_creat_time(const vc::vclock &tcreat)
 size_t
 property_key_hasher :: operator()(const property &p) const
 {
-    return std::hash<std::string>()(p.key);
+    return weaver_util::murmur_hasher<std::string>()(p.key);
 }

@@ -79,7 +79,7 @@ namespace db
             uint64_t shard;
             enum mode state;
             //std::unordered_map<edge_handle_t, std::vector<edge*>> out_edges;
-            google::sparse_hash_map<edge_handle_t, std::vector<edge*>, std::hash<std::string>, weaver_util::eqstr> out_edges;
+            google::sparse_hash_map<edge_handle_t, std::vector<edge*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> out_edges;
             po6::threads::cond cv; // for locking node
             po6::threads::cond migr_cv; // make reads/writes wait while node is being migrated
             std::deque<std::pair<uint64_t, uint64_t>> tx_queue; // queued txs, identified by <vt_id, queue timestamp> tuple
@@ -87,7 +87,7 @@ namespace db
             uint32_t waiters; // count of number of waiters
             bool permanently_deleted;
             std::unique_ptr<vc::vclock> last_perm_deletion; // vclock of last edge/property permanently deleted at this node
-            google::sparse_hash_set<std::string, std::hash<std::string>, weaver_util::eqstr> aliases;
+            google::sparse_hash_set<std::string, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> aliases;
 
             // for migration
             std::unique_ptr<migr_data> migration;
@@ -129,7 +129,7 @@ namespace db
     {
         size_t operator()(const node_version_t &nv) const
         {
-            return std::hash<std::string>()(nv.first);
+            return weaver_util::murmur_hasher<std::string>()(nv.first);
         }
     };
 }
