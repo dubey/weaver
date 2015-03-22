@@ -143,6 +143,7 @@ comm_wrapper :: reconfigure_internal(configuration &new_config)
         } else {
             uint64_t factor = (srv.type == server::SHARD) ? 1 : 0;
             uint64_t vid = srv.virtual_id + NumVts*factor;
+            assert(vid < active_server_idx.size());
 
             WDEBUG << "Server: " << srv.weaver_id
                    << ", role: " << server::to_string(srv.type) << " " << vid
