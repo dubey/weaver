@@ -142,7 +142,7 @@ class hyper_stub_base
         bool get_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool tx);
         //bool put_node(db::node &n);
         bool put_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool if_not_exist);
-        bool put_nodes_bulk(std::unordered_map<node_handle_t, db::node*> &nodes);
+        bool put_nodes_bulk(std::unordered_map<node_handle_t, db::node*> &nodes, vc::vclock&, vc::vclock_t&);
         bool del_node(const node_handle_t &h);
         bool del_nodes(std::unordered_set<node_handle_t> &to_del);
         void update_creat_time(db::node &n);

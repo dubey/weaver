@@ -128,6 +128,7 @@ void
 hyper_stub :: memory_efficient_bulk_load(int thread_id, google::sparse_hash_map<node_handle_t, std::vector<node*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> *nodes_arr)
 {
     assert(NUM_NODE_MAPS % NUM_SHARD_THREADS == 0);
+    vc::vclock zero_clk(0,0);
 
     std::unordered_map<node_handle_t, node*> node_map;
     uint64_t batch_sz = 0;
@@ -137,19 +138,20 @@ hyper_stub :: memory_efficient_bulk_load(int thread_id, google::sparse_hash_map<
             node_map.emplace(p.first, p.second.front());
         }
         if (++batch_sz == 1000) {
-            put_nodes_bulk(node_map);
+            put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
             node_map.clear();
             batch_sz = 0;
         }
     }
 
-    put_nodes_bulk(node_map);
+    put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
 }
 
 void
 hyper_stub :: bulk_load(int thread_id, std::unordered_map<node_handle_t, std::vector<node*>> *nodes_arr)
 {
     assert(NUM_NODE_MAPS % NUM_SHARD_THREADS == 0);
+    vc::vclock zero_clk(0,0);
 
     std::unordered_map<node_handle_t, node*> node_map;
     for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
@@ -159,7 +161,7 @@ hyper_stub :: bulk_load(int thread_id, std::unordered_map<node_handle_t, std::ve
         }
     }
 
-    put_nodes_bulk(node_map);
+    put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
 
     if (AuxIndex) {
         std::unordered_map<std::string, node*> idx_add = node_map;
