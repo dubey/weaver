@@ -28,7 +28,7 @@
 #define weaver_common_constants_h_
 
 // if benchmarking
-//#define weaver_benchmark_
+#define weaver_benchmark_
 
 // unused expression for no warnings
 #define UNUSED(exp) do { (void)(exp); } while (0)

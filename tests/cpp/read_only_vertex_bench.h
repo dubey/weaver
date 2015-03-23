@@ -46,7 +46,7 @@ exec_reads(std::default_random_engine &generator,
         timestamps.emplace_back(t);
     }
 
-    std::cout << "Time taken for " << num_requests << " requests = " << (t-first)/(1000000) << std::endl;
+    //std::cout << "Time taken for " << num_requests << " requests = " << (t-first)/(1000000) << std::endl;
 }
 
 void
@@ -54,11 +54,11 @@ run_read_only_vertex_bench(const std::string &output_fname, uint64_t num_nodes, 
 {
     po6::net::ipaddr ip;
     busybee_discover(&ip);
-    //uint64_t pid = getpid();
+    uint64_t pid = getpid();
 
     std::default_random_engine generator;
     std::uniform_int_distribution<uint64_t> distribution(0, num_nodes-1);
-    client cl("127.0.0.1", 2002, "/home/dubey/installs/etc/weaver.yaml");
+    client cl("128.84.167.101", 2002, "/home/dubey/installs/etc/weaver.yaml");
     wclock::weaver_timer timer;
     std::vector<uint64_t> timestamps;
     timestamps.reserve(num_requests+1);
@@ -66,7 +66,7 @@ run_read_only_vertex_bench(const std::string &output_fname, uint64_t num_nodes, 
     exec_reads(generator, distribution, cl, num_requests, timer, timestamps);
 
     std::ofstream file;
-    file.open(output_fname, std::ofstream::out);
+    file.open(output_fname + "/" + std::to_string(pid), std::ofstream::out);
     for (uint64_t t: timestamps) {
         file << t << std::endl;
     }

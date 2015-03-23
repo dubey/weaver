@@ -55,7 +55,7 @@ init_config_constants(const char *config_file_name)
         WDEBUG << "Neither the provided config file name nor the defaults exist, exiting now." << std::endl;
         return false;
     } else {
-        WDEBUG << "Using config file name " << config_file_name << std::endl;
+        //WDEBUG << "Using config file name " << config_file_name << std::endl;
     }
 
     yaml_parser_t parser;

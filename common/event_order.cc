@@ -11,6 +11,7 @@
  * ===============================================================
  */
 
+//#define weaver_debug_
 #include "common/event_order.h"
 #include "common/config_constants.h"
 
@@ -161,6 +162,8 @@ oracle :: equal_or_happens_before_no_kronos(const vc::vclock_t &vclk1, const vc:
 int64_t
 oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
 {
+    //XXX static uint32_t rev_count = 0;
+
     std::vector<bool> large;
     int64_t ret_idx = INT64_MAX;
 
@@ -233,6 +236,8 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
 
         wp = wpair;
         std::vector<bool> large_upd = large;
+        //XXX std::vector<bool> test_bad(3, false);
+        //XXX int bad_count = 0;
         for (uint64_t i = 0; i < num_clks; i++) {
             for (uint64_t j = i+1; j < num_clks; j++) {
                 if (!large.at(i) && !large.at(j)) {
@@ -243,11 +248,17 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
                         case CHRONOS_HAPPENS_BEFORE:
                             large_upd.at(j) = true;
                             kcache.add(clocks[i].clock, clocks[j].clock);
+                            //XXX if (num_pairs == 3 && (bad_count == 0 || bad_count == 2)) {
+                            //XXX     test_bad[bad_count] = true;
+                            //XXX }
                             break;
 
                         case CHRONOS_HAPPENS_AFTER:
                             large_upd.at(i) = true;
                             kcache.add(clocks[j].clock, clocks[i].clock);
+                            //XXX if (num_pairs == 3 && bad_count == 1) {
+                            //XXX     test_bad[bad_count] = true;
+                            //XXX }
                             break;
 
                         default:
@@ -257,10 +268,16 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
                     free(wp->lhs);
                     free(wp->rhs);
                     wp++;
+                    //XXX bad_count++;
                 }
             }
         }
         free(wpair);
+
+        // XXX
+        //if (test_bad[0] && test_bad[1] && test_bad[2]) {
+        //    WDEBUG << ++rev_count << std::endl;
+        //}
 
         for (uint64_t min_pos = 0; min_pos < num_clks; min_pos++) {
             if (!large_upd.at(min_pos)) {

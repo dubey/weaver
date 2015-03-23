@@ -32,9 +32,9 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     , tx_id_ctr(0)
     , handle_ctr(0)
 {
-    //google::InitGoogleLogging("weaver-client");
-    //google::InstallFailureSignalHandler();
-    //google::LogToStderr();
+    google::InitGoogleLogging("weaver-client");
+    google::InstallFailureSignalHandler();
+    google::LogToStderr();
 
     if (!init_config_constants(config_file)) {
         WDEBUG << "error in init_config_constants, exiting now." << std::endl;
