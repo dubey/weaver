@@ -44,11 +44,18 @@ node :: node(const node_handle_t &_handle, uint64_t shrd, vc::vclock &vclk, po6:
     std::string empty("");
     out_edges.set_deleted_key(empty);
     aliases.set_deleted_key(empty);
+    out_edges.set_empty_key("BAZINGA"); // XXX
 }
 
 node :: ~node()
 {
     assert(out_edges.empty());
+}
+
+void
+node :: add_edge_unique(edge *e)
+{
+    out_edges[e->get_handle()] = std::vector<edge*>(1,e);
 }
 
 void

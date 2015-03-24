@@ -18,7 +18,7 @@
 #include <vector>
 #include <unordered_map>
 #include <google/sparse_hash_set>
-#include <google/sparse_hash_map>
+#include <google/dense_hash_map>
 #include <deque>
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
@@ -79,7 +79,7 @@ namespace db
             uint64_t shard;
             enum mode state;
             //std::unordered_map<edge_handle_t, std::vector<edge*>> out_edges;
-            google::sparse_hash_map<edge_handle_t, std::vector<edge*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> out_edges;
+            google::dense_hash_map<edge_handle_t, std::vector<edge*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> out_edges;
             po6::threads::cond cv; // for locking node
             po6::threads::cond migr_cv; // make reads/writes wait while node is being migrated
             std::deque<std::pair<uint64_t, uint64_t>> tx_queue; // queued txs, identified by <vt_id, queue timestamp> tuple
@@ -110,6 +110,7 @@ namespace db
             std::unique_ptr<vc::vclock_t> restore_clk;
 
         public:
+            void add_edge_unique(edge *e); // bulk loading
             void add_edge(edge *e);
             node_prog::edge_list get_edges();
             node_prog::prop_list get_properties();

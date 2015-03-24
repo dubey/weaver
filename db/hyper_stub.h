@@ -15,6 +15,7 @@
 #define weaver_db_hyper_stub_h_
 
 #include <po6/threads/mutex.h>
+#include <google/sparse_hash_map>
 
 #include "common/hyper_stub_base.h"
 #include "common/vclock.h"

@@ -95,7 +95,7 @@ namespace db
             node* acquire_node_specific(const node_handle_t &node_handle, const vc::vclock *tcreat, const vc::vclock *tdel);
             node* acquire_node_version(const node_handle_t &node_handle, const vc::vclock &vclk, order::oracle*);
             node* acquire_node_write(const node_handle_t &node, uint64_t vt_id, uint64_t qts);
-            node* bulk_load_acquire_node_nonlocking(const node_handle_t &node_handle);
+            node* bulk_load_acquire_node_nonlocking(const node_handle_t &node_handle, uint64_t map_idx);
             void release_node_write(node *n);
             void release_node(node *n, bool migr_node);
 
@@ -114,12 +114,21 @@ namespace db
                 vc::vclock &vclk,
                 bool migrate,
                 bool init_load);
+            node* create_node_bulk_load(const node_handle_t &node_handle,
+                uint64_t map_idx,
+                vc::vclock &vclk,
+                bool migrate);
             void delete_node_nonlocking(node *n,
                 vc::vclock &tdel);
             void delete_node(const node_handle_t &node_handle,
                 vc::vclock &vclk,
                 uint64_t qts);
             void create_edge_nonlocking(node *n,
+                const edge_handle_t &handle,
+                const node_handle_t &remote_node, uint64_t remote_loc,
+                vc::vclock &vclk,
+                bool init_load=false);
+            void create_edge_bulk_load(node *n,
                 const edge_handle_t &handle,
                 const node_handle_t &remote_node, uint64_t remote_loc,
                 vc::vclock &vclk,
@@ -158,7 +167,8 @@ namespace db
                 vc::vclock &vclk,
                 uint64_t qts);
             uint64_t get_node_count();
-            bool bulk_load_node_exists_nonlocking(const node_handle_t &node_handle);
+            bool bulk_load_node_exists_nonlocking(const node_handle_t &node_handle, uint64_t map_idx);
+            node_handle_t node_exists_cache[NUM_NODE_MAPS];
 
             // Initial graph loading
             po6::threads::mutex graph_load_mutex;
@@ -560,16 +570,19 @@ namespace db
     }
 
     inline node*
-    shard :: bulk_load_acquire_node_nonlocking(const node_handle_t &node_handle)
+    shard :: bulk_load_acquire_node_nonlocking(const node_handle_t &node_handle, uint64_t map_idx)
     {
-        uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
-
-        node *n = nullptr;
-        auto node_iter = nodes[map_idx].find(node_handle);
-        if (node_iter != nodes[map_idx].end() && !node_iter->second.empty()) {
-            n = node_iter->second.back();
+        if (bulk_load_node_exists_nonlocking(node_handle, map_idx)) {
+            return nodes[map_idx][node_handle][0];
+        } else {
+            return nullptr;
         }
-        return n;
+        //node *n = nullptr;
+        //auto node_iter = nodes[map_idx].find(node_handle);
+        //if (node_iter != nodes[map_idx].end() && !node_iter->second.empty()) {
+        //    n = node_iter->second.back();
+        //}
+        //return n;
     }
 
     inline void
@@ -636,6 +649,27 @@ namespace db
     // Graph state update methods
 
     inline node*
+    shard :: create_node_bulk_load(const node_handle_t &node_handle,
+        uint64_t map_idx,
+        vc::vclock &vclk,
+        bool)
+    {
+        node *new_node = new node(node_handle, shard_id, vclk, node_map_mutexes+map_idx);
+
+        nodes[map_idx][node_handle] = std::vector<node*>(1, new_node);
+        node_exists_cache[map_idx] = node_handle;
+
+        shard_node_count[shard_id - ShardIdIncr]++;
+
+        new_node->state = node::mode::STABLE;
+#ifdef WEAVER_CLDG
+            new_node->msg_count.resize(get_num_shards(), 0);
+#endif
+        new_node->in_use = false;
+        return new_node;
+    }
+
+    inline node*
     shard :: create_node(const node_handle_t &node_handle,
         vc::vclock &vclk,
         bool migrate,
@@ -648,12 +682,15 @@ namespace db
             node_map_mutexes[map_idx].lock();
         }
 
-        auto map_iter = nodes[map_idx].find(node_handle);
-        if (map_iter == nodes[map_idx].end()) {
-            nodes[map_idx][node_handle] = std::vector<node*>(1, new_node);
-        } else {
-            map_iter->second.emplace_back(new_node);
-        }
+        // XXX bulk load
+        //auto map_iter = nodes[map_idx].find(node_handle);
+        //if (map_iter == nodes[map_idx].end()) {
+        //    nodes[map_idx][node_handle] = std::vector<node*>(1, new_node);
+        //} else {
+        //    map_iter->second.emplace_back(new_node);
+        //}
+        nodes[map_idx][node_handle] = std::vector<node*>(1, new_node);
+        node_exists_cache[map_idx] = node_handle;
 
         if (!init_load) {
             node_map_mutexes[map_idx].unlock();
@@ -729,6 +766,17 @@ namespace db
         //if (!init_load) {
         //    edge_map_mutex.unlock();
         //}
+    }
+
+    inline void
+    shard :: create_edge_bulk_load(node *n,
+        const edge_handle_t &handle,
+        const node_handle_t &remote_node, uint64_t remote_loc,
+        vc::vclock &vclk,
+        bool)
+    {
+        edge *new_edge = new edge(handle, vclk, remote_loc, remote_node);
+        n->add_edge_unique(new_edge);
     }
 
     inline void
@@ -886,10 +934,17 @@ namespace db
 
     // return true if node already created
     inline bool
-    shard :: bulk_load_node_exists_nonlocking(const node_handle_t &node_handle)
+    shard :: bulk_load_node_exists_nonlocking(const node_handle_t &node_handle, uint64_t map_idx)
     {
-        uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
-        return (nodes[map_idx].find(node_handle) != nodes[map_idx].end());
+        if (node_exists_cache[map_idx] == node_handle) {
+            return true;
+        }
+        if (nodes[map_idx].find(node_handle) != nodes[map_idx].end()) {
+            node_exists_cache[map_idx] = node_handle;
+            return true;
+        } else {
+            return false;
+        }
     }
 
     // permanent deletion

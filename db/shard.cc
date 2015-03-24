@@ -233,7 +233,7 @@ get_xml_element(std::ifstream &file, const std::string &name, std::string &eleme
 // 'format' stores the format of the graph file
 // 'graph_file' stores the full path filename of the graph file
 inline void
-load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_shards)
+load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_shards, int load_tid, int load_nthreads)
 {
     std::ifstream file;
     uint64_t node0, node1; // int node_handles
@@ -283,18 +283,24 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     uint64_t loc0 = ((node0 % num_shards) + ShardIdIncr);
                     uint64_t loc1 = ((node1 % num_shards) + ShardIdIncr);
                     if (loc0 == shard_id) {
-                        n = S->bulk_load_acquire_node_nonlocking(id0);
-                        if (n == nullptr) {
-                            n = S->create_node(id0, zero_clk, false, true);
-                            cur_shard_node_count++;
+                        uint64_t map_idx = hash_node_handle(id0) % NUM_NODE_MAPS;
+                        if ((int)map_idx % load_nthreads == load_tid) {
+                            n = S->bulk_load_acquire_node_nonlocking(id0, map_idx);
+                            if (n == nullptr) {
+                                n = S->create_node_bulk_load(id0, map_idx, zero_clk, false);
+                                cur_shard_node_count++;
+                            }
+                            S->create_edge_bulk_load(n, edge_handle, id1, loc1, zero_clk, true);
+                            cur_shard_edge_count++;
                         }
-                        S->create_edge_nonlocking(n, edge_handle, id1, loc1, zero_clk, true);
-                        cur_shard_edge_count++;
                     }
                     if (loc1 == shard_id) {
-                        if (!S->bulk_load_node_exists_nonlocking(id1)) {
-                            S->create_node(id1, zero_clk, false, true);
-                            cur_shard_node_count++;
+                        uint64_t map_idx = hash_node_handle(id1) % NUM_NODE_MAPS;
+                        if ((int)map_idx % load_nthreads == load_tid) {
+                            if (!S->bulk_load_node_exists_nonlocking(id1, map_idx)) {
+                                S->create_node_bulk_load(id1, map_idx, zero_clk, false);
+                                cur_shard_node_count++;
+                            }
                         }
                     }
                 }
@@ -304,140 +310,140 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
         }
 
         case db::WEAVER: {
-            std::unordered_map<node_handle_t, uint64_t> all_node_map;
-            std::getline(file, line);
-            assert(line.length() > 0 && line[0] == '#');
-            char *max_node_ptr = new char[line.length()+1];
-            std::strcpy(max_node_ptr, line.c_str());
-            max_node_handle = strtoull(++max_node_ptr, nullptr, 10);
+            //std::unordered_map<node_handle_t, uint64_t> all_node_map;
+            //std::getline(file, line);
+            //assert(line.length() > 0 && line[0] == '#');
+            //char *max_node_ptr = new char[line.length()+1];
+            //std::strcpy(max_node_ptr, line.c_str());
+            //max_node_handle = strtoull(++max_node_ptr, nullptr, 10);
 
-            // nodes
-            while (std::getline(file, line)) {
-                parse_two_uint64(line, node0, loc);
-                id0 = std::to_string(node0);
-                loc += ShardIdIncr;
-                all_node_map[id0] = loc;
-                assert(loc < num_shards + ShardIdIncr);
-                if (loc == shard_id) {
-                    n = S->bulk_load_acquire_node_nonlocking(id0);
-                    if (n == nullptr) {
-                        n = S->create_node(id0, zero_clk, false, true);
-                    }
-                }
-                if (++line_count == max_node_handle) {
-                     WDEBUG << "Last node pos line: " << line << std::endl;
-                     break;
-                }
-            }
+            //// nodes
+            //while (std::getline(file, line)) {
+            //    parse_two_uint64(line, node0, loc);
+            //    id0 = std::to_string(node0);
+            //    loc += ShardIdIncr;
+            //    all_node_map[id0] = loc;
+            //    assert(loc < num_shards + ShardIdIncr);
+            //    if (loc == shard_id) {
+            //        n = S->bulk_load_acquire_node_nonlocking(id0);
+            //        if (n == nullptr) {
+            //            n = S->create_node(id0, zero_clk, false, true);
+            //        }
+            //    }
+            //    if (++line_count == max_node_handle) {
+            //         WDEBUG << "Last node pos line: " << line << std::endl;
+            //         break;
+            //    }
+            //}
 
-            // edges
-            std::vector<std::pair<std::string, std::string>> props;
-            while (std::getline(file, line)) {
-                props.clear();
-                parse_weaver_edge(line, node0, node1, props);
-                id0 = std::to_string(node0);
-                id1 = std::to_string(node1);
-                edge_handle = std::to_string(max_node_handle + (++edge_count));
-                uint64_t loc0 = all_node_map[id0];
-                uint64_t loc1 = all_node_map[id1];
-                if (loc0 == shard_id) {
-                    n = S->bulk_load_acquire_node_nonlocking(id0);
-                    assert(n != nullptr);
-                    S->create_edge_nonlocking(n, edge_handle, id1, loc1, zero_clk, true);
-                    for (auto &p: props) {
-                        S->set_edge_property_nonlocking(n, edge_handle, p.first, p.second, zero_clk);
-                    }
-                }
-            }
+            //// edges
+            //std::vector<std::pair<std::string, std::string>> props;
+            //while (std::getline(file, line)) {
+            //    props.clear();
+            //    parse_weaver_edge(line, node0, node1, props);
+            //    id0 = std::to_string(node0);
+            //    id1 = std::to_string(node1);
+            //    edge_handle = std::to_string(max_node_handle + (++edge_count));
+            //    uint64_t loc0 = all_node_map[id0];
+            //    uint64_t loc1 = all_node_map[id1];
+            //    if (loc0 == shard_id) {
+            //        n = S->bulk_load_acquire_node_nonlocking(id0);
+            //        assert(n != nullptr);
+            //        S->create_edge_nonlocking(n, edge_handle, id1, loc1, zero_clk, true);
+            //        for (auto &p: props) {
+            //            S->set_edge_property_nonlocking(n, edge_handle, p.first, p.second, zero_clk);
+            //        }
+            //    }
+            //}
 
-            S->bulk_load_persistent();
+            //S->bulk_load_persistent();
             break;
         }
 
         case db::GRAPHML: {
-            auto hash_string = weaver_util::murmur_hasher<std::string>();
-            pugi::xml_document doc;
-            std::string element;
+            //auto hash_string = weaver_util::murmur_hasher<std::string>();
+            //pugi::xml_document doc;
+            //std::string element;
 
-            // nodes
-            int num_nodes = 0;
-            while (get_xml_element(file, "node", element) && !element.empty()) {
-                assert(doc.load_buffer(element.c_str(), element.size()));
-                pugi::xml_node node = doc.child("node");
+            //// nodes
+            //int num_nodes = 0;
+            //while (get_xml_element(file, "node", element) && !element.empty()) {
+            //    assert(doc.load_buffer(element.c_str(), element.size()));
+            //    pugi::xml_node node = doc.child("node");
 
-                id0 = node.attribute("id").value();
-                loc = (hash_string(id0) % num_shards) + ShardIdIncr;
-                if (loc == shard_id) {
-                    n = S->bulk_load_acquire_node_nonlocking(id0);
-                    assert(n == nullptr);
-                    n = S->create_node(id0, zero_clk, false, true);
+            //    id0 = node.attribute("id").value();
+            //    loc = (hash_string(id0) % num_shards) + ShardIdIncr;
+            //    if (loc == shard_id) {
+            //        n = S->bulk_load_acquire_node_nonlocking(id0);
+            //        assert(n == nullptr);
+            //        n = S->create_node(id0, zero_clk, false, true);
 
-                    bool prop_delim = (BulkLoadPropertyValueDelimiter != '\0');
-                    for (pugi::xml_node prop: node.children("data")) {
-                        std::string key = prop.attribute("key").value();
-                        std::string value = prop.child_value();
-                        if (prop_delim) {
-                            std::vector<std::string> values;
-                            split(value, BulkLoadPropertyValueDelimiter, values);
-                            for (std::string &v: values) {
-                                (key == BulkLoadNodeAliasKey)? S->add_node_alias_nonlocking(n, v) :
-                                                               S->set_node_property_nonlocking(n, key, v, zero_clk);
-                            }
-                        } else {
-                            (key == BulkLoadNodeAliasKey)? S->add_node_alias_nonlocking(n, value) :
-                                                           S->set_node_property_nonlocking(n, key, value, zero_clk);
-                        }
-                    }
-                }
+            //        bool prop_delim = (BulkLoadPropertyValueDelimiter != '\0');
+            //        for (pugi::xml_node prop: node.children("data")) {
+            //            std::string key = prop.attribute("key").value();
+            //            std::string value = prop.child_value();
+            //            if (prop_delim) {
+            //                std::vector<std::string> values;
+            //                split(value, BulkLoadPropertyValueDelimiter, values);
+            //                for (std::string &v: values) {
+            //                    (key == BulkLoadNodeAliasKey)? S->add_node_alias_nonlocking(n, v) :
+            //                                                   S->set_node_property_nonlocking(n, key, v, zero_clk);
+            //                }
+            //            } else {
+            //                (key == BulkLoadNodeAliasKey)? S->add_node_alias_nonlocking(n, value) :
+            //                                               S->set_node_property_nonlocking(n, key, value, zero_clk);
+            //            }
+            //        }
+            //    }
 
-                element.clear();
-                if (++num_nodes % 10000 == 0) {
-                    WDEBUG << "created " << num_nodes << " nodes, " << id0 << " has size " << message::size(*n) << std::endl;
-                }
-            }
+            //    element.clear();
+            //    if (++num_nodes % 10000 == 0) {
+            //        WDEBUG << "created " << num_nodes << " nodes, " << id0 << " has size " << message::size(*n) << std::endl;
+            //    }
+            //}
 
 
-            // edges
-            file.close();
-            file.open(graph_file, std::ifstream::in);
-            element.clear();
-            while (get_xml_element(file, "edge", element) && !element.empty()) {
-                assert(doc.load_buffer(element.c_str(), element.size()));
-                pugi::xml_node edge = doc.child("edge");
+            //// edges
+            //file.close();
+            //file.open(graph_file, std::ifstream::in);
+            //element.clear();
+            //while (get_xml_element(file, "edge", element) && !element.empty()) {
+            //    assert(doc.load_buffer(element.c_str(), element.size()));
+            //    pugi::xml_node edge = doc.child("edge");
 
-                id0 = edge.attribute("source").value();
-                id1 = edge.attribute("target").value();
-                edge_handle = edge.attribute("id").value();
-                uint64_t loc0 = (hash_string(id0) % num_shards) + ShardIdIncr;
-                uint64_t loc1 = (hash_string(id1) % num_shards) + ShardIdIncr;
-                if (loc0 == shard_id) {
-                    n = S->bulk_load_acquire_node_nonlocking(id0);
-                    assert(n != nullptr);
-                    S->create_edge_nonlocking(n, edge_handle, id1, loc1, zero_clk, true);
+            //    id0 = edge.attribute("source").value();
+            //    id1 = edge.attribute("target").value();
+            //    edge_handle = edge.attribute("id").value();
+            //    uint64_t loc0 = (hash_string(id0) % num_shards) + ShardIdIncr;
+            //    uint64_t loc1 = (hash_string(id1) % num_shards) + ShardIdIncr;
+            //    if (loc0 == shard_id) {
+            //        n = S->bulk_load_acquire_node_nonlocking(id0);
+            //        assert(n != nullptr);
+            //        S->create_edge_nonlocking(n, edge_handle, id1, loc1, zero_clk, true);
 
-                    for (pugi::xml_node prop: edge.children("data")) {
-                        std::string key = prop.attribute("key").value();
-                        std::string value = prop.child_value();
-                        if (BulkLoadPropertyValueDelimiter != '\0') {
-                            std::vector<std::string> values;
-                            split(value, BulkLoadPropertyValueDelimiter, values);
-                            for (std::string &v: values) {
-                                S->set_edge_property_nonlocking(n, edge_handle, key, v, zero_clk);
-                            }
-                        } else {
-                            S->set_edge_property_nonlocking(n, edge_handle, key, value, zero_clk);
-                        }
-                    }
-                }
-                edge_count++;
-                if (edge_count % 10000 == 0) {
-                    WDEBUG << "edge " << edge_count << std::endl;
-                }
+            //        for (pugi::xml_node prop: edge.children("data")) {
+            //            std::string key = prop.attribute("key").value();
+            //            std::string value = prop.child_value();
+            //            if (BulkLoadPropertyValueDelimiter != '\0') {
+            //                std::vector<std::string> values;
+            //                split(value, BulkLoadPropertyValueDelimiter, values);
+            //                for (std::string &v: values) {
+            //                    S->set_edge_property_nonlocking(n, edge_handle, key, v, zero_clk);
+            //                }
+            //            } else {
+            //                S->set_edge_property_nonlocking(n, edge_handle, key, value, zero_clk);
+            //            }
+            //        }
+            //    }
+            //    edge_count++;
+            //    if (edge_count % 10000 == 0) {
+            //        WDEBUG << "edge " << edge_count << std::endl;
+            //    }
 
-                element.clear();
-            }
+            //    element.clear();
+            //}
 
-            S->bulk_load_persistent();
+            //S->bulk_load_persistent();
             break;
         }
 
@@ -2241,7 +2247,18 @@ main(int argc, const char *argv[])
 
             wclock::weaver_timer timer;
             uint64_t load_time = timer.get_time_elapsed();
-            load_graph(format, graph_file, (uint64_t)bulk_load_num_shards);
+
+            std::vector<std::thread*> bulk_load_threads;
+            for (int i = 0; i < NUM_SHARD_THREADS; i++) {
+                std::thread *t = new std::thread(load_graph, format, graph_file, (uint64_t)bulk_load_num_shards, i, NUM_SHARD_THREADS);
+                bulk_load_threads.emplace_back(t);
+            }
+            for (int i = 0; i < NUM_SHARD_THREADS; i++) {
+                bulk_load_threads[i]->join();
+                delete bulk_load_threads[i];
+            }
+            //load_graph(format, graph_file, (uint64_t)bulk_load_num_shards);
+
             load_time = timer.get_time_elapsed() - load_time;
             message::message msg;
             msg.prepare_message(message::LOADED_GRAPH, load_time);
