@@ -809,13 +809,14 @@ namespace db
         const edge_handle_t &edge_handle,
         vc::vclock &tdel)
     {
+        // XXX benchmark
         // already_exec check for fault tolerance
-        auto out_edge_iter = n->out_edges.find(edge_handle);
-        assert(out_edge_iter != n->out_edges.end());
-        assert(!out_edge_iter->second.empty());
-        edge *e = out_edge_iter->second.back();
-        assert(!e->base.get_del_time());
-        e->base.update_del_time(tdel);
+        //auto out_edge_iter = n->out_edges.find(edge_handle);
+        //assert(out_edge_iter != n->out_edges.end());
+        //assert(!out_edge_iter->second.empty());
+        //edge *e = out_edge_iter->second.back();
+        //assert(!e->base.get_del_time());
+        //e->base.update_del_time(tdel);
     }
 
     inline void
@@ -877,12 +878,13 @@ namespace db
         std::string &key, std::string &value,
         vc::vclock &vclk)
     {
-        auto out_edge_iter = n->out_edges.find(edge_handle);
-        assert(out_edge_iter != n->out_edges.end());
-        assert(!out_edge_iter->second.empty());
-        edge *e = out_edge_iter->second.back();
-        assert(!e->base.get_del_time());
-        e->base.add_property(key, value, vclk);
+        // XXX benchmark
+        //auto out_edge_iter = n->out_edges.find(edge_handle);
+        //assert(out_edge_iter != n->out_edges.end());
+        //assert(!out_edge_iter->second.empty());
+        //edge *e = out_edge_iter->second.back();
+        //assert(!e->base.get_del_time());
+        //e->base.add_property(key, value, vclk);
     }
 
     inline void
@@ -957,11 +959,11 @@ namespace db
         n->permanently_deleted = true;
         // deleting edges now so as to prevent sending messages to neighbors for permanent edge deletion
         // rest of deletion happens in release_node()
-        for (auto &x: n->out_edges) {
-            for (db::edge *e: x.second) {
-                delete e;
-            }
-        }
+        //XXX benchmark for (auto &x: n->out_edges) {
+        //XXX benchmark     for (db::edge *e: x.second) {
+        //XXX benchmark         delete e;
+        //XXX benchmark     }
+        //XXX benchmark }
         n->out_edges.clear();
         release_node(n);
     }
@@ -1033,46 +1035,47 @@ namespace db
                     n = acquire_node_specific(dobj->node, &dobj->version, nullptr);
                     if (n != nullptr) {
                         n->permanently_deleted = true;
-                        for (auto &x: n->out_edges) {
-                            for (db::edge *e: x.second) {
-                                // XXX const node_handle_t &remote_node = e->nbr.handle;
-                                node_version_t local_node = std::make_pair(dobj->node, e->base.get_creat_time());
-                                // XXX remove_from_edge_map(remote_node, local_node);
-                            }
-                        }
+                        //XXX for (auto &x: n->out_edges) {
+                        //XXX     for (db::edge *e: x.second) {
+                        //XXX         // XXX const node_handle_t &remote_node = e->nbr.handle;
+                        //XXX         node_version_t local_node = std::make_pair(dobj->node, e->base.get_creat_time());
+                        //XXX         // XXX remove_from_edge_map(remote_node, local_node);
+                        //XXX     }
+                        //XXX }
                         release_node(n);
                     }
                     break;
 
                 case transaction::EDGE_DELETE_REQ:
                     n = acquire_node_specific(dobj->node, &dobj->version, nullptr);
-                    if (n != nullptr) {
-                        auto map_iter = n->out_edges.find(dobj->edge);
-                        assert(map_iter != n->out_edges.end());
+                    // XXX
+                    //if (n != nullptr) {
+                    //    auto map_iter = n->out_edges.find(dobj->edge);
+                    //    assert(map_iter != n->out_edges.end());
 
-                        edge *e = nullptr;
-                        auto edge_iter = map_iter->second.begin();
-                        for (; edge_iter != map_iter->second.end(); edge_iter++) {
-                            const std::unique_ptr<vc::vclock> &tdel = (*edge_iter)->base.get_del_time();
-                            if (tdel && *tdel == dobj->tdel) {
-                                e = *edge_iter;
-                                break;
-                            }
-                        }
-                        assert(e);
+                    //    edge *e = nullptr;
+                    //    auto edge_iter = map_iter->second.begin();
+                    //    for (; edge_iter != map_iter->second.end(); edge_iter++) {
+                    //        const std::unique_ptr<vc::vclock> &tdel = (*edge_iter)->base.get_del_time();
+                    //        if (tdel && *tdel == dobj->tdel) {
+                    //            e = *edge_iter;
+                    //            break;
+                    //        }
+                    //    }
+                    //    assert(e);
 
-                        if (n->last_perm_deletion == nullptr
-                         || time_oracle->compare_two_vts(*n->last_perm_deletion, *e->base.get_del_time()) == 0) {
-                            n->last_perm_deletion.reset(new vc::vclock(*e->base.get_del_time()));
-                        }
+                    //    if (n->last_perm_deletion == nullptr
+                    //     || time_oracle->compare_two_vts(*n->last_perm_deletion, *e->base.get_del_time()) == 0) {
+                    //        n->last_perm_deletion.reset(new vc::vclock(*e->base.get_del_time()));
+                    //    }
 
-                        delete e;
-                        map_iter->second.erase(edge_iter);
-                        if (map_iter->second.empty()) {
-                            n->out_edges.erase(dobj->edge);
-                        }
-                        release_node(n);
-                    }
+                    //    delete e;
+                    //    map_iter->second.erase(edge_iter);
+                    //    if (map_iter->second.empty()) {
+                    //        n->out_edges.erase(dobj->edge);
+                    //    }
+                    //    release_node(n);
+                    //}
                     break;
 
                 default:
@@ -1106,11 +1109,11 @@ namespace db
         assert(!n->in_use);
         // this code isn't executed in case of deletion of migrated nodes
         if (n->state != node::mode::MOVED) {
-            for (auto &x: n->out_edges) {
-                for (db::edge *e: x.second) {
-                    delete e;
-                }
-            }
+            //XXX for (auto &x: n->out_edges) {
+            //XXX     for (db::edge *e: x.second) {
+            //XXX         delete e;
+            //XXX     }
+            //XXX }
             n->out_edges.clear();
         }
         delete n;
@@ -1122,13 +1125,13 @@ namespace db
     inline void
     shard :: update_migrated_nbr_nonlocking(node *n, const node_handle_t &migr_node, uint64_t old_loc, uint64_t new_loc)
     {
-        for (auto &x: n->out_edges) {
-            for (db::edge *e: x.second) {
-                if (e->nbr.handle == migr_node && e->nbr.loc == old_loc) {
-                    e->nbr.loc = new_loc;
-                }
-            }
-        }
+        //XXX for (auto &x: n->out_edges) {
+        //XXX     for (db::edge *e: x.second) {
+        //XXX         if (e->nbr.handle == migr_node && e->nbr.loc == old_loc) {
+        //XXX             e->nbr.loc = new_loc;
+        //XXX         }
+        //XXX     }
+        //XXX }
     }
 
     inline void

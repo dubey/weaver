@@ -396,8 +396,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     for (const auto &initial_arg : initial_args) {
         //get_set.emplace(initial_arg.first);
-        int n = std::stoi(initial_arg.first);
-        uint64_t loc = ((uint64_t)n % num_shards) + ShardIdIncr;
+        uint64_t loc = (hash_node_handle(initial_arg.first) % num_shards) + ShardIdIncr;
         loc_map.emplace(initial_arg.first, loc);
     }
 

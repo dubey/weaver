@@ -56,7 +56,8 @@ run_read_only_vertex_bench(const std::string &output_fname, uint64_t num_nodes, 
     busybee_discover(&ip);
     uint64_t pid = getpid();
 
-    std::default_random_engine generator;
+    std::random_device rd;
+    std::default_random_engine generator(rd());
     std::uniform_int_distribution<uint64_t> distribution(0, num_nodes-1);
     client cl("172.31.44.220", 2002, "/usr/local/etc/weaver.yaml");
     wclock::weaver_timer timer;

@@ -20,17 +20,9 @@ edge_map_iter&
 edge_map_iter :: operator++()
 {
     while (++internal_cur != internal_end) {
-        bool to_break = false;
-
-        for (db::edge *e: internal_cur->second) {
-            if (time_oracle->clock_creat_before_del_after(*req_time, e->base.get_creat_time(), e->base.get_del_time())) {
-                cur_edge = e;
-                to_break = true;
-                break;
-            }
-        }
-
-        if (to_break) {
+        db::edge *e = *internal_cur;
+        if (time_oracle->clock_creat_before_del_after(*req_time, e->base.get_creat_time(), e->base.get_del_time())) {
+            cur_edge = e;
             break;
         }
     }
@@ -48,17 +40,10 @@ edge_map_iter :: edge_map_iter(edge_map_t::iterator begin,
     , time_oracle(to)
 {
     if (internal_cur != internal_end) {
-        bool to_break = false;
-
-        for (db::edge *e: internal_cur->second) {
-            if (time_oracle->clock_creat_before_del_after(*req_time, e->base.get_creat_time(), e->base.get_del_time())) {
-                cur_edge = e;
-                to_break = true;
-                break;
-            }
-        }
-
-        if (!to_break) {
+        db::edge *e = *internal_cur;
+        if (time_oracle->clock_creat_before_del_after(*req_time, e->base.get_creat_time(), e->base.get_del_time())) {
+            cur_edge = e;
+        } else {
             ++(*this);
         }
     }

@@ -103,12 +103,12 @@ hyper_stub :: restore_backup(google::sparse_hash_map<node_handle_t, std::vector<
             n = new node(node_handle, UINT64_MAX, dummy_clock, shard_mutexes+map_idx);
             recreate_node(node_attrs, *n);
 
-            // edge map
-            for (const auto &p: n->out_edges) {
-                assert(p.second.size() == 1);
-                edge *e = p.second.front();
-                edge_map[e->nbr.handle].emplace(std::make_pair(node_handle, e->base.get_creat_time()));
-            }
+            // edge map XXX
+            //for (const auto &p: n->out_edges) {
+            //    assert(p.second.size() == 1);
+            //    edge *e = p.second.front();
+            //    edge_map[e->nbr.handle].emplace(std::make_pair(node_handle, e->base.get_creat_time()));
+            //}
 
             // node map
             auto &node_map = nodes[map_idx];
@@ -175,11 +175,12 @@ hyper_stub :: bulk_load(int thread_id, std::unordered_map<node_handle_t, std::ve
                 idx_add.emplace(alias, p.second);
             }
 
-            for (auto &x: p.second->out_edges) {
-                assert(x.second.size() == 1);
-                assert(idx_add.find(x.first) == idx_add.end());
-                idx_add.emplace(x.first, p.second);
-            }
+            // XXX
+            //for (auto &x: p.second->out_edges) {
+            //    assert(x.second.size() == 1);
+            //    assert(idx_add.find(x.first) == idx_add.end());
+            //    idx_add.emplace(x.first, p.second);
+            //}
         }
 
         add_indices(idx_add, false);

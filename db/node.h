@@ -79,7 +79,8 @@ namespace db
             uint64_t shard;
             enum mode state;
             //std::unordered_map<edge_handle_t, std::vector<edge*>> out_edges;
-            google::dense_hash_map<edge_handle_t, std::vector<edge*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> out_edges;
+            //google::dense_hash_map<edge_handle_t, std::vector<edge*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> out_edges;
+            std::vector<edge*> out_edges;
             po6::threads::cond cv; // for locking node
             po6::threads::cond migr_cv; // make reads/writes wait while node is being migrated
             std::deque<std::pair<uint64_t, uint64_t>> tx_queue; // queued txs, identified by <vt_id, queue timestamp> tuple

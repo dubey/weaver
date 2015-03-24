@@ -280,10 +280,12 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     id0 = std::to_string(node0);
                     id1 = std::to_string(node1);
                     edge_handle = edge_prefix + std::to_string(++edge_count);
-                    uint64_t loc0 = ((node0 % num_shards) + ShardIdIncr);
-                    uint64_t loc1 = ((node1 % num_shards) + ShardIdIncr);
+                    uint64_t hash0 = hash_node_handle(id0);
+                    uint64_t hash1 = hash_node_handle(id1);
+                    uint64_t loc0 = ((hash0 % num_shards) + ShardIdIncr);
+                    uint64_t loc1 = ((hash1 % num_shards) + ShardIdIncr);
                     if (loc0 == shard_id) {
-                        uint64_t map_idx = hash_node_handle(id0) % NUM_NODE_MAPS;
+                        uint64_t map_idx = hash0 % NUM_NODE_MAPS;
                         if ((int)map_idx % load_nthreads == load_tid) {
                             n = S->bulk_load_acquire_node_nonlocking(id0, map_idx);
                             if (n == nullptr) {
@@ -295,7 +297,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                         }
                     }
                     if (loc1 == shard_id) {
-                        uint64_t map_idx = hash_node_handle(id1) % NUM_NODE_MAPS;
+                        uint64_t map_idx = hash1 % NUM_NODE_MAPS;
                         if ((int)map_idx % load_nthreads == load_tid) {
                             if (!S->bulk_load_node_exists_nonlocking(id1, map_idx)) {
                                 S->create_node_bulk_load(id1, map_idx, zero_clk, false);
@@ -848,56 +850,56 @@ fetch_node_cache_contexts(uint64_t loc,
                     temp_props_deleted.clear();
                 }
                 // now check for any edge changes
-                for (auto &iter: node->out_edges) {
-                    for (db::edge *e: iter.second) {
-                        assert(e != nullptr);
-                        const std::unique_ptr<vc::vclock> &e_del_time = e->base.get_del_time();
+                //XXX for (auto &iter: node->out_edges) {
+                //XXX     for (db::edge *e: iter.second) {
+                //XXX         assert(e != nullptr);
+                //XXX         const std::unique_ptr<vc::vclock> &e_del_time = e->base.get_del_time();
 
-                        bool del_after_cached = (e_del_time != nullptr) && (time_oracle->compare_two_vts(time_cached, *e_del_time) == 0);
-                        bool creat_after_cached = (time_oracle->compare_two_vts(time_cached, e->base.get_creat_time()) == 0);
+                //XXX         bool del_after_cached = (e_del_time != nullptr) && (time_oracle->compare_two_vts(time_cached, *e_del_time) == 0);
+                //XXX         bool creat_after_cached = (time_oracle->compare_two_vts(time_cached, e->base.get_creat_time()) == 0);
 
-                        bool del_before_cur = (e_del_time != nullptr) && (time_oracle->compare_two_vts(*e_del_time, cur_time) == 0);
-                        bool creat_before_cur = (time_oracle->compare_two_vts(e->base.get_creat_time(), cur_time) == 0);
+                //XXX         bool del_before_cur = (e_del_time != nullptr) && (time_oracle->compare_two_vts(*e_del_time, cur_time) == 0);
+                //XXX         bool creat_before_cur = (time_oracle->compare_two_vts(e->base.get_creat_time(), cur_time) == 0);
 
-                        if (creat_after_cached && creat_before_cur && !del_before_cur) {
-                            if (context == nullptr) {
-                                toFill.emplace_back(loc, handle, false);
-                                context = &toFill.back();
-                            }
+                //XXX         if (creat_after_cached && creat_before_cur && !del_before_cur) {
+                //XXX             if (context == nullptr) {
+                //XXX                 toFill.emplace_back(loc, handle, false);
+                //XXX                 context = &toFill.back();
+                //XXX             }
 
-                            context->edges_added.emplace_back(e->get_handle(), e->nbr);
-                            node_prog::edge_cache_context &edge_context = context->edges_added.back();
-                            // don't care about props deleted before req time for an edge created after cache value was stored
-                            fill_changed_properties(e->base.properties, &edge_context.props_added, nullptr, time_cached, cur_time, time_oracle);
-                        } else if (del_after_cached && del_before_cur) {
-                            if (context == nullptr) {
-                                toFill.emplace_back(loc, handle, false);
-                                context = &toFill.back();
-                            }
-                            context->edges_deleted.emplace_back(e->get_handle(), e->nbr);
-                            node_prog::edge_cache_context &edge_context = context->edges_deleted.back();
-                            // don't care about props added after cache time on a deleted edge
-                            fill_changed_properties(e->base.properties, nullptr, &edge_context.props_deleted, time_cached, cur_time, time_oracle);
-                        } else if (del_after_cached && !creat_after_cached) {
-                            // see if any properties changed on edge that didnt change
-                            fill_changed_properties(e->base.properties, &temp_props_added,
-                                    &temp_props_deleted, time_cached, cur_time, time_oracle);
-                            if (!temp_props_added.empty() || !temp_props_deleted.empty()) {
-                                if (context == nullptr) {
-                                    toFill.emplace_back(loc, handle, false);
-                                    context = &toFill.back();
-                                }
-                                context->edges_modified.emplace_back(e->get_handle(), e->nbr);
+                //XXX             context->edges_added.emplace_back(e->get_handle(), e->nbr);
+                //XXX             node_prog::edge_cache_context &edge_context = context->edges_added.back();
+                //XXX             // don't care about props deleted before req time for an edge created after cache value was stored
+                //XXX             fill_changed_properties(e->base.properties, &edge_context.props_added, nullptr, time_cached, cur_time, time_oracle);
+                //XXX         } else if (del_after_cached && del_before_cur) {
+                //XXX             if (context == nullptr) {
+                //XXX                 toFill.emplace_back(loc, handle, false);
+                //XXX                 context = &toFill.back();
+                //XXX             }
+                //XXX             context->edges_deleted.emplace_back(e->get_handle(), e->nbr);
+                //XXX             node_prog::edge_cache_context &edge_context = context->edges_deleted.back();
+                //XXX             // don't care about props added after cache time on a deleted edge
+                //XXX             fill_changed_properties(e->base.properties, nullptr, &edge_context.props_deleted, time_cached, cur_time, time_oracle);
+                //XXX         } else if (del_after_cached && !creat_after_cached) {
+                //XXX             // see if any properties changed on edge that didnt change
+                //XXX             fill_changed_properties(e->base.properties, &temp_props_added,
+                //XXX                     &temp_props_deleted, time_cached, cur_time, time_oracle);
+                //XXX             if (!temp_props_added.empty() || !temp_props_deleted.empty()) {
+                //XXX                 if (context == nullptr) {
+                //XXX                     toFill.emplace_back(loc, handle, false);
+                //XXX                     context = &toFill.back();
+                //XXX                 }
+                //XXX                 context->edges_modified.emplace_back(e->get_handle(), e->nbr);
 
-                                context->edges_modified.back().props_added = std::move(temp_props_added);
-                                context->edges_modified.back().props_deleted = std::move(temp_props_deleted);
+                //XXX                 context->edges_modified.back().props_added = std::move(temp_props_added);
+                //XXX                 context->edges_modified.back().props_deleted = std::move(temp_props_deleted);
 
-                                temp_props_added.clear();
-                                temp_props_deleted.clear();
-                            }
-                        }
-                    }
-                }
+                //XXX                 temp_props_added.clear();
+                //XXX                 temp_props_deleted.clear();
+                //XXX             }
+                //XXX         }
+                //XXX     }
+                //XXX }
             }
         }
         S->release_node(node);
@@ -1640,11 +1642,11 @@ cldg_migration_wrapper(std::vector<uint64_t> &shard_node_count, uint64_t migr_nu
         db::edge *e;
         // get aggregate msg counts per shard
         //std::vector<uint64_t> msg_count(NumShards, 0);
-        for (auto &e_iter: n->out_edges) {
-            e = e_iter.second;
-            //msg_count[e->nbr.loc - ShardIdIncr] += e->msg_count;
-            n->migration->msg_count[e->nbr.loc - ShardIdIncr] += e->msg_count;
-        }
+        //XXX for (auto &e_iter: n->out_edges) {
+        //XXX     e = e_iter.second;
+        //XXX     //msg_count[e->nbr.loc - ShardIdIncr] += e->msg_count;
+        //XXX     n->migration->msg_count[e->nbr.loc - ShardIdIncr] += e->msg_count;
+        //XXX }
         // EWMA update to msg count
         //for (uint64_t i = 0; i < NumShards; i++) {
         //    double new_val = 0.4 * n->msg_count[i] + 0.6 * msg_count[i];
@@ -1685,11 +1687,11 @@ ldg_migration_wrapper(std::vector<uint64_t> &shard_node_count, uint64_t migr_num
         }
 
         // regular LDG
-        for (auto &e_iter: n->out_edges) {
-            for (db::edge *e: e_iter.second) {
-                n->migration->migr_score[e->nbr.loc - ShardIdIncr] += 1;
-            }
-        }
+        //XXX for (auto &e_iter: n->out_edges) {
+        //XXX     for (db::edge *e: e_iter.second) {
+        //XXX         n->migration->migr_score[e->nbr.loc - ShardIdIncr] += 1;
+        //XXX     }
+        //XXX }
         for (uint64_t j = 0; j < migr_num_shards; j++) {
             n->migration->migr_score[j] *= (1 - ((double)shard_node_count[j])/shard_cap);
         }

@@ -25,7 +25,8 @@
 
 namespace node_prog
 {
-    typedef google::dense_hash_map<edge_handle_t, std::vector<db::edge*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> edge_map_t;
+    //typedef google::dense_hash_map<edge_handle_t, std::vector<db::edge*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> edge_map_t;
+    typedef std::vector<db::edge*> edge_map_t;
     class edge_map_iter : public std::iterator<std::input_iterator_tag, edge>
     {
         db::edge *cur_edge;
