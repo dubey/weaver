@@ -19,7 +19,7 @@
 #include <map>
 #include <vector>
 #include <unordered_map>
-#include <google/sparse_hash_map>
+#include <google/dense_hash_map>
 #include <po6/threads/mutex.h>
 #include <po6/net/location.h>
 #include <hyperdex/client.hpp>
@@ -105,7 +105,7 @@ namespace db
             uint64_t shard_id;
             server_id serv_id;
             // node handle -> ptr to node object
-            google::sparse_hash_map<node_handle_t, std::vector<node*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> nodes[NUM_NODE_MAPS];
+            google::dense_hash_map<node_handle_t, std::vector<node*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> nodes[NUM_NODE_MAPS];
             //std::unordered_map<node_handle_t, std::vector<node*>> nodes[NUM_NODE_MAPS]; // node handle -> ptr to node object
             std::unordered_map<node_handle_t, // node handle n ->
                 std::unordered_set<node_version_t, node_version_hash>> edge_map; // in-neighbors of n
@@ -274,6 +274,7 @@ namespace db
     {
         for (uint64_t i = 0; i < NUM_NODE_MAPS; i++) {
             nodes[i].set_deleted_key("");
+            nodes[i].set_empty_key("BAZINGA"); // XXX
         }
     }
 

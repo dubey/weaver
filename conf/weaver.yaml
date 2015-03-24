@@ -3,7 +3,7 @@
 
 # Number of vector timestampers.
 # Default: 1
-num_vts     : 2
+num_vts     : 1
 
 # Number of cache entries per node for node programs.  0 means no caching.
 # Default: 0
@@ -18,7 +18,6 @@ hyperdex_coord:
 # Used for starting up cluster.
 hyperdex_daemons:
     - 172.31.44.220 : 8012
-    - 172.31.41.195 : 8012
 
 # Kronos replicated state machine ip addrs and corresponding ports.
 # Used for starting up cluster and connecting to Kronos.
