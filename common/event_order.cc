@@ -172,6 +172,10 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
         // Kronos not required
         return ret_idx;
     } else {
+        //std::default_random_engine gen;
+        //std::uniform_int_distribution<int64_t> dist(0, clocks.size());
+        //return dist(gen);
+
         // check cache
         uint64_t num_clks = clocks.size();
         for (uint64_t i = 0; i < num_clks; i++) {

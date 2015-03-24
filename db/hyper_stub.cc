@@ -127,24 +127,28 @@ hyper_stub :: restore_backup(google::sparse_hash_map<node_handle_t, std::vector<
 void
 hyper_stub :: memory_efficient_bulk_load(int thread_id, google::sparse_hash_map<node_handle_t, std::vector<node*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> *nodes_arr)
 {
+    WDEBUG << "starting HyperDex bulk load." << std::endl;
     assert(NUM_NODE_MAPS % NUM_SHARD_THREADS == 0);
     vc::vclock zero_clk(0,0);
 
     std::unordered_map<node_handle_t, node*> node_map;
     uint64_t batch_sz = 0;
+    int progress = 0;
     for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
         for (const auto &p: nodes_arr[tid]) {
             assert(p.second.size() == 1);
             node_map.emplace(p.first, p.second.front());
-        }
-        if (++batch_sz == 1000) {
-            put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
-            node_map.clear();
-            batch_sz = 0;
+            if (++batch_sz == 1000) {
+                put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
+                node_map.clear();
+                batch_sz = 0;
+                WDEBUG << "bulk load hyperdex progress " << ++progress << std::endl;
+            }
         }
     }
 
     put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
+    WDEBUG << "bulk load done." << std::endl;
 }
 
 void

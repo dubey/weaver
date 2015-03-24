@@ -27,8 +27,8 @@ if DEBUG
     AM_CFLAGS += -g3 -gdwarf-2 -O0
     AM_CXXFLAGS += -g3 -gdwarf-2 -O0
 else
-    AM_CFLAGS += -O3
-    AM_CXXFLAGS += -O3
+    AM_CFLAGS += -O2
+    AM_CXXFLAGS += -O2
 endif
 
 pkgpyexecdir = $(pyexecdir)/weaver

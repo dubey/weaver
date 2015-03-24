@@ -123,7 +123,7 @@ namespace db
                 const edge_handle_t &handle,
                 const node_handle_t &remote_node, uint64_t remote_loc,
                 vc::vclock &vclk,
-                bool init_load);
+                bool init_load=false);
             void create_edge(const edge_handle_t &handle,
                 const node_handle_t &local_node,
                 const node_handle_t &remote_node, uint64_t remote_loc,
@@ -393,14 +393,15 @@ namespace db
     inline void
     shard :: bulk_load_persistent()
     {
-        std::vector<std::thread> threads;
-        WDEBUG << "hstub.size " << hstub.size() << ", NUM_SHARD_THREADS " << NUM_SHARD_THREADS << std::endl;
-        for (uint64_t i = 0; i < hstub.size(); i++) {
-            threads.emplace_back(std::thread(&hyper_stub::memory_efficient_bulk_load, hstub[i], (int)i, nodes));
-        }
-        for (uint64_t i = 0; i < hstub.size(); i++) {
-            threads[i].join();
-        }
+        // XXX
+        //std::vector<std::thread> threads;
+        //WDEBUG << "hstub.size " << hstub.size() << ", NUM_SHARD_THREADS " << NUM_SHARD_THREADS << std::endl;
+        //for (uint64_t i = 0; i < hstub.size(); i++) {
+        //    threads.emplace_back(std::thread(&hyper_stub::memory_efficient_bulk_load, hstub[i], (int)i, nodes));
+        //}
+        //for (uint64_t i = 0; i < hstub.size(); i++) {
+        //    threads[i].join();
+        //}
     }
 
     // Consistency methods
@@ -714,7 +715,7 @@ namespace db
         const edge_handle_t &handle,
         const node_handle_t &remote_node, uint64_t remote_loc,
         vc::vclock &vclk,
-        bool init_load=false)
+        bool)
     {
         edge *new_edge = new edge(handle, vclk, remote_loc, remote_node);
         n->add_edge(new_edge);
@@ -978,7 +979,7 @@ namespace db
                         n->permanently_deleted = true;
                         for (auto &x: n->out_edges) {
                             for (db::edge *e: x.second) {
-                                const node_handle_t &remote_node = e->nbr.handle;
+                                // XXX const node_handle_t &remote_node = e->nbr.handle;
                                 node_version_t local_node = std::make_pair(dobj->node, e->base.get_creat_time());
                                 // XXX remove_from_edge_map(remote_node, local_node);
                             }
@@ -1252,7 +1253,7 @@ namespace db
     inline void
     shard :: restore_backup()
     {
-        hstub.back()->restore_backup(nodes, edge_map, node_map_mutexes);
+        //XXX hstub.back()->restore_backup(nodes, edge_map, node_map_mutexes);
     }
 }
 

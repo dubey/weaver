@@ -54,6 +54,7 @@ end_program(int signum)
 
 #ifdef weaver_benchmark_
     WDEBUG << "max outstanding prog cnt = " << vts->max_outstanding_cnt << std::endl;
+    WDEBUG << "outstanding prog cnt = " << vts->outstanding_cnt << std::endl;
 #endif
 
     if (signum == SIGINT) {
@@ -371,6 +372,7 @@ template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
     unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, coordinator::hyper_stub *hstub)
 {
+    static uint64_t num_shards = get_num_shards();
     vts->restore_mtx.lock();
     if (vts->restore_status > 0) {
         vts->prog_queue->emplace_back(blocked_prog(clientID, std::move(msg)));
@@ -393,53 +395,56 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     std::unordered_set<node_handle_t> get_set;
 
     for (const auto &initial_arg : initial_args) {
-        get_set.emplace(initial_arg.first);
+        //get_set.emplace(initial_arg.first);
+        int n = std::stoi(initial_arg.first);
+        uint64_t loc = ((uint64_t)n % num_shards) + ShardIdIncr;
+        loc_map.emplace(initial_arg.first, loc);
     }
 
-    if (!get_set.empty()) {
-        loc_map = hstub->get_mappings(get_set);
+    //if (!get_set.empty()) {
+    //    loc_map = hstub->get_mappings(get_set);
 
-        bool success = true;
-        if (loc_map.size() < get_set.size() && AuxIndex) {
-            std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> alias_map;
-            std::pair<node_handle_t, uint64_t> empty;
-            for (const node_handle_t &h: get_set) {
-                if (loc_map.find(h) == loc_map.end()) {
-                    alias_map.emplace(h, empty);
-                }
-            }
+    //    bool success = true;
+    //    if (loc_map.size() < get_set.size() && AuxIndex) {
+    //        std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> alias_map;
+    //        std::pair<node_handle_t, uint64_t> empty;
+    //        for (const node_handle_t &h: get_set) {
+    //            if (loc_map.find(h) == loc_map.end()) {
+    //                alias_map.emplace(h, empty);
+    //            }
+    //        }
 
-            assert((alias_map.size() + loc_map.size()) == get_set.size());
+    //        assert((alias_map.size() + loc_map.size()) == get_set.size());
 
-            success = hstub->get_idx(alias_map);
+    //        success = hstub->get_idx(alias_map);
 
-            if (success) {
-                for (auto &arg: initial_args) {
-                    auto iter = alias_map.find(arg.first);
-                    if (iter != alias_map.end()) {
-                        arg.first = iter->second.first;
-                        loc_map.emplace(iter->second.first, iter->second.second);
-                    } else {
-                        assert(loc_map.find(arg.first) != loc_map.end());
-                    }
-                }
-            }
-        } else if (loc_map.size() < get_set.size()) {
-            success = false;
-        }
+    //        if (success) {
+    //            for (auto &arg: initial_args) {
+    //                auto iter = alias_map.find(arg.first);
+    //                if (iter != alias_map.end()) {
+    //                    arg.first = iter->second.first;
+    //                    loc_map.emplace(iter->second.first, iter->second.second);
+    //                } else {
+    //                    assert(loc_map.find(arg.first) != loc_map.end());
+    //                }
+    //            }
+    //        }
+    //    } else if (loc_map.size() < get_set.size()) {
+    //        success = false;
+    //    }
 
-        if (!success) {
-            // some node handles bad, return immediately
-            WDEBUG << "bad node handles in node prog request: ";
-            for (auto &h: get_set) {
-                std::cerr << h << " ";
-            }
-            std::cerr << std::endl;
-            msg->prepare_message(message::NODE_PROG_NOTFOUND);
-            vts->comm.send_to_client(clientID, msg->buf);
-            return;
-        }
-    }
+    //    if (!success) {
+    //        // some node handles bad, return immediately
+    //        WDEBUG << "bad node handles in node prog request: ";
+    //        for (auto &h: get_set) {
+    //            std::cerr << h << " ";
+    //        }
+    //        std::cerr << std::endl;
+    //        msg->prepare_message(message::NODE_PROG_NOTFOUND);
+    //        vts->comm.send_to_client(clientID, msg->buf);
+    //        return;
+    //    }
+    //}
 
     for (const auto &p: initial_args) {
         initial_batches[loc_map[p.first]].emplace_back(p);

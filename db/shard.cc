@@ -658,8 +658,10 @@ nop(db::message_wrapper *request)
     }
 
     // node max done id for migrated node clean up
-    assert(order::oracle::equal_or_happens_before_no_kronos(S->max_done_clk[vt_id], nop_arg->max_done_clk));
-    S->max_done_clk[vt_id] = std::move(nop_arg->max_done_clk);
+    // XXX should this be if or assert
+    if (order::oracle::equal_or_happens_before_no_kronos(S->max_done_clk[vt_id], nop_arg->max_done_clk)) {
+        S->max_done_clk[vt_id] = std::move(nop_arg->max_done_clk);
+    }
     check_migr_step3 = check_step3();
 
     // atmost one check should be true
@@ -1837,6 +1839,7 @@ recv_loop(uint64_t thread_id)
                         message::message conf_msg;
                         conf_msg.prepare_message(message::TX_DONE, tx_id, shard_id);
                         S->comm.send(vt_id, conf_msg.buf);
+                        WDEBUG << "done tx " << tx_id << std::endl;
                     } else {
                         mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                         tx_order = S->qm.check_wr_request(vclk, qts);
