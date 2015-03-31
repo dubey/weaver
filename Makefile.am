@@ -159,7 +159,6 @@ noinst_HEADERS+=		db/cache_entry.h \
 						db/del_obj.h \
 						db/element.h \
 						db/message_wrapper.h \
-						db/nop_data.h \
 						db/queued_request.h \
 						db/remote_node.h \
 						db/shard.h \
