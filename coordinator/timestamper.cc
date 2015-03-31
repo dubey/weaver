@@ -268,7 +268,6 @@ nop_function()
 
             del_done_reqs.clear();
             vts->tx_prog_mutex.lock();
-            tx->nop->max_done_id = vts->max_done_id;
             tx->nop->max_done_clk = *vts->max_done_clk;
             tx->nop->outstanding_progs = vts->pend_progs.size();
             tx->nop->shard_node_count = vts->shard_node_count;
@@ -490,7 +489,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 { }
 
 // remove a completed node program from pending_prog data structure
-// update 'max_done_id' and 'max_done_clk' accordingly
+// update 'max_done_clk' accordingly
 // return true if successfully process prog_done, false if already processed this prog
 // caution: need to hold vts->tx_prog_mutex
 bool

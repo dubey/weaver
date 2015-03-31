@@ -40,3 +40,7 @@ bulk_load_property_value_delimiter: ","
 # BulkLoadNodeAliasKey is the key of node properties that corresponds to the node aliases while bulk loading graphml graphs.
 # Default: ""
 bulk_load_node_alias_key: "alias"
+
+# BulkLoadEdgeHandlePrefix is the prefix-string attached to edge handles during bulk loading graphs that do not specify edge handles.
+# Default: "e"
+bulk_load_edge_handle_prefix: "e"

@@ -98,7 +98,6 @@ namespace coordinator
             std::unordered_set<uint64_t> outstanding_progs; // for multiple returns and ft
             std::vector<current_prog*> pend_progs, done_progs;
             int prog_done_cnt;
-            uint64_t max_done_id; // permanent deletion of migrated nodes
             std::unique_ptr<vc::vclock_t> max_done_clk; // permanent deletion
             std::unordered_map<node_prog::prog_type, prog_reply_t> done_reqs; // prog state cleanup
 
@@ -179,7 +178,6 @@ namespace coordinator
         , to_nop(NumShards, true)
         , nop_ack_qts(NumShards, 0)
         , prog_done_cnt(0)
-        , max_done_id(0)
         , max_done_clk(new vc::vclock_t(ClkSz, 0))
         , load_count(0)
         , max_load_time(0)
@@ -562,7 +560,6 @@ namespace coordinator
                     this_tx->qts = ++qts[i];
                     this_tx->nop = std::make_shared<transaction::nop_data>();
                     std::shared_ptr<transaction::nop_data> this_nop = this_tx->nop;
-                    this_nop->max_done_id = nop->max_done_id;
                     this_nop->max_done_clk = nop->max_done_clk;
                     this_nop->outstanding_progs = nop->outstanding_progs;
                     this_nop->done_reqs[i] = nop->done_reqs[i];
@@ -645,8 +642,6 @@ namespace coordinator
         uint32_t i = 0;
         uint32_t max_idx = pend_progs.size() > done_progs.size() ? done_progs.size() : pend_progs.size();
         for (i = 0; i < max_idx && pend_progs[i]->req_id == done_progs[i]->req_id; i++, pend_iter++, done_iter++) {
-            assert(max_done_id < pend_progs[i]->req_id);
-            max_done_id = pend_progs[i]->req_id;
             max_done_clk = std::move(pend_progs[i]->vclk);
             delete pend_progs[i];
         }

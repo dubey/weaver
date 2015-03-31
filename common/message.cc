@@ -239,8 +239,7 @@ message :: size(const std::shared_ptr<transaction::pending_update> &t)
 uint64_t
 message :: size(const std::shared_ptr<transaction::nop_data> &t)
 {
-    return size(t->max_done_id)
-         + size(t->max_done_clk)
+    return size(t->max_done_clk)
          + size(t->outstanding_progs)
          + size(t->done_reqs)
          + size(t->shard_node_count);
@@ -474,7 +473,6 @@ message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transact
 void
 message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::nop_data> &t)
 {
-    pack_buffer(packer, t->max_done_id);
     pack_buffer(packer, t->max_done_clk);
     pack_buffer(packer, t->outstanding_progs);
     pack_buffer(packer, t->done_reqs);
@@ -724,7 +722,6 @@ void
 message :: unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::nop_data> &t)
 {
     t = std::make_shared<transaction::nop_data>();
-    unpack_buffer(unpacker, t->max_done_id);
     unpack_buffer(unpacker, t->max_done_clk);
     unpack_buffer(unpacker, t->outstanding_progs);
     unpack_buffer(unpacker, t->done_reqs);

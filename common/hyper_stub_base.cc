@@ -1269,7 +1269,7 @@ hyper_stub_base :: prepare_buffer(const std::unordered_set<std::string> &set, st
 }
 
 inline void
-hyper_stub_base :: prepare_buffer(const google::sparse_hash_set<std::string, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> &set,
+hyper_stub_base :: prepare_buffer(const db::string_set &set,
     std::unique_ptr<e::buffer> &buf)
 {
     std::vector<std::string> sorted;
@@ -1303,7 +1303,7 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordere
 
 inline void
 hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz,
-    google::sparse_hash_set<std::string, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> &set)
+    db::string_set &set)
 {
     UNPACK_SET;
 }

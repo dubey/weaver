@@ -27,7 +27,6 @@ namespace db
         vc::qtimestamp_t qts;
         uint64_t req_id;
         std::vector<std::pair<uint64_t, node_prog::prog_type>> done_reqs;
-        uint64_t max_done_id;
         vc::vclock_t max_done_clk;
         uint64_t outstanding_progs;
         std::vector<uint64_t> shard_node_count;

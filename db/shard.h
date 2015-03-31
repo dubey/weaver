@@ -19,7 +19,6 @@
 #include <map>
 #include <vector>
 #include <unordered_map>
-#include <google/dense_hash_map>
 #include <po6/threads/mutex.h>
 #include <po6/net/location.h>
 #include <hyperdex/client.hpp>
@@ -39,6 +38,7 @@
 #include "common/bool_vector.h"
 #include "common/utils.h"
 #include "db/shard_constants.h"
+#include "db/types.h"
 #include "db/element.h"
 #include "db/node.h"
 #include "db/edge.h"
@@ -105,8 +105,7 @@ namespace db
             uint64_t shard_id;
             server_id serv_id;
             // node handle -> ptr to node object
-            google::dense_hash_map<node_handle_t, std::vector<node*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> nodes[NUM_NODE_MAPS];
-            //std::unordered_map<node_handle_t, std::vector<node*>> nodes[NUM_NODE_MAPS]; // node handle -> ptr to node object
+            db::data_map<std::vector<node*>> nodes[NUM_NODE_MAPS];
             std::unordered_map<node_handle_t, // node handle n ->
                 std::unordered_set<node_version_t, node_version_hash>> edge_map; // in-neighbors of n
         public:
@@ -128,16 +127,16 @@ namespace db
                 const node_handle_t &remote_node, uint64_t remote_loc,
                 vc::vclock &vclk,
                 bool init_load=false);
-            void create_edge_bulk_load(node *n,
-                const edge_handle_t &handle,
-                const node_handle_t &remote_node, uint64_t remote_loc,
-                vc::vclock &vclk,
-                bool init_load=false);
             void create_edge(const edge_handle_t &handle,
                 const node_handle_t &local_node,
                 const node_handle_t &remote_node, uint64_t remote_loc,
                 vc::vclock &vclk,
                 uint64_t qts);
+            void create_edge_bulk_load(node *n,
+                const edge_handle_t &handle,
+                const node_handle_t &remote_node, uint64_t remote_loc,
+                vc::vclock &vclk,
+                bool init_load=false);
             void delete_edge_nonlocking(node *n,
                 const edge_handle_t &edge_handle,
                 vc::vclock &tdel);
@@ -160,6 +159,10 @@ namespace db
                 std::unique_ptr<std::string> key, std::unique_ptr<std::string> value,
                 vc::vclock &vclk,
                 uint64_t qts);
+            void set_edge_property_bulk_load(node *n,
+                const edge_handle_t &edge_handle,
+                std::string &key, std::string &value,
+                vc::vclock &vclk);
             void add_node_alias_nonlocking(node *n,
                 node_handle_t &alias);
             void add_node_alias(const node_handle_t &node_handle,
@@ -189,7 +192,6 @@ namespace db
             // Migration
         public:
             po6::threads::mutex migration_mutex;
-            //XXX std::unordered_set<node_handle_t> node_list; // list of node ids currently on this shard
             bool current_migr, migr_updating_nbrs, migr_token, migrated;
             node_handle_t migr_node;
             uint64_t migr_chance, migr_shard, migr_token_hops, migr_num_shards, migr_vt;
@@ -272,9 +274,6 @@ namespace db
         , nop_count(NumVts, 0)
         , max_clk(UINT64_MAX, UINT64_MAX)
         , zero_clk(0, 0)
-        //, max_prog_id(NumVts, 0)
-        //, target_prog_id(NumVts, 0)
-        //, max_done_id(NumVts, 0)
         , max_seen_clk(NumVts, vc::vclock_t(ClkSz, 0))
         , target_prog_clk(NumVts, vc::vclock_t(ClkSz, 0))
         , max_done_clk(NumVts, vc::vclock_t(ClkSz, 0))
@@ -284,7 +283,6 @@ namespace db
     {
         for (uint64_t i = 0; i < NUM_NODE_MAPS; i++) {
             nodes[i].set_deleted_key("");
-            nodes[i].set_empty_key("BAZINGA"); // XXX
         }
     }
 
@@ -404,15 +402,13 @@ namespace db
     inline void
     shard :: bulk_load_persistent()
     {
-        // XXX
-        //std::vector<std::thread> threads;
-        //WDEBUG << "hstub.size " << hstub.size() << ", NUM_SHARD_THREADS " << NUM_SHARD_THREADS << std::endl;
-        //for (uint64_t i = 0; i < hstub.size(); i++) {
-        //    threads.emplace_back(std::thread(&hyper_stub::memory_efficient_bulk_load, hstub[i], (int)i, nodes));
-        //}
-        //for (uint64_t i = 0; i < hstub.size(); i++) {
-        //    threads[i].join();
-        //}
+        std::vector<std::thread> threads;
+        for (uint64_t i = 0; i < hstub.size(); i++) {
+            threads.emplace_back(std::thread(&hyper_stub::memory_efficient_bulk_load, hstub[i], (int)i, nodes));
+        }
+        for (uint64_t i = 0; i < hstub.size(); i++) {
+            threads[i].join();
+        }
     }
 
     // Consistency methods
@@ -623,7 +619,6 @@ namespace db
             node_map_mutexes[map_idx].unlock();
 
             migration_mutex.lock();
-            //XXX node_list.erase(node_handle);
             shard_node_count[shard_id - ShardIdIncr]--;
             migration_mutex.unlock();
 
@@ -682,14 +677,12 @@ namespace db
             node_map_mutexes[map_idx].lock();
         }
 
-        // XXX bulk load
-        //auto map_iter = nodes[map_idx].find(node_handle);
-        //if (map_iter == nodes[map_idx].end()) {
-        //    nodes[map_idx][node_handle] = std::vector<node*>(1, new_node);
-        //} else {
-        //    map_iter->second.emplace_back(new_node);
-        //}
-        nodes[map_idx][node_handle] = std::vector<node*>(1, new_node);
+        auto map_iter = nodes[map_idx].find(node_handle);
+        if (map_iter == nodes[map_idx].end()) {
+            nodes[map_idx][node_handle] = std::vector<node*>(1, new_node);
+        } else {
+            map_iter->second.emplace_back(new_node);
+        }
         node_exists_cache[map_idx] = node_handle;
 
         if (!init_load) {
@@ -699,7 +692,6 @@ namespace db
         if (!init_load) {
             migration_mutex.lock();
         }
-        //XXX node_list.emplace(node_handle);
         shard_node_count[shard_id - ShardIdIncr]++;
         if (!init_load) {
             migration_mutex.unlock();
@@ -769,17 +761,6 @@ namespace db
     }
 
     inline void
-    shard :: create_edge_bulk_load(node *n,
-        const edge_handle_t &handle,
-        const node_handle_t &remote_node, uint64_t remote_loc,
-        vc::vclock &vclk,
-        bool)
-    {
-        edge *new_edge = new edge(handle, vclk, remote_loc, remote_node);
-        n->add_edge_unique(new_edge);
-    }
-
-    inline void
     shard :: create_edge(const edge_handle_t &handle,
         const node_handle_t &local_node,
         const node_handle_t &remote_node, uint64_t remote_loc,
@@ -805,18 +786,28 @@ namespace db
     }
 
     inline void
+    shard :: create_edge_bulk_load(node *n,
+        const edge_handle_t &handle,
+        const node_handle_t &remote_node, uint64_t remote_loc,
+        vc::vclock &vclk,
+        bool)
+    {
+        edge *new_edge = new edge(handle, vclk, remote_loc, remote_node);
+        n->add_edge_unique(new_edge);
+    }
+
+    inline void
     shard :: delete_edge_nonlocking(node *n,
         const edge_handle_t &edge_handle,
         vc::vclock &tdel)
     {
-        // XXX benchmark
         // already_exec check for fault tolerance
-        //auto out_edge_iter = n->out_edges.find(edge_handle);
-        //assert(out_edge_iter != n->out_edges.end());
-        //assert(!out_edge_iter->second.empty());
-        //edge *e = out_edge_iter->second.back();
-        //assert(!e->base.get_del_time());
-        //e->base.update_del_time(tdel);
+        auto out_edge_iter = n->out_edges.find(edge_handle);
+        assert(out_edge_iter != n->out_edges.end());
+        assert(!out_edge_iter->second.empty());
+        edge *e = out_edge_iter->second.back();
+        assert(!e->base.get_del_time());
+        e->base.update_del_time(tdel);
     }
 
     inline void
@@ -878,13 +869,12 @@ namespace db
         std::string &key, std::string &value,
         vc::vclock &vclk)
     {
-        // XXX benchmark
-        //auto out_edge_iter = n->out_edges.find(edge_handle);
-        //assert(out_edge_iter != n->out_edges.end());
-        //assert(!out_edge_iter->second.empty());
-        //edge *e = out_edge_iter->second.back();
-        //assert(!e->base.get_del_time());
-        //e->base.add_property(key, value, vclk);
+        auto out_edge_iter = n->out_edges.find(edge_handle);
+        assert(out_edge_iter != n->out_edges.end());
+        assert(!out_edge_iter->second.empty());
+        edge *e = out_edge_iter->second.back();
+        assert(!e->base.get_del_time());
+        e->base.add_property(key, value, vclk);
     }
 
     inline void
@@ -907,6 +897,16 @@ namespace db
             set_edge_property_nonlocking(n, edge_handle, *key, *value, vclk);
             release_node_write(n);
         }
+    }
+
+    inline void
+    shard :: set_edge_property_bulk_load(node *n,
+        const edge_handle_t &edge_handle,
+        std::string &key, std::string &value,
+        vc::vclock &vclk)
+    {
+        edge *e = n->out_edges[edge_handle].back();
+        e->base.add_property(key, value, vclk);
     }
 
     void
@@ -959,11 +959,11 @@ namespace db
         n->permanently_deleted = true;
         // deleting edges now so as to prevent sending messages to neighbors for permanent edge deletion
         // rest of deletion happens in release_node()
-        //XXX benchmark for (auto &x: n->out_edges) {
-        //XXX benchmark     for (db::edge *e: x.second) {
-        //XXX benchmark         delete e;
-        //XXX benchmark     }
-        //XXX benchmark }
+        for (auto &x: n->out_edges) {
+            for (db::edge *e: x.second) {
+                delete e;
+            }
+        }
         n->out_edges.clear();
         release_node(n);
     }
@@ -1035,47 +1035,46 @@ namespace db
                     n = acquire_node_specific(dobj->node, &dobj->version, nullptr);
                     if (n != nullptr) {
                         n->permanently_deleted = true;
-                        //XXX for (auto &x: n->out_edges) {
-                        //XXX     for (db::edge *e: x.second) {
-                        //XXX         // XXX const node_handle_t &remote_node = e->nbr.handle;
-                        //XXX         node_version_t local_node = std::make_pair(dobj->node, e->base.get_creat_time());
-                        //XXX         // XXX remove_from_edge_map(remote_node, local_node);
-                        //XXX     }
-                        //XXX }
+                        for (auto &x: n->out_edges) {
+                            for (db::edge *e: x.second) {
+                                // XXX const node_handle_t &remote_node = e->nbr.handle;
+                                node_version_t local_node = std::make_pair(dobj->node, e->base.get_creat_time());
+                                // XXX remove_from_edge_map(remote_node, local_node);
+                            }
+                        }
                         release_node(n);
                     }
                     break;
 
                 case transaction::EDGE_DELETE_REQ:
                     n = acquire_node_specific(dobj->node, &dobj->version, nullptr);
-                    // XXX
-                    //if (n != nullptr) {
-                    //    auto map_iter = n->out_edges.find(dobj->edge);
-                    //    assert(map_iter != n->out_edges.end());
+                    if (n != nullptr) {
+                        auto map_iter = n->out_edges.find(dobj->edge);
+                        assert(map_iter != n->out_edges.end());
 
-                    //    edge *e = nullptr;
-                    //    auto edge_iter = map_iter->second.begin();
-                    //    for (; edge_iter != map_iter->second.end(); edge_iter++) {
-                    //        const std::unique_ptr<vc::vclock> &tdel = (*edge_iter)->base.get_del_time();
-                    //        if (tdel && *tdel == dobj->tdel) {
-                    //            e = *edge_iter;
-                    //            break;
-                    //        }
-                    //    }
-                    //    assert(e);
+                        edge *e = nullptr;
+                        auto edge_iter = map_iter->second.begin();
+                        for (; edge_iter != map_iter->second.end(); edge_iter++) {
+                            const std::unique_ptr<vc::vclock> &tdel = (*edge_iter)->base.get_del_time();
+                            if (tdel && *tdel == dobj->tdel) {
+                                e = *edge_iter;
+                                break;
+                            }
+                        }
+                        assert(e);
 
-                    //    if (n->last_perm_deletion == nullptr
-                    //     || time_oracle->compare_two_vts(*n->last_perm_deletion, *e->base.get_del_time()) == 0) {
-                    //        n->last_perm_deletion.reset(new vc::vclock(*e->base.get_del_time()));
-                    //    }
+                        if (n->last_perm_deletion == nullptr
+                         || time_oracle->compare_two_vts(*n->last_perm_deletion, *e->base.get_del_time()) == 0) {
+                            n->last_perm_deletion.reset(new vc::vclock(*e->base.get_del_time()));
+                        }
 
-                    //    delete e;
-                    //    map_iter->second.erase(edge_iter);
-                    //    if (map_iter->second.empty()) {
-                    //        n->out_edges.erase(dobj->edge);
-                    //    }
-                    //    release_node(n);
-                    //}
+                        delete e;
+                        map_iter->second.erase(edge_iter);
+                        if (map_iter->second.empty()) {
+                            n->out_edges.erase(dobj->edge);
+                        }
+                        release_node(n);
+                    }
                     break;
 
                 default:
@@ -1109,11 +1108,11 @@ namespace db
         assert(!n->in_use);
         // this code isn't executed in case of deletion of migrated nodes
         if (n->state != node::mode::MOVED) {
-            //XXX for (auto &x: n->out_edges) {
-            //XXX     for (db::edge *e: x.second) {
-            //XXX         delete e;
-            //XXX     }
-            //XXX }
+            for (auto &x: n->out_edges) {
+                for (db::edge *e: x.second) {
+                    delete e;
+                }
+            }
             n->out_edges.clear();
         }
         delete n;
@@ -1125,13 +1124,13 @@ namespace db
     inline void
     shard :: update_migrated_nbr_nonlocking(node *n, const node_handle_t &migr_node, uint64_t old_loc, uint64_t new_loc)
     {
-        //XXX for (auto &x: n->out_edges) {
-        //XXX     for (db::edge *e: x.second) {
-        //XXX         if (e->nbr.handle == migr_node && e->nbr.loc == old_loc) {
-        //XXX             e->nbr.loc = new_loc;
-        //XXX         }
-        //XXX     }
-        //XXX }
+        for (auto &x: n->out_edges) {
+            for (db::edge *e: x.second) {
+                if (e->nbr.handle == migr_node && e->nbr.loc == old_loc) {
+                    e->nbr.loc = new_loc;
+                }
+            }
+        }
     }
 
     inline void

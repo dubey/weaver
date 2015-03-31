@@ -34,6 +34,7 @@ init_config_constants(const char *config_file_name)
     AuxIndex = false;
     BulkLoadPropertyValueDelimiter = (char)0;
     BulkLoadNodeAliasKey = "";
+    BulkLoadEdgeHandlePrefix = "e";
 
     FILE *config_file = nullptr;
     if (config_file_name != nullptr) {
@@ -206,6 +207,11 @@ init_config_constants(const char *config_file_name)
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_STRING(BulkLoadNodeAliasKey);
+
+                } else if (strncmp((const char*)token.data.scalar.value, "bulk_load_edge_handle_prefix", TOKEN_STRCMP_LEN(28)) == 0) {
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
+                    PARSE_STRING(BulkLoadEdgeHandlePrefix);
 
                 } else {
                     WDEBUG << "unexpected key " << token.data.scalar.value << std::endl;

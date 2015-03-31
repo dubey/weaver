@@ -16,17 +16,15 @@
 
 #include <stdint.h>
 #include <iterator>
-#include <google/dense_hash_map>
 
-#include "common/utils.h"
 #include "db/edge.h"
+#include "db/types.h"
 #include "common/event_order.h"
 #include "node_prog/edge.h"
 
 namespace node_prog
 {
-    //typedef google::dense_hash_map<edge_handle_t, std::vector<db::edge*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> edge_map_t;
-    typedef std::vector<db::edge*> edge_map_t;
+    using edge_map_t = db::data_map<std::vector<db::edge*>>;
     class edge_map_iter : public std::iterator<std::input_iterator_tag, edge>
     {
         db::edge *cur_edge;

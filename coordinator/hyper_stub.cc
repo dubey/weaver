@@ -61,10 +61,13 @@ void
 hyper_stub :: clean_up(std::unordered_map<node_handle_t, db::node*> &nodes)
 {
     for (auto &p: nodes) {
-        for (db::edge *e: p.second->out_edges) {
-            delete e;
+        for (auto &x: p.second->out_edges) {
+            for (db::edge *e: x.second) {
+                delete e;
+            }
         }
         p.second->out_edges.clear();
+        delete p.second;
     }
     nodes.clear();
 }
@@ -219,11 +222,10 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 CHECK_LOC(upd->loc2, upd->handle2, upd->alias2);
                 GET_NODE(upd->handle1);
 
-                // XXX fix for fast bulk load
-                //if (n->out_edges.find(upd->handle) != n->out_edges.end()) {
-                //    WDEBUG << "edge with handle " << upd->handle << " already exists at node " << upd->handle1 << std::endl;
-                //    ERROR_FAIL;
-                //}
+                if (n->out_edges.find(upd->handle) != n->out_edges.end()) {
+                    WDEBUG << "edge with handle " << upd->handle << " already exists at node " << upd->handle1 << std::endl;
+                    ERROR_FAIL;
+                }
                 n->add_edge(new db::edge(upd->handle, tx->timestamp, upd->loc2, upd->handle2));
 
                 if (AuxIndex) {
@@ -262,12 +264,11 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 }
                 GET_NODE(upd->handle2);
 
-                // XXX fix for fast bulk load
-                //if (n->out_edges.find(upd->handle1) == n->out_edges.end()) {
-                //    WDEBUG << "edge with handle " << upd->handle1 << " does not exist at node " << upd->handle2 << std::endl;
-                //    ERROR_FAIL;
-                //}
-                //n->out_edges.erase(upd->handle1);
+                if (n->out_edges.find(upd->handle1) == n->out_edges.end()) {
+                    WDEBUG << "edge with handle " << upd->handle1 << " does not exist at node " << upd->handle2 << std::endl;
+                    ERROR_FAIL;
+                }
+                n->out_edges.erase(upd->handle1);
 
                 if (AuxIndex) {
                     idx_del.emplace_back(upd->handle1);
@@ -284,15 +285,14 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 }
                 GET_NODE(upd->handle2);
 
-                // XXX fix for fast bulk load
-                //if (n->out_edges.find(upd->handle1) == n->out_edges.end()) {
-                //    WDEBUG << "edge with handle " << upd->handle1 << " does not exist at node " << upd->handle2 << std::endl;
-                //    ERROR_FAIL;
-                //}
-                //if (!n->out_edges[upd->handle1].front()->base.add_property(*upd->key, *upd->value, tx->timestamp)) {
-                //    WDEBUG << "property " << *upd->key << ": " << *upd->value << " already exists at edge " << upd->handle1 << std::endl;
-                //    ERROR_FAIL;
-                //}
+                if (n->out_edges.find(upd->handle1) == n->out_edges.end()) {
+                    WDEBUG << "edge with handle " << upd->handle1 << " does not exist at node " << upd->handle2 << std::endl;
+                    ERROR_FAIL;
+                }
+                if (!n->out_edges[upd->handle1].front()->base.add_property(*upd->key, *upd->value, tx->timestamp)) {
+                    WDEBUG << "property " << *upd->key << ": " << *upd->value << " already exists at edge " << upd->handle1 << std::endl;
+                    ERROR_FAIL;
+                }
                 break;
 
             case transaction::ADD_AUX_INDEX:
@@ -336,10 +336,9 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         }
 
         for (auto &x: n->out_edges) {
-            delete x;
-            //for (db::edge *e: x.second) {
-            //    delete e;
-            //}
+            for (db::edge *e: x.second) {
+                delete e;
+            }
         }
         n->out_edges.clear();
         delete n;

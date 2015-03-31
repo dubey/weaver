@@ -47,7 +47,6 @@ namespace transaction
 
     struct nop_data
     {
-        uint64_t max_done_id;
         vc::vclock_t max_done_clk;
         uint64_t outstanding_progs;
         std::unordered_map<uint64_t, done_req_t> done_reqs;

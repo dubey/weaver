@@ -42,9 +42,8 @@ node :: node(const node_handle_t &_handle, uint64_t shrd, vc::vclock &vclk, po6:
     , last_perm_deletion(nullptr)
 {
     std::string empty("");
-    //out_edges.set_deleted_key(empty);
+    out_edges.set_deleted_key(empty);
     aliases.set_deleted_key(empty);
-    //out_edges.set_empty_key("BAZINGA"); // XXX
 }
 
 node :: ~node()
@@ -55,21 +54,19 @@ node :: ~node()
 void
 node :: add_edge_unique(edge *e)
 {
-    //out_edges[e->get_handle()] = std::vector<edge*>(1,e);
-    out_edges.emplace_back(e);
+    out_edges[e->get_handle()] = std::vector<edge*>(1,e);
 }
 
 void
 node :: add_edge(edge *e)
 {
-    out_edges.emplace_back(e);
-    //auto iter = out_edges.find(e->get_handle());
-    //if (iter == out_edges.end()) {
-    //    out_edges[e->get_handle()] = std::vector<edge*>(1, e);
-    //} else {
-    //    assert(iter->second.back()->base.get_del_time() && "cannot create two concurrent edges with same handle");
-    //    iter->second.emplace_back(e);
-    //}
+    auto iter = out_edges.find(e->get_handle());
+    if (iter == out_edges.end()) {
+        out_edges[e->get_handle()] = std::vector<edge*>(1, e);
+    } else {
+        assert(iter->second.back()->base.get_del_time() && "cannot create two concurrent edges with same handle");
+        iter->second.emplace_back(e);
+    }
 }
 
 node_prog::edge_list
@@ -175,6 +172,5 @@ node :: get_client_node(cl::node &n, bool get_p, bool get_e, bool get_a)
         for (const node_handle_t &h: aliases) {
             n.aliases.emplace(h);
         }
-        //n.aliases = aliases;
     }
 }

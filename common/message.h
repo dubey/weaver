@@ -20,6 +20,7 @@
 #include <unordered_set>
 #include <unordered_map>
 #include <google/sparse_hash_set>
+#include <google/sparse_hash_map>
 #include <google/dense_hash_map>
 #include <queue>
 #include <string>
@@ -148,9 +149,10 @@ namespace message
     uint64_t size(const std::shared_ptr<transaction::nop_data> &ptr_t);
     uint64_t size(const transaction::pending_tx &t);
     uint64_t size(const std::vector<bool> &t);
-    template <typename T1, typename T2> inline uint64_t size(const std::unordered_map<T1, T2>& t);
     template <typename T> inline uint64_t size(const std::unordered_set<T>& t);
     template <typename T1, typename T2, typename T3> inline uint64_t size(const google::sparse_hash_set<T1, T2, T3>& t);
+    template <typename T1, typename T2> inline uint64_t size(const std::unordered_map<T1, T2>& t);
+    template <typename T1, typename T2, typename T3, typename T4> inline uint64_t size(const google::sparse_hash_map<T1, T2, T3, T4>& t);
     template <typename T1, typename T2, typename T3, typename T4> inline uint64_t size(const google::dense_hash_map<T1, T2, T3, T4>& t);
     template <typename T> inline uint64_t size(const std::vector<T>& t);
     template <typename T> inline uint64_t size(const std::deque<T>& t);
@@ -193,9 +195,10 @@ namespace message
     void pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::nop_data> &ptr_t);
     void pack_buffer(e::buffer::packer &packer, const transaction::pending_tx &t);
     void pack_buffer(e::buffer::packer &packer, const std::vector<bool> &t);
-    template <typename T1, typename T2> void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T>& t);
     template <typename T1, typename T2, typename T3> inline void pack_buffer(e::buffer::packer&, const google::sparse_hash_set<T1, T2, T3>& t);
+    template <typename T1, typename T2> void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
+    template <typename T1, typename T2, typename T3, typename T4> inline void pack_buffer(e::buffer::packer&, const google::sparse_hash_map<T1, T2, T3, T4>& t);
     template <typename T1, typename T2, typename T3, typename T4> inline void pack_buffer(e::buffer::packer&, const google::dense_hash_map<T1, T2, T3, T4>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::vector<T>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::deque<T>& t);
@@ -238,9 +241,10 @@ namespace message
     void unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::nop_data> &ptr_t);
     void unpack_buffer(e::unpacker &unpacker, transaction::pending_tx &t);
     void unpack_buffer(e::unpacker &unpacker, std::vector<bool> &t);
-    template <typename T1, typename T2> void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
     template <typename T> void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
     template <typename T1, typename T2, typename T3> void unpack_buffer(e::unpacker&, google::sparse_hash_set<T1, T2, T3>& t);
+    template <typename T1, typename T2> void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
+    template <typename T1, typename T2, typename T3, typename T4> void unpack_buffer(e::unpacker&, google::sparse_hash_map<T1, T2, T3, T4>& t);
     template <typename T1, typename T2, typename T3, typename T4> void unpack_buffer(e::unpacker&, google::dense_hash_map<T1, T2, T3, T4>& t);
     template <typename T> void unpack_buffer(e::unpacker& unpacker, std::vector<T>& t);
     template <typename T> void unpack_buffer(e::unpacker& unpacker, std::deque<T>& t);
@@ -293,49 +297,53 @@ namespace message
         return sz;
     }
 
-    template <typename T>
-    inline uint64_t size(const std::unordered_set<T> &t)
+#define SET_SZ \
+    uint64_t total_size = sizeof(uint32_t); \
+    for (const T1 &elem : t) { \
+        total_size += size(elem); \
+    } \
+    return total_size;
+
+    template <typename T1>
+    inline uint64_t size(const std::unordered_set<T1> &t)
     {
-        // O(n) size operation can handle elements of differing sizes
-        uint64_t total_size = sizeof(uint32_t);
-        for (const T &elem : t) {
-            total_size += size(elem);
-        }
-        return total_size;
+        SET_SZ;
     }
 
     template <typename T1, typename T2, typename T3>
     inline uint64_t size(const google::sparse_hash_set<T1,T2,T3> &t)
     {
-        // O(n) size operation can handle elements of differing sizes
-        uint64_t total_size = sizeof(uint32_t);
-        for (const T1 &elem : t) {
-            total_size += size(elem);
-        }
-        return total_size;
+        SET_SZ;
     }
+
+#undef SET_SZ
+
+#define MAP_SZ \
+    uint64_t total_size = sizeof(uint32_t); \
+    for (const std::pair<const T1, T2> &pair : t) { \
+        total_size += size(pair.first) + size(pair.second); \
+    } \
+    return total_size;
 
     template <typename T1, typename T2>
     inline uint64_t size(const std::unordered_map<T1, T2> &t)
     {
-        // O(n) size operation can handle keys and values of differing sizes
-        uint64_t total_size = sizeof(uint32_t);
-        for (const std::pair<const T1, T2> &pair : t) {
-            total_size += size(pair.first) + size(pair.second);
-        }
-        return total_size;
+        MAP_SZ;
+    }
+
+    template <typename T1, typename T2, typename T3, typename T4>
+    inline uint64_t size(const google::sparse_hash_map<T1,T2,T3,T4> &t)
+    {
+        MAP_SZ;
     }
 
     template <typename T1, typename T2, typename T3, typename T4>
     inline uint64_t size(const google::dense_hash_map<T1,T2,T3,T4> &t)
     {
-        // O(n) size operation can handle elements of differing sizes
-        uint64_t total_size = sizeof(uint32_t);
-        for (const std::pair<const T1, T2> &pair : t) {
-            total_size += size(pair.first) + size(pair.second);
-        }
-        return total_size;
+        MAP_SZ;
     }
+
+#undef MAP_SZ
 
     template <typename T>
     inline uint64_t size(const std::vector<T> &t)
@@ -467,55 +475,61 @@ namespace message
         }
     }
 
-    template <typename T>
+#define SET_PACK \
+    assert(t.size() <= UINT32_MAX); \
+    uint32_t num_keys = t.size(); \
+    pack_buffer(packer, num_keys); \
+    for (const T1 &elem : t) { \
+        pack_buffer(packer, elem); \
+    }
+
+    template <typename T1>
     inline void 
-    pack_buffer(e::buffer::packer &packer, const std::unordered_set<T> &t)
+    pack_buffer(e::buffer::packer &packer, const std::unordered_set<T1> &t)
     {
-        assert(t.size() <= UINT32_MAX);
-        uint32_t num_keys = t.size();
-        pack_buffer(packer, num_keys);
-        for (const T &elem : t) {
-            pack_buffer(packer, elem);
-        }
+        SET_PACK;
     }
 
     template <typename T1, typename T2, typename T3>
     inline void 
     pack_buffer(e::buffer::packer &packer, const google::sparse_hash_set<T1, T2, T3> &t)
     {
-        assert(t.size() <= UINT32_MAX);
-        uint32_t num_keys = t.size();
-        pack_buffer(packer, num_keys);
-        for (const T1 &elem : t) {
-            pack_buffer(packer, elem);
-        }
+        SET_PACK;
+    }
+
+#undef SET_PACK
+
+#define MAP_PACK \
+    assert(t.size() <= UINT32_MAX); \
+    uint32_t num_keys = t.size(); \
+    pack_buffer(packer, num_keys); \
+    for (const std::pair<const T1, T2> &pair : t) { \
+        pack_buffer(packer, pair.first); \
+        pack_buffer(packer, pair.second); \
     }
 
     template <typename T1, typename T2>
     inline void 
     pack_buffer(e::buffer::packer &packer, const std::unordered_map<T1, T2> &t)
     {
-        assert(t.size() <= UINT32_MAX);
-        uint32_t num_keys = t.size();
-        pack_buffer(packer, num_keys);
-        for (const std::pair<const T1, T2> &pair : t) {
-            pack_buffer(packer, pair.first);
-            pack_buffer(packer, pair.second);
-        }
+        MAP_PACK;
+    }
+
+    template <typename T1, typename T2, typename T3, typename T4>
+    inline void 
+    pack_buffer(e::buffer::packer &packer, const google::sparse_hash_map<T1, T2, T3, T4> &t)
+    {
+        MAP_PACK;
     }
 
     template <typename T1, typename T2, typename T3, typename T4>
     inline void 
     pack_buffer(e::buffer::packer &packer, const google::dense_hash_map<T1, T2, T3, T4> &t)
     {
-        assert(t.size() <= UINT32_MAX);
-        uint32_t num_keys = t.size();
-        pack_buffer(packer, num_keys);
-        for (const std::pair<const T1, T2> &pair : t) {
-            pack_buffer(packer, pair.first);
-            pack_buffer(packer, pair.second);
-        }
+        MAP_PACK;
     }
+
+#undef MAP_PACK
 
     // base case for recursive pack_buffer_wrapper()
     template <typename T>
@@ -649,77 +663,68 @@ namespace message
         }
     }
 
-    template <typename T>
+#define SET_UNPACK \
+    assert(t.size() == 0); \
+    uint32_t elements_left; \
+    unpack_buffer(unpacker, elements_left); \
+    while (elements_left > 0) { \
+        T1 new_elem; \
+        unpack_buffer(unpacker, new_elem); \
+        t.insert(new_elem); \
+        elements_left--; \
+    }
+
+    template <typename T1>
     inline void 
-    unpack_buffer(e::unpacker &unpacker, std::unordered_set<T> &t)
+    unpack_buffer(e::unpacker &unpacker, std::unordered_set<T1> &t)
     {
-        assert(t.size() == 0);
-        uint32_t elements_left;
-        unpack_buffer(unpacker, elements_left);
-
-        t.reserve(elements_left);
-
-        while (elements_left > 0) {
-            T new_elem;
-            unpack_buffer(unpacker, new_elem);
-            t.emplace(new_elem);
-            elements_left--;
-        }
+        SET_UNPACK;
     }
 
     template <typename T1, typename T2, typename T3>
     inline void
     unpack_buffer(e::unpacker &unpacker, google::sparse_hash_set<T1,T2,T3> &t)
     {
-        assert(t.size() == 0);
-        uint32_t elements_left;
-        unpack_buffer(unpacker, elements_left);
+        SET_UNPACK;
+    }
 
-        while (elements_left > 0) {
-            T1 new_elem;
-            unpack_buffer(unpacker, new_elem);
-            t.insert(new_elem);
-            elements_left--;
-        }
+#undef SET_UNPACK
+
+#define MAP_UNPACK \
+    assert(t.size() == 0); \
+    uint32_t elements_left; \
+    unpack_buffer(unpacker, elements_left); \
+    while (elements_left > 0) { \
+        T1 key_to_add; \
+        T2 val_to_add; \
+        unpack_buffer(unpacker, key_to_add); \
+        unpack_buffer(unpacker, val_to_add); \
+        t[key_to_add] = val_to_add; \
+        elements_left--; \
     }
 
     template <typename T1, typename T2>
     inline void 
     unpack_buffer(e::unpacker &unpacker, std::unordered_map<T1, T2> &t)
     {
-        assert(t.size() == 0);
-        uint32_t elements_left;
-        unpack_buffer(unpacker, elements_left);
+        MAP_UNPACK;
+    }
 
-        t.reserve(elements_left);
-
-        while (elements_left > 0) {
-            T1 key_to_add;
-            unpack_buffer(unpacker, key_to_add);
-            auto retPair = t.emplace(std::piecewise_construct, std::forward_as_tuple(key_to_add),
-              std::forward_as_tuple()); // emplace key with no-arg constructor value
-            unpack_buffer(unpacker, retPair.first->second); // unpacks value in place in map
-            elements_left--;
-        }
+    template <typename T1, typename T2, typename T3, typename T4>
+    inline void
+    unpack_buffer(e::unpacker &unpacker, google::sparse_hash_map<T1,T2,T3,T4> &t)
+    {
+        MAP_UNPACK;
     }
 
     template <typename T1, typename T2, typename T3, typename T4>
     inline void
     unpack_buffer(e::unpacker &unpacker, google::dense_hash_map<T1,T2,T3,T4> &t)
     {
-        assert(t.size() == 0);
-        uint32_t elements_left;
-        unpack_buffer(unpacker, elements_left);
-
-        while (elements_left > 0) {
-            T1 key_to_add;
-            T2 val_to_add;
-            unpack_buffer(unpacker, key_to_add);
-            unpack_buffer(unpacker, val_to_add);
-            t[key_to_add] = val_to_add;
-            elements_left--;
-        }
+        MAP_UNPACK;
     }
+
+#undef MAP_UNPACK
 
     // base case for recursive unpack_buffer_wrapper()
     template <typename T>
