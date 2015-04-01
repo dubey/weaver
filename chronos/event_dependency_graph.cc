@@ -37,6 +37,7 @@
 #include <algorithm>
 #include <queue>
 
+#define weaver_debug_
 // Chronos
 #include "common/weaver_constants.h"
 #include "event_dependency_graph.h"
@@ -128,7 +129,7 @@ event_dependency_graph :: add_edge(uint64_t src_event_id, uint64_t dst_event_id)
     found = map(dst_event_id, &inner_dst);
     assert(found);
 
-    //XXX poke_cache(src_event_id, dst_event_id);
+    poke_cache(src_event_id, dst_event_id);
     uint64_t* edges = m_edges[inner_src];
 
     if (!edges)
@@ -214,18 +215,15 @@ event_dependency_graph :: remove_edge(uint64_t src_event_id, uint64_t dst_event_
 int
 event_dependency_graph :: compute_order(uint64_t lhs_event_id, uint64_t rhs_event_id)
 {
-    // XXX
-    //if (check_cache(lhs_event_id, rhs_event_id))
-    //{
-    //    WDEBUG << "check cache " << lhs_event_id << " " << rhs_event_id << std::endl;
-    //    return -1;
-    //}
+    if (check_cache(lhs_event_id, rhs_event_id))
+    {
+        return -1;
+    }
 
-    //if (check_cache(rhs_event_id, lhs_event_id))
-    //{
-    //    WDEBUG << "check cache " << rhs_event_id << " " << lhs_event_id << std::endl;
-    //    return 1;
-    //}
+    if (check_cache(rhs_event_id, lhs_event_id))
+    {
+        return 1;
+    }
 
     uint64_t inner_lhs;
     uint64_t inner_rhs;
@@ -239,13 +237,13 @@ event_dependency_graph :: compute_order(uint64_t lhs_event_id, uint64_t rhs_even
 
     if (bfs(inner_lhs, inner_rhs, &dense_sz))
     {
-        //XXX poke_cache(lhs_event_id, rhs_event_id);
+        poke_cache(lhs_event_id, rhs_event_id);
         return -1;
     }
 
     if (bfs(inner_rhs, inner_lhs, &dense_sz))
     {
-        //XXX poke_cache(rhs_event_id, lhs_event_id);
+        poke_cache(rhs_event_id, lhs_event_id);
         return 1;
     }
 
