@@ -32,12 +32,8 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     , tx_id_ctr(0)
     , handle_ctr(0)
 {
-    google::InitGoogleLogging("weaver-client");
-    google::InstallFailureSignalHandler();
-    google::LogToStderr();
-
     if (!init_config_constants(config_file)) {
-        WDEBUG << "error in init_config_constants, exiting now." << std::endl;
+        std::cerr << "error in init_config_constants, exiting now." << std::endl;
         exit(-1);
     }
 
@@ -52,10 +48,23 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
 
     int try_sm = 0;
     while (!maintain_sm_connection()) {
-        WDEBUG << "retry sm connection " << try_sm++ << std::endl;
+        std::cerr << "retry sm connection " << try_sm++ << std::endl;
     }
 
     comm.reset(new cl::comm_wrapper(myid, *m_sm.config()));
+}
+
+// call once per application, even with multiple clients
+void
+client :: initialize_logging(const char *log_file_name)
+{
+    google::InitGoogleLogging("weaver-client");
+    google::InstallFailureSignalHandler();
+    if (log_file_name == nullptr) {
+        google::LogToStderr();
+    } else {
+        google::SetLogDestination(google::INFO, log_file_name);
+    }
 }
 
 bool

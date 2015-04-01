@@ -24,8 +24,8 @@ hyper_stub :: hyper_stub(uint64_t sid)
 { }
 
 void
-hyper_stub :: restore_backup(google::sparse_hash_map<node_handle_t, std::vector<node*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> *nodes,
-    std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,
+hyper_stub :: restore_backup(db::data_map<std::vector<node*>> *nodes,
+    /*XXX std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,*/
     po6::threads::mutex *shard_mutexes)
 {
     const hyperdex_client_attribute *cl_attr;
@@ -103,12 +103,12 @@ hyper_stub :: restore_backup(google::sparse_hash_map<node_handle_t, std::vector<
             n = new node(node_handle, UINT64_MAX, dummy_clock, shard_mutexes+map_idx);
             recreate_node(node_attrs, *n);
 
-            // edge map
-            for (const auto &p: n->out_edges) {
-                assert(p.second.size() == 1);
-                edge *e = p.second.front();
-                edge_map[e->nbr.handle].emplace(std::make_pair(node_handle, e->base.get_creat_time()));
-            }
+            //XXX edge map
+            //for (const auto &p: n->out_edges) {
+            //    assert(p.second.size() == 1);
+            //    edge *e = p.second.front();
+            //    edge_map[e->nbr.handle].emplace(std::make_pair(node_handle, e->base.get_creat_time()));
+            //}
 
             // node map
             auto &node_map = nodes[map_idx];
@@ -125,7 +125,7 @@ hyper_stub :: restore_backup(google::sparse_hash_map<node_handle_t, std::vector<
 }
 
 void
-hyper_stub :: memory_efficient_bulk_load(int thread_id, google::sparse_hash_map<node_handle_t, std::vector<node*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> *nodes_arr)
+hyper_stub :: memory_efficient_bulk_load(int thread_id, db::data_map<std::vector<node*>> *nodes_arr)
 {
     WDEBUG << "starting HyperDex bulk load." << std::endl;
     assert(NUM_NODE_MAPS % NUM_SHARD_THREADS == 0);

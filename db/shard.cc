@@ -280,10 +280,10 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                         edge_handle_t edge_handle = BulkLoadEdgeHandlePrefix + std::to_string(edge_count);
                         db::node *n = S->bulk_load_acquire_node_nonlocking(id0, map_idx);
                         if (n == nullptr) {
-                            n = S->create_node_bulk_load(id0, map_idx, zero_clk, false);
+                            n = S->create_node_bulk_load(id0, map_idx, zero_clk);
                             cur_shard_node_count++;
                         }
-                        S->create_edge_bulk_load(n, edge_handle, id1, loc1, zero_clk, true);
+                        S->create_edge_bulk_load(n, edge_handle, id1, loc1, zero_clk);
                         cur_shard_edge_count++;
                     }
 
@@ -291,7 +291,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                         uint64_t map_idx = hash1 % NUM_NODE_MAPS;
                         if ((int)map_idx % load_nthreads == load_tid) {
                             if (!S->bulk_load_node_exists_nonlocking(id1, map_idx)) {
-                                S->create_node_bulk_load(id1, map_idx, zero_clk, false);
+                                S->create_node_bulk_load(id1, map_idx, zero_clk);
                                 cur_shard_node_count++;
                             }
                         }
@@ -319,7 +319,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 if ((loc == shard_id) && ((int)map_idx % load_nthreads == load_tid)) {
                     db::node *n = S->bulk_load_acquire_node_nonlocking(id0, map_idx);
                     assert(n == nullptr);
-                    n = S->create_node_bulk_load(id0, map_idx, zero_clk, false);
+                    n = S->create_node_bulk_load(id0, map_idx, zero_clk);
 
                     bool prop_delim = (BulkLoadPropertyValueDelimiter != '\0');
                     for (pugi::xml_node prop: node.children("data")) {
@@ -368,7 +368,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
 
                     db::node *n = S->bulk_load_acquire_node_nonlocking(id0, map_idx);
                     assert(n != nullptr);
-                    S->create_edge_bulk_load(n, edge_handle, id1, loc1, zero_clk, true);
+                    S->create_edge_bulk_load(n, edge_handle, id1, loc1, zero_clk);
 
                     for (pugi::xml_node prop: edge.children("data")) {
                         std::string key = prop.attribute("key").value();
@@ -609,8 +609,7 @@ nop(db::message_wrapper *request)
         }
     }
 
-    // node max done id for migrated node clean up
-    // XXX should this be if or assert
+    // node max done clk for migrated node clean up
     if (order::oracle::equal_or_happens_before_no_kronos(S->max_done_clk[vt_id], nop_arg->max_done_clk)) {
         S->max_done_clk[vt_id] = std::move(nop_arg->max_done_clk);
     }
@@ -2062,27 +2061,6 @@ main(int argc, const char *argv[])
     install_signal_handler(SIGHUP, end_program);
     install_signal_handler(SIGTERM, end_program);
 
-    google::InitGoogleLogging(argv[0]);
-    //google::InstallFailureSignalHandler();
-    google::LogToStderr();
-    //google::SetLogDestination(google::INFO, "weaver-shard-");
-
-    // signals
-    //sigset_t ss;
-    //if (sigfillset(&ss) < 0) {
-    //    WDEBUG << "sigfillset failed" << std::endl;
-    //    return -1;
-    //}
-    //sigdelset(&ss, SIGPROF);
-    //sigdelset(&ss, SIGINT);
-    //sigdelset(&ss, SIGHUP);
-    //sigdelset(&ss, SIGTERM);
-    //sigdelset(&ss, SIGTSTP);
-    //if (pthread_sigmask(SIG_SETMASK, &ss, nullptr) < 0) {
-    //    WDEBUG << "pthread sigmask failed" << std::endl;
-    //    return -1;
-    //}
-
     // command line params
     const char* listen_host = "127.0.0.1";
     long listen_port = 5201;
@@ -2091,6 +2069,7 @@ main(int argc, const char *argv[])
     const char *graph_format = "snap";
     bool backup = false;
     long bulk_load_num_shards = 1;
+    const char *log_file_name = nullptr;
     // arg parsing borrowed from HyperDex
     e::argparser ap;
     ap.autohelp();
@@ -2115,10 +2094,22 @@ main(int argc, const char *argv[])
     ap.arg().long_name("bulk-load-num-shards")
             .description("number of shards during bulk loading (default 1)")
             .metavar("num").as_long(&bulk_load_num_shards);
+    ap.arg().long_name("log-file")
+            .description("full path of file to write log to (default: stderr)")
+            .metavar("filename").as_string(&log_file_name);
 
     if (!ap.parse(argc, argv) || ap.args_sz() != 0) {
-        WDEBUG << "args parsing failure" << std::endl;
+        std::cerr << "args parsing failure" << std::endl;
         return -1;
+    }
+
+    google::InitGoogleLogging(argv[0]);
+    google::InstallFailureSignalHandler();
+
+    if (log_file_name == nullptr) {
+        google::LogToStderr();
+    } else {
+        google::SetLogDestination(google::INFO, log_file_name);
     }
 
     // configuration file parse

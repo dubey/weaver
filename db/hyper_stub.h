@@ -15,10 +15,10 @@
 #define weaver_db_hyper_stub_h_
 
 #include <po6/threads/mutex.h>
-#include <google/sparse_hash_map>
 
 #include "common/hyper_stub_base.h"
 #include "common/vclock.h"
+#include "db/types.h"
 #include "db/node.h"
 #include "db/edge.h"
 
@@ -37,12 +37,12 @@ namespace db
 
         public:
             hyper_stub(uint64_t sid);
-            void restore_backup(google::sparse_hash_map<node_handle_t, std::vector<node*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> *nodes,
-                std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,
+            void restore_backup(db::data_map<std::vector<node*>> *nodes,
+                /*XXX std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,*/
                 po6::threads::mutex *shard_mutexes);
             // bulk loading
             void bulk_load(int tid, std::unordered_map<node_handle_t, std::vector<node*>> *nodes);
-            void memory_efficient_bulk_load(int tid, google::sparse_hash_map<node_handle_t, std::vector<node*>, weaver_util::murmur_hasher<std::string>, weaver_util::eqstr> *nodes);
+            void memory_efficient_bulk_load(int tid, db::data_map<std::vector<node*>> *nodes);
             // migration
             bool update_mapping(const node_handle_t &handle, uint64_t loc);
     };

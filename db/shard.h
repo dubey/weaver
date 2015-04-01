@@ -111,12 +111,10 @@ namespace db
         public:
             node* create_node(const node_handle_t &node_handle,
                 vc::vclock &vclk,
-                bool migrate,
-                bool init_load);
+                bool migrate);
             node* create_node_bulk_load(const node_handle_t &node_handle,
                 uint64_t map_idx,
-                vc::vclock &vclk,
-                bool migrate);
+                vc::vclock &vclk);
             void delete_node_nonlocking(node *n,
                 vc::vclock &tdel);
             void delete_node(const node_handle_t &node_handle,
@@ -125,8 +123,7 @@ namespace db
             void create_edge_nonlocking(node *n,
                 const edge_handle_t &handle,
                 const node_handle_t &remote_node, uint64_t remote_loc,
-                vc::vclock &vclk,
-                bool init_load=false);
+                vc::vclock &vclk);
             void create_edge(const edge_handle_t &handle,
                 const node_handle_t &local_node,
                 const node_handle_t &remote_node, uint64_t remote_loc,
@@ -135,8 +132,7 @@ namespace db
             void create_edge_bulk_load(node *n,
                 const edge_handle_t &handle,
                 const node_handle_t &remote_node, uint64_t remote_loc,
-                vc::vclock &vclk,
-                bool init_load=false);
+                vc::vclock &vclk);
             void delete_edge_nonlocking(node *n,
                 const edge_handle_t &edge_handle,
                 vc::vclock &tdel);
@@ -644,10 +640,41 @@ namespace db
     // Graph state update methods
 
     inline node*
+    shard :: create_node(const node_handle_t &node_handle,
+        vc::vclock &vclk,
+        bool migrate)
+    {
+        uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
+        node *new_node = new node(node_handle, shard_id, vclk, node_map_mutexes+map_idx);
+
+        node_map_mutexes[map_idx].lock();
+        auto map_iter = nodes[map_idx].find(node_handle);
+        if (map_iter == nodes[map_idx].end()) {
+            nodes[map_idx][node_handle] = std::vector<node*>(1, new_node);
+        } else {
+            map_iter->second.emplace_back(new_node);
+        }
+        node_exists_cache[map_idx] = node_handle;
+        node_map_mutexes[map_idx].unlock();
+
+        migration_mutex.lock();
+        shard_node_count[shard_id - ShardIdIncr]++;
+        migration_mutex.unlock();
+
+        if (!migrate) {
+            new_node->state = node::mode::STABLE;
+#ifdef WEAVER_CLDG
+            new_node->msg_count.resize(get_num_shards(), 0);
+#endif
+            release_node(new_node);
+        }
+        return new_node;
+    }
+
+    inline node*
     shard :: create_node_bulk_load(const node_handle_t &node_handle,
         uint64_t map_idx,
-        vc::vclock &vclk,
-        bool)
+        vc::vclock &vclk)
     {
         node *new_node = new node(node_handle, shard_id, vclk, node_map_mutexes+map_idx);
 
@@ -658,56 +685,9 @@ namespace db
 
         new_node->state = node::mode::STABLE;
 #ifdef WEAVER_CLDG
-            new_node->msg_count.resize(get_num_shards(), 0);
+        new_node->msg_count.resize(get_num_shards(), 0);
 #endif
         new_node->in_use = false;
-        return new_node;
-    }
-
-    inline node*
-    shard :: create_node(const node_handle_t &node_handle,
-        vc::vclock &vclk,
-        bool migrate,
-        bool init_load=false)
-    {
-        uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
-        node *new_node = new node(node_handle, shard_id, vclk, node_map_mutexes+map_idx);
-
-        if (!init_load) {
-            node_map_mutexes[map_idx].lock();
-        }
-
-        auto map_iter = nodes[map_idx].find(node_handle);
-        if (map_iter == nodes[map_idx].end()) {
-            nodes[map_idx][node_handle] = std::vector<node*>(1, new_node);
-        } else {
-            map_iter->second.emplace_back(new_node);
-        }
-        node_exists_cache[map_idx] = node_handle;
-
-        if (!init_load) {
-            node_map_mutexes[map_idx].unlock();
-        }
-
-        if (!init_load) {
-            migration_mutex.lock();
-        }
-        shard_node_count[shard_id - ShardIdIncr]++;
-        if (!init_load) {
-            migration_mutex.unlock();
-        }
-
-        if (!migrate) {
-            new_node->state = node::mode::STABLE;
-#ifdef WEAVER_CLDG
-            new_node->msg_count.resize(get_num_shards(), 0);
-#endif
-            if (!init_load) {
-                release_node(new_node);
-            } else {
-                new_node->in_use = false;
-            }
-        }
         return new_node;
     }
 
@@ -744,8 +724,7 @@ namespace db
     shard :: create_edge_nonlocking(node *n,
         const edge_handle_t &handle,
         const node_handle_t &remote_node, uint64_t remote_loc,
-        vc::vclock &vclk,
-        bool)
+        vc::vclock &vclk)
     {
         edge *new_edge = new edge(handle, vclk, remote_loc, remote_node);
         n->add_edge(new_edge);
@@ -789,8 +768,7 @@ namespace db
     shard :: create_edge_bulk_load(node *n,
         const edge_handle_t &handle,
         const node_handle_t &remote_node, uint64_t remote_loc,
-        vc::vclock &vclk,
-        bool)
+        vc::vclock &vclk)
     {
         edge *new_edge = new edge(handle, vclk, remote_loc, remote_node);
         n->add_edge_unique(new_edge);
@@ -1311,7 +1289,7 @@ namespace db
     inline void
     shard :: restore_backup()
     {
-        //XXX hstub.back()->restore_backup(nodes, edge_map, node_map_mutexes);
+        hstub.back()->restore_backup(nodes, /*XXX edge_map,*/ node_map_mutexes);
     }
 }
 

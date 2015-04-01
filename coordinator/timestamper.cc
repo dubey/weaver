@@ -371,7 +371,6 @@ template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
     unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, coordinator::hyper_stub *hstub)
 {
-    static uint64_t num_shards = get_num_shards();
     vts->restore_mtx.lock();
     if (vts->restore_status > 0) {
         vts->prog_queue->emplace_back(blocked_prog(clientID, std::move(msg)));
@@ -394,55 +393,53 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     std::unordered_set<node_handle_t> get_set;
 
     for (const auto &initial_arg : initial_args) {
-        //get_set.emplace(initial_arg.first);
-        uint64_t loc = (hash_node_handle(initial_arg.first) % num_shards) + ShardIdIncr;
-        loc_map.emplace(initial_arg.first, loc);
+        get_set.emplace(initial_arg.first);
     }
 
-    //if (!get_set.empty()) {
-    //    loc_map = hstub->get_mappings(get_set);
+    if (!get_set.empty()) {
+        loc_map = hstub->get_mappings(get_set);
 
-    //    bool success = true;
-    //    if (loc_map.size() < get_set.size() && AuxIndex) {
-    //        std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> alias_map;
-    //        std::pair<node_handle_t, uint64_t> empty;
-    //        for (const node_handle_t &h: get_set) {
-    //            if (loc_map.find(h) == loc_map.end()) {
-    //                alias_map.emplace(h, empty);
-    //            }
-    //        }
+        bool success = true;
+        if (loc_map.size() < get_set.size() && AuxIndex) {
+            std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> alias_map;
+            std::pair<node_handle_t, uint64_t> empty;
+            for (const node_handle_t &h: get_set) {
+                if (loc_map.find(h) == loc_map.end()) {
+                    alias_map.emplace(h, empty);
+                }
+            }
 
-    //        assert((alias_map.size() + loc_map.size()) == get_set.size());
+            assert((alias_map.size() + loc_map.size()) == get_set.size());
 
-    //        success = hstub->get_idx(alias_map);
+            success = hstub->get_idx(alias_map);
 
-    //        if (success) {
-    //            for (auto &arg: initial_args) {
-    //                auto iter = alias_map.find(arg.first);
-    //                if (iter != alias_map.end()) {
-    //                    arg.first = iter->second.first;
-    //                    loc_map.emplace(iter->second.first, iter->second.second);
-    //                } else {
-    //                    assert(loc_map.find(arg.first) != loc_map.end());
-    //                }
-    //            }
-    //        }
-    //    } else if (loc_map.size() < get_set.size()) {
-    //        success = false;
-    //    }
+            if (success) {
+                for (auto &arg: initial_args) {
+                    auto iter = alias_map.find(arg.first);
+                    if (iter != alias_map.end()) {
+                        arg.first = iter->second.first;
+                        loc_map.emplace(iter->second.first, iter->second.second);
+                    } else {
+                        assert(loc_map.find(arg.first) != loc_map.end());
+                    }
+                }
+            }
+        } else if (loc_map.size() < get_set.size()) {
+            success = false;
+        }
 
-    //    if (!success) {
-    //        // some node handles bad, return immediately
-    //        WDEBUG << "bad node handles in node prog request: ";
-    //        for (auto &h: get_set) {
-    //            std::cerr << h << " ";
-    //        }
-    //        std::cerr << std::endl;
-    //        msg->prepare_message(message::NODE_PROG_NOTFOUND);
-    //        vts->comm.send_to_client(clientID, msg->buf);
-    //        return;
-    //    }
-    //}
+        if (!success) {
+            // some node handles bad, return immediately
+            WDEBUG << "bad node handles in node prog request: ";
+            for (auto &h: get_set) {
+                std::cerr << h << " ";
+            }
+            std::cerr << std::endl;
+            msg->prepare_message(message::NODE_PROG_NOTFOUND);
+            vts->comm.send_to_client(clientID, msg->buf);
+            return;
+        }
+    }
 
     for (const auto &p: initial_args) {
         initial_batches[loc_map[p.first]].emplace_back(p);
@@ -833,32 +830,12 @@ main(int argc, const char *argv[])
     install_signal_handler(SIGHUP, end_program);
     install_signal_handler(SIGTERM, end_program);
 
-    google::InitGoogleLogging(argv[0]);
-    //google::InstallFailureSignalHandler();
-    google::LogToStderr();
-    //google::SetLogDestination(google::INFO, "weaver-timestamper-");
-
-    // signals
-    //sigset_t ss;
-    //if (sigfillset(&ss) < 0) {
-    //    WDEBUG << "sigfillset failed" << std::endl;
-    //    return -1;
-    //}
-    //sigdelset(&ss, SIGPROF);
-    //sigdelset(&ss, SIGINT);
-    //sigdelset(&ss, SIGHUP);
-    //sigdelset(&ss, SIGTERM);
-    //sigdelset(&ss, SIGTSTP);
-    //if (pthread_sigmask(SIG_SETMASK, &ss, nullptr) < 0) {
-    //    WDEBUG << "pthread sigmask failed" << std::endl;
-    //    return -1;
-    //}
-
     // command line params
     const char* listen_host = "127.0.0.1";
     long listen_port = 5200;
     const char *config_file = "./weaver.yaml";
     bool backup = false;
+    const char *log_file_name = nullptr;
     // arg parsing borrowed from HyperDex
     e::argparser ap;
     ap.autohelp();
@@ -874,10 +851,22 @@ main(int argc, const char *argv[])
     ap.arg().long_name("config-file")
             .description("full path of weaver.yaml configuration file (default ./weaver.yaml)")
             .metavar("filename").as_string(&config_file);
+    ap.arg().long_name("log-file")
+            .description("full path of file to write log to (default: stderr)")
+            .metavar("filename").as_string(&log_file_name);
 
     if (!ap.parse(argc, argv) || ap.args_sz() != 0) {
-        WDEBUG << "args parsing failure" << std::endl;
+        std::cerr << "args parsing failure" << std::endl;
         return -1;
+    }
+
+    google::InitGoogleLogging(argv[0]);
+    google::InstallFailureSignalHandler();
+
+    if (log_file_name == nullptr) {
+        google::LogToStderr();
+    } else {
+        google::SetLogDestination(google::INFO, log_file_name);
     }
 
     // configuration file parse

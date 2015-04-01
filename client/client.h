@@ -28,7 +28,6 @@
 #include "node_prog/pathless_reach_program.h"
 #include "node_prog/clustering_program.h"
 #include "node_prog/two_neighborhood_program.h"
-//#include "node_prog/dijkstra_program.h"
 #include "node_prog/read_node_props_program.h"
 #include "node_prog/read_n_edges_program.h"
 #include "node_prog/edge_count_program.h"
@@ -42,6 +41,7 @@ namespace cl
     {
         public:
             client(const char *coordinator, uint16_t port, const char *config_file);
+            void initialize_logging(const char *log_file_name=nullptr);
 
         private:
             uint64_t myid, vtid;
