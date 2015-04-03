@@ -1030,7 +1030,7 @@ hyper_stub_base :: get_nmap(std::unordered_set<node_handle_t> &toGet, bool tx)
 }
 
 bool
-hyper_stub_base :: add_indices(std::unordered_map<std::string, db::node*> &indices, bool tx)
+hyper_stub_base :: add_indices(std::unordered_map<std::string, db::node*> &indices, bool tx, bool if_not_exist)
 {
     assert(AuxIndex);
 
@@ -1067,10 +1067,20 @@ hyper_stub_base :: add_indices(std::unordered_map<std::string, db::node*> &indic
 
     bool success;
     if (tx) {
-        std::vector<hyper_tx_func> funcs = std::vector<hyper_tx_func>(num_indices, &hyperdex_client_xact_put_if_not_exist);
+        std::vector<hyper_tx_func> funcs;
+        if (if_not_exist) {
+            funcs = std::vector<hyper_tx_func>(num_indices, &hyperdex_client_xact_put_if_not_exist);
+        } else {
+            funcs = std::vector<hyper_tx_func>(num_indices, &hyperdex_client_xact_put);
+        }
         success = multiple_call(funcs, spaces, keys, key_szs, attrs, num_attrs);
     } else {
-        std::vector<hyper_func> funcs = std::vector<hyper_func>(num_indices, &hyperdex_client_put_if_not_exist);
+        std::vector<hyper_func> funcs;
+        if (if_not_exist) {
+            funcs = std::vector<hyper_func>(num_indices, &hyperdex_client_put_if_not_exist);
+        } else {
+            funcs = std::vector<hyper_func>(num_indices, &hyperdex_client_put);
+        }
         success = multiple_call(funcs, spaces, keys, key_szs, attrs, num_attrs);
     }
 

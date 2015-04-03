@@ -164,7 +164,7 @@ class hyper_stub_base
         bool recreate_index(const hyperdex_client_attribute *cl_attr, std::pair<node_handle_t, uint64_t> &value);
         void sort_and_pack_as_set(std::vector<std::string>&, std::unique_ptr<e::buffer>&);
     public:
-        bool add_indices(std::unordered_map<std::string, db::node*> &indices, bool tx);
+        bool add_indices(std::unordered_map<std::string, db::node*> &indices, bool tx, bool if_not_exist);
         bool get_indices(std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> &indices, bool tx);
         bool del_indices(std::vector<std::string> &indices);
 

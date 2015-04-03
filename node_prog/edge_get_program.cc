@@ -23,7 +23,8 @@ uint64_t edge_get_params :: size() const
 {
     uint64_t toRet = message::size(nbrs)
         + message::size(request_edges)
-        + message::size(response_edges);
+        + message::size(response_edges)
+        + message::size(properties);
     return toRet;
 }
 
@@ -32,6 +33,7 @@ void edge_get_params :: pack(e::buffer::packer& packer) const
     message::pack_buffer(packer, nbrs);
     message::pack_buffer(packer, request_edges);
     message::pack_buffer(packer, response_edges);
+    message::pack_buffer(packer, properties);
 }
 
 void edge_get_params :: unpack(e::unpacker& unpacker)
@@ -39,6 +41,7 @@ void edge_get_params :: unpack(e::unpacker& unpacker)
     message::unpack_buffer(unpacker, nbrs);
     message::unpack_buffer(unpacker, request_edges);
     message::unpack_buffer(unpacker, response_edges);
+    message::unpack_buffer(unpacker, properties);
 }
 
 std::pair<search_type, std::vector<std::pair<db::remote_node, edge_get_params>>>
@@ -82,7 +85,7 @@ node_prog :: edge_get_node_program(
             }
         }
 
-        if (select) {
+        if (select && e.has_all_properties(params.properties)) {
             cl::edge cl_edge;
             e.get_client_edge(n.get_handle(), cl_edge);
             params.response_edges.emplace_back(cl_edge);

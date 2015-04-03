@@ -346,7 +346,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 
     if (!put_nodes(old_nodes, false)
      || !put_nodes(new_nodes, true)
-     || !add_indices(idx_add, true)
+     || !add_indices(idx_add, true, true)
      || !del_nodes(del_set)
      || !del_indices(idx_del)) {
         WDEBUG << "hyperdex error with put_nodes/add_indices/del_nodes/del_indices" << std::endl;

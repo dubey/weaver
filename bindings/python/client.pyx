@@ -300,6 +300,7 @@ cdef extern from 'node_prog/edge_get_program.h' namespace 'node_prog':
         vector[node_handle_t] nbrs
         vector[edge_handle_t] request_edges
         vector[edge] response_edges
+        vector[pair[string, string]] properties
 
 class EdgeGetParams:
     def __init__(self, nbrs=None, request_edges=None, response_edges=None):
@@ -695,7 +696,7 @@ cdef class Client:
         py_edge.end_node = str(c_edge.end_node)
         self.__convert_vector_props_to_dict(c_edge.properties, py_edge.properties)
 
-    cdef get_edges(self, nbrs=None, edges=None, node=''):
+    def get_edges(self, nbrs=None, edges=None, properties=None, node=''):
         if node == '':
             if edges is None:
                 raise WeaverError('provide one of node handle, node alias, or edge handle')
@@ -713,6 +714,13 @@ cdef class Client:
             arg_pair.second.request_edges.reserve(len(edges))
             for e in edges:
                 arg_pair.second.request_edges.push_back(e)
+        cdef pair[string, string] prop
+        if properties is not None:
+            arg_pair.second.properties.reserve(len(properties))
+            for p in properties:
+                prop.first = p[0]
+                prop.second = p[1]
+                arg_pair.second.properties.push_back(p)
         cdef vector[pair[string, edge_get_params]] c_args
         c_args.push_back(arg_pair)
 
@@ -735,7 +743,7 @@ cdef class Client:
     def get_edge(self, edge, node=''):
         if node == '':
             node = edge
-        response = self.get_edges(nbrs=None, edges=[edge], node=node)
+        response = self.get_edges(nbrs=None, edges=[edge], properties=None, node=node)
         assert(len(response) < 2)
         if len(response) == 1:
             return response[0]

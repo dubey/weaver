@@ -298,7 +298,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     }
                 }
             }
-            S->bulk_load_persistent();
+            S->bulk_load_persistent(load_tid);
             break;
         }
 
@@ -307,6 +307,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
             std::string element;
 
             // nodes
+            bool prop_delim = (BulkLoadPropertyValueDelimiter != '\0');
             uint64_t cur_shard_node_count = 0;
             while (get_xml_element(file, "node", element) && !element.empty()) {
                 assert(doc.load_buffer(element.c_str(), element.size()));
@@ -321,7 +322,6 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     assert(n == nullptr);
                     n = S->create_node_bulk_load(id0, map_idx, zero_clk);
 
-                    bool prop_delim = (BulkLoadPropertyValueDelimiter != '\0');
                     for (pugi::xml_node prop: node.children("data")) {
                         std::string key = prop.attribute("key").value();
                         std::string value = prop.child_value();
@@ -364,6 +364,9 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 if ((loc0 == shard_id) && ((int)map_idx % load_nthreads == load_tid)) {
                     node_handle_t id1 = edge.attribute("target").value();
                     edge_handle_t edge_handle = edge.attribute("id").value();
+                    if (edge_handle == "e169350") {
+                        WDEBUG << "got e169350 at node " << id0 << std::endl;
+                    }
                     uint64_t loc1 = (hash_node_handle(id1) % num_shards) + ShardIdIncr;
 
                     db::node *n = S->bulk_load_acquire_node_nonlocking(id0, map_idx);
@@ -373,7 +376,15 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     for (pugi::xml_node prop: edge.children("data")) {
                         std::string key = prop.attribute("key").value();
                         std::string value = prop.child_value();
-                        if (BulkLoadPropertyValueDelimiter != '\0') {
+
+                        if (key == BulkLoadEdgeIndexKey) {
+                            n->add_temp_index(value);
+                            if (edge_handle == "e169350") {
+                                WDEBUG << "btc tx id=" << value << std::endl;
+                            }
+                        }
+
+                        if (prop_delim) {
                             std::vector<std::string> values;
                             split(value, BulkLoadPropertyValueDelimiter, values);
                             for (std::string &v: values) {
@@ -392,7 +403,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 element.clear();
             }
 
-            S->bulk_load_persistent();
+            S->bulk_load_persistent(load_tid);
             break;
         }
 

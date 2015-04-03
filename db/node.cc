@@ -40,6 +40,7 @@ node :: node(const node_handle_t &_handle, uint64_t shrd, vc::vclock &vclk, po6:
     , waiters(0)
     , permanently_deleted(false)
     , last_perm_deletion(nullptr)
+    , temp_aliases(nullptr)
 {
     std::string empty("");
     out_edges.set_deleted_key(empty);
@@ -146,6 +147,21 @@ node :: add_cache_value(std::shared_ptr<vc::vclock> vc,
             cache.emplace(key, new_entry);
         }
     }
+}
+
+void
+node :: add_temp_index(const std::string &s)
+{
+    if (temp_aliases == nullptr) {
+        temp_aliases.reset(new string_set());
+    }
+    temp_aliases->insert(s);
+}
+
+void
+node :: done_temp_index()
+{
+    temp_aliases.reset(nullptr);
 }
 
 void

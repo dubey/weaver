@@ -173,7 +173,7 @@ namespace db
             po6::threads::mutex graph_load_mutex;
             uint64_t max_load_time, bulk_load_num_shards;
             uint32_t load_count;
-            void bulk_load_persistent();
+            void bulk_load_persistent(int tid);
 
             // Permanent deletion
         public:
@@ -396,15 +396,9 @@ namespace db
     }
 
     inline void
-    shard :: bulk_load_persistent()
+    shard :: bulk_load_persistent(int tid)
     {
-        std::vector<std::thread> threads;
-        for (uint64_t i = 0; i < hstub.size(); i++) {
-            threads.emplace_back(std::thread(&hyper_stub::memory_efficient_bulk_load, hstub[i], (int)i, nodes));
-        }
-        for (uint64_t i = 0; i < hstub.size(); i++) {
-            threads[i].join();
-        }
+        hstub[tid]->memory_efficient_bulk_load(tid, nodes);
     }
 
     // Consistency methods

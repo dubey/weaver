@@ -33,6 +33,7 @@ namespace node_prog
             // take intersection of all specified predicates
             std::vector<node_handle_t> nbrs; // empty means all nbrs
             std::vector<edge_handle_t> request_edges; // empty means fetch props for all edges
+            std::vector<std::pair<std::string, std::string>> properties; // edges should have these properties
 
             // response params
             std::vector<cl::edge> response_edges;

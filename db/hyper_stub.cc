@@ -132,22 +132,66 @@ hyper_stub :: memory_efficient_bulk_load(int thread_id, db::data_map<std::vector
     vc::vclock zero_clk(0,0);
 
     std::unordered_map<node_handle_t, node*> node_map;
-    uint64_t batch_sz = 0;
     int progress = 0;
     for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
         for (const auto &p: nodes_arr[tid]) {
             assert(p.second.size() == 1);
             node_map.emplace(p.first, p.second.front());
-            if (++batch_sz == 1000) {
+            if (node_map.size() >= 1000) {
                 put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
                 node_map.clear();
-                batch_sz = 0;
                 WDEBUG << "bulk load hyperdex progress " << ++progress << std::endl;
             }
         }
     }
 
     put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
+
+    progress = 0;
+    int ine_progress = 0;
+    if (AuxIndex) {
+        std::unordered_map<std::string, node*> idx_add_if_not_exist;
+        std::unordered_map<std::string, node*> idx_add;
+
+        for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
+            for (const auto &p: nodes_arr[tid]) {
+                node *n = p.second.front();
+                idx_add_if_not_exist.emplace(p.first, n);
+                for (const node_handle_t &alias: n->aliases) {
+                    assert(idx_add_if_not_exist.find(alias) == idx_add_if_not_exist.end());
+                    idx_add_if_not_exist.emplace(alias, n);
+                }
+
+                for (auto &x: n->out_edges) {
+                    assert(x.second.size() == 1);
+                    assert(idx_add_if_not_exist.find(x.first) == idx_add_if_not_exist.end());
+                    idx_add_if_not_exist.emplace(x.first, n);
+                }
+
+                if (n->temp_aliases != nullptr) {
+                    for (const std::string &s: *n->temp_aliases) {
+                        idx_add.emplace(s, n);
+                    }
+                    n->done_temp_index();
+                }
+
+                if (idx_add_if_not_exist.size() >= 10000) {
+                    add_indices(idx_add_if_not_exist, false, true);
+                    idx_add_if_not_exist.clear();
+                    WDEBUG << "aux index if not exist progress " << ++ine_progress << std::endl;
+                }
+                if (idx_add.size() >= 10000) {
+                    add_indices(idx_add, false, false);
+                    idx_add.clear();
+                    WDEBUG << "aux index progress " << ++progress << std::endl;
+                }
+            }
+        }
+
+        add_indices(idx_add_if_not_exist, false, true);
+        add_indices(idx_add, false, false);
+    }
+
     WDEBUG << "bulk load done." << std::endl;
 }
 
@@ -182,7 +226,7 @@ hyper_stub :: bulk_load(int thread_id, std::unordered_map<node_handle_t, std::ve
             }
         }
 
-        add_indices(idx_add, false);
+        add_indices(idx_add, false, true);
     }
 }
 
