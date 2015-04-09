@@ -43,6 +43,7 @@ namespace node_prog
         EDGE_GET,
         NODE_GET,
         TRAVERSE_PROPS,
+        DISCOVER_PATHS,
         END
     };
 

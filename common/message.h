@@ -149,9 +149,9 @@ namespace message
     uint64_t size(const std::shared_ptr<transaction::nop_data> &ptr_t);
     uint64_t size(const transaction::pending_tx &t);
     uint64_t size(const std::vector<bool> &t);
-    template <typename T> inline uint64_t size(const std::unordered_set<T>& t);
+    template <typename T1, typename T2, typename T3> inline uint64_t size(const std::unordered_set<T1, T2, T3>& t);
     template <typename T1, typename T2, typename T3> inline uint64_t size(const google::sparse_hash_set<T1, T2, T3>& t);
-    template <typename T1, typename T2> inline uint64_t size(const std::unordered_map<T1, T2>& t);
+    template <typename T1, typename T2, typename T3, typename T4> inline uint64_t size(const std::unordered_map<T1, T2, T3, T4>& t);
     template <typename T1, typename T2, typename T3, typename T4> inline uint64_t size(const google::sparse_hash_map<T1, T2, T3, T4>& t);
     template <typename T1, typename T2, typename T3, typename T4> inline uint64_t size(const google::dense_hash_map<T1, T2, T3, T4>& t);
     template <typename T> inline uint64_t size(const std::vector<T>& t);
@@ -195,9 +195,9 @@ namespace message
     void pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::nop_data> &ptr_t);
     void pack_buffer(e::buffer::packer &packer, const transaction::pending_tx &t);
     void pack_buffer(e::buffer::packer &packer, const std::vector<bool> &t);
-    template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T>& t);
+    template <typename T1, typename T2, typename T3> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T1, T2, T3>& t);
     template <typename T1, typename T2, typename T3> inline void pack_buffer(e::buffer::packer&, const google::sparse_hash_set<T1, T2, T3>& t);
-    template <typename T1, typename T2> void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2>& t);
+    template <typename T1, typename T2, typename T3, typename T4> void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2, T3, T4>& t);
     template <typename T1, typename T2, typename T3, typename T4> inline void pack_buffer(e::buffer::packer&, const google::sparse_hash_map<T1, T2, T3, T4>& t);
     template <typename T1, typename T2, typename T3, typename T4> inline void pack_buffer(e::buffer::packer&, const google::dense_hash_map<T1, T2, T3, T4>& t);
     template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::vector<T>& t);
@@ -241,9 +241,9 @@ namespace message
     void unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::nop_data> &ptr_t);
     void unpack_buffer(e::unpacker &unpacker, transaction::pending_tx &t);
     void unpack_buffer(e::unpacker &unpacker, std::vector<bool> &t);
-    template <typename T> void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T>& t);
+    template <typename T1, typename T2, typename T3> void unpack_buffer(e::unpacker& unpacker, std::unordered_set<T1, T2, T3>& t);
     template <typename T1, typename T2, typename T3> void unpack_buffer(e::unpacker&, google::sparse_hash_set<T1, T2, T3>& t);
-    template <typename T1, typename T2> void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2>& t);
+    template <typename T1, typename T2, typename T3, typename T4> void unpack_buffer(e::unpacker& unpacker, std::unordered_map<T1, T2, T3, T4>& t);
     template <typename T1, typename T2, typename T3, typename T4> void unpack_buffer(e::unpacker&, google::sparse_hash_map<T1, T2, T3, T4>& t);
     template <typename T1, typename T2, typename T3, typename T4> void unpack_buffer(e::unpacker&, google::dense_hash_map<T1, T2, T3, T4>& t);
     template <typename T> void unpack_buffer(e::unpacker& unpacker, std::vector<T>& t);
@@ -304,8 +304,8 @@ namespace message
     } \
     return total_size;
 
-    template <typename T1>
-    inline uint64_t size(const std::unordered_set<T1> &t)
+    template <typename T1, typename T2, typename T3>
+    inline uint64_t size(const std::unordered_set<T1,T2,T3> &t)
     {
         SET_SZ;
     }
@@ -325,8 +325,8 @@ namespace message
     } \
     return total_size;
 
-    template <typename T1, typename T2>
-    inline uint64_t size(const std::unordered_map<T1, T2> &t)
+    template <typename T1, typename T2, typename T3, typename T4>
+    inline uint64_t size(const std::unordered_map<T1, T2, T3, T4> &t)
     {
         MAP_SZ;
     }
@@ -483,9 +483,9 @@ namespace message
         pack_buffer(packer, elem); \
     }
 
-    template <typename T1>
+    template <typename T1, typename T2, typename T3>
     inline void 
-    pack_buffer(e::buffer::packer &packer, const std::unordered_set<T1> &t)
+    pack_buffer(e::buffer::packer &packer, const std::unordered_set<T1,T2,T3> &t)
     {
         SET_PACK;
     }
@@ -508,9 +508,9 @@ namespace message
         pack_buffer(packer, pair.second); \
     }
 
-    template <typename T1, typename T2>
+    template <typename T1, typename T2, typename T3, typename T4>
     inline void 
-    pack_buffer(e::buffer::packer &packer, const std::unordered_map<T1, T2> &t)
+    pack_buffer(e::buffer::packer &packer, const std::unordered_map<T1, T2, T3, T4> &t)
     {
         MAP_PACK;
     }
@@ -674,9 +674,9 @@ namespace message
         elements_left--; \
     }
 
-    template <typename T1>
+    template <typename T1, typename T2, typename T3>
     inline void 
-    unpack_buffer(e::unpacker &unpacker, std::unordered_set<T1> &t)
+    unpack_buffer(e::unpacker &unpacker, std::unordered_set<T1,T2,T3> &t)
     {
         SET_UNPACK;
     }
@@ -703,9 +703,9 @@ namespace message
         elements_left--; \
     }
 
-    template <typename T1, typename T2>
+    template <typename T1, typename T2, typename T3, typename T4>
     inline void 
-    unpack_buffer(e::unpacker &unpacker, std::unordered_map<T1, T2> &t)
+    unpack_buffer(e::unpacker &unpacker, std::unordered_map<T1, T2, T3, T4> &t)
     {
         MAP_UNPACK;
     }

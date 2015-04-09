@@ -155,7 +155,7 @@ node_prog :: traverse_props_node_program(node &n,
                 }
                 auto edge_props = params.edge_props.front();
                 params.edge_props.pop_front();
-                
+
                 bool collect_edges = params.collect_edges;
                 bool propagate = !params.node_props.empty();
                 if (!propagate) {

@@ -158,6 +158,10 @@ cdef extern from 'client/datastructures.h' namespace 'cl':
         string start_node
         string end_node
         vector[shared_ptr[property]] properties
+    cdef cppclass hash_edge:
+        pass
+    cdef cppclass equals_edge:
+        pass
 
     cdef cppclass node:
         string handle
@@ -337,6 +341,16 @@ class TraversePropsParams:
         self.collect_nodes = collect_n
         self.collect_edges = collect_e
 
+cdef extern from 'node_prog/discover_paths.h' namespace 'node_prog':
+    cdef cppclass discover_paths_params:
+        discover_paths_params()
+        node_handle_t dest
+        uint32_t path_len
+        vector[pair[string, string]] node_props
+        vector[pair[string, string]] edge_props
+        unordered_map[string, vector[edge]] paths
+        remote_node prev_node
+
 cdef extern from 'client/client.h' namespace 'cl':
     cdef cppclass client:
         client(const char *coordinator, uint16_t port, const char *config_file)
@@ -360,6 +374,7 @@ cdef extern from 'client/client.h' namespace 'cl':
         bint edge_get_program(vector[pair[string, edge_get_params]] &initial_args, edge_get_params&) nogil
         bint node_get_program(vector[pair[string, node_get_params]] &initial_args, node_get_params&) nogil
         bint traverse_props_program(vector[pair[string, traverse_props_params]] &initial_args, traverse_props_params&) nogil
+        bint discover_paths_program(vector[pair[string, discover_paths_params]] &initial_args, discover_paths_params&) nogil
         void start_migration()
         void single_stream_migration()
         void exit_weaver()
@@ -842,6 +857,70 @@ cdef class Client:
         for e in c_rp.return_edges:
             response.return_edges.append(e)
         return response
+
+    def discover_paths(self, start_node, end_node, path_len=None, node_props=None, edge_props=None):
+        cdef vector[pair[string, discover_paths_params]] c_args
+        cdef pair[string, discover_paths_params] arg_pair
+        arg_pair.first = start_node
+        arg_pair.second.prev_node = coordinator
+        arg_pair.second.dest = end_node
+        if path_len is not None:
+            arg_pair.second.path_len = path_len
+        if node_props is not None:
+            arg_pair.second.node_props.reserve(len(node_props))
+            for p in node_props:
+                arg_pair.second.node_props.push_back(p)
+        if edge_props is not None:
+            arg_pair.second.edge_props.reserve(len(edge_props))
+            for p in edge_props:
+                arg_pair.second.edge_props.push_back(p)
+        c_args.push_back(arg_pair)
+
+        cdef discover_paths_params c_rp
+        cdef bint success
+        with nogil:
+            success = self.thisptr.discover_paths_program(c_args, c_rp)
+
+        if not success:
+            raise WeaverError('node prog error')
+
+        ret_paths = {}
+        cdef unordered_map[string, vector[edge]].iterator path_iter = c_rp.paths.begin()
+        cdef vector[edge].iterator edge_iter
+        while path_iter != c_rp.paths.end():
+            cur_node = str(deref(path_iter).first)
+            cur_edges = []
+            edge_iter = deref(path_iter).second.begin()
+            while edge_iter != deref(path_iter).second.end():
+                cur_edges.append(Edge())
+                self.__convert_edge_to_client_edge(deref(edge_iter), cur_edges[-1])
+                inc(edge_iter)
+            ret_paths[cur_node] = cur_edges
+            inc(path_iter)
+        return ret_paths
+
+    def __enumerate_paths_recursive(self, paths, src, dst, path_len, visited):
+        if src == dst:
+            return [[dst]]
+        elif path_len > 0:
+            ret_paths = []
+            for e in paths[src]:
+                if e.end_node not in visited:
+                    cur_visited = visited.copy()
+                    cur_visited.add(e.end_node)
+                    child_paths = self.__enumerate_paths_recursive(paths, e.end_node, dst, path_len-1, cur_visited)
+                    if child_paths:
+                        for p in child_paths:
+                            if p:
+                                p.append(src)
+                                ret_paths.append(p)
+            return ret_paths
+
+    def enumerate_paths(self, paths, src, dst, path_len):
+        ret_paths = self.__enumerate_paths_recursive(paths, src, dst, path_len, set())
+        for p in ret_paths:
+            p.reverse()
+        return ret_paths
 
     def traverse(self, start_node, node_props=None, node_aliases=None):
         self.traverse_start_node = start_node

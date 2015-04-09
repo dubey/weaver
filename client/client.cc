@@ -503,6 +503,12 @@ client :: traverse_props_program(std::vector<std::pair<std::string, node_prog::t
     SPECIFIC_NODE_PROG(node_prog::TRAVERSE_PROPS);
 }
 
+bool
+client :: discover_paths_program(std::vector<std::pair<std::string, node_prog::discover_paths_params>> &initial_args, node_prog::discover_paths_params &return_param)
+{
+    SPECIFIC_NODE_PROG(node_prog::DISCOVER_PATHS);
+}
+
 #undef SPECIFIC_NODE_PROG
 
 void

@@ -253,7 +253,7 @@ node_prog :: reach_node_program(
             }
         }
         if (((--state.out_count == 0) || params.reachable) && !state.reachable) {
-            state.reachable |= params.reachable;
+            state.reachable = state.reachable || params.reachable;
             if (params.reachable) {
                 params.hops = state.hops + 1;
                 params.path.emplace_back(rn);

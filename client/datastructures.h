@@ -31,6 +31,22 @@ namespace cl
         std::vector<std::shared_ptr<property>> properties;
     };
 
+    struct hash_edge
+    {
+        size_t operator()(const edge &e) const
+        {
+            return std::hash<std::string>()(e.handle);
+        }
+    };
+
+    struct equals_edge
+    {
+        bool operator()(const edge &e1, const edge &e2) const
+        {
+            return e1.handle == e2.handle;
+        }
+    };
+
     struct node
     {
         std::string handle;
@@ -39,6 +55,21 @@ namespace cl
         std::unordered_set<std::string> aliases;
     };
 
+    struct hash_node
+    {
+        size_t operator()(const node &n) const
+        {
+            return std::hash<std::string>()(n.handle);
+        }
+    };
+
+    struct equals_node
+    {
+        bool operator()(const node &n1, const node &n2) const
+        {
+            return n1.handle == n2.handle;
+        }
+    };
 }
 
 #endif

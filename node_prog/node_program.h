@@ -40,6 +40,7 @@
 #include "node_prog/clustering_program.h"
 #include "node_prog/two_neighborhood_program.h"
 #include "node_prog/traverse_with_props.h"
+#include "node_prog/discover_paths.h"
 
 namespace coordinator
 {
@@ -169,6 +170,8 @@ namespace node_prog
             new particular_node_program<node_get_params, node_get_state, Cache_Value_Base>(NODE_GET, node_prog::node_get_node_program) },
         { TRAVERSE_PROPS,
             new particular_node_program<traverse_props_params, traverse_props_state, Cache_Value_Base>(TRAVERSE_PROPS, node_prog::traverse_props_node_program) },
+        { DISCOVER_PATHS,
+            new particular_node_program<discover_paths_params, discover_paths_state, Cache_Value_Base>(DISCOVER_PATHS, node_prog::discover_paths_node_program) },
     };
 }
 
