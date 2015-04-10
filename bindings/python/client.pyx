@@ -887,9 +887,7 @@ cdef class Client:
 
     cdef __convert_pred_to_c_pred(self, pred, prop_predicate &pred_c):
         pred_c.key = pred.key
-        print(pred_c.key)
         pred_c.value = pred.value
-        print(pred_c.value)
         if pred.rel == Relation.EQUALS:
             pred_c.rel = EQUALS
         elif pred.rel == Relation.LESS:
@@ -906,7 +904,6 @@ cdef class Client:
             pred_c.rel = ENDS_WITH
         elif pred.rel == Relation.CONTAINS:
             pred_c.rel = CONTAINS
-        print(pred_c.rel)
 
     def discover_paths(self, start_node, end_node, path_len=None, node_preds=None, edge_preds=None):
         cdef vector[pair[string, discover_paths_params]] c_args
