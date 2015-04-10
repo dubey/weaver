@@ -377,6 +377,7 @@ cdef extern from 'node_prog/discover_paths.h' namespace 'node_prog':
         vector[prop_predicate] edge_preds
         unordered_map[string, vector[edge]] paths
         remote_node prev_node
+        node_handle_t src
 
 cdef extern from 'client/client.h' namespace 'cl':
     cdef cppclass client:
@@ -911,6 +912,7 @@ cdef class Client:
         arg_pair.first = start_node
         arg_pair.second.prev_node = coordinator
         arg_pair.second.dest = end_node
+        arg_pair.second.src = start_node
         if path_len is not None:
             arg_pair.second.path_len = path_len
         cdef prop_predicate pred_c
@@ -950,27 +952,27 @@ cdef class Client:
         return ret_paths
 
     def __enumerate_paths_recursive(self, paths, src, dst, path_len, visited):
-        if src == dst:
-            return [[dst]]
-        elif path_len > 0:
-            ret_paths = []
+        ret_paths = []
+        if path_len > 0:
+            if src not in paths:
+                return []
             for e in paths[src]:
-                if e.end_node not in visited:
+                if e.end_node == dst or paths[e.end_node] == []:
+                    ret_paths.append([e])
+                elif e.end_node not in visited:
                     cur_visited = visited.copy()
                     cur_visited.add(e.end_node)
                     child_paths = self.__enumerate_paths_recursive(paths, e.end_node, dst, path_len-1, cur_visited)
                     if child_paths:
                         for p in child_paths:
-                            if p:
-                                p.append(src)
-                                ret_paths.append(p)
-            return ret_paths
+                            ret_paths.append([e] + p)
+        return ret_paths
 
     def enumerate_paths(self, paths, src, dst, path_len):
-        ret_paths = self.__enumerate_paths_recursive(paths, src, dst, path_len, set())
-        for p in ret_paths:
-            p.reverse()
-        return ret_paths
+        return self.__enumerate_paths_recursive(paths, src, dst, path_len, set())
+
+    def enumerate_path_vertices(self, paths):
+        return [[(e.start_node, e.end_node) for e in p] for p in paths]
 
     def traverse(self, start_node, node_props=None, node_aliases=None):
         self.traverse_start_node = start_node

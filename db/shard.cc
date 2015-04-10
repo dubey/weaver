@@ -364,9 +364,6 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 if ((loc0 == shard_id) && ((int)map_idx % load_nthreads == load_tid)) {
                     node_handle_t id1 = edge.attribute("target").value();
                     edge_handle_t edge_handle = edge.attribute("id").value();
-                    if (edge_handle == "e169350") {
-                        WDEBUG << "got e169350 at node " << id0 << std::endl;
-                    }
                     uint64_t loc1 = (hash_node_handle(id1) % num_shards) + ShardIdIncr;
 
                     db::node *n = S->bulk_load_acquire_node_nonlocking(id0, map_idx);
@@ -379,9 +376,6 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
 
                         if (key == BulkLoadEdgeIndexKey) {
                             n->add_temp_index(value);
-                            if (edge_handle == "e169350") {
-                                WDEBUG << "btc tx id=" << value << std::endl;
-                            }
                         }
 
                         if (prop_delim) {

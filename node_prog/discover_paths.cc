@@ -36,6 +36,7 @@ discover_paths_params :: size() const
          + message::size(paths)
          + message::size(returning)
          + message::size(prev_node)
+         + message::size(src)
          + message::size(path_ancestors);
 }
 
@@ -49,6 +50,7 @@ discover_paths_params :: pack(e::buffer::packer &packer) const
     message::pack_buffer(packer, paths);
     message::pack_buffer(packer, returning);
     message::pack_buffer(packer, prev_node);
+    message::pack_buffer(packer, src);
     message::pack_buffer(packer, path_ancestors);
 }
 
@@ -62,6 +64,7 @@ discover_paths_params :: unpack(e::unpacker &unpacker)
     message::unpack_buffer(unpacker, paths);
     message::unpack_buffer(unpacker, returning);
     message::unpack_buffer(unpacker, prev_node);
+    message::unpack_buffer(unpacker, src);
     message::unpack_buffer(unpacker, path_ancestors);
 }
 
@@ -218,7 +221,13 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
                 }
             }
 
-            edge_set &eset = dp_state.paths[n.get_handle()];
+            node_handle_t cur_node;
+            if (dp_state.prev_nodes.size() == 1 && dp_state.prev_nodes[0] == db::coordinator) {
+                cur_node = params.src;
+            } else {
+                cur_node = n.get_handle();
+            }
+            edge_set &eset = dp_state.paths[cur_node];
             for (edge &e: n.get_edges()) {
                 node_handle_t nbr = e.get_neighbor().handle;
                 if (e.has_all_predicates(params.edge_preds) && dp_state.paths.find(nbr) != dp_state.paths.end()) {

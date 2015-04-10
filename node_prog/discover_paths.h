@@ -37,6 +37,7 @@ namespace node_prog
 
         bool returning;
         db::remote_node prev_node;
+        node_handle_t src;
         std::unordered_set<node_handle_t> path_ancestors; // prevent cycles
 
         discover_paths_params();
