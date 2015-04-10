@@ -12,6 +12,7 @@
 #include <vector>
 #include <po6/net/location.h>
 
+#include "common/property_predicate.h"
 #include "db/remote_node.h"
 #include "node_prog/property.h"
 #include "client/datastructures.h"
@@ -31,6 +32,7 @@ namespace node_prog
             virtual prop_list get_properties() = 0;
             virtual bool has_property(std::pair<std::string, std::string> &p) = 0;
             virtual bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props) = 0;
+            virtual bool has_all_predicates(std::vector<predicate::prop_predicate> &preds) = 0;
             virtual void get_client_edge(const std::string &node, cl::edge&) = 0;
    };
 }

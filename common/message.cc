@@ -287,6 +287,20 @@ message :: size(const cl::edge &t)
          + size(t.properties);
 }
 
+uint64_t
+message :: size(const enum predicate::relation&)
+{
+    return sizeof(uint8_t);
+}
+
+uint64_t
+message::size(const predicate::prop_predicate &t)
+{
+    return size(t.key)
+         + size(t.value)
+         + size(t.rel);
+}
+
 
 // packing functions
 
@@ -522,6 +536,22 @@ message :: pack_buffer(e::buffer::packer &packer, const cl::edge &t)
     pack_buffer(packer, t.start_node);
     pack_buffer(packer, t.end_node);
     pack_buffer(packer, t.properties);
+}
+
+void
+message :: pack_buffer(e::buffer::packer &packer, const enum predicate::relation &t)
+{
+    assert(t <= UINT8_MAX);
+    uint8_t temp = (uint8_t) t;
+    packer = packer << temp;
+}
+
+void
+message :: pack_buffer(e::buffer::packer &packer, const predicate::prop_predicate &t)
+{
+    pack_buffer(packer, t.key);
+    pack_buffer(packer, t.value);
+    pack_buffer(packer, t.rel);
 }
 
 
@@ -774,6 +804,22 @@ message :: unpack_buffer(e::unpacker &unpacker, cl::edge &t)
     unpack_buffer(unpacker, t.start_node);
     unpack_buffer(unpacker, t.end_node);
     unpack_buffer(unpacker, t.properties);
+}
+
+void
+message :: unpack_buffer(e::unpacker &unpacker, enum predicate::relation &t)
+{
+    uint8_t _type;
+    unpacker = unpacker >> _type;
+    t = (enum predicate::relation)_type;
+}
+
+void
+message :: unpack_buffer(e::unpacker &unpacker, predicate::prop_predicate &t)
+{
+    unpack_buffer(unpacker, t.key);
+    unpack_buffer(unpacker, t.value);
+    unpack_buffer(unpacker, t.rel);
 }
 
 

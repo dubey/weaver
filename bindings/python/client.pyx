@@ -183,6 +183,33 @@ class Node:
         self.out_edges = initialize_member_dict(out_edges)
         self.aliases = initialize_member_list(aliases)
 
+cdef extern from 'common/property_predicate.h' namespace 'predicate':
+    cdef enum relation:
+        EQUALS
+        LESS
+        GREATER
+        LESS_EQUAL
+        GREATER_EQUAL
+        STARTS_WITH
+        ENDS_WITH
+        CONTAINS
+
+    cdef cppclass prop_predicate:
+        string key
+        string value
+        relation rel
+
+def enum(**enums):
+    return type('Enum', (), enums)
+
+Relation = enum(EQUALS=1, LESS=2, GREATER=3, LESS_EQUAL=4, GREATER_EQUAL=5, STARTS_WITH=6, ENDS_WITH=7, CONTAINS=8)
+
+class PropPredicate:
+    def __init__(self, key, value, rel):
+        self.key = key
+        self.value = value
+        self.rel = rel
+
 class RemoteNode:
     def __init__(self, handle='', loc=0):
         self.handle = handle
@@ -346,8 +373,8 @@ cdef extern from 'node_prog/discover_paths.h' namespace 'node_prog':
         discover_paths_params()
         node_handle_t dest
         uint32_t path_len
-        vector[pair[string, string]] node_props
-        vector[pair[string, string]] edge_props
+        vector[prop_predicate] node_preds
+        vector[prop_predicate] edge_preds
         unordered_map[string, vector[edge]] paths
         remote_node prev_node
 
@@ -858,7 +885,30 @@ cdef class Client:
             response.return_edges.append(e)
         return response
 
-    def discover_paths(self, start_node, end_node, path_len=None, node_props=None, edge_props=None):
+    cdef __convert_pred_to_c_pred(self, pred, prop_predicate &pred_c):
+        pred_c.key = pred.key
+        print(pred_c.key)
+        pred_c.value = pred.value
+        print(pred_c.value)
+        if pred.rel == Relation.EQUALS:
+            pred_c.rel = EQUALS
+        elif pred.rel == Relation.LESS:
+            pred_c.rel = LESS
+        elif pred.rel == Relation.GREATER:
+            pred_c.rel = GREATER
+        elif pred.rel == Relation.LESS_EQUAL:
+            pred_c.rel = LESS_EQUAL
+        elif pred.rel == Relation.GREATER_EQUAL:
+            pred_c.rel = GREATER_EQUAL
+        elif pred.rel == Relation.STARTS_WITH:
+            pred_c.rel = STARTS_WITH
+        elif pred.rel == Relation.ENDS_WITH:
+            pred_c.rel = ENDS_WITH
+        elif pred.rel == Relation.CONTAINS:
+            pred_c.rel = CONTAINS
+        print(pred_c.rel)
+
+    def discover_paths(self, start_node, end_node, path_len=None, node_preds=None, edge_preds=None):
         cdef vector[pair[string, discover_paths_params]] c_args
         cdef pair[string, discover_paths_params] arg_pair
         arg_pair.first = start_node
@@ -866,14 +916,17 @@ cdef class Client:
         arg_pair.second.dest = end_node
         if path_len is not None:
             arg_pair.second.path_len = path_len
-        if node_props is not None:
-            arg_pair.second.node_props.reserve(len(node_props))
-            for p in node_props:
-                arg_pair.second.node_props.push_back(p)
-        if edge_props is not None:
-            arg_pair.second.edge_props.reserve(len(edge_props))
-            for p in edge_props:
-                arg_pair.second.edge_props.push_back(p)
+        cdef prop_predicate pred_c
+        if node_preds is not None:
+            arg_pair.second.node_preds.reserve(len(node_preds))
+            for pred in node_preds:
+                self.__convert_pred_to_c_pred(pred, pred_c)
+                arg_pair.second.node_preds.push_back(pred_c)
+        if edge_preds is not None:
+            arg_pair.second.edge_preds.reserve(len(edge_preds))
+            for pred in edge_preds:
+                self.__convert_pred_to_c_pred(pred, pred_c)
+                arg_pair.second.edge_preds.push_back(pred_c)
         c_args.push_back(arg_pair)
 
         cdef discover_paths_params c_rp

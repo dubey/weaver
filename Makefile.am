@@ -93,7 +93,8 @@ noinst_HEADERS+=	node_prog/base_classes.h \
 					common/vclock.h \
                     common/bool_vector.h \
                     common/types.h \
-                    common/utils.h
+                    common/utils.h \
+                    common/property_predicate.h
 
 # timestamper
 noinst_HEADERS+=			coordinator/current_prog.h \
@@ -121,6 +122,7 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    common/message_graph_elem.cc \
                             common/config_constants.cc \
                             common/MurmurHash3.cpp \
+                            common/property_predicate.cc \
 							chronos/chronos.cc \
 							chronos/chronos_c_wrappers.cc \
 							chronos/chronos_cmp_encode.cc \
@@ -189,6 +191,7 @@ weaver_shard_SOURCES=	common/ids.cc \
 		                common/message_cache_context.cc \
                         common/config_constants.cc \
                         common/MurmurHash3.cpp \
+                        common/property_predicate.cc \
 						chronos/chronos.cc \
 						chronos/chronos_c_wrappers.cc \
 						chronos/chronos_cmp_encode.cc \
@@ -230,6 +233,7 @@ libweaverclient_la_SOURCES=	common/ids.cc \
                             common/server_manager_link.cc \
                             common/server_manager_link_wrapper.cc \
                             common/MurmurHash3.cpp \
+                            common/property_predicate.cc \
 							chronos/chronos.cc \
 							chronos/chronos_c_wrappers.cc \
 							chronos/chronos_cmp_encode.cc \

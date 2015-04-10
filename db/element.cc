@@ -197,6 +197,36 @@ element :: has_property(const std::string &key, const std::string &value)
 }
 
 bool
+element :: has_predicate(const predicate::prop_predicate &pred)
+{
+#ifdef weaver_large_property_maps_
+
+    auto iter = properties.find(key);
+    if (iter != properties.end()) {
+        for (const std::shared_ptr<property> p: iter->second) {
+            if (pred.check(*p)
+             && time_oracle->clock_creat_before_del_after(*view_time, p->get_creat_time(), p->get_del_time())) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+
+#else
+
+    for (const std::shared_ptr<property> p: properties) {
+        if (pred.check(*p)
+         && time_oracle->clock_creat_before_del_after(*view_time, p->get_creat_time(), p->get_del_time())) {
+            return true;
+        }
+    }
+    return false;
+
+#endif
+}
+
+bool
 element :: has_property(const std::pair<std::string, std::string> &p)
 {
     return has_property(p.first, p.second);
@@ -207,6 +237,17 @@ element :: has_all_properties(const std::vector<std::pair<std::string, std::stri
 {
     for (const auto &p : props) {
         if (!has_property(p)) { 
+            return false;
+        }
+    }
+    return true;
+}
+
+bool
+element :: has_all_predicates(const std::vector<predicate::prop_predicate> &preds)
+{
+    for (const auto &p : preds) {
+        if (!has_predicate(p)) {
             return false;
         }
     }

@@ -30,6 +30,7 @@
 
 #include "common/vclock.h"
 #include "common/transaction.h"
+#include "common/property_predicate.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/base_classes.h"
 #include "node_prog/property.h"
@@ -169,6 +170,8 @@ namespace message
     uint64_t size(const db::node &t);
     uint64_t size(const cl::node &t);
     uint64_t size(const cl::edge &t);
+    uint64_t size(const enum predicate::relation&);
+    uint64_t size(const predicate::prop_predicate&);
 
     void pack_buffer(e::buffer::packer &packer, const node_prog::Node_Parameters_Base &t);
     void pack_buffer(e::buffer::packer &packer, const node_prog::Node_State_Base &t);
@@ -215,6 +218,8 @@ namespace message
     void pack_buffer(e::buffer::packer &packer, const db::node &t);
     void pack_buffer(e::buffer::packer &packer, const cl::node &t);
     void pack_buffer(e::buffer::packer &packer, const cl::edge &t);
+    void pack_buffer(e::buffer::packer &packer, const enum predicate::relation &t);
+    void pack_buffer(e::buffer::packer &packer, const predicate::prop_predicate &t);
 
     void unpack_buffer(e::unpacker &unpacker, node_prog::Node_Parameters_Base &t);
     void unpack_buffer(e::unpacker &unpacker, node_prog::Node_State_Base &t);
@@ -261,6 +266,8 @@ namespace message
     void unpack_buffer(e::unpacker &unpacker, db::node &t);
     void unpack_buffer(e::unpacker &unpacker, cl::node &t);
     void unpack_buffer(e::unpacker &unpacker, cl::edge &t);
+    void unpack_buffer(e::unpacker &unpacker, enum predicate::relation &t);
+    void unpack_buffer(e::unpacker &unpacker, predicate::prop_predicate &t);
 
     // size templates
 

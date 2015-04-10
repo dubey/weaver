@@ -16,6 +16,7 @@
 
 #include <string>
 
+#include "common/property_predicate.h"
 #include "db/remote_node.h"
 #include "node_prog/node.h"
 #include "node_prog/edge.h"
@@ -30,8 +31,8 @@ namespace node_prog
     {
         node_handle_t dest;
         uint32_t path_len;
-        std::vector<std::pair<std::string, std::string>> node_props;
-        std::vector<std::pair<std::string, std::string>> edge_props;
+        std::vector<predicate::prop_predicate> node_preds;
+        std::vector<predicate::prop_predicate> edge_preds;
         std::unordered_map<node_handle_t, std::vector<cl::edge>> paths;
 
         bool returning;

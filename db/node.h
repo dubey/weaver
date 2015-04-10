@@ -115,6 +115,7 @@ namespace db
             node_prog::prop_list get_properties();
             bool has_property(std::pair<std::string, std::string> &p);
             bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
+            bool has_all_predicates(std::vector<predicate::prop_predicate> &preds);
             void set_handle(const node_handle_t &_handle) { base.set_handle(_handle); }
             const node_handle_t& get_handle() const { return base.get_handle(); }
             void add_alias(const node_handle_t &alias);

@@ -23,6 +23,7 @@
 
 #include "common/weaver_constants.h"
 #include "common/event_order.h"
+#include "common/property_predicate.h"
 #include "db/property.h"
 
 namespace db
@@ -72,7 +73,9 @@ namespace db
             void remove_property(const std::string &key);
             bool has_property(const std::string &key, const std::string &value);
             bool has_property(const std::pair<std::string, std::string> &p);
+            bool has_predicate(const predicate::prop_predicate &p);
             bool has_all_properties(const std::vector<std::pair<std::string, std::string>> &props);
+            bool has_all_predicates(const std::vector<predicate::prop_predicate> &preds);
             void update_del_time(const vc::vclock &del_time);
             const std::unique_ptr<vc::vclock>& get_del_time() const;
             void update_creat_time(const vc::vclock &creat_time);

@@ -90,6 +90,14 @@ edge :: has_all_properties(std::vector<std::pair<std::string, std::string>> &pro
     return base.has_all_properties(props);
 }
 
+bool
+edge :: has_all_predicates(std::vector<predicate::prop_predicate> &preds)
+{
+    assert(base.view_time != nullptr);
+    assert(base.time_oracle != nullptr);
+    return base.has_all_predicates(preds);
+}
+
 // convert this edge into a cl::edge object (see client/weaver_datastructures.h)
 void
 edge :: get_client_edge(const std::string &start_node, cl::edge &e)

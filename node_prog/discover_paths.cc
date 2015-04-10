@@ -31,8 +31,8 @@ discover_paths_params :: size() const
 {
     return message::size(dest)
          + message::size(path_len)
-         + message::size(node_props)
-         + message::size(edge_props)
+         + message::size(node_preds)
+         + message::size(edge_preds)
          + message::size(paths)
          + message::size(returning)
          + message::size(prev_node)
@@ -44,8 +44,8 @@ discover_paths_params :: pack(e::buffer::packer &packer) const
 {
     message::pack_buffer(packer, dest);
     message::pack_buffer(packer, path_len);
-    message::pack_buffer(packer, node_props);
-    message::pack_buffer(packer, edge_props);
+    message::pack_buffer(packer, node_preds);
+    message::pack_buffer(packer, edge_preds);
     message::pack_buffer(packer, paths);
     message::pack_buffer(packer, returning);
     message::pack_buffer(packer, prev_node);
@@ -57,8 +57,8 @@ discover_paths_params :: unpack(e::unpacker &unpacker)
 {
     message::unpack_buffer(unpacker, dest);
     message::unpack_buffer(unpacker, path_len);
-    message::unpack_buffer(unpacker, node_props);
-    message::unpack_buffer(unpacker, edge_props);
+    message::unpack_buffer(unpacker, node_preds);
+    message::unpack_buffer(unpacker, edge_preds);
     message::unpack_buffer(unpacker, paths);
     message::unpack_buffer(unpacker, returning);
     message::unpack_buffer(unpacker, prev_node);
@@ -159,7 +159,7 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
         } else {
             // visit this node now
             dp_len_state &dp_state = state.vmap[params.path_len];
-            if (!n.has_all_properties(params.node_props)) {
+            if (!n.has_all_predicates(params.node_preds)) {
                 // node does not have all required properties, return immediately
                 params.returning = true;
                 assert(params.paths.empty());
@@ -179,7 +179,7 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
                     for (edge &e: n.get_edges()) {
                         const db::remote_node &nbr = e.get_neighbor();
                         if (params.path_ancestors.find(nbr.handle) == params.path_ancestors.end()
-                        &&  e.has_all_properties(params.edge_props)) {
+                        &&  e.has_all_predicates(params.edge_preds)) {
                             next.emplace_back(std::make_pair(nbr, params));
                             dp_state.outstanding_count++;
                         }
@@ -221,7 +221,7 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
             edge_set &eset = dp_state.paths[n.get_handle()];
             for (edge &e: n.get_edges()) {
                 node_handle_t nbr = e.get_neighbor().handle;
-                if (e.has_all_properties(params.edge_props) && dp_state.paths.find(nbr) != dp_state.paths.end()) {
+                if (e.has_all_predicates(params.edge_preds) && dp_state.paths.find(nbr) != dp_state.paths.end()) {
                     cl::edge cl_e;
                     e.get_client_edge(n.get_handle(), cl_e);
                     eset.emplace(cl_e);

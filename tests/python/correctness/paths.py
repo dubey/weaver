@@ -35,7 +35,7 @@ c.create_node('dst')
 # layer 1
 c.create_node('1a')
 c.create_node('1b')
-c.create_edge('src', '1a')
+red1 = c.create_edge('src', '1a')
 c.create_edge('src', '1b')
 
 # layer 2
@@ -44,7 +44,7 @@ c.create_node('2b')
 c.create_node('2c')
 c.create_node('2d')
 c.create_node('2e')
-c.create_edge('1a', '2a')
+red2 = c.create_edge('1a', '2a')
 c.create_edge('1a', '2b')
 c.create_edge('1a', '2c')
 c.create_edge('1b', '2d')
@@ -58,13 +58,17 @@ c.create_edge('src', '3') # src to layer3
 c.create_edge('3', '1a') # layer3 to layer1 for cycle
 
 # edges to dst
-c.create_edge('2a', 'dst')
+red3 = c.create_edge('2a', 'dst')
 c.create_edge('2b', 'dst')
 c.create_edge('3', 'dst')
 c.create_edge('2e', 'dst')
 
+c.set_edge_property(red1, 'color', 'red')
+c.set_edge_property(red2, 'color', 'red')
+c.set_edge_property(red3, 'color', 'red')
+
 c.end_tx()
 
 # discover paths between src and dst
-#paths = c.discover_paths('src', 'dst')
-#print paths
+paths = c.discover_paths('src', 'dst')
+print paths

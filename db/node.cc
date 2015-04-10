@@ -102,6 +102,14 @@ node :: has_all_properties(std::vector<std::pair<std::string, std::string>> &pro
     return base.has_all_properties(props);
 }
 
+bool
+node :: has_all_predicates(std::vector<predicate::prop_predicate> &preds)
+{
+    assert(base.view_time != nullptr);
+    assert(base.time_oracle != nullptr);
+    return base.has_all_predicates(preds);
+}
+
 void
 node :: add_alias(const node_handle_t &alias)
 {
