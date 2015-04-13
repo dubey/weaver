@@ -325,16 +325,16 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     for (pugi::xml_node prop: node.children("data")) {
                         std::string key = prop.attribute("key").value();
                         std::string value = prop.child_value();
-                        if (prop_delim) {
+                        if (!prop_delim || value.empty()) {
+                            (key == BulkLoadNodeAliasKey)? S->add_node_alias_nonlocking(n, value) :
+                                                           S->set_node_property_nonlocking(n, key, value, zero_clk);
+                        } else {
                             std::vector<std::string> values;
                             split(value, BulkLoadPropertyValueDelimiter, values);
                             for (std::string &v: values) {
                                 (key == BulkLoadNodeAliasKey)? S->add_node_alias_nonlocking(n, v) :
                                                                S->set_node_property_nonlocking(n, key, v, zero_clk);
                             }
-                        } else {
-                            (key == BulkLoadNodeAliasKey)? S->add_node_alias_nonlocking(n, value) :
-                                                           S->set_node_property_nonlocking(n, key, value, zero_clk);
                         }
                     }
                     if (++cur_shard_node_count % 10000 == 0) {
@@ -378,14 +378,14 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                             n->add_temp_index(value);
                         }
 
-                        if (prop_delim) {
+                        if (!prop_delim || value.empty()) {
+                            S->set_edge_property_bulk_load(n, edge_handle, key, value, zero_clk);
+                        } else {
                             std::vector<std::string> values;
                             split(value, BulkLoadPropertyValueDelimiter, values);
                             for (std::string &v: values) {
                                 S->set_edge_property_bulk_load(n, edge_handle, key, v, zero_clk);
                             }
-                        } else {
-                            S->set_edge_property_bulk_load(n, edge_handle, key, value, zero_clk);
                         }
                     }
 

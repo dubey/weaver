@@ -172,24 +172,25 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
         // Kronos not required
         return ret_idx;
     } else {
-        // check cache
         uint64_t num_clks = clocks.size();
-        for (uint64_t i = 0; i < num_clks; i++) {
-            for (uint64_t j = i+1; j < num_clks; j++) {
-                if (!large.at(i) && !large.at(j)) {
-                    int cmp = kcache.compare(clocks[i].clock, clocks[j].clock);
-                    if (cmp == 0) {
-                        large[j] = true;
-                        cache_hits++;
-                    } else if (cmp == 1) {
-                        large[i] = true;
-                        cache_hits++;
-                    } else {
-                        assert(cmp == -1);
-                    }
-                }
-            }
-        }
+        // TODO turning off cache for now
+        //// check cache
+        //for (uint64_t i = 0; i < num_clks; i++) {
+        //    for (uint64_t j = i+1; j < num_clks; j++) {
+        //        if (!large.at(i) && !large.at(j)) {
+        //            int cmp = kcache.compare(clocks[i].clock, clocks[j].clock);
+        //            if (cmp == 0) {
+        //                large[j] = true;
+        //                cache_hits++;
+        //            } else if (cmp == 1) {
+        //                large[i] = true;
+        //                cache_hits++;
+        //            } else {
+        //                assert(cmp == -1);
+        //            }
+        //        }
+        //    }
+        //}
         uint64_t num_large = std::count(large.begin(), large.end(), true);
         if (num_large == (num_clks-1)) {
             // Kronos not required
@@ -247,7 +248,7 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
                     switch (wp->order) {
                         case CHRONOS_HAPPENS_BEFORE:
                             large_upd.at(j) = true;
-                            kcache.add(clocks[i].clock, clocks[j].clock);
+                            //TODO turning off cache kcache.add(clocks[i].clock, clocks[j].clock);
                             //XXX if (num_pairs == 3 && (bad_count == 0 || bad_count == 2)) {
                             //XXX     test_bad[bad_count] = true;
                             //XXX }
@@ -255,7 +256,7 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
 
                         case CHRONOS_HAPPENS_AFTER:
                             large_upd.at(i) = true;
-                            kcache.add(clocks[j].clock, clocks[i].clock);
+                            //TODO turning off cache kcache.add(clocks[j].clock, clocks[i].clock);
                             //XXX if (num_pairs == 3 && bad_count == 1) {
                             //XXX     test_bad[bad_count] = true;
                             //XXX }
