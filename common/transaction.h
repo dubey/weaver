@@ -50,6 +50,7 @@ namespace transaction
         vc::vclock_t max_done_clk;
         uint64_t outstanding_progs;
         std::vector<uint64_t> shard_node_count;
+        std::vector<uint64_t> done_txs;
     };
 
     using tx_list_t = std::vector<std::shared_ptr<pending_update>>;

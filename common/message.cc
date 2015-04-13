@@ -241,7 +241,8 @@ message :: size(const std::shared_ptr<transaction::nop_data> &t)
 {
     return size(t->max_done_clk)
          + size(t->outstanding_progs)
-         + size(t->shard_node_count);
+         + size(t->shard_node_count)
+         + size(t->done_txs);
 }
 
 uint64_t
@@ -489,6 +490,7 @@ message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transact
     pack_buffer(packer, t->max_done_clk);
     pack_buffer(packer, t->outstanding_progs);
     pack_buffer(packer, t->shard_node_count);
+    pack_buffer(packer, t->done_txs);
 }
 
 void
@@ -753,6 +755,7 @@ message :: unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::nop
     unpack_buffer(unpacker, t->max_done_clk);
     unpack_buffer(unpacker, t->outstanding_progs);
     unpack_buffer(unpacker, t->shard_node_count);
+    unpack_buffer(unpacker, t->done_txs);
 }
 
 void

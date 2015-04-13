@@ -226,6 +226,7 @@ end_tx(uint64_t tx_id, uint64_t shard_id, coordinator::hyper_stub *hstub)
         hstub->clean_tx(tx_id);
 
         vts->outstanding_tx.erase(tx_id);
+        vts->done_txs.emplace(tx_id, tx->shard_write);
     }
     vts->tx_prog_mutex.unlock();
 }
@@ -266,6 +267,21 @@ nop_function()
             tx->nop->max_done_clk = *vts->max_done_clk;
             tx->nop->outstanding_progs = vts->pend_progs.size();
             tx->nop->shard_node_count = vts->shard_node_count;
+
+            for (auto &p: vts->done_txs) {
+                for (uint64_t shard_id = 0; shard_id < p.second.size(); shard_id++) {
+                    if (vts->to_nop[shard_id] && !p.second[shard_id]) {
+                        p.second[shard_id] = true;
+                    }
+                }
+                if (weaver_util::all(p.second)) {
+                    tx->nop->done_txs.emplace_back(p.first);
+                }
+            }
+            for (uint64_t r: tx->nop->done_txs) {
+                vts->done_txs.erase(r);
+            }
+
             vts->tx_prog_mutex.unlock();
 
             weaver_util::reset_all(vts->to_nop);

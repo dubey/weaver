@@ -581,6 +581,9 @@ nop(db::message_wrapper *request)
         S->cleanup_prog_states();
     }
 
+    // cleanup done txs
+    S->cleanup_done_txs(nop_arg->done_txs);
+
     // migration
     S->migration_mutex.lock();
 

@@ -560,6 +560,7 @@ namespace coordinator
                     this_nop->max_done_clk = nop->max_done_clk;
                     this_nop->outstanding_progs = nop->outstanding_progs;
                     this_nop->shard_node_count = nop->shard_node_count;
+                    this_nop->done_txs = nop->done_txs;
                 }
             }
         } else {

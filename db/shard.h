@@ -248,6 +248,7 @@ namespace db
             std::unordered_set<uint64_t> done_tx_ids;
             po6::threads::mutex done_tx_mtx;
             bool check_done_tx(uint64_t tx_id);
+            void cleanup_done_txs(const std::vector<uint64_t> &clean_txs);
             void restore_backup();
     };
 
@@ -1280,6 +1281,20 @@ namespace db
         done_tx_mtx.unlock();
 
         return found;
+    }
+
+    inline void
+    shard :: cleanup_done_txs(const std::vector<uint64_t> &clean_txs)
+    {
+        if (clean_txs.empty()) {
+            return;
+        }
+
+        done_tx_mtx.lock();
+        for (uint64_t id: clean_txs) {
+            done_tx_ids.erase(id);
+        }
+        done_tx_mtx.unlock();
     }
 
     // restore state when backup becomes primary due to failure
