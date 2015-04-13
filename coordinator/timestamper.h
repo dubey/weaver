@@ -100,7 +100,6 @@ namespace coordinator
             std::vector<current_prog*> pend_progs, done_progs;
             int prog_done_cnt;
             std::unique_ptr<vc::vclock_t> max_done_clk; // permanent deletion
-            std::unordered_map<node_prog::prog_type, req_reply_t> done_reqs; // prog state cleanup
 
             // mutexes
         public:
@@ -195,9 +194,6 @@ namespace coordinator
     {
         // initialize empty vector of done reqs for each prog type
         std::unordered_map<uint64_t, std::vector<bool>> empty_map;
-        done_reqs.emplace(node_prog::REACHABILITY, empty_map);
-        done_reqs.emplace(node_prog::DIJKSTRA, empty_map);
-        done_reqs.emplace(node_prog::CLUSTERING, empty_map);
 
         for (int i = 0; i < NUM_VT_THREADS; i++) {
             hstub_uninit.push_back(new hyper_stub());
@@ -563,7 +559,6 @@ namespace coordinator
                     std::shared_ptr<transaction::nop_data> this_nop = this_tx->nop;
                     this_nop->max_done_clk = nop->max_done_clk;
                     this_nop->outstanding_progs = nop->outstanding_progs;
-                    this_nop->done_reqs[i] = nop->done_reqs[i];
                     this_nop->shard_node_count = nop->shard_node_count;
                 }
             }

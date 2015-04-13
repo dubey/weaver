@@ -237,9 +237,7 @@ nop_function()
     timespec sleep_time;
     int sleep_ret;
     int sleep_flags = 0;
-    std::vector<uint64_t> del_done_reqs;
     std::shared_ptr<transaction::pending_tx> tx = nullptr;
-    uint64_t num_shards;
 
     sleep_time.tv_sec  = VT_TIMEOUT_NANO / NANO;
     sleep_time.tv_nsec = VT_TIMEOUT_NANO % NANO;
@@ -249,8 +247,6 @@ nop_function()
         assert((sleep_ret == 0 || sleep_ret == EINTR) && "error in clock_nanosleep");
 
         vts->periodic_update_mutex.lock();
-
-        num_shards = get_num_shards();
 
         // send nops and state cleanup info to shards
         if (weaver_util::any(vts->to_nop)) {
@@ -266,31 +262,10 @@ nop_function()
             tx->shard_write = vts->to_nop;
             vts->clk_rw_mtx.unlock();
 
-            del_done_reqs.clear();
             vts->tx_prog_mutex.lock();
             tx->nop->max_done_clk = *vts->max_done_clk;
             tx->nop->outstanding_progs = vts->pend_progs.size();
             tx->nop->shard_node_count = vts->shard_node_count;
-            for (auto &x: vts->done_reqs) {
-                // x.first = node prog type
-                // x.second = unordered_map <req_id -> vector<bool>(NumShards)>
-                for (auto &reply: x.second) {
-                    // reply.first = req_id
-                    // reply.second = vector<bool>(NumShards)
-                    for (uint64_t shard_id = 0; shard_id < num_shards; shard_id++) {
-                        if (vts->to_nop[shard_id] && (reply.second.size() > shard_id) && !reply.second[shard_id]) {
-                            reply.second[shard_id] = true;
-                            tx->nop->done_reqs[shard_id].emplace_back(std::make_pair(reply.first, x.first));
-                        }
-                    }
-                    if (weaver_util::all(reply.second)) {
-                        del_done_reqs.emplace_back(reply.first);
-                    }
-                }
-                for (auto &del: del_done_reqs) {
-                    x.second.erase(del);
-                }
-            }
             vts->tx_prog_mutex.unlock();
 
             weaver_util::reset_all(vts->to_nop);

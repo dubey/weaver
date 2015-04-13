@@ -575,10 +575,7 @@ nop(db::message_wrapper *request)
     S->increment_qts(vt_id, 1);
 
     // note done progs for state clean up
-    assert(nop_arg->done_reqs.size() == 1);
-    auto done_req_iter = nop_arg->done_reqs.begin();
-    assert(done_req_iter->first == shard_id-ShardIdIncr);
-    S->add_done_requests(done_req_iter->second, &nop_arg->max_done_clk, vt_id);
+    S->done_prog_clk(&nop_arg->max_done_clk, vt_id);
 
     if (++nop_count % 10000 == 0) {
         S->cleanup_prog_states();
@@ -1137,8 +1134,6 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
                 assert(rn.loc < num_shards + ShardIdIncr);
                 if (rn == db::coordinator || rn.loc == np.vt_id) {
                     // mark requests as done, will be done for other shards by no-ops from coordinator
-                    std::vector<std::pair<uint64_t, node_prog::prog_type>> completed_request {std::make_pair(np.req_id, np.prog_type_recvd)};
-                    S->add_done_requests(completed_request, nullptr, np.req_vclock->vt_id);
                     done_request = true;
                     // signal to send back to vector timestamper that issued request
                     std::unique_ptr<message::message> m(new message::message());

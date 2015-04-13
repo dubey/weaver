@@ -229,7 +229,7 @@ namespace db
             void delete_prog_states(uint64_t req_id, std::vector<node_version_t> &node_handles);
         public:
             void mark_nodes_using_state(uint64_t req_id, const vc::vclock &clk, std::vector<node_version_t> &node_handles);
-            void add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests, const vc::vclock_t *prog_clk, uint64_t vt_id);
+            void done_prog_clk(const vc::vclock_t *prog_clk, uint64_t vt_id);
             void cleanup_prog_states();
             bool check_done_prog(vc::vclock &clk);
 
@@ -1217,10 +1217,8 @@ namespace db
     }
 
     inline void
-    shard :: add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests, const vc::vclock_t *prog_clk, uint64_t vt_id)
+    shard :: done_prog_clk(const vc::vclock_t *prog_clk, uint64_t vt_id)
     {
-        std::vector<std::pair<uint64_t, std::vector<node_version_t>>> to_delete;
-
         node_prog_state_mutex.lock();
 
         if (prog_clk != nullptr) {
@@ -1229,19 +1227,7 @@ namespace db
             }
         }
 
-        for (auto &p: completed_requests) {
-            uint64_t req_id = p.first;
-            auto node_list_iter = outstanding_prog_states.find(req_id);
-            if (node_list_iter != outstanding_prog_states.end()) {
-                to_delete.emplace_back(std::make_pair(req_id, std::move(node_list_iter->second.second)));
-                outstanding_prog_states.erase(req_id);
-            }
-        }
         node_prog_state_mutex.unlock();
-
-        for (auto &p: to_delete) {
-            delete_prog_states(p.first, p.second);
-        }
     }
 
     inline void
