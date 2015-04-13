@@ -560,6 +560,7 @@ unpack_tx_request(db::message_wrapper *request)
 inline void
 nop(db::message_wrapper *request)
 {
+    static uint64_t nop_count = 0;
     uint64_t vt_id;
     vc::vclock vclk;
     uint64_t qts;
@@ -577,7 +578,11 @@ nop(db::message_wrapper *request)
     assert(nop_arg->done_reqs.size() == 1);
     auto done_req_iter = nop_arg->done_reqs.begin();
     assert(done_req_iter->first == shard_id-ShardIdIncr);
-    S->add_done_requests(done_req_iter->second);
+    S->add_done_requests(done_req_iter->second, &nop_arg->max_done_clk, vt_id);
+
+    if (++nop_count % 10000 == 0) {
+        S->cleanup_prog_states();
+    }
 
     // migration
     S->migration_mutex.lock();
@@ -1073,7 +1078,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
                 }
                 */
 #endif
-            if (S->check_done_request(np.req_id, *np.req_vclock)) {
+            if (S->check_done_prog(*np.req_vclock)) {
                 done_request = true;
                 S->release_node(node);
                 break;
@@ -1133,7 +1138,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
                 if (rn == db::coordinator || rn.loc == np.vt_id) {
                     // mark requests as done, will be done for other shards by no-ops from coordinator
                     std::vector<std::pair<uint64_t, node_prog::prog_type>> completed_request {std::make_pair(np.req_id, np.prog_type_recvd)};
-                    S->add_done_requests(completed_request);
+                    S->add_done_requests(completed_request, nullptr, np.req_vclock->vt_id);
                     done_request = true;
                     // signal to send back to vector timestamper that issued request
                     std::unique_ptr<message::message> m(new message::message());
@@ -1189,7 +1194,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
     }
 
     if (!nodes_that_created_state.empty()) {
-        S->mark_nodes_using_state(np.req_id, nodes_that_created_state);
+        S->mark_nodes_using_state(np.req_id, *np.req_vclock, nodes_that_created_state);
     }
 }
 
@@ -1293,7 +1298,7 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
     S->migration_mutex.unlock();
 
     // check if request completed
-    if (S->check_done_request(np.req_id, *np.req_vclock)) {
+    if (S->check_done_prog(*np.req_vclock)) {
         return; // done request
     }
 
@@ -1495,9 +1500,9 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg, order::oracle *ti
     std::vector<node_version_t> this_node_vec(1, std::make_pair(node_handle, n->base.get_creat_time()));
     S->release_node(n);
 
-    for (uint64_t req_id: prog_state_reqs) {
-        S->mark_nodes_using_state(req_id, this_node_vec);
-    }
+    //for (uint64_t req_id: prog_state_reqs) {
+    //    //XXX migration need req_vclock S->mark_nodes_using_state(req_id, this_node_vec);
+    //}
 
     // move deferred reads to local for releasing migration_mutex
     std::vector<std::unique_ptr<message::message>> deferred_reads;

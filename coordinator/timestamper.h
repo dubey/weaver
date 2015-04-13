@@ -52,7 +52,7 @@ namespace coordinator
 
     using tx_queue_t = std::priority_queue<std::shared_ptr<transaction::pending_tx>, std::vector<std::shared_ptr<transaction::pending_tx>>, greater_tx_ptr>;
     using prog_queue_t = std::unique_ptr<std::vector<blocked_prog>>;
-    using prog_reply_t = std::unordered_map<uint64_t, std::vector<bool>>;
+    using req_reply_t = std::unordered_map<uint64_t, std::vector<bool>>;
 
     class timestamper
     {
@@ -93,13 +93,14 @@ namespace coordinator
 
             // transactions
             std::unordered_map<uint64_t, std::shared_ptr<transaction::pending_tx>> outstanding_tx;
+            req_reply_t done_txs; // tx state cleanup
 
             // prog cleanup and permanent deletion
             std::unordered_set<uint64_t> outstanding_progs; // for multiple returns and ft
             std::vector<current_prog*> pend_progs, done_progs;
             int prog_done_cnt;
             std::unique_ptr<vc::vclock_t> max_done_clk; // permanent deletion
-            std::unordered_map<node_prog::prog_type, prog_reply_t> done_reqs; // prog state cleanup
+            std::unordered_map<node_prog::prog_type, req_reply_t> done_reqs; // prog state cleanup
 
             // mutexes
         public:

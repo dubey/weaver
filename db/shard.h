@@ -222,14 +222,16 @@ namespace db
             // node programs
         private:
             po6::threads::mutex node_prog_state_mutex;
-            std::unordered_set<uint64_t> done_prog_ids; // request ids that have finished
-            std::unordered_map<uint64_t, std::vector<node_version_t>> outstanding_prog_states; // maps request_id to list of nodes that have created prog state for that req id
-            void clear_all_state(const std::unordered_map<uint64_t, std::vector<node_version_t>> &outstanding_prog_states);
+            using out_prog_map_t = std::unordered_map<uint64_t, std::pair<vc::vclock, std::vector<node_version_t>>>;
+            out_prog_map_t outstanding_prog_states; // maps request_id to list of nodes that have created prog state for that req id
+            std::vector<vc::vclock_t> prog_done_clk; // largest clock of cumulative completed node prog for each VT
+            void clear_all_state(const out_prog_map_t &outstanding_prog_states);
             void delete_prog_states(uint64_t req_id, std::vector<node_version_t> &node_handles);
         public:
-            void mark_nodes_using_state(uint64_t req_id, std::vector<node_version_t> &node_handles);
-            void add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests);
-            bool check_done_request(uint64_t req_id, vc::vclock &clk);
+            void mark_nodes_using_state(uint64_t req_id, const vc::vclock &clk, std::vector<node_version_t> &node_handles);
+            void add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests, const vc::vclock_t *prog_clk, uint64_t vt_id);
+            void cleanup_prog_states();
+            bool check_done_prog(vc::vclock &clk);
 
             std::unordered_map<std::tuple<cache_key_t, uint64_t, node_handle_t>, void *> node_prog_running_states; // used for fetching cache contexts
             po6::threads::mutex node_prog_running_states_mutex;
@@ -272,6 +274,7 @@ namespace db
         , max_seen_clk(NumVts, vc::vclock_t(ClkSz, 0))
         , target_prog_clk(NumVts, vc::vclock_t(ClkSz, 0))
         , max_done_clk(NumVts, vc::vclock_t(ClkSz, 0))
+        , prog_done_clk(NumVts, vc::vclock_t(ClkSz, 0))
         , watch_set_lookups(0)
         , watch_set_nops(0)
         , watch_set_piggybacks(0)
@@ -359,7 +362,7 @@ namespace db
         // reset qts if a VTS died
         std::vector<server> delta = prev_config.delta(config);
         bool clear_queued = false;
-        std::unordered_map<uint64_t, std::vector<node_version_t>> clear_map;
+        out_prog_map_t clear_map;
         for (const server &srv: delta) {
             if (srv.type == server::VT) {
                 server::state_t prev_state = prev_config.get_state(srv.id);
@@ -1147,12 +1150,12 @@ namespace db
     // node program
 
     inline void
-    shard :: clear_all_state(const std::unordered_map<uint64_t, std::vector<node_version_t>> &prog_states)
+    shard :: clear_all_state(const out_prog_map_t &prog_states)
     {
         std::unordered_map<node_handle_t, std::vector<vc::vclock>> cleared;
 
         for (auto &p: prog_states) {
-            for (const node_version_t &nv: p.second) {
+            for (const node_version_t &nv: p.second.second) {
                 bool found = false;
 
                 std::vector<vc::vclock> &clk_vec = cleared[nv.first];
@@ -1199,47 +1202,38 @@ namespace db
     }
 
     inline void
-    shard :: mark_nodes_using_state(uint64_t req_id, std::vector<node_version_t> &state_nodes)
+    shard :: mark_nodes_using_state(uint64_t req_id, const vc::vclock &clk, std::vector<node_version_t> &state_nodes)
     {
         node_prog_state_mutex.lock();
-        bool done_request = (done_prog_ids.find(req_id) != done_prog_ids.end());
-        if (!done_request) {
-            auto state_list_iter = outstanding_prog_states.find(req_id);
-            if (state_list_iter == outstanding_prog_states.end()) {
-                outstanding_prog_states.emplace(req_id, std::move(state_nodes));
-            } else {
-                std::vector<node_version_t> &add_to = state_list_iter->second;
-                add_to.reserve(add_to.size() + state_nodes.size());
-                add_to.insert(add_to.end(), state_nodes.begin(), state_nodes.end());
-            }
-            node_prog_state_mutex.unlock();
-        } else { // request is finished, just delete things
-            node_prog_state_mutex.unlock();
-            delete_prog_states(req_id, state_nodes);
+        auto state_list_iter = outstanding_prog_states.find(req_id);
+        if (state_list_iter == outstanding_prog_states.end()) {
+            outstanding_prog_states.emplace(req_id, std::make_pair(clk, std::move(state_nodes)));
+        } else {
+            std::vector<node_version_t> &add_to = state_list_iter->second.second;
+            add_to.reserve(add_to.size() + state_nodes.size());
+            add_to.insert(add_to.end(), state_nodes.begin(), state_nodes.end());
         }
+        node_prog_state_mutex.unlock();
     }
 
     inline void
-    shard :: add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests)
+    shard :: add_done_requests(std::vector<std::pair<uint64_t, node_prog::prog_type>> &completed_requests, const vc::vclock_t *prog_clk, uint64_t vt_id)
     {
-        if (completed_requests.empty()) {
-            return;
-        }
-        std::vector<uint64_t> completed_request_ids;
-        for (auto &p: completed_requests) {
-            completed_request_ids.push_back(p.first);
-        }
-
         std::vector<std::pair<uint64_t, std::vector<node_version_t>>> to_delete;
 
         node_prog_state_mutex.lock();
-        done_prog_ids.insert(completed_request_ids.begin(), completed_request_ids.end());
+
+        if (prog_clk != nullptr) {
+            if (order::oracle::happens_before_no_kronos(prog_done_clk[vt_id], *prog_clk)) {
+                prog_done_clk[vt_id] = *prog_clk;
+            }
+        }
 
         for (auto &p: completed_requests) {
             uint64_t req_id = p.first;
             auto node_list_iter = outstanding_prog_states.find(req_id);
             if (node_list_iter != outstanding_prog_states.end()) {
-                to_delete.emplace_back(std::make_pair(req_id, std::move(node_list_iter->second)));
+                to_delete.emplace_back(std::make_pair(req_id, std::move(node_list_iter->second.second)));
                 outstanding_prog_states.erase(req_id);
             }
         }
@@ -1250,11 +1244,35 @@ namespace db
         }
     }
 
+    inline void
+    shard :: cleanup_prog_states()
+    {
+        std::vector<std::pair<uint64_t, std::vector<node_version_t>>> to_delete;
+
+        node_prog_state_mutex.lock();
+        for (const auto &p: outstanding_prog_states) {
+            const vc::vclock &clk = p.second.first;
+            if (order::oracle::happens_before_no_kronos(clk.clock, prog_done_clk[clk.vt_id])) {
+                to_delete.emplace_back(std::make_pair(p.first, std::move(p.second.second)));
+            }
+        }
+
+        for (const auto &p: to_delete) {
+            outstanding_prog_states.erase(p.first);
+        }
+        node_prog_state_mutex.unlock();
+
+        for (auto &p: to_delete) {
+            delete_prog_states(p.first, p.second);
+        }
+    }
+
     inline bool
-    shard :: check_done_request(uint64_t req_id, vc::vclock &clk)
+    shard :: check_done_prog(vc::vclock &clk)
     {
         node_prog_state_mutex.lock();
-        bool done = (clk.get_epoch() < min_prog_epoch) || (done_prog_ids.find(req_id) != done_prog_ids.end());
+        bool done = (clk.get_epoch() < min_prog_epoch)
+                 || (order::oracle::happens_before_no_kronos(clk.clock, prog_done_clk[clk.vt_id]));
         node_prog_state_mutex.unlock();
         return done;
     }
