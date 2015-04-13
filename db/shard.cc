@@ -1788,21 +1788,22 @@ recv_loop(uint64_t thread_id)
                     assert(vclk.clock.size() == ClkSz);
                     assert(txtype != transaction::FAIL);
 
-                    if (S->check_done_tx(tx_id)) {
-                        // tx already executed, this must have been resent because of vt failure
-                        S->increment_qts(vt_id, 1);
-
-                        message::message conf_msg;
-                        conf_msg.prepare_message(message::TX_DONE, tx_id, shard_id);
-                        S->comm.send(vt_id, conf_msg.buf);
-                        WDEBUG << "done tx " << tx_id << std::endl;
-                    } else {
+                    if (txtype == transaction::NOP) {
                         mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
-                        tx_order = S->qm.check_wr_request(vclk, qts);
-                        assert(tx_order == db::PRESENT || tx_order == db::FUTURE);
+                        qreq = new db::queued_request(qts, vclk, nop, mwrap);
+                        S->qm.enqueue_write_request(vt_id, qreq);
+                    } else {
+                        if (S->check_done_tx(tx_id)) {
+                            // tx already executed, this must have been resent because of vt failure
+                            S->increment_qts(vt_id, 1);
 
-                        if (txtype == transaction::UPDATE) {
-                            // write tx
+                            message::message conf_msg;
+                            conf_msg.prepare_message(message::TX_DONE, tx_id, shard_id);
+                            S->comm.send(vt_id, conf_msg.buf);
+                        } else {
+                            mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
+                            tx_order = S->qm.check_wr_request(vclk, qts);
+                            assert(tx_order == db::PRESENT || tx_order == db::FUTURE);
                             if (tx_order == db::PRESENT) {
                                 mwrap->time_oracle = time_oracle;
                                 unpack_tx_request(mwrap);
@@ -1811,14 +1812,9 @@ recv_loop(uint64_t thread_id)
                                 qreq = new db::queued_request(qts, vclk, unpack_tx_request, mwrap);
                                 S->qm.enqueue_write_request(vt_id, qreq);
                             }
-                        } else {
-                            // nop
-                            assert(tx_order != db::PAST);
-                            // nop goes through queues for both PRESENT and FUTURE
-                            qreq = new db::queued_request(qts, vclk, nop, mwrap);
-                            S->qm.enqueue_write_request(vt_id, qreq);
                         }
                     }
+
                     break;
                 }
 

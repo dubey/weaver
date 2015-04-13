@@ -217,7 +217,6 @@ namespace db
             std::vector<vc::vclock_t> max_seen_clk // largest clock seen from each vector timestamper
                 , target_prog_clk
                 , max_done_clk; // largest clock of completed node prog for each VT
-            //std::vector<vc::vclock_t> max_done_clk; // vclk of cumulative last node program completed
             std::vector<bool> migr_edge_acks;
 
             // node programs
