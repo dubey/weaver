@@ -14,6 +14,8 @@
 #include <memory>
 #include "db/edge.h"
 
+db::edge db::edge::empty_edge;
+
 using db::edge;
 using db::remote_node;
 
@@ -105,6 +107,7 @@ edge :: get_client_edge(const std::string &start_node, cl::edge &e)
     e.handle = base.get_handle();
     e.start_node = start_node;
     e.end_node = nbr.handle;
+    e.properties.clear();
 
     node_prog::prop_list plist = get_properties();
     for (std::vector<std::shared_ptr<node_prog::property>> pvec: plist) {

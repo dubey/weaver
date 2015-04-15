@@ -54,6 +54,8 @@ namespace db
             bool has_all_predicates(std::vector<predicate::prop_predicate> &preds);
             const edge_handle_t& get_handle() const { return base.get_handle(); }
             void get_client_edge(const std::string &node, cl::edge &e);
+
+            static edge empty_edge;
     };
 }
 

@@ -70,6 +70,43 @@ node :: add_edge(edge *e)
     }
 }
 
+bool
+node :: edge_exists(const edge_handle_t &handle)
+{
+    assert(base.view_time != nullptr);
+    assert(base.time_oracle != nullptr);
+    auto find_iter = out_edges.find(handle);
+    if (find_iter != out_edges.end()) {
+        for (edge *e: find_iter->second) {
+            if (base.time_oracle->clock_creat_before_del_after(*base.view_time, e->base.get_creat_time(), e->base.get_del_time())) {
+                return true;
+            }
+        }
+        return false;
+    } else {
+        return false;
+    }
+}
+
+db::edge&
+node :: get_edge(const edge_handle_t &handle)
+{
+    assert(base.view_time != nullptr);
+    assert(base.time_oracle != nullptr);
+    auto find_iter = out_edges.find(handle);
+    if (find_iter != out_edges.end()) {
+        for (edge *e: find_iter->second) {
+            if (base.time_oracle->clock_creat_before_del_after(*base.view_time, e->base.get_creat_time(), e->base.get_del_time())) {
+                e->base.view_time = base.view_time;
+                e->base.time_oracle = base.time_oracle;
+                return *e;
+            }
+        }
+    }
+
+    return edge::empty_edge;
+}
+
 node_prog::edge_list
 node :: get_edges()
 {
@@ -176,6 +213,9 @@ void
 node :: get_client_node(cl::node &n, bool get_p, bool get_e, bool get_a)
 {
     n.handle = base.get_handle();
+    n.properties.clear();
+    n.out_edges.clear();
+    n.aliases.clear();
 
     if (get_p) {
         node_prog::prop_list plist = get_properties();

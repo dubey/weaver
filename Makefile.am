@@ -73,6 +73,7 @@ noinst_HEADERS+=	node_prog/base_classes.h \
 					node_prog/reach_program.h \
 					node_prog/traverse_with_props.h \
 					node_prog/discover_paths.h \
+					node_prog/get_btc_block.h \
 					common/cache_constants.h \
 					common/config_constants.h \
 					common/hyper_stub_base.h \
@@ -139,6 +140,7 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    node_prog/read_node_props_program.cc \
 		                    node_prog/traverse_with_props.cc \
 		                    node_prog/discover_paths.cc \
+		                    node_prog/get_btc_block.cc \
 		                    db/element.cc \
 		                    db/property.cc \
 		                    db/edge.cc \
@@ -208,6 +210,7 @@ weaver_shard_SOURCES=	common/ids.cc \
 		                node_prog/read_node_props_program.cc \
 		                node_prog/traverse_with_props.cc \
 		                node_prog/discover_paths.cc \
+		                node_prog/get_btc_block.cc \
 		                db/hyper_stub.cc \
 		                db/queue_manager.cc \
 		                db/element.cc \
@@ -250,6 +253,7 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 		                    node_prog/two_neighborhood_program.cc \
 		                    node_prog/traverse_with_props.cc \
 		                    node_prog/discover_paths.cc \
+		                    node_prog/get_btc_block.cc \
 		                    db/element.cc \
 		                    db/property.cc \
 		                    client/comm_wrapper.cc \

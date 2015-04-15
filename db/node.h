@@ -111,6 +111,8 @@ namespace db
         public:
             void add_edge_unique(edge *e); // bulk loading
             void add_edge(edge *e);
+            bool edge_exists(const edge_handle_t&);
+            edge& get_edge(const edge_handle_t&);
             node_prog::edge_list get_edges();
             node_prog::prop_list get_properties();
             bool has_property(std::pair<std::string, std::string> &p);

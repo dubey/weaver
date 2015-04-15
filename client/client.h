@@ -35,6 +35,7 @@
 #include "node_prog/node_get_program.h"
 #include "node_prog/traverse_with_props.h"
 #include "node_prog/discover_paths.h"
+#include "node_prog/get_btc_block.h"
 
 namespace cl
 {
@@ -77,6 +78,7 @@ namespace cl
             bool node_get_program(std::vector<std::pair<std::string, node_prog::node_get_params>> &initial_args, node_prog::node_get_params&);
             bool traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args, node_prog::traverse_props_params&);
             bool discover_paths_program(std::vector<std::pair<std::string, node_prog::discover_paths_params>> &initial_args, node_prog::discover_paths_params&);
+            bool get_btc_block_program(std::vector<std::pair<std::string, node_prog::get_btc_block_params>> &initial_args, node_prog::get_btc_block_params&);
 
             void start_migration();
             void single_stream_migration();

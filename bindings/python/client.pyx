@@ -379,6 +379,13 @@ cdef extern from 'node_prog/discover_paths.h' namespace 'node_prog':
         remote_node prev_node
         node_handle_t src
 
+cdef extern from 'node_prog/get_btc_block.h' namespace 'node_prog':
+    cdef cppclass get_btc_block_params:
+        get_btc_block_params()
+        node_handle_t block
+        node node
+        vector[pair[vector[edge], vector[edge]]] txs
+
 cdef extern from 'client/client.h' namespace 'cl':
     cdef cppclass client:
         client(const char *coordinator, uint16_t port, const char *config_file)
@@ -403,6 +410,7 @@ cdef extern from 'client/client.h' namespace 'cl':
         bint node_get_program(vector[pair[string, node_get_params]] &initial_args, node_get_params&) nogil
         bint traverse_props_program(vector[pair[string, traverse_props_params]] &initial_args, traverse_props_params&) nogil
         bint discover_paths_program(vector[pair[string, discover_paths_params]] &initial_args, discover_paths_params&) nogil
+        bint get_btc_block_program(vector[pair[string, get_btc_block_params]] &initial_args, get_btc_block_params&) nogil
         void start_migration()
         void single_stream_migration()
         void exit_weaver()
@@ -950,6 +958,46 @@ cdef class Client:
             ret_paths[cur_node] = cur_edges
             inc(path_iter)
         return ret_paths
+
+    def get_btc_block(self, block):
+        cdef vector[pair[string, get_btc_block_params]] c_args
+        cdef pair[string, get_btc_block_params] arg_pair
+        arg_pair.first = block
+        arg_pair.second.block = block
+        c_args.push_back(arg_pair)
+
+        cdef get_btc_block_params c_rp
+        cdef bint success
+        with nogil:
+            success = self.thisptr.get_btc_block_program(c_args, c_rp)
+
+        if not success:
+            raise WeaverError('node prog error')
+
+        new_node = Node()
+        self.__convert_node_to_client_node(c_rp.node , new_node)
+        txs = []
+        cdef vector[edge].iterator edge_iter
+        cdef vector[pair[vector[edge], vector[edge]]].iterator tx_iter = c_rp.txs.begin()
+        while tx_iter != c_rp.txs.end():
+            in_txs = []
+            out_txs = []
+
+            edge_iter = deref(tx_iter).first.begin()
+            while edge_iter != deref(tx_iter).first.end():
+                in_txs.append(Edge())
+                self.__convert_edge_to_client_edge(deref(edge_iter), in_txs[-1])
+                inc(edge_iter)
+
+            edge_iter = deref(tx_iter).second.begin()
+            while edge_iter != deref(tx_iter).second.end():
+                out_txs.append(Edge())
+                self.__convert_edge_to_client_edge(deref(edge_iter), out_txs[-1])
+                inc(edge_iter)
+
+            txs.append((in_txs, out_txs))
+            inc(tx_iter)
+        return (new_node, txs)
 
     def __enumerate_paths_recursive(self, paths, src, dst, path_len, visited):
         ret_paths = []
