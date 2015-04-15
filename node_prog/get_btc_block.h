@@ -32,7 +32,7 @@ namespace node_prog
         std::vector<btc_tx_t> txs;
 
         bool returning;
-        edge_handle_t tx_to_get;
+        std::vector<edge_handle_t> tx_to_get;
         db::remote_node block_node;
 
         get_btc_block_params();

@@ -100,57 +100,81 @@ node_prog :: get_btc_block_node_program(node_prog::node &n,
             std::string block_tx_str = "BLOCK_TX_";
             params.block_node = rn;
             state.outstanding_count = 0;
+            std::unordered_map<node_handle_t, std::pair<db::remote_node, std::vector<std::string>>> send_map;
             for (edge &e: n.get_edges()) {
                 if (e.get_handle().compare(0, block_tx_str.size(), block_tx_str) == 0) {
-                    params.tx_to_get = e.get_handle().substr(block_tx_str.size());
-                    next.emplace_back(std::make_pair(e.get_neighbor(), params));
+                    std::string tx_to_get = e.get_handle().substr(block_tx_str.size());
+                    auto sm_iter = send_map.find(e.get_neighbor().handle);
+                    if (sm_iter == send_map.end()) {
+                        send_map[e.get_neighbor().handle] = std::make_pair(e.get_neighbor(), std::vector<std::string>(1, tx_to_get));
+                    } else {
+                        sm_iter->second.second.emplace_back(tx_to_get);
+                    }
+                }
+            }
+
+            if (send_map.empty()) {
+                n.get_client_node(params.node, true, true, true);
+                next.emplace_back(std::make_pair(db::coordinator, std::move(params)));
+            } else {
+                for (auto &p: send_map) {
+                    params.tx_to_get.clear();
+                    const db::remote_node &nbr = p.second.first;
+                    for (const std::string &tx: p.second.second) {
+                        params.tx_to_get.emplace_back(tx);
+                    }
+                    next.emplace_back(std::make_pair(nbr, params));
                     state.outstanding_count++;
                 }
             }
-
-            if (next.empty()) {
-                assert(state.outstanding_count == 0);
-                n.get_client_node(params.node, true, true, true);
-                next.emplace_back(std::make_pair(db::coordinator, std::move(params)));
-            }
         } else {
             assert(!params.tx_to_get.empty());
-            std::string &tx_handle = params.tx_to_get;
-            if (n.edge_exists(tx_handle)) {
-                btc_tx_t btc_tx;
-                edge &e = n.get_edge(tx_handle);
-                cl::edge cl_edge;
-                e.get_client_edge(n.get_handle(), cl_edge);
-                btc_tx.second.emplace_back(cl_edge);
 
-                std::string tx_id;
-                for (auto pvec: e.get_properties()) {
-                    for (auto &p: pvec) {
-                        if (p->key == "tx_id") {
-                            tx_id = p->value;
+            std::unordered_map<std::string, btc_tx_t> seen_txs;
+            for (std::string &tx_handle: params.tx_to_get) {
+                if (n.edge_exists(tx_handle)) {
+                    edge &e = n.get_edge(tx_handle);
+                    cl::edge cl_edge;
+                    e.get_client_edge(n.get_handle(), cl_edge);
+
+                    std::string tx_id;
+                    for (auto pvec: e.get_properties()) {
+                        for (auto &p: pvec) {
+                            if (p->key == "tx_id") {
+                                tx_id = p->value;
+                            }
+                        }
+                    }
+                    assert(!tx_id.empty());
+                    std::string tx_out = "TXOUT_";
+                    tx_id = tx_id.substr(tx_out.size());
+                    tx_id.pop_back();
+                    tx_id.pop_back();
+
+                    bool exists = seen_txs.find(tx_id) != seen_txs.end();
+                    btc_tx_t &btc_tx = seen_txs[tx_id];
+                    btc_tx.second.emplace_back(cl_edge);
+
+                    if (!exists) {
+                        predicate::prop_predicate pred;
+                        std::vector<predicate::prop_predicate> edge_preds;
+                        pred.key = "consumed_tx_id";
+                        pred.value = tx_id;
+                        pred.rel = predicate::STARTS_WITH;
+                        edge_preds.emplace_back(pred);
+
+                        for (edge &in_e: n.get_edges()) {
+                            if (in_e.has_all_predicates(edge_preds)) {
+                                e.get_client_edge(n.get_handle(), cl_edge);
+                                btc_tx.first.emplace_back(cl_edge);
+                            }
                         }
                     }
                 }
-                assert(!tx_id.empty());
+            }
 
-                predicate::prop_predicate pred;
-                std::vector<predicate::prop_predicate> edge_preds;
-                pred.key = "consumed_tx_id";
-                std::string tx_out = "TXOUT_";
-                pred.value = tx_id.substr(tx_out.size());
-                pred.value.pop_back();
-                pred.value.pop_back();
-                pred.rel = predicate::STARTS_WITH;
-                edge_preds.emplace_back(pred);
-
-                for (edge &in_e: n.get_edges()) {
-                    if (in_e.has_all_predicates(edge_preds)) {
-                        e.get_client_edge(n.get_handle(), cl_edge);
-                        btc_tx.first.emplace_back(cl_edge);
-                    }
-                }
-
-                params.txs.emplace_back(std::move(btc_tx));
+            for (const auto &p: seen_txs) {
+                params.txs.emplace_back(p.second);
             }
             params.returning = true;
             next.emplace_back(std::make_pair(params.block_node, std::move(params)));
