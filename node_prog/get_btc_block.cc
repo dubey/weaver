@@ -165,7 +165,7 @@ node_prog :: get_btc_block_node_program(node_prog::node &n,
 
                         for (edge &in_e: n.get_edges()) {
                             if (in_e.has_all_predicates(edge_preds)) {
-                                e.get_client_edge(n.get_handle(), cl_edge);
+                                in_e.get_client_edge(n.get_handle(), cl_edge);
                                 btc_tx.first.emplace_back(cl_edge);
                             }
                         }
