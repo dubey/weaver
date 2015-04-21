@@ -53,25 +53,6 @@ void migration_begin();
 void migration_wrapper();
 void migration_end();
 
-void
-end_program(int param)
-{
-    WDEBUG << "Ending program, param = " << param << std::endl;
-    WDEBUG << "watch_set lookups originated from this shard " << S->watch_set_lookups << std::endl;
-    WDEBUG << "watch_set nops originated from this shard " << S->watch_set_nops << std::endl;
-    WDEBUG << "watch set piggybacks on this shard " << S->watch_set_piggybacks << std::endl;
-    if (param == SIGINT) {
-        // TODO proper shutdown
-        //S->exit_mutex.lock();
-        //S->to_exit = true;
-        //S->exit_mutex.unlock();
-        exit(0);
-    } else {
-        WDEBUG << "Not SIGINT, exiting immediately." << std::endl;
-        exit(0);
-    }
-}
-
 
 // parse the string 'line' as a uint64_t starting at index 'idx' till the first whitespace or end of string
 // store result in 'n'
@@ -2060,14 +2041,18 @@ init_shard()
     S->init(shard_id);
 }
 
+void
+end_program(int param)
+{
+    WDEBUG << "Ending program, param = " << param << std::endl;
+    WDEBUG << "watch_set lookups originated from this shard " << S->watch_set_lookups << std::endl;
+    WDEBUG << "watch_set nops originated from this shard " << S->watch_set_nops << std::endl;
+    WDEBUG << "watch set piggybacks on this shard " << S->watch_set_piggybacks << std::endl;
+}
+
 int
 main(int argc, const char *argv[])
 {
-    // signal handlers
-    install_signal_handler(SIGINT, end_program);
-    install_signal_handler(SIGHUP, end_program);
-    install_signal_handler(SIGTERM, end_program);
-
     // command line params
     const char* listen_host = "127.0.0.1";
     long listen_port = 5201;

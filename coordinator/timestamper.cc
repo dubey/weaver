@@ -45,31 +45,6 @@ void end_tx(uint64_t tx_id, coordinator::hyper_stub *hstub, uint64_t shard_id);
 
 
 void
-end_program(int signum)
-{
-    std::cerr << "Ending program, signum = " << signum << std::endl;
-    vts->clk_rw_mtx.wrlock();
-    WDEBUG << "num vclk updates " << vts->clk_updates << std::endl;
-    vts->clk_rw_mtx.unlock();
-
-#ifdef weaver_benchmark_
-    WDEBUG << "max outstanding prog cnt = " << vts->max_outstanding_cnt << std::endl;
-    WDEBUG << "outstanding prog cnt = " << vts->outstanding_cnt << std::endl;
-#endif
-
-    if (signum == SIGINT) {
-        // TODO proper shutdown
-        //vts->exit_mutex.lock();
-        //vts->to_exit = true;
-        //vts->exit_mutex.unlock();
-        exit(0);
-    } else {
-        WDEBUG << "Got interrupt signal other than SIGINT, exiting immediately." << std::endl;
-        exit(0);
-    }
-}
-
-void
 prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub *hstub, order::oracle *time_oracle)
 {
     tx->id = vts->generate_req_id();
@@ -814,14 +789,23 @@ init_vt()
     vts->init(vt_id, weaver_id);
 }
 
+void
+end_program(int signum)
+{
+    std::cerr << "Ending program, signum = " << signum << std::endl;
+    vts->clk_rw_mtx.wrlock();
+    WDEBUG << "num vclk updates " << vts->clk_updates << std::endl;
+    vts->clk_rw_mtx.unlock();
+
+#ifdef weaver_benchmark_
+    WDEBUG << "max outstanding prog cnt = " << vts->max_outstanding_cnt << std::endl;
+    WDEBUG << "outstanding prog cnt = " << vts->outstanding_cnt << std::endl;
+#endif
+}
+
 int
 main(int argc, const char *argv[])
 {
-    // signal handlers
-    install_signal_handler(SIGINT, end_program);
-    install_signal_handler(SIGHUP, end_program);
-    install_signal_handler(SIGTERM, end_program);
-
     // command line params
     const char* listen_host = "127.0.0.1";
     long listen_port = 5200;
