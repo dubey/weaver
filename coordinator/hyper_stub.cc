@@ -240,6 +240,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 CHECK_LOC(upd->loc1, upd->handle1, upd->alias1);
                 GET_NODE(upd->handle1);
 
+                idx_del.emplace_back(upd->handle1);
                 for (const std::string &alias: n->aliases) {
                     idx_del.emplace_back(alias);
                 }
