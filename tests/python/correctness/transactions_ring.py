@@ -49,9 +49,7 @@ def remod_ring(c, edges, old_mod, new_mod):
 # assert that path contains vertices in an arithmetic progression
 def traverse_ring(c, src, dst):
     rp = client.ReachParams(dest=dst)
-    #print 'calling run_prog'
     response = c.run_reach_program([(src, rp)])
-    #print 'done run_prog'
     if response.reachable:
         assert (len(response.path) > 1), 'reachable path length = ' + str(len(response.path))
         diff = abs(int(response.path[1]) - int(response.path[0]))
@@ -70,8 +68,8 @@ def read_loop(c, loops):
         src = min(n1,n2)
         dst = max(n1,n2)
         traverse_ring(c, str(src), str(dst))
-        #if i % 100 == 0:
-            #print 'read loop progress ' + str(i)
+        if i % 100 == 0:
+            print 'read loop progress ' + str(i)
 
 config_file=''
 
@@ -108,6 +106,9 @@ for i in range(write_loops):
     new_mod = random.randrange(1,num_nodes/2)
     remod_ring(writer, edges, cur_mod, new_mod)
     cur_mod = new_mod
+    if i % 10 == 0:
+        print 'remod ' + str(i)
+print 'done remod'
 
 for t in threads:
     t.join()

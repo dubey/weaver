@@ -179,6 +179,7 @@ namespace db
         public:
             po6::threads::mutex perm_del_mutex;
             std::deque<del_obj*> perm_del_queue;
+            std::vector<vc::vclock_t> permdel_done_clk;
             void delete_migrated_node(const node_handle_t &migr_node);
             // XXX void remove_from_edge_map(const node_handle_t &remote_node, const node_version_t &local_node);
             void permanent_delete_loop(uint64_t vt_id, bool outstanding_progs, order::oracle *time_oracle);
@@ -216,7 +217,7 @@ namespace db
             void update_node_mapping(const node_handle_t &node, uint64_t shard);
             std::vector<vc::vclock_t> max_seen_clk // largest clock seen from each vector timestamper
                 , target_prog_clk
-                , max_done_clk; // largest clock of completed node prog for each VT
+                , migr_done_clk; // largest clock of completed node prog for each VT
             std::vector<bool> migr_edge_acks;
 
             // node programs
@@ -230,6 +231,7 @@ namespace db
         public:
             void mark_nodes_using_state(uint64_t req_id, const vc::vclock &clk, std::vector<node_version_t> &node_handles);
             void done_prog_clk(const vc::vclock_t *prog_clk, uint64_t vt_id);
+            void done_permdel_clk(const vc::vclock_t *permdel_clk, uint64_t vt_id);
             void cleanup_prog_states();
             bool check_done_prog(vc::vclock &clk);
 
@@ -264,6 +266,7 @@ namespace db
         , to_exit(false)
         , shard_id(UINT64_MAX)
         , serv_id(serverid)
+        , permdel_done_clk(NumVts, vc::vclock_t(ClkSz, 0))
         , current_migr(false)
         , migr_updating_nbrs(false)
         , migr_token(false)
@@ -274,7 +277,7 @@ namespace db
         , zero_clk(0, 0)
         , max_seen_clk(NumVts, vc::vclock_t(ClkSz, 0))
         , target_prog_clk(NumVts, vc::vclock_t(ClkSz, 0))
-        , max_done_clk(NumVts, vc::vclock_t(ClkSz, 0))
+        , migr_done_clk(NumVts, vc::vclock_t(ClkSz, 0))
         , prog_done_clk(NumVts, vc::vclock_t(ClkSz, 0))
         , watch_set_lookups(0)
         , watch_set_nops(0)
@@ -992,11 +995,11 @@ namespace db
                 // if all VTs have no outstanding node progs, then everything can be permanently deleted
                 if (!weaver_util::all(dobj->no_outstanding_progs)) {
                     for (uint64_t i = 0; (i < NumVts) && to_del; i++) {
-                        if (max_done_clk[i].size() < ClkSz) {
+                        if (permdel_done_clk[i].size() < ClkSz) {
                             to_del = false;
                             break;
                         }
-                        to_del = order::oracle::happens_before_no_kronos(dobj->tdel->clock, max_done_clk[i]);
+                        to_del = order::oracle::happens_before_no_kronos(dobj->tdel->clock, permdel_done_clk[i]);
                     }
                 }
             }
@@ -1220,15 +1223,33 @@ namespace db
     inline void
     shard :: done_prog_clk(const vc::vclock_t *prog_clk, uint64_t vt_id)
     {
+        if (prog_clk == nullptr) {
+            return;
+        }
+
         node_prog_state_mutex.lock();
 
-        if (prog_clk != nullptr) {
-            if (order::oracle::happens_before_no_kronos(prog_done_clk[vt_id], *prog_clk)) {
-                prog_done_clk[vt_id] = *prog_clk;
-            }
+        if (order::oracle::happens_before_no_kronos(prog_done_clk[vt_id], *prog_clk)) {
+            prog_done_clk[vt_id] = *prog_clk;
         }
 
         node_prog_state_mutex.unlock();
+    }
+
+    inline void
+    shard :: done_permdel_clk(const vc::vclock_t *permdel_clk, uint64_t vt_id)
+    {
+        if (permdel_clk == nullptr) {
+            return;
+        }
+
+        perm_del_mutex.lock();
+
+        if (order::oracle::happens_before_no_kronos(permdel_done_clk[vt_id], *permdel_clk)) {
+            permdel_done_clk[vt_id] = *permdel_clk;
+        }
+
+        perm_del_mutex.unlock();
     }
 
     inline void

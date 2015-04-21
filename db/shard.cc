@@ -578,6 +578,7 @@ nop(db::message_wrapper *request)
 
     // note done progs for state clean up
     S->done_prog_clk(&nop_arg->max_done_clk, vt_id);
+    S->done_permdel_clk(&nop_arg->max_done_clk, vt_id);
 
     if (++nop_count % 10000 == 0) {
         S->cleanup_prog_states();
@@ -622,8 +623,8 @@ nop(db::message_wrapper *request)
     }
 
     // node max done clk for migrated node clean up
-    if (order::oracle::equal_or_happens_before_no_kronos(S->max_done_clk[vt_id], nop_arg->max_done_clk)) {
-        S->max_done_clk[vt_id] = std::move(nop_arg->max_done_clk);
+    if (order::oracle::equal_or_happens_before_no_kronos(S->migr_done_clk[vt_id], nop_arg->max_done_clk)) {
+        S->migr_done_clk[vt_id] = std::move(nop_arg->max_done_clk);
     }
     check_migr_step3 = check_step3();
 
@@ -1532,7 +1533,7 @@ check_step3()
 {
     bool init_step3 = weaver_util::all(S->migr_edge_acks);
     for (uint64_t i = 0; i < NumVts && init_step3; i++) {
-        init_step3 = order::oracle::happens_before_no_kronos(S->target_prog_clk[i], S->max_done_clk[i]);
+        init_step3 = order::oracle::happens_before_no_kronos(S->target_prog_clk[i], S->migr_done_clk[i]);
     }
     if (init_step3) {
         weaver_util::reset_all(S->migr_edge_acks);
@@ -1832,7 +1833,7 @@ recv_loop(uint64_t thread_id)
                         mwrap->time_oracle = time_oracle;
                         unpack_node_program(mwrap);
                     } else {
-                        qreq = new db::queued_request(req_id, vclk, unpack_node_program, mwrap);
+                        qreq = new db::queued_request(vclk.get_clock(), vclk, unpack_node_program, mwrap);
                         S->qm.enqueue_read_request(vt_id, qreq);
                     }
                     break;
@@ -1853,7 +1854,7 @@ recv_loop(uint64_t thread_id)
                         mwrap->time_oracle = time_oracle;
                         f(mwrap);
                     } else {
-                        qreq = new db::queued_request(req_id, vclk, f, mwrap);
+                        qreq = new db::queued_request(vclk.get_clock(), vclk, f, mwrap);
                         S->qm.enqueue_read_request(vt_id, qreq);
                     }
                     break;

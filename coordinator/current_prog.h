@@ -19,12 +19,12 @@ namespace coordinator
     struct current_prog
     {
         uint64_t req_id, client;
-        std::unique_ptr<vc::vclock_t> vclk;
+        std::unique_ptr<vc::vclock> vclk;
 
-        current_prog(uint64_t rid, uint64_t cl, vc::vclock_t &vc)
+        current_prog(uint64_t rid, uint64_t cl, const vc::vclock &vc)
             : req_id(rid)
             , client(cl)
-            , vclk(new vc::vclock_t(vc))
+            , vclk(new vc::vclock(vc))
         { }
         
         current_prog() : req_id(UINT64_MAX), client(UINT64_MAX) { }

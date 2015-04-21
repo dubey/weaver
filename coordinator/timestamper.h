@@ -99,7 +99,8 @@ namespace coordinator
             std::unordered_set<uint64_t> outstanding_progs; // for multiple returns and ft
             std::vector<current_prog*> pend_progs, done_progs;
             int prog_done_cnt;
-            std::unique_ptr<vc::vclock_t> max_done_clk; // permanent deletion
+            vc::vclock_t max_done_clk; // permanent deletion
+            uint64_t max_done_clk_reqid;
 
             // mutexes
         public:
@@ -178,7 +179,7 @@ namespace coordinator
         , to_nop(NumShards, true)
         , nop_ack_qts(NumShards, 0)
         , prog_done_cnt(0)
-        , max_done_clk(new vc::vclock_t(ClkSz, 0))
+        , max_done_clk(vc::vclock_t(ClkSz, 0))
         , load_count(0)
         , max_load_time(0)
         , shard_node_count(NumShards, 0)
@@ -283,8 +284,8 @@ namespace coordinator
         to_nop.resize(num_shards, true);
         nop_ack_qts.resize(num_shards, 0);
         shard_node_count.resize(num_shards, 0);
-        std::fill(max_done_clk->begin(), max_done_clk->end(), 0);
-        max_done_clk->at(0) = config.version(); 
+        std::fill(max_done_clk.begin(), max_done_clk.end(), 0);
+        max_done_clk[0] = config.version();
 
         // update the periodic_update_config which is used while sending periodic vt updates
         periodic_update_config = config;
@@ -391,10 +392,10 @@ namespace coordinator
             for (current_prog *cp: pend_progs) {
                 bool cont = false;
                 for (uint32_t i = 0; i < done_progs.size(); i++) {
-                    if (cp->req_id == done_progs[i]->req_id) {
+                    if (cp->vclk->get_clock() == done_progs[i]->vclk->get_clock()) {
                         cont = true;
                         break;
-                    } else if (cp->req_id < done_progs[i]->req_id) {
+                    } else if (cp->vclk->get_clock() < done_progs[i]->vclk->get_clock()) {
                         break;
                     }
                 }
@@ -623,7 +624,7 @@ namespace coordinator
     bool
     compare_current_prog(const current_prog* const lhs, const current_prog* const rhs)
     {
-        return lhs->req_id < rhs->req_id;
+        return lhs->vclk->get_clock() < rhs->vclk->get_clock();
     }
 
     // assuming hold tx_prog_mtx
@@ -638,8 +639,9 @@ namespace coordinator
 
         uint32_t i = 0;
         uint32_t max_idx = pend_progs.size() > done_progs.size() ? done_progs.size() : pend_progs.size();
-        for (i = 0; i < max_idx && pend_progs[i]->req_id == done_progs[i]->req_id; i++, pend_iter++, done_iter++) {
-            max_done_clk = std::move(pend_progs[i]->vclk);
+        for (i = 0; i < max_idx && pend_progs[i]->vclk->get_clock() == done_progs[i]->vclk->get_clock(); i++, pend_iter++, done_iter++) {
+            max_done_clk = pend_progs[i]->vclk->clock;
+            max_done_clk_reqid = pend_progs[i]->req_id;
             delete pend_progs[i];
         }
 

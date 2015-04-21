@@ -264,7 +264,7 @@ nop_function()
             vts->clk_rw_mtx.unlock();
 
             vts->tx_prog_mutex.lock();
-            tx->nop->max_done_clk = *vts->max_done_clk;
+            tx->nop->max_done_clk = vts->max_done_clk;
             tx->nop->outstanding_progs = vts->pend_progs.size();
             tx->nop->shard_node_count = vts->shard_node_count;
 
@@ -440,11 +440,12 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     vts->vclk.increment_clock();
     vc::vclock req_timestamp = vts->vclk;
     assert(req_timestamp.clock.size() == ClkSz);
-    vts->clk_rw_mtx.unlock();
 
     vts->tx_prog_mutex.lock();
+    vts->clk_rw_mtx.unlock();
+
     uint64_t req_id = vts->generate_req_id();
-    current_prog *cp = new current_prog(req_id, clientID, req_timestamp.clock);
+    current_prog *cp = new current_prog(req_id, clientID, req_timestamp);
     uint64_t cp_int = (uint64_t)cp;
     vts->pend_progs.emplace_back(cp);
     vts->outstanding_progs.emplace(req_id);

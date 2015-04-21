@@ -180,7 +180,6 @@ queue_manager :: check_wr_queues_timestamps(uint64_t vt_id, uint64_t qt)
             assert(qt > qts[i]);
             if (qt > (qts[i]+1)) {
                 return FUTURE;
-                WDEBUG << "future " << i << std::endl;
             }
         } else {
             pqueue_t &pq = wr_queues[i];
@@ -189,7 +188,6 @@ queue_manager :: check_wr_queues_timestamps(uint64_t vt_id, uint64_t qt)
             } else {
                 // check for correct ordering of queue timestamp (which is priority for thread)
                 if ((qts[i] + 1) != pq.top()->priority) {
-                    WDEBUG << "future " << i << std::endl;
                     return FUTURE;
                 }
             }
