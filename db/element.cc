@@ -17,7 +17,7 @@
 using db::element;
 using db::property;
 
-element :: element(const std::string &_handle, const vc::vclock &vclk)
+element :: element(const std::string &_handle, const vclock_ptr_t &vclk)
     : handle(_handle)
     , creat_time(vclk)
     , del_time(nullptr)
@@ -73,14 +73,14 @@ element :: add_property(const property &prop)
 }
 
 bool
-element :: add_property(const std::string &key, const std::string &value, const vc::vclock &vclk)
+element :: add_property(const std::string &key, const std::string &value, const vclock_ptr_t &vclk)
 {
     property prop(key, value, vclk);
     return add_property(prop);
 }
 
 bool
-element :: delete_property(const std::string &key, const vc::vclock &tdel)
+element :: delete_property(const std::string &key, const vclock_ptr_t &tdel)
 {
 #ifdef weaver_large_property_maps_
 
@@ -111,7 +111,7 @@ element :: delete_property(const std::string &key, const vc::vclock &tdel)
 }
 
 bool
-element :: delete_property(const std::string &key, const std::string &value, const vc::vclock &tdel)
+element :: delete_property(const std::string &key, const std::string &value, const vclock_ptr_t &tdel)
 {
 #ifdef weaver_large_property_maps_
 
@@ -255,25 +255,25 @@ element :: has_all_predicates(const std::vector<predicate::prop_predicate> &pred
 }
 
 void
-element :: update_del_time(const vc::vclock &tdel)
+element :: update_del_time(const vclock_ptr_t &tdel)
 {
     assert(!del_time);
-    del_time.reset(new vc::vclock(tdel));
+    del_time = tdel;
 }
 
-const std::unique_ptr<vc::vclock>&
+const vclock_ptr_t&
 element :: get_del_time() const
 {
     return del_time;
 }
 
 void
-element :: update_creat_time(const vc::vclock &tcreat)
+element :: update_creat_time(const vclock_ptr_t &tcreat)
 {
     creat_time = tcreat;
 }
 
-const vc::vclock&
+const vclock_ptr_t&
 element :: get_creat_time() const
 {
     return creat_time;

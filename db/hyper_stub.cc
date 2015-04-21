@@ -51,7 +51,7 @@ hyper_stub :: restore_backup(db::data_map<std::vector<node*>> *nodes,
     size_t handle_sz = 128;
     size_t cur_sz;
     node_handle_t node_handle;
-    vc::vclock dummy_clock;
+    vc::vclock_ptr_t dummy_clock;
     node *n;
     uint64_t map_idx;
 

@@ -23,27 +23,29 @@
 
 #include "node_prog/property.h"
 
+using vc::vclock_ptr_t;
+
 namespace db
 {
     class property : public node_prog::property
     {
         private:
-            vc::vclock creat_time;
-            std::unique_ptr<vc::vclock> del_time;
+            vclock_ptr_t creat_time;
+            vclock_ptr_t del_time;
 
         public:
             property();
             property(const std::string&, const std::string&);
-            property(const std::string&, const std::string&, const vc::vclock&);
+            property(const std::string&, const std::string&, const vclock_ptr_t&);
             property(const property &other);
 
             bool operator==(property const &p2) const;
 
-            const vc::vclock& get_creat_time() const;
-            const std::unique_ptr<vc::vclock>& get_del_time() const;
+            const vclock_ptr_t& get_creat_time() const;
+            const vclock_ptr_t& get_del_time() const;
             bool is_deleted() const;
-            void update_creat_time(const vc::vclock&);
-            void update_del_time(const vc::vclock&);
+            void update_creat_time(const vclock_ptr_t&);
+            void update_del_time(const vclock_ptr_t&);
     };
 
     class property_key_hasher

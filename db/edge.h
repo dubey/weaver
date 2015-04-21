@@ -31,8 +31,8 @@ namespace db
     {
         public:
             edge();
-            edge(const edge_handle_t &handle, vc::vclock &vclk, uint64_t remote_loc, const node_handle_t &remote_handle);
-            edge(const edge_handle_t &handle, vc::vclock &vclk, remote_node &rn);
+            edge(const edge_handle_t &handle, vclock_ptr_t &vclk, uint64_t remote_loc, const node_handle_t &remote_handle);
+            edge(const edge_handle_t &handle, vclock_ptr_t &vclk, remote_node &rn);
             ~edge() { }
 
         public:

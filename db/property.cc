@@ -17,14 +17,13 @@ using db::property;
 using db::property_key_hasher;
 
 property :: property()
-    : creat_time(UINT64_MAX, UINT64_MAX)
 { }
 
 property :: property(const std::string &k, const std::string &v)
     : node_prog::property(k, v)
 { }
 
-property :: property(const std::string &k, const std::string &v, const vc::vclock &creat)
+property :: property(const std::string &k, const std::string &v, const vclock_ptr_t &creat)
     : node_prog::property(k, v)
     , creat_time(creat)
 { }
@@ -34,7 +33,7 @@ property :: property(const property &other)
     , creat_time(other.creat_time)
 {
     if (other.del_time) {
-        del_time.reset(new vc::vclock(*other.del_time));
+        del_time = other.del_time;
     }
 }
 
@@ -44,13 +43,13 @@ property :: operator==(property const &other) const
     return (key == other.key) && (value == other.value);
 }
 
-const vc::vclock&
+const vclock_ptr_t&
 property :: get_creat_time() const
 {
     return creat_time;
 }
 
-const std::unique_ptr<vc::vclock>&
+const vclock_ptr_t&
 property :: get_del_time() const
 {
     return del_time;
@@ -63,13 +62,13 @@ property :: is_deleted() const
 }
 
 void
-property :: update_del_time(const vc::vclock &tdel)
+property :: update_del_time(const vclock_ptr_t &tdel)
 {
-    del_time.reset(new vc::vclock(tdel));
+    del_time = tdel;
 }
 
 void
-property :: update_creat_time(const vc::vclock &tcreat)
+property :: update_creat_time(const vclock_ptr_t &tcreat)
 {
     creat_time = tcreat;
 }

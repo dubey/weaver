@@ -123,19 +123,15 @@ void
 message :: unpack_buffer(e::unpacker &unpacker, db::element &t)
 {
     std::string handle;
-    vc::vclock creat_time;
-    std::unique_ptr<vc::vclock> del_time;
+    vc::vclock_ptr_t creat_time, del_time;
 
     unpack_buffer(unpacker, handle);
     t.set_handle(handle);
 
     unpack_buffer(unpacker, creat_time);
-    t.update_creat_time(creat_time);
-
     unpack_buffer(unpacker, del_time);
-    if (del_time) {
-        t.update_del_time(*del_time);
-    }
+    t.update_creat_time(creat_time);
+    t.update_del_time(del_time);
 
     unpack_buffer(unpacker, t.properties);
 }
@@ -157,7 +153,7 @@ message :: unpack_buffer(e::unpacker &unpacker, db::edge &t)
 void
 message :: unpack_buffer(e::unpacker &unpacker, db::edge *&t)
 {
-    vc::vclock temp_clk;
+    vc::vclock_ptr_t temp_clk;
     edge_handle_t temp_handle("");
     node_handle_t temp_node_handle("");
     t = new db::edge(temp_handle, temp_clk, 0, temp_node_handle);

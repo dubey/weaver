@@ -30,7 +30,7 @@ migr_data :: migr_data()
     , already_migr(false)
 { }
 
-node :: node(const node_handle_t &_handle, uint64_t shrd, vc::vclock &vclk, po6::threads::mutex *mtx)
+node :: node(const node_handle_t &_handle, uint64_t shrd, vclock_ptr_t &vclk, po6::threads::mutex *mtx)
     : base(_handle, vclk)
     , shard(shrd)
     , state(mode::NASCENT)
@@ -166,7 +166,7 @@ node :: is_alias(const node_handle_t &alias) const
 }
 
 void
-node :: add_cache_value(std::shared_ptr<vc::vclock> vc,
+node :: add_cache_value(vclock_ptr_t vc,
     std::shared_ptr<node_prog::Cache_Value_Base> cache_value,
     std::shared_ptr<std::vector<remote_node>> watch_set,
     cache_key_t key)

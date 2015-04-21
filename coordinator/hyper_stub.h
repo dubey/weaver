@@ -24,7 +24,7 @@ namespace coordinator
         private:
             uint64_t vt_id;
             po6::threads::mutex dummy_mtx;
-            vc::vclock dummy_clk;
+            vclock_ptr_t dummy_clk;
 
         public:
             hyper_stub();

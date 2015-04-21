@@ -146,12 +146,6 @@ class hyper_stub_base
         bool put_nodes_bulk(std::unordered_map<node_handle_t, db::node*> &nodes, vc::vclock&, vc::vclock_t&);
         bool del_node(const node_handle_t &h);
         bool del_nodes(std::unordered_set<node_handle_t> &to_del);
-        void update_creat_time(db::node &n);
-        void update_properties(db::node &n);
-        void add_out_edge(db::node &n, db::edge *e);
-        void remove_out_edge(db::node &n, db::edge *e);
-        void add_in_nbr(const node_handle_t &node, const node_handle_t &nbr);
-        void remove_in_nbr(const node_handle_t &n_hndl, const node_handle_t &nbr);
         bool recreate_node(const hyperdex_client_attribute *cl_attr, db::node &n);
 
         // node map functions

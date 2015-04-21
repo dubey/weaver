@@ -20,14 +20,14 @@ namespace db
     struct deferred_write
     {
         transaction::update_type type;
-        vc::vclock vclk;
+        vclock_ptr_t vclk;
         node_handle_t remote_node, alias;
         uint64_t remote_loc;
         edge_handle_t edge_handle;
         std::unique_ptr<std::string> key, value;
 
         inline
-        deferred_write(transaction::update_type t, vc::vclock &vc) : type(t), vclk(vc) { }
+        deferred_write(transaction::update_type t, vclock_ptr_t vc) : type(t), vclk(vc) { }
     };
     
     typedef std::vector<deferred_write> def_write_lst;

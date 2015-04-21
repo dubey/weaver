@@ -151,10 +151,11 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         return;
     }
 
+    vc::vclock_ptr_t tx_clk_ptr(new vc::vclock(tx->timestamp));
     for (const auto &p: put_map) {
-        new_nodes[p.first] = new db::node(p.first, p.second, tx->timestamp, &dummy_mtx);
-        new_nodes[p.first]->last_upd_clk.reset(new vc::vclock(tx->timestamp));
-        new_nodes[p.first]->restore_clk.reset(new vc::vclock_t(tx->timestamp.clock));
+        new_nodes[p.first] = new db::node(p.first, p.second, tx_clk_ptr, &dummy_mtx);
+        new_nodes[p.first]->last_upd_clk.reset(new vc::vclock(*tx_clk_ptr));
+        new_nodes[p.first]->restore_clk.reset(new vc::vclock_t(tx_clk_ptr->clock));
     }
 
 #define CHECK_LOC(loc, handle, alias) \
@@ -226,7 +227,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                     WDEBUG << "edge with handle " << upd->handle << " already exists at node " << upd->handle1 << std::endl;
                     ERROR_FAIL;
                 }
-                n->add_edge(new db::edge(upd->handle, tx->timestamp, upd->loc2, upd->handle2));
+                n->add_edge(new db::edge(upd->handle, tx_clk_ptr, upd->loc2, upd->handle2));
 
                 if (AuxIndex) {
                     idx_add_iter = idx_add.find(upd->handle);
@@ -248,7 +249,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 CHECK_LOC(upd->loc1, upd->handle1, upd->alias1);
                 GET_NODE(upd->handle1);
 
-                if (!n->base.add_property(*upd->key, *upd->value, tx->timestamp)) {
+                if (!n->base.add_property(*upd->key, *upd->value, tx_clk_ptr)) {
                     WDEBUG << "property " << *upd->key << ": " << *upd->value << " already exists at node " << upd->handle1 << std::endl;
                     ERROR_FAIL;
                 }
@@ -289,7 +290,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                     WDEBUG << "edge with handle " << upd->handle1 << " does not exist at node " << upd->handle2 << std::endl;
                     ERROR_FAIL;
                 }
-                if (!n->out_edges[upd->handle1].front()->base.add_property(*upd->key, *upd->value, tx->timestamp)) {
+                if (!n->out_edges[upd->handle1].front()->base.add_property(*upd->key, *upd->value, tx_clk_ptr)) {
                     WDEBUG << "property " << *upd->key << ": " << *upd->value << " already exists at edge " << upd->handle1 << std::endl;
                     ERROR_FAIL;
                 }
@@ -314,7 +315,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 
         if (n != nullptr) {
             assert(n->restore_clk->size() == ClkSz);
-            (*n->restore_clk)[vt_id+1] = tx->timestamp.get_clock();
+            (*n->restore_clk)[vt_id+1] = tx_clk_ptr->get_clock();
         }
 
         n = nullptr;

@@ -36,6 +36,7 @@
 DECLARE_CONFIG_CONSTANTS;
 
 using db::node_version_t;
+using vc::vclock_ptr_t;
 
 // global static variables
 static uint64_t shard_id;
@@ -246,7 +247,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
     // read, validate, and create graph
     uint64_t line_count = 0;
     uint64_t edge_count = 0;
-    vc::vclock zero_clk(0, 0);
+    vclock_ptr_t zero_clk(new vc::vclock(0,0));
 
     switch(format) {
 
@@ -458,7 +459,7 @@ unpack_migrate_request(db::message_wrapper *request)
 }
 
 void
-apply_writes(uint64_t vt_id, vc::vclock &vclk, uint64_t qts, transaction::pending_tx &tx)
+apply_writes(uint64_t vt_id, vclock_ptr_t vclk, uint64_t qts, transaction::pending_tx &tx)
 {
     // apply all writes
     // acquire_node_write blocks if a preceding write has not been executed
@@ -494,7 +495,7 @@ apply_writes(uint64_t vt_id, vc::vclock &vclk, uint64_t qts, transaction::pendin
     }
 
     // record clocks for future reads
-    S->record_completed_tx(vclk);
+    S->record_completed_tx(*vclk);
 
     // send tx confirmation to coordinator
     message::message conf_msg;
@@ -510,6 +511,7 @@ unpack_tx_request(db::message_wrapper *request)
     uint64_t qts;
     transaction::pending_tx tx(transaction::UPDATE);
     request->msg->unpack_message(message::TX_INIT, vt_id, vclk, qts, tx);
+    vclock_ptr_t vclk_ptr = std::make_shared<vc::vclock>(vclk);
 
     // execute all create_node writes
     // establish tx order at all graph nodes for all other writes
@@ -518,7 +520,7 @@ unpack_tx_request(db::message_wrapper *request)
         n = nullptr;
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ:
-                S->create_node(upd->handle, vclk, false);
+                S->create_node(upd->handle, vclk_ptr, false);
                 break;
 
             // elem1
@@ -550,7 +552,7 @@ unpack_tx_request(db::message_wrapper *request)
     // since tx order has already been established, conflicting txs will be processed in correct order
     S->increment_qts(vt_id, 1);
 
-    apply_writes(vt_id, vclk, qts, tx);
+    apply_writes(vt_id, vclk_ptr, qts, tx);
 
     delete request;
 }
@@ -731,12 +733,12 @@ fill_changed_properties(
     for (std::shared_ptr<db::property> p: props) {
 #endif
             db::property &prop = *p;
-            const std::unique_ptr<vc::vclock> &tdel = prop.get_del_time();
+            const vclock_ptr_t &tdel = prop.get_del_time();
             bool del_before_cur = (tdel != nullptr) && (time_oracle->compare_two_vts(*tdel, cur_time) == 0);
 
             if (props_added != nullptr) {
-                bool creat_after_cached = (time_oracle->compare_two_vts(prop.get_creat_time(), time_cached) == 1);
-                bool creat_before_cur = (time_oracle->compare_two_vts(prop.get_creat_time(), cur_time) == 0);
+                bool creat_after_cached = (time_oracle->compare_two_vts(*prop.get_creat_time(), time_cached) == 1);
+                bool creat_before_cur = (time_oracle->compare_two_vts(*prop.get_creat_time(), cur_time) == 0);
 
                 if (creat_after_cached && creat_before_cur && !del_before_cur) {
                     props_added->emplace_back(prop.key, prop.value);
@@ -806,13 +808,13 @@ fetch_node_cache_contexts(uint64_t loc,
                 for (auto &iter: node->out_edges) {
                     for (db::edge *e: iter.second) {
                         assert(e != nullptr);
-                        const std::unique_ptr<vc::vclock> &e_del_time = e->base.get_del_time();
+                        const vclock_ptr_t &e_del_time = e->base.get_del_time();
 
                         bool del_after_cached = (e_del_time != nullptr) && (time_oracle->compare_two_vts(time_cached, *e_del_time) == 0);
-                        bool creat_after_cached = (time_oracle->compare_two_vts(time_cached, e->base.get_creat_time()) == 0);
+                        bool creat_after_cached = (time_oracle->compare_two_vts(time_cached, *e->base.get_creat_time()) == 0);
 
                         bool del_before_cur = (e_del_time != nullptr) && (time_oracle->compare_two_vts(*e_del_time, cur_time) == 0);
-                        bool creat_before_cur = (time_oracle->compare_two_vts(e->base.get_creat_time(), cur_time) == 0);
+                        bool creat_before_cur = (time_oracle->compare_two_vts(*e->base.get_creat_time(), cur_time) == 0);
 
                         if (creat_after_cached && creat_before_cur && !del_before_cur) {
                             if (context == nullptr) {
@@ -1432,7 +1434,7 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg, order::oracle *ti
     db::node *n;
 
     // create a new node, unpack the message
-    vc::vclock dummy_clock;
+    vclock_ptr_t dummy_clock;
     msg->unpack_partial_message(message::MIGRATE_SEND_NODE, node_handle);
     n = S->create_node(node_handle, dummy_clock, true); // node will be acquired on return
     try {

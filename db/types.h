@@ -13,6 +13,7 @@
 #include <google/sparse_hash_set>
 
 #include "common/utils.h"
+#include "common/vclock.h"
 
 namespace db
 {

@@ -16,6 +16,7 @@
 #ifndef weaver_common_vclock_h_
 #define weaver_common_vclock_h_
 
+#include <memory>
 #include <vector>
 #include <algorithm>
 #include <assert.h>
@@ -26,7 +27,7 @@ namespace vc
 {
     typedef std::vector<uint64_t> vclock_t;
     typedef std::vector<uint64_t> qtimestamp_t;
-    
+
     class vclock
     {
         public:
@@ -45,6 +46,8 @@ namespace vc
             bool operator==(const vclock &rhs) const;
             bool operator!=(const vclock &rhs) const;
     };
+
+    using vclock_ptr_t = std::shared_ptr<vclock>;
 }
 
 #endif

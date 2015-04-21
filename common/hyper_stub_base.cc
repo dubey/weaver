@@ -689,7 +689,7 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::n
     // shard
     n.shard = *((uint64_t*)cl_attr[idx[0]].value);
     // create clock
-    vc::vclock create_clk;
+    vc::vclock_ptr_t create_clk;
     unpack_buffer(cl_attr[idx[1]].value, cl_attr[idx[1]].value_sz, create_clk);
     // properties
 #ifdef weaver_large_property_maps_

@@ -708,16 +708,12 @@ message :: unpack_buffer(e::unpacker &unpacker, db::property &t)
     unpack_buffer(unpacker, t.key);
     unpack_buffer(unpacker, t.value);
 
-    vc::vclock tcreat;
-    std::unique_ptr<vc::vclock> tdel;
+    vclock_ptr_t tcreat, tdel;
 
     unpack_buffer(unpacker, tcreat);
-    t.update_creat_time(tcreat);
-
     unpack_buffer(unpacker, tdel);
-    if (tdel) {
-        t.update_del_time(*tdel);
-    }
+    t.update_creat_time(tcreat);
+    t.update_del_time(tdel);
 }
 
 void 

@@ -310,8 +310,8 @@ oracle :: compare_two_vts(const vc::vclock &clk1, const vc::vclock &clk2)
 // assert not equal because vector clocks are unique.  no two clock are the same in every coordinate of the vector.
 bool
 oracle :: clock_creat_before_del_after(const vc::vclock &req_vclock,
-    const vc::vclock &creat_time,
-    const std::unique_ptr<vc::vclock> &del_time)
+    const vclock_ptr_t &creat_time,
+    const vclock_ptr_t &del_time)
 {
     bool cmp = true;
 
@@ -322,7 +322,7 @@ oracle :: clock_creat_before_del_after(const vc::vclock &req_vclock,
     }
 
     if (cmp) {
-        int64_t cmp_2 = compare_two_vts(creat_time, req_vclock);
+        int64_t cmp_2 = compare_two_vts(*creat_time, req_vclock);
         assert(cmp_2 != 2);
         cmp = (cmp_2 == 0);
     }

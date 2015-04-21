@@ -62,7 +62,7 @@ namespace db
     class node : public node_prog::node
     {
         public:
-            node(const node_handle_t &handle, uint64_t shard, vc::vclock &vclk, po6::threads::mutex *mtx);
+            node(const node_handle_t &handle, uint64_t shard, vclock_ptr_t &vclk, po6::threads::mutex *mtx);
             ~node();
 
         public:
@@ -93,7 +93,7 @@ namespace db
 
             // node program cache
             std::unordered_map<cache_key_t, cache_entry> cache;
-            void add_cache_value(std::shared_ptr<vc::vclock> vc,
+            void add_cache_value(vclock_ptr_t vc,
                 std::shared_ptr<node_prog::Cache_Value_Base> cache_value,
                 std::shared_ptr<std::vector<remote_node>> watch_set,
                 cache_key_t key);
@@ -128,7 +128,7 @@ namespace db
             void get_client_node(cl::node &n, bool, bool, bool);
     };
 
-    using node_version_t = std::pair<node_handle_t, vc::vclock>;
+    using node_version_t = std::pair<node_handle_t, vclock_ptr_t>;
 
     struct node_version_hash
     {

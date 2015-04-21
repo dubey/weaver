@@ -26,6 +26,8 @@
 #include "common/property_predicate.h"
 #include "db/property.h"
 
+using vc::vclock_ptr_t;
+
 namespace db
 {
     struct property_hasher
@@ -49,12 +51,12 @@ namespace db
     {
         public:
             element() { }
-            element(const std::string &handle, const vc::vclock &vclk);
+            element(const std::string &handle, const vclock_ptr_t &vclk);
 
         protected:
             std::string handle;
-            vc::vclock creat_time;
-            std::unique_ptr<vc::vclock> del_time;
+            vclock_ptr_t creat_time;
+            vclock_ptr_t del_time;
 
         public:
 #ifdef weaver_large_property_maps_
@@ -62,24 +64,24 @@ namespace db
 #else
             std::vector<std::shared_ptr<property>> properties;
 #endif
-            std::shared_ptr<vc::vclock> view_time;
+            vclock_ptr_t view_time;
             order::oracle *time_oracle;
 
         public:
             bool add_property(const property &prop);
-            bool add_property(const std::string &key, const std::string &value, const vc::vclock &vclk);
-            bool delete_property(const std::string &key, const vc::vclock &tdel);
-            bool delete_property(const std::string &key, const std::string &value, const vc::vclock &tdel);
+            bool add_property(const std::string &key, const std::string &value, const vclock_ptr_t &vclk);
+            bool delete_property(const std::string &key, const vclock_ptr_t &tdel);
+            bool delete_property(const std::string &key, const std::string &value, const vclock_ptr_t &tdel);
             void remove_property(const std::string &key);
             bool has_property(const std::string &key, const std::string &value);
             bool has_property(const std::pair<std::string, std::string> &p);
             bool has_predicate(const predicate::prop_predicate &p);
             bool has_all_properties(const std::vector<std::pair<std::string, std::string>> &props);
             bool has_all_predicates(const std::vector<predicate::prop_predicate> &preds);
-            void update_del_time(const vc::vclock &del_time);
-            const std::unique_ptr<vc::vclock>& get_del_time() const;
-            void update_creat_time(const vc::vclock &creat_time);
-            const vc::vclock& get_creat_time() const;
+            void update_del_time(const vclock_ptr_t &del_time);
+            const vclock_ptr_t& get_del_time() const;
+            void update_creat_time(const vclock_ptr_t &creat_time);
+            const vclock_ptr_t& get_creat_time() const;
             void set_handle(const std::string &handle);
             const std::string& get_handle() const;
 #ifdef weaver_large_property_maps_
