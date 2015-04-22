@@ -175,7 +175,8 @@ noinst_HEADERS+=		db/cache_entry.h \
 						db/node.h \
 						db/property.h \
 						db/queue_manager.h \
-						db/shard_constants.h
+						db/shard_constants.h \
+						db/types.h
 bin_PROGRAMS+=			weaver-shard
 weaver_shard_SOURCES=	common/ids.cc \
 						common/serialization.cc \
