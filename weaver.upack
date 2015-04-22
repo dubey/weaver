@@ -46,7 +46,7 @@ subpackage libweaverservermanager
 subpackage libweaverclient
 | deb name="libweaverclient0"
 | summary="C++ client for Weaver"
-+ {includedir}/weaver_client.h
++ {includedir}/weaver
 + {libdir}/libweaverclient.so
 + {libdir}/libweaverclient.so.0
 + {libdir}/libweaverclient.so.0.0.0
