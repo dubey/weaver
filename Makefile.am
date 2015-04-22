@@ -95,6 +95,7 @@ noinst_HEADERS+=	node_prog/base_classes.h \
                     common/bool_vector.h \
                     common/types.h \
                     common/utils.h \
+                    common/MurmurHash3.h \
                     common/property_predicate.h
 
 # timestamper
