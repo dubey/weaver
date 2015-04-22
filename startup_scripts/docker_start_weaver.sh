@@ -30,9 +30,6 @@ else
     weaver_libdir="$WEAVER_BUILDDIR"/.libs
 fi
 
-echo 'weaver libdir:'
-echo $weaver_libdir
-
 
 # get config params
 hyperdex_coord_ipaddr=$(weaver-parse-config -c hyperdex_coord_ipaddr $config_file_args)

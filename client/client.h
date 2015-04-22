@@ -85,6 +85,7 @@ namespace cl
             weaver_client_returncode set_edge_property(const std::string &node, const std::string &alias, const std::string &edge, std::string key, std::string value);
             weaver_client_returncode add_alias(const std::string &alias, const std::string &node);
             weaver_client_returncode end_tx();
+            weaver_client_returncode abort_tx();
 
             template <typename ParamsType>
             weaver_client_returncode run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<std::string, ParamsType>> &initial_args, ParamsType &return_param);

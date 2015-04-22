@@ -395,6 +395,18 @@ client :: end_tx()
     return tx_code;
 }
 
+weaver_client_returncode
+client :: abort_tx()
+{
+    CHECK_INIT;
+    CHECK_ACTIVE_TX;
+
+    cur_tx_id = UINT64_MAX;
+    cur_tx.clear();
+
+    return WEAVER_CLIENT_SUCCESS;
+}
+
 #undef CHECK_ACTIVE_TX
 
 template <typename ParamsType>

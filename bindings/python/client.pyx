@@ -413,6 +413,7 @@ cdef extern from 'client/client.h' namespace 'cl':
         weaver_client_returncode set_edge_property(const string &node, const string &alias, const string &edge, string key, string value)
         weaver_client_returncode add_alias(const string &alias, const string &node)
         weaver_client_returncode end_tx() nogil
+        weaver_client_returncode abort_tx()
         weaver_client_returncode run_reach_program(vector[pair[string, reach_params]] &initial_args, reach_params&) nogil
         weaver_client_returncode run_pathless_reach_program(vector[pair[string, pathless_reach_params]] &initial_args, pathless_reach_params&) nogil
         weaver_client_returncode run_clustering_program(vector[pair[string, clustering_params]] &initial_args, clustering_params&) nogil
@@ -595,11 +596,15 @@ cdef class Client:
             raise WeaverError(code, 'add_alias transaction error')
 
     def end_tx(self):
-        cdef bint ret
         with nogil:
             code = self.thisptr.end_tx()
         if code != WEAVER_CLIENT_SUCCESS:
             raise WeaverError(code, 'transaction commit error')
+
+    def abort_tx(self):
+        code = self.thisptr.abort_tx()
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'transaction abort error')
 
     def run_reach_program(self, init_args):
         cdef vector[pair[string, reach_params]] c_args
