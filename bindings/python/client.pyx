@@ -387,38 +387,73 @@ cdef extern from 'node_prog/get_btc_block.h' namespace 'node_prog':
         vector[pair[vector[edge], vector[edge]]] txs
 
 cdef extern from 'client/client.h' namespace 'cl':
+    cdef enum weaver_client_returncode:
+        WEAVER_CLIENT_SUCCESS
+        WEAVER_CLIENT_INITERROR
+        WEAVER_CLIENT_ABORT
+        WEAVER_CLIENT_ACTIVETX
+        WEAVER_CLIENT_NOACTIVETX
+        WEAVER_CLIENT_NOAUXINDEX
+        WEAVER_CLIENT_NOTFOUND
+        WEAVER_CLIENT_LOGICALERROR
+        WEAVER_CLIENT_DISRUPTED
+        WEAVER_CLIENT_INTERNALMSGERROR
+    const char* weaver_client_returncode_to_string(weaver_client_returncode code)
+
     cdef cppclass client:
         client(const char *coordinator, uint16_t port, const char *config_file)
+        void initialize_logging()
 
-        bint begin_tx()
-        bint create_node(string &handle, const vector[string] &aliases)
-        bint create_edge(string &handle, const string &node1, const string &node1_alias, const string &node2, const string &node2_alias)
-        bint delete_node(const string &node, const string &alias)
-        bint delete_edge(const string &edge, const string &node, const string &node_alias)
-        bint set_node_property(const string &node, const string &alias, string key, string value)
-        bint set_edge_property(const string &node, const string &alias, const string &edge, string key, string value)
-        bint add_alias(const string &alias, const string &node)
-        bint end_tx() nogil
-        bint run_reach_program(vector[pair[string, reach_params]] &initial_args, reach_params&) nogil
-        bint run_pathless_reach_program(vector[pair[string, pathless_reach_params]] &initial_args, pathless_reach_params&) nogil
-        bint run_clustering_program(vector[pair[string, clustering_params]] &initial_args, clustering_params&) nogil
-        bint run_two_neighborhood_program(vector[pair[string, two_neighborhood_params]] &initial_args, two_neighborhood_params&) nogil
-        bint read_node_props_program(vector[pair[string, read_node_props_params]] &initial_args, read_node_props_params&) nogil
-        bint read_n_edges_program(vector[pair[string, read_n_edges_params]] &initial_args, read_n_edges_params&) nogil
-        bint edge_count_program(vector[pair[string, edge_count_params]] &initial_args, edge_count_params&) nogil
-        bint edge_get_program(vector[pair[string, edge_get_params]] &initial_args, edge_get_params&) nogil
-        bint node_get_program(vector[pair[string, node_get_params]] &initial_args, node_get_params&) nogil
-        bint traverse_props_program(vector[pair[string, traverse_props_params]] &initial_args, traverse_props_params&) nogil
-        bint discover_paths_program(vector[pair[string, discover_paths_params]] &initial_args, discover_paths_params&) nogil
-        bint get_btc_block_program(vector[pair[string, get_btc_block_params]] &initial_args, get_btc_block_params&) nogil
-        void start_migration()
-        void single_stream_migration()
-        void exit_weaver()
-        vector[uint64_t] get_node_count()
+        weaver_client_returncode begin_tx()
+        weaver_client_returncode create_node(string &handle, const vector[string] &aliases)
+        weaver_client_returncode create_edge(string &handle, const string &node1, const string &node1_alias, const string &node2, const string &node2_alias)
+        weaver_client_returncode delete_node(const string &node, const string &alias)
+        weaver_client_returncode delete_edge(const string &edge, const string &node, const string &node_alias)
+        weaver_client_returncode set_node_property(const string &node, const string &alias, string key, string value)
+        weaver_client_returncode set_edge_property(const string &node, const string &alias, const string &edge, string key, string value)
+        weaver_client_returncode add_alias(const string &alias, const string &node)
+        weaver_client_returncode end_tx() nogil
+        weaver_client_returncode run_reach_program(vector[pair[string, reach_params]] &initial_args, reach_params&) nogil
+        weaver_client_returncode run_pathless_reach_program(vector[pair[string, pathless_reach_params]] &initial_args, pathless_reach_params&) nogil
+        weaver_client_returncode run_clustering_program(vector[pair[string, clustering_params]] &initial_args, clustering_params&) nogil
+        weaver_client_returncode run_two_neighborhood_program(vector[pair[string, two_neighborhood_params]] &initial_args, two_neighborhood_params&) nogil
+        weaver_client_returncode read_node_props_program(vector[pair[string, read_node_props_params]] &initial_args, read_node_props_params&) nogil
+        weaver_client_returncode read_n_edges_program(vector[pair[string, read_n_edges_params]] &initial_args, read_n_edges_params&) nogil
+        weaver_client_returncode edge_count_program(vector[pair[string, edge_count_params]] &initial_args, edge_count_params&) nogil
+        weaver_client_returncode edge_get_program(vector[pair[string, edge_get_params]] &initial_args, edge_get_params&) nogil
+        weaver_client_returncode node_get_program(vector[pair[string, node_get_params]] &initial_args, node_get_params&) nogil
+        weaver_client_returncode traverse_props_program(vector[pair[string, traverse_props_params]] &initial_args, traverse_props_params&) nogil
+        weaver_client_returncode discover_paths_program(vector[pair[string, discover_paths_params]] &initial_args, discover_paths_params&) nogil
+        weaver_client_returncode get_btc_block_program(vector[pair[string, get_btc_block_params]] &initial_args, get_btc_block_params&) nogil
+        weaver_client_returncode start_migration()
+        weaver_client_returncode single_stream_migration()
+        weaver_client_returncode exit_weaver()
+        weaver_client_returncode get_node_count(vector[uint64_t]&)
         bint aux_index()
 
 class WeaverError(Exception):
-    pass
+    def __init__(self, status, message=None):
+        self._status = status
+        self._symbol = weaver_client_returncode_to_string(self._status)
+        self._message = message
+
+    def status(self):
+        return self._status
+
+    def symbol(self):
+        return self._symbol
+
+    def message(self):
+        return self._message
+
+    def __str__(self):
+        error_str = 'WeaverError: ' + self._symbol
+        if self._message:
+            error_str += ' (%s)' % self._message
+        return error_str
+
+    def __repr__(self):
+        return str(self)
 
 cdef class Client:
     cdef client *thisptr
@@ -436,9 +471,13 @@ cdef class Client:
     def __dealloc__(self):
         del self.thisptr
 
+    def initialize_logging(self):
+        self.thisptr.initialize_logging()
+
     def begin_tx(self):
-        if not self.thisptr.begin_tx():
-            raise WeaverError('no more than one concurrent transaction per client')
+        code = self.thisptr.begin_tx()
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'tx error')
 
     def create_node(self, handle='', **kwargs):
         cdef string cc_handle
@@ -447,10 +486,11 @@ cdef class Client:
             cc_handle = handle
         if 'aliases' in kwargs:
             aliases = kwargs['aliases']
-        if self.thisptr.create_node(cc_handle, aliases):
+        code = self.thisptr.create_node(cc_handle, aliases)
+        if code == WEAVER_CLIENT_SUCCESS:
             return str(cc_handle)
         else:
-            raise WeaverError('no active transaction')
+            raise WeaverError(code, 'tx error')
 
     def create_edge(self, node1=None, node2=None, handle=None, **kwargs):
         handle1 = ''
@@ -460,61 +500,65 @@ cdef class Client:
         cdef string cc_handle
         if node1 is None:
             if 'node1_alias' not in kwargs:
-                raise WeaverError('provide either node handle or node alias')
+                raise WeaverError(WEAVER_CLIENT_LOGICALERROR, 'provide either node handle or node alias')
             else:
                 alias1 = kwargs['node1_alias']
         else:
             handle1 = node1
         if node2 is None:
             if 'node2_alias' not in kwargs:
-                raise WeaverError('provide either node handle or node alias')
+                raise WeaverError(WEAVER_CLIENT_LOGICALERROR, 'provide either node handle or node alias')
             else:
                 alias2 = kwargs['node2_alias']
         else:
             handle2 = node2
         if handle is not None:
             cc_handle = handle
-        if self.thisptr.create_edge(cc_handle, handle1, alias1, handle2, alias2):
+        code = self.thisptr.create_edge(cc_handle, handle1, alias1, handle2, alias2)
+        if code == WEAVER_CLIENT_SUCCESS:
             return str(cc_handle)
         else:
-            raise WeaverError('no active transaction')
+            raise WeaverError(code, 'tx error')
 
     def delete_node(self, handle='', **kwargs):
         alias = ''
         if handle is None:
             if 'alias' not in kwargs:
-                raise WeaverError('provide either node handle or node alias')
+                raise WeaverError(WEAVER_CLIENT_LOGICALERROR, 'provide either node handle or node alias')
             else:
                 alias = kwargs['alias']
-        if not self.thisptr.delete_node(handle, alias):
-            raise WeaverError('no active transaction')
+        code = self.thisptr.delete_node(handle, alias)
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'tx error')
 
     def delete_edge(self, edge, node='', **kwargs):
         alias = ''
         if node == '' and 'node_alias' in kwargs:
             alias = kwargs['node_alias']
-        if not self.thisptr.delete_edge(edge, node, alias):
-            raise WeaverError('no active transaction')
+        code = self.thisptr.delete_edge(edge, node, alias)
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'tx error')
 
     def set_node_property(self, key, value, node='', **kwargs):
         alias = ''
         if node == '':
             if 'node_alias' not in kwargs:
-                raise WeaverError('provide either node handle or node alias')
+                raise WeaverError(WEAVER_CLIENT_LOGICALERROR, 'provide either node handle or node alias')
             else:
                 alias = kwargs['node_alias']
-        if not self.thisptr.set_node_property(node, alias, str(key), str(value)):
-            raise WeaverError('no active transaction')
+        code = self.thisptr.set_node_property(node, alias, str(key), str(value))
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'tx error')
 
     def set_node_properties(self, properties, node='', **kwargs):
         alias = ''
         if node == '':
             if 'node_alias' not in kwargs:
-                raise WeaverError('provide either node handle or node alias')
+                raise WeaverError(WEAVER_CLIENT_LOGICALERROR, 'provide either node handle or node alias')
             else:
                 alias = kwargs['node_alias']
         if not isinstance(properties, dict):
-            raise WeaverError('properties should be a dictionary')
+            raise WeaverError(WEAVER_CLIENT_LOGICALERROR, 'properties should be a dictionary')
         else:
             for k in properties:
                 if isinstance(properties[k], list):
@@ -527,15 +571,16 @@ cdef class Client:
         alias = ''
         if node == '' and 'node_alias' in kwargs:
             alias = kwargs['node_alias']
-        if not self.thisptr.set_edge_property(node, alias, edge, str(key), str(value)):
-            raise WeaverError('no active transaction')
+        code = self.thisptr.set_edge_property(node, alias, edge, str(key), str(value))
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'tx error')
 
     def set_edge_properties(self, edge, properties, node='', **kwargs):
         alias = ''
         if 'node_alias' in kwargs:
             alias = kwargs['node_alias']
         if not isinstance(properties, dict):
-            raise WeaverError('properties should be a dictionary')
+            raise WeaverError(WEAVER_CLIENT_LOGICALERROR, 'properties should be a dictionary')
         else:
             for k in properties:
                 if isinstance(properties[k], list):
@@ -545,15 +590,16 @@ cdef class Client:
                     self.set_edge_property(edge, str(k), str(properties[k]), node, node_alias=alias)
 
     def add_alias(self, alias, node):
-        if not self.thisptr.add_alias(alias, node):
-            raise WeaverError('add_alias transaction error')
+        code = self.thisptr.add_alias(alias, node)
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'add_alias transaction error')
 
     def end_tx(self):
         cdef bint ret
         with nogil:
-            ret = self.thisptr.end_tx()
-        if not ret:
-            raise WeaverError('transaction commit error')
+            code = self.thisptr.end_tx()
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'transaction commit error')
 
     def run_reach_program(self, init_args):
         cdef vector[pair[string, reach_params]] c_args
@@ -574,12 +620,11 @@ cdef class Client:
             c_args.push_back(arg_pair)
 
         cdef reach_params c_rp
-        cdef bint success
         with nogil:
-            success = self.thisptr.run_reach_program(c_args, c_rp)
+            code = self.thisptr.run_reach_program(c_args, c_rp)
 
-        if not success:
-            raise WeaverError('node prog error')
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
 
         foundpath = []
         for rn in c_rp.path:
@@ -605,12 +650,11 @@ cdef class Client:
             c_args.push_back(arg_pair)
 
         cdef pathless_reach_params c_rp
-        cdef bint success
         with nogil:
-            success = self.thisptr.run_pathless_reach_program(c_args, c_rp)
+            code = self.thisptr.run_pathless_reach_program(c_args, c_rp)
 
-        if not success:
-            raise WeaverError('node prog error')
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
 
         response = PathlessReachParams(reachable=c_rp.reachable)
         return response
@@ -628,12 +672,11 @@ cdef class Client:
             c_args.push_back(arg_pair)
 
         cdef clustering_params c_rp
-        cdef bint success
         with nogil:
-            success = self.thisptr.run_clustering_program(c_args, c_rp)
+            code = self.thisptr.run_clustering_program(c_args, c_rp)
 
-        if not success:
-            raise WeaverError('node prog error')
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
 
         response = ClusteringParams(clustering_coeff=c_rp.clustering_coeff)
         return response
@@ -653,12 +696,11 @@ cdef class Client:
             c_args.push_back(arg_pair)
 
         cdef two_neighborhood_params c_rp
-        cdef bint success
         with nogil:
-            success = self.thisptr.run_two_neighborhood_program(c_args, c_rp)
+            code = self.thisptr.run_two_neighborhood_program(c_args, c_rp)
 
-        if not success:
-            raise WeaverError('node prog error')
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
 
         response = TwoNeighborhoodParams(responses = c_rp.responses)
         return response
@@ -673,12 +715,11 @@ cdef class Client:
             c_args.push_back(arg_pair)
 
         cdef read_node_props_params c_rp
-        cdef bint success
         with nogil:
-            success = self.thisptr.read_node_props_program(c_args, c_rp)
+            code = self.thisptr.read_node_props_program(c_args, c_rp)
 
-        if not success:
-            raise WeaverError('node prog error')
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
 
         response = ReadNodePropsParams(node_props=c_rp.node_props)
         return response
@@ -697,12 +738,11 @@ cdef class Client:
             c_args.push_back(arg_pair)
 
         cdef read_n_edges_params c_rp
-        cdef bint success
         with nogil:
-            success = self.thisptr.read_n_edges_program(c_args, c_rp)
+            code = self.thisptr.read_n_edges_program(c_args, c_rp)
 
-        if not success:
-            raise WeaverError('node prog error')
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
 
         response = ReadNEdgesParams(return_edges=c_rp.return_edges)
         return response
@@ -720,12 +760,11 @@ cdef class Client:
             c_args.push_back(arg_pair)
 
         cdef edge_count_params c_rp
-        cdef bint success
         with nogil:
-            success = self.thisptr.edge_count_program(c_args, c_rp)
+            code = self.thisptr.edge_count_program(c_args, c_rp)
 
-        if not success:
-            raise WeaverError('node prog error')
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
 
         response = EdgeCountParams(edge_count=c_rp.edge_count)
         return response
@@ -776,12 +815,11 @@ cdef class Client:
         c_args.push_back(arg_pair)
 
         cdef edge_get_params c_rp
-        cdef bint success
         with nogil:
-            success = self.thisptr.edge_get_program(c_args, c_rp)
+            code = self.thisptr.edge_get_program(c_args, c_rp)
 
-        if not success:
-            raise WeaverError('node prog error')
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
 
         response = []
         cdef vector[edge].iterator resp_iter = c_rp.response_edges.begin()
@@ -825,12 +863,11 @@ cdef class Client:
         c_args.push_back(arg_pair)
 
         cdef node_get_params c_rp
-        cdef bint success
         with nogil:
-            success = self.thisptr.node_get_program(c_args, c_rp)
+            code = self.thisptr.node_get_program(c_args, c_rp)
 
-        if not success:
-            raise WeaverError('node prog error')
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
 
         new_node = Node()
         self.__convert_node_to_client_node(c_rp.node, new_node)
@@ -880,12 +917,11 @@ cdef class Client:
             c_args.push_back(arg_pair)
 
         cdef traverse_props_params c_rp
-        cdef bint success
         with nogil:
-            success = self.thisptr.traverse_props_program(c_args, c_rp)
+            code = self.thisptr.traverse_props_program(c_args, c_rp)
 
-        if not success:
-            raise WeaverError('node prog error')
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
 
         response = TraversePropsParams()
         for n in c_rp.return_nodes:
@@ -937,12 +973,11 @@ cdef class Client:
         c_args.push_back(arg_pair)
 
         cdef discover_paths_params c_rp
-        cdef bint success
         with nogil:
-            success = self.thisptr.discover_paths_program(c_args, c_rp)
+            code = self.thisptr.discover_paths_program(c_args, c_rp)
 
-        if not success:
-            raise WeaverError('node prog error')
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
 
         ret_paths = {}
         cdef unordered_map[string, vector[edge]].iterator path_iter = c_rp.paths.begin()
@@ -967,12 +1002,11 @@ cdef class Client:
         c_args.push_back(arg_pair)
 
         cdef get_btc_block_params c_rp
-        cdef bint success
         with nogil:
-            success = self.thisptr.get_btc_block_program(c_args, c_rp)
+            code = self.thisptr.get_btc_block_program(c_args, c_rp)
 
-        if not success:
-            raise WeaverError('node prog error')
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
 
         new_node = Node()
         self.__convert_node_to_client_node(c_rp.node , new_node)
@@ -1094,13 +1128,22 @@ cdef class Client:
         return self.execute(collect_edges=True)
 
     def start_migration(self):
-        self.thisptr.start_migration()
+        code = self.thisptr.start_migration()
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code)
     def single_stream_migration(self):
-        self.thisptr.single_stream_migration()
+        code = self.thisptr.single_stream_migration()
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code)
     def exit_weaver(self):
-        self.thisptr.exit_weaver()
+        code = self.thisptr.exit_weaver()
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code)
     def get_node_count(self):
-        cdef vector[uint64_t] node_count = self.thisptr.get_node_count()
+        cdef vector[uint64_t] node_count
+        code = self.thisptr.get_node_count(node_count)
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code)
         count = []
         cdef vector[uint64_t].iterator iter = node_count.begin()
         while iter != node_count.end():
