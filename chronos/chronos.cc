@@ -160,6 +160,26 @@ class chronos_client::pending_weaver_order : public pending
         ssize_t* m_ret;
 };
 
+class chronos_client::pending_weaver_cleanup : public pending
+{
+    public:
+        pending_weaver_cleanup(chronos_returncode* status, const std::vector<uint64_t> &cleanup_clk, uint64_t *decref_count);
+        virtual ~pending_weaver_cleanup() throw ();
+
+    public:
+        virtual void parse();
+
+    private:
+        pending_weaver_cleanup(const pending_weaver_cleanup&);
+
+    private:
+        pending_weaver_cleanup& operator = (const pending_weaver_cleanup&);
+
+    private:
+        std::vector<uint64_t> m_cleanup_clk;
+        uint64_t *m_decref_count;
+};
+
 class chronos_client::pending_get_stats : public pending
 {
     public:
@@ -289,7 +309,7 @@ chronos_client :: assign_order(chronos_pair* pairs, size_t pairs_sz,
 }
 
 char*
-pack_vector_uint64(uint64_t *vec, uint64_t vec_size, char *p)
+pack_vector_uint64(const std::vector<uint64_t> &vec, uint64_t vec_size, char *p)
 {
     for (size_t i = 0; i < vec_size; i++) {
        p = e::pack64le(vec[i], p);
@@ -320,6 +340,18 @@ chronos_client :: weaver_order(weaver_pair *pairs, size_t pairs_sz,
 
     e::intrusive_ptr<pending> pend(new pending_weaver_order(status, pairs, pairs_sz, ret));
     return send(pend, status, "weaver_order", &buffer.front(), buffer.size());
+}
+
+int64_t
+chronos_client :: weaver_cleanup(const std::vector<uint64_t> &cleanup_clk,
+        chronos_returncode *status, uint64_t *decref_count)
+{
+    std::vector<char> buffer(sizeof(uint64_t) * ClkSz);
+    char *p = &buffer.front();
+    pack_vector_uint64(cleanup_clk, ClkSz, p);
+
+    e::intrusive_ptr<pending> pend(new pending_weaver_cleanup(status, cleanup_clk, decref_count));
+    return send(pend, status, "weaver_cleanup", &buffer.front(), buffer.size());
 }
 
 int64_t
@@ -563,6 +595,35 @@ chronos_client :: pending_weaver_order :: parse()
         {
             m_pairs[i].order = byte_to_chronos_cmp(repl_output[i]);
         }
+    }
+}
+
+////////////////////////////// pending_weaver_cleanup /////////////////////////////
+
+chronos_client :: pending_weaver_cleanup :: pending_weaver_cleanup(chronos_returncode* s, const std::vector<uint64_t> &cleanup_clk, uint64_t *decref_count)
+    : pending(s)
+    , m_cleanup_clk(cleanup_clk)
+    , m_decref_count(decref_count)
+{
+}
+
+chronos_client :: pending_weaver_cleanup :: ~pending_weaver_cleanup() throw ()
+{
+}
+
+void
+chronos_client :: pending_weaver_cleanup :: parse()
+{
+    if (repl_status != REPLICANT_SUCCESS ||
+        repl_output_sz != sizeof(uint64_t))
+    {
+        *status = CHRONOS_ERROR;
+        *m_decref_count = UINT64_MAX;
+    }
+    else
+    {
+        *status = CHRONOS_SUCCESS;
+        e::unpack64le(repl_output, m_decref_count);
     }
 }
 

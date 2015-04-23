@@ -58,6 +58,9 @@ void
 chronosd_weaver_order(struct replicant_state_machine_context* ctx, void* obj,
                           const char* data, size_t data_sz);
 void
+chronosd_weaver_cleanup(struct replicant_state_machine_context* ctx, void* obj,
+                          const char* data, size_t data_sz);
+void
 chronosd_get_stats(struct replicant_state_machine_context* ctx, void* obj,
                        const char* data, size_t data_sz);
 
@@ -76,6 +79,7 @@ struct replicant_state_machine rsm = {
      {"query_order", chronosd_query_order},
      {"assign_order", chronosd_assign_order},
      {"weaver_order", chronosd_weaver_order},
+     {"weaver_cleanup", chronosd_weaver_cleanup},
      {"get_stats", chronosd_get_stats},
      {"new_epoch", chronosd_new_epoch},
      {NULL, NULL}}

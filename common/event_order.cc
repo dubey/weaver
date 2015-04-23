@@ -206,8 +206,8 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
         for (uint64_t i = 0; i < num_clks; i++) {
             for (uint64_t j = i+1; j < num_clks; j++) {
                 if (!large.at(i) && !large.at(j)) {
-                    wp->lhs = (uint64_t*)malloc(sizeof(uint64_t) * ClkSz);
-                    wp->rhs = (uint64_t*)malloc(sizeof(uint64_t) * ClkSz);
+                    wp->lhs.resize(ClkSz, 0);
+                    wp->rhs.resize(ClkSz, 0);
 
                     if (epoch_num == UINT64_MAX) {
                         epoch_num = clocks[i].clock[0];
@@ -266,8 +266,6 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
                             WDEBUG << "cannot reach here" << std::endl;
                             assert(false);
                     }
-                    free(wp->lhs);
-                    free(wp->rhs);
                     wp++;
                     //XXX bad_count++;
                 }
@@ -360,8 +358,8 @@ oracle :: assign_vt_order(const std::vector<vc::vclock> &before, const vc::vcloc
     for (uint64_t i = 0; i < num_pairs; i++) {
         weaver_pair &wp = wpair[i];
         uint64_t idx = need_kronos[i];
-        wp.lhs = (uint64_t*)malloc(sizeof(uint64_t) * ClkSz);
-        wp.rhs = (uint64_t*)malloc(sizeof(uint64_t) * ClkSz);
+        wp.lhs.resize(ClkSz, 0);
+        wp.rhs.resize(ClkSz, 0);
         for (uint64_t k = 0; k < ClkSz; k++) {
             wp.lhs[k] = before[idx].clock[k];
             wp.rhs[k] = after.clock[k];

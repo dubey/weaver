@@ -87,6 +87,8 @@ class chronosd
                           const char* data, size_t data_sz);
         void weaver_order(struct replicant_state_machine_context* ctx,
                           const char* data, size_t data_sz);
+        void weaver_cleanup(struct replicant_state_machine_context* ctx,
+                            const char* data, size_t data_sz);
         void get_stats(struct replicant_state_machine_context* ctx,
                        const char* data, size_t data_sz);
         void new_epoch(struct replicant_state_machine_context* ctx,
@@ -100,27 +102,30 @@ class chronosd
         uint64_t m_count_query_order;
         uint64_t m_count_assign_order;
         std::vector<char> m_repl_resp; // buffer for setting replicant response
+        void gc_weaver_event(uint64_t event_id);
 
     // Weaver
     public:
-        typedef std::set<std::pair<uint64_t, uint64_t>,
-                bool(*)(std::pair<uint64_t, uint64_t>, std::pair<uint64_t, uint64_t>)> pair_set_t;
+        using pair_set_t = std::set<std::pair<uint64_t, uint64_t>, bool(*)(std::pair<uint64_t, uint64_t>, std::pair<uint64_t, uint64_t>)>;
     private:
         uint64_t m_count_weaver_order;
+        uint64_t m_count_weaver_cleanup;
         std::unordered_map<std::vector<uint64_t>, uint64_t> m_vcmap; // vclk -> kronos id
+        std::unordered_map<uint64_t, std::vector<uint64_t>> m_rev_vcmap; // kronos id -> vclk
         bool (*pair_comp_ptr)(std::pair<uint64_t, uint64_t>, std::pair<uint64_t, uint64_t>);
         std::vector<std::vector<pair_set_t>> m_vtlist; // epoch num -> vt id -> (vclk, corresponding kronos id) seen from that vt
-        void assign_vt_dependencies(std::vector<uint64_t> &vclk, uint64_t vt_id);
+        void assign_vt_dependencies(std::vector<uint64_t> &vclk, uint64_t vt_id, uint64_t ev_id);
 };
 
 chronosd :: chronosd()
     : m_graph()
-    , m_count_create_event()
-    , m_count_acquire_references()
-    , m_count_release_references()
-    , m_count_query_order()
-    , m_count_assign_order()
-    , m_count_weaver_order()
+    , m_count_create_event(0)
+    , m_count_acquire_references(0)
+    , m_count_release_references(0)
+    , m_count_query_order(0)
+    , m_count_assign_order(0)
+    , m_count_weaver_order(0)
+    , m_count_weaver_cleanup(0)
     , pair_comp_ptr(&pair_comp)
 {
     // default search paths for config file
@@ -128,7 +133,7 @@ chronosd :: chronosd()
         WDEBUG << "error in init_config_constants, exiting now." << std::endl;
         exit(-1);
     }
-   
+
     m_vtlist.emplace_back(std::vector<pair_set_t>()); // epoch num 0
 
     pair_set_t empty_set(pair_comp_ptr);
@@ -396,10 +401,10 @@ chronosd :: assign_order(struct replicant_state_machine_context* ctx,
 // this method makes edges in the event dependency graph to record
 // dependencies between events from the same vector timestamper
 void
-chronosd :: assign_vt_dependencies(std::vector<uint64_t> &vclk, uint64_t vt_id)
+chronosd :: assign_vt_dependencies(std::vector<uint64_t> &vclk, uint64_t vt_id, uint64_t ev_id)
 {
+    // ev_id = m_vcmap[vclk];
     uint64_t clk_val = vclk[vt_id+1];
-    uint64_t ev_id = m_vcmap[vclk];
     uint64_t epoch = vclk[0];
 
     if (epoch >= m_vtlist.size()) {
@@ -427,11 +432,11 @@ chronosd :: assign_vt_dependencies(std::vector<uint64_t> &vclk, uint64_t vt_id)
 }
 
 const char*
-unpack_vector_uint64(const char *c, uint64_t **vec, uint64_t vec_size)
+unpack_vector_uint64(const char *c, std::vector<uint64_t> &vec, uint64_t vec_size)
 {
-    *vec = (uint64_t*)malloc(sizeof(uint64_t) * vec_size);
+    vec.resize(vec_size, 0);
     for (size_t i = 0; i < vec_size; i++) {
-        c = e::unpack64le(c, *vec + i);
+        c = e::unpack64le(c, &vec[i]);
     }
     return c;
 }
@@ -461,8 +466,8 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
         chronos_pair p;
         weaver_pair wp;
         uint8_t o;
-        data_ptr = unpack_vector_uint64(data_ptr, &wp.lhs, ClkSz);
-        data_ptr = unpack_vector_uint64(data_ptr, &wp.rhs, ClkSz);
+        data_ptr = unpack_vector_uint64(data_ptr, wp.lhs, ClkSz);
+        data_ptr = unpack_vector_uint64(data_ptr, wp.rhs, ClkSz);
         data_ptr = e::unpack64le(data_ptr, &wp.lhs_id);
         data_ptr = e::unpack64le(data_ptr, &wp.rhs_id);
         data_ptr = e::unpack32le(data_ptr, &p.flags);
@@ -476,27 +481,27 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
         // from timestamper it is hard fail
         //assert(p.flags & CHRONOS_SOFT_FAIL);
 
-        std::vector<uint64_t> vc_lhs, vc_rhs;
-        vc_lhs.reserve(ClkSz);
-        vc_rhs.reserve(ClkSz);
-        for (size_t i = 0; i < ClkSz; i++) {
-            vc_lhs.push_back(wp.lhs[i]);
-            vc_rhs.push_back(wp.rhs[i]);
-        }
-
+        std::vector<uint64_t> &vc_lhs = wp.lhs;
+        std::vector<uint64_t> &vc_rhs = wp.rhs;
         // create vertex in dependency graph if doesn't exist
-        if (m_vcmap.find(vc_lhs) == m_vcmap.end()) {
+        auto iter = m_vcmap.find(vc_lhs);
+        if (iter == m_vcmap.end()) {
             uint64_t ev_lhs = m_graph.add_vertex();
             m_vcmap[vc_lhs] = ev_lhs;
-            assign_vt_dependencies(vc_lhs, wp.lhs_id);
+            m_rev_vcmap[ev_lhs] = vc_lhs;
+            p.lhs = ev_lhs;
+            assign_vt_dependencies(vc_lhs, wp.lhs_id, ev_lhs);
+        } else {
+            p.lhs = iter->second;
         }
-        if (m_vcmap.find(vc_rhs) == m_vcmap.end()) {
+        iter = m_vcmap.find(vc_rhs);
+        if (iter == m_vcmap.end()) {
             uint64_t ev_rhs = m_graph.add_vertex();
             m_vcmap[vc_rhs] = ev_rhs;
-            assign_vt_dependencies(vc_rhs, wp.rhs_id);
+            m_rev_vcmap[ev_rhs] = vc_rhs;
+            p.rhs = ev_rhs;
+            assign_vt_dependencies(vc_rhs, wp.rhs_id, ev_rhs);
         }
-        p.lhs = m_vcmap[vc_lhs];
-        p.rhs = m_vcmap[vc_rhs];
 
         assert(m_graph.exists(p.lhs) && m_graph.exists(p.rhs));
 
@@ -555,6 +560,75 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
 }
 
 void
+chronosd :: gc_weaver_event(uint64_t event_id)
+{
+    m_graph.decref(event_id);
+    auto revmap_iter = m_rev_vcmap.find(event_id);
+    assert(revmap_iter != m_rev_vcmap.end());
+    m_vcmap.erase(revmap_iter->second);
+    m_rev_vcmap.erase(revmap_iter);
+}
+
+void
+chronosd :: weaver_cleanup(struct replicant_state_machine_context* ctx,
+                           const char* data, size_t data_sz)
+{
+    ++m_count_weaver_cleanup;
+    assert(data_sz == sizeof(uint64_t)*ClkSz);
+    std::vector<uint64_t> cleanup_clk;
+    unpack_vector_uint64(data, cleanup_clk, ClkSz);
+
+    uint64_t decref_count = 0;
+    uint64_t epoch = cleanup_clk[0];
+    for (uint64_t i = 0; i < epoch; i++) {
+        for (const pair_set_t &set: m_vtlist[i]) {
+            for (const auto &p: set) {
+                gc_weaver_event(p.second);
+                decref_count++;
+            }
+        }
+        m_vtlist[i].clear();
+    }
+
+    assert(m_vtlist[epoch].size() == NumVts);
+    // ClkSz = NumVts+1
+    for (uint64_t j = 1; j < ClkSz; j++) {
+        pair_set_t &set = m_vtlist[epoch][j-1];
+        auto start_iter = set.begin();
+        auto end_iter = set.begin();
+        bool clean;
+        for (; end_iter != set.end(); end_iter++) {
+            const std::vector<uint64_t> &this_clk = m_rev_vcmap[end_iter->second];
+            clean = true;
+            for (uint64_t k = 0; k < this_clk.size(); k++) {
+                if (this_clk[k] >= cleanup_clk[k]) {
+                    clean = false;
+                    break;
+                }
+            }
+            if (clean) {
+                gc_weaver_event(end_iter->second);
+                decref_count++;
+            } else {
+                break;
+            }
+        }
+
+        if (end_iter == set.end()) {
+            set.clear();
+        } else if (start_iter != end_iter) {
+            set.erase(start_iter, end_iter);
+        }
+    }
+
+    const size_t resp_sz = sizeof(uint64_t);
+    m_repl_resp.resize(resp_sz);
+    char *resp_ptr = &m_repl_resp.front();
+    e::pack64le(decref_count, resp_ptr);
+    replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
+}
+
+void
 chronosd :: get_stats(struct replicant_state_machine_context* ctx,
                       const char*, size_t)
 {
@@ -597,6 +671,7 @@ chronosd :: get_stats(struct replicant_state_machine_context* ctx,
     st.count_query_order = m_count_query_order;
     st.count_assign_order = m_count_assign_order;
     st.count_weaver_order = m_count_weaver_order;
+    st.count_weaver_cleanup = m_count_weaver_cleanup;
 
     const size_t resp_sz = sizeof(uint64_t) * 9 + sizeof(uint32_t);
     m_repl_resp.resize(resp_sz);
@@ -612,6 +687,7 @@ chronosd :: get_stats(struct replicant_state_machine_context* ctx,
     resp_ptr = e::pack64le(st.count_query_order, resp_ptr);
     resp_ptr = e::pack64le(st.count_assign_order, resp_ptr);
     resp_ptr = e::pack64le(st.count_weaver_order, resp_ptr);
+    resp_ptr = e::pack64le(st.count_weaver_cleanup, resp_ptr);
     resp_ptr = &m_repl_resp.front();
     replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
 }
@@ -714,6 +790,13 @@ chronosd_weaver_order(struct replicant_state_machine_context* ctx, void* obj,
                           const char* data, size_t data_sz)
 {
     static_cast<chronosd*>(obj)->weaver_order(ctx, data, data_sz);
+}
+
+void
+chronosd_weaver_cleanup(struct replicant_state_machine_context* ctx, void* obj,
+                          const char* data, size_t data_sz)
+{
+    static_cast<chronosd*>(obj)->weaver_cleanup(ctx, data, data_sz);
 }
 
 void

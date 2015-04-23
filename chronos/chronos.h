@@ -81,8 +81,8 @@ struct chronos_pair
 
 struct weaver_pair
 {
-    uint64_t *lhs;
-    uint64_t *rhs;
+    std::vector<uint64_t> lhs;
+    std::vector<uint64_t> rhs;
     uint64_t lhs_id;
     uint64_t rhs_id;
     uint32_t flags;
@@ -102,6 +102,7 @@ struct chronos_stats
     uint64_t count_query_order;
     uint64_t count_assign_order;
     uint64_t count_weaver_order;
+    uint64_t count_weaver_cleanup;
 };
 
 #define CHRONOS_SOFT_FAIL 1
@@ -211,6 +212,13 @@ chronos_assign_order(struct chronos_client* client, struct chronos_pair* pairs, 
 int64_t
 chronos_weaver_order(struct chronos_client* client, struct weaver_pair* pairs, size_t pairs_sz,
                      enum chronos_returncode* status, ssize_t* ret);
+
+/* Cleanup old Kronos events based on cleanup_clk.
+ * All events with timestamp < cleanup_clk are garbage collected.
+ */
+int64_t
+chronos_weaver_cleanup(struct chronos_client* client, uint64_t *cleanup_clk,
+                       enum chronos_returncode* status, uint64_t *decref_count);
 /* Get statistics from the server.
  *
  * The chronos_stats instance will be filled in.  The fields have the following
@@ -288,6 +296,8 @@ class chronos_client
                              chronos_returncode* status, ssize_t* ret);
         int64_t weaver_order(weaver_pair* pairs, size_t pairs_sz,
                              chronos_returncode* status, ssize_t* ret);
+        int64_t weaver_cleanup(const std::vector<uint64_t> &cleanup_clk,
+                               chronos_returncode* status, uint64_t *decref_count);
         int64_t get_stats(chronos_returncode* status, chronos_stats* st, ssize_t* ret);
         int64_t new_epoch(chronos_returncode *status, uint32_t *success);
         int64_t loop(int timeout, chronos_returncode* status);
@@ -299,6 +309,7 @@ class chronos_client
         class pending_references;
         class pending_order;
         class pending_weaver_order;
+        class pending_weaver_cleanup;
         class pending_get_stats;
         class pending_new_epoch;
         typedef std::map<uint64_t, e::intrusive_ptr<pending> > pending_map;
