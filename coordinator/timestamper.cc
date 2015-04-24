@@ -215,12 +215,23 @@ nop_function()
     int sleep_flags = 0;
     std::shared_ptr<transaction::pending_tx> tx = nullptr;
 
+    uint64_t loop_count = 0;
+    bool kronos_call;
+    chronos_client kronos(KronosIpaddr, KronosPort);
+    vc::vclock_t kronos_cleanup_clk(ClkSz, 0);
+
     sleep_time.tv_sec  = VT_TIMEOUT_NANO / NANO;
     sleep_time.tv_nsec = VT_TIMEOUT_NANO % NANO;
 
     while (true) {
         sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, nullptr);
         assert((sleep_ret == 0 || sleep_ret == EINTR) && "error in clock_nanosleep");
+
+        if (++loop_count > 10000) {
+            kronos_call = true;
+        } else {
+            kronos_call = false;
+        }
 
         vts->periodic_update_mutex.lock();
 
@@ -240,6 +251,13 @@ nop_function()
 
             vts->tx_prog_mutex.lock();
             tx->nop->max_done_clk = vts->max_done_clk;
+            if (kronos_call) {
+                if (vts->outstanding_progs.empty()) {
+                    kronos_cleanup_clk = tx->timestamp.clock;
+                } else if (kronos_cleanup_clk[vt_id+1] < vts->max_done_clk[vt_id+1]) {
+                    kronos_cleanup_clk = vts->max_done_clk;
+                }
+            }
             tx->nop->outstanding_progs = vts->pend_progs.size();
             tx->nop->shard_node_count = vts->shard_node_count;
 
@@ -260,6 +278,8 @@ nop_function()
             vts->tx_prog_mutex.unlock();
 
             weaver_util::reset_all(vts->to_nop);
+        } else {
+            kronos_call = false;
         }
 
         vts->periodic_update_mutex.unlock();
@@ -268,6 +288,37 @@ nop_function()
             vts->enqueue_tx(tx);
             vts->tx_queue_loop();
             tx = nullptr;
+        }
+
+        if (kronos_call) {
+            int64_t id;
+            chronos_returncode call_code, wait_code;
+
+            uint64_t decref_count = UINT64_MAX;
+            id = kronos.weaver_cleanup(kronos_cleanup_clk, vt_id, &call_code, &decref_count);
+            id = kronos.wait(id, 100000, &wait_code);
+
+            if (call_code != CHRONOS_SUCCESS || wait_code != CHRONOS_SUCCESS) {
+                WDEBUG << "Kronos weaver_cleanup: call code " << call_code << ", wait code " << wait_code << std::endl;
+            }
+
+            // for debugging
+            //ssize_t ret;
+            //chronos_stats stats;
+            //id = kronos.get_stats(&call_code, &stats, &ret);
+            //id = kronos.wait(id, 100000, &wait_code);
+
+            //if (call_code == CHRONOS_SUCCESS && wait_code == CHRONOS_SUCCESS) {
+            //    WDEBUG << "Kronos stats:" << std::endl;
+            //    WDEBUG << "\tTime:\t" << stats.time << std::endl;
+            //    WDEBUG << "\tEvents:\t" << stats.events << std::endl;
+            //    WDEBUG << "\tCount Weaver order:\t" << stats.count_weaver_order << std::endl;
+            //    WDEBUG << "\tCount Weaver cleanup:\t" << stats.count_weaver_cleanup << std::endl;
+            //} else {
+            //    WDEBUG << "Kronos get_stats: call code " << call_code << ", wait code " << wait_code << std::endl;
+            //}
+
+            loop_count = 0;
         }
     }
 }

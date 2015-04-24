@@ -217,7 +217,7 @@ chronos_weaver_order(struct chronos_client* client, struct weaver_pair* pairs, s
  * All events with timestamp < cleanup_clk are garbage collected.
  */
 int64_t
-chronos_weaver_cleanup(struct chronos_client* client, uint64_t *cleanup_clk,
+chronos_weaver_cleanup(struct chronos_client* client, uint64_t *cleanup_clk, uint64_t vt_id,
                        enum chronos_returncode* status, uint64_t *decref_count);
 /* Get statistics from the server.
  *
@@ -296,7 +296,7 @@ class chronos_client
                              chronos_returncode* status, ssize_t* ret);
         int64_t weaver_order(weaver_pair* pairs, size_t pairs_sz,
                              chronos_returncode* status, ssize_t* ret);
-        int64_t weaver_cleanup(const std::vector<uint64_t> &cleanup_clk,
+        int64_t weaver_cleanup(const std::vector<uint64_t> &cleanup_clk, uint64_t vt_id,
                                chronos_returncode* status, uint64_t *decref_count);
         int64_t get_stats(chronos_returncode* status, chronos_stats* st, ssize_t* ret);
         int64_t new_epoch(chronos_returncode *status, uint32_t *success);

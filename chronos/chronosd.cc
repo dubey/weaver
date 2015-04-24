@@ -102,7 +102,6 @@ class chronosd
         uint64_t m_count_query_order;
         uint64_t m_count_assign_order;
         std::vector<char> m_repl_resp; // buffer for setting replicant response
-        void gc_weaver_event(uint64_t event_id);
 
     // Weaver
     public:
@@ -114,7 +113,9 @@ class chronosd
         std::unordered_map<uint64_t, std::vector<uint64_t>> m_rev_vcmap; // kronos id -> vclk
         bool (*pair_comp_ptr)(std::pair<uint64_t, uint64_t>, std::pair<uint64_t, uint64_t>);
         std::vector<std::vector<pair_set_t>> m_vtlist; // epoch num -> vt id -> (vclk, corresponding kronos id) seen from that vt
+        std::vector<std::vector<uint64_t>> m_cleanup_clk; // vt id -> last cleanup clk heard from that vt
         void assign_vt_dependencies(std::vector<uint64_t> &vclk, uint64_t vt_id, uint64_t ev_id);
+        void gc_weaver_event(uint64_t event_id);
 };
 
 chronosd :: chronosd()
@@ -130,16 +131,17 @@ chronosd :: chronosd()
 {
     // default search paths for config file
     if (!init_config_constants()) {
-        WDEBUG << "error in init_config_constants, exiting now." << std::endl;
-        exit(-1);
+        abort();
     }
 
     m_vtlist.emplace_back(std::vector<pair_set_t>()); // epoch num 0
 
     pair_set_t empty_set(pair_comp_ptr);
     m_vtlist[0].reserve(NumVts);
+    std::vector<uint64_t> empty_clk(ClkSz, 0);
     for (uint64_t vt_id = 0; vt_id < NumVts; vt_id++) {
         m_vtlist[0].emplace_back(empty_set);
+        m_cleanup_clk.emplace_back(empty_clk);
     }
 }
 
@@ -501,6 +503,8 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
             m_rev_vcmap[ev_rhs] = vc_rhs;
             p.rhs = ev_rhs;
             assign_vt_dependencies(vc_rhs, wp.rhs_id, ev_rhs);
+        } else {
+            p.rhs = iter->second;
         }
 
         assert(m_graph.exists(p.lhs) && m_graph.exists(p.rhs));
@@ -541,8 +545,9 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
                     break;
 
                 default:
-                    WDEBUG << "should not reach here" << std::endl;
-                    assert(false);
+                    FILE* log = replicant_state_machine_log_stream(ctx);
+                    fprintf(log, "should not reach here");
+                    abort();
                     break;
             }
         }
@@ -574,50 +579,70 @@ chronosd :: weaver_cleanup(struct replicant_state_machine_context* ctx,
                            const char* data, size_t data_sz)
 {
     ++m_count_weaver_cleanup;
-    assert(data_sz == sizeof(uint64_t)*ClkSz);
+    assert(data_sz == (sizeof(uint64_t)*ClkSz + sizeof(uint64_t)));
+    std::vector<uint64_t> cur_cleanup_clk;
+    uint64_t vt_id;
+    data = unpack_vector_uint64(data, cur_cleanup_clk, ClkSz);
+    e::unpack64le(data, &vt_id);
+
+    assert(vt_id < m_cleanup_clk.size());
+    m_cleanup_clk[vt_id] = cur_cleanup_clk;
+
     std::vector<uint64_t> cleanup_clk;
-    unpack_vector_uint64(data, cleanup_clk, ClkSz);
+    cleanup_clk.reserve(ClkSz);
+    for (uint64_t i = 0; i < ClkSz; i++) {
+        uint64_t this_clk = UINT64_MAX;
+        for (uint64_t j = 0; j < NumVts; j++) {
+            if (m_cleanup_clk[j][i] < this_clk) {
+                this_clk = m_cleanup_clk[j][i];
+            }
+        }
+        cleanup_clk.emplace_back(this_clk);
+    }
 
     uint64_t decref_count = 0;
     uint64_t epoch = cleanup_clk[0];
-    for (uint64_t i = 0; i < epoch; i++) {
-        for (const pair_set_t &set: m_vtlist[i]) {
-            for (const auto &p: set) {
-                gc_weaver_event(p.second);
-                decref_count++;
-            }
-        }
-        m_vtlist[i].clear();
-    }
 
-    assert(m_vtlist[epoch].size() == NumVts);
-    // ClkSz = NumVts+1
-    for (uint64_t j = 1; j < ClkSz; j++) {
-        pair_set_t &set = m_vtlist[epoch][j-1];
-        auto start_iter = set.begin();
-        auto end_iter = set.begin();
-        bool clean;
-        for (; end_iter != set.end(); end_iter++) {
-            const std::vector<uint64_t> &this_clk = m_rev_vcmap[end_iter->second];
-            clean = true;
-            for (uint64_t k = 0; k < this_clk.size(); k++) {
-                if (this_clk[k] >= cleanup_clk[k]) {
-                    clean = false;
+    if (epoch < m_vtlist.size()) {
+        for (uint64_t i = 0; i < epoch; i++) {
+            for (const pair_set_t &set: m_vtlist[i]) {
+                for (const auto &p: set) {
+                    gc_weaver_event(p.second);
+                    decref_count++;
+                }
+            }
+            m_vtlist[i].clear();
+        }
+
+        assert(m_vtlist[epoch].size() == NumVts);
+        // ClkSz = NumVts+1
+        for (uint64_t j = 1; j < ClkSz; j++) {
+            pair_set_t &set = m_vtlist[epoch][j-1];
+            auto start_iter = set.begin();
+            auto end_iter = set.begin();
+            bool clean;
+            for (; end_iter != set.end(); end_iter++) {
+                const std::vector<uint64_t> &this_clk = m_rev_vcmap[end_iter->second];
+                clean = true;
+                for (uint64_t k = 1; k < this_clk.size(); k++) { // skip comparing epoch
+                    if (this_clk[k] >= cleanup_clk[k]) {
+                        clean = false;
+                        break;
+                    }
+                }
+                if (clean) {
+                    gc_weaver_event(end_iter->second);
+                    decref_count++;
+                } else {
                     break;
                 }
             }
-            if (clean) {
-                gc_weaver_event(end_iter->second);
-                decref_count++;
-            } else {
-                break;
-            }
-        }
 
-        if (end_iter == set.end()) {
-            set.clear();
-        } else if (start_iter != end_iter) {
-            set.erase(start_iter, end_iter);
+            if (end_iter == set.end()) {
+                set.clear();
+            } else if (start_iter != end_iter) {
+                set.erase(start_iter, end_iter);
+            }
         }
     }
 
@@ -673,7 +698,7 @@ chronosd :: get_stats(struct replicant_state_machine_context* ctx,
     st.count_weaver_order = m_count_weaver_order;
     st.count_weaver_cleanup = m_count_weaver_cleanup;
 
-    const size_t resp_sz = sizeof(uint64_t) * 9 + sizeof(uint32_t);
+    const size_t resp_sz = sizeof(uint64_t) * 11 + sizeof(uint32_t);
     m_repl_resp.resize(resp_sz);
     char *resp_ptr = &m_repl_resp.front();
     resp_ptr = e::pack64le(st.time, resp_ptr);

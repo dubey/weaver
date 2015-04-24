@@ -199,27 +199,23 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
 
         // need to call Kronos
         uint64_t num_pairs = ((num_clks - num_large) * (num_clks - num_large - 1)) / 2;
-        weaver_pair *wpair = (weaver_pair*)malloc(sizeof(weaver_pair) * num_pairs);
+        weaver_pair *wpair = new weaver_pair[num_pairs];
         weaver_pair *wp = wpair;
         uint64_t epoch_num = UINT64_MAX;
 
         for (uint64_t i = 0; i < num_clks; i++) {
             for (uint64_t j = i+1; j < num_clks; j++) {
                 if (!large.at(i) && !large.at(j)) {
-                    wp->lhs.resize(ClkSz, 0);
-                    wp->rhs.resize(ClkSz, 0);
-
                     if (epoch_num == UINT64_MAX) {
                         epoch_num = clocks[i].clock[0];
+                        assert(clocks[j].clock[0] == epoch_num);
                     } else {
                         assert(clocks[i].clock[0] == epoch_num);
                         assert(clocks[j].clock[0] == epoch_num);
                     }
 
-                    for (uint64_t k = 0; k < ClkSz; k++) {
-                        wp->lhs[k] = clocks[i].clock[k];
-                        wp->rhs[k] = clocks[j].clock[k];
-                    }
+                    wp->lhs = clocks[i].clock;
+                    wp->rhs = clocks[j].clock;
                     wp->lhs_id = clocks[i].vt_id;
                     wp->rhs_id = clocks[j].vt_id;
                     wp->flags = CHRONOS_SOFT_FAIL;
@@ -271,7 +267,7 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
                 }
             }
         }
-        free(wpair);
+        delete[] wpair;
 
         // XXX
         //if (test_bad[0] && test_bad[1] && test_bad[2]) {
@@ -352,18 +348,14 @@ oracle :: assign_vt_order(const std::vector<vc::vclock> &before, const vc::vcloc
     // need to call Kronos
 
     uint64_t num_pairs = need_kronos.size();
-    weaver_pair *wpair = (weaver_pair*)malloc(sizeof(weaver_pair) * num_pairs);
+    weaver_pair *wpair = new weaver_pair[num_pairs];
     
     // prep kronos args
     for (uint64_t i = 0; i < num_pairs; i++) {
         weaver_pair &wp = wpair[i];
         uint64_t idx = need_kronos[i];
-        wp.lhs.resize(ClkSz, 0);
-        wp.rhs.resize(ClkSz, 0);
-        for (uint64_t k = 0; k < ClkSz; k++) {
-            wp.lhs[k] = before[idx].clock[k];
-            wp.rhs[k] = after.clock[k];
-        }
+        wp.lhs = before[idx].clock;
+        wp.rhs = after.clock;
         wp.lhs_id = before[idx].vt_id;
         wp.rhs_id = after.vt_id;
         wp.flags = 0;
@@ -379,10 +371,10 @@ oracle :: assign_vt_order(const std::vector<vc::vclock> &before, const vc::vcloc
     // check kronos returned orders
     for (uint64_t i = 0; i < num_pairs; i++) {
         if (wpair[i].order != CHRONOS_HAPPENS_BEFORE) {
-            free(wpair);
+            delete[] wpair;
             return false;
         }
     }
-    free(wpair);
+    delete[] wpair;
     return true;
 }

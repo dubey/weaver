@@ -48,7 +48,7 @@ shopt -s nullglob
 cd
 
 # hyperdex
-hyperdex_coord_dir="~/weaver_runtime/hyperdex/coord"
+hyperdex_coord_dir=~/weaver_runtime/hyperdex/coord
 echo "Starting HyperDex coordinator at location $hyperdex_coord_ipaddr : $hyperdex_coord_port, data at $hyperdex_coord_dir"
 if [ $hyperdex_coord_ipaddr = "127.0.0.1" ]; then
     mkdir -p $hyperdex_coord_dir
@@ -72,7 +72,7 @@ do
     idx=$(($i-1))
     ipaddr=${hyperdex_daemons_ipaddr[$idx]}
     port=${hyperdex_daemons_port[$idx]}
-    directory="~/weaver_runtime/hyperdex/daemon$idx"
+    directory=~/weaver_runtime/hyperdex/daemon$idx
     echo "Starting HyperDex daemon $i at location $ipaddr : $port, data at $directory"
     if [ $ipaddr = "127.0.0.1" ]; then
         mkdir -p $directory
@@ -139,7 +139,7 @@ do
     idx=$(($i-1))
     ipaddr=${server_manager_ipaddr[$idx]}
     port=${server_manager_port[$idx]}
-    directory="~/weaver_runtime/server_manager/daemon$idx"
+    directory=~/weaver_runtime/server_manager/daemon$idx
     echo "Starting server manager at location  $ipaddr: $port, data at $directory"
     if [ $ipaddr = "127.0.0.1" ]; then
         mkdir -p $directory
@@ -168,7 +168,7 @@ do
     idx=$(($i-1))
     ipaddr=${kronos_ipaddr[$idx]}
     port=${kronos_port[$idx]}
-    directory="~/weaver_runtime/kronos/daemon$idx"
+    directory=~/weaver_runtime/kronos/daemon$idx
     echo "Starting Kronos at location  $ipaddr: $port, data at $directory"
     if [ $ipaddr = "127.0.0.1" ]; then
         mkdir -p $directory
