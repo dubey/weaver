@@ -553,7 +553,6 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
         }
     }
 
-    //assert(num_pairs == NUM_PAIRS);
     if (num_pairs != NUM_PAIRS) {
         for (size_t i = 0; i < edges.size(); ++i) {
             m_graph.remove_edge(edges[i].first, edges[i].second);
@@ -585,7 +584,6 @@ chronosd :: weaver_cleanup(struct replicant_state_machine_context* ctx,
     data = unpack_vector_uint64(data, cur_cleanup_clk, ClkSz);
     e::unpack64le(data, &vt_id);
 
-    assert(vt_id < m_cleanup_clk.size());
     m_cleanup_clk[vt_id] = cur_cleanup_clk;
 
     std::vector<uint64_t> cleanup_clk;

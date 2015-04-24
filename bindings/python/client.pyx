@@ -838,7 +838,6 @@ cdef class Client:
         if node == '':
             node = edge
         response = self.get_edges(nbrs=None, edges=[edge], properties=None, node=node)
-        assert(len(response) < 2)
         if len(response) == 1:
             return response[0]
         else:
@@ -1112,8 +1111,8 @@ cdef class Client:
         num_node_aliases = len(self.traverse_node_aliases)
         num_node_props = len(self.traverse_node_props)
         num_edge_props = len(self.traverse_edge_props)
-        assert (num_node_aliases == num_node_props)
-        assert ((num_node_props == (num_edge_props+1)) or (num_node_props == num_edge_props))
+        if ((num_node_aliases != num_node_props) or !((num_node_props == (num_edge_props+1)) or (num_node_props == num_edge_props))):
+            raise WeaverError(WEAVER_CLIENT_LOGICALERROR)
 
         params = TraversePropsParams(self.traverse_node_aliases, \
                                      self.__convert_props_dict_to_list(self.traverse_node_props), \

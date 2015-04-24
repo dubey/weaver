@@ -74,6 +74,8 @@ server_manager :: server_manager()
     // XXX remove when you want to support multiple clusters
     // do a proper init; see HyperDex/tools/coordinator.cc
     m_cluster = 1;
+
+    generate_cached_configuration(nullptr);
 }
 
 server_manager :: ~server_manager() throw ()
@@ -476,7 +478,6 @@ server_manager :: activate_backup(server *backup, server::type_t type, uint64_t 
 void
 server_manager :: config_get(replicant_state_machine_context* ctx)
 {
-    assert(m_cluster != 0 && m_version != 0);
     assert(m_latest_config.get());
     const char* output = reinterpret_cast<const char*>(m_latest_config->data());
     size_t output_sz = m_latest_config->size();
@@ -502,7 +503,6 @@ server_manager :: config_stable(replicant_state_machine_context* ctx,
 void
 server_manager :: replid_get(replicant_state_machine_context* ctx)
 {
-    assert(m_cluster != 0 && m_version != 0);
     uint64_t client = replicant_state_machine_get_client(ctx);
     size_t sz = sizeof(uint64_t);
     m_response.reset(e::buffer::create(sz));

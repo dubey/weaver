@@ -38,9 +38,13 @@ comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *
 {
     assert(server_id < NumVts);
     auto mlist_iter = mlist.find(WEAVER_TO_BUSYBEE(server_id));
-    assert(mlist_iter != mlist.end() && "busybee mapper lookup");
-    *loc = mlist_iter->second;
-    return true;
+    if (mlist_iter == mlist.end()) {
+        WDEBUG << "busybee mapper lookup fail for " << server_id << std::endl;
+        return false;
+    } else {
+        *loc = mlist_iter->second;
+        return true;
+    }
 }
 
 comm_wrapper :: comm_wrapper(uint64_t bbid, const configuration &new_config)

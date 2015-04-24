@@ -444,8 +444,7 @@ client :: run_node_program(node_prog::prog_type prog_to_run,
 
         if (send_code == BUSYBEE_DISRUPTED) {
             reconfigure();
-            retry = true;
-            continue;
+            return WEAVER_CLIENT_DISRUPTED;
         } else if (send_code != BUSYBEE_SUCCESS) {
             return WEAVER_CLIENT_INTERNALMSGERROR;
         }
