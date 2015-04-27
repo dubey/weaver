@@ -4,7 +4,7 @@ package weaver
 | source="weaver"
 | section="net"
 | dist="Ubuntu"
-| version="0.1"
+| version="0.2.0"
 | release="1"
 | epoch="1"
 | license="BSD"

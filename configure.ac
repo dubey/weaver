@@ -2,7 +2,7 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.68])
-AC_INIT([Weaver], [0.1], [dubey@cs.cornell.edu])
+AC_INIT([Weaver], [0.2.0], [dubey@cs.cornell.edu])
 AM_INIT_AUTOMAKE([foreign subdir-objects])
 AM_SILENT_RULES([yes])
 LT_INIT
