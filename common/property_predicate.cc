@@ -11,6 +11,8 @@
 
 #include <assert.h>
 
+#define weaver_debug_
+#include "common/weaver_constants.h"
 #include "common/property_predicate.h"
 
 using predicate::prop_predicate;
@@ -57,7 +59,7 @@ prop_predicate :: check(const node_prog::property &prop) const
             break;
 
         default:
-            assert(false);
+            WDEBUG << "bad rel " << rel << std::endl;
             return false;
     }
 }

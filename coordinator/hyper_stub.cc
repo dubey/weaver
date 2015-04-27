@@ -230,8 +230,10 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 n->add_edge(new db::edge(upd->handle, tx_clk_ptr, upd->loc2, upd->handle2));
 
                 if (AuxIndex) {
-                    idx_add_iter = idx_add.find(upd->handle);
-                    assert(idx_add_iter != idx_add.end());
+                    if (idx_add.find(upd->handle) == idx_add.end()) {
+                        WDEBUG << "logical error: does not exist in idx_add " << upd->handle << std::endl;
+                        ERROR_FAIL;
+                    }
                     idx_add[upd->handle] = n;
                 }
                 break;
@@ -329,7 +331,10 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         node_iter = old_nodes.find(h);
         if (node_iter == old_nodes.end()) {
             node_iter = new_nodes.find(h);
-            assert(node_iter != new_nodes.end());
+            if (node_iter == new_nodes.end()) {
+                WDEBUG << "did not find node " << h << std::endl;
+                ERROR_FAIL;
+            }
             n = node_iter->second;
             new_nodes.erase(h);
         } else {

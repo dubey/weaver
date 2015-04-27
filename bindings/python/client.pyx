@@ -1111,7 +1111,7 @@ cdef class Client:
         num_node_aliases = len(self.traverse_node_aliases)
         num_node_props = len(self.traverse_node_props)
         num_edge_props = len(self.traverse_edge_props)
-        if ((num_node_aliases != num_node_props) or !((num_node_props == (num_edge_props+1)) or (num_node_props == num_edge_props))):
+        if ((num_node_aliases != num_node_props) or not ((num_node_props == (num_edge_props+1)) or (num_node_props == num_edge_props))):
             raise WeaverError(WEAVER_CLIENT_LOGICALERROR)
 
         params = TraversePropsParams(self.traverse_node_aliases, \

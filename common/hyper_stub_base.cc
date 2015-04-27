@@ -338,6 +338,24 @@ hyper_stub_base :: multiple_call(std::vector<hyper_tx_func> &funcs,
         map_attrs, map_num_attrs);
 }
 
+#define INSERT_HDEX_ID \
+    if (opid_to_idx.find(hdex_id) != opid_to_idx.end()) { \
+        WDEBUG << "logical error: repeated hdex_id " << hdex_id << std::endl; \
+        return false; \
+    } \
+    opid_to_idx[hdex_id] = i;
+
+#define CHECK_HDEX_ID \
+    if (opid_to_idx.find(hdex_id) == opid_to_idx.end()) { \
+        WDEBUG << "logical error: hdex_id not found " << hdex_id << std::endl; \
+        return false; \
+    } \
+    int64_t &idx = opid_to_idx[hdex_id]; \
+    if (idx < 0) { \
+        WDEBUG << "logical error: negative idx " << idx << std::endl; \
+        return false; \
+    }
+
 bool
 hyper_stub_base :: multiple_call(std::vector<hyper_func> &funcs,
     std::vector<const char*> &spaces,
@@ -345,11 +363,14 @@ hyper_stub_base :: multiple_call(std::vector<hyper_func> &funcs,
     std::vector<hyperdex_client_attribute*> &attrs, std::vector<size_t> &num_attrs)
 {
     uint64_t num_calls = funcs.size();
-    assert(num_calls == spaces.size());
-    assert(num_calls == keys.size());
-    assert(num_calls == key_szs.size());
-    assert(num_calls == num_attrs.size());
-    assert(num_calls == attrs.size());
+    if (num_calls != spaces.size()
+     || num_calls != keys.size()
+     || num_calls != key_szs.size()
+     || num_calls != num_attrs.size()
+     || num_calls != attrs.size()) {
+        WDEBUG << "logical error: size of multiple_call vectors not equal" << std::endl;
+        return false;
+    }
 
     hyperdex_client_returncode call_status[num_calls];
     int hdex_id;
@@ -361,8 +382,7 @@ hyper_stub_base :: multiple_call(std::vector<hyper_func> &funcs,
     for (uint64_t i = 0; i < num_calls; i++) {
         HYPERDEX_CALL_NOTX(funcs[i], spaces[i], keys[i], key_szs[i], attrs[i], num_attrs[i], call_status[i]);
 
-        assert(opid_to_idx.find(hdex_id) == opid_to_idx.end());
-        opid_to_idx[hdex_id] = i;
+        INSERT_HDEX_ID;
     }
 
     hyperdex_client_returncode loop_status;
@@ -371,9 +391,7 @@ hyper_stub_base :: multiple_call(std::vector<hyper_func> &funcs,
     for (uint64_t i = 0; i < num_loops; i++) {
         HYPERDEX_LOOP;
 
-        assert(opid_to_idx.find(hdex_id) != opid_to_idx.end());
-        int64_t &idx = opid_to_idx[hdex_id];
-        assert(idx >= 0);
+        CHECK_HDEX_ID;
 
         HYPERDEX_CHECK_STATUSES(call_status[idx], call_status[idx] != HYPERDEX_CLIENT_SUCCESS);
 
@@ -394,18 +412,24 @@ hyper_stub_base :: multiple_call(std::vector<hyper_tx_func> &funcs,
     std::vector<hyperdex_client_map_attribute*> &map_attrs, std::vector<size_t> &map_num_attrs)
 {
     uint64_t num_calls = funcs.size();
-    assert(num_calls == spaces.size());
-    assert(num_calls == keys.size());
-    assert(num_calls == key_szs.size());
-    assert(num_calls == num_attrs.size());
-    assert(num_calls == attrs.size());
+    if (num_calls != spaces.size()
+     || num_calls != keys.size()
+     || num_calls != key_szs.size()
+     || num_calls != num_attrs.size()
+     || num_calls != attrs.size()) {
+        WDEBUG << "logical error: size of multiple_call vectors not equal" << std::endl;
+        return false;
+    }
 
     uint64_t map_num_calls = map_funcs.size();
-    assert(map_num_calls == map_spaces.size());
-    assert(map_num_calls == map_keys.size());
-    assert(map_num_calls == map_key_szs.size());
-    assert(map_num_calls == map_num_attrs.size());
-    assert(map_num_calls == map_attrs.size());
+    if (map_num_calls != map_spaces.size()
+     || map_num_calls != map_keys.size()
+     || map_num_calls != map_key_szs.size()
+     || map_num_calls != map_num_attrs.size()
+     || map_num_calls != map_attrs.size()) {
+        WDEBUG << "logical error: size of multiple_call vectors not equal" << std::endl;
+        return false;
+    }
 
     hyperdex_client_returncode call_status[num_calls+map_num_calls];
     int hdex_id;
@@ -418,15 +442,13 @@ hyper_stub_base :: multiple_call(std::vector<hyper_tx_func> &funcs,
     for (; i < num_calls; i++) {
         HYPERDEX_CALL(funcs[i], spaces[i], keys[i], key_szs[i], attrs[i], num_attrs[i], call_status[i]);
 
-        assert(opid_to_idx.find(hdex_id) == opid_to_idx.end());
-        opid_to_idx[hdex_id] = i;
+        INSERT_HDEX_ID;
     }
 
     for (uint64_t j = 0; j < map_num_calls; j++, i++) {
         HYPERDEX_CALL(map_funcs[j], map_spaces[j], map_keys[j], map_key_szs[j], map_attrs[j], map_num_attrs[j], call_status[i]);
 
-        assert(opid_to_idx.find(hdex_id) == opid_to_idx.end());
-        opid_to_idx[hdex_id] = i;
+        INSERT_HDEX_ID;
     }
 
     hyperdex_client_returncode loop_status;
@@ -435,9 +457,7 @@ hyper_stub_base :: multiple_call(std::vector<hyper_tx_func> &funcs,
     for (i = 0; i < num_loops; i++) {
         HYPERDEX_LOOP;
 
-        assert(opid_to_idx.find(hdex_id) != opid_to_idx.end());
-        int64_t &idx = opid_to_idx[hdex_id];
-        assert(idx >= 0);
+        CHECK_HDEX_ID;
 
         HYPERDEX_CHECK_STATUSES(call_status[idx], call_status[idx] != HYPERDEX_CLIENT_SUCCESS);
 
@@ -505,10 +525,13 @@ hyper_stub_base :: multiple_get(std::vector<const char*> &spaces,
     bool tx)
 {
     uint64_t num_calls = spaces.size();
-    assert(num_calls == keys.size());
-    assert(num_calls == key_szs.size());
-    assert(num_calls == num_attrs.size());
-    assert(num_calls == cl_attrs.size());
+    if (num_calls != keys.size()
+     || num_calls != key_szs.size()
+     || num_calls != num_attrs.size()
+     || num_calls != cl_attrs.size()) {
+        WDEBUG << "logical error: size of multiple_get vectors not equal" << std::endl;
+        return false;
+    }
 
     hyperdex_client_returncode get_status[num_calls];
     int64_t hdex_id;
@@ -525,8 +548,7 @@ hyper_stub_base :: multiple_get(std::vector<const char*> &spaces,
             HYPERDEX_GET_NOTX(spaces[i], keys[i], key_szs[i], get_status[i], cl_attrs[i], num_attrs[i]);
         }
 
-        assert(opid_to_idx.find(hdex_id) == opid_to_idx.end());
-        opid_to_idx[hdex_id] = i;
+        INSERT_HDEX_ID;
     }
 
     hyperdex_client_returncode loop_status;
@@ -535,9 +557,7 @@ hyper_stub_base :: multiple_get(std::vector<const char*> &spaces,
     for (i = 0; i < num_loops; i++) {
         HYPERDEX_LOOP;
 
-        assert(opid_to_idx.find(hdex_id) != opid_to_idx.end());
-        int64_t &idx = opid_to_idx[hdex_id];
-        assert(idx >= 0);
+        CHECK_HDEX_ID;
 
         HYPERDEX_CHECK_STATUSES(get_status[idx], get_status[idx] != HYPERDEX_CLIENT_SUCCESS);
 
@@ -555,10 +575,13 @@ hyper_stub_base :: multiple_get_partial(std::vector<const char*> &spaces,
     bool tx)
 {
     uint64_t num_calls = spaces.size();
-    assert(num_calls == keys.size());
-    assert(num_calls == key_szs.size());
-    assert(num_calls == num_attrs.size());
-    assert(num_calls == cl_attrs.size());
+    if (num_calls != keys.size()
+     || num_calls != key_szs.size()
+     || num_calls != num_attrs.size()
+     || num_calls != cl_attrs.size()) {
+        WDEBUG << "logical error: size of multiple_get_partial vectors not equal" << std::endl;
+        return false;
+    }
 
     hyperdex_client_returncode get_status[num_calls];
     int64_t hdex_id;
@@ -575,8 +598,7 @@ hyper_stub_base :: multiple_get_partial(std::vector<const char*> &spaces,
             HYPERDEX_GET_PARTIAL_NOTX(spaces[i], keys[i], key_szs[i], attrnames, attrnames_sz, get_status[i], cl_attrs[i], num_attrs[i]);
         }
 
-        assert(opid_to_idx.find(hdex_id) == opid_to_idx.end());
-        opid_to_idx[hdex_id] = i;
+        INSERT_HDEX_ID;
     }
 
     hyperdex_client_returncode loop_status;
@@ -585,9 +607,7 @@ hyper_stub_base :: multiple_get_partial(std::vector<const char*> &spaces,
     for (i = 0; i < num_loops; i++) {
         HYPERDEX_LOOP;
 
-        assert(opid_to_idx.find(hdex_id) != opid_to_idx.end());
-        int64_t &idx = opid_to_idx[hdex_id];
-        assert(idx >= 0);
+        CHECK_HDEX_ID;
 
         HYPERDEX_CHECK_STATUSES(get_status[idx], get_status[idx] != HYPERDEX_CLIENT_SUCCESS);
 
@@ -622,8 +642,11 @@ hyper_stub_base :: multiple_del(std::vector<const char*> &spaces,
     std::vector<const char*> &keys, std::vector<size_t> &key_szs)
 {
     uint64_t num_calls = spaces.size();
-    assert(keys.size() == num_calls);
-    assert(key_szs.size() == num_calls);
+    if (num_calls != keys.size()
+     || num_calls != key_szs.size()) {
+        WDEBUG << "logical error: size of multiple_del vectors not equal" << std::endl;
+        return false;
+    }
 
     hyperdex_client_returncode del_status[num_calls];
     int64_t hdex_id;
@@ -636,8 +659,7 @@ hyper_stub_base :: multiple_del(std::vector<const char*> &spaces,
     for (; i < num_calls; i++) {
         HYPERDEX_DEL(spaces[i], keys[i], key_szs[i], del_status[i]);
 
-        assert(opid_to_idx.find(hdex_id) == opid_to_idx.end());
-        opid_to_idx[hdex_id] = i;
+        INSERT_HDEX_ID;
     }
 
     hyperdex_client_returncode loop_status;
@@ -646,9 +668,7 @@ hyper_stub_base :: multiple_del(std::vector<const char*> &spaces,
     for (i = 0; i < num_loops; i++) {
         HYPERDEX_LOOP;
 
-        assert(opid_to_idx.find(hdex_id) != opid_to_idx.end());
-        int64_t &idx = opid_to_idx[hdex_id];
-        assert(idx >= 0);
+        CHECK_HDEX_ID;
 
         HYPERDEX_CHECK_STATUSES(del_status[idx], del_status[idx] != HYPERDEX_CLIENT_SUCCESS && del_status[idx] != HYPERDEX_CLIENT_NOTFOUND);
 
@@ -657,6 +677,9 @@ hyper_stub_base :: multiple_del(std::vector<const char*> &spaces,
 
     return success;
 }
+
+#undef INSERT_HDEX_ID
+#undef CHECK_HDEX_ID
 
 #undef HYPERDEX_CHECK_ID
 #undef HYPERDEX_CALL
@@ -681,8 +704,10 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::n
     }
     std::vector<bool> check_idx(NUM_GRAPH_ATTRS, false);
     for (int i = 0; i < NUM_GRAPH_ATTRS; i++) {
-        assert(idx[i] != -1);
-        assert(!check_idx[idx[i]]);
+        if (idx[i] == -1 || check_idx[idx[i]]) {
+            WDEBUG << "logical error: recreate node " << idx[i] << " " << check_idx[idx[i]] << std::endl;
+            return false;
+        }
         check_idx[idx[i]] = true;
     }
 
@@ -708,7 +733,10 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr, db::n
     unpack_buffer(cl_attr[idx[5]].value, cl_attr[idx[5]].value_sz, n.last_upd_clk);
     // restore clock
     unpack_buffer(cl_attr[idx[6]].value, cl_attr[idx[6]].value_sz, n.restore_clk);
-    assert(n.restore_clk->size() == ClkSz);
+    if (n.restore_clk->size() != ClkSz) {
+        WDEBUG << "unpack error, restore_clk->size=" << n.restore_clk->size() << std::endl;
+        return false;
+    }
     // aliases
     unpack_buffer(cl_attr[idx[7]].value, cl_attr[idx[7]].value_sz, n.aliases);
 
@@ -834,7 +862,9 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
 
     // restore clock
     if (restore_clk_buf == nullptr) {
-        assert(n.restore_clk->size() == ClkSz);
+        if (n.restore_clk->size() != ClkSz) {
+            WDEBUG << "pack error, restore_clk->size=" << n.restore_clk->size() << std::endl;
+        }
         prepare_buffer(n.restore_clk, restore_clk_buf);
     }
     cl_attr[6].attr = graph_attrs[6];
@@ -977,8 +1007,11 @@ hyper_stub_base :: get_nmap(node_handle_t &handle)
 
     bool success = get_partial(graph_space, handle.c_str(), handle.size(), graph_attrs, 1, &attr, &num_attrs, false);
     if (success) {
-        assert(num_attrs == 1);
-        assert(attr->value_sz == sizeof(int64_t));
+        if (num_attrs != 1 || attr->value_sz != sizeof(int64_t)) {
+            WDEBUG << "logical error: num_attrs=" << num_attrs << ", attr->value_sz=" << attr->value_sz << std::endl;
+            hyperdex_client_destroy_attrs(attr, num_attrs);
+            return UINT64_MAX;
+        }
         shard = *((uint64_t*)attr->value);
         hyperdex_client_destroy_attrs(attr, num_attrs);
     }
@@ -1032,7 +1065,10 @@ hyper_stub_base :: get_nmap(std::unordered_set<node_handle_t> &toGet, bool tx)
 bool
 hyper_stub_base :: add_indices(std::unordered_map<std::string, db::node*> &indices, bool tx, bool if_not_exist)
 {
-    assert(AuxIndex);
+    if (!AuxIndex) {
+        WDEBUG << "logical error: aux index" << std::endl;
+        return false;
+    }
 
     uint64_t num_indices = indices.size();
     std::vector<const char*> spaces(num_indices, index_space);
@@ -1103,8 +1139,10 @@ hyper_stub_base :: recreate_index(const hyperdex_client_attribute *cl_attr, std:
     }
     std::vector<bool> check_idx(NUM_INDEX_ATTRS, false);
     for (int i = 0; i < NUM_INDEX_ATTRS; i++) {
-        assert(idx[i] != -1);
-        assert(!check_idx[idx[i]]);
+        if (idx[i] == -1 || check_idx[idx[i]]) {
+            WDEBUG << "logical error: recreate index " << idx[i] << " " << check_idx[idx[i]] << std::endl;
+            return false;
+        }
         check_idx[idx[i]] = true;
     }
 
@@ -1118,7 +1156,10 @@ hyper_stub_base :: recreate_index(const hyperdex_client_attribute *cl_attr, std:
 bool
 hyper_stub_base :: get_indices(std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> &indices, bool tx)
 {
-    assert(AuxIndex);
+    if (!AuxIndex) {
+        WDEBUG << "logical error: aux index" << std::endl;
+        return false;
+    }
 
     int64_t num_indices = indices.size();
     std::vector<const char*> spaces(num_indices, index_space);
@@ -1164,7 +1205,10 @@ hyper_stub_base :: get_indices(std::unordered_map<std::string, std::pair<node_ha
 bool
 hyper_stub_base :: del_indices(std::vector<std::string> &indices)
 {
-    assert(AuxIndex);
+    if (!AuxIndex) {
+        WDEBUG << "logical error: aux index" << std::endl;
+        return false;
+    }
 
     int64_t num_indices = indices.size();
     std::vector<const char*> spaces(num_indices, index_space);
