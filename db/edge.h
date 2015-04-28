@@ -44,7 +44,6 @@ namespace db
 #ifdef WEAVER_NEW_CLDG
             uint32_t msg_count; // number of messages sent on this link
 #endif
-            bool migr_edge; // true if this edge was migrated along with parent node
             void traverse(); // indicate that this edge was traversed; useful for migration statistics
 
             const remote_node& get_neighbor() { return nbr; }

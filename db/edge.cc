@@ -28,7 +28,6 @@ edge :: edge()
 #ifdef WEAVER_NEW_CLDG
     , msg_count(0)
 #endif
-    , migr_edge(false)
 { }
 
 edge :: edge(const edge_handle_t &handle, vclock_ptr_t &vclk, uint64_t remote_loc, const node_handle_t &remote_handle)
@@ -40,7 +39,6 @@ edge :: edge(const edge_handle_t &handle, vclock_ptr_t &vclk, uint64_t remote_lo
 #ifdef WEAVER_NEW_CLDG
     , msg_count(0)
 #endif
-    , migr_edge(false)
 { }
 
 edge :: edge(const edge_handle_t &handle, vclock_ptr_t &vclk, remote_node &rn)
@@ -52,7 +50,6 @@ edge :: edge(const edge_handle_t &handle, vclock_ptr_t &vclk, remote_node &rn)
 #ifdef WEAVER_NEW_CLDG
     , msg_count(0)
 #endif
-    , migr_edge(false)
 { }
 
 // caution: should be called with node mutex held

@@ -147,8 +147,6 @@ message :: unpack_buffer(e::unpacker &unpacker, db::edge &t)
     unpack_buffer(unpacker, t.msg_count);
 #endif
     unpack_buffer(unpacker, t.nbr);
-
-    t.migr_edge = true; // need ack from nbr when updated
 }
 void
 message :: unpack_buffer(e::unpacker &unpacker, db::edge *&t)
