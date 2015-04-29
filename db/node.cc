@@ -54,6 +54,23 @@ node :: ~node()
     assert(out_edges.empty());
 }
 
+// true if prog states is empty
+bool
+node :: empty_prog_states()
+{
+    if (prog_states.empty()) {
+        return true;
+    }
+
+    for (const auto &p: prog_states) {
+        if (!p.second.empty()) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 void
 node :: add_edge_unique(edge *e)
 {

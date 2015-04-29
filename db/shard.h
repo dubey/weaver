@@ -97,9 +97,11 @@ namespace db
             node* acquire_node_specific(uint64_t tid, const node_handle_t &node_handle, const vclock_ptr_t tcreat, const vclock_ptr_t tdel);
             node* acquire_node_version(uint64_t tid, const node_handle_t &node_handle, const vc::vclock &vclk, order::oracle*);
             node* acquire_node_write(uint64_t tid, const node_handle_t &node, uint64_t vt_id, uint64_t qts);
-            node* bulk_load_acquire_node_nonlocking(const node_handle_t &node_handle, uint64_t map_idx);
+            node* bulk_load_acquire_node_nonlocking(uint64_t tid, const node_handle_t &node_handle, uint64_t map_idx);
+            void save_node_prog_state(node *n, uint64_t map_idx);
+            void evict_all(uint64_t map_idx);
             void node_evict(node*, uint64_t map_idx);
-            void choose_evict_node(uint64_t map_idx, const node_handle_t&);
+            void choose_node_to_evict(uint64_t map_idx, const node_handle_t&);
             void release_node_write(node *n);
             void release_node(node *n, bool migr_node);
 
@@ -110,6 +112,7 @@ namespace db
             server_id serv_id;
             // node handle -> ptr to node object
             db::data_map<node_entry> nodes[NUM_NODE_MAPS];
+            db::data_map<node::prog_state_t> evicted_nodes_prog_states[NUM_NODE_MAPS];
             uint32_t nodes_in_memory[NUM_NODE_MAPS];
             std::unordered_map<node_handle_t, // node handle n ->
                 std::unordered_set<node_version_t, node_version_hash>> edge_map; // in-neighbors of n
@@ -179,6 +182,7 @@ namespace db
             uint64_t max_load_time, bulk_load_num_shards;
             uint32_t load_count;
             void bulk_load_persistent(int tid);
+            void bulk_load_flush_map(int tid, uint64_t map_idx);
 
             // Permanent deletion
         public:
@@ -291,6 +295,7 @@ namespace db
         for (uint64_t i = 0; i < NUM_NODE_MAPS; i++) {
             nodes[i].set_deleted_key("");
             nodes_in_memory[i] = 0;
+            evicted_nodes_prog_states[i].set_deleted_key("");
         }
     }
 
@@ -414,6 +419,16 @@ namespace db
         hstub[tid]->memory_efficient_bulk_load(tid, nodes);
     }
 
+    inline void
+    shard :: bulk_load_flush_map(int tid, uint64_t map_idx)
+    {
+        if (nodes_in_memory[map_idx] > NodesPerMap) {
+            hstub[tid]->memory_efficient_bulk_load(nodes[map_idx]);
+            evict_all(map_idx);
+            nodes_in_memory[map_idx] = 0;
+        }
+    }
+
     // Consistency methods
     inline void
     shard :: increment_qts(uint64_t vt_id, uint64_t incr)
@@ -449,6 +464,12 @@ namespace db
                 vclock_ptr_t dummy_clk;
                 node *n = new node(node_handle, UINT64_MAX, dummy_clk, node_map_mutexes+map_idx);
                 if (hstub[tid]->recover_node(*n)) {
+                    db::data_map<db::node::prog_state_t> &node_state_map = evicted_nodes_prog_states[map_idx];
+                    auto prog_state_iter = node_state_map.find(node_handle);
+                    if (prog_state_iter != node_state_map.end()) {
+                        n->prog_states = std::move(prog_state_iter->second);
+                        node_state_map.erase(node_handle);
+                    }
                     entry.nodes.emplace_back(n);
                     if (++nodes_in_memory[map_idx] > NodesPerMap) {
                         // evict a node when this node is released
@@ -595,10 +616,13 @@ namespace db
     }
 
     inline node*
-    shard :: bulk_load_acquire_node_nonlocking(const node_handle_t &node_handle, uint64_t map_idx)
+    shard :: bulk_load_acquire_node_nonlocking(uint64_t tid, const node_handle_t &node_handle, uint64_t map_idx)
     {
         if (bulk_load_node_exists_nonlocking(node_handle, map_idx)) {
-            return nodes[map_idx][node_handle].nodes[0];
+            auto node_iter = node_present(tid, map_idx, node_handle);
+            node *n = node_iter->second.nodes.front();
+            n->to_evict = false; // bulk loading eviction handled separately
+            return n;
         } else {
             return nullptr;
         }
@@ -628,6 +652,29 @@ namespace db
     }
 
     inline void
+    shard :: save_node_prog_state(node *n, uint64_t map_idx)
+    {
+        if (!n->empty_prog_states()) {
+            db::data_map<db::node::prog_state_t> &node_state_map = evicted_nodes_prog_states[map_idx];
+            assert(node_state_map.find(n->get_handle()) == node_state_map.end());
+            node_state_map[n->get_handle()] = std::move(n->prog_states);
+        }
+    }
+
+    // evict all nodes in nodes[map_idx]
+    // while bulk loading when a map is flushed to persistent storage
+    inline void
+    shard :: evict_all(uint64_t map_idx)
+    {
+        for (auto &p: nodes[map_idx]) {
+            node_entry &entry = p.second;
+            permanent_node_delete(entry.nodes.front());
+            entry.nodes.clear();
+            entry.present = false;
+        }
+    }
+
+    inline void
     shard :: node_evict(node *n, uint64_t map_idx)
     {
         const node_handle_t &node_handle = n->get_handle();
@@ -644,12 +691,14 @@ namespace db
         entry.nodes.erase(node_iter);
         entry.present = false;
 
+        save_node_prog_state(n, map_idx);
         permanent_node_delete(n);
     }
 
     inline void
-    shard :: choose_evict_node(uint64_t map_idx, const node_handle_t &cur_node)
+    shard :: choose_node_to_evict(uint64_t map_idx, const node_handle_t &cur_node)
     {
+        // XXX change from random to clock algorithm
         // randomly evict another node
         for (auto &p: nodes[map_idx]) {
             if (p.first != cur_node && p.second.present) {
@@ -690,7 +739,7 @@ namespace db
 
         if (n->to_evict && !n->permanently_deleted) {
             n->to_evict = false;
-            choose_evict_node(map_idx, n->get_handle());
+            choose_node_to_evict(map_idx, n->get_handle());
         }
 
         if (n->waiters > 0) {
@@ -709,6 +758,7 @@ namespace db
             }
             assert(node_iter != entry.nodes.end());
             entry.nodes.erase(node_iter);
+            --nodes_in_memory[map_idx];
             if (entry.nodes.empty()) {
                 nodes[map_idx].erase(node_handle);
             }
@@ -786,6 +836,7 @@ namespace db
 
         nodes[map_idx][node_handle] = node_entry(new_node);
         node_exists_cache[map_idx] = node_handle;
+        ++nodes_in_memory[map_idx];
 
         shard_node_count[shard_id - ShardIdIncr]++;
 

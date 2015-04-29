@@ -103,6 +103,7 @@ namespace db
             typedef std::pair<node_prog::prog_type, id_to_state_t> ptype_and_map_t;
             typedef std::vector<ptype_and_map_t> prog_state_t;
             prog_state_t prog_states;
+            bool empty_prog_states();
 
             // fault tolerance
             std::unique_ptr<vc::vclock> last_upd_clk;

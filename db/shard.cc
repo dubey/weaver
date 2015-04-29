@@ -260,13 +260,14 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     if ((loc0 == shard_id)
                      && ((int)map_idx % load_nthreads == load_tid)) {
                         edge_handle_t edge_handle = BulkLoadEdgeHandlePrefix + std::to_string(edge_count);
-                        db::node *n = S->bulk_load_acquire_node_nonlocking(id0, map_idx);
+                        db::node *n = S->bulk_load_acquire_node_nonlocking(load_tid, id0, map_idx);
                         if (n == nullptr) {
                             n = S->create_node_bulk_load(id0, map_idx, zero_clk);
                             cur_shard_node_count++;
                         }
                         S->create_edge_bulk_load(n, edge_handle, id1, loc1, zero_clk);
                         cur_shard_edge_count++;
+                        S->bulk_load_flush_map(load_tid, map_idx);
                     }
 
                     if (loc1 == shard_id) {
@@ -277,6 +278,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                                 cur_shard_node_count++;
                             }
                         }
+                        S->bulk_load_flush_map(load_tid, map_idx);
                     }
                 }
             }
@@ -300,7 +302,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 uint64_t loc = (hash0 % num_shards) + ShardIdIncr;
                 uint64_t map_idx = hash0 % NUM_NODE_MAPS;
                 if ((loc == shard_id) && ((int)map_idx % load_nthreads == load_tid)) {
-                    db::node *n = S->bulk_load_acquire_node_nonlocking(id0, map_idx);
+                    db::node *n = S->bulk_load_acquire_node_nonlocking(load_tid, id0, map_idx);
                     assert(n == nullptr);
                     n = S->create_node_bulk_load(id0, map_idx, zero_clk);
 
@@ -322,6 +324,8 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     if (++cur_shard_node_count % 10000 == 0) {
                         WDEBUG << "GRAPHML node " << cur_shard_node_count << std::endl;
                     }
+
+                    S->bulk_load_flush_map(load_tid, map_idx);
                 }
 
                 element.clear();
@@ -348,7 +352,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     edge_handle_t edge_handle = edge.attribute("id").value();
                     uint64_t loc1 = (hash_node_handle(id1) % num_shards) + ShardIdIncr;
 
-                    db::node *n = S->bulk_load_acquire_node_nonlocking(id0, map_idx);
+                    db::node *n = S->bulk_load_acquire_node_nonlocking(load_tid, id0, map_idx);
                     assert(n != nullptr);
                     S->create_edge_bulk_load(n, edge_handle, id1, loc1, zero_clk);
 
@@ -374,6 +378,8 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     if (++cur_shard_edge_count % 10000 == 0) {
                         WDEBUG << "GRAPHML edge " << cur_shard_edge_count << std::endl;
                     }
+
+                    S->bulk_load_flush_map(load_tid, map_idx);
                 }
 
                 element.clear();

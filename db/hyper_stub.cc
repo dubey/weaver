@@ -125,6 +125,64 @@ hyper_stub :: restore_backup(db::data_map<db::node_entry> *nodes,
 }
 
 void
+hyper_stub :: put_node_loop(db::data_map<db::node_entry> &nodes,
+    std::unordered_map<node_handle_t, node*> &node_map,
+    int &progress,
+    vc::vclock &zero_clk)
+{
+    for (const auto &p: nodes) {
+        assert(p.second.nodes.size() == 1);
+        node_map.emplace(p.first, p.second.nodes.front());
+        if (node_map.size() >= 1000) {
+            put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
+            node_map.clear();
+            WDEBUG << "bulk load hyperdex progress " << ++progress << std::endl;
+        }
+    }
+}
+
+void
+hyper_stub :: put_index_loop(db::data_map<db::node_entry> &nodes,
+    std::unordered_map<std::string, node*> &idx_add_if_not_exist,
+    std::unordered_map<std::string, node*> &idx_add,
+    int &ine_progress,
+    int &progress)
+{
+    for (const auto &p: nodes) {
+        node *n = p.second.nodes.front();
+        idx_add_if_not_exist.emplace(p.first, n);
+        for (const node_handle_t &alias: n->aliases) {
+            assert(idx_add_if_not_exist.find(alias) == idx_add_if_not_exist.end());
+            idx_add_if_not_exist.emplace(alias, n);
+        }
+
+        for (auto &x: n->out_edges) {
+            assert(x.second.size() == 1);
+            assert(idx_add_if_not_exist.find(x.first) == idx_add_if_not_exist.end());
+            idx_add_if_not_exist.emplace(x.first, n);
+        }
+
+        if (n->temp_aliases != nullptr) {
+            for (const std::string &s: *n->temp_aliases) {
+                idx_add.emplace(s, n);
+            }
+            n->done_temp_index();
+        }
+
+        if (idx_add_if_not_exist.size() >= 10000) {
+            add_indices(idx_add_if_not_exist, false, true);
+            idx_add_if_not_exist.clear();
+            WDEBUG << "aux index if not exist progress " << ++ine_progress << std::endl;
+        }
+        if (idx_add.size() >= 10000) {
+            add_indices(idx_add, false, false);
+            idx_add.clear();
+            WDEBUG << "aux index progress " << ++progress << std::endl;
+        }
+    }
+}
+
+void
 hyper_stub :: memory_efficient_bulk_load(int thread_id, db::data_map<db::node_entry> *nodes_arr)
 {
     WDEBUG << "starting HyperDex bulk load." << std::endl;
@@ -134,15 +192,7 @@ hyper_stub :: memory_efficient_bulk_load(int thread_id, db::data_map<db::node_en
     std::unordered_map<node_handle_t, node*> node_map;
     int progress = 0;
     for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
-        for (const auto &p: nodes_arr[tid]) {
-            assert(p.second.nodes.size() == 1);
-            node_map.emplace(p.first, p.second.nodes.front());
-            if (node_map.size() >= 1000) {
-                put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
-                node_map.clear();
-                WDEBUG << "bulk load hyperdex progress " << ++progress << std::endl;
-            }
-        }
+        put_node_loop(nodes_arr[tid], node_map, progress, zero_clk);
     }
 
     put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
@@ -154,38 +204,7 @@ hyper_stub :: memory_efficient_bulk_load(int thread_id, db::data_map<db::node_en
         std::unordered_map<std::string, node*> idx_add;
 
         for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
-            for (const auto &p: nodes_arr[tid]) {
-                node *n = p.second.nodes.front();
-                idx_add_if_not_exist.emplace(p.first, n);
-                for (const node_handle_t &alias: n->aliases) {
-                    assert(idx_add_if_not_exist.find(alias) == idx_add_if_not_exist.end());
-                    idx_add_if_not_exist.emplace(alias, n);
-                }
-
-                for (auto &x: n->out_edges) {
-                    assert(x.second.size() == 1);
-                    assert(idx_add_if_not_exist.find(x.first) == idx_add_if_not_exist.end());
-                    idx_add_if_not_exist.emplace(x.first, n);
-                }
-
-                if (n->temp_aliases != nullptr) {
-                    for (const std::string &s: *n->temp_aliases) {
-                        idx_add.emplace(s, n);
-                    }
-                    n->done_temp_index();
-                }
-
-                if (idx_add_if_not_exist.size() >= 10000) {
-                    add_indices(idx_add_if_not_exist, false, true);
-                    idx_add_if_not_exist.clear();
-                    WDEBUG << "aux index if not exist progress " << ++ine_progress << std::endl;
-                }
-                if (idx_add.size() >= 10000) {
-                    add_indices(idx_add, false, false);
-                    idx_add.clear();
-                    WDEBUG << "aux index progress " << ++progress << std::endl;
-                }
-            }
+            put_index_loop(nodes_arr[tid], idx_add_if_not_exist, idx_add, ine_progress, progress);
         }
 
         add_indices(idx_add_if_not_exist, false, true);
@@ -193,6 +212,29 @@ hyper_stub :: memory_efficient_bulk_load(int thread_id, db::data_map<db::node_en
     }
 
     WDEBUG << "bulk load done." << std::endl;
+}
+
+void
+hyper_stub :: memory_efficient_bulk_load(db::data_map<db::node_entry> &nodes)
+{
+    vc::vclock zero_clk(0,0);
+
+    std::unordered_map<node_handle_t, node*> node_map;
+    int progress = 0;
+    put_node_loop(nodes, node_map, progress, zero_clk);
+    put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
+
+    progress = 0;
+    int ine_progress = 0;
+    if (AuxIndex) {
+        std::unordered_map<std::string, node*> idx_add_if_not_exist;
+        std::unordered_map<std::string, node*> idx_add;
+
+        put_index_loop(nodes, idx_add_if_not_exist, idx_add, ine_progress, progress);
+
+        add_indices(idx_add_if_not_exist, false, true);
+        add_indices(idx_add, false, false);
+    }
 }
 
 void
