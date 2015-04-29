@@ -60,7 +60,7 @@ namespace db
             bool check_rd_request(vc::vclock_t &clk);
             void enqueue_write_request(uint64_t vt_id, queued_request*);
             enum queue_order check_wr_request(vc::vclock &vclk, uint64_t qt);
-            bool exec_queued_request(order::oracle *time_oracle);
+            bool exec_queued_request(uint64_t tid, order::oracle *time_oracle);
             void increment_qts(uint64_t vt_id, uint64_t incr);
             void record_completed_tx(vc::vclock &tx_clk);
             void reset(uint64_t dead_vt, uint64_t epoch);

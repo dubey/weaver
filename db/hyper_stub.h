@@ -21,6 +21,7 @@
 #include "db/types.h"
 #include "db/node.h"
 #include "db/edge.h"
+#include "db/node_entry.h"
 
 namespace db
 {
@@ -37,14 +38,15 @@ namespace db
 
         public:
             hyper_stub(uint64_t sid);
-            void restore_backup(db::data_map<std::vector<node*>> *nodes,
+            void restore_backup(db::data_map<db::node_entry> *nodes,
                 /*XXX std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,*/
                 po6::threads::mutex *shard_mutexes);
             // bulk loading
             void bulk_load(int tid, std::unordered_map<node_handle_t, std::vector<node*>> *nodes);
-            void memory_efficient_bulk_load(int tid, db::data_map<std::vector<node*>> *nodes);
+            void memory_efficient_bulk_load(int tid, db::data_map<db::node_entry> *nodes);
             // migration
             bool update_mapping(const node_handle_t &handle, uint64_t loc);
+            bool recover_node(db::node &n);
     };
 }
 

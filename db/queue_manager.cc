@@ -108,7 +108,7 @@ queue_manager :: check_wr_request(vc::vclock &vclk, uint64_t qt)
 // execute a single queued request which can be run now, and return true
 // else return false
 bool
-queue_manager :: exec_queued_request(order::oracle *time_oracle)
+queue_manager :: exec_queued_request(uint64_t tid, order::oracle *time_oracle)
 {
     queue_mutex.lock(); // prevent more jobs from being added
     queued_request *req = get_rw_req();
@@ -117,7 +117,7 @@ queue_manager :: exec_queued_request(order::oracle *time_oracle)
         return false;
     }
     req->arg->time_oracle = time_oracle;
-    (*req->func)(req->arg);
+    (*req->func)(tid, req->arg);
     // queue timestamp is incremented by the thread, upon enqueueing this tx on node queue
     // when to increment qts depends on the tx components
     delete req;

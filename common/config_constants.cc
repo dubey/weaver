@@ -36,6 +36,7 @@ init_config_constants(const char *config_file_name)
     BulkLoadNodeAliasKey = "";
     BulkLoadEdgeIndexKey = "";
     BulkLoadEdgeHandlePrefix = "e";
+    NodesPerMap = UINT64_MAX;
 
     FILE *config_file = nullptr;
     if (config_file_name != nullptr) {
@@ -218,6 +219,11 @@ init_config_constants(const char *config_file_name)
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_STRING(BulkLoadEdgeHandlePrefix);
+
+                } else if (strncmp((const char*)token.data.scalar.value, "nodes_per_map", TOKEN_STRCMP_LEN(13)) == 0) {
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
+                    PARSE_INT(NodesPerMap);
 
                 } else {
                     WDEBUG << "unexpected key " << token.data.scalar.value << std::endl;

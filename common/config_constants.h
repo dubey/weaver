@@ -45,6 +45,8 @@ extern std::string BulkLoadNodeAliasKey;
 extern std::string BulkLoadEdgeIndexKey;
 extern std::string BulkLoadEdgeHandlePrefix;
 
+extern uint64_t NodesPerMap;
+
 bool init_config_constants(const char *config_file_name=nullptr);
 void update_config_constants(uint64_t num_shards);
 uint64_t get_num_shards();
@@ -74,6 +76,7 @@ uint64_t get_num_shards();
     std::string BulkLoadNodeAliasKey; \
     std::string BulkLoadEdgeIndexKey; \
     std::string BulkLoadEdgeHandlePrefix; \
+    uint64_t NodesPerMap; \
     uint16_t MaxCacheEntries;
 
 

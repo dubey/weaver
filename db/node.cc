@@ -39,6 +39,8 @@ node :: node(const node_handle_t &_handle, uint64_t shrd, vclock_ptr_t &vclk, po
     , in_use(true)
     , waiters(0)
     , permanently_deleted(false)
+    , evicted(false)
+    , to_evict(false)
     , last_perm_deletion(nullptr)
     , temp_aliases(nullptr)
 {

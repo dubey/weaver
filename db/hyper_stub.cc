@@ -24,7 +24,7 @@ hyper_stub :: hyper_stub(uint64_t sid)
 { }
 
 void
-hyper_stub :: restore_backup(db::data_map<std::vector<node*>> *nodes,
+hyper_stub :: restore_backup(db::data_map<db::node_entry> *nodes,
     /*XXX std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,*/
     po6::threads::mutex *shard_mutexes)
 {
@@ -113,7 +113,7 @@ hyper_stub :: restore_backup(db::data_map<std::vector<node*>> *nodes,
             // node map
             auto &node_map = nodes[map_idx];
             assert(node_map.find(node_handle) == node_map.end());
-            node_map[node_handle] = std::vector<node*>(1, n);
+            node_map[node_handle] = db::node_entry(n);
 
             hyperdex_client_destroy_attrs(cl_attr, num_attrs);
         } else {
@@ -125,7 +125,7 @@ hyper_stub :: restore_backup(db::data_map<std::vector<node*>> *nodes,
 }
 
 void
-hyper_stub :: memory_efficient_bulk_load(int thread_id, db::data_map<std::vector<node*>> *nodes_arr)
+hyper_stub :: memory_efficient_bulk_load(int thread_id, db::data_map<db::node_entry> *nodes_arr)
 {
     WDEBUG << "starting HyperDex bulk load." << std::endl;
     assert(NUM_NODE_MAPS % NUM_SHARD_THREADS == 0);
@@ -135,8 +135,8 @@ hyper_stub :: memory_efficient_bulk_load(int thread_id, db::data_map<std::vector
     int progress = 0;
     for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
         for (const auto &p: nodes_arr[tid]) {
-            assert(p.second.size() == 1);
-            node_map.emplace(p.first, p.second.front());
+            assert(p.second.nodes.size() == 1);
+            node_map.emplace(p.first, p.second.nodes.front());
             if (node_map.size() >= 1000) {
                 put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
                 node_map.clear();
@@ -155,7 +155,7 @@ hyper_stub :: memory_efficient_bulk_load(int thread_id, db::data_map<std::vector
 
         for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
             for (const auto &p: nodes_arr[tid]) {
-                node *n = p.second.front();
+                node *n = p.second.nodes.front();
                 idx_add_if_not_exist.emplace(p.first, n);
                 for (const node_handle_t &alias: n->aliases) {
                     assert(idx_add_if_not_exist.find(alias) == idx_add_if_not_exist.end());
@@ -234,6 +234,12 @@ bool
 hyper_stub :: update_mapping(const node_handle_t &handle, uint64_t loc)
 {
     return update_nmap(handle, loc);
+}
+
+bool
+hyper_stub :: recover_node(db::node &n)
+{
+    return get_node(n);
 }
 
 #undef weaver_debug_

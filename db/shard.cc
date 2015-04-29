@@ -44,13 +44,13 @@ static uint64_t shard_id;
 static db::shard *S;
 
 void migrated_nbr_update(std::unique_ptr<message::message> msg);
-bool migrate_node_step1(db::node*, std::vector<uint64_t>&, uint64_t);
-void migrate_node_step2_req();
-void migrate_node_step2_resp(std::unique_ptr<message::message> msg, order::oracle *time_oracle);
+bool migrate_node_step1(uint64_t tid, db::node*, std::vector<uint64_t>&, uint64_t);
+void migrate_node_step2_req(uint64_t tid);
+void migrate_node_step2_resp(uint64_t tid, std::unique_ptr<message::message> msg, order::oracle *time_oracle);
 bool check_step3();
-void migrate_node_step3();
-void migration_begin();
-void migration_wrapper();
+void migrate_node_step3(uint64_t tid);
+void migration_begin(uint64_t tid);
+void migration_wrapper(uint64_t tid);
 void migration_end();
 
 
@@ -414,7 +414,7 @@ migrated_nbr_ack(uint64_t from_loc, std::vector<vc::vclock_t> &target_prog_clk, 
 }
 
 void
-unpack_migrate_request(db::message_wrapper *request)
+unpack_migrate_request(uint64_t tid, db::message_wrapper *request)
 {
     switch (request->type) {
         case message::MIGRATED_NBR_UPDATE:
@@ -422,7 +422,7 @@ unpack_migrate_request(db::message_wrapper *request)
             break;
 
         case message::MIGRATE_SEND_NODE:
-            migrate_node_step2_resp(std::move(request->msg), request->time_oracle);
+            migrate_node_step2_resp(tid, std::move(request->msg), request->time_oracle);
             break;
 
         case message::MIGRATED_NBR_ACK: {
@@ -440,34 +440,34 @@ unpack_migrate_request(db::message_wrapper *request)
 }
 
 void
-apply_writes(uint64_t vt_id, vclock_ptr_t vclk, uint64_t qts, transaction::pending_tx &tx)
+apply_writes(uint64_t tid, uint64_t vt_id, vclock_ptr_t vclk, uint64_t qts, transaction::pending_tx &tx)
 {
     // apply all writes
     // acquire_node_write blocks if a preceding write has not been executed
     for (auto upd: tx.writes) {
         switch (upd->type) {
             case transaction::EDGE_CREATE_REQ:
-                S->create_edge(upd->handle, upd->handle1, upd->handle2, upd->loc2, vclk, qts);
+                S->create_edge(tid, upd->handle, upd->handle1, upd->handle2, upd->loc2, vclk, qts);
                 break;
 
             case transaction::NODE_DELETE_REQ:
-                S->delete_node(upd->handle1, vclk, qts);
+                S->delete_node(tid, upd->handle1, vclk, qts);
                 break;
 
             case transaction::EDGE_DELETE_REQ:
-                S->delete_edge(upd->handle1, upd->handle2, vclk, qts);
+                S->delete_edge(tid, upd->handle1, upd->handle2, vclk, qts);
                 break;
 
             case transaction::NODE_SET_PROPERTY:
-                S->set_node_property(upd->handle1, std::move(upd->key), std::move(upd->value), vclk, qts);
+                S->set_node_property(tid, upd->handle1, std::move(upd->key), std::move(upd->value), vclk, qts);
                 break;
 
             case transaction::EDGE_SET_PROPERTY:
-                S->set_edge_property(upd->handle1, upd->handle2, std::move(upd->key), std::move(upd->value), vclk, qts);
+                S->set_edge_property(tid, upd->handle1, upd->handle2, std::move(upd->key), std::move(upd->value), vclk, qts);
                 break;
 
             case transaction::ADD_AUX_INDEX:
-                S->add_node_alias(upd->handle1, upd->handle, vclk, qts);
+                S->add_node_alias(tid, upd->handle1, upd->handle, vclk, qts);
                 break;
 
             default:
@@ -485,7 +485,7 @@ apply_writes(uint64_t vt_id, vclock_ptr_t vclk, uint64_t qts, transaction::pendi
 }
 
 void
-unpack_tx_request(db::message_wrapper *request)
+unpack_tx_request(uint64_t tid, db::message_wrapper *request)
 {
     uint64_t vt_id;
     vc::vclock vclk;
@@ -509,13 +509,13 @@ unpack_tx_request(db::message_wrapper *request)
             case transaction::NODE_DELETE_REQ:
             case transaction::NODE_SET_PROPERTY:
             case transaction::ADD_AUX_INDEX:
-                n = S->acquire_node_latest(upd->handle1);
+                n = S->acquire_node_latest(tid, upd->handle1);
                 break;
 
             // elem2
             case transaction::EDGE_DELETE_REQ:
             case transaction::EDGE_SET_PROPERTY:
-                n = S->acquire_node_latest(upd->handle2);
+                n = S->acquire_node_latest(tid, upd->handle2);
                 break;
 
             default:
@@ -533,7 +533,7 @@ unpack_tx_request(db::message_wrapper *request)
     // since tx order has already been established, conflicting txs will be processed in correct order
     S->increment_qts(vt_id, 1);
 
-    apply_writes(vt_id, vclk_ptr, qts, tx);
+    apply_writes(tid, vt_id, vclk_ptr, qts, tx);
 
     delete request;
 }
@@ -541,7 +541,7 @@ unpack_tx_request(db::message_wrapper *request)
 // process nop
 // migration-related checks, and possibly initiating migration
 inline void
-nop(db::message_wrapper *request)
+nop(uint64_t tid, db::message_wrapper *request)
 {
     static uint64_t nop_count = 0;
     uint64_t vt_id;
@@ -562,7 +562,7 @@ nop(db::message_wrapper *request)
     S->done_permdel_clk(&nop_arg->max_done_clk, vt_id);
 
     if (++nop_count % 10000 == 0) {
-        S->cleanup_prog_states();
+        S->cleanup_prog_states(tid);
     }
 
     // cleanup done txs
@@ -626,7 +626,7 @@ nop(db::message_wrapper *request)
     S->migration_mutex.unlock();
 
     // initiate permanent deletion
-    S->permanent_delete_loop(vt_id, nop_arg->outstanding_progs != 0, request->time_oracle);
+    S->permanent_delete_loop(tid, vt_id, nop_arg->outstanding_progs != 0, request->time_oracle);
 
     // record clock; reads go through
     S->record_completed_tx(tx.timestamp);
@@ -637,11 +637,11 @@ nop(db::message_wrapper *request)
 
     // call appropriate function based on check after acked to vt
     if (check_move_migr) {
-        migrate_node_step2_req();
+        migrate_node_step2_req(tid);
     } else if (check_init_migr) {
-        migration_begin();
+        migration_begin(tid);
     } else if (check_migr_step3) {
-        migrate_node_step3();
+        migrate_node_step3(tid);
     }
 
     delete request;
@@ -745,7 +745,8 @@ fill_changed_properties(
 // records all changes to nodes given in ids vector between time_cached and cur_time
 // returns false if cache should be invalidated
 inline bool
-fetch_node_cache_contexts(uint64_t loc,
+fetch_node_cache_contexts(uint64_t tid,
+    uint64_t loc,
     std::vector<node_handle_t> &handles,
     std::vector<node_prog::node_cache_context> &toFill,
     vc::vclock& time_cached,
@@ -753,7 +754,7 @@ fetch_node_cache_contexts(uint64_t loc,
     order::oracle *time_oracle)
 {
     for (node_handle_t &handle: handles) {
-        db::node *node = S->acquire_node_version(handle, time_cached, time_oracle);
+        db::node *node = S->acquire_node_version(tid, handle, time_cached, time_oracle);
 
         if (node == nullptr
          || node->state == db::node::mode::MOVED
@@ -845,7 +846,7 @@ fetch_node_cache_contexts(uint64_t loc,
 }
 
 void
-unpack_and_fetch_context(db::message_wrapper *request)
+unpack_and_fetch_context(uint64_t tid, db::message_wrapper *request)
 {
     std::vector<node_handle_t> ids;
     vc::vclock req_vclock, time_cached;
@@ -856,7 +857,7 @@ unpack_and_fetch_context(db::message_wrapper *request)
     request->msg->unpack_message(message::NODE_CONTEXT_FETCH, pType, req_id, vt_id, req_vclock, time_cached, cache_tuple, ids, from_shard);
     std::vector<node_prog::node_cache_context> contexts;
 
-    bool cache_valid = fetch_node_cache_contexts(S->shard_id, ids, contexts, time_cached, req_vclock, request->time_oracle);
+    bool cache_valid = fetch_node_cache_contexts(tid, S->shard_id, ids, contexts, time_cached, req_vclock, request->time_oracle);
 
     message::message m;
     m.prepare_message(message::NODE_CONTEXT_REPLY, pType, req_id, vt_id, req_vclock, cache_tuple, contexts, cache_valid);
@@ -992,9 +993,10 @@ inline bool cache_lookup(db::node*& node_to_check,
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type func,
-        node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> &np,
-        order::oracle *time_oracle)
+inline void node_prog_loop(uint64_t tid,
+    typename node_prog::node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type func,
+    node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> &np,
+    order::oracle *time_oracle)
 {
     assert(time_oracle != nullptr);
 
@@ -1019,7 +1021,7 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
         ParamsType &params = id_params.second;
         this_node.handle = node_handle;
 
-        db::node *node = S->acquire_node_version(node_handle, *np.req_vclock, time_oracle);
+        db::node *node = S->acquire_node_version(tid, node_handle, *np.req_vclock, time_oracle);
 
         if (node == nullptr
          || (node->base.get_del_time() != nullptr && time_oracle->compare_two_vts(*node->base.get_del_time(), *np.req_vclock) == 0)) {
@@ -1181,30 +1183,32 @@ inline void node_prog_loop(typename node_prog::node_function_type<ParamsType, No
 }
 
 void
-unpack_node_program(db::message_wrapper *request)
+unpack_node_program(uint64_t tid, db::message_wrapper *request)
 {
     node_prog::prog_type pType;
 
     request->msg->unpack_partial_message(message::NODE_PROG, pType);
     assert(node_prog::programs.find(pType) != node_prog::programs.end());
-    node_prog::programs[pType]->unpack_and_run_db(std::move(request->msg), request->time_oracle);
+    node_prog::programs[pType]->unpack_and_run_db(tid, std::move(request->msg), request->time_oracle);
     delete request;
 }
 
 void
-unpack_context_reply(db::message_wrapper *request)
+unpack_context_reply(uint64_t tid, db::message_wrapper *request)
 {
     node_prog::prog_type pType;
 
     request->msg->unpack_partial_message(message::NODE_CONTEXT_REPLY, pType);
     assert(node_prog::programs.find(pType) != node_prog::programs.end());
-    node_prog::programs[pType]->unpack_context_reply_db(std::move(request->msg), request->time_oracle);
+    node_prog::programs[pType]->unpack_context_reply_db(tid, std::move(request->msg), request->time_oracle);
     delete request;
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void
-node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_context_reply_db(std::unique_ptr<message::message> msg, order::oracle *time_oracle)
+node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_context_reply_db(uint64_t tid,
+    std::unique_ptr<message::message> msg,
+    order::oracle *time_oracle)
 {
     vc::vclock req_vclock;
     node_prog::prog_type pType;
@@ -1246,7 +1250,7 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
     }
 
     if (run_now) {
-        node_prog_loop<ParamsType, NodeStateType, CacheValueType>(enclosed_node_prog_func, fstate->prog_state, time_oracle);
+        node_prog_loop<ParamsType, NodeStateType, CacheValueType>(tid, enclosed_node_prog_func, fstate->prog_state, time_oracle);
         fstate->monitor.unlock();
         delete fstate;
     }
@@ -1257,7 +1261,9 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void
-node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_and_run_db(std::unique_ptr<message::message> msg, order::oracle *time_oracle)
+node_prog
+    :: particular_node_program<ParamsType, NodeStateType, CacheValueType>
+    :: unpack_and_run_db(uint64_t tid, std::unique_ptr<message::message> msg, order::oracle *time_oracle)
 {
     node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> np;
 
@@ -1285,7 +1291,7 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
     }
 
     assert(!np.cache_value); // a cache value should not be allocated yet
-    node_prog_loop<ParamsType, NodeStateType, CacheValueType>(enclosed_node_prog_func, np, time_oracle);
+    node_prog_loop<ParamsType, NodeStateType, CacheValueType>(tid, enclosed_node_prog_func, np, time_oracle);
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
@@ -1319,7 +1325,7 @@ get_balanced_assignment(std::vector<uint64_t> &shard_node_count, std::vector<uin
 // send migration information to coordinator mapper
 // return false if no migration happens (max migr score = this shard), else return true
 bool
-migrate_node_step1(db::node *n,
+migrate_node_step1(uint64_t tid, db::node *n,
     std::vector<uint64_t> &shard_node_count,
     uint64_t migr_num_shards)
 {
@@ -1369,7 +1375,7 @@ migrate_node_step1(db::node *n,
     S->release_node(n);
 
     // update Hyperdex map for this node
-    S->update_node_mapping(S->migr_node, migr_loc);
+    S->update_node_mapping(tid, S->migr_node, migr_loc);
 
     // begin migration
     S->migration_mutex.lock();
@@ -1384,7 +1390,7 @@ migrate_node_step1(db::node *n,
 
 // pack node in big message and send to new location
 void
-migrate_node_step2_req()
+migrate_node_step2_req(uint64_t tid)
 {
     db::node *n;
     message::message msg;
@@ -1397,7 +1403,7 @@ migrate_node_step2_req()
     }
     S->migration_mutex.unlock();
 
-    n = S->acquire_node_latest(S->migr_node);
+    n = S->acquire_node_latest(tid, S->migr_node);
     assert(n != nullptr);
     msg.prepare_message(message::MIGRATE_SEND_NODE, S->migr_node, shard_id, *n);
     S->release_node(n);
@@ -1408,7 +1414,7 @@ migrate_node_step2_req()
 // apply buffered reads and writes to node
 // update nbrs of migrated nbrs
 void
-migrate_node_step2_resp(std::unique_ptr<message::message> msg, order::oracle *time_oracle)
+migrate_node_step2_resp(uint64_t tid, std::unique_ptr<message::message> msg, order::oracle *time_oracle)
 {
     // unpack and place node
     uint64_t from_loc;
@@ -1503,7 +1509,7 @@ migrate_node_step2_resp(std::unique_ptr<message::message> msg, order::oracle *ti
         m->unpack_partial_message(message::NODE_PROG, pType);
         WDEBUG << "APPLYING BUFREAD for node " << node_handle << std::endl;
         assert(node_prog::programs.find(pType) != node_prog::programs.end());
-        node_prog::programs[pType]->unpack_and_run_db(std::move(m), time_oracle);
+        node_prog::programs[pType]->unpack_and_run_db(tid, std::move(m), time_oracle);
     }
 }
 
@@ -1525,10 +1531,10 @@ check_step3()
 
 // successfully migrated node to new location, continue migration process
 void
-migrate_node_step3()
+migrate_node_step3(uint64_t tid)
 {
-    S->delete_migrated_node(S->migr_node);
-    migration_wrapper();
+    S->delete_migrated_node(tid, S->migr_node);
+    migration_wrapper(tid);
 }
 
 inline bool
@@ -1555,14 +1561,14 @@ check_migr_node(db::node *n, uint64_t migr_num_shards)
 #ifdef WEAVER_CLDG
 // stream list of nodes and cldg repartition
 inline void
-cldg_migration_wrapper(std::vector<uint64_t> &shard_node_count, uint64_t migr_num_shards, uint64_t shard_cap)
+cldg_migration_wrapper(uint64_t tid, std::vector<uint64_t> &shard_node_count, uint64_t migr_num_shards, uint64_t shard_cap)
 {
     bool no_migr = true;
     while (S->cldg_iter != S->cldg_nodes.end()) {
         db::node *n;
         uint64_t migr_node = S->cldg_iter->first;
         S->cldg_iter++;
-        n = S->acquire_node_latest(migr_node);
+        n = S->acquire_node_latest(tid, migr_node);
 
         // check if okay to migrate
         if (!check_migr_node(n, migr_num_shards)) {
@@ -1594,7 +1600,7 @@ cldg_migration_wrapper(std::vector<uint64_t> &shard_node_count, uint64_t migr_nu
             n->migration->migr_score[j] = n->migration->msg_count[j] * penalty;
         }
 
-        if (migrate_node_step1(n, shard_node_count, migr_num_shards)) {
+        if (migrate_node_step1(tid, n, shard_node_count, migr_num_shards)) {
             no_migr = false;
             break;
         }
@@ -1607,14 +1613,14 @@ cldg_migration_wrapper(std::vector<uint64_t> &shard_node_count, uint64_t migr_nu
 
 // stream list of nodes and ldg repartition
 inline void
-ldg_migration_wrapper(std::vector<uint64_t> &shard_node_count, uint64_t migr_num_shards, uint64_t shard_cap)
+ldg_migration_wrapper(uint64_t tid, std::vector<uint64_t> &shard_node_count, uint64_t migr_num_shards, uint64_t shard_cap)
 {
     bool no_migr = true;
     while (S->ldg_iter != S->ldg_nodes.end()) {
         db::node *n;
         const node_handle_t &migr_node = *S->ldg_iter;
         S->ldg_iter++;
-        n = S->acquire_node_latest(migr_node);
+        n = S->acquire_node_latest(tid, migr_node);
 
         // check if okay to migrate
         if (!check_migr_node(n, migr_num_shards)) {
@@ -1631,7 +1637,7 @@ ldg_migration_wrapper(std::vector<uint64_t> &shard_node_count, uint64_t migr_num
             n->migration->migr_score[j] *= (1 - ((double)shard_node_count[j])/shard_cap);
         }
 
-        if (migrate_node_step1(n, shard_node_count, migr_num_shards)) {
+        if (migrate_node_step1(tid, n, shard_node_count, migr_num_shards)) {
             no_migr = false;
             break;
         }
@@ -1643,7 +1649,7 @@ ldg_migration_wrapper(std::vector<uint64_t> &shard_node_count, uint64_t migr_num
 
 // sort nodes in order of number of requests propagated
 void
-migration_wrapper()
+migration_wrapper(uint64_t tid)
 {
     S->migration_mutex.lock();
     std::vector<uint64_t> shard_node_count = S->shard_node_count;
@@ -1656,13 +1662,13 @@ migration_wrapper()
     S->migration_mutex.unlock();
 
 #ifdef WEAVER_CLDG
-    cldg_migration_wrapper(shard_node_count, num_shards, shard_cap);
+    cldg_migration_wrapper(tid, shard_node_count, num_shards, shard_cap);
 #endif
 
 #ifdef WEAVER_NEW_CLDG
-    cldg_migration_wrapper(shard_node_count, num_shards, shard_cap);
+    cldg_migration_wrapper(tid, shard_node_count, num_shards, shard_cap);
 #else
-    ldg_migration_wrapper(shard_node_count, num_shards, shard_cap);
+    ldg_migration_wrapper(tid, shard_node_count, num_shards, shard_cap);
 #endif
 }
 
@@ -1673,7 +1679,7 @@ bool agg_count_compare(std::pair<node_handle_t, uint32_t> p1, std::pair<node_han
 }
 
 void
-migration_begin()
+migration_begin(uint64_t tid)
 {
     //XXX S->migration_mutex.lock();
     //S->ldg_nodes = S->node_list;
@@ -1700,7 +1706,7 @@ migration_begin()
     uint64_t mcnt;
     for (const node_handle_t &nid: S->ldg_nodes) {
         mcnt = 0;
-        db::node *n = S->acquire_node_latest(nid);
+        db::node *n = S->acquire_node_latest(tid, nid);
         for (uint64_t cnt: n->migration->msg_count) {
             mcnt += cnt;
         }
@@ -1713,7 +1719,7 @@ migration_begin()
     S->ldg_iter = S->ldg_nodes.begin();
 #endif
 
-    migration_wrapper();
+    migration_wrapper(tid);
 }
 
 void
@@ -1793,7 +1799,7 @@ recv_loop(uint64_t thread_id)
                             assert(tx_order == db::PRESENT || tx_order == db::FUTURE);
                             if (tx_order == db::PRESENT) {
                                 mwrap->time_oracle = time_oracle;
-                                unpack_tx_request(mwrap);
+                                unpack_tx_request(thread_id, mwrap);
                             } else {
                                 // enqueue for future execution
                                 qreq = new db::queued_request(qts, vclk, unpack_tx_request, mwrap);
@@ -1812,7 +1818,7 @@ recv_loop(uint64_t thread_id)
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                     if (S->qm.check_rd_request(vclk.clock)) {
                         mwrap->time_oracle = time_oracle;
-                        unpack_node_program(mwrap);
+                        unpack_node_program(thread_id, mwrap);
                     } else {
                         qreq = new db::queued_request(vclk.get_clock(), vclk, unpack_node_program, mwrap);
                         S->qm.enqueue_read_request(vt_id, qreq);
@@ -1822,7 +1828,7 @@ recv_loop(uint64_t thread_id)
 
                 case message::NODE_CONTEXT_FETCH:
                 case message::NODE_CONTEXT_REPLY: {
-                    void (*f)(db::message_wrapper*);
+                    void (*f)(uint64_t, db::message_wrapper*);
                     if (mtype == message::NODE_CONTEXT_FETCH) {
                         f = unpack_and_fetch_context;
                     } else { // NODE_CONTEXT_REPLY
@@ -1833,7 +1839,7 @@ recv_loop(uint64_t thread_id)
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                     if (S->qm.check_rd_request(vclk.clock)) {
                         mwrap->time_oracle = time_oracle;
-                        f(mwrap);
+                        f(thread_id, mwrap);
                     } else {
                         qreq = new db::queued_request(vclk.get_clock(), vclk, f, mwrap);
                         S->qm.enqueue_read_request(vt_id, qreq);
@@ -1846,7 +1852,7 @@ recv_loop(uint64_t thread_id)
                 case message::MIGRATED_NBR_ACK:
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                     mwrap->time_oracle = time_oracle;
-                    unpack_migrate_request(mwrap);
+                    unpack_migrate_request(thread_id, mwrap);
                     break;
 
                 case message::MIGRATION_TOKEN:
@@ -1884,7 +1890,7 @@ recv_loop(uint64_t thread_id)
 
         // execute all queued requests that can be executed now
         // will break from loop when no more requests can be executed, in which case we need to recv
-        while (S->qm.exec_queued_request(time_oracle));
+        while (S->qm.exec_queued_request(thread_id, time_oracle));
     }
 }
 

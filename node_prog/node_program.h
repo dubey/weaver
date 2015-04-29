@@ -114,8 +114,8 @@ namespace node_prog
     class node_program
     {
         public:
-            virtual void unpack_and_run_db(std::unique_ptr<message::message> msg, order::oracle *time_oracle) = 0;
-            virtual void unpack_context_reply_db(std::unique_ptr<message::message> msg, order::oracle *time_oracle) = 0;
+            virtual void unpack_and_run_db(uint64_t tid, std::unique_ptr<message::message> msg, order::oracle *time_oracle) = 0;
+            virtual void unpack_context_reply_db(uint64_t tid, std::unique_ptr<message::message> msg, order::oracle *time_oracle) = 0;
             virtual void unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, coordinator::hyper_stub*) = 0;
 
             virtual ~node_program() { }
@@ -141,8 +141,8 @@ namespace node_prog
             }
 
         public:
-            virtual void unpack_and_run_db(std::unique_ptr<message::message> msg, order::oracle *time_oracle);
-            virtual void unpack_context_reply_db(std::unique_ptr<message::message> msg, order::oracle *time_oracle);
+            virtual void unpack_and_run_db(uint64_t tid, std::unique_ptr<message::message> msg, order::oracle *time_oracle);
+            virtual void unpack_context_reply_db(uint64_t tid, std::unique_ptr<message::message> msg, order::oracle *time_oracle);
             virtual void unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, coordinator::hyper_stub*);
 
             // delete standard copy onstructors

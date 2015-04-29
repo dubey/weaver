@@ -24,7 +24,7 @@ namespace db
     class queued_request
     {
         public:
-            queued_request(uint64_t prio, vc::vclock vclk, void (*f)(message_wrapper*), message_wrapper *a)
+            queued_request(uint64_t prio, vc::vclock vclk, void (*f)(uint64_t, message_wrapper*), message_wrapper *a)
                 : priority(prio)
                 , vclock(vclk)
                 , func(f)
@@ -34,7 +34,7 @@ namespace db
         public:
             uint64_t priority;
             vc::vclock vclock;
-            void (*func)(message_wrapper*);
+            void (*func)(uint64_t, message_wrapper*);
             message_wrapper *arg;
     };
 

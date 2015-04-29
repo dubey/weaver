@@ -83,7 +83,7 @@ namespace db
             std::deque<std::pair<uint64_t, uint64_t>> tx_queue; // queued txs, identified by <vt_id, queue timestamp> tuple
             bool in_use;
             uint32_t waiters; // count of number of waiters
-            bool permanently_deleted;
+            bool permanently_deleted, evicted, to_evict;
             std::unique_ptr<vc::vclock> last_perm_deletion; // vclock of last edge/property permanently deleted at this node
             string_set aliases;
             std::unique_ptr<string_set> temp_aliases;
