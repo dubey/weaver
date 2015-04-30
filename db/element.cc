@@ -257,7 +257,7 @@ element :: has_all_predicates(const std::vector<predicate::prop_predicate> &pred
 void
 element :: update_del_time(const vclock_ptr_t &tdel)
 {
-    assert(!del_time);
+    // do not assert !del_time because node may have been swapped in with latest updates
     del_time = tdel;
 }
 

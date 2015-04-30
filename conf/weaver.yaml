@@ -48,3 +48,5 @@ bulk_load_edge_index_key: "tx_id"
 # BulkLoadEdgeHandlePrefix is the prefix-string attached to edge handles during bulk loading graphs that do not specify edge handles.
 # Default: "e"
 bulk_load_edge_handle_prefix: "e"
+
+nodes_per_map: 1

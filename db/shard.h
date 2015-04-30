@@ -98,7 +98,7 @@ namespace db
             node* acquire_node_version(uint64_t tid, const node_handle_t &node_handle, const vc::vclock &vclk, order::oracle*);
             node* acquire_node_write(uint64_t tid, const node_handle_t &node, uint64_t vt_id, uint64_t qts);
             node* bulk_load_acquire_node_nonlocking(uint64_t tid, const node_handle_t &node_handle, uint64_t map_idx);
-            void save_node_prog_state(node *n, uint64_t map_idx);
+            void save_evicted_node_state(node *n, uint64_t map_idx);
             void evict_all(uint64_t map_idx);
             void node_evict(node*, uint64_t map_idx);
             void choose_node_to_evict(uint64_t map_idx, const node_handle_t&);
@@ -112,7 +112,7 @@ namespace db
             server_id serv_id;
             // node handle -> ptr to node object
             db::data_map<node_entry> nodes[NUM_NODE_MAPS];
-            db::data_map<node::prog_state_t> evicted_nodes_prog_states[NUM_NODE_MAPS];
+            db::data_map<evicted_node_state> evicted_nodes_states[NUM_NODE_MAPS];
             uint32_t nodes_in_memory[NUM_NODE_MAPS];
             std::unordered_map<node_handle_t, // node handle n ->
                 std::unordered_set<node_version_t, node_version_hash>> edge_map; // in-neighbors of n
@@ -295,7 +295,7 @@ namespace db
         for (uint64_t i = 0; i < NUM_NODE_MAPS; i++) {
             nodes[i].set_deleted_key("");
             nodes_in_memory[i] = 0;
-            evicted_nodes_prog_states[i].set_deleted_key("");
+            evicted_nodes_states[i].set_deleted_key("");
         }
     }
 
@@ -464,10 +464,15 @@ namespace db
                 vclock_ptr_t dummy_clk;
                 node *n = new node(node_handle, UINT64_MAX, dummy_clk, node_map_mutexes+map_idx);
                 if (hstub[tid]->recover_node(*n)) {
-                    db::data_map<db::node::prog_state_t> &node_state_map = evicted_nodes_prog_states[map_idx];
+                    db::data_map<db::evicted_node_state> &node_state_map = evicted_nodes_states[map_idx];
                     auto prog_state_iter = node_state_map.find(node_handle);
                     if (prog_state_iter != node_state_map.end()) {
-                        n->prog_states = std::move(prog_state_iter->second);
+                        evicted_node_state &s = prog_state_iter->second;
+                        n->tx_queue = std::move(s.tx_queue);
+                        if (s.last_perm_deletion.vt_id != UINT64_MAX) {
+                            n->last_perm_deletion.reset(new vc::vclock((s.last_perm_deletion)));
+                        }
+                        n->prog_states = std::move(s.prog_states);
                         node_state_map.erase(node_handle);
                     }
                     entry.nodes.emplace_back(n);
@@ -652,12 +657,17 @@ namespace db
     }
 
     inline void
-    shard :: save_node_prog_state(node *n, uint64_t map_idx)
+    shard :: save_evicted_node_state(node *n, uint64_t map_idx)
     {
-        if (!n->empty_prog_states()) {
-            db::data_map<db::node::prog_state_t> &node_state_map = evicted_nodes_prog_states[map_idx];
+        if (!n->empty_evicted_node_state()) {
+            db::data_map<db::evicted_node_state> &node_state_map = evicted_nodes_states[map_idx];
             assert(node_state_map.find(n->get_handle()) == node_state_map.end());
-            node_state_map[n->get_handle()] = std::move(n->prog_states);
+            evicted_node_state &s = node_state_map[n->get_handle()];
+            s.tx_queue = std::move(n->tx_queue);
+            if (n->last_perm_deletion) {
+                s.last_perm_deletion = *n->last_perm_deletion;
+            }
+            s.prog_states = std::move(n->prog_states);
         }
     }
 
@@ -691,7 +701,7 @@ namespace db
         entry.nodes.erase(node_iter);
         entry.present = false;
 
-        save_node_prog_state(n, map_idx);
+        save_evicted_node_state(n, map_idx);
         permanent_node_delete(n);
     }
 
@@ -941,6 +951,7 @@ namespace db
         assert(out_edge_iter != n->out_edges.end());
         assert(!out_edge_iter->second.empty());
         edge *e = out_edge_iter->second.back();
+        // XXX nodeswap
         assert(!e->base.get_del_time());
         e->base.update_del_time(tdel);
     }

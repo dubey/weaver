@@ -281,7 +281,9 @@ hyper_stub :: update_mapping(const node_handle_t &handle, uint64_t loc)
 bool
 hyper_stub :: recover_node(db::node &n)
 {
-    return get_node(n);
+    std::unordered_map<node_handle_t, db::node*> nodes;
+    nodes.emplace(n.get_handle(), &n);
+    return get_nodes(nodes, false);
 }
 
 #undef weaver_debug_

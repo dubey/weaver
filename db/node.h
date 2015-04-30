@@ -103,7 +103,9 @@ namespace db
             typedef std::pair<node_prog::prog_type, id_to_state_t> ptype_and_map_t;
             typedef std::vector<ptype_and_map_t> prog_state_t;
             prog_state_t prog_states;
-            bool empty_prog_states();
+
+            // node eviction
+            bool empty_evicted_node_state();
 
             // fault tolerance
             std::unique_ptr<vc::vclock> last_upd_clk;
@@ -137,6 +139,13 @@ namespace db
         {
             return weaver_util::murmur_hasher<std::string>()(nv.first);
         }
+    };
+
+    struct evicted_node_state
+    {
+        std::deque<std::pair<uint64_t, uint64_t>> tx_queue;
+        vc::vclock last_perm_deletion;
+        node::prog_state_t prog_states;
     };
 }
 

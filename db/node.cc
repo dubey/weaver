@@ -56,16 +56,16 @@ node :: ~node()
 
 // true if prog states is empty
 bool
-node :: empty_prog_states()
+node :: empty_evicted_node_state()
 {
-    if (prog_states.empty()) {
-        return true;
-    }
-
     for (const auto &p: prog_states) {
         if (!p.second.empty()) {
             return false;
         }
+    }
+
+    if (!tx_queue.empty() || last_perm_deletion) {
+        return false;
     }
 
     return true;
@@ -84,8 +84,11 @@ node :: add_edge(edge *e)
     if (iter == out_edges.end()) {
         out_edges[e->get_handle()] = std::vector<edge*>(1, e);
     } else {
-        assert(iter->second.back()->base.get_del_time() && "cannot create two concurrent edges with same handle");
-        iter->second.emplace_back(e);
+        if (iter->second.back()->base.get_del_time()) {
+            // if not deleted, then this node was swapped in from HyperDex
+            // in that case we don't need to perform the write
+            iter->second.emplace_back(e);
+        }
     }
 }
 
