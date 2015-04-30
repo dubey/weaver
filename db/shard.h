@@ -724,16 +724,33 @@ namespace db
         assert(map_iter != nodes[map_idx].end());
 
         auto entry_ptr = map_iter->second;
-        if (entry_ptr->prev == entry_ptr) {
-            // last node in this map
-            node_queue_clock_hand[map_idx] = nullptr;
-        } else {
-            entry_ptr->prev->next = entry_ptr->next;
-            entry_ptr->next->prev = entry_ptr->prev;
+        assert(entry_ptr->prev != entry_ptr); // should never evict last node, NodesPerMap >= 1
+
+        // debug
+        //auto begin_ptr = entry_ptr;
+        //auto cur_ptr = begin_ptr->next;
+        //int ninmem = 1;
+        //while (cur_ptr != begin_ptr) {
+        //    cur_ptr = cur_ptr->next;
+        //    ninmem++;
+        //}
+        //WDEBUG << "nodes in mem=" << ninmem << std::endl;
+        //for (const auto &p: nodes[map_idx]) {
+        //    if (p.second->present) {
+        //        ninmem--;
+        //    }
+        //}
+        //assert(ninmem == 0);
+
+        if (entry_ptr == node_queue_clock_hand[map_idx]) {
+            node_queue_clock_hand[map_idx] = entry_ptr->next;
         }
         if (entry_ptr == node_queue_last[map_idx]) {
             node_queue_last[map_idx] = entry_ptr->prev;
         }
+
+        entry_ptr->prev->next = entry_ptr->next;
+        entry_ptr->next->prev = entry_ptr->prev;
         entry_ptr->prev = nullptr;
         entry_ptr->next = nullptr;
 

@@ -259,7 +259,8 @@ init_config_constants(const char *config_file_name)
      || nullptr == KronosIpaddr
      || UINT16_MAX == KronosPort
      || nullptr == ServerManagerIpaddr
-     || UINT16_MAX == ServerManagerPort) {
+     || UINT16_MAX == ServerManagerPort
+     || NodesPerMap < 1) {
         return false;
     }
 
