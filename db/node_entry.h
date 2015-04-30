@@ -22,6 +22,7 @@ namespace db
     {
         bool present, used;
         std::vector<node*> nodes;
+        std::shared_ptr<node_entry> prev, next;
 
         node_entry() : present(false), used(true) { }
 

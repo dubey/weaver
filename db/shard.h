@@ -92,6 +92,7 @@ namespace db
             void increment_qts(uint64_t vt_id, uint64_t incr);
             void record_completed_tx(vc::vclock &tx_clk);
             void node_wait_and_mark_busy(node*);
+            void new_node_entry(uint64_t map_idx, std::shared_ptr<db::node_entry> new_entry);
             db::data_map<std::shared_ptr<node_entry>>::iterator node_present(uint64_t tid, uint64_t map_idx, const node_handle_t&);
             node* acquire_node_latest(uint64_t tid, const node_handle_t &node_handle);
             node* acquire_node_specific(uint64_t tid, const node_handle_t &node_handle, const vclock_ptr_t tcreat, const vclock_ptr_t tdel);
@@ -101,7 +102,7 @@ namespace db
             void save_evicted_node_state(node *n, uint64_t map_idx);
             void evict_all(uint64_t map_idx);
             void node_evict(node*, uint64_t map_idx);
-            void choose_node_to_evict(uint64_t map_idx, const node_handle_t&);
+            void choose_node_to_evict(uint64_t map_idx, std::shared_ptr<node_entry> cur_entry);
             void release_node_write(node *n);
             void release_node(node *n, bool migr_node);
 
@@ -112,6 +113,8 @@ namespace db
             server_id serv_id;
             // node handle -> ptr to node object
             db::data_map<std::shared_ptr<node_entry>> nodes[NUM_NODE_MAPS];
+            std::shared_ptr<node_entry> node_queue_clock_hand[NUM_NODE_MAPS];
+            std::shared_ptr<node_entry> node_queue_last[NUM_NODE_MAPS];
             db::data_map<evicted_node_state> evicted_nodes_states[NUM_NODE_MAPS];
             uint32_t nodes_in_memory[NUM_NODE_MAPS];
             std::unordered_map<node_handle_t, // node handle n ->
@@ -453,6 +456,24 @@ namespace db
         n->in_use = true;
     }
 
+    inline void
+    shard :: new_node_entry(uint64_t map_idx, std::shared_ptr<db::node_entry> new_entry)
+    {
+        if (node_queue_last[map_idx]) {
+            std::shared_ptr<db::node_entry> last = node_queue_last[map_idx];
+            std::shared_ptr<db::node_entry> first = last->next;
+            new_entry->next = first;
+            new_entry->prev = last;
+            first->prev = new_entry;
+            last->next  = new_entry;
+        } else {
+            node_queue_clock_hand[map_idx] = new_entry;
+            new_entry->next = new_entry;
+            new_entry->prev = new_entry;
+        }
+        node_queue_last[map_idx] = new_entry;
+    }
+
     inline db::data_map<std::shared_ptr<node_entry>>::iterator
     shard :: node_present(uint64_t tid, uint64_t map_idx, const node_handle_t &node_handle)
     {
@@ -465,9 +486,9 @@ namespace db
                 node *n = new node(node_handle, UINT64_MAX, dummy_clk, node_map_mutexes+map_idx);
                 if (hstub[tid]->recover_node(*n)) {
                     db::data_map<db::evicted_node_state> &node_state_map = evicted_nodes_states[map_idx];
-                    auto prog_state_iter = node_state_map.find(node_handle);
-                    if (prog_state_iter != node_state_map.end()) {
-                        evicted_node_state &s = prog_state_iter->second;
+                    auto node_state_iter = node_state_map.find(node_handle);
+                    if (node_state_iter != node_state_map.end()) {
+                        evicted_node_state &s = node_state_iter->second;
                         n->tx_queue = std::move(s.tx_queue);
                         if (s.last_perm_deletion.vt_id != UINT64_MAX) {
                             n->last_perm_deletion.reset(new vc::vclock((s.last_perm_deletion)));
@@ -475,15 +496,22 @@ namespace db
                         n->prog_states = std::move(s.prog_states);
                         node_state_map.erase(node_handle);
                     }
+
                     entry.nodes.emplace_back(n);
                     if (++nodes_in_memory[map_idx] > NodesPerMap) {
                         // evict a node when this node is released
                         n->to_evict = true;
                     }
                     entry.present = true;
+
+                    new_node_entry(map_idx, node_iter->second);
                 } else {
                     permanent_node_delete(n);
                 }
+            }
+
+            if (entry.present) {
+                entry.used = true;
             }
         }
 
@@ -681,7 +709,11 @@ namespace db
             permanent_node_delete(entry.nodes.front());
             entry.nodes.clear();
             entry.present = false;
+            entry.next = nullptr;
+            entry.prev = nullptr;
         }
+        node_queue_clock_hand[map_idx] = nullptr;
+        node_queue_last[map_idx] = nullptr;
     }
 
     inline void
@@ -690,7 +722,22 @@ namespace db
         const node_handle_t &node_handle = n->get_handle();
         auto map_iter = nodes[map_idx].find(node_handle);
         assert(map_iter != nodes[map_idx].end());
-        node_entry &entry = *map_iter->second;
+
+        auto entry_ptr = map_iter->second;
+        if (entry_ptr->prev == entry_ptr) {
+            // last node in this map
+            node_queue_clock_hand[map_idx] = nullptr;
+        } else {
+            entry_ptr->prev->next = entry_ptr->next;
+            entry_ptr->next->prev = entry_ptr->prev;
+        }
+        if (entry_ptr == node_queue_last[map_idx]) {
+            node_queue_last[map_idx] = entry_ptr->prev;
+        }
+        entry_ptr->prev = nullptr;
+        entry_ptr->next = nullptr;
+
+        node_entry &entry = *entry_ptr;
         auto node_iter = entry.nodes.begin();
         for (; node_iter != entry.nodes.end(); node_iter++) {
             if (n == *node_iter) {
@@ -706,29 +753,34 @@ namespace db
     }
 
     inline void
-    shard :: choose_node_to_evict(uint64_t map_idx, const node_handle_t &cur_node)
+    shard :: choose_node_to_evict(uint64_t map_idx, std::shared_ptr<db::node_entry> cur_entry)
     {
-        // XXX change from random to clock algorithm
-        // randomly evict another node
-        for (auto &p: nodes[map_idx]) {
-            if (p.first != cur_node && p.second->present) {
-                node *evict_node = p.second->nodes.back();
+        while (true) {
+            auto entry = node_queue_clock_hand[map_idx];
+            node_queue_clock_hand[map_idx] = node_queue_clock_hand[map_idx]->next;
 
-                evict_node->waiters++;
-                while (evict_node->in_use) {
-                    evict_node->cv.wait();
-                }
-                evict_node->waiters--;
+            if (entry != cur_entry && entry->present) {
+                if (entry->used) {
+                    entry->used = false;
+                } else {
+                    node *evict_node = entry->nodes.back();
 
-                if (!evict_node->evicted && !evict_node->permanently_deleted) {
-                    --nodes_in_memory[map_idx]; // eventually a node will be evicted, proactively reduce count to prevent multiple evictions
-                    if (evict_node->waiters > 0) {
-                        evict_node->evicted = true;
-                        evict_node->cv.signal();
-                    } else {
-                        node_evict(evict_node, map_idx);
+                    evict_node->waiters++;
+                    while (evict_node->in_use) {
+                        evict_node->cv.wait();
                     }
-                    break;
+                    evict_node->waiters--;
+
+                    if (!evict_node->evicted && !evict_node->permanently_deleted) {
+                        --nodes_in_memory[map_idx]; // eventually this node will be evicted, proactively reduce count to prevent multiple evictions
+                        if (evict_node->waiters > 0) {
+                            evict_node->evicted = true;
+                            evict_node->cv.signal();
+                        } else {
+                            node_evict(evict_node, map_idx);
+                        }
+                        break;
+                    }
                 }
             }
         }
@@ -749,7 +801,7 @@ namespace db
 
         if (n->to_evict && !n->permanently_deleted) {
             n->to_evict = false;
-            choose_node_to_evict(map_idx, n->get_handle());
+            choose_node_to_evict(map_idx, nodes[map_idx][n->get_handle()]);
         }
 
         if (n->waiters > 0) {
@@ -813,9 +865,12 @@ namespace db
         node_map_mutexes[map_idx].lock();
         auto map_iter = nodes[map_idx].find(node_handle);
         if (map_iter == nodes[map_idx].end()) {
-            nodes[map_idx][node_handle] = std::make_shared<node_entry>(new_node);
+            auto new_entry = std::make_shared<node_entry>(new_node);
+            nodes[map_idx][node_handle] = new_entry;
+            new_node_entry(map_idx, new_entry);
         } else {
             map_iter->second->nodes.emplace_back(new_node);
+            map_iter->second->used = true;
         }
         node_exists_cache[map_idx] = node_handle;
         if (++nodes_in_memory[map_idx] > NodesPerMap) {
@@ -844,7 +899,9 @@ namespace db
     {
         node *new_node = new node(node_handle, shard_id, vclk, node_map_mutexes+map_idx);
 
-        nodes[map_idx][node_handle] = std::make_shared<node_entry>(new_node);
+        auto new_entry = std::make_shared<node_entry>(new_node);
+        nodes[map_idx][node_handle] = new_entry;
+        new_node_entry(map_idx, new_entry);
         node_exists_cache[map_idx] = node_handle;
         ++nodes_in_memory[map_idx];
 
