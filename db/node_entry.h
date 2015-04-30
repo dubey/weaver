@@ -20,13 +20,14 @@ namespace db
 {
     struct node_entry
     {
-        bool present;
+        bool present, used;
         std::vector<node*> nodes;
 
-        node_entry() : present(false) { }
+        node_entry() : present(false), used(true) { }
 
         node_entry(node *n)
             : present(true)
+            , used(true)
             , nodes(1, n)
         { }
     };

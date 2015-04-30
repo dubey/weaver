@@ -92,7 +92,7 @@ namespace db
             void increment_qts(uint64_t vt_id, uint64_t incr);
             void record_completed_tx(vc::vclock &tx_clk);
             void node_wait_and_mark_busy(node*);
-            db::data_map<node_entry>::iterator node_present(uint64_t tid, uint64_t map_idx, const node_handle_t&);
+            db::data_map<std::shared_ptr<node_entry>>::iterator node_present(uint64_t tid, uint64_t map_idx, const node_handle_t&);
             node* acquire_node_latest(uint64_t tid, const node_handle_t &node_handle);
             node* acquire_node_specific(uint64_t tid, const node_handle_t &node_handle, const vclock_ptr_t tcreat, const vclock_ptr_t tdel);
             node* acquire_node_version(uint64_t tid, const node_handle_t &node_handle, const vc::vclock &vclk, order::oracle*);
@@ -111,7 +111,7 @@ namespace db
             uint64_t shard_id;
             server_id serv_id;
             // node handle -> ptr to node object
-            db::data_map<node_entry> nodes[NUM_NODE_MAPS];
+            db::data_map<std::shared_ptr<node_entry>> nodes[NUM_NODE_MAPS];
             db::data_map<evicted_node_state> evicted_nodes_states[NUM_NODE_MAPS];
             uint32_t nodes_in_memory[NUM_NODE_MAPS];
             std::unordered_map<node_handle_t, // node handle n ->
@@ -453,12 +453,12 @@ namespace db
         n->in_use = true;
     }
 
-    inline db::data_map<node_entry>::iterator
+    inline db::data_map<std::shared_ptr<node_entry>>::iterator
     shard :: node_present(uint64_t tid, uint64_t map_idx, const node_handle_t &node_handle)
     {
         auto node_iter = nodes[map_idx].find(node_handle);
         if (node_iter != nodes[map_idx].end()) {
-            node_entry &entry = node_iter->second;
+            node_entry &entry = *node_iter->second;
             if (!entry.present) {
                 // fetch node from HyperDex
                 vclock_ptr_t dummy_clk;
@@ -503,8 +503,8 @@ namespace db
         node *n = nullptr;
         node_map_mutexes[map_idx].lock();
         auto node_iter = node_present(tid, map_idx, node_handle);
-        if (node_iter != nodes[map_idx].end() && !node_iter->second.nodes.empty()) {
-            n = node_iter->second.nodes.back();
+        if (node_iter != nodes[map_idx].end() && !node_iter->second->nodes.empty()) {
+            n = node_iter->second->nodes.back();
             node_wait_and_mark_busy(n);
         }
         node_map_mutexes[map_idx].unlock();
@@ -522,7 +522,7 @@ namespace db
         node_map_mutexes[map_idx].lock();
         auto node_iter = node_present(tid, map_idx, node_handle);
         if (node_iter != nodes[map_idx].end()) {
-            for (node *n_ver: node_iter->second.nodes) {
+            for (node *n_ver: node_iter->second->nodes) {
                 node_wait_and_mark_busy(n_ver);
 
                 if ((tcreat && *n_ver->base.get_creat_time() == *tcreat)
@@ -553,7 +553,7 @@ namespace db
         node_map_mutexes[map_idx].lock();
         auto node_iter = node_present(tid, map_idx, node_handle);
         if (node_iter != nodes[map_idx].end()) {
-            for (node *n_ver: node_iter->second.nodes) {
+            for (node *n_ver: node_iter->second->nodes) {
                 node_wait_and_mark_busy(n_ver);
 
                 if (time_oracle->clock_creat_before_del_after(vclk, n_ver->base.get_creat_time(), n_ver->base.get_del_time())) {
@@ -581,8 +581,8 @@ namespace db
         auto comp = std::make_pair(vt_id, qts);
         node_map_mutexes[map_idx].lock();
         auto node_iter = node_present(tid, map_idx, node_handle);
-        if (node_iter != nodes[map_idx].end() && !node_iter->second.nodes.empty()) {
-            n = node_iter->second.nodes.back();
+        if (node_iter != nodes[map_idx].end() && !node_iter->second->nodes.empty()) {
+            n = node_iter->second->nodes.back();
             n->waiters++;
 
             // first wait for node to become free
@@ -625,7 +625,7 @@ namespace db
     {
         if (bulk_load_node_exists_nonlocking(node_handle, map_idx)) {
             auto node_iter = node_present(tid, map_idx, node_handle);
-            node *n = node_iter->second.nodes.front();
+            node *n = node_iter->second->nodes.front();
             n->to_evict = false; // bulk loading eviction handled separately
             return n;
         } else {
@@ -677,7 +677,7 @@ namespace db
     shard :: evict_all(uint64_t map_idx)
     {
         for (auto &p: nodes[map_idx]) {
-            node_entry &entry = p.second;
+            node_entry &entry = *p.second;
             permanent_node_delete(entry.nodes.front());
             entry.nodes.clear();
             entry.present = false;
@@ -690,7 +690,7 @@ namespace db
         const node_handle_t &node_handle = n->get_handle();
         auto map_iter = nodes[map_idx].find(node_handle);
         assert(map_iter != nodes[map_idx].end());
-        node_entry &entry = map_iter->second;
+        node_entry &entry = *map_iter->second;
         auto node_iter = entry.nodes.begin();
         for (; node_iter != entry.nodes.end(); node_iter++) {
             if (n == *node_iter) {
@@ -711,8 +711,8 @@ namespace db
         // XXX change from random to clock algorithm
         // randomly evict another node
         for (auto &p: nodes[map_idx]) {
-            if (p.first != cur_node && p.second.present) {
-                node *evict_node = p.second.nodes.back();
+            if (p.first != cur_node && p.second->present) {
+                node *evict_node = p.second->nodes.back();
 
                 evict_node->waiters++;
                 while (evict_node->in_use) {
@@ -759,7 +759,7 @@ namespace db
             const node_handle_t &node_handle = n->get_handle();
             auto map_iter = nodes[map_idx].find(node_handle);
             assert(map_iter != nodes[map_idx].end());
-            node_entry &entry = map_iter->second;
+            node_entry &entry = *map_iter->second;
             auto node_iter = entry.nodes.begin();
             for (; node_iter != entry.nodes.end(); node_iter++) {
                 if (n == *node_iter) {
@@ -813,9 +813,9 @@ namespace db
         node_map_mutexes[map_idx].lock();
         auto map_iter = nodes[map_idx].find(node_handle);
         if (map_iter == nodes[map_idx].end()) {
-            nodes[map_idx][node_handle] = node_entry(new_node);
+            nodes[map_idx][node_handle] = std::make_shared<node_entry>(new_node);
         } else {
-            map_iter->second.nodes.emplace_back(new_node);
+            map_iter->second->nodes.emplace_back(new_node);
         }
         node_exists_cache[map_idx] = node_handle;
         if (++nodes_in_memory[map_idx] > NodesPerMap) {
@@ -844,7 +844,7 @@ namespace db
     {
         node *new_node = new node(node_handle, shard_id, vclk, node_map_mutexes+map_idx);
 
-        nodes[map_idx][node_handle] = node_entry(new_node);
+        nodes[map_idx][node_handle] = std::make_shared<node_entry>(new_node);
         node_exists_cache[map_idx] = node_handle;
         ++nodes_in_memory[map_idx];
 

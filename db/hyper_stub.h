@@ -38,22 +38,22 @@ namespace db
 
         public:
             hyper_stub(uint64_t sid);
-            void restore_backup(db::data_map<db::node_entry> *nodes,
+            void restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *nodes,
                 /*XXX std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,*/
                 po6::threads::mutex *shard_mutexes);
             // bulk loading
             void bulk_load(int tid, std::unordered_map<node_handle_t, std::vector<node*>> *nodes);
-            void memory_efficient_bulk_load(int tid, db::data_map<db::node_entry> *nodes);
-            void memory_efficient_bulk_load(db::data_map<db::node_entry> &nodes);
+            void memory_efficient_bulk_load(int tid, db::data_map<std::shared_ptr<db::node_entry>> *nodes);
+            void memory_efficient_bulk_load(db::data_map<std::shared_ptr<db::node_entry>> &nodes);
             // migration
             bool update_mapping(const node_handle_t &handle, uint64_t loc);
             bool recover_node(db::node &n);
         private:
-            void put_node_loop(db::data_map<db::node_entry> &nodes,
+            void put_node_loop(db::data_map<std::shared_ptr<db::node_entry>> &nodes,
                 std::unordered_map<node_handle_t, node*> &node_map,
                 int &progress,
                 vc::vclock &zero_clk);
-            void put_index_loop(db::data_map<db::node_entry> &nodes,
+            void put_index_loop(db::data_map<std::shared_ptr<db::node_entry>> &nodes,
                 std::unordered_map<std::string, node*> &idx_add_if_not_exist,
                 std::unordered_map<std::string, node*> &idx_add,
                 int &ine_progress,

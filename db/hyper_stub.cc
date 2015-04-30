@@ -24,7 +24,7 @@ hyper_stub :: hyper_stub(uint64_t sid)
 { }
 
 void
-hyper_stub :: restore_backup(db::data_map<db::node_entry> *nodes,
+hyper_stub :: restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *nodes,
     /*XXX std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,*/
     po6::threads::mutex *shard_mutexes)
 {
@@ -113,7 +113,7 @@ hyper_stub :: restore_backup(db::data_map<db::node_entry> *nodes,
             // node map
             auto &node_map = nodes[map_idx];
             assert(node_map.find(node_handle) == node_map.end());
-            node_map[node_handle] = db::node_entry(n);
+            node_map[node_handle] = std::make_shared<db::node_entry>(n);
 
             hyperdex_client_destroy_attrs(cl_attr, num_attrs);
         } else {
@@ -125,14 +125,14 @@ hyper_stub :: restore_backup(db::data_map<db::node_entry> *nodes,
 }
 
 void
-hyper_stub :: put_node_loop(db::data_map<db::node_entry> &nodes,
+hyper_stub :: put_node_loop(db::data_map<std::shared_ptr<db::node_entry>> &nodes,
     std::unordered_map<node_handle_t, node*> &node_map,
     int &progress,
     vc::vclock &zero_clk)
 {
     for (const auto &p: nodes) {
-        assert(p.second.nodes.size() == 1);
-        node_map.emplace(p.first, p.second.nodes.front());
+        assert(p.second->nodes.size() == 1);
+        node_map.emplace(p.first, p.second->nodes.front());
         if (node_map.size() >= 1000) {
             put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
             node_map.clear();
@@ -142,14 +142,14 @@ hyper_stub :: put_node_loop(db::data_map<db::node_entry> &nodes,
 }
 
 void
-hyper_stub :: put_index_loop(db::data_map<db::node_entry> &nodes,
+hyper_stub :: put_index_loop(db::data_map<std::shared_ptr<db::node_entry>> &nodes,
     std::unordered_map<std::string, node*> &idx_add_if_not_exist,
     std::unordered_map<std::string, node*> &idx_add,
     int &ine_progress,
     int &progress)
 {
     for (const auto &p: nodes) {
-        node *n = p.second.nodes.front();
+        node *n = p.second->nodes.front();
         idx_add_if_not_exist.emplace(p.first, n);
         for (const node_handle_t &alias: n->aliases) {
             assert(idx_add_if_not_exist.find(alias) == idx_add_if_not_exist.end());
@@ -183,7 +183,7 @@ hyper_stub :: put_index_loop(db::data_map<db::node_entry> &nodes,
 }
 
 void
-hyper_stub :: memory_efficient_bulk_load(int thread_id, db::data_map<db::node_entry> *nodes_arr)
+hyper_stub :: memory_efficient_bulk_load(int thread_id, db::data_map<std::shared_ptr<db::node_entry>> *nodes_arr)
 {
     WDEBUG << "starting HyperDex bulk load." << std::endl;
     assert(NUM_NODE_MAPS % NUM_SHARD_THREADS == 0);
@@ -215,7 +215,7 @@ hyper_stub :: memory_efficient_bulk_load(int thread_id, db::data_map<db::node_en
 }
 
 void
-hyper_stub :: memory_efficient_bulk_load(db::data_map<db::node_entry> &nodes)
+hyper_stub :: memory_efficient_bulk_load(db::data_map<std::shared_ptr<db::node_entry>> &nodes)
 {
     vc::vclock zero_clk(0,0);
 
