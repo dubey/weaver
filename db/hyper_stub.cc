@@ -131,12 +131,15 @@ hyper_stub :: put_node_loop(db::data_map<std::shared_ptr<db::node_entry>> &nodes
     vc::vclock &zero_clk)
 {
     for (const auto &p: nodes) {
-        assert(p.second->nodes.size() == 1);
-        node_map.emplace(p.first, p.second->nodes.front());
-        if (node_map.size() >= 1000) {
-            put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
-            node_map.clear();
-            WDEBUG << "bulk load hyperdex progress " << ++progress << std::endl;
+        auto &nodes_vec = p.second->nodes;
+        assert(nodes_vec.size() <= 1);
+        if (!nodes_vec.empty()) {
+            node_map.emplace(p.first, nodes_vec.front());
+            if (node_map.size() >= 1000) {
+                put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
+                node_map.clear();
+                WDEBUG << "bulk load hyperdex progress " << ++progress << std::endl;
+            }
         }
     }
 }
@@ -149,35 +152,38 @@ hyper_stub :: put_index_loop(db::data_map<std::shared_ptr<db::node_entry>> &node
     int &progress)
 {
     for (const auto &p: nodes) {
-        node *n = p.second->nodes.front();
-        idx_add_if_not_exist.emplace(p.first, n);
-        for (const node_handle_t &alias: n->aliases) {
-            assert(idx_add_if_not_exist.find(alias) == idx_add_if_not_exist.end());
-            idx_add_if_not_exist.emplace(alias, n);
-        }
-
-        for (auto &x: n->out_edges) {
-            assert(x.second.size() == 1);
-            assert(idx_add_if_not_exist.find(x.first) == idx_add_if_not_exist.end());
-            idx_add_if_not_exist.emplace(x.first, n);
-        }
-
-        if (n->temp_aliases != nullptr) {
-            for (const std::string &s: *n->temp_aliases) {
-                idx_add.emplace(s, n);
+        auto &nodes_vec = p.second->nodes;
+        if (!nodes_vec.empty()) {
+            node *n = nodes_vec.front();
+            idx_add_if_not_exist.emplace(p.first, n);
+            for (const node_handle_t &alias: n->aliases) {
+                assert(idx_add_if_not_exist.find(alias) == idx_add_if_not_exist.end());
+                idx_add_if_not_exist.emplace(alias, n);
             }
-            n->done_temp_index();
-        }
 
-        if (idx_add_if_not_exist.size() >= 10000) {
-            add_indices(idx_add_if_not_exist, false, true);
-            idx_add_if_not_exist.clear();
-            WDEBUG << "aux index if not exist progress " << ++ine_progress << std::endl;
-        }
-        if (idx_add.size() >= 10000) {
-            add_indices(idx_add, false, false);
-            idx_add.clear();
-            WDEBUG << "aux index progress " << ++progress << std::endl;
+            for (auto &x: n->out_edges) {
+                assert(x.second.size() == 1);
+                assert(idx_add_if_not_exist.find(x.first) == idx_add_if_not_exist.end());
+                idx_add_if_not_exist.emplace(x.first, n);
+            }
+
+            if (n->temp_aliases != nullptr) {
+                for (const std::string &s: *n->temp_aliases) {
+                    idx_add.emplace(s, n);
+                }
+                n->done_temp_index();
+            }
+
+            if (idx_add_if_not_exist.size() >= 10000) {
+                add_indices(idx_add_if_not_exist, false, true);
+                idx_add_if_not_exist.clear();
+                WDEBUG << "aux index if not exist progress " << ++ine_progress << std::endl;
+            }
+            if (idx_add.size() >= 10000) {
+                add_indices(idx_add, false, false);
+                idx_add.clear();
+                WDEBUG << "aux index progress " << ++progress << std::endl;
+            }
         }
     }
 }

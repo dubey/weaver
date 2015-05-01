@@ -706,11 +706,13 @@ namespace db
     {
         for (auto &p: nodes[map_idx]) {
             node_entry &entry = *p.second;
-            permanent_node_delete(entry.nodes.front());
-            entry.nodes.clear();
-            entry.present = false;
-            entry.next = nullptr;
-            entry.prev = nullptr;
+            if (entry.present) {
+                permanent_node_delete(entry.nodes.front());
+                entry.nodes.clear();
+                entry.present = false;
+                entry.next = nullptr;
+                entry.prev = nullptr;
+            }
         }
         node_queue_clock_hand[map_idx] = nullptr;
         node_queue_last[map_idx] = nullptr;
