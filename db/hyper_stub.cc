@@ -192,7 +192,6 @@ void
 hyper_stub :: memory_efficient_bulk_load(int thread_id, db::data_map<std::shared_ptr<db::node_entry>> *nodes_arr)
 {
     WDEBUG << "starting HyperDex bulk load." << std::endl;
-    assert(NUM_NODE_MAPS % NUM_SHARD_THREADS == 0);
     vc::vclock zero_clk(0,0);
 
     std::unordered_map<node_handle_t, node*> node_map;
