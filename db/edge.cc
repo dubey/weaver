@@ -15,6 +15,8 @@
 #include "db/edge.h"
 
 db::edge db::edge::empty_edge;
+uint64_t db::edge::edge_count = 0;
+po6::threads::mutex db::edge::edge_count_mtx;
 
 using db::edge;
 using db::remote_node;
@@ -28,7 +30,11 @@ edge :: edge()
 #ifdef WEAVER_NEW_CLDG
     , msg_count(0)
 #endif
-{ }
+{
+    edge_count_mtx.lock();
+    edge_count++;
+    edge_count_mtx.unlock();
+}
 
 edge :: edge(const edge_handle_t &handle, vclock_ptr_t &vclk, uint64_t remote_loc, const node_handle_t &remote_handle)
     : base(handle, vclk)
@@ -39,7 +45,11 @@ edge :: edge(const edge_handle_t &handle, vclock_ptr_t &vclk, uint64_t remote_lo
 #ifdef WEAVER_NEW_CLDG
     , msg_count(0)
 #endif
-{ }
+{
+    edge_count_mtx.lock();
+    edge_count++;
+    edge_count_mtx.unlock();
+}
 
 edge :: edge(const edge_handle_t &handle, vclock_ptr_t &vclk, remote_node &rn)
     : base(handle, vclk)
@@ -50,7 +60,18 @@ edge :: edge(const edge_handle_t &handle, vclock_ptr_t &vclk, remote_node &rn)
 #ifdef WEAVER_NEW_CLDG
     , msg_count(0)
 #endif
-{ }
+{
+    edge_count_mtx.lock();
+    edge_count++;
+    edge_count_mtx.unlock();
+}
+
+edge :: ~edge()
+{
+    edge_count_mtx.lock();
+    edge_count--;
+    edge_count_mtx.unlock();
+}
 
 // caution: should be called with node mutex held
 // should always be called when an edge is traversed in a node program

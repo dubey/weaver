@@ -1065,6 +1065,24 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     cl_attr[7].datatype = graph_dtypes[7];
 }
 
+void
+hyper_stub_base :: prepare_edge(hyperdex_client_map_attribute *cl_attr,
+    db::edge *e,
+    const edge_handle_t &edge_handle,
+    std::unique_ptr<e::buffer> &edge_buf)
+{
+    std::vector<db::edge*> edge_vec(1, e);
+    prepare_buffer<std::vector<db::edge*>>(edge_vec, edge_buf);
+
+    cl_attr->attr = graph_attrs[3];
+    cl_attr->map_key = edge_handle.c_str();
+    cl_attr->map_key_sz = edge_handle.size();
+    cl_attr->map_key_datatype = HYPERDATATYPE_STRING;
+    cl_attr->value = (const char*)edge_buf->data();
+    cl_attr->value_sz = edge_buf->size();
+    cl_attr->value_datatype = HYPERDATATYPE_STRING;
+}
+
 bool
 hyper_stub_base :: put_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool if_not_exist)
 {

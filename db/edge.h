@@ -33,7 +33,7 @@ namespace db
             edge();
             edge(const edge_handle_t &handle, vclock_ptr_t &vclk, uint64_t remote_loc, const node_handle_t &remote_handle);
             edge(const edge_handle_t &handle, vclock_ptr_t &vclk, remote_node &rn);
-            ~edge() { }
+            ~edge();
 
         public:
             element base;
@@ -55,6 +55,10 @@ namespace db
             void get_client_edge(const std::string &node, cl::edge &e);
 
             static edge empty_edge;
+
+            // debug
+            static uint64_t edge_count;
+            static po6::threads::mutex edge_count_mtx;
     };
 }
 

@@ -168,12 +168,12 @@ hyper_stub :: put_index_loop(db::data_map<std::shared_ptr<db::node_entry>> &node
                 idx_add_if_not_exist.emplace(x.first, n);
             }
 
-            if (n->temp_aliases != nullptr) {
-                for (const std::string &s: *n->temp_aliases) {
-                    idx_add.emplace(s, n);
-                }
-                n->done_temp_index();
-            }
+            //if (n->temp_aliases != nullptr) {
+            //    for (const std::string &s: *n->temp_aliases) {
+            //        idx_add.emplace(s, n);
+            //    }
+            //    n->done_temp_index();
+            //}
 
             if (idx_add_if_not_exist.size() >= 10000) {
                 add_indices(idx_add_if_not_exist, false, true);
@@ -306,34 +306,107 @@ hyper_stub :: put_node_no_loop(db::node *n)
     }
     assert(last_clk_buf && restore_clk_buf);
 
-    delayed_call dc;
-    dc.handle = n->get_handle();
-    prepare_node(dc.attrs,
+    async_put_node apn;
+    apn.handle = n->get_handle();
+    prepare_node(apn.attrs,
                  *n,
-                 dc.creat_clk_buf,
-                 dc.props_buf,
-                 dc.out_edges_buf,
+                 apn.creat_clk_buf,
+                 apn.props_buf,
+                 apn.out_edges_buf,
                  last_clk_buf,
                  restore_clk_buf,
-                 dc.aliases_buf);
+                 apn.aliases_buf);
 
     bool success = call_no_loop(&hyperdex_client_put,
                                 graph_space,
-                                dc.handle.c_str(),
-                                dc.handle.size(),
-                                dc.attrs,
+                                apn.handle.c_str(),
+                                apn.handle.size(),
+                                apn.attrs,
                                 NUM_GRAPH_ATTRS);
 
-    delayed_calls.emplace_back(std::move(dc));
+    if (success) {
+        async_put_node_calls.emplace_back(std::move(apn));
+
+        for (const std::string &alias: n->aliases) {
+            success = add_index_no_loop(n->get_handle(), alias);
+            if (!success) {
+                break;
+            }
+        }
+    }
 
     return success;
 }
 
 bool
-hyper_stub :: loop_put_node()
+hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, const std::string &alias)
 {
-    bool success = multiple_loop(delayed_calls.size());
-    delayed_calls.clear();
+    async_put_edge ape;
+    ape.node_handle = node_handle;
+    ape.edge_handle = e->get_handle();
+    prepare_edge(&ape.attr,
+                 e,
+                 ape.edge_handle,
+                 ape.edge_buf);
+
+    bool success = map_call_no_loop(&hyperdex_client_map_add,
+                                    graph_space,
+                                    ape.node_handle.c_str(),
+                                    ape.node_handle.size(),
+                                    &ape.attr, 1);
+
+    if (success) {
+        async_put_edge_calls.emplace_back(std::move(ape));
+
+        if (!alias.empty()) {
+            success = add_index_no_loop(node_handle, alias);
+        }
+    }
+
+    return success;
+}
+
+bool
+hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::string &alias)
+{
+    async_add_index aai;
+    aai.node_handle = node_handle;
+    aai.alias = alias;
+    // node handle
+    aai.index_attrs[0].attr = index_attrs[0];
+    aai.index_attrs[0].value = aai.node_handle.c_str();
+    aai.index_attrs[0].value_sz = aai.node_handle.size();
+    aai.index_attrs[0].datatype = index_dtypes[0];
+    // shard
+    aai.index_attrs[1].attr = index_attrs[1];
+    aai.index_attrs[1].value = (const char*)&shard_id;
+    aai.index_attrs[1].value_sz = sizeof(int64_t);
+    aai.index_attrs[1].datatype = index_dtypes[1];
+
+    bool success = call_no_loop(&hyperdex_client_put,
+                                index_space,
+                                aai.alias.c_str(),
+                                aai.alias.size(),
+                                aai.index_attrs, NUM_INDEX_ATTRS);
+
+    if (success) {
+        async_add_index_calls.emplace_back(std::move(aai));
+    }
+
+    return success;
+}
+
+bool
+hyper_stub :: loop_async_calls()
+{
+    uint64_t num_loops = async_put_node_calls.size() +
+                         async_put_edge_calls.size() +
+                         async_add_index_calls.size();
+    WDEBUG << this << "\tasync loops #" << num_loops << std::endl;
+    bool success = multiple_loop(num_loops);
+    async_put_node_calls.clear();
+    async_put_edge_calls.clear();
+    async_add_index_calls.clear();
     return success;
 }
 

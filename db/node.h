@@ -86,7 +86,6 @@ namespace db
             bool permanently_deleted, evicted, to_evict;
             std::unique_ptr<vc::vclock> last_perm_deletion; // vclock of last edge/property permanently deleted at this node
             string_set aliases;
-            std::unique_ptr<string_set> temp_aliases;
 
             // for migration
             std::unique_ptr<migr_data> migration;
@@ -126,9 +125,11 @@ namespace db
             void add_alias(const node_handle_t &alias);
             bool del_alias(const node_handle_t &alias);
             bool is_alias(const node_handle_t &alias) const;
-            void add_temp_index(const std::string &s); // bulk loading
-            void done_temp_index(); // bulk loading
             void get_client_node(cl::node &n, bool, bool, bool);
+
+            // debug
+            static uint64_t node_count;
+            static po6::threads::mutex node_count_mtx;
     };
 
     using node_version_t = std::pair<node_handle_t, vclock_ptr_t>;

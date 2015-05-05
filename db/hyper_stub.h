@@ -31,7 +31,7 @@ namespace db
         ACTIVE // this shard does have the token
     };
 
-    struct delayed_call
+    struct async_put_node
     {
         std::string handle;
         hyperdex_client_attribute attrs[NUM_GRAPH_ATTRS];
@@ -39,6 +39,19 @@ namespace db
         std::unique_ptr<e::buffer> props_buf;
         std::unique_ptr<e::buffer> out_edges_buf;
         std::unique_ptr<e::buffer> aliases_buf;
+    };
+
+    struct async_put_edge
+    {
+        std::string node_handle, edge_handle;
+        hyperdex_client_map_attribute attr;
+        std::unique_ptr<e::buffer> edge_buf;
+    };
+
+    struct async_add_index
+    {
+        std::string node_handle, alias;
+        hyperdex_client_attribute index_attrs[NUM_INDEX_ATTRS];
     };
 
     class hyper_stub : private hyper_stub_base
@@ -56,8 +69,12 @@ namespace db
             void memory_efficient_bulk_load(int tid, db::data_map<std::shared_ptr<db::node_entry>> *nodes);
             void memory_efficient_bulk_load(db::data_map<std::shared_ptr<db::node_entry>> &nodes);
             bool put_node_no_loop(db::node *n);
-            bool loop_put_node();
-            std::vector<delayed_call> delayed_calls;
+            bool put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, const std::string &alias);
+            bool add_index_no_loop(const node_handle_t &node_handle, const std::string &alias);
+            bool loop_async_calls();
+            std::vector<async_put_node> async_put_node_calls;
+            std::vector<async_put_edge> async_put_edge_calls;
+            std::vector<async_add_index> async_add_index_calls;
             std::unique_ptr<e::buffer> restore_clk_buf;
             std::unique_ptr<e::buffer> last_clk_buf;
             // migration

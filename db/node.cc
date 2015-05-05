@@ -19,6 +19,9 @@
 #include "common/event_order.h"
 #include "db/node.h"
 
+uint64_t db::node::node_count = 0;
+po6::threads::mutex db::node::node_count_mtx;
+
 using db::remote_node;
 using db::edge;
 using db::node;
@@ -42,16 +45,23 @@ node :: node(const node_handle_t &_handle, uint64_t shrd, vclock_ptr_t &vclk, po
     , evicted(false)
     , to_evict(false)
     , last_perm_deletion(nullptr)
-    , temp_aliases(nullptr)
 {
     std::string empty("");
     out_edges.set_deleted_key(empty);
     aliases.set_deleted_key(empty);
+
+    node_count_mtx.lock();
+    node_count++;
+    node_count_mtx.unlock();
 }
 
 node :: ~node()
 {
     assert(out_edges.empty());
+
+    node_count_mtx.lock();
+    node_count--;
+    node_count_mtx.unlock();
 }
 
 // true if prog states is empty
@@ -214,21 +224,6 @@ node :: add_cache_value(vclock_ptr_t vc,
             cache.emplace(key, new_entry);
         }
     }
-}
-
-void
-node :: add_temp_index(const std::string &s)
-{
-    if (temp_aliases == nullptr) {
-        temp_aliases.reset(new string_set());
-    }
-    temp_aliases->insert(s);
-}
-
-void
-node :: done_temp_index()
-{
-    temp_aliases.reset(nullptr);
 }
 
 void

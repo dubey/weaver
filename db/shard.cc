@@ -262,30 +262,43 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     if ((loc0 == shard_id)
                      && ((int)map_idx % load_nthreads == load_tid)) {
                         edge_handle_t edge_handle = BulkLoadEdgeHandlePrefix + std::to_string(edge_count);
-                        db::node *n = S->bulk_load_acquire_node_nonlocking(load_tid, id0, map_idx);
-                        if (n == nullptr) {
-                            n = S->create_node_bulk_load(id0, map_idx, zero_clk);
+                        db::node *n = nullptr;
+                        bool node_in_mem, created;
+                        if (S->bulk_load_node_exists(id0, map_idx)) {
+                            n = S->bulk_load_acquire_node(id0, map_idx);
+                            created = false;
+                        } else {
+                            n = S->create_node_bulk_load(id0, map_idx, zero_clk, node_in_mem);
+                            created = true;
                             cur_shard_node_count++;
                         }
-                        S->create_edge_bulk_load(n, edge_handle, id1, loc1, zero_clk);
+                        db::edge *e = S->create_edge_bulk_load(n, edge_handle, id1, loc1, zero_clk);
                         cur_shard_edge_count++;
-                        S->bulk_load_put_node(hstub, n);
-                        S->bulk_load_flush_map(hstub, map_idx);
+
+                        if (created) {
+                            S->bulk_load_put_node(hstub, n, node_in_mem);
+                        } else {
+                            S->bulk_load_put_edge(hstub, e, id0, n, "");
+                        }
+
+                        S->bulk_load_flush_map(hstub);
                     }
 
                     if (loc1 == shard_id) {
                         db::node *n = nullptr;
+                        bool node_in_mem;
                         uint64_t map_idx = hash1 % NUM_NODE_MAPS;
                         if ((int)map_idx % load_nthreads == load_tid) {
-                            if (!S->bulk_load_node_exists_nonlocking(id1, map_idx)) {
-                                n = S->create_node_bulk_load(id1, map_idx, zero_clk);
+                            if (!S->bulk_load_node_exists(id1, map_idx)) {
+                                n = S->create_node_bulk_load(id1, map_idx, zero_clk, node_in_mem);
                                 cur_shard_node_count++;
                             }
                         }
                         if (n != nullptr) {
-                            S->bulk_load_put_node(hstub, n);
+                            S->bulk_load_put_node(hstub, n, node_in_mem);
                         }
-                        S->bulk_load_flush_map(hstub, map_idx);
+
+                        S->bulk_load_flush_map(hstub);
                     }
                 }
             }
@@ -309,31 +322,31 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                 uint64_t loc = (hash0 % num_shards) + ShardIdIncr;
                 uint64_t map_idx = hash0 % NUM_NODE_MAPS;
                 if ((loc == shard_id) && ((int)map_idx % load_nthreads == load_tid)) {
-                    db::node *n = S->bulk_load_acquire_node_nonlocking(load_tid, id0, map_idx);
-                    assert(n == nullptr);
-                    n = S->create_node_bulk_load(id0, map_idx, zero_clk);
+                    assert(!S->bulk_load_node_exists(id0, map_idx));
+                    bool in_mem;
+                    db::node *n = S->create_node_bulk_load(id0, map_idx, zero_clk, in_mem);
 
                     for (pugi::xml_node prop: node.children("data")) {
                         std::string key = prop.attribute("key").value();
                         std::string value = prop.child_value();
                         if (!prop_delim || value.empty()) {
-                            (key == BulkLoadNodeAliasKey)? S->add_node_alias_nonlocking(n, value) :
-                                                           S->set_node_property_nonlocking(n, key, value, zero_clk);
+                            (key == BulkLoadNodeAliasKey)? S->add_node_alias_bulk_load(n, value) :
+                                                           S->set_node_property_bulk_load(n, key, value, zero_clk);
                         } else {
                             std::vector<std::string> values;
                             split(value, BulkLoadPropertyValueDelimiter, values);
                             for (std::string &v: values) {
-                                (key == BulkLoadNodeAliasKey)? S->add_node_alias_nonlocking(n, v) :
-                                                               S->set_node_property_nonlocking(n, key, v, zero_clk);
+                                (key == BulkLoadNodeAliasKey)? S->add_node_alias_bulk_load(n, v) :
+                                                               S->set_node_property_bulk_load(n, key, v, zero_clk);
                             }
                         }
                     }
                     if (++cur_shard_node_count % 10000 == 0) {
                         WDEBUG << "GRAPHML node " << cur_shard_node_count << std::endl;
+                        S->bulk_load_flush_map(hstub);
                     }
 
-                    S->bulk_load_put_node(hstub, n);
-                    S->bulk_load_flush_map(hstub, map_idx);
+                    S->bulk_load_put_node(hstub, n, in_mem);
                 }
 
                 element.clear();
@@ -360,35 +373,37 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     edge_handle_t edge_handle = edge.attribute("id").value();
                     uint64_t loc1 = (hash_node_handle(id1) % num_shards) + ShardIdIncr;
 
-                    db::node *n = S->bulk_load_acquire_node_nonlocking(load_tid, id0, map_idx);
-                    assert(n != nullptr);
-                    S->create_edge_bulk_load(n, edge_handle, id1, loc1, zero_clk);
+                    db::node *n = S->bulk_load_acquire_node(id0, map_idx);
+                    db::edge *e = S->create_edge_bulk_load(n, edge_handle, id1, loc1, zero_clk);
+                    std::string alias;
 
                     for (pugi::xml_node prop: edge.children("data")) {
                         std::string key = prop.attribute("key").value();
                         std::string value = prop.child_value();
 
                         if (key == BulkLoadEdgeIndexKey) {
-                            n->add_temp_index(value);
+                            alias = value;
                         }
 
                         if (!prop_delim || value.empty()) {
-                            S->set_edge_property_bulk_load(n, edge_handle, key, value, zero_clk);
+                            S->set_edge_property_bulk_load(e, key, value, zero_clk);
                         } else {
                             std::vector<std::string> values;
                             split(value, BulkLoadPropertyValueDelimiter, values);
                             for (std::string &v: values) {
-                                S->set_edge_property_bulk_load(n, edge_handle, key, v, zero_clk);
+                                S->set_edge_property_bulk_load(e, key, v, zero_clk);
                             }
                         }
                     }
 
+                    S->bulk_load_put_edge(hstub, e, id0, n, alias);
+
                     if (++cur_shard_edge_count % 10000 == 0) {
                         WDEBUG << "GRAPHML edge " << cur_shard_edge_count << std::endl;
                     }
-
-                    S->bulk_load_put_node(hstub, n);
-                    S->bulk_load_flush_map(hstub, map_idx);
+                    if (cur_shard_edge_count % 10000 == 0) {
+                        S->bulk_load_flush_map(hstub);
+                    }
                 }
 
                 element.clear();

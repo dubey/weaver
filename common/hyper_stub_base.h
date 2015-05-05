@@ -226,6 +226,10 @@ class hyper_stub_base
             std::unique_ptr<e::buffer>&,
             std::unique_ptr<e::buffer>&,
             std::unique_ptr<e::buffer>&);
+        void prepare_edge(hyperdex_client_map_attribute *attr,
+            db::edge *e,
+            const edge_handle_t &edge_handle,
+            std::unique_ptr<e::buffer>&);
         void pack_uint64(e::buffer::packer &packer, uint64_t num);
         void unpack_uint64(e::unpacker &unpacker, uint64_t &num);
         void pack_uint32(e::buffer::packer &packer, uint32_t num);

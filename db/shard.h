@@ -98,7 +98,7 @@ namespace db
             node* acquire_node_specific(uint64_t tid, const node_handle_t &node_handle, const vclock_ptr_t tcreat, const vclock_ptr_t tdel);
             node* acquire_node_version(uint64_t tid, const node_handle_t &node_handle, const vc::vclock &vclk, order::oracle*);
             node* acquire_node_write(uint64_t tid, const node_handle_t &node, uint64_t vt_id, uint64_t qts);
-            node* bulk_load_acquire_node_nonlocking(uint64_t tid, const node_handle_t &node_handle, uint64_t map_idx);
+            node* bulk_load_acquire_node(const node_handle_t &node_handle, uint64_t map_idx);
             void save_evicted_node_state(node *n, uint64_t map_idx);
             void evict_all(uint64_t map_idx);
             void node_evict(node*, uint64_t map_idx);
@@ -125,7 +125,8 @@ namespace db
                 bool migrate);
             node* create_node_bulk_load(const node_handle_t &node_handle,
                 uint64_t map_idx,
-                vclock_ptr_t vclk);
+                vclock_ptr_t vclk,
+                bool &in_mem);
             void delete_node_nonlocking(node *n,
                 vclock_ptr_t tdel);
             void delete_node(uint64_t tid, const node_handle_t &node_handle,
@@ -140,7 +141,7 @@ namespace db
                 const node_handle_t &remote_node, uint64_t remote_loc,
                 vclock_ptr_t vclk,
                 uint64_t qts);
-            void create_edge_bulk_load(node *n,
+            edge* create_edge_bulk_load(node *n,
                 const edge_handle_t &handle,
                 const node_handle_t &remote_node, uint64_t remote_loc,
                 vclock_ptr_t vclk);
@@ -158,6 +159,9 @@ namespace db
                 std::unique_ptr<std::string> key, std::unique_ptr<std::string> value,
                 vclock_ptr_t vclk,
                 uint64_t qts);
+            void set_node_property_bulk_load(node *n,
+                std::string &key, std::string &value,
+                vclock_ptr_t vclk);
             void set_edge_property_nonlocking(node *n,
                 const edge_handle_t &edge_handle,
                 std::string &key, std::string &value,
@@ -166,8 +170,7 @@ namespace db
                 std::unique_ptr<std::string> key, std::unique_ptr<std::string> value,
                 vclock_ptr_t vclk,
                 uint64_t qts);
-            void set_edge_property_bulk_load(node *n,
-                const edge_handle_t &edge_handle,
+            void set_edge_property_bulk_load(edge *e,
                 std::string &key, std::string &value,
                 vclock_ptr_t vclk);
             void add_node_alias_nonlocking(node *n,
@@ -176,8 +179,10 @@ namespace db
                 node_handle_t &alias,
                 vclock_ptr_t vclk,
                 uint64_t qts);
+            void add_node_alias_bulk_load(node *n,
+                node_handle_t &alias);
             uint64_t get_node_count();
-            bool bulk_load_node_exists_nonlocking(const node_handle_t &node_handle, uint64_t map_idx);
+            bool bulk_load_node_exists(const node_handle_t &node_handle, uint64_t map_idx);
             node_handle_t node_exists_cache[NUM_NODE_MAPS];
 
             // Initial graph loading
@@ -185,8 +190,9 @@ namespace db
             uint64_t max_load_time, bulk_load_num_shards;
             uint32_t load_count;
             void bulk_load_persistent(hyper_stub &hs);
-            void bulk_load_put_node(hyper_stub &hs, node *n);
-            void bulk_load_flush_map(hyper_stub &hs, uint64_t map_idx);
+            void bulk_load_put_node(hyper_stub &hs, node *n, bool in_mem);
+            void bulk_load_put_edge(hyper_stub &hs, edge *e, const node_handle_t &node_handle, node *n, const std::string &alias);
+            void bulk_load_flush_map(hyper_stub &hs);
 
             // Permanent deletion
         public:
@@ -279,6 +285,8 @@ namespace db
         , to_exit(false)
         , shard_id(UINT64_MAX)
         , serv_id(serverid)
+        , max_load_time(0)
+        , load_count(0)
         , permdel_done_clk(NumVts, vc::vclock_t(ClkSz, 0))
         , current_migr(false)
         , migr_updating_nbrs(false)
@@ -420,23 +428,36 @@ namespace db
     inline void
     shard :: bulk_load_persistent(db::hyper_stub &hs)
     {
-        hs.loop_put_node();
+        hs.loop_async_calls();
+        WDEBUG << "looped async calls, #nodes= " << node::node_count << ", #edges=" << edge::edge_count << std::endl;
     }
 
     inline void
-    shard :: bulk_load_put_node(db::hyper_stub &hs, db::node *n)
+    shard :: bulk_load_put_node(db::hyper_stub &hs, db::node *n, bool in_mem)
     {
-        hs.put_node_no_loop(n);
-    }
+        assert(hs.put_node_no_loop(n));
 
-    inline void
-    shard :: bulk_load_flush_map(db::hyper_stub &hs, uint64_t map_idx)
-    {
-        if (nodes_in_memory[map_idx] > NodesPerMap) {
-            hs.loop_put_node();
-            evict_all(map_idx);
-            nodes_in_memory[map_idx] = 0;
+        if (!in_mem) {
+            permanent_node_delete(n);
         }
+    }
+
+    inline void
+    shard :: bulk_load_put_edge(db::hyper_stub &hs, db::edge *e, const node_handle_t &node_handle, node *n, const std::string &alias)
+    {
+        assert(hs.put_edge_no_loop(node_handle, e, alias));
+
+        if (n == nullptr) {
+            delete e;
+        }
+    }
+
+    inline void
+    shard :: bulk_load_flush_map(db::hyper_stub &hs)
+    {
+        WDEBUG << &hs << "\tgoing to loop async" << std::endl;
+        hs.loop_async_calls();
+        WDEBUG << &hs << "\tlooped async calls, #nodes= " << node::node_count << ", #edges=" << edge::edge_count << std::endl;
     }
 
     // Consistency methods
@@ -656,16 +677,23 @@ namespace db
     }
 
     inline node*
-    shard :: bulk_load_acquire_node_nonlocking(uint64_t tid, const node_handle_t &node_handle, uint64_t map_idx)
+    shard :: bulk_load_acquire_node(const node_handle_t &node_handle, uint64_t map_idx)
     {
-        if (bulk_load_node_exists_nonlocking(node_handle, map_idx)) {
-            auto node_iter = node_present(tid, map_idx, node_handle);
-            node *n = node_iter->second->nodes.front();
-            n->to_evict = false; // bulk loading eviction handled separately
-            return n;
+        node_entry &entry = *nodes[map_idx][node_handle];
+        if (entry.present) {
+            return entry.nodes.front();
         } else {
             return nullptr;
         }
+
+        //if (bulk_load_node_exists(node_handle, map_idx)) {
+        //    auto node_iter = node_present(tid, map_idx, node_handle);
+        //    node *n = node_iter->second->nodes.front();
+        //    n->to_evict = false; // bulk loading eviction handled separately
+        //    return n;
+        //} else {
+        //    return nullptr;
+        //}
     }
 
     inline void
@@ -729,6 +757,7 @@ namespace db
     shard :: node_evict(node *n, uint64_t map_idx)
     {
         const node_handle_t &node_handle = n->get_handle();
+        WDEBUG << "evicting node " << node_handle << std::endl;
         auto map_iter = nodes[map_idx].find(node_handle);
         assert(map_iter != nodes[map_idx].end());
 
@@ -921,15 +950,23 @@ namespace db
     inline node*
     shard :: create_node_bulk_load(const node_handle_t &node_handle,
         uint64_t map_idx,
-        vclock_ptr_t vclk)
+        vclock_ptr_t vclk,
+        bool &in_mem)
     {
         node *new_node = new node(node_handle, shard_id, vclk, node_map_mutexes+map_idx);
 
-        auto new_entry = std::make_shared<node_entry>(new_node);
+        std::shared_ptr<node_entry> new_entry;
+        if (nodes_in_memory[map_idx] < NodesPerMap) {
+            new_entry = std::make_shared<node_entry>(new_node);
+            new_node_entry(map_idx, new_entry);
+            ++nodes_in_memory[map_idx];
+            in_mem = true;
+        } else {
+            new_entry = std::make_shared<node_entry>();
+            in_mem = false;
+        }
         nodes[map_idx][node_handle] = new_entry;
-        new_node_entry(map_idx, new_entry);
         node_exists_cache[map_idx] = node_handle;
-        ++nodes_in_memory[map_idx];
 
         shard_node_count[shard_id - ShardIdIncr]++;
 
@@ -1014,14 +1051,19 @@ namespace db
         }
     }
 
-    inline void
+    inline edge*
     shard :: create_edge_bulk_load(node *n,
         const edge_handle_t &handle,
         const node_handle_t &remote_node, uint64_t remote_loc,
         vclock_ptr_t vclk)
     {
         edge *new_edge = new edge(handle, vclk, remote_loc, remote_node);
-        n->add_edge_unique(new_edge);
+
+        if (n != nullptr) {
+            n->add_edge_unique(new_edge);
+        }
+
+        return new_edge;
     }
 
     inline void
@@ -1093,6 +1135,14 @@ namespace db
     }
 
     inline void
+    shard :: set_node_property_bulk_load(node *n,
+        std::string &key, std::string &value,
+        vclock_ptr_t vclk)
+    {
+        n->base.add_property(key, value, vclk);
+    }
+
+    inline void
     shard :: set_edge_property_nonlocking(node *n,
         const edge_handle_t &edge_handle,
         std::string &key, std::string &value,
@@ -1129,12 +1179,10 @@ namespace db
     }
 
     inline void
-    shard :: set_edge_property_bulk_load(node *n,
-        const edge_handle_t &edge_handle,
+    shard :: set_edge_property_bulk_load(edge *e,
         std::string &key, std::string &value,
         vclock_ptr_t vclk)
     {
-        edge *e = n->out_edges[edge_handle].back();
         e->base.add_property(key, value, vclk);
     }
 
@@ -1163,9 +1211,16 @@ namespace db
         }
     }
 
+    void
+    shard :: add_node_alias_bulk_load(node *n,
+        node_handle_t &alias)
+    {
+        n->add_alias(alias);
+    }
+
     // return true if node already created
     inline bool
-    shard :: bulk_load_node_exists_nonlocking(const node_handle_t &node_handle, uint64_t map_idx)
+    shard :: bulk_load_node_exists(const node_handle_t &node_handle, uint64_t map_idx)
     {
         if (node_exists_cache[map_idx] == node_handle) {
             return true;
