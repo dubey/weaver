@@ -293,6 +293,41 @@ hyper_stub_base :: call(hyper_tx_func h,
     return success;
 }
 
+#define DELAYED_INSERT_HDEX_ID \
+    if (delayed_opid_to_idx.find(hdex_id) != delayed_opid_to_idx.end()) { \
+        WDEBUG << "logical error: repeated hdex_id " << hdex_id << std::endl; \
+        return false; \
+    } \
+    delayed_opid_to_idx[hdex_id] = delayed_idx;
+
+#define DELAYED_CHECK_HDEX_ID \
+    if (delayed_opid_to_idx.find(hdex_id) == delayed_opid_to_idx.end()) { \
+        WDEBUG << "logical error: hdex_id not found " << hdex_id << std::endl; \
+        return false; \
+    } \
+    int64_t &idx = delayed_opid_to_idx[hdex_id]; \
+    if (idx < 0) { \
+        WDEBUG << "logical error: negative idx " << idx << std::endl; \
+        return false; \
+    }
+
+bool
+hyper_stub_base :: call_no_loop(hyper_func h,
+    const char *space,
+    const char *key, size_t key_sz,
+    hyperdex_client_attribute *cl_attr, size_t num_attrs)
+{
+    int64_t hdex_id;
+    int success_calls = 0;
+    bool success = true;
+
+    HYPERDEX_CALL_NOTX(h, space, key, key_sz, cl_attr, num_attrs, delayed_call_status[delayed_idx]);
+    DELAYED_INSERT_HDEX_ID;
+    delayed_idx++;
+
+    return success;
+}
+
 // call hyperdex map function h using key hndl, attributes cl_attr, and then loop for response
 bool
 hyper_stub_base :: map_call(hyper_map_tx_func h,
@@ -311,6 +346,41 @@ hyper_stub_base :: map_call(hyper_map_tx_func h,
         HYPERDEX_LOOP;
         HYPERDEX_CHECK_STATUSES(call_status, call_status != HYPERDEX_CLIENT_SUCCESS);
     }
+
+    return success;
+}
+
+bool
+hyper_stub_base :: map_call_no_loop(hyper_map_func h,
+    const char *space,
+    const char *key, size_t key_sz,
+    hyperdex_client_map_attribute *map_attr, size_t num_attrs)
+{
+    int64_t hdex_id;
+    int success_calls = 0;
+    bool success = true;
+    
+    HYPERDEX_CALL_NOTX(h, space, key, key_sz, map_attr, num_attrs, delayed_call_status[delayed_idx]);
+    DELAYED_INSERT_HDEX_ID;
+    delayed_idx++;
+
+    return success;
+}
+
+bool
+hyper_stub_base :: loop()
+{
+    bool success = true;
+    int hdex_id;
+    hyperdex_client_returncode loop_status;
+    uint64_t success_calls = 0;
+
+    HYPERDEX_LOOP;
+    DELAYED_CHECK_HDEX_ID;
+    HYPERDEX_CHECK_STATUSES(delayed_call_status[idx], delayed_call_status[idx] != HYPERDEX_CLIENT_SUCCESS);
+
+    delayed_opid_to_idx.erase(hdex_id);
+    delayed_call_status.erase(idx);
 
     return success;
 }
@@ -466,6 +536,121 @@ hyper_stub_base :: multiple_call(std::vector<hyper_tx_func> &funcs,
 
     return success;
 }
+
+bool
+hyper_stub_base :: multiple_call_no_loop(std::vector<hyper_func> &funcs,
+    std::vector<const char*> &spaces,
+    std::vector<const char*> &keys, std::vector<size_t> &key_szs,
+    std::vector<hyperdex_client_attribute*> &attrs, std::vector<size_t> &num_attrs)
+{
+    std::vector<const char*> map_spaces;
+    std::vector<hyper_map_func> map_funcs;
+    std::vector<const char*> map_keys;
+    std::vector<size_t> map_key_szs;
+    std::vector<hyperdex_client_map_attribute*> map_attrs;
+    std::vector<size_t> map_num_attrs;
+    return multiple_call_no_loop(funcs,
+        spaces,
+        keys, key_szs,
+        attrs, num_attrs,
+        map_funcs,
+        map_spaces,
+        map_keys, map_key_szs,
+        map_attrs, map_num_attrs);
+}
+
+#define DELAYED_INSERT_HDEX_ID \
+    if (delayed_opid_to_idx.find(hdex_id) != delayed_opid_to_idx.end()) { \
+        WDEBUG << "logical error: repeated hdex_id " << hdex_id << std::endl; \
+        return false; \
+    } \
+    delayed_opid_to_idx[hdex_id] = delayed_idx;
+
+bool
+hyper_stub_base :: multiple_call_no_loop(std::vector<hyper_func> &funcs,
+    std::vector<const char*> &spaces,
+    std::vector<const char*> &keys, std::vector<size_t> &key_szs,
+    std::vector<hyperdex_client_attribute*> &attrs, std::vector<size_t> &num_attrs,
+    std::vector<hyper_map_func> &map_funcs,
+    std::vector<const char*> &map_spaces,
+    std::vector<const char*> &map_keys, std::vector<size_t> &map_key_szs,
+    std::vector<hyperdex_client_map_attribute*> &map_attrs, std::vector<size_t> &map_num_attrs)
+{
+    uint64_t num_calls = funcs.size();
+    if (num_calls != spaces.size()
+     || num_calls != keys.size()
+     || num_calls != key_szs.size()
+     || num_calls != num_attrs.size()
+     || num_calls != attrs.size()) {
+        WDEBUG << "logical error: size of multiple_call vectors not equal" << std::endl;
+        return false;
+    }
+
+    uint64_t map_num_calls = map_funcs.size();
+    if (map_num_calls != map_spaces.size()
+     || map_num_calls != map_keys.size()
+     || map_num_calls != map_key_szs.size()
+     || map_num_calls != map_num_attrs.size()
+     || map_num_calls != map_attrs.size()) {
+        WDEBUG << "logical error: size of multiple_call vectors not equal" << std::endl;
+        return false;
+    }
+
+    int hdex_id;
+    uint64_t success_calls = 0;
+    bool success = true;
+
+    for (uint64_t i = 0; i < num_calls; i++) {
+        HYPERDEX_CALL_NOTX(funcs[i], spaces[i], keys[i], key_szs[i], attrs[i], num_attrs[i], delayed_call_status[delayed_idx]);
+
+        DELAYED_INSERT_HDEX_ID;
+        delayed_idx++;
+    }
+
+    for (uint64_t j = 0; j < map_num_calls; j++) {
+        HYPERDEX_CALL_NOTX(map_funcs[j], map_spaces[j], map_keys[j], map_key_szs[j], map_attrs[j], map_num_attrs[j], delayed_call_status[delayed_idx]);
+
+        DELAYED_INSERT_HDEX_ID;
+        delayed_idx++;
+    }
+
+    return success;
+}
+
+#define DELAYED_CHECK_HDEX_ID \
+    if (delayed_opid_to_idx.find(hdex_id) == delayed_opid_to_idx.end()) { \
+        WDEBUG << "logical error: hdex_id not found " << hdex_id << std::endl; \
+        return false; \
+    } \
+    int64_t &idx = delayed_opid_to_idx[hdex_id]; \
+    if (idx < 0) { \
+        WDEBUG << "logical error: negative idx " << idx << std::endl; \
+        return false; \
+    }
+
+bool
+hyper_stub_base :: multiple_loop(uint64_t num_loops)
+{
+    bool success = true;
+    int hdex_id;
+    hyperdex_client_returncode loop_status;
+    uint64_t success_calls = 0;
+    for (uint64_t i = 0; i < num_loops; i++) {
+        HYPERDEX_LOOP;
+
+        DELAYED_CHECK_HDEX_ID;
+
+        HYPERDEX_CHECK_STATUSES(delayed_call_status[idx], delayed_call_status[idx] != HYPERDEX_CLIENT_SUCCESS);
+
+        delayed_opid_to_idx.erase(hdex_id);
+        delayed_call_status.erase(idx);
+    }
+
+    return success;
+}
+
+#undef DELAYED_INSERT_HDEX_ID
+#undef DELAYED_CHECK_HDEX_ID
 
 bool
 hyper_stub_base :: get(const char *space,
@@ -923,7 +1108,9 @@ hyper_stub_base :: put_nodes(std::unordered_map<node_handle_t, db::node*> &nodes
 }
 
 bool
-hyper_stub_base :: put_nodes_bulk(std::unordered_map<node_handle_t, db::node*> &nodes, vc::vclock &last_upd_clk, vc::vclock_t &restore_clk)
+hyper_stub_base :: put_nodes_bulk(std::unordered_map<node_handle_t, db::node*> &nodes,
+    std::shared_ptr<vc::vclock> last_upd_clk,
+    std::shared_ptr<vc::vclock_t> restore_clk)
 {
     int num_nodes = nodes.size();
     std::vector<hyper_func> funcs(num_nodes, &hyperdex_client_put);

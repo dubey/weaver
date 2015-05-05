@@ -58,11 +58,23 @@ class hyper_stub_base
         const char *index_key = "idx";
         const enum hyperdatatype index_dtypes[NUM_INDEX_ATTRS];
 
+        // no loop calls
+        int64_t delayed_idx;
+        std::unordered_map<int64_t, int64_t> delayed_opid_to_idx;
+        std::unordered_map<int64_t, hyperdex_client_returncode> delayed_call_status;
+
         using hyper_func = int64_t (*) (struct hyperdex_client *client,
             const char*,
             const char*,
             size_t,
             const struct hyperdex_client_attribute*,
+            size_t,
+            hyperdex_client_returncode*);
+        using hyper_map_func = int64_t (*) (struct hyperdex_client *client,
+            const char*,
+            const char*,
+            size_t,
+            const struct hyperdex_client_map_attribute*,
             size_t,
             hyperdex_client_returncode*);
         using hyper_tx_func = int64_t (*) (struct hyperdex_client_transaction *client,
@@ -94,10 +106,19 @@ class hyper_stub_base
             const char *space,
             const char *key, size_t key_sz,
             hyperdex_client_attribute *cl_attr, size_t num_attrs);
+        bool call_no_loop(hyper_func h,
+            const char *space,
+            const char *key, size_t key_sz,
+            hyperdex_client_attribute *cl_attr, size_t num_attrs);
         bool map_call(hyper_map_tx_func h,
             const char *space,
             const char *key, size_t key_sz,
             hyperdex_client_map_attribute *map_attr, size_t num_attrs);
+        bool map_call_no_loop(hyper_map_func h,
+            const char *space,
+            const char *key, size_t key_sz,
+            hyperdex_client_map_attribute *map_attr, size_t num_attrs);
+        bool loop();
 
         bool multiple_call(std::vector<hyper_func> &funcs,
             std::vector<const char*> &spaces,
@@ -115,6 +136,20 @@ class hyper_stub_base
             std::vector<const char*> &map_spaces,
             std::vector<const char*> &map_keys, std::vector<size_t> &map_key_szs,
             std::vector<hyperdex_client_map_attribute*> &map_attrs, std::vector<size_t> &map_num_attrs);
+        bool multiple_call_no_loop(std::vector<hyper_func> &funcs,
+            std::vector<const char*> &spaces,
+            std::vector<const char*> &keys, std::vector<size_t> &key_szs,
+            std::vector<hyperdex_client_attribute*> &attrs, std::vector<size_t> &num_attrs);
+        bool multiple_call_no_loop(std::vector<hyper_func> &funcs,
+            std::vector<const char*> &spaces,
+            std::vector<const char*> &keys, std::vector<size_t> &key_szs,
+            std::vector<hyperdex_client_attribute*> &attrs, std::vector<size_t> &num_attrs,
+            std::vector<hyper_map_func> &map_funcs,
+            std::vector<const char*> &map_spaces,
+            std::vector<const char*> &map_keys, std::vector<size_t> &map_key_szs,
+            std::vector<hyperdex_client_map_attribute*> &map_attrs, std::vector<size_t> &map_num_attrs);
+        bool multiple_loop(uint64_t num_loops);
+
         bool get(const char *space,
             const char *key, size_t key_sz,
             const hyperdex_client_attribute **cl_attr, size_t *num_attrs,
@@ -143,7 +178,9 @@ class hyper_stub_base
         bool get_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool tx);
         //bool put_node(db::node &n);
         bool put_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool if_not_exist);
-        bool put_nodes_bulk(std::unordered_map<node_handle_t, db::node*> &nodes, vc::vclock&, vc::vclock_t&);
+        bool put_nodes_bulk(std::unordered_map<node_handle_t, db::node*> &nodes,
+            std::shared_ptr<vc::vclock> last_upd_clk,
+            std::shared_ptr<vc::vclock_t> restore_clk);
         bool del_node(const node_handle_t &h);
         bool del_nodes(std::unordered_set<node_handle_t> &to_del);
         bool recreate_node(const hyperdex_client_attribute *cl_attr, db::node &n);
@@ -180,7 +217,7 @@ class hyper_stub_base
         void prepare_buffer(const std::vector<std::shared_ptr<db::property>>&, std::unique_ptr<e::buffer>&);
         void unpack_buffer(const char *buf, uint64_t buf_sz, std::vector<std::shared_ptr<db::property>>&);
 
-    private:
+    protected:
         void prepare_node(hyperdex_client_attribute *attr,
             db::node &n,
             std::unique_ptr<e::buffer>&,

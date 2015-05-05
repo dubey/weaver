@@ -184,8 +184,9 @@ namespace db
             po6::threads::mutex graph_load_mutex;
             uint64_t max_load_time, bulk_load_num_shards;
             uint32_t load_count;
-            void bulk_load_persistent(int tid);
-            void bulk_load_flush_map(int tid, uint64_t map_idx);
+            void bulk_load_persistent(hyper_stub &hs);
+            void bulk_load_put_node(hyper_stub &hs, node *n);
+            void bulk_load_flush_map(hyper_stub &hs, uint64_t map_idx);
 
             // Permanent deletion
         public:
@@ -417,16 +418,22 @@ namespace db
     }
 
     inline void
-    shard :: bulk_load_persistent(int tid)
+    shard :: bulk_load_persistent(db::hyper_stub &hs)
     {
-        hstub[tid]->memory_efficient_bulk_load(tid, nodes);
+        hs.loop_put_node();
     }
 
     inline void
-    shard :: bulk_load_flush_map(int tid, uint64_t map_idx)
+    shard :: bulk_load_put_node(db::hyper_stub &hs, db::node *n)
+    {
+        hs.put_node_no_loop(n);
+    }
+
+    inline void
+    shard :: bulk_load_flush_map(db::hyper_stub &hs, uint64_t map_idx)
     {
         if (nodes_in_memory[map_idx] > NodesPerMap) {
-            hstub[tid]->memory_efficient_bulk_load(nodes[map_idx]);
+            hs.loop_put_node();
             evict_all(map_idx);
             nodes_in_memory[map_idx] = 0;
         }

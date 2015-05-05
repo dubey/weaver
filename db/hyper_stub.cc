@@ -128,7 +128,8 @@ void
 hyper_stub :: put_node_loop(db::data_map<std::shared_ptr<db::node_entry>> &nodes,
     std::unordered_map<node_handle_t, node*> &node_map,
     int &progress,
-    vc::vclock &zero_clk)
+    std::shared_ptr<vc::vclock> last_upd_clk,
+    std::shared_ptr<vc::vclock_t> restore_clk)
 {
     for (const auto &p: nodes) {
         auto &nodes_vec = p.second->nodes;
@@ -136,7 +137,7 @@ hyper_stub :: put_node_loop(db::data_map<std::shared_ptr<db::node_entry>> &nodes
         if (!nodes_vec.empty()) {
             node_map.emplace(p.first, nodes_vec.front());
             if (node_map.size() >= 1000) {
-                put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
+                put_nodes_bulk(node_map, last_upd_clk, restore_clk);
                 node_map.clear();
                 WDEBUG << "bulk load hyperdex progress " << ++progress << std::endl;
             }
@@ -192,15 +193,16 @@ void
 hyper_stub :: memory_efficient_bulk_load(int thread_id, db::data_map<std::shared_ptr<db::node_entry>> *nodes_arr)
 {
     WDEBUG << "starting HyperDex bulk load." << std::endl;
-    vc::vclock zero_clk(0,0);
+    std::shared_ptr<vc::vclock> last_upd_clk(new vc::vclock(0,0));
+    std::shared_ptr<vc::vclock_t> restore_clk(new vc::vclock_t(last_upd_clk->clock));
 
     std::unordered_map<node_handle_t, node*> node_map;
     int progress = 0;
     for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
-        put_node_loop(nodes_arr[tid], node_map, progress, zero_clk);
+        put_node_loop(nodes_arr[tid], node_map, progress, last_upd_clk, restore_clk);
     }
 
-    put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
+    put_nodes_bulk(node_map, last_upd_clk, restore_clk);
 
     progress = 0;
     int ine_progress = 0;
@@ -222,12 +224,13 @@ hyper_stub :: memory_efficient_bulk_load(int thread_id, db::data_map<std::shared
 void
 hyper_stub :: memory_efficient_bulk_load(db::data_map<std::shared_ptr<db::node_entry>> &nodes)
 {
-    vc::vclock zero_clk(0,0);
+    std::shared_ptr<vc::vclock> last_upd_clk(new vc::vclock(0,0));
+    std::shared_ptr<vc::vclock_t> restore_clk(new vc::vclock_t(last_upd_clk->clock));
 
     std::unordered_map<node_handle_t, node*> node_map;
     int progress = 0;
-    put_node_loop(nodes, node_map, progress, zero_clk);
-    put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
+    put_node_loop(nodes, node_map, progress, last_upd_clk, restore_clk);
+    put_nodes_bulk(node_map, last_upd_clk, restore_clk);
 
     progress = 0;
     int ine_progress = 0;
@@ -246,7 +249,8 @@ void
 hyper_stub :: bulk_load(int thread_id, std::unordered_map<node_handle_t, std::vector<node*>> *nodes_arr)
 {
     assert(NUM_NODE_MAPS % NUM_SHARD_THREADS == 0);
-    vc::vclock zero_clk(0,0);
+    std::shared_ptr<vc::vclock> last_upd_clk(new vc::vclock(0,0));
+    std::shared_ptr<vc::vclock_t> restore_clk(new vc::vclock_t(last_upd_clk->clock));
 
     std::unordered_map<node_handle_t, node*> node_map;
     for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
@@ -256,7 +260,7 @@ hyper_stub :: bulk_load(int thread_id, std::unordered_map<node_handle_t, std::ve
         }
     }
 
-    put_nodes_bulk(node_map, zero_clk, zero_clk.clock);
+    put_nodes_bulk(node_map, last_upd_clk, restore_clk);
 
     if (AuxIndex) {
         std::unordered_map<std::string, node*> idx_add = node_map;
@@ -289,6 +293,48 @@ hyper_stub :: recover_node(db::node &n)
     std::unordered_map<node_handle_t, db::node*> nodes;
     nodes.emplace(n.get_handle(), &n);
     return get_nodes(nodes, false);
+}
+
+bool
+hyper_stub :: put_node_no_loop(db::node *n)
+{
+    if (last_clk_buf == nullptr) {
+        std::shared_ptr<vc::vclock> last_upd_clk(new vc::vclock(0,0));
+        std::shared_ptr<vc::vclock_t> restore_clk(new vc::vclock_t(last_upd_clk->clock));
+        prepare_buffer(last_upd_clk, last_clk_buf);
+        prepare_buffer(restore_clk, restore_clk_buf);
+    }
+    assert(last_clk_buf && restore_clk_buf);
+
+    delayed_call dc;
+    dc.handle = n->get_handle();
+    prepare_node(dc.attrs,
+                 *n,
+                 dc.creat_clk_buf,
+                 dc.props_buf,
+                 dc.out_edges_buf,
+                 last_clk_buf,
+                 restore_clk_buf,
+                 dc.aliases_buf);
+
+    bool success = call_no_loop(&hyperdex_client_put,
+                                graph_space,
+                                dc.handle.c_str(),
+                                dc.handle.size(),
+                                dc.attrs,
+                                NUM_GRAPH_ATTRS);
+
+    delayed_calls.emplace_back(std::move(dc));
+
+    return success;
+}
+
+bool
+hyper_stub :: loop_put_node()
+{
+    bool success = multiple_loop(delayed_calls.size());
+    delayed_calls.clear();
+    return success;
 }
 
 #undef weaver_debug_

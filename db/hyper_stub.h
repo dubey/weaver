@@ -31,6 +31,16 @@ namespace db
         ACTIVE // this shard does have the token
     };
 
+    struct delayed_call
+    {
+        std::string handle;
+        hyperdex_client_attribute attrs[NUM_GRAPH_ATTRS];
+        std::unique_ptr<e::buffer> creat_clk_buf;
+        std::unique_ptr<e::buffer> props_buf;
+        std::unique_ptr<e::buffer> out_edges_buf;
+        std::unique_ptr<e::buffer> aliases_buf;
+    };
+
     class hyper_stub : private hyper_stub_base
     {
         private:
@@ -45,6 +55,11 @@ namespace db
             void bulk_load(int tid, std::unordered_map<node_handle_t, std::vector<node*>> *nodes);
             void memory_efficient_bulk_load(int tid, db::data_map<std::shared_ptr<db::node_entry>> *nodes);
             void memory_efficient_bulk_load(db::data_map<std::shared_ptr<db::node_entry>> &nodes);
+            bool put_node_no_loop(db::node *n);
+            bool loop_put_node();
+            std::vector<delayed_call> delayed_calls;
+            std::unique_ptr<e::buffer> restore_clk_buf;
+            std::unique_ptr<e::buffer> last_clk_buf;
             // migration
             bool update_mapping(const node_handle_t &handle, uint64_t loc);
             bool recover_node(db::node &n);
@@ -52,7 +67,8 @@ namespace db
             void put_node_loop(db::data_map<std::shared_ptr<db::node_entry>> &nodes,
                 std::unordered_map<node_handle_t, node*> &node_map,
                 int &progress,
-                vc::vclock &zero_clk);
+                std::shared_ptr<vc::vclock> last_upd_clk,
+                std::shared_ptr<vc::vclock_t> restore_clk);
             void put_index_loop(db::data_map<std::shared_ptr<db::node_entry>> &nodes,
                 std::unordered_map<std::string, node*> &idx_add_if_not_exist,
                 std::unordered_map<std::string, node*> &idx_add,

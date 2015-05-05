@@ -49,4 +49,4 @@ bulk_load_edge_index_key: "tx_id"
 # Default: "e"
 bulk_load_edge_handle_prefix: "e"
 
-nodes_per_map: 1
+nodes_per_map: 10

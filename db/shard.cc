@@ -230,6 +230,8 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
     uint64_t edge_count = 0;
     vclock_ptr_t zero_clk(new vc::vclock(0,0));
 
+    db::hyper_stub hstub(shard_id);
+
     switch(format) {
 
         case db::SNAP: {
@@ -267,22 +269,27 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                         }
                         S->create_edge_bulk_load(n, edge_handle, id1, loc1, zero_clk);
                         cur_shard_edge_count++;
-                        S->bulk_load_flush_map(load_tid, map_idx);
+                        S->bulk_load_put_node(hstub, n);
+                        S->bulk_load_flush_map(hstub, map_idx);
                     }
 
                     if (loc1 == shard_id) {
+                        db::node *n = nullptr;
                         uint64_t map_idx = hash1 % NUM_NODE_MAPS;
                         if ((int)map_idx % load_nthreads == load_tid) {
                             if (!S->bulk_load_node_exists_nonlocking(id1, map_idx)) {
-                                S->create_node_bulk_load(id1, map_idx, zero_clk);
+                                n = S->create_node_bulk_load(id1, map_idx, zero_clk);
                                 cur_shard_node_count++;
                             }
                         }
-                        S->bulk_load_flush_map(load_tid, map_idx);
+                        if (n != nullptr) {
+                            S->bulk_load_put_node(hstub, n);
+                        }
+                        S->bulk_load_flush_map(hstub, map_idx);
                     }
                 }
             }
-            S->bulk_load_persistent(load_tid);
+            S->bulk_load_persistent(hstub);
             break;
         }
 
@@ -325,7 +332,8 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                         WDEBUG << "GRAPHML node " << cur_shard_node_count << std::endl;
                     }
 
-                    S->bulk_load_flush_map(load_tid, map_idx);
+                    S->bulk_load_put_node(hstub, n);
+                    S->bulk_load_flush_map(hstub, map_idx);
                 }
 
                 element.clear();
@@ -379,13 +387,14 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                         WDEBUG << "GRAPHML edge " << cur_shard_edge_count << std::endl;
                     }
 
-                    S->bulk_load_flush_map(load_tid, map_idx);
+                    S->bulk_load_put_node(hstub, n);
+                    S->bulk_load_flush_map(hstub, map_idx);
                 }
 
                 element.clear();
             }
 
-            S->bulk_load_persistent(load_tid);
+            S->bulk_load_persistent(hstub);
             break;
         }
 
