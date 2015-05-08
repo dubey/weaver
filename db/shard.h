@@ -445,11 +445,7 @@ namespace db
     inline void
     shard :: bulk_load_put_edge(db::hyper_stub &hs, db::edge *e, const node_handle_t &node_handle, node *n, const std::string &alias)
     {
-        assert(hs.put_edge_no_loop(node_handle, e, alias));
-
-        if (n == nullptr) {
-            delete e;
-        }
+        assert(hs.put_edge_no_loop(node_handle, e, alias, n==nullptr));
     }
 
     inline void

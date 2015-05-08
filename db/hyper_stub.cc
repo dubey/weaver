@@ -17,11 +17,19 @@
 #include "db/shard_constants.h"
 #include "db/hyper_stub.h"
 
+#define PUT_EDGE_BATCH_SZ 100
+
 using db::hyper_stub;
 
 hyper_stub :: hyper_stub(uint64_t sid)
     : shard_id(sid)
-{ }
+    , put_edge_batch_clkhand(0)
+{
+    for (uint32_t i = 0; i < PUT_EDGE_BATCH_SZ; i++) {
+        async_put_edge ape;
+        put_edge_batch.emplace_back(std::move(ape));
+    }
+}
 
 void
 hyper_stub :: restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *nodes,
@@ -339,29 +347,96 @@ hyper_stub :: put_node_no_loop(db::node *n)
 }
 
 bool
-hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, const std::string &alias)
+hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, const std::string &alias, bool del_after_call)
 {
-    async_put_edge ape;
-    ape.node_handle = node_handle;
-    ape.edge_handle = e->get_handle();
-    prepare_edge(&ape.attr,
-                 e,
-                 ape.edge_handle,
-                 ape.edge_buf);
-
-    bool success = map_call_no_loop(&hyperdex_client_map_add,
-                                    graph_space,
-                                    ape.node_handle.c_str(),
-                                    ape.node_handle.size(),
-                                    &ape.attr, 1);
-
-    if (success) {
-        async_put_edge_calls.emplace_back(std::move(ape));
-
-        if (!alias.empty()) {
-            success = add_index_no_loop(node_handle, alias);
+    // search for this batch in cache
+    uint32_t found_idx = UINT32_MAX;
+    for (uint32_t i = 0; i < PUT_EDGE_BATCH_SZ; i++) {
+        const async_put_edge &ape = put_edge_batch[i];
+        if (ape.node_handle == node_handle) {
+            found_idx = i;
+            break;
         }
     }
+
+    uint32_t free_idx = UINT32_MAX;
+    uint32_t evict_idx = UINT32_MAX;
+    if (found_idx == UINT32_MAX) {
+        // find slot for this entry
+        // may have to evict
+        uint32_t i;
+        for (i = 0; i < PUT_EDGE_BATCH_SZ; i++) {
+            uint32_t idx = (put_edge_batch_clkhand+i) % PUT_EDGE_BATCH_SZ;
+            async_put_edge &ape = put_edge_batch[idx];
+            if (ape.batched.empty()) {
+                free_idx = idx;
+                put_edge_batch_clkhand = (idx+1) % PUT_EDGE_BATCH_SZ;
+                break;
+            } else if (!ape.used) {
+                evict_idx = idx;
+                put_edge_batch_clkhand = (idx+1) % PUT_EDGE_BATCH_SZ;
+                break;
+            } else {
+                ape.used = false;
+            }
+        }
+
+        // no free slot, evict the clock hand
+        if (free_idx == UINT32_MAX && evict_idx == UINT32_MAX) {
+            evict_idx = put_edge_batch_clkhand;
+            ++put_edge_batch_clkhand;
+        }
+    }
+
+    assert(found_idx != UINT32_MAX 
+        || free_idx != UINT32_MAX
+        || evict_idx != UINT32_MAX);
+
+    bool success = true;
+    uint32_t use_idx;
+    if (found_idx != UINT32_MAX) {
+        use_idx = found_idx;
+    } else if (free_idx != UINT32_MAX) {
+        use_idx = free_idx;
+    } else {
+        use_idx = evict_idx;
+
+        // flush this batch to HyperDex
+        async_put_edge &ape = put_edge_batch[evict_idx];
+        ape.attr = (hyperdex_client_map_attribute*)malloc(sizeof(ape.batched.size() * sizeof(hyperdex_client_map_attribute)));
+        prepare_edges(ape.attr, ape.batched);
+
+        success = map_call_no_loop(&hyperdex_client_map_add,
+                                        graph_space,
+                                        ape.node_handle.c_str(),
+                                        ape.node_handle.size(),
+                                        ape.attr,
+                                        ape.batched.size());
+
+        if (success) {
+            for (const auto &apeu: ape.batched) {
+                if (!apeu.alias.empty()) {
+                    success = success && add_index_no_loop(node_handle, alias);
+                }
+
+                if (apeu.del_after_call) {
+                    delete e;
+                }
+            }
+
+            async_put_edge_calls.emplace_back(std::move(ape));
+        }
+    }
+
+    async_put_edge &cur_ape = put_edge_batch[use_idx];
+    cur_ape.used = true;
+    cur_ape.node_handle = node_handle;
+    async_put_edge_unit cur_apeu;
+    cur_apeu.e = e;
+    cur_apeu.edge_handle = e->get_handle();
+    cur_apeu.alias = alias;
+    cur_apeu.del_after_call = del_after_call;
+    cur_ape.batched.emplace_back(std::move(cur_apeu));
 
     return success;
 }
@@ -405,6 +480,9 @@ hyper_stub :: loop_async_calls()
     WDEBUG << this << "\tasync loops #" << num_loops << std::endl;
     bool success = multiple_loop(num_loops);
     async_put_node_calls.clear();
+    for (const auto &ape: async_put_edge_calls) {
+        free(ape.attr);
+    }
     async_put_edge_calls.clear();
     async_add_index_calls.clear();
     return success;

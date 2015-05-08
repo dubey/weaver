@@ -39,6 +39,40 @@ enum persist_node_state
     MOVING
 };
 
+struct async_put_node
+{
+    std::string handle;
+    hyperdex_client_attribute attrs[NUM_GRAPH_ATTRS];
+    std::unique_ptr<e::buffer> creat_clk_buf;
+    std::unique_ptr<e::buffer> props_buf;
+    std::unique_ptr<e::buffer> out_edges_buf;
+    std::unique_ptr<e::buffer> aliases_buf;
+};
+
+struct async_put_edge_unit
+{
+    db::edge *e;
+    std::string edge_handle, alias;
+    bool del_after_call;
+    std::unique_ptr<e::buffer> edge_buf;
+};
+
+struct async_put_edge
+{
+    bool used;
+    std::string node_handle;
+    std::vector<async_put_edge_unit> batched;
+    hyperdex_client_map_attribute *attr;
+
+    async_put_edge() : used(false) { }
+};
+
+struct async_add_index
+{
+    std::string node_handle, alias;
+    hyperdex_client_attribute index_attrs[NUM_INDEX_ATTRS];
+};
+
 class hyper_stub_base
 {
     protected:
@@ -226,10 +260,8 @@ class hyper_stub_base
             std::unique_ptr<e::buffer>&,
             std::unique_ptr<e::buffer>&,
             std::unique_ptr<e::buffer>&);
-        void prepare_edge(hyperdex_client_map_attribute *attr,
-            db::edge *e,
-            const edge_handle_t &edge_handle,
-            std::unique_ptr<e::buffer>&);
+        void prepare_edges(hyperdex_client_map_attribute *cl_attrs,
+            std::vector<async_put_edge_unit> &edges);
         void pack_uint64(e::buffer::packer &packer, uint64_t num);
         void unpack_uint64(e::unpacker &unpacker, uint64_t &num);
         void pack_uint32(e::buffer::packer &packer, uint32_t num);

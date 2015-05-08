@@ -1792,7 +1792,7 @@ recv_loop(uint64_t thread_id)
 
         S->comm.quiesce_thread(thread_id);
         rec_msg.reset(new message::message());
-        bb_code = S->comm.recv(&rec_msg->buf);
+        bb_code = S->comm.recv(thread_id, &rec_msg->buf);
 
         if (bb_code != BUSYBEE_SUCCESS && bb_code != BUSYBEE_TIMEOUT) {
             continue;

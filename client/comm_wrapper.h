@@ -15,7 +15,6 @@
 #define weaver_client_comm_wrapper_h_
 
 #include <unordered_map>
-#include <e/garbage_collector.h>
 #include <busybee_constants.h>
 #include <busybee_mapper.h>
 #include <busybee_st.h>
@@ -45,8 +44,6 @@ class comm_wrapper
 
     private:
         configuration config;
-        e::garbage_collector bb_gc;
-        e::garbage_collector::thread_state bb_gc_ts;
         std::unique_ptr<weaver_mapper> wmap;
         std::unique_ptr<busybee_st> bb;
         uint64_t bb_id;
@@ -61,7 +58,6 @@ class comm_wrapper
         busybee_returncode send(uint64_t send_to, std::auto_ptr<e::buffer> msg);
         busybee_returncode recv(std::auto_ptr<e::buffer> *msg);
 #pragma GCC diagnostic pop
-        void quiesce_thread();
         void drop();
 };
 

@@ -181,16 +181,16 @@ comm_wrapper :: send_to_client(uint64_t send_to, std::auto_ptr<e::buffer> msg)
 }
 
 busybee_returncode
-comm_wrapper :: recv(uint64_t *recv_from, std::auto_ptr<e::buffer> *msg)
+comm_wrapper :: recv(int tid, uint64_t *recv_from, std::auto_ptr<e::buffer> *msg)
 {
-    return bb->recv(recv_from, msg);
+    return bb->recv(bb_gc_ts[tid].get(), recv_from, msg);
 }
 
 busybee_returncode
-comm_wrapper :: recv(std::auto_ptr<e::buffer> *msg)
+comm_wrapper :: recv(int tid, std::auto_ptr<e::buffer> *msg)
 {
     uint64_t recv_from;
-    return bb->recv(&recv_from, msg);
+    return bb->recv(bb_gc_ts[tid].get(), &recv_from, msg);
 }
 #pragma GCC diagnostic pop
 

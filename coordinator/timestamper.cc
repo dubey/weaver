@@ -546,7 +546,7 @@ server_loop(int thread_id)
     while (true) {
         vts->comm.quiesce_thread(thread_id);
         msg.reset(new message::message());
-        ret = vts->comm.recv(&client_sender, &msg->buf);
+        ret = vts->comm.recv(thread_id, &client_sender, &msg->buf);
         if (ret != BUSYBEE_SUCCESS && ret != BUSYBEE_TIMEOUT) {
             continue;
         } else {

@@ -49,26 +49,20 @@ comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *
 
 comm_wrapper :: comm_wrapper(uint64_t bbid, const configuration &new_config)
     : config(new_config)
-    , bb_gc()
-    , bb_gc_ts()
     , wmap(new weaver_mapper(new_config))
-    , bb(new busybee_st(&bb_gc, wmap.get(), busybee_generate_id()))
+    , bb(new busybee_st(wmap.get(), busybee_generate_id()))
     , bb_id(bbid)
-{
-    bb_gc.register_thread(&bb_gc_ts);
-}
+{ }
 
 comm_wrapper :: ~comm_wrapper()
-{
-    bb_gc.deregister_thread(&bb_gc_ts);
-}
+{ }
 
 void
 comm_wrapper :: reconfigure(const configuration &new_config)
 {
     config = new_config;
     wmap.reset(new weaver_mapper(new_config));
-    bb.reset(new busybee_st(&bb_gc, wmap.get(), busybee_generate_id()));
+    bb.reset(new busybee_st(wmap.get(), busybee_generate_id()));
 }
 
 #pragma GCC diagnostic push
@@ -85,12 +79,6 @@ comm_wrapper :: recv(std::auto_ptr<e::buffer> *msg)
     return bb->recv(&recv_from, msg);
 }
 #pragma GCC diagnostic pop
-
-void
-comm_wrapper :: quiesce_thread()
-{
-    bb_gc.quiescent_state(&bb_gc_ts);
-}
 
 void
 comm_wrapper :: drop()
