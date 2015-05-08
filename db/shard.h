@@ -428,7 +428,8 @@ namespace db
     inline void
     shard :: bulk_load_persistent(db::hyper_stub &hs)
     {
-        hs.loop_async_calls();
+        hs.flush_all_put_edge();
+        hs.loop_async_calls(true);
     }
 
     inline void
@@ -451,7 +452,7 @@ namespace db
     shard :: bulk_load_flush_map(db::hyper_stub &hs)
     {
         WDEBUG << &hs << "\tgoing to loop async" << std::endl;
-        hs.loop_async_calls();
+        hs.loop_async_calls(false);
         WDEBUG << &hs << "\tlooped async calls" << std::endl;
     }
 

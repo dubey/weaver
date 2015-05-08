@@ -48,7 +48,9 @@ namespace db
             bool put_node_no_loop(db::node *n);
             bool put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, const std::string &alias, bool del_after_call);
             bool add_index_no_loop(const node_handle_t &node_handle, const std::string &alias);
-            bool loop_async_calls();
+            bool flush_put_edge(uint32_t evict_idx);
+            bool flush_all_put_edge();
+            bool loop_async_calls(bool flush);
             std::vector<async_put_node> async_put_node_calls;
             std::vector<async_put_edge> async_put_edge_calls;
             std::vector<async_put_edge> put_edge_batch;

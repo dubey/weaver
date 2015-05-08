@@ -344,6 +344,41 @@ hyper_stub :: put_node_no_loop(db::node *n)
 }
 
 bool
+hyper_stub :: flush_put_edge(uint32_t evict_idx)
+{
+    async_put_edge &ape = put_edge_batch[evict_idx];
+    ape.attr = (hyperdex_client_map_attribute*)malloc(ape.batched.size() * sizeof(hyperdex_client_map_attribute));
+    prepare_edges(ape.attr, ape.batched);
+
+    bool success;
+    success = map_call_no_loop(&hyperdex_client_map_add,
+                               graph_space,
+                               ape.node_handle.c_str(),
+                               ape.node_handle.size(),
+                               ape.attr,
+                               ape.batched.size());
+
+    if (success) {
+        for (const auto &apeu: ape.batched) {
+            if (!apeu.alias.empty()) {
+                success = add_index_no_loop(ape.node_handle, apeu.alias) && success;
+            }
+
+            if (apeu.del_after_call) {
+                delete apeu.e;
+            }
+        }
+
+        async_put_edge_calls.emplace_back(std::move(ape));
+    }
+
+    assert(put_edge_batch[evict_idx].batched.empty());
+    put_edge_batch[evict_idx].used = false;
+
+    return success;
+}
+
+bool
 hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, const std::string &alias, bool del_after_call)
 {
     // search for this batch in cache
@@ -399,30 +434,7 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, co
         use_idx = evict_idx;
 
         // flush this batch to HyperDex
-        async_put_edge &ape = put_edge_batch[evict_idx];
-        ape.attr = (hyperdex_client_map_attribute*)malloc(ape.batched.size() * sizeof(hyperdex_client_map_attribute));
-        prepare_edges(ape.attr, ape.batched);
-
-        success = map_call_no_loop(&hyperdex_client_map_add,
-                                   graph_space,
-                                   ape.node_handle.c_str(),
-                                   ape.node_handle.size(),
-                                   ape.attr,
-                                   ape.batched.size());
-
-        if (success) {
-            for (const auto &apeu: ape.batched) {
-                if (!apeu.alias.empty()) {
-                    success = success && add_index_no_loop(node_handle, apeu.alias);
-                }
-
-                if (apeu.del_after_call) {
-                    delete apeu.e;
-                }
-            }
-
-            async_put_edge_calls.emplace_back(std::move(ape));
-        }
+        success = flush_put_edge(evict_idx);
     }
 
     async_put_edge &cur_ape = put_edge_batch[use_idx];
@@ -469,7 +481,21 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::str
 }
 
 bool
-hyper_stub :: loop_async_calls()
+hyper_stub :: flush_all_put_edge()
+{
+    bool success;
+
+    for (uint32_t i = 0; i < PUT_EDGE_BATCH_SZ; i++) {
+        if (!put_edge_batch[i].batched.empty()) {
+            success = flush_put_edge(i) && success;
+        }
+    }
+
+    return success;
+}
+
+bool
+hyper_stub :: loop_async_calls(bool flush)
 {
     uint64_t apn_calls = async_put_node_calls.size();
     uint64_t ape_calls = async_put_edge_calls.size();
@@ -477,12 +503,12 @@ hyper_stub :: loop_async_calls()
 
     bool success = true;
 
-    if (apn_calls > 10000) {
+    if (apn_calls > 10000 || flush) {
         success = success && multiple_loop(apn_calls);
         async_put_node_calls.clear();
     }
 
-    if (ape_calls > 10000) {
+    if (ape_calls > 10000 || flush) {
         success = success && multiple_loop(ape_calls);
         for (const auto &ape: async_put_edge_calls) {
             free(ape.attr);
@@ -490,7 +516,7 @@ hyper_stub :: loop_async_calls()
         async_put_edge_calls.clear();
     }
 
-    if (aai_calls > 10000) {
+    if (aai_calls > 10000 || flush) {
         success = success && multiple_loop(aai_calls);
         async_add_index_calls.clear();
     }
