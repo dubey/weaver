@@ -17,7 +17,7 @@
 #include "db/shard_constants.h"
 #include "db/hyper_stub.h"
 
-#define PUT_EDGE_BATCH_SZ 100
+#define PUT_EDGE_BATCH_SZ 1000
 
 using db::hyper_stub;
 
@@ -336,10 +336,7 @@ hyper_stub :: put_node_no_loop(db::node *n)
         async_put_node_calls.emplace_back(std::move(apn));
 
         for (const std::string &alias: n->aliases) {
-            success = add_index_no_loop(n->get_handle(), alias);
-            if (!success) {
-                break;
-            }
+            success = success && add_index_no_loop(n->get_handle(), alias);
         }
     }
 
@@ -403,24 +400,24 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, co
 
         // flush this batch to HyperDex
         async_put_edge &ape = put_edge_batch[evict_idx];
-        ape.attr = (hyperdex_client_map_attribute*)malloc(sizeof(ape.batched.size() * sizeof(hyperdex_client_map_attribute)));
+        ape.attr = (hyperdex_client_map_attribute*)malloc(ape.batched.size() * sizeof(hyperdex_client_map_attribute));
         prepare_edges(ape.attr, ape.batched);
 
         success = map_call_no_loop(&hyperdex_client_map_add,
-                                        graph_space,
-                                        ape.node_handle.c_str(),
-                                        ape.node_handle.size(),
-                                        ape.attr,
-                                        ape.batched.size());
+                                   graph_space,
+                                   ape.node_handle.c_str(),
+                                   ape.node_handle.size(),
+                                   ape.attr,
+                                   ape.batched.size());
 
         if (success) {
             for (const auto &apeu: ape.batched) {
                 if (!apeu.alias.empty()) {
-                    success = success && add_index_no_loop(node_handle, alias);
+                    success = success && add_index_no_loop(node_handle, apeu.alias);
                 }
 
                 if (apeu.del_after_call) {
-                    delete e;
+                    delete apeu.e;
                 }
             }
 
@@ -474,17 +471,30 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::str
 bool
 hyper_stub :: loop_async_calls()
 {
-    uint64_t num_loops = async_put_node_calls.size() +
-                         async_put_edge_calls.size() +
-                         async_add_index_calls.size();
-    WDEBUG << this << "\tasync loops #" << num_loops << std::endl;
-    bool success = multiple_loop(num_loops);
-    async_put_node_calls.clear();
-    for (const auto &ape: async_put_edge_calls) {
-        free(ape.attr);
+    uint64_t apn_calls = async_put_node_calls.size();
+    uint64_t ape_calls = async_put_edge_calls.size();
+    uint64_t aai_calls = async_add_index_calls.size();
+
+    bool success = true;
+
+    if (apn_calls > 10000) {
+        success = success && multiple_loop(apn_calls);
+        async_put_node_calls.clear();
     }
-    async_put_edge_calls.clear();
-    async_add_index_calls.clear();
+
+    if (ape_calls > 10000) {
+        success = success && multiple_loop(ape_calls);
+        for (const auto &ape: async_put_edge_calls) {
+            free(ape.attr);
+        }
+        async_put_edge_calls.clear();
+    }
+
+    if (aai_calls > 10000) {
+        success = success && multiple_loop(aai_calls);
+        async_add_index_calls.clear();
+    }
+
     return success;
 }
 

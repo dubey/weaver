@@ -18,6 +18,7 @@ hyperdex_coord:
 # Used for starting up cluster.
 hyperdex_daemons:
     - 127.0.0.1 : 8012
+    - 127.0.0.1 : 8013
 
 # Kronos replicated state machine ip addrs and corresponding ports.
 # Used for starting up cluster and connecting to Kronos.
@@ -49,4 +50,4 @@ bulk_load_edge_index_key: "tx_id"
 # Default: "e"
 bulk_load_edge_handle_prefix: "e"
 
-nodes_per_map: 10
+nodes_per_map: 1000

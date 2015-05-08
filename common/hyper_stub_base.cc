@@ -208,7 +208,7 @@ hyper_stub_base :: hyper_stub_base()
     HYPERDEX_CHECK_ID(loop_status);
 
 #define HYPERDEX_CHECK_STATUSES(status, fail_check) \
-    if ((loop_status != HYPERDEX_CLIENT_SUCCESS) || (fail_check)) { \
+    if ((loop_status != HYPERDEX_CLIENT_SUCCESS && loop_status != HYPERDEX_CLIENT_TIMEOUT) || (fail_check)) { \
         WDEBUG << "hyperdex error" \
                << ", call status: " << hyperdex_client_returncode_to_string(status) \
                << ", loop status: " << hyperdex_client_returncode_to_string(loop_status) << std::endl; \
