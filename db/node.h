@@ -126,10 +126,6 @@ namespace db
             bool del_alias(const node_handle_t &alias);
             bool is_alias(const node_handle_t &alias) const;
             void get_client_node(cl::node &n, bool, bool, bool);
-
-            // debug
-            static uint64_t node_count;
-            static po6::threads::mutex node_count_mtx;
     };
 
     using node_version_t = std::pair<node_handle_t, vclock_ptr_t>;

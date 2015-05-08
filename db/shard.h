@@ -429,7 +429,6 @@ namespace db
     shard :: bulk_load_persistent(db::hyper_stub &hs)
     {
         hs.loop_async_calls();
-        WDEBUG << "looped async calls, #nodes= " << node::node_count << ", #edges=" << edge::edge_count << std::endl;
     }
 
     inline void
@@ -453,7 +452,7 @@ namespace db
     {
         WDEBUG << &hs << "\tgoing to loop async" << std::endl;
         hs.loop_async_calls();
-        WDEBUG << &hs << "\tlooped async calls, #nodes= " << node::node_count << ", #edges=" << edge::edge_count << std::endl;
+        WDEBUG << &hs << "\tlooped async calls" << std::endl;
     }
 
     // Consistency methods

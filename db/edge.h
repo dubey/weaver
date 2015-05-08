@@ -55,10 +55,6 @@ namespace db
             void get_client_edge(const std::string &node, cl::edge &e);
 
             static edge empty_edge;
-
-            // debug
-            static uint64_t edge_count;
-            static po6::threads::mutex edge_count_mtx;
     };
 }
 
