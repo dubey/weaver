@@ -47,6 +47,7 @@ struct async_put_node
     std::unique_ptr<e::buffer> props_buf;
     std::unique_ptr<e::buffer> out_edges_buf;
     std::unique_ptr<e::buffer> aliases_buf;
+    size_t num_attrs;
 };
 
 struct async_put_edge_unit
@@ -65,6 +66,8 @@ struct async_put_edge
     hyperdex_client_map_attribute *attr;
 
     async_put_edge() : used(false) { }
+
+    void reset() { used = false; }
 };
 
 struct async_add_index
@@ -259,7 +262,8 @@ class hyper_stub_base
             std::unique_ptr<e::buffer>&,
             std::unique_ptr<e::buffer>&,
             std::unique_ptr<e::buffer>&,
-            std::unique_ptr<e::buffer>&);
+            std::unique_ptr<e::buffer>&,
+            size_t &num_attrs);
         void prepare_edges(hyperdex_client_map_attribute *cl_attrs,
             std::vector<async_put_edge_unit> &edges);
         void pack_uint64(e::buffer::packer &packer, uint64_t num);

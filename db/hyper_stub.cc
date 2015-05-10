@@ -18,9 +18,12 @@
 #include "db/hyper_stub.h"
 
 #define PUT_EDGE_BATCH_SZ 1000
-#define FLUSH_CALL_SZ 100000
+#define FLUSH_CALL_SZ 10000
 
 using db::hyper_stub;
+using db::apn_ptr_t;
+using db::ape_ptr_t;
+using db::aai_ptr_t;
 
 hyper_stub :: hyper_stub(uint64_t sid)
     : shard_id(sid)
@@ -29,9 +32,23 @@ hyper_stub :: hyper_stub(uint64_t sid)
     , ape_count(0)
     , aai_count(0)
 {
+    apn_pool.reserve(FLUSH_CALL_SZ*10);
+    ape_pool.reserve(FLUSH_CALL_SZ*10);
+    aai_pool.reserve(FLUSH_CALL_SZ*10);
+    for (uint32_t i = 0; i < FLUSH_CALL_SZ*10; i++) {
+        apn_ptr_t apn = std::make_shared<async_put_node>();
+        apn_pool.emplace_back(apn);
+        ape_ptr_t ape = std::make_shared<async_put_edge>();
+        ape_pool.emplace_back(ape);
+        aai_ptr_t aai = std::make_shared<async_add_index>();
+        aai_pool.emplace_back(aai);
+    }
+    apn_pool_sz = FLUSH_CALL_SZ*10;
+    ape_pool_sz = FLUSH_CALL_SZ*10;
+    aai_pool_sz = FLUSH_CALL_SZ*10;
+
     for (uint32_t i = 0; i < PUT_EDGE_BATCH_SZ; i++) {
-        async_put_edge ape;
-        put_edge_batch.emplace_back(std::move(ape));
+        put_edge_batch.emplace_back(acquire_ape_ptr());
     }
 }
 
@@ -307,6 +324,78 @@ hyper_stub :: recover_node(db::node &n)
     return get_nodes(nodes, false);
 }
 
+apn_ptr_t
+hyper_stub :: acquire_apn_ptr()
+{
+    apn_ptr_t ret;
+    if (apn_pool.empty()) {
+        for (uint32_t i = 0; i < FLUSH_CALL_SZ*5; i++) {
+            apn_ptr_t new_ptr= std::make_shared<async_put_node>();
+            apn_pool.emplace_back(new_ptr);
+        }
+        apn_pool_sz += FLUSH_CALL_SZ*5;
+        WDEBUG << "apn pool sz=" << apn_pool_sz << std::endl;
+    }
+    ret = apn_pool.back();
+    apn_pool.pop_back();
+    return ret;
+}
+
+void
+hyper_stub :: release_apn_ptr(apn_ptr_t ret)
+{
+    apn_pool.emplace_back(ret);
+}
+
+ape_ptr_t
+hyper_stub :: acquire_ape_ptr()
+{
+    ape_ptr_t ret;
+    if (ape_pool.empty()) {
+        for (uint32_t i = 0; i < FLUSH_CALL_SZ*5; i++) {
+            ape_ptr_t new_ptr= std::make_shared<async_put_edge>();
+            ape_pool.emplace_back(new_ptr);
+        }
+        ape_pool_sz += FLUSH_CALL_SZ*5;
+        WDEBUG << "ape pool sz=" << ape_pool_sz << std::endl;
+    }
+    ret = ape_pool.back();
+    ape_pool.pop_back();
+    ret->reset();
+    return ret;
+}
+
+void
+hyper_stub :: release_ape_ptr(ape_ptr_t ret)
+{
+    ret->batched.clear();
+    free(ret->attr);
+    ape_pool.emplace_back(ret);
+}
+
+aai_ptr_t
+hyper_stub :: acquire_aai_ptr()
+{
+    aai_ptr_t ret;
+    if (aai_pool.empty()) {
+        for (uint32_t i = 0; i < FLUSH_CALL_SZ*5; i++) {
+            aai_ptr_t new_ptr= std::make_shared<async_add_index>();
+            aai_pool.emplace_back(new_ptr);
+        }
+        aai_pool_sz += FLUSH_CALL_SZ*5;
+        WDEBUG << "aai pool sz=" << aai_pool_sz << std::endl;
+    }
+    ret = aai_pool.back();
+    aai_pool.pop_back();
+    return ret;
+}
+
+void
+hyper_stub :: release_aai_ptr(aai_ptr_t ret)
+{
+    aai_pool.emplace_back(ret);
+}
+
 bool
 hyper_stub :: put_node_no_loop(db::node *n)
 {
@@ -318,30 +407,31 @@ hyper_stub :: put_node_no_loop(db::node *n)
     }
     assert(last_clk_buf && restore_clk_buf);
 
-    async_put_node apn;
-    apn.handle = n->get_handle();
-    prepare_node(apn.attrs,
+    apn_ptr_t apn = acquire_apn_ptr();
+    apn->handle = n->get_handle();
+    prepare_node(apn->attrs,
                  *n,
-                 apn.creat_clk_buf,
-                 apn.props_buf,
-                 apn.out_edges_buf,
+                 apn->creat_clk_buf,
+                 apn->props_buf,
+                 apn->out_edges_buf,
                  last_clk_buf,
                  restore_clk_buf,
-                 apn.aliases_buf);
+                 apn->aliases_buf,
+                 apn->num_attrs);
 
     bool success = call_no_loop(&hyperdex_client_put,
                                 graph_space,
-                                apn.handle.c_str(),
-                                apn.handle.size(),
-                                apn.attrs,
-                                NUM_GRAPH_ATTRS);
+                                apn->handle.c_str(),
+                                apn->handle.size(),
+                                apn->attrs,
+                                apn->num_attrs);
 
     if (success) {
         apn_count++;
         async_put_node_calls.emplace_back(std::move(apn));
 
         for (const std::string &alias: n->aliases) {
-            success = success && add_index_no_loop(n->get_handle(), alias);
+            success = add_index_no_loop(n->get_handle(), alias) && success;
         }
     }
 
@@ -351,22 +441,22 @@ hyper_stub :: put_node_no_loop(db::node *n)
 bool
 hyper_stub :: flush_put_edge(uint32_t evict_idx)
 {
-    async_put_edge &ape = put_edge_batch[evict_idx];
-    ape.attr = (hyperdex_client_map_attribute*)malloc(ape.batched.size() * sizeof(hyperdex_client_map_attribute));
-    prepare_edges(ape.attr, ape.batched);
+    ape_ptr_t ape = put_edge_batch[evict_idx];
+    ape->attr = (hyperdex_client_map_attribute*)malloc(ape->batched.size() * sizeof(hyperdex_client_map_attribute));
+    prepare_edges(ape->attr, ape->batched);
 
     bool success;
     success = map_call_no_loop(&hyperdex_client_map_add,
                                graph_space,
-                               ape.node_handle.c_str(),
-                               ape.node_handle.size(),
-                               ape.attr,
-                               ape.batched.size());
+                               ape->node_handle.c_str(),
+                               ape->node_handle.size(),
+                               ape->attr,
+                               ape->batched.size());
 
     if (success) {
-        for (const auto &apeu: ape.batched) {
+        for (const auto &apeu: ape->batched) {
             if (!apeu.alias.empty()) {
-                success = add_index_no_loop(ape.node_handle, apeu.alias) && success;
+                success = add_index_no_loop(ape->node_handle, apeu.alias) && success;
             }
 
             if (apeu.del_after_call) {
@@ -375,11 +465,12 @@ hyper_stub :: flush_put_edge(uint32_t evict_idx)
         }
 
         ape_count++;
-        async_put_edge_calls.emplace_back(std::move(ape));
+        async_put_edge_calls.emplace_back(ape);
+        put_edge_batch[evict_idx] = acquire_ape_ptr();
     }
 
-    assert(put_edge_batch[evict_idx].batched.empty());
-    put_edge_batch[evict_idx].used = false;
+    assert(put_edge_batch[evict_idx]->batched.empty());
+    put_edge_batch[evict_idx]->used = false;
 
     return success;
 }
@@ -390,8 +481,8 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, co
     // search for this batch in cache
     uint32_t found_idx = UINT32_MAX;
     for (uint32_t i = 0; i < PUT_EDGE_BATCH_SZ; i++) {
-        const async_put_edge &ape = put_edge_batch[i];
-        if (ape.node_handle == node_handle) {
+        const ape_ptr_t ape = put_edge_batch[i];
+        if (ape->node_handle == node_handle) {
             found_idx = i;
             break;
         }
@@ -405,17 +496,17 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, co
         uint32_t i;
         for (i = 0; i < PUT_EDGE_BATCH_SZ; i++) {
             uint32_t idx = (put_edge_batch_clkhand+i) % PUT_EDGE_BATCH_SZ;
-            async_put_edge &ape = put_edge_batch[idx];
-            if (ape.batched.empty()) {
+            ape_ptr_t ape = put_edge_batch[idx];
+            if (ape->batched.empty()) {
                 free_idx = idx;
                 put_edge_batch_clkhand = (idx+1) % PUT_EDGE_BATCH_SZ;
                 break;
-            } else if (!ape.used) {
+            } else if (!ape->used) {
                 evict_idx = idx;
                 put_edge_batch_clkhand = (idx+1) % PUT_EDGE_BATCH_SZ;
                 break;
             } else {
-                ape.used = false;
+                ape->used = false;
             }
         }
 
@@ -443,15 +534,15 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, co
         success = flush_put_edge(evict_idx);
     }
 
-    async_put_edge &cur_ape = put_edge_batch[use_idx];
-    cur_ape.used = true;
-    cur_ape.node_handle = node_handle;
+    ape_ptr_t cur_ape = put_edge_batch[use_idx];
+    cur_ape->used = true;
+    cur_ape->node_handle = node_handle;
     async_put_edge_unit cur_apeu;
     cur_apeu.e = e;
     cur_apeu.edge_handle = e->get_handle();
     cur_apeu.alias = alias;
     cur_apeu.del_after_call = del_after_call;
-    cur_ape.batched.emplace_back(std::move(cur_apeu));
+    cur_ape->batched.emplace_back(std::move(cur_apeu));
 
     return success;
 }
@@ -459,25 +550,25 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, co
 bool
 hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::string &alias)
 {
-    async_add_index aai;
-    aai.node_handle = node_handle;
-    aai.alias = alias;
+    aai_ptr_t aai = acquire_aai_ptr();
+    aai->node_handle = node_handle;
+    aai->alias = alias;
     // node handle
-    aai.index_attrs[0].attr = index_attrs[0];
-    aai.index_attrs[0].value = aai.node_handle.c_str();
-    aai.index_attrs[0].value_sz = aai.node_handle.size();
-    aai.index_attrs[0].datatype = index_dtypes[0];
+    aai->index_attrs[0].attr = index_attrs[0];
+    aai->index_attrs[0].value = aai->node_handle.c_str();
+    aai->index_attrs[0].value_sz = aai->node_handle.size();
+    aai->index_attrs[0].datatype = index_dtypes[0];
     // shard
-    aai.index_attrs[1].attr = index_attrs[1];
-    aai.index_attrs[1].value = (const char*)&shard_id;
-    aai.index_attrs[1].value_sz = sizeof(int64_t);
-    aai.index_attrs[1].datatype = index_dtypes[1];
+    aai->index_attrs[1].attr = index_attrs[1];
+    aai->index_attrs[1].value = (const char*)&shard_id;
+    aai->index_attrs[1].value_sz = sizeof(int64_t);
+    aai->index_attrs[1].datatype = index_dtypes[1];
 
     bool success = call_no_loop(&hyperdex_client_put,
                                 index_space,
-                                aai.alias.c_str(),
-                                aai.alias.size(),
-                                aai.index_attrs, NUM_INDEX_ATTRS);
+                                aai->alias.c_str(),
+                                aai->alias.size(),
+                                aai->index_attrs, NUM_INDEX_ATTRS);
 
     if (success) {
         aai_count++;
@@ -493,13 +584,22 @@ hyper_stub :: flush_all_put_edge()
     bool success;
 
     for (uint32_t i = 0; i < PUT_EDGE_BATCH_SZ; i++) {
-        if (!put_edge_batch[i].batched.empty()) {
+        if (!put_edge_batch[i]->batched.empty()) {
             success = flush_put_edge(i) && success;
         }
     }
 
     return success;
 }
+
+#define LOOP_ASYNC(count, loops, print_name, release_func, calls_deque) \
+    count -= loops; \
+    WDEBUG << "#" << print_name << "=" << count << std::endl; \
+    success = multiple_loop(loops) && success; \
+    for (uint64_t i = 0; i < loops; i++) { \
+        release_func(calls_deque[i]); \
+    } \
+    calls_deque.erase(calls_deque.begin(), calls_deque.begin()+loops);
 
 bool
 hyper_stub :: loop_async_calls(bool flush)
@@ -512,57 +612,31 @@ hyper_stub :: loop_async_calls(bool flush)
     bool success = true;
 
     if (flush) {
-        apn_count -= apn_calls;
-        WDEBUG << "#apn=" << apn_count << std::endl;
-        success = success && multiple_loop(apn_calls);
-        async_put_node_calls.clear();
+        LOOP_ASYNC(apn_count, apn_calls, "apn", release_apn_ptr, async_put_node_calls);
 
-        ape_count -= ape_calls;
-        WDEBUG << "#ape=" << ape_count << std::endl;
-        success = success && multiple_loop(ape_calls);
-        for (const auto &ape: async_put_edge_calls) {
-            free(ape.attr);
-        }
-        async_put_edge_calls.clear();
+        LOOP_ASYNC(ape_count, ape_calls, "ape", release_ape_ptr, async_put_edge_calls);
 
-        aai_count -= aai_calls;
-        WDEBUG << "#aai=" << aai_count << std::endl;
-        success = success && multiple_loop(aai_calls);
-        async_add_index_calls.clear();
+        LOOP_ASYNC(aai_count, aai_calls, "aai", release_aai_ptr, async_add_index_calls);
     } else {
         if (apn_calls > FLUSH_CALL_SZ) {
             uint32_t num_loop = apn_calls - FLUSH_CALL_SZ/2;
-            apn_count -= num_loop;
-        WDEBUG << "#apn=" << apn_count << std::endl;
-            success = success && multiple_loop(num_loop);
-            async_put_node_calls.erase(async_put_node_calls.begin(), async_put_node_calls.begin()+num_loop);
-            assert(async_put_node_calls.size() == FLUSH_CALL_SZ/2);
+            LOOP_ASYNC(apn_count, num_loop, "apn", release_apn_ptr, async_put_node_calls);
         }
 
         if (ape_calls > FLUSH_CALL_SZ) {
             uint32_t num_loop = ape_calls - FLUSH_CALL_SZ/2;
-            ape_count -= num_loop;
-        WDEBUG << "#ape=" << ape_count << std::endl;
-            success = success && multiple_loop(num_loop);
-
-            for (auto iter = async_put_edge_calls.begin(); iter != async_put_edge_calls.begin()+num_loop; iter++) {
-                free(iter->attr);
-            }
-            async_put_edge_calls.erase(async_put_edge_calls.begin(), async_put_edge_calls.begin()+num_loop);
-            assert(async_put_edge_calls.size() == FLUSH_CALL_SZ/2);
+            LOOP_ASYNC(ape_count, num_loop, "ape", release_ape_ptr, async_put_edge_calls);
         }
 
         if (aai_calls > FLUSH_CALL_SZ) {
             uint32_t num_loop = aai_calls - FLUSH_CALL_SZ/2;
-            aai_count -= num_loop;
-        WDEBUG << "#aai=" << aai_count << std::endl;
-            success = success && multiple_loop(num_loop);
-            async_add_index_calls.erase(async_add_index_calls.begin(), async_add_index_calls.begin()+num_loop);
-            assert(async_add_index_calls.size() == FLUSH_CALL_SZ/2);
+            LOOP_ASYNC(aai_count, num_loop, "aai", release_aai_ptr, async_add_index_calls);
         }
     }
 
     return success;
 }
+
+#undef LOOP_ASYNC
 
 #undef weaver_debug_

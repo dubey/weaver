@@ -31,6 +31,10 @@ namespace db
         ACTIVE // this shard does have the token
     };
 
+    using apn_ptr_t = std::shared_ptr<async_put_node>;
+    using ape_ptr_t = std::shared_ptr<async_put_edge>;
+    using aai_ptr_t = std::shared_ptr<async_add_index>;
+
     class hyper_stub : private hyper_stub_base
     {
         private:
@@ -51,11 +55,21 @@ namespace db
             bool flush_put_edge(uint32_t evict_idx);
             bool flush_all_put_edge();
             bool loop_async_calls(bool flush);
-            std::deque<async_put_node> async_put_node_calls;
-            std::deque<async_put_edge> async_put_edge_calls;
-            std::vector<async_put_edge> put_edge_batch;
+            std::vector<apn_ptr_t> apn_pool;
+            std::vector<ape_ptr_t> ape_pool;
+            std::vector<aai_ptr_t> aai_pool;
+            uint32_t apn_pool_sz, ape_pool_sz, aai_pool_sz;
+            apn_ptr_t acquire_apn_ptr();
+            void release_apn_ptr(apn_ptr_t);
+            ape_ptr_t acquire_ape_ptr();
+            void release_ape_ptr(ape_ptr_t);
+            aai_ptr_t acquire_aai_ptr();
+            void release_aai_ptr(aai_ptr_t);
+            std::deque<apn_ptr_t> async_put_node_calls;
+            std::deque<ape_ptr_t> async_put_edge_calls;
+            std::vector<ape_ptr_t> put_edge_batch;
             uint32_t put_edge_batch_clkhand;
-            std::deque<async_add_index> async_add_index_calls;
+            std::deque<aai_ptr_t> async_add_index_calls;
             uint32_t apn_count, ape_count, aai_count;
             std::unique_ptr<e::buffer> restore_clk_buf;
             std::unique_ptr<e::buffer> last_clk_buf;
