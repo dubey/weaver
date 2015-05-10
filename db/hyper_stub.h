@@ -51,11 +51,12 @@ namespace db
             bool flush_put_edge(uint32_t evict_idx);
             bool flush_all_put_edge();
             bool loop_async_calls(bool flush);
-            std::vector<async_put_node> async_put_node_calls;
-            std::vector<async_put_edge> async_put_edge_calls;
+            std::deque<async_put_node> async_put_node_calls;
+            std::deque<async_put_edge> async_put_edge_calls;
             std::vector<async_put_edge> put_edge_batch;
             uint32_t put_edge_batch_clkhand;
-            std::vector<async_add_index> async_add_index_calls;
+            std::deque<async_add_index> async_add_index_calls;
+            uint32_t apn_count, ape_count, aai_count;
             std::unique_ptr<e::buffer> restore_clk_buf;
             std::unique_ptr<e::buffer> last_clk_buf;
             // migration
