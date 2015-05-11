@@ -645,9 +645,12 @@ hyper_stub :: loop_async(uint64_t loops)
                         async_put_node_calls[apn->op_id] = apn;
                     } else {
                         apn_count--;
+                        success = false;
+                        release_apn_ptr(apn);
                     }
                 } else {
                     success = false;
+                    release_apn_ptr(apn);
                 }
 
             } else if (async_put_edge_calls.find(op_id) != async_put_edge_calls.end()) {
@@ -673,9 +676,12 @@ hyper_stub :: loop_async(uint64_t loops)
                         async_put_edge_calls[ape->op_id] = ape;
                     } else {
                         ape_count--;
+                        success = false;
+                        release_ape_ptr(ape);
                     }
                 } else {
                     success = false;
+                    release_ape_ptr(ape);
                 }
             } else if (async_add_index_calls.find(op_id) != async_add_index_calls.end()) {
                 found = true;
@@ -699,9 +705,12 @@ hyper_stub :: loop_async(uint64_t loops)
                         async_add_index_calls[aai->op_id] = aai;
                     } else {
                         aai_count--;
+                        success = false;
+                        release_aai_ptr(aai);
                     }
                 } else {
                     success = false;
+                    release_aai_ptr(aai);
                 }
             }
             if (op_id >= 0) {
