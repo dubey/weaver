@@ -430,7 +430,6 @@ hyper_stub :: put_node_no_loop(db::node *n)
     if (success) {
         apn_count++;
         async_put_node_calls[apn->op_id] = apn;
-        //async_put_node_calls.emplace_back(std::move(apn));
 
         for (const std::string &alias: n->aliases) {
             success = add_index_no_loop(n->get_handle(), alias) && success;
@@ -469,7 +468,6 @@ hyper_stub :: flush_put_edge(uint32_t evict_idx)
 
         ape_count++;
         async_put_edge_calls[ape->op_id] = ape;
-        //async_put_edge_calls.emplace_back(ape);
         put_edge_batch[evict_idx] = acquire_ape_ptr();
     }
 
@@ -578,7 +576,6 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::str
     if (success) {
         aai_count++;
         async_add_index_calls[aai->op_id] = aai;
-        //async_add_index_calls.emplace_back(std::move(aai));
     }
 
     if (async_add_index_calls.size() > 10*FLUSH_CALL_SZ) {
@@ -733,7 +730,6 @@ hyper_stub :: loop_async(uint64_t loops)
 bool
 hyper_stub :: loop_async_calls(bool flush)
 {
-    // flush first ~50% calls
     uint64_t apn_calls = async_put_node_calls.size();
     uint64_t ape_calls = async_put_edge_calls.size();
     uint64_t aai_calls = async_add_index_calls.size();
@@ -751,6 +747,7 @@ hyper_stub :: loop_async_calls(bool flush)
         ape_pool.clear();
         aai_pool.clear();
     } else {
+        // flush first ~50% calls
         if (apn_calls > FLUSH_CALL_SZ) {
             uint32_t num_loop = apn_calls - FLUSH_CALL_SZ/2;
             success = loop_async(num_loop) && success;
