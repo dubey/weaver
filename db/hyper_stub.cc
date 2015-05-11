@@ -581,6 +581,10 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::str
         //async_add_index_calls.emplace_back(std::move(aai));
     }
 
+    if (async_add_index_calls.size() > 10*FLUSH_CALL_SZ) {
+        loop_async_calls(false); // prevent too many outstanding requests
+    }
+
     return success;
 }
 
