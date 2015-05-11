@@ -315,7 +315,8 @@ bool
 hyper_stub_base :: call_no_loop(hyper_func h,
     const char *space,
     const char *key, size_t key_sz,
-    hyperdex_client_attribute *cl_attr, size_t num_attrs)
+    hyperdex_client_attribute *cl_attr, size_t num_attrs,
+    int64_t &op_id)
 {
     int64_t hdex_id;
     int success_calls = 0;
@@ -325,6 +326,7 @@ hyper_stub_base :: call_no_loop(hyper_func h,
     DELAYED_INSERT_HDEX_ID;
     delayed_idx++;
 
+    op_id = hdex_id;
     return success;
 }
 
@@ -354,7 +356,8 @@ bool
 hyper_stub_base :: map_call_no_loop(hyper_map_func h,
     const char *space,
     const char *key, size_t key_sz,
-    hyperdex_client_map_attribute *map_attr, size_t num_attrs)
+    hyperdex_client_map_attribute *map_attr, size_t num_attrs,
+    int64_t &op_id)
 {
     int64_t hdex_id;
     int success_calls = 0;
@@ -364,14 +367,15 @@ hyper_stub_base :: map_call_no_loop(hyper_map_func h,
     DELAYED_INSERT_HDEX_ID;
     delayed_idx++;
 
+    op_id = hdex_id;
     return success;
 }
 
 bool
-hyper_stub_base :: loop()
+hyper_stub_base :: loop(int64_t &op_id, hyperdex_client_returncode &code)
 {
     bool success = true;
-    int hdex_id;
+    int64_t hdex_id;
     hyperdex_client_returncode loop_status;
     uint64_t success_calls = 0;
 
@@ -379,9 +383,11 @@ hyper_stub_base :: loop()
     DELAYED_CHECK_HDEX_ID;
     HYPERDEX_CHECK_STATUSES(delayed_call_status[idx], delayed_call_status[idx] != HYPERDEX_CLIENT_SUCCESS);
 
+    code = delayed_call_status[idx];
     delayed_opid_to_idx.erase(hdex_id);
     delayed_call_status.erase(idx);
 
+    op_id = hdex_id;
     return success;
 }
 
@@ -559,13 +565,6 @@ hyper_stub_base :: multiple_call_no_loop(std::vector<hyper_func> &funcs,
         map_attrs, map_num_attrs);
 }
 
-#define DELAYED_INSERT_HDEX_ID \
-    if (delayed_opid_to_idx.find(hdex_id) != delayed_opid_to_idx.end()) { \
-        WDEBUG << "logical error: repeated hdex_id " << hdex_id << std::endl; \
-        return false; \
-    } \
-    delayed_opid_to_idx[hdex_id] = delayed_idx;
-
 bool
 hyper_stub_base :: multiple_call_no_loop(std::vector<hyper_func> &funcs,
     std::vector<const char*> &spaces,
@@ -616,17 +615,6 @@ hyper_stub_base :: multiple_call_no_loop(std::vector<hyper_func> &funcs,
 
     return success;
 }
-
-#define DELAYED_CHECK_HDEX_ID \
-    if (delayed_opid_to_idx.find(hdex_id) == delayed_opid_to_idx.end()) { \
-        WDEBUG << "logical error: hdex_id not found " << hdex_id << std::endl; \
-        return false; \
-    } \
-    int64_t &idx = delayed_opid_to_idx[hdex_id]; \
-    if (idx < 0) { \
-        WDEBUG << "logical error: negative idx " << idx << std::endl; \
-        return false; \
-    }
 
 bool
 hyper_stub_base :: multiple_loop(uint64_t num_loops)

@@ -48,6 +48,7 @@ struct async_put_node
     std::unique_ptr<e::buffer> out_edges_buf;
     std::unique_ptr<e::buffer> aliases_buf;
     size_t num_attrs;
+    int64_t op_id;
 };
 
 struct async_put_edge_unit
@@ -64,6 +65,7 @@ struct async_put_edge
     std::string node_handle;
     std::vector<async_put_edge_unit> batched;
     hyperdex_client_map_attribute *attr;
+    int64_t op_id;
 
     async_put_edge() : used(false) { }
 
@@ -74,6 +76,7 @@ struct async_add_index
 {
     std::string node_handle, alias;
     hyperdex_client_attribute index_attrs[NUM_INDEX_ATTRS];
+    int64_t op_id;
 };
 
 class hyper_stub_base
@@ -146,7 +149,8 @@ class hyper_stub_base
         bool call_no_loop(hyper_func h,
             const char *space,
             const char *key, size_t key_sz,
-            hyperdex_client_attribute *cl_attr, size_t num_attrs);
+            hyperdex_client_attribute *cl_attr, size_t num_attrs,
+            int64_t &op_id);
         bool map_call(hyper_map_tx_func h,
             const char *space,
             const char *key, size_t key_sz,
@@ -154,8 +158,9 @@ class hyper_stub_base
         bool map_call_no_loop(hyper_map_func h,
             const char *space,
             const char *key, size_t key_sz,
-            hyperdex_client_map_attribute *map_attr, size_t num_attrs);
-        bool loop();
+            hyperdex_client_map_attribute *map_attr, size_t num_attrs,
+            int64_t &op_id);
+        bool loop(int64_t &op_id, hyperdex_client_returncode &code);
 
         bool multiple_call(std::vector<hyper_func> &funcs,
             std::vector<const char*> &spaces,

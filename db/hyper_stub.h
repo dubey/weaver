@@ -54,6 +54,7 @@ namespace db
             bool add_index_no_loop(const node_handle_t &node_handle, const std::string &alias);
             bool flush_put_edge(uint32_t evict_idx);
             bool flush_all_put_edge();
+            bool loop_async(uint64_t loops);
             bool loop_async_calls(bool flush);
             std::vector<apn_ptr_t> apn_pool;
             std::vector<ape_ptr_t> ape_pool;
@@ -65,12 +66,12 @@ namespace db
             void release_ape_ptr(ape_ptr_t);
             aai_ptr_t acquire_aai_ptr();
             void release_aai_ptr(aai_ptr_t);
-            std::deque<apn_ptr_t> async_put_node_calls;
-            std::deque<ape_ptr_t> async_put_edge_calls;
+            std::unordered_map<int64_t, apn_ptr_t> async_put_node_calls;
+            std::unordered_map<int64_t, ape_ptr_t> async_put_edge_calls;
             std::vector<ape_ptr_t> put_edge_batch;
+            std::unordered_map<int64_t, aai_ptr_t> async_add_index_calls;
             uint32_t put_edge_batch_clkhand;
-            std::deque<aai_ptr_t> async_add_index_calls;
-            uint32_t apn_count, ape_count, aai_count;
+            uint64_t apn_count, ape_count, aai_count;
             std::unique_ptr<e::buffer> restore_clk_buf;
             std::unique_ptr<e::buffer> last_clk_buf;
             // migration
