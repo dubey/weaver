@@ -431,6 +431,9 @@ hyper_stub :: put_node_no_loop(db::node *n)
         apn_count++;
         async_put_node_calls[apn->op_id] = apn;
 
+        if (n->aliases.size() > FLUSH_CALL_SZ) {
+            WDEBUG << "aliases.size=" << n->aliases.size() << std::endl;
+        }
         for (const std::string &alias: n->aliases) {
             success = add_index_no_loop(n->get_handle(), alias) && success;
         }
