@@ -723,9 +723,9 @@ hyper_stub :: loop_async(uint64_t loops)
         }
     }
 
-    WDEBUG << "#apn=" << apn_count << std::endl;
-    WDEBUG << "#ape=" << ape_count << std::endl;
-    WDEBUG << "#aai=" << aai_count << std::endl;
+    WDEBUG << "#apn=" << apn_count << ", apn_pool_sz=" << apn_pool_sz << std::endl;
+    WDEBUG << "#ape=" << ape_count << ", ape_pool_sz=" << ape_pool_sz << std::endl;
+    WDEBUG << "#aai=" << aai_count << ", aai_pool_sz=" << aai_pool_sz << std::endl;
 
     return success;
 }
