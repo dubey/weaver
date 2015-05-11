@@ -342,7 +342,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                         }
                     }
                     if (++cur_shard_node_count % 10000 == 0) {
-                        WDEBUG << "GRAPHML node " << cur_shard_node_count << std::endl;
+                        WDEBUG << "GRAPHML tid=" << load_tid << " node=" << cur_shard_node_count << std::endl;
                         S->bulk_load_flush_map(hstub);
                     }
 
@@ -399,7 +399,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     S->bulk_load_put_edge(hstub, e, id0, n, alias);
 
                     if (++cur_shard_edge_count % 10000 == 0) {
-                        WDEBUG << "GRAPHML edge " << cur_shard_edge_count << std::endl;
+                        WDEBUG << "GRAPHML tid=" << load_tid << " edge=" << cur_shard_edge_count << std::endl;
                     }
                     if (cur_shard_edge_count % 10000 == 0) {
                         S->bulk_load_flush_map(hstub);
