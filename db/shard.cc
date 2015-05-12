@@ -171,43 +171,162 @@ split(const std::string &s, char delim, std::vector<std::string> &elems)
 }
 
 inline bool
-get_xml_element(std::ifstream &file, const std::string &name, std::string &element)
+get_xml_element(std::ifstream &file,
+                const std::vector<std::string> &names,
+                std::string &element,
+                uint32_t &cur_elem_idx)
 {
     std::string line;
     bool in_elem = false;
     size_t pos;
-    std::string start = "<"+name;
-    std::string end = "</"+name+">";
+    std::vector<std::string> start, end;
+    for (const std::string &n: names) {
+        start.emplace_back("<"+n);
+        end.emplace_back("</"+n+">");
+    }
 
     while(std::getline(file, line)) {
         bool appended = false;
-        if ((pos = line.find(start)) != std::string::npos) {
-            if (in_elem) {
-                return false;
+        for (uint32_t i = 0; i < names.size(); i++) {
+            if ((pos = line.find(start[i])) != std::string::npos) {
+                if (in_elem) {
+                    return false;
+                }
+                in_elem = true;
+                element.append(line);
+                appended = true;
+                cur_elem_idx = i;
             }
-            in_elem = true;
-            element.append(line);
-            appended = true;
-        }
 
-        if ((pos = line.find(end)) != std::string::npos) {
-            if (!in_elem) {
-                return false;
+            if ((pos = line.find(end[i])) != std::string::npos) {
+                if (!in_elem) {
+                    return false;
+                }
+                assert(i == cur_elem_idx);
+                if (!appended) {
+                    element.append(line);
+                    appended = true;
+                }
+                return true;
             }
-            if (!appended) {
+
+            if (!appended && in_elem) {
                 element.append(line);
                 appended = true;
             }
-            return true;
-        }
-
-        if (!appended && in_elem) {
-            element.append(line);
-            appended = true;
         }
     }
 
     return false;
+}
+
+void
+parse_xml_node(pugi::xml_document &doc,
+               std::string &element,
+               uint64_t num_shards,
+               int load_tid,
+               int load_nthreads,
+               vclock_ptr_t zero_clk,
+               bool prop_delim,
+               uint64_t &cur_shard_node_count,
+               db::hyper_stub &hstub)
+{
+    assert(doc.load_buffer(element.c_str(), element.size()));
+    pugi::xml_node node = doc.child("node");
+
+    node_handle_t id0 = node.attribute("id").value();
+    uint64_t hash0 = hash_node_handle(id0);
+    uint64_t loc = (hash0 % num_shards) + ShardIdIncr;
+    uint64_t map_idx = hash0 % NUM_NODE_MAPS;
+    if ((loc == shard_id) && ((int)map_idx % load_nthreads == load_tid)) {
+        assert(!S->bulk_load_node_exists(id0, map_idx));
+        bool in_mem;
+        db::node *n = S->create_node_bulk_load(id0, map_idx, zero_clk, in_mem);
+
+        for (pugi::xml_node prop: node.children("data")) {
+            std::string key = prop.attribute("key").value();
+            std::string value = prop.child_value();
+            if (!prop_delim || value.empty()) {
+                (key == BulkLoadNodeAliasKey)? S->add_node_alias_bulk_load(n, value) :
+                                               S->set_node_property_bulk_load(n, key, value, zero_clk);
+            } else {
+                std::vector<std::string> values;
+                split(value, BulkLoadPropertyValueDelimiter, values);
+                for (std::string &v: values) {
+                    (key == BulkLoadNodeAliasKey)? S->add_node_alias_bulk_load(n, v) :
+                                                   S->set_node_property_bulk_load(n, key, v, zero_clk);
+                }
+            }
+        }
+        if (++cur_shard_node_count % 10000 == 0) {
+            WDEBUG << "GRAPHML tid=" << load_tid << " node=" << cur_shard_node_count << std::endl;
+            S->bulk_load_flush_map(hstub);
+        }
+
+        S->bulk_load_put_node(hstub, n, in_mem);
+    }
+
+    element.clear();
+}
+
+void
+parse_xml_edge(pugi::xml_document &doc,
+               std::string &element,
+               uint64_t num_shards,
+               int load_tid,
+               int load_nthreads,
+               vclock_ptr_t zero_clk,
+               bool prop_delim,
+               uint64_t &cur_shard_edge_count,
+               db::hyper_stub &hstub)
+{
+    assert(doc.load_buffer(element.c_str(), element.size()));
+    pugi::xml_node edge = doc.child("edge");
+
+    node_handle_t id0 = edge.attribute("source").value();
+    uint64_t hash0 = hash_node_handle(id0);
+    uint64_t loc0 = (hash0 % num_shards) + ShardIdIncr;
+    uint64_t map_idx = hash0 % NUM_NODE_MAPS;
+
+    if ((loc0 == shard_id) && ((int)map_idx % load_nthreads == load_tid)) {
+        node_handle_t id1 = edge.attribute("target").value();
+        edge_handle_t edge_handle = edge.attribute("id").value();
+        uint64_t loc1 = (hash_node_handle(id1) % num_shards) + ShardIdIncr;
+
+        db::node *n = S->bulk_load_acquire_node(id0, map_idx);
+        db::edge *e = S->create_edge_bulk_load(n, edge_handle, id1, loc1, zero_clk);
+        std::string alias;
+
+        for (pugi::xml_node prop: edge.children("data")) {
+            std::string key = prop.attribute("key").value();
+            std::string value = prop.child_value();
+
+            if (key == BulkLoadEdgeIndexKey) {
+                alias = value;
+            }
+
+            if (!prop_delim || value.empty()) {
+                S->set_edge_property_bulk_load(e, key, value, zero_clk);
+            } else {
+                std::vector<std::string> values;
+                split(value, BulkLoadPropertyValueDelimiter, values);
+                for (std::string &v: values) {
+                    S->set_edge_property_bulk_load(e, key, v, zero_clk);
+                }
+            }
+        }
+
+        S->bulk_load_put_edge(hstub, e, id0, n, alias);
+
+        if (++cur_shard_edge_count % 10000 == 0) {
+            WDEBUG << "GRAPHML tid=" << load_tid << " edge=" << cur_shard_edge_count << std::endl;
+        }
+        if (cur_shard_edge_count % 10000 == 0) {
+            S->bulk_load_flush_map(hstub);
+        }
+    }
+
+    element.clear();
 }
 
 // initial bulk graph loading method
@@ -310,104 +429,39 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
             pugi::xml_document doc;
             std::string element;
 
-            // nodes
             bool prop_delim = (BulkLoadPropertyValueDelimiter != '\0');
             uint64_t cur_shard_node_count = 0;
-            while (get_xml_element(file, "node", element) && !element.empty()) {
-                assert(doc.load_buffer(element.c_str(), element.size()));
-                pugi::xml_node node = doc.child("node");
-
-                node_handle_t id0 = node.attribute("id").value();
-                uint64_t hash0 = hash_node_handle(id0);
-                uint64_t loc = (hash0 % num_shards) + ShardIdIncr;
-                uint64_t map_idx = hash0 % NUM_NODE_MAPS;
-                if ((loc == shard_id) && ((int)map_idx % load_nthreads == load_tid)) {
-                    assert(!S->bulk_load_node_exists(id0, map_idx));
-                    bool in_mem;
-                    db::node *n = S->create_node_bulk_load(id0, map_idx, zero_clk, in_mem);
-
-                    for (pugi::xml_node prop: node.children("data")) {
-                        std::string key = prop.attribute("key").value();
-                        std::string value = prop.child_value();
-                        if (!prop_delim || value.empty()) {
-                            (key == BulkLoadNodeAliasKey)? S->add_node_alias_bulk_load(n, value) :
-                                                           S->set_node_property_bulk_load(n, key, value, zero_clk);
-                        } else {
-                            std::vector<std::string> values;
-                            split(value, BulkLoadPropertyValueDelimiter, values);
-                            for (std::string &v: values) {
-                                (key == BulkLoadNodeAliasKey)? S->add_node_alias_bulk_load(n, v) :
-                                                               S->set_node_property_bulk_load(n, key, v, zero_clk);
-                            }
-                        }
-                    }
-                    if (++cur_shard_node_count % 10000 == 0) {
-                        WDEBUG << "GRAPHML tid=" << load_tid << " node=" << cur_shard_node_count << std::endl;
-                        S->bulk_load_flush_map(hstub);
-                    }
-
-                    S->bulk_load_put_node(hstub, n, in_mem);
-                }
-
-                element.clear();
-            }
-
-
-            // edges
-            file.close();
-            file.open(graph_file, std::ifstream::in);
-            element.clear();
             uint64_t cur_shard_edge_count = 0;
-            while (get_xml_element(file, "edge", element) && !element.empty()) {
-                assert(doc.load_buffer(element.c_str(), element.size()));
-                pugi::xml_node edge = doc.child("edge");
-                edge_count++;
-
-                node_handle_t id0 = edge.attribute("source").value();
-                uint64_t hash0 = hash_node_handle(id0);
-                uint64_t loc0 = (hash0 % num_shards) + ShardIdIncr;
-                uint64_t map_idx = hash0 % NUM_NODE_MAPS;
-
-                if ((loc0 == shard_id) && ((int)map_idx % load_nthreads == load_tid)) {
-                    node_handle_t id1 = edge.attribute("target").value();
-                    edge_handle_t edge_handle = edge.attribute("id").value();
-                    uint64_t loc1 = (hash_node_handle(id1) % num_shards) + ShardIdIncr;
-
-                    db::node *n = S->bulk_load_acquire_node(id0, map_idx);
-                    db::edge *e = S->create_edge_bulk_load(n, edge_handle, id1, loc1, zero_clk);
-                    std::string alias;
-
-                    for (pugi::xml_node prop: edge.children("data")) {
-                        std::string key = prop.attribute("key").value();
-                        std::string value = prop.child_value();
-
-                        if (key == BulkLoadEdgeIndexKey) {
-                            alias = value;
-                        }
-
-                        if (!prop_delim || value.empty()) {
-                            S->set_edge_property_bulk_load(e, key, value, zero_clk);
-                        } else {
-                            std::vector<std::string> values;
-                            split(value, BulkLoadPropertyValueDelimiter, values);
-                            for (std::string &v: values) {
-                                S->set_edge_property_bulk_load(e, key, v, zero_clk);
-                            }
-                        }
-                    }
-
-                    S->bulk_load_put_edge(hstub, e, id0, n, alias);
-
-                    if (++cur_shard_edge_count % 10000 == 0) {
-                        WDEBUG << "GRAPHML tid=" << load_tid << " edge=" << cur_shard_edge_count << std::endl;
-                    }
-                    if (cur_shard_edge_count % 10000 == 0) {
-                        S->bulk_load_flush_map(hstub);
-                    }
+            std::vector<std::string> elem_vec;
+            elem_vec.emplace_back("node");
+            elem_vec.emplace_back("edge");
+            uint32_t cur_elem_idx;
+            while (get_xml_element(file, elem_vec, element, cur_elem_idx) && !element.empty()) {
+                if (cur_elem_idx == 0) {
+                    parse_xml_node(doc,
+                                   element,
+                                   num_shards,
+                                   load_tid,
+                                   load_nthreads,
+                                   zero_clk,
+                                   prop_delim,
+                                   cur_shard_node_count,
+                                   hstub);
+                } else {
+                    parse_xml_edge(doc,
+                                   element,
+                                   num_shards,
+                                   load_tid,
+                                   load_nthreads,
+                                   zero_clk,
+                                   prop_delim,
+                                   cur_shard_edge_count,
+                                   hstub);
                 }
-
-                element.clear();
             }
+
+            file.close();
+            element.clear();
 
             S->bulk_load_persistent(hstub);
             break;
