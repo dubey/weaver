@@ -429,7 +429,7 @@ hyper_stub :: put_node_no_loop(db::node *n)
 
     if (success) {
         apn_count++;
-        async_put_node_calls[apn->op_id] = apn;
+        async_put_node_calls.emplace(apn->op_id, apn);
 
         if (n->aliases.size() > FLUSH_CALL_SZ) {
             WDEBUG << "aliases.size=" << n->aliases.size() << std::endl;
@@ -470,7 +470,7 @@ hyper_stub :: flush_put_edge(uint32_t evict_idx)
         }
 
         ape_count++;
-        async_put_edge_calls[ape->op_id] = ape;
+        async_put_edge_calls.emplace(ape->op_id, ape);
         put_edge_batch[evict_idx] = acquire_ape_ptr();
     }
 
@@ -578,7 +578,7 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::str
 
     if (success) {
         aai_count++;
-        async_add_index_calls[aai->op_id] = aai;
+        async_add_index_calls.emplace(aai->op_id, aai);
     }
 
     if (async_add_index_calls.size() > 10*FLUSH_CALL_SZ) {
@@ -604,7 +604,6 @@ hyper_stub :: flush_all_put_edge()
 
 #define SUCCESS_LOOP(calls_map, release_func, count) \
     if (calls_map.find(op_id) != calls_map.end()) { \
-        found = true; \
         release_func(calls_map[op_id]); \
         calls_map.erase(op_id); \
         count--; \
@@ -620,15 +619,11 @@ hyper_stub :: loop_async(uint64_t loops)
         hyperdex_client_returncode code;
 
         if(loop(op_id, code)) {
-            bool found = false;
             SUCCESS_LOOP(async_put_node_calls, release_apn_ptr, apn_count);
             SUCCESS_LOOP(async_put_edge_calls, release_ape_ptr, ape_count);
             SUCCESS_LOOP(async_add_index_calls, release_aai_ptr, aai_count);
-            assert(found);
         } else {
-            bool found = false;
             if (async_put_node_calls.find(op_id) != async_put_node_calls.end()) {
-                found = true;
                 apn_ptr_t apn = async_put_node_calls[op_id];
                 async_put_node_calls.erase(op_id);
 
@@ -646,7 +641,7 @@ hyper_stub :: loop_async(uint64_t loops)
                                                     apn->num_attrs,
                                                     apn->op_id);
                     if (cur_success) {
-                        async_put_node_calls[apn->op_id] = apn;
+                        async_put_node_calls.emplace(apn->op_id, apn);
                     } else {
                         apn_count--;
                         success = false;
@@ -658,7 +653,6 @@ hyper_stub :: loop_async(uint64_t loops)
                 }
 
             } else if (async_put_edge_calls.find(op_id) != async_put_edge_calls.end()) {
-                found = true;
                 ape_ptr_t ape = async_put_edge_calls[op_id];
                 async_put_edge_calls.erase(op_id);
 
@@ -677,7 +671,7 @@ hyper_stub :: loop_async(uint64_t loops)
                                                         ape->op_id);
 
                     if (cur_success) {
-                        async_put_edge_calls[ape->op_id] = ape;
+                        async_put_edge_calls.emplace(ape->op_id, ape);
                     } else {
                         ape_count--;
                         success = false;
@@ -688,7 +682,6 @@ hyper_stub :: loop_async(uint64_t loops)
                     release_ape_ptr(ape);
                 }
             } else if (async_add_index_calls.find(op_id) != async_add_index_calls.end()) {
-                found = true;
                 aai_ptr_t aai = async_add_index_calls[op_id];
                 async_add_index_calls.erase(op_id);
 
@@ -706,7 +699,7 @@ hyper_stub :: loop_async(uint64_t loops)
                                                     aai->op_id);
 
                     if (cur_success) {
-                        async_add_index_calls[aai->op_id] = aai;
+                        async_add_index_calls.emplace(aai->op_id, aai);
                     } else {
                         aai_count--;
                         success = false;
@@ -716,9 +709,6 @@ hyper_stub :: loop_async(uint64_t loops)
                     success = false;
                     release_aai_ptr(aai);
                 }
-            }
-            if (op_id >= 0) {
-                assert(found);
             }
         }
     }

@@ -298,7 +298,7 @@ hyper_stub_base :: call(hyper_tx_func h,
         WDEBUG << "logical error: repeated hdex_id " << hdex_id << std::endl; \
         return false; \
     } \
-    delayed_opid_to_idx[hdex_id] = delayed_idx;
+    delayed_opid_to_idx.emplace(hdex_id, delayed_idx);
 
 #define DELAYED_CHECK_HDEX_ID \
     if (delayed_opid_to_idx.find(hdex_id) == delayed_opid_to_idx.end()) { \
