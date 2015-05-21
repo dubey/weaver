@@ -31,17 +31,34 @@ namespace db
         ACTIVE // this shard does have the token
     };
 
+    using async_call_ptr_t = std::shared_ptr<async_call>;
     using apn_ptr_t = std::shared_ptr<async_put_node>;
     using ape_ptr_t = std::shared_ptr<async_put_edge>;
     using aai_ptr_t = std::shared_ptr<async_add_index>;
+
+    template <typename T>
+    class hyper_stub_pool
+    {
+        private:
+            std::vector<async_call_ptr_t> pool;
+            uint64_t sz;
+
+        public:
+            hyper_stub_pool();
+            uint64_t size();
+            std::shared_ptr<T> acquire();
+            void release(std::shared_ptr<T>);
+            void clear() { pool.clear(); }
+    };
 
     class hyper_stub : private hyper_stub_base
     {
         private:
             const uint64_t shard_id;
+            const int thread_id;
 
         public:
-            hyper_stub(uint64_t sid);
+            hyper_stub(uint64_t sid, int tid);
             void restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *nodes,
                 /*XXX std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,*/
                 po6::threads::mutex *shard_mutexes);
@@ -56,22 +73,14 @@ namespace db
             bool flush_all_put_edge();
             bool loop_async(uint64_t loops);
             bool loop_async_calls(bool flush);
-            std::vector<apn_ptr_t> apn_pool;
-            std::vector<ape_ptr_t> ape_pool;
-            std::vector<aai_ptr_t> aai_pool;
-            uint32_t apn_pool_sz, ape_pool_sz, aai_pool_sz;
-            apn_ptr_t acquire_apn_ptr();
-            void release_apn_ptr(apn_ptr_t);
-            ape_ptr_t acquire_ape_ptr();
-            void release_ape_ptr(ape_ptr_t);
-            aai_ptr_t acquire_aai_ptr();
-            void release_aai_ptr(aai_ptr_t);
-            std::unordered_map<int64_t, apn_ptr_t> async_put_node_calls;
-            std::unordered_map<int64_t, ape_ptr_t> async_put_edge_calls;
+            void possibly_flush();
+            void abort_bulk_load();
+            hyper_stub_pool<async_put_node> apn_pool;
+            hyper_stub_pool<async_put_edge> ape_pool;
+            hyper_stub_pool<async_add_index> aai_pool;
             std::vector<ape_ptr_t> put_edge_batch;
-            std::unordered_map<int64_t, aai_ptr_t> async_add_index_calls;
             uint32_t put_edge_batch_clkhand;
-            uint64_t apn_count, ape_count, aai_count;
+            std::unordered_map<int64_t, async_call_ptr_t> async_calls;
             std::unique_ptr<e::buffer> restore_clk_buf;
             std::unique_ptr<e::buffer> last_clk_buf;
             // migration

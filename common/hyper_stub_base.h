@@ -39,7 +39,25 @@ enum persist_node_state
     MOVING
 };
 
-struct async_put_node
+enum async_call_type
+{
+    PUT_NODE,
+    PUT_EDGE,
+    ADD_INDEX
+};
+
+const char*
+async_call_type_to_string(async_call_type);
+
+struct async_call
+{
+    async_call_type type;
+    hyperdex_client_returncode status;
+
+    async_call() : status(HYPERDEX_CLIENT_GARBAGE) { }
+};
+
+struct async_put_node : public async_call
 {
     std::string handle;
     hyperdex_client_attribute attrs[NUM_GRAPH_ATTRS];
@@ -49,6 +67,8 @@ struct async_put_node
     std::unique_ptr<e::buffer> aliases_buf;
     size_t num_attrs;
     int64_t op_id;
+
+    async_put_node() { type = PUT_NODE; }
 };
 
 struct async_put_edge_unit
@@ -59,7 +79,7 @@ struct async_put_edge_unit
     std::unique_ptr<e::buffer> edge_buf;
 };
 
-struct async_put_edge
+struct async_put_edge : public async_call
 {
     bool used;
     std::string node_handle;
@@ -67,16 +87,18 @@ struct async_put_edge
     hyperdex_client_map_attribute *attr;
     int64_t op_id;
 
-    async_put_edge() : used(false) { }
+    async_put_edge() : used(false) { type = PUT_EDGE; }
 
     void reset() { used = false; }
 };
 
-struct async_add_index
+struct async_add_index : public async_call
 {
     std::string node_handle, alias;
     hyperdex_client_attribute index_attrs[NUM_INDEX_ATTRS];
     int64_t op_id;
+
+    async_add_index() { type = ADD_INDEX; }
 };
 
 class hyper_stub_base
@@ -97,11 +119,6 @@ class hyper_stub_base
         const char *index_attrs[NUM_INDEX_ATTRS];
         const char *index_key = "idx";
         const enum hyperdatatype index_dtypes[NUM_INDEX_ATTRS];
-
-        // no loop calls
-        int64_t delayed_idx;
-        std::unordered_map<int64_t, int64_t> delayed_opid_to_idx;
-        std::unordered_map<int64_t, hyperdex_client_returncode> delayed_call_status;
 
         using hyper_func = int64_t (*) (struct hyperdex_client *client,
             const char*,
@@ -135,6 +152,9 @@ class hyper_stub_base
         hyperdex_client *cl;
         hyperdex_client_transaction *hyper_tx;
 
+        void check_op_id(int64_t op_id,
+                         hyperdex_client_returncode status,
+                         bool &success, int &success_calls);
         void begin_tx();
         void commit_tx(hyperdex_client_returncode &commit_status);
         void abort_tx();
@@ -150,7 +170,7 @@ class hyper_stub_base
             const char *space,
             const char *key, size_t key_sz,
             hyperdex_client_attribute *cl_attr, size_t num_attrs,
-            int64_t &op_id);
+            int64_t &op_id, hyperdex_client_returncode &status);
         bool map_call(hyper_map_tx_func h,
             const char *space,
             const char *key, size_t key_sz,
@@ -159,8 +179,8 @@ class hyper_stub_base
             const char *space,
             const char *key, size_t key_sz,
             hyperdex_client_map_attribute *map_attr, size_t num_attrs,
-            int64_t &op_id);
-        bool loop(int64_t &op_id, hyperdex_client_returncode &code);
+            int64_t &op_id, hyperdex_client_returncode &status);
+        bool loop(int64_t &op_id, hyperdex_client_returncode &loop_code);
 
         bool multiple_call(std::vector<hyper_func> &funcs,
             std::vector<const char*> &spaces,
@@ -178,19 +198,6 @@ class hyper_stub_base
             std::vector<const char*> &map_spaces,
             std::vector<const char*> &map_keys, std::vector<size_t> &map_key_szs,
             std::vector<hyperdex_client_map_attribute*> &map_attrs, std::vector<size_t> &map_num_attrs);
-        bool multiple_call_no_loop(std::vector<hyper_func> &funcs,
-            std::vector<const char*> &spaces,
-            std::vector<const char*> &keys, std::vector<size_t> &key_szs,
-            std::vector<hyperdex_client_attribute*> &attrs, std::vector<size_t> &num_attrs);
-        bool multiple_call_no_loop(std::vector<hyper_func> &funcs,
-            std::vector<const char*> &spaces,
-            std::vector<const char*> &keys, std::vector<size_t> &key_szs,
-            std::vector<hyperdex_client_attribute*> &attrs, std::vector<size_t> &num_attrs,
-            std::vector<hyper_map_func> &map_funcs,
-            std::vector<const char*> &map_spaces,
-            std::vector<const char*> &map_keys, std::vector<size_t> &map_key_szs,
-            std::vector<hyperdex_client_map_attribute*> &map_attrs, std::vector<size_t> &map_num_attrs);
-        bool multiple_loop(uint64_t num_loops);
 
         bool get(const char *space,
             const char *key, size_t key_sz,

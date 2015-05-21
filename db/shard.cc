@@ -258,7 +258,7 @@ parse_xml_node(pugi::xml_document &doc,
                 }
             }
         }
-        if (++cur_shard_node_count % 10000 == 0) {
+        if (++cur_shard_node_count % 100000 == 0) {
             WDEBUG << "GRAPHML tid=" << load_tid << " node=" << cur_shard_node_count << std::endl;
             S->bulk_load_flush_map(hstub);
         }
@@ -318,10 +318,10 @@ parse_xml_edge(pugi::xml_document &doc,
 
         S->bulk_load_put_edge(hstub, e, id0, n, alias);
 
-        if (++cur_shard_edge_count % 10000 == 0) {
+        if (++cur_shard_edge_count % 100000 == 0) {
             WDEBUG << "GRAPHML tid=" << load_tid << " edge=" << cur_shard_edge_count << std::endl;
         }
-        if (cur_shard_edge_count % 10000 == 0) {
+        if (cur_shard_edge_count % 100000 == 0) {
             S->bulk_load_flush_map(hstub);
         }
     }
@@ -349,7 +349,8 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
     uint64_t edge_count = 0;
     vclock_ptr_t zero_clk(new vc::vclock(0,0));
 
-    db::hyper_stub hstub(shard_id);
+    std::shared_ptr<db::hyper_stub> hstub_ptr = std::make_shared<db::hyper_stub>(shard_id, load_tid);
+    db::hyper_stub &hstub = *hstub_ptr;
 
     switch(format) {
 
@@ -2243,8 +2244,6 @@ main(int argc, const char *argv[])
     } else {
         init_shard();
 
-        init_worker_threads(worker_threads);
-
         S->config_mutex.unlock();
 
         // bulk loading
@@ -2278,6 +2277,10 @@ main(int argc, const char *argv[])
             msg.prepare_message(message::LOADED_GRAPH, load_time);
             S->comm.send(ShardIdIncr, msg.buf);
         }
+
+        S->config_mutex.lock();
+        init_worker_threads(worker_threads);
+        S->config_mutex.unlock();
     }
 
     std::cout << "Weaver: shard instance " << S->shard_id << std::endl;

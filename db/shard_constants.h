@@ -15,6 +15,7 @@
 #define weaver_db_shard_constants_h_
 
 #define NUM_SHARD_THREADS (sysconf(_SC_NPROCESSORS_ONLN ))
+//#define NUM_SHARD_THREADS 2
 //#define NUM_SHARD_THREADS 128
 
 #define NUM_NODE_MAPS 64

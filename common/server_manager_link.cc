@@ -141,7 +141,7 @@ server_manager_link :: get_replid(uint64_t &id)
 
     while (true) {
         replicant_returncode lrc = REPLICANT_GARBAGE;
-        int64_t lid = loop(-1, &lrc);
+        int64_t lid = loop(1000000, &lrc);
 
         if (lid < 0) {
             e::error err = error();

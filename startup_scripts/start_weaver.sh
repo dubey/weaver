@@ -80,6 +80,7 @@ do
         rm -f $rm_patterns hyperdex-daemon-*
         hyperdex daemon --listen=$ipaddr --listen-port=$port \
                         --coordinator=$hyperdex_coord_ipaddr --coordinator-port=$hyperdex_coord_port \
+                        --log-immediate \
                         > /dev/null 2>&1
     else
     ssh $ipaddr 'bash -s' << EOF
@@ -89,6 +90,7 @@ do
         rm -f $rm_patterns hyperdex-daemon-*
         hyperdex daemon --listen=$ipaddr --listen-port=$port \
                         --coordinator=$hyperdex_coord_ipaddr --coordinator-port=$hyperdex_coord_port \
+                        --log-immediate \
                         > /dev/null 2>&1
 EOF
     fi

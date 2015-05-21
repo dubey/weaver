@@ -320,10 +320,10 @@ namespace db
     {
         shard_id = shardid;
         for (int i = 0; i < NUM_SHARD_THREADS; i++) {
-            hstub.push_back(new hyper_stub(shard_id));
+            hstub.push_back(new hyper_stub(shard_id, -1));
             time_oracles.push_back(new order::oracle());
         }
-        hstub.push_back(new hyper_stub(shard_id)); // for server manager thread
+        hstub.push_back(new hyper_stub(shard_id, -1)); // for server manager thread
     }
 
     // reconfigure shard according to new cluster configuration
@@ -451,9 +451,7 @@ namespace db
     inline void
     shard :: bulk_load_flush_map(db::hyper_stub &hs)
     {
-        WDEBUG << &hs << "\tgoing to loop async" << std::endl;
         hs.loop_async_calls(false);
-        WDEBUG << &hs << "\tlooped async calls" << std::endl;
     }
 
     // Consistency methods

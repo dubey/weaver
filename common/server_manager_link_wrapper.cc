@@ -166,7 +166,7 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
     }
 
     replicant_returncode lrc = REPLICANT_GARBAGE;
-    int64_t lid = m_sm->loop(-1, &lrc);
+    int64_t lid = m_sm->loop(1000000, &lrc);
 
     if (lid < 0)
     {
