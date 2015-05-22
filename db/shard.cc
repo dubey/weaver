@@ -260,7 +260,6 @@ parse_xml_node(pugi::xml_document &doc,
         }
         if (++cur_shard_node_count % 100000 == 0) {
             WDEBUG << "GRAPHML tid=" << load_tid << " node=" << cur_shard_node_count << std::endl;
-            S->bulk_load_flush_map(hstub);
         }
 
         S->bulk_load_put_node(hstub, n, in_mem);
@@ -320,9 +319,6 @@ parse_xml_edge(pugi::xml_document &doc,
 
         if (++cur_shard_edge_count % 100000 == 0) {
             WDEBUG << "GRAPHML tid=" << load_tid << " edge=" << cur_shard_edge_count << std::endl;
-        }
-        if (cur_shard_edge_count % 100000 == 0) {
-            S->bulk_load_flush_map(hstub);
         }
     }
 

@@ -82,14 +82,15 @@ struct async_put_edge_unit
 struct async_put_edge : public async_call
 {
     bool used;
+    uint64_t time;
     std::string node_handle;
     std::vector<async_put_edge_unit> batched;
     hyperdex_client_map_attribute *attr;
     int64_t op_id;
 
-    async_put_edge() : used(false) { type = PUT_EDGE; }
+    async_put_edge() : used(false), time(UINT64_MAX) { type = PUT_EDGE; }
 
-    void reset() { used = false; }
+    void reset() { used = false; time = UINT64_MAX; }
 };
 
 struct async_add_index : public async_call

@@ -102,7 +102,7 @@ hyper_stub_base :: check_op_id(int64_t op_id,
                                bool &success,
                                int &success_calls)
 {
-    if (op_id < 0 && status != HYPERDEX_CLIENT_TIMEOUT) {
+    if (op_id < 0 && status != HYPERDEX_CLIENT_TIMEOUT && status != HYPERDEX_CLIENT_NONEPENDING) {
         WDEBUG << "Hyperdex function failed, op id = " << op_id
                << ", status = " << hyperdex_client_returncode_to_string(status) << std::endl;
         WDEBUG << "error message: " << hyperdex_client_error_message(cl) << std::endl;
