@@ -259,11 +259,15 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 		                    db/element.cc \
 		                    db/property.cc \
 		                    client/comm_wrapper.cc \
-		                    client/client.cc
+		                    client/weaver_returncode.cc \
+		                    client/client.cc \
+		                    client/c.cc
 libweaverclient_la_CFLAGS=	$(AM_CFLAGS)
 libweaverclient_la_CXXFLAGS=$(AM_CXXFLAGS)
 weaverinclude_HEADERS+=		client/client.h \
-							client/datastructures.h
+							client/datastructures.h \
+							client/weaver_returncode.h \
+							client/weaver_client.h
 
 # python client
 EXTRA_DIST+=						bindings/python/__init__.py \

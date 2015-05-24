@@ -21,6 +21,7 @@
 #include "common/message_constants.h"
 #include "common/server_manager_link_wrapper.h"
 #include "common/transaction.h"
+#include "client/weaver_returncode.h"
 #include "client/comm_wrapper.h"
 #include "client/datastructures.h"
 #include "node_prog/node_prog_type.h"
@@ -39,25 +40,6 @@
 
 namespace cl
 {
-    enum weaver_client_returncode
-    {
-        WEAVER_CLIENT_SUCCESS,
-        WEAVER_CLIENT_INITERROR,
-        WEAVER_CLIENT_LOGICALERROR,
-        // tx
-        WEAVER_CLIENT_ABORT,
-        WEAVER_CLIENT_ACTIVETX,
-        WEAVER_CLIENT_NOACTIVETX,
-        WEAVER_CLIENT_NOAUXINDEX,
-        // node prog
-        WEAVER_CLIENT_NOTFOUND,
-        // msg
-        WEAVER_CLIENT_DISRUPTED,
-        WEAVER_CLIENT_INTERNALMSGERROR
-    };
-
-    const char* weaver_client_returncode_to_string(weaver_client_returncode code);
-
     class client
     {
         public:

@@ -25,37 +25,7 @@
 DECLARE_CONFIG_CONSTANTS;
 
 using cl::client;
-using cl::weaver_client_returncode;
 using transaction::pending_update;
-
-const char*
-cl :: weaver_client_returncode_to_string(weaver_client_returncode code)
-{
-    switch (code) {
-        case WEAVER_CLIENT_SUCCESS:
-            return "WEAVER_CLIENT_SUCCESS";
-        case WEAVER_CLIENT_INITERROR:
-            return "WEAVER_CLIENT_INITERROR";
-        case WEAVER_CLIENT_LOGICALERROR:
-            return "WEAVER_CLIENT_LOGICALERROR";
-        case WEAVER_CLIENT_ABORT:
-            return "WEAVER_CLIENT_ABORT";
-        case WEAVER_CLIENT_ACTIVETX:
-            return "WEAVER_CLIENT_ACTIVETX";
-        case WEAVER_CLIENT_NOACTIVETX:
-            return "WEAVER_CLIENT_NOACTIVETX";
-        case WEAVER_CLIENT_NOAUXINDEX:
-            return "WEAVER_CLIENT_NOAUXINDEX";
-        case WEAVER_CLIENT_NOTFOUND:
-            return "WEAVER_CLIENT_NOTFOUND";
-        case WEAVER_CLIENT_DISRUPTED:
-            return "WEAVER_CLIENT_DISRUPTED";
-        case WEAVER_CLIENT_INTERNALMSGERROR:
-            return "WEAVER_CLIENT_INTERNALMSGERROR";
-    }
-
-    return "";
-}
 
 client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const char *config_file="/etc/weaver.yaml")
     : m_sm(coordinator, port)

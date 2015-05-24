@@ -386,7 +386,7 @@ cdef extern from 'node_prog/get_btc_block.h' namespace 'node_prog':
         node node
         vector[pair[vector[edge], vector[edge]]] txs
 
-cdef extern from 'client/client.h' namespace 'cl':
+cdef extern from 'client/weaver_returncode.h':
     cdef enum weaver_client_returncode:
         WEAVER_CLIENT_SUCCESS
         WEAVER_CLIENT_INITERROR
@@ -400,6 +400,7 @@ cdef extern from 'client/client.h' namespace 'cl':
         WEAVER_CLIENT_INTERNALMSGERROR
     const char* weaver_client_returncode_to_string(weaver_client_returncode code)
 
+cdef extern from 'client/client.h' namespace 'cl':
     cdef cppclass client:
         client(const char *coordinator, uint16_t port, const char *config_file)
         void initialize_logging()
