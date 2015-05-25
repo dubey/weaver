@@ -92,6 +92,11 @@ int main()
     }
     printf("done printing node details\n");
 
+    // node prog
+    struct edge *e;
+    returncode = weaver_client_get_edge(client, edge, &e);
+    printf("\ngot edge, handle=%s\n", e->handle);
+
     // delete tx
     weaver_client_begin_tx(client);
     weaver_client_delete_edge(client, edge, NULL, 0);
@@ -103,6 +108,7 @@ int main()
     weaver_client_destroy_handles(node2, 1);
     weaver_client_destroy_handles(edge, 1);
     weaver_client_destroy_nodes(n, 1);
+    weaver_client_destroy_edges(e, 1);
 
     returncode = weaver_client_get_node(client, ayush, &n);
     assert(WEAVER_CLIENT_NOTFOUND == returncode);
