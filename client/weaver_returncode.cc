@@ -9,7 +9,7 @@
  * ===============================================================
  */
 
-#include "client/weaver_returncode.h"
+#include "client/weaver/weaver_returncode.h"
 
 #ifdef __cplusplus
 extern "C"

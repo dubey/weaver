@@ -9,7 +9,7 @@
  * ===============================================================
  */
 
-#include "client/weaver_client.h"
+#include "client/weaver/weaver_client.h"
 #include "client/client.h"
 
 #define C_WRAP_EXCEPT(X) \

@@ -266,8 +266,8 @@ libweaverclient_la_CFLAGS=	$(AM_CFLAGS)
 libweaverclient_la_CXXFLAGS=$(AM_CXXFLAGS)
 weaverinclude_HEADERS+=		client/client.h \
 							client/datastructures.h \
-							client/weaver_returncode.h \
-							client/weaver_client.h
+							client/weaver/weaver_returncode.h \
+							client/weaver/weaver_client.h
 
 # python client
 EXTRA_DIST+=						bindings/python/__init__.py \

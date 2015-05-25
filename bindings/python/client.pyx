@@ -386,7 +386,7 @@ cdef extern from 'node_prog/get_btc_block.h' namespace 'node_prog':
         node node
         vector[pair[vector[edge], vector[edge]]] txs
 
-cdef extern from 'client/weaver_returncode.h':
+cdef extern from 'client/weaver/weaver_returncode.h':
     cdef enum weaver_client_returncode:
         WEAVER_CLIENT_SUCCESS
         WEAVER_CLIENT_INITERROR
