@@ -118,6 +118,11 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
              && get_set.find(p.second.first) == get_set.end()) {
                 get_set.emplace(p.second.first);
             }
+
+            if (del_set.find(p.first) != del_set.end()) {
+                del_set.erase(p.first);
+                del_set.emplace(p.second.first);
+            }
         }
     }
 

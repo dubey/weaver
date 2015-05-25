@@ -12,43 +12,6 @@
 #include "client/weaver_client.h"
 #include "client/client.h"
 
-void
-pre_create_handle(std::string &handle, char **c_handle, int create_handle)
-{
-    if (!create_handle) {
-        handle = *c_handle;
-    }
-}
-
-void
-convert_c_handle(const std::string &handle, char **c_handle)
-{
-    char *new_handle = (char*)malloc(handle.size()+1);
-    strncpy(new_handle, handle.c_str(), handle.size());
-    new_handle[handle.size()] = '\0';
-
-    *c_handle = new_handle;
-}
-
-void
-post_create_handle(const std::string &handle, char **c_handle, int create_handle)
-{
-    if (create_handle) {
-        convert_c_handle(handle, c_handle);
-    }
-}
-
-void
-prepare_handle_or_alias(std::string &node, std::string &alias,
-                        const char *_node, int handle_or_alias)
-{
-    if (handle_or_alias) {
-        alias = _node;
-    } else {
-        node = _node;
-    }
-}
-
 #define C_WRAP_EXCEPT(X) \
     cl::client *cl = reinterpret_cast<cl::client*>(_cl); \
     try { \
@@ -84,6 +47,45 @@ void
 weaver_client_destroy(struct weaver_client *client)
 {
     delete reinterpret_cast<cl::client*>(client);
+}
+
+void
+pre_create_handle(std::string &handle, char **c_handle, int create_handle)
+{
+    if (!create_handle) {
+        handle = *c_handle;
+    }
+}
+
+void
+convert_c_handle(const std::string &handle, char **c_handle)
+{
+    char *new_handle = (char*)malloc(handle.size()+1);
+    strncpy(new_handle, handle.c_str(), handle.size());
+    new_handle[handle.size()] = '\0';
+
+    *c_handle = new_handle;
+}
+
+void
+post_create_handle(const std::string &handle, char **c_handle, int create_handle)
+{
+    if (create_handle) {
+        convert_c_handle(handle, c_handle);
+    }
+}
+
+void
+prepare_handle_or_alias(std::string &node, std::string &alias,
+                        const char *_node, int handle_or_alias)
+{
+    if (_node) {
+        if (handle_or_alias) {
+            alias = _node;
+        } else {
+            node = _node;
+        }
+    }
 }
 
 weaver_client_returncode
@@ -352,6 +354,72 @@ weaver_client_get_edge(struct weaver_client *_cl,
     }
 
     return returncode;
+}
+
+enum weaver_client_returncode
+weaver_client_destroy_handles(char *handles,
+                              size_t handles_sz)
+{
+    if (handles_sz > 0) {
+        free(handles);
+    }
+
+    return WEAVER_CLIENT_SUCCESS;
+}
+
+enum weaver_client_returncode
+weaver_client_destroy_properties(struct property *props,
+                                 size_t properties_sz)
+{
+    if (properties_sz > 0) {
+        for (size_t i = 0; i < properties_sz; i++) {
+            weaver_client_destroy_handles(props[i].key, 1);
+            weaver_client_destroy_handles(props[i].value, 1);
+        }
+        free(props);
+    }
+
+    return WEAVER_CLIENT_SUCCESS;
+}
+
+enum weaver_client_returncode
+weaver_client_destroy_edges(struct edge *edges,
+                            size_t edges_sz)
+{
+    if (edges_sz > 0) {
+        for (size_t i = 0; i < edges_sz; i++) {
+            weaver_client_destroy_handles(edges[i].handle, 1);
+            weaver_client_destroy_handles(edges[i].start_node, 1);
+            weaver_client_destroy_handles(edges[i].end_node, 1);
+            weaver_client_destroy_properties(edges[i].properties, edges[i].properties_sz);
+        }
+        free(edges);
+    }
+
+    return WEAVER_CLIENT_SUCCESS;
+}
+
+enum weaver_client_returncode
+weaver_client_destroy_nodes(struct node *nodes,
+                            size_t nodes_sz)
+{
+    if (nodes_sz > 0) {
+        for (size_t i = 0; i < nodes_sz; i++) {
+            weaver_client_destroy_handles(nodes[i].handle, 1);
+            weaver_client_destroy_properties(nodes[i].properties, nodes[i].properties_sz);
+            weaver_client_destroy_edges(nodes[i].out_edges, nodes[i].out_edges_sz);
+
+            if (nodes[i].aliases_sz > 0) {
+                for (size_t j = 0; j < nodes[i].aliases_sz; j++) {
+                    weaver_client_destroy_handles(nodes[i].aliases[j], 1);
+                }
+            }
+            free(nodes[i].aliases);
+        }
+        free(nodes);
+    }
+
+    return WEAVER_CLIENT_SUCCESS;
 }
 
 #ifdef __cplusplus

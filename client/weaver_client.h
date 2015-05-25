@@ -113,6 +113,21 @@ weaver_client_get_edge(struct weaver_client *client,
                        const char *edge_handle,
                        struct edge **e);
 
+enum weaver_client_returncode
+weaver_client_destroy_handles(char *handles,
+                              size_t handles_sz);
+
+enum weaver_client_returncode
+weaver_client_destroy_properties(struct property *props,
+                                 size_t properties_sz);
+
+enum weaver_client_returncode
+weaver_client_destroy_edges(struct edge *edges,
+                            size_t edges_sz);
+
+enum weaver_client_returncode
+weaver_client_destroy_nodes(struct node *nodes,
+                            size_t nodes_sz);
 
 #ifdef __cplusplus
 }

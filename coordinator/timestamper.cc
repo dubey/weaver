@@ -107,7 +107,11 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
                 HANDLE_OR_ALIAS(upd->handle1, upd->loc1, upd->alias1);
                 upd->loc2 = 0;
                 if (upd->type == transaction::NODE_DELETE_REQ) {
-                    del_set.emplace(upd->handle1);
+                    if (upd->handle1.empty()) {
+                        del_set.emplace(upd->alias1);
+                    } else {
+                        del_set.emplace(upd->handle1);
+                    }
                 }
                 break;
 
