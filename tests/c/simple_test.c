@@ -105,7 +105,7 @@ int main()
     weaver_client_destroy_nodes(n, 1);
 
     returncode = weaver_client_get_node(client, ayush, &n);
-    assert(returncode == WEAVER_CLIENT_NOTFOUND);
+    assert(WEAVER_CLIENT_NOTFOUND == returncode);
 
     weaver_client_destroy(client);
     return 0;
