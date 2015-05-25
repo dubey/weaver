@@ -21,14 +21,20 @@ pre_create_handle(std::string &handle, char **c_handle, int create_handle)
 }
 
 void
-post_create_handle(std::string &handle, char **c_handle, int create_handle)
+convert_c_handle(const std::string &handle, char **c_handle)
+{
+    char *new_handle = (char*)malloc(handle.size()+1);
+    strncpy(new_handle, handle.c_str(), handle.size());
+    new_handle[handle.size()] = '\0';
+
+    *c_handle = new_handle;
+}
+
+void
+post_create_handle(const std::string &handle, char **c_handle, int create_handle)
 {
     if (create_handle) {
-        char *new_handle = (char*)malloc(handle.size()+1);
-        strncpy(new_handle, handle.c_str(), handle.size());
-        new_handle[handle.size()] = '\0';
-
-        *c_handle = new_handle;
+        convert_c_handle(handle, c_handle);
     }
 }
 
@@ -180,14 +186,14 @@ weaver_client_delete_edge(struct weaver_client *_cl,
 weaver_client_returncode
 weaver_client_set_node_property(struct weaver_client *_cl,
                                 const char *_node, int handle_or_alias,
-                                const char *key, const char *value)
+                                const struct property *prop)
 {
     weaver_client_returncode returncode;
     std::string node, alias;
     prepare_handle_or_alias(node, alias, _node, handle_or_alias);
 
     C_WRAP_EXCEPT(
-        returncode = cl->set_node_property(node, alias, key, value);
+        returncode = cl->set_node_property(node, alias, prop->key, prop->value);
     );
 
     return returncode;
@@ -197,14 +203,14 @@ weaver_client_returncode
 weaver_client_set_edge_property(struct weaver_client *_cl,
                                 const char *_node, int handle_or_alias,
                                 const char *edge,
-                                const char *key, const char *value)
+                                const struct property *prop)
 {
     weaver_client_returncode returncode;
     std::string node, alias;
     prepare_handle_or_alias(node, alias, _node, handle_or_alias);
 
     C_WRAP_EXCEPT(
-        returncode = cl->set_edge_property(node, alias, edge, key, value);
+        returncode = cl->set_edge_property(node, alias, edge, prop->key, prop->value);
     );
 
     return returncode;
@@ -229,7 +235,7 @@ weaver_client_end_tx(struct weaver_client *_cl)
     weaver_client_returncode returncode;
 
     C_WRAP_EXCEPT(
-        cl->end_tx();
+        returncode = cl->end_tx();
     );
 
     return returncode;
@@ -241,8 +247,109 @@ weaver_client_abort_tx(struct weaver_client *_cl)
     weaver_client_returncode returncode;
 
     C_WRAP_EXCEPT(
-        cl->abort_tx();
+        returncode = cl->abort_tx();
     );
+
+    return returncode;
+}
+
+void
+convert_c_properties(const std::vector<std::shared_ptr<cl::property>> &props,
+                     struct property **c_props, size_t *props_sz)
+{
+    *props_sz = props.size();
+    if (props.size() > 0) {
+        *c_props = (struct property*)malloc(sizeof(struct property) * props.size());
+    }
+
+    for (size_t i = 0; i < props.size(); i++) {
+        struct property &c_p = (*c_props)[i];
+        const cl::property &p = *props[i];
+        convert_c_handle(p.key, &c_p.key);
+        convert_c_handle(p.value, &c_p.value);
+    }
+}
+
+void
+convert_c_edge(const cl::edge &edge,
+               struct edge *c_edge)
+{
+    convert_c_handle(edge.handle, &c_edge->handle);
+    convert_c_handle(edge.start_node, &c_edge->start_node);
+    convert_c_handle(edge.end_node, &c_edge->end_node);
+    convert_c_properties(edge.properties, &c_edge->properties, &c_edge->properties_sz);
+}
+
+void
+convert_c_node(const cl::node &n, struct node *c_n)
+{
+    convert_c_handle(n.handle, &c_n->handle);
+    convert_c_properties(n.properties, &c_n->properties, &c_n->properties_sz);
+
+    c_n->out_edges_sz = n.out_edges.size();
+    if (c_n->out_edges_sz > 0) {
+        c_n->out_edges = (struct edge*)malloc(sizeof(struct edge) * c_n->out_edges_sz);
+        size_t i = 0;
+        for (const auto &p: n.out_edges) {
+            convert_c_edge(p.second, c_n->out_edges+i);
+            i++;
+        }
+    }
+
+    c_n->aliases_sz = n.aliases.size();
+    if (c_n->aliases_sz > 0) {
+        c_n->aliases = (char**)malloc(sizeof(char*) * c_n->aliases_sz);
+        size_t i = 0;
+        for (const std::string &alias: n.aliases) {
+            convert_c_handle(alias, c_n->aliases + i);
+            i++;
+        }
+    }
+}
+
+weaver_client_returncode
+weaver_client_get_node(struct weaver_client *_cl,
+                       const char *node_handle,
+                       struct node **n)
+{
+    weaver_client_returncode returncode;
+    std::vector<std::pair<std::string, node_prog::node_get_params>> arg_vec;
+    node_prog::node_get_params arg_params, ret_params;
+    arg_params.props = true;
+    arg_params.edges = true;
+    arg_params.aliases = true;
+    arg_vec.emplace_back(std::make_pair(node_handle, arg_params));
+
+    C_WRAP_EXCEPT(
+        returncode = cl->node_get_program(arg_vec, ret_params);
+    );
+
+    if (returncode == WEAVER_CLIENT_SUCCESS) {
+        *n = (struct node*)malloc(sizeof(struct node));
+        convert_c_node(ret_params.node, *n);
+    }
+
+    return returncode;
+}
+
+weaver_client_returncode
+weaver_client_get_edge(struct weaver_client *_cl,
+                       const char *edge_handle,
+                       struct edge **e)
+{
+    weaver_client_returncode returncode;
+    std::vector<std::pair<std::string, node_prog::edge_get_params>> arg_vec;
+    node_prog::edge_get_params arg_params, ret_params;
+    arg_vec.emplace_back(std::make_pair(edge_handle, arg_params));
+
+    C_WRAP_EXCEPT(
+        returncode = cl->edge_get_program(arg_vec, ret_params);
+    );
+
+    if (returncode == WEAVER_CLIENT_SUCCESS) {
+        *e = (struct edge*)malloc(sizeof(struct edge));
+        convert_c_edge(ret_params.response_edges.front(), *e);
+    }
 
     return returncode;
 }

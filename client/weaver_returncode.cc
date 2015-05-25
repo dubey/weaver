@@ -17,7 +17,7 @@ extern "C"
 #endif
 
 const char*
-weaver_client_returncode_to_string(weaver_client_returncode code)
+weaver_client_returncode_to_string(enum weaver_client_returncode code)
 {
     switch (code) {
         case WEAVER_CLIENT_SUCCESS:
