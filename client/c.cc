@@ -22,7 +22,7 @@
     } \
     catch (...) { \
         returncode = WEAVER_CLIENT_EXCEPTION; \
-    } \
+    }
 
 #ifdef __cplusplus
 extern "C"
