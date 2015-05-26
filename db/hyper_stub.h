@@ -80,7 +80,7 @@ namespace db
             hyper_stub_pool<async_add_index> aai_pool;
             std::unordered_map<std::string, ape_ptr_t> put_edge_batch;
             uint64_t put_edge_batch_clock;
-            std::unordered_set<std::string> outstanding_node_puts;
+            std::unordered_map<std::string, std::vector<ape_ptr_t>> outstanding_node_puts;
             std::unordered_map<int64_t, async_call_ptr_t> async_calls;
             std::unique_ptr<e::buffer> restore_clk_buf;
             std::unique_ptr<e::buffer> last_clk_buf;
@@ -98,6 +98,7 @@ namespace db
                 std::unordered_map<std::string, node*> &idx_add,
                 int &ine_progress,
                 int &progress);
+            bool done_op(async_call_ptr_t, int64_t op_id);
     };
 }
 

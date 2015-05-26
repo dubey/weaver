@@ -53,8 +53,9 @@ struct async_call
 {
     async_call_type type;
     hyperdex_client_returncode status;
+    uint32_t loop_calls;
 
-    async_call() : status(HYPERDEX_CLIENT_GARBAGE) { }
+    async_call() : status(HYPERDEX_CLIENT_GARBAGE), loop_calls(0) { }
 };
 
 struct async_put_node : public async_call

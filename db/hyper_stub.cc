@@ -17,9 +17,9 @@
 #include "db/shard_constants.h"
 #include "db/hyper_stub.h"
 
-#define PUT_EDGE_BUFFER_SZ 5000
-#define FLUSH_CALL_SZ 10000
-#define INITIAL_POOL_SZ (FLUSH_CALL_SZ*3)
+#define PUT_EDGE_BUFFER_SZ 10000
+#define OUTSTANDING_HD_OPS 50000
+#define INITIAL_POOL_SZ (OUTSTANDING_HD_OPS*3)
 
 using db::hyper_stub;
 using db::hyper_stub_pool;
@@ -51,11 +51,11 @@ hyper_stub_pool<T> :: acquire()
     std::shared_ptr<T> ret;
 
     if (pool.empty()) {
-        for (uint32_t i = 0; i < FLUSH_CALL_SZ; i++) {
+        for (uint32_t i = 0; i < OUTSTANDING_HD_OPS; i++) {
             std::shared_ptr<T> new_ptr= std::make_shared<T>();
             pool.emplace_back(new_ptr);
         }
-        sz += FLUSH_CALL_SZ;
+        sz += OUTSTANDING_HD_OPS;
         WDEBUG << "pool sz=" << sz << std::endl;
     }
 
@@ -77,6 +77,7 @@ hyper_stub_pool<T> :: release(std::shared_ptr<T> ptr)
         ape->batched.clear();
         free(ape->attr);
     }
+    ptr->loop_calls = 0;
     pool.emplace_back(ptr);
 }
 
@@ -394,8 +395,7 @@ hyper_stub :: put_node_no_loop(db::node *n)
 
     if (success) {
         async_calls.emplace(apn->op_id, apn);
-        outstanding_node_puts.emplace(apn->handle);
-        //WDEBUG << "tid=" << thread_id << "\top_id=" << apn->op_id << " in async_put_node_calls" << std::endl;
+        outstanding_node_puts.emplace(apn->handle, std::vector<ape_ptr_t>());
 
         for (const std::string &alias: n->aliases) {
             success = add_index_no_loop(n->get_handle(), alias) && success;
@@ -442,7 +442,6 @@ hyper_stub :: flush_put_edge(ape_ptr_t ape)
 
     if (success) {
         async_calls.emplace(ape->op_id, ape);
-        //WDEBUG << "tid=" << thread_id << "\top_id=" << ape->op_id << " in async_put_edge_calls" << std::endl;
     } else {
         WDEBUG << "hyperdex_client_map_add failed, op_id=" << ape->op_id
                << ", call_code=" << hyperdex_client_returncode_to_string(ape->status) << std::endl;
@@ -466,31 +465,38 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, co
         cur_ape = put_edge_iter->second;
     } else {
         if (put_edge_batch.size() > PUT_EDGE_BUFFER_SZ) {
-            // flush oldest PUT_EDGE_BUFFER_SZ/2
-            std::vector<std::pair<uint64_t, std::string>> possibly_flush;
+            WDEBUG << "flush put edge loop, sz=" << put_edge_batch.size() << std::endl;
+            // write oldest PUT_EDGE_BUFFER_SZ/2
+            std::vector<ape_ptr_t> can_write;
             for (const auto &p: put_edge_batch) {
                 ape_ptr_t ape = p.second;
-                if (outstanding_node_puts.find(ape->node_handle) == outstanding_node_puts.end()) {
-                    possibly_flush.emplace_back(std::make_pair(ape->time, p.first));
-                }
+                can_write.emplace_back(ape);
             }
 
-            std::sort(possibly_flush.begin(), possibly_flush.end(),
-                      [](const std::pair<uint64_t,std::string> &left, const std::pair<uint64_t,std::string> &right) {
-                          return left.first < right.first;
+            std::sort(can_write.begin(), can_write.end(),
+                      [](const ape_ptr_t &left, const ape_ptr_t &right) {
+                          return left->time < right->time;
                       }
             );
 
-            // remove as many MRU items as needed so that we flush only PUT_EDGE_BUFFER_SZ/2 items
-            if (possibly_flush.size() > PUT_EDGE_BUFFER_SZ/2) {
-                possibly_flush.erase(possibly_flush.begin() + PUT_EDGE_BUFFER_SZ/2, possibly_flush.end());
+            // remove as many MRU items as needed so that we write only PUT_EDGE_BUFFER_SZ/2 items
+            if (can_write.size() > PUT_EDGE_BUFFER_SZ/2) {
+                can_write.erase(can_write.begin() + PUT_EDGE_BUFFER_SZ/2, can_write.end());
             }
 
-            for (const auto &p: possibly_flush) {
-                auto del_iter = put_edge_batch.find(p.second);
-                success = flush_put_edge(del_iter->second) && success;
-                put_edge_batch.erase(del_iter);
+            for (auto ape: can_write) {
+                std::string del_handle = ape->node_handle;
+
+                auto outstanding_iter = outstanding_node_puts.find(del_handle);
+                if (outstanding_iter != outstanding_node_puts.end()) {
+                    outstanding_iter->second.emplace_back(ape);
+                } else {
+                    success = flush_put_edge(ape) && success;
+                }
+
+                put_edge_batch.erase(del_handle);
             }
+            WDEBUG << "flush put edge DONE, sz=" << put_edge_batch.size() << std::endl;
         }
 
         cur_ape = ape_pool.acquire();
@@ -539,7 +545,6 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::str
 
     if (success) {
         async_calls.emplace(aai->op_id, aai);
-        //WDEBUG << "tid=" << thread_id << "\top_id=" << aai->op_id << " in async_add_index_calls" << std::endl;
     } else {
         WDEBUG << "hyperdex_client_put failed, op_id=" << aai->op_id
                << ", call_code=" << hyperdex_client_returncode_to_string(aai->status) << std::endl;
@@ -567,14 +572,48 @@ hyper_stub :: flush_all_put_edge()
 }
 
 bool
-hyper_stub :: loop_async(uint64_t outstanding_ops, uint64_t &num_timeouts)
+hyper_stub :: done_op(async_call_ptr_t ac_ptr, int64_t op_id)
 {
     bool success = true;
-    uint64_t initial_ops = outstanding_ops;
+
+    switch (ac_ptr->type) {
+        case PUT_NODE: {
+            auto apn = std::static_pointer_cast<async_put_node>(ac_ptr);
+
+            // flush any pending put edge calls dependent on this node
+            auto outstanding_iter = outstanding_node_puts.find(apn->handle);
+            assert(outstanding_iter != outstanding_node_puts.end());
+            for (auto ape: outstanding_iter->second) {
+                success = flush_put_edge(ape) && success;
+            }
+            outstanding_node_puts.erase(outstanding_iter);
+
+            apn_pool.release(apn);
+            break;
+        }
+
+        case PUT_EDGE:
+            ape_pool.release(std::static_pointer_cast<async_put_edge>(ac_ptr));
+            break;
+
+        case ADD_INDEX:
+            aai_pool.release(std::static_pointer_cast<async_add_index>(ac_ptr));
+            break;
+    }
+    async_calls.erase(op_id);
+
+    return success;
+}
+
+bool
+hyper_stub :: loop_async(uint64_t num_ops_to_leave, uint64_t &num_timeouts)
+{
+    bool success = true;
+    uint64_t initial_ops = async_calls.size();
     uint64_t loop_count = 0;
     num_timeouts = 0;
 
-    while (outstanding_ops > 0) {
+    while (async_calls.size() > num_ops_to_leave) {
         int64_t op_id;
         hyperdex_client_returncode loop_code;
 
@@ -596,30 +635,14 @@ hyper_stub :: loop_async(uint64_t outstanding_ops, uint64_t &num_timeouts)
             WDEBUG << "hyperdex_client_loop returned op_id=" << op_id
                    << " and loop_code=" << hyperdex_client_returncode_to_string(loop_code)
                    << " which was not found in async_calls_map." << std::endl;
-            abort_bulk_load();
+            //XXX abort_bulk_load();
+            continue;
         }
 
         async_call_ptr_t ac_ptr = find_iter->second;
         switch (ac_ptr->status) {
             case HYPERDEX_CLIENT_SUCCESS:
-                switch (ac_ptr->type) {
-                    case PUT_NODE: {
-                        auto apn = std::static_pointer_cast<async_put_node>(ac_ptr);
-                        outstanding_node_puts.erase(apn->handle);
-                        apn_pool.release(apn);
-                        break;
-                    }
-
-                    case PUT_EDGE:
-                        ape_pool.release(std::static_pointer_cast<async_put_edge>(ac_ptr));
-                        break;
-
-                    case ADD_INDEX:
-                        aai_pool.release(std::static_pointer_cast<async_add_index>(ac_ptr));
-                        break;
-                }
-                async_calls.erase(op_id);
-                outstanding_ops--;
+                success = done_op(ac_ptr, op_id) && success;
                 break;
 
             default:
@@ -629,112 +652,31 @@ hyper_stub :: loop_async(uint64_t outstanding_ops, uint64_t &num_timeouts)
                 abort_bulk_load();
         }
 
-            //WDEBUG << "unsuccessful loop, op_id=" << op_id << "\treturncode=" << hyperdex_client_returncode_to_string(code) << std::endl;
-            // XXX don't erase if interrupted or can loop again later
-            //if (async_put_node_calls.find(op_id) != async_put_node_calls.end()) {
-            //    apn_ptr_t apn = async_put_node_calls[op_id];
-            //    async_put_node_calls.erase(op_id);
-            //    //WDEBUG << "tid=" << thread_id << "\top_id=" << op_id << " deleting" << std::endl;
-
-            //    if (code == HYPERDEX_CLIENT_COORDFAIL
-            //     || code == HYPERDEX_CLIENT_SERVERERROR
-            //     || code == HYPERDEX_CLIENT_RECONFIGURE
-            //     || code == HYPERDEX_CLIENT_INTERRUPTED
-            //     || code == HYPERDEX_CLIENT_CLUSTER_JUMP
-            //     || code == HYPERDEX_CLIENT_OFFLINE) {
-            //        bool cur_success = call_no_loop(&hyperdex_client_put,
-            //                                        graph_space,
-            //                                        apn->handle.c_str(),
-            //                                        apn->handle.size(),
-            //                                        apn->attrs,
-            //                                        apn->num_attrs,
-            //                                        apn->op_id, apn->status);
-            //        if (cur_success) {
-            //            async_put_node_calls.emplace(apn->op_id, apn);
-            //            //WDEBUG << "tid=" << thread_id << "\there op_id=" << apn->op_id << std::endl;
-            //        } else {
-            //            apn_count--;
-            //            success = false;
-            //            release_apn_ptr(apn);
-            //        }
-            //    } else {
-            //        success = false;
-            //        release_apn_ptr(apn);
-            //    }
-
-            //    found = true;
-            //} else if (async_put_edge_calls.find(op_id) != async_put_edge_calls.end()) {
-            //    ape_ptr_t ape = async_put_edge_calls[op_id];
-            //    async_put_edge_calls.erase(op_id);
-            //    //WDEBUG << "tid=" << thread_id << "\top_id=" << op_id << " deleting" << std::endl;
-
-            //    if (code == HYPERDEX_CLIENT_COORDFAIL
-            //     || code == HYPERDEX_CLIENT_SERVERERROR
-            //     || code == HYPERDEX_CLIENT_RECONFIGURE
-            //     || code == HYPERDEX_CLIENT_INTERRUPTED
-            //     || code == HYPERDEX_CLIENT_CLUSTER_JUMP
-            //     || code == HYPERDEX_CLIENT_OFFLINE) {
-            //        bool cur_success = map_call_no_loop(&hyperdex_client_map_add,
-            //                                            graph_space,
-            //                                            ape->node_handle.c_str(),
-            //                                            ape->node_handle.size(),
-            //                                            ape->attr,
-            //                                            ape->batched.size(),
-            //                                            ape->op_id, ape->status);
-
-            //        if (cur_success) {
-            //            async_put_edge_calls.emplace(ape->op_id, ape);
-            //            //WDEBUG << "tid=" << thread_id << "\there op_id=" << ape->op_id << std::endl;
-            //        } else {
-            //            ape_count--;
-            //            success = false;
-            //            release_ape_ptr(ape);
-            //        }
-            //    } else {
-            //        success = false;
-            //        release_ape_ptr(ape);
-            //    }
-
-            //    found = true;
-            //} else if (async_add_index_calls.find(op_id) != async_add_index_calls.end()) {
-            //    aai_ptr_t aai = async_add_index_calls[op_id];
-            //    async_add_index_calls.erase(op_id);
-            //    //WDEBUG << "tid=" << thread_id << "\top_id=" << op_id << " deleting" << std::endl;
-
-            //    if (code == HYPERDEX_CLIENT_COORDFAIL
-            //     || code == HYPERDEX_CLIENT_SERVERERROR
-            //     || code == HYPERDEX_CLIENT_RECONFIGURE
-            //     || code == HYPERDEX_CLIENT_INTERRUPTED
-            //     || code == HYPERDEX_CLIENT_CLUSTER_JUMP
-            //     || code == HYPERDEX_CLIENT_OFFLINE) {
-            //        bool cur_success = call_no_loop(&hyperdex_client_put,
-            //                                        index_space,
-            //                                        aai->alias.c_str(),
-            //                                        aai->alias.size(),
-            //                                        aai->index_attrs, NUM_INDEX_ATTRS,
-            //                                        aai->op_id, aai->status);
-
-            //        if (cur_success) {
-            //            async_add_index_calls.emplace(aai->op_id, aai);
-            //            //WDEBUG << "tid=" << thread_id << "\there op_id=" << aai->op_id << std::endl;
-            //        } else {
-            //            aai_count--;
-            //            success = false;
-            //            release_aai_ptr(aai);
-            //        }
-            //    } else {
-            //        success = false;
-            //        release_aai_ptr(aai);
-            //    }
-
-            //    found = true;
-            //}
-
-        if (++loop_count > 4*initial_ops) {
+        if (++loop_count > 10*initial_ops) {
             WDEBUG << "exceeded max loops, loop_count=" << loop_count << ", initial_ops=" << initial_ops << std::endl;
-            assert(false);
+            if (num_ops_to_leave == 0) {
+                for (auto &p: async_calls) {
+                    done_op(p.second, p.first);
+                }
+            }
+            break;
+            // XXX assert(false);
         }
     }
+
+    //// remove calls which haven't been looped for a while
+    //std::vector<int64_t> to_del;
+    //for (auto &p: async_calls) {
+    //    if (++p.second->loop_calls == OUTSTANDING_HD_OPS*5) {
+    //        to_del.emplace_back(p.first);
+    //    }
+    //}
+    //for (int64_t d: to_del) {
+    //    success = done_op(async_calls[d], d) && success;
+    //}
+    //if (!to_del.empty()) {
+    //    WDEBUG << "remove #" << to_del.size() << " unlooped calls" << std::endl;
+    //}
 
     return success;
 }
@@ -746,24 +688,15 @@ hyper_stub :: loop_async_calls(bool flush)
     uint64_t timeouts = 0;
 
     if (flush) {
-        success = loop_async(async_calls.size(), timeouts);
+        success = loop_async(0, timeouts);
 
         apn_pool.clear();
         ape_pool.clear();
         aai_pool.clear();
     } else {
-        WDEBUG << "PRE  tid=" << thread_id << "\t#async_calls=" << async_calls.size() << std::endl;
-
-        success = loop_async(async_calls.size(), timeouts);
-        //// flush first ~50% calls
-        //if (async_calls.size() > FLUSH_CALL_SZ) {
-        //    uint32_t num_loop = async_calls.size() - FLUSH_CALL_SZ/2;
-        //    success = loop_async(num_loop, timeouts);
-        //}
-
-        WDEBUG << "POST tid=" << thread_id
-               << "\t#async_calls=" << async_calls.size()
-               << "\t#timeouts=" << timeouts << std::endl;
+        //WDEBUG << "PRE  tid=" << thread_id << "\t#async_calls=" << async_calls.size() << std::endl;
+        success = loop_async(OUTSTANDING_HD_OPS, timeouts);
+        //WDEBUG << "POST tid=" << thread_id << "\t#async_calls=" << async_calls.size() << "\t#timeouts=" << timeouts << std::endl;
     }
 
     return success;
@@ -773,9 +706,7 @@ hyper_stub :: loop_async_calls(bool flush)
 void
 hyper_stub :: possibly_flush()
 {
-    if (async_calls.size() > FLUSH_CALL_SZ) {
-        loop_async_calls(false);
-    }
+    loop_async_calls(false);
 }
 
 void

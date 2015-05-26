@@ -258,7 +258,7 @@ parse_xml_node(pugi::xml_document &doc,
                 }
             }
         }
-        if (++cur_shard_node_count % 100000 == 0) {
+        if (++cur_shard_node_count % 10000 == 0) {
             WDEBUG << "GRAPHML tid=" << load_tid << " node=" << cur_shard_node_count << std::endl;
         }
 
@@ -317,7 +317,7 @@ parse_xml_edge(pugi::xml_document &doc,
 
         S->bulk_load_put_edge(hstub, e, id0, n, alias);
 
-        if (++cur_shard_edge_count % 100000 == 0) {
+        if (++cur_shard_edge_count % 10000 == 0) {
             WDEBUG << "GRAPHML tid=" << load_tid << " edge=" << cur_shard_edge_count << std::endl;
         }
     }
