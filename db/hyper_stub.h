@@ -63,13 +63,10 @@ namespace db
                 /*XXX std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,*/
                 po6::threads::mutex *shard_mutexes);
             // bulk loading
-            void bulk_load(int tid, std::unordered_map<node_handle_t, std::vector<node*>> *nodes);
-            void memory_efficient_bulk_load(int tid, db::data_map<std::shared_ptr<db::node_entry>> *nodes);
-            void memory_efficient_bulk_load(db::data_map<std::shared_ptr<db::node_entry>> &nodes);
             bool put_node_no_loop(db::node *n);
             bool put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, const std::string &alias, bool del_after_call);
-            bool add_index_no_loop(const node_handle_t &node_handle, const std::string &alias);
-            bool flush_put_edge(ape_ptr_t);
+            bool add_index_no_loop(const node_handle_t &node_handle, const std::string &alias, bool loop_after_call);
+            bool flush_put_edge(ape_ptr_t, bool loop_after_call);
             bool flush_all_put_edge();
             bool loop_async(uint64_t loops, uint64_t &timeouts);
             bool loop_async_calls(bool flush);

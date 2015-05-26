@@ -17,8 +17,9 @@
 #include "db/shard_constants.h"
 #include "db/hyper_stub.h"
 
-#define PUT_EDGE_BUFFER_SZ 10000
-#define OUTSTANDING_HD_OPS 50000
+#define PUT_EDGE_BUFFER_SZ 5000
+#define OUTSTANDING_HD_OPS 10000
+#define MAX_TIMEOUTS 600 // 1 min of waiting total
 #define INITIAL_POOL_SZ (OUTSTANDING_HD_OPS*3)
 
 using db::hyper_stub;
@@ -191,163 +192,6 @@ hyper_stub :: restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *node
     free(handle_str);
 }
 
-void
-hyper_stub :: put_node_loop(db::data_map<std::shared_ptr<db::node_entry>> &nodes,
-    std::unordered_map<node_handle_t, node*> &node_map,
-    int &progress,
-    std::shared_ptr<vc::vclock> last_upd_clk,
-    std::shared_ptr<vc::vclock_t> restore_clk)
-{
-    for (const auto &p: nodes) {
-        auto &nodes_vec = p.second->nodes;
-        assert(nodes_vec.size() <= 1);
-        if (!nodes_vec.empty()) {
-            node_map.emplace(p.first, nodes_vec.front());
-            if (node_map.size() >= 1000) {
-                put_nodes_bulk(node_map, last_upd_clk, restore_clk);
-                node_map.clear();
-                WDEBUG << "bulk load hyperdex progress " << ++progress << std::endl;
-            }
-        }
-    }
-}
-
-void
-hyper_stub :: put_index_loop(db::data_map<std::shared_ptr<db::node_entry>> &nodes,
-    std::unordered_map<std::string, node*> &idx_add_if_not_exist,
-    std::unordered_map<std::string, node*> &idx_add,
-    int &ine_progress,
-    int &progress)
-{
-    for (const auto &p: nodes) {
-        auto &nodes_vec = p.second->nodes;
-        if (!nodes_vec.empty()) {
-            node *n = nodes_vec.front();
-            idx_add_if_not_exist.emplace(p.first, n);
-            for (const node_handle_t &alias: n->aliases) {
-                assert(idx_add_if_not_exist.find(alias) == idx_add_if_not_exist.end());
-                idx_add_if_not_exist.emplace(alias, n);
-            }
-
-            for (auto &x: n->out_edges) {
-                assert(x.second.size() == 1);
-                assert(idx_add_if_not_exist.find(x.first) == idx_add_if_not_exist.end());
-                idx_add_if_not_exist.emplace(x.first, n);
-            }
-
-            //if (n->temp_aliases != nullptr) {
-            //    for (const std::string &s: *n->temp_aliases) {
-            //        idx_add.emplace(s, n);
-            //    }
-            //    n->done_temp_index();
-            //}
-
-            if (idx_add_if_not_exist.size() >= 10000) {
-                add_indices(idx_add_if_not_exist, false, true);
-                idx_add_if_not_exist.clear();
-                WDEBUG << "aux index if not exist progress " << ++ine_progress << std::endl;
-            }
-            if (idx_add.size() >= 10000) {
-                add_indices(idx_add, false, false);
-                idx_add.clear();
-                WDEBUG << "aux index progress " << ++progress << std::endl;
-            }
-        }
-    }
-}
-
-void
-hyper_stub :: memory_efficient_bulk_load(int thread_id, db::data_map<std::shared_ptr<db::node_entry>> *nodes_arr)
-{
-    WDEBUG << "starting HyperDex bulk load." << std::endl;
-    std::shared_ptr<vc::vclock> last_upd_clk(new vc::vclock(0,0));
-    std::shared_ptr<vc::vclock_t> restore_clk(new vc::vclock_t(last_upd_clk->clock));
-
-    std::unordered_map<node_handle_t, node*> node_map;
-    int progress = 0;
-    for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
-        put_node_loop(nodes_arr[tid], node_map, progress, last_upd_clk, restore_clk);
-    }
-
-    put_nodes_bulk(node_map, last_upd_clk, restore_clk);
-
-    progress = 0;
-    int ine_progress = 0;
-    if (AuxIndex) {
-        std::unordered_map<std::string, node*> idx_add_if_not_exist;
-        std::unordered_map<std::string, node*> idx_add;
-
-        for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
-            put_index_loop(nodes_arr[tid], idx_add_if_not_exist, idx_add, ine_progress, progress);
-        }
-
-        add_indices(idx_add_if_not_exist, false, true);
-        add_indices(idx_add, false, false);
-    }
-
-    WDEBUG << "bulk load done." << std::endl;
-}
-
-void
-hyper_stub :: memory_efficient_bulk_load(db::data_map<std::shared_ptr<db::node_entry>> &nodes)
-{
-    std::shared_ptr<vc::vclock> last_upd_clk(new vc::vclock(0,0));
-    std::shared_ptr<vc::vclock_t> restore_clk(new vc::vclock_t(last_upd_clk->clock));
-
-    std::unordered_map<node_handle_t, node*> node_map;
-    int progress = 0;
-    put_node_loop(nodes, node_map, progress, last_upd_clk, restore_clk);
-    put_nodes_bulk(node_map, last_upd_clk, restore_clk);
-
-    progress = 0;
-    int ine_progress = 0;
-    if (AuxIndex) {
-        std::unordered_map<std::string, node*> idx_add_if_not_exist;
-        std::unordered_map<std::string, node*> idx_add;
-
-        put_index_loop(nodes, idx_add_if_not_exist, idx_add, ine_progress, progress);
-
-        add_indices(idx_add_if_not_exist, false, true);
-        add_indices(idx_add, false, false);
-    }
-}
-
-void
-hyper_stub :: bulk_load(int thread_id, std::unordered_map<node_handle_t, std::vector<node*>> *nodes_arr)
-{
-    assert(NUM_NODE_MAPS % NUM_SHARD_THREADS == 0);
-    std::shared_ptr<vc::vclock> last_upd_clk(new vc::vclock(0,0));
-    std::shared_ptr<vc::vclock_t> restore_clk(new vc::vclock_t(last_upd_clk->clock));
-
-    std::unordered_map<node_handle_t, node*> node_map;
-    for (int tid = thread_id; tid < NUM_NODE_MAPS; tid += NUM_SHARD_THREADS) {
-        for (const auto &p: nodes_arr[tid]) {
-            assert(p.second.size() == 1);
-            node_map.emplace(p.first, p.second.front());
-        }
-    }
-
-    put_nodes_bulk(node_map, last_upd_clk, restore_clk);
-
-    if (AuxIndex) {
-        std::unordered_map<std::string, node*> idx_add = node_map;
-        for (auto &p: node_map) {
-            for (const node_handle_t &alias: p.second->aliases) {
-                assert(idx_add.find(alias) == idx_add.end());
-                idx_add.emplace(alias, p.second);
-            }
-
-            for (auto &x: p.second->out_edges) {
-                assert(x.second.size() == 1);
-                assert(idx_add.find(x.first) == idx_add.end());
-                idx_add.emplace(x.first, p.second);
-            }
-        }
-
-        add_indices(idx_add, false, true);
-    }
-}
-
 bool
 hyper_stub :: update_mapping(const node_handle_t &handle, uint64_t loc)
 {
@@ -398,7 +242,7 @@ hyper_stub :: put_node_no_loop(db::node *n)
         outstanding_node_puts.emplace(apn->handle, std::vector<ape_ptr_t>());
 
         for (const std::string &alias: n->aliases) {
-            success = add_index_no_loop(n->get_handle(), alias) && success;
+            success = add_index_no_loop(n->get_handle(), alias, true) && success;
         }
     } else {
         WDEBUG << "hyperdex_client_put failed, op_id=" << apn->op_id
@@ -413,7 +257,7 @@ hyper_stub :: put_node_no_loop(db::node *n)
 }
 
 bool
-hyper_stub :: flush_put_edge(ape_ptr_t ape)
+hyper_stub :: flush_put_edge(ape_ptr_t ape, bool loop_after_call)
 {
     ape->attr = (hyperdex_client_map_attribute*)malloc(ape->batched.size() * sizeof(hyperdex_client_map_attribute));
     prepare_edges(ape->attr, ape->batched);
@@ -423,7 +267,7 @@ hyper_stub :: flush_put_edge(ape_ptr_t ape)
     // add aliases to index
     for (const auto &apeu: ape->batched) {
         if (!apeu.alias.empty()) {
-            success = add_index_no_loop(ape->node_handle, apeu.alias) && success;
+            success = add_index_no_loop(ape->node_handle, apeu.alias, loop_after_call) && success;
         }
 
         if (apeu.del_after_call) {
@@ -432,24 +276,27 @@ hyper_stub :: flush_put_edge(ape_ptr_t ape)
     }
 
     // add edge to node object via map_add call
-    success = map_call_no_loop(&hyperdex_client_map_add,
-                               graph_space,
-                               ape->node_handle.c_str(),
-                               ape->node_handle.size(),
-                               ape->attr,
-                               ape->batched.size(),
-                               ape->op_id, ape->status);
+    // XXX turning off map add calls
+    //success = map_call_no_loop(&hyperdex_client_map_add,
+    //                           graph_space,
+    //                           ape->node_handle.c_str(),
+    //                           ape->node_handle.size(),
+    //                           ape->attr,
+    //                           ape->batched.size(),
+    //                           ape->op_id, ape->status);
 
-    if (success) {
-        async_calls.emplace(ape->op_id, ape);
-    } else {
-        WDEBUG << "hyperdex_client_map_add failed, op_id=" << ape->op_id
-               << ", call_code=" << hyperdex_client_returncode_to_string(ape->status) << std::endl;
-        WDEBUG << "node=" << ape->node_handle << ", sample edge=" << ape->batched.front().edge_handle << std::endl;
-        abort_bulk_load();
+    //if (success) {
+    //    async_calls.emplace(ape->op_id, ape);
+    //} else {
+    //    WDEBUG << "hyperdex_client_map_add failed, op_id=" << ape->op_id
+    //           << ", call_code=" << hyperdex_client_returncode_to_string(ape->status) << std::endl;
+    //    WDEBUG << "node=" << ape->node_handle << ", sample edge=" << ape->batched.front().edge_handle << std::endl;
+    //    abort_bulk_load();
+    //}
+
+    if (loop_after_call) {
+        possibly_flush();
     }
-
-    possibly_flush();
 
     return success;
 }
@@ -484,19 +331,25 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, co
                 can_write.erase(can_write.begin() + PUT_EDGE_BUFFER_SZ/2, can_write.end());
             }
 
+            uint64_t defer_count = 0;
+            uint64_t call_count = 0;
             for (auto ape: can_write) {
                 std::string del_handle = ape->node_handle;
 
                 auto outstanding_iter = outstanding_node_puts.find(del_handle);
                 if (outstanding_iter != outstanding_node_puts.end()) {
                     outstanding_iter->second.emplace_back(ape);
+                    defer_count++;
                 } else {
-                    success = flush_put_edge(ape) && success;
+                    success = flush_put_edge(ape, true) && success;
+                    call_count++;
                 }
 
                 put_edge_batch.erase(del_handle);
             }
-            WDEBUG << "flush put edge DONE, sz=" << put_edge_batch.size() << std::endl;
+            WDEBUG << "flush put edge DONE, sz=" << put_edge_batch.size()
+                   << "\tdefer_count=" << defer_count
+                   << "\tcall_count=" << call_count << std::endl;
         }
 
         cur_ape = ape_pool.acquire();
@@ -520,7 +373,7 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, co
 }
 
 bool
-hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::string &alias)
+hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::string &alias, bool loop_after_call)
 {
     aai_ptr_t aai = aai_pool.acquire();
     aai->node_handle = node_handle;
@@ -552,7 +405,9 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::str
         abort_bulk_load();
     }
 
-    possibly_flush();
+    if (loop_after_call) {
+        possibly_flush();
+    }
 
     return success;
 }
@@ -564,7 +419,7 @@ hyper_stub :: flush_all_put_edge()
 
     for (auto &p: put_edge_batch) {
         if (!p.second->batched.empty()) {
-            success = flush_put_edge(p.second) && success;
+            success = flush_put_edge(p.second, true) && success;
         }
     }
 
@@ -584,7 +439,7 @@ hyper_stub :: done_op(async_call_ptr_t ac_ptr, int64_t op_id)
             auto outstanding_iter = outstanding_node_puts.find(apn->handle);
             assert(outstanding_iter != outstanding_node_puts.end());
             for (auto ape: outstanding_iter->second) {
-                success = flush_put_edge(ape) && success;
+                success = flush_put_edge(ape, false) && success;
             }
             outstanding_node_puts.erase(outstanding_iter);
 
@@ -610,7 +465,6 @@ hyper_stub :: loop_async(uint64_t num_ops_to_leave, uint64_t &num_timeouts)
 {
     bool success = true;
     uint64_t initial_ops = async_calls.size();
-    uint64_t loop_count = 0;
     num_timeouts = 0;
 
     while (async_calls.size() > num_ops_to_leave) {
@@ -652,8 +506,10 @@ hyper_stub :: loop_async(uint64_t num_ops_to_leave, uint64_t &num_timeouts)
                 abort_bulk_load();
         }
 
-        if (++loop_count > 10*initial_ops) {
-            WDEBUG << "exceeded max loops, loop_count=" << loop_count << ", initial_ops=" << initial_ops << std::endl;
+        if (num_timeouts > MAX_TIMEOUTS) {
+            WDEBUG << "exceeded max loops, initial_ops=" << initial_ops
+                   << ", num_timeouts=" << num_timeouts
+                   << ", async_calls.size=" << async_calls.size() << std::endl;
             if (num_ops_to_leave == 0) {
                 for (auto &p: async_calls) {
                     done_op(p.second, p.first);
