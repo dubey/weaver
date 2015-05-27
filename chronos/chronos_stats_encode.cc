@@ -28,8 +28,8 @@
 // Chronos
 #include "chronos_stats_encode.h"
 
-e::buffer::packer
-operator << (e::buffer::packer lhs, const chronos_stats& rhs)
+e::packer
+operator << (e::packer lhs, const chronos_stats& rhs)
 {
     return lhs << rhs.time << rhs.utime << rhs.stime << rhs.maxrss << rhs.events
         << rhs.count_create_event << rhs.count_acquire_references

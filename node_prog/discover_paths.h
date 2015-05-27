@@ -43,7 +43,7 @@ namespace node_prog
         discover_paths_params();
         ~discover_paths_params() { }
         uint64_t size() const;
-        void pack(e::buffer::packer&) const;
+        void pack(e::packer&) const;
         void unpack(e::unpacker&);
 
         // no caching
@@ -60,7 +60,7 @@ namespace node_prog
         dp_len_state();
         ~dp_len_state() { }
         uint64_t size() const;
-        void pack(e::buffer::packer&) const;
+        void pack(e::packer&) const;
         void unpack(e::unpacker&);
     };
 
@@ -72,7 +72,7 @@ namespace node_prog
         discover_paths_state();
         ~discover_paths_state() { }
         uint64_t size() const;
-        void pack(e::buffer::packer&) const;
+        void pack(e::packer&) const;
         void unpack(e::unpacker&);
     };
 

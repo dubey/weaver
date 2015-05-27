@@ -25,7 +25,7 @@
 #include <e/endian.h>
 
 // Replicant
-#include <replicant_state_machine.h>
+#include <rsm.h>
 
 // Weaver
 #include "common/server_manager_returncode.h"
@@ -33,11 +33,6 @@
 #include "coordinator/util.h"
 
 #define ALARM_INTERVAL 60
-
-// XXX does this matter for Weaver?
-// ASSUME:  I'm assuming only one server ever changes state at a time for a
-//          given transition.  If you violate this assumption, fixup
-//          converge_intent.
 
 namespace
 {
@@ -71,8 +66,6 @@ server_manager :: server_manager()
 {
     assert(m_config_ack_through == m_config_ack_barrier.min_version());
     assert(m_config_stable_through == m_config_stable_barrier.min_version());
-    // XXX remove when you want to support multiple clusters
-    // do a proper init; see HyperDex/tools/coordinator.cc
     m_cluster = 1;
 
     generate_cached_configuration(nullptr);
@@ -83,38 +76,34 @@ server_manager :: ~server_manager() throw ()
 }
 
 void
-server_manager :: init(replicant_state_machine_context* ctx, uint64_t token)
+server_manager :: init(rsm_context* ctx, uint64_t token)
 {
-    FILE* log = replicant_state_machine_log_stream(ctx);
-
     if (m_cluster != 0)
     {
-        fprintf(log, "cannot initialize Weaver cluster with id %lu "
+        rsm_log(ctx, "cannot initialize Weaver cluster with id %lu "
                      "because it is already initialized to %lu\n", token, m_cluster);
         // we lie to the client and pretend all is well
         return generate_response(ctx, COORD_SUCCESS);
     }
 
-    replicant_state_machine_alarm(ctx, "alarm", ALARM_INTERVAL);
-    fprintf(log, "initializing Weaver cluster with id %lu\n", token);
+    rsm_log(ctx, "initializing Weaver cluster with id %lu\n", token);
     m_cluster = token;
     generate_next_configuration(ctx);
     return generate_response(ctx, COORD_SUCCESS);
 }
 
 void
-server_manager :: server_register(replicant_state_machine_context* ctx,
+server_manager :: server_register(rsm_context* ctx,
                                   const server_id& sid,
                                   const po6::net::location& bind_to,
                                   server::type_t type)
 {
-    FILE* log = replicant_state_machine_log_stream(ctx);
     server* srv = get_server(sid);
 
     if (srv)
     {
         std::string str(to_string(srv->bind_to));
-        fprintf(log, "cannot register server(%lu) because the id belongs to "
+        rsm_log(ctx, "cannot register server(%lu) because the id belongs to "
                      "server(%lu, %s)\n", sid.get(), srv->id.get(), str.c_str());
         return generate_response(ctx, COORD_DUPLICATE);
     }
@@ -138,24 +127,23 @@ server_manager :: server_register(replicant_state_machine_context* ctx,
             break;
     }
 
-    check_backup(log, srv);
+    check_backup(ctx, srv);
 
-    fprintf(log, "registered server(%lu)\n", sid.get());
+    rsm_log(ctx, "registered server(%lu)\n", sid.get());
     generate_next_configuration(ctx);
     return generate_response(ctx, COORD_SUCCESS);
 }
 
 void
-server_manager :: server_online(replicant_state_machine_context* ctx,
+server_manager :: server_online(rsm_context* ctx,
                              const server_id& sid,
                              const po6::net::location* bind_to)
 {
-    FILE* log = replicant_state_machine_log_stream(ctx);
     server* srv = get_server(sid);
 
     if (!srv)
     {
-        fprintf(log, "cannot bring server(%lu) online because "
+        rsm_log(ctx, "cannot bring server(%lu) online because "
                      "the server doesn't exist\n", sid.get());
         return generate_response(ctx, COORD_NOT_FOUND);
     }
@@ -165,7 +153,7 @@ server_manager :: server_online(replicant_state_machine_context* ctx,
         srv->state != server::SHUTDOWN &&
         srv->state != server::AVAILABLE)
     {
-        fprintf(log, "cannot bring server(%lu) online because the server is "
+        rsm_log(ctx, "cannot bring server(%lu) online because the server is "
                      "%s\n", sid.get(), server::to_string(srv->state));
         return generate_response(ctx, COORD_NO_CAN_DO);
     }
@@ -182,7 +170,7 @@ server_manager :: server_online(replicant_state_machine_context* ctx,
             if (m_servers[i].id != sid &&
                 m_servers[i].bind_to == *bind_to)
             {
-                fprintf(log, "cannot change server(%lu) to %s "
+                rsm_log(ctx, "cannot change server(%lu) to %s "
                              "because that address is in use by "
                              "server(%lu)\n", sid.get(), to.c_str(),
                              m_servers[i].id.get());
@@ -190,7 +178,7 @@ server_manager :: server_online(replicant_state_machine_context* ctx,
             }
         }
 
-        fprintf(log, "changing server(%lu)'s address from %s to %s\n",
+        rsm_log(ctx, "changing server(%lu)'s address from %s to %s\n",
                      sid.get(), from.c_str(), to.c_str());
         srv->bind_to = *bind_to;
         changed = true;
@@ -198,7 +186,7 @@ server_manager :: server_online(replicant_state_machine_context* ctx,
 
     if (srv->state != server::AVAILABLE)
     {
-        fprintf(log, "changing server(%lu) from %s to %s\n",
+        rsm_log(ctx, "changing server(%lu) from %s to %s\n",
                      sid.get(), server::to_string(srv->state),
                      server::to_string(server::AVAILABLE));
         srv->state = server::AVAILABLE;
@@ -211,23 +199,18 @@ server_manager :: server_online(replicant_state_machine_context* ctx,
         generate_next_configuration(ctx);
     }
 
-    char buf[sizeof(uint64_t)];
-    e::pack64be(sid.get(), buf);
-    uint64_t client = replicant_state_machine_get_client(ctx);
-    replicant_state_machine_suspect(ctx, client, "server_suspect",  buf, sizeof(uint64_t));
     return generate_response(ctx, COORD_SUCCESS);
 }
 
 void
-server_manager :: server_offline(replicant_state_machine_context* ctx,
+server_manager :: server_offline(rsm_context* ctx,
                               const server_id& sid)
 {
-    FILE* log = replicant_state_machine_log_stream(ctx);
     server* srv = get_server(sid);
 
     if (!srv)
     {
-        fprintf(log, "cannot bring server(%lu) offline because "
+        rsm_log(ctx, "cannot bring server(%lu) offline because "
                      "the server doesn't exist\n", sid.get());
         return generate_response(ctx, COORD_NOT_FOUND);
     }
@@ -237,18 +220,18 @@ server_manager :: server_offline(replicant_state_machine_context* ctx,
         srv->state != server::AVAILABLE &&
         srv->state != server::SHUTDOWN)
     {
-        fprintf(log, "cannot bring server(%lu) offline because the server is "
+        rsm_log(ctx, "cannot bring server(%lu) offline because the server is "
                      "%s\n", sid.get(), server::to_string(srv->state));
         return generate_response(ctx, COORD_NO_CAN_DO);
     }
 
     if (srv->state != server::NOT_AVAILABLE && srv->state != server::SHUTDOWN)
     {
-        fprintf(log, "changing server(%lu) from %s to %s\n",
+        rsm_log(ctx, "changing server(%lu) from %s to %s\n",
                      sid.get(), server::to_string(srv->state),
                      server::to_string(server::NOT_AVAILABLE));
         srv->state = server::NOT_AVAILABLE;
-        find_backup(log, srv->type, srv->virtual_id);
+        find_backup(ctx, srv->type, srv->virtual_id);
         generate_next_configuration(ctx);
     }
 
@@ -256,15 +239,14 @@ server_manager :: server_offline(replicant_state_machine_context* ctx,
 }
 
 void
-server_manager :: server_shutdown(replicant_state_machine_context* ctx,
+server_manager :: server_shutdown(rsm_context* ctx,
                                const server_id& sid)
 {
-    FILE* log = replicant_state_machine_log_stream(ctx);
     server* srv = get_server(sid);
 
     if (!srv)
     {
-        fprintf(log, "cannot shutdown server(%lu) because "
+        rsm_log(ctx, "cannot shutdown server(%lu) because "
                      "the server doesn't exist\n", sid.get());
         return generate_response(ctx, COORD_NOT_FOUND);
     }
@@ -274,18 +256,18 @@ server_manager :: server_shutdown(replicant_state_machine_context* ctx,
         srv->state != server::AVAILABLE &&
         srv->state != server::SHUTDOWN)
     {
-        fprintf(log, "cannot shutdown server(%lu) because the server is "
+        rsm_log(ctx, "cannot shutdown server(%lu) because the server is "
                      "%s\n", sid.get(), server::to_string(srv->state));
         return generate_response(ctx, COORD_NO_CAN_DO);
     }
 
     if (srv->state == server::ASSIGNED && srv->state == server::AVAILABLE) {
-        find_backup(log, srv->type, srv->virtual_id);
+        find_backup(ctx, srv->type, srv->virtual_id);
     }
 
     if (srv->state != server::SHUTDOWN)
     {
-        fprintf(log, "changing server(%lu) from %s to %s\n",
+        rsm_log(ctx, "changing server(%lu) from %s to %s\n",
                      sid.get(), server::to_string(srv->state),
                      server::to_string(server::SHUTDOWN));
         srv->state = server::SHUTDOWN;
@@ -296,26 +278,25 @@ server_manager :: server_shutdown(replicant_state_machine_context* ctx,
 }
 
 void
-server_manager :: server_kill(replicant_state_machine_context* ctx,
+server_manager :: server_kill(rsm_context* ctx,
                            const server_id& sid)
 {
-    FILE* log = replicant_state_machine_log_stream(ctx);
     server* srv = get_server(sid);
 
     if (!srv)
     {
-        fprintf(log, "cannot kill server(%lu) because "
+        rsm_log(ctx, "cannot kill server(%lu) because "
                      "the server doesn't exist\n", sid.get());
         return generate_response(ctx, COORD_NOT_FOUND);
     }
 
     if (srv->state == server::ASSIGNED && srv->state == server::AVAILABLE) {
-        find_backup(log, srv->type, srv->virtual_id);
+        find_backup(ctx, srv->type, srv->virtual_id);
     }
 
     if (srv->state != server::KILLED)
     {
-        fprintf(log, "changing server(%lu) from %s to %s\n",
+        rsm_log(ctx, "changing server(%lu) from %s to %s\n",
                      sid.get(), server::to_string(srv->state),
                      server::to_string(server::KILLED));
         srv->state = server::KILLED;
@@ -326,21 +307,20 @@ server_manager :: server_kill(replicant_state_machine_context* ctx,
 }
 
 void
-server_manager :: server_forget(replicant_state_machine_context* ctx,
+server_manager :: server_forget(rsm_context* ctx,
                              const server_id& sid)
 {
-    FILE* log = replicant_state_machine_log_stream(ctx);
     server* srv = get_server(sid);
 
     if (!srv)
     {
-        fprintf(log, "cannot forget server(%lu) because "
+        rsm_log(ctx, "cannot forget server(%lu) because "
                      "the server doesn't exist\n", sid.get());
         return generate_response(ctx, COORD_NOT_FOUND);
     }
 
     if (srv->state == server::ASSIGNED && srv->state == server::AVAILABLE) {
-        find_backup(log, srv->type, srv->virtual_id);
+        find_backup(ctx, srv->type, srv->virtual_id);
     }
 
     for (size_t i = 0; i < m_servers.size(); ++i)
@@ -358,15 +338,14 @@ server_manager :: server_forget(replicant_state_machine_context* ctx,
 }
 
 void
-server_manager :: server_suspect(replicant_state_machine_context* ctx,
+server_manager :: server_suspect(rsm_context* ctx,
                               const server_id& sid)
 {
-    FILE* log = replicant_state_machine_log_stream(ctx);
     server* srv = get_server(sid);
 
     if (!srv)
     {
-        fprintf(log, "cannot suspect server(%lu) because "
+        rsm_log(ctx, "cannot suspect server(%lu) because "
                      "the server doesn't exist\n", sid.get());
         return generate_response(ctx, COORD_NOT_FOUND);
     }
@@ -380,18 +359,18 @@ server_manager :: server_suspect(replicant_state_machine_context* ctx,
         srv->state != server::NOT_AVAILABLE &&
         srv->state != server::AVAILABLE)
     {
-        fprintf(log, "cannot suspect server(%lu) because the server is "
+        rsm_log(ctx, "cannot suspect server(%lu) because the server is "
                      "%s\n", sid.get(), server::to_string(srv->state));
         return generate_response(ctx, COORD_NO_CAN_DO);
     }
 
     if (srv->state != server::NOT_AVAILABLE && srv->state != server::SHUTDOWN)
     {
-        fprintf(log, "changing server(%lu) from %s to %s because we suspect it failed\n",
+        rsm_log(ctx, "changing server(%lu) from %s to %s because we suspect it failed\n",
                      sid.get(), server::to_string(srv->state),
                      server::to_string(server::NOT_AVAILABLE));
         srv->state = server::NOT_AVAILABLE;
-        find_backup(log, srv->type, srv->virtual_id);
+        find_backup(ctx, srv->type, srv->virtual_id);
         generate_next_configuration(ctx);
     }
 
@@ -399,7 +378,19 @@ server_manager :: server_suspect(replicant_state_machine_context* ctx,
 }
 
 void
-server_manager :: check_backup(FILE *log, server *new_srv)
+server_manager :: report_disconnect(rsm_context *ctx,
+                                    const server_id &sid,
+                                    uint64_t version)
+{
+    if (m_version != version) {
+        return;
+    }
+
+    return server_suspect(ctx, sid);
+}
+
+void
+server_manager :: check_backup(rsm_context* ctx, server *new_srv)
 {
     if (new_srv->type != server::BACKUP_SHARD && new_srv->type != server::BACKUP_VT) {
         return;
@@ -424,7 +415,7 @@ server_manager :: check_backup(FILE *log, server *new_srv)
     }
 
     for (uint64_t vid: dead_servers) {
-        fprintf(log, "activating backup %lu for dead %s %lu\n",
+        rsm_log(ctx, "activating backup %lu for dead %s %lu\n",
                 new_srv->weaver_id, server::to_string(server_type), vid);
         activate_backup(new_srv, server_type, vid);
         break;
@@ -432,7 +423,7 @@ server_manager :: check_backup(FILE *log, server *new_srv)
 }
 
 void
-server_manager :: find_backup(FILE *log, server::type_t type, uint64_t vid)
+server_manager :: find_backup(rsm_context* ctx, server::type_t type, uint64_t vid)
 {
     server::type_t target_type;
 
@@ -446,7 +437,7 @@ server_manager :: find_backup(FILE *log, server::type_t type, uint64_t vid)
             break;
 
         default:
-            fprintf(log, "unexpected type: (int) %d, (string) %s\n",
+            rsm_log(ctx, "unexpected type: (int) %d, (string) %s\n",
                     type, server::to_string(type));
             return;
     }
@@ -454,7 +445,7 @@ server_manager :: find_backup(FILE *log, server::type_t type, uint64_t vid)
     for (size_t i = 0; i < m_servers.size(); i++) {
         if (m_servers[i].type == target_type) {
             // found backup server
-            fprintf(log, "activating backup %lu for dead %s %lu\n",
+            rsm_log(ctx, "activating backup %lu for dead %s %lu\n",
                     m_servers[i].weaver_id, server::to_string(type), vid);
             activate_backup(&m_servers[i], type, vid);
             break;
@@ -476,16 +467,16 @@ server_manager :: activate_backup(server *backup, server::type_t type, uint64_t 
 }
 
 void
-server_manager :: config_get(replicant_state_machine_context* ctx)
+server_manager :: config_get(rsm_context* ctx)
 {
     assert(m_latest_config.get());
     const char* output = reinterpret_cast<const char*>(m_latest_config->data());
     size_t output_sz = m_latest_config->size();
-    replicant_state_machine_set_response(ctx, output, output_sz);
+    rsm_set_output(ctx, output, output_sz);
 }
 
 void
-server_manager :: config_ack(replicant_state_machine_context* ctx,
+server_manager :: config_ack(rsm_context* ctx,
                           const server_id& sid, uint64_t version)
 {
     m_config_ack_barrier.pass(version, sid);
@@ -493,7 +484,7 @@ server_manager :: config_ack(replicant_state_machine_context* ctx,
 }
 
 void
-server_manager :: config_stable(replicant_state_machine_context* ctx,
+server_manager :: config_stable(rsm_context* ctx,
                              const server_id& sid, uint64_t version)
 {
     m_config_stable_barrier.pass(version, sid);
@@ -501,34 +492,27 @@ server_manager :: config_stable(replicant_state_machine_context* ctx,
 }
 
 void
-server_manager :: replid_get(replicant_state_machine_context* ctx)
+server_manager :: replid_get(rsm_context* ctx)
 {
-    uint64_t client = replicant_state_machine_get_client(ctx);
+    uint64_t client = 0;//XXX replicant_state_machine_get_client(ctx);
     size_t sz = sizeof(uint64_t);
     m_response.reset(e::buffer::create(sz));
     uint8_t *ptr = m_response->data();
     e::pack64be(client, ptr);
-    replicant_state_machine_set_response(ctx, reinterpret_cast<const char*>(m_response->data()), sz);
+    rsm_set_output(ctx, reinterpret_cast<const char*>(m_response->data()), sz);
 }
 
 void
-server_manager :: alarm(replicant_state_machine_context* ctx)
+server_manager :: debug_dump(rsm_context* ctx)
 {
-    replicant_state_machine_alarm(ctx, "alarm", ALARM_INTERVAL);
-}
-
-void
-server_manager :: debug_dump(replicant_state_machine_context* ctx)
-{
-    FILE* log = replicant_state_machine_log_stream(ctx);
-    fprintf(log, "=== begin debug dump ===========================================================\n");
-    fprintf(log, "config ack through: %lu\n", m_config_ack_through);
-    fprintf(log, "config stable through: %lu\n", m_config_stable_through);
-    fprintf(log, "=== end debug dump =============================================================\n");
+    rsm_log(ctx, "=== begin debug dump ===========================================================\n");
+    rsm_log(ctx, "config ack through: %lu\n", m_config_ack_through);
+    rsm_log(ctx, "config stable through: %lu\n", m_config_stable_through);
+    rsm_log(ctx, "=== end debug dump =============================================================\n");
 }
 
 server_manager*
-server_manager :: recreate(replicant_state_machine_context* ctx,
+server_manager :: recreate(rsm_context* ctx,
                            const char* data, size_t data_sz)
 {
 #pragma GCC diagnostic push
@@ -538,7 +522,7 @@ server_manager :: recreate(replicant_state_machine_context* ctx,
 
     if (!c.get())
     {
-        fprintf(replicant_state_machine_log_stream(ctx), "memory allocation failed\n");
+        rsm_log(ctx, "memory allocation failed\n");
         return nullptr;
     }
 
@@ -549,18 +533,17 @@ server_manager :: recreate(replicant_state_machine_context* ctx,
 
     if (up.error())
     {
-        fprintf(replicant_state_machine_log_stream(ctx), "unpacking failed\n");
+        rsm_log(ctx, "unpacking failed\n");
         return nullptr;
     }
 
     c->generate_cached_configuration(ctx);
-    replicant_state_machine_alarm(ctx, "alarm", ALARM_INTERVAL);
     return c.release();
 }
 
-void
-server_manager :: snapshot(replicant_state_machine_context* /*ctx*/,
-                        const char** data, size_t* data_sz)
+int
+server_manager :: snapshot(rsm_context* /*ctx*/,
+                        char** data, size_t* data_sz)
 {
     size_t sz = sizeof(m_cluster)
               + sizeof(m_counter)
@@ -576,7 +559,7 @@ server_manager :: snapshot(replicant_state_machine_context* /*ctx*/,
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     std::auto_ptr<e::buffer> buf(e::buffer::create(sz));
 #pragma GCC diagnostic pop
-    e::buffer::packer pa = buf->pack_at(0);
+    e::packer pa = buf->pack_at(0);
     pa = pa << m_cluster << m_counter << m_version << m_flags << m_servers
             << m_config_ack_through << m_config_ack_barrier
             << m_config_stable_through << m_config_stable_barrier;
@@ -589,6 +572,8 @@ server_manager :: snapshot(replicant_state_machine_context* /*ctx*/,
     {
         memmove(ptr, buf->data(), buf->size());
     }
+
+    return 0;
 }
 
 server*
@@ -625,49 +610,38 @@ server_manager :: get_server(const server_id& sid)
 }
 
 void
-server_manager :: check_ack_condition(replicant_state_machine_context* ctx)
+server_manager :: check_ack_condition(rsm_context* ctx)
 {
     if (m_config_ack_through < m_config_ack_barrier.min_version())
     {
-        FILE* log = replicant_state_machine_log_stream(ctx);
-        fprintf(log, "acked through version %lu\n", m_config_ack_barrier.min_version());
+        rsm_log(ctx, "acked through version %lu\n", m_config_ack_barrier.min_version());
     }
 
     while (m_config_ack_through < m_config_ack_barrier.min_version())
     {
-        replicant_state_machine_condition_broadcast(ctx, "ack", &m_config_ack_through);
+        rsm_cond_broadcast(ctx, "ack");
     }
 }
 
 void
-server_manager :: check_stable_condition(replicant_state_machine_context* ctx)
+server_manager :: check_stable_condition(rsm_context* ctx)
 {
     if (m_config_stable_through < m_config_stable_barrier.min_version())
     {
-        FILE* log = replicant_state_machine_log_stream(ctx);
-        fprintf(log, "stable through version %lu\n", m_config_stable_barrier.min_version());
+        rsm_log(ctx, "stable through version %lu\n", m_config_stable_barrier.min_version());
     }
 
     while (m_config_stable_through < m_config_stable_barrier.min_version())
     {
-        replicant_state_machine_condition_broadcast(ctx, "stable", &m_config_stable_through);
+        rsm_cond_broadcast(ctx, "stable");
     }
 }
 
 void
-server_manager :: generate_next_configuration(replicant_state_machine_context* ctx)
+server_manager :: generate_next_configuration(rsm_context* ctx)
 {
-    FILE* log = replicant_state_machine_log_stream(ctx);
-    uint64_t cond_state;
-
-    if (replicant_state_machine_condition_broadcast(ctx, "config", &cond_state) < 0)
-    {
-        fprintf(log, "could not broadcast on \"config\" condition\n");
-    }
-
     ++m_version;
-    fprintf(log, "issuing new configuration version %lu\n", m_version);
-    assert(cond_state == m_version);
+    rsm_log(ctx, "issuing new configuration version %lu\n", m_version);
     std::vector<server_id> sids;
     servers_in_configuration(&sids);
     m_config_ack_barrier.new_version(m_version, sids);
@@ -675,10 +649,12 @@ server_manager :: generate_next_configuration(replicant_state_machine_context* c
     check_ack_condition(ctx);
     check_stable_condition(ctx);
     generate_cached_configuration(ctx);
+
+    rsm_cond_broadcast_data(ctx, "config", m_latest_config->cdata(), m_latest_config->size());
 }
 
 void
-server_manager :: generate_cached_configuration(replicant_state_machine_context*)
+server_manager :: generate_cached_configuration(rsm_context*)
 {
     m_latest_config.reset();
     size_t sz = 4 * sizeof(uint64_t);
@@ -692,7 +668,7 @@ server_manager :: generate_cached_configuration(replicant_state_machine_context*
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     std::auto_ptr<e::buffer> new_config(e::buffer::create(sz));
 #pragma GCC diagnostic pop
-    e::buffer::packer pa = new_config->pack_at(0);
+    e::packer pa = new_config->pack_at(0);
     pa = pa << m_cluster << m_version << m_flags
             << uint64_t(m_servers.size());
 

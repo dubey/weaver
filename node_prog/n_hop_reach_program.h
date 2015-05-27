@@ -58,7 +58,7 @@ namespace node_prog
                 return toRet;
             }
 
-            virtual void pack(e::buffer::packer &packer) const 
+            virtual void pack(e::packer &packer) const 
             {
                 message::pack_buffer(packer, returning);
                 message::pack_buffer(packer, prev_node);
@@ -111,7 +111,7 @@ namespace node_prog
             return toRet;
         }
 
-        virtual void pack(e::buffer::packer& packer) const 
+        virtual void pack(e::packer& packer) const 
         {
             message::pack_buffer(packer, already_visited_hops);
             message::pack_buffer(packer, prev_node);

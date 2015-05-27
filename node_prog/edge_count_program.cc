@@ -27,7 +27,7 @@ edge_count_params :: size() const
     return toRet;
 }
 
-void edge_count_params :: pack(e::buffer::packer& packer) const 
+void edge_count_params :: pack(e::packer& packer) const 
 {
     message::pack_buffer(packer, edges_props);
     message::pack_buffer(packer, edge_count);

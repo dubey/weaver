@@ -28,10 +28,10 @@
 
 // e
 #include <e/buffer.h>
+#include <e/serialization.h>
 
 // Weaver
 #include "common/ids.h"
-#include "common/serialization.h"
 
 namespace coordinator
 {
@@ -53,7 +53,7 @@ class server_barrier
 
     private:
         friend size_t pack_size(const server_barrier& ri);
-        friend e::buffer::packer operator << (e::buffer::packer pa, const server_barrier& ri);
+        friend e::packer operator << (e::packer pa, const server_barrier& ri);
         friend e::unpacker operator >> (e::unpacker up, server_barrier& ri);
         typedef std::pair<uint64_t, std::vector<server_id> > version_t;
         typedef std::list<version_t> version_list_t;
@@ -75,8 +75,8 @@ pack_size(const server_barrier& ri)
     return sz;
 }
 
-inline e::buffer::packer
-operator << (e::buffer::packer pa, const server_barrier& ri)
+inline e::packer
+operator << (e::packer pa, const server_barrier& ri)
 {
     typedef server_barrier::version_list_t version_list_t;
     uint32_t x = ri.m_versions.size();

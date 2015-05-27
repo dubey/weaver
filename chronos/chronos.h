@@ -319,7 +319,7 @@ class chronos_client
                      const char* func, const char* data, size_t data_sz);
 
     private:
-        std::auto_ptr<replicant_client> m_replicant;
+        replicant_client *m_repl;
         pending_map m_pending;
 };
 #endif // __cplusplus

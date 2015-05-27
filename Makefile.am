@@ -89,7 +89,6 @@ noinst_HEADERS+=	node_prog/base_classes.h \
 					common/comm_wrapper.h \
 					common/event_order.h \
 					common/message_constants.h \
-					common/serialization.h \
 					common/server_manager_link_wrapper.h \
 					common/vclock.h \
                     common/bool_vector.h \
@@ -113,7 +112,6 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    common/configuration.cc \
 		                    common/server.cc \
 		                    common/ids.cc \
-		                    common/serialization.cc \
 		                    common/server_manager_link.cc \
 		                    common/server_manager_link_wrapper.cc \
 		                    common/hyper_stub_base.cc \
@@ -156,8 +154,7 @@ libweaverservermanager_la_SOURCES=	coordinator/server_barrier.cc \
 									coordinator/transitions.cc \
 									coordinator/symtable.c \
 									common/server.cc \
-									common/ids.cc \
-									common/serialization.cc
+									common/ids.cc
 libweaverservermanager_la_CFLAGS= 	$(AM_CFLAGS)
 libweaverservermanager_la_CXXFLAGS=	$(AM_CXXFLAGS)
 
@@ -179,7 +176,6 @@ noinst_HEADERS+=		db/cache_entry.h \
 						db/types.h
 bin_PROGRAMS+=			weaver-shard
 weaver_shard_SOURCES=	common/ids.cc \
-						common/serialization.cc \
 						common/server.cc \
 						common/configuration.cc \
 		                common/comm_wrapper.cc \
@@ -226,7 +222,6 @@ noinst_HEADERS+=			client/client_constants.h \
 							client/comm_wrapper.h
 lib_LTLIBRARIES+=			libweaverclient.la
 libweaverclient_la_SOURCES=	common/ids.cc \
-		                    common/serialization.cc \
 		                    common/server.cc \
 		                    common/configuration.cc \
 		                    common/comm_wrapper.cc \

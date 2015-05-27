@@ -38,7 +38,7 @@ namespace node_prog
         get_btc_block_params();
         ~get_btc_block_params() { }
         uint64_t size() const;
-        void pack(e::buffer::packer&) const;
+        void pack(e::packer&) const;
         void unpack(e::unpacker&);
 
         // no caching
@@ -54,7 +54,7 @@ namespace node_prog
         get_btc_block_state();
         ~get_btc_block_state() { }
         uint64_t size() const;
-        void pack(e::buffer::packer&) const;
+        void pack(e::packer&) const;
         void unpack(e::unpacker&);
     };
 

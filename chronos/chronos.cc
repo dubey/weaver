@@ -59,7 +59,7 @@ class chronos_client::pending
 
     public:
         replicant_returncode repl_status;
-        const char* repl_output;
+        char* repl_output;
         size_t repl_output_sz;
         chronos_returncode* status;
 
@@ -221,13 +221,14 @@ class chronos_client::pending_new_epoch : public pending
 };
 
 chronos_client :: chronos_client(const char* host, uint16_t port)
-    : m_replicant(new replicant_client(host, port))
+    : m_repl(replicant_client_create(host, port))
     , m_pending()
 {
 }
 
 chronos_client :: ~chronos_client() throw ()
 {
+    replicant_client_destroy(m_repl);
 }
 
 int64_t
@@ -375,7 +376,7 @@ int64_t
 chronos_client :: loop(int timeout, chronos_returncode* status)
 {
     replicant_returncode rc;
-    int64_t ret = m_replicant->loop(timeout, &rc);
+    int64_t ret = replicant_client_loop(m_repl, timeout, &rc);
 
     if (ret < 0)
     {
@@ -404,7 +405,7 @@ int64_t
 chronos_client :: wait(int64_t id, int timeout, chronos_returncode* status)
 {
     replicant_returncode rc;
-    int64_t ret = m_replicant->loop(id, timeout, &rc);
+    int64_t ret = replicant_client_wait(m_repl, id, timeout, &rc);
 
     if (ret < 0)
     {
@@ -433,11 +434,12 @@ int64_t
 chronos_client :: send(e::intrusive_ptr<pending> pend, chronos_returncode* status,
                        const char* func, const char* data, size_t data_sz)
 {
-    int64_t ret = m_replicant->send("chronosd",
-                                    func, data, data_sz,
-                                    &pend->repl_status,
-                                    &pend->repl_output,
-                                    &pend->repl_output_sz);
+    int64_t ret = replicant_client_call(m_repl, "chronosd",
+                                        func, data, data_sz,
+                                        REPLICANT_CALL_ROBUST,
+                                        &pend->repl_status,
+                                        &pend->repl_output,
+                                        &pend->repl_output_sz);
 
     if (ret > 0)
     {
@@ -447,9 +449,8 @@ chronos_client :: send(e::intrusive_ptr<pending> pend, chronos_returncode* statu
     else
     {
         WDEBUG << std::endl;
-        e::error send_error = m_replicant->last_error();
-        WDEBUG << send_error.msg();
-        WDEBUG << send_error.loc();
+        WDEBUG << replicant_client_error_message(m_repl);
+        WDEBUG << replicant_client_error_location(m_repl);
         *status = CHRONOS_ERROR;
         return ret;
     }
@@ -470,7 +471,7 @@ chronos_client :: pending :: ~pending() throw ()
 {
     if (repl_output)
     {
-        replicant_destroy_output(repl_output, repl_output_sz);
+        free(repl_output);
     }
 }
 

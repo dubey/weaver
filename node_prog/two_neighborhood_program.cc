@@ -51,7 +51,7 @@ two_neighborhood_params :: size() const
 }
 
 void
-two_neighborhood_params :: pack(e::buffer::packer& packer) const 
+two_neighborhood_params :: pack(e::packer& packer) const 
 {
     message::pack_buffer(packer, _search_cache);
     message::pack_buffer(packer, cache_update);
@@ -94,7 +94,7 @@ two_neighborhood_state :: size() const
 }
 
 void
-two_neighborhood_state :: pack(e::buffer::packer& packer) const 
+two_neighborhood_state :: pack(e::packer& packer) const 
 {
     message::pack_buffer(packer, one_hop_visited);
     message::pack_buffer(packer, two_hop_visited);
@@ -129,7 +129,7 @@ two_neighborhood_cache_value :: size() const
 }
 
 void
-two_neighborhood_cache_value :: pack(e::buffer::packer& packer) const 
+two_neighborhood_cache_value :: pack(e::packer& packer) const 
 {
     message::pack_buffer(packer, prop_key);
     message::pack_buffer(packer, responses);

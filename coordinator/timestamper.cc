@@ -902,7 +902,7 @@ main(int argc, const char *argv[])
         return -1;
     }
 
-    po6::net::location my_loc(listen_host, listen_port);
+    std::shared_ptr<po6::net::location> my_loc(new po6::net::location(listen_host, listen_port));
     uint64_t sid;
     assert(generate_token(&sid));
     vts = new coordinator::timestamper(sid, my_loc, backup);
@@ -910,7 +910,7 @@ main(int argc, const char *argv[])
     // server manager link
     std::thread sm_thr(server_manager_link_loop,
         po6::net::hostname(ServerManagerIpaddr, ServerManagerPort),
-        my_loc,
+        *my_loc,
         backup);
     sm_thr.detach();
 

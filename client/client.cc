@@ -714,7 +714,7 @@ client :: reconfigure()
             } else if (rc == REPLICANT_TIMEOUT) {
                 CLIENTLOG << "operation timed out";
             } else {
-                CLIENTLOG << "coordinator failure: " << m_sm.error().msg();
+                CLIENTLOG << "coordinator failure: " << m_sm.error_message();
             }
             CLIENTLOG << "retry sm connection " << try_sm << std::endl;
         }

@@ -44,7 +44,7 @@ namespace node_prog
             virtual bool search_cache() { return _search_cache; }
             virtual cache_key_t cache_key() { return _cache_key; }
             virtual uint64_t size() const;
-            virtual void pack(e::buffer::packer &packer) const; 
+            virtual void pack(e::packer &packer) const; 
             virtual void unpack(e::unpacker &unpacker);
     };
 
@@ -59,7 +59,7 @@ namespace node_prog
         reach_node_state();
         virtual ~reach_node_state() { }
         virtual uint64_t size() const; 
-        virtual void pack(e::buffer::packer& packer) const ;
+        virtual void pack(e::packer& packer) const ;
         virtual void unpack(e::unpacker& unpacker);
     };
 
@@ -70,7 +70,7 @@ namespace node_prog
         reach_cache_value(std::vector<db::remote_node> &cpy);
         virtual ~reach_cache_value () { }
         virtual uint64_t size() const;
-        virtual void pack(e::buffer::packer& packer) const;
+        virtual void pack(e::packer& packer) const;
         virtual void unpack(e::unpacker& unpacker);
     };
 

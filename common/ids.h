@@ -28,6 +28,7 @@
 
 // e
 #include <e/buffer.h>
+#include <e/serialization.h>
 
 // An ID is a simple wrapper around uint64_t in order to prevent devs from
 // accidently using one type of ID as another.
@@ -54,10 +55,11 @@
     inline size_t \
     pack_size(const TYPE ## _id&) \
     { \
-        return sizeof(uint64_t); \
+        uint64_t i = 0; \
+        return e::pack_size(i); \
     } \
-    e::buffer::packer \
-    operator << (e::buffer::packer pa, const TYPE ## _id& rhs); \
+    e::packer \
+    operator << (e::packer pa, const TYPE ## _id& rhs); \
     e::unpacker \
     operator >> (e::unpacker up, TYPE ## _id& rhs); \
     OPERATOR(TYPE, <) \

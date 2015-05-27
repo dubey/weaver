@@ -280,11 +280,11 @@ class hyper_stub_base
             size_t &num_attrs);
         void prepare_edges(hyperdex_client_map_attribute *cl_attrs,
             std::vector<async_put_edge_unit> &edges);
-        void pack_uint64(e::buffer::packer &packer, uint64_t num);
+        void pack_uint64(e::packer &packer, uint64_t num);
         void unpack_uint64(e::unpacker &unpacker, uint64_t &num);
-        void pack_uint32(e::buffer::packer &packer, uint32_t num);
+        void pack_uint32(e::packer &packer, uint32_t num);
         void unpack_uint32(e::unpacker &unpacker, uint32_t &num);
-        void pack_string(e::buffer::packer &packer, const std::string &t);
+        void pack_string(e::packer &packer, const std::string &t);
         void unpack_string(e::unpacker &unpacker, std::string &t, const uint32_t sz);
 
     public:
@@ -298,7 +298,7 @@ hyper_stub_base :: prepare_buffer(const T &t, std::unique_ptr<e::buffer> &buf)
 {
     uint64_t buf_sz = message::size(t);
     buf.reset(e::buffer::create(buf_sz));
-    e::buffer::packer packer = buf->pack_at(0);
+    e::packer packer = buf->pack_at(0);
     message::pack_buffer(packer, t);
 }
 
@@ -337,7 +337,7 @@ hyper_stub_base :: prepare_buffer(const std::unordered_map<std::string, T> &map,
     }
 
     buf.reset(e::buffer::create(buf_sz));
-    e::buffer::packer packer = buf->pack();
+    e::packer packer = buf->pack();
 
     for (uint64_t i = 0; i < sorted.size(); i++) {
         pack_uint32(packer, sorted[i].size());
@@ -358,7 +358,7 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordere
     std::string key;
     uint32_t sz;
 
-    while (!unpacker.empty()) {
+    while (unpacker.remain() > 0) {
         key.erase();
 
         unpack_uint32(unpacker, sz);
@@ -394,7 +394,7 @@ hyper_stub_base :: prepare_buffer(const db::data_map<T> &map, std::unique_ptr<e:
     }
 
     buf.reset(e::buffer::create(buf_sz));
-    e::buffer::packer packer = buf->pack();
+    e::packer packer = buf->pack();
 
     for (uint64_t i = 0; i < sorted.size(); i++) {
         pack_uint32(packer, sorted[i].size());
@@ -415,7 +415,7 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, db::data_map<
     std::string key;
     uint32_t sz;
 
-    while (!unpacker.empty()) {
+    while (unpacker.remain() > 0) {
         key.erase();
 
         unpack_uint32(unpacker, sz);

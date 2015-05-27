@@ -78,7 +78,7 @@ message :: size(const db::node &t)
 }
 
 // packing methods
-void message :: pack_buffer(e::buffer::packer &packer, const db::element &t)
+void message :: pack_buffer(e::packer &packer, const db::element &t)
 {
     pack_buffer(packer, t.get_handle());
     pack_buffer(packer, t.get_creat_time());
@@ -86,7 +86,7 @@ void message :: pack_buffer(e::buffer::packer &packer, const db::element &t)
     pack_buffer(packer, *t.get_properties());
 }
 
-void message :: pack_buffer(e::buffer::packer &packer, const db::edge &t)
+void message :: pack_buffer(e::packer &packer, const db::edge &t)
 {
     pack_buffer(packer, t.base);
 #ifdef WEAVER_CLDG
@@ -98,13 +98,13 @@ void message :: pack_buffer(e::buffer::packer &packer, const db::edge &t)
     pack_buffer(packer, t.nbr);
 }
 
-void message :: pack_buffer(e::buffer::packer &packer, const db::edge* const &t)
+void message :: pack_buffer(e::packer &packer, const db::edge* const &t)
 {
     pack_buffer(packer, *t);
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const db::node &t)
+message :: pack_buffer(e::packer &packer, const db::node &t)
 {
     pack_buffer(packer, t.base);
     pack_buffer(packer, t.out_edges);

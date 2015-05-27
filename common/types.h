@@ -157,7 +157,7 @@
             return sizeof(uint64_t); \
         } \
      \
-        void pack_buffer(e::buffer::packer &packer, const TYPE &t) \
+        void pack_buffer(e::packer &packer, const TYPE &t) \
         { \
             packer << t.value; \
         } \

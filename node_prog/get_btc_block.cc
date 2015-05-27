@@ -36,7 +36,7 @@ get_btc_block_params :: size() const
 }
 
 void
-get_btc_block_params :: pack(e::buffer::packer &packer) const
+get_btc_block_params :: pack(e::packer &packer) const
 {
     message::pack_buffer(packer, block);
     message::pack_buffer(packer, node);
@@ -69,7 +69,7 @@ get_btc_block_state :: size() const
 }
 
 void
-get_btc_block_state :: pack(e::buffer::packer &packer) const
+get_btc_block_state :: pack(e::packer &packer) const
 {
     message::pack_buffer(packer, outstanding_count);
     message::pack_buffer(packer, txs);

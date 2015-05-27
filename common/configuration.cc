@@ -23,9 +23,11 @@
 #include <sstream>
 #include <unordered_set>
 
+// e
+#include <e/serialization.h>
+
 // HyperDex
 #include "common/configuration.h"
-#include "common/serialization.h"
 
 configuration :: configuration()
     : m_cluster(0)

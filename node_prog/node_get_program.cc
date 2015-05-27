@@ -27,7 +27,7 @@ node_get_params :: size() const
 }
 
 void
-node_get_params :: pack(e::buffer::packer& packer) const
+node_get_params :: pack(e::packer& packer) const
 {
     message::pack_buffer(packer, props);
     message::pack_buffer(packer, edges);

@@ -41,7 +41,7 @@ discover_paths_params :: size() const
 }
 
 void
-discover_paths_params :: pack(e::buffer::packer &packer) const
+discover_paths_params :: pack(e::packer &packer) const
 {
     message::pack_buffer(packer, dest);
     message::pack_buffer(packer, path_len);
@@ -82,7 +82,7 @@ dp_len_state :: size() const
 }
 
 void
-dp_len_state :: pack(e::buffer::packer &packer) const
+dp_len_state :: pack(e::packer &packer) const
 {
     message::pack_buffer(packer, outstanding_count);
     message::pack_buffer(packer, prev_nodes);
@@ -107,7 +107,7 @@ discover_paths_state :: size() const
 }
 
 void
-discover_paths_state :: pack(e::buffer::packer &packer) const
+discover_paths_state :: pack(e::packer &packer) const
 {
     message::pack_buffer(packer, vmap);
 }

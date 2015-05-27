@@ -36,7 +36,7 @@ clustering_params :: size() const
 }
 
 void
-clustering_params :: pack(e::buffer::packer& packer) const 
+clustering_params :: pack(e::packer& packer) const 
 {
     message::pack_buffer(packer, _search_cache);
     message::pack_buffer(packer, _cache_key);
@@ -68,7 +68,7 @@ clustering_node_state :: size() const
 }
 
 void
-clustering_node_state :: pack(e::buffer::packer& packer) const 
+clustering_node_state :: pack(e::packer& packer) const 
 {
     message::pack_buffer(packer, neighbor_counts);
     message::pack_buffer(packer, responses_left);

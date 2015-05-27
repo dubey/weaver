@@ -42,7 +42,7 @@ namespace node_prog
                     return toRet;
             }
 
-            virtual void pack(e::buffer::packer &packer) const 
+            virtual void pack(e::packer &packer) const 
             {
                 message::pack_buffer(packer, responses_left);
                 message::pack_buffer(packer, num_edges);
@@ -80,7 +80,7 @@ namespace node_prog
             return toRet;
         }
 
-        virtual void pack(e::buffer::packer& packer) const 
+        virtual void pack(e::packer& packer) const 
         {
             message::pack_buffer(packer, responses_left);
             message::pack_buffer(packer, total);

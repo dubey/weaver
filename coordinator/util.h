@@ -19,7 +19,7 @@
 #include "common/server_manager_returncode.h"
 
 static inline void
-generate_response(replicant_state_machine_context* ctx, server_manager_returncode x)
+generate_response(rsm_context* ctx, server_manager_returncode x)
 {
     const char* ptr = nullptr;
 
@@ -48,7 +48,7 @@ generate_response(replicant_state_machine_context* ctx, server_manager_returncod
             break;
     }
 
-    replicant_state_machine_set_response(ctx, ptr, 2);
+    rsm_set_output(ctx, ptr, 2);
 }
 
 #define INVARIANT_BROKEN(X) \

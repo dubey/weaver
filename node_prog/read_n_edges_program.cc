@@ -30,7 +30,7 @@ read_n_edges_params :: size() const
 }
 
 void
-read_n_edges_params :: pack(e::buffer::packer& packer) const 
+read_n_edges_params :: pack(e::packer& packer) const 
 {
     message::pack_buffer(packer, num_edges);
     message::pack_buffer(packer, edges_props);

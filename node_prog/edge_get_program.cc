@@ -28,7 +28,7 @@ uint64_t edge_get_params :: size() const
     return toRet;
 }
 
-void edge_get_params :: pack(e::buffer::packer& packer) const 
+void edge_get_params :: pack(e::packer& packer) const 
 {
     message::pack_buffer(packer, nbrs);
     message::pack_buffer(packer, request_edges);

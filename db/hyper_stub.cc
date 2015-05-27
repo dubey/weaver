@@ -88,7 +88,7 @@ hyper_stub :: hyper_stub(uint64_t sid, int tid)
     , thread_id(tid)
     , put_edge_batch_clock(0)
 {
-    hyperdex_client_set_tid(cl, thread_id);
+    //hyperdex_client_set_tid(cl, thread_id);
 }
 
 void

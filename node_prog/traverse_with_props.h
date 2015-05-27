@@ -43,7 +43,7 @@ namespace node_prog
         traverse_props_params();
         ~traverse_props_params() { }
         uint64_t size() const;
-        void pack(e::buffer::packer &packer) const;
+        void pack(e::packer &packer) const;
         void unpack(e::unpacker &unpacker);
 
         // no caching
@@ -62,7 +62,7 @@ namespace node_prog
         traverse_props_state();
         ~traverse_props_state() { }
         uint64_t size() const; 
-        void pack(e::buffer::packer& packer) const ;
+        void pack(e::packer& packer) const ;
         void unpack(e::unpacker& unpacker);
     };
 

@@ -14,7 +14,7 @@ namespace node_prog
     {
         public:
             virtual uint64_t size() const  = 0;
-            virtual void pack(e::buffer::packer& packer) const = 0;
+            virtual void pack(e::packer& packer) const = 0;
             virtual void unpack(e::unpacker& unpacker) = 0;
     };
 

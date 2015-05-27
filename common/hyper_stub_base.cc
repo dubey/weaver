@@ -1281,12 +1281,13 @@ hyper_stub_base :: del_indices(std::vector<std::string> &indices)
 
 
 void
-hyper_stub_base :: pack_uint64(e::buffer::packer &pkr, uint64_t num)
+hyper_stub_base :: pack_uint64(e::packer &pkr, uint64_t num)
 {
     uint8_t intbuf[8];
     e::pack64le(num, intbuf);
-    e::slice intslc(intbuf, 8);
-    pkr = pkr.copy(intslc);
+    for (size_t i = 0; i < 8; i++) {
+        pkr = pkr << intbuf[i];
+    }
 }
 
 void
@@ -1300,12 +1301,13 @@ hyper_stub_base :: unpack_uint64(e::unpacker &unpacker, uint64_t &num)
 }
 
 void
-hyper_stub_base :: pack_uint32(e::buffer::packer &pkr, uint32_t num)
+hyper_stub_base :: pack_uint32(e::packer &pkr, uint32_t num)
 {
     uint8_t intbuf[4];
     e::pack32le(num, intbuf);
-    e::slice intslc(intbuf, 4);
-    pkr = pkr.copy(intslc);
+    for (size_t i = 0; i < 4; i++) {
+        pkr = pkr << intbuf[i];
+    }
 }
 
 void
@@ -1319,7 +1321,7 @@ hyper_stub_base :: unpack_uint32(e::unpacker &unpacker, uint32_t &num)
 }
 
 void
-hyper_stub_base :: pack_string(e::buffer::packer &packer, const std::string &s)
+hyper_stub_base :: pack_string(e::packer &packer, const std::string &s)
 {
     uint8_t *rawchars = (uint8_t*)s.data();
 
@@ -1353,7 +1355,7 @@ hyper_stub_base :: sort_and_pack_as_set(std::vector<std::string> &vec, std::uniq
     }
 
     buf.reset(e::buffer::create(buf_sz));
-    e::buffer::packer packer = buf->pack();
+    e::packer packer = buf->pack();
 
     for (uint64_t i = 0; i < vec.size(); i++) {
         pack_uint32(packer, vec[i].size());
@@ -1394,7 +1396,7 @@ hyper_stub_base :: prepare_buffer(const db::string_set &set,
     e::unpacker unpacker = ebuf->unpack_from(0); \
     std::string key; \
     uint32_t sz; \
-    while (!unpacker.empty()) { \
+    while (unpacker.remain() > 0) { \
         key.erase(); \
         unpack_uint32(unpacker, sz); \
         unpack_string(unpacker, key, sz); \
@@ -1432,7 +1434,7 @@ hyper_stub_base :: prepare_buffer(const std::vector<std::shared_ptr<db::property
     }
 
     buf.reset(e::buffer::create(buf_sz));
-    e::buffer::packer packer = buf->pack();
+    e::packer packer = buf->pack();
 
     for (uint64_t i = 0; i < props.size(); i++) {
         pack_uint32(packer, sz[i]);
@@ -1448,7 +1450,7 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::vector<s
     e::unpacker unpacker = ebuf->unpack_from(0);
     uint32_t sz;
 
-    while (!unpacker.empty()) {
+    while (unpacker.remain() > 0) {
         unpack_uint32(unpacker, sz);
         std::shared_ptr<db::property> p;
         message::unpack_buffer(unpacker, p);

@@ -21,6 +21,7 @@
 #include <busybee_mta.h>
 
 #include "common/configuration.h"
+#include "common/server_manager_link_wrapper.h"
 
 namespace common
 {
@@ -56,10 +57,12 @@ class comm_wrapper
         uint64_t bb_id;
         int num_threads;
         int timeout;
+        server_manager_link_wrapper *sm_stub;
         void reconfigure_internal(configuration&);
+        void handle_disruption(uint64_t id);
 
     public:
-        comm_wrapper(po6::net::location &loc, int nthr, int timeout);
+        comm_wrapper(std::shared_ptr<po6::net::location> loc, int nthr, int timeout, server_manager_link_wrapper*);
         ~comm_wrapper();
         void reconfigure(configuration &config, bool to_pause=true, uint64_t *num_active_vts=nullptr);
         std::shared_ptr<po6::net::location> get_loc() { return loc; }

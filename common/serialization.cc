@@ -20,8 +20,8 @@
 // Weaver
 #include "common/serialization.h"
 
-e::buffer::packer
-operator << (e::buffer::packer lhs, const po6::net::ipaddr& rhs)
+e::packer
+operator << (e::packer lhs, const po6::net::ipaddr& rhs)
 {
     assert(rhs.family() == AF_INET || rhs.family() == AF_INET6 || rhs.family() == AF_UNSPEC);
     uint8_t type;
@@ -107,8 +107,8 @@ pack_size(const po6::net::ipaddr&)
     return 17; // One byte for family, and 4/16 for address
 }
 
-e::buffer::packer
-operator << (e::buffer::packer lhs, const po6::net::location& rhs)
+e::packer
+operator << (e::packer lhs, const po6::net::location& rhs)
 {
     return lhs << rhs.address << rhs.port;
 }
@@ -125,8 +125,8 @@ pack_size(const po6::net::location& rhs)
     return pack_size(rhs.address) + sizeof(uint16_t);
 }
 
-e::buffer::packer
-operator << (e::buffer::packer lhs, const po6::net::hostname& rhs)
+e::packer
+operator << (e::packer lhs, const po6::net::hostname& rhs)
 {
     return lhs << e::slice(rhs.address.data(), rhs.address.size()) << rhs.port;
 }

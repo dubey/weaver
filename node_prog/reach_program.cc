@@ -49,7 +49,7 @@ reach_params :: size() const
 }
 
 void
-reach_params :: pack(e::buffer::packer &packer) const 
+reach_params :: pack(e::packer &packer) const 
 {
     message::pack_buffer(packer, _search_cache);
     message::pack_buffer(packer, _cache_key);
@@ -96,7 +96,7 @@ reach_node_state :: size() const
 }
 
 void
-reach_node_state :: pack(e::buffer::packer& packer) const 
+reach_node_state :: pack(e::packer& packer) const 
 {
     message::pack_buffer(packer, visited);
     message::pack_buffer(packer, prev_node);
@@ -126,7 +126,7 @@ reach_cache_value :: size() const
 }
 
 void
-reach_cache_value :: pack(e::buffer::packer& packer) const 
+reach_cache_value :: pack(e::packer& packer) const 
 {
     message::pack_buffer(packer, path);
 }

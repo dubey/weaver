@@ -38,7 +38,7 @@ namespace node_prog
             bool search_cache() { return _search_cache; }
             cache_key_t cache_key() { return _cache_key; }
             uint64_t size() const;
-            void pack(e::buffer::packer& packer) const;
+            void pack(e::packer& packer) const;
             void unpack(e::unpacker& unpacker);
     };
 
@@ -50,7 +50,7 @@ namespace node_prog
 
         ~clustering_node_state() { }
         uint64_t size() const;
-        void pack(e::buffer::packer& packer) const;
+        void pack(e::packer& packer) const;
         void unpack(e::unpacker& unpacker);
     };
 

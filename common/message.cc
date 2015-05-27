@@ -305,25 +305,25 @@ message::size(const predicate::prop_predicate &t)
 // packing functions
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const node_prog::Node_Parameters_Base &t)
+message :: pack_buffer(e::packer &packer, const node_prog::Node_Parameters_Base &t)
 {
     t.pack(packer);
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const node_prog::Node_State_Base &t)
+message :: pack_buffer(e::packer &packer, const node_prog::Node_State_Base &t)
 {
     t.pack(packer);
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const node_prog::Cache_Value_Base *&t)
+message :: pack_buffer(e::packer &packer, const node_prog::Cache_Value_Base *&t)
 {
     t->pack(packer);
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const enum msg_type &t)
+message :: pack_buffer(e::packer &packer, const enum msg_type &t)
 {
     assert(t <= UINT8_MAX);
     uint8_t temp = (uint8_t) t;
@@ -331,7 +331,7 @@ message :: pack_buffer(e::buffer::packer &packer, const enum msg_type &t)
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const enum node_prog::prog_type &t)
+message :: pack_buffer(e::packer &packer, const enum node_prog::prog_type &t)
 {
     assert(t <= UINT8_MAX);
     uint8_t temp = (uint8_t) t;
@@ -339,7 +339,7 @@ message :: pack_buffer(e::buffer::packer &packer, const enum node_prog::prog_typ
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const enum transaction::update_type &t)
+message :: pack_buffer(e::packer &packer, const enum transaction::update_type &t)
 {
     assert(t <= UINT8_MAX);
     uint8_t temp = (uint8_t) t;
@@ -347,7 +347,7 @@ message :: pack_buffer(e::buffer::packer &packer, const enum transaction::update
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const enum transaction::tx_type &t)
+message :: pack_buffer(e::packer &packer, const enum transaction::tx_type &t)
 {
     assert(t <= UINT8_MAX);
     uint8_t temp = (uint8_t) t;
@@ -355,7 +355,7 @@ message :: pack_buffer(e::buffer::packer &packer, const enum transaction::tx_typ
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const bool &t)
+message :: pack_buffer(e::packer &packer, const bool &t)
 {
     uint8_t to_pack = 0;
     if (t) {
@@ -365,43 +365,43 @@ message :: pack_buffer(e::buffer::packer &packer, const bool &t)
 }
 
 void 
-message :: pack_buffer(e::buffer::packer &packer, const uint8_t &t)
+message :: pack_buffer(e::packer &packer, const uint8_t &t)
 {
     packer = packer << t;
 }
 
 void 
-message :: pack_buffer(e::buffer::packer &packer, const uint16_t &t)
+message :: pack_buffer(e::packer &packer, const uint16_t &t)
 {
     packer = packer << t;
 }
 
 void 
-message :: pack_buffer(e::buffer::packer &packer, const uint32_t &t)
+message :: pack_buffer(e::packer &packer, const uint32_t &t)
 {
     packer = packer << t;
 }
 
 void 
-message :: pack_buffer(e::buffer::packer &packer, const uint64_t &t)
+message :: pack_buffer(e::packer &packer, const uint64_t &t)
 {
     packer = packer << t;
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const int64_t &t)
+message :: pack_buffer(e::packer &packer, const int64_t &t)
 {
     packer = packer << t;
 }
 
 void 
-message :: pack_buffer(e::buffer::packer &packer, const int &t)
+message :: pack_buffer(e::packer &packer, const int &t)
 {
     packer = packer << t;
 }
 
 void 
-message :: pack_buffer(e::buffer::packer &packer, const double &t)
+message :: pack_buffer(e::packer &packer, const double &t)
 {
     uint64_t dbl;
     memcpy(&dbl, &t, sizeof(double)); //to avoid casting issues, probably could avoid copy
@@ -409,7 +409,7 @@ message :: pack_buffer(e::buffer::packer &packer, const double &t)
 }
 
 void
-message :: pack_string(e::buffer::packer &packer, const std::string &t, const uint32_t sz)
+message :: pack_string(e::packer &packer, const std::string &t, const uint32_t sz)
 {
     uint32_t words = sz / 8;
     uint32_t leftover_chars = sz % 8;
@@ -427,7 +427,7 @@ message :: pack_string(e::buffer::packer &packer, const std::string &t, const ui
 }
 
 void 
-message :: pack_buffer(e::buffer::packer &packer, const std::string &t)
+message :: pack_buffer(e::packer &packer, const std::string &t)
 {
     assert(t.size() <= UINT32_MAX);
     uint32_t strlen = t.size();
@@ -437,21 +437,21 @@ message :: pack_buffer(e::buffer::packer &packer, const std::string &t)
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const vc::vclock &t)
+message :: pack_buffer(e::packer &packer, const vc::vclock &t)
 {
     pack_buffer(packer, t.vt_id);
     pack_buffer(packer, t.clock);
 }
 
 void 
-message :: pack_buffer(e::buffer::packer &packer, const node_prog::property &t)
+message :: pack_buffer(e::packer &packer, const node_prog::property &t)
 {
     pack_buffer(packer, t.key);
     pack_buffer(packer, t.value);
 }
 
 void 
-message :: pack_buffer(e::buffer::packer &packer, const db::property &t)
+message :: pack_buffer(e::packer &packer, const db::property &t)
 {
     pack_buffer(packer, t.key);
     pack_buffer(packer, t.value);
@@ -460,14 +460,14 @@ message :: pack_buffer(e::buffer::packer &packer, const db::property &t)
 }
 
 void 
-message :: pack_buffer(e::buffer::packer &packer, const db::remote_node &t)
+message :: pack_buffer(e::packer &packer, const db::remote_node &t)
 {
     pack_buffer(packer, t.loc);
     pack_buffer(packer, t.handle);
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::pending_update> &t)
+message :: pack_buffer(e::packer &packer, const std::shared_ptr<transaction::pending_update> &t)
 {
     pack_buffer(packer, t->type);
     pack_buffer(packer, t->handle);
@@ -485,7 +485,7 @@ message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transact
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::nop_data> &t)
+message :: pack_buffer(e::packer &packer, const std::shared_ptr<transaction::nop_data> &t)
 {
     pack_buffer(packer, t->max_done_clk);
     pack_buffer(packer, t->outstanding_progs);
@@ -494,7 +494,7 @@ message :: pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transact
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const transaction::pending_tx &t)
+message :: pack_buffer(e::packer &packer, const transaction::pending_tx &t)
 {
     pack_buffer(packer, t.type);
     pack_buffer(packer, t.id);
@@ -511,7 +511,7 @@ message :: pack_buffer(e::buffer::packer &packer, const transaction::pending_tx 
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const std::vector<bool> &t)
+message :: pack_buffer(e::packer &packer, const std::vector<bool> &t)
 {
     uint32_t sz = t.size();
     pack_buffer(packer, sz);
@@ -521,7 +521,7 @@ message :: pack_buffer(e::buffer::packer &packer, const std::vector<bool> &t)
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const cl::node &t)
+message :: pack_buffer(e::packer &packer, const cl::node &t)
 {
     pack_buffer(packer, t.handle);
     pack_buffer(packer, t.properties);
@@ -530,7 +530,7 @@ message :: pack_buffer(e::buffer::packer &packer, const cl::node &t)
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const cl::edge &t)
+message :: pack_buffer(e::packer &packer, const cl::edge &t)
 {
     pack_buffer(packer, t.handle);
     pack_buffer(packer, t.start_node);
@@ -539,7 +539,7 @@ message :: pack_buffer(e::buffer::packer &packer, const cl::edge &t)
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const enum predicate::relation &t)
+message :: pack_buffer(e::packer &packer, const enum predicate::relation &t)
 {
     assert(t <= UINT8_MAX);
     uint8_t temp = (uint8_t) t;
@@ -547,7 +547,7 @@ message :: pack_buffer(e::buffer::packer &packer, const enum predicate::relation
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const predicate::prop_predicate &t)
+message :: pack_buffer(e::packer &packer, const predicate::prop_predicate &t)
 {
     pack_buffer(packer, t.key);
     pack_buffer(packer, t.value);

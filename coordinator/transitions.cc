@@ -22,10 +22,12 @@
 // STL
 #include <string>
 
+// e
+#include <e/serialization.h>
+
 // Weaver
 #include "common/server_manager_returncode.h"
 #include "common/ids.h"
-#include "common/serialization.h"
 #include "coordinator/server_manager.h"
 #include "coordinator/transitions.h"
 #include "coordinator/util.h"
@@ -35,7 +37,7 @@
     { \
         if (!obj) \
         { \
-            fprintf(replicant_state_machine_log_stream(ctx), "cannot operate on NULL object\n"); \
+            rsm_log(ctx, "cannot operate on NULL object\n"); \
             return generate_response(ctx, COORD_UNINITIALIZED); \
         } \
     } \
@@ -48,7 +50,7 @@
         coordinator::server_manager* c = static_cast<coordinator::server_manager*>(obj); \
         if (c->cluster() == 0) \
         { \
-            fprintf(replicant_state_machine_log_stream(ctx), "cluster not initialized\n"); \
+            rsm_log(ctx, "cluster not initialized\n"); \
             return generate_response(ctx, COORD_UNINITIALIZED); \
         } \
     } \
@@ -59,7 +61,7 @@
     { \
         if (up.error() || up.remain()) \
         { \
-            fprintf(log, "received malformed \"" #MSGTYPE "\" message\n"); \
+            rsm_log(ctx, "received malformed \"" #MSGTYPE "\" message\n"); \
             return generate_response(ctx, COORD_MALFORMED); \
         } \
     } while (0)
@@ -68,64 +70,45 @@ extern "C"
 {
 
 void*
-weaver_server_manager_create(struct replicant_state_machine_context* ctx)
+weaver_server_manager_create(struct rsm_context* ctx)
 {
-    if (replicant_state_machine_condition_create(ctx, "config") < 0)
-    {
-        fprintf(replicant_state_machine_log_stream(ctx), "could not create condition \"config\"\n");
-        return NULL;
-    }
-
-    if (replicant_state_machine_condition_create(ctx, "ack") < 0)
-    {
-        fprintf(replicant_state_machine_log_stream(ctx), "could not create condition \"ack\"\n");
-        return NULL;
-    }
-
-    if (replicant_state_machine_condition_create(ctx, "stable") < 0)
-    {
-        fprintf(replicant_state_machine_log_stream(ctx), "could not create condition \"stable\"\n");
-        return NULL;
-    }
+    rsm_cond_create(ctx, "config");
+    rsm_cond_create(ctx, "ack");
+    rsm_cond_create(ctx, "stable");
 
     coordinator::server_manager* c = new (std::nothrow) coordinator::server_manager();
 
     if (!c)
     {
-        fprintf(replicant_state_machine_log_stream(ctx), "memory allocation failed\n");
+        rsm_log(ctx, "memory allocation failed\n");
     }
 
-    fprintf(replicant_state_machine_log_stream(ctx), "created server manager object\n");
+    rsm_log(ctx, "created server manager object\n");
     return c;
 }
 
 void*
-weaver_server_manager_recreate(struct replicant_state_machine_context* ctx,
+weaver_server_manager_recreate(struct rsm_context* ctx,
                                const char* data, size_t data_sz)
 {
     return coordinator::server_manager::recreate(ctx, data, data_sz);
 }
 
-void
-weaver_server_manager_destroy(struct replicant_state_machine_context*, void* obj)
+int
+weaver_server_manager_snapshot(struct rsm_context* ctx,
+                               void* obj, char** data, size_t* data_sz)
 {
-    if (obj)
-    {
-        delete static_cast<coordinator::server_manager*>(obj);
+    if (!obj) {
+        rsm_log(ctx, "cannot operate on NULL object\n");
+        generate_response(ctx, COORD_UNINITIALIZED);
+        return -1;
     }
-}
-
-void
-weaver_server_manager_snapshot(struct replicant_state_machine_context* ctx,
-                               void* obj, const char** data, size_t* data_sz)
-{
-    PROTECT_NULL;
     coordinator::server_manager* c = static_cast<coordinator::server_manager*>(obj);
-    c->snapshot(ctx, data, data_sz);
+    return c->snapshot(ctx, data, data_sz);
 }
 
 void
-weaver_server_manager_init(struct replicant_state_machine_context* ctx,
+weaver_server_manager_init(struct rsm_context* ctx,
                           void* obj, const char* data, size_t data_sz)
 {
     PROTECT_NULL;
@@ -137,7 +120,7 @@ weaver_server_manager_init(struct replicant_state_machine_context* ctx,
 }
 
 void
-weaver_server_manager_config_get(struct replicant_state_machine_context* ctx,
+weaver_server_manager_config_get(struct rsm_context* ctx,
                                 void* obj, const char*, size_t)
 {
     PROTECT_UNINITIALIZED;
@@ -146,11 +129,10 @@ weaver_server_manager_config_get(struct replicant_state_machine_context* ctx,
 }
 
 void
-weaver_server_manager_config_ack(struct replicant_state_machine_context* ctx,
+weaver_server_manager_config_ack(struct rsm_context* ctx,
                                 void* obj, const char* data, size_t data_sz)
 {
     PROTECT_UNINITIALIZED;
-    FILE* log = replicant_state_machine_log_stream(ctx);
     coordinator::server_manager* c = static_cast<coordinator::server_manager*>(obj);
     server_id sid;
     uint64_t version;
@@ -161,11 +143,10 @@ weaver_server_manager_config_ack(struct replicant_state_machine_context* ctx,
 }
 
 void
-weaver_server_manager_config_stable(struct replicant_state_machine_context* ctx,
+weaver_server_manager_config_stable(struct rsm_context* ctx,
                                    void* obj, const char* data, size_t data_sz)
 {
     PROTECT_UNINITIALIZED;
-    FILE* log = replicant_state_machine_log_stream(ctx);
     coordinator::server_manager* c = static_cast<coordinator::server_manager*>(obj);
     server_id sid;
     uint64_t version;
@@ -176,7 +157,7 @@ weaver_server_manager_config_stable(struct replicant_state_machine_context* ctx,
 }
 
 void
-weaver_server_manager_replid_get(struct replicant_state_machine_context* ctx,
+weaver_server_manager_replid_get(struct rsm_context* ctx,
                                    void* obj, const char*, size_t)
 {
     PROTECT_UNINITIALIZED;
@@ -185,11 +166,10 @@ weaver_server_manager_replid_get(struct replicant_state_machine_context* ctx,
 }
 
 void
-weaver_server_manager_server_register(struct replicant_state_machine_context* ctx,
+weaver_server_manager_server_register(struct rsm_context* ctx,
                                      void* obj, const char* data, size_t data_sz)
 {
     PROTECT_UNINITIALIZED;
-    FILE* log = replicant_state_machine_log_stream(ctx);
     coordinator::server_manager* c = static_cast<coordinator::server_manager*>(obj);
     server_id sid;
     po6::net::location bind_to;
@@ -202,11 +182,10 @@ weaver_server_manager_server_register(struct replicant_state_machine_context* ct
 }
 
 void
-weaver_server_manager_server_online(struct replicant_state_machine_context* ctx,
+weaver_server_manager_server_online(struct rsm_context* ctx,
                                    void* obj, const char* data, size_t data_sz)
 {
     PROTECT_UNINITIALIZED;
-    FILE* log = replicant_state_machine_log_stream(ctx);
     coordinator::server_manager* c = static_cast<coordinator::server_manager*>(obj);
     server_id sid;
     po6::net::location bind_to;
@@ -226,11 +205,10 @@ weaver_server_manager_server_online(struct replicant_state_machine_context* ctx,
 }
 
 void
-weaver_server_manager_server_offline(struct replicant_state_machine_context* ctx,
+weaver_server_manager_server_offline(struct rsm_context* ctx,
                                     void* obj, const char* data, size_t data_sz)
 {
     PROTECT_UNINITIALIZED;
-    FILE* log = replicant_state_machine_log_stream(ctx);
     coordinator::server_manager* c = static_cast<coordinator::server_manager*>(obj);
     server_id sid;
     e::unpacker up(data, data_sz);
@@ -240,11 +218,10 @@ weaver_server_manager_server_offline(struct replicant_state_machine_context* ctx
 }
 
 void
-weaver_server_manager_server_shutdown(struct replicant_state_machine_context* ctx,
+weaver_server_manager_server_shutdown(struct rsm_context* ctx,
                                      void* obj, const char* data, size_t data_sz)
 {
     PROTECT_UNINITIALIZED;
-    FILE* log = replicant_state_machine_log_stream(ctx);
     coordinator::server_manager* c = static_cast<coordinator::server_manager*>(obj);
     server_id sid;
     e::unpacker up(data, data_sz);
@@ -254,11 +231,10 @@ weaver_server_manager_server_shutdown(struct replicant_state_machine_context* ct
 }
 
 void
-weaver_server_manager_server_kill(struct replicant_state_machine_context* ctx,
+weaver_server_manager_server_kill(struct rsm_context* ctx,
                                  void* obj, const char* data, size_t data_sz)
 {
     PROTECT_UNINITIALIZED;
-    FILE* log = replicant_state_machine_log_stream(ctx);
     coordinator::server_manager* c = static_cast<coordinator::server_manager*>(obj);
     server_id sid;
     e::unpacker up(data, data_sz);
@@ -268,11 +244,10 @@ weaver_server_manager_server_kill(struct replicant_state_machine_context* ctx,
 }
 
 void
-weaver_server_manager_server_forget(struct replicant_state_machine_context* ctx,
+weaver_server_manager_server_forget(struct rsm_context* ctx,
                                    void* obj, const char* data, size_t data_sz)
 {
     PROTECT_UNINITIALIZED;
-    FILE* log = replicant_state_machine_log_stream(ctx);
     coordinator::server_manager* c = static_cast<coordinator::server_manager*>(obj);
     server_id sid;
     e::unpacker up(data, data_sz);
@@ -282,11 +257,10 @@ weaver_server_manager_server_forget(struct replicant_state_machine_context* ctx,
 }
 
 void
-weaver_server_manager_server_suspect(struct replicant_state_machine_context* ctx,
+weaver_server_manager_server_suspect(struct rsm_context* ctx,
                                     void* obj, const char* data, size_t data_sz)
 {
     PROTECT_UNINITIALIZED;
-    FILE* log = replicant_state_machine_log_stream(ctx);
     coordinator::server_manager* c = static_cast<coordinator::server_manager*>(obj);
     server_id sid;
     e::unpacker up(data, data_sz);
@@ -296,16 +270,21 @@ weaver_server_manager_server_suspect(struct replicant_state_machine_context* ctx
 }
 
 void
-weaver_server_manager_alarm(struct replicant_state_machine_context* ctx,
-                           void* obj, const char*, size_t)
+weaver_server_manager_report_disconnect(struct rsm_context* ctx,
+                                        void* obj, const char* data, size_t data_sz)
 {
     PROTECT_UNINITIALIZED;
     coordinator::server_manager* c = static_cast<coordinator::server_manager*>(obj);
-    c->alarm(ctx);
+    server_id sid;
+    uint64_t version;
+    e::unpacker up(data, data_sz);
+    up = up >> sid >> version;
+    CHECK_UNPACK(report_disconnect);
+    c->report_disconnect(ctx, sid, version);
 }
 
 void
-weaver_server_manager_debug_dump(struct replicant_state_machine_context* ctx,
+weaver_server_manager_debug_dump(struct rsm_context* ctx,
                                 void* obj, const char*, size_t)
 {
     PROTECT_UNINITIALIZED;

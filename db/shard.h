@@ -69,11 +69,8 @@ namespace db
     class shard
     {
         public:
-            shard(uint64_t serverid, po6::net::location &loc);
+            shard(uint64_t serverid, std::shared_ptr<po6::net::location> loc);
             void init(uint64_t shardid);
-
-            // Messaging infrastructure
-            common::comm_wrapper comm;
 
             // Server manager
             po6::threads::mutex config_mutex, exit_mutex;
@@ -84,6 +81,9 @@ namespace db
             void reconfigure();
             void update_members_new_config();
             bool to_exit;
+
+            // Messaging infrastructure
+            common::comm_wrapper comm;
 
             // Consistency
         public:
@@ -274,15 +274,15 @@ namespace db
     };
 
     inline
-    shard :: shard(uint64_t serverid, po6::net::location &loc)
-        : comm(loc, NUM_SHARD_THREADS, SHARD_MSGRECV_TIMEOUT)
-        , sm_stub(server_id(serverid), comm.get_loc())
+    shard :: shard(uint64_t serverid, std::shared_ptr<po6::net::location> loc)
+        : sm_stub(server_id(serverid), comm.get_loc())
         , active_backup(false)
         , first_config(false)
         , pause_bb(false)
         , backup_cond(&config_mutex)
         , first_config_cond(&config_mutex)
         , to_exit(false)
+        , comm(loc, NUM_SHARD_THREADS, SHARD_MSGRECV_TIMEOUT, &sm_stub)
         , shard_id(UINT64_MAX)
         , serv_id(serverid)
         , max_load_time(0)

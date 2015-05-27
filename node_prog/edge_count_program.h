@@ -35,7 +35,7 @@ namespace node_prog
             bool search_cache() { return false; }
             cache_key_t cache_key() { return cache_key_t(); }
             uint64_t size() const;
-            void pack(e::buffer::packer& packer) const;
+            void pack(e::packer& packer) const;
             void unpack(e::unpacker& unpacker);
     };
 
@@ -43,7 +43,7 @@ namespace node_prog
     {
         virtual ~edge_count_state() { }
         virtual uint64_t size() const { return 0; }
-        virtual void pack(e::buffer::packer&) const { }
+        virtual void pack(e::packer&) const { }
         virtual void unpack(e::unpacker&) { }
     };
 

@@ -41,7 +41,7 @@ message :: size(const node_prog::node_cache_context &t)
 
 // packing methods
 void
-message :: pack_buffer(e::buffer::packer &packer, const node_prog::edge_cache_context &t)
+message :: pack_buffer(e::packer &packer, const node_prog::edge_cache_context &t)
 {
     pack_buffer(packer, t.edge_handle);
     pack_buffer(packer, t.nbr);
@@ -50,7 +50,7 @@ message :: pack_buffer(e::buffer::packer &packer, const node_prog::edge_cache_co
 }
 
 void
-message :: pack_buffer(e::buffer::packer &packer, const node_prog::node_cache_context &t)
+message :: pack_buffer(e::packer &packer, const node_prog::node_cache_context &t)
 {
     pack_buffer(packer, t.node);
     pack_buffer(packer, t.node_deleted);

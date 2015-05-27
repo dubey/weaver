@@ -27,45 +27,31 @@
 // e
 #include <e/buffer.h>
 
-e::buffer::packer
-operator << (e::buffer::packer lhs, const po6::net::ipaddr& rhs);
-e::unpacker
-operator >> (e::unpacker lhs, po6::net::ipaddr& rhs);
-size_t
-pack_size(const po6::net::ipaddr& rhs);
-
-e::buffer::packer
-operator << (e::buffer::packer lhs, const po6::net::location& rhs);
-e::unpacker
-operator >> (e::unpacker lhs, po6::net::location& rhs);
-size_t
-pack_size(const po6::net::location& rhs);
-
-e::buffer::packer
-operator << (e::buffer::packer lhs, const po6::net::hostname& rhs);
-e::unpacker
-operator >> (e::unpacker lhs, po6::net::hostname& rhs);
-size_t
-pack_size(const po6::net::hostname& rhs);
-
-inline size_t
-pack_size(uint64_t) { return sizeof(uint64_t); }
-
-size_t
-pack_size(const e::slice& s);
-
-template <typename T>
-size_t
-pack_size(const std::vector<T>& v)
-{
-    size_t sz = sizeof(uint32_t);
-
-    for (size_t i = 0; i < v.size(); ++i)
-    {
-        sz += pack_size(v[i]);
-    }
-
-    return sz;
-}
+//e::packer
+//operator << (e::packer lhs, const po6::net::ipaddr& rhs);
+//e::unpacker
+//operator >> (e::unpacker lhs, po6::net::ipaddr& rhs);
+//size_t
+//pack_size(const po6::net::ipaddr& rhs);
+//
+//e::packer
+//operator << (e::packer lhs, const po6::net::location& rhs);
+//e::unpacker
+//operator >> (e::unpacker lhs, po6::net::location& rhs);
+//size_t
+//pack_size(const po6::net::location& rhs);
+//
+//e::packer
+//operator << (e::packer lhs, const po6::net::hostname& rhs);
+//e::unpacker
+//operator >> (e::unpacker lhs, po6::net::hostname& rhs);
+//size_t
+//pack_size(const po6::net::hostname& rhs);
+//
+//inline size_t
+//pack_size(uint64_t) { return sizeof(uint64_t); }
+//
+//size_t
+//pack_size(const e::slice& s);
 
 #endif // weaver_common_serialization_h_

@@ -30,7 +30,7 @@ read_node_props_params :: size() const
 }
 
 void
-read_node_props_params :: pack(e::buffer::packer& packer) const 
+read_node_props_params :: pack(e::packer& packer) const 
 {
     message::pack_buffer(packer, keys);
     message::pack_buffer(packer, node_props);

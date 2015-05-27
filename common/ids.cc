@@ -25,8 +25,8 @@
     { \
         return lhs << #TYPE "(" << rhs.get() << ")"; \
     } \
-    e::buffer::packer \
-    operator << (e::buffer::packer pa, const TYPE ## _id& rhs) \
+    e::packer \
+    operator << (e::packer pa, const TYPE ## _id& rhs) \
     { \
         return pa << rhs.get(); \
     } \

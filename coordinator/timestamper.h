@@ -57,15 +57,15 @@ namespace coordinator
     class timestamper
     {
         public:
-            // messaging
-            common::comm_wrapper comm;
-
             // server manager
             server_manager_link_wrapper sm_stub;
             configuration config, prev_config, periodic_update_config;
             bool is_backup, active_backup, first_config, pause_bb;
             uint64_t num_active_vts;
             po6::threads::cond backup_cond, first_config_cond, start_all_vts_cond;
+
+            // messaging
+            common::comm_wrapper comm;
 
             // Hyperdex stub
             std::vector<hyper_stub*> hstub, hstub_uninit;
@@ -134,7 +134,7 @@ namespace coordinator
             bool to_exit;
 
         public:
-            timestamper(uint64_t serverid, po6::net::location &loc, bool backup);
+            timestamper(uint64_t serverid, std::shared_ptr<po6::net::location> loc, bool backup);
             void init(uint64_t vtid, uint64_t weaverid);
             void restore_backup();
             void reconfigure();
@@ -156,9 +156,8 @@ namespace coordinator
     };
 
     inline
-    timestamper :: timestamper(uint64_t serverid, po6::net::location &loc, bool backup)
-        : comm(loc, NUM_VT_THREADS, -1)
-        , sm_stub(server_id(serverid), comm.get_loc())
+    timestamper :: timestamper(uint64_t serverid, std::shared_ptr<po6::net::location> loc, bool backup)
+        : sm_stub(server_id(serverid), loc)
         , is_backup(backup)
         , active_backup(false)
         , first_config(false)
@@ -167,6 +166,7 @@ namespace coordinator
         , backup_cond(&config_mutex)
         , first_config_cond(&config_mutex)
         , start_all_vts_cond(&config_mutex)
+        , comm(loc, NUM_VT_THREADS, -1, &sm_stub)
         , serv_id(serverid)
         , vt_id(UINT64_MAX)
         , shifted_id(UINT64_MAX)

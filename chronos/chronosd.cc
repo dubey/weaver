@@ -42,7 +42,7 @@
 #include <e/popt.h>
 
 // Replicant
-#include <replicant_state_machine.h>
+#include <rsm.h>
 
 // Chronos
 #include "common/weaver_constants.h"
@@ -75,23 +75,23 @@ class chronosd
         ~chronosd() throw ();
 
     public:
-        void create_event(struct replicant_state_machine_context* ctx,
+        void create_event(struct rsm_context* ctx,
                           const char* data, size_t data_sz);
-        void acquire_references(struct replicant_state_machine_context* ctx,
+        void acquire_references(struct rsm_context* ctx,
                                 const char* data, size_t data_sz);
-        void release_references(struct replicant_state_machine_context* ctx,
+        void release_references(struct rsm_context* ctx,
                                 const char* data, size_t data_sz);
-        void query_order(struct replicant_state_machine_context* ctx,
+        void query_order(struct rsm_context* ctx,
                          const char* data, size_t data_sz);
-        void assign_order(struct replicant_state_machine_context* ctx,
+        void assign_order(struct rsm_context* ctx,
                           const char* data, size_t data_sz);
-        void weaver_order(struct replicant_state_machine_context* ctx,
+        void weaver_order(struct rsm_context* ctx,
                           const char* data, size_t data_sz);
-        void weaver_cleanup(struct replicant_state_machine_context* ctx,
+        void weaver_cleanup(struct rsm_context* ctx,
                             const char* data, size_t data_sz);
-        void get_stats(struct replicant_state_machine_context* ctx,
+        void get_stats(struct rsm_context* ctx,
                        const char* data, size_t data_sz);
-        void new_epoch(struct replicant_state_machine_context* ctx,
+        void new_epoch(struct rsm_context* ctx,
                        const char* data, size_t data_sz);
 
     private:
@@ -150,7 +150,7 @@ chronosd :: ~chronosd() throw ()
 }
 
 void
-chronosd :: create_event(struct replicant_state_machine_context* ctx,
+chronosd :: create_event(struct rsm_context* ctx,
                          const char*, size_t)
 {
     ++m_count_create_event;
@@ -159,11 +159,11 @@ chronosd :: create_event(struct replicant_state_machine_context* ctx,
     m_repl_resp.resize(resp_sz);
     char *resp_ptr = &m_repl_resp.front();
     e::pack64le(event, resp_ptr);
-    replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
+    rsm_set_output(ctx, resp_ptr, resp_sz);
 }
 
 void
-chronosd :: acquire_references(struct replicant_state_machine_context* ctx,
+chronosd :: acquire_references(struct rsm_context* ctx,
                                const char* data, size_t data_sz)
 {
     ++m_count_acquire_references;
@@ -217,7 +217,7 @@ chronosd :: acquire_references(struct replicant_state_machine_context* ctx,
     m_repl_resp.resize(resp_sz);
     char *resp_ptr = &m_repl_resp.front();
     e::pack64le(response, resp_ptr);
-    replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
+    rsm_set_output(ctx, resp_ptr, resp_sz);
 
     if (response == NUM_EVENTS)
     {
@@ -226,7 +226,7 @@ chronosd :: acquire_references(struct replicant_state_machine_context* ctx,
 }
 
 void
-chronosd :: release_references(struct replicant_state_machine_context* ctx,
+chronosd :: release_references(struct rsm_context* ctx,
                                const char* data, size_t data_sz)
 {
     ++m_count_release_references;
@@ -253,11 +253,11 @@ chronosd :: release_references(struct replicant_state_machine_context* ctx,
     m_repl_resp.resize(resp_sz);
     char *resp_ptr = &m_repl_resp.front();
     e::pack64le(response, resp_ptr);
-    replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
+    rsm_set_output(ctx, resp_ptr, resp_sz);
 }
 
 void
-chronosd :: query_order(struct replicant_state_machine_context* ctx,
+chronosd :: query_order(struct rsm_context* ctx,
                         const char* data, size_t data_sz)
 {
     ++m_count_query_order;
@@ -301,11 +301,11 @@ chronosd :: query_order(struct replicant_state_machine_context* ctx,
     }
 
     char *resp_ptr = &m_repl_resp.front();
-    replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
+    rsm_set_output(ctx, resp_ptr, resp_sz);
 }
 
 void
-chronosd :: assign_order(struct replicant_state_machine_context* ctx,
+chronosd :: assign_order(struct rsm_context* ctx,
                          const char* data, size_t data_sz)
 {
     ++m_count_assign_order;
@@ -397,7 +397,7 @@ chronosd :: assign_order(struct replicant_state_machine_context* ctx,
     }
 
     char *resp_ptr = &m_repl_resp.front();
-    replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
+    rsm_set_output(ctx, resp_ptr, resp_sz);
 }
 
 // this method makes edges in the event dependency graph to record
@@ -444,7 +444,7 @@ unpack_vector_uint64(const char *c, std::vector<uint64_t> &vec, uint64_t vec_siz
 }
 
 void
-chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
+chronosd :: weaver_order(struct rsm_context* ctx,
                          const char* data, size_t data_sz)
 {
     ++m_count_weaver_order;
@@ -545,8 +545,7 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
                     break;
 
                 default:
-                    FILE* log = replicant_state_machine_log_stream(ctx);
-                    fprintf(log, "should not reach here");
+                    rsm_log(ctx, "should not reach here");
                     abort();
                     break;
             }
@@ -560,7 +559,7 @@ chronosd :: weaver_order(struct replicant_state_machine_context* ctx,
     }
 
     char *resp_ptr = &m_repl_resp.front();
-    replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
+    rsm_set_output(ctx, resp_ptr, resp_sz);
 }
 
 void
@@ -574,7 +573,7 @@ chronosd :: gc_weaver_event(uint64_t event_id)
 }
 
 void
-chronosd :: weaver_cleanup(struct replicant_state_machine_context* ctx,
+chronosd :: weaver_cleanup(struct rsm_context* ctx,
                            const char* data, size_t data_sz)
 {
     ++m_count_weaver_cleanup;
@@ -648,11 +647,11 @@ chronosd :: weaver_cleanup(struct replicant_state_machine_context* ctx,
     m_repl_resp.resize(resp_sz);
     char *resp_ptr = &m_repl_resp.front();
     e::pack64le(decref_count, resp_ptr);
-    replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
+    rsm_set_output(ctx, resp_ptr, resp_sz);
 }
 
 void
-chronosd :: get_stats(struct replicant_state_machine_context* ctx,
+chronosd :: get_stats(struct rsm_context* ctx,
                       const char*, size_t)
 {
     chronos_stats st;
@@ -712,12 +711,12 @@ chronosd :: get_stats(struct replicant_state_machine_context* ctx,
     resp_ptr = e::pack64le(st.count_weaver_order, resp_ptr);
     resp_ptr = e::pack64le(st.count_weaver_cleanup, resp_ptr);
     resp_ptr = &m_repl_resp.front();
-    replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
+    rsm_set_output(ctx, resp_ptr, resp_sz);
 }
 
 // not in use right now
 void
-chronosd :: new_epoch(struct replicant_state_machine_context* /*ctx*/,
+chronosd :: new_epoch(struct rsm_context* /*ctx*/,
                       const char*, size_t)
 {
     //assert(m_vtlist.size() == NumVts);
@@ -731,106 +730,94 @@ chronosd :: new_epoch(struct replicant_state_machine_context* /*ctx*/,
     //char *resp_ptr = &m_repl_resp.front();
     //uint32_t success = 0;
     //e::pack32le(success, resp_ptr);
-    //replicant_state_machine_set_response(ctx, resp_ptr, resp_sz);
+    //rsm_set_output(ctx, resp_ptr, resp_sz);
 }
 
 extern "C"
 {
 
 void*
-chronosd_create(struct replicant_state_machine_context*)
+chronosd_create(struct rsm_context*)
 {
     return new (std::nothrow) chronosd();
 }
 
 void*
-chronosd_recreate(struct replicant_state_machine_context* ctx,
+chronosd_recreate(struct rsm_context* ctx,
                   const char*, size_t)
 {
-    // XXX
-    FILE* log = replicant_state_machine_log_stream(ctx);
-    fprintf(log, "chronosd does not recreate from snapshots");
+    rsm_log(ctx, "chronosd does not recreate from snapshots");
     abort();
 }
 
-void
-chronosd_destroy(struct replicant_state_machine_context*, void* f)
+int
+chronosd_snapshot(struct rsm_context* ctx,
+                  void*, char** data, size_t* sz)
 {
-    if (f)
-    {
-        delete static_cast<chronosd*>(f);
-    }
-}
-
-void
-chronosd_snapshot(struct replicant_state_machine_context* ctx,
-                  void*, const char** data, size_t* sz)
-{
-    // XXX
-    FILE* log = replicant_state_machine_log_stream(ctx);
-    fprintf(log, "chronosd does not take snapshots");
+    rsm_log(ctx, "chronosd does not take snapshots");
     *data = NULL;
     *sz = 0;
+    return -1;
 }
 
 void
-chronosd_create_event(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_create_event(struct rsm_context* ctx, void* obj,
                           const char* data, size_t data_sz)
 {
     static_cast<chronosd*>(obj)->create_event(ctx, data, data_sz);
 }
 
 void
-chronosd_acquire_references(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_acquire_references(struct rsm_context* ctx, void* obj,
                                 const char* data, size_t data_sz)
 {
     static_cast<chronosd*>(obj)->acquire_references(ctx, data, data_sz);
 }
 
 void
-chronosd_release_references(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_release_references(struct rsm_context* ctx, void* obj,
                                 const char* data, size_t data_sz)
 {
     static_cast<chronosd*>(obj)->release_references(ctx, data, data_sz);
 }
 
 void
-chronosd_query_order(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_query_order(struct rsm_context* ctx, void* obj,
                          const char* data, size_t data_sz)
 {
     static_cast<chronosd*>(obj)->query_order(ctx, data, data_sz);
 }
 
 void
-chronosd_assign_order(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_assign_order(struct rsm_context* ctx, void* obj,
                           const char* data, size_t data_sz)
 {
     static_cast<chronosd*>(obj)->assign_order(ctx, data, data_sz);
 }
 
 void
-chronosd_weaver_order(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_weaver_order(struct rsm_context* ctx, void* obj,
                           const char* data, size_t data_sz)
 {
     static_cast<chronosd*>(obj)->weaver_order(ctx, data, data_sz);
 }
 
 void
-chronosd_weaver_cleanup(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_weaver_cleanup(struct rsm_context* ctx, void* obj,
                           const char* data, size_t data_sz)
 {
     static_cast<chronosd*>(obj)->weaver_cleanup(ctx, data, data_sz);
 }
 
 void
-chronosd_get_stats(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_get_stats(struct rsm_context* ctx, void* obj,
                        const char* data, size_t data_sz)
 {
     static_cast<chronosd*>(obj)->get_stats(ctx, data, data_sz);
 }
 
 void
-chronosd_new_epoch(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_new_epoch(struct rsm_context* ctx, void* obj,
                        const char* data, size_t data_sz)
 {
     static_cast<chronosd*>(obj)->new_epoch(ctx, data, data_sz);

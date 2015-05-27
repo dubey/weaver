@@ -49,10 +49,14 @@ comm_wrapper :: weaver_mapper :: add_mapping(uint64_t server_id, const po6::net:
 }
 
 
-comm_wrapper :: comm_wrapper(po6::net::location &my_loc, int nthr, int to)
+comm_wrapper :: comm_wrapper(std::shared_ptr<po6::net::location> my_loc,
+                             int nthr,
+                             int to,
+                             server_manager_link_wrapper *sm)
     : active_server_idx(NumVts, UINT64_MAX)
     , num_threads(nthr)
     , timeout(to)
+    , sm_stub(sm)
 {
     wmap.reset(new weaver_mapper());
 
@@ -60,12 +64,12 @@ comm_wrapper :: comm_wrapper(po6::net::location &my_loc, int nthr, int to)
     while (!done) {
         done = true;
         try {
-            bb.reset(new busybee_mta(&bb_gc, wmap.get(), my_loc, WEAVER_TO_BUSYBEE(bb_id), num_threads));
+            bb.reset(new busybee_mta(&bb_gc, wmap.get(), *my_loc, WEAVER_TO_BUSYBEE(bb_id), num_threads));
         } catch (po6::error e) {
             done = false;
             if (e == 98) {
                 // retry another port
-                my_loc.port++;
+                my_loc->port++;
             } else {
                 WDEBUG << "exception " << e << std::endl;
                 throw e;
@@ -73,7 +77,7 @@ comm_wrapper :: comm_wrapper(po6::net::location &my_loc, int nthr, int to)
         }
     }
 
-    loc.reset(new po6::net::location(my_loc));
+    loc = my_loc;
     WDEBUG << "attaching to loc " << loc->address << ":" << loc->port << std::endl;
     bb->set_timeout(timeout);
 
@@ -183,14 +187,26 @@ comm_wrapper :: send_to_client(uint64_t send_to, std::auto_ptr<e::buffer> msg)
 busybee_returncode
 comm_wrapper :: recv(int tid, uint64_t *recv_from, std::auto_ptr<e::buffer> *msg)
 {
-    return bb->recv(bb_gc_ts[tid].get(), recv_from, msg);
+    busybee_returncode rc = bb->recv(bb_gc_ts[tid].get(), recv_from, msg);
+
+    if (rc == BUSYBEE_DISRUPTED) {
+        handle_disruption(*recv_from);
+    }
+
+    return rc;
 }
 
 busybee_returncode
 comm_wrapper :: recv(int tid, std::auto_ptr<e::buffer> *msg)
 {
     uint64_t recv_from;
-    return bb->recv(bb_gc_ts[tid].get(), &recv_from, msg);
+    busybee_returncode rc = bb->recv(bb_gc_ts[tid].get(), &recv_from, msg);
+
+    if (rc == BUSYBEE_DISRUPTED) {
+        handle_disruption(recv_from);
+    }
+
+    return rc;
 }
 #pragma GCC diagnostic pop
 
@@ -198,6 +214,14 @@ void
 comm_wrapper :: quiesce_thread(int tid)
 {
     bb_gc.quiescent_state(bb_gc_ts[tid].get());
+}
+
+void
+comm_wrapper :: handle_disruption(uint64_t id)
+{
+    if (config.get_address(server_id(id)) != *loc) {
+        sm_stub->report_tcp_disconnect(id);
+    }
 }
 
 #undef weaver_debug_

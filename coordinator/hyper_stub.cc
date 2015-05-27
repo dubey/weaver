@@ -368,7 +368,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 
     uint64_t buf_sz = message::size(*tx);
     std::unique_ptr<e::buffer> buf(e::buffer::create(buf_sz));
-    e::buffer::packer packer = buf->pack_at(0);
+    e::packer packer = buf->pack_at(0);
     message::pack_buffer(packer, *tx);
 
     attr[1].attr = tx_attrs[1];

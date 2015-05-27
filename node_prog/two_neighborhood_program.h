@@ -40,7 +40,7 @@ namespace node_prog
             bool search_cache();
             cache_key_t cache_key();
             uint64_t size() const;
-            void pack(e::buffer::packer& packer) const;
+            void pack(e::packer& packer) const;
             void unpack(e::unpacker& unpacker);
     };
 
@@ -55,7 +55,7 @@ namespace node_prog
         two_neighborhood_state();
         ~two_neighborhood_state() { }
         uint64_t size() const;
-        void pack(e::buffer::packer& packer) const;
+        void pack(e::packer& packer) const;
         void unpack(e::unpacker& unpacker);
     };
 
@@ -67,7 +67,7 @@ namespace node_prog
         two_neighborhood_cache_value(std::string &prop_key, std::vector<std::pair<node_handle_t, std::string>> &responses);
         ~two_neighborhood_cache_value () { }
         uint64_t size() const;
-        void pack(e::buffer::packer& packer) const;
+        void pack(e::packer& packer) const;
         void unpack(e::unpacker& unpacker);
     };
 

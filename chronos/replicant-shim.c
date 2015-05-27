@@ -27,51 +27,48 @@
  */
 
 /* Replicant */
-#include <replicant_state_machine.h>
+#include <rsm.h>
 
 void*
-chronosd_create(struct replicant_state_machine_context*);
+chronosd_create(struct rsm_context*);
 void*
-chronosd_recreate(struct replicant_state_machine_context* ctx,
+chronosd_recreate(struct rsm_context* ctx,
                   const char*, size_t);
+int
+chronosd_snapshot(struct rsm_context* ctx,
+                  void*, char** data, size_t* sz);
 void
-chronosd_destroy(struct replicant_state_machine_context* ctx, void* f);
-void
-chronosd_snapshot(struct replicant_state_machine_context* ctx,
-                  void*, const char** data, size_t* sz);
-void
-chronosd_create_event(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_create_event(struct rsm_context* ctx, void* obj,
                           const char* data, size_t data_sz);
 void
-chronosd_acquire_references(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_acquire_references(struct rsm_context* ctx, void* obj,
                                 const char* data, size_t data_sz);
 void
-chronosd_release_references(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_release_references(struct rsm_context* ctx, void* obj,
                                 const char* data, size_t data_sz);
 void
-chronosd_query_order(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_query_order(struct rsm_context* ctx, void* obj,
                          const char* data, size_t data_sz);
 void
-chronosd_assign_order(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_assign_order(struct rsm_context* ctx, void* obj,
                           const char* data, size_t data_sz);
 void
-chronosd_weaver_order(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_weaver_order(struct rsm_context* ctx, void* obj,
                           const char* data, size_t data_sz);
 void
-chronosd_weaver_cleanup(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_weaver_cleanup(struct rsm_context* ctx, void* obj,
                           const char* data, size_t data_sz);
 void
-chronosd_get_stats(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_get_stats(struct rsm_context* ctx, void* obj,
                        const char* data, size_t data_sz);
 
 void
-chronosd_new_epoch(struct replicant_state_machine_context* ctx, void* obj,
+chronosd_new_epoch(struct rsm_context* ctx, void* obj,
                        const char* data, size_t data_sz);
 
-struct replicant_state_machine rsm = {
+struct state_machine rsm = {
     chronosd_create,
     chronosd_recreate,
-    chronosd_destroy,
     chronosd_snapshot,
     {{"create_event", chronosd_create_event},
      {"acquire_references", chronosd_acquire_references},

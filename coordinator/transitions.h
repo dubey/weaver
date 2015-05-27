@@ -24,25 +24,21 @@ extern "C"
 #endif /* __cplusplus */
 
 /* Replicant */
-#include <replicant_state_machine.h>
+#include <rsm.h>
 
 void*
-weaver_server_manager_create(struct replicant_state_machine_context* ctx);
+weaver_server_manager_create(struct rsm_context* ctx);
 
 void*
-weaver_server_manager_recreate(struct replicant_state_machine_context* ctx,
+weaver_server_manager_recreate(struct rsm_context* ctx,
                               const char* data, size_t data_sz);
 
-void
-weaver_server_manager_destroy(struct replicant_state_machine_context* ctx,
-                             void* f);
-
-void
-weaver_server_manager_snapshot(struct replicant_state_machine_context* ctx,
-                              void* obj, const char** data, size_t* sz);
+int
+weaver_server_manager_snapshot(struct rsm_context* ctx,
+                              void* obj, char** data, size_t* sz);
 
 #define TRANSITION(X) void \
-    weaver_server_manager_ ## X(struct replicant_state_machine_context* ctx, \
+    weaver_server_manager_ ## X(struct rsm_context* ctx, \
                                void* obj, const char* data, size_t data_sz)
 
 TRANSITION(init);
@@ -59,8 +55,7 @@ TRANSITION(server_shutdown);
 TRANSITION(server_kill);
 TRANSITION(server_forget);
 TRANSITION(server_suspect);
-
-TRANSITION(alarm);
+TRANSITION(report_disconnect);
 
 TRANSITION(debug_dump);
 

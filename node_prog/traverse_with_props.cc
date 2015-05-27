@@ -44,7 +44,7 @@ traverse_props_params :: size() const
 }
 
 void
-traverse_props_params :: pack(e::buffer::packer &packer) const
+traverse_props_params :: pack(e::packer &packer) const
 {
     message::pack_buffer(packer, returning);
     message::pack_buffer(packer, prev_node);
@@ -88,7 +88,7 @@ traverse_props_state :: size() const
 }
 
 void
-traverse_props_state :: pack(e::buffer::packer &packer) const
+traverse_props_state :: pack(e::packer &packer) const
 {
     message::pack_buffer(packer, visited);
     message::pack_buffer(packer, out_count);

@@ -17,7 +17,7 @@
 // see https://github.com/rescrv/HyperDex for the original code.
 
 /* Replicant */
-#include <replicant_state_machine.h>
+#include <rsm.h>
 
 /* Weaver */
 #include "coordinator/transitions.h"
@@ -25,10 +25,9 @@
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-pedantic"
 
-struct replicant_state_machine rsm = {
+struct state_machine rsm = {
     weaver_server_manager_create,
     weaver_server_manager_recreate,
-    weaver_server_manager_destroy,
     weaver_server_manager_snapshot,
     {{"config_get", weaver_server_manager_config_get},
      {"config_ack", weaver_server_manager_config_ack},
@@ -41,7 +40,6 @@ struct replicant_state_machine rsm = {
      {"server_kill", weaver_server_manager_server_kill},
      {"server_forget", weaver_server_manager_server_forget},
      {"server_suspect", weaver_server_manager_server_suspect},
-     {"alarm", weaver_server_manager_alarm},
      {"debug_dump", weaver_server_manager_debug_dump},
      {"init", weaver_server_manager_init},
      {NULL, NULL}}

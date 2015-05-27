@@ -28,7 +28,7 @@
 #include <po6/net/location.h>
 
 // Replicant
-#include <replicant_state_machine.h>
+#include <rsm.h>
 
 // Weaver
 #include "common/ids.h"
@@ -46,60 +46,55 @@ class server_manager
 
     // identity
     public:
-        void init(replicant_state_machine_context* ctx, uint64_t token);
+        void init(rsm_context* ctx, uint64_t token);
         uint64_t cluster() const { return m_cluster; }
 
     // server management
     public:
-        void server_register(replicant_state_machine_context* ctx,
+        void server_register(rsm_context* ctx,
                              const server_id& sid,
                              const po6::net::location& bind_to,
                              server::type_t type);
-        void server_online(replicant_state_machine_context* ctx,
+        void server_online(rsm_context* ctx,
                            const server_id& sid,
                            const po6::net::location* bind_to);
-        void server_offline(replicant_state_machine_context* ctx,
+        void server_offline(rsm_context* ctx,
                             const server_id& sid);
-        void server_shutdown(replicant_state_machine_context* ctx,
+        void server_shutdown(rsm_context* ctx,
                              const server_id& sid);
-        void server_kill(replicant_state_machine_context* ctx,
+        void server_kill(rsm_context* ctx,
                          const server_id& sid);
-        void server_forget(replicant_state_machine_context* ctx,
+        void server_forget(rsm_context* ctx,
                            const server_id& sid);
-        void server_suspect(replicant_state_machine_context* ctx,
+        void server_suspect(rsm_context* ctx,
                             const server_id& sid);
-        // XXX what does this do?
-        //void report_disconnect(replicant_state_machine_context* ctx,
-        //                       const server_id& sid, uint64_t version);
+        void report_disconnect(rsm_context* ctx,
+                               const server_id& sid, uint64_t version);
 
     private:
-        void check_backup(FILE *log, server *new_srv);
-        void find_backup(FILE *log, server::type_t type, uint64_t vid);
+        void check_backup(rsm_context *ctx, server *new_srv);
+        void find_backup(rsm_context *ctx, server::type_t type, uint64_t vid);
         void activate_backup(server *backup_srv, server::type_t type, uint64_t vid);
 
     // config management
     public:
-        void config_get(replicant_state_machine_context* ctx);
-        void config_ack(replicant_state_machine_context* ctx,
+        void config_get(rsm_context* ctx);
+        void config_ack(rsm_context* ctx,
                         const server_id& sid, uint64_t version);
-        void config_stable(replicant_state_machine_context* ctx,
+        void config_stable(rsm_context* ctx,
                            const server_id& sid, uint64_t version);
-        void replid_get(replicant_state_machine_context *ctx);
-
-    // alarm
-    public:
-        void alarm(replicant_state_machine_context* ctx);
+        void replid_get(rsm_context *ctx);
 
     // debug
     public:
-        void debug_dump(replicant_state_machine_context* ctx);
+        void debug_dump(rsm_context* ctx);
 
     // backup/restore
     public:
-        static server_manager* recreate(replicant_state_machine_context* ctx,
+        static server_manager* recreate(rsm_context* ctx,
                                         const char* data, size_t data_sz);
-        void snapshot(replicant_state_machine_context* ctx,
-                      const char** data, size_t* data_sz);
+        int snapshot(rsm_context* ctx,
+                     char** data, size_t* data_sz);
 
     // utilities
     private:
@@ -107,10 +102,10 @@ class server_manager
         server* new_server(const server_id& sid);
         server* get_server(const server_id& sid);
         // configuration
-        void check_ack_condition(replicant_state_machine_context* ctx);
-        void check_stable_condition(replicant_state_machine_context* ctx);
-        void generate_next_configuration(replicant_state_machine_context* ctx);
-        void generate_cached_configuration(replicant_state_machine_context* ctx);
+        void check_ack_condition(rsm_context* ctx);
+        void check_stable_condition(rsm_context* ctx);
+        void generate_next_configuration(rsm_context* ctx);
+        void generate_cached_configuration(rsm_context* ctx);
         void servers_in_configuration(std::vector<server_id>* sids);
 
     private:

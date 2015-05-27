@@ -173,53 +173,53 @@ namespace message
     uint64_t size(const enum predicate::relation&);
     uint64_t size(const predicate::prop_predicate&);
 
-    void pack_buffer(e::buffer::packer &packer, const node_prog::Node_Parameters_Base &t);
-    void pack_buffer(e::buffer::packer &packer, const node_prog::Node_State_Base &t);
-    void pack_buffer(e::buffer::packer &packer, const node_prog::Cache_Value_Base *&t);
-    void pack_buffer(e::buffer::packer &packer, const enum msg_type &t);    
-    void pack_buffer(e::buffer::packer &packer, const enum node_prog::prog_type &t);
-    void pack_buffer(e::buffer::packer &packer, const enum transaction::update_type &t);
-    void pack_buffer(e::buffer::packer &packer, const enum transaction::tx_type &t);
-    void pack_buffer(e::buffer::packer &packer, const bool &t);
-    void pack_buffer(e::buffer::packer &packer, const uint8_t &t);
-    void pack_buffer(e::buffer::packer &packer, const uint16_t &t);
-    void pack_buffer(e::buffer::packer &packer, const uint32_t &t);
-    void pack_buffer(e::buffer::packer &packer, const uint64_t &t);
-    void pack_buffer(e::buffer::packer &packer, const int64_t &t);
-    void pack_buffer(e::buffer::packer &packer, const int &t);
-    void pack_buffer(e::buffer::packer &packer, const double &t);
-    void pack_string(e::buffer::packer &packer, const std::string &t, const uint32_t sz);
-    void pack_buffer(e::buffer::packer &packer, const std::string &t);
-    void pack_buffer(e::buffer::packer &packer, const vc::vclock &t);
-    void pack_buffer(e::buffer::packer &packer, const node_prog::property &t);
-    void pack_buffer(e::buffer::packer &packer, const db::property &t);
-    void pack_buffer(e::buffer::packer &packer, const db::remote_node &t);
-    void pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::pending_update> &ptr_t);
-    void pack_buffer(e::buffer::packer &packer, const std::shared_ptr<transaction::nop_data> &ptr_t);
-    void pack_buffer(e::buffer::packer &packer, const transaction::pending_tx &t);
-    void pack_buffer(e::buffer::packer &packer, const std::vector<bool> &t);
-    template <typename T1, typename T2, typename T3> inline void pack_buffer(e::buffer::packer& packer, const std::unordered_set<T1, T2, T3>& t);
-    template <typename T1, typename T2, typename T3> inline void pack_buffer(e::buffer::packer&, const google::sparse_hash_set<T1, T2, T3>& t);
-    template <typename T1, typename T2, typename T3, typename T4> void pack_buffer(e::buffer::packer& packer, const std::unordered_map<T1, T2, T3, T4>& t);
-    template <typename T1, typename T2, typename T3, typename T4> inline void pack_buffer(e::buffer::packer&, const google::sparse_hash_map<T1, T2, T3, T4>& t);
-    template <typename T1, typename T2, typename T3, typename T4> inline void pack_buffer(e::buffer::packer&, const google::dense_hash_map<T1, T2, T3, T4>& t);
-    template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::vector<T>& t);
-    template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::deque<T>& t);
-    template <typename T1, typename T2, typename T3> void pack_buffer(e::buffer::packer&, std::priority_queue<T1, T2, T3>);
-    template <typename T1, typename T2> inline void pack_buffer(e::buffer::packer &packer, const std::pair<T1, T2>& t);
-    template <typename T1, typename T2, typename T3> inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3>& t);
-    template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::shared_ptr<T> &ptr_t);
-    template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unique_ptr<T> &ptr_t);
-    void pack_buffer(e::buffer::packer &packer, const node_prog::node_cache_context &t);
-    void pack_buffer(e::buffer::packer &packer, const node_prog::edge_cache_context &t);
-    void pack_buffer(e::buffer::packer &packer, const db::element &t);
-    void pack_buffer(e::buffer::packer &packer, const db::edge &t);
-    void pack_buffer(e::buffer::packer &packer, const db::edge* const &t);
-    void pack_buffer(e::buffer::packer &packer, const db::node &t);
-    void pack_buffer(e::buffer::packer &packer, const cl::node &t);
-    void pack_buffer(e::buffer::packer &packer, const cl::edge &t);
-    void pack_buffer(e::buffer::packer &packer, const enum predicate::relation &t);
-    void pack_buffer(e::buffer::packer &packer, const predicate::prop_predicate &t);
+    void pack_buffer(e::packer &packer, const node_prog::Node_Parameters_Base &t);
+    void pack_buffer(e::packer &packer, const node_prog::Node_State_Base &t);
+    void pack_buffer(e::packer &packer, const node_prog::Cache_Value_Base *&t);
+    void pack_buffer(e::packer &packer, const enum msg_type &t);    
+    void pack_buffer(e::packer &packer, const enum node_prog::prog_type &t);
+    void pack_buffer(e::packer &packer, const enum transaction::update_type &t);
+    void pack_buffer(e::packer &packer, const enum transaction::tx_type &t);
+    void pack_buffer(e::packer &packer, const bool &t);
+    void pack_buffer(e::packer &packer, const uint8_t &t);
+    void pack_buffer(e::packer &packer, const uint16_t &t);
+    void pack_buffer(e::packer &packer, const uint32_t &t);
+    void pack_buffer(e::packer &packer, const uint64_t &t);
+    void pack_buffer(e::packer &packer, const int64_t &t);
+    void pack_buffer(e::packer &packer, const int &t);
+    void pack_buffer(e::packer &packer, const double &t);
+    void pack_string(e::packer &packer, const std::string &t, const uint32_t sz);
+    void pack_buffer(e::packer &packer, const std::string &t);
+    void pack_buffer(e::packer &packer, const vc::vclock &t);
+    void pack_buffer(e::packer &packer, const node_prog::property &t);
+    void pack_buffer(e::packer &packer, const db::property &t);
+    void pack_buffer(e::packer &packer, const db::remote_node &t);
+    void pack_buffer(e::packer &packer, const std::shared_ptr<transaction::pending_update> &ptr_t);
+    void pack_buffer(e::packer &packer, const std::shared_ptr<transaction::nop_data> &ptr_t);
+    void pack_buffer(e::packer &packer, const transaction::pending_tx &t);
+    void pack_buffer(e::packer &packer, const std::vector<bool> &t);
+    template <typename T1, typename T2, typename T3> inline void pack_buffer(e::packer& packer, const std::unordered_set<T1, T2, T3>& t);
+    template <typename T1, typename T2, typename T3> inline void pack_buffer(e::packer&, const google::sparse_hash_set<T1, T2, T3>& t);
+    template <typename T1, typename T2, typename T3, typename T4> void pack_buffer(e::packer& packer, const std::unordered_map<T1, T2, T3, T4>& t);
+    template <typename T1, typename T2, typename T3, typename T4> inline void pack_buffer(e::packer&, const google::sparse_hash_map<T1, T2, T3, T4>& t);
+    template <typename T1, typename T2, typename T3, typename T4> inline void pack_buffer(e::packer&, const google::dense_hash_map<T1, T2, T3, T4>& t);
+    template <typename T> inline void pack_buffer(e::packer& packer, const std::vector<T>& t);
+    template <typename T> inline void pack_buffer(e::packer& packer, const std::deque<T>& t);
+    template <typename T1, typename T2, typename T3> void pack_buffer(e::packer&, std::priority_queue<T1, T2, T3>);
+    template <typename T1, typename T2> inline void pack_buffer(e::packer &packer, const std::pair<T1, T2>& t);
+    template <typename T1, typename T2, typename T3> inline void pack_buffer(e::packer &packer, const std::tuple<T1, T2, T3>& t);
+    template <typename T> inline void pack_buffer(e::packer& packer, const std::shared_ptr<T> &ptr_t);
+    template <typename T> inline void pack_buffer(e::packer& packer, const std::unique_ptr<T> &ptr_t);
+    void pack_buffer(e::packer &packer, const node_prog::node_cache_context &t);
+    void pack_buffer(e::packer &packer, const node_prog::edge_cache_context &t);
+    void pack_buffer(e::packer &packer, const db::element &t);
+    void pack_buffer(e::packer &packer, const db::edge &t);
+    void pack_buffer(e::packer &packer, const db::edge* const &t);
+    void pack_buffer(e::packer &packer, const db::node &t);
+    void pack_buffer(e::packer &packer, const cl::node &t);
+    void pack_buffer(e::packer &packer, const cl::edge &t);
+    void pack_buffer(e::packer &packer, const enum predicate::relation &t);
+    void pack_buffer(e::packer &packer, const predicate::prop_predicate &t);
 
     void unpack_buffer(e::unpacker &unpacker, node_prog::Node_Parameters_Base &t);
     void unpack_buffer(e::unpacker &unpacker, node_prog::Node_State_Base &t);
@@ -403,7 +403,7 @@ namespace message
 
     template <typename T1, typename T2>
     inline void 
-    pack_buffer(e::buffer::packer &packer, const std::pair<T1, T2> &t)
+    pack_buffer(e::packer &packer, const std::pair<T1, T2> &t)
     {
         // assumes constant size
         pack_buffer(packer, t.first);
@@ -411,13 +411,13 @@ namespace message
     }
 
     template <typename T1, typename T2, typename T3>
-    inline void pack_buffer(e::buffer::packer &packer, const std::tuple<T1, T2, T3> &t){
+    inline void pack_buffer(e::packer &packer, const std::tuple<T1, T2, T3> &t){
         pack_buffer(packer, std::get<0>(t));
         pack_buffer(packer, std::get<1>(t));
         pack_buffer(packer, std::get<2>(t));
     }
 
-    template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::shared_ptr<T> &ptr_t)
+    template <typename T> inline void pack_buffer(e::packer& packer, const std::shared_ptr<T> &ptr_t)
     {
         bool exists;
         if (ptr_t) {
@@ -430,7 +430,7 @@ namespace message
         }
     }
 
-    template <typename T> inline void pack_buffer(e::buffer::packer& packer, const std::unique_ptr<T> &ptr_t)
+    template <typename T> inline void pack_buffer(e::packer& packer, const std::unique_ptr<T> &ptr_t)
     {
         bool exists;
         if (ptr_t) {
@@ -445,7 +445,7 @@ namespace message
 
     template <typename T> 
     inline void 
-    pack_buffer(e::buffer::packer &packer, const std::vector<T> &t)
+    pack_buffer(e::packer &packer, const std::vector<T> &t)
     {
         // !assumes constant element size
         assert(t.size() <= UINT32_MAX);
@@ -458,7 +458,7 @@ namespace message
 
     template <typename T> 
     inline void 
-    pack_buffer(e::buffer::packer &packer, const std::deque<T> &t)
+    pack_buffer(e::packer &packer, const std::deque<T> &t)
     {
         // !assumes constant element size
         assert(t.size() <= UINT32_MAX);
@@ -471,7 +471,7 @@ namespace message
 
     template <typename T1, typename T2, typename T3>
     inline void
-    pack_buffer(e::buffer::packer &packer, std::priority_queue<T1, T2, T3> t)
+    pack_buffer(e::packer &packer, std::priority_queue<T1, T2, T3> t)
     {
         assert(t.size() <= UINT32_MAX);
         uint32_t num_elems = t.size();
@@ -492,14 +492,14 @@ namespace message
 
     template <typename T1, typename T2, typename T3>
     inline void 
-    pack_buffer(e::buffer::packer &packer, const std::unordered_set<T1,T2,T3> &t)
+    pack_buffer(e::packer &packer, const std::unordered_set<T1,T2,T3> &t)
     {
         SET_PACK;
     }
 
     template <typename T1, typename T2, typename T3>
     inline void 
-    pack_buffer(e::buffer::packer &packer, const google::sparse_hash_set<T1, T2, T3> &t)
+    pack_buffer(e::packer &packer, const google::sparse_hash_set<T1, T2, T3> &t)
     {
         SET_PACK;
     }
@@ -517,21 +517,21 @@ namespace message
 
     template <typename T1, typename T2, typename T3, typename T4>
     inline void 
-    pack_buffer(e::buffer::packer &packer, const std::unordered_map<T1, T2, T3, T4> &t)
+    pack_buffer(e::packer &packer, const std::unordered_map<T1, T2, T3, T4> &t)
     {
         MAP_PACK;
     }
 
     template <typename T1, typename T2, typename T3, typename T4>
     inline void 
-    pack_buffer(e::buffer::packer &packer, const google::sparse_hash_map<T1, T2, T3, T4> &t)
+    pack_buffer(e::packer &packer, const google::sparse_hash_map<T1, T2, T3, T4> &t)
     {
         MAP_PACK;
     }
 
     template <typename T1, typename T2, typename T3, typename T4>
     inline void 
-    pack_buffer(e::buffer::packer &packer, const google::dense_hash_map<T1, T2, T3, T4> &t)
+    pack_buffer(e::packer &packer, const google::dense_hash_map<T1, T2, T3, T4> &t)
     {
         MAP_PACK;
     }
@@ -541,19 +541,16 @@ namespace message
     // base case for recursive pack_buffer_wrapper()
     template <typename T>
     inline void 
-    pack_buffer_wrapper(e::buffer::packer &packer, const T &t)
+    pack_buffer_wrapper(e::packer &packer, const T &t)
     {
-        uint32_t before = packer.remain();
         pack_buffer(packer, t);
-        assert((before - packer.remain()) == size(t) && "reserved size for type not same as number of bytes packed");
-        UNUSED(before);
     }
 
     // recursive wrapper around variadic templated pack_buffer()
     // also performs buffer size sanity checks
     template <typename T, typename... Args>
     inline void 
-    pack_buffer_wrapper(e::buffer::packer &packer, const T &t, const Args&... args)
+    pack_buffer_wrapper(e::packer &packer, const T &t, const Args&... args)
     {
         pack_buffer_wrapper(packer, t);
         pack_buffer_wrapper(packer, args...);
@@ -566,10 +563,9 @@ namespace message
         uint64_t bytes_to_pack = size(given_type);
         type = given_type;
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
-        e::buffer::packer packer = buf->pack_at(BUSYBEE_HEADER_SIZE); 
+        e::packer packer = buf->pack_at(BUSYBEE_HEADER_SIZE); 
 
         pack_buffer(packer, given_type);
-        assert(packer.remain() == 0 && "reserved size for message not same as number of bytes packed");
     }
 
     template <typename... Args>
@@ -579,11 +575,10 @@ namespace message
         uint64_t bytes_to_pack = size_wrapper(args...) + size(given_type);
         type = given_type;
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
-        e::buffer::packer packer = buf->pack_at(BUSYBEE_HEADER_SIZE); 
+        e::packer packer = buf->pack_at(BUSYBEE_HEADER_SIZE); 
 
         pack_buffer(packer, given_type);
         pack_buffer_wrapper(packer, args...);
-        assert(packer.remain() == 0 && "reserved size for message not same as number of bytes packed");
     }
 
 
@@ -770,7 +765,7 @@ namespace message
         unpack_buffer_wrapper(unpacker, args...);
         assert(!unpacker.error());
         if (check_empty) {
-            assert(unpacker.empty()); // assert whole message was unpacked
+            assert(unpacker.remain() == 0); // assert whole message was unpacked
         }
     }
 

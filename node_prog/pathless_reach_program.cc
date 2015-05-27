@@ -46,7 +46,7 @@ pathless_reach_params :: size() const
 }
 
 void
-pathless_reach_params :: pack(e::buffer::packer &packer) const 
+pathless_reach_params :: pack(e::packer &packer) const 
 {
     message::pack_buffer(packer, returning);
     message::pack_buffer(packer, prev_node);
@@ -83,7 +83,7 @@ pathless_reach_node_state :: size() const
 }
 
 void
-pathless_reach_node_state :: pack(e::buffer::packer& packer) const 
+pathless_reach_node_state :: pack(e::packer& packer) const 
 {
     message::pack_buffer(packer, visited);
     message::pack_buffer(packer, prev_node);

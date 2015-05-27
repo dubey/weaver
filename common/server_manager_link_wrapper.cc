@@ -26,12 +26,12 @@
 
 // e
 #include <e/endian.h>
+#include <e/serialization.h>
 
 // Weaver
 #define weaver_debug_
 #include "common/weaver_constants.h"
 #include "common/server_manager_returncode.h"
-#include "common/serialization.h"
 #include "common/server_manager_link_wrapper.h"
 
 class server_manager_link_wrapper::sm_rpc
@@ -45,7 +45,7 @@ class server_manager_link_wrapper::sm_rpc
 
     public:
         replicant_returncode status;
-        const char* output;
+        char* output;
         size_t output_sz;
         std::ostringstream msg;
 
@@ -75,7 +75,7 @@ server_manager_link_wrapper :: sm_rpc :: ~sm_rpc() throw ()
 {
     if (output)
     {
-        replicant_destroy_output(output, output_sz);
+        free(output);
     }
 }
 
@@ -84,9 +84,8 @@ server_manager_link_wrapper :: sm_rpc :: callback(server_manager_link_wrapper* c
 {
     if (status != REPLICANT_SUCCESS)
     {
-        e::error err = clw->m_sm->error();
         WDEBUG << "server manager error: " << msg.str()
-               << ": " << err.msg() << " @ " << err.loc() << std::endl;
+               << ": " << clw->m_sm->error_message() << " @ " << clw->m_sm->error_location() << std::endl;
     }
 
     if (status == REPLICANT_CLUSTER_JUMP)
@@ -143,9 +142,9 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
     m_us = us;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    std::auto_ptr<e::buffer> buf(e::buffer::create(sizeof(uint64_t) + pack_size(bind_to) + sizeof(int)));
+    std::auto_ptr<e::buffer> buf(e::buffer::create(sizeof(uint64_t) + e::pack_size(bind_to) + sizeof(int)));
 #pragma GCC diagnostic pop
-    e::buffer::packer pa = buf->pack_at(0);
+    e::packer pa = buf->pack_at(0);
     uint8_t t = static_cast<uint8_t>(type);
     pa = pa << us << bind_to << t;
 #pragma GCC diagnostic push
@@ -160,8 +159,7 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
 
     if (rid < 0)
     {
-        e::error err = m_sm->error();
-        WDEBUG << "could not register as " << us << ": " << err.msg() << " @ " << err.loc() << std::endl;
+        WDEBUG << "could not register as " << us << ": " << m_sm->error_message() << " @ " << m_sm->error_location() << std::endl;
         return false;
     }
 
@@ -170,8 +168,7 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
 
     if (lid < 0)
     {
-        e::error err = m_sm->error();
-        WDEBUG << "could not register as " << us << ": " << err.msg() << " @ " << err.loc() << std::endl;
+        WDEBUG << "could not register as " << us << ": " << m_sm->error_message() << " @ " << m_sm->error_location() << std::endl;
         return false;
     }
 
@@ -183,8 +180,7 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
 
     if (rpc->status != REPLICANT_SUCCESS)
     {
-        e::error err = m_sm->error();
-        WDEBUG << "could not register as " << us << ": " << err.msg() << " @ " << err.loc() << std::endl;
+        WDEBUG << "could not register as " << us << ": " << m_sm->error_message() << " @ " << m_sm->error_location() << std::endl;
         return false;
     }
 
@@ -249,28 +245,24 @@ server_manager_link_wrapper :: maintain_link()
             WDEBUG << "server manager " << status << std::endl;
             break;
         }
-        else if (id < 0 && (status == REPLICANT_BACKOFF ||
-                            status == REPLICANT_NEED_BOOTSTRAP))
+        else if (id < 0 && (status == REPLICANT_COMM_FAILED))
         {
-            e::error err = m_sm->error();
             WDEBUG << "server manager disconnected: backing off before retrying" << std::endl;
-            WDEBUG << "details: " << err.msg() << " @ " << err.loc() << std::endl;
+            WDEBUG << "details: " << m_sm->error_message() << " @ " << m_sm->error_location() << std::endl;
             do_sleep();
             exit_status = false;
             break;
         }
         else if (id < 0 && status == REPLICANT_CLUSTER_JUMP)
         {
-            e::error err = m_sm->error();
-            WDEBUG << "cluster jump: " << err.msg() << " @ " << err.loc() << std::endl;
+            WDEBUG << "cluster jump: " << m_sm->error_message() << " @ " << m_sm->error_location() << std::endl;
             do_sleep();
             exit_status = false;
             break;
         }
         else if (id < 0)
         {
-            e::error err = m_sm->error();
-            WDEBUG << "server manager error: " << err.msg() << " @ " << err.loc() << std::endl;
+            WDEBUG << "server manager error: " << m_sm->error_message() << " @ " << m_sm->error_location() << std::endl;
             do_sleep();
             exit_status = false;
             break;
@@ -351,6 +343,18 @@ server_manager_link_wrapper :: config_stable(uint64_t version)
     }
 
     exit_critical_section();
+}
+
+void
+server_manager_link_wrapper :: report_tcp_disconnect(uint64_t id)
+{
+    char buf[2 * sizeof(uint64_t)];
+    e::pack64be(id, buf);
+    uint64_t version = m_sm->config()->version();
+    e::pack64be(version, buf);
+    e::intrusive_ptr<sm_rpc> rpc = new sm_rpc();
+    rpc->msg << "report TCP disconnect id=" << id;
+    make_rpc("report_disconnect", buf, 2*sizeof(uint64_t), rpc);
 }
 
 void
@@ -486,12 +490,12 @@ server_manager_link_wrapper :: ensure_available()
         return;
     }
 
-    size_t sz = sizeof(uint64_t) + pack_size(*m_loc);
+    size_t sz = sizeof(uint64_t) + e::pack_size(*m_loc);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
     std::auto_ptr<e::buffer> buf(e::buffer::create(sz));
 #pragma GCC diagnostic pop
-    *buf << m_us << *m_loc;
+    buf->pack() << m_us << *m_loc;
     e::intrusive_ptr<sm_rpc> rpc = new sm_rpc_available();
     rpc->msg << "server online";
     m_online_id = make_rpc_nosync("server_online",
@@ -591,9 +595,8 @@ server_manager_link_wrapper :: make_rpc_nosync(const char* func,
 
     if (id < 0)
     {
-        e::error err = m_sm->error();
         WDEBUG << "server manager error: " << rpc->msg.str()
-                   << ": " << err.msg() << " @ " << err.loc() << std::endl;
+                   << ": " << m_sm->error_message() << " @ " << m_sm->error_location() << std::endl;
     }
     else
     {
@@ -607,13 +610,14 @@ int64_t
 server_manager_link_wrapper :: wait_nosync(const char* cond, uint64_t state,
                                         e::intrusive_ptr<sm_rpc> rpc)
 {
-    int64_t id = m_sm->wait(cond, state, &rpc->status);
+    char *data;
+    size_t data_sz;
+    int64_t id = m_sm->wait(cond, state, &rpc->status, &data, &data_sz);
 
     if (id < 0)
     {
-        e::error err = m_sm->error();
         WDEBUG << "server manager error: " << rpc->msg.str()
-                   << ": " << err.msg() << " @ " << err.loc() << std::endl;
+                   << ": " << m_sm->error_message() << " @ " << m_sm->error_location() << std::endl;
     }
     else
     {

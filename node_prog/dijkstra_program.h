@@ -61,7 +61,7 @@ namespace node_prog
                 return sz;
             }
 
-            virtual void pack(e::buffer::packer &packer) const
+            virtual void pack(e::packer &packer) const
             {
                 message::pack_buffer(packer, cost);
                 message::pack_buffer(packer, node);
@@ -121,7 +121,7 @@ namespace node_prog
                 return toRet;
             }
 
-            virtual void pack(e::buffer::packer& packer) const 
+            virtual void pack(e::packer& packer) const 
             {
                 message::pack_buffer(packer, src_id);
                 message::pack_buffer(packer, src_handle);
@@ -175,7 +175,7 @@ namespace node_prog
                 + message::size(visited);
             return sz;
         }
-        virtual void pack(e::buffer::packer& packer) const 
+        virtual void pack(e::packer& packer) const 
         {
             message::pack_buffer(packer, pq_shortest);
             message::pack_buffer(packer, pq_widest);

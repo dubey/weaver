@@ -52,8 +52,7 @@ class server_manager_link
 
     public:
         const configuration* config() { return &m_config; }
-        poll_fd_t poll_fd() { return m_repl.poll_fd(); }
-        bool force_configuration_fetch(replicant_returncode* status);
+        poll_fd_t poll_fd() { return replicant_client_poll_fd(m_repl); }
         // true if there's a configuration to use
         // false if there's an error to report
         //
@@ -63,14 +62,17 @@ class server_manager_link
         int64_t rpc(const char* func,
                     const char* data, size_t data_sz,
                     replicant_returncode* status,
-                    const char** output, size_t* output_sz);
+                    char** output, size_t* output_sz);
         int64_t backup(replicant_returncode* status,
-                       const char** output, size_t* output_sz);
+                       char** output, size_t* output_sz);
         int64_t wait(const char* cond, uint64_t state,
-                     replicant_returncode* status);
+                     replicant_returncode* status,
+                     char **output, size_t *output_sz);
         int64_t loop(int timeout, replicant_returncode* status);
         uint64_t queued_responses() { return m_pending_ids.size(); }
-        e::error error() { return m_repl.last_error(); }
+        //e::error error() { return m_repl.last_error(); }
+        std::string error_message() { return replicant_client_error_message(m_repl); }
+        std::string error_location() { return replicant_client_error_location(m_repl); }
 
     private:
         server_manager_link(const server_manager_link&);
@@ -89,12 +91,12 @@ class server_manager_link
         void reset();
 
     private:
-        replicant_client m_repl;
+        replicant_client *m_repl;
         configuration m_config;
         enum { NOTHING, WAITING_ON_BROADCAST, FETCHING_CONFIG, FETCHING_ID } m_state;
         int64_t m_id;
         replicant_returncode m_status;
-        const char* m_output;
+        char* m_output;
         size_t m_output_sz;
         std::list<int64_t> m_pending_ids;
 };

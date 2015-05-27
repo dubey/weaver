@@ -21,11 +21,15 @@
 
 // C
 #include <stdint.h>
+#include <map>
 
 // po6
 #include <po6/net/location.h>
 #include <po6/threads/cond.h>
 #include <po6/threads/mutex.h>
+
+// e
+#include <e/intrusive_ptr.h>
 
 // Weaver
 #include "common/configuration.h"
@@ -54,6 +58,7 @@ class server_manager_link_wrapper
     public:
         void config_ack(uint64_t version);
         void config_stable(uint64_t version);
+        void report_tcp_disconnect(uint64_t id);
 
     private:
         class sm_rpc;

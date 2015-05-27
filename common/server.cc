@@ -16,9 +16,11 @@
 // Robert Escriva's HyperDex coordinator.
 // see https://github.com/rescrv/HyperDex for the original code.
 
+// e
+#include <e/serialization.h>
+
 // Weaver
 #include "common/server.h"
-#include "common/serialization.h"
 
 const char*
 server :: to_string(state_t state)
@@ -103,8 +105,8 @@ operator < (const server& lhs, const server& rhs)
     return lhs.id < rhs.id;
 }
 
-e::buffer::packer
-operator << (e::buffer::packer lhs, const server& rhs)
+e::packer
+operator << (e::packer lhs, const server& rhs)
 {
     uint8_t s = static_cast<uint8_t>(rhs.state);
     uint8_t t = static_cast<uint8_t>(rhs.type);
@@ -124,10 +126,12 @@ operator >> (e::unpacker lhs, server& rhs)
 size_t
 pack_size(const server& p)
 {
-    return sizeof(uint8_t)
-         + sizeof(uint64_t)
-         + sizeof(uint64_t)
-         + sizeof(uint64_t)
-         + sizeof(int)
-         + pack_size(p.bind_to);
+    uint8_t s = 0;
+    uint8_t t = 0;
+    return e::pack_size(s)
+         + pack_size(p.id)
+         + e::pack_size(p.weaver_id)
+         + e::pack_size(p.virtual_id)
+         + e::pack_size(t)
+         + e::pack_size(p.bind_to);
 }
