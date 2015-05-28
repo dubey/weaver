@@ -83,7 +83,6 @@ class server_manager
                         const server_id& sid, uint64_t version);
         void config_stable(rsm_context* ctx,
                            const server_id& sid, uint64_t version);
-        void replid_get(rsm_context *ctx);
 
     // debug
     public:

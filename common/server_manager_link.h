@@ -58,19 +58,22 @@ class server_manager_link
         //
         // blocks if there's progress to be made toward getting a config
         bool ensure_configuration(replicant_returncode* status);
-        bool get_replid(uint64_t &id);
+        bool get_unique_number(uint64_t &id);
         int64_t rpc(const char* func,
                     const char* data, size_t data_sz,
                     replicant_returncode* status,
                     char** output, size_t* output_sz);
+        int64_t rpc_defended(const char* enter_func,
+                             const char* enter_data, size_t enter_data_sz,
+                             const char* exit_func,
+                             const char* exit_data, size_t exit_data_sz,
+                             replicant_returncode* status);
         int64_t backup(replicant_returncode* status,
                        char** output, size_t* output_sz);
         int64_t wait(const char* cond, uint64_t state,
-                     replicant_returncode* status,
-                     char **output, size_t *output_sz);
+                     replicant_returncode* status);
         int64_t loop(int timeout, replicant_returncode* status);
-        uint64_t queued_responses() { return m_pending_ids.size(); }
-        //e::error error() { return m_repl.last_error(); }
+        int64_t wait(int64_t id, int timeout, replicant_returncode *status);
         std::string error_message() { return replicant_client_error_message(m_repl); }
         std::string error_location() { return replicant_client_error_location(m_repl); }
 
@@ -80,25 +83,16 @@ class server_manager_link
 
     private:
         bool prime_state_machine(replicant_returncode* status);
-        // call this when m_repl.loop returns m_id
-        // returns true if there's a new configuration to handle
-        // returns false otherwise and sets failed:
-        //      failed == true:  there's an error stored in *status;
-        //      failed == false:  no error, just working the state machine
-        bool handle_internal_callback(replicant_returncode* status, bool* failed);
-        bool begin_waiting_on_broadcast(replicant_returncode* status);
-        bool begin_fetching_config(replicant_returncode* status);
+        bool process_new_configuration(replicant_returncode* status);
         void reset();
 
     private:
         replicant_client *m_repl;
         configuration m_config;
-        enum { NOTHING, WAITING_ON_BROADCAST, FETCHING_CONFIG, FETCHING_ID } m_state;
         int64_t m_id;
         replicant_returncode m_status;
         char* m_output;
         size_t m_output_sz;
-        std::list<int64_t> m_pending_ids;
 };
 
 #endif // weaver_common_server_manager_link_h_

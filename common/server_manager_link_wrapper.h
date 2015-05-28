@@ -47,7 +47,7 @@ class server_manager_link_wrapper
 
     public:
         void set_server_manager_address(const char* host, uint16_t port);
-        bool get_replid(uint64_t &id);
+        bool get_unique_number(uint64_t &id);
         bool register_id(server_id us, const po6::net::location& bind_to, server::type_t type);
         bool should_exit();
         bool maintain_link();
@@ -83,6 +83,11 @@ class server_manager_link_wrapper
         int64_t make_rpc_nosync(const char* func,
                                 const char* data, size_t data_sz,
                                 e::intrusive_ptr<sm_rpc> rpc);
+        int64_t make_rpc_defended(const char* enter_func,
+                                  const char* enter_data, size_t enter_data_sz,
+                                  const char* exit_func,
+                                  const char* exit_data, size_t exit_data_sz,
+                                  e::intrusive_ptr<sm_rpc> rpc);
         int64_t wait_nosync(const char* cond, uint64_t state,
                             e::intrusive_ptr<sm_rpc> rpc);
 

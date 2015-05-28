@@ -492,17 +492,6 @@ server_manager :: config_stable(rsm_context* ctx,
 }
 
 void
-server_manager :: replid_get(rsm_context* ctx)
-{
-    uint64_t client = 0;//XXX replicant_state_machine_get_client(ctx);
-    size_t sz = sizeof(uint64_t);
-    m_response.reset(e::buffer::create(sz));
-    uint8_t *ptr = m_response->data();
-    e::pack64be(client, ptr);
-    rsm_set_output(ctx, reinterpret_cast<const char*>(m_response->data()), sz);
-}
-
-void
 server_manager :: debug_dump(rsm_context* ctx)
 {
     rsm_log(ctx, "=== begin debug dump ===========================================================\n");

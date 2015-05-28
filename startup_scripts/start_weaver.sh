@@ -42,7 +42,9 @@ kronos_ipaddr=($(weaver-parse-config -c kronos_ipaddr $config_file_args))
 kronos_port=($(weaver-parse-config -c kronos_port $config_file_args))
 aux_index=($(weaver-parse-config -c aux_index $config_file_args))
 
-rm_patterns="*.log *.sst *.old CURRENT  LOCK  LOG  MANIFEST*"
+rm_patterns="*.log *.sst *.old CURRENT  LOCK  LOG  MANIFEST* IDENTITY log.* replica.* *.so"
+
+ip_addrs=$(ifconfig | grep inet | grep -v inet6 | awk '{print $2}' | awk -F":" '{print $2}')
 
 shopt -s nullglob
 cd
@@ -50,7 +52,7 @@ cd
 # hyperdex
 hyperdex_coord_dir=~/weaver_runtime/hyperdex/coord
 echo "Starting HyperDex coordinator at location $hyperdex_coord_ipaddr : $hyperdex_coord_port, data at $hyperdex_coord_dir"
-if [ $hyperdex_coord_ipaddr = "127.0.0.1" ]; then
+if [[ $ip_addrs =~ $hyperdex_coord_ipaddr ]]; then
     mkdir -p $hyperdex_coord_dir
     cd $hyperdex_coord_dir
     rm -f $rm_patterns replicant-daemon-*
@@ -74,7 +76,7 @@ do
     port=${hyperdex_daemons_port[$idx]}
     directory=~/weaver_runtime/hyperdex/daemon$idx
     echo "Starting HyperDex daemon $i at location $ipaddr : $port, data at $directory"
-    if [ $ipaddr = "127.0.0.1" ]; then
+    if [[ $ip_addrs =~ $ipaddr ]]; then
         mkdir -p $directory
         cd $directory
         rm -f $rm_patterns hyperdex-daemon-*
@@ -143,17 +145,17 @@ do
     port=${server_manager_port[$idx]}
     directory=~/weaver_runtime/server_manager/daemon$idx
     echo "Starting server manager at location  $ipaddr: $port, data at $directory"
-    if [ $ipaddr = "127.0.0.1" ]; then
+    if [[ $ip_addrs =~ $ipaddr ]]; then
         mkdir -p $directory
         cd $directory
-        rm -f *.log *.sst *.old CURRENT  LOCK  LOG  MANIFEST* replicant-daemon-*
+        rm -f $rm_patterns replicant-daemon-*
         replicant daemon --daemon --listen $ipaddr --listen-port $port > /dev/null 2>&1
     else
     ssh $ipaddr 'bash -s' << EOF
         shopt -s nullglob
         mkdir -p $directory
         cd $directory
-        rm -f *.log *.sst *.old CURRENT  LOCK  LOG  MANIFEST* replicant-daemon-*
+        rm -f $rm_patterns replicant-daemon-*
         replicant daemon --daemon --listen $ipaddr --listen-port $port > /dev/null 2>&1
 EOF
     fi
@@ -172,17 +174,17 @@ do
     port=${kronos_port[$idx]}
     directory=~/weaver_runtime/kronos/daemon$idx
     echo "Starting Kronos at location  $ipaddr: $port, data at $directory"
-    if [ $ipaddr = "127.0.0.1" ]; then
+    if [[ $ip_addrs =~ $ipaddr ]]; then
         mkdir -p $directory
         cd $directory
-        rm -f *.log *.sst *.old CURRENT  LOCK  LOG  MANIFEST* replicant-daemon-*
+        rm -f $rm_patterns replicant-daemon-*
         replicant daemon --daemon --listen $ipaddr --listen-port $port > /dev/null 2>&1
     else
     ssh $ipaddr 'bash -s' << EOF
         shopt -s nullglob
         mkdir -p $directory
         cd $directory
-        rm -f *.log *.sst *.old CURRENT  LOCK  LOG  MANIFEST* replicant-daemon-*
+        rm -f $rm_patterns replicant-daemon-*
         replicant daemon --daemon --listen $ipaddr --listen-port $port > /dev/null 2>&1
 EOF
     fi

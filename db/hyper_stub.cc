@@ -19,7 +19,7 @@
 
 #define PUT_EDGE_BUFFER_SZ 5000
 #define OUTSTANDING_HD_OPS 10000
-#define MAX_TIMEOUTS 600 // 1 min of waiting total
+#define MAX_TIMEOUTS 3000 // 5 mins of waiting total
 #define INITIAL_POOL_SZ (OUTSTANDING_HD_OPS*3)
 
 using db::hyper_stub;
@@ -475,6 +475,9 @@ hyper_stub :: loop_async(uint64_t num_ops_to_leave, uint64_t &num_timeouts)
         if (op_id < 0) {
             if (loop_code == HYPERDEX_CLIENT_TIMEOUT) {
                 num_timeouts++;
+                if (num_timeouts > 100) {
+                    WDEBUG << "#timeouts=" << num_timeouts << std::endl;
+                }
                 continue;
             } else {
                 WDEBUG << "hyperdex_client_loop failed, op_id=" << op_id
@@ -489,8 +492,7 @@ hyper_stub :: loop_async(uint64_t num_ops_to_leave, uint64_t &num_timeouts)
             WDEBUG << "hyperdex_client_loop returned op_id=" << op_id
                    << " and loop_code=" << hyperdex_client_returncode_to_string(loop_code)
                    << " which was not found in async_calls_map." << std::endl;
-            //XXX abort_bulk_load();
-            continue;
+            abort_bulk_load();
         }
 
         async_call_ptr_t ac_ptr = find_iter->second;
@@ -519,20 +521,6 @@ hyper_stub :: loop_async(uint64_t num_ops_to_leave, uint64_t &num_timeouts)
             // XXX assert(false);
         }
     }
-
-    //// remove calls which haven't been looped for a while
-    //std::vector<int64_t> to_del;
-    //for (auto &p: async_calls) {
-    //    if (++p.second->loop_calls == OUTSTANDING_HD_OPS*5) {
-    //        to_del.emplace_back(p.first);
-    //    }
-    //}
-    //for (int64_t d: to_del) {
-    //    success = done_op(async_calls[d], d) && success;
-    //}
-    //if (!to_del.empty()) {
-    //    WDEBUG << "remove #" << to_del.size() << " unlooped calls" << std::endl;
-    //}
 
     return success;
 }

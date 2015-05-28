@@ -2008,12 +2008,6 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location my_loc, 
         return;
     }
 
-    uint64_t myid = UINT64_MAX;
-    if (!S->sm_stub.get_replid(myid)) {
-        WDEBUG << "fail get_replid" << std::endl;
-        return;
-    }
-
     bool cluster_jump = false;
 
     while (!S->sm_stub.should_exit())

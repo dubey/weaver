@@ -157,15 +157,6 @@ weaver_server_manager_config_stable(struct rsm_context* ctx,
 }
 
 void
-weaver_server_manager_replid_get(struct rsm_context* ctx,
-                                   void* obj, const char*, size_t)
-{
-    PROTECT_UNINITIALIZED;
-    coordinator::server_manager* c = static_cast<coordinator::server_manager*>(obj);
-    c->replid_get(ctx);
-}
-
-void
 weaver_server_manager_server_register(struct rsm_context* ctx,
                                      void* obj, const char* data, size_t data_sz)
 {

@@ -131,9 +131,9 @@ server_manager_link_wrapper :: set_server_manager_address(const char* host, uint
 }
 
 bool
-server_manager_link_wrapper :: get_replid(uint64_t &id)
+server_manager_link_wrapper :: get_unique_number(uint64_t &id)
 {
-    return m_sm->get_replid(id);
+    return m_sm->get_unique_number(id);
 }
 
 bool
@@ -164,7 +164,7 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
     }
 
     replicant_returncode lrc = REPLICANT_GARBAGE;
-    int64_t lid = m_sm->loop(1000000, &lrc);
+    int64_t lid = m_sm->wait(rid, -1, &lrc);
 
     if (lid < 0)
     {
@@ -175,6 +175,7 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
     if (lid != rid)
     {
         WDEBUG << "could not register as " << us << ": server manager loop malfunction" << std::endl;
+        WDEBUG << "lid=" << lid << ", rid=" << rid << std::endl;
         return false;
     }
 
@@ -218,8 +219,12 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
 bool
 server_manager_link_wrapper :: should_exit()
 {
-    return (!m_sm->config()->exists(m_us) && m_sm->config()->version() > 0) ||
-           (m_shutdown_requested && m_sm->config()->get_state(m_us) == server::SHUTDOWN);
+    enter_critical_section();
+    bool yes =  (!m_sm->config()->exists(m_us) && m_sm->config()->version() > 0) ||
+                (m_shutdown_requested && m_sm->config()->get_state(m_us) == server::SHUTDOWN);
+    exit_critical_section();
+
+    return yes;
 }
 
 bool
@@ -242,7 +247,6 @@ server_manager_link_wrapper :: maintain_link()
         {
             reset_sleep();
             exit_status = false;
-            WDEBUG << "server manager " << status << std::endl;
             break;
         }
         else if (id < 0 && (status == REPLICANT_COMM_FAILED))
@@ -493,14 +497,17 @@ server_manager_link_wrapper :: ensure_available()
     size_t sz = sizeof(uint64_t) + e::pack_size(*m_loc);
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
-    std::auto_ptr<e::buffer> buf(e::buffer::create(sz));
+    std::auto_ptr<e::buffer> enter_buf(e::buffer::create(sz));
 #pragma GCC diagnostic pop
-    buf->pack() << m_us << *m_loc;
+    enter_buf->pack() << m_us << *m_loc;
+    char exit_buf[sizeof(uint64_t)];
+    e::pack64be(m_us.get(), exit_buf);
     e::intrusive_ptr<sm_rpc> rpc = new sm_rpc_available();
     rpc->msg << "server online";
-    m_online_id = make_rpc_nosync("server_online",
-                                  reinterpret_cast<const char*>(buf->data()), buf->size(),
-                                  rpc);
+    m_online_id = make_rpc_defended("server_online",
+                                    enter_buf->cdata(), enter_buf->size(),
+                                    "server_suspect", exit_buf, sizeof(uint64_t),
+                                    rpc);
 }
 
 class server_manager_link_wrapper::sm_rpc_config_ack : public sm_rpc
@@ -596,7 +603,33 @@ server_manager_link_wrapper :: make_rpc_nosync(const char* func,
     if (id < 0)
     {
         WDEBUG << "server manager error: " << rpc->msg.str()
-                   << ": " << m_sm->error_message() << " @ " << m_sm->error_location() << std::endl;
+                   << ": " << m_sm->error_message()
+                   << " @ " << m_sm->error_location() << std::endl;
+    }
+    else
+    {
+        m_rpcs.insert(std::make_pair(id, rpc));
+    }
+
+    return id;
+}
+
+int64_t
+server_manager_link_wrapper :: make_rpc_defended(const char* enter_func,
+                                                 const char* enter_data, size_t enter_data_sz,
+                                                 const char* exit_func,
+                                                 const char* exit_data, size_t exit_data_sz,
+                                                 e::intrusive_ptr<sm_rpc> rpc)
+{
+    int64_t id = m_sm->rpc_defended(enter_func, enter_data, enter_data_sz,
+                                    exit_func, exit_data, exit_data_sz,
+                                    &rpc->status);
+
+    if (id < 0)
+    {
+        LOG(ERROR) << "coordinator error: " << rpc->msg.str()
+                   << ": " << m_sm->error_message()
+                   << " @ " << m_sm->error_location();
     }
     else
     {
@@ -610,14 +643,13 @@ int64_t
 server_manager_link_wrapper :: wait_nosync(const char* cond, uint64_t state,
                                         e::intrusive_ptr<sm_rpc> rpc)
 {
-    char *data;
-    size_t data_sz;
-    int64_t id = m_sm->wait(cond, state, &rpc->status, &data, &data_sz);
+    int64_t id = m_sm->wait(cond, state, &rpc->status);
 
     if (id < 0)
     {
         WDEBUG << "server manager error: " << rpc->msg.str()
-                   << ": " << m_sm->error_message() << " @ " << m_sm->error_location() << std::endl;
+               << ": " << m_sm->error_message()
+               << " @ " << m_sm->error_location() << std::endl;
     }
     else
     {

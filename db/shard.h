@@ -275,7 +275,7 @@ namespace db
 
     inline
     shard :: shard(uint64_t serverid, std::shared_ptr<po6::net::location> loc)
-        : sm_stub(server_id(serverid), comm.get_loc())
+        : sm_stub(server_id(serverid), loc)
         , active_backup(false)
         , first_config(false)
         , pause_bb(false)
