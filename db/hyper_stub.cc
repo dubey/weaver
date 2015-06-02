@@ -78,7 +78,6 @@ hyper_stub_pool<T> :: release(std::shared_ptr<T> ptr)
         ape->batched.clear();
         free(ape->attr);
     }
-    ptr->loop_calls = 0;
     pool.emplace_back(ptr);
 }
 
@@ -87,6 +86,7 @@ hyper_stub :: hyper_stub(uint64_t sid, int tid)
     : shard_id(sid)
     , thread_id(tid)
     , put_edge_batch_clock(0)
+    , print_op_stats_counter(0)
 {
     //hyperdex_client_set_tid(cl, thread_id);
 }
@@ -227,7 +227,8 @@ hyper_stub :: put_node_no_loop(db::node *n)
                  last_clk_buf,
                  restore_clk_buf,
                  apn->aliases_buf,
-                 apn->num_attrs);
+                 apn->num_attrs,
+                 apn->packed_sz);
 
     bool success = call_no_loop(&hyperdex_client_put,
                                 graph_space,
@@ -238,6 +239,7 @@ hyper_stub :: put_node_no_loop(db::node *n)
                                 apn->op_id, apn->status);
 
     if (success) {
+        apn->exec_time = timer.get_time_elapsed_millis();
         async_calls.emplace(apn->op_id, apn);
         outstanding_node_puts.emplace(apn->handle, std::vector<ape_ptr_t>());
 
@@ -260,7 +262,7 @@ bool
 hyper_stub :: flush_put_edge(ape_ptr_t ape, bool loop_after_call)
 {
     ape->attr = (hyperdex_client_map_attribute*)malloc(ape->batched.size() * sizeof(hyperdex_client_map_attribute));
-    prepare_edges(ape->attr, ape->batched);
+    prepare_edges(ape->attr, ape->batched, ape->packed_sz);
 
     bool success = true;
 
@@ -276,23 +278,23 @@ hyper_stub :: flush_put_edge(ape_ptr_t ape, bool loop_after_call)
     }
 
     // add edge to node object via map_add call
-    // XXX turning off map add calls
-    //success = map_call_no_loop(&hyperdex_client_map_add,
-    //                           graph_space,
-    //                           ape->node_handle.c_str(),
-    //                           ape->node_handle.size(),
-    //                           ape->attr,
-    //                           ape->batched.size(),
-    //                           ape->op_id, ape->status);
+    success = map_call_no_loop(&hyperdex_client_map_add,
+                               graph_space,
+                               ape->node_handle.c_str(),
+                               ape->node_handle.size(),
+                               ape->attr,
+                               ape->batched.size(),
+                               ape->op_id, ape->status);
 
-    //if (success) {
-    //    async_calls.emplace(ape->op_id, ape);
-    //} else {
-    //    WDEBUG << "hyperdex_client_map_add failed, op_id=" << ape->op_id
-    //           << ", call_code=" << hyperdex_client_returncode_to_string(ape->status) << std::endl;
-    //    WDEBUG << "node=" << ape->node_handle << ", sample edge=" << ape->batched.front().edge_handle << std::endl;
-    //    abort_bulk_load();
-    //}
+    if (success) {
+        ape->exec_time = timer.get_time_elapsed_millis();
+        async_calls.emplace(ape->op_id, ape);
+    } else {
+        WDEBUG << "hyperdex_client_map_add failed, op_id=" << ape->op_id
+               << ", call_code=" << hyperdex_client_returncode_to_string(ape->status) << std::endl;
+        WDEBUG << "node=" << ape->node_handle << ", sample edge=" << ape->batched.front().edge_handle << std::endl;
+        abort_bulk_load();
+    }
 
     if (loop_after_call) {
         possibly_flush();
@@ -316,8 +318,7 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, co
             // write oldest PUT_EDGE_BUFFER_SZ/2
             std::vector<ape_ptr_t> can_write;
             for (const auto &p: put_edge_batch) {
-                ape_ptr_t ape = p.second;
-                can_write.emplace_back(ape);
+                can_write.emplace_back(p.second);
             }
 
             std::sort(can_write.begin(), can_write.end(),
@@ -388,6 +389,8 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::str
     aai->index_attrs[1].value = (const char*)&shard_id;
     aai->index_attrs[1].value_sz = sizeof(int64_t);
     aai->index_attrs[1].datatype = index_dtypes[1];
+    aai->packed_sz = aai->index_attrs[0].value_sz
+                   + aai->index_attrs[1].value_sz; 
 
     bool success = call_no_loop(&hyperdex_client_put,
                                 index_space,
@@ -397,6 +400,7 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::str
                                 aai->op_id, aai->status);
 
     if (success) {
+        aai->exec_time = timer.get_time_elapsed_millis();
         async_calls.emplace(aai->op_id, aai);
     } else {
         WDEBUG << "hyperdex_client_put failed, op_id=" << aai->op_id
@@ -426,11 +430,39 @@ hyper_stub :: flush_all_put_edge()
     return success;
 }
 
+void
+hyper_stub :: done_op_stat(uint64_t time, size_t op_sz)
+{
+    while (done_op_stats.size() > 10000) {
+        done_op_stats.pop_front();
+    }
+    done_op_stats.push_back(std::make_pair(time, op_sz));
+
+    if (++print_op_stats_counter % 10000 == 0) {
+        float tot_time = 0;
+        float tot_sz = 0;
+        for (const auto &p: done_op_stats) {
+            tot_time += p.first;
+            tot_sz += p.second;
+        }
+
+        float avg_time_sec = tot_time / (10000*1000);
+        float avg_sz = tot_sz / 10000;
+        WDEBUG << "tid=" << thread_id
+               << "\tAvg Time for last 10k ops=" << avg_time_sec << " s."
+               << "\tAvg Sz of last 10k ops=" << avg_sz
+               << std::endl;
+    }
+}
+
 bool
 hyper_stub :: done_op(async_call_ptr_t ac_ptr, int64_t op_id)
 {
     bool success = true;
 
+    assert(ac_ptr->exec_time != 42);
+    uint64_t op_time = timer.get_time_elapsed_millis() - ac_ptr->exec_time;
+    size_t op_sz = ac_ptr->packed_sz;
     switch (ac_ptr->type) {
         case PUT_NODE: {
             auto apn = std::static_pointer_cast<async_put_node>(ac_ptr);
@@ -457,6 +489,8 @@ hyper_stub :: done_op(async_call_ptr_t ac_ptr, int64_t op_id)
     }
     async_calls.erase(op_id);
 
+    done_op_stat(op_time, op_sz);
+
     return success;
 }
 
@@ -475,8 +509,8 @@ hyper_stub :: loop_async(uint64_t num_ops_to_leave, uint64_t &num_timeouts)
         if (op_id < 0) {
             if (loop_code == HYPERDEX_CLIENT_TIMEOUT) {
                 num_timeouts++;
-                if (num_timeouts > 100) {
-                    WDEBUG << "#timeouts=" << num_timeouts << std::endl;
+                if (num_timeouts % 100 == 0) {
+                    WDEBUG << "tid=" << thread_id << "\t#timeouts=" << num_timeouts << std::endl;
                 }
                 continue;
             } else {
