@@ -83,7 +83,6 @@ weaver_server_manager_create(struct rsm_context* ctx)
         rsm_log(ctx, "memory allocation failed\n");
     }
 
-    rsm_log(ctx, "created server manager object\n");
     return c;
 }
 

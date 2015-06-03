@@ -2010,8 +2010,11 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location my_loc, 
 
     bool cluster_jump = false;
 
+    int loop_count = 0;
     while (!S->sm_stub.should_exit())
+    //while (true)
     {
+        loop_count += 1;
         S->exit_mutex.lock();
         if (S->to_exit) {
             S->sm_stub.request_shutdown();
@@ -2071,6 +2074,7 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location my_loc, 
         WDEBUG << "\n================================================================================\n"
                << "Exiting because the server manager says it doesn't know about this node.\n"
                << "================================================================================\n";
+        WDEBUG << S->sm_stub.config().dump() << std::endl;
     }
     else if (S->sm_stub.should_exit())
     {

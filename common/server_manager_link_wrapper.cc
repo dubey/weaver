@@ -159,7 +159,9 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
 
     if (rid < 0)
     {
-        WDEBUG << "could not register as " << us << ": " << m_sm->error_message() << " @ " << m_sm->error_location() << std::endl;
+        WDEBUG << "could not register as " << us
+               << ": " << m_sm->error_message()
+               << " @ " << m_sm->error_location() << std::endl;
         return false;
     }
 
@@ -168,7 +170,9 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
 
     if (lid < 0)
     {
-        WDEBUG << "could not register as " << us << ": " << m_sm->error_message() << " @ " << m_sm->error_location() << std::endl;
+        WDEBUG << "could not register as " << us
+               << ": " << m_sm->error_message()
+               << " @ " << m_sm->error_location() << std::endl;
         return false;
     }
 
@@ -181,7 +185,9 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
 
     if (rpc->status != REPLICANT_SUCCESS)
     {
-        WDEBUG << "could not register as " << us << ": " << m_sm->error_message() << " @ " << m_sm->error_location() << std::endl;
+        WDEBUG << "could not register as " << us
+               << ": " << m_sm->error_message()
+               << " @ " << m_sm->error_location() << std::endl;
         return false;
     }
 
@@ -194,7 +200,7 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
         switch (rc)
         {
             case COORD_SUCCESS:
-                return true;
+                break;
             case COORD_DUPLICATE:
                 WDEBUG << "could not register as " << us << ": another server has this ID" << std::endl;
                 return false;
@@ -214,6 +220,19 @@ server_manager_link_wrapper :: register_id(server_id us, const po6::net::locatio
         WDEBUG << "could not register as " << us << ": server manager returned invalid message" << std::endl;
         return false;
     }
+
+    while (!m_sm->config()->exists(us))
+    {
+        lid = m_sm->wait(INT64_MAX, -1, &lrc);
+
+        if (lid < 0)
+        {
+            LOG(ERROR) << "could not register as " << us << ": coordinator loop malfunction";
+            return false;
+        }
+    }
+
+    return true;
 }
 
 bool

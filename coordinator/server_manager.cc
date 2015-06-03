@@ -32,8 +32,6 @@
 #include "coordinator/server_manager.h"
 #include "coordinator/util.h"
 
-#define ALARM_INTERVAL 60
-
 namespace
 {
 
@@ -66,7 +64,6 @@ server_manager :: server_manager()
 {
     assert(m_config_ack_through == m_config_ack_barrier.min_version());
     assert(m_config_stable_through == m_config_stable_barrier.min_version());
-    m_cluster = 1;
 
     generate_cached_configuration(nullptr);
 }
@@ -531,7 +528,7 @@ server_manager :: recreate(rsm_context* ctx,
 }
 
 int
-server_manager :: snapshot(rsm_context* /*ctx*/,
+server_manager :: snapshot(rsm_context* /*CANNOT USE ctx in snapshot*/,
                         char** data, size_t* data_sz)
 {
     size_t sz = sizeof(m_cluster)
@@ -609,6 +606,7 @@ server_manager :: check_ack_condition(rsm_context* ctx)
     while (m_config_ack_through < m_config_ack_barrier.min_version())
     {
         rsm_cond_broadcast(ctx, "ack");
+        ++m_config_ack_through;
     }
 }
 
@@ -623,6 +621,7 @@ server_manager :: check_stable_condition(rsm_context* ctx)
     while (m_config_stable_through < m_config_stable_barrier.min_version())
     {
         rsm_cond_broadcast(ctx, "stable");
+        ++m_config_stable_through;
     }
 }
 
@@ -640,6 +639,7 @@ server_manager :: generate_next_configuration(rsm_context* ctx)
     generate_cached_configuration(ctx);
 
     rsm_cond_broadcast_data(ctx, "config", m_latest_config->cdata(), m_latest_config->size());
+    rsm_log(ctx, "#servers in config=%lu\n", m_servers.size());
 }
 
 void
@@ -676,37 +676,4 @@ server_manager :: servers_in_configuration(std::vector<server_id>* sids)
     for (std::vector<server>::iterator it = m_servers.begin(); it != m_servers.end(); it++) {
         sids->push_back(it->id);
     }
-    /*
-    for (std::map<std::string, std::tr1::shared_ptr<space> >::iterator it = m_spaces.begin();
-            it != m_spaces.end(); ++it)
-    {
-        space& s(*it->second);
-
-        for (size_t i = 0; i < s.subspaces.size(); ++i)
-        {
-            subspace& ss(s.subspaces[i]);
-
-            for (size_t j = 0; j < ss.regions.size(); ++j)
-            {
-                region& reg(ss.regions[j]);
-
-                for (size_t k = 0; k < reg.replicas.size(); ++k)
-                {
-                    sids->push_back(reg.replicas[k].si);
-                }
-            }
-        }
-    }
-
-    for (size_t i = 0; i < m_transfers.size(); ++i)
-    {
-        sids->push_back(m_transfers[i].src);
-        sids->push_back(m_transfers[i].dst);
-    }
-
-    std::sort(sids->begin(), sids->end());
-    std::vector<server_id>::iterator sit;
-    sit = std::unique(sids->begin(), sids->end());
-    sids->resize(sit - sids->begin());
-    */
 }

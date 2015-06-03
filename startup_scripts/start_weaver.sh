@@ -111,6 +111,8 @@ attributes
 tolerate 2 failures
 EOF
 
+sleep 1
+
 hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
 space weaver_graph_data
 key node
@@ -126,6 +128,8 @@ attributes
 tolerate 2 failures
 EOF
 
+sleep 1
+
 hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
 space weaver_tx_data
 key tx_id
@@ -136,33 +140,33 @@ tolerate 2 failures
 EOF
 
 
-# server manager
-num_sm_daemons=${#server_manager_ipaddr[*]}
-for i in $(seq 1 $num_sm_daemons);
-do
-    idx=$(($i-1))
-    ipaddr=${server_manager_ipaddr[$idx]}
-    port=${server_manager_port[$idx]}
-    directory=~/weaver_runtime/server_manager/daemon$idx
-    echo "Starting server manager at location  $ipaddr: $port, data at $directory"
-    if [[ $ip_addrs =~ $ipaddr ]]; then
-        mkdir -p $directory
-        cd $directory
-        rm -f $rm_patterns replicant-daemon-*
-        replicant daemon --daemon --listen $ipaddr --listen-port $port > /dev/null 2>&1
-    else
-    ssh $ipaddr 'bash -s' << EOF
-        shopt -s nullglob
-        mkdir -p $directory
-        cd $directory
-        rm -f $rm_patterns replicant-daemon-*
-        replicant daemon --daemon --listen $ipaddr --listen-port $port > /dev/null 2>&1
-EOF
-    fi
-done
-sleep 2
-
-replicant new-object -h ${server_manager_ipaddr[0]} -p ${server_manager_port[0]} weaver "$weaver_libdir"/libweaverservermanager.so
+## server manager
+#num_sm_daemons=${#server_manager_ipaddr[*]}
+#for i in $(seq 1 $num_sm_daemons);
+#do
+#    idx=$(($i-1))
+#    ipaddr=${server_manager_ipaddr[$idx]}
+#    port=${server_manager_port[$idx]}
+#    directory=~/weaver_runtime/server_manager/daemon$idx
+#    echo "Starting server manager at location  $ipaddr: $port, data at $directory"
+#    if [[ $ip_addrs =~ $ipaddr ]]; then
+#        mkdir -p $directory
+#        cd $directory
+#        rm -f $rm_patterns replicant-daemon-*
+#        replicant daemon --daemon --listen $ipaddr --listen-port $port > /dev/null 2>&1
+#    else
+#    ssh $ipaddr 'bash -s' << EOF
+#        shopt -s nullglob
+#        mkdir -p $directory
+#        cd $directory
+#        rm -f $rm_patterns replicant-daemon-*
+#        replicant daemon --daemon --listen $ipaddr --listen-port $port > /dev/null 2>&1
+#EOF
+#    fi
+#done
+#sleep 2
+#
+#replicant new-object -h ${server_manager_ipaddr[0]} -p ${server_manager_port[0]} weaver "$weaver_libdir"/libweaverservermanager.so
 
 
 # kronos
