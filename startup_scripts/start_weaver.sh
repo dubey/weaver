@@ -140,33 +140,39 @@ tolerate 2 failures
 EOF
 
 
-## server manager
-#num_sm_daemons=${#server_manager_ipaddr[*]}
-#for i in $(seq 1 $num_sm_daemons);
-#do
-#    idx=$(($i-1))
-#    ipaddr=${server_manager_ipaddr[$idx]}
-#    port=${server_manager_port[$idx]}
-#    directory=~/weaver_runtime/server_manager/daemon$idx
-#    echo "Starting server manager at location  $ipaddr: $port, data at $directory"
-#    if [[ $ip_addrs =~ $ipaddr ]]; then
-#        mkdir -p $directory
-#        cd $directory
-#        rm -f $rm_patterns replicant-daemon-*
-#        replicant daemon --daemon --listen $ipaddr --listen-port $port > /dev/null 2>&1
-#    else
-#    ssh $ipaddr 'bash -s' << EOF
-#        shopt -s nullglob
-#        mkdir -p $directory
-#        cd $directory
-#        rm -f $rm_patterns replicant-daemon-*
-#        replicant daemon --daemon --listen $ipaddr --listen-port $port > /dev/null 2>&1
-#EOF
-#    fi
-#done
-#sleep 2
-#
-#replicant new-object -h ${server_manager_ipaddr[0]} -p ${server_manager_port[0]} weaver "$weaver_libdir"/libweaverservermanager.so
+# server manager
+num_sm_daemons=${#server_manager_ipaddr[*]}
+for i in $(seq 1 $num_sm_daemons);
+do
+    idx=$(($i-1))
+    ipaddr=${server_manager_ipaddr[$idx]}
+    port=${server_manager_port[$idx]}
+    directory=~/weaver_runtime/server_manager/daemon$idx
+    echo "Starting server manager at location  $ipaddr: $port, data at $directory"
+    if [[ $ip_addrs =~ $ipaddr ]]; then
+        mkdir -p $directory
+        cd $directory
+        rm -f $rm_patterns replicant-daemon-*
+        if [[ $i == 1 ]]; then
+            replicant daemon --daemon --listen $ipaddr --listen-port $port --object weaver --library "$weaver_libdir"/libweaverservermanager.so --init-string $(od -N 8 -t uL -An /dev/urandom) > /dev/null 2>&1
+        else
+            replicant daemon --daemon --listen $ipaddr --listen-port $port  > /dev/null 2>&1
+        fi
+    else
+    ssh $ipaddr 'bash -s' << EOF
+        shopt -s nullglob
+        mkdir -p $directory
+        cd $directory
+        rm -f $rm_patterns replicant-daemon-*
+        if [[ $i == 1 ]]; then
+            replicant daemon --daemon --listen $ipaddr --listen-port $port --object weaver --library "$weaver_libdir"/libweaverservermanager.so --init-string $(od -N 8 -t uL -An /dev/urandom) > /dev/null 2>&1
+        else
+            replicant daemon --daemon --listen $ipaddr --listen-port $port  > /dev/null 2>&1
+        fi
+EOF
+    fi
+done
+sleep 2
 
 
 # kronos
@@ -182,19 +188,25 @@ do
         mkdir -p $directory
         cd $directory
         rm -f $rm_patterns replicant-daemon-*
-        replicant daemon --daemon --listen $ipaddr --listen-port $port > /dev/null 2>&1
+        if [[ $i == 1 ]]; then
+            replicant daemon --daemon --listen $ipaddr --listen-port $port --object chronosd --library "$weaver_libdir"/libweaverchronosd.so --init-string $(od -N 8 -t uL -An /dev/urandom) > /dev/null 2>&1
+        else
+            replicant daemon --daemon --listen $ipaddr --listen-port $port  > /dev/null 2>&1
+        fi
     else
     ssh $ipaddr 'bash -s' << EOF
         shopt -s nullglob
         mkdir -p $directory
         cd $directory
         rm -f $rm_patterns replicant-daemon-*
-        replicant daemon --daemon --listen $ipaddr --listen-port $port > /dev/null 2>&1
+        if [[ $i == 1 ]]; then
+            replicant daemon --daemon --listen $ipaddr --listen-port $port --object chronosd --library "$weaver_libdir"/libweaverchronosd.so --init-string $(od -N 8 -t uL -An /dev/urandom) > /dev/null 2>&1
+        else
+            replicant daemon --daemon --listen $ipaddr --listen-port $port  > /dev/null 2>&1
+        fi
 EOF
     fi
 done
 sleep 2
-
-replicant new-object -h ${kronos_ipaddr[0]} -p ${kronos_port[0]} chronosd "$weaver_libdir"/libweaverchronosd.so
 
 echo 'Done startup.'
