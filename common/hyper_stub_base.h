@@ -53,9 +53,10 @@ struct async_call
 {
     async_call_type type;
     hyperdex_client_returncode status;
-    uint32_t loop_calls;
+    uint64_t exec_time;
+    size_t packed_sz;
 
-    async_call() : status(HYPERDEX_CLIENT_GARBAGE), loop_calls(0) { }
+    async_call() : status(HYPERDEX_CLIENT_GARBAGE), exec_time(42), packed_sz(42) { }
 };
 
 struct async_put_node : public async_call
@@ -277,9 +278,11 @@ class hyper_stub_base
             std::unique_ptr<e::buffer>&,
             std::unique_ptr<e::buffer>&,
             std::unique_ptr<e::buffer>&,
-            size_t &num_attrs);
+            size_t &num_attrs,
+            size_t &packed_node_sz);
         void prepare_edges(hyperdex_client_map_attribute *cl_attrs,
-            std::vector<async_put_edge_unit> &edges);
+            std::vector<async_put_edge_unit> &edges,
+            size_t &packed_sz);
         void pack_uint64(e::packer &packer, uint64_t num);
         void unpack_uint64(e::unpacker &unpacker, uint64_t &num);
         void pack_uint32(e::packer &packer, uint32_t num);

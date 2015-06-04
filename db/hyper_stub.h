@@ -23,6 +23,10 @@
 #include "db/edge.h"
 #include "db/node_entry.h"
 
+// debug
+#include <list>
+#include "common/clock.h"
+
 namespace db
 {
     enum persist_migr_token
@@ -84,6 +88,12 @@ namespace db
             // migration
             bool update_mapping(const node_handle_t &handle, uint64_t loc);
             bool recover_node(db::node &n);
+
+            // debug
+            void done_op_stat(uint64_t time, size_t op_sz);
+            std::list<std::pair<uint64_t, size_t>> done_op_stats;
+            wclock::weaver_timer timer;
+            uint64_t print_op_stats_counter;
         private:
             void put_node_loop(db::data_map<std::shared_ptr<db::node_entry>> &nodes,
                 std::unordered_map<node_handle_t, node*> &node_map,

@@ -821,15 +821,18 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     std::unique_ptr<e::buffer> &last_clk_buf,
     std::unique_ptr<e::buffer> &restore_clk_buf,
     std::unique_ptr<e::buffer> &aliases_buf,
-    size_t &num_attrs)
+    size_t &num_attrs,
+    size_t &packed_node_sz)
 {
     size_t attr_idx = 0;
+    packed_node_sz = 0;
 
     // shard
     cl_attr[attr_idx].attr = graph_attrs[0];
     cl_attr[attr_idx].value = (const char*)&n.shard;
     cl_attr[attr_idx].value_sz = sizeof(int64_t);
     cl_attr[attr_idx].datatype = graph_dtypes[0];
+    packed_node_sz += cl_attr[attr_idx].value_sz;
     attr_idx++;
 
     // create clock
@@ -838,6 +841,7 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     cl_attr[attr_idx].value = (const char*)creat_clk_buf->data();
     cl_attr[attr_idx].value_sz = creat_clk_buf->size();
     cl_attr[attr_idx].datatype = graph_dtypes[1];
+    packed_node_sz += cl_attr[attr_idx].value_sz;
     attr_idx++;
 
     // properties
@@ -851,6 +855,7 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
         cl_attr[attr_idx].value = (const char*)props_buf->data();
         cl_attr[attr_idx].value_sz = props_buf->size();
         cl_attr[attr_idx].datatype = graph_dtypes[2];
+        packed_node_sz += cl_attr[attr_idx].value_sz;
         attr_idx++;
     }
 
@@ -861,6 +866,7 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
         cl_attr[attr_idx].value = (const char*)out_edges_buf->data();
         cl_attr[attr_idx].value_sz = out_edges_buf->size();
         cl_attr[attr_idx].datatype = graph_dtypes[3];
+        packed_node_sz += cl_attr[attr_idx].value_sz;
         attr_idx++;
     }
 
@@ -870,6 +876,7 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     cl_attr[attr_idx].value = (const char*)&status;
     cl_attr[attr_idx].value_sz = sizeof(int64_t);
     cl_attr[attr_idx].datatype = graph_dtypes[4];
+    packed_node_sz += cl_attr[attr_idx].value_sz;
     attr_idx++;
 
     // last update clock
@@ -880,6 +887,7 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     cl_attr[attr_idx].value = (const char*)last_clk_buf->data();
     cl_attr[attr_idx].value_sz = last_clk_buf->size();
     cl_attr[attr_idx].datatype = graph_dtypes[5];
+    packed_node_sz += cl_attr[attr_idx].value_sz;
     attr_idx++;
 
     // restore clock
@@ -893,6 +901,7 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     cl_attr[attr_idx].value = (const char*)restore_clk_buf->data();
     cl_attr[attr_idx].value_sz = restore_clk_buf->size();
     cl_attr[attr_idx].datatype = graph_dtypes[6];
+    packed_node_sz += cl_attr[attr_idx].value_sz;
     attr_idx++;
 
     // aliases
@@ -901,6 +910,7 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     cl_attr[attr_idx].value = (const char*)aliases_buf->data();
     cl_attr[attr_idx].value_sz = aliases_buf->size();
     cl_attr[attr_idx].datatype = graph_dtypes[7];
+    packed_node_sz += cl_attr[attr_idx].value_sz;
     attr_idx++;
 
     num_attrs = attr_idx;
@@ -909,8 +919,10 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
 
 void
 hyper_stub_base :: prepare_edges(hyperdex_client_map_attribute *cl_attrs,
-    std::vector<async_put_edge_unit> &edges)
+    std::vector<async_put_edge_unit> &edges,
+    size_t &packed_sz)
 {
+    packed_sz = 0;
     for (uint32_t i = 0; i < edges.size(); i++) {
         db::edge *e = edges[i].e;
         const edge_handle_t &edge_handle = edges[i].edge_handle;
@@ -928,6 +940,7 @@ hyper_stub_base :: prepare_edges(hyperdex_client_map_attribute *cl_attrs,
         cl_attr->value = (const char*)edge_buf->data();
         cl_attr->value_sz = edge_buf->size();
         cl_attr->value_datatype = HYPERDATATYPE_STRING;
+        packed_sz += cl_attr->value_sz;
     }
 }
 
@@ -961,7 +974,8 @@ hyper_stub_base :: put_nodes(std::unordered_map<node_handle_t, db::node*> &nodes
         keys[i] = p.first.c_str();
         key_szs[i] = p.first.size();
 
-        prepare_node(attrs[i], *p.second, creat_clk_buf[i], props_buf[i], out_edges_buf[i], last_clk_buf[i], restore_clk_buf[i], aliases_buf[i], num_attrs[i]);
+        size_t packed_sz;
+        prepare_node(attrs[i], *p.second, creat_clk_buf[i], props_buf[i], out_edges_buf[i], last_clk_buf[i], restore_clk_buf[i], aliases_buf[i], num_attrs[i], packed_sz);
 
         i++;
     }
@@ -1002,7 +1016,8 @@ hyper_stub_base :: put_nodes_bulk(std::unordered_map<node_handle_t, db::node*> &
         keys[i] = p.first.c_str();
         key_szs[i] = p.first.size();
 
-        prepare_node(attrs[i], *p.second, creat_clk_buf[i], props_buf[i], out_edges_buf[i], last_clk_buf, restore_clk_buf, aliases_buf[i], num_attrs[i]);
+        size_t packed_sz;
+        prepare_node(attrs[i], *p.second, creat_clk_buf[i], props_buf[i], out_edges_buf[i], last_clk_buf, restore_clk_buf, aliases_buf[i], num_attrs[i], packed_sz);
 
         i++;
     }
