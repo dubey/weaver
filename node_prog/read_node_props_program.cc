@@ -11,7 +11,8 @@
  * ===============================================================
  */
 
-#include "common/message.h"
+#include "common/stl_serialization.h"
+#include "node_prog/node_prog_type.h"
 #include "node_prog/node.h"
 #include "node_prog/edge.h"
 #include "node_prog/read_node_props_program.h"

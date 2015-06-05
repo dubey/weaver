@@ -42,11 +42,33 @@
 #include <replicant.h>
 
 // Chronos
+#define weaver_debug_
 #include "common/weaver_constants.h"
 #include "common/config_constants.h"
 #include "chronos/chronos.h"
 #include "chronos/chronos_cmp_encode.h"
 #include "chronos/network_constants.h"
+
+const char*
+chronos_returncode_to_string(enum chronos_returncode crc)
+{
+    switch (crc) {
+        case CHRONOS_SUCCESS:
+            return "CHRONOS_SUCCESS";
+        case CHRONOS_UNEXPECTED_ID:
+            return "CHRONOS_UNEXPECTED_ID";
+        case CHRONOS_REPLICANT_ERROR:
+            return "CHRONOS_REPLICANT_ERROR";
+        case CHRONOS_PO6_ERROR:
+            return "CHRONOS_PO6_ERROR";
+        case CHRONOS_ERROR:
+            return "CHRONOS_ERROR";
+        case CHRONOS_GARBAGE:
+            return "CHRONOS_GARBAGE";
+    }
+
+    return "";
+}
 
 class chronos_client::pending
 {
@@ -389,7 +411,7 @@ chronos_client :: loop(int timeout, chronos_returncode* status)
 
         if (it == m_pending.end())
         {
-            *status = CHRONOS_ERROR;
+            *status = CHRONOS_UNEXPECTED_ID;
             return -1;
         }
 
@@ -418,7 +440,7 @@ chronos_client :: wait(int64_t id, int timeout, chronos_returncode* status)
 
         if (it == m_pending.end())
         {
-            *status = CHRONOS_ERROR;
+            *status = CHRONOS_UNEXPECTED_ID;
             return -1;
         }
 
@@ -451,7 +473,7 @@ chronos_client :: send(e::intrusive_ptr<pending> pend, chronos_returncode* statu
         WDEBUG << std::endl;
         WDEBUG << replicant_client_error_message(m_repl);
         WDEBUG << replicant_client_error_location(m_repl);
-        *status = CHRONOS_ERROR;
+        *status = CHRONOS_REPLICANT_ERROR;
         return ret;
     }
 }
@@ -493,7 +515,7 @@ chronos_client :: pending_create_event :: parse()
     if (repl_status != REPLICANT_SUCCESS ||
         repl_output_sz != sizeof(uint64_t))
     {
-        *status = CHRONOS_ERROR;
+        *status = CHRONOS_REPLICANT_ERROR;
     }
     else
     {
@@ -520,7 +542,7 @@ chronos_client :: pending_references :: parse()
     if (repl_status != REPLICANT_SUCCESS ||
         repl_output_sz != sizeof(uint64_t))
     {
-        *status = CHRONOS_ERROR;
+        *status = CHRONOS_REPLICANT_ERROR;
         *m_ret = -1;
     }
     else
@@ -552,7 +574,7 @@ chronos_client :: pending_order :: parse()
     if (repl_status != REPLICANT_SUCCESS ||
         repl_output_sz != m_pairs_sz)
     {
-        *status = CHRONOS_ERROR;
+        *status = CHRONOS_REPLICANT_ERROR;
         *m_ret = -1;
     }
     else
@@ -587,7 +609,7 @@ chronos_client :: pending_weaver_order :: parse()
     if (repl_status != REPLICANT_SUCCESS ||
         repl_output_sz != m_pairs_sz)
     {
-        *status = CHRONOS_ERROR;
+        *status = CHRONOS_REPLICANT_ERROR;
         *m_ret = -1;
     }
     else
@@ -625,7 +647,9 @@ chronos_client :: pending_weaver_cleanup :: parse()
     if (repl_status != REPLICANT_SUCCESS ||
         repl_output_sz != sizeof(uint64_t))
     {
-        *status = CHRONOS_ERROR;
+        WDEBUG << "repl status=" << replicant_returncode_to_string(repl_status)
+               << ", output_sz=" << repl_output_sz << std::endl;
+        *status = CHRONOS_REPLICANT_ERROR;
         *m_decref_count = UINT64_MAX;
     }
     else
@@ -654,7 +678,7 @@ chronos_client :: pending_get_stats :: parse()
     if (repl_status != REPLICANT_SUCCESS ||
         repl_output_sz != sizeof(uint64_t) * 11 + sizeof(uint32_t))
     {
-        *status = CHRONOS_ERROR;
+        *status = CHRONOS_REPLICANT_ERROR;
         *m_ret = -1;
     }
     else
@@ -693,7 +717,7 @@ chronos_client :: pending_new_epoch :: parse()
     if (repl_status != REPLICANT_SUCCESS ||
         repl_output_sz != sizeof(uint32_t))
     {
-        *status = CHRONOS_ERROR;
+        *status = CHRONOS_REPLICANT_ERROR;
         *m_success = UINT32_MAX; // error
     }
     else

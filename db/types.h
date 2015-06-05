@@ -9,6 +9,9 @@
  * ===============================================================
  */
 
+#ifndef weaver_db_types_h
+#define weaver_db_types_h
+
 #include <google/sparse_hash_map>
 #include <google/sparse_hash_set>
 
@@ -26,3 +29,5 @@ namespace db
                                                weaver_util::murmur_hasher<std::string>,
                                                weaver_util::eqstr>;
 }
+
+#endif

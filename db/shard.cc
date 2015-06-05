@@ -237,7 +237,7 @@ parse_xml_node(pugi::xml_document &doc,
     node_handle_t id0 = node.attribute("id").value();
     uint64_t hash0 = hash_node_handle(id0);
     uint64_t loc = (hash0 % num_shards) + ShardIdIncr;
-    uint64_t map_idx = hash0 % NUM_NODE_MAPS;
+    uint64_t map_idx = get_map_idx(id0);
     if ((loc == shard_id) && ((int)map_idx % load_nthreads == load_tid)) {
         assert(!S->bulk_load_node_exists(id0, map_idx));
         bool in_mem;
@@ -285,7 +285,7 @@ parse_xml_edge(pugi::xml_document &doc,
     node_handle_t id0 = edge.attribute("source").value();
     uint64_t hash0 = hash_node_handle(id0);
     uint64_t loc0 = (hash0 % num_shards) + ShardIdIncr;
-    uint64_t map_idx = hash0 % NUM_NODE_MAPS;
+    uint64_t map_idx = get_map_idx(id0);
 
     if ((loc0 == shard_id) && ((int)map_idx % load_nthreads == load_tid)) {
         node_handle_t id1 = edge.attribute("target").value();
@@ -374,7 +374,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     uint64_t hash1 = hash_node_handle(id1);
                     uint64_t loc1 = ((hash1 % num_shards) + ShardIdIncr);
 
-                    uint64_t map_idx = hash0 % NUM_NODE_MAPS;
+                    uint64_t map_idx = get_map_idx(id0);
                     if ((loc0 == shard_id)
                      && ((int)map_idx % load_nthreads == load_tid)) {
                         edge_handle_t edge_handle = BulkLoadEdgeHandlePrefix + std::to_string(edge_count);
@@ -403,7 +403,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                     if (loc1 == shard_id) {
                         db::node *n = nullptr;
                         bool node_in_mem;
-                        uint64_t map_idx = hash1 % NUM_NODE_MAPS;
+                        uint64_t map_idx = get_map_idx(id1);
                         if ((int)map_idx % load_nthreads == load_tid) {
                             if (!S->bulk_load_node_exists(id1, map_idx)) {
                                 n = S->create_node_bulk_load(id1, map_idx, zero_clk, node_in_mem);

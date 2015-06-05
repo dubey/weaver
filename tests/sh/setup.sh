@@ -8,6 +8,7 @@
 
 echo 'Setup weaver support infrastructure.'
 config_file="$WEAVER_SRCDIR"/conf/weaver.yaml
+WEAVER_BUILDDIR="$WEAVER_BUILDDIR" "$WEAVER_SRCDIR"/startup_scripts/kill_weaver.sh $config_file
 WEAVER_BUILDDIR="$WEAVER_BUILDDIR" "$WEAVER_SRCDIR"/startup_scripts/start_weaver.sh $config_file
 echo 'Start weaver-shard.'
 weaver shard --config-file=$config_file &
@@ -17,3 +18,4 @@ for i in $(seq 1 $num_vts); do
     echo 'Start weaver-timestamper.'
     weaver timestamper --config-file=$config_file &
 done
+sleep 1

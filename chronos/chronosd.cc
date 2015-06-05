@@ -40,6 +40,7 @@
 // e
 #include <e/endian.h>
 #include <e/popt.h>
+#include <e/buffer.h>
 
 // Replicant
 #include <rsm.h>
@@ -47,6 +48,7 @@
 // Chronos
 #include "common/weaver_constants.h"
 #include "common/config_constants.h"
+#include "common/stl_serialization.h"
 #include "chronos/chronos.h"
 #include "chronos/chronos_cmp_encode.h"
 #include "chronos/event_dependency_graph.h"
@@ -94,6 +96,12 @@ class chronosd
         void new_epoch(struct rsm_context* ctx,
                        const char* data, size_t data_sz);
 
+    // backup / restore
+    public:
+        static chronosd* recreate(rsm_context *ctx,
+                                  const char *data, size_t data_sz);
+        int snapshot(rsm_context *ctx,
+                     char **data, size_t *data_sz);
     private:
         event_dependency_graph m_graph;
         uint64_t m_count_create_event;
@@ -711,6 +719,7 @@ chronosd :: get_stats(struct rsm_context* ctx,
     resp_ptr = e::pack64le(st.count_weaver_order, resp_ptr);
     resp_ptr = e::pack64le(st.count_weaver_cleanup, resp_ptr);
     resp_ptr = &m_repl_resp.front();
+
     rsm_set_output(ctx, resp_ptr, resp_sz);
 }
 
@@ -733,6 +742,88 @@ chronosd :: new_epoch(struct rsm_context* /*ctx*/,
     //rsm_set_output(ctx, resp_ptr, resp_sz);
 }
 
+chronosd*
+chronosd :: recreate(rsm_context *ctx,
+                     const char *data, size_t data_sz)
+{
+    std::unique_ptr<chronosd> c(new chronosd());
+
+    if (!c)
+    {
+        rsm_log(ctx, "memory allocation failed\n");
+        return nullptr;
+    }
+
+    e::unpacker up(data, data_sz);
+    up = up >> c->m_graph
+            >> c->m_count_create_event
+            >> c->m_count_acquire_references
+            >> c->m_count_release_references
+            >> c->m_count_query_order
+            >> c->m_count_assign_order
+            >> c->m_count_weaver_order
+            >> c->m_count_weaver_cleanup;
+    message::unpack_buffer(up, c->m_vcmap);
+    message::unpack_buffer(up, c->m_rev_vcmap);
+    message::unpack_buffer(up, c->m_vtlist);
+    message::unpack_buffer(up, c->m_cleanup_clk);
+
+    if (up.error())
+    {
+        rsm_log(ctx, "unpacking failed\n");
+        return nullptr;
+    }
+
+    return c.release();
+}
+
+int
+chronosd ::snapshot(rsm_context* /* CANNOT USE ctx IN snaphot */,
+                    char **data, size_t *data_sz)
+{
+    size_t sz = pack_size(m_graph)
+              + e::pack_size(m_count_create_event)
+              + e::pack_size(m_count_acquire_references)
+              + e::pack_size(m_count_release_references)
+              + e::pack_size(m_count_query_order)
+              + e::pack_size(m_count_assign_order)
+              + e::pack_size(m_count_weaver_order)
+              + e::pack_size(m_count_weaver_cleanup)
+              + message::size(m_vcmap)
+              + message::size(m_rev_vcmap)
+              + message::size(m_vtlist)
+              + message::size(m_cleanup_clk);
+
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wdeprecated-declarations"
+    std::auto_ptr<e::buffer> buf(e::buffer::create(sz));
+#pragma GCC diagnostic pop
+    e::packer pa = buf->pack_at(0);
+    pa = pa << m_graph
+            << m_count_create_event
+            << m_count_acquire_references
+            << m_count_release_references
+            << m_count_query_order
+            << m_count_assign_order
+            << m_count_weaver_order
+            << m_count_weaver_cleanup;
+    message::pack_buffer(pa, m_vcmap);
+    message::pack_buffer(pa, m_rev_vcmap);
+    message::pack_buffer(pa, m_vtlist);
+    message::pack_buffer(pa, m_cleanup_clk);
+
+    char* ptr = static_cast<char*>(malloc(buf->size()));
+    *data = ptr;
+    *data_sz = buf->size();
+
+    if (*data)
+    {
+        memmove(ptr, buf->data(), buf->size());
+    }
+
+    return 0;
+}
+
 extern "C"
 {
 
@@ -744,20 +835,16 @@ chronosd_create(struct rsm_context*)
 
 void*
 chronosd_recreate(struct rsm_context* ctx,
-                  const char*, size_t)
+                  const char *data, size_t data_sz)
 {
-    rsm_log(ctx, "chronosd does not recreate from snapshots");
-    abort();
+    return chronosd::recreate(ctx, data, data_sz);
 }
 
 int
 chronosd_snapshot(struct rsm_context* ctx,
-                  void*, char** data, size_t* sz)
+                  void* obj, char** data, size_t* data_sz)
 {
-    rsm_log(ctx, "chronosd does not take snapshots");
-    *data = NULL;
-    *sz = 0;
-    return -1;
+    return static_cast<chronosd*>(obj)->snapshot(ctx, data, data_sz);
 }
 
 void

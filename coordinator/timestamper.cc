@@ -299,7 +299,8 @@ nop_function()
             id = kronos.wait(id, 100000, &wait_code);
 
             if (call_code != CHRONOS_SUCCESS || wait_code != CHRONOS_SUCCESS) {
-                WDEBUG << "Kronos weaver_cleanup: call code " << call_code << ", wait code " << wait_code << std::endl;
+                WDEBUG << "Kronos weaver_cleanup: call code " << chronos_returncode_to_string(call_code)
+                       << ", wait code " << chronos_returncode_to_string(wait_code) << std::endl;
             }
 
             // for debugging

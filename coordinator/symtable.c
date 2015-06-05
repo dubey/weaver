@@ -39,6 +39,7 @@ struct state_machine rsm = {
      {"server_kill", weaver_server_manager_server_kill},
      {"server_forget", weaver_server_manager_server_forget},
      {"server_suspect", weaver_server_manager_server_suspect},
+     {"report_disconnect", weaver_server_manager_server_suspect},
      {"debug_dump", weaver_server_manager_debug_dump},
      {"init", weaver_server_manager_init},
      {NULL, NULL}}

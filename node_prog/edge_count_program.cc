@@ -11,7 +11,8 @@
  * ===============================================================
  */
 
-#include "common/message.h"
+#include "common/stl_serialization.h"
+#include "node_prog/node_prog_type.h"
 #include "node_prog/edge_count_program.h"
 
 using node_prog::search_type;

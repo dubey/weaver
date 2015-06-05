@@ -38,6 +38,9 @@
 // Google SparseHash
 #include <google/sparse_hash_map>
 
+// e
+#include <e/serialization.h>
+
 // Weaver
 #include "common/utils.h"
 
@@ -68,6 +71,9 @@ class event_dependency_graph
         bool map(uint64_t event, uint64_t* inner);
         bool bfs(uint64_t start, uint64_t end, uint64_t* dense_sz);
         void inner_decref(uint64_t inner);
+        uint64_t base_size(uint64_t step_size) const;
+        void allocate_base(void **new_base, uint64_t step_size) const;
+        void reassign_base(void *new_base, uint64_t step_size, bool copy);
         void resize();
         // Cache that shit
         bool check_cache(uint64_t outer_src, uint64_t inner_dst);
@@ -75,6 +81,11 @@ class event_dependency_graph
 
     private:
         event_dependency_graph& operator = (const event_dependency_graph&);
+
+    private:
+        friend e::packer operator << (e::packer lhs, const event_dependency_graph &rhs);
+        friend e::unpacker operator >> (e::unpacker lhs, event_dependency_graph &rhs);
+        friend size_t pack_size(const event_dependency_graph &g);
 
     private:
         uint64_t m_nextid;
@@ -92,5 +103,14 @@ class event_dependency_graph
         uint64_t** m_edges;
         event_map_t m_event_to_inner;
 };
+
+e::packer
+operator << (e::packer lhs, const event_dependency_graph &rhs);
+
+e::unpacker
+operator >> (e::unpacker lhs, event_dependency_graph &rhs);
+
+size_t
+pack_size(const event_dependency_graph &g);
 
 #endif // event_dependency_graph_h_

@@ -75,7 +75,7 @@ chronos_create_event(chronos_client* client,
     }
     catch (po6::error& e)
     {
-        *status = CHRONOS_ERROR;
+        *status = CHRONOS_PO6_ERROR;
         errno = e;
         return 0;
     }
@@ -97,7 +97,7 @@ chronos_acquire_references(chronos_client* client,
     }
     catch (po6::error& e)
     {
-        *status = CHRONOS_ERROR;
+        *status = CHRONOS_PO6_ERROR;
         errno = e;
         return -1;
     }
@@ -119,7 +119,7 @@ chronos_release_references(chronos_client* client,
     }
     catch (po6::error& e)
     {
-        *status = CHRONOS_ERROR;
+        *status = CHRONOS_PO6_ERROR;
         errno = e;
         return -1;
     }
@@ -140,7 +140,7 @@ chronos_query_order(struct chronos_client* client, struct chronos_pair* pairs, s
     }
     catch (po6::error& e)
     {
-        *status = CHRONOS_ERROR;
+        *status = CHRONOS_PO6_ERROR;
         errno = e;
         return -1;
     }
@@ -161,7 +161,7 @@ chronos_assign_order(struct chronos_client* client, struct chronos_pair* pairs, 
     }
     catch (po6::error& e)
     {
-        *status = CHRONOS_ERROR;
+        *status = CHRONOS_PO6_ERROR;
         errno = e;
         return -1;
     }
@@ -184,7 +184,7 @@ chronos_get_stats(struct chronos_client* client,
     }
     catch (po6::error& e)
     {
-        *status = CHRONOS_ERROR;
+        *status = CHRONOS_PO6_ERROR;
         errno = e;
         return -1;
     }
@@ -206,7 +206,7 @@ chronos_new_epoch(struct chronos_client* client,
     }
     catch (po6::error& e)
     {
-        *status = CHRONOS_ERROR;
+        *status = CHRONOS_PO6_ERROR;
         errno = e;
         return -1;
     }
@@ -226,7 +226,7 @@ chronos_loop(struct chronos_client* client, int timeout, enum chronos_returncode
     }
     catch (po6::error& e)
     {
-        *status = CHRONOS_ERROR;
+        *status = CHRONOS_PO6_ERROR;
         errno = e;
         return -1;
     }
@@ -246,7 +246,7 @@ chronos_wait(struct chronos_client* client, int64_t id, int timeout, enum chrono
     }
     catch (po6::error& e)
     {
-        *status = CHRONOS_ERROR;
+        *status = CHRONOS_PO6_ERROR;
         errno = e;
         return -1;
     }

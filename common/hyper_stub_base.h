@@ -24,7 +24,7 @@
 #include <hyperdex/client.h>
 #include <hyperdex/datastructures.h>
 
-#include "common/message.h"
+#include "common/stl_serialization.h"
 #include "common/transaction.h"
 #include "db/types.h"
 #include "db/node.h"

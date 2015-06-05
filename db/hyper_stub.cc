@@ -15,6 +15,7 @@
 #include "common/weaver_constants.h"
 #include "common/config_constants.h"
 #include "db/shard_constants.h"
+#include "db/utils.h"
 #include "db/hyper_stub.h"
 
 #define PUT_EDGE_BUFFER_SZ 5000
@@ -167,7 +168,7 @@ hyper_stub :: restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *node
             node_handle = node_handle_t(handle_str);
 
             // recreate node
-            map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
+            map_idx = get_map_idx(node_handle);
             n = new node(node_handle, UINT64_MAX, dummy_clock, shard_mutexes+map_idx);
             recreate_node(node_attrs, *n);
 

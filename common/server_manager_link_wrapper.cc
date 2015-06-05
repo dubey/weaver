@@ -84,7 +84,8 @@ server_manager_link_wrapper :: sm_rpc :: callback(server_manager_link_wrapper* c
 {
     if (status != REPLICANT_SUCCESS)
     {
-        WDEBUG << "server manager error: " << msg.str()
+        WDEBUG << "server manager error: returncode=" << replicant_returncode_to_string(status)
+               << ", msg=" << msg.str()
                << ": " << clw->m_sm->error_message() << " @ " << clw->m_sm->error_location() << std::endl;
     }
 
@@ -249,7 +250,7 @@ server_manager_link_wrapper :: should_exit()
 bool
 server_manager_link_wrapper :: maintain_link()
 {
-    enter_critical_section_killable();
+    enter_critical_section();
     bool exit_status = false;
 
     while (true)
@@ -315,7 +316,7 @@ server_manager_link_wrapper :: maintain_link()
         }
     }
 
-    exit_critical_section_killable();
+    exit_critical_section();
     return exit_status;
 }
 

@@ -38,6 +38,7 @@
 #include "common/bool_vector.h"
 #include "common/utils.h"
 #include "db/shard_constants.h"
+#include "db/utils.h"
 #include "db/types.h"
 #include "db/element.h"
 #include "db/node.h"
@@ -86,7 +87,6 @@ namespace db
             common::comm_wrapper comm;
 
             // Consistency
-        public:
             queue_manager qm;
             std::vector<order::oracle*> time_oracles;
             void increment_qts(uint64_t vt_id, uint64_t incr);
@@ -119,7 +119,6 @@ namespace db
             uint32_t nodes_in_memory[NUM_NODE_MAPS];
             std::unordered_map<node_handle_t, // node handle n ->
                 std::unordered_set<node_version_t, node_version_hash>> edge_map; // in-neighbors of n
-        public:
             node* create_node(const node_handle_t &node_handle,
                 vclock_ptr_t vclk,
                 bool migrate);
@@ -548,7 +547,7 @@ namespace db
     inline node*
     shard :: acquire_node_latest(uint64_t tid, const node_handle_t &node_handle)
     {
-        uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
+        uint64_t map_idx = get_map_idx(node_handle);
 
         node *n = nullptr;
         node_map_mutexes[map_idx].lock();
@@ -566,7 +565,7 @@ namespace db
     inline node*
     shard :: acquire_node_specific(uint64_t tid, const node_handle_t &node_handle, const vclock_ptr_t tcreat, const vclock_ptr_t tdel)
     {
-        uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
+        uint64_t map_idx = get_map_idx(node_handle);
 
         node *n = nullptr;
         node_map_mutexes[map_idx].lock();
@@ -597,7 +596,7 @@ namespace db
     inline node*
     shard :: acquire_node_version(uint64_t tid, const node_handle_t &node_handle, const vc::vclock &vclk, order::oracle *time_oracle)
     {
-        uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
+        uint64_t map_idx = get_map_idx(node_handle);
 
         node *n = nullptr;
         node_map_mutexes[map_idx].lock();
@@ -625,7 +624,7 @@ namespace db
     inline node*
     shard :: acquire_node_write(uint64_t tid, const node_handle_t &node_handle, uint64_t vt_id, uint64_t qts)
     {
-        uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
+        uint64_t map_idx = get_map_idx(node_handle);
 
         node *n = nullptr;
         auto comp = std::make_pair(vt_id, qts);
@@ -679,15 +678,6 @@ namespace db
         } else {
             return nullptr;
         }
-
-        //if (bulk_load_node_exists(node_handle, map_idx)) {
-        //    auto node_iter = node_present(tid, map_idx, node_handle);
-        //    node *n = node_iter->second->nodes.front();
-        //    n->to_evict = false; // bulk loading eviction handled separately
-        //    return n;
-        //} else {
-        //    return nullptr;
-        //}
     }
 
     inline void
@@ -758,22 +748,6 @@ namespace db
         auto entry_ptr = map_iter->second;
         assert(entry_ptr->prev != entry_ptr); // should never evict last node, NodesPerMap >= 1
 
-        // debug
-        //auto begin_ptr = entry_ptr;
-        //auto cur_ptr = begin_ptr->next;
-        //int ninmem = 1;
-        //while (cur_ptr != begin_ptr) {
-        //    cur_ptr = cur_ptr->next;
-        //    ninmem++;
-        //}
-        //WDEBUG << "nodes in mem=" << ninmem << std::endl;
-        //for (const auto &p: nodes[map_idx]) {
-        //    if (p.second->present) {
-        //        ninmem--;
-        //    }
-        //}
-        //assert(ninmem == 0);
-
         if (entry_ptr == node_queue_clock_hand[map_idx]) {
             node_queue_clock_hand[map_idx] = entry_ptr->next;
         }
@@ -839,7 +813,7 @@ namespace db
     inline void
     shard :: release_node(node *n, bool migr_done=false)
     {
-        uint64_t map_idx = hash_node_handle(n->get_handle()) % NUM_NODE_MAPS;
+        uint64_t map_idx = get_map_idx(n->get_handle());
 
         node_map_mutexes[map_idx].lock();
         n->in_use = false;
@@ -908,7 +882,7 @@ namespace db
         vclock_ptr_t vclk,
         bool migrate)
     {
-        uint64_t map_idx = hash_node_handle(node_handle) % NUM_NODE_MAPS;
+        uint64_t map_idx = get_map_idx(node_handle);
         node *new_node = new node(node_handle, shard_id, vclk, node_map_mutexes+map_idx);
 
         node_map_mutexes[map_idx].lock();

@@ -69,3 +69,5 @@ do
         ssh $ipaddr "pidof replicant-daemon | xargs kill -9"
     fi
 done
+
+sleep 2

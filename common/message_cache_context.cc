@@ -11,7 +11,7 @@
  * ===============================================================
  */
 
-#include "message.h"
+#include "common/stl_serialization.h"
 #include "node_prog/cache_response.h"
 
 // size methods

@@ -40,11 +40,13 @@
 #define weaver_debug_
 // Chronos
 #include "common/weaver_constants.h"
+#include "common/stl_serialization.h"
 #include "event_dependency_graph.h"
 
 #define EDGES_EMPTY (UINT64_MAX - 1)
 #define EDGES_END (UINT64_MAX - 1)
 #define CACHE_SIZE 16384ULL
+#define CACHE_MALLOC_SIZE (CACHE_SIZE * 64ULL)
 
 event_dependency_graph :: event_dependency_graph()
     : m_nextid(1)
@@ -64,17 +66,17 @@ event_dependency_graph :: event_dependency_graph()
 {
     m_event_to_inner.set_deleted_key(0);
 
-    m_cache = static_cast<uint64_t*>(mmap(NULL, CACHE_SIZE * 64ULL, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_POPULATE, -1, 0));
+    m_cache = static_cast<uint64_t*>(mmap(NULL, CACHE_MALLOC_SIZE, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_POPULATE, -1, 0));
 
     assert(m_cache != MAP_FAILED);
-    memset(m_cache, 0, CACHE_SIZE * 64ULL);
+    memset(m_cache, 0, CACHE_MALLOC_SIZE);
 }
 
 event_dependency_graph :: ~event_dependency_graph() throw ()
 {
     if (m_base)
     {
-        munmap(m_free_inner_ids, m_vertices_allocated * 7 * sizeof(uint64_t));
+        munmap(m_free_inner_ids, base_size(m_vertices_allocated));
     }
 }
 
@@ -406,6 +408,80 @@ event_dependency_graph :: inner_decref(uint64_t inner)
     }
 }
 
+uint64_t
+event_dependency_graph :: base_size(uint64_t step_size) const
+{
+    return (7 * step_size * sizeof(uint64_t) + sizeof(uint64_t));
+}
+
+void
+event_dependency_graph :: allocate_base(void **new_base, uint64_t next_step) const
+{
+    uint64_t allocate = base_size(next_step);
+    *new_base = mmap(NULL, allocate, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_POPULATE, -1, 0);
+
+    if (*new_base == MAP_FAILED)
+    {
+        throw std::bad_alloc();
+    }
+}
+
+void
+event_dependency_graph :: reassign_base(void *new_base, uint64_t next_step, bool copy)
+{
+    uint64_t* tmp = reinterpret_cast<uint64_t*>(new_base);
+
+    if (copy) {
+        // Copy the free inner ids
+        memmove(tmp, m_free_inner_ids, m_free_inner_id_end * sizeof(uint64_t));
+    }
+    m_free_inner_ids = tmp;
+    tmp += next_step;
+
+    // Do nothing for "dense"
+    m_dense = tmp;
+    tmp += next_step;
+
+    // Do nothing for "sparse"
+    m_sparse = tmp;
+    tmp += next_step;
+
+    // Do nothing for "bfsqueue"
+    m_bfsqueue = tmp;
+    tmp += next_step + 1;
+
+    if (copy) {
+        // Copy inner->event mapping
+        memmove(tmp, m_inner_to_event, m_vertices_allocated * sizeof(uint64_t));
+    }
+    m_inner_to_event = tmp;
+    tmp += next_step;
+
+    if (copy) {
+        // Copy refcounts
+        memmove(tmp, m_refcount, m_vertices_allocated * sizeof(uint64_t));
+    }
+    m_refcount = tmp;
+    tmp += next_step;
+
+    if (copy) {
+        // Copy edge pointers
+        memmove(tmp, m_edges, m_vertices_allocated * sizeof(uint64_t));
+    }
+    m_edges = reinterpret_cast<uint64_t**>(tmp);
+
+    // Give back what ye taketh
+    if (m_base) {
+        munmap(m_base, base_size(m_vertices_allocated));
+    }
+
+    // Save the current memory
+    m_base = new_base;
+
+    // Update allocation size;
+    m_vertices_allocated = next_step;
+}
+
 void
 event_dependency_graph :: resize()
 {
@@ -421,45 +497,10 @@ event_dependency_graph :: resize()
     }
 
     next_step *= 1.3;
-    uint64_t allocate = 7 * next_step * sizeof(uint64_t) + sizeof(uint64_t);
-    void* new_base = mmap(NULL, allocate, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_POPULATE, -1, 0);
+    void *new_base;
+    allocate_base(&new_base, next_step);
 
-    if (new_base == MAP_FAILED)
-    {
-        throw std::bad_alloc();
-    }
-
-    uint64_t* tmp = reinterpret_cast<uint64_t*>(new_base);
-    // Copy the free inner ids
-    memmove(tmp, m_free_inner_ids, m_free_inner_id_end * sizeof(uint64_t));
-    m_free_inner_ids = tmp;
-    tmp += next_step;
-    // Do nothing for "dense"
-    m_dense = tmp;
-    tmp += next_step;
-    // Do nothing for "sparse"
-    m_sparse = tmp;
-    tmp += next_step;
-    // Do nothing for "bfsqueue"
-    m_bfsqueue = tmp;
-    tmp += next_step + 1;
-    // Copy inner->event mapping
-    memmove(tmp, m_inner_to_event, m_vertices_allocated * sizeof(uint64_t));
-    m_inner_to_event = tmp;
-    tmp += next_step;
-    // Copy refcounts
-    memmove(tmp, m_refcount, m_vertices_allocated * sizeof(uint64_t));
-    m_refcount = tmp;
-    tmp += next_step;
-    // Copy edge pointers
-    memmove(tmp, m_edges, m_vertices_allocated * sizeof(uint64_t));
-    m_edges = reinterpret_cast<uint64_t**>(tmp);
-    // Give back what ye taketh
-    munmap(m_base, 7 * sizeof(uint64_t) * m_vertices_allocated);
-    // Save the current memory
-    m_base = new_base;
-    // Update allocation size;
-    m_vertices_allocated = next_step;
+    reassign_base(new_base, next_step, true);
 }
 
 #define CACHE_LINE(S, D) ((((S) & 4095) << 12) | ((D) & 4095)) 
@@ -495,4 +536,68 @@ event_dependency_graph :: poke_cache(uint64_t src, uint64_t dst)
     m_cache[cache_line + 2] = m_cache[cache_line + 0];
     m_cache[cache_line + 1] = dst;
     m_cache[cache_line + 0] = src;
+}
+
+e::packer
+operator << (e::packer lhs, const event_dependency_graph &rhs)
+{
+    e::slice cache_slice(rhs.m_cache, CACHE_MALLOC_SIZE);
+    e::slice base_slice;
+    if (rhs.m_base) {
+        base_slice = e::slice(rhs.m_base, rhs.base_size(rhs.m_vertices_allocated));
+    } else {
+        base_slice = e::slice(rhs.m_base, 0);
+    }
+
+    lhs = lhs << rhs.m_nextid
+              << rhs.m_vertices_number
+              << rhs.m_vertices_allocated
+              << rhs.m_free_inner_id_end
+              << cache_slice
+              << base_slice;
+    message::pack_buffer(lhs, rhs.m_event_to_inner);
+
+    return lhs;
+}
+
+e::unpacker
+operator >> (e::unpacker lhs, event_dependency_graph &rhs)
+{
+    e::slice cache_slice, base_slice;
+
+    lhs = lhs >> rhs.m_nextid
+              >> rhs.m_vertices_number
+              >> rhs.m_vertices_allocated
+              >> rhs.m_free_inner_id_end
+              >> cache_slice
+              >> base_slice;
+    message::unpack_buffer(lhs, rhs.m_event_to_inner);
+
+    assert(rhs.base_size(rhs.m_vertices_allocated) == base_slice.size());
+
+    void *new_base = NULL;
+    rhs.m_base = NULL;
+    if (base_slice.size() > 0) {
+        rhs.allocate_base(&new_base, rhs.m_vertices_allocated);
+        memmove(new_base, base_slice.data(), rhs.base_size(rhs.m_vertices_allocated));
+
+        rhs.reassign_base(new_base, rhs.m_vertices_allocated, false);
+    }
+
+    return lhs;
+}
+
+size_t
+pack_size(const event_dependency_graph &g)
+{
+    e::slice cache_slice(g.m_cache, CACHE_MALLOC_SIZE);
+    e::slice base_slice(g.m_base, g.base_size(g.m_vertices_allocated));
+
+    return e::pack_size(g.m_nextid)
+         + e::pack_size(g.m_vertices_number)
+         + e::pack_size(g.m_vertices_allocated)
+         + e::pack_size(g.m_free_inner_id_end)
+         + e::pack_size(cache_slice)
+         + e::pack_size(base_slice)
+         + message::size(g.m_event_to_inner);
 }

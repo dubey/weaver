@@ -65,6 +65,9 @@ hyper_stub_base :: hyper_stub_base()
     HYPERDEX_CALL_WRAPPER(f(arg1, arg2, arg3, arg4, arg5, arg6, arg7, arg8, arg9), op_id, status, success, success_calls);
 
 #define HYPERDEX_LOOP(loop_status, hdex_id, success, success_calls) \
+    HYPERDEX_CALL_WRAPPER(hyperdex_client_loop(cl, -1, &loop_status), hdex_id, loop_status, success, success_calls);
+
+#define HYPERDEX_LOOP_TIMEOUT(loop_status, hdex_id, success, success_calls) \
     HYPERDEX_CALL_WRAPPER(hyperdex_client_loop(cl, 100, &loop_status), hdex_id, loop_status, success, success_calls);
 
 
@@ -267,7 +270,7 @@ hyper_stub_base :: loop(int64_t &op_id, hyperdex_client_returncode &loop_status)
     int success_calls = 0;
     bool success = true;
 
-    HYPERDEX_LOOP(loop_status, op_id, success, success_calls);
+    HYPERDEX_LOOP_TIMEOUT(loop_status, op_id, success, success_calls);
 
     return success;
 }
@@ -697,6 +700,7 @@ hyper_stub_base :: multiple_del(std::vector<const char*> &spaces,
 #undef HYPERDEX_CALL7
 #undef HYPERDEX_CALL9
 #undef HYPERDEX_LOOP
+#undef HYPERDEX_LOOP_TIMEOUT
 #undef HYPERDEX_CHECK_STATUSES
 
 bool

@@ -58,9 +58,15 @@ struct chronos_client;
 enum chronos_returncode
 {
     CHRONOS_SUCCESS,
+    CHRONOS_UNEXPECTED_ID,
+    CHRONOS_REPLICANT_ERROR,
+    CHRONOS_PO6_ERROR,
     CHRONOS_ERROR,
     CHRONOS_GARBAGE
 };
+
+const char*
+chronos_returncode_to_string(enum chronos_returncode crc);
 
 enum chronos_cmp
 {

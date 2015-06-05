@@ -21,6 +21,7 @@
 #include <po6/threads/mutex.h>
 #include <po6/threads/cond.h>
 
+#include "node_prog/node_prog_type.h"
 #include "node_prog/node.h"
 #include "node_prog/edge.h"
 #include "node_prog/edge_list.h"

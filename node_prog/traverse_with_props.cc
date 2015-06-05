@@ -12,8 +12,9 @@
  */
 
 #define weaver_debug_
-#include "common/message.h"
+#include "common/stl_serialization.h"
 #include "common/cache_constants.h"
+#include "node_prog/node_prog_type.h"
 #include "node_prog/edge.h"
 #include "node_prog/traverse_with_props.h"
 

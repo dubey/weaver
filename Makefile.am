@@ -77,6 +77,9 @@ noinst_HEADERS+=	node_prog/base_classes.h \
 					common/cache_constants.h \
 					common/config_constants.h \
 					common/hyper_stub_base.h \
+					common/stl_serialization.h \
+					common/weaver_serialization.h \
+					common/enum_serialization.h \
 					common/message.h \
 					common/server.h \
 					common/server_manager_returncode.h \
@@ -118,6 +121,9 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    common/event_order.cc \
 		                    common/vclock.cc \
                             common/transaction.cc \
+		                    common/stl_serialization.cc \
+		                    common/weaver_serialization.cc \
+		                    common/enum_serialization.cc \
 		                    common/message.cc \
 		                    common/message_graph_elem.cc \
                             common/config_constants.cc \
@@ -173,6 +179,7 @@ noinst_HEADERS+=		db/cache_entry.h \
 						db/property.h \
 						db/queue_manager.h \
 						db/shard_constants.h \
+						db/utils.h \
 						db/types.h
 bin_PROGRAMS+=			weaver-shard
 weaver_shard_SOURCES=	common/ids.cc \
@@ -186,6 +193,9 @@ weaver_shard_SOURCES=	common/ids.cc \
 		                common/clock.cc \
 		                common/vclock.cc \
                         common/transaction.cc \
+		                common/stl_serialization.cc \
+		                common/weaver_serialization.cc \
+		                common/enum_serialization.cc \
 		                common/message.cc \
 		                common/message_graph_elem.cc \
 		                common/message_cache_context.cc \
@@ -227,6 +237,9 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 		                    common/comm_wrapper.cc \
 		                    common/vclock.cc \
                             common/transaction.cc \
+		                    common/stl_serialization.cc \
+		                    common/weaver_serialization.cc \
+		                    common/enum_serialization.cc \
 		                    common/message.cc \
 		                    common/event_order.cc \
                             common/config_constants.cc \
@@ -328,6 +341,7 @@ noinst_HEADERS+=	chronos/chronos_cmp_encode.h \
 
 lib_LTLIBRARIES+=				libweaverchronosd.la
 libweaverchronosd_la_SOURCES=	common/config_constants.cc \
+								common/stl_serialization.cc \
 								chronos/chronos_cmp_encode.cc \
 		        				chronos/chronos_stats_encode.cc \
 		        				chronos/chronosd.cc \
