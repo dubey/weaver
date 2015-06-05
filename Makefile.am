@@ -180,7 +180,8 @@ noinst_HEADERS+=		db/cache_entry.h \
 						db/queue_manager.h \
 						db/shard_constants.h \
 						db/utils.h \
-						db/types.h
+						db/types.h \
+						db/node_entry.h
 bin_PROGRAMS+=			weaver-shard
 weaver_shard_SOURCES=	common/ids.cc \
 						common/server.cc \
