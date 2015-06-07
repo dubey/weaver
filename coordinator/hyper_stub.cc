@@ -252,8 +252,8 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 CHECK_LOC(upd->loc1, upd->handle1, upd->alias1);
                 GET_NODE(upd->handle1);
 
-                if (!n->base.add_property(*upd->key, *upd->value, tx_clk_ptr)) {
-                    WDEBUG << "property " << *upd->key << ": " << *upd->value << " already exists at node " << upd->handle1 << std::endl;
+                if (!n->base.set_property(*upd->key, *upd->value, tx_clk_ptr)) {
+                    WDEBUG << "set property " << *upd->key << ": " << *upd->value << " fail at node " << upd->handle1 << std::endl;
                     ERROR_FAIL;
                 }
                 break;
@@ -293,8 +293,8 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                     WDEBUG << "edge with handle " << upd->handle1 << " does not exist at node " << upd->handle2 << std::endl;
                     ERROR_FAIL;
                 }
-                if (!n->out_edges[upd->handle1].front()->base.add_property(*upd->key, *upd->value, tx_clk_ptr)) {
-                    WDEBUG << "property " << *upd->key << ": " << *upd->value << " already exists at edge " << upd->handle1 << std::endl;
+                if (!n->out_edges[upd->handle1].front()->base.set_property(*upd->key, *upd->value, tx_clk_ptr)) {
+                    WDEBUG << "property " << *upd->key << ": " << *upd->value << " fail at edge " << upd->handle1 << std::endl;
                     ERROR_FAIL;
                 }
                 break;

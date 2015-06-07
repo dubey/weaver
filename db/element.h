@@ -72,6 +72,8 @@ namespace db
             bool add_property(const std::string &key, const std::string &value, const vclock_ptr_t &vclk);
             bool delete_property(const std::string &key, const vclock_ptr_t &tdel);
             bool delete_property(const std::string &key, const std::string &value, const vclock_ptr_t &tdel);
+            bool set_property(const property &prop);
+            bool set_property(const std::string &key, const std::string &value, const vclock_ptr_t &vclk);
             void remove_property(const std::string &key);
             bool has_property(const std::string &key, const std::string &value);
             bool has_property(const std::pair<std::string, std::string> &p);

@@ -141,6 +141,39 @@ element :: delete_property(const std::string &key, const std::string &value, con
 #endif
 }
 
+bool
+element :: set_property(const property &prop)
+{
+#ifdef weaver_large_property_maps_
+
+    auto find_iter = properties.find(prop.key);
+    if (find_iter != properties.end()
+     && !find_iter->second.back()->is_deleted()) {
+        delete_property(prop.key, prop.get_creat_time());
+    }
+
+#else
+
+    for (const std::shared_ptr<property> p: properties) {
+        if (p->key == prop.key && !p->is_deleted()) {
+            delete_property(prop.key, prop.get_creat_time());
+        }
+    }
+
+
+#endif
+
+    add_property(prop);
+    return true;
+}
+
+bool
+element :: set_property(const std::string &key, const std::string &value, const vclock_ptr_t &vclk)
+{
+    property prop(key, value, vclk);
+    return set_property(prop);
+}
+
 // caution: assuming mutex access to this element
 void
 element :: remove_property(const std::string &key)

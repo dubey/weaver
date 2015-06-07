@@ -1078,7 +1078,7 @@ namespace db
         std::string &key, std::string &value,
         vclock_ptr_t vclk)
     {
-        n->base.add_property(key, value, vclk);
+        n->base.set_property(key, value, vclk);
     }
 
     inline void
@@ -1121,7 +1121,7 @@ namespace db
         assert(!out_edge_iter->second.empty());
         edge *e = out_edge_iter->second.back();
         assert(!e->base.get_del_time());
-        e->base.add_property(key, value, vclk);
+        e->base.set_property(key, value, vclk);
     }
 
     inline void
