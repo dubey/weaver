@@ -812,7 +812,7 @@ cdef class Client:
         cdef pair[string, string] prop
         if properties is not None:
             arg_pair.second.properties.reserve(len(properties))
-            for p in properties:
+            for p in self.__convert_props_dict_to_list(properties):
                 prop.first = p[0]
                 prop.second = p[1]
                 arg_pair.second.properties.push_back(p)
@@ -1095,16 +1095,19 @@ cdef class Client:
 
     def __convert_props_dict_to_list(self, dprops):
         lprops = []
+        if dprops and isinstance(dprops, dict):
+            for k in dprops:
+                if isinstance(dprops[k], list):
+                    for v in dprops[k]:
+                        lprops.append((k,v))
+                else:
+                    lprops.append((k, dprops[k]))
+        return lprops
+
+    def __convert_props_dictlist_to_listlist(self, dprops):
+        lprops = []
         for d in dprops:
-            cur_list = []
-            if d:
-                for k in d:
-                    if isinstance(d[k], list):
-                        for v in d[k]:
-                            cur_list.append((k,v))
-                    else:
-                        cur_list.append((k, d[k]))
-            lprops.append(cur_list)
+            lprops.append(self.__convert_props_dict_to_list(d))
         return lprops
 
     def execute(self, collect_nodes=False, collect_edges=False):
@@ -1115,8 +1118,8 @@ cdef class Client:
             raise WeaverError(WEAVER_CLIENT_LOGICALERROR)
 
         params = TraversePropsParams(self.traverse_node_aliases, \
-                                     self.__convert_props_dict_to_list(self.traverse_node_props), \
-                                     self.__convert_props_dict_to_list(self.traverse_edge_props), \
+                                     self.__convert_props_dictlist_to_listlist(self.traverse_node_props), \
+                                     self.__convert_props_dictlist_to_listlist(self.traverse_edge_props), \
                                      collect_n=collect_nodes, \
                                      collect_e=collect_edges)
         response = self.traverse_props([(self.traverse_start_node, params)])
