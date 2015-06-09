@@ -592,6 +592,8 @@ void
 hyper_stub :: abort_bulk_load()
 {
     WDEBUG << "Aborting bulk load now." << std::endl;
+    WDEBUG << "error message: " << hyperdex_client_error_message(cl) << std::endl;
+    WDEBUG << "error loc: " << hyperdex_client_error_location(cl) << std::endl;
     assert(false);
 }
 
