@@ -140,18 +140,20 @@ comm_wrapper :: reconfigure_internal(configuration &new_config)
         assert(srv.weaver_id != UINT64_MAX);
 
         if (srv.type != server::SHARD && srv.type != server::VT) {
-            WDEBUG << "Server: " << srv.weaver_id
-                   << ", role: " << server::to_string(srv.type)
-                   << ", state: " << server::to_string(srv.state)
+            WDEBUG << "Server=" << srv.weaver_id
+                   << ", loc=" << srv.bind_to
+                   << ", role=" << server::to_string(srv.type)
+                   << ", state=" << server::to_string(srv.state)
                    << "." << std::endl;
         } else {
             uint64_t factor = (srv.type == server::SHARD) ? 1 : 0;
             uint64_t vid = srv.virtual_id + NumVts*factor;
             assert(vid < active_server_idx.size());
 
-            WDEBUG << "Server: " << srv.weaver_id
-                   << ", role: " << server::to_string(srv.type) << " " << vid
-                   << ", state: " << server::to_string(srv.state)
+            WDEBUG << "Server=" << srv.weaver_id
+                   << ", loc=" << srv.bind_to
+                   << ", role=" << server::to_string(srv.type)
+                   << ", state=" << server::to_string(srv.state)
                    << "." << std::endl;
 
             if (srv.state == server::AVAILABLE) {
