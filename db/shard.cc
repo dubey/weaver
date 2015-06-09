@@ -2243,6 +2243,10 @@ main(int argc, const char *argv[])
 
         // bulk loading
         if (graph_file != nullptr) {
+            WDEBUG << "Bulk loading graph"
+                   << ", file=" << graph_file
+                   << ", format=" << graph_format
+                   << ", #shards=" << bulk_load_num_shards << std::endl;
             S->bulk_load_num_shards = (uint64_t)bulk_load_num_shards;
 
             db::graph_file_format format = db::SNAP;
