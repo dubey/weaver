@@ -896,6 +896,7 @@ main(int argc, const char *argv[])
     } else {
         google::SetLogDestination(google::INFO, log_file_name);
     }
+    FLAGS_logbufsecs = 0;
 
     // configuration file parse
     if (!init_config_constants(config_file)) {
