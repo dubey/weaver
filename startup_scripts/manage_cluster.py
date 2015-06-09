@@ -22,17 +22,19 @@ def execute_command(command):
     except subprocess.CalledProcessError as e:
         print 'CalledProcessError, returncode=' + str(e.returncode) + ', output=' + str(e.output)
 
-def execute_remote_command(command, ip_addr):
+def execute_remote_command(command, ip_addr, sleep=False):
     ssh_command = ['ssh', ip_addr]
     ssh_command.extend(command)
     output = execute_command(ssh_command)
-    time.sleep(1)
+    if sleep:
+        time.sleep(1)
     return output
 
 def main():
     parser = argparse.ArgumentParser(description='Manage Weaver cluster as specified by the yaml cluster file.  Default action is to launch new Weaver processes.')
     parser.add_argument('-c', '--cluster-file', default='cluster.yaml', help='yaml file describing the cluster')
     parser.add_argument('-g', '--graph-file', help='initial bulk load graph file')
+    parser.add_argument('-n', '--num-shards', default='-1', help='bulk load num shards (if different from len(shards))')
     parser.add_argument('-k', '--kill', help='kill weaver cluster processes', action='store_true')
 
     args = parser.parse_args()
@@ -40,8 +42,17 @@ def main():
     with open(args.cluster_file, 'r') as f:
         cluster = yaml.load(f)
     print 'Cluster = ' + str(cluster)
-    shards = cluster['shards']
-    vts = cluster['timestampers']
+    shards = []
+    vts = []
+    if 'shards' in cluster:
+        shards = cluster['shards']
+    if 'timestampers' in cluster:
+        vts = cluster['timestampers']
+    if args.num_shards == '-1':
+        bulk_load_num_shards = len(shards)
+    else:
+        bulk_load_num_shards = int(args.num_shards)
+    print 'Bulk load #shards=' + str(bulk_load_num_shards)
 
     shard_count = 0
     for s in shards:
@@ -51,15 +62,16 @@ def main():
             print 'Killed shard ' + str(shard_count)
         else:
             execute_remote_command(['mkdir', '-p', '~/weaver_runtime/shard'], s)
-            command = ['weaver', 'shard',
+            command = ['cd', '/local/dubey', '&&',
+                       'weaver', 'shard',
                        '-l', s,
                        '--log-file', '~/weaver_runtime/shard/'+str(shard_count)+'.log']
             if args.graph_file is not None:
                 command.extend(['--graph-format', 'graphml',
-                                '--graph-file', args.graph_file,
-                                '--bulk-load-num-shards', str(len(shards))])
+                                '--graph-file', args.graph_file + '_' + str(shard_count),
+                                '--bulk-load-num-shards', str(bulk_load_num_shards)])
             command.append('> /dev/null 2>&1 &')
-            execute_remote_command(command, s)
+            execute_remote_command(command, s, True)
             print 'Launched shard ' + str(shard_count)
         shard_count += 1
 
@@ -71,7 +83,8 @@ def main():
             print 'Killed vt ' + str(vt_count)
         else:
             execute_remote_command(['mkdir', '-p', '~/weaver_runtime/timestamper'], vt)
-            command = ['weaver', 'timestamper',
+            command = ['cd', '/local/dubey', '&&',
+                       'weaver', 'timestamper',
                        '-l', vt,
                        '--log-file', '~/weaver_runtime/timestamper/'+str(vt_count)+'.log']
             command.append('> /dev/null 2>&1 &')
