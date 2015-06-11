@@ -229,6 +229,7 @@ parse_xml_node(pugi::xml_document &doc,
                vclock_ptr_t zero_clk,
                bool prop_delim,
                uint64_t &cur_shard_node_count,
+               uint64_t &nodes_in_memory,
                db::hyper_stub &hstub)
 {
     assert(doc.load_buffer(element.c_str(), element.size()));
@@ -258,8 +259,12 @@ parse_xml_node(pugi::xml_document &doc,
                 }
             }
         }
+
+        if (in_mem) {
+            nodes_in_memory++;
+        }
         if (++cur_shard_node_count % 10000 == 0) {
-            WDEBUG << "GRAPHML tid=" << load_tid << " node=" << cur_shard_node_count << std::endl;
+            WDEBUG << "GRAPHML tid=" << load_tid << " node=" << cur_shard_node_count << " nodes_in_mem=" << nodes_in_memory << std::endl;
         }
 
         S->bulk_load_put_node(hstub, n, in_mem);
@@ -277,6 +282,7 @@ parse_xml_edge(pugi::xml_document &doc,
                vclock_ptr_t zero_clk,
                bool prop_delim,
                uint64_t &cur_shard_edge_count,
+               uint64_t &edges_in_memory,
                db::hyper_stub &hstub)
 {
     assert(doc.load_buffer(element.c_str(), element.size()));
@@ -316,9 +322,12 @@ parse_xml_edge(pugi::xml_document &doc,
         }
 
         S->bulk_load_put_edge(hstub, e, id0, n, alias);
-
+        
+        if (n != nullptr) {
+            edges_in_memory++;
+        }
         if (++cur_shard_edge_count % 10000 == 0) {
-            WDEBUG << "GRAPHML tid=" << load_tid << " edge=" << cur_shard_edge_count << std::endl;
+            WDEBUG << "GRAPHML tid=" << load_tid << " edge=" << cur_shard_edge_count << " edges_in_mem=" << edges_in_memory << std::endl;
         }
     }
 
@@ -429,6 +438,8 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
             bool prop_delim = (BulkLoadPropertyValueDelimiter != '\0');
             uint64_t cur_shard_node_count = 0;
             uint64_t cur_shard_edge_count = 0;
+            uint64_t nodes_in_memory = 0;
+            uint64_t edges_in_memory = 0;
             std::vector<std::string> elem_vec;
             elem_vec.emplace_back("node");
             elem_vec.emplace_back("edge");
@@ -443,6 +454,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                                    zero_clk,
                                    prop_delim,
                                    cur_shard_node_count,
+                                   nodes_in_memory,
                                    hstub);
                 } else {
                     parse_xml_edge(doc,
@@ -453,6 +465,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                                    zero_clk,
                                    prop_delim,
                                    cur_shard_edge_count,
+                                   edges_in_memory,
                                    hstub);
                 }
             }
