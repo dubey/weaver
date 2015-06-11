@@ -70,6 +70,7 @@ namespace db
             bool put_node_no_loop(db::node *n);
             bool put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, const std::string &alias, bool del_after_call);
             bool add_index_no_loop(const node_handle_t &node_handle, const std::string &alias, bool loop_after_call);
+            bool flush_or_defer_put_edge(ape_ptr_t ape, bool &defer);
             bool flush_put_edge(ape_ptr_t, bool loop_after_call);
             bool flush_all_put_edge();
             bool loop_async(uint64_t loops, uint64_t &timeouts);
