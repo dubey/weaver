@@ -31,6 +31,7 @@
 
 #define NUM_INDEX_ATTRS 2
 #define NUM_GRAPH_ATTRS 8
+#define NUM_EDGE_ATTRS 1
 #define NUM_TX_ATTRS 2
 
 enum persist_node_state
@@ -122,6 +123,11 @@ class hyper_stub_base
         const char *index_attrs[NUM_INDEX_ATTRS];
         const char *index_key = "idx";
         const enum hyperdatatype index_dtypes[NUM_INDEX_ATTRS];
+        // edge handle -> edge data
+        const char *edge_space = "weaver_edge_data";
+        const char *edge_attr = "data";
+        const char *edge_key = "edge";
+        const enum hyperdatatype edge_dtype = HYPERDATATYPE_STRING;
 
         using hyper_func = int64_t (*) (struct hyperdex_client *client,
             const char*,
@@ -226,15 +232,14 @@ class hyper_stub_base
             std::vector<const char*> &keys, std::vector<size_t> &key_szs);
 
         // graph data functions
+        bool get_edges(db::data_map<std::vector<db::edge*>> &edges, bool tx);
         bool get_node(db::node &n);
         bool get_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool tx);
-        //bool put_node(db::node &n);
+        bool put_edges(const db::data_map<std::vector<db::edge*>> &edges, bool if_not_exist);
         bool put_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool if_not_exist);
-        bool put_nodes_bulk(std::unordered_map<node_handle_t, db::node*> &nodes,
-            std::shared_ptr<vc::vclock> last_upd_clk,
-            std::shared_ptr<vc::vclock_t> restore_clk);
-        bool del_node(const node_handle_t &h);
-        bool del_nodes(std::unordered_set<node_handle_t> &to_del);
+        bool del_edges(const db::node&);
+        bool del_node(const db::node&);
+        bool del_nodes(std::vector<db::node*> &nodes);
         bool recreate_node(const hyperdex_client_attribute *cl_attr, db::node &n);
 
         // node map functions

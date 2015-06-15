@@ -58,16 +58,31 @@ hyper_stub :: get_idx(std::unordered_map<std::string, std::pair<std::string, uin
 }
 
 void
+hyper_stub :: clean_node(db::node *n)
+{
+    for (auto &x: n->out_edges) {
+        for (db::edge *e: x.second) {
+            delete e;
+        }
+    }
+    n->out_edges.clear();
+    delete n;
+}
+
+void
 hyper_stub :: clean_up(std::unordered_map<node_handle_t, db::node*> &nodes)
 {
     for (auto &p: nodes) {
-        for (auto &x: p.second->out_edges) {
-            for (db::edge *e: x.second) {
-                delete e;
-            }
-        }
-        p.second->out_edges.clear();
-        delete p.second;
+        clean_node(p.second);
+    }
+    nodes.clear();
+}
+
+void
+hyper_stub :: clean_up(std::vector<db::node*> &nodes)
+{
+    for (auto n: nodes) {
+        clean_node(n);
     }
     nodes.clear();
 }
@@ -88,12 +103,14 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     abort_tx(); \
     clean_up(old_nodes); \
     clean_up(new_nodes); \
+    clean_up(del_vec); \
     return;
 
     ready = false;
     error = false;
 
     std::unordered_map<node_handle_t, db::node*> old_nodes, new_nodes;
+    std::vector<db::node*> del_vec;
     begin_tx();
 
     // get aux indices from HyperDex
@@ -327,6 +344,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 #undef CHECK_LOC
 #undef GET_NODE
 
+    del_vec.reserve(del_set.size());
     for (const node_handle_t &h: del_set) {
         node_iter = old_nodes.find(h);
         if (node_iter == old_nodes.end()) {
@@ -341,20 +359,13 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
             n = node_iter->second;
             old_nodes.erase(h);
         }
-
-        for (auto &x: n->out_edges) {
-            for (db::edge *e: x.second) {
-                delete e;
-            }
-        }
-        n->out_edges.clear();
-        delete n;
+        del_vec.emplace_back(n);
     }
 
     if (!put_nodes(old_nodes, false)
      || !put_nodes(new_nodes, true)
      || !add_indices(idx_add, true, true)
-     || !del_nodes(del_set)
+     || !del_nodes(del_vec)
      || !del_indices(idx_del)) {
         WDEBUG << "hyperdex error with put_nodes/add_indices/del_nodes/del_indices" << std::endl;
         ERROR_FAIL;
@@ -402,6 +413,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 
     clean_up(old_nodes);
     clean_up(new_nodes);
+    clean_up(del_vec);
 
 #undef ERROR_FAIL
 }

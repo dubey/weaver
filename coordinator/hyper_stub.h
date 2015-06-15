@@ -44,7 +44,9 @@ namespace coordinator
             void restore_backup(std::vector<std::shared_ptr<transaction::pending_tx>> &txs);
 
         private:
+            void clean_node(db::node*);
             void clean_up(std::unordered_map<node_handle_t, db::node*> &nodes);
+            void clean_up(std::vector<db::node*> &nodes);
             void recreate_tx(const hyperdex_client_attribute *attr, transaction::pending_tx &tx);
     };
 }
