@@ -982,30 +982,37 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
 }
 
 void
-hyper_stub_base :: prepare_edges(hyperdex_client_map_attribute *cl_attrs,
-    std::vector<async_put_edge_unit> &edges,
+hyper_stub_base :: prepare_edges_set(hyperdex_client_attribute *attrs,
+    std::vector<async_put_edge_set_unit> &edges,
     size_t &packed_sz)
 {
     packed_sz = 0;
     for (uint32_t i = 0; i < edges.size(); i++) {
-        db::edge *e = edges[i].e;
         const edge_handle_t &edge_handle = edges[i].edge_handle;
-        std::unique_ptr<e::buffer> &edge_buf = edges[i].edge_buf;
-        // cl_attrs is an array of size edges.size()
-        hyperdex_client_map_attribute *cl_attr = cl_attrs + i;
+        hyperdex_client_attribute *attr = attrs + i;
 
-        std::vector<db::edge*> edge_vec(1, e);
-        prepare_buffer<std::vector<db::edge*>>(edge_vec, edge_buf);
-
-        cl_attr->attr = graph_attrs[3];
-        cl_attr->map_key = edge_handle.c_str();
-        cl_attr->map_key_sz = edge_handle.size();
-        cl_attr->map_key_datatype = HYPERDATATYPE_STRING;
-        cl_attr->value = (const char*)edge_buf->data();
-        cl_attr->value_sz = edge_buf->size();
-        cl_attr->value_datatype = HYPERDATATYPE_STRING;
-        packed_sz += cl_attr->value_sz;
+        attr->attr = graph_attrs[3];
+        attr->value = edge_handle.c_str();
+        attr->value_sz = edge_handle.size();
+        attr->datatype = HYPERDATATYPE_STRING;
+        packed_sz += attr->value_sz;
     }
+}
+
+void
+hyper_stub_base :: prepare_edge(hyperdex_client_attribute &attr,
+    db::edge &e,
+    std::unique_ptr<e::buffer> &buf,
+    size_t &packed_sz)
+{
+    std::vector<db::edge*> edge_vec(1, &e);
+    prepare_buffer<std::vector<db::edge*>>(edge_vec, buf);
+
+    packed_sz = 0;
+    attr.attr = edge_attr;
+    attr.value = (const char*)buf->data();
+    attr.value_sz = buf->size();
+    attr.datatype = edge_dtype;
 }
 
 bool

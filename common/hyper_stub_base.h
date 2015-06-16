@@ -43,6 +43,7 @@ enum persist_node_state
 enum async_call_type
 {
     PUT_NODE,
+    PUT_EDGE_SET,
     PUT_EDGE,
     ADD_INDEX
 };
@@ -56,6 +57,7 @@ struct async_call
     hyperdex_client_returncode status;
     uint64_t exec_time;
     size_t packed_sz;
+    int64_t op_id;
 
     async_call() : status(HYPERDEX_CLIENT_GARBAGE), exec_time(42), packed_sz(42) { }
 };
@@ -69,38 +71,41 @@ struct async_put_node : public async_call
     std::unique_ptr<e::buffer> out_edges_buf;
     std::unique_ptr<e::buffer> aliases_buf;
     size_t num_attrs;
-    int64_t op_id;
 
     async_put_node() { type = PUT_NODE; }
 };
 
-struct async_put_edge_unit
+struct async_put_edge_set_unit
 {
-    db::edge *e;
     std::string edge_handle, alias;
-    bool del_after_call;
-    std::unique_ptr<e::buffer> edge_buf;
 };
 
-struct async_put_edge : public async_call
+struct async_put_edge_set : public async_call
 {
     bool used;
     uint64_t time;
     std::string node_handle;
-    std::vector<async_put_edge_unit> batched;
-    hyperdex_client_map_attribute *attr;
-    int64_t op_id;
+    std::vector<async_put_edge_set_unit> batched;
+    hyperdex_client_attribute *attr;
 
-    async_put_edge() : used(false), time(UINT64_MAX) { type = PUT_EDGE; }
+    async_put_edge_set() : used(false), time(UINT64_MAX) { type = PUT_EDGE_SET; }
 
     void reset() { used = false; time = UINT64_MAX; }
+};
+
+struct async_put_edge : public async_call
+{
+    std::string edge_handle;
+    hyperdex_client_attribute attr;
+    std::unique_ptr<e::buffer> buf;
+
+    async_put_edge() { type = PUT_EDGE; }
 };
 
 struct async_add_index : public async_call
 {
     std::string node_handle, alias;
     hyperdex_client_attribute index_attrs[NUM_INDEX_ATTRS];
-    int64_t op_id;
 
     async_add_index() { type = ADD_INDEX; }
 };
@@ -285,8 +290,12 @@ class hyper_stub_base
             std::unique_ptr<e::buffer>&,
             size_t &num_attrs,
             size_t &packed_node_sz);
-        void prepare_edges(hyperdex_client_map_attribute *cl_attrs,
-            std::vector<async_put_edge_unit> &edges,
+        void prepare_edges_set(hyperdex_client_attribute *set_attrs,
+            std::vector<async_put_edge_set_unit> &edges,
+            size_t &packed_sz);
+        void prepare_edge(hyperdex_client_attribute &attr,
+            db::edge &e,
+            std::unique_ptr<e::buffer> &buf,
             size_t &packed_sz);
         void pack_uint64(e::packer &packer, uint64_t num);
         void unpack_uint64(e::unpacker &unpacker, uint64_t &num);

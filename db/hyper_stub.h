@@ -37,6 +37,7 @@ namespace db
 
     using async_call_ptr_t = std::shared_ptr<async_call>;
     using apn_ptr_t = std::shared_ptr<async_put_node>;
+    using apes_ptr_t = std::shared_ptr<async_put_edge_set>;
     using ape_ptr_t = std::shared_ptr<async_put_edge>;
     using aai_ptr_t = std::shared_ptr<async_add_index>;
 
@@ -70,19 +71,20 @@ namespace db
             bool put_node_no_loop(db::node *n);
             bool put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, const std::string &alias, bool del_after_call);
             bool add_index_no_loop(const node_handle_t &node_handle, const std::string &alias, bool loop_after_call);
-            bool flush_or_defer_put_edge(ape_ptr_t ape, bool &defer);
-            bool flush_put_edge(ape_ptr_t, bool loop_after_call);
+            bool flush_or_defer_put_edge_set(apes_ptr_t ape, bool &defer);
+            bool flush_put_edge_set(apes_ptr_t, bool loop_after_call);
             bool flush_all_put_edge();
             bool loop_async(uint64_t loops, uint64_t &timeouts);
             bool loop_async_calls(bool flush);
             void possibly_flush();
             void abort_bulk_load();
             hyper_stub_pool<async_put_node> apn_pool;
+            hyper_stub_pool<async_put_edge_set> apes_pool;
             hyper_stub_pool<async_put_edge> ape_pool;
             hyper_stub_pool<async_add_index> aai_pool;
-            std::unordered_map<std::string, ape_ptr_t> put_edge_batch;
+            std::unordered_map<std::string, apes_ptr_t> put_edge_batch;
             uint64_t put_edge_batch_clock;
-            std::unordered_map<std::string, std::vector<ape_ptr_t>> outstanding_node_puts;
+            std::unordered_map<std::string, std::vector<apes_ptr_t>> outstanding_node_puts;
             std::unordered_map<int64_t, async_call_ptr_t> async_calls;
             std::unique_ptr<e::buffer> restore_clk_buf;
             std::unique_ptr<e::buffer> last_clk_buf;
