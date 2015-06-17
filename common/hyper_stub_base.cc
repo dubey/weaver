@@ -21,7 +21,7 @@ hyper_stub_base :: hyper_stub_base()
         "creat_time",
         "properties",
         "out_edges",
-        "migr_status", // 0 for stable, 1 for moving
+        "max_edge_id",
         "last_upd_clk",
         "restore_clk",
         "aliases"}
@@ -32,19 +32,17 @@ hyper_stub_base :: hyper_stub_base()
 #else
         HYPERDATATYPE_LIST_STRING,
 #endif
-        HYPERDATATYPE_SET_STRING,
+        HYPERDATATYPE_SET_INT64,
         HYPERDATATYPE_INT64,
         HYPERDATATYPE_STRING,
         HYPERDATATYPE_STRING,
         HYPERDATATYPE_SET_STRING}
-    , tx_attrs{"vt_id",
-        "tx_data"}
-    , tx_dtypes{HYPERDATATYPE_INT64,
-        HYPERDATATYPE_STRING}
-    , index_attrs{"node",
-        "shard"}
-    , index_dtypes{HYPERDATATYPE_STRING,
-        HYPERDATATYPE_INT64}
+    , tx_attrs{"vt_id", "tx_data"}
+    , tx_dtypes{HYPERDATATYPE_INT64, HYPERDATATYPE_STRING}
+    , index_attrs{"node", "shard"}
+    , index_dtypes{HYPERDATATYPE_STRING, HYPERDATATYPE_INT64}
+    , edge_attrs{"handle", "data"}
+    , edge_dtypes{HYPERDATATYPE_STRING, HYPERDATATYPE_STRING}
     , cl(hyperdex_client_create(HyperdexCoordIpaddr, HyperdexCoordPort))
 { }
 
@@ -179,7 +177,8 @@ bool
 hyper_stub_base :: call(hyper_tx_func h,
     const char *space,
     const char *key, size_t key_sz,
-    hyperdex_client_attribute *cl_attr, size_t num_attrs)
+    hyperdex_client_attribute *cl_attr, size_t num_attrs,
+    hyperdex_client_returncode *ret_call_status)
 {
     hyperdex_client_returncode call_status, loop_status;
     int64_t hdex_id;
@@ -195,6 +194,10 @@ hyper_stub_base :: call(hyper_tx_func h,
     if (success_calls == 1) {
         HYPERDEX_LOOP(loop_status, hdex_id, success, success_calls);
         HYPERDEX_CHECK_STATUSES(call_status, call_status != HYPERDEX_CLIENT_SUCCESS);
+    }
+
+    if (ret_call_status != nullptr) {
+        *ret_call_status = call_status;
     }
 
     return success;
@@ -741,13 +744,10 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr,
     n.in_use = false;
     n.base.update_creat_time(create_clk);
 
-    // out edge handles
-    std::unordered_set<std::string> edge_handles;
-    unpack_buffer(cl_attr[idx[3]].value, cl_attr[idx[3]].value_sz, edge_handles);
-    std::vector<db::edge*> empty_vec;
-    for (const std::string &h: edge_handles) {
-        n.out_edges[h] = empty_vec;
-    }
+    // edge ids
+    unpack_buffer(cl_attr[idx[3]].value, cl_attr[idx[3]].value_sz, n.edge_ids);
+    // max edge id
+    n.max_edge_id = *((uint64_t*)cl_attr[idx[4]].value);
     // last update clock
     unpack_buffer(cl_attr[idx[5]].value, cl_attr[idx[5]].value_sz, n.last_upd_clk);
     // restore clock
@@ -763,9 +763,38 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr,
 }
 
 bool
-hyper_stub_base :: get_edges(db::data_map<std::vector<db::edge*>> &edges, bool tx)
+hyper_stub_base :: recreate_edge(const hyperdex_client_attribute *cl_attr,
+                                 edge_handle_t &handle,
+                                 std::vector<db::edge*> &edge_vec)
 {
-    int64_t num_edges = edges.size();
+    std::vector<int> idx(NUM_EDGE_ATTRS, -1);    
+    for (int i = 0; i < NUM_EDGE_ATTRS; i++) {
+        for (int j = 0; j < NUM_EDGE_ATTRS; j++) {
+            if (strcmp(cl_attr[i].attr, edge_attrs[j]) == 0) {
+                idx[j] = i;
+                break;
+            }
+        }
+    }
+    std::vector<bool> check_idx(NUM_EDGE_ATTRS, false);
+    for (int i = 0; i < NUM_EDGE_ATTRS; i++) {
+        if (idx[i] == -1 || check_idx[idx[i]]) {
+            WDEBUG << "logical error: recreate edge " << idx[i] << " " << check_idx[idx[i]] << std::endl;
+            return false;
+        }
+        check_idx[idx[i]] = true;
+    }
+
+    handle = std::string(cl_attr[idx[0]].value, cl_attr[idx[0]].value_sz);
+    unpack_buffer(cl_attr[idx[1]].value, cl_attr[idx[1]].value_sz, edge_vec);
+
+    return true;
+}
+
+bool
+hyper_stub_base :: get_edges(db::node &n, bool tx)
+{
+    int64_t num_edges = n.edge_ids.size();
     std::vector<const char*> spaces(num_edges, edge_space);
     std::vector<const char*> keys(num_edges);
     std::vector<size_t> key_szs(num_edges);
@@ -776,9 +805,9 @@ hyper_stub_base :: get_edges(db::data_map<std::vector<db::edge*>> &edges, bool t
     size_t num_attrs_array[num_edges];
 
     int64_t i = 0;
-    for (const auto &x: edges) {
-        keys[i] = x.first.c_str();
-        key_szs[i] = x.first.size();
+    for (const uint64_t &id: n.edge_ids) {
+        keys[i] = (const char*)&id;
+        key_szs[i] = sizeof(int64_t);
         attrs[i] = attr_array + i;
         num_attrs[i] = num_attrs_array + i;
 
@@ -790,7 +819,10 @@ hyper_stub_base :: get_edges(db::data_map<std::vector<db::edge*>> &edges, bool t
     if (success) {
         for (i = 0; i < num_edges; i++) {
             if (*num_attrs[i] == NUM_EDGE_ATTRS) {
-                unpack_buffer(attr_array[i]->value, attr_array[i]->value_sz, edges[keys[i]]);
+                edge_handle_t handle;
+                std::vector<db::edge*> edge_vec;
+                success = recreate_edge(attr_array[i], handle, edge_vec) && success;
+                n.out_edges[handle] = edge_vec;
                 hyperdex_client_destroy_attrs(attr_array[i], NUM_EDGE_ATTRS);
             } else {
                 WDEBUG << "bad num attributes " << *num_attrs[i] << std::endl;
@@ -816,7 +848,7 @@ hyper_stub_base :: get_node(db::node &n)
     if (success) {
         success = recreate_node(attr, n);
         if (success) {
-            success = get_edges(n.out_edges, true);
+            success = get_edges(n, true);
         }
         hyperdex_client_destroy_attrs(attr, num_attrs);
     }
@@ -855,7 +887,7 @@ hyper_stub_base :: get_nodes(std::unordered_map<node_handle_t, db::node*> &nodes
                 db::node &n = *nodes[node_handle_t(keys[i])];
                 bool recr_success = recreate_node(attr_array[i], n);
                 if (recr_success) {
-                    recr_success = get_edges(n.out_edges, tx);
+                    recr_success = get_edges(n, tx);
                 }
                 hyperdex_client_destroy_attrs(attr_array[i], NUM_GRAPH_ATTRS);
                 success = success && recr_success;
@@ -919,13 +951,9 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
         attr_idx++;
     }
 
-    // out edge handles
-    if (!n.out_edges.empty()) {
-        std::unordered_set<std::string> out_edge_handles;
-        for (const auto &p: n.out_edges) {
-            out_edge_handles.emplace(p.first);
-        }
-        prepare_buffer(out_edge_handles, out_edges_buf);
+    // out edge ids
+    if (!n.edge_ids.empty()) {
+        prepare_buffer(n.edge_ids, out_edges_buf);
         cl_attr[attr_idx].attr = graph_attrs[3];
         cl_attr[attr_idx].value = (const char*)out_edges_buf->data();
         cl_attr[attr_idx].value_sz = out_edges_buf->size();
@@ -934,10 +962,9 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
         attr_idx++;
     }
 
-    // migr status
-    int64_t status = STABLE;
+    // max edge id
     cl_attr[attr_idx].attr = graph_attrs[4];
-    cl_attr[attr_idx].value = (const char*)&status;
+    cl_attr[attr_idx].value = (const char*)&n.max_edge_id;
     cl_attr[attr_idx].value_sz = sizeof(int64_t);
     cl_attr[attr_idx].datatype = graph_dtypes[4];
     packed_node_sz += cl_attr[attr_idx].value_sz;
@@ -988,19 +1015,18 @@ hyper_stub_base :: prepare_edges_set(hyperdex_client_attribute *attrs,
 {
     packed_sz = 0;
     for (uint32_t i = 0; i < edges.size(); i++) {
-        const edge_handle_t &edge_handle = edges[i].edge_handle;
         hyperdex_client_attribute *attr = attrs + i;
 
         attr->attr = graph_attrs[3];
-        attr->value = edge_handle.c_str();
-        attr->value_sz = edge_handle.size();
-        attr->datatype = HYPERDATATYPE_STRING;
+        attr->value = (const char*)&edges[i].edge_id;
+        attr->value_sz = sizeof(int64_t);
+        attr->datatype = HYPERDATATYPE_INT64;
         packed_sz += attr->value_sz;
     }
 }
 
 void
-hyper_stub_base :: prepare_edge(hyperdex_client_attribute &attr,
+hyper_stub_base :: prepare_edge(hyperdex_client_attribute *attrs,
     db::edge &e,
     std::unique_ptr<e::buffer> &buf,
     size_t &packed_sz)
@@ -1008,13 +1034,37 @@ hyper_stub_base :: prepare_edge(hyperdex_client_attribute &attr,
     std::vector<db::edge*> edge_vec(1, &e);
     prepare_buffer<std::vector<db::edge*>>(edge_vec, buf);
 
-    packed_sz = 0;
-    attr.attr = edge_attr;
-    attr.value = (const char*)buf->data();
-    attr.value_sz = buf->size();
-    attr.datatype = edge_dtype;
+    attrs[0].attr = edge_attrs[0];
+    attrs[0].value = e.get_handle().c_str();
+    attrs[0].value_sz = e.get_handle().size();
+    attrs[0].datatype = edge_dtypes[0];
+    attrs[1].attr = edge_attrs[1];
+    attrs[1].value = (const char*)buf->data();
+    attrs[1].value_sz = buf->size();
+    attrs[1].datatype = edge_dtypes[1];
+    packed_sz = attrs[0].value_sz + attrs[1].value_sz;
 }
 
+hyperdex_client_returncode
+hyper_stub_base :: put_new_edge(uint64_t edge_id,
+                                db::edge *e)
+{
+    std::unique_ptr<e::buffer> edge_buf;
+    hyperdex_client_attribute attrs[NUM_EDGE_ATTRS];
+    size_t packed_sz;
+    prepare_edge(attrs, *e, edge_buf, packed_sz);
+
+    hyperdex_client_returncode code;
+    call(hyperdex_client_xact_put_if_not_exist,
+         edge_space,
+         (const char*)edge_id, sizeof(int64_t),
+         attrs, NUM_EDGE_ATTRS,
+         &code);
+
+    return code;
+}
+
+/*
 bool
 hyper_stub_base :: put_edges(const db::data_map<std::vector<db::edge*>> &edges, bool if_not_exist)
 {
@@ -1054,6 +1104,7 @@ hyper_stub_base :: put_edges(const db::data_map<std::vector<db::edge*>> &edges, 
 
     return success;
 }
+*/
 
 bool
 hyper_stub_base :: put_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool if_not_exist)
@@ -1086,9 +1137,9 @@ hyper_stub_base :: put_nodes(std::unordered_map<node_handle_t, db::node*> &nodes
         key_szs[i] = p.first.size();
 
         size_t packed_sz;
-        if (!put_edges(p.second->out_edges, if_not_exist)) {
-            return false;
-        }
+        //if (!put_edges(p.second->out_edges, if_not_exist)) {
+        //    return false;
+        //}
         prepare_node(attrs[i], *p.second, creat_clk_buf[i], props_buf[i], out_edges_buf[i], last_clk_buf[i], restore_clk_buf[i], aliases_buf[i], num_attrs[i], packed_sz);
 
         i++;
@@ -1110,9 +1161,9 @@ hyper_stub_base :: del_edges(const db::node &n)
     std::vector<size_t> key_szs(num_edges);
 
     int i = 0;
-    for (const auto &p: n.out_edges) {
-        keys[i] = p.first.c_str();
-        key_szs[i] = p.first.size();
+    for (const uint64_t &id: n.edge_ids) {
+        keys[i] = (const char*)&id;
+        key_szs[i] = sizeof(int64_t);
 
         i++;
     }

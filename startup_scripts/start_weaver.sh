@@ -120,8 +120,8 @@ attributes
     int shard,
     string creat_time,
     list(string) properties,
-    set(string) out_edges,
-    int migr_status,
+    set(int) out_edges,
+    int max_edge_id,
     string last_upd_clk,
     string restore_clk,
     set(string) aliases
@@ -130,8 +130,9 @@ EOF
 
 hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
 space weaver_edge_data
-key edge
+key edge_id
 attributes
+    string handle,
     string data
 tolerate 2 failures
 EOF

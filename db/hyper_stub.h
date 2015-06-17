@@ -70,6 +70,7 @@ namespace db
             // bulk loading
             bool put_node_no_loop(db::node *n);
             bool put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, const std::string &alias, bool del_after_call);
+            bool add_edge_to_node_set(const node_handle_t&, uint64_t edge_id, const std::string &alias);
             bool add_index_no_loop(const node_handle_t &node_handle, const std::string &alias, bool loop_after_call);
             bool flush_or_defer_put_edge_set(apes_ptr_t ape, bool &defer);
             bool flush_put_edge_set(apes_ptr_t, bool loop_after_call);
@@ -86,6 +87,7 @@ namespace db
             uint64_t put_edge_batch_clock;
             std::unordered_map<std::string, std::vector<apes_ptr_t>> outstanding_node_puts;
             std::unordered_map<int64_t, async_call_ptr_t> async_calls;
+            std::unordered_map<node_handle_t, uint64_t> node_max_edge_id;
             std::unique_ptr<e::buffer> restore_clk_buf;
             std::unique_ptr<e::buffer> last_clk_buf;
             // migration

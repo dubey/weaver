@@ -111,6 +111,10 @@ namespace db
             std::unique_ptr<vc::vclock> last_upd_clk;
             std::unique_ptr<vc::vclock_t> restore_clk;
 
+            // separate edge space
+            std::set<uint64_t> edge_ids;
+            uint64_t max_edge_id;
+
         public:
             void add_edge_unique(edge *e); // bulk loading
             void add_edge(edge *e);
