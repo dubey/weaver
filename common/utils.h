@@ -16,6 +16,7 @@
 
 #include <unordered_set>
 #include <unordered_map>
+#include <random>
 
 #include "common/MurmurHash3.h"
 
@@ -116,6 +117,16 @@ namespace weaver_util
             return hash[0];
         }
     };
+
+    // return number chosen uniformly at random from [0, max]
+    inline uint64_t
+    random_number(uint64_t max)
+    {
+        std::random_device rd;
+        std::default_random_engine generator(rd());
+        std::uniform_int_distribution<uint64_t> distribution(0, max);
+        return distribution(generator);
+    }
 }
 
 

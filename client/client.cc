@@ -11,8 +11,7 @@
  * ===============================================================
  */
 
-#include <random>
-
+#include "common/utils.h"
 #include "common/message.h"
 #include "common/config_constants.h"
 #include "client/client_constants.h"
@@ -71,10 +70,7 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
         return;
     }
 
-    std::random_device rd;
-    std::default_random_engine generator(rd());
-    std::uniform_int_distribution<uint64_t> distribution(0, NumVts-1);
-    vtid = distribution(generator);
+    vtid = weaver_util::random_number(NumVts-1);
 
     if (!m_sm.get_unique_number(myid)) {
         std::cerr << "weaver_client: could not contact Weaver server manager" << std::endl;
