@@ -48,9 +48,10 @@ namespace db
         private:
             std::vector<async_call_ptr_t> pool;
             uint64_t sz;
+            async_call_type type;
 
         public:
-            hyper_stub_pool();
+            hyper_stub_pool(async_call_type type);
             uint64_t size();
             std::shared_ptr<T> acquire();
             void release(std::shared_ptr<T>);

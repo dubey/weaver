@@ -11,6 +11,8 @@
  * ===============================================================
  */
 
+#include <iterator>
+
 #define weaver_debug_
 #include "common/weaver_constants.h"
 #include "common/config_constants.h"
@@ -32,8 +34,9 @@ using db::ape_ptr_t;
 using db::aai_ptr_t;
 
 template <typename T>
-hyper_stub_pool<T> :: hyper_stub_pool()
+hyper_stub_pool<T> :: hyper_stub_pool(async_call_type t)
     : sz(INITIAL_POOL_SZ)
+    , type(t)
 {
     pool.reserve(INITIAL_POOL_SZ);
     for (uint32_t i = 0; i < INITIAL_POOL_SZ; i++) {
@@ -60,7 +63,7 @@ hyper_stub_pool<T> :: acquire()
             pool.emplace_back(new_ptr);
         }
         sz += OUTSTANDING_HD_OPS;
-        WDEBUG << "pool sz=" << sz << std::endl;
+        WDEBUG << async_call_type_to_string(type) << " pool sz=" << sz << std::endl;
     }
 
     async_call_ptr_t back = pool.back();
@@ -82,12 +85,25 @@ hyper_stub_pool<T> :: release(std::shared_ptr<T> ptr)
         free(apes->attr);
     }
     pool.emplace_back(ptr);
+
+    if (sz >= 2*INITIAL_POOL_SZ
+     && pool.size() > 0.75*sz) {
+        // half the size of the pool
+        uint64_t num_erased = std::distance(pool.begin() + sz/2, pool.end());
+        pool.erase(pool.begin() + sz/2, pool.end());
+        sz -= num_erased;
+        WDEBUG << async_call_type_to_string(type) << " pool sz=" << sz << std::endl;
+    }
 }
 
 
 hyper_stub :: hyper_stub(uint64_t sid, int tid)
     : shard_id(sid)
     , thread_id(tid)
+    , apn_pool(PUT_NODE)
+    , apes_pool(PUT_EDGE_SET)
+    , ape_pool(PUT_EDGE)
+    , aai_pool(ADD_INDEX)
     , put_edge_batch_clock(0)
     , print_op_stats_counter(0)
     , gen_seed(weaver_util::urandom_uint64())
@@ -248,7 +264,7 @@ hyper_stub :: put_node_no_loop(db::node *n)
                                 apn->op_id, apn->status);
 
     if (success) {
-        apn->exec_time = timer.get_time_elapsed_millis();
+        apn->exec_time = timer.get_real_time_millis();
         async_calls[apn->op_id] = apn;
         outstanding_node_puts.emplace(apn->handle, std::vector<apes_ptr_t>());
 
@@ -297,7 +313,7 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, co
                                 ape->op_id, ape->status);
 
     if (success) {
-        ape->exec_time = timer.get_time_elapsed_millis();
+        ape->exec_time = timer.get_real_time_millis();
         async_calls[ape->op_id] = ape;
     } else {
         WDEBUG << "hyperdex_client_put failed, op_id=" << ape->op_id
@@ -351,7 +367,7 @@ hyper_stub :: flush_put_edge_set(apes_ptr_t apes)
                            apes->op_id, apes->status);
 
     if (success) {
-        apes->exec_time = timer.get_time_elapsed_millis();
+        apes->exec_time = timer.get_real_time_millis();
         async_calls[apes->op_id] = apes;
     } else {
         WDEBUG << "hyperdex_client_set_add failed, op_id=" << apes->op_id
@@ -466,7 +482,7 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::str
                                 aai->op_id, aai->status);
 
     if (success) {
-        aai->exec_time = timer.get_time_elapsed_millis();
+        aai->exec_time = timer.get_real_time_millis();
         async_calls[aai->op_id] = aai;
     } else {
         WDEBUG << "hyperdex_client_put failed, op_id=" << aai->op_id
@@ -474,6 +490,8 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::str
         WDEBUG << "alias=" << aai->alias << ", node=" << aai->node_handle << std::endl;
         abort_bulk_load();
     }
+
+    possibly_flush();
 
     return success;
 }
@@ -496,10 +514,10 @@ hyper_stub :: flush_all_put_edge()
 void
 hyper_stub :: done_op_stat(uint64_t time, size_t op_sz)
 {
+    done_op_stats.push_back(std::make_pair(time, op_sz));
     while (done_op_stats.size() > 10000) {
         done_op_stats.pop_front();
     }
-    done_op_stats.push_back(std::make_pair(time, op_sz));
 
     if (++print_op_stats_counter % 10000 == 0) {
         float tot_time = 0;
@@ -509,11 +527,12 @@ hyper_stub :: done_op_stat(uint64_t time, size_t op_sz)
             tot_sz += p.second;
         }
 
-        float avg_time_sec = tot_time / (10000*1000);
-        float avg_sz = tot_sz / 10000;
+        float avg_time_sec = tot_time / (done_op_stats.size()*1000);
+        float avg_sz = tot_sz / done_op_stats.size();
         WDEBUG << "tid=" << thread_id
                << "\tAvg Time for last 10k ops=" << avg_time_sec << " s."
                << "\tAvg Sz of last 10k ops=" << avg_sz
+               << "\t#ops=" << done_op_stats.size()
                << std::endl;
     }
 }
@@ -524,7 +543,7 @@ hyper_stub :: done_op(async_call_ptr_t ac_ptr, int64_t op_id)
     bool success = true;
 
     assert(ac_ptr->exec_time != 42);
-    uint64_t op_time = timer.get_time_elapsed_millis() - ac_ptr->exec_time;
+    uint64_t op_time = timer.get_real_time_millis() - ac_ptr->exec_time;
     size_t op_sz = ac_ptr->packed_sz;
     switch (ac_ptr->type) {
         case PUT_NODE: {
