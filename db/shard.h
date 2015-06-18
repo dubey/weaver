@@ -427,8 +427,10 @@ namespace db
     inline void
     shard :: bulk_load_persistent(db::hyper_stub &hs)
     {
+        hs.loop_async_calls(true);
         hs.flush_all_put_edge();
         hs.loop_async_calls(true);
+        hs.done_bulk_load();
     }
 
     inline void

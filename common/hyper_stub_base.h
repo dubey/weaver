@@ -78,7 +78,6 @@ struct async_put_node : public async_call
 struct async_put_edge_set_unit
 {
     uint64_t edge_id;
-    std::string alias;
 };
 
 struct async_put_edge_set : public async_call
@@ -101,7 +100,6 @@ struct async_put_edge : public async_call
     hyperdex_client_attribute attrs[NUM_EDGE_ATTRS];
     std::unique_ptr<e::buffer> buf;
     db::edge *e;
-    std::string alias;
     bool del_after_call;
 
     async_put_edge() : del_after_call(false) { type = PUT_EDGE; }
