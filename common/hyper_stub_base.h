@@ -288,6 +288,9 @@ class hyper_stub_base
         // properties
         void prepare_buffer(const std::vector<std::shared_ptr<db::property>>&, std::unique_ptr<e::buffer>&);
         void unpack_buffer(const char *buf, uint64_t buf_sz, std::vector<std::shared_ptr<db::property>>&);
+        // edge ids
+        void prepare_buffer(const std::set<int64_t>&, std::unique_ptr<e::buffer>&);
+        void unpack_buffer(const char *buf, uint64_t buf_sz, std::set<int64_t>&);
 
     protected:
         void prepare_node(hyperdex_client_attribute *attr,

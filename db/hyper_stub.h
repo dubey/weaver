@@ -14,6 +14,7 @@
 #ifndef weaver_db_hyper_stub_h_
 #define weaver_db_hyper_stub_h_
 
+#include <random>
 #include <po6/threads/mutex.h>
 
 #include "common/hyper_stub_base.h"
@@ -100,6 +101,10 @@ namespace db
             wclock::weaver_timer timer;
             uint64_t print_op_stats_counter;
         private:
+            // pseudo random number gen for bulk loading, seeded by /dev/urandom
+            uint64_t gen_seed;
+            std::mt19937_64 mt64_gen;
+            std::uniform_int_distribution<uint64_t> uint64max_dist;
             void put_node_loop(db::data_map<std::shared_ptr<db::node_entry>> &nodes,
                 std::unordered_map<node_handle_t, node*> &node_map,
                 int &progress,

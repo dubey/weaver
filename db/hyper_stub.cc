@@ -90,7 +90,13 @@ hyper_stub :: hyper_stub(uint64_t sid, int tid)
     , thread_id(tid)
     , put_edge_batch_clock(0)
     , print_op_stats_counter(0)
-{ }
+    , gen_seed(weaver_util::urandom_uint64())
+    , mt64_gen(gen_seed)
+    , uint64max_dist()
+{
+    assert(gen_seed != 0);
+    assert(uint64max_dist.max() == UINT64_MAX);
+}
 
 void
 hyper_stub :: restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *nodes,
@@ -220,7 +226,7 @@ hyper_stub :: put_node_no_loop(db::node *n)
 
     apn_ptr_t apn = apn_pool.acquire();
     apn->handle = n->get_handle();
-    n->max_edge_id = weaver_util::random_number(UINT64_MAX);
+    n->max_edge_id = uint64max_dist(mt64_gen);
     node_max_edge_id[n->get_handle()] = n->max_edge_id;
     prepare_node(apn->attrs,
                  *n,

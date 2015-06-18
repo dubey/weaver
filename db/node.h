@@ -112,7 +112,7 @@ namespace db
             std::unique_ptr<vc::vclock_t> restore_clk;
 
             // separate edge space
-            std::set<uint64_t> edge_ids;
+            std::set<int64_t> edge_ids;
             uint64_t max_edge_id;
 
         public:

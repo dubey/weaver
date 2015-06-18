@@ -16,7 +16,7 @@
 
 #include <unordered_set>
 #include <unordered_map>
-#include <random>
+#include <po6/io/fd.h>
 
 #include "common/MurmurHash3.h"
 
@@ -118,14 +118,18 @@ namespace weaver_util
         }
     };
 
-    // return number chosen uniformly at random from [0, max]
     inline uint64_t
-    random_number(uint64_t max)
+    urandom_uint64()
     {
-        std::random_device rd;
-        std::default_random_engine generator(rd());
-        std::uniform_int_distribution<uint64_t> distribution(0, max);
-        return distribution(generator);
+        uint64_t token;
+        po6::io::fd sysrand(open("/dev/urandom", O_RDONLY));
+
+        if (sysrand.get() < 0
+         || sysrand.read(&token, sizeof(token)) != sizeof(token)) {
+            token = 0;
+        }
+
+        return token;
     }
 }
 

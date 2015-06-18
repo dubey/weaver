@@ -1623,6 +1623,36 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::vector<s
     }
 }
 
+// pack as HYPERDATATYPE_SET_INT64
+void
+hyper_stub_base :: prepare_buffer(const std::set<int64_t> &set,
+                                  std::unique_ptr<e::buffer> &buf)
+{
+    uint64_t buf_sz = sizeof(int64_t) * set.size();
+    buf.reset(e::buffer::create(buf_sz));
+    e::packer packer = buf->pack();
+
+    for (int64_t i: set) {
+        uint64_t ui = (uint64_t)i;
+        pack_uint64(packer, ui);
+    }
+}
+
+// unpack from HYPERDATATYPE_SET_INT64 in to std::set<int64_t>
+void
+hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz,
+                                 std::set<int64_t> &set)
+{
+    std::unique_ptr<e::buffer> ebuf(e::buffer::create(buf, buf_sz));
+    e::unpacker unpacker = ebuf->unpack_from(0);
+
+    while (unpacker.remain() > 0) {
+        uint64_t ui;
+        unpack_uint64(unpacker, ui);
+        set.emplace((int64_t)ui);
+    }
+}
+
 const char*
 async_call_type_to_string(async_call_type t)
 {
