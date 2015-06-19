@@ -462,16 +462,16 @@ hyper_stub :: add_edge_to_node_set(const node_handle_t &node_handle,
 
 bool
 hyper_stub :: put_node_edge_id_set_no_loop(const node_handle_t &node_handle,
-                                           uint64_t start_id,
-                                           uint64_t end_id)
+                                           int64_t start_id,
+                                           int64_t end_id)
 {
     apes_ptr_t apes = apes_pool.acquire();
     apes->node_handle = node_handle;
     apes->max_edge_id = end_id;
 
     // edge id set
-    std::set<uint64_t> id_set;
-    for (uint64_t i = start_id; i < end_id; i++) {
+    std::set<int64_t> id_set;
+    for (int64_t i = start_id; i < end_id; i++) {
         id_set.emplace(i);
     }
     prepare_buffer(id_set, apes->set_buf);
@@ -566,9 +566,9 @@ hyper_stub :: flush_all_put_edge()
     WDEBUG << "flush edge id set, #nodes=" << node_edge_id.size() << std::endl;
 
     for (const auto &p: node_edge_id) {
-        if (!put_node_edge_id_set_no_loop(p.first,
-                                          p.second.first,
-                                          p.second.first + p.second.second)) {
+        int64_t start_id = (int64_t)p.second.first;
+        int64_t end_id = (int64_t)(p.second.first + p.second.second);
+        if (!put_node_edge_id_set_no_loop(p.first, start_id, end_id)) {
             return false;
         }
     }

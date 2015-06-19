@@ -78,8 +78,8 @@ namespace db
             //bool add_edge_to_node_set(const node_handle_t&,
             //                          uint64_t edge_id);
             bool put_node_edge_id_set_no_loop(const node_handle_t &node_handle,
-                                              uint64_t start_id,
-                                              uint64_t end_id);
+                                              int64_t start_id,
+                                              int64_t end_id);
             bool add_index_no_loop(const node_handle_t &node_handle,
                                    const std::string &alias);
             bool flush_or_defer_put_edge_set(apes_ptr_t ape, bool &defer);

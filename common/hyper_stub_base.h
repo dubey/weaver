@@ -89,7 +89,7 @@ struct async_put_edge_set : public async_call
     hyperdex_client_attribute *attr;
     hyperdex_client_attribute set_attr[2];
     std::unique_ptr<e::buffer> set_buf;
-    uint64_t max_edge_id;
+    int64_t max_edge_id;
 
     async_put_edge_set() : used(false), time(UINT64_MAX) { type = PUT_EDGE_SET; }
 

@@ -233,7 +233,8 @@ check_btc_node(const node_handle_t &h)
         || h[0] == '8'
         || h[0] == '9'
         || h[0] == '0'
-        || h.substr(0, 5) == "BLOCK");
+        || h.substr(0, 5) == "BLOCK"
+        || h.substr(0, 4) == "COIN");
 }
 
 void
@@ -296,6 +297,8 @@ parse_xml_node(pugi::xml_document &doc,
             uint64_t node_idx;
             parse_single_uint64(block_index, parse_idx, node_idx, parse_bad);
             start_edge_idx = (40000000ULL + node_idx) * 10000000000ULL; // at most 10B edges per node
+        } else if (id0[0] == 'C') {
+            start_edge_idx = (50000000ULL + 0) * 10000000000ULL; // at most 10B edges per node
         } else {
             uint64_t node_idx;
             parse_single_uint64(id0, parse_idx, node_idx, parse_bad);
