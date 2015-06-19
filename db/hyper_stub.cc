@@ -382,6 +382,7 @@ hyper_stub :: flush_put_edge_set(apes_ptr_t apes)
     return success;
 }
 
+/*
 // XXX update max_edge_id in node object at the end of bulk loading
 bool
 hyper_stub :: add_edge_to_node_set(const node_handle_t &node_handle,
@@ -457,6 +458,55 @@ hyper_stub :: add_edge_to_node_set(const node_handle_t &node_handle,
 
     return success;
 }
+*/
+
+bool
+hyper_stub :: put_node_edge_id_set_no_loop(const node_handle_t &node_handle,
+                                           uint64_t start_id,
+                                           uint64_t end_id)
+{
+    apes_ptr_t apes = apes_pool.acquire();
+    apes->node_handle = node_handle;
+    apes->max_edge_id = end_id;
+
+    // edge id set
+    std::set<uint64_t> id_set;
+    for (uint64_t i = start_id; i < end_id; i++) {
+        id_set.emplace(i);
+    }
+    prepare_buffer(id_set, apes->set_buf);
+    apes->set_attr[0].attr = graph_attrs[3];
+    apes->set_attr[0].value = (const char*)apes->set_buf->data();
+    apes->set_attr[0].value_sz = apes->set_buf->size();
+    apes->set_attr[0].datatype = graph_dtypes[3];
+
+    // max edge id
+    apes->set_attr[1].attr = graph_attrs[4];
+    apes->set_attr[1].value = (const char*)&apes->max_edge_id;
+    apes->set_attr[1].value_sz = sizeof(int64_t);
+    apes->set_attr[1].datatype = graph_dtypes[4];
+
+    bool success = call_no_loop(&hyperdex_client_put,
+                                graph_space,
+                                apes->node_handle.c_str(),
+                                apes->node_handle.size(),
+                                apes->set_attr, 2,
+                                apes->op_id, apes->status);
+
+    if (success) {
+        apes->exec_time = timer.get_real_time_millis();
+        async_calls[apes->op_id] = apes;
+    } else {
+        WDEBUG << "hyperdex_client_put failed, op_id=" << apes->op_id
+               << ", call_code=" << hyperdex_client_returncode_to_string(apes->status) << std::endl;
+        WDEBUG << "node=" << apes->node_handle << std::endl;
+        abort_bulk_load();
+    }
+
+    possibly_flush();
+
+    return success;
+}
 
 bool
 hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::string &alias)
@@ -502,6 +552,7 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::str
 bool
 hyper_stub :: flush_all_put_edge()
 {
+    /*
     auto put_edge_batch_local = std::move(put_edge_batch);
     assert(put_edge_batch.empty());
     for (auto &p: put_edge_batch_local) {
@@ -510,6 +561,18 @@ hyper_stub :: flush_all_put_edge()
             flushable_apes.emplace_back(p.second);
         }
     }
+    */
+
+    WDEBUG << "flush edge id set, #nodes=" << node_edge_id.size() << std::endl;
+
+    for (const auto &p: node_edge_id) {
+        if (!put_node_edge_id_set_no_loop(p.first,
+                                          p.second.first,
+                                          p.second.first + p.second.second)) {
+            return false;
+        }
+    }
+    node_edge_id.clear();
 
     return true;
 }
@@ -719,8 +782,8 @@ hyper_stub :: done_bulk_load()
 {
     apn_pool.clear();
     ape_pool.clear();
+    apes_pool.clear();
     aai_pool.clear();
-    node_edge_id.clear();
 }
 
 #undef weaver_debug_
