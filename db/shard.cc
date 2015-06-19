@@ -221,6 +221,22 @@ get_xml_element(std::ifstream &file,
 }
 
 void
+check_btc_node(const node_handle_t &h)
+{
+    assert(h[0] == '1'
+        || h[0] == '2'
+        || h[0] == '3'
+        || h[0] == '4'
+        || h[0] == '5'
+        || h[0] == '6'
+        || h[0] == '7'
+        || h[0] == '8'
+        || h[0] == '9'
+        || h[0] == '0'
+        || h.substr(0, 5) == "BLOCK");
+}
+
+void
 parse_xml_node(pugi::xml_document &doc,
                std::string &element,
                uint64_t num_shards,
@@ -244,6 +260,7 @@ parse_xml_node(pugi::xml_document &doc,
         bool in_mem;
         db::node *n = S->create_node_bulk_load(id0, map_idx, zero_clk, in_mem);
 
+        std::string block_index;
         for (pugi::xml_node prop: node.children("data")) {
             std::string key = prop.attribute("key").value();
             std::string value = prop.child_value();
@@ -258,6 +275,10 @@ parse_xml_node(pugi::xml_document &doc,
                                                    S->set_node_property_bulk_load(n, key, v, zero_clk);
                 }
             }
+
+            if (key == "index") {
+                block_index = value;
+            }
         }
 
         if (in_mem) {
@@ -267,7 +288,21 @@ parse_xml_node(pugi::xml_document &doc,
             WDEBUG << "GRAPHML tid=" << load_tid << " node=" << cur_shard_node_count << " nodes_in_mem=" << nodes_in_memory << std::endl;
         }
 
-        S->bulk_load_put_node(hstub, n, in_mem);
+        check_btc_node(id0);
+        uint64_t start_edge_idx;
+        size_t parse_idx = 0;
+        bool parse_bad = false;
+        if (id0[0] == 'B') {
+            uint64_t node_idx;
+            parse_single_uint64(block_index, parse_idx, node_idx, parse_bad);
+            start_edge_idx = (40000000ULL + node_idx) * 10000000000ULL; // at most 10B edges per node
+        } else {
+            uint64_t node_idx;
+            parse_single_uint64(id0, parse_idx, node_idx, parse_bad);
+            start_edge_idx = (1 + node_idx) * 10000000000ULL; // at most 10B edges per node
+        }
+        assert(!parse_bad);
+        S->bulk_load_put_node(hstub, n, in_mem, start_edge_idx);
     }
 
     element.clear();
@@ -401,7 +436,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                         cur_shard_edge_count++;
 
                         if (created) {
-                            S->bulk_load_put_node(hstub, n, node_in_mem);
+                            S->bulk_load_put_node(hstub, n, node_in_mem, 0);
                         } else {
                             S->bulk_load_put_edge(hstub, e, id0, n, "");
                         }
@@ -420,7 +455,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                             }
                         }
                         if (n != nullptr) {
-                            S->bulk_load_put_node(hstub, n, node_in_mem);
+                            S->bulk_load_put_node(hstub, n, node_in_mem, 0);
                         }
 
                         S->bulk_load_flush_map(hstub);

@@ -20,9 +20,9 @@
 #include "db/utils.h"
 #include "db/hyper_stub.h"
 
-#define PUT_EDGE_BUFFER_SZ 5000
+#define PUT_EDGE_BUFFER_SZ 50
 #define NUM_EDGES_BUFFERED_PER_NODE 100
-#define OUTSTANDING_HD_OPS 10000
+#define OUTSTANDING_HD_OPS 100
 #define MAX_TIMEOUTS 3000 // 5 mins of waiting total
 #define INITIAL_POOL_SZ (OUTSTANDING_HD_OPS*3)
 
@@ -230,7 +230,7 @@ hyper_stub :: recover_node(db::node &n)
 }
 
 bool
-hyper_stub :: put_node_no_loop(db::node *n)
+hyper_stub :: put_node_no_loop(db::node *n, uint64_t start_edge_idx)
 {
     if (last_clk_buf == nullptr) {
         std::shared_ptr<vc::vclock> last_upd_clk(new vc::vclock(0,0));
@@ -242,8 +242,7 @@ hyper_stub :: put_node_no_loop(db::node *n)
 
     apn_ptr_t apn = apn_pool.acquire();
     apn->handle = n->get_handle();
-    n->max_edge_id = uint64max_dist(mt64_gen);
-    node_max_edge_id[n->get_handle()] = n->max_edge_id;
+    node_edge_id[n->get_handle()] = std::make_pair(start_edge_idx, 0);
     prepare_node(apn->attrs,
                  *n,
                  apn->creat_clk_buf,
@@ -296,10 +295,14 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, co
     ape_ptr_t ape = ape_pool.acquire();
     ape->node_handle = node_handle;
     ape->edge_handle = e->get_handle();
-    assert(node_max_edge_id.find(node_handle) != node_max_edge_id.end());
-    ape->edge_id = node_max_edge_id[node_handle]++;
     ape->e = e;
     ape->del_after_call = del_after_call;
+
+    auto edge_id_iter = node_edge_id.find(node_handle);
+    assert(edge_id_iter != node_edge_id.end());
+    std::pair<uint64_t, uint64_t> &edge_id = edge_id_iter->second;
+    ape->edge_id = edge_id.first + edge_id.second++;
+
     prepare_edge(ape->attrs,
                  *e,
                  ape->buf,
@@ -571,7 +574,7 @@ hyper_stub :: done_op(async_call_ptr_t ac_ptr, int64_t op_id)
                 delete ape->e;
             }
             assert(!ape->node_handle.empty());
-            add_edge_to_node_set(ape->node_handle, ape->edge_id);
+            //add_edge_to_node_set(ape->node_handle, ape->edge_id);
             ape_pool.release(ape);
             break;
        }
@@ -607,6 +610,23 @@ hyper_stub :: loop_async_and_flush(uint64_t num_ops_to_leave, uint64_t &num_time
                     if (num_timeouts % 100 == 0) {
                         WDEBUG << "tid=" << thread_id << "\t#timeouts=" << num_timeouts << std::endl;
                     }
+
+                    if (num_timeouts > MAX_TIMEOUTS) {
+                        WDEBUG << "exceeded max loops, initial_ops=" << initial_ops
+                               << ", num_timeouts=" << num_timeouts
+                               << ", async_calls.size=" << async_calls.size() << std::endl;
+                        while(true) {
+                            sleep(2);
+                        }
+                        assert(false);
+                        if (num_ops_to_leave == 0) {
+                            for (auto &p: async_calls) {
+                                done_op(p.second, p.first);
+                            }
+                        }
+                        break;
+                    }
+
                     continue;
                 } else {
                     WDEBUG << "hyperdex_client_loop failed, op_id=" << op_id
@@ -651,18 +671,6 @@ hyper_stub :: loop_async_and_flush(uint64_t num_ops_to_leave, uint64_t &num_time
                     abort_bulk_load();
             }
 
-            if (num_timeouts > MAX_TIMEOUTS) {
-                WDEBUG << "exceeded max loops, initial_ops=" << initial_ops
-                       << ", num_timeouts=" << num_timeouts
-                       << ", async_calls.size=" << async_calls.size() << std::endl;
-                assert(false);
-                if (num_ops_to_leave == 0) {
-                    for (auto &p: async_calls) {
-                        done_op(p.second, p.first);
-                    }
-                }
-                break;
-            }
         } else if (!flushable_apes.empty()) {
             apes_ptr_t apes = flushable_apes.back();
             flushable_apes.pop_back();
@@ -712,7 +720,7 @@ hyper_stub :: done_bulk_load()
     apn_pool.clear();
     ape_pool.clear();
     aai_pool.clear();
-    node_max_edge_id.clear();
+    node_edge_id.clear();
 }
 
 #undef weaver_debug_

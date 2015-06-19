@@ -70,7 +70,7 @@ namespace db
                 /*XXX std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,*/
                 po6::threads::mutex *shard_mutexes);
             // bulk loading
-            bool put_node_no_loop(db::node *n);
+            bool put_node_no_loop(db::node *n, uint64_t start_edge_idx);
             bool put_edge_no_loop(const node_handle_t &node_handle,
                                   db::edge *e,
                                   const std::string &alias,
@@ -96,7 +96,7 @@ namespace db
             std::unordered_map<std::string, std::vector<apes_ptr_t>> outstanding_node_puts;
             std::vector<apes_ptr_t> flushable_apes;
             std::unordered_map<int64_t, async_call_ptr_t> async_calls;
-            std::unordered_map<node_handle_t, uint64_t> node_max_edge_id;
+            std::unordered_map<node_handle_t, std::pair<uint64_t, uint64_t>> node_edge_id; // node handle -> (start edge id, edge count)
             std::unique_ptr<e::buffer> restore_clk_buf;
             std::unique_ptr<e::buffer> last_clk_buf;
             // migration

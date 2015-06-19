@@ -189,7 +189,7 @@ namespace db
             uint64_t max_load_time, bulk_load_num_shards;
             uint32_t load_count;
             void bulk_load_persistent(hyper_stub &hs);
-            void bulk_load_put_node(hyper_stub &hs, node *n, bool in_mem);
+            void bulk_load_put_node(hyper_stub &hs, node *n, bool in_mem, uint64_t start_edge_idx);
             void bulk_load_put_edge(hyper_stub &hs, edge *e, const node_handle_t &node_handle, node *n, const std::string &alias);
             void bulk_load_flush_map(hyper_stub &hs);
 
@@ -434,9 +434,9 @@ namespace db
     }
 
     inline void
-    shard :: bulk_load_put_node(db::hyper_stub &hs, db::node *n, bool in_mem)
+    shard :: bulk_load_put_node(db::hyper_stub &hs, db::node *n, bool in_mem, uint64_t start_edge_idx)
     {
-        assert(hs.put_node_no_loop(n));
+        assert(hs.put_node_no_loop(n, start_edge_idx));
 
         if (!in_mem) {
             permanent_node_delete(n);
