@@ -108,7 +108,7 @@ key idx
 attributes
     string node,
     int shard
-tolerate 2 failures
+tolerate 0 failures
 EOF
 
 sleep 1
@@ -125,7 +125,7 @@ attributes
     string last_upd_clk,
     string restore_clk,
     set(string) aliases
-tolerate 2 failures
+tolerate 0 failures
 EOF
 
 hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
@@ -134,7 +134,7 @@ key edge_id
 attributes
     string handle,
     string data
-tolerate 2 failures
+tolerate 0 failures
 EOF
 
 sleep 1
@@ -145,7 +145,7 @@ key tx_id
 attributes
     int vt_id,
     string tx_data
-tolerate 2 failures
+tolerate 0 failures
 EOF
 
 
