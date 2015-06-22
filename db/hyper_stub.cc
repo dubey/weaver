@@ -63,7 +63,7 @@ hyper_stub_pool<T> :: acquire()
             pool.emplace_back(new_ptr);
         }
         sz += OUTSTANDING_HD_OPS;
-        WDEBUG << async_call_type_to_string(type) << " pool sz=" << sz << std::endl;
+        WDEBUG << async_call_type_to_string(type) << " INC pool sz=" << sz << std::endl;
     }
 
     async_call_ptr_t back = pool.back();
@@ -81,8 +81,6 @@ hyper_stub_pool<T> :: release(std::shared_ptr<T> ptr)
         async_call_ptr_t ac_ptr = ptr;
         apes_ptr_t apes = std::static_pointer_cast<async_put_edge_set>(ac_ptr);
         apes->node_handle.clear();
-        apes->batched.clear();
-        free(apes->attr);
     }
     pool.emplace_back(ptr);
 
@@ -92,7 +90,7 @@ hyper_stub_pool<T> :: release(std::shared_ptr<T> ptr)
         uint64_t num_erased = std::distance(pool.begin() + sz/2, pool.end());
         pool.erase(pool.begin() + sz/2, pool.end());
         sz -= num_erased;
-        WDEBUG << async_call_type_to_string(type) << " pool sz=" << sz << std::endl;
+        WDEBUG << async_call_type_to_string(type) << " DEC pool sz=" << sz << std::endl;
     }
 }
 
@@ -104,7 +102,6 @@ hyper_stub :: hyper_stub(uint64_t sid, int tid)
     , apes_pool(PUT_EDGE_SET)
     , ape_pool(PUT_EDGE)
     , aai_pool(ADD_INDEX)
-    , put_edge_batch_clock(0)
     , print_op_stats_counter(0)
     , gen_seed(weaver_util::urandom_uint64())
     , mt64_gen(gen_seed)
@@ -242,7 +239,11 @@ hyper_stub :: put_node_no_loop(db::node *n, uint64_t start_edge_idx)
 
     apn_ptr_t apn = apn_pool.acquire();
     apn->handle = n->get_handle();
-    node_edge_id[n->get_handle()] = std::make_pair(start_edge_idx, 0);
+    if (start_edge_idx) {
+        node_edge_id[n->get_handle()] = std::make_pair(start_edge_idx, 0);
+    } else {
+        node_edge_id[n->get_handle()] = std::make_pair(uint64max_dist(mt64_gen), 0);
+    }
     prepare_node(apn->attrs,
                  *n,
                  apn->creat_clk_buf,
@@ -265,7 +266,6 @@ hyper_stub :: put_node_no_loop(db::node *n, uint64_t start_edge_idx)
     if (success) {
         apn->exec_time = timer.get_real_time_millis();
         async_calls[apn->op_id] = apn;
-        outstanding_node_puts.emplace(apn->handle, std::vector<apes_ptr_t>());
 
         for (const std::string &alias: n->aliases) {
             success = add_index_no_loop(n->get_handle(), alias) && success;
@@ -283,7 +283,10 @@ hyper_stub :: put_node_no_loop(db::node *n, uint64_t start_edge_idx)
 }
 
 bool
-hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, const std::string &alias, bool del_after_call)
+hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle,
+                               db::edge *e,
+                               const std::string &alias,
+                               bool del_after_call)
 {
     // add edge alias
     if (!alias.empty()) {
@@ -331,136 +334,6 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle, db::edge *e, co
 }
 
 bool
-hyper_stub :: flush_or_defer_put_edge_set(apes_ptr_t apes, bool &defer)
-{
-    bool success = true;
-    std::string del_handle = apes->node_handle;
-
-    put_edge_batch.erase(del_handle);
-
-    auto outstanding_iter = outstanding_node_puts.find(del_handle);
-    if (outstanding_iter != outstanding_node_puts.end()) {
-        // this edge's parent node has not yet been written to HyperDex
-        // defer writing edge until node has been written
-        outstanding_iter->second.emplace_back(apes);
-        defer = true;
-    } else {
-        flushable_apes.emplace_back(apes);
-        defer = false;
-    }
-
-    return success;
-}
-
-bool
-hyper_stub :: flush_put_edge_set(apes_ptr_t apes)
-{
-    apes->attr = (hyperdex_client_attribute*)malloc(apes->batched.size() * sizeof(hyperdex_client_attribute));
-    prepare_edges_set(apes->attr, apes->batched, apes->packed_sz);
-
-    bool success = true;
-
-    // add edge to node object via set_add call
-    success = call_no_loop(&hyperdex_client_set_add,
-                           graph_space,
-                           apes->node_handle.c_str(),
-                           apes->node_handle.size(),
-                           apes->attr,
-                           apes->batched.size(),
-                           apes->op_id, apes->status);
-
-    if (success) {
-        apes->exec_time = timer.get_real_time_millis();
-        async_calls[apes->op_id] = apes;
-    } else {
-        WDEBUG << "hyperdex_client_set_add failed, op_id=" << apes->op_id
-               << ", call_code=" << hyperdex_client_returncode_to_string(apes->status) << std::endl;
-        WDEBUG << "node=" << apes->node_handle << ", sample edge_id=" << apes->batched.front().edge_id << std::endl;
-        abort_bulk_load();
-    }
-
-    return success;
-}
-
-/*
-// XXX update max_edge_id in node object at the end of bulk loading
-bool
-hyper_stub :: add_edge_to_node_set(const node_handle_t &node_handle,
-                                   uint64_t edge_id)
-{
-    // add edge to node's edge list
-    auto put_edge_iter = put_edge_batch.find(node_handle);
-    apes_ptr_t cur_apes;
-    bool get_new_apes = false;
-    bool success = true;
-
-    if (put_edge_iter != put_edge_batch.end()) {
-        cur_apes = put_edge_iter->second;
-
-        if (cur_apes->batched.size() > NUM_EDGES_BUFFERED_PER_NODE) {
-            // flush edges to prevent buffering too many edges for a node
-            bool defer;
-            flush_or_defer_put_edge_set(cur_apes, defer);
-            get_new_apes = true;
-        }
-    } else {
-        get_new_apes = true;
-        if (put_edge_batch.size() > PUT_EDGE_BUFFER_SZ) {
-            WDEBUG << "flush put edge loop, sz=" << put_edge_batch.size() << std::endl;
-            // write oldest PUT_EDGE_BUFFER_SZ/2
-            std::vector<apes_ptr_t> can_write;
-            for (const auto &p: put_edge_batch) {
-                can_write.emplace_back(p.second);
-            }
-
-            std::sort(can_write.begin(), can_write.end(),
-                      [](const apes_ptr_t &left, const apes_ptr_t &right) {
-                          return left->time < right->time;
-                      }
-            );
-
-            // remove as many MRU items as needed so that we write only PUT_EDGE_BUFFER_SZ/2 items
-            if (can_write.size() > PUT_EDGE_BUFFER_SZ/2) {
-                can_write.erase(can_write.begin() + PUT_EDGE_BUFFER_SZ/2, can_write.end());
-            }
-
-            uint64_t defer_count = 0;
-            uint64_t call_count = 0;
-            for (auto apes: can_write) {
-                bool defer;
-                success = flush_or_defer_put_edge_set(apes, defer) && success;
-                if (defer) {
-                    defer_count++;
-                } else {
-                    call_count++;
-                }
-            }
-            WDEBUG << "flush put edge DONE, sz=" << put_edge_batch.size()
-                   << "\tdefer_count=" << defer_count
-                   << "\tcall_count=" << call_count << std::endl;
-        }
-    }
-
-    if (get_new_apes) {
-        cur_apes = apes_pool.acquire();
-        cur_apes->reset();
-        assert(cur_apes->batched.empty());
-        put_edge_batch[node_handle] = cur_apes;
-    }
-
-    assert(cur_apes != nullptr);
-    cur_apes->used = true;
-    cur_apes->time = put_edge_batch_clock++;
-    cur_apes->node_handle = node_handle;
-    async_put_edge_set_unit cur_apesu;
-    cur_apesu.edge_id = edge_id;
-    cur_apes->batched.emplace_back(std::move(cur_apesu));
-
-    return success;
-}
-*/
-
-bool
 hyper_stub :: put_node_edge_id_set_no_loop(const node_handle_t &node_handle,
                                            int64_t start_id,
                                            int64_t end_id)
@@ -486,6 +359,8 @@ hyper_stub :: put_node_edge_id_set_no_loop(const node_handle_t &node_handle,
     apes->set_attr[1].value_sz = sizeof(int64_t);
     apes->set_attr[1].datatype = graph_dtypes[4];
 
+    apes->packed_sz = apes->set_attr[0].value_sz + apes->set_attr[1].value_sz;
+
     bool success = call_no_loop(&hyperdex_client_put,
                                 graph_space,
                                 apes->node_handle.c_str(),
@@ -509,7 +384,8 @@ hyper_stub :: put_node_edge_id_set_no_loop(const node_handle_t &node_handle,
 }
 
 bool
-hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::string &alias)
+hyper_stub :: add_index_no_loop(const node_handle_t &node_handle,
+                                const std::string &alias)
 {
     aai_ptr_t aai = aai_pool.acquire();
     aai->node_handle = node_handle;
@@ -550,19 +426,8 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle, const std::str
 }
 
 bool
-hyper_stub :: flush_all_put_edge()
+hyper_stub :: flush_all_edge_ids()
 {
-    /*
-    auto put_edge_batch_local = std::move(put_edge_batch);
-    assert(put_edge_batch.empty());
-    for (auto &p: put_edge_batch_local) {
-        assert(p.first == p.second->node_handle);
-        if (!p.second->batched.empty()) {
-            flushable_apes.emplace_back(p.second);
-        }
-    }
-    */
-
     WDEBUG << "flush edge id set, #nodes=" << node_edge_id.size() << std::endl;
 
     for (const auto &p: node_edge_id) {
@@ -614,15 +479,6 @@ hyper_stub :: done_op(async_call_ptr_t ac_ptr, int64_t op_id)
     switch (ac_ptr->type) {
         case PUT_NODE: {
             auto apn = std::static_pointer_cast<async_put_node>(ac_ptr);
-
-            // flush any pending put edge calls dependent on this node
-            auto outstanding_iter = outstanding_node_puts.find(apn->handle);
-            assert(outstanding_iter != outstanding_node_puts.end());
-            for (auto apes: outstanding_iter->second) {
-                flushable_apes.emplace_back(apes);
-            }
-            outstanding_node_puts.erase(outstanding_iter);
-
             apn_pool.release(apn);
             break;
         }
@@ -636,8 +492,6 @@ hyper_stub :: done_op(async_call_ptr_t ac_ptr, int64_t op_id)
             if (ape->del_after_call) {
                 delete ape->e;
             }
-            assert(!ape->node_handle.empty());
-            //add_edge_to_node_set(ape->node_handle, ape->edge_id);
             ape_pool.release(ape);
             break;
        }
@@ -655,7 +509,8 @@ hyper_stub :: done_op(async_call_ptr_t ac_ptr, int64_t op_id)
 }
 
 bool
-hyper_stub :: loop_async_and_flush(uint64_t num_ops_to_leave, uint64_t &num_timeouts)
+hyper_stub :: loop_async_and_flush(uint64_t num_ops_to_leave,
+                                   uint64_t &num_timeouts)
 {
     bool success = true;
     uint64_t initial_ops = async_calls.size();
@@ -678,9 +533,6 @@ hyper_stub :: loop_async_and_flush(uint64_t num_ops_to_leave, uint64_t &num_time
                         WDEBUG << "exceeded max loops, initial_ops=" << initial_ops
                                << ", num_timeouts=" << num_timeouts
                                << ", async_calls.size=" << async_calls.size() << std::endl;
-                        while(true) {
-                            sleep(2);
-                        }
                         assert(false);
                         if (num_ops_to_leave == 0) {
                             for (auto &p: async_calls) {
@@ -734,10 +586,6 @@ hyper_stub :: loop_async_and_flush(uint64_t num_ops_to_leave, uint64_t &num_time
                     abort_bulk_load();
             }
 
-        } else if (!flushable_apes.empty()) {
-            apes_ptr_t apes = flushable_apes.back();
-            flushable_apes.pop_back();
-            flush_put_edge_set(apes);
         } else {
             break;
         }

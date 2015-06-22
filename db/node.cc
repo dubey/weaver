@@ -42,6 +42,7 @@ node :: node(const node_handle_t &_handle, uint64_t shrd, vclock_ptr_t &vclk, po
     , evicted(false)
     , to_evict(false)
     , last_perm_deletion(nullptr)
+    , max_edge_id(0)
 {
     std::string empty("");
     out_edges.set_deleted_key(empty);

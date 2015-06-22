@@ -75,25 +75,14 @@ struct async_put_node : public async_call
     async_put_node() { type = PUT_NODE; }
 };
 
-struct async_put_edge_set_unit
-{
-    uint64_t edge_id;
-};
-
 struct async_put_edge_set : public async_call
 {
-    bool used;
-    uint64_t time;
     std::string node_handle;
-    std::vector<async_put_edge_set_unit> batched;
-    hyperdex_client_attribute *attr;
+    int64_t max_edge_id;
     hyperdex_client_attribute set_attr[2];
     std::unique_ptr<e::buffer> set_buf;
-    int64_t max_edge_id;
 
-    async_put_edge_set() : used(false), time(UINT64_MAX) { type = PUT_EDGE_SET; }
-
-    void reset() { used = false; time = UINT64_MAX; }
+    async_put_edge_set() { type = PUT_EDGE_SET; }
 };
 
 struct async_put_edge : public async_call
@@ -304,9 +293,6 @@ class hyper_stub_base
             std::unique_ptr<e::buffer>&,
             size_t &num_attrs,
             size_t &packed_node_sz);
-        void prepare_edges_set(hyperdex_client_attribute *set_attrs,
-            std::vector<async_put_edge_set_unit> &edges,
-            size_t &packed_sz);
         void prepare_edge(hyperdex_client_attribute *attrs,
             db::edge &e,
             std::unique_ptr<e::buffer> &buf,

@@ -963,12 +963,14 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     }
 
     // max edge id
-    cl_attr[attr_idx].attr = graph_attrs[4];
-    cl_attr[attr_idx].value = (const char*)&n.max_edge_id;
-    cl_attr[attr_idx].value_sz = sizeof(int64_t);
-    cl_attr[attr_idx].datatype = graph_dtypes[4];
-    packed_node_sz += cl_attr[attr_idx].value_sz;
-    attr_idx++;
+    if (n.max_edge_id) {
+        cl_attr[attr_idx].attr = graph_attrs[4];
+        cl_attr[attr_idx].value = (const char*)&n.max_edge_id;
+        cl_attr[attr_idx].value_sz = sizeof(int64_t);
+        cl_attr[attr_idx].datatype = graph_dtypes[4];
+        packed_node_sz += cl_attr[attr_idx].value_sz;
+        attr_idx++;
+    }
 
     // last update clock
     if (last_clk_buf == nullptr) {
@@ -1006,23 +1008,6 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
 
     num_attrs = attr_idx;
     assert(num_attrs <= NUM_GRAPH_ATTRS);
-}
-
-void
-hyper_stub_base :: prepare_edges_set(hyperdex_client_attribute *attrs,
-    std::vector<async_put_edge_set_unit> &edges,
-    size_t &packed_sz)
-{
-    packed_sz = 0;
-    for (uint32_t i = 0; i < edges.size(); i++) {
-        hyperdex_client_attribute *attr = attrs + i;
-
-        attr->attr = graph_attrs[3];
-        attr->value = (const char*)&edges[i].edge_id;
-        attr->value_sz = sizeof(int64_t);
-        attr->datatype = HYPERDATATYPE_INT64;
-        packed_sz += attr->value_sz;
-    }
 }
 
 void

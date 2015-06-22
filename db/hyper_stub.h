@@ -70,21 +70,17 @@ namespace db
                 /*XXX std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,*/
                 po6::threads::mutex *shard_mutexes);
             // bulk loading
-            bool put_node_no_loop(db::node *n, uint64_t start_edge_idx);
+            bool put_node_no_loop(db::node *n, uint64_t start_edge_idx=0);
             bool put_edge_no_loop(const node_handle_t &node_handle,
                                   db::edge *e,
                                   const std::string &alias,
                                   bool del_after_call);
-            //bool add_edge_to_node_set(const node_handle_t&,
-            //                          uint64_t edge_id);
             bool put_node_edge_id_set_no_loop(const node_handle_t &node_handle,
                                               int64_t start_id,
                                               int64_t end_id);
             bool add_index_no_loop(const node_handle_t &node_handle,
                                    const std::string &alias);
-            bool flush_or_defer_put_edge_set(apes_ptr_t ape, bool &defer);
-            bool flush_put_edge_set(apes_ptr_t);
-            bool flush_all_put_edge();
+            bool flush_all_edge_ids();
             bool loop_async_and_flush(uint64_t loops, uint64_t &timeouts);
             bool loop_async_calls(bool flush);
             void possibly_flush();
@@ -94,10 +90,6 @@ namespace db
             hyper_stub_pool<async_put_edge_set> apes_pool;
             hyper_stub_pool<async_put_edge> ape_pool;
             hyper_stub_pool<async_add_index> aai_pool;
-            std::unordered_map<std::string, apes_ptr_t> put_edge_batch;
-            uint64_t put_edge_batch_clock;
-            std::unordered_map<std::string, std::vector<apes_ptr_t>> outstanding_node_puts;
-            std::vector<apes_ptr_t> flushable_apes;
             std::unordered_map<int64_t, async_call_ptr_t> async_calls;
             std::unordered_map<node_handle_t, std::pair<uint64_t, uint64_t>> node_edge_id; // node handle -> (start edge id, edge count)
             std::unique_ptr<e::buffer> restore_clk_buf;
