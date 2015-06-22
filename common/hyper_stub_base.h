@@ -19,6 +19,7 @@
 #include <algorithm>
 #include <unordered_map>
 #include <unordered_set>
+#include <random>
 #include <e/endian.h>
 #include <e/buffer.h>
 #include <hyperdex/client.h>
@@ -283,6 +284,11 @@ class hyper_stub_base
         void unpack_buffer(const char *buf, uint64_t buf_sz, std::set<int64_t>&);
 
     protected:
+        // pseudo random number gen for edge ids, seeded by /dev/urandom
+        uint64_t gen_seed;
+        std::mt19937_64 mt64_gen;
+        std::uniform_int_distribution<uint64_t> uint64max_dist;
+
         void prepare_node(hyperdex_client_attribute *attr,
             db::node &n,
             std::unique_ptr<e::buffer>&,

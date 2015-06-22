@@ -103,9 +103,6 @@ hyper_stub :: hyper_stub(uint64_t sid, int tid)
     , ape_pool(PUT_EDGE)
     , aai_pool(ADD_INDEX)
     , print_op_stats_counter(0)
-    , gen_seed(weaver_util::urandom_uint64())
-    , mt64_gen(gen_seed)
-    , uint64max_dist()
 {
     assert(gen_seed != 0);
     assert(uint64max_dist.max() == UINT64_MAX);
