@@ -419,8 +419,8 @@ weaver_client_destroy_nodes(struct node *nodes,
                 for (size_t j = 0; j < nodes[i].aliases_sz; j++) {
                     weaver_client_destroy_handles(nodes[i].aliases[j], 1);
                 }
+                free(nodes[i].aliases);
             }
-            free(nodes[i].aliases);
         }
         free(nodes);
     }
