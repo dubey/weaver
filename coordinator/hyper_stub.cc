@@ -232,10 +232,11 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                     ERROR_FAIL;
                 }
                 GET_NODE(upd->handle);
+                n->max_edge_id = uint64max_dist(mt64_gen);
                 idx_add.emplace(upd->handle, n);
                 break;
 
-            case transaction::EDGE_CREATE_REQ:
+            case transaction::EDGE_CREATE_REQ: {
                 CHECK_LOC(upd->loc1, upd->handle1, upd->alias1);
                 CHECK_LOC(upd->loc2, upd->handle2, upd->alias2);
                 GET_NODE(upd->handle1);
@@ -244,7 +245,23 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                     WDEBUG << "edge with handle " << upd->handle << " already exists at node " << upd->handle1 << std::endl;
                     ERROR_FAIL;
                 }
-                n->add_edge(new db::edge(upd->handle, tx_clk_ptr, upd->loc2, upd->handle2));
+                db::edge *e = new db::edge(upd->handle, tx_clk_ptr, upd->loc2, upd->handle2);
+                n->add_edge(e);
+
+                hyperdex_client_returncode put_code;
+                uint64_t edge_id;
+                do {
+                    edge_id = n->max_edge_id++;
+                    put_code = put_new_edge(edge_id, e);
+                } while (put_code == HYPERDEX_CLIENT_CMPFAIL);
+
+                if (put_code != HYPERDEX_CLIENT_SUCCESS) {
+                    WDEBUG << "error putting new edge, handle=" << upd->handle << " at node " << upd->handle1 << std::endl;
+                    ERROR_FAIL;
+                }
+                WDEBUG << "edge=" << e->get_handle() << " id=" << e->edge_id << std::endl;
+
+                n->edge_ids.emplace(edge_id);
 
                 if (AuxIndex) {
                     if (idx_add.find(upd->handle) == idx_add.end()) {
@@ -254,6 +271,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                     idx_add[upd->handle] = n;
                 }
                 break;
+            }
 
             case transaction::NODE_DELETE_REQ:
                 CHECK_LOC(upd->loc1, upd->handle1, upd->alias1);
@@ -288,6 +306,16 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 if (n->out_edges.find(upd->handle1) == n->out_edges.end()) {
                     WDEBUG << "edge with handle " << upd->handle1 << " does not exist at node " << upd->handle2 << std::endl;
                     ERROR_FAIL;
+                }
+                for (db::edge *e: n->out_edges[upd->handle1]) {
+                    WDEBUG << "remove id=" << e->edge_id << " for edge=" << e->get_handle() << std::endl;
+                    n->edge_ids.erase(e->edge_id);
+                    if (!del_edge(e->edge_id)) {
+                        WDEBUG << "did not find edge id=" << e->edge_id << ", edge handle=" << upd->handle1
+                               << " at node=" << n->get_handle() << std::endl;
+                        ERROR_FAIL;
+                    }
+                    delete e;
                 }
                 n->out_edges.erase(upd->handle1);
 

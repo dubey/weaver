@@ -238,14 +238,15 @@ class hyper_stub_base
         bool get_node(db::node &n);
         bool get_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool tx);
         hyperdex_client_returncode put_new_edge(uint64_t edge_id, db::edge *e);
-        bool put_edges(const db::data_map<std::vector<db::edge*>> &edges, bool if_not_exist);
+        bool put_edges(const db::data_map<std::vector<db::edge*>> &edges);
         bool put_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool if_not_exist);
+        bool del_edge(uint64_t edge_id);
         bool del_edges(const db::node&);
         bool del_node(const db::node&);
         bool del_nodes(std::vector<db::node*> &nodes);
         bool recreate_edge(const hyperdex_client_attribute *cl_attr,
                            edge_handle_t &handle,
-                           std::vector<db::edge*> &edge_vec);
+                           db::edge **e);
         bool recreate_node(const hyperdex_client_attribute *cl_attr, db::node &n);
 
         // node map functions
@@ -301,6 +302,7 @@ class hyper_stub_base
             size_t &packed_node_sz);
         void prepare_edge(hyperdex_client_attribute *attrs,
             db::edge &e,
+            uint64_t edge_id,
             std::unique_ptr<e::buffer> &buf,
             size_t &packed_sz);
         void pack_uint64(e::packer &packer, uint64_t num);

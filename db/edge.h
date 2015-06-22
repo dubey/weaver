@@ -44,6 +44,7 @@ namespace db
 #ifdef WEAVER_NEW_CLDG
             uint32_t msg_count; // number of messages sent on this link
 #endif
+            uint64_t edge_id; // for new HD schema
             void traverse(); // indicate that this edge was traversed; useful for migration statistics
 
             const remote_node& get_neighbor() { return nbr; }

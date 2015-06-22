@@ -103,10 +103,7 @@ hyper_stub :: hyper_stub(uint64_t sid, int tid)
     , ape_pool(PUT_EDGE)
     , aai_pool(ADD_INDEX)
     , print_op_stats_counter(0)
-{
-    assert(gen_seed != 0);
-    assert(uint64max_dist.max() == UINT64_MAX);
-}
+{ }
 
 void
 hyper_stub :: restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *nodes,
@@ -310,6 +307,7 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle,
 
     prepare_edge(ape->attrs,
                  *e,
+                 ape->edge_id,
                  ape->buf,
                  ape->packed_sz);
 

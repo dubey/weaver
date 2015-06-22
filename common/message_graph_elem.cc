@@ -50,7 +50,8 @@ message :: size(const db::edge &t)
 #ifdef WEAVER_NEW_CLDG
         + size(t.msg_count)
 #endif
-        + size(t.nbr);
+        + size(t.nbr)
+        + size(t.edge_id);
     return sz;
 }
 
@@ -96,6 +97,7 @@ void message :: pack_buffer(e::packer &packer, const db::edge &t)
     pack_buffer(packer, t.msg_count);
 #endif
     pack_buffer(packer, t.nbr);
+    pack_buffer(packer, t.edge_id);
 }
 
 void message :: pack_buffer(e::packer &packer, const db::edge* const &t)
@@ -147,6 +149,7 @@ message :: unpack_buffer(e::unpacker &unpacker, db::edge &t)
     unpack_buffer(unpacker, t.msg_count);
 #endif
     unpack_buffer(unpacker, t.nbr);
+    unpack_buffer(unpacker, t.edge_id);
 }
 void
 message :: unpack_buffer(e::unpacker &unpacker, db::edge *&t)
