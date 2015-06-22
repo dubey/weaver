@@ -247,10 +247,13 @@ parse_xml_node(pugi::xml_document &doc,
                bool prop_delim,
                uint64_t &cur_shard_node_count,
                uint64_t &nodes_in_memory,
-               db::hyper_stub &hstub)
+               uint64_t &total_node_count,
+               db::hyper_stub &hstub,
+               bool btc_graph)
 {
     assert(doc.load_buffer(element.c_str(), element.size()));
     pugi::xml_node node = doc.child("node");
+    total_node_count++;
 
     node_handle_t id0 = node.attribute("id").value();
     uint64_t hash0 = hash_node_handle(id0);
@@ -289,22 +292,32 @@ parse_xml_node(pugi::xml_document &doc,
             WDEBUG << "GRAPHML tid=" << load_tid << " node=" << cur_shard_node_count << " nodes_in_mem=" << nodes_in_memory << std::endl;
         }
 
-        check_btc_node(id0);
+#define MAX_EDGES_PER_NODE 10000000000ULL // at most 10B edges per node
+
         uint64_t start_edge_idx;
-        size_t parse_idx = 0;
-        bool parse_bad = false;
-        if (id0[0] == 'B') {
-            uint64_t node_idx;
-            parse_single_uint64(block_index, parse_idx, node_idx, parse_bad);
-            start_edge_idx = (40000000ULL + node_idx) * 10000000000ULL; // at most 10B edges per node
-        } else if (id0[0] == 'C') {
-            start_edge_idx = (50000000ULL + 0) * 10000000000ULL; // at most 10B edges per node
+
+        if (btc_graph) {
+            check_btc_node(id0);
+            size_t parse_idx = 0;
+            bool parse_bad = false;
+            if (id0[0] == 'B') {
+                uint64_t node_idx;
+                parse_single_uint64(block_index, parse_idx, node_idx, parse_bad);
+                start_edge_idx = (40000000ULL + node_idx) * MAX_EDGES_PER_NODE;
+            } else if (id0[0] == 'C') {
+                start_edge_idx = (50000000ULL + 0) * MAX_EDGES_PER_NODE;
+            } else {
+                uint64_t node_idx;
+                parse_single_uint64(id0, parse_idx, node_idx, parse_bad);
+                start_edge_idx = (1 + node_idx) * MAX_EDGES_PER_NODE;
+            }
+            assert(!parse_bad);
         } else {
-            uint64_t node_idx;
-            parse_single_uint64(id0, parse_idx, node_idx, parse_bad);
-            start_edge_idx = (1 + node_idx) * 10000000000ULL; // at most 10B edges per node
+            start_edge_idx = total_node_count * MAX_EDGES_PER_NODE;
         }
-        assert(!parse_bad);
+
+#undef MAX_EDGES_PER_NODE
+
         S->bulk_load_put_node(hstub, n, in_mem, start_edge_idx);
     }
 
@@ -376,7 +389,7 @@ parse_xml_edge(pugi::xml_document &doc,
 // 'format' stores the format of the graph file
 // 'graph_file' stores the full path filename of the graph file
 inline void
-load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_shards, int load_tid, int load_nthreads)
+load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_shards, int load_tid, int load_nthreads, bool btc_graph)
 {
     std::ifstream file;
     std::string line;
@@ -478,6 +491,7 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
             uint64_t cur_shard_edge_count = 0;
             uint64_t nodes_in_memory = 0;
             uint64_t edges_in_memory = 0;
+            uint64_t total_node_count = 0;
             std::vector<std::string> elem_vec;
             elem_vec.emplace_back("node");
             elem_vec.emplace_back("edge");
@@ -493,7 +507,9 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
                                    prop_delim,
                                    cur_shard_node_count,
                                    nodes_in_memory,
-                                   hstub);
+                                   total_node_count,
+                                   hstub,
+                                   btc_graph);
                 } else {
                     parse_xml_edge(doc,
                                    element,
@@ -2198,6 +2214,7 @@ main(int argc, const char *argv[])
     bool backup = false;
     long bulk_load_num_shards = 1;
     const char *log_file_name = nullptr;
+    bool btc_graph = false;
     // arg parsing borrowed from HyperDex
     e::argparser ap;
     ap.autohelp();
@@ -2225,6 +2242,9 @@ main(int argc, const char *argv[])
     ap.arg().long_name("log-file")
             .description("full path of file to write log to (default: stderr)")
             .metavar("filename").as_string(&log_file_name);
+    ap.arg().long_name("btc-graph")
+            .description("bulk loading btc graph")
+            .set_true(&btc_graph).hidden();
 
     if (!ap.parse(argc, argv) || ap.args_sz() != 0) {
         std::cerr << "args parsing failure" << std::endl;
@@ -2314,7 +2334,7 @@ main(int argc, const char *argv[])
 
             std::vector<std::thread*> bulk_load_threads;
             for (int i = 0; i < NUM_SHARD_THREADS; i++) {
-                std::thread *t = new std::thread(load_graph, format, graph_file, (uint64_t)bulk_load_num_shards, i, NUM_SHARD_THREADS);
+                std::thread *t = new std::thread(load_graph, format, graph_file, (uint64_t)bulk_load_num_shards, i, NUM_SHARD_THREADS, btc_graph);
                 bulk_load_threads.emplace_back(t);
             }
             for (int i = 0; i < NUM_SHARD_THREADS; i++) {
