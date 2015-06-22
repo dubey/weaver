@@ -9,6 +9,7 @@
  * ===============================================================
  */
 
+#define weaver_debug_
 #include "client/weaver/weaver_client.h"
 #include "client/client.h"
 
@@ -36,6 +37,10 @@ weaver_client_create(const char *coordinator, uint16_t port, const char *config_
         return reinterpret_cast<weaver_client*>(new cl::client(coordinator, port, config_file));
     }
     catch (std::bad_alloc& ba) {
+        return NULL;
+    }
+    catch (cl::weaver_client_exception &weaver_exception) {
+        WDEBUG << weaver_exception.what() << std::endl;
         return NULL;
     }
     catch (...) {
@@ -342,6 +347,7 @@ weaver_client_get_edge(struct weaver_client *_cl,
     weaver_client_returncode returncode;
     std::vector<std::pair<std::string, node_prog::edge_get_params>> arg_vec;
     node_prog::edge_get_params arg_params, ret_params;
+    arg_params.request_edges.emplace_back(edge_handle);
     arg_vec.emplace_back(std::make_pair(edge_handle, arg_params));
 
     C_WRAP_EXCEPT(

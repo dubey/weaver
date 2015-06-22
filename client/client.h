@@ -14,6 +14,7 @@
 #ifndef weaver_client_client_h_
 #define weaver_client_client_h_
 
+#include <exception>
 #include <fstream>
 #include <unordered_map>
 #include <po6/net/location.h>
@@ -40,6 +41,22 @@
 
 namespace cl
 {
+    class weaver_client_exception : public std::exception
+    {
+        std::string message;
+
+        public:
+            weaver_client_exception(const std::string &msg)
+                : std::exception()
+                , message(msg)
+            { }
+
+            virtual const char* what() const throw()
+            {
+                return message.c_str();
+            }
+    };
+
     class client
     {
         public:

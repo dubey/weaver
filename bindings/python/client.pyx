@@ -402,7 +402,7 @@ cdef extern from 'client/weaver/weaver_returncode.h':
 
 cdef extern from 'client/client.h' namespace 'cl':
     cdef cppclass client:
-        client(const char *coordinator, uint16_t port, const char *config_file)
+        client(const char *coordinator, uint16_t port, const char *config_file) except +
         void initialize_logging()
 
         weaver_client_returncode begin_tx()

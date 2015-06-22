@@ -38,7 +38,9 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     if (!init_config_constants(config_file)) {
         std::cerr << "weaver_client: error in init_config_constants, config file=" << config_file << std::endl;
         init = false;
-        return;
+        std::string except_message = "could not initialize configuration constants from file ";
+        except_message += config_file;
+        throw weaver_client_exception(except_message);
     }
 
     std::random_device rd;
@@ -47,14 +49,14 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     vtid = distribution(generator);
 
     if (!m_sm.get_unique_number(myid)) {
-        std::cerr << "weaver_client: could not contact Weaver server manager" << std::endl;
         init = false;
-        return;
+        std::string except_message = "could not contact Weaver server manager";
+        throw weaver_client_exception(except_message);
     }
     if (myid <= MaxNumServers) {
-        std::cerr << "weaver_client: internal error in initialization, myid=" << myid << std::endl;
         init = false;
-        return;
+        std::string except_message = "internal error in initialization, myid=" + std::to_string(myid);
+        throw weaver_client_exception(except_message);
     }
     myid_str = std::to_string(myid);
 
@@ -64,14 +66,10 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
         std::cerr << "weaver_client: retry server manager connection #" << try_sm++ << std::endl;
         init = false;
         if (try_sm == 10) {
-            std::cerr << "weaver_client: multiple server manager connection attempts failed" << std::endl;
             init = false;
-            break;
+            std::string except_message = "multiple server manager connection attempts failed";
+            throw weaver_client_exception(except_message);
         }
-    }
-
-    if (false) {
-        return;
     }
 
     comm.reset(new cl::comm_wrapper(myid, *m_sm.config()));
