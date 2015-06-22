@@ -19,7 +19,7 @@ CYTHON=cython
 
 AM_CFLAGS=-Wall -Wextra
 AM_CXXFLAGS=-std=c++0x -Wall -Wextra
-AM_CPPFLAGS=
+AM_CPPFLAGS=-I$(top_srcdir)/client
 CYTHON_FLAGS=--cplus
 LIBS=-lbusybee -le -pthread -lrt -lhyperdex-client -lreplicant -lyaml -lpopt -lglog -lpugixml
 
@@ -268,11 +268,15 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 		                    db/element.cc \
 		                    db/property.cc \
 		                    client/comm_wrapper.cc \
-		                    client/client.cc
+		                    client/weaver_returncode.cc \
+		                    client/client.cc \
+		                    client/c.cc
 libweaverclient_la_CFLAGS=	$(AM_CFLAGS)
 libweaverclient_la_CXXFLAGS=$(AM_CXXFLAGS)
 weaverinclude_HEADERS+=		client/client.h \
-							client/datastructures.h
+							client/datastructures.h \
+							client/weaver/weaver_returncode.h \
+							client/weaver/weaver_client.h
 
 # python client
 EXTRA_DIST+=						bindings/python/__init__.py \
