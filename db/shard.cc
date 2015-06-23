@@ -2202,9 +2202,15 @@ end_program(int param)
     WDEBUG << "watch set piggybacks on this shard " << S->watch_set_piggybacks << std::endl;
 }
 
+static void
+dummy(int)
+{ }
+
 int
 main(int argc, const char *argv[])
 {
+    install_signal_handler(SIGUSR1, dummy);
+
     // command line params
     const char* listen_host = "127.0.0.1";
     long listen_port = 5201;

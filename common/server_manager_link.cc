@@ -31,6 +31,9 @@ server_manager_link :: server_manager_link(const char* server_manager, uint16_t 
     , m_output(NULL)
     , m_output_sz(0)
 {
+    if (!m_repl) {
+        WDEBUG << "bad m_repl, errno=" << strerror(errno) << std::endl;
+    }
 }
 
 server_manager_link :: ~server_manager_link() throw ()

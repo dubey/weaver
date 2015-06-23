@@ -34,6 +34,8 @@
 #include "common/server_manager_returncode.h"
 #include "common/server_manager_link_wrapper.h"
 
+using po6::threads::make_thread_wrapper;
+
 class server_manager_link_wrapper::sm_rpc
 {
     public:
@@ -100,10 +102,13 @@ server_manager_link_wrapper :: sm_rpc :: callback(server_manager_link_wrapper* c
 server_manager_link_wrapper :: server_manager_link_wrapper(server_id us, std::shared_ptr<po6::net::location> loc)
     : m_us(us)
     , m_loc(loc)
+    , m_poller(make_thread_wrapper(&server_manager_link_wrapper::background_maintenance, this))
+    , m_deferred()
     , m_sm()
     , m_rpcs()
     , m_mtx()
     , m_cond(&m_mtx)
+    , m_poller_started(false)
     , m_locked(false)
     , m_kill(false)
     , m_to_kill()
@@ -122,6 +127,10 @@ server_manager_link_wrapper :: server_manager_link_wrapper(server_id us, std::sh
 
 server_manager_link_wrapper :: ~server_manager_link_wrapper() throw ()
 {
+    if (m_poller_started)
+    {
+        m_poller.join();
+    }
 }
 
 void
@@ -250,8 +259,14 @@ server_manager_link_wrapper :: should_exit()
 bool
 server_manager_link_wrapper :: maintain_link()
 {
-    enter_critical_section();
+    enter_critical_section_killable();
     bool exit_status = false;
+
+    if (!m_poller_started)
+    {
+        m_poller.start();
+        m_poller_started = true;
+    }
 
     while (true)
     {
@@ -259,7 +274,18 @@ server_manager_link_wrapper :: maintain_link()
         ensure_config_ack();
         ensure_config_stable();
         replicant_returncode status = REPLICANT_GARBAGE;
-        int64_t id = m_sm->loop(1000, &status);
+        int64_t id = -1;
+
+        if (!m_deferred.empty())
+        {
+            id = m_deferred.front().first;
+            status = m_deferred.front().second;
+            m_deferred.pop();
+        }
+        else
+        {
+            id = m_sm->loop(1000, &status);
+        }
 
         if (id < 0 &&
             (status == REPLICANT_TIMEOUT ||
@@ -316,7 +342,7 @@ server_manager_link_wrapper :: maintain_link()
         }
     }
 
-    exit_critical_section();
+    exit_critical_section_killable();
     return exit_status;
 }
 
@@ -382,6 +408,39 @@ server_manager_link_wrapper :: report_tcp_disconnect(uint64_t id)
 }
 
 void
+server_manager_link_wrapper :: background_maintenance()
+{
+    sigset_t ss;
+
+    if (sigfillset(&ss) < 0)
+    {
+        PLOG(ERROR) << "sigfillset";
+        return;
+    }
+
+    if (pthread_sigmask(SIG_BLOCK, &ss, NULL) < 0)
+    {
+        PLOG(ERROR) << "could not block signals";
+        return;
+    }
+
+    while (true)
+    {
+        enter_critical_section_background();
+
+        replicant_returncode status = REPLICANT_GARBAGE;
+        int64_t id = m_sm->loop(1000, &status);
+
+        if (status != REPLICANT_TIMEOUT && status != REPLICANT_INTERRUPTED)
+        {
+            m_deferred.push(std::make_pair(id, status));
+        }
+
+        exit_critical_section_killable();
+    }
+}
+
+void
 server_manager_link_wrapper :: do_sleep()
 {
     uint64_t sleep = m_sleep;
@@ -433,6 +492,7 @@ server_manager_link_wrapper :: enter_critical_section()
     }
 
     m_locked = true;
+    m_kill = false;
 }
 
 void
@@ -440,10 +500,11 @@ server_manager_link_wrapper :: exit_critical_section()
 {
     po6::threads::mutex::hold hold(&m_mtx);
     m_locked = false;
+    m_kill = false;
 
     if (m_waiting > 0)
     {
-        m_cond.signal();
+        m_cond.broadcast();
     }
 }
 
@@ -470,6 +531,23 @@ server_manager_link_wrapper :: enter_critical_section_killable()
 }
 
 void
+server_manager_link_wrapper :: enter_critical_section_background()
+{
+    po6::threads::mutex::hold hold(&m_mtx);
+
+    while (m_locked || m_waiting > 0)
+    {
+        ++m_waiting;
+        m_cond.wait();
+        --m_waiting;
+    }
+
+    m_locked = true;
+    m_kill = true;
+    m_to_kill = pthread_self();
+}
+
+void
 server_manager_link_wrapper :: exit_critical_section_killable()
 {
     po6::threads::mutex::hold hold(&m_mtx);
@@ -478,7 +556,7 @@ server_manager_link_wrapper :: exit_critical_section_killable()
 
     if (m_waiting > 0)
     {
-        m_cond.signal();
+        m_cond.broadcast();
     }
 }
 

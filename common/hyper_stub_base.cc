@@ -803,6 +803,7 @@ hyper_stub_base :: get_edges(db::node &n, bool tx)
     int64_t num_edges = n.edge_ids.size();
     std::vector<const char*> spaces(num_edges, edge_space);
     std::vector<const char*> keys(num_edges);
+    std::vector<int64_t> int_keys(num_edges);
     std::vector<size_t> key_szs(num_edges);
     std::vector<const hyperdex_client_attribute**> attrs(num_edges, nullptr);
     std::vector<size_t*> num_attrs(num_edges, nullptr);
@@ -811,8 +812,9 @@ hyper_stub_base :: get_edges(db::node &n, bool tx)
     size_t num_attrs_array[num_edges];
 
     int64_t i = 0;
-    for (const uint64_t &id: n.edge_ids) {
-        keys[i] = (const char*)&id;
+    for (const uint64_t id: n.edge_ids) {
+        int_keys[i] = (int64_t)id;
+        keys[i] = (const char*)&int_keys[i];
         key_szs[i] = sizeof(int64_t);
         attrs[i] = attr_array + i;
         num_attrs[i] = num_attrs_array + i;
@@ -838,6 +840,8 @@ hyper_stub_base :: get_edges(db::node &n, bool tx)
                 }
             }
         }
+    } else {
+        WDEBUG << "get edges failed" << std::endl;
     }
 
     return success;

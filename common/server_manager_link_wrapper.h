@@ -22,9 +22,11 @@
 // C
 #include <stdint.h>
 #include <map>
+#include <queue>
 
 // po6
 #include <po6/net/location.h>
+#include <po6/threads/thread.h>
 #include <po6/threads/cond.h>
 #include <po6/threads/mutex.h>
 
@@ -68,11 +70,13 @@ class server_manager_link_wrapper
         typedef std::map<int64_t, e::intrusive_ptr<sm_rpc> > rpc_map_t;
 
     private:
+        void background_maintenance();
         void do_sleep();
         void reset_sleep();
         void enter_critical_section();
         void exit_critical_section();
         void enter_critical_section_killable();
+        void enter_critical_section_background();
         void exit_critical_section_killable();
         void ensure_available();
         void ensure_config_ack();
@@ -94,6 +98,8 @@ class server_manager_link_wrapper
     private:
         server_id m_us;
         std::shared_ptr<po6::net::location> m_loc;
+        po6::threads::thread m_poller;
+        std::queue<std::pair<int64_t, replicant_returncode>> m_deferred;
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         std::auto_ptr<server_manager_link> m_sm;
@@ -101,6 +107,7 @@ class server_manager_link_wrapper
         rpc_map_t m_rpcs;
         po6::threads::mutex m_mtx;
         po6::threads::cond m_cond;
+        bool m_poller_started;
         bool m_locked;
         bool m_kill;
         pthread_t m_to_kill;

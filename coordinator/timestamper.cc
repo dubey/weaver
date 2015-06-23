@@ -859,9 +859,15 @@ end_program(int signum)
 #endif
 }
 
+static void
+dummy(int)
+{ }
+
 int
 main(int argc, const char *argv[])
 {
+    install_signal_handler(SIGUSR1, dummy);
+
     // command line params
     const char* listen_host = "127.0.0.1";
     long listen_port = 5200;
