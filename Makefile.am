@@ -313,6 +313,8 @@ EXTRA_DIST+=	tests/python/correctness/simple_test_aux_index.py
 EXTRA_DIST+=	tests/python/correctness/delete_tx.py
 EXTRA_DIST+=	tests/python/correctness/transactions.py
 EXTRA_DIST+=	tests/python/correctness/transactions_ring.py
+EXTRA_DIST+=	tests/python/correctness/concurrent_clients.py
+EXTRA_DIST+=	tests/python/correctness/multiple_del.py
 EXTRA_DIST+=	tests/python/correctness/ft_shard_deletes.py
 EXTRA_DIST+=	tests/python/correctness/multiline_cache_testing.py
 EXTRA_DIST+=	tests/python/correctness/read_properties.py
@@ -377,6 +379,8 @@ EXTRA_DIST+=	tests/sh/env.sh \
 				tests/sh/read_properties.sh \
 				tests/sh/line_reachability.sh \
 				tests/sh/line_properties.sh \
+				tests/sh/concurrent_clients.sh \
+				tests/sh/multiple_del.sh \
 				tests/sh/transactions.sh
 
 bin_PROGRAMS+=		weaver
