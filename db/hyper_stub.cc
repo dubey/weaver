@@ -20,8 +20,6 @@
 #include "db/utils.h"
 #include "db/hyper_stub.h"
 
-#define PUT_EDGE_BUFFER_SZ 50
-#define NUM_EDGES_BUFFERED_PER_NODE 100
 #define OUTSTANDING_HD_OPS 100
 #define MAX_TIMEOUTS 3000 // 5 mins of waiting total
 #define INITIAL_POOL_SZ (OUTSTANDING_HD_OPS*3)
