@@ -221,7 +221,7 @@ nop_function()
 
     uint64_t loop_count = 0;
     bool kronos_call;
-    chronos_client kronos(KronosIpaddr, KronosPort);
+    chronos_client kronos(KronosIpaddr.c_str(), KronosPort);
     vc::vclock_t kronos_cleanup_clk(ClkSz, 0);
 
     sleep_time.tv_sec  = VT_TIMEOUT_NANO / NANO;
@@ -977,7 +977,7 @@ main(int argc, const char *argv[])
     // server manager link
     std::shared_ptr<pthread_t> sm_thr(new pthread_t());
     sm_link_loop_data sm_args;
-    sm_args.sm_host = po6::net::hostname(ServerManagerIpaddr, ServerManagerPort);
+    sm_args.sm_host = po6::net::hostname(ServerManagerIpaddr.c_str(), ServerManagerPort);
     sm_args.loc = *my_loc;
     sm_args.backup = backup;
     int rc = pthread_create(sm_thr.get(), nullptr, &server_manager_link_loop, (void*)&sm_args);

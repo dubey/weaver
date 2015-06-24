@@ -25,11 +25,11 @@ init_config_constants(const char *config_file_name)
     ClkSz = UINT64_MAX;
     NumShards = UINT64_MAX;
     MaxCacheEntries = UINT16_MAX;
-    HyperdexCoordIpaddr = nullptr;
+    HyperdexCoordIpaddr = std::string();
     HyperdexCoordPort = UINT16_MAX;
-    KronosIpaddr = nullptr;
+    KronosIpaddr = std::string();
     KronosPort = UINT16_MAX;
-    ServerManagerIpaddr = nullptr;
+    ServerManagerIpaddr = std::string();
     ServerManagerPort = UINT16_MAX;
     AuxIndex = false;
     BulkLoadPropertyValueDelimiter = (char)0;
@@ -92,7 +92,6 @@ init_config_constants(const char *config_file_name)
     yaml_token_delete(&token);
 
 #define PARSE_IPADDR(X) \
-    X = (char*)malloc(32); \
     strncpy(X, (const char*)token.data.scalar.value, 32); \
     yaml_token_delete(&token);
 
@@ -135,12 +134,12 @@ init_config_constants(const char *config_file_name)
         PARSE_ASSERT_TYPE_DELETE(YAML_BLOCK_MAPPING_START_TOKEN); \
         PARSE_ASSERT_TYPE_DELETE(YAML_KEY_TOKEN); \
         PARSE_ASSERT_TYPE(YAML_SCALAR_TOKEN); \
-        char *ipaddr; \
+        char ipaddr[32]; \
         PARSE_IPADDR(ipaddr) \
         PARSE_VALUE_SCALAR \
         uint16_t port; \
         PARSE_INT(port) \
-        v.emplace_back(std::make_pair(ipaddr, port)); \
+        v.emplace_back(std::make_pair(std::string(ipaddr), port)); \
         PARSE_ASSERT_TYPE_DELETE(YAML_BLOCK_END_TOKEN); \
     }
 
@@ -253,12 +252,12 @@ init_config_constants(const char *config_file_name)
 
     if (UINT64_MAX == NumVts
      || UINT16_MAX == MaxCacheEntries
-     || nullptr == HyperdexCoordIpaddr
+     || HyperdexCoordIpaddr.empty()
      || UINT16_MAX == HyperdexCoordPort
      || HyperdexDaemons.empty()
-     || nullptr == KronosIpaddr
+     || KronosIpaddr.empty()
      || UINT16_MAX == KronosPort
-     || nullptr == ServerManagerIpaddr
+     || ServerManagerIpaddr.empty()
      || UINT16_MAX == ServerManagerPort
      || NodesPerMap < 1) {
         return false;

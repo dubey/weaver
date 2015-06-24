@@ -26,18 +26,18 @@ extern po6::threads::rwlock NumShardsLock;
 extern uint64_t MaxNumServers;
 extern uint64_t ShardIdIncr;
 
-extern char *HyperdexCoordIpaddr;
+extern std::string HyperdexCoordIpaddr;
 extern uint16_t HyperdexCoordPort;
-extern std::vector<std::pair<char*, uint16_t>> HyperdexCoord;
-extern std::vector<std::pair<char*, uint16_t>> HyperdexDaemons;
+extern std::vector<std::pair<std::string, uint16_t>> HyperdexCoord;
+extern std::vector<std::pair<std::string, uint16_t>> HyperdexDaemons;
 
-extern char *KronosIpaddr;
+extern std::string KronosIpaddr;
 extern uint16_t KronosPort;
-extern std::vector<std::pair<char*, uint16_t>> KronosLocs;
+extern std::vector<std::pair<std::string, uint16_t>> KronosLocs;
 
-extern char *ServerManagerIpaddr;
+extern std::string ServerManagerIpaddr;
 extern uint16_t ServerManagerPort;
-extern std::vector<std::pair<char*, uint16_t>> ServerManagerLocs;
+extern std::vector<std::pair<std::string, uint16_t>> ServerManagerLocs;
 
 extern bool AuxIndex;
 extern char BulkLoadPropertyValueDelimiter;
@@ -61,16 +61,16 @@ uint64_t get_num_shards();
     po6::threads::rwlock NumShardsLock; \
     uint64_t MaxNumServers; \
     uint64_t ShardIdIncr; \
-    char *HyperdexCoordIpaddr; \
+    std::string HyperdexCoordIpaddr; \
     uint16_t HyperdexCoordPort; \
-    std::vector<std::pair<char*, uint16_t>> HyperdexCoord; \
-    std::vector<std::pair<char*, uint16_t>> HyperdexDaemons; \
-    char *KronosIpaddr; \
+    std::vector<std::pair<std::string, uint16_t>> HyperdexCoord; \
+    std::vector<std::pair<std::string, uint16_t>> HyperdexDaemons; \
+    std::string KronosIpaddr; \
     uint16_t KronosPort; \
-    std::vector<std::pair<char*, uint16_t>> KronosLocs; \
-    char *ServerManagerIpaddr; \
+    std::vector<std::pair<std::string, uint16_t>> KronosLocs; \
+    std::string ServerManagerIpaddr; \
     uint16_t ServerManagerPort; \
-    std::vector<std::pair<char*, uint16_t>> ServerManagerLocs; \
+    std::vector<std::pair<std::string, uint16_t>> ServerManagerLocs; \
     bool AuxIndex; \
     char BulkLoadPropertyValueDelimiter; \
     std::string BulkLoadNodeAliasKey; \

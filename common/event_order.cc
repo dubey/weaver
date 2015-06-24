@@ -18,7 +18,7 @@
 using order::oracle;
 
 oracle :: oracle()
-    : kronos_cl(chronos_client_create(KronosIpaddr, KronosPort))
+    : kronos_cl(chronos_client_create(KronosIpaddr.c_str(), KronosPort))
     , cache_hits(0)
 { }
 

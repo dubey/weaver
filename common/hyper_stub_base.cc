@@ -43,7 +43,7 @@ hyper_stub_base :: hyper_stub_base()
     , index_dtypes{HYPERDATATYPE_STRING, HYPERDATATYPE_INT64}
     , edge_attrs{"handle", "data"}
     , edge_dtypes{HYPERDATATYPE_STRING, HYPERDATATYPE_STRING}
-    , cl(hyperdex_client_create(HyperdexCoordIpaddr, HyperdexCoordPort))
+    , cl(hyperdex_client_create(HyperdexCoordIpaddr.c_str(), HyperdexCoordPort))
     , gen_seed(weaver_util::urandom_uint64())
     , mt64_gen(gen_seed)
     , uint64max_dist()
