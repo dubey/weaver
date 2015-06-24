@@ -369,6 +369,8 @@ TESTS +=		tests/sh/empty_graph.sh \
 				tests/sh/read_properties.sh \
 				tests/sh/line_reachability.sh \
 				tests/sh/line_properties.sh \
+				tests/sh/concurrent_clients.sh \
+				tests/sh/multiple_del.sh \
 				tests/sh/transactions.sh
 EXTRA_DIST+=	tests/sh/env.sh \
 				tests/sh/setup.sh \

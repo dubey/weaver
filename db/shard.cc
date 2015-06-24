@@ -20,6 +20,7 @@
 #include <e/popt.h>
 #include <e/buffer.h>
 #include <pugixml.hpp>
+#include <pthread.h>
 
 #define weaver_debug_
 #include "common/weaver_constants.h"
@@ -385,19 +386,37 @@ parse_xml_edge(pugi::xml_document &doc,
     element.clear();
 }
 
+struct load_graph_data
+{
+    db::graph_file_format format;
+    const char *graph_file;
+    uint64_t num_shards;
+    int load_tid;
+    int load_nthreads;
+    bool btc_graph;
+};
+
 // initial bulk graph loading method
 // 'format' stores the format of the graph file
 // 'graph_file' stores the full path filename of the graph file
-inline void
-load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_shards, int load_tid, int load_nthreads, bool btc_graph)
+inline void*
+load_graph(void *args)
 {
+    load_graph_data *data = (load_graph_data*)args;
+    db::graph_file_format &format = data->format;
+    const char *graph_file = data->graph_file;
+    uint64_t num_shards = data->num_shards;
+    int load_tid = data->load_tid;
+    int load_nthreads = data->load_nthreads;
+    bool btc_graph = data->btc_graph;
+
     std::ifstream file;
     std::string line;
 
     file.open(graph_file, std::ifstream::in);
     if (!file) {
         WDEBUG << "File not found" << std::endl;
-        return;
+        return nullptr;
     }
 
     // read, validate, and create graph
@@ -533,9 +552,11 @@ load_graph(db::graph_file_format format, const char *graph_file, uint64_t num_sh
 
         default:
             WDEBUG << "Unsupported graph file format " << format << std::endl;
-            return;
+            return nullptr;
     }
     file.close();
+
+    return nullptr;
 }
 
 void
@@ -1888,10 +1909,33 @@ migration_end()
     S->comm.send(next_shard, msg.buf);
 }
 
-// server msg recv loop for the shard server
-void
-recv_loop(uint64_t thread_id)
+static bool
+block_signals()
 {
+    sigset_t ss;
+    if (sigfillset(&ss) < 0) {
+        std::cerr << "sigfillset" << std::endl;
+        return false;
+    }
+
+    sigdelset(&ss, SIGPROF);
+    if (pthread_sigmask(SIG_SETMASK, &ss, NULL) < 0) {
+        std::cerr << "could not block signals" << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
+// server msg recv loop for the shard server
+void*
+server_loop(void *args)
+{
+    uint64_t thread_id = (uint64_t)args;
+    if (!block_signals()) {
+        return nullptr;
+    }
+
     uint64_t vt_id, req_id;
     enum message::msg_type mtype;
     std::unique_ptr<message::message> rec_msg;
@@ -2060,9 +2104,21 @@ generate_token(uint64_t* token)
     return true;
 }
 
-void
-server_manager_link_loop(po6::net::hostname sm_host, po6::net::location my_loc, bool backup)
+struct sm_link_loop_data
 {
+    po6::net::hostname sm_host;
+    po6::net::location loc;
+    bool backup;
+};
+
+void*
+server_manager_link_loop(void *args)
+{
+    sm_link_loop_data *data = (sm_link_loop_data*)args;
+    po6::net::hostname &sm_host = data->sm_host;
+    po6::net::location &my_loc = data->loc;
+    bool &backup = data->backup;
+
     // Most of the following code has been borrowed from
     // Robert Escriva's HyperDex.
     // see https://github.com/rescrv/HyperDex for the original code.
@@ -2072,7 +2128,7 @@ server_manager_link_loop(po6::net::hostname sm_host, po6::net::location my_loc, 
     server::type_t type = backup? server::BACKUP_SHARD : server::SHARD;
     if (!S->sm_stub.register_id(S->serv_id, my_loc, type))
     {
-        return;
+        return nullptr;
     }
 
     bool cluster_jump = false;
@@ -2166,10 +2222,13 @@ install_signal_handler(int signum, void (*handler)(int))
 
 // caution: assume holding S->config_mutex for S->pause_bb
 void
-init_worker_threads(std::vector<std::thread*> &threads)
+init_worker_threads(std::vector<std::shared_ptr<pthread_t>> &threads)
 {
     for (int i = 0; i < NUM_SHARD_THREADS; i++) {
-        std::thread *t = new std::thread(recv_loop, i);
+        uint64_t tid = (uint64_t)i;
+        std::shared_ptr<pthread_t> t(new pthread_t());
+        int rc = pthread_create(t.get(), nullptr, &server_loop, (void*)tid);
+        assert(rc == 0);
         threads.emplace_back(t);
     }
     S->pause_bb = true;
@@ -2279,11 +2338,13 @@ main(int argc, const char *argv[])
     S = new db::shard(sid, my_loc);
 
     // server manager link
-    std::thread sm_thr(server_manager_link_loop,
-        po6::net::hostname(ServerManagerIpaddr, ServerManagerPort),
-        *my_loc,
-        backup);
-    sm_thr.detach();
+    std::shared_ptr<pthread_t> sm_thr(new pthread_t());
+    sm_link_loop_data sm_args;
+    sm_args.sm_host = po6::net::hostname(ServerManagerIpaddr, ServerManagerPort);
+    sm_args.loc = *my_loc;
+    sm_args.backup = backup;
+    int rc = pthread_create(sm_thr.get(), nullptr, &server_manager_link_loop, (void*)&sm_args);
+    assert(rc == 0);
 
     S->config_mutex.lock();
 
@@ -2292,7 +2353,7 @@ main(int argc, const char *argv[])
         S->first_config_cond.wait();
     }
 
-    std::vector<std::thread*> worker_threads;
+    std::vector<std::shared_ptr<pthread_t>> worker_threads;
 
     if (backup) {
         while (!S->active_backup) {
@@ -2338,15 +2399,28 @@ main(int argc, const char *argv[])
             wclock::weaver_timer timer;
             uint64_t load_time = timer.get_time_elapsed();
 
-            std::vector<std::thread*> bulk_load_threads;
+            std::vector<std::shared_ptr<pthread_t>> bulk_load_threads;
+            std::vector<load_graph_data> bulk_load_args;
             for (int i = 0; i < NUM_SHARD_THREADS; i++) {
-                std::thread *t = new std::thread(load_graph, format, graph_file, (uint64_t)bulk_load_num_shards, i, NUM_SHARD_THREADS, btc_graph);
+                load_graph_data &args = bulk_load_args[i];
+                args.format = format;
+                args.graph_file = graph_file;
+                args.num_shards = (uint64_t)bulk_load_num_shards;
+                args.load_tid = i;
+                args.load_nthreads = NUM_SHARD_THREADS;
+                args.btc_graph = btc_graph;
+
+                std::shared_ptr<pthread_t> t(new pthread_t());
+                int rc = pthread_create(t.get(), nullptr, &load_graph, &args);
+                assert(rc == 0);
                 bulk_load_threads.emplace_back(t);
             }
+
             for (int i = 0; i < NUM_SHARD_THREADS; i++) {
-                bulk_load_threads[i]->join();
-                delete bulk_load_threads[i];
+                pthread_join(*bulk_load_threads[i], nullptr);
             }
+
+            bulk_load_threads.clear();
 
             load_time = timer.get_time_elapsed() - load_time;
             message::message msg;
@@ -2362,9 +2436,10 @@ main(int argc, const char *argv[])
     std::cout << "Weaver: shard instance " << S->shard_id << std::endl;
     std::cout << "THIS IS AN ALPHA RELEASE WHICH SHOULD NOT BE USED IN PRODUCTION" << std::endl;
 
-    for (auto t: worker_threads) {
-        t->join();
+    for (std::shared_ptr<pthread_t> t: worker_threads) {
+        pthread_join(*t, nullptr);
     }
+    pthread_join(*sm_thr, nullptr);
 
     return 0;
 }

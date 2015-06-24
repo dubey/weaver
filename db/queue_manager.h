@@ -17,7 +17,6 @@
 #define weaver_db_queue_manager_h_
 
 #include <queue>
-#include <thread>
 #include <po6/threads/mutex.h>
 
 #include "db/queued_request.h"

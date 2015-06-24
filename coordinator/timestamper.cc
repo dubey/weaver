@@ -13,13 +13,13 @@
  */
 
 #include <iostream>
-#include <thread>
 #include <vector>
 #include <deque>
 #include <stdlib.h>
 #include <signal.h>
 #include <sys/time.h>
 #include <e/popt.h>
+#include <pthread.h>
 
 #define weaver_debug_
 #include "common/vclock.h"
@@ -328,8 +328,8 @@ nop_function()
     }
 }
 
-void
-clk_update_function()
+void*
+clk_update_function(void*)
 {
     timespec sleep_time;
     int sleep_ret;
@@ -536,9 +536,33 @@ node_prog_done(uint64_t req_id, current_prog *cp)
     return true;
 }
 
-void
-server_loop(int thread_id)
+static bool
+block_signals()
 {
+    sigset_t ss;
+    if (sigfillset(&ss) < 0) {
+        std::cerr << "sigfillset" << std::endl;
+        return false;
+    }
+
+    sigdelset(&ss, SIGPROF);
+    if (pthread_sigmask(SIG_SETMASK, &ss, NULL) < 0) {
+        std::cerr << "could not block signals" << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
+void*
+server_loop(void *args)
+{
+    uint64_t thread_id_long = (uint64_t)args;
+    int thread_id = (int)thread_id_long;
+    if (!block_signals()) {
+        return nullptr;
+    }
+
     busybee_returncode ret;
     enum message::msg_type mtype;
     std::unique_ptr<message::message> msg;
@@ -716,19 +740,35 @@ generate_token(uint64_t* token)
     return true;
 }
 
-void
-server_manager_link_loop(po6::net::hostname sm_host, po6::net::location loc, bool backup)
+struct sm_link_loop_data
 {
+    po6::net::hostname sm_host;
+    po6::net::location loc;
+    bool backup;
+};
+
+void*
+server_manager_link_loop(void *args)
+{
+    sm_link_loop_data *data = (sm_link_loop_data*)args;
+    po6::net::hostname &sm_host = data->sm_host;
+    po6::net::location &loc = data->loc;
+    bool &backup = data->backup;
+
     // Most of the following code has been 'borrowed' from
     // Robert Escriva's HyperDex.
     // see https://github.com/rescrv/HyperDex for the original code.
+
+    if (!block_signals()) {
+        return nullptr;
+    }
 
     vts->sm_stub.set_server_manager_address(sm_host.address.c_str(), sm_host.port);
 
     server::type_t type = backup? server::BACKUP_VT : server::VT;
     if (!vts->sm_stub.register_id(vts->serv_id, loc, type))
     {
-        return;
+        return nullptr;
     }
 
     bool cluster_jump = false;
@@ -815,10 +855,12 @@ install_signal_handler(int signum, void (*handler)(int))
 
 // caution: assume holding vts->config_mutex for vts->pause_bb
 void
-init_worker_threads(std::vector<std::thread*> &threads)
+init_worker_threads(std::vector<std::shared_ptr<pthread_t>> &threads)
 {
-    for (int i = 0; i < NUM_VT_THREADS; i++) {
-        std::thread *t = new std::thread(server_loop, i);
+    for (uint64_t i = 0; i < NUM_VT_THREADS; i++) {
+        std::shared_ptr<pthread_t> t(new pthread_t());
+        int rc = pthread_create(t.get(), nullptr, &server_loop, (void*)i);
+        assert(rc == 0);
         threads.emplace_back(t);
     }
     vts->pause_bb = true;
@@ -863,10 +905,23 @@ static void
 dummy(int)
 { }
 
+static void
+exit_on_signal(int)
+{
+    exit(EXIT_SUCCESS);
+}
+
 int
 main(int argc, const char *argv[])
 {
+    install_signal_handler(SIGHUP, exit_on_signal);
+    install_signal_handler(SIGINT, exit_on_signal);
+    install_signal_handler(SIGTERM, exit_on_signal);
     install_signal_handler(SIGUSR1, dummy);
+
+    if (!block_signals()) {
+        return EXIT_FAILURE;
+    }
 
     // command line params
     const char* listen_host = "127.0.0.1";
@@ -920,11 +975,13 @@ main(int argc, const char *argv[])
     vts = new coordinator::timestamper(sid, my_loc, backup);
 
     // server manager link
-    std::thread sm_thr(server_manager_link_loop,
-        po6::net::hostname(ServerManagerIpaddr, ServerManagerPort),
-        *my_loc,
-        backup);
-    sm_thr.detach();
+    std::shared_ptr<pthread_t> sm_thr(new pthread_t());
+    sm_link_loop_data sm_args;
+    sm_args.sm_host = po6::net::hostname(ServerManagerIpaddr, ServerManagerPort);
+    sm_args.loc = *my_loc;
+    sm_args.backup = backup;
+    int rc = pthread_create(sm_thr.get(), nullptr, &server_manager_link_loop, (void*)&sm_args);
+    assert(rc == 0);
 
     vts->config_mutex.lock();
 
@@ -933,7 +990,7 @@ main(int argc, const char *argv[])
         vts->first_config_cond.wait();
     }
 
-    std::vector<std::thread*> worker_threads;
+    std::vector<std::shared_ptr<pthread_t>> worker_threads;
 
     if (backup) {
         while (!vts->active_backup) {
@@ -963,18 +1020,24 @@ main(int argc, const char *argv[])
     std::cout << "Vector timestamper " << vt_id << std::endl;
     std::cout << "THIS IS AN ALPHA RELEASE WHICH SHOULD NOT BE USED IN PRODUCTION" << std::endl;
 
+    std::shared_ptr<pthread_t> clk_update_thr;
     if (NumVts > 1) {
         // periodic vector clock update to other timestampers
-        std::thread clk_update_thr(clk_update_function);
-        clk_update_thr.detach();
+        clk_update_thr.reset(new pthread_t());
+        int rc = pthread_create(clk_update_thr.get(), nullptr, &clk_update_function, nullptr);
+        assert(rc == 0);
     }
 
     // periodic nops to shard
     nop_function();
 
-    for (std::thread *t: worker_threads) {
-        t->join();
+    for (std::shared_ptr<pthread_t> t: worker_threads) {
+        pthread_join(*t, nullptr);
+    }
+    pthread_join(*sm_thr, nullptr);
+    if (clk_update_thr != nullptr) {
+        pthread_join(*clk_update_thr, nullptr);
     }
 
-    return 0;
+    return EXIT_SUCCESS;
 }
