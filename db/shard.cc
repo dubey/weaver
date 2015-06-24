@@ -2400,7 +2400,7 @@ main(int argc, const char *argv[])
             uint64_t load_time = timer.get_time_elapsed();
 
             std::vector<std::shared_ptr<pthread_t>> bulk_load_threads;
-            std::vector<load_graph_data> bulk_load_args;
+            std::vector<load_graph_data> bulk_load_args(NUM_SHARD_THREADS);
             for (int i = 0; i < NUM_SHARD_THREADS; i++) {
                 load_graph_data &args = bulk_load_args[i];
                 args.format = format;
