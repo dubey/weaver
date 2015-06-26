@@ -302,6 +302,7 @@ namespace db
         , watch_set_lookups(0)
         , watch_set_nops(0)
         , watch_set_piggybacks(0)
+        , min_prog_epoch(0)
     {
         for (uint64_t i = 0; i < NUM_NODE_MAPS; i++) {
             nodes[i].set_deleted_key("");
