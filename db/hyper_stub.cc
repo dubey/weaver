@@ -94,13 +94,21 @@ hyper_stub_pool<T> :: release(std::shared_ptr<T> ptr)
 
 
 hyper_stub :: hyper_stub(uint64_t sid, int tid)
-    : shard_id(sid)
-    , thread_id(tid)
-    , apn_pool(PUT_NODE)
-    , apes_pool(PUT_EDGE_SET)
-    , ape_pool(PUT_EDGE)
-    , aai_pool(ADD_INDEX)
-    , print_op_stats_counter(0)
+    : m_shard_id(sid)
+    , m_thread_id(tid)
+    , m_apn_pool(PUT_NODE)
+    , m_apes_pool(PUT_EDGE_SET)
+    , m_ape_pool(PUT_EDGE)
+    , m_aai_pool(ADD_INDEX)
+    , m_async_calls()
+    , m_restore_clk_buf(nullptr)
+    , m_last_clk_buf(nullptr)
+    //, g_load_queue()
+    , g_node_edge_id()
+    , g_bulk_load_mtx()
+    , m_done_op_stats()
+    , m_timer()
+    , m_print_op_stats_counter(0)
 { }
 
 void
@@ -112,7 +120,7 @@ hyper_stub :: restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *node
     size_t num_attrs;
 
     // node list
-    const hyperdex_client_attribute_check attr_check = {graph_attrs[0], (const char*)&shard_id, sizeof(int64_t), graph_dtypes[0], HYPERPREDICATE_EQUALS};
+    const hyperdex_client_attribute_check attr_check = {graph_attrs[0], (const char*)&m_shard_id, sizeof(int64_t), graph_dtypes[0], HYPERPREDICATE_EQUALS};
     enum hyperdex_client_returncode search_status, loop_status;
 
     int64_t call_id = hyperdex_client_search(cl, graph_space, &attr_check, 1, &search_status, &cl_attr, &num_attrs);
@@ -226,28 +234,28 @@ hyper_stub :: recover_node(db::node &n)
 bool
 hyper_stub :: put_node_no_loop(db::node *n, uint64_t start_edge_idx)
 {
-    if (last_clk_buf == nullptr) {
+    if (m_last_clk_buf == nullptr) {
         std::shared_ptr<vc::vclock> last_upd_clk(new vc::vclock(0,0));
         std::shared_ptr<vc::vclock_t> restore_clk(new vc::vclock_t(last_upd_clk->clock));
-        prepare_buffer(last_upd_clk, last_clk_buf);
-        prepare_buffer(restore_clk, restore_clk_buf);
+        prepare_buffer(last_upd_clk, m_last_clk_buf);
+        prepare_buffer(restore_clk, m_restore_clk_buf);
     }
-    assert(last_clk_buf && restore_clk_buf);
+    assert(m_last_clk_buf && m_restore_clk_buf);
 
-    apn_ptr_t apn = apn_pool.acquire();
+    apn_ptr_t apn = m_apn_pool.acquire();
     apn->handle = n->get_handle();
     if (start_edge_idx) {
-        node_edge_id[n->get_handle()] = std::make_pair(start_edge_idx, 0);
+        g_node_edge_id[n->get_handle()] = std::make_pair(start_edge_idx, 0);
     } else {
-        node_edge_id[n->get_handle()] = std::make_pair(uint64max_dist(mt64_gen), 0);
+        g_node_edge_id[n->get_handle()] = std::make_pair(uint64max_dist(mt64_gen), 0);
     }
     prepare_node(apn->attrs,
                  *n,
                  apn->creat_clk_buf,
                  apn->props_buf,
                  apn->out_edges_buf,
-                 last_clk_buf,
-                 restore_clk_buf,
+                 m_last_clk_buf,
+                 m_restore_clk_buf,
                  apn->aliases_buf,
                  apn->num_attrs,
                  apn->packed_sz);
@@ -261,8 +269,8 @@ hyper_stub :: put_node_no_loop(db::node *n, uint64_t start_edge_idx)
                                 apn->op_id, apn->status);
 
     if (success) {
-        apn->exec_time = timer.get_real_time_millis();
-        async_calls[apn->op_id] = apn;
+        apn->exec_time = m_timer.get_real_time_millis();
+        m_async_calls[apn->op_id] = apn;
 
         for (const std::string &alias: n->aliases) {
             success = add_index_no_loop(n->get_handle(), alias) && success;
@@ -292,14 +300,14 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle,
         }
     }
     // write edge to edge space
-    ape_ptr_t ape = ape_pool.acquire();
+    ape_ptr_t ape = m_ape_pool.acquire();
     ape->node_handle = node_handle;
     ape->edge_handle = e->get_handle();
     ape->e = e;
     ape->del_after_call = del_after_call;
 
-    auto edge_id_iter = node_edge_id.find(node_handle);
-    assert(edge_id_iter != node_edge_id.end());
+    auto edge_id_iter = g_node_edge_id.find(node_handle);
+    assert(edge_id_iter != g_node_edge_id.end());
     std::pair<uint64_t, uint64_t> &edge_id = edge_id_iter->second;
     ape->edge_id = edge_id.first + edge_id.second++;
 
@@ -317,8 +325,8 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle,
                                 ape->op_id, ape->status);
 
     if (success) {
-        ape->exec_time = timer.get_real_time_millis();
-        async_calls[ape->op_id] = ape;
+        ape->exec_time = m_timer.get_real_time_millis();
+        m_async_calls[ape->op_id] = ape;
     } else {
         WDEBUG << "hyperdex_client_put failed, op_id=" << ape->op_id
                << ", call_code=" << hyperdex_client_returncode_to_string(ape->status) << std::endl;
@@ -336,7 +344,7 @@ hyper_stub :: put_node_edge_id_set_no_loop(const node_handle_t &node_handle,
                                            int64_t start_id,
                                            int64_t end_id)
 {
-    apes_ptr_t apes = apes_pool.acquire();
+    apes_ptr_t apes = m_apes_pool.acquire();
     apes->node_handle = node_handle;
     apes->max_edge_id = end_id;
 
@@ -367,8 +375,8 @@ hyper_stub :: put_node_edge_id_set_no_loop(const node_handle_t &node_handle,
                                 apes->op_id, apes->status);
 
     if (success) {
-        apes->exec_time = timer.get_real_time_millis();
-        async_calls[apes->op_id] = apes;
+        apes->exec_time = m_timer.get_real_time_millis();
+        m_async_calls[apes->op_id] = apes;
     } else {
         WDEBUG << "hyperdex_client_put failed, op_id=" << apes->op_id
                << ", call_code=" << hyperdex_client_returncode_to_string(apes->status) << std::endl;
@@ -385,7 +393,7 @@ bool
 hyper_stub :: add_index_no_loop(const node_handle_t &node_handle,
                                 const std::string &alias)
 {
-    aai_ptr_t aai = aai_pool.acquire();
+    aai_ptr_t aai = m_aai_pool.acquire();
     aai->node_handle = node_handle;
     aai->alias = alias;
     // node handle
@@ -395,7 +403,7 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle,
     aai->index_attrs[0].datatype = index_dtypes[0];
     // shard
     aai->index_attrs[1].attr = index_attrs[1];
-    aai->index_attrs[1].value = (const char*)&shard_id;
+    aai->index_attrs[1].value = (const char*)&m_shard_id;
     aai->index_attrs[1].value_sz = sizeof(int64_t);
     aai->index_attrs[1].datatype = index_dtypes[1];
     aai->packed_sz = aai->index_attrs[0].value_sz
@@ -409,8 +417,8 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle,
                                 aai->op_id, aai->status);
 
     if (success) {
-        aai->exec_time = timer.get_real_time_millis();
-        async_calls[aai->op_id] = aai;
+        aai->exec_time = m_timer.get_real_time_millis();
+        m_async_calls[aai->op_id] = aai;
     } else {
         WDEBUG << "hyperdex_client_put failed, op_id=" << aai->op_id
                << ", call_code=" << hyperdex_client_returncode_to_string(aai->status) << std::endl;
@@ -426,16 +434,16 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle,
 bool
 hyper_stub :: flush_all_edge_ids()
 {
-    WDEBUG << "flush edge id set, #nodes=" << node_edge_id.size() << std::endl;
+    WDEBUG << "flush edge id set, #nodes=" << g_node_edge_id.size() << std::endl;
 
-    for (const auto &p: node_edge_id) {
+    for (const auto &p: g_node_edge_id) {
         int64_t start_id = (int64_t)p.second.first;
         int64_t end_id = (int64_t)(p.second.first + p.second.second);
         if (!put_node_edge_id_set_no_loop(p.first, start_id, end_id)) {
             return false;
         }
     }
-    node_edge_id.clear();
+    g_node_edge_id.clear();
 
     return true;
 }
@@ -443,25 +451,25 @@ hyper_stub :: flush_all_edge_ids()
 void
 hyper_stub :: done_op_stat(uint64_t time, size_t op_sz)
 {
-    done_op_stats.push_back(std::make_pair(time, op_sz));
-    while (done_op_stats.size() > 10000) {
-        done_op_stats.pop_front();
+    m_done_op_stats.push_back(std::make_pair(time, op_sz));
+    while (m_done_op_stats.size() > 10000) {
+        m_done_op_stats.pop_front();
     }
 
-    if (++print_op_stats_counter % 10000 == 0) {
+    if (++m_print_op_stats_counter % 10000 == 0) {
         float tot_time = 0;
         float tot_sz = 0;
-        for (const auto &p: done_op_stats) {
+        for (const auto &p: m_done_op_stats) {
             tot_time += p.first;
             tot_sz += p.second;
         }
 
-        float avg_time_sec = tot_time / (done_op_stats.size()*1000);
-        float avg_sz = tot_sz / done_op_stats.size();
-        WDEBUG << "tid=" << thread_id
+        float avg_time_sec = tot_time / (m_done_op_stats.size()*1000);
+        float avg_sz = tot_sz / m_done_op_stats.size();
+        WDEBUG << "tid=" << m_thread_id
                << "\tAvg Time for last 10k ops=" << avg_time_sec << " s."
                << "\tAvg Sz of last 10k ops=" << avg_sz
-               << "\t#ops=" << done_op_stats.size()
+               << "\t#ops=" << m_done_op_stats.size()
                << std::endl;
     }
 }
@@ -472,17 +480,17 @@ hyper_stub :: done_op(async_call_ptr_t ac_ptr, int64_t op_id)
     bool success = true;
 
     assert(ac_ptr->exec_time != 42);
-    uint64_t op_time = timer.get_real_time_millis() - ac_ptr->exec_time;
+    uint64_t op_time = m_timer.get_real_time_millis() - ac_ptr->exec_time;
     size_t op_sz = ac_ptr->packed_sz;
     switch (ac_ptr->type) {
         case PUT_NODE: {
             auto apn = std::static_pointer_cast<async_put_node>(ac_ptr);
-            apn_pool.release(apn);
+            m_apn_pool.release(apn);
             break;
         }
 
         case PUT_EDGE_SET:
-            apes_pool.release(std::static_pointer_cast<async_put_edge_set>(ac_ptr));
+            m_apes_pool.release(std::static_pointer_cast<async_put_edge_set>(ac_ptr));
             break;
 
         case PUT_EDGE: {
@@ -490,16 +498,16 @@ hyper_stub :: done_op(async_call_ptr_t ac_ptr, int64_t op_id)
             if (ape->del_after_call) {
                 delete ape->e;
             }
-            ape_pool.release(ape);
+            m_ape_pool.release(ape);
             break;
        }
 
         case ADD_INDEX:
-            aai_pool.release(std::static_pointer_cast<async_add_index>(ac_ptr));
+            m_aai_pool.release(std::static_pointer_cast<async_add_index>(ac_ptr));
             break;
     }
 
-    async_calls.erase(op_id);
+    m_async_calls.erase(op_id);
 
     done_op_stat(op_time, op_sz);
 
@@ -511,11 +519,11 @@ hyper_stub :: loop_async_and_flush(uint64_t num_ops_to_leave,
                                    uint64_t &num_timeouts)
 {
     bool success = true;
-    uint64_t initial_ops = async_calls.size();
+    uint64_t initial_ops = m_async_calls.size();
     num_timeouts = 0;
 
     while (true) {
-        if (async_calls.size() > num_ops_to_leave) {
+        if (m_async_calls.size() > num_ops_to_leave) {
             int64_t op_id;
             hyperdex_client_returncode loop_code;
 
@@ -524,16 +532,16 @@ hyper_stub :: loop_async_and_flush(uint64_t num_ops_to_leave,
                 if (loop_code == HYPERDEX_CLIENT_TIMEOUT) {
                     num_timeouts++;
                     if (num_timeouts % 100 == 0) {
-                        WDEBUG << "tid=" << thread_id << "\t#timeouts=" << num_timeouts << std::endl;
+                        WDEBUG << "tid=" << m_thread_id << "\t#timeouts=" << num_timeouts << std::endl;
                     }
 
                     if (num_timeouts > MAX_TIMEOUTS) {
                         WDEBUG << "exceeded max loops, initial_ops=" << initial_ops
                                << ", num_timeouts=" << num_timeouts
-                               << ", async_calls.size=" << async_calls.size() << std::endl;
+                               << ", m_async_calls.size=" << m_async_calls.size() << std::endl;
                         assert(false);
                         if (num_ops_to_leave == 0) {
-                            for (auto &p: async_calls) {
+                            for (auto &p: m_async_calls) {
                                 done_op(p.second, p.first);
                             }
                         }
@@ -549,11 +557,11 @@ hyper_stub :: loop_async_and_flush(uint64_t num_ops_to_leave,
             }
             assert(loop_code == HYPERDEX_CLIENT_SUCCESS);
 
-            auto find_iter = async_calls.find(op_id);
-            if (find_iter == async_calls.end()) {
+            auto find_iter = m_async_calls.find(op_id);
+            if (find_iter == m_async_calls.end()) {
                 WDEBUG << "hyperdex_client_loop returned op_id=" << op_id
                        << " and loop_code=" << hyperdex_client_returncode_to_string(loop_code)
-                       << " which was not found in async_calls_map." << std::endl;
+                       << " which was not found in m_async_calls_map." << std::endl;
                 abort_bulk_load();
             }
 
@@ -565,7 +573,7 @@ hyper_stub :: loop_async_and_flush(uint64_t num_ops_to_leave,
 
                 case HYPERDEX_CLIENT_CMPFAIL: {
                     assert(ac_ptr->type == PUT_EDGE);
-                    async_calls.erase(op_id);
+                    m_async_calls.erase(op_id);
                     // reissue put with new edge id
                     ape_ptr_t ape = std::static_pointer_cast<async_put_edge>(ac_ptr);
                     WDEBUG << "repeat edge id=" << ape->edge_id << std::endl;
@@ -573,7 +581,7 @@ hyper_stub :: loop_async_and_flush(uint64_t num_ops_to_leave,
                                      ape->e,
                                      "",
                                      ape->del_after_call);
-                    ape_pool.release(ape);
+                    m_ape_pool.release(ape);
                     break;
                 }
 
@@ -626,10 +634,10 @@ hyper_stub :: abort_bulk_load()
 void
 hyper_stub :: done_bulk_load()
 {
-    apn_pool.clear();
-    ape_pool.clear();
-    apes_pool.clear();
-    aai_pool.clear();
+    m_apn_pool.clear();
+    m_ape_pool.clear();
+    m_apes_pool.clear();
+    m_aai_pool.clear();
 }
 
 #undef weaver_debug_

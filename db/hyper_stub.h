@@ -59,10 +59,6 @@ namespace db
 
     class hyper_stub : private hyper_stub_base
     {
-        private:
-            const uint64_t shard_id;
-            const int thread_id;
-
         public:
             hyper_stub(uint64_t sid, int tid);
             void restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *nodes,
@@ -85,35 +81,40 @@ namespace db
             void possibly_flush();
             void abort_bulk_load();
             void done_bulk_load();
-            hyper_stub_pool<async_put_node> apn_pool;
-            hyper_stub_pool<async_put_edge_set> apes_pool;
-            hyper_stub_pool<async_put_edge> ape_pool;
-            hyper_stub_pool<async_add_index> aai_pool;
-            std::unordered_map<int64_t, async_call_ptr_t> async_calls;
-            std::unordered_map<node_handle_t, std::pair<uint64_t, uint64_t>> node_edge_id; // node handle -> (start edge id, edge count)
-            std::unique_ptr<e::buffer> restore_clk_buf;
-            std::unique_ptr<e::buffer> last_clk_buf;
             // migration
             bool update_mapping(const node_handle_t &handle, uint64_t loc);
             bool recover_node(db::node &n);
 
+        private:
+            bool done_op(async_call_ptr_t, int64_t op_id);
             // debug
             void done_op_stat(uint64_t time, size_t op_sz);
-            std::list<std::pair<uint64_t, size_t>> done_op_stats;
-            wclock::weaver_timer timer;
-            uint64_t print_op_stats_counter;
-        private:
-            void put_node_loop(db::data_map<std::shared_ptr<db::node_entry>> &nodes,
-                std::unordered_map<node_handle_t, node*> &node_map,
-                int &progress,
-                std::shared_ptr<vc::vclock> last_upd_clk,
-                std::shared_ptr<vc::vclock_t> restore_clk);
-            void put_index_loop(db::data_map<std::shared_ptr<db::node_entry>> &nodes,
-                std::unordered_map<std::string, node*> &idx_add_if_not_exist,
-                std::unordered_map<std::string, node*> &idx_add,
-                int &ine_progress,
-                int &progress);
-            bool done_op(async_call_ptr_t, int64_t op_id);
+
+            // member vars
+
+            const uint64_t m_shard_id;
+            const int m_thread_id;
+
+            // bulk load
+            hyper_stub_pool<async_put_node> m_apn_pool;
+            hyper_stub_pool<async_put_edge_set> m_apes_pool;
+            hyper_stub_pool<async_put_edge> m_ape_pool;
+            hyper_stub_pool<async_add_index> m_aai_pool;
+            std::unordered_map<int64_t, async_call_ptr_t> m_async_calls;
+            std::unique_ptr<e::buffer> m_restore_clk_buf;
+            std::unique_ptr<e::buffer> m_last_clk_buf;
+            // bulk load ds may be accessed by other threads outside member functions
+            // concurrent access protected by mutex
+            uint64_t g_load_chunk;
+            po6::threads::cond g_chunk_cond;
+            std::unordered_set<uint32_t> g_loaded_elems;
+            std::unordered_map<node_handle_t, std::pair<uint64_t, uint64_t>> g_node_edge_id; // node handle -> (start edge id, edge count)
+            po6::threads::mutex g_bulk_load_mtx;
+
+            // debug
+            std::list<std::pair<uint64_t, size_t>> m_done_op_stats;
+            wclock::weaver_timer m_timer;
+            uint64_t m_print_op_stats_counter;
     };
 }
 

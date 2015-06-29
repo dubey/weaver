@@ -98,7 +98,7 @@ namespace db
             node* acquire_node_specific(uint64_t tid, const node_handle_t &node_handle, const vclock_ptr_t tcreat, const vclock_ptr_t tdel);
             node* acquire_node_version(uint64_t tid, const node_handle_t &node_handle, const vc::vclock &vclk, order::oracle*);
             node* acquire_node_write(uint64_t tid, const node_handle_t &node, uint64_t vt_id, uint64_t qts);
-            node* bulk_load_acquire_node(const node_handle_t &node_handle, uint64_t map_idx);
+            //node* bulk_load_acquire_node(const node_handle_t &node_handle, uint64_t map_idx);
             void save_evicted_node_state(node *n, uint64_t map_idx);
             void evict_all(uint64_t map_idx);
             void node_evict(node*, uint64_t map_idx);
@@ -140,10 +140,10 @@ namespace db
                 const node_handle_t &remote_node, uint64_t remote_loc,
                 vclock_ptr_t vclk,
                 uint64_t qts);
-            edge* create_edge_bulk_load(node *n,
-                const edge_handle_t &handle,
+            edge* create_edge_bulk_load(const edge_handle_t &handle,
                 const node_handle_t &remote_node, uint64_t remote_loc,
                 vclock_ptr_t vclk);
+            bool add_edge_to_node_bulk_load(edge *e, const node_handle_t &node);
             void delete_edge_nonlocking(node *n,
                 const edge_handle_t &edge_handle,
                 vclock_ptr_t tdel);
@@ -182,7 +182,6 @@ namespace db
                 node_handle_t &alias);
             uint64_t get_node_count();
             bool bulk_load_node_exists(const node_handle_t &node_handle, uint64_t map_idx);
-            node_handle_t node_exists_cache[NUM_NODE_MAPS];
 
             // Initial graph loading
             po6::threads::mutex graph_load_mutex;
@@ -190,7 +189,7 @@ namespace db
             uint32_t load_count;
             void bulk_load_persistent(hyper_stub &hs);
             void bulk_load_put_node(hyper_stub &hs, node *n, bool in_mem, uint64_t start_edge_idx);
-            void bulk_load_put_edge(hyper_stub &hs, edge *e, const node_handle_t &node_handle, node *n, const std::string &alias);
+            void bulk_load_put_edge(hyper_stub &hs, edge *e, const node_handle_t &node_handle, bool node_in_mem, const std::string &alias);
             void bulk_load_flush_map(hyper_stub &hs);
 
             // Permanent deletion
@@ -445,9 +444,9 @@ namespace db
     }
 
     inline void
-    shard :: bulk_load_put_edge(db::hyper_stub &hs, db::edge *e, const node_handle_t &node_handle, node *n, const std::string &alias)
+    shard :: bulk_load_put_edge(db::hyper_stub &hs, db::edge *e, const node_handle_t &node_handle, bool node_in_mem, const std::string &alias)
     {
-        assert(hs.put_edge_no_loop(node_handle, e, alias, n==nullptr));
+        assert(hs.put_edge_no_loop(node_handle, e, alias, node_in_mem));
     }
 
     inline void
@@ -672,16 +671,16 @@ namespace db
         return n;
     }
 
-    inline node*
-    shard :: bulk_load_acquire_node(const node_handle_t &node_handle, uint64_t map_idx)
-    {
-        node_entry &entry = *nodes[map_idx][node_handle];
-        if (entry.present) {
-            return entry.nodes.front();
-        } else {
-            return nullptr;
-        }
-    }
+    //inline node*
+    //shard :: bulk_load_acquire_node(const node_handle_t &node_handle, uint64_t map_idx)
+    //{
+    //    node_entry &entry = *nodes[map_idx][node_handle];
+    //    if (entry.present) {
+    //        return entry.nodes.front();
+    //    } else {
+    //        return nullptr;
+    //    }
+    //}
 
     inline void
     shard :: release_node_write(node *n)
@@ -898,7 +897,6 @@ namespace db
             map_iter->second->nodes.emplace_back(new_node);
             map_iter->second->used = true;
         }
-        node_exists_cache[map_idx] = node_handle;
         if (++nodes_in_memory[map_idx] > NodesPerMap) {
             new_node->to_evict = true;
         }
@@ -926,6 +924,13 @@ namespace db
     {
         node *new_node = new node(node_handle, shard_id, vclk, node_map_mutexes+map_idx);
 
+        node_map_mutexes[map_idx].lock();
+        if (node_map_mutexes[map_idx].find(node_handle) != node_map_mutexes.end()) {
+            std::string err_msg = "repeated node handle ";
+            err_msg += node_handle;
+            err_msg += " in bulk loading process, aborting now.";
+            assert(false && err_msg);
+        }
         std::shared_ptr<node_entry> new_entry;
         if (nodes_in_memory[map_idx] < NodesPerMap) {
             new_entry = std::make_shared<node_entry>(new_node);
@@ -937,9 +942,9 @@ namespace db
             in_mem = false;
         }
         nodes[map_idx][node_handle] = new_entry;
-        node_exists_cache[map_idx] = node_handle;
+        node_map_mutexes[map_idx].unlock();
 
-        shard_node_count[shard_id - ShardIdIncr]++;
+        // XXX shard_node_count[shard_id - ShardIdIncr]++;
 
         new_node->state = node::mode::STABLE;
 #ifdef WEAVER_CLDG
@@ -1023,18 +1028,29 @@ namespace db
     }
 
     inline edge*
-    shard :: create_edge_bulk_load(node *n,
-        const edge_handle_t &handle,
+    shard :: create_edge_bulk_load(const edge_handle_t &handle,
         const node_handle_t &remote_node, uint64_t remote_loc,
         vclock_ptr_t vclk)
     {
         edge *new_edge = new edge(handle, vclk, remote_loc, remote_node);
-
-        if (n != nullptr) {
-            n->add_edge_unique(new_edge);
-        }
-
         return new_edge;
+    }
+
+    inline bool
+    shard :: add_edge_to_node_bulk_load(edge *e, const node_handle_t &node_handle)
+    {
+        bool found = false;
+
+        node_map_mutexes[map_idx].lock();
+        node_entry &entry = *nodes[map_idx][node_handle];
+        if (entry.present) {
+            node *n = entry.nodes.front();
+            n->add_edge_unique(e);
+            found = true;
+        }
+        node_map_mutexes[map_idx].unlock();
+
+        return found;
     }
 
     inline void
@@ -1193,11 +1209,7 @@ namespace db
     inline bool
     shard :: bulk_load_node_exists(const node_handle_t &node_handle, uint64_t map_idx)
     {
-        if (node_exists_cache[map_idx] == node_handle) {
-            return true;
-        }
         if (nodes[map_idx].find(node_handle) != nodes[map_idx].end()) {
-            node_exists_cache[map_idx] = node_handle;
             return true;
         } else {
             return false;
