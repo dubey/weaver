@@ -98,7 +98,6 @@ namespace db
             node* acquire_node_specific(uint64_t tid, const node_handle_t &node_handle, const vclock_ptr_t tcreat, const vclock_ptr_t tdel);
             node* acquire_node_version(uint64_t tid, const node_handle_t &node_handle, const vc::vclock &vclk, order::oracle*);
             node* acquire_node_write(uint64_t tid, const node_handle_t &node, uint64_t vt_id, uint64_t qts);
-            //node* bulk_load_acquire_node(const node_handle_t &node_handle, uint64_t map_idx);
             void save_evicted_node_state(node *n, uint64_t map_idx);
             void evict_all(uint64_t map_idx);
             void node_evict(node*, uint64_t map_idx);
@@ -124,8 +123,9 @@ namespace db
                 bool migrate);
             node* create_node_bulk_load(const node_handle_t &node_handle,
                 uint64_t map_idx,
-                vclock_ptr_t vclk,
-                bool &in_mem);
+                vclock_ptr_t vclk);
+            bool add_node_to_nodemap_bulk_load(node *n, uint64_t map_idx);
+            bool node_exists_bulk_load(const node_handle_t &node_handle);
             void delete_node_nonlocking(node *n,
                 vclock_ptr_t tdel);
             void delete_node(uint64_t tid, const node_handle_t &node_handle,
@@ -143,7 +143,7 @@ namespace db
             edge* create_edge_bulk_load(const edge_handle_t &handle,
                 const node_handle_t &remote_node, uint64_t remote_loc,
                 vclock_ptr_t vclk);
-            bool add_edge_to_node_bulk_load(edge *e, const node_handle_t &node);
+            bool add_edge_to_node_bulk_load(edge *e, const node_handle_t &node, uint64_t map_idx);
             void delete_edge_nonlocking(node *n,
                 const edge_handle_t &edge_handle,
                 vclock_ptr_t tdel);
@@ -188,8 +188,15 @@ namespace db
             uint64_t max_load_time, bulk_load_num_shards;
             uint32_t load_count;
             void bulk_load_persistent(hyper_stub &hs);
-            void bulk_load_put_node(hyper_stub &hs, node *n, bool in_mem, uint64_t start_edge_idx);
-            void bulk_load_put_edge(hyper_stub &hs, edge *e, const node_handle_t &node_handle, bool node_in_mem, const std::string &alias);
+            void bulk_load_put_node(hyper_stub &hs,
+                                    node *n,
+                                    bool in_mem);
+            void bulk_load_put_edge(hyper_stub &hs,
+                                    edge *e,
+                                    const node_handle_t &node_handle,
+                                    uint64_t edge_id,
+                                    bool node_in_mem,
+                                    const std::string &alias);
             void bulk_load_flush_map(hyper_stub &hs);
 
             // Permanent deletion
@@ -434,9 +441,11 @@ namespace db
     }
 
     inline void
-    shard :: bulk_load_put_node(db::hyper_stub &hs, db::node *n, bool in_mem, uint64_t start_edge_idx)
+    shard :: bulk_load_put_node(db::hyper_stub &hs,
+                                db::node *n,
+                                bool in_mem)
     {
-        assert(hs.put_node_no_loop(n, start_edge_idx));
+        assert(hs.put_node_no_loop(n));
 
         if (!in_mem) {
             permanent_node_delete(n);
@@ -444,9 +453,14 @@ namespace db
     }
 
     inline void
-    shard :: bulk_load_put_edge(db::hyper_stub &hs, db::edge *e, const node_handle_t &node_handle, bool node_in_mem, const std::string &alias)
+    shard :: bulk_load_put_edge(db::hyper_stub &hs,
+                                db::edge *e,
+                                const node_handle_t &node_handle,
+                                uint64_t edge_id,
+                                bool node_in_mem,
+                                const std::string &alias)
     {
-        assert(hs.put_edge_no_loop(node_handle, e, alias, node_in_mem));
+        assert(hs.put_edge_no_loop(node_handle, e, edge_id, alias, !node_in_mem));
     }
 
     inline void
@@ -670,17 +684,6 @@ namespace db
 
         return n;
     }
-
-    //inline node*
-    //shard :: bulk_load_acquire_node(const node_handle_t &node_handle, uint64_t map_idx)
-    //{
-    //    node_entry &entry = *nodes[map_idx][node_handle];
-    //    if (entry.present) {
-    //        return entry.nodes.front();
-    //    } else {
-    //        return nullptr;
-    //    }
-    //}
 
     inline void
     shard :: release_node_write(node *n)
@@ -918,22 +921,35 @@ namespace db
 
     inline node*
     shard :: create_node_bulk_load(const node_handle_t &node_handle,
-        uint64_t map_idx,
-        vclock_ptr_t vclk,
-        bool &in_mem)
+                                   uint64_t map_idx,
+                                   vclock_ptr_t vclk)
     {
         node *new_node = new node(node_handle, shard_id, vclk, node_map_mutexes+map_idx);
+        new_node->state = node::mode::STABLE;
+#ifdef WEAVER_CLDG
+        new_node->msg_count.resize(get_num_shards(), 0);
+#endif
+        new_node->in_use = false;
+
+        return new_node;
+    }
+
+    inline bool
+    shard :: add_node_to_nodemap_bulk_load(node *n,
+                                           uint64_t map_idx)
+    {
+        bool in_mem;
 
         node_map_mutexes[map_idx].lock();
-        if (node_map_mutexes[map_idx].find(node_handle) != node_map_mutexes.end()) {
+        if (nodes[map_idx].find(n->get_handle()) != nodes[map_idx].end()) {
             std::string err_msg = "repeated node handle ";
-            err_msg += node_handle;
+            err_msg += n->get_handle();
             err_msg += " in bulk loading process, aborting now.";
-            assert(false && err_msg);
+            assert(false && err_msg.c_str());
         }
         std::shared_ptr<node_entry> new_entry;
         if (nodes_in_memory[map_idx] < NodesPerMap) {
-            new_entry = std::make_shared<node_entry>(new_node);
+            new_entry = std::make_shared<node_entry>(n);
             new_node_entry(map_idx, new_entry);
             ++nodes_in_memory[map_idx];
             in_mem = true;
@@ -941,17 +957,27 @@ namespace db
             new_entry = std::make_shared<node_entry>();
             in_mem = false;
         }
-        nodes[map_idx][node_handle] = new_entry;
+        nodes[map_idx][n->get_handle()] = new_entry;
         node_map_mutexes[map_idx].unlock();
 
-        // XXX shard_node_count[shard_id - ShardIdIncr]++;
+        return in_mem;
+    }
 
-        new_node->state = node::mode::STABLE;
-#ifdef WEAVER_CLDG
-        new_node->msg_count.resize(get_num_shards(), 0);
-#endif
-        new_node->in_use = false;
-        return new_node;
+    inline bool
+    shard :: node_exists_bulk_load(const node_handle_t &handle)
+    {
+        bool exists;
+        uint64_t map_idx = get_map_idx(handle);
+
+        node_map_mutexes[map_idx].lock();
+        if (nodes[map_idx].find(handle) == nodes[map_idx].end()) {
+            exists = false;
+        } else {
+            exists = true;
+        }
+        node_map_mutexes[map_idx].unlock();
+
+        return exists;
     }
 
     inline void
@@ -1037,14 +1063,17 @@ namespace db
     }
 
     inline bool
-    shard :: add_edge_to_node_bulk_load(edge *e, const node_handle_t &node_handle)
+    shard :: add_edge_to_node_bulk_load(edge *e, const node_handle_t &node_handle, uint64_t map_idx)
     {
         bool found = false;
 
         node_map_mutexes[map_idx].lock();
-        node_entry &entry = *nodes[map_idx][node_handle];
-        if (entry.present) {
-            node *n = entry.nodes.front();
+        auto node_iter = nodes[map_idx].find(node_handle);
+        assert(node_iter != nodes[map_idx].end());
+
+        std::shared_ptr<node_entry> entry = node_iter->second;
+        if (entry->present) {
+            node *n = entry->nodes.front();
             n->add_edge_unique(e);
             found = true;
         }

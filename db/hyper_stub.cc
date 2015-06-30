@@ -103,9 +103,9 @@ hyper_stub :: hyper_stub(uint64_t sid, int tid)
     , m_async_calls()
     , m_restore_clk_buf(nullptr)
     , m_last_clk_buf(nullptr)
-    //, g_load_queue()
     , g_node_edge_id()
     , g_bulk_load_mtx()
+    , g_chunk_cond(&g_bulk_load_mtx)
     , m_done_op_stats()
     , m_timer()
     , m_print_op_stats_counter(0)
@@ -231,12 +231,63 @@ hyper_stub :: recover_node(db::node &n)
     }
 }
 
+void
+hyper_stub :: mark_done_chunk(uint64_t chunk)
+{
+    g_bulk_load_mtx.lock();
+    assert(chunk == (g_load_chunk+1));
+    g_load_chunk = chunk;
+    g_loaded_elems.clear();
+    g_chunk_cond.broadcast();
+    g_bulk_load_mtx.unlock();
+}
+
+void
+hyper_stub :: check_loaded_chunk(uint64_t chunk, uint32_t chunk_elem,
+                                 bool &loaded_chunk, bool &loaded_elem)
+{
+    g_bulk_load_mtx.lock();
+    if (chunk > g_load_chunk) {
+        loaded_chunk = false;
+
+        if (g_loaded_elems.find(chunk_elem) == g_loaded_elems.end()) {
+            loaded_elem = false;
+            g_loaded_elems.emplace(chunk_elem);
+        } else {
+            loaded_elem = true;
+        }
+    } else {
+        loaded_chunk = true;
+        loaded_elem  = true;
+    }
+    g_bulk_load_mtx.unlock();
+}
+
+void
+hyper_stub :: wait_done_chunk(uint64_t chunk)
+{
+    g_bulk_load_mtx.lock();
+    while (chunk > g_load_chunk) {
+        g_chunk_cond.wait();
+    }
+    g_bulk_load_mtx.unlock();
+}
+
+void
+hyper_stub :: new_node(const node_handle_t &handle, uint64_t start_edge_idx)
+{
+    assert(start_edge_idx);
+    g_bulk_load_mtx.lock();
+    g_node_edge_id[handle] = std::make_pair(start_edge_idx, 0);
+    g_bulk_load_mtx.unlock();
+}
+
 bool
-hyper_stub :: put_node_no_loop(db::node *n, uint64_t start_edge_idx)
+hyper_stub :: put_node_no_loop(db::node *n)
 {
     if (m_last_clk_buf == nullptr) {
-        std::shared_ptr<vc::vclock> last_upd_clk(new vc::vclock(0,0));
-        std::shared_ptr<vc::vclock_t> restore_clk(new vc::vclock_t(last_upd_clk->clock));
+        std::shared_ptr<vc::vclock> last_upd_clk  = std::make_shared<vc::vclock>(0,0);
+        std::shared_ptr<vc::vclock_t> restore_clk = std::make_shared<vc::vclock_t>(last_upd_clk->clock);
         prepare_buffer(last_upd_clk, m_last_clk_buf);
         prepare_buffer(restore_clk, m_restore_clk_buf);
     }
@@ -244,11 +295,7 @@ hyper_stub :: put_node_no_loop(db::node *n, uint64_t start_edge_idx)
 
     apn_ptr_t apn = m_apn_pool.acquire();
     apn->handle = n->get_handle();
-    if (start_edge_idx) {
-        g_node_edge_id[n->get_handle()] = std::make_pair(start_edge_idx, 0);
-    } else {
-        g_node_edge_id[n->get_handle()] = std::make_pair(uint64max_dist(mt64_gen), 0);
-    }
+
     prepare_node(apn->attrs,
                  *n,
                  apn->creat_clk_buf,
@@ -287,9 +334,26 @@ hyper_stub :: put_node_no_loop(db::node *n, uint64_t start_edge_idx)
     return success;
 }
 
+// return edge id for new edge
+uint64_t
+hyper_stub :: new_edge(const node_handle_t &node_handle)
+{
+    g_bulk_load_mtx.lock();
+
+    auto edge_id_iter = g_node_edge_id.find(node_handle);
+    assert(edge_id_iter != g_node_edge_id.end());
+    std::pair<uint64_t, uint64_t> &edge_id = edge_id_iter->second;
+    uint64_t eid = edge_id.first + edge_id.second++;
+
+    g_bulk_load_mtx.unlock();
+
+    return eid;
+}
+
 bool
 hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle,
                                db::edge *e,
+                               uint64_t edge_id,
                                const std::string &alias,
                                bool del_after_call)
 {
@@ -305,11 +369,7 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle,
     ape->edge_handle = e->get_handle();
     ape->e = e;
     ape->del_after_call = del_after_call;
-
-    auto edge_id_iter = g_node_edge_id.find(node_handle);
-    assert(edge_id_iter != g_node_edge_id.end());
-    std::pair<uint64_t, uint64_t> &edge_id = edge_id_iter->second;
-    ape->edge_id = edge_id.first + edge_id.second++;
+    ape->edge_id = edge_id;
 
     prepare_edge(ape->attrs,
                  *e,
@@ -570,20 +630,6 @@ hyper_stub :: loop_async_and_flush(uint64_t num_ops_to_leave,
                 case HYPERDEX_CLIENT_SUCCESS:
                     success = done_op(ac_ptr, op_id) && success;
                     break;
-
-                case HYPERDEX_CLIENT_CMPFAIL: {
-                    assert(ac_ptr->type == PUT_EDGE);
-                    m_async_calls.erase(op_id);
-                    // reissue put with new edge id
-                    ape_ptr_t ape = std::static_pointer_cast<async_put_edge>(ac_ptr);
-                    WDEBUG << "repeat edge id=" << ape->edge_id << std::endl;
-                    put_edge_no_loop(ape->node_handle,
-                                     ape->e,
-                                     "",
-                                     ape->del_after_call);
-                    m_ape_pool.release(ape);
-                    break;
-                }
 
                 default:
                     WDEBUG << "Unexpected hyperdex op code, here are some details." << std::endl;

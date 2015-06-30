@@ -65,9 +65,15 @@ namespace db
                 /*XXX std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,*/
                 po6::threads::mutex *shard_mutexes);
             // bulk loading
-            bool put_node_no_loop(db::node *n, uint64_t start_edge_idx=0);
+            void mark_done_chunk(uint64_t chunk);
+            void check_loaded_chunk(uint64_t chunk, uint32_t chunk_elem, bool &lchunk, bool &lelem);
+            void wait_done_chunk(uint64_t chunk);
+            void new_node(const node_handle_t &handle, uint64_t start_edge_idx);
+            bool put_node_no_loop(db::node *n);
+            uint64_t new_edge(const node_handle_t &node_handle);
             bool put_edge_no_loop(const node_handle_t &node_handle,
                                   db::edge *e,
+                                  uint64_t edge_id,
                                   const std::string &alias,
                                   bool del_after_call);
             bool put_node_edge_id_set_no_loop(const node_handle_t &node_handle,
@@ -106,10 +112,10 @@ namespace db
             // bulk load ds may be accessed by other threads outside member functions
             // concurrent access protected by mutex
             uint64_t g_load_chunk;
-            po6::threads::cond g_chunk_cond;
             std::unordered_set<uint32_t> g_loaded_elems;
             std::unordered_map<node_handle_t, std::pair<uint64_t, uint64_t>> g_node_edge_id; // node handle -> (start edge id, edge count)
             po6::threads::mutex g_bulk_load_mtx;
+            po6::threads::cond g_chunk_cond;
 
             // debug
             std::list<std::pair<uint64_t, size_t>> m_done_op_stats;

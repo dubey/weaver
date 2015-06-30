@@ -23,6 +23,7 @@ edge_map_iter :: operator++()
         bool to_break = false;
 
         for (db::edge *e: internal_cur->second) {
+            assert(internal_cur->first == e->get_handle());
             if (time_oracle->clock_creat_before_del_after(*req_time, e->base.get_creat_time(), e->base.get_del_time())) {
                 cur_edge = e;
                 to_break = true;
@@ -51,6 +52,7 @@ edge_map_iter :: edge_map_iter(edge_map_t::iterator begin,
         bool to_break = false;
 
         for (db::edge *e: internal_cur->second) {
+            assert(internal_cur->first == e->get_handle());
             if (time_oracle->clock_creat_before_del_after(*req_time, e->base.get_creat_time(), e->base.get_del_time())) {
                 cur_edge = e;
                 to_break = true;

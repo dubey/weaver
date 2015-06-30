@@ -57,6 +57,7 @@ edge :: edge(const edge_handle_t &handle, vclock_ptr_t &vclk, remote_node &rn)
 
 edge :: ~edge()
 {
+    WDEBUG << "deleting edge handle=" << get_handle() << std::endl;
 }
 
 // caution: should be called with node mutex held

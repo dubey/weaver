@@ -34,6 +34,8 @@
 #include "node_prog/node_program.h"
 #include "node_prog/base_classes.h"
 
+#define XML_CHUNK_SZ 10000
+
 DECLARE_CONFIG_CONSTANTS;
 
 using db::node_version_t;
@@ -171,54 +173,129 @@ split(const std::string &s, char delim, std::vector<std::string> &elems)
     }
 }
 
-bool
-get_xml_element(std::ifstream &file,
-                const std::vector<std::string> &names,
-                std::string &element,
-                uint32_t &cur_elem_idx)
+struct xml_element
 {
-    std::string line;
-    bool in_elem = false;
+    uint32_t elem_idx;
+    pugi::xml_document doc;
+    uint64_t owner_shard;
+    int owner_tid;
+    node_handle_t node;
+    edge_handle_t edge;
+
+    bool belongs_to_thread(int tid) { return owner_tid == tid; }
+    bool belongs_to_threads(const std::vector<int> &tids)
+    {
+        for (int tid: tids) {
+            if (owner_tid == tid) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+};
+
+bool
+get_xml_element_chunk(std::ifstream &file,
+                      const std::vector<std::string> &names,
+                      std::vector<xml_element> &elements,
+                      uint32_t &elem_count,
+                      int load_nthreads,
+                      uint64_t num_shards)
+{
     size_t pos;
     std::vector<std::string> start, end;
     for (const std::string &n: names) {
         start.emplace_back("<"+n);
         end.emplace_back("</"+n+">");
     }
+    assert(elements.size() == XML_CHUNK_SZ);
+    elem_count = 0;
 
-    while(std::getline(file, line)) {
-        bool appended = false;
-        for (uint32_t i = 0; i < names.size(); i++) {
-            if ((pos = line.find(start[i])) != std::string::npos) {
-                if (in_elem) {
-                    return false;
-                }
-                in_elem = true;
-                element.append(line);
-                appended = true;
-                cur_elem_idx = i;
-            }
+    for (uint32_t idx = 0; idx < XML_CHUNK_SZ && !file.eof(); idx++) {
+        std::string line, element;
+        uint32_t cur_elem_idx;
+        bool in_elem = false;
 
-            if ((pos = line.find(end[i])) != std::string::npos) {
-                if (!in_elem) {
-                    return false;
+        while (std::getline(file, line)) {
+            bool appended = false;
+            bool done_elem = false;
+
+            for (uint32_t i = 0; i < names.size(); i++) {
+                if ((pos = line.find(start[i])) != std::string::npos) {
+                    if (in_elem) {
+                        WDEBUG << "unexpected xml format\n"
+                               << "element=" << element << std::endl
+                               << "line=" << line << std::endl;
+                        WDEBUG << "aborting bulk load at current line" << std::endl;
+                        return false;
+                    }
+                    in_elem = true;
+                    element.append(line);
+                    appended = true;
+                    cur_elem_idx = i;
                 }
-                assert(i == cur_elem_idx);
-                if (!appended) {
+
+                if ((pos = line.find(end[i])) != std::string::npos) {
+                    if (!in_elem) {
+                        WDEBUG << "unexpected xml format\n"
+                               << "element=" << element << std::endl
+                               << "line=" << line << std::endl;
+                        WDEBUG << "aborting bulk load at current line" << std::endl;
+                        return false;
+                    }
+                    assert(i == cur_elem_idx);
+                    if (!appended) {
+                        element.append(line);
+                        appended = true;
+                    }
+
+                    done_elem = true;
+                    break;
+                }
+
+                if (!appended && in_elem) {
                     element.append(line);
                     appended = true;
                 }
-                return true;
             }
 
-            if (!appended && in_elem) {
-                element.append(line);
-                appended = true;
+            if (done_elem) {
+                break;
             }
+        }
+
+        if (!element.empty()) {
+            elem_count = idx+1;
+            xml_element &xml_elem = elements[idx];
+            xml_elem.elem_idx = cur_elem_idx;
+            if (!xml_elem.doc.load_buffer(element.c_str(), element.size())) {
+                WDEBUG << "could not load xml\n"
+                       << "element=" << element << std::endl;
+                WDEBUG << "aborting bulk load at current line" << std::endl;
+                return false;
+            }
+
+            // find owner thread and shard
+            std::string id0, id1;
+            if (xml_elem.elem_idx == 0) { // node
+                pugi::xml_node node = xml_elem.doc.child("node");
+                id0 = node.attribute("id").value();
+            } else { // edge
+                pugi::xml_node edge = xml_elem.doc.child("edge");
+                id0 = edge.attribute("source").value();
+                id1 = edge.attribute("id").value();
+                xml_elem.edge = id1;
+            }
+            xml_elem.node = id0;
+            xml_elem.owner_shard = (hash_node_handle(id0) % num_shards) + ShardIdIncr;
+            xml_elem.owner_tid = (int)get_map_idx(id0) % load_nthreads;
+        } else {
+            assert(file.eof());
         }
     }
 
-    return false;
+    return true;
 }
 
 void
@@ -238,54 +315,74 @@ check_btc_node(const node_handle_t &h)
         || h.substr(0, 4) == "COIN");
 }
 
-bool
-element_belongs_to_thread(uint32_t node_or_edge,
-                          pugi::xml_document &elem,
-                          int tid,
-                          int nthreads)
+struct load_graph_data
 {
-    std::string id0;
-    if (node_or_edge == 0) { // node
-        pugi::xml_node node = elem.child("node");
-        id0 = node.attribute("id").value();
-    } else { // edge
-        pugi::xml_node edge = doc.child("edge");
-        id0 = edge.attribute("source").value();
-    }
-    uint64_t hash0 = hash_node_handle(id0);
-    uint64_t loc = (hash0 % num_shards) + ShardIdIncr;
-    uint64_t map_idx = get_map_idx(id0);
-    return (loc == shard_id) && ((int)map_idx % nthreads == tid);
-}
+    db::graph_file_format format;
+    const char *graph_file;
+    uint64_t num_shards;
+    int load_tid;
+    int load_nthreads;
+    bool btc_graph;
+    std::vector<std::shared_ptr<db::hyper_stub>> hstubs;
+};
+
+struct load_xml_elem_static_args
+{
+    uint64_t num_shards;
+    int load_nthreads;
+    vclock_ptr_t zero_clk;
+    bool prop_delim;
+    uint64_t cur_shard_node_count;
+    uint64_t nodes_in_memory;
+    uint64_t total_node_count;
+    uint64_t cur_shard_edge_count;
+    uint64_t edges_in_memory;
+    bool btc_graph;
+
+    load_xml_elem_static_args(const load_graph_data &data,
+                              bool pdelim)
+        : num_shards(data.num_shards)
+        , load_nthreads(data.load_nthreads)
+        , zero_clk(new vc::vclock(0,0))
+        , prop_delim(pdelim)
+        , cur_shard_node_count(0)
+        , nodes_in_memory(0)
+        , total_node_count(0)
+        , cur_shard_edge_count(0)
+        , edges_in_memory(0)
+        , btc_graph(data.btc_graph)
+    { }
+};
 
 void
-parse_xml_node(pugi::xml_document &doc,
-               std::string &element,
-               uint64_t num_shards,
-               int load_tid,
-               int this_tid,
-               int load_nthreads,
-               vclock_ptr_t zero_clk,
-               bool prop_delim,
-               uint64_t &cur_shard_node_count,
-               uint64_t &nodes_in_memory,
-               uint64_t &total_node_count,
-               db::hyper_stub &hstub,
-               db::hyper_stub &other_hstub,
-               bool btc_graph)
+load_xml_node(pugi::xml_document &doc,
+              int owner_tid,
+              int this_tid,
+              db::hyper_stub &hstub,
+              db::hyper_stub &other_hstub,
+              load_xml_elem_static_args &static_args)
 {
-    assert(doc.load_buffer(element.c_str(), element.size()));
+    uint64_t &num_shards = static_args.num_shards;
+    int &load_nthreads = static_args.load_nthreads;
+    vclock_ptr_t zero_clk = static_args.zero_clk;
+    bool prop_delim = static_args.prop_delim;
+    uint64_t &cur_shard_node_count = static_args.cur_shard_node_count;
+    uint64_t &nodes_in_memory = static_args.nodes_in_memory;
+    uint64_t &total_node_count = static_args.total_node_count;
+    bool btc_graph = static_args.btc_graph;
+
+    // get xml node from doc
     pugi::xml_node node = doc.child("node");
     total_node_count++;
 
+    // init node attributes
     node_handle_t id0 = node.attribute("id").value();
     uint64_t hash0 = hash_node_handle(id0);
     uint64_t loc = (hash0 % num_shards) + ShardIdIncr;
     uint64_t map_idx = get_map_idx(id0);
-    assert((loc == shard_id) && ((int)map_idx % load_nthreads == load_tid));
+    assert((loc == shard_id) && ((int)map_idx % load_nthreads == owner_tid));
 
-    bool in_mem;
-    db::node *n = S->create_node_bulk_load(id0, map_idx, zero_clk, in_mem);
+    db::node *n = S->create_node_bulk_load(id0, map_idx, zero_clk);
 
     std::string block_index;
     for (pugi::xml_node prop: node.children("data")) {
@@ -308,11 +405,11 @@ parse_xml_node(pugi::xml_document &doc,
         }
     }
 
-    if (in_mem) {
-        nodes_in_memory++;
-    }
     if (++cur_shard_node_count % 10000 == 0) {
-        WDEBUG << "GRAPHML tid=" << load_tid << " node=" << cur_shard_node_count << " nodes_in_mem=" << nodes_in_memory << std::endl;
+        WDEBUG << "GRAPHML tid=" << this_tid
+               << " node=" << cur_shard_node_count
+               << " nodes_in_mem=" << nodes_in_memory
+               << std::endl;
     }
 
 #define MAX_EDGES_PER_NODE 10000000000ULL // at most 10B edges per node
@@ -341,42 +438,46 @@ parse_xml_node(pugi::xml_document &doc,
 
 #undef MAX_EDGES_PER_NODE
 
-    other_hstub.new_node(n, start_edge_idx);
-    S->bulk_load_put_node(hstub, n, in_mem, start_edge_idx);
+    other_hstub.new_node(n->get_handle(), start_edge_idx);
+    bool in_mem = S->add_node_to_nodemap_bulk_load(n, map_idx);
+    S->bulk_load_put_node(hstub, n, in_mem);
 
-    element.clear();
+    if (in_mem) {
+        nodes_in_memory++;
+    }
 }
 
 void
-parse_xml_edge(pugi::xml_document &doc,
-               std::string &element,
-               uint64_t num_shards,
-               int load_tid,
-               int this_tid,
-               int load_nthreads,
-               vclock_ptr_t zero_clk,
-               bool prop_delim,
-               uint64_t &cur_shard_edge_count,
-               uint64_t &edges_in_memory,
-               db::hyper_stub &hstub,
-               db::hyper_stub &other_hstub)
+load_xml_edge(pugi::xml_document &doc,
+              int owner_tid,
+              int this_tid,
+              db::hyper_stub &hstub,
+              db::hyper_stub &other_hstub,
+              load_xml_elem_static_args &static_args)
 {
-    assert(doc.load_buffer(element.c_str(), element.size()));
+    uint64_t &num_shards = static_args.num_shards;
+    int &load_nthreads = static_args.load_nthreads;
+    vclock_ptr_t zero_clk = static_args.zero_clk;
+    bool prop_delim = static_args.prop_delim;
+    uint64_t &cur_shard_edge_count = static_args.cur_shard_edge_count;
+    uint64_t &edges_in_memory = static_args.edges_in_memory;
+
+    // get xml edge
     pugi::xml_node edge = doc.child("edge");
 
+    // initialize edge attributes
     node_handle_t id0 = edge.attribute("source").value();
     uint64_t hash0 = hash_node_handle(id0);
     uint64_t loc0 = (hash0 % num_shards) + ShardIdIncr;
     uint64_t map_idx = get_map_idx(id0);
-
-    assert((loc0 == shard_id) && ((int)map_idx % load_nthreads == load_tid));
+    assert((loc0 == shard_id) && ((int)map_idx % load_nthreads == owner_tid));
 
     node_handle_t id1 = edge.attribute("target").value();
     edge_handle_t edge_handle = edge.attribute("id").value();
     uint64_t loc1 = (hash_node_handle(id1) % num_shards) + ShardIdIncr;
 
     db::edge *e = S->create_edge_bulk_load(edge_handle, id1, loc1, zero_clk);
-    bool in_mem = S->add_edge_to_node_bulk_load(e, id0);
+    bool in_mem = S->add_edge_to_node_bulk_load(e, id0, map_idx);
     std::string alias;
 
     for (pugi::xml_node prop: edge.children("data")) {
@@ -398,40 +499,42 @@ parse_xml_edge(pugi::xml_document &doc,
         }
     }
 
-    other_hstub.new_edge(id0, e);
-    S->bulk_load_put_edge(hstub, e, id0, in_mem, alias);
+    uint64_t edge_id = other_hstub.new_edge(id0);
+    S->bulk_load_put_edge(hstub, e, id0, edge_id, in_mem, alias);
     
-    if (n != nullptr) {
+    if (in_mem) {
         edges_in_memory++;
     }
     if (++cur_shard_edge_count % 10000 == 0) {
-        WDEBUG << "GRAPHML tid=" << load_tid << " edge=" << cur_shard_edge_count << " edges_in_mem=" << edges_in_memory << std::endl;
+        WDEBUG << "GRAPHML tid=" << this_tid
+               << " edge=" << cur_shard_edge_count
+               << " edges_in_mem=" << edges_in_memory << std::endl;
     }
-
-    element.clear();
 }
 
 void
-load_xml_element(std::pair<uint32_t, std::string> &elem,
-                 uint64_t owner_shard,
+load_xml_element(xml_element &elem,
+                 uint64_t this_tid,
                  db::hyper_stub &my_hstub,
-                 db::hyper_stub &owner_hstub)
+                 db::hyper_stub &owner_hstub,
+                 load_xml_elem_static_args &static_args)
 {
-    if (elem.first == 0) { // node
+    if (elem.elem_idx == 0) { // node
+        load_xml_node(elem.doc,
+                      elem.owner_tid,
+                      this_tid,
+                      my_hstub,
+                      owner_hstub,
+                      static_args);
     } else { // edge
+        load_xml_edge(elem.doc,
+                      elem.owner_tid,
+                      this_tid,
+                      my_hstub,
+                      owner_hstub,
+                      static_args);
     }
 }
-
-struct load_graph_data
-{
-    db::graph_file_format format;
-    const char *graph_file;
-    uint64_t num_shards;
-    int load_tid;
-    int load_nthreads;
-    bool btc_graph;
-    std::vector<std::shared_ptr<db::hyper_stub>> hstubs;
-};
 
 // initial bulk graph loading method
 // 'format' stores the format of the graph file
@@ -445,7 +548,6 @@ load_graph(void *args)
     uint64_t num_shards = data->num_shards;
     int load_tid = data->load_tid;
     int load_nthreads = data->load_nthreads;
-    bool btc_graph = data->btc_graph;
     std::vector<std::shared_ptr<db::hyper_stub>> &hstubs = data->hstubs;
 
     std::ifstream file;
@@ -459,15 +561,12 @@ load_graph(void *args)
 
     // read, validate, and create graph
     uint64_t line_count = 0;
-    uint64_t edge_count = 0;
-    vclock_ptr_t zero_clk(new vc::vclock(0,0));
-
-    std::shared_ptr<db::hyper_stub> hstub_ptr = hstubs[load_tid]; // std::make_shared<db::hyper_stub>(shard_id, load_tid);
-    db::hyper_stub &hstub = *hstub_ptr;
+    db::hyper_stub &hstub = *hstubs[load_tid];
 
     switch(format) {
 
         case db::SNAP: {
+            vclock_ptr_t zero_clk(new vc::vclock(0,0));
             uint64_t cur_shard_node_count = 0;
             uint64_t cur_shard_edge_count = 0;
 
@@ -477,6 +576,7 @@ load_graph(void *args)
                     WDEBUG << "SNAP bulk loading: processed " << line_count << " lines, cur shard stats: "
                            << cur_shard_node_count << " nodes, " << cur_shard_edge_count << " edges." << std::endl;
                 }
+                /*
                 if ((line.length() == 0) || (line[0] == '#')) {
                     continue;
                 } else {
@@ -534,92 +634,105 @@ load_graph(void *args)
                         S->bulk_load_flush_map(hstub);
                     }
                 }
+                */
             }
             S->bulk_load_persistent(hstub);
             break;
         }
 
         case db::GRAPHML: {
-            pugi::xml_document doc;
-            std::string element;
-            std::vector<std::pair<uint32_t, pugi::xml_document>> elements;
+            std::vector<xml_element> elements(XML_CHUNK_SZ);
+            load_xml_elem_static_args static_xml_args(*data, (BulkLoadPropertyValueDelimiter != '\0'));
+            std::vector<std::string> elem_name_vec;
+            elem_name_vec.emplace_back("node");
+            elem_name_vec.emplace_back("edge");
+            uint64_t chunk_count = 1;
+            uint32_t elem_count;
 
-            bool prop_delim = (BulkLoadPropertyValueDelimiter != '\0');
-            uint64_t cur_shard_node_count = 0;
-            uint64_t cur_shard_edge_count = 0;
-            uint64_t nodes_in_memory = 0;
-            uint64_t edges_in_memory = 0;
-            uint64_t total_node_count = 0;
-            std::vector<std::string> elem_vec;
-            elem_vec.emplace_back("node");
-            elem_vec.emplace_back("edge");
-            uint32_t cur_elem_idx;
-            uint64_t chunk_count = 0;
-
-            while (get_xml_element_chunk(file, elem_vec, elements)) {
-                if (elements.empty()) {
+            while (get_xml_element_chunk(file, elem_name_vec, elements, elem_count, load_nthreads, num_shards)) {
+                if (elem_count == 0) {
                     break;
                 }
 
                 // first load elements that belong to this thread
-                for (uint32_t i = 0; i < elements.size(); i++) {
-                    if (element_belongs_to_thread(elements[i].first, elements[i].second, load_tid)
-                     && !hstub.check_loaded(i)) {
-                        load_xml_element(elements[i], load_tid, load_tid, hstub, hstub);
+                for (uint32_t i = 0; i < elem_count; i++) {
+                    if (elements[i].belongs_to_thread(load_tid)) {
+                        bool loaded_chunk, loaded_elem;
+                        hstub.check_loaded_chunk(chunk_count, i, loaded_chunk, loaded_elem);
+                        assert(!loaded_chunk);
+                        if (!loaded_elem) {
+                            load_xml_element(elements[i],
+                                             load_tid,
+                                             hstub, hstub,
+                                             static_xml_args);
+                        }
                     }
                 }
 
                 // done with my elements
                 hstub.mark_done_chunk(chunk_count);
 
-                for (int sid = 0; sid < hstubs.size(); sid++) {
-                    db::hyper_stub &other_hstub = *hstubs[sid];
-                    if (!other_hstub.check_done_chunk(chunk_count)) {
-                        for (uint32_t i = 0; i < elements.size(); i++) {
-                            if (element_belongs_to_thread(elements[i].first, elements[i].second, tid)
-                             && !other_hstub.check_loaded(i)) {
-                                load_xml_element(elements[i], load_tid, tid, hstub, other_hstub);
-                            }
-                        }
+                // now load other threads elems
+                std::vector<int> done_tids(1, load_tid);
+                for (uint32_t i = 0; i < elem_count; i++) {
+                    xml_element &elem = elements[i];
+
+                    if (elem.belongs_to_threads(done_tids)) {
+                        continue;
                     }
 
-                    other_hstub.wait_done_chunk(chunk_count);
-                }
-                // all threads done with all elems in this chunk
-            }
+                    if (elem.elem_idx == 0) {
+                        // do not load other thread's node
+                        continue;
+                    }
 
-            while (get_xml_element(file, elem_vec, element, cur_elem_idx) && !element.empty()) {
-                if (cur_elem_idx == 0) {
-                    parse_xml_node(doc,
-                                   element,
-                                   num_shards,
-                                   load_tid,
-                                   load_nthreads,
-                                   zero_clk,
-                                   prop_delim,
-                                   cur_shard_node_count,
-                                   nodes_in_memory,
-                                   total_node_count,
-                                   hstub,
-                                   btc_graph);
-                } else {
-                    parse_xml_edge(doc,
-                                   element,
-                                   num_shards,
-                                   load_tid,
-                                   load_nthreads,
-                                   zero_clk,
-                                   prop_delim,
-                                   cur_shard_edge_count,
-                                   edges_in_memory,
-                                   hstub);
+                    if (!S->node_exists_bulk_load(elem.node)) {
+                        // node not created, skip edge
+                        // the edge will eventually be added by another thread once the node has been loaded
+                        continue;
+                    }
+
+                    db::hyper_stub &other_hstub = *hstubs[elem.owner_tid];
+                    bool loaded_chunk, loaded_elem;
+                    other_hstub.check_loaded_chunk(chunk_count, i, loaded_chunk, loaded_elem);
+
+                    if (loaded_chunk) {
+                        bool found = false;
+                        for (uint32_t idx = 0; idx < done_tids.size(); idx++) {
+                            if (done_tids[idx] == elem.owner_tid) {
+                                found = true;
+                                break;
+                            }
+                        }
+
+                        if (!found) {
+                            done_tids.emplace_back(elem.owner_tid);
+                            assert((int64_t)done_tids.size() <= NUM_SHARD_THREADS);
+                        }
+                    } else if (!loaded_elem) {
+                        load_xml_element(elem,
+                                         load_tid,
+                                         hstub, other_hstub,
+                                         static_xml_args);
+                    }
                 }
+
+                // wait for all threads to finish with current chunk
+                for (int i = 0; i < NUM_SHARD_THREADS; i++) {
+                    if (i == load_tid) {
+                        continue;
+                    }
+                    hstubs[i]->wait_done_chunk(chunk_count);
+                }
+
+                // all threads done with all elems in this chunk
+                chunk_count++;
             }
 
             file.close();
-            element.clear();
 
             S->bulk_load_persistent(hstub);
+
             break;
         }
 
@@ -2472,6 +2585,11 @@ main(int argc, const char *argv[])
             wclock::weaver_timer timer;
             uint64_t load_time = timer.get_time_elapsed();
 
+            std::vector<std::shared_ptr<db::hyper_stub>> hstubs;
+            for (int i = 0; i < NUM_SHARD_THREADS; i++) {
+                hstubs.emplace_back(std::make_shared<db::hyper_stub>(shard_id, i));
+            }
+
             std::vector<std::shared_ptr<pthread_t>> bulk_load_threads;
             std::vector<load_graph_data> bulk_load_args(NUM_SHARD_THREADS);
             for (int i = 0; i < NUM_SHARD_THREADS; i++) {
@@ -2482,8 +2600,9 @@ main(int argc, const char *argv[])
                 args.load_tid = i;
                 args.load_nthreads = NUM_SHARD_THREADS;
                 args.btc_graph = btc_graph;
+                args.hstubs = hstubs;
 
-                std::shared_ptr<pthread_t> t(new pthread_t());
+                std::shared_ptr<pthread_t> t = std::make_shared<pthread_t>();
                 int rc = pthread_create(t.get(), nullptr, &load_graph, &args);
                 assert(rc == 0);
                 bulk_load_threads.emplace_back(t);
