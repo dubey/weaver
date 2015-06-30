@@ -337,6 +337,7 @@ struct load_xml_elem_static_args
     uint64_t total_node_count;
     uint64_t cur_shard_edge_count;
     uint64_t edges_in_memory;
+    uint64_t other_thread_elem_count;
     bool btc_graph;
 
     load_xml_elem_static_args(const load_graph_data &data,
@@ -350,6 +351,7 @@ struct load_xml_elem_static_args
         , total_node_count(0)
         , cur_shard_edge_count(0)
         , edges_in_memory(0)
+        , other_thread_elem_count(0)
         , btc_graph(data.btc_graph)
     { }
 };
@@ -409,6 +411,7 @@ load_xml_node(pugi::xml_document &doc,
         WDEBUG << "GRAPHML tid=" << this_tid
                << " node=" << cur_shard_node_count
                << " nodes_in_mem=" << nodes_in_memory
+               << " other_thread_elem_count=" << static_args.other_thread_elem_count
                << std::endl;
     }
 
@@ -508,7 +511,9 @@ load_xml_edge(pugi::xml_document &doc,
     if (++cur_shard_edge_count % 10000 == 0) {
         WDEBUG << "GRAPHML tid=" << this_tid
                << " edge=" << cur_shard_edge_count
-               << " edges_in_mem=" << edges_in_memory << std::endl;
+               << " edges_in_mem=" << edges_in_memory
+               << " other_thread_elem_count=" << static_args.other_thread_elem_count
+               << std::endl;
     }
 }
 
@@ -714,6 +719,7 @@ load_graph(void *args)
                                          load_tid,
                                          hstub, other_hstub,
                                          static_xml_args);
+                        static_xml_args.other_thread_elem_count++;
                     }
                 }
 
