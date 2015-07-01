@@ -182,9 +182,22 @@ struct xml_element
     node_handle_t node;
     edge_handle_t edge;
 
-    bool belongs_to_thread(int tid) { return owner_tid == tid; }
-    bool belongs_to_threads(const std::vector<int> &tids)
+    // shard id should match
+    bool belongs_to_shard() { return owner_shard == shard_id; }
+
+    // shard id and thread id should match
+    bool belongs_to_us(int tid)
     {
+        return belongs_to_shard() && (owner_tid == tid);
+    }
+
+    // shard id should match, thread id should be one of tids
+    bool belongs_to_us(const std::vector<int> &tids)
+    {
+        if (!belongs_to_shard()) {
+            return false;
+        }
+
         for (int tid: tids) {
             if (owner_tid == tid) {
                 return true;
@@ -661,7 +674,7 @@ load_graph(void *args)
 
                 // first load elements that belong to this thread
                 for (uint32_t i = 0; i < elem_count; i++) {
-                    if (elements[i].belongs_to_thread(load_tid)) {
+                    if (elements[i].belongs_to_us(load_tid)) {
                         bool loaded_chunk, loaded_elem;
                         hstub.check_loaded_chunk(chunk_count, i, loaded_chunk, loaded_elem);
                         assert(!loaded_chunk);
@@ -682,21 +695,28 @@ load_graph(void *args)
                 for (uint32_t i = 0; i < elem_count; i++) {
                     xml_element &elem = elements[i];
 
-                    if (elem.belongs_to_threads(done_tids)) {
+                    // don't load another shards elements
+                    if (!elem.belongs_to_shard()) {
                         continue;
                     }
 
+                    // don't load elements that have already been loaded
+                    if (elem.belongs_to_us(done_tids)) {
+                        continue;
+                    }
+
+                    // don't load other thread's node
                     if (elem.elem_idx == 0) {
-                        // do not load other thread's node
                         continue;
                     }
 
+                    // node not created, skip edge
+                    // the edge will eventually be added by another thread once the node has been loaded
                     if (!S->node_exists_bulk_load(elem.node)) {
-                        // node not created, skip edge
-                        // the edge will eventually be added by another thread once the node has been loaded
                         continue;
                     }
 
+                    // now try loading elem
                     db::hyper_stub &other_hstub = *hstubs[elem.owner_tid];
                     bool loaded_chunk, loaded_elem;
                     other_hstub.check_loaded_chunk(chunk_count, i, loaded_chunk, loaded_elem);
