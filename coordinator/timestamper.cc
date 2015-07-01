@@ -906,8 +906,9 @@ dummy(int)
 { }
 
 static void
-exit_on_signal(int)
+exit_on_signal(int sig)
 {
+    WDEBUG << "got signal " << strsignal(sig) << ", exiting now" << std::endl;
     exit(EXIT_SUCCESS);
 }
 
