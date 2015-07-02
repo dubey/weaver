@@ -793,11 +793,12 @@ cdef class Client:
         self.__convert_vector_props_to_dict(c_edge.properties, py_edge.properties)
 
     def get_edges(self, nbrs=None, edges=None, properties=None, node=''):
+        if edges is not None:
+            if not isinstance(edges, list):
+                raise WeaverError(WEAVER_CLIENT_LOGICALERROR, 'edges should be list')
         if node == '':
             if edges is None:
-                raise WeaverError('provide one of node handle, node alias, or edge handle')
-            elif not isinstance(edges, list):
-                raise WeaverError('edges should be list')
+                raise WeaverError(WEAVER_CLIENT_LOGICALERROR, 'provide one of node handle, node alias, or edge handle')
             else:
                 node = edges[0]
         cdef pair[string, edge_get_params] arg_pair
@@ -842,7 +843,7 @@ cdef class Client:
         if len(response) == 1:
             return response[0]
         else:
-            raise WeaverError('edge not found or some other error')
+            raise WeaverError(WEAVER_CLIENT_ABORT, 'edge not found or some other error')
 
     cdef __convert_node_to_client_node(self, node c_node, py_node):
         py_node.handle = str(c_node.handle)

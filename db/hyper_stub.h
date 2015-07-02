@@ -74,7 +74,7 @@ namespace db
             bool put_edge_no_loop(const node_handle_t &node_handle,
                                   db::edge *e,
                                   uint64_t edge_id,
-                                  const std::string &alias,
+                                  const std::vector<std::string> &aliases,
                                   bool del_after_call);
             bool put_node_edge_id_set_no_loop(const node_handle_t &node_handle,
                                               int64_t start_id,

@@ -481,14 +481,15 @@ load_xml_edge(pugi::xml_document &doc,
 
     db::edge *e = S->create_edge_bulk_load(edge_handle, id1, loc1, zero_clk);
     bool in_mem = S->add_edge_to_node_bulk_load(e, id0, map_idx);
-    std::string alias;
+    std::vector<std::string> aliases;
+    aliases.emplace_back(edge_handle);
 
     for (pugi::xml_node prop: edge.children("data")) {
         std::string key = prop.attribute("key").value();
         std::string value = prop.child_value();
 
         if (key == BulkLoadEdgeIndexKey) {
-            alias = value;
+            aliases.emplace_back(value);
         }
 
         if (!prop_delim || value.empty()) {
@@ -503,7 +504,7 @@ load_xml_edge(pugi::xml_document &doc,
     }
 
     uint64_t edge_id = other_hstub.new_edge(id0);
-    S->bulk_load_put_edge(hstub, e, id0, edge_id, in_mem, alias);
+    S->bulk_load_put_edge(hstub, e, id0, edge_id, in_mem, aliases);
     
     if (in_mem) {
         edges_in_memory++;

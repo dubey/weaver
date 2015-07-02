@@ -354,13 +354,15 @@ bool
 hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle,
                                db::edge *e,
                                uint64_t edge_id,
-                               const std::string &alias,
+                               const std::vector<std::string> &aliases,
                                bool del_after_call)
 {
     // add edge alias
-    if (!alias.empty()) {
-        if (!add_index_no_loop(node_handle, alias)) {
-            return false;
+    if (!aliases.empty()) {
+        for (const std::string &alias: aliases) {
+            if (!add_index_no_loop(node_handle, alias)) {
+                return false;
+            }
         }
     }
     // write edge to edge space

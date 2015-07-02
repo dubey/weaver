@@ -11,6 +11,7 @@
  * ===============================================================
  */
 
+#define weaver_debug_
 #include "common/stl_serialization.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/edge_get_program.h"
@@ -45,6 +46,25 @@ void edge_get_params :: unpack(e::unpacker& unpacker)
     message::unpack_buffer(unpacker, properties);
 }
 
+bool
+check_edge_nbrs(const std::vector<node_handle_t> &nbrs,
+                node_prog::edge &e)
+{
+    bool return_edge = true;
+
+    if (!nbrs.empty()) {
+        return_edge = false;
+        for (const node_handle_t &nbr: nbrs) {
+            if (nbr == e.get_neighbor().handle) {
+                return_edge = true;
+                break;
+            }
+        }
+    }
+
+    return return_edge;
+}
+
 std::pair<search_type, std::vector<std::pair<db::remote_node, edge_get_params>>>
 node_prog :: edge_get_node_program(
     node &n,
@@ -55,41 +75,54 @@ node_prog :: edge_get_node_program(
         std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)>&,
     cache_response<Cache_Value_Base>*)
 {
-    auto elist = n.get_edges();
-    for (edge &e : elist) {
-        bool select = true;
+    if (!params.request_edges.empty()) {
+        // don't have to iterate over all edges
+        for (const edge_handle_t &h: params.request_edges) {
+            if (n.edge_exists(h)) {
+                edge &e = n.get_edge(h);
+                bool return_edge = true;
 
-        if (!params.nbrs.empty()) {
-            auto nbr = e.get_neighbor();
-            bool found = false;
-            for (const node_handle_t &h: params.nbrs) {
-                if (h == nbr.handle) {
-                    found = true;
-                    break;
+                if (!params.nbrs.empty()) {
+                    return_edge = check_edge_nbrs(params.nbrs, e);
+                }
+
+                if (return_edge && !e.has_all_properties(params.properties)) {
+                    return_edge = false;
+                }
+
+                if (return_edge) {
+                    cl::edge cl_edge;
+                    e.get_client_edge(n.get_handle(), cl_edge);
+                    params.response_edges.emplace_back(cl_edge);
                 }
             }
-            if (!found) {
-                select = false;
-            }
         }
+    } else {
+        // iterate over all edges, will be slow for vertices with lots of edges
+        for (edge &e: n.get_edges()) {
+            bool return_edge = true;
 
-        if (select && !params.request_edges.empty()) {
-            bool found = false;
-            for (const edge_handle_t &h: params.request_edges) {
-                if (e.get_handle() == h) {
-                    found = true;
-                    break;
+            if (!params.nbrs.empty()) {
+                return_edge = check_edge_nbrs(params.nbrs, e);
+            }
+
+            if (return_edge && !params.request_edges.empty()) {
+                return_edge = false;
+                for (const edge_handle_t &h: params.request_edges) {
+                    WDEBUG << "request_edge=" << h
+                           << ", handle=" << e.get_handle() << std::endl;
+                    if (e.get_handle() == h) {
+                        return_edge = true;
+                        break;
+                    }
                 }
             }
-            if (!found) {
-                select = false;
-            }
-        }
 
-        if (select && e.has_all_properties(params.properties)) {
-            cl::edge cl_edge;
-            e.get_client_edge(n.get_handle(), cl_edge);
-            params.response_edges.emplace_back(cl_edge);
+            if (return_edge && e.has_all_properties(params.properties)) {
+                cl::edge cl_edge;
+                e.get_client_edge(n.get_handle(), cl_edge);
+                params.response_edges.emplace_back(cl_edge);
+            }
         }
     }
 

@@ -98,6 +98,7 @@ node_prog :: get_btc_block_node_program(node_prog::node &n,
         // request spreading out
 
         if (n.get_handle() == params.block || n.is_alias(params.block)) {
+            // this is btc block vertex
             std::string block_tx_str = "BLOCK_TX_";
             params.block_node = rn;
             state.outstanding_count = 0;
@@ -129,26 +130,28 @@ node_prog :: get_btc_block_node_program(node_prog::node &n,
                 }
             }
         } else {
+            // this is neighbor of btc block, i.e. a btc address vertex
             assert(!params.tx_to_get.empty());
 
             std::unordered_map<std::string, btc_tx_t> seen_txs;
-            for (std::string &tx_handle: params.tx_to_get) {
+            for (std::string &_tx_handle: params.tx_to_get) {
+                std::string tx_handle = "TXOUT_" + _tx_handle;
                 if (n.edge_exists(tx_handle)) {
                     edge &e = n.get_edge(tx_handle);
                     cl::edge cl_edge;
                     e.get_client_edge(n.get_handle(), cl_edge);
 
-                    std::string tx_id;
-                    for (auto pvec: e.get_properties()) {
-                        for (auto &p: pvec) {
-                            if (p->key == "tx_id") {
-                                tx_id = p->value;
-                            }
-                        }
-                    }
-                    assert(!tx_id.empty());
                     std::string tx_out = "TXOUT_";
-                    tx_id = tx_id.substr(tx_out.size());
+                    std::string tx_id = tx_handle.substr(tx_out.size());
+                    //for (auto pvec: e.get_properties()) {
+                    //    for (auto &p: pvec) {
+                    //        if (p->key == "tx_id") {
+                    //            tx_id = p->value;
+                    //        }
+                    //    }
+                    //}
+                    //assert(!tx_id.empty());
+                    //tx_id = tx_id.substr(tx_out.size());
                     tx_id.pop_back();
                     tx_id.pop_back();
 
@@ -157,19 +160,35 @@ node_prog :: get_btc_block_node_program(node_prog::node &n,
                     btc_tx.second.emplace_back(cl_edge);
 
                     if (!exists) {
-                        predicate::prop_predicate pred;
-                        std::vector<predicate::prop_predicate> edge_preds;
-                        pred.key = "consumed_tx_id";
-                        pred.value = tx_id;
-                        pred.rel = predicate::STARTS_WITH;
-                        edge_preds.emplace_back(pred);
-
-                        for (edge &in_e: n.get_edges()) {
-                            if (in_e.has_all_predicates(edge_preds)) {
-                                in_e.get_client_edge(n.get_handle(), cl_edge);
-                                btc_tx.first.emplace_back(cl_edge);
+                        std::vector<std::string> input_txes;
+                        for (auto pvec: e.get_properties()) {
+                            for (auto &p: pvec) {
+                                if (p->key == "input_txes") {
+                                    input_txes.emplace_back("TXIN_" + p->value);
+                                }
                             }
                         }
+                        WDEBUG << "input_txes.sz=" << input_txes.size() << std::endl;
+
+                        for (const std::string &itx: input_txes) {
+                            assert(n.edge_exists(itx));
+                            edge &in_e = n.get_edge(itx);
+                            in_e.get_client_edge(n.get_handle(), cl_edge);
+                            btc_tx.first.emplace_back(cl_edge);
+                        }
+                        //predicate::prop_predicate pred;
+                        //std::vector<predicate::prop_predicate> edge_preds;
+                        //pred.key = "consumed_tx_id";
+                        //pred.value = tx_id;
+                        //pred.rel = predicate::STARTS_WITH;
+                        //edge_preds.emplace_back(pred);
+
+                        //for (edge &in_e: n.get_edges()) {
+                        //    if (in_e.has_all_predicates(edge_preds)) {
+                        //        in_e.get_client_edge(n.get_handle(), cl_edge);
+                        //        btc_tx.first.emplace_back(cl_edge);
+                        //    }
+                        //}
                     }
                 }
             }
