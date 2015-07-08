@@ -176,6 +176,7 @@ split(const std::string &s, char delim, std::vector<std::string> &elems)
 struct xml_element
 {
     uint32_t elem_idx;
+    uint64_t node_count;
     pugi::xml_document doc;
     uint64_t owner_shard;
     int owner_tid;
@@ -375,7 +376,8 @@ load_xml_node(pugi::xml_document &doc,
               int this_tid,
               db::hyper_stub &hstub,
               db::hyper_stub &other_hstub,
-              load_xml_elem_static_args &static_args)
+              load_xml_elem_static_args &static_args,
+              uint64_t node_count)
 {
     uint64_t &num_shards = static_args.num_shards;
     int &load_nthreads = static_args.load_nthreads;
@@ -383,12 +385,10 @@ load_xml_node(pugi::xml_document &doc,
     bool prop_delim = static_args.prop_delim;
     uint64_t &cur_shard_node_count = static_args.cur_shard_node_count;
     uint64_t &nodes_in_memory = static_args.nodes_in_memory;
-    uint64_t &total_node_count = static_args.total_node_count;
     bool btc_graph = static_args.btc_graph;
 
     // get xml node from doc
     pugi::xml_node node = doc.child("node");
-    total_node_count++;
 
     // init node attributes
     node_handle_t id0 = node.attribute("id").value();
@@ -449,7 +449,7 @@ load_xml_node(pugi::xml_document &doc,
         }
         assert(!parse_bad);
     } else {
-        start_edge_idx = total_node_count * MAX_EDGES_PER_NODE;
+        start_edge_idx = node_count * MAX_EDGES_PER_NODE;
     }
 
 #undef MAX_EDGES_PER_NODE
@@ -544,7 +544,8 @@ load_xml_element(xml_element &elem,
                       this_tid,
                       my_hstub,
                       owner_hstub,
-                      static_args);
+                      static_args,
+                      elem.node_count);
     } else { // edge
         load_xml_edge(elem.doc,
                       elem.owner_tid,
@@ -675,6 +676,11 @@ load_graph(void *args)
 
                 // first load elements that belong to this thread
                 for (uint32_t i = 0; i < elem_count; i++) {
+                    if (elements[i].elem_idx == 0) {
+                        // assign node count
+                        elements[i].node_count = ++static_xml_args.total_node_count;
+                    }
+
                     if (elements[i].belongs_to_us(load_tid)) {
                         bool loaded_chunk, loaded_elem;
                         hstub.check_loaded_chunk(chunk_count, i, loaded_chunk, loaded_elem);
