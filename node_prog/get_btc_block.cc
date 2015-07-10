@@ -102,70 +102,63 @@ node_prog :: get_btc_block_node_program(node_prog::node &n,
             std::string block_tx_str = "BLOCK_TX_";
             params.block_node = rn;
             state.outstanding_count = 0;
-            std::unordered_map<node_handle_t, std::pair<db::remote_node, std::vector<std::string>>> send_map;
+            std::vector<std::pair<db::remote_node, std::string>> txs_to_get;
             for (edge &e: n.get_edges()) {
                 if (e.get_handle().compare(0, block_tx_str.size(), block_tx_str) == 0) {
                     std::string tx_to_get = e.get_handle().substr(block_tx_str.size());
-                    auto sm_iter = send_map.find(e.get_neighbor().handle);
-                    if (sm_iter == send_map.end()) {
-                        send_map[e.get_neighbor().handle] = std::make_pair(e.get_neighbor(), std::vector<std::string>(1, tx_to_get));
-                    } else {
-                        sm_iter->second.second.emplace_back(tx_to_get);
-                    }
+                    txs_to_get.emplace_back(std::make_pair(e.get_neighbor(), tx_to_get));
                 }
             }
 
-            if (send_map.empty()) {
+            if (txs_to_get.empty()) {
                 n.get_client_node(params.node, true, true, true);
                 next.emplace_back(std::make_pair(db::coordinator, std::move(params)));
             } else {
-                for (auto &p: send_map) {
+                for (const auto &p: txs_to_get) {
                     params.tx_to_get.clear();
-                    const db::remote_node &nbr = p.second.first;
-                    for (const std::string &tx: p.second.second) {
-                        params.tx_to_get.emplace_back(tx);
-                    }
-                    next.emplace_back(std::make_pair(nbr, params));
+                    params.tx_to_get.emplace_back(p.second);
+                    next.emplace_back(std::make_pair(p.first, params));
                     state.outstanding_count++;
                 }
             }
         } else {
-            // this is neighbor of btc block, i.e. a btc address vertex
+            // this is neighbor of btc block, i.e. a btc tx vertex
             assert(!params.tx_to_get.empty());
 
             std::unordered_map<std::string, btc_tx_t> seen_txs;
-            for (std::string &_tx_handle: params.tx_to_get) {
-                std::string tx_handle = "TXOUT_" + _tx_handle;
-                if (n.edge_exists(tx_handle)) {
-                    edge &e = n.get_edge(tx_handle);
-                    cl::edge cl_edge;
-                    e.get_client_edge(n.get_handle(), cl_edge);
+            for (const std::string &tx_id: params.tx_to_get) {
+                uint64_t tx_index = 0;
+                while (true) {
+                    std::string tx_handle = "TXOUT_" + tx_id + "_" + std::to_string(tx_index++);
+                    if (n.edge_exists(tx_handle)) {
+                        edge &e = n.get_edge(tx_handle);
+                        cl::edge cl_edge;
+                        e.get_client_edge(n.get_handle(), cl_edge);
 
-                    std::string tx_out = "TXOUT_";
-                    std::string tx_id = tx_handle.substr(tx_out.size());
-                    tx_id.pop_back();
-                    tx_id.pop_back();
+                        bool exists = seen_txs.find(tx_id) != seen_txs.end();
+                        btc_tx_t &btc_tx = seen_txs[tx_id];
+                        btc_tx.second.emplace_back(cl_edge);
 
-                    bool exists = seen_txs.find(tx_id) != seen_txs.end();
-                    btc_tx_t &btc_tx = seen_txs[tx_id];
-                    btc_tx.second.emplace_back(cl_edge);
+                        if (!exists) {
+                            std::vector<std::string> input_txes;
+                            for (auto pvec: e.get_properties()) {
+                                for (auto &p: pvec) {
+                                    if (p->key == "input_txes") {
+                                        input_txes.emplace_back("CXIN_" + p->value);
+                                    }
+                                }
+                            }
 
-                    if (!exists) {
-                        std::vector<std::string> input_txes;
-                        for (auto pvec: e.get_properties()) {
-                            for (auto &p: pvec) {
-                                if (p->key == "input_txes") {
-                                    input_txes.emplace_back("CXIN_" + p->value);
+                            for (const std::string &itx: input_txes) {
+                                if (n.edge_exists(itx)) {
+                                    edge &in_e = n.get_edge(itx);
+                                    in_e.get_client_edge(n.get_handle(), cl_edge);
+                                    btc_tx.first.emplace_back(cl_edge);
                                 }
                             }
                         }
-
-                        for (const std::string &itx: input_txes) {
-                            assert(n.edge_exists(itx));
-                            edge &in_e = n.get_edge(itx);
-                            in_e.get_client_edge(n.get_handle(), cl_edge);
-                            btc_tx.first.emplace_back(cl_edge);
-                        }
+                    } else {
+                        break;
                     }
                 }
             }
