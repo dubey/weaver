@@ -379,6 +379,17 @@ cdef extern from 'node_prog/discover_paths.h' namespace 'node_prog':
         remote_node prev_node
         node_handle_t src
 
+cdef extern from 'node_prog/cause_and_effect.h' namespace 'node_prog':
+    cdef cppclass cause_and_effect_params:
+        cause_and_effect_params()
+        node_handle_t dest
+        uint32_t path_len
+        vector[prop_predicate] node_preds
+        vector[prop_predicate] edge_preds
+        unordered_map[string, vector[edge]] paths
+        remote_node prev_node
+        node_handle_t src
+
 cdef extern from 'node_prog/get_btc_block.h' namespace 'node_prog':
     cdef cppclass get_btc_block_params:
         get_btc_block_params()
@@ -426,6 +437,7 @@ cdef extern from 'client/client.h' namespace 'cl':
         weaver_client_returncode node_get_program(vector[pair[string, node_get_params]] &initial_args, node_get_params&) nogil
         weaver_client_returncode traverse_props_program(vector[pair[string, traverse_props_params]] &initial_args, traverse_props_params&) nogil
         weaver_client_returncode discover_paths_program(vector[pair[string, discover_paths_params]] &initial_args, discover_paths_params&) nogil
+        weaver_client_returncode cause_and_effect_program(vector[pair[string, cause_and_effect_params]] &initial_args, cause_and_effect_params&) nogil
         weaver_client_returncode get_btc_block_program(vector[pair[string, get_btc_block_params]] &initial_args, get_btc_block_params&) nogil
         weaver_client_returncode start_migration()
         weaver_client_returncode single_stream_migration()
@@ -980,6 +992,50 @@ cdef class Client:
         cdef discover_paths_params c_rp
         with nogil:
             code = self.thisptr.discover_paths_program(c_args, c_rp)
+
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
+
+        ret_paths = {}
+        cdef unordered_map[string, vector[edge]].iterator path_iter = c_rp.paths.begin()
+        cdef vector[edge].iterator edge_iter
+        while path_iter != c_rp.paths.end():
+            cur_node = str(deref(path_iter).first)
+            cur_edges = []
+            edge_iter = deref(path_iter).second.begin()
+            while edge_iter != deref(path_iter).second.end():
+                cur_edges.append(Edge())
+                self.__convert_edge_to_client_edge(deref(edge_iter), cur_edges[-1])
+                inc(edge_iter)
+            ret_paths[cur_node] = cur_edges
+            inc(path_iter)
+        return ret_paths
+
+    def cause_and_effect(self, start_node, end_node, path_len=None, node_preds=None, edge_preds=None):
+        cdef vector[pair[string, cause_and_effect_params]] c_args
+        cdef pair[string, cause_and_effect_params] arg_pair
+        arg_pair.first = start_node
+        arg_pair.second.prev_node = coordinator
+        arg_pair.second.dest = end_node
+        arg_pair.second.src = start_node
+        if path_len is not None:
+            arg_pair.second.path_len = path_len
+        cdef prop_predicate pred_c
+        if node_preds is not None:
+            arg_pair.second.node_preds.reserve(len(node_preds))
+            for pred in node_preds:
+                self.__convert_pred_to_c_pred(pred, pred_c)
+                arg_pair.second.node_preds.push_back(pred_c)
+        if edge_preds is not None:
+            arg_pair.second.edge_preds.reserve(len(edge_preds))
+            for pred in edge_preds:
+                self.__convert_pred_to_c_pred(pred, pred_c)
+                arg_pair.second.edge_preds.push_back(pred_c)
+        c_args.push_back(arg_pair)
+
+        cdef cause_and_effect_params c_rp
+        with nogil:
+            code = self.thisptr.cause_and_effect_program(c_args, c_rp)
 
         if code != WEAVER_CLIENT_SUCCESS:
             raise WeaverError(code, 'node prog error')

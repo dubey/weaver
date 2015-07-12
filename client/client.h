@@ -37,6 +37,7 @@
 #include "node_prog/node_get_program.h"
 #include "node_prog/traverse_with_props.h"
 #include "node_prog/discover_paths.h"
+#include "node_prog/cause_and_effect.h"
 #include "node_prog/get_btc_block.h"
 
 namespace cl
@@ -99,6 +100,7 @@ namespace cl
             weaver_client_returncode node_get_program(std::vector<std::pair<std::string, node_prog::node_get_params>> &initial_args, node_prog::node_get_params&);
             weaver_client_returncode traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args, node_prog::traverse_props_params&);
             weaver_client_returncode discover_paths_program(std::vector<std::pair<std::string, node_prog::discover_paths_params>> &initial_args, node_prog::discover_paths_params&);
+            weaver_client_returncode cause_and_effect_program(std::vector<std::pair<std::string, node_prog::cause_and_effect_params>> &initial_args, node_prog::cause_and_effect_params&);
             weaver_client_returncode get_btc_block_program(std::vector<std::pair<std::string, node_prog::get_btc_block_params>> &initial_args, node_prog::get_btc_block_params&);
 
             weaver_client_returncode start_migration();
