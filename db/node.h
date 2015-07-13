@@ -31,7 +31,6 @@
 #include "db/cache_entry.h"
 #include "db/element.h"
 #include "db/edge.h"
-#include "db/shard_constants.h"
 #include "client/datastructures.h"
 
 namespace message

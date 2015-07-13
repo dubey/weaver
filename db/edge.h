@@ -22,7 +22,6 @@
 #include "node_prog/property.h"
 #include "db/remote_node.h"
 #include "db/element.h"
-#include "db/shard_constants.h"
 #include "client/datastructures.h"
 
 namespace db
