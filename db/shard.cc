@@ -428,7 +428,8 @@ load_xml_node(pugi::xml_document &doc,
                << std::endl;
     }
 
-#define MAX_EDGES_PER_NODE 10000000000ULL // at most 10B edges per node
+#define MAX_EDGES_PER_NODE 100000000ULL // at most 100M edges per node
+#define MAX_NODES_PER_SHARD 100000000ULL // at most 100M nodes per shard
 
     uint64_t start_edge_idx;
 
@@ -449,10 +450,12 @@ load_xml_node(pugi::xml_document &doc,
         }
         assert(!parse_bad);
     } else {
-        start_edge_idx = node_count * MAX_EDGES_PER_NODE;
+        start_edge_idx = (shard_id-ShardIdIncr)*MAX_NODES_PER_SHARD*MAX_EDGES_PER_NODE
+                       + node_count*MAX_EDGES_PER_NODE;
     }
 
 #undef MAX_EDGES_PER_NODE
+#undef MAX_NODES_PER_SHARD
 
     other_hstub.new_node(n->get_handle(), start_edge_idx);
     bool in_mem = S->add_node_to_nodemap_bulk_load(n, map_idx);
