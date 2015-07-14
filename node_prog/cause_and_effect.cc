@@ -21,11 +21,14 @@ using node_prog::cdp_len_state;
 using node_prog::cache_response;
 using node_prog::Cache_Value_Base;
 
+static const int MAX_RESULTS = 10;
+
 // params
 cause_and_effect_params :: cause_and_effect_params()
     : path_confid(1.0)
     , returning(false)
-{ }
+{
+}
 
 uint64_t
 cause_and_effect_params :: size() const
@@ -133,21 +136,6 @@ static uint32_t quantize(double f)
     return uint32_t(f * 1e6);
 }
 
-/* merge results */
-static void
-state_paths_to_params_paths(const std::unordered_map<node_handle_t, node_prog::edge_set> &state_paths,
-    std::unordered_map<node_handle_t, std::vector<cl::edge>> &params_paths)
-{
-    params_paths.clear();
-    for (const auto &p: state_paths) {
-        std::vector<cl::edge> &evec = params_paths[p.first];
-        evec.reserve(p.second.size());
-        for (const cl::edge &e: p.second) {
-            evec.emplace_back(e);
-        }
-    }
-}
-
 std::pair<search_type, std::vector<std::pair<db::remote_node, cause_and_effect_params>>>
 node_prog :: cause_and_effect_node_program(node_prog::node &n,
    db::remote_node &rn,
@@ -170,8 +158,8 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
             if (dp_state.outstanding_count == 0) {
                 // replies already gathered from children
                 params.returning = true;
-                params.path_confid = params.prev_confid;
-                state_paths_to_params_paths(dp_state.paths, params.paths);
+                std::swap(params.path_confid, params.prev_confid);
+                params.paths = dp_state.paths;
                 next.emplace_back(std::make_pair(params.prev_node, params));
             } else {
                 // still awaiting replies, enqueue in prev nodes
@@ -185,7 +173,7 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
             if (!n.has_all_predicates(params.node_preds)) {
                 // node does not have all required properties, return immediately
                 params.returning = true;
-                params.path_confid = params.prev_confid;
+                std::swap(params.path_confid, params.prev_confid);
                 assert(params.paths.empty());
                 next.emplace_back(std::make_pair(params.prev_node, params));
             } else {
@@ -193,9 +181,9 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
                 if (params.dest == n.get_handle() || n.is_alias(params.dest)) {
                     fprintf(stderr, "hit\n");
                     params.returning = true;
-                    params.path_confid = params.prev_confid;
-                    dp_state.paths[n.get_handle()] = edge_set();
-                    state_paths_to_params_paths(dp_state.paths, params.paths);
+                    params.paths.emplace_back(1.0, std::vector<node_handle_t>());
+                    params.paths[0].second.emplace_back(n.get_handle());
+                    std::swap(params.path_confid, params.prev_confid);
                     next.emplace_back(std::make_pair(params.prev_node, params));
                     fprintf(stderr, "return to %s\n", params.prev_node.handle.c_str());
                 } else if (params.path_confid > params.cutoff_confid) {
@@ -225,6 +213,7 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
 
                     if (dp_state.outstanding_count == 0) {
                         params.returning = true;
+                        params.prev_confid = params.path_confid;
                         params.path_confid = dp_state.prev_confids[0];
                         next.emplace_back(std::make_pair(dp_state.prev_nodes[0], params));
                         dp_state.prev_nodes.clear();
@@ -232,7 +221,7 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
                     }
                 } else { /* run out of path length */
                     params.returning = true;
-                    params.path_confid = params.prev_confid;
+                    std::swap(params.path_confid, params.prev_confid);
                     assert(params.paths.empty());
                     next.emplace_back(std::make_pair(params.prev_node, params));
                 }
@@ -241,45 +230,34 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
 
     } else {
         // request returning to start node
-        fprintf(stderr, "back to id: %s %d\n", n.get_handle().c_str(),quantize(params.path_confid));
+        fprintf(stderr, "back to id: %s %d %d\n", n.get_handle().c_str(),quantize(params.path_confid), quantize(params.prev_confid));
         auto vmap_iter = state.vmap.find(quantize(params.path_confid));
         assert(vmap_iter != state.vmap.end());
         cdp_len_state &dp_state = vmap_iter->second;
 
-        if (!params.paths.empty()) {
-            for (const auto &p: params.paths) {
-                if (dp_state.paths.find(p.first) == dp_state.paths.end()) {
-                    dp_state.paths.emplace(p.first, edge_set());
-                }
-                edge_set &eset = dp_state.paths[p.first];
-                for (const cl::edge &cl_e: p.second) {
-                    eset.emplace(cl_e);
-                }
-            }
-
-            node_handle_t cur_node;
-            if (dp_state.prev_nodes.size() == 1 && dp_state.prev_nodes[0] == db::coordinator) {
-                cur_node = params.src;
-            } else {
-                cur_node = n.get_handle();
-            }
-            edge_set &eset = dp_state.paths[cur_node];
-            for (edge &e: n.get_edges()) {
-                node_handle_t nbr = e.get_neighbor().handle;
-                fprintf(stderr, "considering %s: %d\n", nbr.c_str(),
-                    dp_state.paths.find(nbr) != dp_state.paths.end()
-                        );
-                if (e.has_all_predicates(params.edge_preds) && dp_state.paths.find(nbr) != dp_state.paths.end()) {
-                    cl::edge cl_e;
-                    e.get_client_edge(n.get_handle(), cl_e);
-                    fprintf(stderr, "adding edge: %s\n", cl_e.end_node.c_str());
-                    eset.emplace(cl_e);
-                }
-            }
+        path_res new_paths;
+        auto &spaths = dp_state.paths;
+        auto &ppaths = params.paths;
+        for (auto &path: ppaths)
+            path.first *= params.prev_confid / params.path_confid;
+        for (auto siter = spaths.begin(),
+                    piter = ppaths.begin();
+                    (siter != spaths.end() || piter != ppaths.end())
+                        && new_paths.size() < MAX_RESULTS;) {
+            if (piter == ppaths.end() || (siter != spaths.end() && siter->first < piter->first))
+                new_paths.emplace_back(*siter++);
+            else
+                new_paths.emplace_back(*piter++);
         }
 
+        dp_state.paths = new_paths;
+
         if (--dp_state.outstanding_count == 0) {
-            state_paths_to_params_paths(dp_state.paths, params.paths);
+
+            for (auto &path: dp_state.paths)
+                path.second.emplace_back(n.get_handle());
+
+            params.paths = dp_state.paths;
             auto prev_nodes = dp_state.prev_nodes;
             auto prev_confids = dp_state.prev_confids;
             auto niter = prev_nodes.begin();
@@ -287,6 +265,7 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
             for (;niter != prev_nodes.end(); niter++, citer++) {
                 auto &prev = *niter;
                 auto &confid = *citer;
+                params.prev_confid = params.path_confid;
                 params.path_confid = confid;
                 next.emplace_back(std::make_pair(prev, params));
             }

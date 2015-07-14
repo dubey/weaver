@@ -384,10 +384,11 @@ cdef extern from 'node_prog/cause_and_effect.h' namespace 'node_prog':
         cause_and_effect_params()
         node_handle_t dest
         double path_confid
+        double prev_confid
         double cutoff_confid
         vector[prop_predicate] node_preds
         vector[prop_predicate] edge_preds
-        unordered_map[string, vector[edge]] paths
+        vector[pair[double, vector[node_handle_t]]] paths
         remote_node prev_node
         node_handle_t src
 
@@ -1043,19 +1044,32 @@ cdef class Client:
         if code != WEAVER_CLIENT_SUCCESS:
             raise WeaverError(code, 'node prog error')
 
-        ret_paths = {}
-        cdef unordered_map[string, vector[edge]].iterator path_iter = c_rp.paths.begin()
-        cdef vector[edge].iterator edge_iter
+        ret_paths = []
+        cdef vector[pair[double, vector[node_handle_t]]].iterator path_iter = c_rp.paths.begin()
+        cdef vector[node_handle_t].iterator node_iter
         while path_iter != c_rp.paths.end():
-            cur_node = str(deref(path_iter).first)
-            cur_edges = []
-            edge_iter = deref(path_iter).second.begin()
-            while edge_iter != deref(path_iter).second.end():
-                cur_edges.append(Edge())
-                self.__convert_edge_to_client_edge(deref(edge_iter), cur_edges[-1])
-                inc(edge_iter)
-            ret_paths[cur_node] = cur_edges
+            confid = deref(path_iter).first
+            path = []
+            node_iter = deref(path_iter).second.begin()
+            while node_iter != deref(path_iter).second.end():
+                path.append(deref(node_iter))
+                inc(node_iter)
+            path.reverse()
+            ret_paths.append((confid, path))
             inc(path_iter)
+#        ret_paths = {}
+#        cdef unordered_map[string, vector[edge]].iterator path_iter = c_rp.paths.begin()
+#        cdef vector[edge].iterator edge_iter
+#        while path_iter != c_rp.paths.end():
+#            cur_node = str(deref(path_iter).first)
+#            cur_edges = []
+#            edge_iter = deref(path_iter).second.begin()
+#            while edge_iter != deref(path_iter).second.end():
+#                cur_edges.append(Edge())
+#                self.__convert_edge_to_client_edge(deref(edge_iter), cur_edges[-1])
+#                inc(edge_iter)
+#            ret_paths[cur_node] = cur_edges
+#            inc(path_iter)
         return ret_paths
 
     def get_btc_block(self, block):

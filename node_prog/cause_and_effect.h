@@ -26,7 +26,7 @@
 namespace node_prog
 {
     using edge_set = std::unordered_set<cl::edge, cl::hash_edge, cl::equals_edge>;
-
+    using path_res = std::vector<std::pair<double, std::vector<node_handle_t>>>;
     /* parameter passing to a node */
     struct cause_and_effect_params: public virtual Node_Parameters_Base
     {
@@ -39,8 +39,8 @@ namespace node_prog
         /* node & edge predicates */
         std::vector<predicate::prop_predicate> node_preds;
         std::vector<predicate::prop_predicate> edge_preds;
-        /* subgraph results */
-        std::unordered_map<node_handle_t, std::vector<cl::edge>> paths;
+        /* path results */
+        path_res paths;
         /* whether the search is in returning phase */
         bool returning;
         /* the node that propagates to the current node */
@@ -68,8 +68,8 @@ namespace node_prog
         /* previous nodes */
         std::vector<db::remote_node> prev_nodes;
         std::vector<double> prev_confids;
-        /* subgraph results */
-        std::unordered_map<node_handle_t, edge_set> paths;
+        /* path results */
+        path_res paths;
 
         cdp_len_state();
         ~cdp_len_state() { }
