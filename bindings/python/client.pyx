@@ -383,7 +383,8 @@ cdef extern from 'node_prog/cause_and_effect.h' namespace 'node_prog':
     cdef cppclass cause_and_effect_params:
         cause_and_effect_params()
         node_handle_t dest
-        uint32_t path_len
+        double path_confid
+        double cutoff_confid
         vector[prop_predicate] node_preds
         vector[prop_predicate] edge_preds
         unordered_map[string, vector[edge]] paths
@@ -1011,15 +1012,17 @@ cdef class Client:
             inc(path_iter)
         return ret_paths
 
-    def cause_and_effect(self, start_node, end_node, path_len=None, node_preds=None, edge_preds=None):
+    def cause_and_effect(self, start_node, end_node, path_confid=1.0, cutoff_confid=0.1, node_preds=None, edge_preds=None):
         cdef vector[pair[string, cause_and_effect_params]] c_args
         cdef pair[string, cause_and_effect_params] arg_pair
         arg_pair.first = start_node
         arg_pair.second.prev_node = coordinator
         arg_pair.second.dest = end_node
         arg_pair.second.src = start_node
-        if path_len is not None:
-            arg_pair.second.path_len = path_len
+        if path_confid is not None:
+            arg_pair.second.path_confid = path_confid
+        if cutoff_confid is not None:
+            arg_pair.second.cutoff_confid = cutoff_confid
         cdef prop_predicate pred_c
         if node_preds is not None:
             arg_pair.second.node_preds.reserve(len(node_preds))
