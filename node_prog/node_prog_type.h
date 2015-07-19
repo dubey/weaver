@@ -45,6 +45,7 @@ namespace node_prog
         TRAVERSE_PROPS,
         DISCOVER_PATHS,
         CAUSE_AND_EFFECT,
+        N_GRAM_PATH,
         GET_BTC_BLOCK,
         END
     };
