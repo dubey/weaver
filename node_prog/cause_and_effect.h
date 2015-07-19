@@ -1,12 +1,10 @@
 /*
  * ===============================================================
- *    Description:  Discover all paths between two vertices
- *                  predicated on max path len, node properties,
- *                  edge properties.
+ *    Description:  Cause and effect implementation.
  *
- *         Author:  Ayush Dubey, dubey@cs.cornell.edu
+ *         Author:  Ted Yin, ted.sybil@gmail.com
  *
- * Copyright (C) 2014, Cornell University, see the LICENSE file
+ * Copyright (C) 2015, Cornell University, see the LICENSE file
  *                     for licensing agreement
  * ===============================================================
  */
@@ -43,6 +41,7 @@ namespace node_prog
         anc_set ancestors;
         uint32_t ancestors_hash;
         uint32_t prev_ancestors_hash;
+        uint32_t max_results;
         /* path results */
         path_res paths;
 
@@ -50,7 +49,6 @@ namespace node_prog
         bool returning;
         /* the node that propagates to the current node */
         db::remote_node prev_node;
-        node_handle_t src;
 
         cause_and_effect_params();
         ~cause_and_effect_params() { }

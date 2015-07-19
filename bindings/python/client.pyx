@@ -385,14 +385,11 @@ cdef extern from 'node_prog/cause_and_effect.h' namespace 'node_prog':
         node_handle_t dest
         double cutoff_confid
         double confidence
-        uint32_t ancestors_hash
-        uint32_t prev_ancestors_hash
-        unordered_set[node_handle_t] ancestors
         vector[prop_predicate] node_preds
         vector[prop_predicate] edge_preds
         vector[pair[double, vector[node_handle_t]]] paths
+        uint32_t max_results
         remote_node prev_node
-        node_handle_t src
 
 cdef extern from 'node_prog/n_gram_path.h' namespace 'node_prog':
     cdef cppclass n_gram_path_params:
@@ -402,8 +399,6 @@ cdef extern from 'node_prog/n_gram_path.h' namespace 'node_prog':
         unordered_map[uint32_t, uint32_t] progress
         remote_node coord
         vector[node_handle_t] remaining_path
-        uint32_t step
-        node_handle_t src
 
 cdef extern from 'node_prog/get_btc_block.h' namespace 'node_prog':
     cdef cppclass get_btc_block_params:
@@ -1027,17 +1022,18 @@ cdef class Client:
             inc(path_iter)
         return ret_paths
 
-    def cause_and_effect(self, start_node, end_node, confidence=1.0, cutoff_confid=0.1, node_preds=None, edge_preds=None):
+    def cause_and_effect(self, start_node, end_node, confidence=None, cutoff_confid=None, max_results=None, node_preds=None, edge_preds=None):
         cdef vector[pair[string, cause_and_effect_params]] c_args
         cdef pair[string, cause_and_effect_params] arg_pair
         arg_pair.first = start_node
         arg_pair.second.prev_node = coordinator
         arg_pair.second.dest = end_node
-        arg_pair.second.src = start_node
         if confidence is not None:
             arg_pair.second.confidence = confidence
         if cutoff_confid is not None:
             arg_pair.second.cutoff_confid = cutoff_confid
+        if max_results is not None:
+            arg_pair.second.max_results = max_results
         cdef prop_predicate pred_c
         if node_preds is not None:
             arg_pair.second.node_preds.reserve(len(node_preds))
@@ -1076,10 +1072,11 @@ cdef class Client:
     def n_gram_path(self, path, node_preds=None, edge_preds=None):
         cdef vector[pair[string, n_gram_path_params]] c_args
         cdef pair[string, n_gram_path_params] arg_pair
+        if len(path) == 0:
+            raise WeaverError(WEAVER_CLIENT_ABORT, 'empty path')
         arg_pair.first = path[0]
         arg_pair.second.coord = coordinator
         arg_pair.second.remaining_path = path[1:]
-        arg_pair.second.src = path[0]
         cdef prop_predicate pred_c
         if node_preds is not None:
             arg_pair.second.node_preds.reserve(len(node_preds))

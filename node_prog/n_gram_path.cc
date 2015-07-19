@@ -1,10 +1,10 @@
 /*
  * ===============================================================
- *    Description:  Discover paths implementation.
+ *    Description:  N-gram path matching implementation.
  *
- *         Author:  Ayush Dubey, dubey@cs.cornell.edu
+ *         Author:  Ted Yin, ted.sybil@gmail.com
  *
- * Copyright (C) 2014, Cornell University, see the LICENSE file
+ * Copyright (C) 2015, Cornell University, see the LICENSE file
  *                     for licensing agreement
  * ===============================================================
  */
@@ -35,7 +35,6 @@ n_gram_path_params :: size() const
          + message::size(coord)
          + message::size(remaining_path)
          + message::size(step)
-         + message::size(src)
          ;
 }
 
@@ -48,7 +47,6 @@ n_gram_path_params :: pack(e::packer &packer) const
     message::pack_buffer(packer, coord);
     message::pack_buffer(packer, remaining_path);
     message::pack_buffer(packer, step);
-    message::pack_buffer(packer, src);
 }
 
 void
@@ -60,7 +58,6 @@ n_gram_path_params :: unpack(e::unpacker &unpacker)
     message::unpack_buffer(unpacker, coord);
     message::unpack_buffer(unpacker, remaining_path);
     message::unpack_buffer(unpacker, step);
-    message::unpack_buffer(unpacker, src);
 }
 
 n_gram_path_state :: n_gram_path_state()
@@ -98,7 +95,7 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
     std::vector<std::pair<db::remote_node, n_gram_path_params>> next;
     node_handle_t cur_handle = n.get_handle();
 
-    fprintf(stderr, "propagate to id: %s\n", cur_handle.c_str());
+    fprintf(stderr, "Propagate to %s\n", cur_handle.c_str());
     // visit this node now
     if (!n.has_all_predicates(params.node_preds)) {
         params.progress.clear();
@@ -106,7 +103,7 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
     } else {
         /* already reaches the target */
         if (params.remaining_path.empty()) {
-            fprintf(stderr, "hit\n");
+            WDEBUG << "Hit destination\n";
             next.emplace_back(std::make_pair(params.coord, params));
         } else {
             db::remote_node *next_node = nullptr;
@@ -124,10 +121,13 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
                         else if (iter[0]->key == "doc_pos")
                             doc_pos = std::stoul(iter[0]->value);
                     }
-                    assert(doc_id != (uint32_t)-1);
-                    assert(doc_pos != (uint32_t)-1);
+                    if (doc_id == (uint32_t)-1 || doc_pos == (uint32_t)-1)
+                    {
+                        WDEBUG << "doc_id/doc_pos property not found for edge: " +
+                            cur_handle + " -> " + nbr.handle + "\n";
+                        continue;
+                    }
                     auto iter = params.progress.find(doc_id);
-                    fprintf(stderr, "step: %d edge: %lu %lu\n", params.step, doc_id, doc_pos);
                     if ((iter != params.progress.end() &&
                         iter->second + 1 == doc_pos) ||
                         (params.step == 1))
@@ -136,15 +136,15 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
                         next_node = new db::remote_node(nbr);
                 }
             }
-            fprintf(stderr, "===\n");
-            for (const auto &ref: params.progress)
-                fprintf(stderr, "%lu: %lu\n", ref.first, ref.second);
-            fprintf(stderr, "===\n");
             if (next_node) {
                 params.progress = new_progress;
                 params.remaining_path = std::vector<node_handle_t>(
                                             params.remaining_path.begin() + 1,
                                             params.remaining_path.end());
+                fprintf(stderr, "== progress at node %s ===\n", cur_handle.c_str());
+                for (const auto &ref: params.progress)
+                    fprintf(stderr, "%u: %u\n", ref.first, ref.second);
+                fprintf(stderr, "==========================\n");
                 next.emplace_back(std::make_pair(*next_node, params));
                 delete next_node;
             }

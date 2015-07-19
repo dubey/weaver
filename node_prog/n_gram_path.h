@@ -1,12 +1,10 @@
 /*
  * ===============================================================
- *    Description:  Discover all paths between two vertices
- *                  predicated on max path len, node properties,
- *                  edge properties.
+ *    Description:  N-gram path matching implementation.
  *
- *         Author:  Ayush Dubey, dubey@cs.cornell.edu
+ *         Author:  Ted Yin, ted.sybil@gmail.com
  *
- * Copyright (C) 2014, Cornell University, see the LICENSE file
+ * Copyright (C) 2015, Cornell University, see the LICENSE file
  *                     for licensing agreement
  * ===============================================================
  */
@@ -38,7 +36,6 @@ namespace node_prog
         db::remote_node coord;
         std::vector<node_handle_t> remaining_path;
         uint32_t step;
-        node_handle_t src;
 
         n_gram_path_params();
         ~n_gram_path_params() { }

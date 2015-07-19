@@ -1,10 +1,10 @@
 /*
  * ===============================================================
- *    Description:  Discover paths implementation.
+ *    Description:  Cause and effect implementation.
  *
- *         Author:  Ayush Dubey, dubey@cs.cornell.edu
+ *         Author:  Ted Yin, ted.sybil@gmail.com
  *
- * Copyright (C) 2014, Cornell University, see the LICENSE file
+ * Copyright (C) 2015, Cornell University, see the LICENSE file
  *                     for licensing agreement
  * ===============================================================
  */
@@ -21,13 +21,13 @@ using node_prog::cause_and_effect_substate;
 using node_prog::cache_response;
 using node_prog::Cache_Value_Base;
 
-static const int MAX_RESULTS = 10;
-
 // params
 cause_and_effect_params :: cause_and_effect_params()
-    : confidence(1.0)
+    : cutoff_confid(0.1)
+    , confidence(1.0)
     , ancestors_hash(0)
     , prev_ancestors_hash(0)
+    , max_results(10)
     , returning(false)
 {
 }
@@ -43,10 +43,10 @@ cause_and_effect_params :: size() const
          + message::size(ancestors)
          + message::size(ancestors_hash)
          + message::size(prev_ancestors_hash)
+         + message::size(max_results)
          + message::size(paths)
          + message::size(returning)
          + message::size(prev_node)
-         + message::size(src)
          ;
 }
 
@@ -61,10 +61,10 @@ cause_and_effect_params :: pack(e::packer &packer) const
     message::pack_buffer(packer, ancestors);
     message::pack_buffer(packer, ancestors_hash);
     message::pack_buffer(packer, prev_ancestors_hash);
+    message::pack_buffer(packer, max_results);
     message::pack_buffer(packer, paths);
     message::pack_buffer(packer, returning);
     message::pack_buffer(packer, prev_node);
-    message::pack_buffer(packer, src);
 }
 
 void
@@ -78,10 +78,10 @@ cause_and_effect_params :: unpack(e::unpacker &unpacker)
     message::unpack_buffer(unpacker, ancestors);
     message::unpack_buffer(unpacker, ancestors_hash);
     message::unpack_buffer(unpacker, prev_ancestors_hash);
+    message::unpack_buffer(unpacker, max_results);
     message::unpack_buffer(unpacker, paths);
     message::unpack_buffer(unpacker, returning);
     message::unpack_buffer(unpacker, prev_node);
-    message::unpack_buffer(unpacker, src);
 }
 
 // state
@@ -314,7 +314,7 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
         for (auto siter = spaths.begin(),
                     piter = ppaths.begin();
                     (siter != spaths.end() || piter != ppaths.end())
-                        && new_paths.size() < MAX_RESULTS;) {
+                        && new_paths.size() < params.max_results;) {
             if (piter == ppaths.end() || (siter != spaths.end() && siter->first < piter->first))
                 new_paths.emplace_back(*siter++);
             else
