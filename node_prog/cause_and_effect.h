@@ -27,6 +27,16 @@ namespace node_prog
     using path_res = std::vector<std::pair<double, std::vector<node_handle_t>>>;
     using anc_set = std::unordered_set<node_handle_t>;
 
+    struct path_handle: public virtual Node_State_Base {
+        std::vector<node_handle_t> nodes;
+        std::vector<edge_handle_t> edges;
+        void pop();
+        uint64_t size() const;
+        void pack(e::packer&) const;
+        void unpack(e::unpacker&);
+        bool operator==(const path_handle &b) const;
+    };
+
     /* parameter passing to a node */
     struct cause_and_effect_params: public virtual Node_Parameters_Base
     {
@@ -38,9 +48,12 @@ namespace node_prog
         std::vector<predicate::prop_predicate> edge_preds;
 
         double confidence;
+        /* for checking cycles */
         anc_set ancestors;
-        uint32_t ancestors_hash;
-        uint32_t prev_ancestors_hash;
+        /* for identifying different path through a node */
+        path_handle path_id;
+        uint32_t path_hash;
+        uint32_t prev_path_hash;
         uint32_t max_results;
         /* path results */
         path_res paths;
@@ -68,14 +81,14 @@ namespace node_prog
         uint32_t outstanding_count;
         /* the product of confidence so far */
         double confidence;
-        uint32_t prev_ancestors_hash;
-        uint32_t ancestors_hash;
+        uint32_t prev_path_hash;
+        uint32_t path_hash;
         /* all nodes on the path to root */
-        anc_set ancestors;
+        path_handle path_id;
         /* path results */
         db::remote_node prev_node;
         path_res paths;
-        void get_prev_substate_identifier(const node_handle_t &n, cause_and_effect_params &params);
+        void get_prev_substate_identifier(cause_and_effect_params &params);
         cause_and_effect_substate();
         ~cause_and_effect_substate() { }
         uint64_t size() const;

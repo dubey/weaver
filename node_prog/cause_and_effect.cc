@@ -25,8 +25,8 @@ using node_prog::Cache_Value_Base;
 cause_and_effect_params :: cause_and_effect_params()
     : cutoff_confid(0.1)
     , confidence(1.0)
-    , ancestors_hash(0)
-    , prev_ancestors_hash(0)
+    , path_hash(0)
+    , prev_path_hash(0)
     , max_results(10)
     , returning(false)
 {
@@ -41,8 +41,9 @@ cause_and_effect_params :: size() const
          + message::size(edge_preds)
          + message::size(confidence)
          + message::size(ancestors)
-         + message::size(ancestors_hash)
-         + message::size(prev_ancestors_hash)
+         + message::size(path_id)
+         + message::size(path_hash)
+         + message::size(prev_path_hash)
          + message::size(max_results)
          + message::size(paths)
          + message::size(returning)
@@ -59,8 +60,9 @@ cause_and_effect_params :: pack(e::packer &packer) const
     message::pack_buffer(packer, edge_preds);
     message::pack_buffer(packer, confidence);
     message::pack_buffer(packer, ancestors);
-    message::pack_buffer(packer, ancestors_hash);
-    message::pack_buffer(packer, prev_ancestors_hash);
+    message::pack_buffer(packer, path_id);
+    message::pack_buffer(packer, path_hash);
+    message::pack_buffer(packer, prev_path_hash);
     message::pack_buffer(packer, max_results);
     message::pack_buffer(packer, paths);
     message::pack_buffer(packer, returning);
@@ -76,8 +78,9 @@ cause_and_effect_params :: unpack(e::unpacker &unpacker)
     message::unpack_buffer(unpacker, edge_preds);
     message::unpack_buffer(unpacker, confidence);
     message::unpack_buffer(unpacker, ancestors);
-    message::unpack_buffer(unpacker, ancestors_hash);
-    message::unpack_buffer(unpacker, prev_ancestors_hash);
+    message::unpack_buffer(unpacker, path_id);
+    message::unpack_buffer(unpacker, path_hash);
+    message::unpack_buffer(unpacker, prev_path_hash);
     message::unpack_buffer(unpacker, max_results);
     message::unpack_buffer(unpacker, paths);
     message::unpack_buffer(unpacker, returning);
@@ -94,9 +97,9 @@ cause_and_effect_substate :: size() const
 {
     return message::size(outstanding_count)
          + message::size(confidence)
-         + message::size(prev_ancestors_hash)
-         + message::size(ancestors_hash)
-         + message::size(ancestors)
+         + message::size(prev_path_hash)
+         + message::size(path_hash)
+         + message::size(path_id)
          + message::size(prev_node)
          + message::size(paths)
          ;
@@ -107,9 +110,9 @@ cause_and_effect_substate :: pack(e::packer &packer) const
 {
     message::pack_buffer(packer, outstanding_count);
     message::pack_buffer(packer, confidence);
-    message::pack_buffer(packer, prev_ancestors_hash);
-    message::pack_buffer(packer, ancestors_hash);
-    message::pack_buffer(packer, ancestors);
+    message::pack_buffer(packer, prev_path_hash);
+    message::pack_buffer(packer, path_hash);
+    message::pack_buffer(packer, path_id);
     message::pack_buffer(packer, prev_node);
     message::pack_buffer(packer, paths);
 }
@@ -119,22 +122,20 @@ cause_and_effect_substate :: unpack(e::unpacker &unpacker)
 {
     message::unpack_buffer(unpacker, outstanding_count);
     message::unpack_buffer(unpacker, confidence);
-    message::unpack_buffer(unpacker, prev_ancestors_hash);
-    message::unpack_buffer(unpacker, ancestors_hash);
-    message::unpack_buffer(unpacker, ancestors);
+    message::unpack_buffer(unpacker, prev_path_hash);
+    message::unpack_buffer(unpacker, path_hash);
+    message::unpack_buffer(unpacker, path_id);
     message::unpack_buffer(unpacker, prev_node);
     message::unpack_buffer(unpacker, paths);
 }
 
 void
-cause_and_effect_substate::get_prev_substate_identifier(const node_handle_t &n,
-                                                        cause_and_effect_params &params)
+cause_and_effect_substate::get_prev_substate_identifier(cause_and_effect_params &params)
 {
-    /* fprintf(stderr, "%s: %s\n", __func__, n.c_str()); */
-    params.ancestors_hash = prev_ancestors_hash;
-    params.ancestors = ancestors;
-    if (!params.ancestors.empty())
-        assert(params.ancestors.erase(n) == 1);
+    params.path_hash = prev_path_hash;
+    /* copy path handle */
+    params.path_id = path_id;
+    params.path_id.pop();
 }
 
 cause_and_effect_state :: cause_and_effect_state()
@@ -169,13 +170,13 @@ uint32_t incremental_bkdr_hash(uint32_t hv, const node_handle_t &node)
 
 cause_and_effect_substate *cause_and_effect_state::get_substate(const cause_and_effect_params &params, bool create = false)
 {
-    auto iter = vmap.find(params.ancestors_hash);
+    auto iter = vmap.find(params.path_hash);
     if (create)
     {
         std::vector<cause_and_effect_substate> *substates;
         if (iter == vmap.end())
         {
-            substates = &(vmap.emplace(params.ancestors_hash, std::vector<cause_and_effect_substate>()).first->second);
+            substates = &(vmap.emplace(params.path_hash, std::vector<cause_and_effect_substate>()).first->second);
         }
         else
             substates = &(iter->second);
@@ -188,19 +189,42 @@ cause_and_effect_substate *cause_and_effect_state::get_substate(const cause_and_
         if (iter == vmap.end())
             return nullptr;
         for (auto &substate: iter->second) {
-            bool flag = true;
-            for (const auto &node: params.ancestors) {
-                if (substate.ancestors.find(node) == \
-                        substate.ancestors.end())
-                {
-                    flag = false;
-                    break;
-                }
-            }
-            if (flag) return &substate;
+            if (substate.path_id == substate.path_id)
+            return &substate;
         }
         return nullptr;
     }
+}
+
+void node_prog::path_handle::pop() {
+    if (!nodes.empty())
+    {
+        nodes.pop_back();
+        edges.pop_back();
+    }
+}
+
+uint64_t node_prog::path_handle::size() const {
+    return message::size(nodes) + message::size(edges);
+}
+
+void node_prog::path_handle::pack(e::packer &packer) const {
+    message::pack_buffer(packer, nodes);
+    message::pack_buffer(packer, edges);
+}
+
+void node_prog::path_handle::unpack(e::unpacker &unpacker) {
+    message::unpack_buffer(unpacker, nodes);
+    message::unpack_buffer(unpacker, edges);
+}
+
+bool node_prog::path_handle::operator==(const path_handle &b) const {
+    if (nodes.size() != b.nodes.size())
+        return false;
+    for (size_t i = 0; i < nodes.size(); i++)
+        if (nodes[i] != b.nodes[i] || edges[i] != b.edges[i])
+            return false;
+    return true;
 }
 
 std::pair<search_type, std::vector<std::pair<db::remote_node, cause_and_effect_params>>>
@@ -215,7 +239,6 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
     /* node progs to trigger next */
     std::vector<std::pair<db::remote_node, cause_and_effect_params>> next;
     node_handle_t cur_handle = n.get_handle();
-    node_handle_t prev_handle = params.prev_node.handle;
 
     if (!params.returning) {
         // request spreading out
@@ -223,43 +246,44 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
         cause_and_effect_substate *ret = state.get_substate(params);
         if (ret != nullptr) {
             /* node with the same substate already visited */
-            assert(0 && "impossible!");
+            assert(0 && "impossible");
         } else {
-            fprintf(stderr, "propagate to id: %s %.3f\n", cur_handle.c_str(),params.confidence);
+            /* fprintf(stderr, "propagate to id: %s %.3f\n", cur_handle.c_str(),params.confidence); */
             // visit this node now
-            cause_and_effect_substate &dp_state = *state.get_substate(params, true);             
+            cause_and_effect_substate &dp_state = *state.get_substate(params, true);
             dp_state.confidence = params.confidence;
-            dp_state.ancestors_hash = params.ancestors_hash;
-            dp_state.prev_ancestors_hash = params.prev_ancestors_hash;
-            dp_state.ancestors = params.ancestors;
+            dp_state.path_hash = params.path_hash;
+            dp_state.prev_path_hash = params.prev_path_hash;
+            dp_state.path_id = params.path_id;
             dp_state.prev_node = params.prev_node;
 
             if (!n.has_all_predicates(params.node_preds)) {
                 // node does not have all required properties, return immediately
                 params.returning = true;
-                dp_state.get_prev_substate_identifier(prev_handle, params);
+                dp_state.get_prev_substate_identifier(params);
                 assert(params.paths.empty());
                 next.emplace_back(std::make_pair(params.prev_node, params));
-                fprintf(stderr, "returning to %s\n", params.prev_node.handle.c_str());
+                /* fprintf(stderr, "returning to %s\n", params.prev_node.handle.c_str()); */
             } else {
                 /* already reaches the target */
                 if (params.dest == cur_handle || n.is_alias(params.dest)) {
                     fprintf(stderr, "hit\n");
                     params.returning = true;
-                    dp_state.get_prev_substate_identifier(prev_handle, params);
+                    dp_state.get_prev_substate_identifier(params);
                     params.paths.emplace_back(dp_state.confidence, std::vector<node_handle_t>());
                     params.paths[0].second.emplace_back(cur_handle);
                     next.emplace_back(std::make_pair(params.prev_node, params));
-                    fprintf(stderr, "returning to %s\n", params.prev_node.handle.c_str());
+                    /* fprintf(stderr, "returning to %s\n", params.prev_node.handle.c_str()); */
                 } else if (params.confidence > params.cutoff_confid) {
                     double prev_conf = params.confidence;
                     cause_and_effect_params params0 = params;
                     params.prev_node = rn;
                     params.ancestors.emplace(cur_handle);
-                    params.prev_ancestors_hash = params.ancestors_hash;
-                    params.ancestors_hash = incremental_bkdr_hash(params.ancestors_hash,
+                    params.path_id.nodes.emplace_back(cur_handle);
+                    params.prev_path_hash = params.path_hash;
+                    double path_hash = incremental_bkdr_hash(params.path_hash,
                                                     cur_handle);
-                    fprintf(stderr, "%s old_hv: %u new_hv: %u\n", cur_handle.c_str(), params.prev_ancestors_hash, params.ancestors_hash);
+                    /* fprintf(stderr, "%s old_hv: %u new_hv: %u\n", cur_handle.c_str(), params.prev_path_hash, params.path_hash); */
 
                     for (edge &e: n.get_edges()) {
                         const db::remote_node &nbr = e.get_neighbor();
@@ -275,30 +299,33 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
                             }
                             assert(confid >= 0);
                             params.confidence = prev_conf * confid;
+                            params.path_id.edges.emplace_back(e.get_handle());
+                            params.path_hash = incremental_bkdr_hash(path_hash, e.get_handle());
                             next.emplace_back(std::make_pair(nbr, params));
+                            params.path_id.edges.pop_back(); /* revert to original edges */
                             dp_state.outstanding_count++;
                         }
                     }
 
                     if (dp_state.outstanding_count == 0) {
                         params0.returning = true;
-                        dp_state.get_prev_substate_identifier(prev_handle, params0);
+                        dp_state.get_prev_substate_identifier(params0);
                         next.emplace_back(std::make_pair(params0.prev_node, params0));
-                fprintf(stderr, "returning to %s\n", params0.prev_node.handle.c_str());
+                /* fprintf(stderr, "returning to %s\n", params0.prev_node.handle.c_str()); */
                     }
                 } else { /* run out of path length */
                     params.returning = true;
-                    dp_state.get_prev_substate_identifier(prev_handle, params);
+                    dp_state.get_prev_substate_identifier(params);
                     assert(params.paths.empty());
                     next.emplace_back(std::make_pair(params.prev_node, params));
-                fprintf(stderr, "returning to %s\n", params.prev_node.handle.c_str());
+                    /* fprintf(stderr, "returning to %s\n", params.prev_node.handle.c_str()); */
                 }
             }
         }
 
     } else {
         // request returning to start node
-        fprintf(stderr, "back to %s with hash: %u", cur_handle.c_str(), params.ancestors_hash);
+        /* fprintf(stderr, "back to %s with hash: %u", cur_handle.c_str(), params.path_hash); */
         /*
         for (const auto &t: params.ancestors)
             fprintf(stderr, " %s", t.c_str());
@@ -307,7 +334,7 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
         cause_and_effect_substate *ret = state.get_substate(params);
         assert(ret != nullptr);
         cause_and_effect_substate &dp_state = *ret;
-        fprintf(stderr, "back to id: %s %.3f\n", cur_handle.c_str(), dp_state.confidence);
+        /* fprintf(stderr, "back to id: %s %.3f\n", cur_handle.c_str(), dp_state.confidence); */
         path_res new_paths;
         auto &spaths = dp_state.paths;
         auto &ppaths = params.paths;
@@ -315,7 +342,7 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
                     piter = ppaths.begin();
                     (siter != spaths.end() || piter != ppaths.end())
                         && new_paths.size() < params.max_results;) {
-            if (piter == ppaths.end() || (siter != spaths.end() && siter->first < piter->first))
+            if (piter == ppaths.end() || (siter != spaths.end() && siter->first > piter->first))
                 new_paths.emplace_back(*siter++);
             else
                 new_paths.emplace_back(*piter++);
@@ -327,7 +354,7 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
 
             for (auto &path: dp_state.paths)
                 path.second.emplace_back(cur_handle);
-            dp_state.get_prev_substate_identifier(dp_state.prev_node.handle, params);
+            dp_state.get_prev_substate_identifier(params);
             params.paths = dp_state.paths;
             next.emplace_back(std::make_pair(dp_state.prev_node, params));
         }
