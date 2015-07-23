@@ -36,6 +36,7 @@ namespace node_prog
         db::remote_node coord;
         std::vector<node_handle_t> remaining_path;
         uint32_t step;
+        bool unigram;
 
         n_gram_path_params();
         ~n_gram_path_params() { }

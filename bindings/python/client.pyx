@@ -15,6 +15,7 @@
 
 from __future__ import print_function
 import sys
+from libcpp cimport bool
 
 # begin <stolen from Hyperdex/bindings/client.pyx>
 cdef extern from 'stdint.h':
@@ -399,6 +400,7 @@ cdef extern from 'node_prog/n_gram_path.h' namespace 'node_prog':
         unordered_map[uint32_t, uint32_t] progress
         remote_node coord
         vector[node_handle_t] remaining_path
+        bool unigram
 
 cdef extern from 'node_prog/get_btc_block.h' namespace 'node_prog':
     cdef cppclass get_btc_block_params:
@@ -1077,6 +1079,10 @@ cdef class Client:
         arg_pair.first = path[0]
         arg_pair.second.coord = coordinator
         arg_pair.second.remaining_path = path[1:]
+        if len(arg_pair.second.remaining_path) == 0:
+            arg_pair.second.unigram = True
+        else:
+            arg_pair.second.unigram = False
         cdef prop_predicate pred_c
         if node_preds is not None:
             arg_pair.second.node_preds.reserve(len(node_preds))

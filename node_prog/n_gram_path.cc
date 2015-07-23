@@ -35,6 +35,7 @@ n_gram_path_params :: size() const
          + message::size(coord)
          + message::size(remaining_path)
          + message::size(step)
+         + message::size(unigram)
          ;
 }
 
@@ -47,6 +48,7 @@ n_gram_path_params :: pack(e::packer &packer) const
     message::pack_buffer(packer, coord);
     message::pack_buffer(packer, remaining_path);
     message::pack_buffer(packer, step);
+    message::pack_buffer(packer, unigram);
 }
 
 void
@@ -58,6 +60,7 @@ n_gram_path_params :: unpack(e::unpacker &unpacker)
     message::unpack_buffer(unpacker, coord);
     message::unpack_buffer(unpacker, remaining_path);
     message::unpack_buffer(unpacker, step);
+    message::unpack_buffer(unpacker, unigram);
 }
 
 n_gram_path_state :: n_gram_path_state()
@@ -103,8 +106,29 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
     } else {
         /* already reaches the target */
         if (params.remaining_path.empty()) {
-            WDEBUG << "Hit destination\n";
-            next.emplace_back(std::make_pair(params.coord, params));
+            if (params.unigram) {
+                for (edge &e: n.get_edges()) {
+                    const db::remote_node &nbr = e.get_neighbor();
+                    if (e.has_all_predicates(params.edge_preds)) {
+                        uint32_t doc_id = -1;
+                        for (auto iter: e.get_properties()) {
+                            if (iter[0]->key == "doc_id")
+                                doc_id = std::stoul(iter[0]->value);
+                        }
+                        if (doc_id == (uint32_t)-1)
+                        {
+                            WDEBUG << "doc_id property not found for edge: " +
+                                cur_handle + " -> " + nbr.handle + "\n";
+                            continue;
+                        }
+                        params.progress.emplace(doc_id, 0);
+                    }
+                }
+                next.emplace_back(std::make_pair(params.coord, params));
+            } else {
+                WDEBUG << "Hit destination\n";
+                next.emplace_back(std::make_pair(params.coord, params));
+            }
         } else {
             db::remote_node *next_node = nullptr;
             params.step++;
