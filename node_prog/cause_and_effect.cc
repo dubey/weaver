@@ -196,6 +196,20 @@ cause_and_effect_substate *cause_and_effect_state::get_substate(const cause_and_
     }
 }
 
+void
+_state_paths_to_params_paths(const std::unordered_map<node_handle_t, node_prog::edge_set> &state_paths,
+    std::unordered_map<node_handle_t, std::vector<cl::edge>> &params_paths)
+{
+    params_paths.clear();
+    for (const auto &p: state_paths) {
+        std::vector<cl::edge> &evec = params_paths[p.first];
+        evec.reserve(p.second.size());
+        for (const cl::edge &e: p.second) {
+            evec.emplace_back(e);
+        }
+    }
+}
+
 void node_prog::path_handle::pop() {
     if (!nodes.empty())
     {
@@ -248,7 +262,7 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
             /* node with the same substate already visited */
             assert(0 && "impossible");
         } else {
-            /* fprintf(stderr, "propagate to id: %s %.3f\n", cur_handle.c_str(),params.confidence); */
+            fprintf(stderr, "propagate to id: %s %.3f\n", cur_handle.c_str(),params.confidence);
             // visit this node now
             cause_and_effect_substate &dp_state = *state.get_substate(params, true);
             dp_state.confidence = params.confidence;
@@ -270,8 +284,12 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
                     fprintf(stderr, "hit\n");
                     params.returning = true;
                     dp_state.get_prev_substate_identifier(params);
+                    /*
                     params.paths.emplace_back(dp_state.confidence, std::vector<node_handle_t>());
                     params.paths[0].second.emplace_back(cur_handle);
+                    */
+                    dp_state.paths[cur_handle] = edge_set();
+                    _state_paths_to_params_paths(dp_state.paths, params.paths);
                     next.emplace_back(std::make_pair(params.prev_node, params));
                     /* fprintf(stderr, "returning to %s\n", params.prev_node.handle.c_str()); */
                 } else if (params.confidence > params.cutoff_confid) {
@@ -284,6 +302,7 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
                     double path_hash = incremental_bkdr_hash(params.path_hash,
                                                     cur_handle);
                     /* fprintf(stderr, "%s old_hv: %u new_hv: %u\n", cur_handle.c_str(), params.prev_path_hash, params.path_hash); */
+                    bool has_child = false;
 
                     for (edge &e: n.get_edges()) {
                         const db::remote_node &nbr = e.get_neighbor();
@@ -303,11 +322,13 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
                             params.path_hash = incremental_bkdr_hash(path_hash, e.get_handle());
                             next.emplace_back(std::make_pair(nbr, params));
                             params.path_id.edges.pop_back(); /* revert to original edges */
+                            fprintf(stderr, "%s -> %s count: %d\n", cur_handle.c_str(), nbr.handle.c_str(), dp_state.outstanding_count);
                             dp_state.outstanding_count++;
+                            has_child = true;
                         }
                     }
 
-                    if (dp_state.outstanding_count == 0) {
+                    if (!has_child) {
                         params0.returning = true;
                         dp_state.get_prev_substate_identifier(params0);
                         next.emplace_back(std::make_pair(params0.prev_node, params0));
@@ -334,28 +355,35 @@ node_prog :: cause_and_effect_node_program(node_prog::node &n,
         cause_and_effect_substate *ret = state.get_substate(params);
         assert(ret != nullptr);
         cause_and_effect_substate &dp_state = *ret;
-        /* fprintf(stderr, "back to id: %s %.3f\n", cur_handle.c_str(), dp_state.confidence); */
+        fprintf(stderr, "back to id: %s %.3f\n", cur_handle.c_str(), dp_state.confidence);
         path_res new_paths;
         auto &spaths = dp_state.paths;
         auto &ppaths = params.paths;
-        for (auto siter = spaths.begin(),
-                    piter = ppaths.begin();
-                    (siter != spaths.end() || piter != ppaths.end())
-                        && new_paths.size() < params.max_results;) {
-            if (piter == ppaths.end() || (siter != spaths.end() && siter->first > piter->first))
-                new_paths.emplace_back(*siter++);
-            else
-                new_paths.emplace_back(*piter++);
+        /* merge results from child node */
+        if (!params.paths.empty()) {
+            for (const auto &p: ppaths) {
+                if (spaths.find(p.first) == spaths.end())
+                    spaths.emplace(p.first, edge_set());
+                edge_set &eset = spaths[p.first];
+                for (const cl::edge &cl_e: p.second)
+                    eset.emplace(cl_e);
+            }
+            /* add edges to children */
+            edge_set &eset = spaths[cur_handle];
+            for (edge &e: n.get_edges()) {
+                node_handle_t nbr = e.get_neighbor().handle;
+                if (e.has_all_predicates(params.edge_preds) && spaths.find(nbr) != spaths.end()) {
+                    cl::edge cl_e;
+                    e.get_client_edge(n.get_handle(), cl_e);
+                    eset.emplace(cl_e);
+                }
+            }
         }
 
-        dp_state.paths = new_paths;
-
+        fprintf(stderr, "count: %d\n", dp_state.outstanding_count);
         if (--dp_state.outstanding_count == 0) {
-
-            for (auto &path: dp_state.paths)
-                path.second.emplace_back(cur_handle);
             dp_state.get_prev_substate_identifier(params);
-            params.paths = dp_state.paths;
+            _state_paths_to_params_paths(spaths, ppaths);
             next.emplace_back(std::make_pair(dp_state.prev_node, params));
         }
     }

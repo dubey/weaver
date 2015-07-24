@@ -24,7 +24,7 @@
 namespace node_prog
 {
     using edge_set = std::unordered_set<cl::edge, cl::hash_edge, cl::equals_edge>;
-    using path_res = std::vector<std::pair<double, std::vector<node_handle_t>>>;
+    using path_res = std::unordered_map<node_handle_t, edge_set>;
     using anc_set = std::unordered_set<node_handle_t>;
 
     struct path_handle: public virtual Node_State_Base {
@@ -56,7 +56,7 @@ namespace node_prog
         uint32_t prev_path_hash;
         uint32_t max_results;
         /* path results */
-        path_res paths;
+        std::unordered_map<node_handle_t, std::vector<cl::edge>> paths;
 
         /* whether the search is in returning phase */
         bool returning;
@@ -76,9 +76,9 @@ namespace node_prog
 
     /* finer state given remaining path length */
     struct cause_and_effect_substate: public virtual Node_State_Base
-    {
-        /* number of children that still have not returned the result */
+    {   
         uint32_t outstanding_count;
+        path_res paths;
         /* the product of confidence so far */
         double confidence;
         uint32_t prev_path_hash;
@@ -87,7 +87,6 @@ namespace node_prog
         path_handle path_id;
         /* path results */
         db::remote_node prev_node;
-        path_res paths;
         void get_prev_substate_identifier(cause_and_effect_params &params);
         cause_and_effect_substate();
         ~cause_and_effect_substate() { }
@@ -101,6 +100,7 @@ namespace node_prog
     {
         /* maps remaining path len to a finer state representation */
         std::unordered_map<uint32_t, std::vector<cause_and_effect_substate>> vmap;
+        /* number of children that still have not returned the result */
 
         cause_and_effect_state();
         ~cause_and_effect_state() { }
