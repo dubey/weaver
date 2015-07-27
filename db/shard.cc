@@ -464,6 +464,85 @@ load_xml_node(pugi::xml_document &doc,
 }
 
 void
+check_node(const node_handle_t &node_handle
+           int owner_tid,
+           int this_tid,
+           db::hyper_stub &hstub,
+           db::hyper_stub &other_hstub,
+           load_xml_elem_static_args &static_args,
+           uint64_t node_count)
+{
+    if (S->node_exists_bulk_load(node_handle)) {
+        return;
+    }
+
+    uint64_t &num_shards = static_args.num_shards;
+    int &load_nthreads = static_args.load_nthreads;
+    vclock_ptr_t zero_clk = static_args.zero_clk;
+    bool prop_delim = static_args.prop_delim;
+    uint64_t &cur_shard_node_count = static_args.cur_shard_node_count;
+    uint64_t &nodes_in_memory = static_args.nodes_in_memory;
+    bool btc_graph = static_args.btc_graph;
+
+    // init node attributes
+    node_handle_t &id0 = node_handle;
+    uint64_t hash0 = hash_node_handle(id0);
+    uint64_t loc = (hash0 % num_shards) + ShardIdIncr;
+    uint64_t map_idx = get_map_idx(id0);
+    assert((loc == shard_id) && ((int)map_idx % load_nthreads == owner_tid));
+
+    db::node *n = S->create_node_bulk_load(id0, map_idx, zero_clk);
+
+    if (n == nullptr) {
+        // node already exists
+        return;
+    }
+
+    if (++cur_shard_node_count % 10000 == 0) {
+        WDEBUG << "GRAPHML tid=" << this_tid
+               << " node=" << cur_shard_node_count
+               << " nodes_in_mem=" << nodes_in_memory
+               << " other_thread_elem_count=" << static_args.other_thread_elem_count
+               << std::endl;
+    }
+
+#define MAX_EDGES_PER_NODE 10000000000ULL // at most 10B edges per node
+
+    uint64_t start_edge_idx;
+
+    if (btc_graph) {
+        check_btc_node(id0);
+        size_t parse_idx = 0;
+        bool parse_bad = false;
+        if (id0[0] == 'B') {
+            uint64_t node_idx;
+            parse_single_uint64(block_index, parse_idx, node_idx, parse_bad);
+            start_edge_idx = (40000000ULL + node_idx) * MAX_EDGES_PER_NODE;
+        } else if (id0[0] == 'C') {
+            start_edge_idx = (50000000ULL + 0) * MAX_EDGES_PER_NODE;
+        } else {
+            uint64_t node_idx;
+            parse_single_uint64(id0, parse_idx, node_idx, parse_bad);
+            start_edge_idx = (1 + node_idx) * MAX_EDGES_PER_NODE;
+        }
+        assert(!parse_bad);
+    } else {
+        start_edge_idx = node_count * MAX_EDGES_PER_NODE;
+    }
+
+#undef MAX_EDGES_PER_NODE
+
+    bool already_exists = other_hstub.new_node(n->get_handle(), start_edge_idx);
+    assert(!already_exists);
+    bool in_mem = S->add_node_to_nodemap_bulk_load(n, map_idx);
+    S->bulk_load_put_node(hstub, n, in_mem);
+
+    if (in_mem) {
+        nodes_in_memory++;
+    }
+}
+
+void
 load_xml_edge(pugi::xml_document &doc,
               int owner_tid,
               int this_tid,

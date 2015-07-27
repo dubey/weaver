@@ -68,7 +68,7 @@ namespace db
             void mark_done_chunk(uint64_t chunk);
             void check_loaded_chunk(uint64_t chunk, uint32_t chunk_elem, bool &lchunk, bool &lelem);
             void wait_done_chunk(uint64_t chunk);
-            void new_node(const node_handle_t &handle, uint64_t start_edge_idx);
+            bool new_node(const node_handle_t &handle, uint64_t start_edge_idx);
             bool put_node_no_loop(db::node *n);
             uint64_t new_edge(const node_handle_t &node_handle);
             bool put_edge_no_loop(const node_handle_t &node_handle,

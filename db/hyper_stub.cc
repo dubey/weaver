@@ -273,13 +273,22 @@ hyper_stub :: wait_done_chunk(uint64_t chunk)
     g_bulk_load_mtx.unlock();
 }
 
-void
+bool
 hyper_stub :: new_node(const node_handle_t &handle, uint64_t start_edge_idx)
 {
+    bool found;
+
     assert(start_edge_idx);
     g_bulk_load_mtx.lock();
-    g_node_edge_id[handle] = std::make_pair(start_edge_idx, 0);
+    if (g_node_edge_id.find(handle) != g_node_edge_id.end()) {
+        found = true;
+    } else {
+        found = false;
+        g_node_edge_id[handle] = std::make_pair(start_edge_idx, 0);
+    }
     g_bulk_load_mtx.unlock();
+
+    return found;
 }
 
 bool

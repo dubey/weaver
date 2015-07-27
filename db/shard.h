@@ -207,7 +207,6 @@ namespace db
             void delete_migrated_node(uint64_t tid, const node_handle_t &migr_node);
             // XXX void remove_from_edge_map(const node_handle_t &remote_node, const node_version_t &local_node);
             void permanent_delete_loop(uint64_t tid, uint64_t vt_id, bool outstanding_progs, order::oracle *time_oracle);
-        private:
             void permanent_node_delete(node *n);
 
             // Migration
