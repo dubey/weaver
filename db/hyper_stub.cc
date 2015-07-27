@@ -623,7 +623,13 @@ hyper_stub :: loop_async_and_flush(uint64_t num_ops_to_leave,
                 } else {
                     WDEBUG << "hyperdex_client_loop failed, op_id=" << op_id
                            << ", loop_code=" << hyperdex_client_returncode_to_string(loop_code) << std::endl;
-                    abort_bulk_load();
+                    if (loop_code == HYPERDEX_CLIENT_NONEPENDING) {
+                        WDEBUG << "#async_calls=" << m_async_calls.size() << std::endl;
+                        m_async_calls.clear();
+                        break;
+                    } else {
+                        abort_bulk_load();
+                    }
                 }
             }
             assert(loop_code == HYPERDEX_CLIENT_SUCCESS);
