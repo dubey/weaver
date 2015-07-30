@@ -34,6 +34,7 @@ namespace node_prog
         std::vector<predicate::prop_predicate> node_preds;
         std::vector<predicate::prop_predicate> edge_preds;
         std::unordered_map<node_handle_t, std::vector<cl::edge>> paths;
+        std::vector<node_handle_t> nodes_on_path;
 
         bool returning;
         db::remote_node prev_node;
@@ -56,6 +57,7 @@ namespace node_prog
         uint32_t outstanding_count;
         std::vector<db::remote_node> prev_nodes;
         std::unordered_map<node_handle_t, edge_set> paths;
+        std::vector<node_handle_t> nodes_on_path;
 
         dp_len_state();
         ~dp_len_state() { }

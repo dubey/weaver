@@ -35,6 +35,7 @@ discover_paths_params :: size() const
          + message::size(node_preds)
          + message::size(edge_preds)
          + message::size(paths)
+         + message::size(nodes_on_path)
          + message::size(returning)
          + message::size(prev_node)
          + message::size(src)
@@ -49,6 +50,7 @@ discover_paths_params :: pack(e::packer &packer) const
     message::pack_buffer(packer, node_preds);
     message::pack_buffer(packer, edge_preds);
     message::pack_buffer(packer, paths);
+    message::pack_buffer(packer, nodes_on_path);
     message::pack_buffer(packer, returning);
     message::pack_buffer(packer, prev_node);
     message::pack_buffer(packer, src);
@@ -63,6 +65,7 @@ discover_paths_params :: unpack(e::unpacker &unpacker)
     message::unpack_buffer(unpacker, node_preds);
     message::unpack_buffer(unpacker, edge_preds);
     message::unpack_buffer(unpacker, paths);
+    message::unpack_buffer(unpacker, nodes_on_path);
     message::unpack_buffer(unpacker, returning);
     message::unpack_buffer(unpacker, prev_node);
     message::unpack_buffer(unpacker, src);
@@ -79,7 +82,8 @@ dp_len_state :: size() const
 {
     return message::size(outstanding_count)
          + message::size(prev_nodes)
-         + message::size(paths);
+         + message::size(paths)
+         + message::size(nodes_on_path);
 }
 
 void
@@ -88,6 +92,7 @@ dp_len_state :: pack(e::packer &packer) const
     message::pack_buffer(packer, outstanding_count);
     message::pack_buffer(packer, prev_nodes);
     message::pack_buffer(packer, paths);
+    message::pack_buffer(packer, nodes_on_path);
 }
 
 void
@@ -96,6 +101,7 @@ dp_len_state :: unpack(e::unpacker &unpacker)
     message::unpack_buffer(unpacker, outstanding_count);
     message::unpack_buffer(unpacker, prev_nodes);
     message::unpack_buffer(unpacker, paths);
+    message::unpack_buffer(unpacker, nodes_on_path);
 }
 
 discover_paths_state :: discover_paths_state()
@@ -155,6 +161,7 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
                 // replies already gathered from children
                 params.returning = true;
                 state_paths_to_params_paths(dp_state.paths, params.paths);
+                params.nodes_on_path = dp_state.nodes_on_path;
                 next.emplace_back(std::make_pair(params.prev_node, params));
             } else {
                 // still awaiting replies, enqueue in prev nodes
@@ -166,6 +173,7 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
             if (!n.has_all_predicates(params.node_preds)) {
                 // node does not have all required properties, return immediately
                 params.returning = true;
+                params.nodes_on_path.clear();
                 assert(params.paths.empty());
                 next.emplace_back(std::make_pair(params.prev_node, params));
             } else {
@@ -173,12 +181,19 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
                     params.returning = true;
                     dp_state.paths[n.get_handle()] = edge_set();
                     state_paths_to_params_paths(dp_state.paths, params.paths);
+                    params.nodes_on_path.emplace_back(n.get_handle());
+                    /*
+                    for (const auto &r: params.nodes_on_path)
+                        fprintf(stderr, "%s ", r.c_str());
+                    fprintf(stderr, "\n");
+                    */
                     next.emplace_back(std::make_pair(params.prev_node, params));
                 } else if (params.path_len > 0) {
                     dp_state.prev_nodes.emplace_back(params.prev_node);
                     params.path_len--;
                     params.prev_node = rn;
                     params.path_ancestors.emplace(n.get_handle());
+                    params.nodes_on_path.emplace_back(n.get_handle());
 
                     for (edge &e: n.get_edges()) {
                         const db::remote_node &nbr = e.get_neighbor();
@@ -192,12 +207,19 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
                     if (dp_state.outstanding_count == 0) {
                         params.returning = true;
                         params.path_len++;
+                        params.nodes_on_path.clear();
                         next.emplace_back(std::make_pair(dp_state.prev_nodes[0], params));
                         dp_state.prev_nodes.clear();
                     }
                 } else {
                     params.returning = true;
+                    params.nodes_on_path.clear();
                     assert(params.paths.empty());
+                    if (!params.dest.length())
+                    {
+                        dp_state.paths[n.get_handle()] = edge_set();
+                        state_paths_to_params_paths(dp_state.paths, params.paths);
+                    }
                     next.emplace_back(std::make_pair(params.prev_node, params));
                 }
             }
@@ -210,6 +232,10 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
         auto vmap_iter = state.vmap.find(params.path_len);
         assert(vmap_iter != state.vmap.end());
         dp_len_state &dp_state = vmap_iter->second;
+
+        if (!params.nodes_on_path.empty()) {
+            dp_state.nodes_on_path = params.nodes_on_path;
+        }
 
         if (!params.paths.empty()) {
             for (const auto &p: params.paths) {
@@ -241,6 +267,7 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
 
         if (--dp_state.outstanding_count == 0) {
             state_paths_to_params_paths(dp_state.paths, params.paths);
+            params.nodes_on_path = dp_state.nodes_on_path;
             for (db::remote_node &prev: dp_state.prev_nodes) {
                 next.emplace_back(std::make_pair(prev, params));
             }

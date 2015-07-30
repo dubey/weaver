@@ -377,6 +377,7 @@ cdef extern from 'node_prog/discover_paths.h' namespace 'node_prog':
         vector[prop_predicate] node_preds
         vector[prop_predicate] edge_preds
         unordered_map[string, vector[edge]] paths
+        vector[string] nodes_on_path
         remote_node prev_node
         node_handle_t src
 
@@ -1022,7 +1023,12 @@ cdef class Client:
                 inc(edge_iter)
             ret_paths[cur_node] = cur_edges
             inc(path_iter)
-        return ret_paths
+        path = []
+        cdef vector[string].iterator node_iter = c_rp.nodes_on_path.begin()
+        while node_iter != c_rp.nodes_on_path.end():
+            path.append(deref(node_iter))
+            inc(node_iter)
+        return (ret_paths, path)
 
     def cause_and_effect(self, start_node, end_node, confidence=None, cutoff_confid=None, max_results=None, node_preds=None, edge_preds=None):
         cdef vector[pair[string, cause_and_effect_params]] c_args
