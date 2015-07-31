@@ -176,7 +176,7 @@ split(const std::string &s, char delim, std::vector<std::string> &elems)
 struct xml_element
 {
     uint32_t elem_idx;
-    uint64_t node_count;
+    uint64_t elem_count;
     pugi::xml_document doc;
     uint64_t owner_shard;
     int owner_tid;
@@ -348,7 +348,7 @@ struct load_xml_elem_static_args
     bool prop_delim;
     uint64_t cur_shard_node_count;
     uint64_t nodes_in_memory;
-    uint64_t total_node_count;
+    uint64_t total_elem_count;
     uint64_t cur_shard_edge_count;
     uint64_t edges_in_memory;
     uint64_t other_thread_elem_count;
@@ -362,13 +362,16 @@ struct load_xml_elem_static_args
         , prop_delim(pdelim)
         , cur_shard_node_count(0)
         , nodes_in_memory(0)
-        , total_node_count(0)
+        , total_elem_count(0)
         , cur_shard_edge_count(0)
         , edges_in_memory(0)
         , other_thread_elem_count(0)
         , btc_graph(data.btc_graph)
     { }
 };
+
+#define MAX_EDGES_PER_NODE 100000000ULL // at most 100M edges per node
+#define MAX_NODES_PER_SHARD 100000000ULL // at most 100M nodes per shard
 
 void
 load_xml_node(pugi::xml_document &doc,
@@ -428,9 +431,6 @@ load_xml_node(pugi::xml_document &doc,
                << std::endl;
     }
 
-#define MAX_EDGES_PER_NODE 100000000ULL // at most 100M edges per node
-#define MAX_NODES_PER_SHARD 100000000ULL // at most 100M nodes per shard
-
     uint64_t start_edge_idx;
 
     if (btc_graph) {
@@ -454,9 +454,6 @@ load_xml_node(pugi::xml_document &doc,
                        + node_count*MAX_EDGES_PER_NODE;
     }
 
-#undef MAX_EDGES_PER_NODE
-#undef MAX_NODES_PER_SHARD
-
     other_hstub.new_node(n->get_handle(), start_edge_idx);
     bool in_mem = S->add_node_to_nodemap_bulk_load(n, map_idx);
     S->bulk_load_put_node(hstub, n, in_mem);
@@ -467,7 +464,7 @@ load_xml_node(pugi::xml_document &doc,
 }
 
 void
-check_node(const node_handle_t &node_handle
+check_node(const node_handle_t &node_handle,
            int owner_tid,
            int this_tid,
            db::hyper_stub &hstub,
@@ -482,13 +479,11 @@ check_node(const node_handle_t &node_handle
     uint64_t &num_shards = static_args.num_shards;
     int &load_nthreads = static_args.load_nthreads;
     vclock_ptr_t zero_clk = static_args.zero_clk;
-    bool prop_delim = static_args.prop_delim;
     uint64_t &cur_shard_node_count = static_args.cur_shard_node_count;
     uint64_t &nodes_in_memory = static_args.nodes_in_memory;
-    bool btc_graph = static_args.btc_graph;
 
     // init node attributes
-    node_handle_t &id0 = node_handle;
+    const node_handle_t &id0 = node_handle;
     uint64_t hash0 = hash_node_handle(id0);
     uint64_t loc = (hash0 % num_shards) + ShardIdIncr;
     uint64_t map_idx = get_map_idx(id0);
@@ -509,31 +504,9 @@ check_node(const node_handle_t &node_handle
                << std::endl;
     }
 
-#define MAX_EDGES_PER_NODE 10000000000ULL // at most 10B edges per node
-
     uint64_t start_edge_idx;
-
-    if (btc_graph) {
-        check_btc_node(id0);
-        size_t parse_idx = 0;
-        bool parse_bad = false;
-        if (id0[0] == 'B') {
-            uint64_t node_idx;
-            parse_single_uint64(block_index, parse_idx, node_idx, parse_bad);
-            start_edge_idx = (40000000ULL + node_idx) * MAX_EDGES_PER_NODE;
-        } else if (id0[0] == 'C') {
-            start_edge_idx = (50000000ULL + 0) * MAX_EDGES_PER_NODE;
-        } else {
-            uint64_t node_idx;
-            parse_single_uint64(id0, parse_idx, node_idx, parse_bad);
-            start_edge_idx = (1 + node_idx) * MAX_EDGES_PER_NODE;
-        }
-        assert(!parse_bad);
-    } else {
-        start_edge_idx = node_count * MAX_EDGES_PER_NODE;
-    }
-
-#undef MAX_EDGES_PER_NODE
+    start_edge_idx = (shard_id-ShardIdIncr)*MAX_NODES_PER_SHARD*MAX_EDGES_PER_NODE
+                   + node_count*MAX_EDGES_PER_NODE;
 
     bool already_exists = other_hstub.new_node(n->get_handle(), start_edge_idx);
     assert(!already_exists);
@@ -545,13 +518,17 @@ check_node(const node_handle_t &node_handle
     }
 }
 
+#undef MAX_EDGES_PER_NODE
+#undef MAX_NODES_PER_SHARD
+
 void
 load_xml_edge(pugi::xml_document &doc,
               int owner_tid,
               int this_tid,
               db::hyper_stub &hstub,
               db::hyper_stub &other_hstub,
-              load_xml_elem_static_args &static_args)
+              load_xml_elem_static_args &static_args,
+              uint64_t elem_count)
 {
     uint64_t &num_shards = static_args.num_shards;
     int &load_nthreads = static_args.load_nthreads;
@@ -569,6 +546,12 @@ load_xml_edge(pugi::xml_document &doc,
     uint64_t loc0 = (hash0 % num_shards) + ShardIdIncr;
     uint64_t map_idx = get_map_idx(id0);
     assert((loc0 == shard_id) && ((int)map_idx % load_nthreads == owner_tid));
+
+    check_node(id0,
+               owner_tid, this_tid,
+               hstub, other_hstub,
+               static_args,
+               elem_count);
 
     node_handle_t id1 = edge.attribute("target").value();
     edge_handle_t edge_handle = edge.attribute("id").value();
@@ -627,14 +610,15 @@ load_xml_element(xml_element &elem,
                       my_hstub,
                       owner_hstub,
                       static_args,
-                      elem.node_count);
+                      elem.elem_count);
     } else { // edge
         load_xml_edge(elem.doc,
                       elem.owner_tid,
                       this_tid,
                       my_hstub,
                       owner_hstub,
-                      static_args);
+                      static_args,
+                      elem.elem_count);
     }
 }
 
@@ -758,10 +742,7 @@ load_graph(void *args)
 
                 // first load elements that belong to this thread
                 for (uint32_t i = 0; i < elem_count; i++) {
-                    if (elements[i].elem_idx == 0) {
-                        // assign node count
-                        elements[i].node_count = ++static_xml_args.total_node_count;
-                    }
+                    elements[i].elem_count = ++static_xml_args.total_elem_count;
 
                     if (elements[i].belongs_to_us(load_tid)) {
                         bool loaded_chunk, loaded_elem;
