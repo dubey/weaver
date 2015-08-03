@@ -26,12 +26,7 @@ namespace node_prog
     using btc_tx_t = std::pair<std::vector<cl::edge>, std::vector<cl::edge>>;
     struct get_btc_tx_params: public virtual Node_Parameters_Base
     {
-        node_handle_t tx_handle;
         cl::node ret_node;
-
-        bool returning;
-        std::unordered_map<edge_handle_t, node_handle_t> consumed_map;
-        db::remote_node tx_rn;
 
         get_btc_tx_params();
         ~get_btc_tx_params() { }
@@ -46,9 +41,6 @@ namespace node_prog
 
     struct get_btc_tx_state: public virtual Node_State_Base
     {
-        uint32_t outstanding_count;
-        std::unordered_map<edge_handle_t, node_handle_t> consumed_map;
-
         get_btc_tx_state();
         ~get_btc_tx_state() { }
         uint64_t size() const;

@@ -127,57 +127,45 @@ node_prog :: get_btc_block_node_program(node_prog::node &n,
             assert(!params.tx_to_get.empty());
 
             std::unordered_map<std::string, btc_tx_t> seen_txs;
-            for (const std::string &tx_id: params.tx_to_get) {
-                uint64_t tx_index = 0;
-                while (true) {
-                    std::string tx_handle = "TXOUT_" + tx_id + "_" + std::to_string(tx_index);
-                    if (n.edge_exists(tx_handle)) {
-                        WDEBUG << tx_handle << std::endl;
-                        edge &e = n.get_edge(tx_handle);
-                        cl::edge cl_edge;
-                        e.get_client_edge(n.get_handle(), cl_edge);
-                        std::string consumed_tx_handle = "CTX_" + tx_id + "_" + std::to_string(tx_index);
-                        if (n.edge_exists(consumed_tx_handle)) {
-                            edge &ctx_edge = n.get_edge(consumed_tx_handle);
-                            std::shared_ptr<cl::property> consumed_prop(new cl::property());
-                            consumed_prop->key = "consumed";
-                            consumed_prop->value = ctx_edge.get_neighbor().handle;
-                            cl_edge.properties.emplace_back(consumed_prop);
-                        }
+            btc_tx_t ret_tx;
+            std::vector<cl::edge> &inputs  = ret_tx.first;
+            std::vector<cl::edge> &outputs = ret_tx.second;
+            std::unordered_map<std::string, std::string> consumed;
+            std::string txout_str = "TXOUT_";
+            std::string cxin_str = "CXIN_";
+            std::string ctx_str = "CTX_";
+            const std::string &node_handle = n.get_handle();
 
-                        bool exists = seen_txs.find(tx_id) != seen_txs.end();
-                        btc_tx_t &btc_tx = seen_txs[tx_id];
-                        btc_tx.second.emplace_back(cl_edge);
-
-                        if (!exists) {
-                            std::vector<std::string> input_txes;
-                            for (auto pvec: e.get_properties()) {
-                                for (auto &p: pvec) {
-                                    if (p->key == "input_txes") {
-                                        input_txes.emplace_back("CXIN_" + p->value);
-                                    }
-                                }
-                            }
-
-                            for (const std::string &itx: input_txes) {
-                                if (n.edge_exists(itx)) {
-                                    edge &in_e = n.get_edge(itx);
-                                    in_e.get_client_edge(n.get_handle(), cl_edge);
-                                    btc_tx.first.emplace_back(cl_edge);
-                                }
-                            }
-                        }
-                    } else {
-                        break;
-                    }
-
-                    tx_index++;
+            // a btc tx has either CXIN, TXOUT, or CTX edge
+            // we need to access all such edges
+            for (edge &e: n.get_edges()) {
+                const std::string &edge_handle = e.get_handle();
+                if (edge_handle.compare(0, txout_str.size(), txout_str) == 0) {
+                    outputs.emplace_back(cl::edge());
+                    e.get_client_edge(node_handle, outputs.back());
+                } else if (edge_handle.compare(0, cxin_str.size(), cxin_str) == 0) {
+                    inputs.emplace_back(cl::edge());
+                    e.get_client_edge(node_handle, inputs.back());
+                } else {
+                    assert(edge_handle.compare(0, ctx_str.size(), ctx_str) == 0);
+                    std::string output_handle = edge_handle.substr(ctx_str.size());
+                    consumed[output_handle] = e.get_neighbor().handle;
                 }
             }
 
-            for (const auto &p: seen_txs) {
-                params.txs.emplace_back(p.second);
+            for (cl::edge &cl_edge: outputs) {
+                std::string output_handle = cl_edge.handle.substr(txout_str.size());
+                auto citer = consumed.find(output_handle);
+                if (citer != consumed.end()) {
+                    std::shared_ptr<cl::property> consumed_prop(new cl::property());
+                    consumed_prop->key = "consumed";
+                    consumed_prop->value = citer->second;
+                    cl_edge.properties.emplace_back(consumed_prop);
+                }
             }
+
+            params.txs.emplace_back(ret_tx);
+
             params.returning = true;
             next.emplace_back(std::make_pair(params.block_node, std::move(params)));
         }

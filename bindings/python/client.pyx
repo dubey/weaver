@@ -389,7 +389,6 @@ cdef extern from 'node_prog/get_btc_block.h' namespace 'node_prog':
 cdef extern from 'node_prog/get_btc_tx.h' namespace 'node_prog':
     cdef cppclass get_btc_tx_params:
         get_btc_tx_params()
-        node_handle_t tx_handle
         node ret_node
 
 cdef extern from 'client/weaver/weaver_returncode.h':
@@ -1050,7 +1049,6 @@ cdef class Client:
         cdef vector[pair[string, get_btc_tx_params]] c_args
         cdef pair[string, get_btc_tx_params] arg_pair
         arg_pair.first = tx
-        arg_pair.second.tx_handle = tx
         c_args.push_back(arg_pair)
 
         cdef get_btc_tx_params c_rp
