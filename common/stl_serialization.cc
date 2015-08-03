@@ -9,6 +9,7 @@
  * ===============================================================
  */
 
+#include "common/weaver_constants.h"
 #include "common/stl_serialization.h"
 
 uint64_t

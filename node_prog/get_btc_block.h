@@ -28,12 +28,11 @@ namespace node_prog
     struct get_btc_block_params: public virtual Node_Parameters_Base
     {
         node_handle_t block;
-        cl::node node;
-        std::vector<btc_tx_t> txs;
+        cl::node block_node;
+        std::vector<cl::node> txs;
 
         bool returning;
-        std::vector<edge_handle_t> tx_to_get;
-        db::remote_node block_node;
+        db::remote_node block_rn;
 
         get_btc_block_params();
         ~get_btc_block_params() { }
@@ -49,7 +48,7 @@ namespace node_prog
     struct get_btc_block_state: public virtual Node_State_Base
     {
         uint32_t outstanding_count;
-        std::vector<btc_tx_t> txs;
+        std::vector<cl::node> txs;
 
         get_btc_block_state();
         ~get_btc_block_state() { }

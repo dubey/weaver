@@ -162,7 +162,6 @@ cdef extern from 'client/datastructures.h' namespace 'cl':
         pass
     cdef cppclass equals_edge:
         pass
-
     cdef cppclass node:
         string handle
         vector[shared_ptr[property]] properties
@@ -383,8 +382,8 @@ cdef extern from 'node_prog/get_btc_block.h' namespace 'node_prog':
     cdef cppclass get_btc_block_params:
         get_btc_block_params()
         node_handle_t block
-        node node
-        vector[pair[vector[edge], vector[edge]]] txs
+        node block_node
+        vector[node] txs
 
 cdef extern from 'node_prog/get_btc_tx.h' namespace 'node_prog':
     cdef cppclass get_btc_tx_params:
@@ -1020,30 +1019,17 @@ cdef class Client:
         if code != WEAVER_CLIENT_SUCCESS:
             raise WeaverError(code, 'node prog error')
 
-        new_node = Node()
-        self.__convert_node_to_client_node(c_rp.node , new_node)
+        block_node = Node()
+        self.__convert_node_to_client_node(c_rp.block_node , block_node)
         txs = []
-        cdef vector[edge].iterator edge_iter
-        cdef vector[pair[vector[edge], vector[edge]]].iterator tx_iter = c_rp.txs.begin()
+        cdef vector[node].iterator tx_iter = c_rp.txs.begin()
         while tx_iter != c_rp.txs.end():
-            in_txs = []
-            out_txs = []
-
-            edge_iter = deref(tx_iter).first.begin()
-            while edge_iter != deref(tx_iter).first.end():
-                in_txs.append(Edge())
-                self.__convert_edge_to_client_edge(deref(edge_iter), in_txs[-1])
-                inc(edge_iter)
-
-            edge_iter = deref(tx_iter).second.begin()
-            while edge_iter != deref(tx_iter).second.end():
-                out_txs.append(Edge())
-                self.__convert_edge_to_client_edge(deref(edge_iter), out_txs[-1])
-                inc(edge_iter)
-
-            txs.append((in_txs, out_txs))
+            tx_node = Node()
+            self.__convert_node_to_client_node(deref(tx_iter), tx_node)
+            txs.append(tx_node)
             inc(tx_iter)
-        return (new_node, txs)
+
+        return (block_node, txs)
 
     def get_btc_tx(self, tx):
         cdef vector[pair[string, get_btc_tx_params]] c_args

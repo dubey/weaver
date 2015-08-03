@@ -13,6 +13,7 @@
 #include "common/stl_serialization.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/get_btc_tx.h"
+#include "node_prog/parse_btc_tx.h"
 
 using node_prog::search_type;
 using node_prog::get_btc_tx_params;
@@ -68,24 +69,7 @@ node_prog :: get_btc_tx_node_program(node_prog::node &n,
    cache_response<Cache_Value_Base>*)
 {
     std::vector<std::pair<db::remote_node, get_btc_tx_params>> next;
-    std::string txout_str = "TXOUT_";
-
-    n.get_client_node(params.ret_node, true, true, true);
-    for (auto &p: params.ret_node.out_edges) {
-        if (p.first.compare(0, txout_str.size(), txout_str) == 0) {
-            std::string consm_tx = "CTX_" + p.first.substr(txout_str.size());
-            if (n.edge_exists(consm_tx)) {
-                edge &ctx_edge = n.get_edge(consm_tx);
-                cl::edge &e = p.second;
-
-                std::shared_ptr<cl::property> consumed_prop(new cl::property());
-                consumed_prop->key = "consumed";
-                consumed_prop->value = ctx_edge.get_neighbor().handle;
-
-                e.properties.emplace_back(consumed_prop);
-            }
-        }
-    }
+    parse_btc_tx(params.ret_node, n);
     next.emplace_back(std::make_pair(db::coordinator, std::move(params)));
 
     return std::make_pair(search_type::BREADTH_FIRST, std::move(next));
