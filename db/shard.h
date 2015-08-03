@@ -1068,7 +1068,11 @@ namespace db
 
         node_map_mutexes[map_idx].lock();
         auto node_iter = nodes[map_idx].find(node_handle);
-        assert(node_iter != nodes[map_idx].end());
+        if (node_iter == nodes[map_idx].end()) {
+            WDEBUG << "did not find node=" << node_handle
+                   << " while adding edge=" << e->get_handle() << std::endl;
+            assert(false);
+        }
 
         std::shared_ptr<node_entry> entry = node_iter->second;
         if (entry->present) {
