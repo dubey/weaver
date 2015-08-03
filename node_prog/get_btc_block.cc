@@ -130,12 +130,20 @@ node_prog :: get_btc_block_node_program(node_prog::node &n,
             for (const std::string &tx_id: params.tx_to_get) {
                 uint64_t tx_index = 0;
                 while (true) {
-                    std::string tx_handle = "TXOUT_" + tx_id + "_" + std::to_string(tx_index++);
+                    std::string tx_handle = "TXOUT_" + tx_id + "_" + std::to_string(tx_index);
                     if (n.edge_exists(tx_handle)) {
                         WDEBUG << tx_handle << std::endl;
                         edge &e = n.get_edge(tx_handle);
                         cl::edge cl_edge;
                         e.get_client_edge(n.get_handle(), cl_edge);
+                        std::string consumed_tx_handle = "CTX_" + tx_id + "_" + std::to_string(tx_index);
+                        if (n.edge_exists(consumed_tx_handle)) {
+                            edge &ctx_edge = n.get_edge(consumed_tx_handle);
+                            std::shared_ptr<cl::property> consumed_prop(new cl::property());
+                            consumed_prop->key = "consumed";
+                            consumed_prop->value = ctx_edge.get_neighbor().handle;
+                            cl_edge.properties.emplace_back(consumed_prop);
+                        }
 
                         bool exists = seen_txs.find(tx_id) != seen_txs.end();
                         btc_tx_t &btc_tx = seen_txs[tx_id];
@@ -162,6 +170,8 @@ node_prog :: get_btc_block_node_program(node_prog::node &n,
                     } else {
                         break;
                     }
+
+                    tx_index++;
                 }
             }
 
