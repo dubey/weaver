@@ -106,7 +106,6 @@ node_prog :: get_btc_block_node_program(node_prog::node &n,
             for (edge &e: n.get_edges()) {
                 if (e.get_handle().compare(0, block_tx_str.size(), block_tx_str) == 0) {
                     std::string tx_to_get = e.get_handle().substr(block_tx_str.size());
-                    WDEBUG << tx_to_get << std::endl;
                     txs_to_get.emplace_back(std::make_pair(e.get_neighbor(), tx_to_get));
                 }
             }
