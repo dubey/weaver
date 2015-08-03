@@ -42,6 +42,7 @@
 #include "node_prog/traverse_with_props.h"
 #include "node_prog/discover_paths.h"
 #include "node_prog/get_btc_block.h"
+#include "node_prog/get_btc_tx.h"
 
 namespace coordinator
 {
@@ -175,6 +176,8 @@ namespace node_prog
             new particular_node_program<discover_paths_params, discover_paths_state, Cache_Value_Base>(DISCOVER_PATHS, node_prog::discover_paths_node_program) },
         { GET_BTC_BLOCK,
             new particular_node_program<get_btc_block_params, get_btc_block_state, Cache_Value_Base>(GET_BTC_BLOCK, node_prog::get_btc_block_node_program) },
+        { GET_BTC_TX,
+            new particular_node_program<get_btc_tx_params, get_btc_tx_state, Cache_Value_Base>(GET_BTC_TX, node_prog::get_btc_tx_node_program) },
     };
 }
 

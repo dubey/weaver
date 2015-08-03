@@ -386,6 +386,12 @@ cdef extern from 'node_prog/get_btc_block.h' namespace 'node_prog':
         node node
         vector[pair[vector[edge], vector[edge]]] txs
 
+cdef extern from 'node_prog/get_btc_tx.h' namespace 'node_prog':
+    cdef cppclass get_btc_tx_params:
+        get_btc_tx_params()
+        node_handle_t tx_handle
+        node ret_node
+
 cdef extern from 'client/weaver/weaver_returncode.h':
     cdef enum weaver_client_returncode:
         WEAVER_CLIENT_SUCCESS
@@ -427,6 +433,7 @@ cdef extern from 'client/client.h' namespace 'cl':
         weaver_client_returncode traverse_props_program(vector[pair[string, traverse_props_params]] &initial_args, traverse_props_params&) nogil
         weaver_client_returncode discover_paths_program(vector[pair[string, discover_paths_params]] &initial_args, discover_paths_params&) nogil
         weaver_client_returncode get_btc_block_program(vector[pair[string, get_btc_block_params]] &initial_args, get_btc_block_params&) nogil
+        weaver_client_returncode get_btc_tx_program(vector[pair[string, get_btc_tx_params]] &initial_args, get_btc_tx_params&) nogil
         weaver_client_returncode start_migration()
         weaver_client_returncode single_stream_migration()
         weaver_client_returncode exit_weaver()
@@ -1038,6 +1045,24 @@ cdef class Client:
             txs.append((in_txs, out_txs))
             inc(tx_iter)
         return (new_node, txs)
+
+    def get_btc_tx(self, tx):
+        cdef vector[pair[string, get_btc_tx_params]] c_args
+        cdef pair[string, get_btc_tx_params] arg_pair
+        arg_pair.first = tx
+        arg_pair.second.tx_handle = tx
+        c_args.push_back(arg_pair)
+
+        cdef get_btc_tx_params c_rp
+        with nogil:
+            code = self.thisptr.get_btc_tx_program(c_args, c_rp)
+
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
+
+        new_node = Node()
+        self.__convert_node_to_client_node(c_rp.ret_node , new_node)
+        return new_node
 
     def __enumerate_paths_recursive(self, paths, src, dst, path_len, visited):
         ret_paths = []
