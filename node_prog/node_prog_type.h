@@ -46,6 +46,7 @@ namespace node_prog
         DISCOVER_PATHS,
         GET_BTC_BLOCK,
         GET_BTC_TX,
+        GET_BTC_ADDR,
         END
     };
 

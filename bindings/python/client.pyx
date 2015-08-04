@@ -390,6 +390,13 @@ cdef extern from 'node_prog/get_btc_tx.h' namespace 'node_prog':
         get_btc_tx_params()
         node ret_node
 
+cdef extern from 'node_prog/get_btc_addr.h' namespace 'node_prog':
+    cdef cppclass get_btc_addr_params:
+        get_btc_addr_params()
+        node_handle_t addr_handle
+        node addr_node
+        vector[node] txs
+
 cdef extern from 'client/weaver/weaver_returncode.h':
     cdef enum weaver_client_returncode:
         WEAVER_CLIENT_SUCCESS
@@ -432,6 +439,7 @@ cdef extern from 'client/client.h' namespace 'cl':
         weaver_client_returncode discover_paths_program(vector[pair[string, discover_paths_params]] &initial_args, discover_paths_params&) nogil
         weaver_client_returncode get_btc_block_program(vector[pair[string, get_btc_block_params]] &initial_args, get_btc_block_params&) nogil
         weaver_client_returncode get_btc_tx_program(vector[pair[string, get_btc_tx_params]] &initial_args, get_btc_tx_params&) nogil
+        weaver_client_returncode get_btc_addr_program(vector[pair[string, get_btc_addr_params]] &initial_args, get_btc_addr_params&) nogil
         weaver_client_returncode start_migration()
         weaver_client_returncode single_stream_migration()
         weaver_client_returncode exit_weaver()
@@ -1047,6 +1055,32 @@ cdef class Client:
         new_node = Node()
         self.__convert_node_to_client_node(c_rp.ret_node , new_node)
         return new_node
+
+    def get_btc_addr(self, addr):
+        cdef vector[pair[string, get_btc_addr_params]] c_args
+        cdef pair[string, get_btc_addr_params] arg_pair
+        arg_pair.first = addr
+        arg_pair.second.addr_handle = addr
+        c_args.push_back(arg_pair)
+
+        cdef get_btc_addr_params c_rp
+        with nogil:
+            code = self.thisptr.get_btc_addr_program(c_args, c_rp)
+
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
+
+        addr_node = Node()
+        self.__convert_node_to_client_node(c_rp.addr_node , addr_node)
+        txs = []
+        cdef vector[node].iterator tx_iter = c_rp.txs.begin()
+        while tx_iter != c_rp.txs.end():
+            tx_node = Node()
+            self.__convert_node_to_client_node(deref(tx_iter), tx_node)
+            txs.append(tx_node)
+            inc(tx_iter)
+
+        return (addr_node, txs)
 
     def __enumerate_paths_recursive(self, paths, src, dst, path_len, visited):
         ret_paths = []

@@ -39,6 +39,7 @@
 #include "node_prog/discover_paths.h"
 #include "node_prog/get_btc_block.h"
 #include "node_prog/get_btc_tx.h"
+#include "node_prog/get_btc_addr.h"
 
 namespace cl
 {
@@ -102,6 +103,7 @@ namespace cl
             weaver_client_returncode discover_paths_program(std::vector<std::pair<std::string, node_prog::discover_paths_params>> &initial_args, node_prog::discover_paths_params&);
             weaver_client_returncode get_btc_block_program(std::vector<std::pair<std::string, node_prog::get_btc_block_params>> &initial_args, node_prog::get_btc_block_params&);
             weaver_client_returncode get_btc_tx_program(std::vector<std::pair<std::string, node_prog::get_btc_tx_params>> &initial_args, node_prog::get_btc_tx_params&);
+            weaver_client_returncode get_btc_addr_program(std::vector<std::pair<std::string, node_prog::get_btc_addr_params>> &initial_args, node_prog::get_btc_addr_params&);
 
             weaver_client_returncode start_migration();
             weaver_client_returncode single_stream_migration();

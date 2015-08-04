@@ -76,6 +76,7 @@ noinst_HEADERS+=	node_prog/base_classes.h \
 					node_prog/parse_btc_tx.h \
 					node_prog/get_btc_block.h \
 					node_prog/get_btc_tx.h \
+					node_prog/get_btc_addr.h \
 					common/cache_constants.h \
 					common/config_constants.h \
 					common/hyper_stub_base.h \
@@ -150,6 +151,7 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    node_prog/parse_btc_tx.cc \
 		                    node_prog/get_btc_block.cc \
 		                    node_prog/get_btc_tx.cc \
+		                    node_prog/get_btc_addr.cc \
 		                    db/element.cc \
 		                    db/property.cc \
 		                    db/edge.cc \
@@ -226,6 +228,7 @@ weaver_shard_SOURCES=	common/ids.cc \
 						node_prog/parse_btc_tx.cc \
 		                node_prog/get_btc_block.cc \
 		                node_prog/get_btc_tx.cc \
+		                node_prog/get_btc_addr.cc \
 		                db/hyper_stub.cc \
 		                db/queue_manager.cc \
 		                db/element.cc \
@@ -273,6 +276,7 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 		                    node_prog/parse_btc_tx.cc \
 		                    node_prog/get_btc_block.cc \
 		                    node_prog/get_btc_tx.cc \
+		                    node_prog/get_btc_addr.cc \
 		                    db/element.cc \
 		                    db/property.cc \
 		                    client/comm_wrapper.cc \

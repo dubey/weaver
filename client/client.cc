@@ -538,6 +538,12 @@ client :: get_btc_tx_program(std::vector<std::pair<std::string, node_prog::get_b
     SPECIFIC_NODE_PROG(node_prog::GET_BTC_TX);
 }
 
+weaver_client_returncode
+client :: get_btc_addr_program(std::vector<std::pair<std::string, node_prog::get_btc_addr_params>> &initial_args, node_prog::get_btc_addr_params &return_param)
+{
+    SPECIFIC_NODE_PROG(node_prog::GET_BTC_ADDR);
+}
+
 #undef SPECIFIC_NODE_PROG
 
 weaver_client_returncode
