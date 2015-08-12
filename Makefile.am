@@ -21,7 +21,7 @@ AM_CFLAGS=-Wall -Wextra
 AM_CXXFLAGS=-std=c++0x -Wall -Wextra
 AM_CPPFLAGS=-I$(top_srcdir)/client
 CYTHON_FLAGS=--cplus
-LIBS=-lbusybee -le -pthread -lrt -lhyperdex-client -lreplicant -lyaml -lpopt -lglog -lpugixml
+LIBS=-lpo6 -le -lbusybee -pthread -lrt -lhyperdex-client -lreplicant -lyaml -lpopt -lglog -lpugixml
 
 if DEBUG
     AM_CFLAGS += -g3 -gdwarf-2 -O0

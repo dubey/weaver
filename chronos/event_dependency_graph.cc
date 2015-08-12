@@ -541,12 +541,12 @@ event_dependency_graph :: poke_cache(uint64_t src, uint64_t dst)
 e::packer
 operator << (e::packer lhs, const event_dependency_graph &rhs)
 {
-    e::slice cache_slice(rhs.m_cache, CACHE_MALLOC_SIZE);
+    e::slice cache_slice((const uint8_t*)rhs.m_cache, CACHE_MALLOC_SIZE);
     e::slice base_slice;
     if (rhs.m_base) {
-        base_slice = e::slice(rhs.m_base, rhs.base_size(rhs.m_vertices_allocated));
+        base_slice = e::slice((const uint8_t*)rhs.m_base, rhs.base_size(rhs.m_vertices_allocated));
     } else {
-        base_slice = e::slice(rhs.m_base, 0);
+        base_slice = e::slice((const uint8_t*)rhs.m_base, 0);
     }
 
     lhs = lhs << rhs.m_nextid
@@ -590,8 +590,8 @@ operator >> (e::unpacker lhs, event_dependency_graph &rhs)
 size_t
 pack_size(const event_dependency_graph &g)
 {
-    e::slice cache_slice(g.m_cache, CACHE_MALLOC_SIZE);
-    e::slice base_slice(g.m_base, g.base_size(g.m_vertices_allocated));
+    e::slice cache_slice((const uint8_t*)g.m_cache, CACHE_MALLOC_SIZE);
+    e::slice base_slice((const uint8_t*)g.m_base, g.base_size(g.m_vertices_allocated));
 
     return e::pack_size(g.m_nextid)
          + e::pack_size(g.m_vertices_number)

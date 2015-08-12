@@ -65,13 +65,13 @@ comm_wrapper :: comm_wrapper(std::shared_ptr<po6::net::location> my_loc,
         done = true;
         try {
             bb.reset(new busybee_mta(&bb_gc, wmap.get(), *my_loc, WEAVER_TO_BUSYBEE(bb_id), num_threads));
-        } catch (po6::error e) {
+        } catch (std::runtime_error &e) {
             done = false;
-            if (e == 98) {
+            if (errno == EADDRINUSE) {
                 // retry another port
                 my_loc->port++;
             } else {
-                WDEBUG << "exception " << e << std::endl;
+                WDEBUG << "exception " << e.what() << std::endl;
                 throw e;
             }
         }
