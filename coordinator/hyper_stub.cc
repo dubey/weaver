@@ -88,16 +88,47 @@ hyper_stub :: clean_up(std::vector<db::node*> &nodes)
 }
 
 void
-hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
-    std::unordered_set<node_handle_t> &del_set,
-    std::unordered_map<node_handle_t, uint64_t> &put_map,
-    std::unordered_set<std::string> &idx_get_set,
-    std::unordered_map<std::string, db::node*> &idx_add,
-    std::shared_ptr<transaction::pending_tx> tx,
-    bool &ready,
-    bool &error,
-    order::oracle *time_oracle)
+do_tx(std::unordered_set<node_handle_t> &get_nodes,
+      std::unordered_set<node_handle_t> &get_aliases,
+      std::unordered_set<edge_handle_t> &get_edges,
+      std::unordered_map<node_handle_t, std::vector<uint64_t>> &create_nodes,
+      std::unordered_set<edge_handle_t> &create_edges,
+      std::shared_ptr<transaction::pending_tx> tx,
+      bool &ready,
+      bool &error,
+      order::oracle *time_oracle)
 {
+    std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> indices;
+    if (AuxIndex) {
+        indices.reserve(get_aliases.size());
+        std::pair<node_handle_t, uint64_t> empty_pair;
+        for (const std::string &i: idx_get_set) {
+            if (idx_add.find(i) == idx_add.end()) {
+                indices.emplace(i, empty_pair);
+            }
+        }
+        if (!indices.empty()) {
+            if (!get_indices(indices, true)) {
+                WDEBUG << "get_indices" << std::endl;
+                ERROR_FAIL;
+            }
+        }
+
+        for (const auto &p: indices) {
+            if (put_map.find(p.second.first) == put_map.end()
+             && get_set.find(p.second.first) == get_set.end()) {
+                get_set.emplace(p.second.first);
+            }
+
+            if (del_set.find(p.first) != del_set.end()) {
+                del_set.erase(p.first);
+                del_set.emplace(p.second.first);
+            }
+        }
+    }
+
+
+    /*
 #define ERROR_FAIL \
     error = true; \
     abort_tx(); \
@@ -223,11 +254,14 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         } \
     }
 
+    WDEBUG << "here" << std::endl;
     auto node_iter = old_nodes.end();
     auto idx_get_iter = indices.end();
     auto idx_add_iter = idx_add.end();
     db::node *n = nullptr;
     std::vector<std::string> idx_del;
+    uint64_t num_edges_put = 0;
+    db::data_map<std::vector<db::edge*>> edges_to_put;
 
     for (std::shared_ptr<transaction::pending_update> upd: tx->writes) {
         switch (upd->type) {
@@ -258,6 +292,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                 do {
                     edge_id = n->max_edge_id++;
                     put_code = put_new_edge(edge_id, e);
+                    num_edges_put++;
                 } while (put_code == HYPERDEX_CLIENT_CMPFAIL);
 
                 if (put_code != HYPERDEX_CLIENT_SUCCESS) {
@@ -347,6 +382,8 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
                     WDEBUG << "property " << *upd->key << ": " << *upd->value << " fail at edge " << upd->handle1 << std::endl;
                     ERROR_FAIL;
                 }
+                edges_to_put[upd->handle1] = n->out_edges[upd->handle1];
+                num_edges_put++;
                 break;
 
             case transaction::ADD_AUX_INDEX:
@@ -377,6 +414,7 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
 #undef CHECK_LOC
 #undef GET_NODE
 
+    WDEBUG << "here" << std::endl;
     del_vec.reserve(del_set.size());
     for (const node_handle_t &h: del_set) {
         node_iter = old_nodes.find(h);
@@ -395,14 +433,26 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
         del_vec.emplace_back(n);
     }
 
+    uint64_t num_total_edges = 0;
+    for (const auto &p: old_nodes) {
+        num_total_edges += p.second->out_edges.size();
+    }
+    for (const auto &p: new_nodes) {
+        num_total_edges += p.second->out_edges.size();
+    }
+    WDEBUG << "HD calls start, #put_nodes=" << (old_nodes.size() + new_nodes.size() + idx_add.size())
+           << ", #edges=" << num_edges_put << ", #total_edges=" << num_total_edges
+           << ", #dels=" << (del_vec.size() + idx_del.size()) << std::endl;
     if (!put_nodes(old_nodes, false)
      || !put_nodes(new_nodes, true)
+     || !put_edges(edges_to_put)
      || !add_indices(idx_add, true, true)
      || !del_nodes(del_vec)
      || !del_indices(idx_del)) {
-        WDEBUG << "hyperdex error with put_nodes/add_indices/del_nodes/del_indices" << std::endl;
+        WDEBUG << "hyperdex error with put_nodes/put_edges/add_indices/del_nodes/del_indices" << std::endl;
         ERROR_FAIL;
     }
+    WDEBUG << "HD calls end" << std::endl;
 
     hyperdex_client_attribute attr[NUM_TX_ATTRS];
     attr[0].attr = tx_attrs[0];
@@ -419,14 +469,17 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     attr[1].value = (const char*)buf->data();
     attr[1].value_sz = buf->size();
     attr[1].datatype = tx_dtypes[1];
+    WDEBUG << "here" << std::endl;
 
     if (!call(&hyperdex_client_xact_put, tx_space, (const char*)&tx->id, sizeof(int64_t), attr, NUM_TX_ATTRS)) {
         WDEBUG << "hyperdex tx put error, tx id " << tx->id << std::endl;
         ERROR_FAIL;
     }
+    WDEBUG << "here" << std::endl;
 
     hyperdex_client_returncode commit_status = HYPERDEX_CLIENT_GARBAGE;
     commit_tx(commit_status);
+    WDEBUG << "here" << std::endl;
 
     switch(commit_status) {
         case HYPERDEX_CLIENT_SUCCESS:
@@ -447,8 +500,10 @@ hyper_stub :: do_tx(std::unordered_set<node_handle_t> &get_set,
     clean_up(old_nodes);
     clean_up(new_nodes);
     clean_up(del_vec);
+    WDEBUG << "here" << std::endl;
 
 #undef ERROR_FAIL
+    */
 }
 
 

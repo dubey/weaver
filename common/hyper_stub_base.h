@@ -109,26 +109,31 @@ struct async_add_index : public async_call
 class hyper_stub_base
 {
     protected:
+        const size_t num_node_attrs;
+        const size_t num_edge_attrs;
+        const size_t num_edge_id_attrs;
+        const size_t num_tx_attrs;
+
         // node handle -> node data
-        const char *graph_space = "weaver_graph_data";
-        const char *graph_attrs[NUM_GRAPH_ATTRS];
-        const char *graph_key = "node";
-        const enum hyperdatatype graph_dtypes[NUM_GRAPH_ATTRS];
+        const char *node_space = "weaver_node_data";
+        const char *node_attrs[num_node_attrs];
+        const char *node_key = "node_handle";
+        const enum hyperdatatype graph_dtypes[num_node_attrs];
+        // edge handle -> node handle, shard, edge id, edge data
+        const char *edge_space = "weaver_edge_data";
+        const char *edge_attrs[num_edge_attrs];
+        const char *edge_key = "edge_handle";
+        const enum hyperdatatype edge_dtypes[num_edge_attrs];
+        // edge id -> edge handle
+        const char *edge_id_space = "weaver_edge_id_data";
+        const char *edge_id_attrs[num_edge_id_attrs];
+        const char *edge_id_key = "edge_id";
+        const enum hyperdatatype edge_dtypes[num_edge_id_attrs];
         // tx id -> vt id, tx data
         const char *tx_space = "weaver_tx_data";
-        const char *tx_attrs[NUM_TX_ATTRS];
+        const char *tx_attrs[num_tx_attrs];
         const char *tx_key = "tx_id";
-        const enum hyperdatatype tx_dtypes[NUM_TX_ATTRS];
-        // aux index: index -> node,shard
-        const char *index_space = "weaver_index_data";
-        const char *index_attrs[NUM_INDEX_ATTRS];
-        const char *index_key = "idx";
-        const enum hyperdatatype index_dtypes[NUM_INDEX_ATTRS];
-        // edge handle -> edge data
-        const char *edge_space = "weaver_edge_data";
-        const char *edge_attrs[NUM_EDGE_ATTRS];
-        const char *edge_key = "edge";
-        const enum hyperdatatype edge_dtypes[NUM_EDGE_ATTRS];
+        const enum hyperdatatype tx_dtypes[num_tx_attrs];
 
         using hyper_func = int64_t (*) (struct hyperdex_client *client,
             const char*,
@@ -234,11 +239,14 @@ class hyper_stub_base
             std::vector<const char*> &keys, std::vector<size_t> &key_szs);
 
         // graph data functions
+        bool get_edge(db::edge &e, bool tx);
         bool get_edges(db::node &n, bool tx);
         bool get_node(db::node &n);
         bool get_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool tx);
         hyperdex_client_returncode put_new_edge(uint64_t edge_id, db::edge *e);
+        bool put_edge(const db::edge *e, bool if_not_exist);
         bool put_edges(const db::data_map<std::vector<db::edge*>> &edges);
+        bool put_node(const db::node *e, bool if_not_exist);
         bool put_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool if_not_exist);
         bool del_edge(uint64_t edge_id);
         bool del_edges(const db::node&);

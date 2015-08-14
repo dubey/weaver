@@ -187,6 +187,161 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
     vts->tx_queue_loop();
 }
 
+// iterate through the tx and collate the nodes and edges to get
+// then pass the tx to hstub object
+// the hstub object will first get all objects
+// it will then create a state machine that execs the tx asynchronously
+// the state machine will commit the HD tx at the end of all ops
+// if any of the individual ops fail, abort the tx and return to client
+void
+prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub *hstub, order::oracle *time_oracle)
+{
+    tx->id = vts->generate_req_id();
+
+    std::unordered_set<node_handle_t> get_nodes;
+    std::unordered_set<edge_handle_t> get_edges, create_edges;
+    std::unordered_map<node_handle_t, uint64_t> create_nodes;
+    std::unordered_set<std::string> get_aliases;
+    std::unordered_map<std::string, db::node*> idx_add;
+    std::unordered_map<node_handle_t, uint64_t>::iterator find_iter; 
+
+#define CHECK_LOC(handle, loc) \
+    find_iter = create_nodes.find(handle); \
+    if (find_iter == create_nodes.end()) { \
+        loc = UINT64_MAX; \
+        get_nodes.emplace(handle); \
+    } else { \
+        loc = find_iter->second; \
+    }
+
+#define HANDLE_OR_ALIAS(handle, loc, alias) \
+    if (handle == "") { \
+        if (alias == "") { \
+            error = true; \
+            WDEBUG << "both handle and alias are empty" << std::endl; \
+            break; \
+        } else if (!AuxIndex) { \
+            error = true; \
+            WDEBUG << "cannot use alias with auxiliary indexing turned off, check weaver.yaml file" << std::endl; \
+            break; \
+        } else { \
+            get_aliases.emplace(alias); \
+            loc = UINT64_MAX; \
+        } \
+    } else { \
+        CHECK_LOC(handle, loc); \
+    }
+
+    bool error = false;
+    for (std::shared_ptr<transaction::pending_update> upd: tx->writes) {
+        switch (upd->type) {
+
+            case transaction::NODE_CREATE_REQ:
+                // randomly assign shard for this node
+                upd->loc1 = vts->generate_loc(); // node will be placed on this shard
+                if (create_nodes.find(upd->handle) == create_nodes.end()) {
+                    create_nodes.emplace(upd->handle, std::vector<uint64_t>());
+                }
+                create_nodes[upd->handle].emplace_back(upd->loc1);
+                break;
+
+            case transaction::EDGE_CREATE_REQ:
+                HANDLE_OR_ALIAS(upd->handle1, upd->loc1, upd->alias1);
+                HANDLE_OR_ALIAS(upd->handle2, upd->loc2, upd->alias2);
+                if (create_edges.find(upd->handle) == create_edges.end()) {
+                    create_edges.emplace(upd->handle);
+                }
+
+                //if (AuxIndex) {
+                //    idx_add.emplace(upd->handle, nullptr);
+                //}
+                break;
+
+            case transaction::NODE_DELETE_REQ:
+            case transaction::NODE_SET_PROPERTY:
+                HANDLE_OR_ALIAS(upd->handle1, upd->loc1, upd->alias1);
+                upd->loc2 = 0;
+                //if (upd->type == transaction::NODE_DELETE_REQ) {
+                //    if (upd->handle1.empty()) {
+                //        del_set.emplace(upd->alias1);
+                //    } else {
+                //        del_set.emplace(upd->handle1);
+                //    }
+                //}
+                break;
+
+            case transaction::EDGE_DELETE_REQ:
+            case transaction::EDGE_SET_PROPERTY:
+                if (upd->alias2 != "") {
+                    HANDLE_OR_ALIAS(upd->handle2, upd->loc1, upd->alias2);
+                } else {
+                    // if no alias provided, use edge as node alias
+                    HANDLE_OR_ALIAS(upd->handle2, upd->loc1, upd->handle1);
+                }
+                upd->loc2 = 0;
+                break;
+
+            case transaction::ADD_AUX_INDEX:
+                if (!AuxIndex) {
+                    error = true;
+                    WDEBUG << "cannot add alias with auxiliary indexing turned off, check weaver.yaml file" << std::endl;
+                    break;
+                }
+                CHECK_LOC(upd->handle1, upd->loc1);
+                break;
+
+            default:
+                WDEBUG << "bad type" << std::endl;
+        }
+
+        if (error) {
+            break;
+        }
+    }
+
+#undef CHECK_LOC
+#undef HANDLE_OR_ALIAS
+
+    uint64_t sender = tx->sender;
+    bool ready = false;
+
+    while (!ready && !error) {
+        vts->clk_rw_mtx.wrlock();
+        vts->vclk.increment_clock();
+        vts->out_queue_counter++;
+        tx->timestamp = vts->vclk;
+        tx->vt_seq = vts->out_queue_counter;
+        vts->clk_rw_mtx.unlock();
+
+        // write tx in warp
+        // gets/puts/dels node mappings
+        // sets error if any warp operation returns error
+        // sets upd->loc for each upd in tx
+        // sets tx->shard_write bool_vector (shard_write[i] = true iff there is a tx component at shard i)
+        hstub->do_tx(get_nodes, get_aliases, get_edges, create_nodes, create_edges, tx, ready, error, time_oracle);
+
+        assert(!(ready && error)); // can't be ready after some error
+
+        std::shared_ptr<transaction::pending_tx> to_enq;
+        if (!ready || error) {
+            to_enq = tx->copy_fail_transaction();
+        } else {
+            to_enq = tx;
+        }
+        vts->enqueue_tx(to_enq);
+    }
+
+    message::message msg;
+    if (error) {
+        // fail tx
+        msg.prepare_message(message::CLIENT_TX_ABORT);
+    } else {
+        msg.prepare_message(message::CLIENT_TX_SUCCESS);
+    }
+    vts->comm.send_to_client(sender, msg.buf);
+    vts->tx_queue_loop();
+}
+
 // if all replies have been received, ack to client
 void
 end_tx(uint64_t tx_id, uint64_t shard_id, coordinator::hyper_stub *hstub)
@@ -689,6 +844,7 @@ server_loop(void *args)
 
                     if (to_process) {
                         vts->comm.send_to_client(client, msg->buf);
+                        WDEBUG << "done node prog and sent to client=" << client << std::endl;
 #ifdef weaver_benchmark_
                         vts->test_mtx.lock();
                         vts->outstanding_cnt--;

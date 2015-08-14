@@ -798,6 +798,34 @@ hyper_stub_base :: recreate_edge(const hyperdex_client_attribute *cl_attr,
 }
 
 bool
+hyper_stub_base :: get_edge(const edge_handle_t &edge_handle, db::edge **e, bool tx)
+{
+    std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> get_idx;
+    get_idx.emplace(edge_handle, std::make_pair(node_handle_t(), UINT64_MAX));
+    if (!get_indices(get_idx, tx)) {
+        return false;
+    }
+
+    const hyperdex_client_attribute *attr;
+    size_t num_attrs;
+    uint64_t edge_id = e->edge_id;
+
+    bool success = get(edge_space,
+                       (const char*)edge_id, sizeof(int64_t),
+                       &attr, &num_attrs,
+                       tx);
+    if (success) {
+        success = recreate_node(attr, n);
+        if (success) {
+            success = get_edges(n, true);
+        }
+        hyperdex_client_destroy_attrs(attr, num_attrs);
+    }
+
+    return success;
+}
+
+bool
 hyper_stub_base :: get_edges(db::node &n, bool tx)
 {
     int64_t num_edges = n.edge_ids.size();
@@ -1128,10 +1156,10 @@ hyper_stub_base :: put_nodes(std::unordered_map<node_handle_t, db::node*> &nodes
         key_szs[i] = p.first.size();
 
         size_t packed_sz;
-        if (!p.second->out_edges.empty()
-         && !put_edges(p.second->out_edges)) {
-            return false;
-        }
+        //if (!p.second->out_edges.empty()
+        // && !put_edges(p.second->out_edges)) {
+        //    return false;
+        //}
         prepare_node(attrs[i], *p.second, creat_clk_buf[i], props_buf[i], out_edges_buf[i], last_clk_buf[i], restore_clk_buf[i], aliases_buf[i], num_attrs[i], packed_sz);
 
         i++;

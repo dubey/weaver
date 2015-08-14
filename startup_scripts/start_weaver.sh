@@ -103,19 +103,8 @@ sleep 3
 echo 'Adding HyperDex spaces'
 
 hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
-space weaver_index_data
-key idx
-attributes
-    string node,
-    int shard
-tolerate 0 failures
-EOF
-
-sleep 1
-
-hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
-space weaver_graph_data
-key node
+space weaver_node_data
+key node_handle
 attributes
     int shard,
     string creat_time,
@@ -128,12 +117,26 @@ attributes
 tolerate 0 failures
 EOF
 
+sleep 1
+
 hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
 space weaver_edge_data
+key edge_handle
+attributes
+    string node_handle,
+    int shard,
+    int edge_id,
+    string data
+tolerate 0 failures
+EOF
+
+sleep 1
+
+hyperdex add-space -h $hyperdex_coord_ipaddr -p $hyperdex_coord_port << EOF
+space weaver_edge_id_data
 key edge_id
 attributes
-    string handle,
-    string data
+    string handle
 tolerate 0 failures
 EOF
 
@@ -147,6 +150,8 @@ attributes
     string tx_data
 tolerate 0 failures
 EOF
+
+sleep 1
 
 
 # server manager

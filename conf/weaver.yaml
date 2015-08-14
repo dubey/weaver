@@ -12,21 +12,65 @@ max_cache_entries : 0
 # HyperDex coordinator ip addrs and corresponding ports.
 # Used for starting up cluster and for connecting to HyperDex.
 hyperdex_coord:
-    - 127.0.0.1 : 7982
+    - 128.84.167.220 : 7982
 
 # HyperDex daemons ip addrs and corresponding ports.
 # Used for starting up cluster.
 hyperdex_daemons:
-    - 127.0.0.1 : 8012
-    
+    - 128.84.167.220 : 8012
+    - 128.84.167.221 : 8012
+    - 128.84.167.222 : 8012
+    - 128.84.167.225 : 8012
+    - 128.84.167.226 : 8012
+    - 128.84.167.227 : 8012
+    - 128.84.167.230 : 8012
+    - 128.84.167.231 : 8012
+    - 128.84.167.232 : 8012
+    - 128.84.167.233 : 8012
+    - 128.84.167.234 : 8012
+    - 128.84.167.235 : 8012
+    - 128.84.167.236 : 8012
+    - 128.84.167.238 : 8012
+    - 128.84.167.239 : 8012
+    - 128.84.167.240 : 8012
+    - 128.84.167.241 : 8012
+    - 128.84.167.242 : 8012
+    - 128.84.167.243 : 8012
+    - 128.84.167.244 : 8012
+    - 128.84.167.245 : 8012
+    - 128.84.167.246 : 8012
+#    - 128.84.167.247 : 8012
+    - 128.84.167.248 : 8012
+    - 128.84.167.249 : 8012
+    - 128.84.167.250 : 8012
+    - 128.84.167.252 : 8012
+    - 128.84.167.150 : 8012
+    - 128.84.167.151 : 8012
+    - 128.84.167.156 : 8012
+    - 128.84.167.157 : 8012
+    - 128.84.167.152 : 8012
+    - 128.84.167.153 : 8012
+    - 128.84.167.160 : 8012
+    - 128.84.167.161 : 8012
+    - 128.84.167.162 : 8012
+    - 128.84.167.164 : 8012
+    - 128.84.167.165 : 8012
+    - 128.84.167.166 : 8012
+    - 128.84.167.167 : 8012
+    - 128.84.167.168 : 8012
+    - 128.84.167.169 : 8012
+    - 128.84.167.154 : 8012
+    - 128.84.167.155 : 8012
+    - 128.84.167.186 : 8012
+
 # Kronos replicated state machine ip addrs and corresponding ports.
 # Used for starting up cluster and connecting to Kronos.
 kronos:
-    - 127.0.0.1 : 1992
+    - 128.84.167.220 : 1992
 
 # Weaver coordinator ip addrs and ports.
 weaver_coord:
-    - 127.0.0.1 : 2002
+    - 128.84.167.220 : 2002
 
 # Boolean aux_index controls whether Weaver maintains auxiliary indexing.
 # Auxiliary indexing can be used to access edges and attach arbitrary handles to nodes.
@@ -43,10 +87,10 @@ bulk_load_node_alias_key: "alias"
 
 # BulkLoadEdgeIndexKey is the key of edge property that defines any additional index to be made to the node.
 # Default: ""
-# bulk_load_edge_index_key: ""
+#bulk_load_edge_index_key: "tx_id"
 
 # BulkLoadEdgeHandlePrefix is the prefix-string attached to edge handles during bulk loading graphs that do not specify edge handles.
 # Default: "e"
 bulk_load_edge_handle_prefix: ""
 
-nodes_per_map: 1000
+nodes_per_map: 100
