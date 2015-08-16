@@ -122,15 +122,19 @@ hyper_stub :: restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *node
     size_t num_attrs;
 
     // node list
-    const hyperdex_client_attribute_check attr_check = {graph_attrs[0], (const char*)&m_shard_id, sizeof(int64_t), graph_dtypes[0], HYPERPREDICATE_EQUALS};
+    const hyperdex_client_attribute_check attr_check = {node_attrs[0],
+                                                        (const char*)&m_shard_id,
+                                                        sizeof(int64_t),
+                                                        node_dtypes[0],
+                                                        HYPERPREDICATE_EQUALS};
     enum hyperdex_client_returncode search_status, loop_status;
 
-    int64_t call_id = hyperdex_client_search(cl, graph_space, &attr_check, 1, &search_status, &cl_attr, &num_attrs);
+    int64_t call_id = hyperdex_client_search(m_cl, node_space, &attr_check, 1, &search_status, &cl_attr, &num_attrs);
     if (call_id < 0) {
         WDEBUG << "Hyperdex function failed, op id = " << call_id
                << ", status = " << hyperdex_client_returncode_to_string(search_status) << std::endl;
-        WDEBUG << "error message: " << hyperdex_client_error_message(cl) << std::endl;
-        WDEBUG << "error loc: " << hyperdex_client_error_location(cl) << std::endl;
+        WDEBUG << "error message: " << hyperdex_client_error_message(m_cl) << std::endl;
+        WDEBUG << "error loc: " << hyperdex_client_error_location(m_cl) << std::endl;
         return;
     }
 
@@ -147,7 +151,7 @@ hyper_stub :: restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *node
 
     while (!loop_done) {
         // loop until search done
-        loop_id = hyperdex_client_loop(cl, -1, &loop_status);
+        loop_id = hyperdex_client_loop(m_cl, -1, &loop_status);
         if (loop_id != call_id
          || loop_status != HYPERDEX_CLIENT_SUCCESS
          || (search_status != HYPERDEX_CLIENT_SUCCESS && search_status != HYPERDEX_CLIENT_SEARCHDONE)) {
@@ -163,10 +167,10 @@ hyper_stub :: restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *node
         if (search_status == HYPERDEX_CLIENT_SEARCHDONE) {
             loop_done = true;
         } else if (search_status == HYPERDEX_CLIENT_SUCCESS) {
-            assert(num_attrs == NUM_GRAPH_ATTRS+1); // node handle + graph attrs
+            assert(num_attrs == num_node_attrs+1); // node handle + graph attrs
 
             uint64_t key_idx = UINT64_MAX;
-            hyperdex_client_attribute node_attrs[NUM_GRAPH_ATTRS];
+            hyperdex_client_attribute node_attrs[num_node_attrs];
             for (uint64_t i = 0, j = 0; i < num_attrs; i++) {
                 if (strncmp(cl_attr[i].attr, graph_key, 4) == 0) {
                     key_idx = i;
@@ -319,7 +323,7 @@ hyper_stub :: put_node_no_loop(db::node *n)
                  apn->packed_sz);
 
     bool success = call_no_loop(&hyperdex_client_put,
-                                graph_space,
+                                node_space,
                                 apn->handle.c_str(),
                                 apn->handle.size(),
                                 apn->attrs,
@@ -394,7 +398,7 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle,
                                 edge_space,
                                 (const char*)&ape->edge_id,
                                 sizeof(int64_t),
-                                ape->attrs, NUM_EDGE_ATTRS,
+                                ape->attrs, num_edge_attrs,
                                 ape->op_id, ape->status);
 
     if (success) {
@@ -427,16 +431,16 @@ hyper_stub :: put_node_edge_id_set_no_loop(const node_handle_t &node_handle,
         id_set.emplace(i);
     }
     prepare_buffer(id_set, apes->set_buf);
-    apes->set_attr[0].attr = graph_attrs[3];
+    apes->set_attr[0].attr = node_attrs[3];
     apes->set_attr[0].value = (const char*)apes->set_buf->data();
     apes->set_attr[0].value_sz = apes->set_buf->size();
-    apes->set_attr[0].datatype = graph_dtypes[3];
+    apes->set_attr[0].datatype = node_dtypes[3];
 
     // max edge id
-    apes->set_attr[1].attr = graph_attrs[4];
+    apes->set_attr[1].attr = node_attrs[4];
     apes->set_attr[1].value = (const char*)&apes->max_edge_id;
     apes->set_attr[1].value_sz = sizeof(int64_t);
-    apes->set_attr[1].datatype = graph_dtypes[4];
+    apes->set_attr[1].datatype = node_dtypes[4];
 
     apes->packed_sz = apes->set_attr[0].value_sz + apes->set_attr[1].value_sz;
 
