@@ -118,7 +118,7 @@ class hyper_stub_base
         const char *node_space = "weaver_node_data";
         const char *node_attrs[num_node_attrs];
         const char *node_key = "node_handle";
-        const enum hyperdatatype graph_dtypes[num_node_attrs];
+        const enum hyperdatatype node_dtypes[num_node_attrs];
         // edge handle -> node handle, shard, edge id, edge data
         const char *edge_space = "weaver_edge_data";
         const char *edge_attrs[num_edge_attrs];
@@ -128,7 +128,7 @@ class hyper_stub_base
         const char *edge_id_space = "weaver_edge_id_data";
         const char *edge_id_attrs[num_edge_id_attrs];
         const char *edge_id_key = "edge_id";
-        const enum hyperdatatype edge_dtypes[num_edge_id_attrs];
+        const enum hyperdatatype edge_id_dtypes[num_edge_id_attrs];
         // tx id -> vt id, tx data
         const char *tx_space = "weaver_tx_data";
         const char *tx_attrs[num_tx_attrs];
@@ -164,8 +164,8 @@ class hyper_stub_base
             size_t,
             hyperdex_client_returncode*);
 
-        hyperdex_client *cl;
-        hyperdex_client_transaction *hyper_tx;
+        hyperdex_client *m_cl;
+        hyperdex_client_transaction *m_hyper_tx;
 
         void check_op_id(int64_t op_id,
                          hyperdex_client_returncode status,
@@ -294,9 +294,9 @@ class hyper_stub_base
 
     protected:
         // pseudo random number gen for edge ids, seeded by /dev/urandom
-        uint64_t gen_seed;
-        std::mt19937_64 mt64_gen;
-        std::uniform_int_distribution<uint64_t> uint64max_dist;
+        uint64_t m_gen_seed;
+        std::mt19937_64 m_mt64_gen;
+        std::uniform_int_distribution<uint64_t> m_uint64max_dist;
 
         void prepare_node(hyperdex_client_attribute *attr,
             db::node &n,
