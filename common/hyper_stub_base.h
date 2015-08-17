@@ -30,9 +30,9 @@
 #include "db/types.h"
 #include "db/node.h"
 
-#define NUM_INDEX_ATTRS 2
-#define NUM_GRAPH_ATTRS 8
-#define NUM_EDGE_ATTRS 2
+#define NUM_NODE_ATTRS 8
+#define NUM_EDGE_ATTRS 4
+#define NUM_EDGE_ID_ATTRS 1
 #define NUM_TX_ATTRS 2
 
 enum persist_node_state
@@ -70,7 +70,7 @@ class hyper_stub_base
         struct async_put_node : public async_call
         {
             std::string handle;
-            hyperdex_client_attribute attrs[hyper_stub_base::num_node_attrs];
+            hyperdex_client_attribute attrs[NUM_NODE_ATTRS];
             std::unique_ptr<e::buffer> creat_clk_buf;
             std::unique_ptr<e::buffer> props_buf;
             std::unique_ptr<e::buffer> out_edges_buf;
@@ -93,7 +93,7 @@ class hyper_stub_base
         struct async_put_edge : public async_call
         {
             std::string edge_handle, node_handle;
-            hyperdex_client_attribute attrs[hyper_stub_base::num_edge_attrs];
+            hyperdex_client_attribute attrs[NUM_EDGE_ATTRS];
             std::unique_ptr<e::buffer> buf;
             db::edge *e;
             bool del_after_call;
@@ -102,49 +102,44 @@ class hyper_stub_base
             async_put_edge() : del_after_call(false) { type = PUT_EDGE; }
         };
 
-        //struct async_add_index : public async_call
-        //{
-        //    std::string node_handle, alias;
-        //    hyperdex_client_attribute index_attrs[NUM_INDEX_ATTRS];
+        struct async_add_index : public async_call
+        {
+            std::string node_handle, alias;
+            hyperdex_client_attribute index_attrs[2];
 
-        //    async_add_index() { type = ADD_INDEX; }
-        //};
+            async_add_index() { type = ADD_INDEX; }
+        };
 
         struct async_put_edge_id : public async_call
         {
             uint64_t edge_id;
             std::string edge_handle;
-            hyperdex_client_attribute edgeid_attrs[hyper_stub_base::num_edge_id_attrs];
+            hyperdex_client_attribute edgeid_attrs[NUM_EDGE_ID_ATTRS];
 
             async_put_edge_id() { type = PUT_EDGE_ID; }
         };
 
     protected:
-        static const size_t num_node_attrs;
-        static const size_t num_edge_attrs;
-        static const size_t num_edge_id_attrs;
-        static const size_t num_tx_attrs;
-
         // node handle -> node data
         const char *node_space = "weaver_node_data";
-        const char *node_attrs[num_node_attrs];
+        const char *node_attrs[NUM_NODE_ATTRS];
         const char *node_key = "node_handle";
-        const enum hyperdatatype node_dtypes[num_node_attrs];
+        const enum hyperdatatype node_dtypes[NUM_NODE_ATTRS];
         // edge handle -> node handle, shard, edge id, edge data
         const char *edge_space = "weaver_edge_data";
-        const char *edge_attrs[num_edge_attrs];
+        const char *edge_attrs[NUM_EDGE_ATTRS];
         const char *edge_key = "edge_handle";
-        const enum hyperdatatype edge_dtypes[num_edge_attrs];
+        const enum hyperdatatype edge_dtypes[NUM_EDGE_ATTRS];
         // edge id -> edge handle
         const char *edge_id_space = "weaver_edge_id_data";
-        const char *edge_id_attrs[num_edge_id_attrs];
+        const char *edge_id_attrs[NUM_EDGE_ID_ATTRS];
         const char *edge_id_key = "edge_id";
-        const enum hyperdatatype edge_id_dtypes[num_edge_id_attrs];
+        const enum hyperdatatype edge_id_dtypes[NUM_EDGE_ID_ATTRS];
         // tx id -> vt id, tx data
         const char *tx_space = "weaver_tx_data";
-        const char *tx_attrs[num_tx_attrs];
+        const char *tx_attrs[NUM_TX_ATTRS];
         const char *tx_key = "tx_id";
-        const enum hyperdatatype tx_dtypes[num_tx_attrs];
+        const enum hyperdatatype tx_dtypes[NUM_TX_ATTRS];
 
         using hyper_func = int64_t (*) (struct hyperdex_client *client,
             const char*,
@@ -250,21 +245,30 @@ class hyper_stub_base
             std::vector<const char*> &keys, std::vector<size_t> &key_szs);
 
         // graph data functions
-        bool get_edge(db::edge &e, bool tx);
-        bool get_edges(db::node &n, bool tx);
-        bool get_node(db::node &n);
-        bool get_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool tx);
-        hyperdex_client_returncode put_new_edge(uint64_t edge_id, db::edge *e);
+        bool get_edge(const edge_handle_t &edge_handle,
+                      db::edge **e,
+                      bool tx);
+        bool get_node_edges(db::node &n, bool tx);
+        bool get_node(db::node &n, bool recreate_edges);
+        bool get_nodes(std::unordered_map<node_handle_t, db::node*> &nodes,
+                       bool recreate_edges,
+                       bool tx);
+        hyperdex_client_returncode put_new_edge(uint64_t edge_id,
+                                                db::edge *e,
+                                                const node_handle_t &handle,
+                                                uint64_t shard);
         bool put_edge(const db::edge *e, bool if_not_exist);
         bool put_edges(const db::data_map<std::vector<db::edge*>> &edges);
         bool put_node(const db::node *e, bool if_not_exist);
         bool put_nodes(std::unordered_map<node_handle_t, db::node*> &nodes, bool if_not_exist);
-        bool del_edge(uint64_t edge_id);
+        bool del_edge(const edge_handle_t&, uint64_t edge_id);
         bool del_edges(const db::node&);
         bool del_node(const db::node&);
         bool del_nodes(std::vector<db::node*> &nodes);
         bool recreate_edge(const hyperdex_client_attribute *cl_attr,
-                           edge_handle_t &handle,
+                           node_handle_t &handle,
+                           uint64_t &shard,
+                           uint64_t &edge_id,
                            db::edge **e);
         bool recreate_node(const hyperdex_client_attribute *cl_attr, db::node &n);
 
