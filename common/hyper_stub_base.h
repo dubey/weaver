@@ -46,73 +46,84 @@ enum async_call_type
     PUT_NODE,
     PUT_EDGE_SET,
     PUT_EDGE,
+    PUT_EDGE_ID,
     ADD_INDEX
 };
 
 const char*
 async_call_type_to_string(async_call_type);
 
-struct async_call
-{
-    async_call_type type;
-    hyperdex_client_returncode status;
-    uint64_t exec_time;
-    size_t packed_sz;
-    int64_t op_id;
-
-    async_call() : status(HYPERDEX_CLIENT_GARBAGE), exec_time(42), packed_sz(42) { }
-};
-
-struct async_put_node : public async_call
-{
-    std::string handle;
-    hyperdex_client_attribute attrs[NUM_GRAPH_ATTRS];
-    std::unique_ptr<e::buffer> creat_clk_buf;
-    std::unique_ptr<e::buffer> props_buf;
-    std::unique_ptr<e::buffer> out_edges_buf;
-    std::unique_ptr<e::buffer> aliases_buf;
-    size_t num_attrs;
-
-    async_put_node() { type = PUT_NODE; }
-};
-
-struct async_put_edge_set : public async_call
-{
-    std::string node_handle;
-    int64_t max_edge_id;
-    hyperdex_client_attribute set_attr[2];
-    std::unique_ptr<e::buffer> set_buf;
-
-    async_put_edge_set() { type = PUT_EDGE_SET; }
-};
-
-struct async_put_edge : public async_call
-{
-    uint64_t edge_id;
-    std::string node_handle, edge_handle;
-    hyperdex_client_attribute attrs[NUM_EDGE_ATTRS];
-    std::unique_ptr<e::buffer> buf;
-    db::edge *e;
-    bool del_after_call;
-
-    async_put_edge() : del_after_call(false) { type = PUT_EDGE; }
-};
-
-struct async_add_index : public async_call
-{
-    std::string node_handle, alias;
-    hyperdex_client_attribute index_attrs[NUM_INDEX_ATTRS];
-
-    async_add_index() { type = ADD_INDEX; }
-};
-
 class hyper_stub_base
 {
     protected:
-        const size_t num_node_attrs;
-        const size_t num_edge_attrs;
-        const size_t num_edge_id_attrs;
-        const size_t num_tx_attrs;
+        struct async_call
+        {
+            async_call_type type;
+            hyperdex_client_returncode status;
+            uint64_t exec_time;
+            size_t packed_sz;
+            int64_t op_id;
+
+            async_call() : status(HYPERDEX_CLIENT_GARBAGE), exec_time(42), packed_sz(42) { }
+        };
+
+        struct async_put_node : public async_call
+        {
+            std::string handle;
+            hyperdex_client_attribute attrs[hyper_stub_base::num_node_attrs];
+            std::unique_ptr<e::buffer> creat_clk_buf;
+            std::unique_ptr<e::buffer> props_buf;
+            std::unique_ptr<e::buffer> out_edges_buf;
+            std::unique_ptr<e::buffer> aliases_buf;
+            size_t num_attrs;
+
+            async_put_node() { type = PUT_NODE; }
+        };
+
+        struct async_put_edge_set : public async_call
+        {
+            std::string node_handle;
+            int64_t max_edge_id;
+            hyperdex_client_attribute set_attr[2];
+            std::unique_ptr<e::buffer> set_buf;
+
+            async_put_edge_set() { type = PUT_EDGE_SET; }
+        };
+
+        struct async_put_edge : public async_call
+        {
+            std::string edge_handle, node_handle;
+            hyperdex_client_attribute attrs[hyper_stub_base::num_edge_attrs];
+            std::unique_ptr<e::buffer> buf;
+            db::edge *e;
+            bool del_after_call;
+            uint64_t edge_id;
+
+            async_put_edge() : del_after_call(false) { type = PUT_EDGE; }
+        };
+
+        //struct async_add_index : public async_call
+        //{
+        //    std::string node_handle, alias;
+        //    hyperdex_client_attribute index_attrs[NUM_INDEX_ATTRS];
+
+        //    async_add_index() { type = ADD_INDEX; }
+        //};
+
+        struct async_put_edge_id : public async_call
+        {
+            uint64_t edge_id;
+            std::string edge_handle;
+            hyperdex_client_attribute edgeid_attrs[hyper_stub_base::num_edge_id_attrs];
+
+            async_put_edge_id() { type = PUT_EDGE_ID; }
+        };
+
+    protected:
+        static const size_t num_node_attrs;
+        static const size_t num_edge_attrs;
+        static const size_t num_edge_id_attrs;
+        static const size_t num_tx_attrs;
 
         // node handle -> node data
         const char *node_space = "weaver_node_data";
@@ -309,8 +320,10 @@ class hyper_stub_base
             size_t &num_attrs,
             size_t &packed_node_sz);
         void prepare_edge(hyperdex_client_attribute *attrs,
+            const node_handle_t &handle,
+            const uint64_t &shard,
             db::edge &e,
-            uint64_t edge_id,
+            const uint64_t &edge_id,
             std::unique_ptr<e::buffer> &buf,
             size_t &packed_sz);
         void pack_uint64(e::packer &packer, uint64_t num);

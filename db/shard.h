@@ -195,8 +195,7 @@ namespace db
                                     edge *e,
                                     const node_handle_t &node_handle,
                                     uint64_t edge_id,
-                                    bool node_in_mem,
-                                    const std::vector<std::string> &alias);
+                                    bool node_in_mem);
             void bulk_load_flush_map(hyper_stub &hs);
 
             // Permanent deletion
@@ -456,10 +455,9 @@ namespace db
                                 db::edge *e,
                                 const node_handle_t &node_handle,
                                 uint64_t edge_id,
-                                bool node_in_mem,
-                                const std::vector<std::string> &aliases)
+                                bool node_in_mem)
     {
-        assert(hs.put_edge_no_loop(node_handle, e, edge_id, aliases, !node_in_mem));
+        assert(hs.put_edge_no_loop(node_handle, e, edge_id, !node_in_mem));
     }
 
     inline void

@@ -16,11 +16,12 @@
 #include "common/hyper_stub_base.h"
 #include "common/config_constants.h"
 
+const uint64_t hyper_stub_base::num_node_attrs = 8;
+const uint64_t hyper_stub_base::num_edge_attrs = 4;
+const uint64_t hyper_stub_base::num_edge_id_attrs = 1;
+const uint64_t hyper_stub_base::num_tx_attrs = 2;
+
 hyper_stub_base :: hyper_stub_base()
-    : num_node_attrs(8)
-    , num_edge_attrs(4)
-    , num_edge_id_attrs(1)
-    , num_tx_attrs(2)
     : node_attrs{"shard",
                  "creat_time",
                  "properties",
@@ -50,7 +51,7 @@ hyper_stub_base :: hyper_stub_base()
                   HYPERDATATYPE_STRING,
                   HYPERDATATYPE_STRING}
     , edge_id_attrs{"handle"}
-    , edge_dtypes{HYPERDATATYPE_STRING}
+    , edge_id_dtypes{HYPERDATATYPE_STRING}
     , tx_attrs{"vt_id", "tx_data"}
     , tx_dtypes{HYPERDATATYPE_INT64, HYPERDATATYPE_STRING}
     , m_cl(hyperdex_client_create(HyperdexCoordIpaddr.c_str(), HyperdexCoordPort))
@@ -1104,9 +1105,9 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
 void
 hyper_stub_base :: prepare_edge(hyperdex_client_attribute *attrs,
     const node_handle_t &node_handle,
-    uint64_t shard,
+    const uint64_t &shard,
     db::edge &e,
-    uint64_t edge_id,
+    const uint64_t &edge_id,
     std::unique_ptr<e::buffer> &buf,
     size_t &packed_sz)
 {
@@ -1125,7 +1126,7 @@ hyper_stub_base :: prepare_edge(hyperdex_client_attribute *attrs,
 
     // shard
     attrs[attr_idx].attr = edge_attrs[attr_idx];
-    attrs[attr_idx].value = (const char*)shard;
+    attrs[attr_idx].value = (const char*)&shard;
     attrs[attr_idx].value_sz = sizeof(int64_t);
     attrs[attr_idx].datatype = edge_dtypes[attr_idx];
     packed_sz += sizeof(int64_t);
@@ -1133,7 +1134,7 @@ hyper_stub_base :: prepare_edge(hyperdex_client_attribute *attrs,
 
     // edge id
     attrs[attr_idx].attr = edge_attrs[attr_idx];
-    attrs[attr_idx].value = (const char*)e.edge_id;
+    attrs[attr_idx].value = (const char*)&edge_id;
     attrs[attr_idx].value_sz = sizeof(int64_t);
     attrs[attr_idx].datatype = edge_dtypes[attr_idx];
     packed_sz += sizeof(int64_t);
@@ -1766,8 +1767,12 @@ async_call_type_to_string(async_call_type t)
     switch (t) {
         case PUT_NODE:
             return "PUT_NODE";
+        case PUT_EDGE_SET:
+            return "PUT_EDGE_SET";
         case PUT_EDGE:
             return "PUT_EDGE";
+        case PUT_EDGE_ID:
+            return "PUT_EDGE_ID";
         case ADD_INDEX:
             return "ADD_INDEX";
         default:

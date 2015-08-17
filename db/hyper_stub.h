@@ -35,30 +35,30 @@ namespace db
         ACTIVE // this shard does have the token
     };
 
-    using async_call_ptr_t = std::shared_ptr<async_call>;
-    using apn_ptr_t = std::shared_ptr<async_put_node>;
-    using apes_ptr_t = std::shared_ptr<async_put_edge_set>;
-    using ape_ptr_t = std::shared_ptr<async_put_edge>;
-    using aai_ptr_t = std::shared_ptr<async_add_index>;
-
-    template <typename T>
-    class hyper_stub_pool
-    {
-        private:
-            std::vector<async_call_ptr_t> pool;
-            uint64_t sz;
-            async_call_type type;
-
-        public:
-            hyper_stub_pool(async_call_type type);
-            uint64_t size();
-            std::shared_ptr<T> acquire();
-            void release(std::shared_ptr<T>);
-            void clear() { pool.clear(); }
-    };
+    using async_call_ptr_t = std::shared_ptr<hyper_stub_base::async_call>;
+    using apn_ptr_t = std::shared_ptr<hyper_stub_base::async_put_node>;
+    using apes_ptr_t = std::shared_ptr<hyper_stub_base::async_put_edge_set>;
+    using ape_ptr_t = std::shared_ptr<hyper_stub_base::async_put_edge>;
+    using aai_ptr_t = std::shared_ptr<hyper_stub_base::async_add_index>;
 
     class hyper_stub : private hyper_stub_base
     {
+        template <typename T>
+        class hyper_stub_pool
+        {
+            private:
+                std::vector<async_call_ptr_t> pool;
+                uint64_t sz;
+                async_call_type type;
+
+            public:
+                hyper_stub_pool(async_call_type type);
+                uint64_t size();
+                std::shared_ptr<T> acquire();
+                void release(std::shared_ptr<T>);
+                void clear() { pool.clear(); }
+        };
+
         public:
             hyper_stub(uint64_t sid, int tid);
             void restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *nodes,
@@ -74,7 +74,6 @@ namespace db
             bool put_edge_no_loop(const node_handle_t &node_handle,
                                   db::edge *e,
                                   uint64_t edge_id,
-                                  const std::vector<std::string> &aliases,
                                   bool del_after_call);
             bool put_node_edge_id_set_no_loop(const node_handle_t &node_handle,
                                               int64_t start_id,
@@ -105,6 +104,7 @@ namespace db
             hyper_stub_pool<async_put_node> m_apn_pool;
             hyper_stub_pool<async_put_edge_set> m_apes_pool;
             hyper_stub_pool<async_put_edge> m_ape_pool;
+            hyper_stub_pool<async_put_edge_id> m_apei_pool;
             hyper_stub_pool<async_add_index> m_aai_pool;
             std::unordered_map<int64_t, async_call_ptr_t> m_async_calls;
             std::unique_ptr<e::buffer> m_restore_clk_buf;

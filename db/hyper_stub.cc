@@ -25,7 +25,7 @@
 #define INITIAL_POOL_SZ (OUTSTANDING_HD_OPS*3)
 
 using db::hyper_stub;
-using db::hyper_stub_pool;
+using db::hyper_stub::hyper_stub_pool;
 using db::apn_ptr_t;
 using db::apes_ptr_t;
 using db::ape_ptr_t;
@@ -99,6 +99,7 @@ hyper_stub :: hyper_stub(uint64_t sid, int tid)
     , m_apn_pool(PUT_NODE)
     , m_apes_pool(PUT_EDGE_SET)
     , m_ape_pool(PUT_EDGE)
+    , m_apei_pool(PUT_EDGE_ID)
     , m_aai_pool(ADD_INDEX)
     , m_async_calls()
     , m_restore_clk_buf(nullptr)
@@ -366,38 +367,72 @@ hyper_stub :: new_edge(const node_handle_t &node_handle)
 }
 
 bool
+hyper_stub :: put_edge_id_no_loop(uint64_t edge_id,
+                                  const edge_handle_t &edge_handle)
+{
+    apei_ptr_t apei = m_apei_pool.acquire();
+    apei->edge_id = edge_id;
+    apei->edge_handle = edge_handle;
+    // edge handle
+    apei->edgeid_attrs[0].attr     = edge_id_attrs[0];
+    apei->edgeid_attrs[0].value    = apei->edge_handle.c_str();
+    apei->edgeid_attrs[0].value_sz = apei->edge_handle.size();
+    apei->edgeid_attrs[0].datatype = edge_id_dtypes[0];
+    apei->packed_sz                = apei->edge_handle.size();
+
+    bool success = call_no_loop(hyperdex_client_put_if_not_exist,
+                                edge_id_space,
+                                (const char*)&apei->edge_id,
+                                sizeof(int64_t),
+                                apei->edgeid_attrs, hyper_stub_base::num_edge_id_attrs,
+                                apei->op_id, apei->status);
+
+    if (success) {
+        apei->exec_time = m_timer.get_real_time_millis();
+        m_async_calls[apei->op_id] = apei;
+    } else {
+        WDEBUG << "hyperdex_client_put failed, op_id=" << apei->op_id
+               << ", call_code=" << hyperdex_client_returncode_to_string(apei->status) << std::endl;
+        WDEBUG << "edge_id=" << edge_id << ", edge_handle=" << edge_handle << std::endl;
+        abort_bulk_load();
+    }
+
+    possibly_flush();
+
+    return success;
+}
+
+bool
 hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle,
                                db::edge *e,
                                uint64_t edge_id,
-                               const std::vector<std::string> &aliases,
                                bool del_after_call)
 {
-    // add edge alias
-    if (!aliases.empty()) {
-        for (const std::string &alias: aliases) {
-            if (!add_index_no_loop(node_handle, alias)) {
-                return false;
-            }
-        }
+    // add edge id
+    if (!put_edge_id_no_loop(edge_id, e->get_handle())) {
+        return false;
     }
+
     // write edge to edge space
     ape_ptr_t ape = m_ape_pool.acquire();
-    ape->node_handle = node_handle;
     ape->edge_handle = e->get_handle();
+    ape->node_handle = node_handle;
     ape->e = e;
     ape->del_after_call = del_after_call;
     ape->edge_id = edge_id;
 
     prepare_edge(ape->attrs,
+                 ape->node_handle,
+                 m_shard_id,
                  *e,
                  ape->edge_id,
                  ape->buf,
                  ape->packed_sz);
 
-    bool success = call_no_loop(&hyperdex_client_put_if_not_exist,
+    bool success = call_no_loop(&hyperdex_client_put,
                                 edge_space,
-                                (const char*)&ape->edge_id,
-                                sizeof(int64_t),
+                                ape->edge_handle.c_str(),
+                                ape->edge_handle.size(),
                                 ape->attrs, num_edge_attrs,
                                 ape->op_id, ape->status);
 
@@ -474,23 +509,23 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle,
     aai->node_handle = node_handle;
     aai->alias = alias;
     // node handle
-    aai->index_attrs[0].attr = index_attrs[0];
+    aai->index_attrs[0].attr = edge_attrs[0];
     aai->index_attrs[0].value = aai->node_handle.c_str();
     aai->index_attrs[0].value_sz = aai->node_handle.size();
-    aai->index_attrs[0].datatype = index_dtypes[0];
+    aai->index_attrs[0].datatype = edge_dtypes[0];
     // shard
-    aai->index_attrs[1].attr = index_attrs[1];
+    aai->index_attrs[1].attr = edge_attrs[1];
     aai->index_attrs[1].value = (const char*)&m_shard_id;
     aai->index_attrs[1].value_sz = sizeof(int64_t);
-    aai->index_attrs[1].datatype = index_dtypes[1];
+    aai->index_attrs[1].datatype = edge_dtypes[1];
     aai->packed_sz = aai->index_attrs[0].value_sz
                    + aai->index_attrs[1].value_sz; 
 
     bool success = call_no_loop(&hyperdex_client_put,
-                                index_space,
+                                edge_space,
                                 aai->alias.c_str(),
                                 aai->alias.size(),
-                                aai->index_attrs, NUM_INDEX_ATTRS,
+                                aai->index_attrs, 2,
                                 aai->op_id, aai->status);
 
     if (success) {
@@ -561,8 +596,7 @@ hyper_stub :: done_op(async_call_ptr_t ac_ptr, int64_t op_id)
     size_t op_sz = ac_ptr->packed_sz;
     switch (ac_ptr->type) {
         case PUT_NODE: {
-            auto apn = std::static_pointer_cast<async_put_node>(ac_ptr);
-            m_apn_pool.release(apn);
+            m_apn_pool.release(std::static_pointer_cast<async_put_node>(ac_ptr));
             break;
         }
 
@@ -578,6 +612,10 @@ hyper_stub :: done_op(async_call_ptr_t ac_ptr, int64_t op_id)
             m_ape_pool.release(ape);
             break;
        }
+
+        case PUT_EDGE_ID:
+            m_apei_pool.release(std::static_pointer_cast<async_put_edge_id>(ac_ptr));
+            break;
 
         case ADD_INDEX:
             m_aai_pool.release(std::static_pointer_cast<async_add_index>(ac_ptr));
@@ -706,6 +744,7 @@ hyper_stub :: done_bulk_load()
     m_apn_pool.clear();
     m_ape_pool.clear();
     m_apes_pool.clear();
+    m_apei_pool.clear();
     m_aai_pool.clear();
 }
 

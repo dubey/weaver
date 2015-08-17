@@ -85,10 +85,6 @@ bulk_load_property_value_delimiter: ","
 # Default: ""
 bulk_load_node_alias_key: "alias"
 
-# BulkLoadEdgeIndexKey is the key of edge property that defines any additional index to be made to the node.
-# Default: ""
-#bulk_load_edge_index_key: "tx_id"
-
 # BulkLoadEdgeHandlePrefix is the prefix-string attached to edge handles during bulk loading graphs that do not specify edge handles.
 # Default: "e"
 bulk_load_edge_handle_prefix: ""
