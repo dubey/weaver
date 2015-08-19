@@ -88,6 +88,547 @@ hyper_stub :: clean_up(std::vector<db::node*> &nodes)
 }
 
 void
+hyper_stub :: clean_up(std::unordered_map<edge_handle_t, db::edge*> &edges)
+{
+    for (auto &p: edges) {
+        delete p.second;
+    }
+    edges.clear();
+}
+
+bool
+hyper_stub :: check_lastupd_clk(vc::vclock &before,
+                                vc::vclock &tx_clk,
+                                order::oracle *time_oracle)
+{
+    std::vector<vc::vclock> before_vec(1, before);
+    return time_oracle->assign_vt_order(before_vec, tx_clk);
+}
+
+bool
+hyper_stub :: del_key(const char *key, size_t key_sz,
+                      const char *space,
+                      std::unordered_map<int64_t, async_call_ptr_r> &async_calls)
+{
+    ad_ptr_t ad = std::make_shared<async_del>();
+    return del_async(ad, key, key_sz, node_space, async_calls);
+}
+
+bool
+loop_async_calls(std::unordered_set<int64_t, async_call_ptr_t> &async_calls,
+                 std::unordered_set<int64_t, async_call_ptr_t> &done_calls)
+{
+    uint64_t num_timeouts = 0;
+    while (!async_calls.empty()) {
+        int64_t op_id;
+        hyperdex_client_returncode loop_code;
+
+        loop(op_id, loop_code);
+
+        if (op_id < 0) {
+            if (loop_code == HYPERDEX_CLIENT_TIMEOUT) {
+                if (num_timeouts % 100 == 0) {
+                    WDEBUG << "loop timeout in do_tx #" << num_timeouts << std::endl;
+                }
+            } else {
+                WDEBUG << "loop_failed, op_id=" << op_id
+                       << ", code=" << hyperdex_client_returncode_to_string(loop_code)
+                       << std::endl;;
+                return false;
+            }
+        } else {
+            assert(loop_code == HYPERDEX_CLIENT_SUCCESS);
+
+            auto call_iter = async_calls.find(op_id);
+            if (call_iter == async_calls.end()) {
+                WDEBUG << "did not find op_id=" << op_id << std::endl;
+                return false;
+            }
+
+            done_calls.emplace(op_id, call_iter->second);
+            async_calls.erase(op_id);
+        }
+    }
+
+    return true;
+}
+
+bool
+check_calls_status(std::unordered_set<int64_t, async_call_ptr_t> &async_calls)
+{
+    for (auto &p: async_calls) {
+        async_call_ptr_t ac_ptr = p.second;
+        if (p->status == HYPERDEX_CLIENT_SUCCESS) {
+            continue;
+        }
+
+        WDEBUG << "bad op, type=" << async_call_type_to_string(ac_ptr->type)
+               << ", op_id=" << ac_ptr->op_id
+               << ", returncode=" << hyperdex_client_returncode_to_string(ac_ptr->status)
+               << std::endl;
+        return false;
+    }
+
+    return true;
+}
+
+// TODO make async for gets
+void do_tx(std::shared_ptr<transaction::pending_tx> tx,
+           bool &ready,
+           bool &error,
+           order::oracle *time_oracle)
+{
+#define ERROR_FAIL(error_msg) \
+    WDEBUG << error_msg << std::endl; \
+    error = true; \
+    abort_tx(); \
+    clean_up(nodes); \
+    clean_up(edges); \
+    return;
+
+#define GET_NODE(handle) \
+    nodes.emplace(handle, new db::node(handle, UINT64_MAX, dummy_clk, &dummy_mtx))
+
+#define GET_EDGE(handle) \
+    edges.emplace(handle, nullptr)
+
+#define GET_ALIAS(alias) \
+    aliases.emplace(alias, std::make_pair(std::string(), UINT64_MAX))
+
+    // first pass
+    // here we optimize the latency for the initial gets in the transaction
+    // we iterate through the transaction and collect all nodes, edges, and aliases that we clearly need
+    // we then issue a batch get for those keys
+    // this parallelizes the requests, as opposed to getting each key sequentially
+    // we also perform some sanity checks and fail the tx if any check does not pass
+
+    std::unordered_set<node_handle_t> seen_nodes, seen_edges, seen_aliases;
+    std::unordered_map<node_handle_t, db::node*> nodes;
+    std::unordered_map<edge_handle_t, db::edge*> edges;
+    std::unordered_map<edge_handle_t, aux_edge_data> edge_data;
+    std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> aliases;
+
+    for (std::shared_ptr<transaction::pending_update> upd: tx->writes) {
+        switch (upd->type) {
+            case transaction::NODE_CREATE_REQ:
+                seen_nodes.emplace(upd->handle);
+                seen_aliases.emplace(upd->handle);
+                break;
+
+            case transaction::NODE_DELETE_REQ:
+            case transaction::NODE_SET_PROPERTY:
+                if (upd->handle1 != ""
+                 && seen_nodes.find(upd->handle1) == seen_nodes.end()) {
+                    seen_nodes.emplace(upd->handle1);
+                    GET_NODE(upd->handle1);
+                } else if (upd->alias1 != ""
+                        && seen_aliases.find(upd->alias1) == seen_aliases.end()) {
+                    seen_aliases.emplace(upd->alias1);
+                    GET_ALIAS(upd->alias1);
+                } else {
+                    ERROR_FAIL("both handle and alias are empty");
+                }
+                break;
+
+            case transaction::EDGE_CREATE_REQ:
+                seen_edges.emplace(upd->handle);
+                break;
+
+            case EDGE_DELETE_REQ:
+            case EDGE_SET_PROPERTY:
+                if (seen_edges.find(upd->handle1) == seen_edges.end()) {
+                    seen_edges.emplace(upd->handle1);
+                    GET_EDGE(upd->handle1);
+                }
+                if (upd->handle2 != ""
+                 && seen_nodes.find(upd->handle2) == seen_nodes.end()) {
+                    seen_nodes.emplace(upd->handle2);
+                    GET_NODE(upd->handle2);
+                }
+                break;
+
+            case transaction::ADD_AUX_INDEX:
+                if (seen_nodes.find(upd->handle1) == seen_nodes.end()) {
+                    seen_nodes.emplace(upd->handle1);
+                    GET_NODE(upd->handle1);
+                }
+                break;
+        }
+    }
+
+    // get aliases
+    if (!get_aliases.empty()
+     && !get_indices(aliases, true)) {
+        ERROR_FAIL("get indices");
+    }
+    for (const auto &p: aliases) {
+        if (seen_nodes.find(p.second.first) == seen_nodes.end()) {
+            GET_NODE(p.second.first);
+        }
+    }
+
+    // get edges
+    if (!edges.empty()) {
+        aux_edge_data data;
+        for (auto &p: edges) {
+            if (get_edge(p.first, &p.second, data, true)) {
+                edge_data[p.first] = data;
+                if (seen_nodes.find(data.node_handle) == seen_nodes.end()) {
+                    GET_NODE(data.node_handle);
+                }
+            } else {
+                ERROR_FAIL("get_edge, handle=" << p.first);
+            }
+        }
+    }
+
+    // get nodes
+    if (!get_nodes(nodes, true)) {
+        ERROR_FAIL("get_nodes");
+    }
+
+    std::unordered_map<int64_t, async_call_ptr_t> async_calls,
+                                                  done_calls;
+    std::unordered_map<int64_t, std::pair<apei_ptr_t, db::node*>> create_edge_calls;
+    vc::vclock_ptr_t tx_clk_ptr(new vc::vclock(tx->timestamp));
+    std::unique_ptr<e::buffer> lastupd_clk_buf, restore_clk_buf;
+    prepare_buffer(tx_clk_ptr, lastupd_clk_buf);
+    prepare_buffer(tx_clk_ptr, restore_clk_buf);
+    std::vector<vc::vclock> before_vec;
+    // done with initial optimization gets
+    // now iterate through tx and process each op
+
+#define CHECK_LASTUPD_CLK(node) \
+    if (tx->timestamp != *node->last_upd_clk) { \
+        before_vec.clear(); \
+        before_vec.emplace_back(*node->last_upd_clk); \
+        if (!time_oracle->assign_vt_order(before_vec, tx->timestamp)) { \
+            abort_tx(); \
+            return; \
+        } \
+    }
+
+#define CHECK_NODE(handle, alias, loc) \
+    if (handle == "") { \
+        auto alias_iter = aliases.find(alias); \
+        if (alias_iter == aliases.end()) { \
+            WDEBUG << "logical error, expected alias=" << alias << std::endl; \
+            ERROR_FAIL; \
+        } \
+        handle = alias_iter->second.first; \
+    } \
+    if (nodes.find(handle) == nodes.end()) { \
+        WDEBUG << "logical error, not found node=" << handle << std::endl; \
+        ERROR_FAIL; \
+    } \
+    db::node *n = nodes[handle]; \
+    CHECK_LASTUPD_CLK(n); \
+    loc = n->shard;
+
+    for (std::shared_ptr<transaction::pending_update> upd: tx->writes) {
+        switch (upd->type) {
+            case transaction::NODE_CREATE_REQ: {
+                if (nodes.find(upd->handle) != nodes.end()) {
+                    WDEBUG << "cannot create node already created/existing in this transaction, handle=" << upd->handle << std::endl;
+                    ERROR_FAIL;
+                }
+                db::node *n = new db::node(upd->handle,
+                                           upd->loc1,
+                                           tx_clk_ptr,
+                                           &dummy_mtx);
+                n->last_upd_clk.reset(new vc::vclock(*tx_clk_ptr));
+                n->restore_clk.reset(new vc::vclock_t(tx_clk_ptr->clock));
+                nodes.emplace(upd->handle, n);
+
+                apn_ptr_t apn = std::make_shared<async_put_node>();
+                if (!put_node_async(apn,
+                                    nodes[upd->handle],
+                                    lastupd_clk_buf,
+                                    restore_clk_buf,
+                                    async_calls)) {
+                    ERROR_FAIL("put node async");
+                }
+                             
+                break;
+            }
+
+            case transaction::EDGE_CREATE_REQ: {
+                if (edges.find(upd->handle) != edges.end()) {
+                    WDEBUG << "cannot create edge already created/existing in this transaction, handle=" << upd->handle << std::endl;
+                    ERROR_FAIL;
+                }
+
+                if (upd->handle1 == "") {
+                    auto &x = aliases[upd->alias1];
+                    upd->handle1 = x.first;
+                    upd->loc1    = x.second;
+                }
+                if (upd->handle2 == "") {
+                    auto &x = aliases[upd->alias2];
+                    upd->handle2 = x.first;
+                    upd->loc2    = x.second;
+                }
+
+                auto node1_iter = nodes.find(upd->handle1);
+                auto node2_iter = nodes.find(upd->handle2);
+                if (node1_iter == nodes.end() || node2_iter == nodes.end()) {
+                    WDEBUG << "logical error" << std::endl
+                           << "node1=" << upd->handle1 << ", found=" << (node1_iter == nodes.end()) << std::endl
+                           << "node2=" << upd->handle2 << ", found=" << (node2_iter == nodes.end()) << std::endl;
+                    ERROR_FAIL;
+                }
+
+                db::node *node1 = node1_iter->second;
+                db::node *node2 = node2_iter->second;
+                CHECK_LASTUPD_CLK(node1);
+                CHECK_LASTUPD_CLK(node2);
+                upd->loc1 = node1->shard;
+                upd->loc2 = node2->shard;
+                edges.emplace(upd->handle, new db::edge(upd->handle,
+                                                        tx_clk_ptr,
+                                                        upd->loc2,
+                                                        upd->handle2);
+
+                uint64_t edge_id = n->max_edge_id++;
+                apei_ptr_t apei = std::make_shared<async_put_edge_id>();
+                if (!put_edge_id_async(apei,
+                                       edge_id,
+                                       upd->handle,
+                                       async_calls)) {
+                    ERROR_FAIL;
+                }
+                create_edge_calls[apei->op_id] = std::make_pair(apei, n);
+
+                break;
+            }
+
+            case transaction::NODE_DELETE_REQ: {
+                CHECK_NODE(upd->handle1, upd->alias1, upd->loc1);
+
+                if (!del_key(upd->handle1.c_str(), upd->handle1.size(),
+                             node_space,
+                             async_calls)) {
+                    ERROR_FAIL("delete node=" << upd->handle1);
+                }
+                for (const std::string &alias: n->aliases) {
+                    if (!del_key(alias.c_str(), alias.size(),
+                                 edge_space,
+                                 async_calls)) {
+                        ERROR_FAIL("delete alias=" << alias);
+                    }
+                }
+
+                delete n;
+                nodes.erase(upd->handle1);
+                break;
+            }
+
+            case transaction::NODE_SET_PROPERTY: {
+                CHECK_NODE(upd->handle1, upd->alias1, upd->loc1);
+
+                if (!n->base.set_property(*upd->key, *upd->value, tx_clk_ptr)) {
+                    WDEBUG << "set property " << *upd->key << ": " << *upd->value << " fail at node=" << upd->handle1 << std::endl;
+                    ERROR_FAIL;
+                }
+                break;
+            }
+
+            case transaction::EDGE_DELETE_REQ:
+            case transaction::EDGE_SET_PROPERTY: {
+                if (edges.find(upd->handle1) == edges.end()) {
+                    ERROR_FAIL("logical error, did not find edge=" << upd->handle1);
+                }
+
+                db::edge *e = edges[upd->handle1];
+                aux_edge_data &aux_data = edge_data[upd->handle1];
+                if (upd->handle2 == "") {
+                    upd->handle2 = aux_data.node_handle;
+                } else if (upd->handle2 != aux_data.node_handle) {
+                    ERROR_FAIL("edge=" << upd->handle1 << " not found at node=" << upd->handle1);
+                }
+
+                CHECK_NODE(upd->handle2, upd->alias2, upd->loc1);
+
+                if (n->edge_ids.find(aux_data.edge_id) == n->edge_ids.end()) {
+                    ERROR_FAIL("logical error, did not find edge_id=" << aux_data.edge_id << " at node=" << upd->handle2);
+                }
+
+                if (upd->type == transaction::EDGE_DELETE_REQ) {
+                    if (!del_key((const char *)&aux_data.edge_id, sizeof(int64_t),
+                                 edge_id_space,
+                                 async_calls)) {
+                        ERROR_FAIL("delete edge_id=" << aux_data.edge_id);
+                    }
+                    if (!del_key(upd->handle1.c_str(), upd->handle1.size(),
+                                 edge_space,
+                                 async_calls)) {
+                        ERROR_FAIL("delete edge=" << upd->handle1);
+                    }
+
+                    n->edge_ids.erase(aux_data.edge_id);
+                    delete e;
+                    edges.erase(upd->handle1);
+                } else {
+                    if (!e->base.set_property(*upd->key, *upd->value, tx_clk_ptr)) {
+                        ERROR_FAIL("property " << *upd->key << ": " << *upd->value << " fail at edge " << upd->handle1);
+                    }
+                }
+
+                break;
+            }
+
+            case transaction::ADD_AUX_INDEX: {
+                CHECK_NODE(upd->handle1, upd->alias1, upd->loc1);
+
+                aai_ptr_t aai = std::make_shared<async_add_index>();
+                if (!add_index_async(aai, upd->handle1, upd->handle, n->shard, async_calls)) {
+                    ERROR_FAIL("add_index_async, node=" << upd->handle1 << ", alias=" << upd->handle);
+                }
+
+                n->add_alias(upd->handle);
+                break;
+            }
+        }
+    }
+
+    if (!loop_async_calls(async_calls, done_calls)) {
+        ERROR_FAIL("loop");
+    }
+
+    // if any put_edge_id_calls cmp_failed, we need to reexec
+    for (auto &p: create_edge_calls) {
+        int64_t op_id   = p.first;
+        apei_ptr_t apei = p.second.first;
+        db::node *n     = p.second.second;
+
+        while (apei->status == HYPERDEX_CLIENT_CMPFAIL) {
+            int64_t edge_id = n->max_edge_id++;
+            if (!put_edge_id_async(apei,
+                                   edge_id,
+                                   apei->edge_handle,
+                                   async_calls)) {
+                ERROR_FAIL("apei");
+            }
+            std::unordered_map<int64_t, async_call_ptr_t> done_apei;
+            if (!loop_async_calls(async_calls, done_apei)) {
+                ERROR_FAIL("loop");
+            }
+        }
+
+        if (apei->status != HYPERDEX_CLIENT_SUCCESS) {
+            ERROR_FAIL("apei handle=" << apei->edge_handle << ", id=" << apei->edge_id << ", node=" << n->get_handle());
+        }
+    }
+
+    if (!check_calls_status(done_calls)) {
+        ERROR_FAIL("check_calls_status");
+    }
+    done_calls.clear();
+
+    // do corresponding put edge calls
+    for (auto &p: create_edge_calls) {
+        apei_ptr_t apei = p.second.first;
+        db::node *n     = p.second.second;
+        ape_ptr_t ape = std::make_shared<async_put_edge>();
+        if (!put_edge_async(ape,
+                            n->get_handle(),
+                            edges[apei->edge_handle],
+                            apei->edge_id,
+                            false,
+                            true,
+                            async_calls)) {
+            ERROR_FAIL;
+        }
+
+        n->edge_ids.emplace(apei->edge_id);
+    }
+    create_edge_calls.clear();
+
+    // write all nodes
+    for (auto &p: nodes) {
+        apn_ptr_t apn = std::make_shared<async_put_node>();
+        if (!put_node_async(apn,
+                            p.second,
+                            lastupd_clk_buf,
+                            restore_clk_buf,
+                            async_calls)) {
+            ERROR_FAIL("put_node " << p.first);
+        }
+    }
+
+    // write all edges
+    for (auto &p: edges) {
+        ape_ptr_t ape = std::make_shared<async_put_edge>();
+        aux_edge_data &aux_data = edge_data[p.first];
+        if (!put_edge_async(ape,
+                            aux_data.node_handle,
+                            p.second,
+                            aux_data.edge_id,
+                            false,
+                            false,
+                            async_calls)) {
+            ERROR_FAIL("put_edge " << p.first);
+        }
+    }
+
+    if (!loop_async_calls(async_calls, done_calls)) {
+        ERROR_FAIL("loop");
+    }
+    if (!check_calls_status(done_calls)) {
+        ERROR_FAIL("check_calls_status");
+    }
+    done_calls.clear();
+
+    // write tx data
+    hyperdex_client_attribute attr[NUM_TX_ATTRS];
+    attr[0].attr = tx_attrs[0];
+    attr[0].value = (const char*)&vt_id;
+    attr[0].value_sz = sizeof(int64_t);
+    attr[0].datatype = tx_dtypes[0];
+
+    uint64_t buf_sz = message::size(*tx);
+    std::unique_ptr<e::buffer> buf(e::buffer::create(buf_sz));
+    e::packer packer = buf->pack_at(0);
+    message::pack_buffer(packer, *tx);
+
+    attr[1].attr = tx_attrs[1];
+    attr[1].value = (const char*)buf->data();
+    attr[1].value_sz = buf->size();
+    attr[1].datatype = tx_dtypes[1];
+
+    if (!call(&hyperdex_client_xact_put,
+              tx_space,
+              (const char*)&tx->id, sizeof(int64_t),
+              attr, NUM_TX_ATTRS)) {
+        ERROR_FAIL("hyperdex tx put error, tx id " << tx->id);
+    }
+
+    // commit tx
+    hyperdex_client_returncode commit_status = HYPERDEX_CLIENT_GARBAGE;
+    commit_tx(commit_status);
+
+    switch(commit_status) {
+        case HYPERDEX_CLIENT_SUCCESS:
+            ready = true;
+            assert(!error);
+            break;
+
+        case HYPERDEX_CLIENT_ABORTED:
+            ready = false;
+            assert(!error);
+            break;
+
+        default:
+            error = true;
+            ready = false;
+    }
+
+    clean_up(nodes);
+    clean_up(edges);
+}
+
+/*
+void
 do_tx(std::unordered_set<node_handle_t> &get_nodes,
       std::unordered_set<node_handle_t> &get_aliases,
       std::unordered_set<edge_handle_t> &get_edges,
@@ -128,7 +669,6 @@ do_tx(std::unordered_set<node_handle_t> &get_nodes,
     }
 
 
-    /*
 #define ERROR_FAIL \
     error = true; \
     abort_tx(); \
@@ -503,8 +1043,8 @@ do_tx(std::unordered_set<node_handle_t> &get_nodes,
     WDEBUG << "here" << std::endl;
 
 #undef ERROR_FAIL
-    */
 }
+*/
 
 
 void

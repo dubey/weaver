@@ -35,12 +35,6 @@ namespace db
         ACTIVE // this shard does have the token
     };
 
-    using async_call_ptr_t = std::shared_ptr<hyper_stub_base::async_call>;
-    using apn_ptr_t = std::shared_ptr<hyper_stub_base::async_put_node>;
-    using apes_ptr_t = std::shared_ptr<hyper_stub_base::async_put_edge_set>;
-    using ape_ptr_t = std::shared_ptr<hyper_stub_base::async_put_edge>;
-    using aai_ptr_t = std::shared_ptr<hyper_stub_base::async_add_index>;
-
     class hyper_stub : private hyper_stub_base
     {
         template <typename T>

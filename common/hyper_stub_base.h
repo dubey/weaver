@@ -56,6 +56,12 @@ async_call_type_to_string(async_call_type);
 class hyper_stub_base
 {
     protected:
+        struct aux_edge_data
+        {
+            node_handle_t node_handle;
+            uint64_t shard, edge_id;
+        };
+
         struct async_call
         {
             async_call_type type;
@@ -118,6 +124,19 @@ class hyper_stub_base
 
             async_put_edge_id() { type = PUT_EDGE_ID; }
         };
+
+        struct async_del : public async_call
+        {
+            std::string key;
+
+            async_del() { type = DEL; }
+        };
+
+        using async_call_ptr_t = std::shared_ptr<hyper_stub_base::async_call>;
+        using apn_ptr_t = std::shared_ptr<hyper_stub_base::async_put_node>;
+        using apes_ptr_t = std::shared_ptr<hyper_stub_base::async_put_edge_set>;
+        using ape_ptr_t = std::shared_ptr<hyper_stub_base::async_put_edge>;
+        using aai_ptr_t = std::shared_ptr<hyper_stub_base::async_add_index>;
 
     protected:
         // node handle -> node data
@@ -193,6 +212,14 @@ class hyper_stub_base
             const char *key, size_t key_sz,
             hyperdex_client_attribute *cl_attr, size_t num_attrs,
             int64_t &op_id, hyperdex_client_returncode &status);
+        bool call_no_loop(hyper_tx_func h,
+            const char *space,
+            const char *key, size_t key_sz,
+            hyperdex_client_attribute *cl_attr, size_t num_attrs,
+            int64_t &op_id, hyperdex_client_returncode &status);
+        bool del_no_loop(const char *space,
+                         const char *key, size_t key_sz,
+                         int64_t &op_id, hyperdex_client_returncode &status);
         bool map_call(hyper_map_tx_func h,
             const char *space,
             const char *key, size_t key_sz,
@@ -247,7 +274,11 @@ class hyper_stub_base
         // graph data functions
         bool get_edge(const edge_handle_t &edge_handle,
                       db::edge **e,
+                      aux_edge_data &aux_data,
                       bool tx);
+        bool get_edges(std::unordered_map<edge_handle_t, db::edge*> &edges,
+                       std::unordered_map<edge_handle_t, aux_edge_data> &aux_data,
+                       bool tx);
         bool get_node_edges(db::node &n, bool tx);
         bool get_node(db::node &n, bool recreate_edges);
         bool get_nodes(std::unordered_map<node_handle_t, db::node*> &nodes,
@@ -286,9 +317,32 @@ class hyper_stub_base
         bool get_indices(std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> &indices, bool tx);
         bool del_indices(std::vector<std::string> &indices);
 
-        // tx data functions
-        bool put_tx_data(transaction::pending_tx *tx);
-        bool del_tx_data(uint64_t tx_id);
+        // async calls
+        bool put_node_async(apn_ptr_t apn,
+                            db::node *n,
+                            std::unique_ptr<e::buffer> &lastupd_clk_buf,
+                            std::unique_ptr<e::buffer> &restore_clk_buf,
+                            std::unordered_map<int64_t, async_call_ptr_t> &async_calls);
+        bool put_edge_id_async(apei_ptr_t apei,
+                               uint64_t edge_id,
+                               const edge_handle_t &edge_handle,
+                               std::unordered_map<int64_t, async_call_ptr_t> &async_calls);
+        bool put_edge_async(ape_ptr_t ape,
+                            const node_handle_t &node_handle,
+                            db::edge *e,
+                            uint64_t edge_id,
+                            bool del_after_call,
+                            bool put_if_not_exist,
+                            std::unordered_map<int64_t, async_call_ptr_t> &async_calls);
+        bool add_index_async(aai_ptr_t aai,
+                             const node_handle_t &node_handle,
+                             const std::string &alias,
+                             uint64_t &shard,
+                             std::unordered_map<int64_t, async_call_ptr_t> &async_calls);
+        bool del_async(ad_ptr_t ad,
+                       const char *key, size_t key_sz,
+                       const char *space,
+                       std::unordered_map<int64_t, async_call_ptr_t> &async_calls);
 
         template <typename T> void prepare_buffer(const T &t, std::unique_ptr<e::buffer> &buf);
         template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, T &t);

@@ -310,38 +310,16 @@ hyper_stub :: put_node_no_loop(db::node *n)
     assert(m_last_clk_buf && m_restore_clk_buf);
 
     apn_ptr_t apn = m_apn_pool.acquire();
-    apn->handle = n->get_handle();
 
-    prepare_node(apn->attrs,
-                 *n,
-                 apn->creat_clk_buf,
-                 apn->props_buf,
-                 apn->out_edges_buf,
-                 m_last_clk_buf,
-                 m_restore_clk_buf,
-                 apn->aliases_buf,
-                 apn->num_attrs,
-                 apn->packed_sz);
-
-    bool success = call_no_loop(&hyperdex_client_put,
-                                node_space,
-                                apn->handle.c_str(),
-                                apn->handle.size(),
-                                apn->attrs,
-                                apn->num_attrs,
-                                apn->op_id, apn->status);
+    bool success = put_node_async(apn,
+                                  n,
+                                  m_last_clk_buf,
+                                  m_restore_clk_buf,
+                                  m_async_calls);
 
     if (success) {
         apn->exec_time = m_timer.get_real_time_millis();
-        m_async_calls[apn->op_id] = apn;
-
-        for (const std::string &alias: n->aliases) {
-            success = add_index_no_loop(n->get_handle(), alias) && success;
-        }
     } else {
-        WDEBUG << "hyperdex_client_put failed, op_id=" << apn->op_id
-               << ", call_code=" << hyperdex_client_returncode_to_string(apn->status) << std::endl;
-        WDEBUG << "node=" << apn->handle << std::endl;
         abort_bulk_load();
     }
 
@@ -371,29 +349,15 @@ hyper_stub :: put_edge_id_no_loop(uint64_t edge_id,
                                   const edge_handle_t &edge_handle)
 {
     apei_ptr_t apei = m_apei_pool.acquire();
-    apei->edge_id = edge_id;
-    apei->edge_handle = edge_handle;
-    // edge handle
-    apei->edgeid_attrs[0].attr     = edge_id_attrs[0];
-    apei->edgeid_attrs[0].value    = apei->edge_handle.c_str();
-    apei->edgeid_attrs[0].value_sz = apei->edge_handle.size();
-    apei->edgeid_attrs[0].datatype = edge_id_dtypes[0];
-    apei->packed_sz                = apei->edge_handle.size();
 
-    bool success = call_no_loop(hyperdex_client_put_if_not_exist,
-                                edge_id_space,
-                                (const char*)&apei->edge_id,
-                                sizeof(int64_t),
-                                apei->edgeid_attrs, hyper_stub_base::num_edge_id_attrs,
-                                apei->op_id, apei->status);
+    bool success = put_edge_id_async(apei,
+                                     edge_id,
+                                     edge_handle,
+                                     m_async_calls);
 
     if (success) {
         apei->exec_time = m_timer.get_real_time_millis();
-        m_async_calls[apei->op_id] = apei;
     } else {
-        WDEBUG << "hyperdex_client_put failed, op_id=" << apei->op_id
-               << ", call_code=" << hyperdex_client_returncode_to_string(apei->status) << std::endl;
-        WDEBUG << "edge_id=" << edge_id << ", edge_handle=" << edge_handle << std::endl;
         abort_bulk_load();
     }
 
@@ -415,34 +379,17 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle,
 
     // write edge to edge space
     ape_ptr_t ape = m_ape_pool.acquire();
-    ape->edge_handle = e->get_handle();
-    ape->node_handle = node_handle;
-    ape->e = e;
-    ape->del_after_call = del_after_call;
-    ape->edge_id = edge_id;
 
-    prepare_edge(ape->attrs,
-                 ape->node_handle,
-                 m_shard_id,
-                 *e,
-                 ape->edge_id,
-                 ape->buf,
-                 ape->packed_sz);
-
-    bool success = call_no_loop(&hyperdex_client_put,
-                                edge_space,
-                                ape->edge_handle.c_str(),
-                                ape->edge_handle.size(),
-                                ape->attrs, num_edge_attrs,
-                                ape->op_id, ape->status);
+    bool success = put_edge_async(ape,
+                                  node_handle,
+                                  e,
+                                  edge_id,
+                                  del_after_call,
+                                  m_async_calls);
 
     if (success) {
         ape->exec_time = m_timer.get_real_time_millis();
-        m_async_calls[ape->op_id] = ape;
     } else {
-        WDEBUG << "hyperdex_client_put failed, op_id=" << ape->op_id
-               << ", call_code=" << hyperdex_client_returncode_to_string(ape->status) << std::endl;
-        WDEBUG << "edge=" << ape->edge_handle << std::endl;
         abort_bulk_load();
     }
 
@@ -506,35 +453,16 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle,
                                 const std::string &alias)
 {
     aai_ptr_t aai = m_aai_pool.acquire();
-    aai->node_handle = node_handle;
-    aai->alias = alias;
-    // node handle
-    aai->index_attrs[0].attr = edge_attrs[0];
-    aai->index_attrs[0].value = aai->node_handle.c_str();
-    aai->index_attrs[0].value_sz = aai->node_handle.size();
-    aai->index_attrs[0].datatype = edge_dtypes[0];
-    // shard
-    aai->index_attrs[1].attr = edge_attrs[1];
-    aai->index_attrs[1].value = (const char*)&m_shard_id;
-    aai->index_attrs[1].value_sz = sizeof(int64_t);
-    aai->index_attrs[1].datatype = edge_dtypes[1];
-    aai->packed_sz = aai->index_attrs[0].value_sz
-                   + aai->index_attrs[1].value_sz; 
 
-    bool success = call_no_loop(&hyperdex_client_put,
-                                edge_space,
-                                aai->alias.c_str(),
-                                aai->alias.size(),
-                                aai->index_attrs, 2,
-                                aai->op_id, aai->status);
+    bool success = add_index_async(aai,
+                                   node_handle,
+                                   alias,
+                                   m_shard_id,
+                                   m_async_calls);
 
     if (success) {
         aai->exec_time = m_timer.get_real_time_millis();
-        m_async_calls[aai->op_id] = aai;
     } else {
-        WDEBUG << "hyperdex_client_put failed, op_id=" << aai->op_id
-               << ", call_code=" << hyperdex_client_returncode_to_string(aai->status) << std::endl;
-        WDEBUG << "alias=" << aai->alias << ", node=" << aai->node_handle << std::endl;
         abort_bulk_load();
     }
 
