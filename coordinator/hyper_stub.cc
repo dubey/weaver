@@ -79,15 +79,6 @@ hyper_stub :: clean_up(std::unordered_map<node_handle_t, db::node*> &nodes)
 }
 
 void
-hyper_stub :: clean_up(std::vector<db::node*> &nodes)
-{
-    for (auto n: nodes) {
-        clean_node(n);
-    }
-    nodes.clear();
-}
-
-void
 hyper_stub :: clean_up(std::unordered_map<edge_handle_t, db::edge*> &edges)
 {
     for (auto &p: edges) {
@@ -108,15 +99,15 @@ hyper_stub :: check_lastupd_clk(vc::vclock &before,
 bool
 hyper_stub :: del_key(const char *key, size_t key_sz,
                       const char *space,
-                      std::unordered_map<int64_t, async_call_ptr_r> &async_calls)
+                      std::unordered_map<int64_t, async_call_ptr_t> &async_calls)
 {
     ad_ptr_t ad = std::make_shared<async_del>();
-    return del_async(ad, key, key_sz, node_space, async_calls);
+    return del_async(ad, key, key_sz, space, async_calls);
 }
 
 bool
-loop_async_calls(std::unordered_set<int64_t, async_call_ptr_t> &async_calls,
-                 std::unordered_set<int64_t, async_call_ptr_t> &done_calls)
+hyper_stub :: loop_async_calls(std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                               std::unordered_map<int64_t, async_call_ptr_t> &done_calls)
 {
     uint64_t num_timeouts = 0;
     while (!async_calls.empty()) {
@@ -154,11 +145,11 @@ loop_async_calls(std::unordered_set<int64_t, async_call_ptr_t> &async_calls,
 }
 
 bool
-check_calls_status(std::unordered_set<int64_t, async_call_ptr_t> &async_calls)
+hyper_stub :: check_calls_status(std::unordered_map<int64_t, async_call_ptr_t> &async_calls)
 {
     for (auto &p: async_calls) {
         async_call_ptr_t ac_ptr = p.second;
-        if (p->status == HYPERDEX_CLIENT_SUCCESS) {
+        if (ac_ptr->status == HYPERDEX_CLIENT_SUCCESS) {
             continue;
         }
 
@@ -173,10 +164,11 @@ check_calls_status(std::unordered_set<int64_t, async_call_ptr_t> &async_calls)
 }
 
 // TODO make async for gets
-void do_tx(std::shared_ptr<transaction::pending_tx> tx,
-           bool &ready,
-           bool &error,
-           order::oracle *time_oracle)
+void
+hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
+                    bool &ready,
+                    bool &error,
+                    order::oracle *time_oracle)
 {
 #define ERROR_FAIL(error_msg) \
     WDEBUG << error_msg << std::endl; \
@@ -234,8 +226,8 @@ void do_tx(std::shared_ptr<transaction::pending_tx> tx,
                 seen_edges.emplace(upd->handle);
                 break;
 
-            case EDGE_DELETE_REQ:
-            case EDGE_SET_PROPERTY:
+            case transaction::EDGE_DELETE_REQ:
+            case transaction::EDGE_SET_PROPERTY:
                 if (seen_edges.find(upd->handle1) == seen_edges.end()) {
                     seen_edges.emplace(upd->handle1);
                     GET_EDGE(upd->handle1);
@@ -257,8 +249,7 @@ void do_tx(std::shared_ptr<transaction::pending_tx> tx,
     }
 
     // get aliases
-    if (!get_aliases.empty()
-     && !get_indices(aliases, true)) {
+    if (!aliases.empty() && !get_indices(aliases, true)) {
         ERROR_FAIL("get indices");
     }
     for (const auto &p: aliases) {
@@ -283,7 +274,7 @@ void do_tx(std::shared_ptr<transaction::pending_tx> tx,
     }
 
     // get nodes
-    if (!get_nodes(nodes, true)) {
+    if (!get_nodes(nodes, false, true)) {
         ERROR_FAIL("get_nodes");
     }
 
@@ -312,14 +303,12 @@ void do_tx(std::shared_ptr<transaction::pending_tx> tx,
     if (handle == "") { \
         auto alias_iter = aliases.find(alias); \
         if (alias_iter == aliases.end()) { \
-            WDEBUG << "logical error, expected alias=" << alias << std::endl; \
-            ERROR_FAIL; \
+            ERROR_FAIL("logical error, expected alias=" << alias); \
         } \
         handle = alias_iter->second.first; \
     } \
     if (nodes.find(handle) == nodes.end()) { \
-        WDEBUG << "logical error, not found node=" << handle << std::endl; \
-        ERROR_FAIL; \
+        ERROR_FAIL("logical error, not found node=" << handle); \
     } \
     db::node *n = nodes[handle]; \
     CHECK_LASTUPD_CLK(n); \
@@ -329,8 +318,7 @@ void do_tx(std::shared_ptr<transaction::pending_tx> tx,
         switch (upd->type) {
             case transaction::NODE_CREATE_REQ: {
                 if (nodes.find(upd->handle) != nodes.end()) {
-                    WDEBUG << "cannot create node already created/existing in this transaction, handle=" << upd->handle << std::endl;
-                    ERROR_FAIL;
+                    ERROR_FAIL("cannot create node already created/existing in this transaction, handle=" << upd->handle);
                 }
                 db::node *n = new db::node(upd->handle,
                                            upd->loc1,
@@ -354,8 +342,7 @@ void do_tx(std::shared_ptr<transaction::pending_tx> tx,
 
             case transaction::EDGE_CREATE_REQ: {
                 if (edges.find(upd->handle) != edges.end()) {
-                    WDEBUG << "cannot create edge already created/existing in this transaction, handle=" << upd->handle << std::endl;
-                    ERROR_FAIL;
+                    ERROR_FAIL("cannot create edge already created/existing in this transaction, handle=" << upd->handle);
                 }
 
                 if (upd->handle1 == "") {
@@ -372,10 +359,9 @@ void do_tx(std::shared_ptr<transaction::pending_tx> tx,
                 auto node1_iter = nodes.find(upd->handle1);
                 auto node2_iter = nodes.find(upd->handle2);
                 if (node1_iter == nodes.end() || node2_iter == nodes.end()) {
-                    WDEBUG << "logical error" << std::endl
-                           << "node1=" << upd->handle1 << ", found=" << (node1_iter == nodes.end()) << std::endl
-                           << "node2=" << upd->handle2 << ", found=" << (node2_iter == nodes.end()) << std::endl;
-                    ERROR_FAIL;
+                    ERROR_FAIL("logical error" << std::endl
+                               << "node1=" << upd->handle1 << ", found=" << (node1_iter == nodes.end()) << std::endl
+                               << "node2=" << upd->handle2 << ", found=" << (node2_iter == nodes.end()));
                 }
 
                 db::node *node1 = node1_iter->second;
@@ -387,17 +373,17 @@ void do_tx(std::shared_ptr<transaction::pending_tx> tx,
                 edges.emplace(upd->handle, new db::edge(upd->handle,
                                                         tx_clk_ptr,
                                                         upd->loc2,
-                                                        upd->handle2);
+                                                        upd->handle2));
 
-                uint64_t edge_id = n->max_edge_id++;
+                uint64_t edge_id = node1->max_edge_id++;
                 apei_ptr_t apei = std::make_shared<async_put_edge_id>();
                 if (!put_edge_id_async(apei,
                                        edge_id,
                                        upd->handle,
                                        async_calls)) {
-                    ERROR_FAIL;
+                    ERROR_FAIL("put edge id async, edge_id=" << edge_id);
                 }
-                create_edge_calls[apei->op_id] = std::make_pair(apei, n);
+                create_edge_calls[apei->op_id] = std::make_pair(apei, node1);
 
                 break;
             }
@@ -427,8 +413,7 @@ void do_tx(std::shared_ptr<transaction::pending_tx> tx,
                 CHECK_NODE(upd->handle1, upd->alias1, upd->loc1);
 
                 if (!n->base.set_property(*upd->key, *upd->value, tx_clk_ptr)) {
-                    WDEBUG << "set property " << *upd->key << ": " << *upd->value << " fail at node=" << upd->handle1 << std::endl;
-                    ERROR_FAIL;
+                    ERROR_FAIL("set property " << *upd->key << ": " << *upd->value << " fail at node=" << upd->handle1);
                 }
                 break;
             }
@@ -497,7 +482,6 @@ void do_tx(std::shared_ptr<transaction::pending_tx> tx,
 
     // if any put_edge_id_calls cmp_failed, we need to reexec
     for (auto &p: create_edge_calls) {
-        int64_t op_id   = p.first;
         apei_ptr_t apei = p.second.first;
         db::node *n     = p.second.second;
 
@@ -534,10 +518,11 @@ void do_tx(std::shared_ptr<transaction::pending_tx> tx,
                             n->get_handle(),
                             edges[apei->edge_handle],
                             apei->edge_id,
+                            n->shard,
                             false,
                             true,
                             async_calls)) {
-            ERROR_FAIL;
+            ERROR_FAIL("put edge=" << apei->edge_handle);
         }
 
         n->edge_ids.emplace(apei->edge_id);
@@ -564,6 +549,7 @@ void do_tx(std::shared_ptr<transaction::pending_tx> tx,
                             aux_data.node_handle,
                             p.second,
                             aux_data.edge_id,
+                            aux_data.shard,
                             false,
                             false,
                             async_calls)) {
@@ -1100,12 +1086,12 @@ hyper_stub :: restore_backup(std::vector<std::shared_ptr<transaction::pending_tx
     const hyperdex_client_attribute_check attr_check = {tx_attrs[0], (const char*)&vt_id, sizeof(int64_t), tx_dtypes[0], HYPERPREDICATE_EQUALS};
     enum hyperdex_client_returncode search_status, loop_status;
 
-    int64_t call_id = hyperdex_client_search(cl, tx_space, &attr_check, 1, &search_status, &cl_attr, &num_attrs);
+    int64_t call_id = hyperdex_client_search(m_cl, tx_space, &attr_check, 1, &search_status, &cl_attr, &num_attrs);
     if (call_id < 0) {
         WDEBUG << "Hyperdex function failed, op id = " << call_id
                << ", status = " << hyperdex_client_returncode_to_string(search_status) << std::endl;
-        WDEBUG << "error message: " << hyperdex_client_error_message(cl) << std::endl;
-        WDEBUG << "error loc: " << hyperdex_client_error_location(cl) << std::endl;
+        WDEBUG << "error message: " << hyperdex_client_error_message(m_cl) << std::endl;
+        WDEBUG << "error loc: " << hyperdex_client_error_location(m_cl) << std::endl;
         return;
     }
 
@@ -1114,7 +1100,7 @@ hyper_stub :: restore_backup(std::vector<std::shared_ptr<transaction::pending_tx
     std::shared_ptr<transaction::pending_tx> tx;
     while (!loop_done) {
         // loop until search done
-        loop_id = hyperdex_client_loop(cl, -1, &loop_status);
+        loop_id = hyperdex_client_loop(m_cl, -1, &loop_status);
         if (loop_id != call_id
          || loop_status != HYPERDEX_CLIENT_SUCCESS
          || (search_status != HYPERDEX_CLIENT_SUCCESS && search_status != HYPERDEX_CLIENT_SEARCHDONE)) {
@@ -1122,8 +1108,8 @@ hyper_stub :: restore_backup(std::vector<std::shared_ptr<transaction::pending_tx
                    << ", loop_id = " << loop_id
                    << ", loop status = " << hyperdex_client_returncode_to_string(loop_status)
                    << ", search status = " << hyperdex_client_returncode_to_string(search_status) << std::endl;
-            WDEBUG << "error message: " << hyperdex_client_error_message(cl) << std::endl;
-            WDEBUG << "error loc: " << hyperdex_client_error_location(cl) << std::endl;
+            WDEBUG << "error message: " << hyperdex_client_error_message(m_cl) << std::endl;
+            WDEBUG << "error loc: " << hyperdex_client_error_location(m_cl) << std::endl;
             return;
         }
 

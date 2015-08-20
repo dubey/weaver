@@ -1619,10 +1619,6 @@ hyper_stub_base :: put_node_async(apn_ptr_t apn,
 
     if (success) {
         async_calls[apn->op_id] = apn;
-
-        for (const std::string &alias: n->aliases) {
-            success = add_index_async(n->get_handle(), alias) && success;
-        }
     }
     
     if (!success) {
@@ -1662,7 +1658,6 @@ hyper_stub_base :: put_edge_id_async(apei_ptr_t apei,
         WDEBUG << "hyperdex_client_put failed, op_id=" << apei->op_id
                << ", call_code=" << hyperdex_client_returncode_to_string(apei->status) << std::endl;
         WDEBUG << "edge_id=" << edge_id << ", edge_handle=" << edge_handle << std::endl;
-        abort_bulk_load();
     }
 
     return success;
@@ -1673,19 +1668,21 @@ hyper_stub_base :: put_edge_async(ape_ptr_t ape,
                                   const node_handle_t &node_handle,
                                   db::edge *e,
                                   uint64_t edge_id,
+                                  uint64_t shard,
                                   bool del_after_call,
                                   bool put_if_not_exist,
                                   std::unordered_map<int64_t, async_call_ptr_t> &async_calls)
 {
-    ape->edge_handle = e->get_handle();
-    ape->node_handle = node_handle;
-    ape->e = e;
+    ape->edge_handle    = e->get_handle();
+    ape->node_handle    = node_handle;
+    ape->e              = e;
     ape->del_after_call = del_after_call;
-    ape->edge_id = edge_id;
+    ape->edge_id        = edge_id;
+    ape->shard          = shard;
 
     prepare_edge(ape->attrs,
                  ape->node_handle,
-                 m_shard_id,
+                 shard,
                  *e,
                  ape->edge_id,
                  ape->buf,
@@ -1999,6 +1996,8 @@ async_call_type_to_string(async_call_type t)
             return "PUT_EDGE_ID";
         case ADD_INDEX:
             return "ADD_INDEX";
+        case DEL:
+            return "DEL";
         default:
             return "BAD TYPE";
     }

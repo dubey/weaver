@@ -47,7 +47,8 @@ enum async_call_type
     PUT_EDGE_SET,
     PUT_EDGE,
     PUT_EDGE_ID,
-    ADD_INDEX
+    ADD_INDEX,
+    DEL
 };
 
 const char*
@@ -103,7 +104,7 @@ class hyper_stub_base
             std::unique_ptr<e::buffer> buf;
             db::edge *e;
             bool del_after_call;
-            uint64_t edge_id;
+            uint64_t edge_id, shard;
 
             async_put_edge() : del_after_call(false) { type = PUT_EDGE; }
         };
@@ -127,7 +128,7 @@ class hyper_stub_base
 
         struct async_del : public async_call
         {
-            std::string key;
+            const char *key;
 
             async_del() { type = DEL; }
         };
@@ -136,7 +137,9 @@ class hyper_stub_base
         using apn_ptr_t = std::shared_ptr<hyper_stub_base::async_put_node>;
         using apes_ptr_t = std::shared_ptr<hyper_stub_base::async_put_edge_set>;
         using ape_ptr_t = std::shared_ptr<hyper_stub_base::async_put_edge>;
+        using apei_ptr_t = std::shared_ptr<hyper_stub_base::async_put_edge_id>;
         using aai_ptr_t = std::shared_ptr<hyper_stub_base::async_add_index>;
+        using ad_ptr_t = std::shared_ptr<hyper_stub_base::async_del>;
 
     protected:
         // node handle -> node data
@@ -331,6 +334,7 @@ class hyper_stub_base
                             const node_handle_t &node_handle,
                             db::edge *e,
                             uint64_t edge_id,
+                            uint64_t shard,
                             bool del_after_call,
                             bool put_if_not_exist,
                             std::unordered_map<int64_t, async_call_ptr_t> &async_calls);

@@ -319,7 +319,13 @@ hyper_stub :: put_node_no_loop(db::node *n)
 
     if (success) {
         apn->exec_time = m_timer.get_real_time_millis();
-    } else {
+
+        for (const std::string &alias: n->aliases) {
+            success = add_index_no_loop(n->get_handle(), alias) && success;
+        }
+    }
+    
+    if (!success) {
         abort_bulk_load();
     }
 
@@ -384,6 +390,7 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle,
                                   node_handle,
                                   e,
                                   edge_id,
+                                  m_shard_id,
                                   del_after_call,
                                   m_async_calls);
 
