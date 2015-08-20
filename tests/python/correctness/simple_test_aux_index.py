@@ -25,23 +25,23 @@ if len(sys.argv) > 1:
     config_file = sys.argv[1]
 
 # create client object
-c = client.Client('127.0.0.1', 2002, config_file)
+c = client.Client('128.84.167.220', 2002, config_file)
 
 # check aux index
 assert c.aux_index()
 
-# 1. create node for user ayush
-c.begin_tx()
-c.create_node('ayush')
-c.set_node_properties({'type': 'user', 'age': '25'}, 'ayush')
-c.end_tx()
-
-# 2. create node for user egs
-c.begin_tx()
-c.create_node('egs')
-c.set_node_property('type', 'user', 'egs')
-c.end_tx()
-
+## 1. create node for user ayush
+#c.begin_tx()
+#c.create_node('ayush')
+#c.set_node_properties({'type': 'user', 'age': '25'}, 'ayush')
+#c.end_tx()
+#
+## 2. create node for user egs
+#c.begin_tx()
+#c.create_node('egs')
+#c.set_node_property('type', 'user', 'egs')
+#c.end_tx()
+#
 # 3. ayush follows egs
 c.begin_tx()
 c.create_edge('ayush', 'egs', 'e1')

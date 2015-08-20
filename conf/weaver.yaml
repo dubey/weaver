@@ -19,7 +19,7 @@ hyperdex_coord:
 hyperdex_daemons:
     - 128.84.167.220 : 8012
     - 128.84.167.221 : 8012
-    - 128.84.167.222 : 8012
+#    - 128.84.167.222 : 8012
     - 128.84.167.225 : 8012
     - 128.84.167.226 : 8012
     - 128.84.167.227 : 8012
@@ -89,4 +89,4 @@ bulk_load_node_alias_key: "alias"
 # Default: "e"
 bulk_load_edge_handle_prefix: ""
 
-nodes_per_map: 100
+nodes_per_map: 2

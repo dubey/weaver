@@ -83,11 +83,14 @@ hyper_stub_base :: hyper_stub_base()
 
 #ifdef weaver_benchmark_ // assert false on error
 
-#define HYPERDEX_CHECK_STATUSES(status, fail_check) \
+#define HYPERDEX_CHECK_STATUSES(status, fail_check, debug_key) \
     if ((loop_status != HYPERDEX_CLIENT_SUCCESS) || (fail_check)) { \
         WDEBUG << "hyperdex error" \
                << ", call status: " << hyperdex_client_returncode_to_string(status) \
                << ", loop status: " << hyperdex_client_returncode_to_string(loop_status) << std::endl; \
+        if (debug_key != nullptr) { \
+            WDEBUG << "key=" << (const char*)debug_key << std::endl; \
+        } \
         WDEBUG << "error message: " << hyperdex_client_error_message(m_cl) << std::endl; \
         WDEBUG << "error loc: " << hyperdex_client_error_location(m_cl) << std::endl; \
         assert(false); \
@@ -96,11 +99,14 @@ hyper_stub_base :: hyper_stub_base()
 
 #else
 
-#define HYPERDEX_CHECK_STATUSES(status, fail_check) \
+#define HYPERDEX_CHECK_STATUSES(status, fail_check, debug_key) \
     if ((loop_status != HYPERDEX_CLIENT_SUCCESS && loop_status != HYPERDEX_CLIENT_TIMEOUT) || (fail_check)) { \
         WDEBUG << "hyperdex error" \
                << ", call status: " << hyperdex_client_returncode_to_string(status) \
                << ", loop status: " << hyperdex_client_returncode_to_string(loop_status) << std::endl; \
+        if (debug_key != nullptr) { \
+            WDEBUG << "key=" << (const char*)debug_key << std::endl; \
+        } \
         WDEBUG << "error message: " << hyperdex_client_error_message(m_cl) << std::endl; \
         WDEBUG << "error loc: " << hyperdex_client_error_location(m_cl) << std::endl; \
         success = false; \
@@ -148,7 +154,8 @@ hyper_stub_base :: commit_tx(hyperdex_client_returncode &commit_status)
     if (success) {
         HYPERDEX_LOOP(loop_status, hdex_id, success, success_calls);
         HYPERDEX_CHECK_STATUSES(commit_status,
-            commit_status != HYPERDEX_CLIENT_ABORTED && commit_status != HYPERDEX_CLIENT_SUCCESS);
+                                commit_status != HYPERDEX_CLIENT_ABORTED && commit_status != HYPERDEX_CLIENT_SUCCESS,
+                                nullptr);
     }
 }
 
@@ -178,7 +185,7 @@ hyper_stub_base :: call(hyper_func h,
 
     if (success_calls == 1) {
         HYPERDEX_LOOP(loop_status, hdex_id, success, success_calls);
-        HYPERDEX_CHECK_STATUSES(call_status, call_status != HYPERDEX_CLIENT_SUCCESS);
+        HYPERDEX_CHECK_STATUSES(call_status, call_status != HYPERDEX_CLIENT_SUCCESS, key);
     }
 
     return success;
@@ -205,7 +212,7 @@ hyper_stub_base :: call(hyper_tx_func h,
 
     if (success_calls == 1) {
         HYPERDEX_LOOP(loop_status, hdex_id, success, success_calls);
-        HYPERDEX_CHECK_STATUSES(call_status, call_status != HYPERDEX_CLIENT_SUCCESS);
+        HYPERDEX_CHECK_STATUSES(call_status, call_status != HYPERDEX_CLIENT_SUCCESS, key);
     }
 
     if (ret_call_status != nullptr) {
@@ -290,7 +297,7 @@ hyper_stub_base :: map_call(hyper_map_tx_func h,
 
     if (success_calls == 1) {
         HYPERDEX_LOOP(loop_status, hdex_id, success, success_calls);
-        HYPERDEX_CHECK_STATUSES(call_status, call_status != HYPERDEX_CLIENT_SUCCESS);
+        HYPERDEX_CHECK_STATUSES(call_status, call_status != HYPERDEX_CLIENT_SUCCESS, key);
     }
 
     return success;
@@ -408,7 +415,7 @@ hyper_stub_base :: multiple_call(std::vector<hyper_func> &funcs,
 
         CHECK_HDEX_ID;
 
-        HYPERDEX_CHECK_STATUSES(call_status[idx], call_status[idx] != HYPERDEX_CLIENT_SUCCESS);
+        HYPERDEX_CHECK_STATUSES(call_status[idx], call_status[idx] != HYPERDEX_CLIENT_SUCCESS, keys[idx]);
 
         idx = -1;
     }
@@ -465,9 +472,9 @@ hyper_stub_base :: multiple_call(std::vector<hyper_tx_func> &funcs,
     }
 
     for (uint64_t j = 0; j < map_num_calls; j++, i++) {
-        HYPERDEX_CALL7(map_funcs[i], m_hyper_tx,
-                       map_spaces[i], map_keys[i], map_key_szs[i],
-                       map_attrs[i], map_num_attrs[i],
+        HYPERDEX_CALL7(map_funcs[j], m_hyper_tx,
+                       map_spaces[j], map_keys[j], map_key_szs[j],
+                       map_attrs[j], map_num_attrs[j],
                        &call_status[i],
                        hdex_id, call_status[i], success, success_calls);
 
@@ -482,7 +489,8 @@ hyper_stub_base :: multiple_call(std::vector<hyper_tx_func> &funcs,
 
         CHECK_HDEX_ID;
 
-        HYPERDEX_CHECK_STATUSES(call_status[idx], call_status[idx] != HYPERDEX_CLIENT_SUCCESS);
+        const char *debug_key = idx < (int64_t)keys.size()? keys[idx] : map_keys[idx-keys.size()];
+        HYPERDEX_CHECK_STATUSES(call_status[idx], call_status[idx] != HYPERDEX_CLIENT_SUCCESS, debug_key);
 
         idx = -1;
     }
@@ -517,7 +525,7 @@ hyper_stub_base :: get(const char *space,
 
     if (success_calls == 1) {
         HYPERDEX_LOOP(loop_status, hdex_id, success, success_calls);
-        HYPERDEX_CHECK_STATUSES(get_status, get_status != HYPERDEX_CLIENT_SUCCESS);
+        HYPERDEX_CHECK_STATUSES(get_status, get_status != HYPERDEX_CLIENT_SUCCESS, key);
     }
 
     return success;
@@ -553,7 +561,7 @@ hyper_stub_base :: get_partial(const char *space,
 
     if (success_calls == 1) {
         HYPERDEX_LOOP(loop_status, hdex_id, success, success_calls);
-        HYPERDEX_CHECK_STATUSES(get_status, get_status != HYPERDEX_CLIENT_SUCCESS);
+        HYPERDEX_CHECK_STATUSES(get_status, get_status != HYPERDEX_CLIENT_SUCCESS, key);
     }
 
     return success;
@@ -608,7 +616,7 @@ hyper_stub_base :: multiple_get(std::vector<const char*> &spaces,
 
         CHECK_HDEX_ID;
 
-        HYPERDEX_CHECK_STATUSES(get_status[idx], get_status[idx] != HYPERDEX_CLIENT_SUCCESS);
+        HYPERDEX_CHECK_STATUSES(get_status[idx], get_status[idx] != HYPERDEX_CLIENT_SUCCESS, nullptr);
 
         idx = -1;
     }
@@ -668,7 +676,7 @@ hyper_stub_base :: multiple_get_partial(std::vector<const char*> &spaces,
 
         CHECK_HDEX_ID;
 
-        HYPERDEX_CHECK_STATUSES(get_status[idx], get_status[idx] != HYPERDEX_CLIENT_SUCCESS);
+        HYPERDEX_CHECK_STATUSES(get_status[idx], get_status[idx] != HYPERDEX_CLIENT_SUCCESS, keys[idx]);
 
         idx = -1;
     }
@@ -692,7 +700,7 @@ hyper_stub_base :: del(const char* space, const char *key, size_t key_sz)
 
     if (success_calls == 1) {
         HYPERDEX_LOOP(loop_status, hdex_id, success, success_calls);
-        HYPERDEX_CHECK_STATUSES(del_status, del_status != HYPERDEX_CLIENT_SUCCESS);
+        HYPERDEX_CHECK_STATUSES(del_status, del_status != HYPERDEX_CLIENT_SUCCESS, key);
     }
 
     return success;
@@ -735,7 +743,9 @@ hyper_stub_base :: multiple_del(std::vector<const char*> &spaces,
 
         CHECK_HDEX_ID;
 
-        HYPERDEX_CHECK_STATUSES(del_status[idx], del_status[idx] != HYPERDEX_CLIENT_SUCCESS && del_status[idx] != HYPERDEX_CLIENT_NOTFOUND);
+        HYPERDEX_CHECK_STATUSES(del_status[idx],
+                                del_status[idx] != HYPERDEX_CLIENT_SUCCESS && del_status[idx] != HYPERDEX_CLIENT_NOTFOUND,
+                                keys[idx]);
 
         idx = -1;
     }

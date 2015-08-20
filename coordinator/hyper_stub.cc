@@ -163,6 +163,7 @@ hyper_stub :: check_calls_status(std::unordered_map<int64_t, async_call_ptr_t> &
     return true;
 }
 
+
 // TODO make async for gets
 void
 hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
@@ -170,6 +171,8 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                     bool &error,
                     order::oracle *time_oracle)
 {
+    begin_tx();
+
 #define ERROR_FAIL(error_msg) \
     WDEBUG << error_msg << std::endl; \
     error = true; \
@@ -183,6 +186,21 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
 
 #define GET_EDGE(handle) \
     edges.emplace(handle, nullptr)
+
+#define HANDLE_OR_ALIAS(handle, alias) \
+    if (handle != "") { \
+        if (seen_nodes.find(handle) == seen_nodes.end()) { \
+            seen_nodes.emplace(handle); \
+            GET_NODE(handle); \
+        } \
+    } else if (alias != "") { \
+        if (seen_aliases.find(alias) == seen_aliases.end()) { \
+            seen_aliases.emplace(alias); \
+            GET_ALIAS(alias); \
+        } \
+    } else { \
+        ERROR_FAIL("both handle and alias are empty"); \
+    }
 
 #define GET_ALIAS(alias) \
     aliases.emplace(alias, std::make_pair(std::string(), UINT64_MAX))
@@ -209,20 +227,12 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
 
             case transaction::NODE_DELETE_REQ:
             case transaction::NODE_SET_PROPERTY:
-                if (upd->handle1 != ""
-                 && seen_nodes.find(upd->handle1) == seen_nodes.end()) {
-                    seen_nodes.emplace(upd->handle1);
-                    GET_NODE(upd->handle1);
-                } else if (upd->alias1 != ""
-                        && seen_aliases.find(upd->alias1) == seen_aliases.end()) {
-                    seen_aliases.emplace(upd->alias1);
-                    GET_ALIAS(upd->alias1);
-                } else {
-                    ERROR_FAIL("both handle and alias are empty");
-                }
+                HANDLE_OR_ALIAS(upd->handle1, upd->alias1);
                 break;
 
             case transaction::EDGE_CREATE_REQ:
+                HANDLE_OR_ALIAS(upd->handle1, upd->alias1);
+                HANDLE_OR_ALIAS(upd->handle2, upd->alias2);
                 seen_edges.emplace(upd->handle);
                 break;
 
@@ -248,10 +258,15 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
         }
     }
 
+#undef HANDLE_OR_ALIAS
+
     // get aliases
     if (!aliases.empty() && !get_indices(aliases, true)) {
         ERROR_FAIL("get indices");
     }
+
+#undef GET_ALIAS
+
     for (const auto &p: aliases) {
         if (seen_nodes.find(p.second.first) == seen_nodes.end()) {
             GET_NODE(p.second.first);
@@ -273,18 +288,23 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
         }
     }
 
+#undef GET_EDGE
+
     // get nodes
     if (!get_nodes(nodes, false, true)) {
         ERROR_FAIL("get_nodes");
     }
 
+#undef GET_NODE
+
     std::unordered_map<int64_t, async_call_ptr_t> async_calls,
                                                   done_calls;
     std::unordered_map<int64_t, std::pair<apei_ptr_t, db::node*>> create_edge_calls;
     vc::vclock_ptr_t tx_clk_ptr(new vc::vclock(tx->timestamp));
+    auto restore_clk = std::make_shared<vc::vclock_t>(tx_clk_ptr->clock);
     std::unique_ptr<e::buffer> lastupd_clk_buf, restore_clk_buf;
     prepare_buffer(tx_clk_ptr, lastupd_clk_buf);
-    prepare_buffer(tx_clk_ptr, restore_clk_buf);
+    prepare_buffer(restore_clk, restore_clk_buf);
     std::vector<vc::vclock> before_vec;
     // done with initial optimization gets
     // now iterate through tx and process each op
@@ -298,6 +318,8 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
             return; \
         } \
     }
+    //    *node->last_upd_clk = tx->timestamp;
+    //(*node->restore_clk)[vt_id+1] = tx_clk_ptr->get_clock();
 
 #define CHECK_NODE(handle, alias, loc) \
     if (handle == "") { \
@@ -338,6 +360,11 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                     ERROR_FAIL("put node async");
                 }
                              
+                aai_ptr_t aai = std::make_shared<async_add_index>();
+                if (!add_index_async(aai, upd->handle, upd->handle, n->shard, async_calls, true)) {
+                    ERROR_FAIL("add_index_async, node=" << upd->handle << ", alias=" << upd->handle);
+                }
+
                 break;
             }
 
@@ -387,6 +414,12 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                 }
                 create_edge_calls[apei->op_id] = std::make_pair(apei, node1);
 
+                aux_edge_data aux_data;
+                aux_data.node_handle   = upd->handle1;
+                aux_data.shard         = upd->loc1;
+                aux_data.edge_id       = edge_id;
+                edge_data[upd->handle] = aux_data;
+
                 break;
             }
 
@@ -404,6 +437,7 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                                  async_calls)) {
                         ERROR_FAIL("delete alias=" << alias);
                     }
+                    aliases.erase(alias);
                 }
 
                 delete n;
@@ -455,6 +489,7 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                     n->edge_ids.erase(aux_data.edge_id);
                     delete e;
                     edges.erase(upd->handle1);
+                    edge_data.erase(upd->handle1);
                 } else {
                     if (!e->base.set_property(*upd->key, *upd->value, tx_clk_ptr)) {
                         ERROR_FAIL("property " << *upd->key << ": " << *upd->value << " fail at edge " << upd->handle1);
@@ -473,10 +508,27 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                 }
 
                 n->add_alias(upd->handle);
+
+                auto alias_iter = aliases.find(upd->handle);
+                auto alias_pair = std::make_pair(upd->handle1, n->shard);
+                if (alias_iter != aliases.end()
+                 && alias_iter->second != alias_pair) {
+                    ERROR_FAIL("conflicting aliases " << upd->handle);
+                }
+                aliases.emplace(upd->handle, alias_pair);
                 break;
             }
         }
+
+        uint64_t shard_write_idx = upd->loc1 - ShardIdIncr;
+        if (shard_write_idx >= tx->shard_write.size()) {
+            tx->shard_write.resize(shard_write_idx+1, false);
+        }
+        tx->shard_write[shard_write_idx] = true;
     }
+
+#undef CHECK_LASTUPD_CLK
+#undef CHECK_NODE
 
     if (!loop_async_calls(async_calls, done_calls)) {
         ERROR_FAIL("loop");
@@ -617,6 +669,8 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
 
     clean_up(nodes);
     clean_up(edges);
+
+#undef ERROR_FAIL
 }
 
 /*
