@@ -153,10 +153,7 @@ hyper_stub :: check_calls_status(std::unordered_map<int64_t, async_call_ptr_t> &
             continue;
         }
 
-        WDEBUG << "bad op, type=" << async_call_type_to_string(ac_ptr->type)
-               << ", op_id=" << ac_ptr->op_id
-               << ", returncode=" << hyperdex_client_returncode_to_string(ac_ptr->status)
-               << std::endl;
+        debug_print_async_call(ac_ptr);
         return false;
     }
 
@@ -348,6 +345,7 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                                            &dummy_mtx);
                 n->last_upd_clk.reset(new vc::vclock(*tx_clk_ptr));
                 n->restore_clk.reset(new vc::vclock_t(tx_clk_ptr->clock));
+                n->max_edge_id = m_uint64max_dist(m_mt64_gen);
                 nodes.emplace(upd->handle, n);
 
                 apn_ptr_t apn = std::make_shared<async_put_node>();
@@ -356,12 +354,13 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                                     lastupd_clk_buf,
                                     restore_clk_buf,
                                     async_calls,
+                                    true,
                                     true)) {
                     ERROR_FAIL("put node async");
                 }
                              
                 aai_ptr_t aai = std::make_shared<async_add_index>();
-                if (!add_index_async(aai, upd->handle, upd->handle, n->shard, async_calls, true)) {
+                if (!add_index_async(aai, upd->handle, upd->handle, n->shard, async_calls, true, true)) {
                     ERROR_FAIL("add_index_async, node=" << upd->handle << ", alias=" << upd->handle);
                 }
 
@@ -413,6 +412,8 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                     ERROR_FAIL("put edge id async, edge_id=" << edge_id);
                 }
                 create_edge_calls[apei->op_id] = std::make_pair(apei, node1);
+
+                node1->edge_ids.emplace(edge_id);
 
                 aux_edge_data aux_data;
                 aux_data.node_handle   = upd->handle1;
@@ -503,7 +504,7 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                 CHECK_NODE(upd->handle1, upd->alias1, upd->loc1);
 
                 aai_ptr_t aai = std::make_shared<async_add_index>();
-                if (!add_index_async(aai, upd->handle1, upd->handle, n->shard, async_calls, true)) {
+                if (!add_index_async(aai, upd->handle1, upd->handle, n->shard, async_calls, true, true)) {
                     ERROR_FAIL("add_index_async, node=" << upd->handle1 << ", alias=" << upd->handle);
                 }
 
@@ -530,6 +531,7 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
 #undef CHECK_LASTUPD_CLK
 #undef CHECK_NODE
 
+    WDEBUG << "first loop for put_edge_ids" << std::endl;
     if (!loop_async_calls(async_calls, done_calls)) {
         ERROR_FAIL("loop");
     }
@@ -540,12 +542,16 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
         db::node *n     = p.second.second;
 
         while (apei->status == HYPERDEX_CLIENT_CMPFAIL) {
-            int64_t edge_id = n->max_edge_id++;
+            WDEBUG << "retry edge id for edge=" << apei->edge_handle << std::endl;
+            n->edge_ids.erase(apei->edge_id);
+            apei->edge_id = n->max_edge_id++;
+            n->edge_ids.emplace(apei->edge_id);
             if (!put_edge_id_async(apei,
-                                   edge_id,
+                                   apei->edge_id,
                                    apei->edge_handle,
                                    async_calls,
                                    true)) {
+                debug_print_async_call(apei);
                 ERROR_FAIL("apei");
             }
             std::unordered_map<int64_t, async_call_ptr_t> done_apei;
@@ -555,7 +561,8 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
         }
 
         if (apei->status != HYPERDEX_CLIENT_SUCCESS) {
-            ERROR_FAIL("apei handle=" << apei->edge_handle << ", id=" << apei->edge_id << ", node=" << n->get_handle());
+            debug_print_async_call(apei);
+            ERROR_FAIL("apei");
         }
     }
 
@@ -575,15 +582,23 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                             apei->edge_id,
                             n->shard,
                             false,
-                            true,
                             async_calls,
+                            true,
                             true)) {
-            ERROR_FAIL("put edge=" << apei->edge_handle);
+            debug_print_async_call(apei);
+            ERROR_FAIL("put edge");
         }
-
-        n->edge_ids.emplace(apei->edge_id);
     }
     create_edge_calls.clear();
+
+    WDEBUG << "second loop async" << std::endl;
+    if (!loop_async_calls(async_calls, done_calls)) {
+        ERROR_FAIL("loop");
+    }
+    if (!check_calls_status(done_calls)) {
+        ERROR_FAIL("check_calls_status");
+    }
+    done_calls.clear();
 
     // write all nodes
     for (auto &p: nodes) {
@@ -593,8 +608,10 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                             lastupd_clk_buf,
                             restore_clk_buf,
                             async_calls,
+                            false,
                             true)) {
-            ERROR_FAIL("put_node " << p.first);
+            debug_print_async_call(apn);
+            ERROR_FAIL("put_node");
         }
     }
 
@@ -608,13 +625,15 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                             aux_data.edge_id,
                             aux_data.shard,
                             false,
-                            false,
                             async_calls,
+                            false,
                             true)) {
-            ERROR_FAIL("put_edge " << p.first);
+            debug_print_async_call(ape);
+            ERROR_FAIL("put_edge");
         }
     }
 
+    WDEBUG << "third loop async" << std::endl;
     if (!loop_async_calls(async_calls, done_calls)) {
         ERROR_FAIL("loop");
     }
@@ -669,6 +688,8 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
 
     clean_up(nodes);
     clean_up(edges);
+
+    WDEBUG << std::endl << std::endl << "DONE TX" << std::endl << std::endl;
 
 #undef ERROR_FAIL
 }

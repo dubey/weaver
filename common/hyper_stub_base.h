@@ -70,6 +70,7 @@ class hyper_stub_base
             uint64_t exec_time;
             size_t packed_sz;
             int64_t op_id;
+            bool putine, tx;
 
             async_call() : status(HYPERDEX_CLIENT_GARBAGE), exec_time(42), packed_sz(42) { }
         };
@@ -140,6 +141,8 @@ class hyper_stub_base
         using apei_ptr_t = std::shared_ptr<hyper_stub_base::async_put_edge_id>;
         using aai_ptr_t = std::shared_ptr<hyper_stub_base::async_add_index>;
         using ad_ptr_t = std::shared_ptr<hyper_stub_base::async_del>;
+
+        void debug_print_async_call(async_call_ptr_t);
 
     protected:
         // node handle -> node data
@@ -326,6 +329,7 @@ class hyper_stub_base
                             std::unique_ptr<e::buffer> &lastupd_clk_buf,
                             std::unique_ptr<e::buffer> &restore_clk_buf,
                             std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                            bool put_if_not_exist,
                             bool tx);
         bool put_edge_id_async(apei_ptr_t apei,
                                uint64_t edge_id,
@@ -338,14 +342,15 @@ class hyper_stub_base
                             uint64_t edge_id,
                             uint64_t shard,
                             bool del_after_call,
-                            bool put_if_not_exist,
                             std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                            bool put_if_not_exist,
                             bool tx);
         bool add_index_async(aai_ptr_t aai,
                              const node_handle_t &node_handle,
                              const std::string &alias,
                              const uint64_t &shard,
                              std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                             bool put_if_not_exist,
                              bool tx);
         bool del_async(ad_ptr_t ad,
                        const char *key, size_t key_sz,

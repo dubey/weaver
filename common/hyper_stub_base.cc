@@ -616,7 +616,7 @@ hyper_stub_base :: multiple_get(std::vector<const char*> &spaces,
 
         CHECK_HDEX_ID;
 
-        HYPERDEX_CHECK_STATUSES(get_status[idx], get_status[idx] != HYPERDEX_CLIENT_SUCCESS, nullptr);
+        HYPERDEX_CHECK_STATUSES(get_status[idx], get_status[idx] != HYPERDEX_CLIENT_SUCCESS, keys[idx]);
 
         idx = -1;
     }
@@ -1605,8 +1605,11 @@ hyper_stub_base :: put_node_async(apn_ptr_t apn,
                                   std::unique_ptr<e::buffer> &lastupd_clk_buf,
                                   std::unique_ptr<e::buffer> &restore_clk_buf,
                                   std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                                  bool put_if_not_exist,
                                   bool tx)
 {
+    apn->putine = put_if_not_exist;
+    apn->tx     = tx;
     apn->handle = n->get_handle();
 
     prepare_node(apn->attrs,
@@ -1622,7 +1625,9 @@ hyper_stub_base :: put_node_async(apn_ptr_t apn,
 
     bool success;
     if (tx) {
-        success = call_no_loop(&hyperdex_client_xact_put,
+        hyper_tx_func h = put_if_not_exist? &hyperdex_client_xact_put_if_not_exist
+                                          : &hyperdex_client_xact_put;
+        success = call_no_loop(h,
                                node_space,
                                apn->handle.c_str(),
                                apn->handle.size(),
@@ -1630,7 +1635,9 @@ hyper_stub_base :: put_node_async(apn_ptr_t apn,
                                apn->num_attrs,
                                apn->op_id, apn->status);
     } else {
-        success = call_no_loop(&hyperdex_client_put,
+        hyper_func h = put_if_not_exist? &hyperdex_client_put_if_not_exist
+                                       : &hyperdex_client_put;
+        success = call_no_loop(h,
                                node_space,
                                apn->handle.c_str(),
                                apn->handle.size(),
@@ -1640,6 +1647,7 @@ hyper_stub_base :: put_node_async(apn_ptr_t apn,
     }
 
     if (success) {
+        //debug_print_async_call(apn);
         async_calls[apn->op_id] = apn;
     }
     
@@ -1659,7 +1667,9 @@ hyper_stub_base :: put_edge_id_async(apei_ptr_t apei,
                                      std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
                                      bool tx)
 {
-    apei->edge_id = edge_id;
+    apei->putine      = true;
+    apei->tx          = tx;
+    apei->edge_id     = edge_id;
     apei->edge_handle = edge_handle;
     // edge handle
     apei->edgeid_attrs[0].attr     = edge_id_attrs[0];
@@ -1686,6 +1696,7 @@ hyper_stub_base :: put_edge_id_async(apei_ptr_t apei,
     }
 
     if (success) {
+        debug_print_async_call(apei);
         async_calls[apei->op_id] = apei;
     } else {
         WDEBUG << "hyperdex_client_put failed, op_id=" << apei->op_id
@@ -1703,10 +1714,12 @@ hyper_stub_base :: put_edge_async(ape_ptr_t ape,
                                   uint64_t edge_id,
                                   uint64_t shard,
                                   bool del_after_call,
-                                  bool put_if_not_exist,
                                   std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                                  bool put_if_not_exist,
                                   bool tx)
 {
+    ape->putine         = put_if_not_exist;
+    ape->tx             = tx;
     ape->edge_handle    = e->get_handle();
     ape->node_handle    = node_handle;
     ape->e              = e;
@@ -1744,6 +1757,7 @@ hyper_stub_base :: put_edge_async(ape_ptr_t ape,
     }
 
     if (success) {
+        debug_print_async_call(ape);
         async_calls[ape->op_id] = ape;
     } else {
         WDEBUG << "hyperdex_client_put failed, op_id=" << ape->op_id
@@ -1760,10 +1774,13 @@ hyper_stub_base :: add_index_async(aai_ptr_t aai,
                                    const std::string &alias,
                                    const uint64_t &shard,
                                    std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                                   bool put_if_not_exist,
                                    bool tx)
 {
+    aai->putine      = put_if_not_exist;
+    aai->tx          = tx;
     aai->node_handle = node_handle;
-    aai->alias = alias;
+    aai->alias       = alias;
     // node handle
     aai->index_attrs[0].attr = edge_attrs[0];
     aai->index_attrs[0].value = aai->node_handle.c_str();
@@ -1779,14 +1796,18 @@ hyper_stub_base :: add_index_async(aai_ptr_t aai,
 
     bool success;
     if (tx) {
-        success = call_no_loop(&hyperdex_client_xact_put,
+        hyper_tx_func h = put_if_not_exist? &hyperdex_client_xact_put_if_not_exist
+                                          : &hyperdex_client_xact_put;
+        success = call_no_loop(h,
                                edge_space,
                                aai->alias.c_str(),
                                aai->alias.size(),
                                aai->index_attrs, 2,
                                aai->op_id, aai->status);
     } else {
-        success = call_no_loop(&hyperdex_client_put,
+        hyper_func h = put_if_not_exist? &hyperdex_client_put_if_not_exist
+                                       : &hyperdex_client_put;
+        success = call_no_loop(h,
                                edge_space,
                                aai->alias.c_str(),
                                aai->alias.size(),
@@ -1795,6 +1816,7 @@ hyper_stub_base :: add_index_async(aai_ptr_t aai,
     }
 
     if (success) {
+        //debug_print_async_call(aai);
         async_calls[aai->op_id] = aai;
     } else {
         WDEBUG << "hyperdex_client_put failed, op_id=" << aai->op_id
@@ -1813,11 +1835,14 @@ hyper_stub_base :: del_async(ad_ptr_t ad,
                              const char *space,
                              std::unordered_map<int64_t, async_call_ptr_t> &async_calls)
 {
-    ad->key = key;
+    ad->putine = false;
+    ad->tx     = true;
+    ad->key    = key;
 
     bool success = del_no_loop(space, key, key_sz, ad->op_id, ad->status);
 
     if (success) {
+        //debug_print_async_call(ad);
         async_calls[ad->op_id] = ad;
     } else {
         WDEBUG << "hyperdex_client_del failed, op_id=" << ad->op_id
@@ -2058,5 +2083,79 @@ async_call_type_to_string(async_call_type t)
             return "DEL";
         default:
             return "BAD TYPE";
+    }
+}
+
+void
+hyper_stub_base :: debug_print_async_call(async_call_ptr_t ac_ptr)
+{
+    WDEBUG << std::endl
+           << "async_call_type=" << async_call_type_to_string(ac_ptr->type) << std::endl
+           << "returncode=" << hyperdex_client_returncode_to_string(ac_ptr->status) << std::endl
+           << "op_id=" << ac_ptr->op_id << std::endl
+           << "packed_sz=" << ac_ptr->packed_sz << std::endl
+           << "putine=" << ac_ptr->putine << std::endl
+           << "tx=" << ac_ptr->tx << std::endl;
+
+
+    switch (ac_ptr->type) {
+        case PUT_NODE: {
+            apn_ptr_t apn = std::static_pointer_cast<async_put_node>(ac_ptr);
+            WDEBUG << std::endl
+                   << "\thandle=" << apn->handle << std::endl
+                   << "\tnum_attrs=" << apn->num_attrs << std::endl
+                   << std::endl;
+            break;
+        }
+
+        case PUT_EDGE_SET: {
+            apes_ptr_t apes = std::static_pointer_cast<async_put_edge_set>(ac_ptr);
+            WDEBUG << std::endl
+                   << "\tnode_handle=" << apes->node_handle << std::endl
+                   << "\tmax_edge_id=" << apes->max_edge_id << std::endl
+                   << std::endl;
+            break;
+        }
+
+        case PUT_EDGE: {
+            ape_ptr_t ape = std::static_pointer_cast<async_put_edge>(ac_ptr);
+            WDEBUG << std::endl
+                   << "\tedge_handle=" << ape->edge_handle << std::endl
+                   << "\tnode_handle=" << ape->node_handle << std::endl
+                   << "\tdel_after_call=" << ape->del_after_call << std::endl
+                   << "\tedge_id=" << ape->edge_id << std::endl
+                   << "\tshard=" << ape->shard << std::endl
+                   << std::endl;
+            break;
+       }
+
+        case PUT_EDGE_ID: {
+            apei_ptr_t apei = std::static_pointer_cast<async_put_edge_id>(ac_ptr);
+            WDEBUG << std::endl
+                   << "\tedge_id=" << apei->edge_id << std::endl
+                   << "\tedge_handle=" << apei->edge_handle << std::endl
+                   << std::endl;
+            break;
+        }
+
+        case ADD_INDEX: {
+            aai_ptr_t aai = std::static_pointer_cast<async_add_index>(ac_ptr);
+            WDEBUG << std::endl
+                   << "\tnode_handle=" << aai->node_handle << std::endl
+                   << "\talias=" << aai->alias << std::endl
+                   << std::endl;
+            break;
+        }
+
+        case DEL: {
+            ad_ptr_t ad = std::static_pointer_cast<async_del>(ac_ptr);
+            WDEBUG << std::endl
+                   << "\tkey=" << ad->key << std::endl
+                   << std::endl;
+            break;
+        }
+
+        default:
+            WDEBUG << "impossible async call type=" << async_call_type_to_string(ac_ptr->type) << std::endl;
     }
 }

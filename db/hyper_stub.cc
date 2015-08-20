@@ -316,6 +316,7 @@ hyper_stub :: put_node_no_loop(db::node *n)
                                   m_last_clk_buf,
                                   m_restore_clk_buf,
                                   m_async_calls,
+                                  false,
                                   false);
 
     if (success) {
@@ -394,8 +395,8 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle,
                                   edge_id,
                                   m_shard_id,
                                   del_after_call,
-                                  false,
                                   m_async_calls,
+                                  false,
                                   false);
 
     if (success) {
@@ -470,6 +471,7 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle,
                                    alias,
                                    m_shard_id,
                                    m_async_calls,
+                                   false,
                                    false);
 
     if (success) {
