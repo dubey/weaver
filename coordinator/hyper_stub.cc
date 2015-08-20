@@ -333,7 +333,8 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                                     nodes[upd->handle],
                                     lastupd_clk_buf,
                                     restore_clk_buf,
-                                    async_calls)) {
+                                    async_calls,
+                                    true)) {
                     ERROR_FAIL("put node async");
                 }
                              
@@ -380,7 +381,8 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                 if (!put_edge_id_async(apei,
                                        edge_id,
                                        upd->handle,
-                                       async_calls)) {
+                                       async_calls,
+                                       true)) {
                     ERROR_FAIL("put edge id async, edge_id=" << edge_id);
                 }
                 create_edge_calls[apei->op_id] = std::make_pair(apei, node1);
@@ -466,7 +468,7 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                 CHECK_NODE(upd->handle1, upd->alias1, upd->loc1);
 
                 aai_ptr_t aai = std::make_shared<async_add_index>();
-                if (!add_index_async(aai, upd->handle1, upd->handle, n->shard, async_calls)) {
+                if (!add_index_async(aai, upd->handle1, upd->handle, n->shard, async_calls, true)) {
                     ERROR_FAIL("add_index_async, node=" << upd->handle1 << ", alias=" << upd->handle);
                 }
 
@@ -490,7 +492,8 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
             if (!put_edge_id_async(apei,
                                    edge_id,
                                    apei->edge_handle,
-                                   async_calls)) {
+                                   async_calls,
+                                   true)) {
                 ERROR_FAIL("apei");
             }
             std::unordered_map<int64_t, async_call_ptr_t> done_apei;
@@ -521,7 +524,8 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                             n->shard,
                             false,
                             true,
-                            async_calls)) {
+                            async_calls,
+                            true)) {
             ERROR_FAIL("put edge=" << apei->edge_handle);
         }
 
@@ -536,7 +540,8 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                             p.second,
                             lastupd_clk_buf,
                             restore_clk_buf,
-                            async_calls)) {
+                            async_calls,
+                            true)) {
             ERROR_FAIL("put_node " << p.first);
         }
     }
@@ -552,7 +557,8 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
                             aux_data.shard,
                             false,
                             false,
-                            async_calls)) {
+                            async_calls,
+                            true)) {
             ERROR_FAIL("put_edge " << p.first);
         }
     }

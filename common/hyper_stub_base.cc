@@ -1594,7 +1594,8 @@ hyper_stub_base :: put_node_async(apn_ptr_t apn,
                                   db::node *n,
                                   std::unique_ptr<e::buffer> &lastupd_clk_buf,
                                   std::unique_ptr<e::buffer> &restore_clk_buf,
-                                  std::unordered_map<int64_t, async_call_ptr_t> &async_calls)
+                                  std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                                  bool tx)
 {
     apn->handle = n->get_handle();
 
@@ -1609,13 +1610,24 @@ hyper_stub_base :: put_node_async(apn_ptr_t apn,
                  apn->num_attrs,
                  apn->packed_sz);
 
-    bool success = call_no_loop(&hyperdex_client_put,
-                                node_space,
-                                apn->handle.c_str(),
-                                apn->handle.size(),
-                                apn->attrs,
-                                apn->num_attrs,
-                                apn->op_id, apn->status);
+    bool success;
+    if (tx) {
+        success = call_no_loop(&hyperdex_client_xact_put,
+                               node_space,
+                               apn->handle.c_str(),
+                               apn->handle.size(),
+                               apn->attrs,
+                               apn->num_attrs,
+                               apn->op_id, apn->status);
+    } else {
+        success = call_no_loop(&hyperdex_client_put,
+                               node_space,
+                               apn->handle.c_str(),
+                               apn->handle.size(),
+                               apn->attrs,
+                               apn->num_attrs,
+                               apn->op_id, apn->status);
+    }
 
     if (success) {
         async_calls[apn->op_id] = apn;
@@ -1634,7 +1646,8 @@ bool
 hyper_stub_base :: put_edge_id_async(apei_ptr_t apei,
                                      uint64_t edge_id,
                                      const edge_handle_t &edge_handle,
-                                     std::unordered_map<int64_t, async_call_ptr_t> &async_calls)
+                                     std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                                     bool tx)
 {
     apei->edge_id = edge_id;
     apei->edge_handle = edge_handle;
@@ -1645,12 +1658,22 @@ hyper_stub_base :: put_edge_id_async(apei_ptr_t apei,
     apei->edgeid_attrs[0].datatype = edge_id_dtypes[0];
     apei->packed_sz                = apei->edge_handle.size();
 
-    bool success = call_no_loop(hyperdex_client_put_if_not_exist,
-                                edge_id_space,
-                                (const char*)&apei->edge_id,
-                                sizeof(int64_t),
-                                apei->edgeid_attrs, NUM_EDGE_ID_ATTRS,
-                                apei->op_id, apei->status);
+    bool success;
+    if (tx) {
+        success = call_no_loop(hyperdex_client_xact_put_if_not_exist,
+                               edge_id_space,
+                               (const char*)&apei->edge_id,
+                               sizeof(int64_t),
+                               apei->edgeid_attrs, NUM_EDGE_ID_ATTRS,
+                               apei->op_id, apei->status);
+    } else {
+        success = call_no_loop(hyperdex_client_put_if_not_exist,
+                               edge_id_space,
+                               (const char*)&apei->edge_id,
+                               sizeof(int64_t),
+                               apei->edgeid_attrs, NUM_EDGE_ID_ATTRS,
+                               apei->op_id, apei->status);
+    }
 
     if (success) {
         async_calls[apei->op_id] = apei;
@@ -1671,7 +1694,8 @@ hyper_stub_base :: put_edge_async(ape_ptr_t ape,
                                   uint64_t shard,
                                   bool del_after_call,
                                   bool put_if_not_exist,
-                                  std::unordered_map<int64_t, async_call_ptr_t> &async_calls)
+                                  std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                                  bool tx)
 {
     ape->edge_handle    = e->get_handle();
     ape->node_handle    = node_handle;
@@ -1688,14 +1712,26 @@ hyper_stub_base :: put_edge_async(ape_ptr_t ape,
                  ape->buf,
                  ape->packed_sz);
 
-    hyper_func h = put_if_not_exist? &hyperdex_client_put_if_not_exist
-                                   : &hyperdex_client_put;
-    bool success = call_no_loop(h,
-                                edge_space,
-                                ape->edge_handle.c_str(),
-                                ape->edge_handle.size(),
-                                ape->attrs, NUM_EDGE_ATTRS,
-                                ape->op_id, ape->status);
+    bool success;
+    if (tx) {
+        hyper_tx_func h = put_if_not_exist? &hyperdex_client_xact_put_if_not_exist
+                                          : &hyperdex_client_xact_put;
+        success = call_no_loop(h,
+                               edge_space,
+                               ape->edge_handle.c_str(),
+                               ape->edge_handle.size(),
+                               ape->attrs, NUM_EDGE_ATTRS,
+                               ape->op_id, ape->status);
+    } else {
+        hyper_func h = put_if_not_exist? &hyperdex_client_put_if_not_exist
+                                       : &hyperdex_client_put;
+        success = call_no_loop(h,
+                               edge_space,
+                               ape->edge_handle.c_str(),
+                               ape->edge_handle.size(),
+                               ape->attrs, NUM_EDGE_ATTRS,
+                               ape->op_id, ape->status);
+    }
 
     if (success) {
         async_calls[ape->op_id] = ape;
@@ -1712,8 +1748,9 @@ bool
 hyper_stub_base :: add_index_async(aai_ptr_t aai,
                                    const node_handle_t &node_handle,
                                    const std::string &alias,
-                                   uint64_t &shard,
-                                   std::unordered_map<int64_t, async_call_ptr_t> &async_calls)
+                                   const uint64_t &shard,
+                                   std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                                   bool tx)
 {
     aai->node_handle = node_handle;
     aai->alias = alias;
@@ -1730,12 +1767,22 @@ hyper_stub_base :: add_index_async(aai_ptr_t aai,
     aai->packed_sz = aai->index_attrs[0].value_sz
                    + aai->index_attrs[1].value_sz; 
 
-    bool success = call_no_loop(&hyperdex_client_put,
-                                edge_space,
-                                aai->alias.c_str(),
-                                aai->alias.size(),
-                                aai->index_attrs, 2,
-                                aai->op_id, aai->status);
+    bool success;
+    if (tx) {
+        success = call_no_loop(&hyperdex_client_xact_put,
+                               edge_space,
+                               aai->alias.c_str(),
+                               aai->alias.size(),
+                               aai->index_attrs, 2,
+                               aai->op_id, aai->status);
+    } else {
+        success = call_no_loop(&hyperdex_client_put,
+                               edge_space,
+                               aai->alias.c_str(),
+                               aai->alias.size(),
+                               aai->index_attrs, 2,
+                               aai->op_id, aai->status);
+    }
 
     if (success) {
         async_calls[aai->op_id] = aai;
@@ -1749,6 +1796,7 @@ hyper_stub_base :: add_index_async(aai_ptr_t aai,
 }
 
 // key should persist until async call has completed
+// transactional call
 bool
 hyper_stub_base :: del_async(ad_ptr_t ad,
                              const char *key, size_t key_sz,

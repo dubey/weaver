@@ -325,11 +325,13 @@ class hyper_stub_base
                             db::node *n,
                             std::unique_ptr<e::buffer> &lastupd_clk_buf,
                             std::unique_ptr<e::buffer> &restore_clk_buf,
-                            std::unordered_map<int64_t, async_call_ptr_t> &async_calls);
+                            std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                            bool tx);
         bool put_edge_id_async(apei_ptr_t apei,
                                uint64_t edge_id,
                                const edge_handle_t &edge_handle,
-                               std::unordered_map<int64_t, async_call_ptr_t> &async_calls);
+                               std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                               bool tx);
         bool put_edge_async(ape_ptr_t ape,
                             const node_handle_t &node_handle,
                             db::edge *e,
@@ -337,12 +339,14 @@ class hyper_stub_base
                             uint64_t shard,
                             bool del_after_call,
                             bool put_if_not_exist,
-                            std::unordered_map<int64_t, async_call_ptr_t> &async_calls);
+                            std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                            bool tx);
         bool add_index_async(aai_ptr_t aai,
                              const node_handle_t &node_handle,
                              const std::string &alias,
-                             uint64_t &shard,
-                             std::unordered_map<int64_t, async_call_ptr_t> &async_calls);
+                             const uint64_t &shard,
+                             std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                             bool tx);
         bool del_async(ad_ptr_t ad,
                        const char *key, size_t key_sz,
                        const char *space,

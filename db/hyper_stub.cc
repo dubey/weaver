@@ -25,14 +25,14 @@
 #define INITIAL_POOL_SZ (OUTSTANDING_HD_OPS*3)
 
 using db::hyper_stub;
-using db::hyper_stub::hyper_stub_pool;
-using db::apn_ptr_t;
-using db::apes_ptr_t;
-using db::ape_ptr_t;
-using db::aai_ptr_t;
+//using hyper_stub::hyper_stub_pool;
+//using db::apn_ptr_t;
+//using db::apes_ptr_t;
+//using db::ape_ptr_t;
+//using db::aai_ptr_t;
 
 template <typename T>
-hyper_stub_pool<T> :: hyper_stub_pool(async_call_type t)
+hyper_stub :: hyper_stub_pool<T> :: hyper_stub_pool(async_call_type t)
     : sz(INITIAL_POOL_SZ)
     , type(t)
 {
@@ -44,14 +44,14 @@ hyper_stub_pool<T> :: hyper_stub_pool(async_call_type t)
 
 template <typename T>
 uint64_t
-hyper_stub_pool<T> :: size()
+hyper_stub :: hyper_stub_pool<T> :: size()
 {
     return sz;
 }
 
 template <typename T>
 std::shared_ptr<T>
-hyper_stub_pool<T> :: acquire()
+hyper_stub :: hyper_stub_pool<T> :: acquire()
 {
     std::shared_ptr<T> ret;
 
@@ -73,7 +73,7 @@ hyper_stub_pool<T> :: acquire()
 
 template <typename T>
 void
-hyper_stub_pool<T> :: release(std::shared_ptr<T> ptr)
+hyper_stub :: hyper_stub_pool<T> :: release(std::shared_ptr<T> ptr)
 {
     if (ptr->type == PUT_EDGE_SET) {
         async_call_ptr_t ac_ptr = ptr;
@@ -160,20 +160,20 @@ hyper_stub :: restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *node
                    << ", loop_id = " << loop_id
                    << ", loop status = " << hyperdex_client_returncode_to_string(loop_status)
                    << ", search status = " << hyperdex_client_returncode_to_string(search_status) << std::endl;
-            WDEBUG << "error message: " << hyperdex_client_error_message(cl) << std::endl;
-            WDEBUG << "error loc: " << hyperdex_client_error_location(cl) << std::endl;
+            WDEBUG << "error message: " << hyperdex_client_error_message(m_cl) << std::endl;
+            WDEBUG << "error loc: " << hyperdex_client_error_location(m_cl) << std::endl;
             return;
         }
 
         if (search_status == HYPERDEX_CLIENT_SEARCHDONE) {
             loop_done = true;
         } else if (search_status == HYPERDEX_CLIENT_SUCCESS) {
-            assert(num_attrs == num_node_attrs+1); // node handle + graph attrs
+            assert(num_attrs == NUM_NODE_ATTRS+1); // node handle + graph attrs
 
             uint64_t key_idx = UINT64_MAX;
-            hyperdex_client_attribute node_attrs[num_node_attrs];
+            hyperdex_client_attribute node_attrs[NUM_NODE_ATTRS];
             for (uint64_t i = 0, j = 0; i < num_attrs; i++) {
-                if (strncmp(cl_attr[i].attr, graph_key, 4) == 0) {
+                if (strncmp(cl_attr[i].attr, node_key, 4) == 0) {
                     key_idx = i;
                 } else {
                     node_attrs[j++] = cl_attr[i];
@@ -230,7 +230,7 @@ hyper_stub :: recover_node(db::node &n)
 {
     std::unordered_map<node_handle_t, db::node*> nodes;
     nodes.emplace(n.get_handle(), &n);
-    if (get_nodes(nodes, false)) {
+    if (get_nodes(nodes, true, false)) {
         n.edge_ids.clear();
         return true;
     } else {
@@ -315,7 +315,8 @@ hyper_stub :: put_node_no_loop(db::node *n)
                                   n,
                                   m_last_clk_buf,
                                   m_restore_clk_buf,
-                                  m_async_calls);
+                                  m_async_calls,
+                                  false);
 
     if (success) {
         apn->exec_time = m_timer.get_real_time_millis();
@@ -359,7 +360,8 @@ hyper_stub :: put_edge_id_no_loop(uint64_t edge_id,
     bool success = put_edge_id_async(apei,
                                      edge_id,
                                      edge_handle,
-                                     m_async_calls);
+                                     m_async_calls,
+                                     false);
 
     if (success) {
         apei->exec_time = m_timer.get_real_time_millis();
@@ -392,7 +394,9 @@ hyper_stub :: put_edge_no_loop(const node_handle_t &node_handle,
                                   edge_id,
                                   m_shard_id,
                                   del_after_call,
-                                  m_async_calls);
+                                  false,
+                                  m_async_calls,
+                                  false);
 
     if (success) {
         ape->exec_time = m_timer.get_real_time_millis();
@@ -434,7 +438,7 @@ hyper_stub :: put_node_edge_id_set_no_loop(const node_handle_t &node_handle,
     apes->packed_sz = apes->set_attr[0].value_sz + apes->set_attr[1].value_sz;
 
     bool success = call_no_loop(&hyperdex_client_put,
-                                graph_space,
+                                node_space,
                                 apes->node_handle.c_str(),
                                 apes->node_handle.size(),
                                 apes->set_attr, 2,
@@ -465,7 +469,8 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle,
                                    node_handle,
                                    alias,
                                    m_shard_id,
-                                   m_async_calls);
+                                   m_async_calls,
+                                   false);
 
     if (success) {
         aai->exec_time = m_timer.get_real_time_millis();
@@ -555,6 +560,10 @@ hyper_stub :: done_op(async_call_ptr_t ac_ptr, int64_t op_id)
         case ADD_INDEX:
             m_aai_pool.release(std::static_pointer_cast<async_add_index>(ac_ptr));
             break;
+
+        default:
+            WDEBUG << "impossible async call type=" << async_call_type_to_string(ac_ptr->type) << std::endl;
+            assert(false);
     }
 
     m_async_calls.erase(op_id);
@@ -668,8 +677,8 @@ void
 hyper_stub :: abort_bulk_load()
 {
     WDEBUG << "Aborting bulk load now." << std::endl;
-    WDEBUG << "error message: " << hyperdex_client_error_message(cl) << std::endl;
-    WDEBUG << "error loc: " << hyperdex_client_error_location(cl) << std::endl;
+    WDEBUG << "error message: " << hyperdex_client_error_message(m_cl) << std::endl;
+    WDEBUG << "error loc: " << hyperdex_client_error_location(m_cl) << std::endl;
     assert(false);
 }
 

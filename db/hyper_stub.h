@@ -37,23 +37,24 @@ namespace db
 
     class hyper_stub : private hyper_stub_base
     {
-        template <typename T>
-        class hyper_stub_pool
-        {
-            private:
-                std::vector<async_call_ptr_t> pool;
-                uint64_t sz;
-                async_call_type type;
-
-            public:
-                hyper_stub_pool(async_call_type type);
-                uint64_t size();
-                std::shared_ptr<T> acquire();
-                void release(std::shared_ptr<T>);
-                void clear() { pool.clear(); }
-        };
-
         public:
+
+            template <typename T>
+            class hyper_stub_pool
+            {
+                private:
+                    std::vector<async_call_ptr_t> pool;
+                    uint64_t sz;
+                    async_call_type type;
+
+                public:
+                    hyper_stub_pool(async_call_type type);
+                    uint64_t size();
+                    std::shared_ptr<T> acquire();
+                    void release(std::shared_ptr<T>);
+                    void clear() { pool.clear(); }
+            };
+
             hyper_stub(uint64_t sid, int tid);
             void restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *nodes,
                 /*XXX std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,*/
@@ -69,6 +70,8 @@ namespace db
                                   db::edge *e,
                                   uint64_t edge_id,
                                   bool del_after_call);
+            bool put_edge_id_no_loop(uint64_t edge_id,
+                                     const edge_handle_t &edge_handle);
             bool put_node_edge_id_set_no_loop(const node_handle_t &node_handle,
                                               int64_t start_id,
                                               int64_t end_id);
