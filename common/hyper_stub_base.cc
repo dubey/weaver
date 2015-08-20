@@ -43,7 +43,7 @@ hyper_stub_base :: hyper_stub_base()
                  "data"}
     , edge_dtypes{HYPERDATATYPE_STRING,
                   HYPERDATATYPE_INT64,
-                  HYPERDATATYPE_STRING,
+                  HYPERDATATYPE_INT64,
                   HYPERDATATYPE_STRING}
     , edge_id_attrs{"handle"}
     , edge_id_dtypes{HYPERDATATYPE_STRING}
