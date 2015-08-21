@@ -60,7 +60,10 @@ namespace coordinator
                          std::unordered_map<int64_t, async_call_ptr_t> &async_calls);
             bool loop_async_calls(std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
                                   std::unordered_map<int64_t, async_call_ptr_t> &done_calls);
-            bool check_calls_status(std::unordered_map<int64_t, async_call_ptr_t> &async_calls);
+            bool check_calls_status(std::unordered_map<int64_t, async_call_ptr_t> &async_calls, bool allow_cmpfail);
+            bool loop_and_check(std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                                std::unordered_map<int64_t, async_call_ptr_t> &done_calls,
+                                bool allow_cmpfail);
             void recreate_tx(const hyperdex_client_attribute *attr, transaction::pending_tx &tx);
     };
 }

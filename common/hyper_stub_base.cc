@@ -1647,7 +1647,6 @@ hyper_stub_base :: put_node_async(apn_ptr_t apn,
     }
 
     if (success) {
-        //debug_print_async_call(apn);
         async_calls[apn->op_id] = apn;
     }
     
@@ -1696,7 +1695,6 @@ hyper_stub_base :: put_edge_id_async(apei_ptr_t apei,
     }
 
     if (success) {
-        debug_print_async_call(apei);
         async_calls[apei->op_id] = apei;
     } else {
         WDEBUG << "hyperdex_client_put failed, op_id=" << apei->op_id
@@ -1757,7 +1755,6 @@ hyper_stub_base :: put_edge_async(ape_ptr_t ape,
     }
 
     if (success) {
-        debug_print_async_call(ape);
         async_calls[ape->op_id] = ape;
     } else {
         WDEBUG << "hyperdex_client_put failed, op_id=" << ape->op_id
@@ -1816,7 +1813,6 @@ hyper_stub_base :: add_index_async(aai_ptr_t aai,
     }
 
     if (success) {
-        //debug_print_async_call(aai);
         async_calls[aai->op_id] = aai;
     } else {
         WDEBUG << "hyperdex_client_put failed, op_id=" << aai->op_id
@@ -1842,7 +1838,6 @@ hyper_stub_base :: del_async(ad_ptr_t ad,
     bool success = del_no_loop(space, key, key_sz, ad->op_id, ad->status);
 
     if (success) {
-        //debug_print_async_call(ad);
         async_calls[ad->op_id] = ad;
     } else {
         WDEBUG << "hyperdex_client_del failed, op_id=" << ad->op_id
