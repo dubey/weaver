@@ -677,8 +677,6 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
     clean_up(nodes);
     clean_up(edges);
 
-    WDEBUG << std::endl << std::endl << "DONE TX" << std::endl << std::endl;
-
 #undef ERROR_FAIL
 }
 
