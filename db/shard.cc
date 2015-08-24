@@ -454,12 +454,16 @@ load_xml_node(pugi::xml_document &doc,
                        + node_count*MAX_EDGES_PER_NODE;
     }
 
-    other_hstub.new_node(n->get_handle(), start_edge_idx);
-    bool in_mem = S->add_node_to_nodemap_bulk_load(n, map_idx);
-    S->bulk_load_put_node(hstub, n, in_mem);
+    bool already_exists = other_hstub.new_node(n->get_handle(), start_edge_idx);
+    if (!already_exists) {
+        bool in_mem = S->add_node_to_nodemap_bulk_load(n, map_idx);
+        S->bulk_load_put_node(hstub, n, in_mem);
 
-    if (in_mem) {
-        nodes_in_memory++;
+        if (in_mem) {
+            nodes_in_memory++;
+        }
+    } else {
+        delete n;
     }
 }
 
