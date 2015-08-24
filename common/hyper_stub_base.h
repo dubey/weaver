@@ -235,7 +235,7 @@ class hyper_stub_base
             const char *key, size_t key_sz,
             hyperdex_client_map_attribute *map_attr, size_t num_attrs,
             int64_t &op_id, hyperdex_client_returncode &status);
-        bool loop(int64_t &op_id, hyperdex_client_returncode &loop_code);
+        bool loop(bool timeout, int64_t &op_id, hyperdex_client_returncode &loop_code);
 
         bool multiple_call(std::vector<hyper_func> &funcs,
             std::vector<const char*> &spaces,

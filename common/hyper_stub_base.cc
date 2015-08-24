@@ -323,12 +323,16 @@ hyper_stub_base :: map_call_no_loop(hyper_map_func h,
 }
 
 bool
-hyper_stub_base :: loop(int64_t &op_id, hyperdex_client_returncode &loop_status)
+hyper_stub_base :: loop(bool timeout, int64_t &op_id, hyperdex_client_returncode &loop_status)
 {
     int success_calls = 0;
     bool success = true;
 
-    HYPERDEX_LOOP_TIMEOUT(loop_status, op_id, success, success_calls);
+    if (timeout) {
+        HYPERDEX_LOOP_TIMEOUT(loop_status, op_id, success, success_calls);
+    } else {
+        HYPERDEX_LOOP(loop_status, op_id, success, success_calls);
+    }
 
     return success;
 }

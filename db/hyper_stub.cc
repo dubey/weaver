@@ -588,7 +588,7 @@ hyper_stub :: loop_async_and_flush(uint64_t num_ops_to_leave,
             int64_t op_id;
             hyperdex_client_returncode loop_code;
 
-            loop(op_id, loop_code);
+            loop(false, op_id, loop_code);
             if (op_id < 0) {
                 if (loop_code == HYPERDEX_CLIENT_TIMEOUT) {
                     num_timeouts++;

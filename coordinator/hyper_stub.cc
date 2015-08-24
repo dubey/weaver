@@ -114,7 +114,7 @@ hyper_stub :: loop_async_calls(std::unordered_map<int64_t, async_call_ptr_t> &as
         int64_t op_id;
         hyperdex_client_returncode loop_code;
 
-        loop(op_id, loop_code);
+        loop(true, op_id, loop_code);
 
         if (op_id < 0) {
             if (loop_code == HYPERDEX_CLIENT_TIMEOUT) {
