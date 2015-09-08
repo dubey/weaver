@@ -643,6 +643,10 @@ load_graph(void *args)
         return nullptr;
     }
 
+    file.seekg(0, file.end);
+    size_t graph_file_sz = file.tellg();
+    file.seekg(0, file.beg);
+
     // read, validate, and create graph
     uint64_t line_count = 0;
     db::hyper_stub &hstub = *hstubs[load_tid];
@@ -732,10 +736,18 @@ load_graph(void *args)
             elem_name_vec.emplace_back("edge");
             uint64_t chunk_count = 1;
             uint32_t elem_count;
+            float prev_progress = 0;
 
             while (get_xml_element_chunk(file, elem_name_vec, elements, elem_count, load_nthreads, num_shards)) {
                 if (elem_count == 0) {
                     break;
+                }
+
+                float file_cur_pos = file.tellg();
+                float progress     = ((float)file_cur_pos)/graph_file_sz * 100;
+                if (progress - prev_progress >= 0.1) {
+                    WDEBUG << "GRAPHML load progress=" << progress << std::endl;
+                    prev_progress = progress;
                 }
 
                 // first load elements that belong to this thread
@@ -1469,6 +1481,7 @@ inline void node_prog_loop(uint64_t tid,
         node_handle = id_params.first;
         ParamsType &params = id_params.second;
         this_node.handle = node_handle;
+        WDEBUG << "exec node prog at node=" << node_handle << std::endl;
 
         db::node *node = S->acquire_node_version(tid, node_handle, *np.req_vclock, time_oracle);
 

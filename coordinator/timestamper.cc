@@ -407,6 +407,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     for (auto &batch_pair: initial_batches) {
         msg_to_send.prepare_message(message::NODE_PROG, pType, vt_id, req_timestamp, req_id, cp_int, batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
+        WDEBUG << "send node prog to shard=" << batch_pair.first << std::endl;
     }
 
 #ifdef weaver_benchmark_
