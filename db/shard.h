@@ -187,6 +187,7 @@ namespace db
             po6::threads::mutex graph_load_mutex;
             uint64_t max_load_time, bulk_load_num_shards;
             uint32_t load_count;
+            std::vector<uint64_t> graph_load_time;
             void bulk_load_persistent(hyper_stub &hs);
             void bulk_load_put_node(hyper_stub &hs,
                                     node *n,

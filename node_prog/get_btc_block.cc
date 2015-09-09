@@ -112,13 +112,19 @@ node_prog :: get_btc_block_node_program(node_prog::node &n,
                 n.get_client_node(params.block_node, true, true, true);
                 next.emplace_back(std::make_pair(db::coordinator, std::move(params)));
             } else {
+                std::string tx_list = "";
                 for (const auto &tx: txs_to_get) {
                     next.emplace_back(std::make_pair(tx, params));
                     state.outstanding_count++;
+                    tx_list += tx.handle + " ";
                 }
+                WDEBUG << "prop node prog from block=" << n.get_handle()
+                       << " to " << next.size() << " transactions.  List of txs:" << std::endl
+                       << tx_list << std::endl;
             }
         } else {
-            WDEBUG << "at btc tx=" << n.get_handle() << std::endl;
+            WDEBUG << "at btc tx=" << n.get_handle()
+                   << " for get btc block=" << params.block_rn.handle << std::endl;
             cl::node tx;
             parse_btc_tx(tx, n);
             params.txs.emplace_back(tx);
@@ -130,7 +136,10 @@ node_prog :: get_btc_block_node_program(node_prog::node &n,
     } else {
         // request returning to start node
         assert(n.get_handle() == params.block || n.is_alias(params.block));
-        WDEBUG << "return at btc block=" << params.block << std::endl;
+        assert(params.txs.size() == 1);
+        WDEBUG << "return at btc block=" << params.block
+               << " from tx=" << params.txs.front().handle 
+               << ", outstanding count=" << (state.outstanding_count-1) << std::endl;
 
         for (const auto &tx: params.txs) {
             state.txs.emplace_back(tx);

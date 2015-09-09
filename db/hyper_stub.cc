@@ -498,6 +498,7 @@ hyper_stub :: flush_all_edge_ids()
         }
     }
     g_node_edge_id.clear();
+    g_node_edge_id = std::map<node_handle_t, std::pair<uint64_t, uint64_t>>();
 
     return true;
 }

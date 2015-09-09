@@ -2349,19 +2349,35 @@ server_loop(void *args)
                     break;
 
                 case message::LOADED_GRAPH: {
-                    uint64_t load_time;
-                    rec_msg->unpack_message(message::LOADED_GRAPH, load_time);
+                    uint64_t load_time, load_shard;
+                    rec_msg->unpack_message(message::LOADED_GRAPH, load_shard, load_time);
+
                     S->graph_load_mutex.lock();
+
                     if (load_time > S->max_load_time) {
                         S->max_load_time = load_time;
                     }
+
+                    if (S->graph_load_time.empty()) {
+                        S->graph_load_time.resize(S->bulk_load_num_shards, 0);
+                    }
+                    uint64_t load_shard_idx = load_shard - ShardIdIncr;
+                    S->graph_load_time[load_shard_idx] = load_time/MEGA;
+
                     if (++S->load_count == S->bulk_load_num_shards) {
-                        WDEBUG << "Loaded graph on all shards, time taken = " << (S->max_load_time/MEGA) << " ms." << std::endl;
+                        WDEBUG << "Loaded graph on all shards, max time = " << (S->max_load_time/MEGA) << " ms." << std::endl;
+                        WDEBUG << "Shardwise times:" << std::endl;
+                        for (uint64_t i = 0; i < S->bulk_load_num_shards; i++) {
+                            WDEBUG << "Shard " << (i+ShardIdIncr)
+                                   << " = " << S->graph_load_time[i] << " ms." << std::endl;
+                        }
                     } else {
                         WDEBUG << "Loaded graph on " << S->load_count << " shards, current time "
-                                << (S->max_load_time/MEGA) << "ms." << std::endl;
+                                << (S->max_load_time/MEGA) << " ms." << std::endl;
                     }
+
                     S->graph_load_mutex.unlock();
+
                     break;
                 }
 
@@ -2723,7 +2739,7 @@ main(int argc, const char *argv[])
 
             load_time = timer.get_time_elapsed() - load_time;
             message::message msg;
-            msg.prepare_message(message::LOADED_GRAPH, load_time);
+            msg.prepare_message(message::LOADED_GRAPH, S->shard_id, load_time);
             S->comm.send(ShardIdIncr, msg.buf);
         }
 
