@@ -19,6 +19,8 @@
 #include <map>
 #include <vector>
 #include <unordered_map>
+#include <sys/types.h>
+#include <sys/sysinfo.h>
 #include <po6/threads/mutex.h>
 #include <po6/net/location.h>
 #include <hyperdex/client.hpp>
@@ -48,6 +50,19 @@
 #include "db/del_obj.h"
 #include "db/node_entry.h"
 #include "db/hyper_stub.h"
+
+bool
+available_memory()
+{
+    struct sysinfo mem_info;
+    sysinfo(&mem_info);
+
+    float total = mem_info.totalram;
+    float avail = mem_info.freeram;
+    float used  = total - avail;
+
+    return (used/total < MaxMemory);
+}
 
 namespace db
 {
@@ -533,7 +548,8 @@ namespace db
                     }
 
                     entry.nodes.emplace_back(n);
-                    if (++nodes_in_memory[map_idx] > NodesPerMap) {
+                    //if (++nodes_in_memory[map_idx] > NodesPerMap) {
+                    if (!available_memory()) {
                         // evict a node when this node is released
                         n->to_evict = true;
                     }
@@ -744,7 +760,7 @@ namespace db
     shard :: node_evict(node *n, uint64_t map_idx)
     {
         const node_handle_t &node_handle = n->get_handle();
-        WDEBUG << "evicting node " << node_handle << std::endl;
+        //WDEBUG << "evicting node " << node_handle << std::endl;
         auto map_iter = nodes[map_idx].find(node_handle);
         assert(map_iter != nodes[map_idx].end());
 
@@ -784,6 +800,11 @@ namespace db
         while (true) {
             auto entry = node_queue_clock_hand[map_idx];
             node_queue_clock_hand[map_idx] = node_queue_clock_hand[map_idx]->next;
+
+            if (entry == node_queue_clock_hand[map_idx]) {
+                // single node in this node_map
+                break;
+            }
 
             if (entry != cur_entry && entry->present) {
                 if (entry->used) {
@@ -898,7 +919,8 @@ namespace db
             map_iter->second->nodes.emplace_back(new_node);
             map_iter->second->used = true;
         }
-        if (++nodes_in_memory[map_idx] > NodesPerMap) {
+        //if (++nodes_in_memory[map_idx] > NodesPerMap) {
+        if (!available_memory()) {
             new_node->to_evict = true;
         }
         node_map_mutexes[map_idx].unlock();
@@ -947,8 +969,10 @@ namespace db
         }
         std::shared_ptr<node_entry> new_entry;
         if (nodes_in_memory[map_idx] < NodesPerMap) {
+        //if (available_memory()) {
             new_entry = std::make_shared<node_entry>(n);
             new_node_entry(map_idx, new_entry);
+            new_entry->used = true;
             ++nodes_in_memory[map_idx];
             in_mem = true;
         } else {
@@ -1075,9 +1099,13 @@ namespace db
 
         std::shared_ptr<node_entry> entry = node_iter->second;
         if (entry->present) {
+            //entry->used = true;
             node *n = entry->nodes.front();
             n->add_edge_unique(e);
             found = true;
+            //if (!available_memory()) {
+            //    choose_node_to_evict(map_idx, entry);
+            //}
         }
         node_map_mutexes[map_idx].unlock();
 

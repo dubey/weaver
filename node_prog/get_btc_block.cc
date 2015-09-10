@@ -112,15 +112,16 @@ node_prog :: get_btc_block_node_program(node_prog::node &n,
                 n.get_client_node(params.block_node, true, true, true);
                 next.emplace_back(std::make_pair(db::coordinator, std::move(params)));
             } else {
-                std::string tx_list = "";
                 for (const auto &tx: txs_to_get) {
                     next.emplace_back(std::make_pair(tx, params));
+                    WDEBUG << "prop node prog from block=" << n.get_handle()
+                           << " to tx=" << tx.handle << " at shard=" << tx.loc
+                           << std::endl;
                     state.outstanding_count++;
-                    tx_list += tx.handle + " ";
                 }
-                WDEBUG << "prop node prog from block=" << n.get_handle()
-                       << " to " << next.size() << " transactions.  List of txs:" << std::endl
-                       << tx_list << std::endl;
+                WDEBUG << "sent node prog from block=" << n.get_handle()
+                       << " to " << next.size() << " transactions."
+                       << std::endl;
             }
         } else {
             WDEBUG << "at btc tx=" << n.get_handle()

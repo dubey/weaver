@@ -110,7 +110,7 @@ namespace db
             // concurrent access protected by mutex
             uint64_t g_load_chunk;
             std::unordered_set<uint32_t> g_loaded_elems;
-            std::map<node_handle_t, std::pair<uint64_t, uint64_t>> g_node_edge_id; // node handle -> (start edge id, edge count)
+            std::unordered_map<node_handle_t, std::pair<uint64_t, uint64_t>> g_node_edge_id; // node handle -> (start edge id, edge count)
             po6::threads::mutex g_bulk_load_mtx;
             po6::threads::cond g_chunk_cond;
 

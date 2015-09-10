@@ -486,19 +486,36 @@ hyper_stub :: add_index_no_loop(const node_handle_t &node_handle,
 }
 
 bool
+sort_ptr_pair_handle(std::pair<const node_handle_t, std::pair<uint64_t, uint64_t>> *lhs,
+                     std::pair<const node_handle_t, std::pair<uint64_t, uint64_t>> *rhs)
+{
+    return lhs->first < rhs->first;
+}
+
+bool
 hyper_stub :: flush_all_edge_ids()
 {
     WDEBUG << "flush edge id set, #nodes=" << g_node_edge_id.size() << std::endl;
 
-    for (const auto &p: g_node_edge_id) {
+    std::vector<std::pair<const node_handle_t, std::pair<uint64_t, uint64_t>>*> sorted_node_edge_id;
+    for (auto &p: g_node_edge_id) {
+        sorted_node_edge_id.emplace_back(&p);
+    }
+    std::sort(sorted_node_edge_id.begin(), sorted_node_edge_id.end(), sort_ptr_pair_handle);
+
+    for (auto p_ptr: sorted_node_edge_id) {
+        auto &p = *p_ptr;
         int64_t start_id = (int64_t)p.second.first;
         int64_t end_id = (int64_t)(p.second.first + p.second.second);
         if (!put_node_edge_id_set_no_loop(p.first, start_id, end_id)) {
             return false;
         }
     }
+
+    sorted_node_edge_id.clear();
+    sorted_node_edge_id = std::vector<std::pair<const node_handle_t, std::pair<uint64_t, uint64_t>>*>();
     g_node_edge_id.clear();
-    g_node_edge_id = std::map<node_handle_t, std::pair<uint64_t, uint64_t>>();
+    g_node_edge_id = std::unordered_map<node_handle_t, std::pair<uint64_t, uint64_t>>();
 
     return true;
 }

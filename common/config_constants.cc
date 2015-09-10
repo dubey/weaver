@@ -36,7 +36,8 @@ init_config_constants(const char *config_file_name)
     BulkLoadNodeAliasKey = "";
     BulkLoadEdgeIndexKey = "";
     BulkLoadEdgeHandlePrefix = "e";
-    NodesPerMap = UINT64_MAX;
+    NodesPerMap = 2;
+    MaxMemory = 0.5;
 
     FILE *config_file = nullptr;
     if (config_file_name != nullptr) {
@@ -89,6 +90,10 @@ init_config_constants(const char *config_file_name)
 
 #define PARSE_INT(X) \
     X = atoi((const char*)token.data.scalar.value); \
+    yaml_token_delete(&token);
+
+#define PARSE_FLOAT(X) \
+    X = atof((const char*)token.data.scalar.value); \
     yaml_token_delete(&token);
 
 #define PARSE_IPADDR(X) \
@@ -224,6 +229,11 @@ init_config_constants(const char *config_file_name)
                     PARSE_VALUE_SCALAR;
                     PARSE_INT(NodesPerMap);
 
+                } else if (strncmp((const char*)token.data.scalar.value, "max_memory", TOKEN_STRCMP_LEN(10)) == 0) {
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
+                    PARSE_FLOAT(MaxMemory);
+
                 } else {
                     WDEBUG << "unexpected key " << token.data.scalar.value << std::endl;
                 }
@@ -244,6 +254,7 @@ init_config_constants(const char *config_file_name)
 
 #undef PARSE_VALUE_SCALAR
 #undef PARSE_INT
+#undef PARSE_FLOAT
 #undef PARSE_BOOL
 #undef PARSE_CHAR
 #undef PARSE_IPADDR
@@ -258,8 +269,7 @@ init_config_constants(const char *config_file_name)
      || KronosIpaddr.empty()
      || UINT16_MAX == KronosPort
      || ServerManagerIpaddr.empty()
-     || UINT16_MAX == ServerManagerPort
-     || NodesPerMap < 1) {
+     || UINT16_MAX == ServerManagerPort) {
         return false;
     }
 
