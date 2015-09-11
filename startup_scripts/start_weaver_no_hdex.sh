@@ -64,7 +64,7 @@ ssh $hyperdex_coord_ipaddr 'bash -s' << EOF
     hyperdex coordinator -l $hyperdex_coord_ipaddr -p $hyperdex_coord_port > /dev/null 2>&1
 EOF
 fi
-sleep 3
+sleep 15
 
 num_daemons=${#hyperdex_daemons_ipaddr[*]}
 for i in $(seq 1 $num_daemons);
