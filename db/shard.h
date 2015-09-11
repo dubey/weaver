@@ -203,7 +203,7 @@ namespace db
             uint64_t max_load_time, bulk_load_num_shards;
             uint32_t load_count;
             std::vector<uint64_t> graph_load_time;
-            void bulk_load_persistent(hyper_stub &hs);
+            void bulk_load_persistent(hyper_stub &hs, bool call_hdex);
             void bulk_load_put_node(hyper_stub &hs,
                                     node *n,
                                     bool in_mem);
@@ -446,11 +446,13 @@ namespace db
     }
 
     inline void
-    shard :: bulk_load_persistent(db::hyper_stub &hs)
+    shard :: bulk_load_persistent(db::hyper_stub &hs, bool call_hdex)
     {
-        hs.loop_async_calls(true);
-        hs.flush_all_edge_ids();
-        hs.loop_async_calls(true);
+        if (call_hdex) {
+            hs.loop_async_calls(true);
+            hs.flush_all_edge_ids();
+            hs.loop_async_calls(true);
+        }
         hs.done_bulk_load();
     }
 

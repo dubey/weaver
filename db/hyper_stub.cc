@@ -514,8 +514,6 @@ hyper_stub :: flush_all_edge_ids()
 
     sorted_node_edge_id.clear();
     sorted_node_edge_id = std::vector<std::pair<const node_handle_t, std::pair<uint64_t, uint64_t>>*>();
-    g_node_edge_id.clear();
-    g_node_edge_id = std::unordered_map<node_handle_t, std::pair<uint64_t, uint64_t>>();
 
     return true;
 }
@@ -710,6 +708,8 @@ hyper_stub :: done_bulk_load()
     m_apes_pool.clear();
     m_apei_pool.clear();
     m_aai_pool.clear();
+    g_node_edge_id.clear();
+    g_node_edge_id = std::unordered_map<node_handle_t, std::pair<uint64_t, uint64_t>>();
 }
 
 #undef weaver_debug_

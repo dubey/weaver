@@ -337,6 +337,7 @@ struct load_graph_data
     int load_tid;
     int load_nthreads;
     bool btc_graph;
+    bool call_hdex;
     std::vector<std::shared_ptr<db::hyper_stub>> hstubs;
 };
 
@@ -353,6 +354,7 @@ struct load_xml_elem_static_args
     uint64_t edges_in_memory;
     uint64_t other_thread_elem_count;
     bool btc_graph;
+    bool call_hdex;
 
     load_xml_elem_static_args(const load_graph_data &data,
                               bool pdelim)
@@ -367,6 +369,7 @@ struct load_xml_elem_static_args
         , edges_in_memory(0)
         , other_thread_elem_count(0)
         , btc_graph(data.btc_graph)
+        , call_hdex(data.call_hdex)
     { }
 };
 
@@ -457,7 +460,11 @@ load_xml_node(pugi::xml_document &doc,
     bool already_exists = other_hstub.new_node(n->get_handle(), start_edge_idx);
     if (!already_exists) {
         bool in_mem = S->add_node_to_nodemap_bulk_load(n, map_idx);
-        S->bulk_load_put_node(hstub, n, in_mem);
+        if (static_args.call_hdex) {
+            S->bulk_load_put_node(hstub, n, in_mem);
+        } else if (!in_mem) {
+            S->permanent_node_delete(n);
+        }
 
         if (in_mem) {
             nodes_in_memory++;
@@ -515,7 +522,11 @@ check_node(const node_handle_t &node_handle,
     bool already_exists = other_hstub.new_node(n->get_handle(), start_edge_idx);
     assert(!already_exists);
     bool in_mem = S->add_node_to_nodemap_bulk_load(n, map_idx);
-    S->bulk_load_put_node(hstub, n, in_mem);
+    if (static_args.call_hdex) {
+        S->bulk_load_put_node(hstub, n, in_mem);
+    } else if (!in_mem) {
+        S->permanent_node_delete(n);
+    }
 
     if (in_mem) {
         nodes_in_memory++;
@@ -564,23 +575,27 @@ load_xml_edge(pugi::xml_document &doc,
     db::edge *e = S->create_edge_bulk_load(edge_handle, id1, loc1, zero_clk);
     bool in_mem = S->add_edge_to_node_bulk_load(e, id0, map_idx);
 
-    for (pugi::xml_node prop: edge.children("data")) {
-        std::string key = prop.attribute("key").value();
-        std::string value = prop.child_value();
+    if (in_mem || static_args.call_hdex) {
+        for (pugi::xml_node prop: edge.children("data")) {
+            std::string key = prop.attribute("key").value();
+            std::string value = prop.child_value();
 
-        if (!prop_delim || value.empty()) {
-            S->set_edge_property_bulk_load(e, key, value, zero_clk);
-        } else {
-            std::vector<std::string> values;
-            split(value, BulkLoadPropertyValueDelimiter, values);
-            for (std::string &v: values) {
-                S->set_edge_property_bulk_load(e, key, v, zero_clk);
+            if (!prop_delim || value.empty()) {
+                S->set_edge_property_bulk_load(e, key, value, zero_clk);
+            } else {
+                std::vector<std::string> values;
+                split(value, BulkLoadPropertyValueDelimiter, values);
+                for (std::string &v: values) {
+                    S->set_edge_property_bulk_load(e, key, v, zero_clk);
+                }
             }
         }
-    }
 
-    uint64_t edge_id = other_hstub.new_edge(id0);
-    S->bulk_load_put_edge(hstub, e, id0, edge_id, in_mem);
+        if (static_args.call_hdex) {
+            uint64_t edge_id = other_hstub.new_edge(id0);
+            S->bulk_load_put_edge(hstub, e, id0, edge_id, in_mem);
+        }
+    }
     
     if (in_mem) {
         edges_in_memory++;
@@ -724,7 +739,7 @@ load_graph(void *args)
                 }
                 */
             }
-            S->bulk_load_persistent(hstub);
+            S->bulk_load_persistent(hstub, data->call_hdex);
             break;
         }
 
@@ -837,7 +852,7 @@ load_graph(void *args)
 
             file.close();
 
-            S->bulk_load_persistent(hstub);
+            S->bulk_load_persistent(hstub, data->call_hdex);
 
             break;
         }
@@ -2589,6 +2604,7 @@ main(int argc, const char *argv[])
     long bulk_load_num_shards = 1;
     const char *log_file_name = nullptr;
     bool btc_graph = false;
+    bool call_hdex = true;
     // arg parsing borrowed from HyperDex
     e::argparser ap;
     ap.autohelp();
@@ -2619,6 +2635,9 @@ main(int argc, const char *argv[])
     ap.arg().long_name("btc-graph")
             .description("bulk loading btc graph")
             .set_true(&btc_graph).hidden();
+    ap.arg().long_name("no-call-hdex")
+            .description("do not perform HyperDex Warp ops while bulk loading, if data already exists in a running HyperDex Warp cluster")
+            .set_false(&call_hdex);
 
     if (!ap.parse(argc, argv) || ap.args_sz() != 0) {
         std::cerr << "args parsing failure" << std::endl;
@@ -2717,13 +2736,14 @@ main(int argc, const char *argv[])
             std::vector<load_graph_data> bulk_load_args(NUM_SHARD_THREADS);
             for (int i = 0; i < NUM_SHARD_THREADS; i++) {
                 load_graph_data &args = bulk_load_args[i];
-                args.format = format;
-                args.graph_file = graph_file;
-                args.num_shards = (uint64_t)bulk_load_num_shards;
-                args.load_tid = i;
-                args.load_nthreads = NUM_SHARD_THREADS;
-                args.btc_graph = btc_graph;
-                args.hstubs = hstubs;
+                args.format           = format;
+                args.graph_file       = graph_file;
+                args.num_shards       = (uint64_t)bulk_load_num_shards;
+                args.load_tid         = i;
+                args.load_nthreads    = NUM_SHARD_THREADS;
+                args.btc_graph        = btc_graph;
+                args.call_hdex        = call_hdex;
+                args.hstubs           = hstubs;
 
                 std::shared_ptr<pthread_t> t = std::make_shared<pthread_t>();
                 int rc = pthread_create(t.get(), nullptr, &load_graph, &args);
