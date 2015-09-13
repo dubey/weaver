@@ -86,6 +86,7 @@ namespace db
             // migration
             bool update_mapping(const node_handle_t &handle, uint64_t loc);
             bool recover_node(db::node &n);
+            bool call_get_node(db::node &n);
 
         private:
             bool done_op(async_call_ptr_t, int64_t op_id);
@@ -96,6 +97,7 @@ namespace db
 
             const uint64_t m_shard_id;
             const int m_thread_id;
+            std::unordered_map<int64_t, async_call_ptr_t> m_async_calls;
 
             // bulk load
             hyper_stub_pool<async_put_node> m_apn_pool;
@@ -103,7 +105,6 @@ namespace db
             hyper_stub_pool<async_put_edge> m_ape_pool;
             hyper_stub_pool<async_put_edge_id> m_apei_pool;
             hyper_stub_pool<async_add_index> m_aai_pool;
-            std::unordered_map<int64_t, async_call_ptr_t> m_async_calls;
             std::unique_ptr<e::buffer> m_restore_clk_buf;
             std::unique_ptr<e::buffer> m_last_clk_buf;
             // bulk load ds may be accessed by other threads outside member functions
@@ -113,6 +114,9 @@ namespace db
             std::unordered_map<node_handle_t, std::pair<uint64_t, uint64_t>> g_node_edge_id; // node handle -> (start edge id, edge count)
             po6::threads::mutex g_bulk_load_mtx;
             po6::threads::cond g_chunk_cond;
+
+            // shard funcs
+            po6::threads::mutex m_shard_mtx;
 
             // debug
             std::list<std::pair<uint64_t, size_t>> m_done_op_stats;

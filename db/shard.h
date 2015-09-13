@@ -282,11 +282,12 @@ namespace db
             uint64_t watch_set_piggybacks;
 
             // fault tolerance
-        public:
+        private:
             std::vector<hyper_stub*> hstub;
             uint64_t min_prog_epoch; // protected by node_prog_state_mutex
             std::unordered_set<uint64_t> done_tx_ids;
             po6::threads::mutex done_tx_mtx;
+        public:
             bool check_done_tx(uint64_t tx_id);
             void cleanup_done_txs(const std::vector<uint64_t> &clean_txs);
             void restore_backup();

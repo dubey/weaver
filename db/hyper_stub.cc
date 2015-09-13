@@ -96,12 +96,12 @@ hyper_stub :: hyper_stub_pool<T> :: release(std::shared_ptr<T> ptr)
 hyper_stub :: hyper_stub(uint64_t sid, int tid)
     : m_shard_id(sid)
     , m_thread_id(tid)
+    , m_async_calls()
     , m_apn_pool(PUT_NODE)
     , m_apes_pool(PUT_EDGE_SET)
     , m_ape_pool(PUT_EDGE)
     , m_apei_pool(PUT_EDGE_ID)
     , m_aai_pool(ADD_INDEX)
-    , m_async_calls()
     , m_restore_clk_buf(nullptr)
     , m_last_clk_buf(nullptr)
     , g_load_chunk(0)
@@ -109,6 +109,7 @@ hyper_stub :: hyper_stub(uint64_t sid, int tid)
     , g_node_edge_id()
     , g_bulk_load_mtx()
     , g_chunk_cond(&g_bulk_load_mtx)
+    , m_shard_mtx()
     , m_done_op_stats()
     , m_timer()
     , m_print_op_stats_counter(0)
@@ -236,6 +237,23 @@ hyper_stub :: recover_node(db::node &n)
     } else {
         return false;
     }
+}
+
+bool
+hyper_stub :: get_node_no_loop(db::node *n)
+{
+    m_shard_mtx.lock();
+
+    agn_ptr_t agn = std::make_shared<async_get_node>();
+    bool success = get_node_async(agn,
+                                  n,
+                                  async_calls,
+                                  true,
+                                  false);
+
+    m_shard_mtx.unlock();
+
+    return success;
 }
 
 void

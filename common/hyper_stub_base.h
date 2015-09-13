@@ -48,7 +48,8 @@ enum async_call_type
     PUT_EDGE,
     PUT_EDGE_ID,
     ADD_INDEX,
-    DEL
+    DEL,
+    GET_NODE
 };
 
 const char*
@@ -134,6 +135,16 @@ class hyper_stub_base
             async_del() { type = DEL; }
         };
 
+        struct async_get_node : public async_call
+        {
+            db::node *n;
+            const hyperdex_client_attribute *cl_attr;
+            size_t num_attrs;
+            bool recreate_edges;
+
+            async_get_node() { type = GET_NODE; }
+        };
+
         using async_call_ptr_t = std::shared_ptr<hyper_stub_base::async_call>;
         using apn_ptr_t = std::shared_ptr<hyper_stub_base::async_put_node>;
         using apes_ptr_t = std::shared_ptr<hyper_stub_base::async_put_edge_set>;
@@ -141,6 +152,7 @@ class hyper_stub_base
         using apei_ptr_t = std::shared_ptr<hyper_stub_base::async_put_edge_id>;
         using aai_ptr_t = std::shared_ptr<hyper_stub_base::async_add_index>;
         using ad_ptr_t = std::shared_ptr<hyper_stub_base::async_del>;
+        using agn_ptr_t = std::shared_ptr<hyper_stub_base::async_get_node>;
 
         void debug_print_async_call(async_call_ptr_t);
 
@@ -226,6 +238,11 @@ class hyper_stub_base
         bool del_no_loop(const char *space,
                          const char *key, size_t key_sz,
                          int64_t &op_id, hyperdex_client_returncode &status);
+        bool get_no_loop(const char* space,
+                         const char *key, size_t key_sz,
+                         const hyperdex_client_attribute **cl_attr, size_t *num_attrs,
+                         int64_t &op_id, hyperdex_client_returncode &status,
+                         bool tx);
         bool map_call(hyper_map_tx_func h,
             const char *space,
             const char *key, size_t key_sz,
@@ -356,6 +373,11 @@ class hyper_stub_base
                        const char *key, size_t key_sz,
                        const char *space,
                        std::unordered_map<int64_t, async_call_ptr_t> &async_calls);
+        bool get_node_async(agn_ptr_t agn,
+                            db::node *n,
+                            std::unordered_map<int64_t, async_call_ptr_t>&,
+                            bool recreate_edges,
+                            bool tx);
 
         template <typename T> void prepare_buffer(const T &t, std::unique_ptr<e::buffer> &buf);
         template <typename T> void unpack_buffer(const char *buf, uint64_t buf_sz, T &t);
@@ -373,6 +395,9 @@ class hyper_stub_base
         // edge ids
         void prepare_buffer(const std::set<int64_t>&, std::unique_ptr<e::buffer>&);
         void unpack_buffer(const char *buf, uint64_t buf_sz, std::set<int64_t>&);
+
+        // general functions
+        int hd_poll_fd();
 
     protected:
         // pseudo random number gen for edge ids, seeded by /dev/urandom

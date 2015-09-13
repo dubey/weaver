@@ -261,6 +261,33 @@ hyper_stub_base :: call_no_loop(hyper_tx_func h,
 }
 
 bool
+hyper_stub_base :: get_no_loop(const char* space,
+                               const char *key, size_t key_sz,
+                               const hyperdex_client_attribute **cl_attr, size_t *num_attrs,
+                               int64_t &op_id, hyperdex_client_returncode &status,
+                               bool tx)
+{
+    int success_calls = 0;
+    bool success = true;
+
+    if (tx) {
+        HYPERDEX_CALL7(hyperdex_client_xact_get, m_hyper_tx,
+                       space, key, key_sz,
+                       &status,
+                       cl_attr, num_attrs,
+                       op_id, status, success, success_calls);
+    } else {
+        HYPERDEX_CALL7(hyperdex_client_get, m_cl,
+                       space, key, key_sz,
+                       &status,
+                       cl_attr, num_attrs,
+                       op_id, status, success, success_calls);
+    }
+
+    return success;
+}
+
+bool
 hyper_stub_base :: del_no_loop(const char* space,
                                const char *key, size_t key_sz,
                                int64_t &op_id,
@@ -1852,6 +1879,37 @@ hyper_stub_base :: del_async(ad_ptr_t ad,
     return success;
 }
 
+bool
+hyper_stub_base :: get_node_async(agn_ptr_t agn,
+                                  db::node *n,
+                                  std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                                  bool recreate_edges,
+                                  bool tx)
+{
+    agn->tx             = tx;
+    agn->n              = n;
+    agn->recreate_edges = recreate_edges;
+
+    bool success;
+    success = get_no_loop(node_space,
+                          n->get_handle().c_str(), n->get_handle().size(),
+                          &agn->cl_attr, &agn->num_attrs,
+                          agn->op_id, agn->status,
+                          tx);
+
+    if (success) {
+        async_calls[agn->op_id] = agn;
+    }
+
+    if (!success) {
+        WDEBUG << "hyperdex_client_put failed, op_id=" << agn->op_id
+               << ", call_code=" << hyperdex_client_returncode_to_string(agn->status) << std::endl;
+        WDEBUG << "node=" << agn->n->get_handle() << std::endl;
+    }
+
+    return success;
+}
+
 
 
 
@@ -2062,6 +2120,13 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz,
         unpack_uint64(unpacker, ui);
         set.emplace((int64_t)ui);
     }
+}
+
+
+int
+hyper_stub_base :: hd_poll_fd()
+{
+    return hyperdex_client_poll_fd(m_cl);
 }
 
 const char*
