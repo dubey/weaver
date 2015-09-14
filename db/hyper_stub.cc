@@ -25,11 +25,6 @@
 #define INITIAL_POOL_SZ (OUTSTANDING_HD_OPS*3)
 
 using db::hyper_stub;
-//using hyper_stub::hyper_stub_pool;
-//using db::apn_ptr_t;
-//using db::apes_ptr_t;
-//using db::ape_ptr_t;
-//using db::aai_ptr_t;
 
 template <typename T>
 hyper_stub :: hyper_stub_pool<T> :: hyper_stub_pool(async_call_type t)
