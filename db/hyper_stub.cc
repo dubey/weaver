@@ -115,6 +115,12 @@ hyper_stub :: hyper_stub(uint64_t sid, int tid)
     , m_print_op_stats_counter(0)
 { }
 
+int
+hyper_stub :: fd()
+{
+    return hyperdex_client_poll_fd(m_cl);
+}
+
 void
 hyper_stub :: restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *nodes,
     /*XXX std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,*/
@@ -720,10 +726,9 @@ hyper_stub :: loop_get_node(db::node **n)
         if (loop_code == HYPERDEX_CLIENT_NONEPENDING) {
             WDEBUG << "#async_calls=" << m_async_calls.size() << std::endl;
             m_async_calls.clear();
-        } else {
-            print_errors();
-            assert(false);
         }
+        print_errors();
+        assert(false);
     } else {
         auto find_iter = m_async_calls.find(op_id);
         if (find_iter == m_async_calls.end()) {

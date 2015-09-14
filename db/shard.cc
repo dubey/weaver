@@ -21,6 +21,8 @@
 #include <e/buffer.h>
 #include <pugixml.hpp>
 #include <pthread.h>
+#include <sys/types.h>
+#include <poll.h>
 
 #define weaver_debug_
 #include "common/weaver_constants.h"
@@ -1518,8 +1520,8 @@ inline void node_prog_loop(uint64_t tid,
                 // prog loop will continue once node has been recovered
                 // return now
                 WDEBUG << "async recover node=" << node_handle << std::endl;
-                db::async_nodeprog_state delayed_prog = S->loop_recover_node(tid, time_oracle);
-                node_prog::programs[delayed_prog.type]->continue_execution(tid, time_oracle, delayed_prog);
+                //db::async_nodeprog_state delayed_prog = S->loop_recover_node(tid, time_oracle);
+                //node_prog::programs[delayed_prog.type]->continue_execution(tid, time_oracle, delayed_prog);
                 return;
             }
         }
@@ -2277,15 +2279,10 @@ block_signals()
     return true;
 }
 
-// server msg recv loop for the shard server
-void*
-server_loop(void *args)
+// server busybee msg recv loop for the shard server
+void
+server_loop_busybee(uint64_t thread_id)
 {
-    uint64_t thread_id = (uint64_t)args;
-    if (!block_signals()) {
-        return nullptr;
-    }
-
     uint64_t vt_id, req_id;
     enum message::msg_type mtype;
     std::unique_ptr<message::message> rec_msg;
@@ -2300,155 +2297,201 @@ server_loop(void *args)
     enum db::queue_order tx_order;
     order::oracle *time_oracle = S->time_oracles[thread_id];
 
-    while (true) {
+    S->comm.quiesce_thread(thread_id);
+    rec_msg.reset(new message::message());
+    bb_code = S->comm.recv(thread_id, &rec_msg->buf);
 
-        S->comm.quiesce_thread(thread_id);
-        rec_msg.reset(new message::message());
-        bb_code = S->comm.recv(thread_id, &rec_msg->buf);
+    if (bb_code != BUSYBEE_SUCCESS && bb_code != BUSYBEE_TIMEOUT) {
+        return;
+    }
 
-        if (bb_code != BUSYBEE_SUCCESS && bb_code != BUSYBEE_TIMEOUT) {
-            continue;
-        }
+    if (bb_code == BUSYBEE_SUCCESS) {
+        // exec or enqueue this request
+        auto unpacker = rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE);
+        unpack_buffer(unpacker, mtype);
+        rec_msg->change_type(mtype);
+        vclk.clock.clear();
 
-        if (bb_code == BUSYBEE_SUCCESS) {
-            // exec or enqueue this request
-            auto unpacker = rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE);
-            unpack_buffer(unpacker, mtype);
-            rec_msg->change_type(mtype);
-            vclk.clock.clear();
+        switch (mtype) {
+            case message::TX_INIT: {
+                rec_msg->unpack_partial_message(message::TX_INIT, vt_id, vclk, qts, txtype, tx_id);
+                assert(vclk.clock.size() == ClkSz);
+                assert(txtype != transaction::FAIL);
 
-            switch (mtype) {
-                case message::TX_INIT: {
-                    rec_msg->unpack_partial_message(message::TX_INIT, vt_id, vclk, qts, txtype, tx_id);
-                    assert(vclk.clock.size() == ClkSz);
-                    assert(txtype != transaction::FAIL);
+                if (txtype == transaction::NOP) {
+                    mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
+                    qreq = new db::queued_request(qts, vclk, nop, mwrap);
+                    S->qm.enqueue_write_request(vt_id, qreq);
+                } else {
+                    if (S->check_done_tx(tx_id)) {
+                        // tx already executed, this must have been resent because of vt failure
+                        S->increment_qts(vt_id, 1);
 
-                    if (txtype == transaction::NOP) {
+                        message::message conf_msg;
+                        conf_msg.prepare_message(message::TX_DONE, tx_id, shard_id);
+                        S->comm.send(vt_id, conf_msg.buf);
+                    } else {
                         mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
-                        qreq = new db::queued_request(qts, vclk, nop, mwrap);
-                        S->qm.enqueue_write_request(vt_id, qreq);
-                    } else {
-                        if (S->check_done_tx(tx_id)) {
-                            // tx already executed, this must have been resent because of vt failure
-                            S->increment_qts(vt_id, 1);
-
-                            message::message conf_msg;
-                            conf_msg.prepare_message(message::TX_DONE, tx_id, shard_id);
-                            S->comm.send(vt_id, conf_msg.buf);
+                        tx_order = S->qm.check_wr_request(vclk, qts);
+                        assert(tx_order == db::PRESENT || tx_order == db::FUTURE);
+                        if (tx_order == db::PRESENT) {
+                            mwrap->time_oracle = time_oracle;
+                            unpack_tx_request(thread_id, mwrap);
                         } else {
-                            mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
-                            tx_order = S->qm.check_wr_request(vclk, qts);
-                            assert(tx_order == db::PRESENT || tx_order == db::FUTURE);
-                            if (tx_order == db::PRESENT) {
-                                mwrap->time_oracle = time_oracle;
-                                unpack_tx_request(thread_id, mwrap);
-                            } else {
-                                // enqueue for future execution
-                                qreq = new db::queued_request(qts, vclk, unpack_tx_request, mwrap);
-                                S->qm.enqueue_write_request(vt_id, qreq);
-                            }
+                            // enqueue for future execution
+                            qreq = new db::queued_request(qts, vclk, unpack_tx_request, mwrap);
+                            S->qm.enqueue_write_request(vt_id, qreq);
                         }
                     }
-
-                    break;
                 }
 
-                case message::NODE_PROG: {
-                    rec_msg->unpack_partial_message(message::NODE_PROG, pType, vt_id, vclk, req_id);
-                    assert(vclk.clock.size() == ClkSz);
+                break;
+            }
 
-                    mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
-                    if (S->qm.check_rd_request(vclk.clock)) {
-                        mwrap->time_oracle = time_oracle;
-                        unpack_node_program(thread_id, mwrap);
-                    } else {
-                        qreq = new db::queued_request(vclk.get_clock(), vclk, unpack_node_program, mwrap);
-                        S->qm.enqueue_read_request(vt_id, qreq);
-                    }
-                    break;
-                }
+            case message::NODE_PROG: {
+                rec_msg->unpack_partial_message(message::NODE_PROG, pType, vt_id, vclk, req_id);
+                assert(vclk.clock.size() == ClkSz);
 
-                case message::NODE_CONTEXT_FETCH:
-                case message::NODE_CONTEXT_REPLY: {
-                    void (*f)(uint64_t, db::message_wrapper*);
-                    if (mtype == message::NODE_CONTEXT_FETCH) {
-                        f = unpack_and_fetch_context;
-                    } else { // NODE_CONTEXT_REPLY
-                        f = unpack_context_reply;
-                    }
-                    rec_msg->unpack_partial_message(mtype, pType, req_id, vt_id, vclk);
-                    assert(vclk.clock.size() == ClkSz);
-                    mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
-                    if (S->qm.check_rd_request(vclk.clock)) {
-                        mwrap->time_oracle = time_oracle;
-                        f(thread_id, mwrap);
-                    } else {
-                        qreq = new db::queued_request(vclk.get_clock(), vclk, f, mwrap);
-                        S->qm.enqueue_read_request(vt_id, qreq);
-                    }
-                    break;
-                }
-
-                case message::MIGRATE_SEND_NODE:
-                case message::MIGRATED_NBR_UPDATE:
-                case message::MIGRATED_NBR_ACK:
-                    mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
+                mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
+                if (S->qm.check_rd_request(vclk.clock)) {
                     mwrap->time_oracle = time_oracle;
-                    unpack_migrate_request(thread_id, mwrap);
-                    break;
+                    unpack_node_program(thread_id, mwrap);
+                } else {
+                    qreq = new db::queued_request(vclk.get_clock(), vclk, unpack_node_program, mwrap);
+                    S->qm.enqueue_read_request(vt_id, qreq);
+                }
+                break;
+            }
 
-                case message::MIGRATION_TOKEN:
-                    S->migration_mutex.lock();
-                    rec_msg->unpack_message(mtype, S->migr_token_hops, S->migr_num_shards, S->migr_vt);
-                    S->migr_token = true;
-                    S->migrated = false;
-                    S->migration_mutex.unlock();
-                    break;
+            case message::NODE_CONTEXT_FETCH:
+            case message::NODE_CONTEXT_REPLY: {
+                void (*f)(uint64_t, db::message_wrapper*);
+                if (mtype == message::NODE_CONTEXT_FETCH) {
+                    f = unpack_and_fetch_context;
+                } else { // NODE_CONTEXT_REPLY
+                    f = unpack_context_reply;
+                }
+                rec_msg->unpack_partial_message(mtype, pType, req_id, vt_id, vclk);
+                assert(vclk.clock.size() == ClkSz);
+                mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
+                if (S->qm.check_rd_request(vclk.clock)) {
+                    mwrap->time_oracle = time_oracle;
+                    f(thread_id, mwrap);
+                } else {
+                    qreq = new db::queued_request(vclk.get_clock(), vclk, f, mwrap);
+                    S->qm.enqueue_read_request(vt_id, qreq);
+                }
+                break;
+            }
 
-                case message::LOADED_GRAPH: {
-                    uint64_t load_time, load_shard;
-                    rec_msg->unpack_message(message::LOADED_GRAPH, load_shard, load_time);
+            case message::MIGRATE_SEND_NODE:
+            case message::MIGRATED_NBR_UPDATE:
+            case message::MIGRATED_NBR_ACK:
+                mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
+                mwrap->time_oracle = time_oracle;
+                unpack_migrate_request(thread_id, mwrap);
+                break;
 
-                    S->graph_load_mutex.lock();
+            case message::MIGRATION_TOKEN:
+                S->migration_mutex.lock();
+                rec_msg->unpack_message(mtype, S->migr_token_hops, S->migr_num_shards, S->migr_vt);
+                S->migr_token = true;
+                S->migrated = false;
+                S->migration_mutex.unlock();
+                break;
 
-                    if (load_time > S->max_load_time) {
-                        S->max_load_time = load_time;
-                    }
+            case message::LOADED_GRAPH: {
+                uint64_t load_time, load_shard;
+                rec_msg->unpack_message(message::LOADED_GRAPH, load_shard, load_time);
 
-                    if (S->graph_load_time.empty()) {
-                        S->graph_load_time.resize(S->bulk_load_num_shards, 0);
-                    }
-                    uint64_t load_shard_idx = load_shard - ShardIdIncr;
-                    S->graph_load_time[load_shard_idx] = load_time/MEGA;
+                S->graph_load_mutex.lock();
 
-                    if (++S->load_count == S->bulk_load_num_shards) {
-                        WDEBUG << "Loaded graph on all shards, max time = " << (S->max_load_time/MEGA) << " ms." << std::endl;
-                        WDEBUG << "Shardwise times:" << std::endl;
-                        for (uint64_t i = 0; i < S->bulk_load_num_shards; i++) {
-                            WDEBUG << "Shard " << (i+ShardIdIncr)
-                                   << " = " << S->graph_load_time[i] << " ms." << std::endl;
-                        }
-                    } else {
-                        WDEBUG << "Loaded graph on " << S->load_count << " shards, current time "
-                                << (S->max_load_time/MEGA) << " ms." << std::endl;
-                    }
-
-                    S->graph_load_mutex.unlock();
-
-                    break;
+                if (load_time > S->max_load_time) {
+                    S->max_load_time = load_time;
                 }
 
-                case message::EXIT_WEAVER:
-                    exit(0);
-                    
-                default:
-                    WDEBUG << "unexpected msg type " << message::to_string(mtype) << std::endl;
+                if (S->graph_load_time.empty()) {
+                    S->graph_load_time.resize(S->bulk_load_num_shards, 0);
+                }
+                uint64_t load_shard_idx = load_shard - ShardIdIncr;
+                S->graph_load_time[load_shard_idx] = load_time/MEGA;
+
+                if (++S->load_count == S->bulk_load_num_shards) {
+                    WDEBUG << "Loaded graph on all shards, max time = " << (S->max_load_time/MEGA) << " ms." << std::endl;
+                    WDEBUG << "Shardwise times:" << std::endl;
+                    for (uint64_t i = 0; i < S->bulk_load_num_shards; i++) {
+                        WDEBUG << "Shard " << (i+ShardIdIncr)
+                               << " = " << S->graph_load_time[i] << " ms." << std::endl;
+                    }
+                } else {
+                    WDEBUG << "Loaded graph on " << S->load_count << " shards, current time "
+                            << (S->max_load_time/MEGA) << " ms." << std::endl;
+                }
+
+                S->graph_load_mutex.unlock();
+
+                break;
+            }
+
+            case message::EXIT_WEAVER:
+                exit(0);
+                
+            default:
+                WDEBUG << "unexpected msg type " << message::to_string(mtype) << std::endl;
+        }
+    }
+
+    // execute all queued requests that can be executed now
+    // will break from loop when no more requests can be executed, in which case we need to recv
+    while (S->qm.exec_queued_request(thread_id, time_oracle));
+}
+
+// event on hyperdex client needs to be processed
+void
+server_loop_hyperdex(uint64_t thread_id)
+{
+    order::oracle *time_oracle = S->time_oracles[thread_id];
+    db::async_nodeprog_state delayed_prog = S->loop_recover_node(thread_id,
+                                                                 time_oracle);
+    WDEBUG << "recovered node=" << delayed_prog.n->get_handle() << std::endl;
+    node_prog::programs[delayed_prog.type]->continue_execution(thread_id,
+                                                               time_oracle,
+                                                               delayed_prog);
+}
+
+void*
+server_loop(void *args)
+{
+    uint64_t thread_id = (uint64_t)args;
+    if (!block_signals()) {
+        return nullptr;
+    }
+
+    pollfd pfds[2];
+    pfds[0].fd      = S->comm.fd();
+    pfds[0].events  = POLLIN|POLLOUT|POLLERR|POLLHUP;
+    pfds[1].fd      = S->hstub_fd(thread_id);
+    pfds[1].events  = POLLIN|POLLOUT|POLLERR|POLLHUP;
+
+    while (true) {
+        pfds[0].revents = 0;
+        pfds[1].revents = 0;
+
+        int count = poll(pfds, 2, -1);
+
+        if (count < 0) {
+            WDEBUG << "poll failed, error=" << po6::strerror(errno) << std::endl;
+            return nullptr;
+        } else if (count == 0) {
+            WDEBUG << "poll timeout" << std::endl;
+        } else {
+            if (pfds[0].revents) {
+                server_loop_busybee(thread_id);
+            }
+            if (pfds[1].revents) {
+                server_loop_hyperdex(thread_id);
             }
         }
-
-        // execute all queued requests that can be executed now
-        // will break from loop when no more requests can be executed, in which case we need to recv
-        while (S->qm.exec_queued_request(thread_id, time_oracle));
     }
 }
 

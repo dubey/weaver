@@ -306,6 +306,7 @@ namespace db
             std::unordered_set<uint64_t> done_tx_ids;
             po6::threads::mutex done_tx_mtx;
         public:
+            int hstub_fd(uint64_t tid);
             bool check_done_tx(uint64_t tx_id);
             void cleanup_done_txs(const std::vector<uint64_t> &clean_txs);
             void restore_backup();
@@ -1770,6 +1771,12 @@ namespace db
 
 
     // Fault tolerance
+
+    inline int
+    shard :: hstub_fd(uint64_t tid)
+    {
+        return hstub[tid]->fd();
+    }
 
     inline bool
     shard :: check_done_tx(uint64_t tx_id)

@@ -396,9 +396,6 @@ class hyper_stub_base
         void prepare_buffer(const std::set<int64_t>&, std::unique_ptr<e::buffer>&);
         void unpack_buffer(const char *buf, uint64_t buf_sz, std::set<int64_t>&);
 
-        // general functions
-        int hd_poll_fd();
-
     protected:
         // pseudo random number gen for edge ids, seeded by /dev/urandom
         uint64_t m_gen_seed;

@@ -66,6 +66,7 @@ class comm_wrapper
         ~comm_wrapper();
         void reconfigure(configuration &config, bool to_pause=true, uint64_t *num_active_vts=nullptr);
         std::shared_ptr<po6::net::location> get_loc() { return loc; }
+        int fd() { return bb->poll_fd(); }
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
         busybee_returncode send(uint64_t send_to, std::auto_ptr<e::buffer> msg);

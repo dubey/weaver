@@ -56,6 +56,7 @@ namespace db
             };
 
             hyper_stub(uint64_t sid, int tid);
+            int fd();
             void restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *nodes,
                 /*XXX std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,*/
                 po6::threads::mutex *shard_mutexes);

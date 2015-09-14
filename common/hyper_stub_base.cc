@@ -2123,12 +2123,6 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz,
 }
 
 
-int
-hyper_stub_base :: hd_poll_fd()
-{
-    return hyperdex_client_poll_fd(m_cl);
-}
-
 const char*
 async_call_type_to_string(async_call_type t)
 {

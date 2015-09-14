@@ -19,7 +19,7 @@
 //#define NUM_SHARD_THREADS 128
 
 #define NUM_NODE_MAPS 64
-#define SHARD_MSGRECV_TIMEOUT -1 // busybee recv timeout (ms) for shard worker threads
+#define SHARD_MSGRECV_TIMEOUT 0 // busybee recv timeout (ms) for shard worker threads
 
 #define BATCH_MSG_SIZE 1 // 1 == no batching
 
