@@ -247,7 +247,7 @@ hyper_stub :: get_node_no_loop(db::node *n)
     agn_ptr_t agn = std::make_shared<async_get_node>();
     bool success = get_node_async(agn,
                                   n,
-                                  async_calls,
+                                  m_async_calls,
                                   true,
                                   false);
 
@@ -702,6 +702,70 @@ hyper_stub :: loop_async_calls(bool flush)
     return success;
 }
 
+bool
+hyper_stub :: loop_get_node(db::node **n)
+{
+    m_shard_mtx.lock();
+
+    *n = nullptr;
+    bool success = true;
+    int64_t op_id;
+    hyperdex_client_returncode loop_code;
+
+    loop(false, op_id, loop_code);
+
+    if (op_id < 0) {
+        WDEBUG << "hyperdex_client_loop failed, op_id=" << op_id
+               << ", loop_code=" << hyperdex_client_returncode_to_string(loop_code) << std::endl;
+        if (loop_code == HYPERDEX_CLIENT_NONEPENDING) {
+            WDEBUG << "#async_calls=" << m_async_calls.size() << std::endl;
+            m_async_calls.clear();
+        } else {
+            print_errors();
+            assert(false);
+        }
+    } else {
+        auto find_iter = m_async_calls.find(op_id);
+        if (find_iter == m_async_calls.end()) {
+            WDEBUG << "hyperdex_client_loop returned op_id=" << op_id
+                   << " and loop_code=" << hyperdex_client_returncode_to_string(loop_code)
+                   << " which was not found in m_async_calls_map." << std::endl;
+            print_errors();
+            assert(false);
+        }
+
+        async_call_ptr_t ac_ptr = find_iter->second;
+        switch (ac_ptr->status) {
+            case HYPERDEX_CLIENT_SUCCESS: {
+                assert(ac_ptr->type == GET_NODE);
+                agn_ptr_t agn = std::static_pointer_cast<async_get_node>(ac_ptr);
+                m_async_calls.erase(op_id);
+
+                success = recreate_node(agn->cl_attr, *agn->n);
+                if (success && agn->recreate_edges) {
+                    success = get_node_edges(*agn->n, agn->tx);
+                }
+                hyperdex_client_destroy_attrs(agn->cl_attr, agn->num_attrs);
+
+                *n = agn->n;
+                break;
+            }
+
+            default:
+                WDEBUG << "Unexpected hyperdex op code, here are some details." << std::endl;
+                WDEBUG << "type=" << async_call_type_to_string(ac_ptr->type)
+                       << ", call_code=" << hyperdex_client_returncode_to_string(ac_ptr->status) << std::endl;
+                print_errors();
+                assert(false);
+        }
+    }
+
+    m_shard_mtx.unlock();
+
+    return success;
+}
+
+
 // prevent too many outstanding requests
 void
 hyper_stub :: possibly_flush()
@@ -710,11 +774,17 @@ hyper_stub :: possibly_flush()
 }
 
 void
+hyper_stub :: print_errors()
+{
+    WDEBUG << "error message: " << hyperdex_client_error_message(m_cl) << std::endl;
+    WDEBUG << "error loc: " << hyperdex_client_error_location(m_cl) << std::endl;
+}
+
+void
 hyper_stub :: abort_bulk_load()
 {
     WDEBUG << "Aborting bulk load now." << std::endl;
-    WDEBUG << "error message: " << hyperdex_client_error_message(m_cl) << std::endl;
-    WDEBUG << "error loc: " << hyperdex_client_error_location(m_cl) << std::endl;
+    print_errors();
     assert(false);
 }
 

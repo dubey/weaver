@@ -1344,16 +1344,17 @@ unpack_and_fetch_context(uint64_t tid, db::message_wrapper *request)
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 struct fetch_state
 {
-    node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> prog_state;
+    std::shared_ptr<node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType>> prog_state;
     po6::threads::mutex monitor;
     uint64_t replies_left;
     bool cache_valid;
 
-    fetch_state(node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> & copy_from)
-        : prog_state(copy_from.clone_without_start_node_params()), cache_valid(false) { }
+    fetch_state(node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> &copy_from)
+        : prog_state(new node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType>(copy_from.clone_without_start_node_params()))
+        , cache_valid(false) { }
 
     // delete standard copy onstructors
-    fetch_state (const fetch_state&) = delete;
+    fetch_state(const fetch_state&) = delete;
     fetch_state& operator=(fetch_state const&) = delete;
 };
 
@@ -1379,7 +1380,7 @@ inline bool cache_lookup(db::node*& node_to_check,
         std::shared_ptr<vc::vclock> time_cached(entry.clk);
         std::shared_ptr<std::vector<db::remote_node>> watch_set = entry.watch_set;
 
-        auto state = get_state_if_exists(*node_to_check, np.req_id, np.prog_type_recvd);
+        auto state = get_state_if_exists(*node_to_check, np.req_id, np.m_type);
         if (state != nullptr && state->contexts_found.find(np.req_id) != state->contexts_found.end()) {
             np.cache_value.reset(new node_prog::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
 #ifdef weaver_debug_
@@ -1405,11 +1406,11 @@ inline bool cache_lookup(db::node*& node_to_check,
 
         S->node_prog_running_states_mutex.lock();
         if (S->node_prog_running_states.find(cache_tuple) != S->node_prog_running_states.end()) {
-            fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (fetch_state<ParamsType, NodeStateType, CacheValueType> *) S->node_prog_running_states[cache_tuple];
+            fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (fetch_state<ParamsType, NodeStateType, CacheValueType> *)S->node_prog_running_states[cache_tuple];
             fstate->monitor.lock(); // maybe move up
             S->node_prog_running_states_mutex.unlock();
             assert(fstate->replies_left > 0);
-            fstate->prog_state.start_node_params.push_back(cur_node_params);
+            fstate->prog_state->start_node_params.push_back(cur_node_params);
             fstate->monitor.unlock();
 
             S->release_node(node_to_check);
@@ -1448,10 +1449,10 @@ inline bool cache_lookup(db::node*& node_to_check,
         }
 
         fstate->replies_left = contexts_to_fetch.size();
-        fstate->prog_state.cache_value.swap(future_cache_response);
-        fstate->prog_state.start_node_params.push_back(cur_node_params);
+        fstate->prog_state->cache_value.swap(future_cache_response);
+        fstate->prog_state->start_node_params.push_back(cur_node_params);
         fstate->cache_valid = true;
-        assert(fstate->prog_state.start_node_params.size() == 1);
+        assert(fstate->prog_state->start_node_params.size() == 1);
         fstate->monitor.unlock();
 
         uint64_t num_shards = get_num_shards();
@@ -1460,7 +1461,7 @@ inline bool cache_lookup(db::node*& node_to_check,
                 auto &context_list = contexts_to_fetch[i];
                 assert(context_list.size() > 0);
                 std::unique_ptr<message::message> m(new message::message());
-                m->prepare_message(message::NODE_CONTEXT_FETCH, np.prog_type_recvd, np.req_id, np.vt_id, *np.req_vclock, *time_cached, cache_tuple, context_list, S->shard_id);
+                m->prepare_message(message::NODE_CONTEXT_FETCH, np.m_type, np.req_id, np.vt_id, *np.req_vclock, *time_cached, cache_tuple, context_list, S->shard_id);
                 S->comm.send(i, m->buf);
             }
         }
@@ -1470,22 +1471,19 @@ inline bool cache_lookup(db::node*& node_to_check,
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 inline void node_prog_loop(uint64_t tid,
-    typename node_prog::node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type func,
-    node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> &np,
-    order::oracle *time_oracle)
+                           std::shared_ptr<node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType>> np_ptr,
+                           order::oracle *time_oracle,
+                           db::node *first_node)
 {
     assert(time_oracle != nullptr);
 
+    auto &np = *np_ptr;
     message::message out_msg;
-    // these are the node programs that will be propagated onwards
-    std::unordered_map<uint64_t, std::deque<std::pair<node_handle_t, ParamsType>>> batched_node_progs;
     // node state function
     std::function<NodeStateType&()> node_state_getter;
     std::function<void(std::shared_ptr<CacheValueType>,
                        std::shared_ptr<std::vector<db::remote_node>>,
                        cache_key_t)> add_cache_func;
-
-    std::vector<node_version_t> nodes_that_created_state;
 
     node_handle_t node_handle;
     bool done_request = false;
@@ -1498,7 +1496,33 @@ inline void node_prog_loop(uint64_t tid,
         this_node.handle = node_handle;
         WDEBUG << "exec node prog at node=" << node_handle << std::endl;
 
-        db::node *node = S->acquire_node_version(tid, node_handle, *np.req_vclock, time_oracle);
+        db::node *node = nullptr;
+
+        if (first_node != nullptr) {
+            assert(first_node->get_handle() == node_handle);
+            node = first_node;
+            first_node = nullptr;
+        } else {
+            bool recover;
+            std::shared_ptr<void> np_void = std::static_pointer_cast<void>(np_ptr);
+            node = S->acquire_node_nodeprog(tid,
+                                            node_handle,
+                                            *np.req_vclock,
+                                            time_oracle,
+                                            np.m_type,
+                                            np_void,
+                                            recover);
+
+            if (recover) {
+                // node is being recovered from HyperDex
+                // prog loop will continue once node has been recovered
+                // return now
+                WDEBUG << "async recover node=" << node_handle << std::endl;
+                db::async_nodeprog_state delayed_prog = S->loop_recover_node(tid, time_oracle);
+                node_prog::programs[delayed_prog.type]->continue_execution(tid, time_oracle, delayed_prog);
+                return;
+            }
+        }
 
         if (node == nullptr
          || (node->base.get_del_time() != nullptr && time_oracle->compare_two_vts(*node->base.get_del_time(), *np.req_vclock) == 0)) {
@@ -1510,7 +1534,7 @@ inline void node_prog_loop(uint64_t tid,
                 buf_node_params.emplace_back(id_params);
                 std::unique_ptr<message::message> m(new message::message());
                 assert(np.req_vclock != nullptr);
-                m->prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, buf_node_params);
+                m->prepare_message(message::NODE_PROG, np.m_type, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, buf_node_params);
                 S->migration_mutex.lock();
                 if (S->deferred_reads.find(node_handle) == S->deferred_reads.end()) {
                     S->deferred_reads.emplace(node_handle, std::vector<std::unique_ptr<message::message>>());
@@ -1526,7 +1550,7 @@ inline void node_prog_loop(uint64_t tid,
             fwd_node_params.emplace_back(id_params);
             std::unique_ptr<message::message> m(new message::message());
             assert(np.req_vclock != nullptr);
-            m->prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, fwd_node_params);
+            m->prepare_message(message::NODE_PROG, np.m_type, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, fwd_node_params);
             uint64_t new_loc = node->migration->new_loc;
             S->release_node(node);
             S->comm.send(new_loc, m->buf);
@@ -1565,20 +1589,20 @@ inline void node_prog_loop(uint64_t tid,
                     _1, _2, _3); // 1 is cache value, 2 is watch set, 3 is key
             }
 
-            node_state_getter = std::bind(get_or_create_state<NodeStateType>, np.prog_type_recvd, np.req_id, node, &nodes_that_created_state); 
+            node_state_getter = std::bind(get_or_create_state<NodeStateType>, np.m_type, np.req_id, node, &np.nodes_that_created_state); 
 
             node->base.view_time = np.req_vclock; 
             node->base.time_oracle = time_oracle;
             assert(np.req_vclock != nullptr);
             assert(np.req_vclock->clock.size() == ClkSz);
             // call node program
-            auto next_node_params = func(*node, this_node,
+            auto next_node_params = np.m_func(*node, this_node,
                     params, // actual parameters for this node program
                     node_state_getter, add_cache_func,
                     (node_prog::cache_response<CacheValueType>*) np.cache_value.get());
             if (MaxCacheEntries) {
                 if (np.cache_value) {
-                    auto state = get_state_if_exists(*node, np.req_id, np.prog_type_recvd);
+                    auto state = get_state_if_exists(*node, np.req_id, np.m_type);
                     if (state) {
                         state->contexts_found.insert(np.req_id);
                     }
@@ -1603,11 +1627,11 @@ inline void node_prog_loop(uint64_t tid,
                     done_request = true;
                     // signal to send back to vector timestamper that issued request
                     std::unique_ptr<message::message> m(new message::message());
-                    m->prepare_message(message::NODE_PROG_RETURN, np.prog_type_recvd, np.req_id, np.vt_prog_ptr, res.second);
+                    m->prepare_message(message::NODE_PROG_RETURN, np.m_type, np.req_id, np.vt_prog_ptr, res.second);
                     S->comm.send(np.vt_id, m->buf);
                     break; // can only send one message back
                 } else {
-                    std::deque<std::pair<node_handle_t, ParamsType>> &next_deque = (rn.loc == S->shard_id) ? np.start_node_params : batched_node_progs[rn.loc]; // TODO this is dumb just have a single data structure later
+                    std::deque<std::pair<node_handle_t, ParamsType>> &next_deque = (rn.loc == S->shard_id) ? np.start_node_params : np.batched_node_progs[rn.loc]; // TODO this is dumb just have a single data structure later
                     if (next_node_params.first == node_prog::search_type::DEPTH_FIRST) {
                         next_deque.emplace_front(rn.handle, std::move(res.second));
                     } else { // BREADTH_FIRST
@@ -1627,12 +1651,12 @@ inline void node_prog_loop(uint64_t tid,
 #endif
         }
         uint64_t num_shards = get_num_shards();
-        assert(batched_node_progs.size() < num_shards);
-        for (auto &loc_progs_pair : batched_node_progs) {
+        assert(np.batched_node_progs.size() < num_shards);
+        for (auto &loc_progs_pair : np.batched_node_progs) {
             assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < num_shards + ShardIdIncr);
             if (loc_progs_pair.second.size() > BATCH_MSG_SIZE) {
                 assert(np.req_vclock != nullptr);
-                out_msg.prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, loc_progs_pair.second);
+                out_msg.prepare_message(message::NODE_PROG, np.m_type, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, loc_progs_pair.second);
                 S->comm.send(loc_progs_pair.first, out_msg.buf);
                 loc_progs_pair.second.clear();
             }
@@ -1643,20 +1667,34 @@ inline void node_prog_loop(uint64_t tid,
     }
     uint64_t num_shards = get_num_shards();
     if (!done_request) {
-        for (auto &loc_progs_pair : batched_node_progs) {
+        for (auto &loc_progs_pair : np.batched_node_progs) {
             if (!loc_progs_pair.second.empty()) {
                 assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < num_shards + ShardIdIncr);
                 assert(np.req_vclock != nullptr);
-                out_msg.prepare_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, loc_progs_pair.second);
+                out_msg.prepare_message(message::NODE_PROG, np.m_type, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, loc_progs_pair.second);
                 S->comm.send(loc_progs_pair.first, out_msg.buf);
                 loc_progs_pair.second.clear();
             }
         }
     }
 
-    if (!nodes_that_created_state.empty()) {
-        S->mark_nodes_using_state(np.req_id, *np.req_vclock, nodes_that_created_state);
+    if (!np.nodes_that_created_state.empty()) {
+        S->mark_nodes_using_state(np.req_id, *np.req_vclock, np.nodes_that_created_state);
     }
+}
+
+template <typename ParamsType, typename NodeStateType, typename CacheValueType>
+void
+node_prog
+    :: particular_node_program<ParamsType, NodeStateType, CacheValueType>
+    :: continue_execution(uint64_t tid,
+                          order::oracle *time_oracle,
+                          db::async_nodeprog_state delayed_prog)
+{
+    auto np_ptr = std::static_pointer_cast<node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType>>(delayed_prog.state);
+    db::node *first_node = delayed_prog.n;
+
+    node_prog_loop<ParamsType, NodeStateType, CacheValueType>(tid, np_ptr, time_oracle, first_node);
 }
 
 void
@@ -1683,9 +1721,11 @@ unpack_context_reply(uint64_t tid, db::message_wrapper *request)
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void
-node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: unpack_context_reply_db(uint64_t tid,
-    std::unique_ptr<message::message> msg,
-    order::oracle *time_oracle)
+node_prog
+    :: particular_node_program<ParamsType, NodeStateType, CacheValueType>
+    :: unpack_context_reply_db(uint64_t tid,
+                               std::unique_ptr<message::message> msg,
+                               order::oracle *time_oracle)
 {
     vc::vclock req_vclock;
     node_prog::prog_type pType;
@@ -1711,7 +1751,7 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
     }
     S->node_prog_running_states_mutex.unlock();
 
-    auto& existing_context = fstate->prog_state.cache_value->get_context();
+    auto& existing_context = fstate->prog_state->cache_value->get_context();
 
     if (fstate->cache_valid) {
         if (cache_valid) {
@@ -1719,15 +1759,16 @@ node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> 
         } else {
             // invalidate cache
             existing_context.clear();
-            assert(fstate->prog_state.cache_value != nullptr);
-            fstate->prog_state.cache_value->invalidate();
-            fstate->prog_state.cache_value.reset(nullptr); // clear cached value
+            assert(fstate->prog_state->cache_value != nullptr);
+            fstate->prog_state->cache_value->invalidate();
+            fstate->prog_state->cache_value.reset(nullptr); // clear cached value
             fstate->cache_valid = false;
         }
     }
 
     if (run_now) {
-        node_prog_loop<ParamsType, NodeStateType, CacheValueType>(tid, enclosed_node_prog_func, fstate->prog_state, time_oracle);
+        fstate->prog_state->m_func = m_func;
+        node_prog_loop<ParamsType, NodeStateType, CacheValueType>(tid, fstate->prog_state, time_oracle, nullptr);
         fstate->monitor.unlock();
         delete fstate;
     }
@@ -1742,13 +1783,13 @@ node_prog
     :: particular_node_program<ParamsType, NodeStateType, CacheValueType>
     :: unpack_and_run_db(uint64_t tid, std::unique_ptr<message::message> msg, order::oracle *time_oracle)
 {
-    node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> np;
+    auto np = std::make_shared<node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType>>();
 
     // unpack the node program
     try {
-        np.req_vclock.reset(new vc::vclock());
-        msg->unpack_message(message::NODE_PROG, np.prog_type_recvd, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, np.start_node_params);
-        assert(np.req_vclock->clock.size() == ClkSz);
+        np->req_vclock.reset(new vc::vclock());
+        msg->unpack_message(message::NODE_PROG, np->m_type, np->vt_id, *np->req_vclock, np->req_id, np->vt_prog_ptr, np->start_node_params);
+        assert(np->req_vclock->clock.size() == ClkSz);
     } catch (std::bad_alloc &ba) {
         WDEBUG << "bad_alloc caught " << ba.what() << std::endl;
         assert(false);
@@ -1757,18 +1798,19 @@ node_prog
 
     // update max prog id
     S->migration_mutex.lock();
-    if (order::oracle::happens_before_no_kronos(S->max_seen_clk[np.vt_id], np.req_vclock->clock)) {
-        S->max_seen_clk[np.vt_id] = np.req_vclock->clock;
+    if (order::oracle::happens_before_no_kronos(S->max_seen_clk[np->vt_id], np->req_vclock->clock)) {
+        S->max_seen_clk[np->vt_id] = np->req_vclock->clock;
     }
     S->migration_mutex.unlock();
 
     // check if request completed
-    if (S->check_done_prog(*np.req_vclock)) {
+    if (S->check_done_prog(*np->req_vclock)) {
         return; // done request
     }
 
-    assert(!np.cache_value); // a cache value should not be allocated yet
-    node_prog_loop<ParamsType, NodeStateType, CacheValueType>(tid, enclosed_node_prog_func, np, time_oracle);
+    assert(!np->cache_value); // a cache value should not be allocated yet
+    np->m_func = m_func;
+    node_prog_loop<ParamsType, NodeStateType, CacheValueType>(tid, np, time_oracle, nullptr);
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>

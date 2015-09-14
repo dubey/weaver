@@ -50,6 +50,7 @@
 #include "db/del_obj.h"
 #include "db/node_entry.h"
 #include "db/hyper_stub.h"
+#include "db/async_nodeprog_state.h"
 
 bool
 available_memory()
@@ -108,11 +109,27 @@ namespace db
             void record_completed_tx(vc::vclock &tx_clk);
             void node_wait_and_mark_busy(node*);
             void new_node_entry(uint64_t map_idx, std::shared_ptr<db::node_entry> new_entry);
+            void post_node_recovery(bool recovery_success,
+                                    db::node *n,
+                                    uint64_t map_idx,
+                                    std::shared_ptr<node_entry> entry);
             db::data_map<std::shared_ptr<node_entry>>::iterator node_present(uint64_t tid, uint64_t map_idx, const node_handle_t&);
+            bool async_node_present(uint64_t tid, uint64_t map_idx, const node_handle_t&, db::data_map<std::shared_ptr<node_entry>>::iterator&);
             node* acquire_node_latest(uint64_t tid, const node_handle_t &node_handle);
             node* acquire_node_specific(uint64_t tid, const node_handle_t &node_handle, const vclock_ptr_t tcreat, const vclock_ptr_t tdel);
             node* acquire_node_version(uint64_t tid, const node_handle_t &node_handle, const vc::vclock &vclk, order::oracle*);
             node* acquire_node_write(uint64_t tid, const node_handle_t &node, uint64_t vt_id, uint64_t qts);
+            node* acquire_node_nodeprog(uint64_t tid,
+                                        const node_handle_t &node_handle,
+                                        const vc::vclock &vclk,
+                                        order::oracle*,
+                                        node_prog::prog_type p_type,
+                                        std::shared_ptr<void> prog_state,
+                                        bool &recover);
+            node* finish_acquire_node_nodeprog(db::data_map<std::shared_ptr<node_entry>>::iterator&,
+                                               const vc::vclock &prog_clk,
+                                               order::oracle *time_oracle);
+            async_nodeprog_state loop_recover_node(int tid, order::oracle*);
             void save_evicted_node_state(node *n, uint64_t map_idx);
             void evict_all(uint64_t map_idx);
             void node_evict(node*, uint64_t map_idx);
@@ -264,6 +281,7 @@ namespace db
             using out_prog_map_t = std::unordered_map<uint64_t, std::pair<vc::vclock, std::vector<node_version_t>>>;
             out_prog_map_t outstanding_prog_states; // maps request_id to list of nodes that have created prog state for that req id
             std::vector<vc::vclock_t> prog_done_clk; // largest clock of cumulative completed node prog for each VT
+            std::unordered_map<node_handle_t, async_nodeprog_state> async_get_prog_states[NUM_NODE_MAPS];
             void clear_all_state(uint64_t tid, const out_prog_map_t &outstanding_prog_states);
             void delete_prog_states(uint64_t tid, uint64_t req_id, std::vector<node_version_t> &node_handles);
         public:
@@ -527,41 +545,55 @@ namespace db
         node_queue_last[map_idx] = new_entry;
     }
 
+    inline void
+    shard :: post_node_recovery(bool recovery_success,
+                                db::node *n,
+                                uint64_t map_idx,
+                                std::shared_ptr<node_entry> entry)
+    {
+        if (recovery_success) {
+            db::data_map<db::evicted_node_state> &node_state_map = evicted_nodes_states[map_idx];
+            auto node_state_iter = node_state_map.find(n->get_handle());
+            if (node_state_iter != node_state_map.end()) {
+                evicted_node_state &s = node_state_iter->second;
+                n->tx_queue = std::move(s.tx_queue);
+                if (s.last_perm_deletion.vt_id != UINT64_MAX) {
+                    n->last_perm_deletion.reset(new vc::vclock((s.last_perm_deletion)));
+                }
+                n->prog_states = std::move(s.prog_states);
+                node_state_map.erase(n->get_handle());
+            }
+
+            entry->nodes.emplace_back(n);
+            //if (++nodes_in_memory[map_idx] > NodesPerMap) {
+            if (!available_memory()) {
+                // evict a node when this node is released
+                n->to_evict = true;
+            }
+            entry->present = true;
+
+            new_node_entry(map_idx, entry);
+        } else {
+            permanent_node_delete(n);
+        }
+    }
+
     inline db::data_map<std::shared_ptr<node_entry>>::iterator
     shard :: node_present(uint64_t tid, uint64_t map_idx, const node_handle_t &node_handle)
     {
         auto node_iter = nodes[map_idx].find(node_handle);
         if (node_iter != nodes[map_idx].end()) {
-            node_entry &entry = *node_iter->second;
+            std::shared_ptr<node_entry> entry_ptr = node_iter->second;
+            node_entry &entry = *entry_ptr;
             if (!entry.present) {
                 // fetch node from HyperDex
                 vclock_ptr_t dummy_clk;
                 node *n = new node(node_handle, UINT64_MAX, dummy_clk, node_map_mutexes+map_idx);
-                if (hstub[tid]->recover_node(*n)) {
-                    db::data_map<db::evicted_node_state> &node_state_map = evicted_nodes_states[map_idx];
-                    auto node_state_iter = node_state_map.find(node_handle);
-                    if (node_state_iter != node_state_map.end()) {
-                        evicted_node_state &s = node_state_iter->second;
-                        n->tx_queue = std::move(s.tx_queue);
-                        if (s.last_perm_deletion.vt_id != UINT64_MAX) {
-                            n->last_perm_deletion.reset(new vc::vclock((s.last_perm_deletion)));
-                        }
-                        n->prog_states = std::move(s.prog_states);
-                        node_state_map.erase(node_handle);
-                    }
-
-                    entry.nodes.emplace_back(n);
-                    //if (++nodes_in_memory[map_idx] > NodesPerMap) {
-                    if (!available_memory()) {
-                        // evict a node when this node is released
-                        n->to_evict = true;
-                    }
-                    entry.present = true;
-
-                    new_node_entry(map_idx, node_iter->second);
-                } else {
-                    permanent_node_delete(n);
-                }
+                bool recovery_success = hstub[tid]->recover_node(*n);
+                post_node_recovery(recovery_success,
+                                   n,
+                                   map_idx,
+                                   entry_ptr);
             }
 
             if (entry.present) {
@@ -570,6 +602,31 @@ namespace db
         }
 
         return node_iter;
+    }
+
+    // return value indicates if node found and in memory
+    inline bool
+    shard :: async_node_present(uint64_t tid,
+                                uint64_t map_idx,
+                                const node_handle_t &node_handle,
+                                db::data_map<std::shared_ptr<node_entry>>::iterator &node_iter)
+    {
+        node_iter = nodes[map_idx].find(node_handle);
+        if (node_iter != nodes[map_idx].end()) {
+            node_entry &entry = *node_iter->second;
+            if (!entry.present) {
+                // fetch node from HyperDex
+                vclock_ptr_t dummy_clk;
+                node *n = new node(node_handle, UINT64_MAX, dummy_clk, node_map_mutexes+map_idx);
+                hstub[tid]->get_node_no_loop(n);
+                return false;
+            } else {
+                entry.used = true;
+                return true;
+            }
+        } else {
+            return false;
+        }
     }
 
     // nodes is map<handle, vector<node*>>
@@ -700,6 +757,99 @@ namespace db
         node_map_mutexes[map_idx].unlock();
 
         return n;
+    }
+
+    // get node that existed at time vclk, i.e. create time < vclk < delete time
+    // strict inequality because vector clocks are unique.  no two clocks have exact same value
+    // async get node for better performance
+    inline node*
+    shard :: acquire_node_nodeprog(uint64_t tid,
+                                   const node_handle_t &node_handle,
+                                   const vc::vclock &vclk,
+                                   order::oracle *time_oracle,
+                                   node_prog::prog_type p_type,
+                                   std::shared_ptr<void> prog_state,
+                                   bool &recover)
+    {
+        uint64_t map_idx = get_map_idx(node_handle);
+
+        node *n = nullptr;
+        recover = false;
+        node_map_mutexes[map_idx].lock();
+        auto node_iter = nodes[map_idx].end();
+        bool found = async_node_present(tid, map_idx, node_handle, node_iter);
+
+        if (found) {
+            n = finish_acquire_node_nodeprog(node_iter, vclk, time_oracle);
+        } else if (node_iter != nodes[map_idx].end()) {
+            // node exists but currently not in memory
+            // save prog state until node is recovered from HyperDex
+            async_nodeprog_state delayed_prog;
+            delayed_prog.type  = p_type;
+            delayed_prog.clk   = vclk;
+            delayed_prog.state = prog_state;
+            async_get_prog_states[map_idx][node_handle] = delayed_prog;
+            recover = true;
+        }
+
+        node_map_mutexes[map_idx].unlock();
+
+        return n;
+    }
+
+    inline node*
+    shard :: finish_acquire_node_nodeprog(db::data_map<std::shared_ptr<node_entry>>::iterator &node_iter,
+                                          const vc::vclock &prog_clk,
+                                          order::oracle *time_oracle)
+    {
+        db::node *n = nullptr;
+        for (node *n_ver: node_iter->second->nodes) {
+            node_wait_and_mark_busy(n_ver);
+
+            if (time_oracle->clock_creat_before_del_after(prog_clk, n_ver->base.get_creat_time(), n_ver->base.get_del_time())) {
+                n = n_ver;
+                break;
+            } else {
+                n_ver->in_use = false;
+                if (n_ver->waiters > 0) {
+                    n_ver->cv.signal();
+                }
+            }
+        }
+
+        return n;
+    }
+
+    inline async_nodeprog_state
+    shard :: loop_recover_node(int tid, order::oracle *time_oracle)
+    {
+        db::node *n = nullptr;
+        bool success = hstub[tid]->loop_get_node(&n);
+
+        uint64_t map_idx = get_map_idx(n->get_handle());
+        node_map_mutexes[map_idx].lock();
+
+        auto node_iter = nodes[map_idx].find(n->get_handle());
+        assert(node_iter != nodes[map_idx].end());
+
+        post_node_recovery(success,
+                           n,
+                           map_idx,
+                           node_iter->second);
+
+        auto progstate_map  = async_get_prog_states[map_idx];
+        auto progstate_iter = progstate_map.find(n->get_handle());
+        assert(progstate_iter != progstate_map.end());
+        async_nodeprog_state delayed_prog = progstate_iter->second;
+        n = finish_acquire_node_nodeprog(node_iter,
+                                         delayed_prog.clk,
+                                         time_oracle);
+
+        node_map_mutexes[map_idx].unlock();
+
+        delayed_prog.n = n;
+
+        return delayed_prog;
     }
 
     inline void

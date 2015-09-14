@@ -59,6 +59,7 @@ namespace db
             void restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *nodes,
                 /*XXX std::unordered_map<node_handle_t, std::unordered_set<node_version_t, node_version_hash>> &edge_map,*/
                 po6::threads::mutex *shard_mutexes);
+            void print_errors();
             // bulk loading
             void mark_done_chunk(uint64_t chunk);
             void check_loaded_chunk(uint64_t chunk, uint32_t chunk_elem, bool &lchunk, bool &lelem);
@@ -85,8 +86,10 @@ namespace db
             void done_bulk_load();
             // migration
             bool update_mapping(const node_handle_t &handle, uint64_t loc);
+            // node swapping
             bool recover_node(db::node &n);
-            bool call_get_node(db::node &n);
+            bool get_node_no_loop(db::node *n);
+            bool loop_get_node(db::node **n);
 
         private:
             bool done_op(async_call_ptr_t, int64_t op_id);

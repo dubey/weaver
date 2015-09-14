@@ -430,6 +430,11 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     unpack_context_reply_db(uint64_t, std::unique_ptr<message::message>, order::oracle*)
 { }
 
+template <typename ParamsType, typename NodeStateType, typename CacheValueType>
+void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> ::
+    continue_execution(uint64_t, order::oracle*, db::async_nodeprog_state)
+{ }
+
 // remove a completed node program from pending_prog data structure
 // update 'max_done_clk' accordingly
 // return true if successfully process prog_done, false if already processed this prog

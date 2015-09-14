@@ -24,6 +24,7 @@
 #include "common/message.h"
 #include "common/event_order.h"
 #include "db/remote_node.h"
+#include "db/async_nodeprog_state.h"
 #include "node_prog/cache_response.h"
 #include "node_prog/node.h"
 #include "node_prog/edge.h"
@@ -74,23 +75,34 @@ namespace node_prog
     struct node_prog_running_state
     {
         private:
+            typedef typename node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type func;
+
             /* constructs a clone without start_node_params or cache_value */
-            node_prog_running_state(node_prog::prog_type ptype, uint64_t vt, std::shared_ptr<vc::vclock> vclk, uint64_t rid, uint64_t vtptr)
-                : prog_type_recvd(ptype)
+            node_prog_running_state(node_prog::prog_type ptype,
+                                    uint64_t vt,
+                                    std::shared_ptr<vc::vclock> vclk,
+                                    uint64_t rid,
+                                    uint64_t vtptr,
+                                    func f)
+                : m_type(ptype)
                 , vt_id(vt)
                 , req_vclock(vclk)
                 , req_id(rid)
                 , vt_prog_ptr(vtptr)
+                , m_func(f)
             { }
 
         public:
-            node_prog::prog_type prog_type_recvd;
+            node_prog::prog_type m_type;
             uint64_t vt_id;
             std::shared_ptr<vc::vclock> req_vclock;
             uint64_t req_id;
             uint64_t vt_prog_ptr;
             std::deque<std::pair<node_handle_t, ParamsType>> start_node_params;
             std::unique_ptr<cache_response<CacheValueType>> cache_value;
+            std::unordered_map<uint64_t, std::deque<std::pair<node_handle_t, ParamsType>>> batched_node_progs;
+            std::vector<std::pair<node_handle_t, vclock_ptr_t>> nodes_that_created_state;
+            func m_func;
 
             node_prog_running_state() { }
             // delete standard copy onstructors
@@ -99,17 +111,20 @@ namespace node_prog
 
             node_prog_running_state clone_without_start_node_params() 
             {
-                return node_prog_running_state(prog_type_recvd, vt_id, req_vclock, req_id, vt_prog_ptr);
+                return node_prog_running_state(m_type, vt_id, req_vclock, req_id, vt_prog_ptr, m_func);
             }
 
             node_prog_running_state(node_prog_running_state&& copy_from)
-                : prog_type_recvd(copy_from.prog_type_recvd)
-                  , vt_id(copy_from.vt_id)
-                  , req_vclock(copy_from.req_vclock)
-                  , req_id(copy_from.req_id)
-                  , vt_prog_ptr(copy_from.vt_prog_ptr)
-                  , start_node_params(copy_from.start_node_params)
-                  , cache_value(std::move(copy_from.cache_value))
+                : m_type(copy_from.m_type)
+                , vt_id(copy_from.vt_id)
+                , req_vclock(copy_from.req_vclock)
+                , req_id(copy_from.req_id)
+                , vt_prog_ptr(copy_from.vt_prog_ptr)
+                , start_node_params(copy_from.start_node_params)
+                , cache_value(std::move(copy_from.cache_value))
+                , batched_node_progs()
+                , nodes_that_created_state()
+                , m_func(copy_from.m_func)
             { }
    };
 
@@ -119,6 +134,7 @@ namespace node_prog
             virtual void unpack_and_run_db(uint64_t tid, std::unique_ptr<message::message> msg, order::oracle *time_oracle) = 0;
             virtual void unpack_context_reply_db(uint64_t tid, std::unique_ptr<message::message> msg, order::oracle *time_oracle) = 0;
             virtual void unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, coordinator::hyper_stub*) = 0;
+            virtual void continue_execution(uint64_t tid, order::oracle*, db::async_nodeprog_state) = 0;
 
             virtual ~node_program() { }
     };
@@ -128,24 +144,24 @@ namespace node_prog
     {
         public:
             typedef typename node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type func;
-            func enclosed_node_prog_func;
-            prog_type type;
+            func m_func;
+            prog_type m_type;
 
         public:
-            particular_node_program(prog_type _type, func prog_func)
-                : enclosed_node_prog_func(prog_func)
-                , type(_type)
+            particular_node_program(prog_type type, func prog_func)
+                : m_func(prog_func)
+                , m_type(type)
             {
                 static_assert(std::is_base_of<Node_Parameters_Base, ParamsType>::value, "Params type must be derived from Node_Parameters_Base");
                 static_assert(std::is_base_of<Node_State_Base, NodeStateType>::value, "State type must be derived from Node_State_Base");
                 static_assert(std::is_base_of<Cache_Value_Base, CacheValueType>::value, "Cache value type must be derived from Cache_Value_Base");
-
             }
 
         public:
             virtual void unpack_and_run_db(uint64_t tid, std::unique_ptr<message::message> msg, order::oracle *time_oracle);
             virtual void unpack_context_reply_db(uint64_t tid, std::unique_ptr<message::message> msg, order::oracle *time_oracle);
             virtual void unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, coordinator::hyper_stub*);
+            virtual void continue_execution(uint64_t tid, order::oracle*, db::async_nodeprog_state);
 
             // delete standard copy onstructors
             particular_node_program(const particular_node_program&) = delete;
