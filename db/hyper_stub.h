@@ -94,6 +94,7 @@ namespace db
 
         private:
             bool done_op(async_call_ptr_t, int64_t op_id);
+            bool done_get_op(async_call_ptr_t, int64_t op_id, db::node **n);
             // debug
             void done_op_stat(uint64_t time, size_t op_sz);
 

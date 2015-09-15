@@ -1630,6 +1630,16 @@ hyper_stub_base :: del_indices(std::vector<std::string> &indices)
 
 
 // async calls
+
+#define POST_ASYNC_CALL(ac_ptr, async_calls, success, debug_info) \
+    if (success) { \
+        async_calls[ac_ptr->op_id] = ac_ptr; \
+    } else { \
+        WDEBUG << "hyperdex_client op failed, op_id=" << ac_ptr->op_id \
+               << ", call_code=" << hyperdex_client_returncode_to_string(ac_ptr->status) << std::endl; \
+        WDEBUG << debug_info << std::endl; \
+    }
+
 bool
 hyper_stub_base :: put_node_async(apn_ptr_t apn,
                                   db::node *n,
@@ -1677,15 +1687,10 @@ hyper_stub_base :: put_node_async(apn_ptr_t apn,
                                apn->op_id, apn->status);
     }
 
-    if (success) {
-        async_calls[apn->op_id] = apn;
-    }
-    
-    if (!success) {
-        WDEBUG << "hyperdex_client_put failed, op_id=" << apn->op_id
-               << ", call_code=" << hyperdex_client_returncode_to_string(apn->status) << std::endl;
-        WDEBUG << "node=" << apn->handle << std::endl;
-    }
+    POST_ASYNC_CALL(apn,
+                    async_calls,
+                    success,
+                    "node=" << apn->handle);
 
     return success;
 }
@@ -1725,13 +1730,10 @@ hyper_stub_base :: put_edge_id_async(apei_ptr_t apei,
                                apei->op_id, apei->status);
     }
 
-    if (success) {
-        async_calls[apei->op_id] = apei;
-    } else {
-        WDEBUG << "hyperdex_client_put failed, op_id=" << apei->op_id
-               << ", call_code=" << hyperdex_client_returncode_to_string(apei->status) << std::endl;
-        WDEBUG << "edge_id=" << edge_id << ", edge_handle=" << edge_handle << std::endl;
-    }
+    POST_ASYNC_CALL(apei,
+                    async_calls,
+                    success,
+                    "edge_id=" << edge_id << ", edge_handle=" << edge_handle);
 
     return success;
 }
@@ -1785,13 +1787,10 @@ hyper_stub_base :: put_edge_async(ape_ptr_t ape,
                                ape->op_id, ape->status);
     }
 
-    if (success) {
-        async_calls[ape->op_id] = ape;
-    } else {
-        WDEBUG << "hyperdex_client_put failed, op_id=" << ape->op_id
-               << ", call_code=" << hyperdex_client_returncode_to_string(ape->status) << std::endl;
-        WDEBUG << "edge=" << ape->edge_handle << std::endl;
-    }
+    POST_ASYNC_CALL(ape,
+                    async_calls,
+                    success,
+                    "edge=" << ape->edge_handle);
 
     return success;
 }
@@ -1843,13 +1842,11 @@ hyper_stub_base :: add_index_async(aai_ptr_t aai,
                                aai->op_id, aai->status);
     }
 
-    if (success) {
-        async_calls[aai->op_id] = aai;
-    } else {
-        WDEBUG << "hyperdex_client_put failed, op_id=" << aai->op_id
-               << ", call_code=" << hyperdex_client_returncode_to_string(aai->status) << std::endl;
-        WDEBUG << "alias=" << aai->alias << ", node=" << aai->node_handle << std::endl;
-    }
+
+    POST_ASYNC_CALL(aai,
+                    async_calls,
+                    success,
+                    "alias=" << aai->alias << ", node=" << aai->node_handle);
 
     return success;
 }
@@ -1868,13 +1865,10 @@ hyper_stub_base :: del_async(ad_ptr_t ad,
 
     bool success = del_no_loop(space, key, key_sz, ad->op_id, ad->status);
 
-    if (success) {
-        async_calls[ad->op_id] = ad;
-    } else {
-        WDEBUG << "hyperdex_client_del failed, op_id=" << ad->op_id
-               << ", call_code=" << hyperdex_client_returncode_to_string(ad->status) << std::endl;
-        WDEBUG << "key=" << key << ", space=" << space << std::endl;      
-    }
+    POST_ASYNC_CALL(ad,
+                    async_calls,
+                    success,
+                    "key=" << key << ", space=" << space);
 
     return success;
 }
@@ -1897,20 +1891,65 @@ hyper_stub_base :: get_node_async(agn_ptr_t agn,
                           agn->op_id, agn->status,
                           tx);
 
-    if (success) {
-        async_calls[agn->op_id] = agn;
-    }
-
-    if (!success) {
-        WDEBUG << "hyperdex_client_put failed, op_id=" << agn->op_id
-               << ", call_code=" << hyperdex_client_returncode_to_string(agn->status) << std::endl;
-        WDEBUG << "node=" << agn->n->get_handle() << std::endl;
-    }
+    POST_ASYNC_CALL(agn,
+                    async_calls,
+                    success,
+                    "node=" << agn->n->get_handle());
 
     return success;
 }
 
+bool
+hyper_stub_base :: get_edge_handle_async(ageh_ptr_t ageh,
+                                         db::node *n,
+                                         uint64_t edge_id,
+                                         std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                                         bool tx)
+{
+    ageh->edge_id = (int64_t)edge_id;
+    ageh->n       = n;
+    ageh->tx      = tx;
 
+    bool success;
+    success = get_no_loop(edge_id_space,
+                          (const char*)&ageh->edge_id, sizeof(int64_t),
+                          &ageh->cl_attr, &ageh->num_attrs,
+                          ageh->op_id, ageh->status,
+                          tx);
+
+    POST_ASYNC_CALL(ageh,
+                    async_calls,
+                    success,
+                    "edge_id=" << edge_id);
+
+    return success;
+}
+
+bool
+hyper_stub_base :: get_edge_async(age_ptr_t age,
+                                  db::node *n,
+                                  const edge_handle_t &edge_handle,
+                                  std::unordered_map<int64_t, async_call_ptr_t> &async_calls,
+                                  bool tx)
+{
+    age->handle = edge_handle;
+    age->n      = n;
+    age->tx     = tx;
+
+    bool success;
+    success = get_no_loop(edge_space,
+                          age->handle.c_str(), age->handle.size(),
+                          &age->cl_attr, &age->num_attrs,
+                          age->op_id, age->status,
+                          tx);
+
+    POST_ASYNC_CALL(age,
+                    async_calls,
+                    success,
+                    "edge=" << edge_handle);
+
+    return success;
+}
 
 
 void

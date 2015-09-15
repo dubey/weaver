@@ -129,7 +129,7 @@ namespace db
             node* finish_acquire_node_nodeprog(db::data_map<std::shared_ptr<node_entry>>::iterator&,
                                                const vc::vclock &prog_clk,
                                                order::oracle *time_oracle);
-            async_nodeprog_state loop_recover_node(int tid, order::oracle*);
+            bool loop_recover_node(int tid, order::oracle*, async_nodeprog_state&);
             void save_evicted_node_state(node *n, uint64_t map_idx);
             void evict_all(uint64_t map_idx);
             void node_evict(node*, uint64_t map_idx);
@@ -773,10 +773,11 @@ namespace db
                                    bool &recover)
     {
         uint64_t map_idx = get_map_idx(node_handle);
-
         node *n = nullptr;
         recover = false;
+
         node_map_mutexes[map_idx].lock();
+
         auto node_iter = nodes[map_idx].end();
         bool found = async_node_present(tid, map_idx, node_handle, node_iter);
 
@@ -821,11 +822,23 @@ namespace db
         return n;
     }
 
-    inline async_nodeprog_state
-    shard :: loop_recover_node(int tid, order::oracle *time_oracle)
+    inline bool
+    shard :: loop_recover_node(int tid,
+                               order::oracle *time_oracle,
+                               async_nodeprog_state &delayed_prog)
     {
         db::node *n = nullptr;
         bool success = hstub[tid]->loop_get_node(&n);
+
+        if (n == nullptr) {
+            // still haven't recovered node entirely
+            return false;
+        }
+
+        if (!success) {
+            // error in loop call
+           return false;
+        }
 
         uint64_t map_idx = get_map_idx(n->get_handle());
         node_map_mutexes[map_idx].lock();
@@ -838,10 +851,13 @@ namespace db
                            map_idx,
                            node_iter->second);
 
+        node_entry &entry = *node_iter->second;
+        entry.used = true;
+
         auto progstate_map  = async_get_prog_states[map_idx];
         auto progstate_iter = progstate_map.find(n->get_handle());
         assert(progstate_iter != progstate_map.end());
-        async_nodeprog_state delayed_prog = progstate_iter->second;
+        delayed_prog = progstate_iter->second;
         n = finish_acquire_node_nodeprog(node_iter,
                                          delayed_prog.clk,
                                          time_oracle);
@@ -850,7 +866,7 @@ namespace db
 
         delayed_prog.n = n;
 
-        return delayed_prog;
+        return true;
     }
 
     inline void

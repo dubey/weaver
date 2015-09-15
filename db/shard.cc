@@ -1496,7 +1496,6 @@ inline void node_prog_loop(uint64_t tid,
         node_handle = id_params.first;
         ParamsType &params = id_params.second;
         this_node.handle = node_handle;
-        WDEBUG << "exec node prog at node=" << node_handle << std::endl;
 
         db::node *node = nullptr;
 
@@ -1519,9 +1518,6 @@ inline void node_prog_loop(uint64_t tid,
                 // node is being recovered from HyperDex
                 // prog loop will continue once node has been recovered
                 // return now
-                WDEBUG << "async recover node=" << node_handle << std::endl;
-                //db::async_nodeprog_state delayed_prog = S->loop_recover_node(tid, time_oracle);
-                //node_prog::programs[delayed_prog.type]->continue_execution(tid, time_oracle, delayed_prog);
                 return;
             }
         }
@@ -2451,12 +2447,15 @@ void
 server_loop_hyperdex(uint64_t thread_id)
 {
     order::oracle *time_oracle = S->time_oracles[thread_id];
-    db::async_nodeprog_state delayed_prog = S->loop_recover_node(thread_id,
-                                                                 time_oracle);
-    WDEBUG << "recovered node=" << delayed_prog.n->get_handle() << std::endl;
-    node_prog::programs[delayed_prog.type]->continue_execution(thread_id,
-                                                               time_oracle,
-                                                               delayed_prog);
+    db::async_nodeprog_state delayed_prog;
+    bool loop_success = S->loop_recover_node(thread_id,
+                                             time_oracle,
+                                             delayed_prog);
+    if (loop_success) {
+        node_prog::programs[delayed_prog.type]->continue_execution(thread_id,
+            time_oracle,
+            delayed_prog);
+    }
 }
 
 void*

@@ -104,7 +104,6 @@ hyper_stub :: hyper_stub(uint64_t sid, int tid)
     , g_node_edge_id()
     , g_bulk_load_mtx()
     , g_chunk_cond(&g_bulk_load_mtx)
-    , m_shard_mtx()
     , m_done_op_stats()
     , m_timer()
     , m_print_op_stats_counter(0)
@@ -136,8 +135,7 @@ hyper_stub :: restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *node
     if (call_id < 0) {
         WDEBUG << "Hyperdex function failed, op id = " << call_id
                << ", status = " << hyperdex_client_returncode_to_string(search_status) << std::endl;
-        WDEBUG << "error message: " << hyperdex_client_error_message(m_cl) << std::endl;
-        WDEBUG << "error loc: " << hyperdex_client_error_location(m_cl) << std::endl;
+        print_errors();
         return;
     }
 
@@ -162,8 +160,7 @@ hyper_stub :: restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *node
                    << ", loop_id = " << loop_id
                    << ", loop status = " << hyperdex_client_returncode_to_string(loop_status)
                    << ", search status = " << hyperdex_client_returncode_to_string(search_status) << std::endl;
-            WDEBUG << "error message: " << hyperdex_client_error_message(m_cl) << std::endl;
-            WDEBUG << "error loc: " << hyperdex_client_error_location(m_cl) << std::endl;
+            print_errors();
             return;
         }
 
@@ -243,16 +240,12 @@ hyper_stub :: recover_node(db::node &n)
 bool
 hyper_stub :: get_node_no_loop(db::node *n)
 {
-    m_shard_mtx.lock();
-
     agn_ptr_t agn = std::make_shared<async_get_node>();
     bool success = get_node_async(agn,
                                   n,
                                   m_async_calls,
                                   true,
                                   false);
-
-    m_shard_mtx.unlock();
 
     return success;
 }
@@ -599,7 +592,7 @@ hyper_stub :: done_op(async_call_ptr_t ac_ptr, int64_t op_id)
             break;
 
         default:
-            WDEBUG << "impossible async call type=" << async_call_type_to_string(ac_ptr->type) << std::endl;
+            WDEBUG << "unexpected async call type=" << async_call_type_to_string(ac_ptr->type) << std::endl;
             assert(false);
     }
 
@@ -704,10 +697,97 @@ hyper_stub :: loop_async_calls(bool flush)
 }
 
 bool
+hyper_stub :: done_get_op(async_call_ptr_t ac_ptr, int64_t op_id, db::node **n)
+{
+    bool success;
+    *n = nullptr;
+
+    switch (ac_ptr->type) {
+        case GET_NODE: {
+            agn_ptr_t agn = std::static_pointer_cast<async_get_node>(ac_ptr);
+            m_async_calls.erase(op_id);
+
+            success = recreate_node(agn->cl_attr, *agn->n);
+            hyperdex_client_destroy_attrs(agn->cl_attr, agn->num_attrs);
+
+            if (success && agn->recreate_edges) {
+                agn->n->pending_recover_edges = agn->n->edge_ids.size();
+                if (agn->n->pending_recover_edges == 0) {
+                    *n = agn->n;
+                }
+                for (const uint64_t id: agn->n->edge_ids) {
+                    ageh_ptr_t ageh = std::make_shared<async_get_edge_handle>();
+                    success = get_edge_handle_async(ageh,
+                                                    agn->n,
+                                                    id,
+                                                    m_async_calls,
+                                                    false) && success;
+                }
+            }
+
+            break;
+        }
+
+        case GET_EDGE_HANDLE: {
+            ageh_ptr_t ageh = std::static_pointer_cast<async_get_edge_handle>(ac_ptr);
+            m_async_calls.erase(op_id);
+
+            if (ageh->num_attrs == NUM_EDGE_ID_ATTRS) {
+                edge_handle_t handle = std::string(ageh->cl_attr[0].value,
+                                                   ageh->cl_attr[0].value_sz);
+
+                age_ptr_t age = std::make_shared<async_get_edge>();
+                success = get_edge_async(age,
+                                         ageh->n,
+                                         handle,
+                                         m_async_calls,
+                                         false);
+            } else {
+                success = false;
+            }
+            hyperdex_client_destroy_attrs(ageh->cl_attr, ageh->num_attrs);
+            break;
+        }
+
+        case GET_EDGE: {
+            age_ptr_t age = std::static_pointer_cast<async_get_edge>(ac_ptr);
+            m_async_calls.erase(op_id);
+
+            if (age->num_attrs == NUM_EDGE_ATTRS) {
+                node_handle_t node_handle;
+                uint64_t shard, edge_id;
+                db::edge *e;
+                success = recreate_edge(age->cl_attr,
+                                        node_handle,
+                                        shard,
+                                        edge_id,
+                                        &e);
+                if (success) {
+                    age->n->recover_edge_mtx.lock();
+                    age->n->out_edges[age->handle].emplace_back(e);
+                    if (--age->n->pending_recover_edges == 0) {
+                        *n = age->n;
+                    }
+                    age->n->recover_edge_mtx.unlock();
+                }
+            } else {
+                success = false;
+            }
+            hyperdex_client_destroy_attrs(age->cl_attr, age->num_attrs);
+            break;
+        }
+
+        default:
+            WDEBUG << "unexpected async call type=" << async_call_type_to_string(ac_ptr->type) << std::endl;
+            assert(false);
+    }
+
+    return success;
+}
+
+bool
 hyper_stub :: loop_get_node(db::node **n)
 {
-    m_shard_mtx.lock();
-
     *n = nullptr;
     bool success = true;
     int64_t op_id;
@@ -716,12 +796,12 @@ hyper_stub :: loop_get_node(db::node **n)
     loop(false, op_id, loop_code);
 
     if (op_id < 0) {
+        if (loop_code == HYPERDEX_CLIENT_NONEPENDING) {
+            m_async_calls.clear();
+            return false;
+        }
         WDEBUG << "hyperdex_client_loop failed, op_id=" << op_id
                << ", loop_code=" << hyperdex_client_returncode_to_string(loop_code) << std::endl;
-        if (loop_code == HYPERDEX_CLIENT_NONEPENDING) {
-            WDEBUG << "#async_calls=" << m_async_calls.size() << std::endl;
-            m_async_calls.clear();
-        }
         print_errors();
         assert(false);
     } else {
@@ -737,17 +817,7 @@ hyper_stub :: loop_get_node(db::node **n)
         async_call_ptr_t ac_ptr = find_iter->second;
         switch (ac_ptr->status) {
             case HYPERDEX_CLIENT_SUCCESS: {
-                assert(ac_ptr->type == GET_NODE);
-                agn_ptr_t agn = std::static_pointer_cast<async_get_node>(ac_ptr);
-                m_async_calls.erase(op_id);
-
-                success = recreate_node(agn->cl_attr, *agn->n);
-                if (success && agn->recreate_edges) {
-                    success = get_node_edges(*agn->n, agn->tx);
-                }
-                hyperdex_client_destroy_attrs(agn->cl_attr, agn->num_attrs);
-
-                *n = agn->n;
+                success = done_get_op(ac_ptr, op_id, n) && success;
                 break;
             }
 
@@ -759,8 +829,6 @@ hyper_stub :: loop_get_node(db::node **n)
                 assert(false);
         }
     }
-
-    m_shard_mtx.unlock();
 
     return success;
 }

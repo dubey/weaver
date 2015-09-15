@@ -49,7 +49,9 @@ enum async_call_type
     PUT_EDGE_ID,
     ADD_INDEX,
     DEL,
-    GET_NODE
+    GET_NODE,
+    GET_EDGE_HANDLE,
+    GET_EDGE
 };
 
 const char*
@@ -145,14 +147,36 @@ class hyper_stub_base
             async_get_node() { type = GET_NODE; }
         };
 
-        using async_call_ptr_t = std::shared_ptr<hyper_stub_base::async_call>;
-        using apn_ptr_t = std::shared_ptr<hyper_stub_base::async_put_node>;
-        using apes_ptr_t = std::shared_ptr<hyper_stub_base::async_put_edge_set>;
-        using ape_ptr_t = std::shared_ptr<hyper_stub_base::async_put_edge>;
-        using apei_ptr_t = std::shared_ptr<hyper_stub_base::async_put_edge_id>;
-        using aai_ptr_t = std::shared_ptr<hyper_stub_base::async_add_index>;
-        using ad_ptr_t = std::shared_ptr<hyper_stub_base::async_del>;
-        using agn_ptr_t = std::shared_ptr<hyper_stub_base::async_get_node>;
+        struct async_get_edge_handle : public async_call
+        {
+            db::node *n;
+            int64_t edge_id;
+            const hyperdex_client_attribute *cl_attr;
+            size_t num_attrs;
+
+            async_get_edge_handle() { type = GET_EDGE_HANDLE; }
+        };
+
+        struct async_get_edge : public async_call
+        {
+            db::node *n;
+            edge_handle_t handle;
+            const hyperdex_client_attribute *cl_attr;
+            size_t num_attrs;
+
+            async_get_edge() { type = GET_EDGE; }
+        };
+
+        using async_call_ptr_t  = std::shared_ptr<hyper_stub_base::async_call>;
+        using apn_ptr_t         = std::shared_ptr<hyper_stub_base::async_put_node>;
+        using apes_ptr_t        = std::shared_ptr<hyper_stub_base::async_put_edge_set>;
+        using ape_ptr_t         = std::shared_ptr<hyper_stub_base::async_put_edge>;
+        using apei_ptr_t        = std::shared_ptr<hyper_stub_base::async_put_edge_id>;
+        using aai_ptr_t         = std::shared_ptr<hyper_stub_base::async_add_index>;
+        using ad_ptr_t          = std::shared_ptr<hyper_stub_base::async_del>;
+        using agn_ptr_t         = std::shared_ptr<hyper_stub_base::async_get_node>;
+        using ageh_ptr_t        = std::shared_ptr<hyper_stub_base::async_get_edge_handle>;
+        using age_ptr_t         = std::shared_ptr<hyper_stub_base::async_get_edge>;
 
         void debug_print_async_call(async_call_ptr_t);
 
@@ -377,6 +401,16 @@ class hyper_stub_base
                             db::node *n,
                             std::unordered_map<int64_t, async_call_ptr_t>&,
                             bool recreate_edges,
+                            bool tx);
+        bool get_edge_handle_async(ageh_ptr_t ageh,
+                                   db::node *n,
+                                   uint64_t edge_id,
+                                   std::unordered_map<int64_t, async_call_ptr_t>&,
+                                   bool tx);
+        bool get_edge_async(age_ptr_t age,
+                            db::node *n,
+                            const edge_handle_t &edge_handle,
+                            std::unordered_map<int64_t, async_call_ptr_t>&,
                             bool tx);
 
         template <typename T> void prepare_buffer(const T &t, std::unique_ptr<e::buffer> &buf);

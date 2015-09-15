@@ -105,6 +105,8 @@ namespace db
 
             // node eviction
             bool empty_evicted_node_state();
+            uint32_t pending_recover_edges;
+            po6::threads::mutex recover_edge_mtx;
 
             // fault tolerance
             std::unique_ptr<vc::vclock> last_upd_clk;
