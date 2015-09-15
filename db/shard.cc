@@ -1629,7 +1629,7 @@ inline void node_prog_loop(uint64_t tid,
                     S->comm.send(np.vt_id, m->buf);
                     break; // can only send one message back
                 } else {
-                    std::deque<std::pair<node_handle_t, ParamsType>> &next_deque = (rn.loc == S->shard_id) ? np.start_node_params : np.batched_node_progs[rn.loc]; // TODO this is dumb just have a single data structure later
+                    std::deque<std::pair<node_handle_t, ParamsType>> &next_deque = (rn.loc == S->shard_id) ? np.start_node_params : np.batched_node_progs[rn.loc];
                     if (next_node_params.first == node_prog::search_type::DEPTH_FIRST) {
                         next_deque.emplace_front(rn.handle, std::move(res.second));
                     } else { // BREADTH_FIRST
@@ -1652,11 +1652,18 @@ inline void node_prog_loop(uint64_t tid,
         assert(np.batched_node_progs.size() < num_shards);
         for (auto &loc_progs_pair : np.batched_node_progs) {
             assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < num_shards + ShardIdIncr);
-            if (loc_progs_pair.second.size() > BATCH_MSG_SIZE) {
+            //while (loc_progs_pair.second.size() > BATCH_MSG_SIZE) {
+            while (!loc_progs_pair.second.empty()) {
+                std::deque<std::pair<node_handle_t, ParamsType>> progs;
+                //while (progs.size() <= BATCH_MSG_SIZE && !loc_progs_pair.second.empty()) {
+                //    progs.emplace_back(loc_progs_pair.second.front());
+                //    loc_progs_pair.second.pop_front();
+                //}
+                progs.emplace_back(loc_progs_pair.second.front());;
+                loc_progs_pair.second.pop_front();
                 assert(np.req_vclock != nullptr);
-                out_msg.prepare_message(message::NODE_PROG, np.m_type, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, loc_progs_pair.second);
+                out_msg.prepare_message(message::NODE_PROG, np.m_type, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, progs);
                 S->comm.send(loc_progs_pair.first, out_msg.buf);
-                loc_progs_pair.second.clear();
             }
         }
         if (MaxCacheEntries) {
@@ -1666,12 +1673,18 @@ inline void node_prog_loop(uint64_t tid,
     uint64_t num_shards = get_num_shards();
     if (!done_request) {
         for (auto &loc_progs_pair : np.batched_node_progs) {
-            if (!loc_progs_pair.second.empty()) {
-                assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < num_shards + ShardIdIncr);
+            assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < num_shards + ShardIdIncr);
+            while (!loc_progs_pair.second.empty()) {
+                std::deque<std::pair<node_handle_t, ParamsType>> progs;
+                //while (progs.size() <= BATCH_MSG_SIZE && !loc_progs_pair.second.empty()) {
+                //    progs.emplace_back(loc_progs_pair.second.front());
+                //    loc_progs_pair.second.pop_front();
+                //}
+                progs.emplace_back(loc_progs_pair.second.front());
+                loc_progs_pair.second.pop_front();
                 assert(np.req_vclock != nullptr);
-                out_msg.prepare_message(message::NODE_PROG, np.m_type, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, loc_progs_pair.second);
+                out_msg.prepare_message(message::NODE_PROG, np.m_type, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, progs);
                 S->comm.send(loc_progs_pair.first, out_msg.buf);
-                loc_progs_pair.second.clear();
             }
         }
     }
@@ -2420,8 +2433,19 @@ server_loop_busybee(uint64_t thread_id)
                                << " = " << S->graph_load_time[i] << " ms." << std::endl;
                     }
                 } else {
-                    WDEBUG << "Loaded graph on " << S->load_count << " shards, current time "
-                            << (S->max_load_time/MEGA) << " ms." << std::endl;
+                    std::string pending_shards = "";
+                    for (uint64_t i = 0; i < S->bulk_load_num_shards; i++) {
+                        if (S->graph_load_time[i] == 0) {
+                            pending_shards += (std::to_string(i) + " ");
+                        }
+                    }
+                    if (!pending_shards.empty()) {
+                        pending_shards.pop_back();
+                    }
+                    WDEBUG << "Loaded graph on " << S->load_count << " shards, "
+                           << "current time " << (S->max_load_time/MEGA) << " ms. "
+                           << "Pending shards = " << pending_shards
+                           << std::endl;
                 }
 
                 S->graph_load_mutex.unlock();
@@ -2842,6 +2866,7 @@ main(int argc, const char *argv[])
             bulk_load_threads.clear();
 
             load_time = timer.get_time_elapsed() - load_time;
+            WDEBUG << "Completed bulk load at this shard, time taken=" << load_time/MEGA << " ms." << std::endl;
             message::message msg;
             msg.prepare_message(message::LOADED_GRAPH, S->shard_id, load_time);
             S->comm.send(ShardIdIncr, msg.buf);
