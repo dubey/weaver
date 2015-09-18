@@ -98,9 +98,9 @@ namespace coordinator
             // prog cleanup and permanent deletion
             std::unordered_set<uint64_t> outstanding_progs; // for multiple returns and ft
             std::vector<current_prog*> pend_progs, done_progs;
+            std::unordered_map<uint64_t, std::pair<uint64_t, uint64_t>> node_recovery_counts;
             int prog_done_cnt;
-            vc::vclock_t max_done_clk; // permanent deletion
-            uint64_t max_done_clk_reqid;
+            vc::vclock_t m_max_done_clk; // permanent deletion
 
             // mutexes
         public:
@@ -179,7 +179,7 @@ namespace coordinator
         , to_nop(NumShards, true)
         , nop_ack_qts(NumShards, 0)
         , prog_done_cnt(0)
-        , max_done_clk(vc::vclock_t(ClkSz, 0))
+        , m_max_done_clk(vc::vclock_t(ClkSz, 0))
         , load_count(0)
         , max_load_time(0)
         , shard_node_count(NumShards, 0)
@@ -284,8 +284,8 @@ namespace coordinator
         to_nop.resize(num_shards, true);
         nop_ack_qts.resize(num_shards, 0);
         shard_node_count.resize(num_shards, 0);
-        std::fill(max_done_clk.begin(), max_done_clk.end(), 0);
-        max_done_clk[0] = config.version();
+        std::fill(m_max_done_clk.begin(), m_max_done_clk.end(), 0);
+        m_max_done_clk[0] = config.version();
 
         // update the periodic_update_config which is used while sending periodic vt updates
         periodic_update_config = config;
@@ -640,8 +640,7 @@ namespace coordinator
         uint32_t i = 0;
         uint32_t max_idx = pend_progs.size() > done_progs.size() ? done_progs.size() : pend_progs.size();
         for (i = 0; i < max_idx && pend_progs[i]->vclk->get_clock() == done_progs[i]->vclk->get_clock(); i++, pend_iter++, done_iter++) {
-            max_done_clk = pend_progs[i]->vclk->clock;
-            max_done_clk_reqid = pend_progs[i]->req_id;
+            m_max_done_clk = pend_progs[i]->vclk->clock;
             delete pend_progs[i];
         }
 

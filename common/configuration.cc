@@ -159,6 +159,25 @@ configuration :: get_type(const server_id &id) const
     return server::UNDEF;
 }
 
+bool
+sort_servers(const server &lhs, const server &rhs)
+{
+    if (lhs.weaver_id == rhs.weaver_id) {
+        return lhs.id < rhs.id;
+    } else {
+        return lhs.weaver_id < rhs.weaver_id;
+    }
+}
+
+std::vector<server>
+configuration :: get_servers() const
+{
+    auto servers = m_servers;
+    std::sort(servers.begin(), servers.end(), sort_servers);
+
+    return servers;
+}
+
 std::string
 configuration :: dump() const
 {

@@ -1039,8 +1039,9 @@ nop(uint64_t tid, db::message_wrapper *request)
     S->done_prog_clk(&nop_arg->max_done_clk, vt_id);
     S->done_permdel_clk(&nop_arg->max_done_clk, vt_id);
 
+    std::unordered_map<uint64_t, uint64_t> recovery_counts;
     if (++nop_count % 10000 == 0) {
-        S->cleanup_prog_states(tid);
+        recovery_counts = S->cleanup_prog_states(tid);
     }
 
     // cleanup done txs
@@ -1110,7 +1111,7 @@ nop(uint64_t tid, db::message_wrapper *request)
     S->record_completed_tx(tx.timestamp);
 
     // ack to VT
-    msg.prepare_message(message::VT_NOP_ACK, shard_id, qts, cur_node_count);
+    msg.prepare_message(message::VT_NOP_ACK, shard_id, qts, cur_node_count, recovery_counts);
     S->comm.send(vt_id, msg.buf);
 
     // call appropriate function based on check after acked to vt
@@ -1471,6 +1472,64 @@ inline bool cache_lookup(db::node*& node_to_check,
     } 
 }
 
+
+template <typename ParamsType, typename NodeStateType, typename CacheValueType>
+inline void
+propagate_node_progs(node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType> &np,
+                     uint64_t prop_shard,
+                     uint64_t num_shards,
+                     std::deque<std::pair<node_handle_t, ParamsType>> &prop_progs)
+{
+    assert(prop_shard != shard_id
+        && prop_shard  < (num_shards + ShardIdIncr));
+    assert(np.req_vclock != nullptr);
+
+    std::vector<std::deque<std::pair<node_handle_t, ParamsType>>> prog_batches;
+
+    // 2
+    //while (!prop_progs.empty()) {
+    //    std::deque<std::pair<node_handle_t, ParamsType>> progs;
+    //    progs.emplace_back(prop_progs.front());;
+    //    prog_batches.emplace_back(std::move(progs));
+
+    //    prop_progs.pop_front();
+    //}
+    // 3
+    //prog_batches.emplace_back(std::move(prop_progs));
+    // 1
+    while (!prop_progs.empty()) {
+        std::deque<std::pair<node_handle_t, ParamsType>> progs;
+        size_t num_progs;
+        if (BATCH_MSG_SIZE == 0) {
+            // BATCH_MSG_SIZE == 0 means no batching
+            num_progs = prop_progs.size();
+        } else {
+            num_progs = BATCH_MSG_SIZE < prop_progs.size() ? BATCH_MSG_SIZE : prop_progs.size();
+        }
+        assert(num_progs > 0);
+
+        for (size_t i = 0; i < num_progs; i++) {
+            progs.emplace_back(prop_progs[i]);
+        }
+        prog_batches.emplace_back(std::move(progs));
+
+        prop_progs.erase(prop_progs.begin(), prop_progs.begin() + num_progs);
+    }
+
+    for (auto &progs: prog_batches) {
+        message::message out_msg;
+        out_msg.prepare_message(message::NODE_PROG,
+                                np.m_type,
+                                np.vt_id,
+                                *np.req_vclock,
+                                np.req_id,
+                                np.vt_prog_ptr,
+                                progs);
+        S->comm.send(prop_shard, out_msg.buf);
+        //WDEBUG << "send node prog=" << np.req_id << " to shard " << prop_shard << std::endl;
+    }
+}
+
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 inline void node_prog_loop(uint64_t tid,
                            std::shared_ptr<node_prog::node_prog_running_state<ParamsType, NodeStateType, CacheValueType>> np_ptr,
@@ -1478,9 +1537,22 @@ inline void node_prog_loop(uint64_t tid,
                            db::node *first_node)
 {
     assert(time_oracle != nullptr);
-
     auto &np = *np_ptr;
-    message::message out_msg;
+
+    //S->nodeprog_msg_mtx.lock();
+    //auto count_iter = S->nodeprog_msg_counts.find(np.req_id);
+    //uint64_t curprog_msg_count;
+    //if (count_iter == S->nodeprog_msg_counts.end()) {
+    //    S->nodeprog_msg_counts.emplace(np.req_id, 1);
+    //    curprog_msg_count = 1;
+    //} else {
+    //    count_iter->second++;
+    //    curprog_msg_count = count_iter->second;
+    //}
+    //S->nodeprog_msg_mtx.unlock();
+
+    //WDEBUG << "prog=" << np.req_id << " msg count=" << curprog_msg_count << std::endl;
+
     // node state function
     std::function<NodeStateType&()> node_state_getter;
     std::function<void(std::shared_ptr<CacheValueType>,
@@ -1496,6 +1568,7 @@ inline void node_prog_loop(uint64_t tid,
         node_handle = id_params.first;
         ParamsType &params = id_params.second;
         this_node.handle = node_handle;
+        //WDEBUG << "thread=" << tid << " exec node prog at node=" << node_handle << std::endl;
 
         db::node *node = nullptr;
 
@@ -1505,6 +1578,7 @@ inline void node_prog_loop(uint64_t tid,
             first_node = nullptr;
         } else {
             bool recover;
+            uint64_t prog_id = np.req_id;
             std::shared_ptr<void> np_void = std::static_pointer_cast<void>(np_ptr);
             node = S->acquire_node_nodeprog(tid,
                                             node_handle,
@@ -1518,6 +1592,7 @@ inline void node_prog_loop(uint64_t tid,
                 // node is being recovered from HyperDex
                 // prog loop will continue once node has been recovered
                 // return now
+                S->record_node_recovery(prog_id, *np.req_vclock);
                 return;
             }
         }
@@ -1648,44 +1723,23 @@ inline void node_prog_loop(uint64_t tid,
             S->msg_count_mutex.unlock();
 #endif
         }
+
         uint64_t num_shards = get_num_shards();
         assert(np.batched_node_progs.size() < num_shards);
+
         for (auto &loc_progs_pair : np.batched_node_progs) {
-            assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < num_shards + ShardIdIncr);
-            //while (loc_progs_pair.second.size() > BATCH_MSG_SIZE) {
-            while (!loc_progs_pair.second.empty()) {
-                std::deque<std::pair<node_handle_t, ParamsType>> progs;
-                //while (progs.size() <= BATCH_MSG_SIZE && !loc_progs_pair.second.empty()) {
-                //    progs.emplace_back(loc_progs_pair.second.front());
-                //    loc_progs_pair.second.pop_front();
-                //}
-                progs.emplace_back(loc_progs_pair.second.front());;
-                loc_progs_pair.second.pop_front();
-                assert(np.req_vclock != nullptr);
-                out_msg.prepare_message(message::NODE_PROG, np.m_type, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, progs);
-                S->comm.send(loc_progs_pair.first, out_msg.buf);
-            }
+            propagate_node_progs(np, loc_progs_pair.first, num_shards, loc_progs_pair.second);
         }
+
         if (MaxCacheEntries) {
             assert(np.cache_value == false); // unique ptr is not assigned
         }
     }
+
     uint64_t num_shards = get_num_shards();
     if (!done_request) {
         for (auto &loc_progs_pair : np.batched_node_progs) {
-            assert(loc_progs_pair.first != shard_id && loc_progs_pair.first < num_shards + ShardIdIncr);
-            while (!loc_progs_pair.second.empty()) {
-                std::deque<std::pair<node_handle_t, ParamsType>> progs;
-                //while (progs.size() <= BATCH_MSG_SIZE && !loc_progs_pair.second.empty()) {
-                //    progs.emplace_back(loc_progs_pair.second.front());
-                //    loc_progs_pair.second.pop_front();
-                //}
-                progs.emplace_back(loc_progs_pair.second.front());
-                loc_progs_pair.second.pop_front();
-                assert(np.req_vclock != nullptr);
-                out_msg.prepare_message(message::NODE_PROG, np.m_type, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, progs);
-                S->comm.send(loc_progs_pair.first, out_msg.buf);
-            }
+            propagate_node_progs(np, loc_progs_pair.first, num_shards, loc_progs_pair.second);
         }
     }
 
@@ -2306,15 +2360,22 @@ server_loop_busybee(uint64_t thread_id)
     enum db::queue_order tx_order;
     order::oracle *time_oracle = S->time_oracles[thread_id];
 
-    S->comm.quiesce_thread(thread_id);
-    rec_msg.reset(new message::message());
-    bb_code = S->comm.recv(thread_id, &rec_msg->buf);
+    while (true) {
+        S->comm.quiesce_thread(thread_id);
+        rec_msg.reset(new message::message());
+        bb_code = S->comm.recv(thread_id, &rec_msg->buf);
 
-    if (bb_code != BUSYBEE_SUCCESS && bb_code != BUSYBEE_TIMEOUT) {
-        return;
-    }
+        if (bb_code != BUSYBEE_SUCCESS && bb_code != BUSYBEE_TIMEOUT) {
+            WDEBUG << "busybee recv returned code=" << bb_code << std::endl;
+            return;
+        }
 
-    if (bb_code == BUSYBEE_SUCCESS) {
+        if (bb_code == BUSYBEE_TIMEOUT) {
+            break;
+        }
+
+        assert(bb_code == BUSYBEE_SUCCESS);
+
         // exec or enqueue this request
         auto unpacker = rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE);
         unpack_buffer(unpacker, mtype);
@@ -2713,6 +2774,7 @@ main(int argc, const char *argv[])
     const char *log_file_name = nullptr;
     bool btc_graph = false;
     bool call_hdex = true;
+    bool log_immediate = false;
     // arg parsing borrowed from HyperDex
     e::argparser ap;
     ap.autohelp();
@@ -2746,6 +2808,9 @@ main(int argc, const char *argv[])
     ap.arg().long_name("no-call-hdex")
             .description("do not perform HyperDex Warp ops while bulk loading, if data already exists in a running HyperDex Warp cluster")
             .set_false(&call_hdex);
+    ap.arg().long_name("log-immediate")
+            .description("flush log immediately")
+            .set_true(&log_immediate);
 
     if (!ap.parse(argc, argv) || ap.args_sz() != 0) {
         std::cerr << "args parsing failure" << std::endl;
@@ -2760,7 +2825,10 @@ main(int argc, const char *argv[])
     } else {
         google::SetLogDestination(google::INFO, log_file_name);
     }
-    FLAGS_logbufsecs = 0;
+
+    if (log_immediate) {
+        FLAGS_logbufsecs = 0;
+    }
 
     // configuration file parse
     if (!init_config_constants(config_file)) {

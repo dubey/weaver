@@ -282,13 +282,15 @@ namespace db
             out_prog_map_t outstanding_prog_states; // maps request_id to list of nodes that have created prog state for that req id
             std::vector<vc::vclock_t> prog_done_clk; // largest clock of cumulative completed node prog for each VT
             std::unordered_map<node_handle_t, async_nodeprog_state> async_get_prog_states[NUM_NODE_MAPS];
+            std::unordered_map<uint64_t, std::pair<vc::vclock, uint64_t>> m_prog_node_recover_counts;
             void clear_all_state(uint64_t tid, const out_prog_map_t &outstanding_prog_states);
             void delete_prog_states(uint64_t tid, uint64_t req_id, std::vector<node_version_t> &node_handles);
         public:
+            void record_node_recovery(uint64_t prog_id, const vc::vclock&);
             void mark_nodes_using_state(uint64_t req_id, const vc::vclock &clk, std::vector<node_version_t> &node_handles);
             void done_prog_clk(const vc::vclock_t *prog_clk, uint64_t vt_id);
             void done_permdel_clk(const vc::vclock_t *permdel_clk, uint64_t vt_id);
-            void cleanup_prog_states(uint64_t tid);
+            std::unordered_map<uint64_t, uint64_t> cleanup_prog_states(uint64_t tid);
             bool check_done_prog(vc::vclock &clk);
 
             std::unordered_map<std::tuple<cache_key_t, uint64_t, node_handle_t>, void *> node_prog_running_states; // used for fetching cache contexts
@@ -310,6 +312,10 @@ namespace db
             bool check_done_tx(uint64_t tx_id);
             void cleanup_done_txs(const std::vector<uint64_t> &clean_txs);
             void restore_backup();
+
+            // debug
+            po6::threads::mutex nodeprog_msg_mtx;
+            std::unordered_map<uint64_t, uint64_t> nodeprog_msg_counts;
     };
 
     inline
@@ -1269,13 +1275,9 @@ namespace db
 
         std::shared_ptr<node_entry> entry = node_iter->second;
         if (entry->present) {
-            //entry->used = true;
             node *n = entry->nodes.front();
             n->add_edge_unique(e);
             found = true;
-            //if (!available_memory()) {
-            //    choose_node_to_evict(map_idx, entry);
-            //}
         }
         node_map_mutexes[map_idx].unlock();
 
@@ -1706,6 +1708,19 @@ namespace db
     }
 
     inline void
+    shard :: record_node_recovery(uint64_t prog_id, const vc::vclock &vclk)
+    {
+        node_prog_state_mutex.lock();
+        auto iter = m_prog_node_recover_counts.find(prog_id);
+        if (iter == m_prog_node_recover_counts.end()) {
+            m_prog_node_recover_counts.emplace(prog_id, std::make_pair(vclk, 1));
+        } else {
+            iter->second.second++;
+        }
+        node_prog_state_mutex.unlock();
+    }
+
+    inline void
     shard :: mark_nodes_using_state(uint64_t req_id, const vc::vclock &clk, std::vector<node_version_t> &state_nodes)
     {
         node_prog_state_mutex.lock();
@@ -1752,7 +1767,7 @@ namespace db
         perm_del_mutex.unlock();
     }
 
-    inline void
+    inline std::unordered_map<uint64_t, uint64_t>
     shard :: cleanup_prog_states(uint64_t tid)
     {
         std::vector<std::pair<uint64_t, std::vector<node_version_t>>> to_delete;
@@ -1768,11 +1783,28 @@ namespace db
         for (const auto &p: to_delete) {
             outstanding_prog_states.erase(p.first);
         }
+
+        std::unordered_map<uint64_t, uint64_t> node_recover_counts;
+        std::vector<uint64_t> del_node_counts;
+        for (auto &p: m_prog_node_recover_counts) {
+            const vc::vclock &clk = p.second.first;
+            if (order::oracle::happens_before_no_kronos(clk.clock, prog_done_clk[clk.vt_id])) {
+                node_recover_counts.emplace(p.first, p.second.second);
+                del_node_counts.emplace_back(p.first);
+            }
+        }
+
+        for (uint64_t d: del_node_counts) {
+            m_prog_node_recover_counts.erase(d);
+        }
+
         node_prog_state_mutex.unlock();
 
         for (auto &p: to_delete) {
             delete_prog_states(tid, p.first, p.second);
         }
+
+        return node_recover_counts;
     }
 
     inline bool

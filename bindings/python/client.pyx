@@ -384,6 +384,7 @@ cdef extern from 'node_prog/get_btc_block.h' namespace 'node_prog':
         node_handle_t block
         node block_node
         vector[node] txs
+        uint32_t num_nodes_read
 
 cdef extern from 'node_prog/get_btc_tx.h' namespace 'node_prog':
     cdef cppclass get_btc_tx_params:
@@ -1037,7 +1038,7 @@ cdef class Client:
             txs.append(tx_node)
             inc(tx_iter)
 
-        return (block_node, txs)
+        return (block_node, txs, c_rp.num_nodes_read)
 
     def get_btc_tx(self, tx):
         cdef vector[pair[string, get_btc_tx_params]] c_args

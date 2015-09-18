@@ -30,6 +30,7 @@ namespace node_prog
         node_handle_t block;
         cl::node block_node;
         std::vector<cl::node> txs;
+        uint32_t num_nodes_read;
 
         bool returning;
         db::remote_node block_rn;
@@ -48,7 +49,9 @@ namespace node_prog
     struct get_btc_block_state: public virtual Node_State_Base
     {
         uint32_t outstanding_count;
+        std::unordered_map<std::string, uint64_t> outstanding;
         std::vector<cl::node> txs;
+        uint32_t num_nodes_read;
 
         get_btc_block_state();
         ~get_btc_block_state() { }

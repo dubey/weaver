@@ -21,7 +21,7 @@
 #define NUM_NODE_MAPS 64
 #define SHARD_MSGRECV_TIMEOUT 0 // busybee recv timeout (ms) for shard worker threads
 
-#define BATCH_MSG_SIZE 1 // 1 == no batching
+#define BATCH_MSG_SIZE 10 // 1 == no batching
 
 // migration
 //#define WEAVER_CLDG // defined if communication-based LDG, undef otherwise

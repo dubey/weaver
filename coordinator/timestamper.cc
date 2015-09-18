@@ -175,12 +175,12 @@ nop_function()
             vts->clk_rw_mtx.unlock();
 
             vts->tx_prog_mutex.lock();
-            tx->nop->max_done_clk = vts->max_done_clk;
+            tx->nop->max_done_clk = vts->m_max_done_clk;
             if (kronos_call) {
                 if (vts->outstanding_progs.empty()) {
                     kronos_cleanup_clk = tx->timestamp.clock;
-                } else if (kronos_cleanup_clk[vt_id+1] < vts->max_done_clk[vt_id+1]) {
-                    kronos_cleanup_clk = vts->max_done_clk;
+                } else if (kronos_cleanup_clk[vt_id+1] < vts->m_max_done_clk[vt_id+1]) {
+                    kronos_cleanup_clk = vts->m_max_done_clk;
                 }
             }
             tx->nop->outstanding_progs = vts->pend_progs.size();
@@ -407,7 +407,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     for (auto &batch_pair: initial_batches) {
         msg_to_send.prepare_message(message::NODE_PROG, pType, vt_id, req_timestamp, req_id, cp_int, batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
-        WDEBUG << "send node prog to shard=" << batch_pair.first << std::endl;
+        WDEBUG << "send node prog=" << req_id << " to shard=" << batch_pair.first << std::endl;
     }
 
 #ifdef weaver_benchmark_
@@ -438,10 +438,11 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 // remove a completed node program from pending_prog data structure
 // update 'max_done_clk' accordingly
 // return true if successfully process prog_done, false if already processed this prog
-// caution: need to hold vts->tx_prog_mutex
 bool
 node_prog_done(uint64_t req_id, current_prog *cp)
 {
+    vts->tx_prog_mutex.lock();
+
     auto &done_progs = vts->done_progs;
     auto &outstanding_progs = vts->outstanding_progs;
 
@@ -452,13 +453,16 @@ node_prog_done(uint64_t req_id, current_prog *cp)
     outstanding_progs.erase(req_id);
     done_progs.emplace_back(cp);
 
-    if (++vts->prog_done_cnt % 100 == 0) {
+    //if (++vts->prog_done_cnt % 100 == 0) {
+    if (++vts->prog_done_cnt % 1 == 0) {
         vts->prog_done_cnt = 0;
     } else {
         return true;
     }
 
     vts->process_pend_progs();
+
+    vts->tx_prog_mutex.unlock();
 
     return true;
 }
@@ -538,13 +542,31 @@ server_loop(void *args)
 
                 case message::VT_NOP_ACK: {
                     uint64_t shard_node_count, nop_qts, sid, sender;
-                    msg->unpack_message(message::VT_NOP_ACK, sender, nop_qts, shard_node_count);
+                    std::unordered_map<uint64_t, uint64_t> node_recovery_counts;
+                    msg->unpack_message(message::VT_NOP_ACK, sender, nop_qts, shard_node_count, node_recovery_counts);
                     sid = sender - ShardIdIncr;
                     vts->periodic_update_mutex.lock();
                     if (nop_qts > vts->nop_ack_qts[sid]) {
                         vts->shard_node_count[sid] = shard_node_count;
                         vts->to_nop[sid] = true;
                         vts->nop_ack_qts[sid] = nop_qts;
+                    }
+
+                    for (const auto &p: node_recovery_counts) {
+                        auto iter = vts->node_recovery_counts.find(p.first);
+                        if (iter == vts->node_recovery_counts.end()) {
+                            vts->node_recovery_counts.emplace(p.first, std::make_pair(1, p.second));
+                            iter = vts->node_recovery_counts.find(p.first);
+                        } else {
+                            iter->second.first++;
+                            iter->second.second += p.second;
+                        }
+
+                        WDEBUG << "prog=" << p.first << ", # node recoveries=" << iter->second.second << std::endl;
+                        if (iter->second.first == get_num_shards()) {
+                            WDEBUG << "done prog=" << p.first << ", # node recoveries=" << iter->second.second << std::endl;
+                            vts->node_recovery_counts.erase(p.first);
+                        }
                     }
                     vts->periodic_update_mutex.unlock();
                     break;
@@ -610,13 +632,11 @@ server_loop(void *args)
                     current_prog *cp = (current_prog*)cp_int;
                     client = cp->client;
 
-                    vts->tx_prog_mutex.lock();
                     bool to_process = node_prog_done(req_id, cp);
-                    vts->tx_prog_mutex.unlock();
 
                     if (to_process) {
                         vts->comm.send_to_client(client, msg->buf);
-                        WDEBUG << "done node prog and sent to client=" << client << std::endl;
+                        WDEBUG << "done node prog=" << req_id << " and sent to client=" << client << std::endl;
 #ifdef weaver_benchmark_
                         vts->test_mtx.lock();
                         vts->outstanding_cnt--;
@@ -858,6 +878,7 @@ main(int argc, const char *argv[])
     const char *config_file = "./weaver.yaml";
     bool backup = false;
     const char *log_file_name = nullptr;
+    bool log_immediate = false;
     // arg parsing borrowed from HyperDex
     e::argparser ap;
     ap.autohelp();
@@ -876,6 +897,9 @@ main(int argc, const char *argv[])
     ap.arg().long_name("log-file")
             .description("full path of file to write log to (default: stderr)")
             .metavar("filename").as_string(&log_file_name);
+    ap.arg().long_name("log-immediate")
+            .description("flush log immediately")
+            .set_true(&log_immediate);
 
     if (!ap.parse(argc, argv) || ap.args_sz() != 0) {
         std::cerr << "args parsing failure" << std::endl;
@@ -890,7 +914,10 @@ main(int argc, const char *argv[])
     } else {
         google::SetLogDestination(google::INFO, log_file_name);
     }
-    FLAGS_logbufsecs = 0;
+
+    if (log_immediate) {
+        FLAGS_logbufsecs = 0;
+    }
 
     // configuration file parse
     if (!init_config_constants(config_file)) {

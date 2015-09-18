@@ -54,7 +54,7 @@ class configuration
         uint64_t get_weaver_id(const server_id &id) const;
         uint64_t get_virtual_id(const server_id &id) const;
         server::type_t get_type(const server_id &id) const;
-        std::vector<server> get_servers() const { return m_servers; }
+        std::vector<server> get_servers() const;
 
     public:
         std::string dump() const;
