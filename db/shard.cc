@@ -357,6 +357,7 @@ struct load_xml_elem_static_args
     uint64_t other_thread_elem_count;
     bool btc_graph;
     bool call_hdex;
+    uint64_t block_index;
 
     load_xml_elem_static_args(const load_graph_data &data,
                               bool pdelim)
@@ -372,6 +373,7 @@ struct load_xml_elem_static_args
         , other_thread_elem_count(0)
         , btc_graph(data.btc_graph)
         , call_hdex(data.call_hdex)
+        , block_index(0)
     { }
 };
 
@@ -428,6 +430,17 @@ load_xml_node(pugi::xml_document &doc,
         }
     }
 
+    if (!block_index.empty()) {
+        size_t parse_idx;
+        uint64_t blk;
+        bool parse_bad = false;
+        parse_single_uint64(block_index, parse_idx, blk, parse_bad);
+        assert(!parse_bad);
+        if (blk > static_args.block_index) {
+            static_args.block_index = blk;
+        }
+    }
+
     if (++cur_shard_node_count % 10000 == 0) {
         WDEBUG << "GRAPHML tid=" << this_tid
                << " node=" << cur_shard_node_count
@@ -461,7 +474,7 @@ load_xml_node(pugi::xml_document &doc,
 
     bool already_exists = other_hstub.new_node(n->get_handle(), start_edge_idx);
     if (!already_exists) {
-        bool in_mem = S->add_node_to_nodemap_bulk_load(n, map_idx);
+        bool in_mem = S->add_node_to_nodemap_bulk_load(n, map_idx, static_args.block_index);
         if (static_args.call_hdex) {
             S->bulk_load_put_node(hstub, n, in_mem);
         } else if (!in_mem) {
@@ -523,7 +536,7 @@ check_node(const node_handle_t &node_handle,
 
     bool already_exists = other_hstub.new_node(n->get_handle(), start_edge_idx);
     assert(!already_exists);
-    bool in_mem = S->add_node_to_nodemap_bulk_load(n, map_idx);
+    bool in_mem = S->add_node_to_nodemap_bulk_load(n, map_idx, static_args.block_index);
     if (static_args.call_hdex) {
         S->bulk_load_put_node(hstub, n, in_mem);
     } else if (!in_mem) {

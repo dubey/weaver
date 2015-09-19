@@ -49,24 +49,24 @@ ip_addrs=$(ifconfig | grep inet | grep -v inet6 | awk '{print $2}' | awk -F":" '
 shopt -s nullglob
 cd
 
-# hyperdex coord
-hyperdex_coord_dir=~/weaver_runtime/hyperdex/coord
-echo "Starting HyperDex coordinator at location $hyperdex_coord_ipaddr : $hyperdex_coord_port, data at $hyperdex_coord_dir"
-if [[ $ip_addrs =~ $hyperdex_coord_ipaddr ]]; then
-    mkdir -p $hyperdex_coord_dir
-    cd $hyperdex_coord_dir
-    rm replicant-daemon-*
-    hyperdex coordinator -l $hyperdex_coord_ipaddr -p $hyperdex_coord_port > /dev/null 2>&1
-else
-ssh $hyperdex_coord_ipaddr 'bash -s' << EOF
-    shopt -s nullglob
-    mkdir -p $hyperdex_coord_dir
-    cd $hyperdex_coord_dir
-    rm replicant-daemon-*
-    hyperdex coordinator -l $hyperdex_coord_ipaddr -p $hyperdex_coord_port > /dev/null 2>&1
-EOF
-fi
-
+## hyperdex coord
+#hyperdex_coord_dir=~/weaver_runtime/hyperdex/coord
+#echo "Starting HyperDex coordinator at location $hyperdex_coord_ipaddr : $hyperdex_coord_port, data at $hyperdex_coord_dir"
+#if [[ $ip_addrs =~ $hyperdex_coord_ipaddr ]]; then
+#    mkdir -p $hyperdex_coord_dir
+#    cd $hyperdex_coord_dir
+#    rm replicant-daemon-*
+#    hyperdex coordinator -l $hyperdex_coord_ipaddr -p $hyperdex_coord_port > /dev/null 2>&1
+#else
+#ssh $hyperdex_coord_ipaddr 'bash -s' << EOF
+#    shopt -s nullglob
+#    mkdir -p $hyperdex_coord_dir
+#    cd $hyperdex_coord_dir
+#    rm replicant-daemon-*
+#    hyperdex coordinator -l $hyperdex_coord_ipaddr -p $hyperdex_coord_port > /dev/null 2>&1
+#EOF
+#fi
+#
 # weaver server manager
 num_sm_daemons=${#server_manager_ipaddr[*]}
 for i in $(seq 1 $num_sm_daemons);
@@ -136,38 +136,38 @@ EOF
 done
 sleep 2
 
-echo 'Wait for HyperDex coordinator to start up'
-cd $hyperdex_coord_dir
-./test_file.sh
-echo 'HyperDex coordinator is now up, starting HyperDex daemons'
-
-#hyperdex daemons
-num_daemons=${#hyperdex_daemons_ipaddr[*]}
-for i in $(seq 1 $num_daemons);
-do
-    idx=$(($i-1))
-    ipaddr=${hyperdex_daemons_ipaddr[$idx]}
-    port=${hyperdex_daemons_port[$idx]}
-    directory=~/weaver_runtime/hyperdex/daemon$idx
-    echo "Starting HyperDex daemon $i at location $ipaddr : $port, data at $directory"
-    if [[ $ip_addrs =~ $ipaddr ]]; then
-        mkdir -p $directory
-        cd $directory
-        hyperdex daemon --listen=$ipaddr --listen-port=$port \
-                        --coordinator=$hyperdex_coord_ipaddr --coordinator-port=$hyperdex_coord_port \
-                        --log-immediate \
-                        > /dev/null 2>&1
-    else
-    ssh $ipaddr 'bash -s' << EOF
-        shopt -s nullglob
-        mkdir -p $directory
-        cd $directory
-        hyperdex daemon --listen=$ipaddr --listen-port=$port \
-                        --coordinator=$hyperdex_coord_ipaddr --coordinator-port=$hyperdex_coord_port \
-                        --log-immediate \
-                        > /dev/null 2>&1
-EOF
-    fi
-done
-
+#echo 'Wait for HyperDex coordinator to start up'
+#cd $hyperdex_coord_dir
+#./test_file.sh
+#echo 'HyperDex coordinator is now up, starting HyperDex daemons'
+#
+##hyperdex daemons
+#num_daemons=${#hyperdex_daemons_ipaddr[*]}
+#for i in $(seq 1 $num_daemons);
+#do
+#    idx=$(($i-1))
+#    ipaddr=${hyperdex_daemons_ipaddr[$idx]}
+#    port=${hyperdex_daemons_port[$idx]}
+#    directory=~/weaver_runtime/hyperdex/daemon$idx
+#    echo "Starting HyperDex daemon $i at location $ipaddr : $port, data at $directory"
+#    if [[ $ip_addrs =~ $ipaddr ]]; then
+#        mkdir -p $directory
+#        cd $directory
+#        hyperdex daemon --listen=$ipaddr --listen-port=$port \
+#                        --coordinator=$hyperdex_coord_ipaddr --coordinator-port=$hyperdex_coord_port \
+#                        --log-immediate \
+#                        > /dev/null 2>&1
+#    else
+#    ssh $ipaddr 'bash -s' << EOF
+#        shopt -s nullglob
+#        mkdir -p $directory
+#        cd $directory
+#        hyperdex daemon --listen=$ipaddr --listen-port=$port \
+#                        --coordinator=$hyperdex_coord_ipaddr --coordinator-port=$hyperdex_coord_port \
+#                        --log-immediate \
+#                        > /dev/null 2>&1
+#EOF
+#    fi
+#done
+#
 echo 'Done startup.'

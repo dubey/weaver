@@ -156,7 +156,7 @@ namespace db
             node* create_node_bulk_load(const node_handle_t &node_handle,
                 uint64_t map_idx,
                 vclock_ptr_t vclk);
-            bool add_node_to_nodemap_bulk_load(node *n, uint64_t map_idx);
+            bool add_node_to_nodemap_bulk_load(node *n, uint64_t map_idx, uint64_t block_index);
             bool node_exists_bulk_load(const node_handle_t &node_handle);
             void delete_node_nonlocking(node *n,
                 vclock_ptr_t tdel);
@@ -1132,7 +1132,8 @@ namespace db
 
     inline bool
     shard :: add_node_to_nodemap_bulk_load(node *n,
-                                           uint64_t map_idx)
+                                           uint64_t map_idx,
+                                           uint64_t block_index)
     {
         bool in_mem;
 
@@ -1146,6 +1147,7 @@ namespace db
         std::shared_ptr<node_entry> new_entry;
         if (nodes_in_memory[map_idx] < NodesPerMap) {
         //if (available_memory()) {
+        //if (block_index >= 200000 && block_index <= 202000) {
             new_entry = std::make_shared<node_entry>(n);
             new_node_entry(map_idx, new_entry);
             new_entry->used = true;
