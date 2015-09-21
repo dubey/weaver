@@ -96,4 +96,4 @@ bulk_load_edge_handle_prefix: ""
 nodes_per_map: 10
 
 # max memory to be used as ratio of total system memory
-max_memory: 0.80
+max_memory: 0.95

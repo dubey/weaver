@@ -66,7 +66,7 @@ cd
 #    hyperdex coordinator -l $hyperdex_coord_ipaddr -p $hyperdex_coord_port > /dev/null 2>&1
 #EOF
 #fi
-#
+
 # weaver server manager
 num_sm_daemons=${#server_manager_ipaddr[*]}
 for i in $(seq 1 $num_sm_daemons);

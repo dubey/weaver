@@ -32,8 +32,9 @@ oracle :: compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
 {
     int ret = 2;
 
-    assert(clk1.size() == ClkSz);
-    assert(clk2.size() == ClkSz);
+    uint64_t clk_sz = clk1.size() < clk2.size() ? clk1.size() : clk2.size();
+    //assert(clk1.size() == ClkSz);
+    //assert(clk2.size() == ClkSz);
 
     // check epoch number
     if (clk1[0] < clk2[0]) {
@@ -43,7 +44,7 @@ oracle :: compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
     }
 
     // same epoch number, compare each entry in vector
-    for (uint64_t i = 1; i < ClkSz; i++) {
+    for (uint64_t i = 1; i < clk_sz; i++) {
         if ((clk1[i] < clk2[i]) && (ret != 0)) {
             if (ret == 2) {
                 ret = 0;

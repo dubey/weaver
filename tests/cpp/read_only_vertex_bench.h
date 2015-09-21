@@ -31,13 +31,12 @@ exec_reads(std::default_random_engine &generator,
     wclock::weaver_timer &timer,
     std::vector<uint64_t> &timestamps)
 {
-    node_prog::read_node_props_params rp, return_params;
-
     uint64_t t;
     uint64_t first = timer.get_time_elapsed();
     timestamps.emplace_back(first);
     for (uint64_t i = 0; i < num_requests; i++) {
-        std::string n = std::to_string(distribution(generator));
+        node_prog::read_node_props_params rp, return_params;
+        std::string n = "BLOCKID_" + std::to_string(distribution(generator));
 
         std::vector<std::pair<std::string, node_prog::read_node_props_params>> args(1, std::make_pair(n, rp));
         cl.read_node_props_program(args, return_params);
@@ -58,8 +57,8 @@ run_read_only_vertex_bench(const std::string &output_fname, uint64_t num_nodes, 
 
     std::random_device rd;
     std::default_random_engine generator(rd());
-    std::uniform_int_distribution<uint64_t> distribution(0, num_nodes-1);
-    client cl("172.31.44.220", 2002, "/usr/local/etc/weaver.yaml");
+    std::uniform_int_distribution<uint64_t> distribution(1001, 1999);
+    client cl("128.84.167.220", 2002, "/usr/local/etc/weaver.yaml");
     wclock::weaver_timer timer;
     std::vector<uint64_t> timestamps;
     timestamps.reserve(num_requests+1);
