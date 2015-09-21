@@ -152,7 +152,7 @@ nop_function()
         sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, nullptr);
         assert((sleep_ret == 0 || sleep_ret == EINTR) && "error in clock_nanosleep");
 
-        if (++loop_count > 10000) {
+        if (++loop_count > 100000000) {
             kronos_call = true;
         } else {
             kronos_call = false;
@@ -381,6 +381,15 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
             msg->prepare_message(message::NODE_PROG_NOTFOUND);
             vts->comm.send_to_client(clientID, msg->buf);
             return;
+        }
+    }
+
+    // process loc map
+    // hack around bug: should be storing shard id in HyperDex, not server
+    if (ShardIdIncr > 1) {
+        uint64_t increment = ShardIdIncr - 1;
+        for (auto &p: loc_map) {
+            p.second += increment;
         }
     }
 

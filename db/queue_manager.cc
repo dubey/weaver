@@ -48,6 +48,7 @@ queue_manager :: enqueue_read_request(uint64_t vt_id, queued_request *t)
 bool
 queue_manager :: check_rd_request(vc::vclock_t &clk)
 {
+    //return true;
     queue_mutex.lock();
     bool check = check_rd_req_nonlocking(clk);
     queue_mutex.unlock();

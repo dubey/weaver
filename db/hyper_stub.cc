@@ -763,6 +763,9 @@ hyper_stub :: done_get_op(async_call_ptr_t ac_ptr, int64_t op_id, db::node **n)
                                         edge_id,
                                         &e);
                 if (success) {
+                    // hack to avoid bulk loading graph for diff #vts
+                    e->nbr.loc += (ShardIdIncr - 1);
+
                     age->n->recover_edge_mtx.lock();
                     age->n->out_edges[age->handle].emplace_back(e);
                     if (--age->n->pending_recover_edges == 0) {

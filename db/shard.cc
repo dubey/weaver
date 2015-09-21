@@ -1702,6 +1702,7 @@ inline void node_prog_loop(uint64_t tid,
                     std::unique_ptr<message::message> m(new message::message());
                     m->prepare_message(message::NODE_PROG_RETURN, np.m_type, np.req_id, np.vt_prog_ptr, res.second);
                     S->comm.send(np.vt_id, m->buf);
+                    //WDEBUG << "done node prog=" << np.req_id << ", sending to server=" << np.vt_id << std::endl;
                     break; // can only send one message back
                 } else {
                     std::deque<std::pair<node_handle_t, ParamsType>> &next_deque = (rn.loc == S->shard_id) ? np.start_node_params : np.batched_node_progs[rn.loc];

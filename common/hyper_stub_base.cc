@@ -101,14 +101,14 @@ hyper_stub_base :: hyper_stub_base()
 
 #define HYPERDEX_CHECK_STATUSES(status, fail_check, debug_key) \
     if ((loop_status != HYPERDEX_CLIENT_SUCCESS && loop_status != HYPERDEX_CLIENT_TIMEOUT) || (fail_check)) { \
-        WDEBUG << "hyperdex error" \
+        /*WDEBUG << "hyperdex error" \
                << ", call status: " << hyperdex_client_returncode_to_string(status) \
-               << ", loop status: " << hyperdex_client_returncode_to_string(loop_status) << std::endl; \
+               << ", loop status: " << hyperdex_client_returncode_to_string(loop_status) << std::endl;*/ \
         if (debug_key != nullptr) { \
             WDEBUG << "key=" << (const char*)debug_key << std::endl; \
         } \
-        WDEBUG << "error message: " << hyperdex_client_error_message(m_cl) << std::endl; \
-        WDEBUG << "error loc: " << hyperdex_client_error_location(m_cl) << std::endl; \
+        /*WDEBUG << "error message: " << hyperdex_client_error_message(m_cl) << std::endl; \
+        WDEBUG << "error loc: " << hyperdex_client_error_location(m_cl) << std::endl;*/ \
         success = false; \
     }
 
@@ -841,10 +841,10 @@ hyper_stub_base :: recreate_node(const hyperdex_client_attribute *cl_attr,
     unpack_buffer(cl_attr[idx[5]].value, cl_attr[idx[5]].value_sz, n.last_upd_clk);
     // restore clock
     unpack_buffer(cl_attr[idx[6]].value, cl_attr[idx[6]].value_sz, n.restore_clk);
-    if (n.restore_clk->size() != ClkSz) {
-        WDEBUG << "unpack error, restore_clk->size=" << n.restore_clk->size() << std::endl;
-        return false;
-    }
+    //if (n.restore_clk->size() != ClkSz) {
+    //    WDEBUG << "unpack error, restore_clk->size=" << n.restore_clk->size() << std::endl;
+    //    return false;
+    //}
     // aliases
     unpack_buffer(cl_attr[idx[7]].value, cl_attr[idx[7]].value_sz, n.aliases);
 
