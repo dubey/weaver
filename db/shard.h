@@ -785,11 +785,17 @@ namespace db
         node_map_mutexes[map_idx].lock();
 
         auto node_iter = nodes[map_idx].end();
+#ifdef weaver_async_node_recovery_
         bool found = async_node_present(tid, map_idx, node_handle, node_iter);
+#else
+        node_iter = node_present(tid, map_idx, node_handle);
+        bool found = (node_iter != nodes[map_idx].end());
+#endif
+        bool node_exists = (node_iter != nodes[map_idx].end());
 
         if (found) {
             n = finish_acquire_node_nodeprog(node_iter, vclk, time_oracle);
-        } else if (node_iter != nodes[map_idx].end()) {
+        } else if (node_exists) {
             // node exists but currently not in memory
             // save prog state until node is recovered from HyperDex
             async_nodeprog_state delayed_prog;

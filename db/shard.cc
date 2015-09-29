@@ -2557,6 +2557,7 @@ server_loop_hyperdex(uint64_t thread_id)
     }
 }
 
+#ifdef weaver_async_node_recover_
 void*
 server_loop(void *args)
 {
@@ -2592,6 +2593,20 @@ server_loop(void *args)
         }
     }
 }
+#else
+void*
+server_loop(void *args)
+{
+    uint64_t thread_id = (uint64_t)args;
+    if (!block_signals()) {
+        return nullptr;
+    }
+
+    while (true) {
+        server_loop_busybee(thread_id);
+    }
+}
+#endif
 
 bool
 generate_token(uint64_t* token)

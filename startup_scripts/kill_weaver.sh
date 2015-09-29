@@ -30,7 +30,7 @@ kronos_port=($(weaver-parse-config -c kronos_port $config_file_args))
 #else
 #    ssh $ipaddr "ps ax | grep 'libhyperdex-coordinator.so' | grep replicant-daemon | awk -F ' ' '{print $1}' | xargs kill -9"
 #fi
-#
+
 #num_daemons=${#hyperdex_daemons_ipaddr[*]}
 #for i in $(seq 1 $num_daemons);
 #do

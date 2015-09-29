@@ -27,4 +27,7 @@
 //#define WEAVER_CLDG // defined if communication-based LDG, undef otherwise
 //#define WEAVER_NEW_CLDG // defined if communication-based LDG, undef otherwise
 
+// async node recovery
+//#define weaver_async_node_recovery_
+
 #endif
