@@ -230,7 +230,7 @@ get_xml_element_chunk(std::ifstream &file,
 
     for (uint32_t idx = 0; idx < XML_CHUNK_SZ && !file.eof(); idx++) {
         std::string line, element;
-        uint32_t cur_elem_idx;
+        uint32_t cur_elem_idx = UINT32_MAX;
         bool in_elem = false;
 
         while (std::getline(file, line)) {

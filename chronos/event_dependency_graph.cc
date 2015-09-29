@@ -546,7 +546,7 @@ operator << (e::packer lhs, const event_dependency_graph &rhs)
     if (rhs.m_base) {
         base_slice = e::slice((const uint8_t*)rhs.m_base, rhs.base_size(rhs.m_vertices_allocated));
     } else {
-        base_slice = e::slice((const uint8_t*)rhs.m_base, 0);
+        base_slice = e::slice((const uint8_t*)rhs.m_base, (size_t)0);
     }
 
     lhs = lhs << rhs.m_nextid
