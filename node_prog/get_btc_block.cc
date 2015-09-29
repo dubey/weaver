@@ -108,7 +108,7 @@ node_prog :: get_btc_block_node_program(node_prog::node &n,
 
         if (n.get_handle() == params.block || n.is_alias(params.block)) {
             // this is btc block vertex
-            WDEBUG << "at btc block=" << n.get_handle() << " aka=" << params.block << std::endl;
+            //WDEBUG << "at btc block=" << n.get_handle() << " aka=" << params.block << std::endl;
             std::string block_tx_str = "BLOCK_TX_";
             params.block_rn = rn;
             //state.outstanding.clear();
@@ -138,8 +138,8 @@ node_prog :: get_btc_block_node_program(node_prog::node &n,
                 //       << std::endl;
             }
         } else {
-            WDEBUG << "at btc tx=" << n.get_handle()
-                   << " for get btc block=" << params.block_rn.handle << std::endl;
+            //WDEBUG << "at btc tx=" << n.get_handle()
+            //       << " for get btc block=" << params.block_rn.handle << std::endl;
             cl::node tx;
             parse_btc_tx(tx, n);
             params.txs.emplace_back(tx);
@@ -156,9 +156,9 @@ node_prog :: get_btc_block_node_program(node_prog::node &n,
 
         //state.outstanding.erase(params.txs.front().handle);
 
-        WDEBUG << "return at btc block=" << params.block
-               << " from tx=" << params.txs.front().handle 
-               << ", outstanding count=" << (state.outstanding_count-1) << std::endl;
+        //WDEBUG << "return at btc block=" << params.block
+        //       << " from tx=" << params.txs.front().handle 
+        //       << ", outstanding count=" << (state.outstanding_count-1) << std::endl;
         //if (!state.outstanding.empty()) {
         //    for (const auto &p: state.outstanding) {
         //        WDEBUG << "pending tx=" << p.first << " from loc=" << p.second << std::endl;

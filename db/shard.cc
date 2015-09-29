@@ -425,7 +425,7 @@ load_xml_node(pugi::xml_document &doc,
             }
         }
 
-        if (key == "index") {
+        if (key == "index" || key == "block") {
             block_index = value;
         }
     }

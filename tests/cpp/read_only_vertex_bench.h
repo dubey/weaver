@@ -57,7 +57,7 @@ run_read_only_vertex_bench(const std::string &output_fname, uint64_t num_nodes, 
 
     std::random_device rd;
     std::default_random_engine generator(rd());
-    std::uniform_int_distribution<uint64_t> distribution(1001, 1999);
+    std::uniform_int_distribution<uint64_t> distribution(200000, 200099);
     client cl("128.84.167.220", 2002, "/usr/local/etc/weaver.yaml");
     wclock::weaver_timer timer;
     std::vector<uint64_t> timestamps;
@@ -66,7 +66,9 @@ run_read_only_vertex_bench(const std::string &output_fname, uint64_t num_nodes, 
     exec_reads(generator, distribution, cl, num_requests, timer, timestamps);
 
     std::ofstream file;
-    file.open(output_fname + "/" + std::to_string(pid), std::ofstream::out);
+    std::uniform_int_distribution<uint64_t> fname_dist(1, UINT64_MAX-1);
+    uint64_t name_rand = fname_dist(generator);
+    file.open(output_fname + "/" + std::to_string(pid) + "_" + std::to_string(name_rand), std::ofstream::out);
     for (uint64_t t: timestamps) {
         file << t << std::endl;
     }
