@@ -491,7 +491,7 @@ namespace db
                                 db::node *n,
                                 bool in_mem)
     {
-        assert(hs.put_node_no_loop(n));
+        PASSERT(hs.put_node_no_loop(n));
 
         if (!in_mem) {
             permanent_node_delete(n);
@@ -505,7 +505,7 @@ namespace db
                                 uint64_t edge_id,
                                 bool node_in_mem)
     {
-        assert(hs.put_edge_no_loop(node_handle, e, edge_id, !node_in_mem));
+        PASSERT(hs.put_edge_no_loop(node_handle, e, edge_id, !node_in_mem));
     }
 
     inline void
@@ -748,7 +748,7 @@ namespace db
                     break;
                 }
             }
-            assert(exists);
+            PASSERT(exists);
 
             if (n->tx_queue.front() != comp) {
                 // write exists in queue, but cannot be executed right now
@@ -860,7 +860,7 @@ namespace db
         node_map_mutexes[map_idx].lock();
 
         auto node_iter = nodes[map_idx].find(n->get_handle());
-        assert(node_iter != nodes[map_idx].end());
+        PASSERT(node_iter != nodes[map_idx].end());
 
         post_node_recovery(success,
                            n,
@@ -872,7 +872,7 @@ namespace db
 
         auto progstate_map  = async_get_prog_states[map_idx];
         auto progstate_iter = progstate_map.find(n->get_handle());
-        assert(progstate_iter != progstate_map.end());
+        PASSERT(progstate_iter != progstate_map.end());
         delayed_prog = progstate_iter->second;
         n = finish_acquire_node_nodeprog(node_iter,
                                          delayed_prog.clk,
@@ -894,8 +894,8 @@ namespace db
     inline void
     shard :: permanent_node_delete(node *n)
     {
-        assert(n->waiters == 0);
-        assert(!n->in_use);
+        PASSERT(n->waiters == 0);
+        PASSERT(!n->in_use);
         // this code isn't executed in case of deletion of migrated nodes
         if (n->state != node::mode::MOVED) {
             for (auto &x: n->out_edges) {
@@ -913,7 +913,7 @@ namespace db
     {
         if (!n->empty_evicted_node_state()) {
             db::data_map<db::evicted_node_state> &node_state_map = evicted_nodes_states[map_idx];
-            assert(node_state_map.find(n->get_handle()) == node_state_map.end());
+            PASSERT(node_state_map.find(n->get_handle()) == node_state_map.end());
             evicted_node_state &s = node_state_map[n->get_handle()];
             s.tx_queue = std::move(n->tx_queue);
             if (n->last_perm_deletion) {
@@ -948,10 +948,10 @@ namespace db
         const node_handle_t &node_handle = n->get_handle();
         //WDEBUG << "evicting node " << node_handle << std::endl;
         auto map_iter = nodes[map_idx].find(node_handle);
-        assert(map_iter != nodes[map_idx].end());
+        PASSERT(map_iter != nodes[map_idx].end());
 
         auto entry_ptr = map_iter->second;
-        assert(entry_ptr->prev != entry_ptr); // should never evict last node, NodesPerMap >= 1
+        PASSERT(entry_ptr->prev != entry_ptr); // should never evict last node, NodesPerMap >= 1
 
         if (entry_ptr == node_queue_clock_hand[map_idx]) {
             node_queue_clock_hand[map_idx] = entry_ptr->next;
@@ -972,7 +972,7 @@ namespace db
                 break;
             }
         }
-        assert(node_iter != entry.nodes.end());
+        PASSERT(node_iter != entry.nodes.end());
         entry.nodes.erase(node_iter);
         entry.present = false;
 
@@ -1043,7 +1043,7 @@ namespace db
         } else if (n->permanently_deleted) {
             const node_handle_t &node_handle = n->get_handle();
             auto map_iter = nodes[map_idx].find(node_handle);
-            assert(map_iter != nodes[map_idx].end());
+            PASSERT(map_iter != nodes[map_idx].end());
             node_entry &entry = *map_iter->second;
             auto node_iter = entry.nodes.begin();
             for (; node_iter != entry.nodes.end(); node_iter++) {
@@ -1051,7 +1051,7 @@ namespace db
                     break;
                 }
             }
-            assert(node_iter != entry.nodes.end());
+            PASSERT(node_iter != entry.nodes.end());
             entry.nodes.erase(node_iter);
             --nodes_in_memory[map_idx];
             if (entry.nodes.empty()) {
@@ -1152,7 +1152,7 @@ namespace db
             std::string err_msg = "repeated node handle ";
             err_msg += n->get_handle();
             err_msg += " in bulk loading process, aborting now.";
-            assert(false && err_msg.c_str());
+            PASSERT(false && err_msg.c_str());
         }
         std::shared_ptr<node_entry> new_entry;
         //if (nodes_in_memory[map_idx] < NodesPerMap) {
@@ -1257,7 +1257,7 @@ namespace db
             dw.remote_loc = remote_loc; 
             migration_mutex.unlock();
         } else {
-            assert(n->get_handle() == local_node);
+            PASSERT(n->get_handle() == local_node);
             create_edge_nonlocking(n, handle, remote_node, remote_loc, vclk);
             release_node_write(n);
         }
@@ -1282,7 +1282,7 @@ namespace db
         if (node_iter == nodes[map_idx].end()) {
             WDEBUG << "did not find node=" << node_handle
                    << " while adding edge=" << e->get_handle() << std::endl;
-            assert(false);
+            PASSERT(false);
         }
 
         std::shared_ptr<node_entry> entry = node_iter->second;
@@ -1303,11 +1303,11 @@ namespace db
     {
         // already_exec check for fault tolerance
         auto out_edge_iter = n->out_edges.find(edge_handle);
-        assert(out_edge_iter != n->out_edges.end());
-        assert(!out_edge_iter->second.empty());
+        PASSERT(out_edge_iter != n->out_edges.end());
+        PASSERT(!out_edge_iter->second.empty());
         edge *e = out_edge_iter->second.back();
         // XXX nodeswap
-        assert(!e->base.get_del_time());
+        PASSERT(!e->base.get_del_time());
         e->base.update_del_time(tdel);
     }
 
@@ -1379,10 +1379,10 @@ namespace db
         vclock_ptr_t vclk)
     {
         auto out_edge_iter = n->out_edges.find(edge_handle);
-        assert(out_edge_iter != n->out_edges.end());
-        assert(!out_edge_iter->second.empty());
+        PASSERT(out_edge_iter != n->out_edges.end());
+        PASSERT(!out_edge_iter->second.empty());
         edge *e = out_edge_iter->second.back();
-        assert(!e->base.get_del_time());
+        PASSERT(!e->base.get_del_time());
         e->base.set_property(key, value, vclk);
     }
 
@@ -1483,8 +1483,8 @@ namespace db
     {
         const vc::vclock_t &clk1 = o1->tdel->clock;
         const vc::vclock_t &clk2 = o2->tdel->clock;
-        assert(clk1.size() == ClkSz);
-        assert(clk2.size() == ClkSz);
+        PASSERT(clk1.size() == ClkSz);
+        PASSERT(clk2.size() == ClkSz);
         for (uint64_t i = 0; i < ClkSz; i++) {
             if (clk1[i] < clk2[i]) {
                 return true;
@@ -1499,7 +1499,7 @@ namespace db
     //shard :: remove_from_edge_map(const node_handle_t &remote_node, const node_version_t &local_node)
     //{
     //    auto edge_map_iter = edge_map.find(remote_node);
-    //    assert(edge_map_iter != edge_map.end());
+    //    PASSERT(edge_map_iter != edge_map.end());
     //    auto &node_version_set = edge_map_iter->second;
     //    node_version_set.erase(local_node);
     //    if (node_version_set.empty()) {
@@ -1560,7 +1560,7 @@ namespace db
                     n = acquire_node_specific(tid, dobj->node, dobj->version, nullptr);
                     if (n != nullptr) {
                         auto map_iter = n->out_edges.find(dobj->edge);
-                        assert(map_iter != n->out_edges.end());
+                        PASSERT(map_iter != n->out_edges.end());
 
                         edge *e = nullptr;
                         auto edge_iter = map_iter->second.begin();
@@ -1571,7 +1571,7 @@ namespace db
                                 break;
                             }
                         }
-                        assert(e);
+                        PASSERT(e);
 
                         if (n->last_perm_deletion == nullptr
                          || time_oracle->compare_two_vts(*n->last_perm_deletion, *e->base.get_del_time()) == 0) {
@@ -1594,7 +1594,7 @@ namespace db
             // we know dobj will be initialized here
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
-            assert(dobj != nullptr);
+            PASSERT(dobj != nullptr);
             delete dobj;
 #pragma GCC diagnostic pop
 
@@ -1707,12 +1707,12 @@ namespace db
                     auto &state_map = state_pair.second;
                     auto state_iter = state_map.find(req_id);
                     if (state_iter != state_map.end()) {
-                        assert(state_map.erase(req_id) > 0);
+                        PASSERT(state_map.erase(req_id) > 0);
                     }
                     found = true;
                     break;
                 }
-                assert(found);
+                PASSERT(found);
 
                 release_node(n);
             }
