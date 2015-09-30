@@ -541,7 +541,7 @@ namespace db
     inline void
     shard :: new_node_entry(uint64_t map_idx, std::shared_ptr<db::node_entry> new_entry)
     {
-        if (node_queue_last[map_idx]) {
+        if (node_queue_last[map_idx] != nullptr) {
             std::shared_ptr<db::node_entry> last = node_queue_last[map_idx];
             std::shared_ptr<db::node_entry> first = last->next;
             new_entry->next = first;
@@ -983,14 +983,20 @@ namespace db
     inline void
     shard :: choose_node_to_evict(uint64_t map_idx, std::shared_ptr<db::node_entry> cur_entry)
     {
-        while (true) {
-            auto entry = node_queue_clock_hand[map_idx];
-            node_queue_clock_hand[map_idx] = node_queue_clock_hand[map_idx]->next;
+        // avoid multiple hash table lookups
+        auto &cur_clock_hand = node_queue_clock_hand[map_idx];
 
-            if (entry == node_queue_clock_hand[map_idx]) {
-                // single node in this node_map
+        while (true) {
+            if (cur_clock_hand == cur_clock_hand->next) {
+                // single node left in this node map
+                // do not evict
                 break;
             }
+
+            auto entry = cur_clock_hand;
+            cur_clock_hand = cur_clock_hand->next;
+
+            PASSERT(entry != cur_clock_hand);
 
             if (entry != cur_entry && entry->present) {
                 if (entry->used) {
@@ -1017,6 +1023,8 @@ namespace db
                 }
             }
         }
+
+        PASSERT(cur_clock_hand == node_queue_clock_hand[map_idx]);
     }
 
     // unlock the previously acquired node, and wake any waiting threads
