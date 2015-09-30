@@ -199,7 +199,7 @@ node_prog :: two_neighborhood_node_program(
     if (MaxCacheEntries && params._search_cache  && cache_response != NULL && cache_response->get_value()->prop_key.compare(params.prop_key) == 0) {
         WDEBUG  << "GOT CACHE" << std::endl;
         params._search_cache = false; // only search cache once
-        assert(params.on_hop == 0 && params.outgoing);
+        PASSERT(params.on_hop == 0 && params.outgoing);
         std::vector<db::remote_node> one_hops_to_check;
         std::vector<db::remote_node> two_hops_to_check;
         if (check_cache_context(cache_response->get_context(), rn, one_hops_to_check, two_hops_to_check)) { // if context is valid
@@ -231,7 +231,7 @@ node_prog :: two_neighborhood_node_program(
 
     params._search_cache = false;
     if (params.outgoing) {
-        assert(params.responses.empty());
+        PASSERT(params.responses.empty());
         switch (params.on_hop){
             case 0:
                 state.prev_node = db::coordinator;
@@ -254,7 +254,7 @@ node_prog :: two_neighborhood_node_program(
                     params.outgoing = false;
                     next.emplace_back(std::make_pair(params.prev_node, params));
                 } else {
-                    assert(state.responses.size() == 0);
+                    PASSERT(state.responses.size() == 0);
                     state.one_hop_visited = true;
                     state.prev_node = params.prev_node;
                     params.prev_node = rn;
@@ -288,13 +288,13 @@ node_prog :: two_neighborhood_node_program(
                 break;
         }
     } else { // returning
-        assert(params.on_hop == 0 or params.on_hop == 1);
+        PASSERT(params.on_hop == 0 or params.on_hop == 1);
         //WDEBUG<< "GOT " << params.responses.size() << " responses with on_hop " << params.on_hop << std::endl;
-        assert(params.on_hop == 0 || params.on_hop == 1);
+        PASSERT(params.on_hop == 0 || params.on_hop == 1);
 
         state.responses.insert(state.responses.end(), params.responses.begin(), params.responses.end()); 
 
-        assert(state.responses_left != 0);
+        PASSERT(state.responses_left != 0);
         state.responses_left--;
         if (state.responses_left == 0) {
             params.responses.clear();
@@ -318,7 +318,7 @@ node_prog :: two_neighborhood_node_program(
             }
             next.emplace_back(std::make_pair(state.prev_node, params));
         } else {
-            assert(next.size() == 0);
+            PASSERT(next.size() == 0);
         }
     }
     return std::make_pair(search_type::BREADTH_FIRST, next); 

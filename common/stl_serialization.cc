@@ -150,7 +150,7 @@ message :: pack_string(e::packer &packer, const std::string &t, const uint32_t s
 void 
 message :: pack_buffer(e::packer &packer, const std::string &t)
 {
-    assert(t.size() <= UINT32_MAX);
+    PASSERT(t.size() <= UINT32_MAX);
     uint32_t strlen = t.size();
     packer = packer << strlen;
 

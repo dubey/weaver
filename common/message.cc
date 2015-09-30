@@ -98,7 +98,7 @@ message :: size(const enum msg_type &)
 void
 message :: pack_buffer(e::packer &packer, const enum msg_type &t)
 {
-    assert(t <= UINT8_MAX);
+    PASSERT(t <= UINT8_MAX);
     uint8_t temp = (uint8_t) t;
     packer = packer << temp;
 }

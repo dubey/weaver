@@ -22,6 +22,7 @@
 // Weaver
 #include "common/server_manager_link.h"
 #include "common/weaver_constants.h"
+#include "common/passert.h"
 
 server_manager_link :: server_manager_link(const char* server_manager, uint16_t port)
     : m_repl(replicant_client_create(server_manager, port))
@@ -50,7 +51,7 @@ server_manager_link :: ensure_configuration(replicant_returncode* status)
         return false;
     }
 
-    assert(m_id >= 0);
+    PASSERT(m_id >= 0);
     int timeout = m_config.cluster() == 0 ? -1 : 0;
     int64_t lid = replicant_client_wait(m_repl, m_id, timeout, status);
 
@@ -59,7 +60,7 @@ server_manager_link :: ensure_configuration(replicant_returncode* status)
         return *status == REPLICANT_TIMEOUT && timeout == 0;
     }
 
-    assert(lid == m_id);
+    PASSERT(lid == m_id);
     return process_new_configuration(status);
 }
 

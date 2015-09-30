@@ -18,6 +18,7 @@
 
 // Weaver
 #include "coordinator/server_barrier.h"
+#include "common/passert.h"
 
 using coordinator::server_barrier;
 
@@ -41,9 +42,9 @@ void
 server_barrier :: new_version(uint64_t version,
                               const std::vector<server_id>& servers)
 {
-    assert(!m_versions.empty());
-    assert(version > 0);
-    assert(m_versions.back().first < version);
+    PASSERT(!m_versions.empty());
+    PASSERT(version > 0);
+    PASSERT(m_versions.back().first < version);
     m_versions.push_back(std::make_pair(version, servers));
     maybe_clear_prefix();
 }
@@ -63,7 +64,7 @@ server_barrier :: pass(uint64_t version, const server_id& sid)
             break;
         }
 
-        assert(it->first == version);
+        PASSERT(it->first == version);
 
         for (size_t i = 0; i < it->second.size(); )
         {

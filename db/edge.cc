@@ -12,6 +12,7 @@
  */
 
 #include <memory>
+#include "common/passert.h"
 #include "db/edge.h"
 
 db::edge db::edge::empty_edge;
@@ -76,32 +77,32 @@ edge :: traverse()
 node_prog::prop_list 
 edge :: get_properties()
 {
-    assert(base.view_time != nullptr);
-    assert(base.time_oracle != nullptr);
+    PASSERT(base.view_time != nullptr);
+    PASSERT(base.time_oracle != nullptr);
     return node_prog::prop_list(base.properties, *base.view_time, base.time_oracle);
 }
 
 bool
 edge :: has_property(std::pair<std::string, std::string> &p)
 {
-    assert(base.view_time != nullptr);
-    assert(base.time_oracle != nullptr);
+    PASSERT(base.view_time != nullptr);
+    PASSERT(base.time_oracle != nullptr);
     return base.has_property(p);
 }
 
 bool
 edge :: has_all_properties(std::vector<std::pair<std::string, std::string>> &props)
 {
-    assert(base.view_time != nullptr);
-    assert(base.time_oracle != nullptr);
+    PASSERT(base.view_time != nullptr);
+    PASSERT(base.time_oracle != nullptr);
     return base.has_all_properties(props);
 }
 
 bool
 edge :: has_all_predicates(std::vector<predicate::prop_predicate> &preds)
 {
-    assert(base.view_time != nullptr);
-    assert(base.time_oracle != nullptr);
+    PASSERT(base.view_time != nullptr);
+    PASSERT(base.time_oracle != nullptr);
     return base.has_all_predicates(preds);
 }
 

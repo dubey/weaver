@@ -27,9 +27,6 @@
 
 #define __STDC_LIMIT_MACROS
 
-// C
-#include <cassert>
-
 // POSIX
 #include <sys/mman.h>
 
@@ -68,7 +65,7 @@ event_dependency_graph :: event_dependency_graph()
 
     m_cache = static_cast<uint64_t*>(mmap(NULL, CACHE_MALLOC_SIZE, PROT_READ|PROT_WRITE, MAP_PRIVATE|MAP_ANONYMOUS|MAP_POPULATE, -1, 0));
 
-    assert(m_cache != MAP_FAILED);
+    PASSERT(m_cache != MAP_FAILED);
     memset(m_cache, 0, CACHE_MALLOC_SIZE);
 }
 
@@ -94,7 +91,7 @@ event_dependency_graph :: add_vertex()
             resize();
         }
 
-        assert(m_vertices_number < m_vertices_allocated);
+        PASSERT(m_vertices_number < m_vertices_allocated);
         inner_id = m_vertices_number;
         ++m_vertices_number;
         m_edges[inner_id] = NULL;
@@ -127,9 +124,9 @@ event_dependency_graph :: add_edge(uint64_t src_event_id, uint64_t dst_event_id)
     bool found;
 
     found = map(src_event_id, &inner_src);
-    assert(found);
+    PASSERT(found);
     found = map(dst_event_id, &inner_dst);
-    assert(found);
+    PASSERT(found);
 
     poke_cache(src_event_id, dst_event_id);
     uint64_t* edges = m_edges[inner_src];
@@ -165,7 +162,7 @@ event_dependency_graph :: add_edge(uint64_t src_event_id, uint64_t dst_event_id)
         *edges = EDGES_EMPTY;
     }
 
-    assert(m_refcount[inner_dst] < UINT64_MAX);
+    PASSERT(m_refcount[inner_dst] < UINT64_MAX);
     ++m_refcount[inner_dst];
 }
 
@@ -177,9 +174,9 @@ event_dependency_graph :: remove_edge(uint64_t src_event_id, uint64_t dst_event_
     bool found;
 
     found = map(src_event_id, &inner_src);
-    assert(found);
+    PASSERT(found);
     found = map(dst_event_id, &inner_dst);
-    assert(found);
+    PASSERT(found);
 
     uint64_t* edges = m_edges[inner_src];
 
@@ -210,7 +207,7 @@ event_dependency_graph :: remove_edge(uint64_t src_event_id, uint64_t dst_event_
         ++edges_next;
     }
 
-    assert(m_refcount[inner_dst] > 1);
+    PASSERT(m_refcount[inner_dst] > 1);
     --m_refcount[inner_dst];
 }
 
@@ -232,9 +229,9 @@ event_dependency_graph :: compute_order(uint64_t lhs_event_id, uint64_t rhs_even
     bool found;
 
     found = map(lhs_event_id, &inner_lhs);
-    assert(found);
+    PASSERT(found);
     found = map(rhs_event_id, &inner_rhs);
-    assert(found);
+    PASSERT(found);
     uint64_t dense_sz = 0;
 
     if (bfs(inner_lhs, inner_rhs, &dense_sz))
@@ -273,7 +270,7 @@ event_dependency_graph :: incref(uint64_t event_id)
     
     if (found)
     {
-        assert(m_refcount[inner] < UINT64_MAX);
+        PASSERT(m_refcount[inner] < UINT64_MAX);
         ++m_refcount[inner];
     }
 
@@ -314,7 +311,7 @@ event_dependency_graph :: map(uint64_t event, uint64_t* inner)
 bool
 event_dependency_graph :: bfs(uint64_t start, uint64_t end, uint64_t* dense_sz)
 {
-    assert(m_bfsqueue);
+    PASSERT(m_bfsqueue);
     uint64_t bfshead = 0;
     uint64_t bfstail = 1;
     m_bfsqueue[bfshead] = start;
@@ -360,7 +357,7 @@ event_dependency_graph :: bfs(uint64_t start, uint64_t end, uint64_t* dense_sz)
 void
 event_dependency_graph :: inner_decref(uint64_t inner)
 {
-    assert(m_bfsqueue);
+    PASSERT(m_bfsqueue);
     uint64_t dense_sz = 0;
     uint64_t bfshead = 0;
     uint64_t bfstail = 1;
@@ -371,7 +368,7 @@ event_dependency_graph :: inner_decref(uint64_t inner)
     {
         uint64_t v = m_bfsqueue[bfshead];
         ++bfshead;
-        assert(m_refcount[v] > 0);
+        PASSERT(m_refcount[v] > 0);
         --m_refcount[v];
 
         if (m_refcount[v] > 0)
@@ -573,7 +570,7 @@ operator >> (e::unpacker lhs, event_dependency_graph &rhs)
               >> base_slice;
     message::unpack_buffer(lhs, rhs.m_event_to_inner);
 
-    assert(rhs.base_size(rhs.m_vertices_allocated) == base_slice.size());
+    PASSERT(rhs.base_size(rhs.m_vertices_allocated) == base_slice.size());
 
     void *new_base = NULL;
     rhs.m_base = NULL;

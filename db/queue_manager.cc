@@ -75,7 +75,7 @@ queue_manager :: check_wr_request(vc::vclock &vclk, uint64_t qt)
     enum queue_order ret = FUTURE;
     queue_mutex.lock();
     enum queue_order cur_order = check_wr_queues_timestamps(vclk.vt_id, qt);
-    assert(cur_order != PAST);
+    PASSERT(cur_order != PAST);
 
     if (cur_order == PRESENT) {
         // all write queues (possibly except vt_id) good to go
@@ -178,7 +178,7 @@ queue_manager :: check_wr_queues_timestamps(uint64_t vt_id, uint64_t qt)
     // check each write queue ready to go
     for (uint64_t i = 0; i < NumVts; i++) {
         if (vt_id == i) {
-            assert(qt > qts[i]);
+            PASSERT(qt > qts[i]);
             if (qt > (qts[i]+1)) {
                 return FUTURE;
             }
@@ -201,7 +201,7 @@ queued_request*
 queue_manager :: get_wr_req()
 {
     enum queue_order queue_status = check_wr_queues_timestamps(UINT64_MAX, UINT64_MAX);
-    assert(queue_status != PAST);
+    PASSERT(queue_status != PAST);
     if (queue_status == FUTURE) {
         return nullptr;
     }
@@ -216,7 +216,7 @@ queue_manager :: get_wr_req()
         timestamps.reserve(NumVts);
         for (uint64_t vt_id = 0; vt_id < NumVts; vt_id++) {
             timestamps.emplace_back(wr_queues[vt_id].top()->vclock);
-            assert(timestamps.back().clock.size() == ClkSz);
+            PASSERT(timestamps.back().clock.size() == ClkSz);
         }
         exec_vt_id = time_oracle.compare_vts(timestamps);
     }
@@ -241,7 +241,7 @@ queue_manager :: reset(uint64_t dead_vt, uint64_t new_epoch)
 {
     queue_mutex.lock();
 
-    assert(new_epoch > min_epoch[dead_vt]);
+    PASSERT(new_epoch > min_epoch[dead_vt]);
     min_epoch[dead_vt] = new_epoch;
 
     qts[dead_vt] = 0;

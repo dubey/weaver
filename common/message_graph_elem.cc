@@ -186,7 +186,7 @@ message :: unpack_buffer(e::unpacker &unpacker, db::node &t)
     // unpack node prog state
     // need to unroll because we have to first unpack into particular state type, and then upcast and save as base type
     uint32_t num_prog_types = node_prog::END;
-    assert(t.prog_states.size() == num_prog_types);
+    PASSERT(t.prog_states.size() == num_prog_types);
 
     uint32_t num_maps;
     unpack_buffer(unpacker, num_maps);

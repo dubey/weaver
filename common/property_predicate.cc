@@ -9,8 +9,6 @@
  * ===============================================================
  */
 
-#include <assert.h>
-
 #define weaver_debug_
 #include "common/weaver_constants.h"
 #include "common/property_predicate.h"

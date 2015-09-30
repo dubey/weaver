@@ -33,6 +33,7 @@
 #include "common/weaver_constants.h"
 #include "common/server_manager_returncode.h"
 #include "common/server_manager_link_wrapper.h"
+#include "common/passert.h"
 
 using po6::threads::make_thread_wrapper;
 
@@ -136,7 +137,7 @@ server_manager_link_wrapper :: ~server_manager_link_wrapper() throw ()
 void
 server_manager_link_wrapper :: set_server_manager_address(const char* host, uint16_t port)
 {
-    assert(!m_sm.get());
+    PASSERT(!m_sm.get());
     m_sm.reset(new server_manager_link(host, port));
 }
 

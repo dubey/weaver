@@ -85,7 +85,7 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
         // sets tx->shard_write bool_vector (shard_write[i] = true iff there is a tx component at shard i)
         hstub->do_tx(tx, ready, error, time_oracle);
 
-        assert(!(ready && error)); // can't be ready after some error
+        PASSERT(!(ready && error)); // can't be ready after some error
 
         std::shared_ptr<transaction::pending_tx> to_enq;
         if (!ready || error) {
@@ -114,11 +114,11 @@ end_tx(uint64_t tx_id, uint64_t shard_id, coordinator::hyper_stub *hstub)
 {
     vts->tx_prog_mutex.lock();
     auto find_iter = vts->outstanding_tx.find(tx_id);
-    assert(find_iter != vts->outstanding_tx.end());
+    PASSERT(find_iter != vts->outstanding_tx.end());
 
     std::shared_ptr<transaction::pending_tx> tx = find_iter->second;
     uint64_t shard_idx = shard_id - ShardIdIncr;
-    assert(tx->shard_write[shard_idx]);
+    PASSERT(tx->shard_write[shard_idx]);
     tx->shard_write[shard_idx] = false;
 
     if (weaver_util::none(tx->shard_write)) {
@@ -150,7 +150,7 @@ nop_function()
 
     while (true) {
         sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, nullptr);
-        assert((sleep_ret == 0 || sleep_ret == EINTR) && "error in clock_nanosleep");
+        PASSERT(sleep_ret == 0 || sleep_ret == EINTR);
 
         if (++loop_count > 100000000) {
             kronos_call = true;
@@ -275,7 +275,7 @@ clk_update_function(void*)
     while (true) {
         sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, nullptr);
         if (sleep_ret != 0 && sleep_ret != EINTR) {
-            assert(false);
+            PASSERT(false);
         }
         vts->periodic_update_mutex.lock();
 
@@ -352,7 +352,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                 }
             }
 
-            assert((alias_map.size() + loc_map.size()) == get_set.size());
+            PASSERT((alias_map.size() + loc_map.size()) == get_set.size());
 
             success = hstub->get_idx(alias_map);
 
@@ -363,7 +363,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
                         arg.first = iter->second.first;
                         loc_map.emplace(iter->second.first, iter->second.second);
                     } else {
-                        assert(loc_map.find(arg.first) != loc_map.end());
+                        PASSERT(loc_map.find(arg.first) != loc_map.end());
                     }
                 }
             }
@@ -400,7 +400,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     vts->clk_rw_mtx.wrlock();
     vts->vclk.increment_clock();
     vc::vclock req_timestamp = vts->vclk;
-    assert(req_timestamp.clock.size() == ClkSz);
+    PASSERT(req_timestamp.clock.size() == ClkSz);
 
     vts->tx_prog_mutex.lock();
     vts->clk_rw_mtx.unlock();
@@ -545,7 +545,7 @@ server_loop(void *args)
                 //case message::VT_CLOCK_UPDATE_ACK:
                 //    vts->periodic_update_mutex.lock();
                 //    vts->clock_update_acks++;
-                //    assert(vts->clock_update_acks < NumVts);
+                //    PASSERT(vts->clock_update_acks < NumVts);
                 //    vts->periodic_update_mutex.unlock();
                 //    break;
 
@@ -657,7 +657,7 @@ server_loop(void *args)
 
                 case message::RESTORE_DONE: {
                     vts->restore_mtx.lock();
-                    assert(vts->restore_status > 0);
+                    PASSERT(vts->restore_status > 0);
                     vts->restore_status--;
                     coordinator::prog_queue_t progs = std::move(vts->prog_queue);
                     vts->prog_queue.reset(new std::vector<blocked_prog>());
@@ -673,7 +673,7 @@ server_loop(void *args)
 
                 default:
                     WDEBUG << "unexpected msg type " << message::to_string(mtype) << std::endl;
-                    assert(false);
+                    PASSERT(false);
             }
         }
     }
@@ -807,7 +807,7 @@ install_signal_handler(int signum, void (*handler)(int))
     sigfillset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
     int ret = sigaction(signum, &sa, nullptr);
-    assert(ret == 0);
+    PASSERT(ret == 0);
 }
 
 // caution: assume holding vts->config_mutex for vts->pause_bb
@@ -817,7 +817,7 @@ init_worker_threads(std::vector<std::shared_ptr<pthread_t>> &threads)
     for (uint64_t i = 0; i < NUM_VT_THREADS; i++) {
         std::shared_ptr<pthread_t> t(new pthread_t());
         int rc = pthread_create(t.get(), nullptr, &server_loop, (void*)i);
-        assert(rc == 0);
+        PASSERT(rc == 0);
         threads.emplace_back(t);
     }
     vts->pause_bb = true;
@@ -833,12 +833,12 @@ init_vt()
     for (const server &srv: servers) {
         WDEBUG << "server " << srv.weaver_id << " has address " << srv.bind_to << std::endl;
         if (srv.id == vts->serv_id) {
-            assert(srv.type == server::VT);
+            PASSERT(srv.type == server::VT);
             vt_id = srv.virtual_id;
             weaver_id = srv.weaver_id;
         }
     }
-    assert(vt_id != UINT64_MAX);
+    PASSERT(vt_id != UINT64_MAX);
 
     // registered this server with server_manager, we now know the vt_id
     vts->init(vt_id, weaver_id);
@@ -936,7 +936,7 @@ main(int argc, const char *argv[])
 
     std::shared_ptr<po6::net::location> my_loc(new po6::net::location(listen_host, listen_port));
     uint64_t sid;
-    assert(generate_token(&sid));
+    PASSERT(generate_token(&sid));
     vts = new coordinator::timestamper(sid, my_loc, backup);
 
     // server manager link
@@ -946,7 +946,7 @@ main(int argc, const char *argv[])
     sm_args.loc = *my_loc;
     sm_args.backup = backup;
     int rc = pthread_create(sm_thr.get(), nullptr, &server_manager_link_loop, (void*)&sm_args);
-    assert(rc == 0);
+    PASSERT(rc == 0);
 
     vts->config_mutex.lock();
 
@@ -990,7 +990,7 @@ main(int argc, const char *argv[])
         // periodic vector clock update to other timestampers
         clk_update_thr.reset(new pthread_t());
         int rc = pthread_create(clk_update_thr.get(), nullptr, &clk_update_function, nullptr);
-        assert(rc == 0);
+        PASSERT(rc == 0);
     }
 
     // periodic nops to shard

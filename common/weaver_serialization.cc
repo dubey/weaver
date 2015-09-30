@@ -15,6 +15,7 @@
 #include "common/stl_serialization.h"
 #include "common/enum_serialization.h"
 #include "common/vclock.h"
+#include "common/passert.h"
 #include "node_prog/base_classes.h"
 #include "node_prog/property.h"
 #include "db/remote_node.h"

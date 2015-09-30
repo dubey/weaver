@@ -54,8 +54,8 @@ hyper_stub_base :: hyper_stub_base()
     , m_mt64_gen(m_gen_seed)
     , m_uint64max_dist()
 {
-    assert(m_gen_seed != 0);
-    assert(m_uint64max_dist.max() == UINT64_MAX);
+    PASSERT(m_gen_seed != 0);
+    PASSERT(m_uint64max_dist.max() == UINT64_MAX);
 }
 
 
@@ -93,7 +93,7 @@ hyper_stub_base :: hyper_stub_base()
         } \
         WDEBUG << "error message: " << hyperdex_client_error_message(m_cl) << std::endl; \
         WDEBUG << "error loc: " << hyperdex_client_error_location(m_cl) << std::endl; \
-        assert(false); \
+        PASSERT(false); \
         success = false; \
     }
 
@@ -127,7 +127,7 @@ hyper_stub_base :: check_op_id(int64_t op_id,
         WDEBUG << "error message: " << hyperdex_client_error_message(m_cl) << std::endl;
         WDEBUG << "error loc: " << hyperdex_client_error_location(m_cl) << std::endl;
 #ifdef weaver_benchmark_
-        assert(false);
+        PASSERT(false);
 #endif
         success = false;
     } else {
@@ -1176,7 +1176,7 @@ hyper_stub_base :: prepare_node(hyperdex_client_attribute *cl_attr,
     attr_idx++;
 
     num_attrs = attr_idx;
-    assert(num_attrs <= NUM_NODE_ATTRS);
+    PASSERT(num_attrs <= NUM_NODE_ATTRS);
 }
 
 void

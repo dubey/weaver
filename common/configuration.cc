@@ -29,6 +29,8 @@
 // HyperDex
 #include "common/configuration.h"
 
+#include "common/passert.h"
+
 configuration :: configuration()
     : m_cluster(0)
     , m_version(0)
@@ -151,7 +153,7 @@ configuration :: get_type(const server_id &id) const
     for (size_t i = 0; i < m_servers.size(); ++i)
     {
         if (m_servers[i].id == id) {
-            assert(m_servers[i].type != server::UNDEF);
+            PASSERT(m_servers[i].type != server::UNDEF);
             return m_servers[i].type;
         }
     }

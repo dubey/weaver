@@ -166,7 +166,7 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
             if (!n.has_all_predicates(params.node_preds)) {
                 // node does not have all required properties, return immediately
                 params.returning = true;
-                assert(params.paths.empty());
+                PASSERT(params.paths.empty());
                 next.emplace_back(std::make_pair(params.prev_node, params));
             } else {
                 if (params.dest == n.get_handle() || n.is_alias(params.dest)) {
@@ -197,7 +197,7 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
                     }
                 } else {
                     params.returning = true;
-                    assert(params.paths.empty());
+                    PASSERT(params.paths.empty());
                     next.emplace_back(std::make_pair(params.prev_node, params));
                 }
             }
@@ -208,7 +208,7 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
 
         params.path_len++;
         auto vmap_iter = state.vmap.find(params.path_len);
-        assert(vmap_iter != state.vmap.end());
+        PASSERT(vmap_iter != state.vmap.end());
         dp_len_state &dp_state = vmap_iter->second;
 
         if (!params.paths.empty()) {

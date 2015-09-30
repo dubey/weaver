@@ -27,6 +27,7 @@
 #include <e/serialization.h>
 
 #include "common/weaver_serialization.h"
+#include "common/passert.h"
 
 namespace message
 {
@@ -275,7 +276,7 @@ namespace message
     pack_buffer(e::packer &packer, const std::vector<T> &t)
     {
         // !assumes constant element size
-        assert(t.size() <= UINT32_MAX);
+        PASSERT(t.size() <= UINT32_MAX);
         uint32_t num_elems = t.size();
         pack_buffer(packer, num_elems);
         for (const T &elem: t) {
@@ -288,7 +289,7 @@ namespace message
     pack_buffer(e::packer &packer, const std::deque<T> &t)
     {
         // !assumes constant element size
-        assert(t.size() <= UINT32_MAX);
+        PASSERT(t.size() <= UINT32_MAX);
         uint32_t num_elems = t.size();
         pack_buffer(packer, num_elems);
         for (const T &elem : t) {
@@ -300,7 +301,7 @@ namespace message
     inline void
     pack_buffer(e::packer &packer, std::priority_queue<T1, T2, T3> t)
     {
-        assert(t.size() <= UINT32_MAX);
+        PASSERT(t.size() <= UINT32_MAX);
         uint32_t num_elems = t.size();
         packer = packer << num_elems;
         while (!t.empty()) {
@@ -310,7 +311,7 @@ namespace message
     }
 
 #define SET_PACK \
-    assert(t.size() <= UINT32_MAX); \
+    PASSERT(t.size() <= UINT32_MAX); \
     uint32_t num_keys = t.size(); \
     pack_buffer(packer, num_keys); \
     for (const T1 &elem : t) { \
@@ -341,7 +342,7 @@ namespace message
 #undef SET_PACK
 
 #define MAP_PACK \
-    assert(t.size() <= UINT32_MAX); \
+    PASSERT(t.size() <= UINT32_MAX); \
     uint32_t num_keys = t.size(); \
     pack_buffer(packer, num_keys); \
     for (const std::pair<const T1, T2> &pair : t) { \
@@ -414,7 +415,7 @@ namespace message
     inline void 
     unpack_buffer(e::unpacker &unpacker, std::vector<T> &t)
     {
-        assert(t.size() == 0);
+        PASSERT(t.size() == 0);
         uint32_t elements_left;
         unpack_buffer(unpacker, elements_left);
 
@@ -429,7 +430,7 @@ namespace message
     inline void 
     unpack_buffer(e::unpacker &unpacker, std::deque<T> &t)
     {
-        assert(t.size() == 0);
+        PASSERT(t.size() == 0);
         uint32_t elements_left;
         unpack_buffer(unpacker, elements_left);
 
@@ -444,7 +445,7 @@ namespace message
     inline void
     unpack_buffer(e::unpacker &unpacker, std::priority_queue<T1, T2, T3> &t)
     {
-        assert(t.size() == 0);
+        PASSERT(t.size() == 0);
         uint32_t elements_left = 0;
         unpack_buffer(unpacker, elements_left);
         while (elements_left > 0) {
@@ -456,7 +457,7 @@ namespace message
     }
 
 #define SET_UNPACK \
-    assert(t.size() == 0); \
+    PASSERT(t.size() == 0); \
     uint32_t elements_left; \
     unpack_buffer(unpacker, elements_left); \
     while (elements_left > 0) { \
@@ -490,7 +491,7 @@ namespace message
 #undef SET_UNPACK
 
 #define MAP_UNPACK \
-    assert(t.size() == 0); \
+    PASSERT(t.size() == 0); \
     uint32_t elements_left; \
     unpack_buffer(unpacker, elements_left); \
     while (elements_left > 0) { \

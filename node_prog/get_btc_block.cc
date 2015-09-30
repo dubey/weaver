@@ -150,9 +150,9 @@ node_prog :: get_btc_block_node_program(node_prog::node &n,
 
     } else {
         // request returning to start node
-        assert(n.get_handle() == params.block || n.is_alias(params.block));
-        assert(params.txs.size() == 1);
-        //assert(state.outstanding.size() == state.outstanding_count);
+        PASSERT(n.get_handle() == params.block || n.is_alias(params.block));
+        PASSERT(params.txs.size() == 1);
+        //PASSERT(state.outstanding.size() == state.outstanding_count);
 
         //state.outstanding.erase(params.txs.front().handle);
 

@@ -167,7 +167,7 @@ hyper_stub :: restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *node
         if (search_status == HYPERDEX_CLIENT_SEARCHDONE) {
             loop_done = true;
         } else if (search_status == HYPERDEX_CLIENT_SUCCESS) {
-            assert(num_attrs == NUM_NODE_ATTRS+1); // node handle + graph attrs
+            PASSERT(num_attrs == NUM_NODE_ATTRS+1); // node handle + graph attrs
 
             uint64_t key_idx = UINT64_MAX;
             hyperdex_client_attribute node_attrs[NUM_NODE_ATTRS];
@@ -178,7 +178,7 @@ hyper_stub :: restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *node
                     node_attrs[j++] = cl_attr[i];
                 }
             }
-            assert(key_idx != UINT64_MAX);
+            PASSERT(key_idx != UINT64_MAX);
 
             // null terminated copy of the obtained handle
             cur_sz = cl_attr[key_idx].value_sz + 1;
@@ -199,14 +199,14 @@ hyper_stub :: restore_backup(db::data_map<std::shared_ptr<db::node_entry>> *node
 
             //XXX edge map
             //for (const auto &p: n->out_edges) {
-            //    assert(p.second.size() == 1);
+            //    PASSERT(p.second.size() == 1);
             //    edge *e = p.second.front();
             //    edge_map[e->nbr.handle].emplace(std::make_pair(node_handle, e->base.get_creat_time()));
             //}
 
             // node map
             auto &node_map = nodes[map_idx];
-            assert(node_map.find(node_handle) == node_map.end());
+            PASSERT(node_map.find(node_handle) == node_map.end());
             node_map[node_handle] = std::make_shared<db::node_entry>(n);
 
             hyperdex_client_destroy_attrs(cl_attr, num_attrs);
@@ -254,7 +254,7 @@ void
 hyper_stub :: mark_done_chunk(uint64_t chunk)
 {
     g_bulk_load_mtx.lock();
-    assert(chunk == (g_load_chunk+1));
+    PASSERT(chunk == (g_load_chunk+1));
     g_load_chunk = chunk;
     g_loaded_elems.clear();
     g_chunk_cond.broadcast();
@@ -297,7 +297,7 @@ hyper_stub :: new_node(const node_handle_t &handle, uint64_t start_edge_idx)
 {
     bool found;
 
-    assert(start_edge_idx);
+    PASSERT(start_edge_idx);
     g_bulk_load_mtx.lock();
     if (g_node_edge_id.find(handle) != g_node_edge_id.end()) {
         found = true;
@@ -319,7 +319,7 @@ hyper_stub :: put_node_no_loop(db::node *n)
         prepare_buffer(last_upd_clk, m_last_clk_buf);
         prepare_buffer(restore_clk, m_restore_clk_buf);
     }
-    assert(m_last_clk_buf && m_restore_clk_buf);
+    PASSERT(m_last_clk_buf && m_restore_clk_buf);
 
     apn_ptr_t apn = m_apn_pool.acquire();
 
@@ -355,7 +355,7 @@ hyper_stub :: new_edge(const node_handle_t &node_handle)
     g_bulk_load_mtx.lock();
 
     auto edge_id_iter = g_node_edge_id.find(node_handle);
-    assert(edge_id_iter != g_node_edge_id.end());
+    PASSERT(edge_id_iter != g_node_edge_id.end());
     std::pair<uint64_t, uint64_t> &edge_id = edge_id_iter->second;
     uint64_t eid = edge_id.first + edge_id.second++;
 
@@ -561,7 +561,7 @@ hyper_stub :: done_op(async_call_ptr_t ac_ptr, int64_t op_id)
 {
     bool success = true;
 
-    assert(ac_ptr->exec_time != 42);
+    PASSERT(ac_ptr->exec_time != 42);
     uint64_t op_time = m_timer.get_real_time_millis() - ac_ptr->exec_time;
     size_t op_sz = ac_ptr->packed_sz;
     switch (ac_ptr->type) {
@@ -593,7 +593,7 @@ hyper_stub :: done_op(async_call_ptr_t ac_ptr, int64_t op_id)
 
         default:
             WDEBUG << "unexpected async call type=" << async_call_type_to_string(ac_ptr->type) << std::endl;
-            assert(false);
+            PASSERT(false);
     }
 
     m_async_calls.erase(op_id);
@@ -628,7 +628,7 @@ hyper_stub :: loop_async_and_flush(uint64_t num_ops_to_leave,
                         WDEBUG << "exceeded max loops, initial_ops=" << initial_ops
                                << ", num_timeouts=" << num_timeouts
                                << ", m_async_calls.size=" << m_async_calls.size() << std::endl;
-                        assert(false);
+                        PASSERT(false);
                         if (num_ops_to_leave == 0) {
                             for (auto &p: m_async_calls) {
                                 done_op(p.second, p.first);
@@ -650,7 +650,7 @@ hyper_stub :: loop_async_and_flush(uint64_t num_ops_to_leave,
                     }
                 }
             }
-            assert(loop_code == HYPERDEX_CLIENT_SUCCESS);
+            PASSERT(loop_code == HYPERDEX_CLIENT_SUCCESS);
 
             auto find_iter = m_async_calls.find(op_id);
             if (find_iter == m_async_calls.end()) {
@@ -782,7 +782,7 @@ hyper_stub :: done_get_op(async_call_ptr_t ac_ptr, int64_t op_id, db::node **n)
 
         default:
             WDEBUG << "unexpected async call type=" << async_call_type_to_string(ac_ptr->type) << std::endl;
-            assert(false);
+            PASSERT(false);
     }
 
     return success;
@@ -806,7 +806,7 @@ hyper_stub :: loop_get_node(db::node **n)
         WDEBUG << "hyperdex_client_loop failed, op_id=" << op_id
                << ", loop_code=" << hyperdex_client_returncode_to_string(loop_code) << std::endl;
         print_errors();
-        assert(false);
+        PASSERT(false);
     } else {
         auto find_iter = m_async_calls.find(op_id);
         if (find_iter == m_async_calls.end()) {
@@ -814,7 +814,7 @@ hyper_stub :: loop_get_node(db::node **n)
                    << " and loop_code=" << hyperdex_client_returncode_to_string(loop_code)
                    << " which was not found in m_async_calls_map." << std::endl;
             print_errors();
-            assert(false);
+            PASSERT(false);
         }
 
         async_call_ptr_t ac_ptr = find_iter->second;
@@ -829,7 +829,7 @@ hyper_stub :: loop_get_node(db::node **n)
                 WDEBUG << "type=" << async_call_type_to_string(ac_ptr->type)
                        << ", call_code=" << hyperdex_client_returncode_to_string(ac_ptr->status) << std::endl;
                 print_errors();
-                assert(false);
+                PASSERT(false);
         }
     }
 
@@ -856,7 +856,7 @@ hyper_stub :: abort_bulk_load()
 {
     WDEBUG << "Aborting bulk load now." << std::endl;
     print_errors();
-    assert(false);
+    PASSERT(false);
 }
 
 void

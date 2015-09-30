@@ -52,7 +52,7 @@ node :: node(const node_handle_t &_handle, uint64_t shrd, vclock_ptr_t &vclk, po
 node :: ~node()
 {
     state = mode::DELETED; // track memory bugs
-    assert(out_edges.empty());
+    PASSERT(out_edges.empty());
 }
 
 // true if prog states is empty
@@ -96,8 +96,8 @@ node :: add_edge(edge *e)
 bool
 node :: edge_exists(const edge_handle_t &handle)
 {
-    assert(base.view_time != nullptr);
-    assert(base.time_oracle != nullptr);
+    PASSERT(base.view_time != nullptr);
+    PASSERT(base.time_oracle != nullptr);
     auto find_iter = out_edges.find(handle);
     if (find_iter != out_edges.end()) {
         for (edge *e: find_iter->second) {
@@ -114,8 +114,8 @@ node :: edge_exists(const edge_handle_t &handle)
 db::edge&
 node :: get_edge(const edge_handle_t &handle)
 {
-    assert(base.view_time != nullptr);
-    assert(base.time_oracle != nullptr);
+    PASSERT(base.view_time != nullptr);
+    PASSERT(base.time_oracle != nullptr);
     auto find_iter = out_edges.find(handle);
     if (find_iter != out_edges.end()) {
         for (edge *e: find_iter->second) {
@@ -133,40 +133,40 @@ node :: get_edge(const edge_handle_t &handle)
 node_prog::edge_list
 node :: get_edges()
 {
-    assert(base.view_time != nullptr);
-    assert(base.time_oracle != nullptr);
+    PASSERT(base.view_time != nullptr);
+    PASSERT(base.time_oracle != nullptr);
     return node_prog::edge_list(out_edges, base.view_time, base.time_oracle);
 };
 
 node_prog::prop_list
 node :: get_properties()
 {
-    assert(base.view_time != nullptr);
-    assert(base.time_oracle != nullptr);
+    PASSERT(base.view_time != nullptr);
+    PASSERT(base.time_oracle != nullptr);
     return node_prog::prop_list(base.properties, *base.view_time, base.time_oracle);
 };
 
 bool
 node :: has_property(std::pair<std::string, std::string> &p)
 {
-    assert(base.view_time != nullptr);
-    assert(base.time_oracle != nullptr);
+    PASSERT(base.view_time != nullptr);
+    PASSERT(base.time_oracle != nullptr);
     return base.has_property(p);
 }
 
 bool
 node :: has_all_properties(std::vector<std::pair<std::string, std::string>> &props)
 {
-    assert(base.view_time != nullptr);
-    assert(base.time_oracle != nullptr);
+    PASSERT(base.view_time != nullptr);
+    PASSERT(base.time_oracle != nullptr);
     return base.has_all_properties(props);
 }
 
 bool
 node :: has_all_predicates(std::vector<predicate::prop_predicate> &preds)
 {
-    assert(base.view_time != nullptr);
-    assert(base.time_oracle != nullptr);
+    PASSERT(base.view_time != nullptr);
+    PASSERT(base.time_oracle != nullptr);
     return base.has_all_predicates(preds);
 }
 

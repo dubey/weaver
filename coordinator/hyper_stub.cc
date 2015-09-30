@@ -128,7 +128,7 @@ hyper_stub :: loop_async_calls(std::unordered_map<int64_t, async_call_ptr_t> &as
                 return false;
             }
         } else {
-            assert(loop_code == HYPERDEX_CLIENT_SUCCESS);
+            PASSERT(loop_code == HYPERDEX_CLIENT_SUCCESS);
 
             auto call_iter = async_calls.find(op_id);
             if (call_iter == async_calls.end()) {
@@ -591,7 +591,7 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
 #undef CHECK_LASTUPD_CLK
 #undef CHECK_NODE
 
-    assert(async_calls.empty());
+    PASSERT(async_calls.empty());
 
     // write all nodes
     for (auto &p: nodes) {
@@ -661,12 +661,12 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
     switch(commit_status) {
         case HYPERDEX_CLIENT_SUCCESS:
             ready = true;
-            assert(!error);
+            PASSERT(!error);
             break;
 
         case HYPERDEX_CLIENT_ABORTED:
             ready = false;
-            assert(!error);
+            PASSERT(!error);
             break;
 
         default:
@@ -713,10 +713,10 @@ hyper_stub :: recreate_tx(const hyperdex_client_attribute *cl_attr,
     } else if (strncmp(cl_attr[2].attr, tx_attrs[1], 7) == 0) {
         tx_data_idx = 2;
     } else {
-        assert(strncmp(cl_attr[1].attr, tx_attrs[1], 7) == 0);
+        PASSERT(strncmp(cl_attr[1].attr, tx_attrs[1], 7) == 0);
         tx_data_idx = 1;
     }
-    assert(cl_attr[tx_data_idx].datatype == tx_dtypes[1]);
+    PASSERT(cl_attr[tx_data_idx].datatype == tx_dtypes[1]);
 
     std::unique_ptr<e::buffer> buf(e::buffer::create(cl_attr[tx_data_idx].value,
                                                      cl_attr[tx_data_idx].value_sz));
@@ -767,7 +767,7 @@ hyper_stub :: restore_backup(std::vector<std::shared_ptr<transaction::pending_tx
             break;
 
             case HYPERDEX_CLIENT_SUCCESS:
-            assert(num_attrs == (NUM_TX_ATTRS+1));
+            PASSERT(num_attrs == (NUM_TX_ATTRS+1));
 
             tx = std::make_shared<transaction::pending_tx>(transaction::UPDATE);
             recreate_tx(cl_attr, *tx);

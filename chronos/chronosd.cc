@@ -214,7 +214,7 @@ chronosd :: acquire_references(struct rsm_context* ctx,
         for (size_t j = 0; j < num_events; ++j)
         {
             bool decr = m_graph.decref(events[num_events]);
-            assert(decr);
+            PASSERT(decr);
         }
 
         response = event_offsets[num_events];
@@ -423,10 +423,10 @@ chronosd :: assign_vt_dependencies(std::vector<uint64_t> &vclk, uint64_t vt_id, 
         m_vtlist.resize(epoch+1, initializer);
     }
 
-    assert(vt_id < NumVts && m_vtlist[epoch].size() == NumVts);
+    PASSERT(vt_id < NumVts && m_vtlist[epoch].size() == NumVts);
     pair_set_t &vtlist = m_vtlist[epoch][vt_id];
     auto res = vtlist.emplace(std::make_pair(clk_val, ev_id));
-    assert(res.second);
+    PASSERT(res.second);
     auto iter = res.first;
     // make fwd edge
     iter++; // iter is now element succeeding newly inserted element
@@ -486,10 +486,10 @@ chronosd :: weaver_order(struct rsm_context* ctx,
 
         // Bunch of sanity checks for Weaver provided vector clocks
         // some order should have been provided
-        assert((p.order == CHRONOS_HAPPENS_BEFORE) || (p.order == CHRONOS_HAPPENS_AFTER));
+        PASSERT((p.order == CHRONOS_HAPPENS_BEFORE) || (p.order == CHRONOS_HAPPENS_AFTER));
         // we need SOFT_FAIL only for query weaver_order.  For kronos calls
         // from timestamper it is hard fail
-        //assert(p.flags & CHRONOS_SOFT_FAIL);
+        //PASSERT(p.flags & CHRONOS_SOFT_FAIL);
 
         std::vector<uint64_t> &vc_lhs = wp.lhs;
         std::vector<uint64_t> &vc_rhs = wp.rhs;
@@ -515,7 +515,7 @@ chronosd :: weaver_order(struct rsm_context* ctx,
             p.rhs = iter->second;
         }
 
-        assert(m_graph.exists(p.lhs) && m_graph.exists(p.rhs));
+        PASSERT(m_graph.exists(p.lhs) && m_graph.exists(p.rhs));
 
         int resolve = m_graph.compute_order(p.lhs, p.rhs);
 
@@ -575,7 +575,7 @@ chronosd :: gc_weaver_event(uint64_t event_id)
 {
     m_graph.decref(event_id);
     auto revmap_iter = m_rev_vcmap.find(event_id);
-    assert(revmap_iter != m_rev_vcmap.end());
+    PASSERT(revmap_iter != m_rev_vcmap.end());
     m_vcmap.erase(revmap_iter->second);
     m_rev_vcmap.erase(revmap_iter);
 }
@@ -585,7 +585,7 @@ chronosd :: weaver_cleanup(struct rsm_context* ctx,
                            const char* data, size_t data_sz)
 {
     ++m_count_weaver_cleanup;
-    assert(data_sz == (sizeof(uint64_t)*ClkSz + sizeof(uint64_t)));
+    PASSERT(data_sz == (sizeof(uint64_t)*ClkSz + sizeof(uint64_t)));
     std::vector<uint64_t> cur_cleanup_clk;
     uint64_t vt_id;
     data = unpack_vector_uint64(data, cur_cleanup_clk, ClkSz);
@@ -619,7 +619,7 @@ chronosd :: weaver_cleanup(struct rsm_context* ctx,
             m_vtlist[i].clear();
         }
 
-        assert(m_vtlist[epoch].size() == NumVts);
+        PASSERT(m_vtlist[epoch].size() == NumVts);
         // ClkSz = NumVts+1
         for (uint64_t j = 1; j < ClkSz; j++) {
             pair_set_t &set = m_vtlist[epoch][j-1];
@@ -728,7 +728,7 @@ void
 chronosd :: new_epoch(struct rsm_context* /*ctx*/,
                       const char*, size_t)
 {
-    //assert(m_vtlist.size() == NumVts);
+    //PASSERT(m_vtlist.size() == NumVts);
 
     //for (pair_set_t &p: m_vtlist) {
     //    p.clear();

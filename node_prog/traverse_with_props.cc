@@ -148,7 +148,7 @@ node_prog :: traverse_props_node_program(node &n,
 
             if (params.edge_props.empty()) {
                 // reached the max hop, return now
-                assert(params.node_props.empty());
+                PASSERT(params.node_props.empty());
                 params.return_nodes.emplace(n.get_handle());
             } else {
                 if (params.collect_nodes) {
@@ -160,7 +160,7 @@ node_prog :: traverse_props_node_program(node &n,
                 bool collect_edges = params.collect_edges;
                 bool propagate = !params.node_props.empty();
                 if (!propagate) {
-                    assert(params.edge_props.empty());
+                    PASSERT(params.edge_props.empty());
                     collect_edges = true;
                 }
 
@@ -187,7 +187,7 @@ node_prog :: traverse_props_node_program(node &n,
         }
 
         state.visited = true;
-        assert(!next.empty());
+        PASSERT(!next.empty());
 
     } else {
         // request returning to start node

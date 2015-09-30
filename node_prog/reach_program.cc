@@ -217,7 +217,7 @@ node_prog :: reach_node_program(
 
                             // context for cached value contains the nodes in the path to the dest_idination from this node
                             params.path = std::dynamic_pointer_cast<reach_cache_value>(cache_response->get_value())->path; // XXX double check this path
-                            assert(params.path.size() > 0);
+                            PASSERT(params.path.size() > 0);
                             next.emplace_back(std::make_pair(prev_node, params));
                             return std::make_pair(search_type::DEPTH_FIRST, next); // single length vector
                         } else {

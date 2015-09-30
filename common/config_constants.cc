@@ -17,6 +17,7 @@
 #include "common/weaver_constants.h"
 #include "common/cache_constants.h"
 #include "common/config_constants.h"
+#include "common/passert.h"
 
 bool
 init_config_constants(const char *config_file_name)
@@ -74,7 +75,7 @@ init_config_constants(const char *config_file_name)
 
 #define PARSE_ASSERT_TYPE(t) \
     yaml_parser_scan(&parser, &token); \
-    assert(token.type == t); \
+    PASSERT(token.type == t); \
 
 #define PARSE_ASSERT_TYPE_DELETE(t) \
     PARSE_ASSERT_TYPE(t); \
@@ -134,7 +135,7 @@ init_config_constants(const char *config_file_name)
             yaml_token_delete(&token); \
             break; \
         } \
-        assert(token.type == YAML_BLOCK_ENTRY_TOKEN); \
+        PASSERT(token.type == YAML_BLOCK_ENTRY_TOKEN); \
         yaml_token_delete(&token); \
         PARSE_ASSERT_TYPE_DELETE(YAML_BLOCK_MAPPING_START_TOKEN); \
         PARSE_ASSERT_TYPE_DELETE(YAML_KEY_TOKEN); \
@@ -177,7 +178,7 @@ init_config_constants(const char *config_file_name)
                 } else if (strncmp((const char*)token.data.scalar.value, "hyperdex_coord", TOKEN_STRCMP_LEN(14)) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_IPADDR_PORT_BLOCK(HyperdexCoord);
-                    assert(!HyperdexCoord.empty());
+                    PASSERT(!HyperdexCoord.empty());
                     HyperdexCoordIpaddr = HyperdexCoord[0].first;
                     HyperdexCoordPort = HyperdexCoord[0].second;
 
@@ -188,14 +189,14 @@ init_config_constants(const char *config_file_name)
                 } else if (strncmp((const char*)token.data.scalar.value, "kronos", TOKEN_STRCMP_LEN(6)) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_IPADDR_PORT_BLOCK(KronosLocs);
-                    assert(!KronosLocs.empty());
+                    PASSERT(!KronosLocs.empty());
                     KronosIpaddr = KronosLocs[0].first;
                     KronosPort = KronosLocs[0].second;
 
                 } else if (strncmp((const char*)token.data.scalar.value, "weaver_coord", TOKEN_STRCMP_LEN(14)) == 0) {
                     yaml_token_delete(&token);
                     PARSE_VALUE_IPADDR_PORT_BLOCK(ServerManagerLocs);
-                    assert(!ServerManagerLocs.empty());
+                    PASSERT(!ServerManagerLocs.empty());
                     ServerManagerIpaddr = ServerManagerLocs[0].first;
                     ServerManagerPort = ServerManagerLocs[0].second;
 
@@ -285,7 +286,7 @@ void
 update_config_constants(uint64_t num_shards)
 {
     NumShardsLock.wrlock();
-    assert(num_shards >= NumShards);
+    PASSERT(num_shards >= NumShards);
     NumShards = num_shards;
     WDEBUG << "update #shards = " << NumShards << std::endl;
     NumShardsLock.unlock();

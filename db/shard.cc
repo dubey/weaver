@@ -225,7 +225,7 @@ get_xml_element_chunk(std::ifstream &file,
         start.emplace_back("<"+n);
         end.emplace_back("</"+n+">");
     }
-    assert(elements.size() == XML_CHUNK_SZ);
+    PASSERT(elements.size() == XML_CHUNK_SZ);
     elem_count = 0;
 
     for (uint32_t idx = 0; idx < XML_CHUNK_SZ && !file.eof(); idx++) {
@@ -260,7 +260,7 @@ get_xml_element_chunk(std::ifstream &file,
                         WDEBUG << "aborting bulk load at current line" << std::endl;
                         return false;
                     }
-                    assert(i == cur_elem_idx);
+                    PASSERT(i == cur_elem_idx);
                     if (!appended) {
                         element.append(line);
                         appended = true;
@@ -307,7 +307,7 @@ get_xml_element_chunk(std::ifstream &file,
             xml_elem.owner_shard = (hash_node_handle(id0) % num_shards) + ShardIdIncr;
             xml_elem.owner_tid = (int)get_map_idx(id0) % load_nthreads;
         } else {
-            assert(file.eof());
+            PASSERT(file.eof());
         }
     }
 
@@ -317,18 +317,18 @@ get_xml_element_chunk(std::ifstream &file,
 void
 check_btc_node(const node_handle_t &h)
 {
-    assert(h[0] == '1'
-        || h[0] == '2'
-        || h[0] == '3'
-        || h[0] == '4'
-        || h[0] == '5'
-        || h[0] == '6'
-        || h[0] == '7'
-        || h[0] == '8'
-        || h[0] == '9'
-        || h[0] == '0'
-        || h.substr(0, 5) == "BLOCK"
-        || h.substr(0, 4) == "COIN");
+    PASSERT(h[0] == '1'
+         || h[0] == '2'
+         || h[0] == '3'
+         || h[0] == '4'
+         || h[0] == '5'
+         || h[0] == '6'
+         || h[0] == '7'
+         || h[0] == '8'
+         || h[0] == '9'
+         || h[0] == '0'
+         || h.substr(0, 5) == "BLOCK"
+         || h.substr(0, 4) == "COIN");
 }
 
 struct load_graph_data
@@ -405,7 +405,7 @@ load_xml_node(pugi::xml_document &doc,
     uint64_t hash0 = hash_node_handle(id0);
     uint64_t loc = (hash0 % num_shards) + ShardIdIncr;
     uint64_t map_idx = get_map_idx(id0);
-    assert((loc == shard_id) && ((int)map_idx % load_nthreads == owner_tid));
+    PASSERT((loc == shard_id) && ((int)map_idx % load_nthreads == owner_tid));
 
     db::node *n = S->create_node_bulk_load(id0, map_idx, zero_clk);
 
@@ -435,7 +435,7 @@ load_xml_node(pugi::xml_document &doc,
         uint64_t blk;
         bool parse_bad = false;
         parse_single_uint64(block_index, parse_idx, blk, parse_bad);
-        assert(!parse_bad);
+        PASSERT(!parse_bad);
         if (blk > static_args.block_index) {
             static_args.block_index = blk;
         }
@@ -466,7 +466,7 @@ load_xml_node(pugi::xml_document &doc,
             parse_single_uint64(id0, parse_idx, node_idx, parse_bad);
             start_edge_idx = (1 + node_idx) * MAX_EDGES_PER_NODE;
         }
-        assert(!parse_bad);
+        PASSERT(!parse_bad);
     } else {
         start_edge_idx = (shard_id-ShardIdIncr)*MAX_NODES_PER_SHARD*MAX_EDGES_PER_NODE
                        + node_count*MAX_EDGES_PER_NODE;
@@ -513,7 +513,7 @@ check_node(const node_handle_t &node_handle,
     uint64_t hash0 = hash_node_handle(id0);
     uint64_t loc = (hash0 % num_shards) + ShardIdIncr;
     uint64_t map_idx = get_map_idx(id0);
-    assert((loc == shard_id) && ((int)map_idx % load_nthreads == owner_tid));
+    PASSERT((loc == shard_id) && ((int)map_idx % load_nthreads == owner_tid));
 
     db::node *n = S->create_node_bulk_load(id0, map_idx, zero_clk);
 
@@ -535,7 +535,7 @@ check_node(const node_handle_t &node_handle,
                    + node_count*MAX_EDGES_PER_NODE;
 
     bool already_exists = other_hstub.new_node(n->get_handle(), start_edge_idx);
-    assert(!already_exists);
+    PASSERT(!already_exists);
     bool in_mem = S->add_node_to_nodemap_bulk_load(n, map_idx, static_args.block_index);
     if (static_args.call_hdex) {
         S->bulk_load_put_node(hstub, n, in_mem);
@@ -575,7 +575,7 @@ load_xml_edge(pugi::xml_document &doc,
     uint64_t hash0 = hash_node_handle(id0);
     uint64_t loc0 = (hash0 % num_shards) + ShardIdIncr;
     uint64_t map_idx = get_map_idx(id0);
-    assert((loc0 == shard_id) && ((int)map_idx % load_nthreads == owner_tid));
+    PASSERT((loc0 == shard_id) && ((int)map_idx % load_nthreads == owner_tid));
 
     check_node(id0,
                owner_tid, this_tid,
@@ -787,7 +787,7 @@ load_graph(void *args)
                     if (elements[i].belongs_to_us(load_tid)) {
                         bool loaded_chunk, loaded_elem;
                         hstub.check_loaded_chunk(chunk_count, i, loaded_chunk, loaded_elem);
-                        assert(!loaded_chunk);
+                        PASSERT(!loaded_chunk);
                         if (!loaded_elem) {
                             load_xml_element(elements[i],
                                              load_tid,
@@ -842,7 +842,7 @@ load_graph(void *args)
 
                         if (!found) {
                             done_tids.emplace_back(elem.owner_tid);
-                            assert((int64_t)done_tids.size() <= NUM_SHARD_THREADS);
+                            PASSERT((int64_t)done_tids.size() <= NUM_SHARD_THREADS);
                         }
                     } else if (!loaded_elem) {
                         load_xml_element(elem,
@@ -1014,7 +1014,7 @@ unpack_tx_request(uint64_t tid, db::message_wrapper *request)
         }
 
         if (upd->type != transaction::NODE_CREATE_REQ) {
-            assert(n != nullptr);
+            PASSERT(n != nullptr);
             n->tx_queue.emplace_back(std::make_pair(vt_id, qts));
             S->release_node(n);
         }
@@ -1102,9 +1102,9 @@ nop(uint64_t tid, db::message_wrapper *request)
     check_migr_step3 = check_step3();
 
     // atmost one check should be true
-    assert(!(check_move_migr && check_init_migr)
-        && !(check_init_migr && check_migr_step3)
-        && !(check_move_migr && check_migr_step3));
+    PASSERT(!(check_move_migr && check_init_migr)
+         && !(check_init_migr && check_migr_step3)
+         && !(check_move_migr && check_migr_step3));
 
     uint64_t cur_node_count = S->shard_node_count[shard_id - ShardIdIncr];
     uint64_t max_idx = S->shard_node_count.size() > nop_arg->shard_node_count.size() ?
@@ -1180,7 +1180,7 @@ NodeStateType& get_or_create_state(node_prog::prog_type ptype,
     } else {
         NodeStateType *ptr = new NodeStateType();
         (*state_map)[req_id] = std::unique_ptr<node_prog::Node_State_Base>(ptr);
-        assert(nodes_that_created_state != nullptr);
+        PASSERT(nodes_that_created_state != nullptr);
         nodes_that_created_state->emplace_back(std::make_pair(node->get_handle(), node->base.get_creat_time()));
         return *ptr;
     }
@@ -1282,7 +1282,7 @@ fetch_node_cache_contexts(uint64_t tid,
                 // now check for any edge changes
                 for (auto &iter: node->out_edges) {
                     for (db::edge *e: iter.second) {
-                        assert(e != nullptr);
+                        PASSERT(e != nullptr);
                         const vclock_ptr_t &e_del_time = e->base.get_del_time();
 
                         bool del_after_cached = (e_del_time != nullptr) && (time_oracle->compare_two_vts(time_cached, *e_del_time) == 0);
@@ -1385,8 +1385,8 @@ inline bool cache_lookup(db::node*& node_to_check,
     std::pair<node_handle_t, ParamsType> &cur_node_params,
     order::oracle *time_oracle)
 {
-    assert(node_to_check != nullptr);
-    assert(!np.cache_value); // cache_value is not already assigned
+    PASSERT(node_to_check != nullptr);
+    PASSERT(!np.cache_value); // cache_value is not already assigned
     np.cache_value = nullptr; // it is unallocated anyway
     if (node_to_check->cache.find(cache_key) == node_to_check->cache.end()) {
         return true;
@@ -1411,7 +1411,7 @@ inline bool cache_lookup(db::node*& node_to_check,
         if (cmp_1 >= 1) { // cached value is newer or from this same request
             return true;
         }
-        assert(cmp_1 == 0);
+        PASSERT(cmp_1 == 0);
 
         if (watch_set->empty()) { // no context needs to be fetched
             np.cache_value.reset(new node_prog::cache_response<CacheValueType>(node_to_check->cache, cache_key, cval, watch_set));
@@ -1425,7 +1425,7 @@ inline bool cache_lookup(db::node*& node_to_check,
             fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (fetch_state<ParamsType, NodeStateType, CacheValueType> *)S->node_prog_running_states[cache_tuple];
             fstate->monitor.lock(); // maybe move up
             S->node_prog_running_states_mutex.unlock();
-            assert(fstate->replies_left > 0);
+            PASSERT(fstate->replies_left > 0);
             fstate->prog_state->start_node_params.push_back(cur_node_params);
             fstate->monitor.unlock();
 
@@ -1468,14 +1468,14 @@ inline bool cache_lookup(db::node*& node_to_check,
         fstate->prog_state->cache_value.swap(future_cache_response);
         fstate->prog_state->start_node_params.push_back(cur_node_params);
         fstate->cache_valid = true;
-        assert(fstate->prog_state->start_node_params.size() == 1);
+        PASSERT(fstate->prog_state->start_node_params.size() == 1);
         fstate->monitor.unlock();
 
         uint64_t num_shards = get_num_shards();
         for (uint64_t i = ShardIdIncr; i < num_shards + ShardIdIncr; i++) {
             if (contexts_to_fetch.find(i) != contexts_to_fetch.end()) {
                 auto &context_list = contexts_to_fetch[i];
-                assert(context_list.size() > 0);
+                PASSERT(context_list.size() > 0);
                 std::unique_ptr<message::message> m(new message::message());
                 m->prepare_message(message::NODE_CONTEXT_FETCH, np.m_type, np.req_id, np.vt_id, *np.req_vclock, *time_cached, cache_tuple, context_list, S->shard_id);
                 S->comm.send(i, m->buf);
@@ -1493,9 +1493,9 @@ propagate_node_progs(node_prog::node_prog_running_state<ParamsType, NodeStateTyp
                      uint64_t num_shards,
                      std::deque<std::pair<node_handle_t, ParamsType>> &prop_progs)
 {
-    assert(prop_shard != shard_id
+    PASSERT(prop_shard != shard_id
         && prop_shard  < (num_shards + ShardIdIncr));
-    assert(np.req_vclock != nullptr);
+    PASSERT(np.req_vclock != nullptr);
 
     std::vector<std::deque<std::pair<node_handle_t, ParamsType>>> prog_batches;
 
@@ -1519,7 +1519,7 @@ propagate_node_progs(node_prog::node_prog_running_state<ParamsType, NodeStateTyp
         } else {
             num_progs = BATCH_MSG_SIZE < prop_progs.size() ? BATCH_MSG_SIZE : prop_progs.size();
         }
-        assert(num_progs > 0);
+        PASSERT(num_progs > 0);
 
         for (size_t i = 0; i < num_progs; i++) {
             progs.emplace_back(prop_progs[i]);
@@ -1549,7 +1549,7 @@ inline void node_prog_loop(uint64_t tid,
                            order::oracle *time_oracle,
                            db::node *first_node)
 {
-    assert(time_oracle != nullptr);
+    PASSERT(time_oracle != nullptr);
     auto &np = *np_ptr;
 
     //S->nodeprog_msg_mtx.lock();
@@ -1586,7 +1586,7 @@ inline void node_prog_loop(uint64_t tid,
         db::node *node = nullptr;
 
         if (first_node != nullptr) {
-            assert(first_node->get_handle() == node_handle);
+            PASSERT(first_node->get_handle() == node_handle);
             node = first_node;
             first_node = nullptr;
         } else {
@@ -1619,7 +1619,7 @@ inline void node_prog_loop(uint64_t tid,
                 std::vector<std::pair<node_handle_t, ParamsType>> buf_node_params;
                 buf_node_params.emplace_back(id_params);
                 std::unique_ptr<message::message> m(new message::message());
-                assert(np.req_vclock != nullptr);
+                PASSERT(np.req_vclock != nullptr);
                 m->prepare_message(message::NODE_PROG, np.m_type, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, buf_node_params);
                 S->migration_mutex.lock();
                 if (S->deferred_reads.find(node_handle) == S->deferred_reads.end()) {
@@ -1635,16 +1635,16 @@ inline void node_prog_loop(uint64_t tid,
             std::vector<std::pair<node_handle_t, ParamsType>> fwd_node_params;
             fwd_node_params.emplace_back(id_params);
             std::unique_ptr<message::message> m(new message::message());
-            assert(np.req_vclock != nullptr);
+            PASSERT(np.req_vclock != nullptr);
             m->prepare_message(message::NODE_PROG, np.m_type, np.vt_id, *np.req_vclock, np.req_id, np.vt_prog_ptr, fwd_node_params);
             uint64_t new_loc = node->migration->new_loc;
             S->release_node(node);
             S->comm.send(new_loc, m->buf);
             np.start_node_params.pop_front(); // pop off this one
         } else { // node does exist
-            assert(node->state == db::node::mode::STABLE);
+            PASSERT(node->state == db::node::mode::STABLE);
 #ifdef WEAVER_NEW_CLDG
-            assert(false && "new_cldg not supported right now");
+            PASSERT(false && "new_cldg not supported right now");
                 /*
                 if (np.prev_server >= ShardIdIncr) {
                     node->migration->msg_count[np.prev_server - ShardIdIncr]++;
@@ -1679,8 +1679,8 @@ inline void node_prog_loop(uint64_t tid,
 
             node->base.view_time = np.req_vclock; 
             node->base.time_oracle = time_oracle;
-            assert(np.req_vclock != nullptr);
-            assert(np.req_vclock->clock.size() == ClkSz);
+            PASSERT(np.req_vclock != nullptr);
+            PASSERT(np.req_vclock->clock.size() == ClkSz);
             // call node program
             auto next_node_params = np.m_func(*node, this_node,
                     params, // actual parameters for this node program
@@ -1707,7 +1707,7 @@ inline void node_prog_loop(uint64_t tid,
             uint64_t num_shards = get_num_shards();
             for (std::pair<db::remote_node, ParamsType> &res : next_node_params.second) {
                 db::remote_node& rn = res.first; 
-                assert(rn.loc < num_shards + ShardIdIncr);
+                PASSERT(rn.loc < num_shards + ShardIdIncr);
                 if (rn == db::coordinator || rn.loc == np.vt_id) {
                     // mark requests as done, will be done for other shards by no-ops from coordinator
                     done_request = true;
@@ -1739,14 +1739,14 @@ inline void node_prog_loop(uint64_t tid,
         }
 
         uint64_t num_shards = get_num_shards();
-        assert(np.batched_node_progs.size() < num_shards);
+        PASSERT(np.batched_node_progs.size() < num_shards);
 
         for (auto &loc_progs_pair : np.batched_node_progs) {
             propagate_node_progs(np, loc_progs_pair.first, num_shards, loc_progs_pair.second);
         }
 
         if (MaxCacheEntries) {
-            assert(np.cache_value == false); // unique ptr is not assigned
+            PASSERT(np.cache_value == false); // unique ptr is not assigned
         }
     }
 
@@ -1782,7 +1782,7 @@ unpack_node_program(uint64_t tid, db::message_wrapper *request)
     node_prog::prog_type pType;
 
     request->msg->unpack_partial_message(message::NODE_PROG, pType);
-    assert(node_prog::programs.find(pType) != node_prog::programs.end());
+    PASSERT(node_prog::programs.find(pType) != node_prog::programs.end());
     node_prog::programs[pType]->unpack_and_run_db(tid, std::move(request->msg), request->time_oracle);
     delete request;
 }
@@ -1793,7 +1793,7 @@ unpack_context_reply(uint64_t tid, db::message_wrapper *request)
     node_prog::prog_type pType;
 
     request->msg->unpack_partial_message(message::NODE_CONTEXT_REPLY, pType);
-    assert(node_prog::programs.find(pType) != node_prog::programs.end());
+    PASSERT(node_prog::programs.find(pType) != node_prog::programs.end());
     node_prog::programs[pType]->unpack_context_reply_db(tid, std::move(request->msg), request->time_oracle);
     delete request;
 }
@@ -1817,7 +1817,7 @@ node_prog
 
     S->node_prog_running_states_mutex.lock();
     auto lookup_iter = S->node_prog_running_states.find(cache_tuple);
-    assert(lookup_iter != S->node_prog_running_states.end());
+    PASSERT(lookup_iter != S->node_prog_running_states.end());
     struct fetch_state<ParamsType, NodeStateType, CacheValueType> *fstate = (struct fetch_state<ParamsType, NodeStateType, CacheValueType> *) lookup_iter->second;
     fstate->monitor.lock();
     fstate->replies_left--;
@@ -1825,7 +1825,7 @@ node_prog
     if (run_now) {
         //remove from map
         size_t num_erased = S->node_prog_running_states.erase(cache_tuple);
-        assert(num_erased == 1);
+        PASSERT(num_erased == 1);
         UNUSED(num_erased); // if asserts are off
     }
     S->node_prog_running_states_mutex.unlock();
@@ -1838,7 +1838,7 @@ node_prog
         } else {
             // invalidate cache
             existing_context.clear();
-            assert(fstate->prog_state->cache_value != nullptr);
+            PASSERT(fstate->prog_state->cache_value != nullptr);
             fstate->prog_state->cache_value->invalidate();
             fstate->prog_state->cache_value.reset(nullptr); // clear cached value
             fstate->cache_valid = false;
@@ -1868,10 +1868,10 @@ node_prog
     try {
         np->req_vclock.reset(new vc::vclock());
         msg->unpack_message(message::NODE_PROG, np->m_type, np->vt_id, *np->req_vclock, np->req_id, np->vt_prog_ptr, np->start_node_params);
-        assert(np->req_vclock->clock.size() == ClkSz);
+        PASSERT(np->req_vclock->clock.size() == ClkSz);
     } catch (std::bad_alloc &ba) {
         WDEBUG << "bad_alloc caught " << ba.what() << std::endl;
-        assert(false);
+        PASSERT(false);
         return;
     }
 
@@ -1887,7 +1887,7 @@ node_prog
         return; // done request
     }
 
-    assert(!np->cache_value); // a cache value should not be allocated yet
+    PASSERT(!np->cache_value); // a cache value should not be allocated yet
     np->m_func = m_func;
     node_prog_loop<ParamsType, NodeStateType, CacheValueType>(tid, np, time_oracle, nullptr);
 }
@@ -2002,7 +2002,7 @@ migrate_node_step2_req(uint64_t tid)
     S->migration_mutex.unlock();
 
     n = S->acquire_node_latest(tid, S->migr_node);
-    assert(n != nullptr);
+    PASSERT(n != nullptr);
     msg.prepare_message(message::MIGRATE_SEND_NODE, S->migr_node, shard_id, *n);
     S->release_node(n);
     S->comm.send(S->migr_shard, msg.buf);
@@ -2106,7 +2106,7 @@ migrate_node_step2_resp(uint64_t tid, std::unique_ptr<message::message> msg, ord
         node_prog::prog_type pType;
         m->unpack_partial_message(message::NODE_PROG, pType);
         WDEBUG << "APPLYING BUFREAD for node " << node_handle << std::endl;
-        assert(node_prog::programs.find(pType) != node_prog::programs.end());
+        PASSERT(node_prog::programs.find(pType) != node_prog::programs.end());
         node_prog::programs[pType]->unpack_and_run_db(tid, std::move(m), time_oracle);
     }
 }
@@ -2388,7 +2388,7 @@ server_loop_busybee(uint64_t thread_id)
             break;
         }
 
-        assert(bb_code == BUSYBEE_SUCCESS);
+        PASSERT(bb_code == BUSYBEE_SUCCESS);
 
         // exec or enqueue this request
         auto unpacker = rec_msg->buf->unpack_from(BUSYBEE_HEADER_SIZE);
@@ -2399,8 +2399,8 @@ server_loop_busybee(uint64_t thread_id)
         switch (mtype) {
             case message::TX_INIT: {
                 rec_msg->unpack_partial_message(message::TX_INIT, vt_id, vclk, qts, txtype, tx_id);
-                assert(vclk.clock.size() == ClkSz);
-                assert(txtype != transaction::FAIL);
+                PASSERT(vclk.clock.size() == ClkSz);
+                PASSERT(txtype != transaction::FAIL);
 
                 if (txtype == transaction::NOP) {
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
@@ -2417,7 +2417,7 @@ server_loop_busybee(uint64_t thread_id)
                     } else {
                         mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                         tx_order = S->qm.check_wr_request(vclk, qts);
-                        assert(tx_order == db::PRESENT || tx_order == db::FUTURE);
+                        PASSERT(tx_order == db::PRESENT || tx_order == db::FUTURE);
                         if (tx_order == db::PRESENT) {
                             mwrap->time_oracle = time_oracle;
                             unpack_tx_request(thread_id, mwrap);
@@ -2434,7 +2434,7 @@ server_loop_busybee(uint64_t thread_id)
 
             case message::NODE_PROG: {
                 rec_msg->unpack_partial_message(message::NODE_PROG, pType, vt_id, vclk, req_id);
-                assert(vclk.clock.size() == ClkSz);
+                PASSERT(vclk.clock.size() == ClkSz);
 
                 mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                 if (S->qm.check_rd_request(vclk.clock)) {
@@ -2456,7 +2456,7 @@ server_loop_busybee(uint64_t thread_id)
                     f = unpack_context_reply;
                 }
                 rec_msg->unpack_partial_message(mtype, pType, req_id, vt_id, vclk);
-                assert(vclk.clock.size() == ClkSz);
+                PASSERT(vclk.clock.size() == ClkSz);
                 mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
                 if (S->qm.check_rd_request(vclk.clock)) {
                     mwrap->time_oracle = time_oracle;
@@ -2739,7 +2739,7 @@ install_signal_handler(int signum, void (*handler)(int))
     sigfillset(&sa.sa_mask);
     sa.sa_flags = SA_RESTART;
     int ret = sigaction(signum, &sa, nullptr);
-    assert(ret == 0);
+    PASSERT(ret == 0);
 }
 
 // caution: assume holding S->config_mutex for S->pause_bb
@@ -2750,7 +2750,7 @@ init_worker_threads(std::vector<std::shared_ptr<pthread_t>> &threads)
         uint64_t tid = (uint64_t)i;
         std::shared_ptr<pthread_t> t(new pthread_t());
         int rc = pthread_create(t.get(), nullptr, &server_loop, (void*)tid);
-        assert(rc == 0);
+        PASSERT(rc == 0);
         threads.emplace_back(t);
     }
     S->pause_bb = true;
@@ -2764,11 +2764,11 @@ init_shard()
     shard_id = UINT64_MAX;
     for (const server &srv: servers) {
         if (srv.id == S->serv_id) {
-            assert(srv.type == server::SHARD);
+            PASSERT(srv.type == server::SHARD);
             shard_id = srv.virtual_id + NumVts;
         }
     }
-    assert(shard_id != UINT64_MAX);
+    PASSERT(shard_id != UINT64_MAX);
 
     // registered this server with server_manager, we now know the shard_id
     S->init(shard_id);
@@ -2867,7 +2867,7 @@ main(int argc, const char *argv[])
 
     std::shared_ptr<po6::net::location> my_loc(new po6::net::location(listen_host, listen_port));
     uint64_t sid;
-    assert(generate_token(&sid));
+    PASSERT(generate_token(&sid));
     S = new db::shard(sid, my_loc);
 
     // server manager link
@@ -2877,7 +2877,7 @@ main(int argc, const char *argv[])
     sm_args.loc = *my_loc;
     sm_args.backup = backup;
     int rc = pthread_create(sm_thr.get(), nullptr, &server_manager_link_loop, (void*)&sm_args);
-    assert(rc == 0);
+    PASSERT(rc == 0);
 
     S->config_mutex.lock();
 
@@ -2952,7 +2952,7 @@ main(int argc, const char *argv[])
 
                 std::shared_ptr<pthread_t> t = std::make_shared<pthread_t>();
                 int rc = pthread_create(t.get(), nullptr, &load_graph, &args);
-                assert(rc == 0);
+                PASSERT(rc == 0);
                 bulk_load_threads.emplace_back(t);
             }
 

@@ -167,7 +167,7 @@ namespace message
     {
         enum msg_type received_type;
         e::unpacker unpacker = buf->unpack_from(BUSYBEE_HEADER_SIZE);
-        assert(!unpacker.error());
+        PASSERT(!unpacker.error());
 
         unpack_buffer(unpacker, received_type);
 #ifdef weaver_benchmark_
@@ -175,13 +175,13 @@ namespace message
             WDEBUG << "recv type = " << to_string(received_type) << ", expected type " << to_string(expected_type) << std::endl;
         }
 #endif
-        assert(received_type == expected_type);
+        PASSERT(received_type == expected_type);
         UNUSED(expected_type);
 
         unpack_buffer_wrapper(unpacker, args...);
-        assert(!unpacker.error());
+        PASSERT(!unpacker.error());
         if (check_empty) {
-            assert(unpacker.remain() == 0); // assert whole message was unpacked
+            PASSERT(unpacker.remain() == 0); // assert whole message was unpacked
         }
     }
 

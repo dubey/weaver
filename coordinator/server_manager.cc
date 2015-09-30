@@ -31,6 +31,7 @@
 #include "common/server_manager_returncode.h"
 #include "coordinator/server_manager.h"
 #include "coordinator/util.h"
+#include "common/passert.h"
 
 namespace
 {
@@ -62,8 +63,8 @@ server_manager :: server_manager()
     , m_config_stable_barrier()
     , m_latest_config()
 {
-    assert(m_config_ack_through == m_config_ack_barrier.min_version());
-    assert(m_config_stable_through == m_config_stable_barrier.min_version());
+    PASSERT(m_config_ack_through == m_config_ack_barrier.min_version());
+    PASSERT(m_config_stable_through == m_config_stable_barrier.min_version());
 
     generate_cached_configuration(nullptr);
 }
@@ -454,9 +455,9 @@ void
 server_manager :: activate_backup(server *backup, server::type_t type, uint64_t vid)
 {
     if (type == server::VT) {
-        assert(backup->type == server::BACKUP_VT);
+        PASSERT(backup->type == server::BACKUP_VT);
     } else {
-        assert(backup->type == server::BACKUP_SHARD);
+        PASSERT(backup->type == server::BACKUP_SHARD);
     }
 
     backup->type = type;
@@ -466,7 +467,7 @@ server_manager :: activate_backup(server *backup, server::type_t type, uint64_t 
 void
 server_manager :: config_get(rsm_context* ctx)
 {
-    assert(m_latest_config.get());
+    PASSERT(m_latest_config.get());
     const char* output = reinterpret_cast<const char*>(m_latest_config->data());
     size_t output_sz = m_latest_config->size();
     rsm_set_output(ctx, output, output_sz);

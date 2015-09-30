@@ -18,6 +18,7 @@
 #include "common/config_constants.h"
 #include "common/message_constants.h"
 #include "client/comm_wrapper.h"
+#include "common/passert.h"
 
 using cl::comm_wrapper;
 
@@ -27,7 +28,7 @@ comm_wrapper :: weaver_mapper :: weaver_mapper(const configuration &config)
 
     for (const server &srv: servers) {
         if (srv.type == server::VT && srv.state == server::AVAILABLE) {
-            assert(mlist.find(WEAVER_TO_BUSYBEE(srv.virtual_id)) == mlist.end());
+            PASSERT(mlist.find(WEAVER_TO_BUSYBEE(srv.virtual_id)) == mlist.end());
             mlist[WEAVER_TO_BUSYBEE(srv.virtual_id)] = srv.bind_to;
         }
     }
@@ -36,7 +37,7 @@ comm_wrapper :: weaver_mapper :: weaver_mapper(const configuration &config)
 bool
 comm_wrapper :: weaver_mapper :: lookup(uint64_t server_id, po6::net::location *loc)
 {
-    assert(server_id < NumVts);
+    PASSERT(server_id < NumVts);
     auto mlist_iter = mlist.find(WEAVER_TO_BUSYBEE(server_id));
     if (mlist_iter == mlist.end()) {
         WDEBUG << "busybee mapper lookup fail for " << server_id << std::endl;

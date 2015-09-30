@@ -346,7 +346,7 @@ client :: end_tx()
 
     if (success) {
         message::msg_type mtype = recv_msg.unpack_message_type();
-        assert(mtype == message::CLIENT_TX_SUCCESS || mtype == message::CLIENT_TX_ABORT);
+        PASSERT(mtype == message::CLIENT_TX_SUCCESS || mtype == message::CLIENT_TX_ABORT);
         if (mtype == message::CLIENT_TX_ABORT) {
             success = false;
             tx_code = WEAVER_CLIENT_ABORT;

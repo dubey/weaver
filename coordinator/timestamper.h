@@ -253,8 +253,8 @@ namespace coordinator
 
         uint64_t prev_active_vts = num_active_vts;
         comm.reconfigure(config, pause_bb, &num_active_vts);
-        assert(prev_active_vts <= num_active_vts);
-        assert(num_active_vts <= NumVts);
+        PASSERT(prev_active_vts <= num_active_vts);
+        PASSERT(num_active_vts <= NumVts);
         if (num_active_vts > prev_active_vts) {
             WDEBUG << "#active vts = " << num_active_vts << std::endl;
             start_all_vts_cond.signal();
@@ -536,8 +536,8 @@ namespace coordinator
     inline void
     timestamper :: factor_tx(std::shared_ptr<transaction::pending_tx> tx, std::vector<std::shared_ptr<transaction::pending_tx>> &factored_tx)
     {
-        assert(tx != nullptr);
-        assert(tx->type != transaction::FAIL);
+        PASSERT(tx != nullptr);
+        PASSERT(tx->type != transaction::FAIL);
 
         uint64_t num_shards = tx->shard_write.size();
         factored_tx.reserve(num_shards);
@@ -551,7 +551,7 @@ namespace coordinator
         if (tx->type == transaction::NOP) {
             // nop
             std::shared_ptr<transaction::nop_data> nop = tx->nop;
-            assert(nop != nullptr);
+            PASSERT(nop != nullptr);
             for (uint64_t i = 0; i < num_shards; i++) {
                 std::shared_ptr<transaction::pending_tx> this_tx = factored_tx[i];
                 if (tx->shard_write[i]) {
@@ -592,13 +592,13 @@ namespace coordinator
             std::shared_ptr<transaction::pending_tx> tx;
             std::vector<std::shared_ptr<transaction::pending_tx>> factored_tx;
             if (!process_tx_queue(tx, factored_tx)) {
-                assert(tx == nullptr);
+                PASSERT(tx == nullptr);
                 break;
             } else if (tx == nullptr) {
                 continue;
             }
 
-            assert(tx->type != transaction::FAIL && tx->type != transaction::EPOCH_CHANGE);
+            PASSERT(tx->type != transaction::FAIL && tx->type != transaction::EPOCH_CHANGE);
 
             // tx succeeded, send to shards
             uint64_t num_shards = tx->shard_write.size();

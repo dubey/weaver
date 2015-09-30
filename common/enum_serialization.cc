@@ -10,6 +10,7 @@
  */
 
 #include "common/enum_serialization.h"
+#include "common/passert.h"
 
 uint64_t
 message :: size(const enum node_prog::prog_type&)
@@ -38,7 +39,7 @@ message :: size(const enum predicate::relation&)
 void
 message :: pack_buffer(e::packer &packer, const enum node_prog::prog_type &t)
 {
-    assert(t <= UINT8_MAX);
+    PASSERT(t <= UINT8_MAX);
     uint8_t temp = (uint8_t) t;
     packer = packer << temp;
 }
@@ -46,7 +47,7 @@ message :: pack_buffer(e::packer &packer, const enum node_prog::prog_type &t)
 void
 message :: pack_buffer(e::packer &packer, const enum transaction::update_type &t)
 {
-    assert(t <= UINT8_MAX);
+    PASSERT(t <= UINT8_MAX);
     uint8_t temp = (uint8_t) t;
     packer = packer << temp;
 }
@@ -54,7 +55,7 @@ message :: pack_buffer(e::packer &packer, const enum transaction::update_type &t
 void
 message :: pack_buffer(e::packer &packer, const enum transaction::tx_type &t)
 {
-    assert(t <= UINT8_MAX);
+    PASSERT(t <= UINT8_MAX);
     uint8_t temp = (uint8_t) t;
     packer = packer << temp;
 }
@@ -62,7 +63,7 @@ message :: pack_buffer(e::packer &packer, const enum transaction::tx_type &t)
 void
 message :: pack_buffer(e::packer &packer, const enum predicate::relation &t)
 {
-    assert(t <= UINT8_MAX);
+    PASSERT(t <= UINT8_MAX);
     uint8_t temp = (uint8_t) t;
     packer = packer << temp;
 }

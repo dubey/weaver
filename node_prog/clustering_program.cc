@@ -117,7 +117,7 @@ node_prog :: clustering_node_program(
                 }
             }
             if (--cstate.responses_left == 0) {
-                assert(cstate.neighbor_counts.size() > 1);
+                PASSERT(cstate.neighbor_counts.size() > 1);
                 double denominator = (double) (cstate.neighbor_counts.size() * (cstate.neighbor_counts.size() - 1));
                 uint64_t numerator = 0;
                 for (std::pair<const node_handle_t, int> &nbr_count : cstate.neighbor_counts){

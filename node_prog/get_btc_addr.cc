@@ -128,7 +128,7 @@ node_prog :: get_btc_addr_node_program(node_prog::node &n,
 
     } else {
         // request returning to start node
-        assert(n.get_handle() == params.addr_handle || n.is_alias(params.addr_handle));
+        PASSERT(n.get_handle() == params.addr_handle || n.is_alias(params.addr_handle));
 
         for (const auto &tx: params.txs) {
             state.txs.emplace_back(tx);

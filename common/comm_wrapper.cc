@@ -18,6 +18,7 @@
 #include "common/config_constants.h"
 #include "common/message_constants.h"
 #include "common/comm_wrapper.h"
+#include "common/passert.h"
 
 #define ID_INCR (1ULL << 32ULL)
 #define WEAVER_TO_BUSYBEE(x) (x+ID_INCR)
@@ -44,7 +45,7 @@ comm_wrapper :: weaver_mapper :: add_mapping(uint64_t server_id, const po6::net:
     if (find_iter == mlist.end()) {
         mlist[WEAVER_TO_BUSYBEE(server_id)] = loc;
     } else {
-        assert(find_iter->second == loc);
+        PASSERT(find_iter->second == loc);
     }
 }
 
@@ -133,11 +134,11 @@ comm_wrapper :: reconfigure_internal(configuration &new_config)
         }
     }
     uint64_t num_shards = shard_set.size();
-    assert(active_server_idx.size() <= (NumVts+num_shards));
+    PASSERT(active_server_idx.size() <= (NumVts+num_shards));
     active_server_idx.resize(NumVts+num_shards, UINT64_MAX);
 
     for (const server &srv: servers) {
-        assert(srv.weaver_id != UINT64_MAX);
+        PASSERT(srv.weaver_id != UINT64_MAX);
 
         if (srv.type != server::SHARD && srv.type != server::VT) {
             WDEBUG << "Server=" << srv.weaver_id
@@ -148,7 +149,7 @@ comm_wrapper :: reconfigure_internal(configuration &new_config)
         } else {
             uint64_t factor = (srv.type == server::SHARD) ? 1 : 0;
             uint64_t vid = srv.virtual_id + NumVts*factor;
-            assert(vid < active_server_idx.size());
+            PASSERT(vid < active_server_idx.size());
 
             WDEBUG << "Server=" << srv.weaver_id
                    << ", loc=" << srv.bind_to

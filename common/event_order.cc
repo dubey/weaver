@@ -14,6 +14,7 @@
 //#define weaver_debug_
 #include "common/event_order.h"
 #include "common/config_constants.h"
+#include "common/passert.h"
 
 using order::oracle;
 
@@ -33,8 +34,8 @@ oracle :: compare_two_clocks(const vc::vclock_t &clk1, const vc::vclock_t &clk2)
     int ret = 2;
 
     uint64_t clk_sz = clk1.size() < clk2.size() ? clk1.size() : clk2.size();
-    //assert(clk1.size() == ClkSz);
-    //assert(clk2.size() == ClkSz);
+    //PASSERT(clk1.size() == ClkSz);
+    //PASSERT(clk2.size() == ClkSz);
 
     // check epoch number
     if (clk1[0] < clk2[0]) {
@@ -74,7 +75,7 @@ oracle :: compare_vector_clocks(const std::vector<vc::vclock> &clocks)
     for (uint64_t i = 0; i < (num_clks-1); i++) {
         for (uint64_t j = (i+1); j < num_clks; j++) {
             int cmp = compare_two_clocks(clocks.at(i).clock, clocks.at(j).clock);
-            assert(cmp != 2);
+            PASSERT(cmp != 2);
             if ((cmp == 0) && !large.at(j)) {
                 large.at(j) = true;
                 num_large++;
@@ -87,7 +88,7 @@ oracle :: compare_vector_clocks(const std::vector<vc::vclock> &clocks)
             return large;
         }
     }
-    assert(num_large < (num_clks-1));
+    PASSERT(num_large < (num_clks-1));
     return large;
 }
 
@@ -100,7 +101,7 @@ get_false_position(std::vector<bool> &large)
             return min_pos;
         }
     }
-    assert(false);
+    PASSERT(false);
     return UINT64_MAX;
 }
 
@@ -112,7 +113,7 @@ void
 oracle :: compare_vts_no_kronos(const std::vector<vc::vclock> &clocks, std::vector<bool> &large, int64_t &small_idx)
 {
     large = compare_vector_clocks(clocks);
-    assert(clocks.size() == large.size());
+    PASSERT(clocks.size() == large.size());
 
     if (std::count(large.begin(), large.end(), false) == 1) {
         // Kronos not required
@@ -187,7 +188,7 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
         //                large[i] = true;
         //                cache_hits++;
         //            } else {
-        //                assert(cmp == -1);
+        //                PASSERT(cmp == -1);
         //            }
         //        }
         //    }
@@ -209,10 +210,10 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
                 if (!large.at(i) && !large.at(j)) {
                     if (epoch_num == UINT64_MAX) {
                         epoch_num = clocks[i].clock[0];
-                        assert(clocks[j].clock[0] == epoch_num);
+                        PASSERT(clocks[j].clock[0] == epoch_num);
                     } else {
-                        assert(clocks[i].clock[0] == epoch_num);
-                        assert(clocks[j].clock[0] == epoch_num);
+                        PASSERT(clocks[i].clock[0] == epoch_num);
+                        PASSERT(clocks[j].clock[0] == epoch_num);
                     }
 
                     wp->lhs = clocks[i].clock;
@@ -240,7 +241,7 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
             for (uint64_t j = i+1; j < num_clks; j++) {
                 if (!large.at(i) && !large.at(j)) {
                     // retrieve and set order
-                    assert((wp->order == CHRONOS_HAPPENS_BEFORE) || (wp->order == CHRONOS_HAPPENS_AFTER));
+                    PASSERT((wp->order == CHRONOS_HAPPENS_BEFORE) || (wp->order == CHRONOS_HAPPENS_AFTER));
                     // fine-grained locking for cache.add() so that other requests are not blocked for a long time
                     switch (wp->order) {
                         case CHRONOS_HAPPENS_BEFORE:
@@ -261,7 +262,7 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
 
                         default:
                             WDEBUG << "cannot reach here" << std::endl;
-                            assert(false);
+                            PASSERT(false);
                     }
                     wp++;
                     //XXX bad_count++;
@@ -281,7 +282,7 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
             }
         }
         // should never reach here
-        assert(false);
+        PASSERT(false);
         return INT64_MAX;
     }
 }
@@ -312,13 +313,13 @@ oracle :: clock_creat_before_del_after(const vc::vclock &req_vclock,
 
     if (del_time) {
         int64_t cmp_1 = compare_two_vts(*del_time, req_vclock);
-        assert(cmp_1 != 2);
+        PASSERT(cmp_1 != 2);
         cmp = (cmp_1 == 1);
     }
 
     if (cmp) {
         int64_t cmp_2 = compare_two_vts(*creat_time, req_vclock);
-        assert(cmp_2 != 2);
+        PASSERT(cmp_2 != 2);
         cmp = (cmp_2 == 0);
     }
 

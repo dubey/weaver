@@ -43,8 +43,8 @@ namespace db
     {
         bool operator()(const del_obj* const &dw1, const del_obj* const &dw2)
         {
-            assert(dw1->tdel->clock.size() == ClkSz);
-            assert(dw2->tdel->clock.size() == ClkSz);
+            PASSERT(dw1->tdel->clock.size() == ClkSz);
+            PASSERT(dw2->tdel->clock.size() == ClkSz);
             for (uint64_t i = 0; i < ClkSz; i++) {
                 if (dw1->tdel->clock[i] <= dw2->tdel->clock[i]) {
                     return false;
