@@ -51,6 +51,7 @@ node :: node(const node_handle_t &_handle, uint64_t shrd, vclock_ptr_t &vclk, po
 
 node :: ~node()
 {
+    state = mode::DELETED; // track memory bugs
     assert(out_edges.empty());
 }
 

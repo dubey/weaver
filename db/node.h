@@ -70,7 +70,8 @@ namespace db
             {
                 NASCENT = 0,
                 STABLE,
-                MOVED
+                MOVED,
+                DELETED
             };
 
         public:
