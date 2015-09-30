@@ -327,7 +327,11 @@ namespace db
         , backup_cond(&config_mutex)
         , first_config_cond(&config_mutex)
         , to_exit(false)
+#ifdef weaver_async_node_recovery_
         , comm(loc, NUM_SHARD_THREADS, SHARD_MSGRECV_TIMEOUT, &sm_stub)
+#else
+        , comm(loc, NUM_SHARD_THREADS, -1, &sm_stub)
+#endif
         , shard_id(UINT64_MAX)
         , serv_id(serverid)
         , max_load_time(0)

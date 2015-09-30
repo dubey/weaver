@@ -24,25 +24,25 @@ server_manager_port=($(weaver-parse-config -c server_manager_port $config_file_a
 kronos_ipaddr=($(weaver-parse-config -c kronos_ipaddr $config_file_args))
 kronos_port=($(weaver-parse-config -c kronos_port $config_file_args))
 
-#echo "Killing all HyperDex coordinator daemons at $hyperdex_coord_ipaddr"
-#if [[ $ip_addrs =~ $hyperdex_coord_ipaddr ]]; then
-#    ps ax | grep 'libhyperdex-coordinator.so' | grep replicant-daemon | awk -F ' ' '{print $1}' | xargs kill -9
-#else
-#    ssh $ipaddr "ps ax | grep 'libhyperdex-coordinator.so' | grep replicant-daemon | awk -F ' ' '{print $1}' | xargs kill -9"
-#fi
+echo "Killing all HyperDex coordinator daemons at $hyperdex_coord_ipaddr"
+if [[ $ip_addrs =~ $hyperdex_coord_ipaddr ]]; then
+    ps ax | grep 'libhyperdex-coordinator.so' | grep replicant-daemon | awk -F ' ' '{print $1}' | xargs kill -9
+else
+    ssh $ipaddr "ps ax | grep 'libhyperdex-coordinator.so' | grep replicant-daemon | awk -F ' ' '{print $1}' | xargs kill -9"
+fi
 
-#num_daemons=${#hyperdex_daemons_ipaddr[*]}
-#for i in $(seq 1 $num_daemons);
-#do
-#    idx=$(($i-1))
-#    ipaddr=${hyperdex_daemons_ipaddr[$idx]}
-#    echo "Killing all HyperDex daemons at $ipaddr"
-#    if [[ $ip_addrs =~ $ipaddr ]]; then
-#        pidof hyperdex-daemon | xargs kill -9
-#    else
-#        ssh $ipaddr "pidof hyperdex-daemon | xargs kill -9"
-#    fi
-#done
+num_daemons=${#hyperdex_daemons_ipaddr[*]}
+for i in $(seq 1 $num_daemons);
+do
+    idx=$(($i-1))
+    ipaddr=${hyperdex_daemons_ipaddr[$idx]}
+    echo "Killing all HyperDex daemons at $ipaddr"
+    if [[ $ip_addrs =~ $ipaddr ]]; then
+        pidof hyperdex-daemon | xargs kill -9
+    else
+        ssh $ipaddr "pidof hyperdex-daemon | xargs kill -9"
+    fi
+done
 
 num_sm_daemons=${#server_manager_ipaddr[*]}
 for i in $(seq 1 $num_sm_daemons);

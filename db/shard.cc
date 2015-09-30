@@ -2534,11 +2534,11 @@ server_loop_busybee(uint64_t thread_id)
             default:
                 WDEBUG << "unexpected msg type " << message::to_string(mtype) << std::endl;
         }
-    }
 
-    // execute all queued requests that can be executed now
-    // will break from loop when no more requests can be executed, in which case we need to recv
-    while (S->qm.exec_queued_request(thread_id, time_oracle));
+        // execute all queued requests that can be executed now
+        // will break from loop when no more requests can be executed, in which case we need to recv
+        while (S->qm.exec_queued_request(thread_id, time_oracle));
+    }
 }
 
 // event on hyperdex client needs to be processed
