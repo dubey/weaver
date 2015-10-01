@@ -1155,9 +1155,9 @@ namespace db
             assert(false && err_msg.c_str());
         }
         std::shared_ptr<node_entry> new_entry;
-        //if (nodes_in_memory[map_idx] < NodesPerMap) {
+        if (nodes_in_memory[map_idx] < NodesPerMap) {
         //if (available_memory()) {
-        if (block_index >= 199999 && block_index <= 200101) {
+        //if (block_index >= 199999 && block_index <= 200101) {
             new_entry = std::make_shared<node_entry>(n);
             new_node_entry(map_idx, new_entry);
             new_entry->used = true;

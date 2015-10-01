@@ -93,7 +93,7 @@ bulk_load_node_alias_key: "alias"
 bulk_load_edge_handle_prefix: ""
 
 # nodes per map in memory during bulk load
-nodes_per_map: 10
+nodes_per_map: 100000
 
 # max memory to be used as ratio of total system memory
 max_memory: 0.95
