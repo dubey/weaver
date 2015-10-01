@@ -185,12 +185,18 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
                     params.prev_node = rn;
                     params.path_ancestors.emplace(n.get_handle());
                     std::vector<db::remote_node> possible_next;
+                    std::unordered_set<uint32_t> choose_idx;
 
+                    uint32_t edge_iter_idx = 0;
                     for (edge &e: n.get_edges()) {
                         const db::remote_node &nbr = e.get_neighbor();
                         if (params.path_ancestors.find(nbr.handle) == params.path_ancestors.end()
                         &&  e.has_all_predicates(params.edge_preds)) {
                             possible_next.emplace_back(nbr);
+                            if (nbr.handle == params.dest && choose_idx.empty()) {
+                                choose_idx.emplace(edge_iter_idx);
+                            }
+                            edge_iter_idx++;
                         }
                     }
 
@@ -200,7 +206,6 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
                         next.emplace_back(std::make_pair(dp_state.prev_nodes[0], params));
                         dp_state.prev_nodes.clear();
                     } else {
-                        std::unordered_set<uint32_t> choose_idx;
                         if (params.branching_factor >= possible_next.size()) {
                             for (uint32_t i = 0; i < possible_next.size(); i++) {
                                 choose_idx.emplace(i);
