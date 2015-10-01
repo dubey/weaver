@@ -14,6 +14,8 @@
 #ifndef weaver_common_utils_h_
 #define weaver_common_utils_h_
 
+#include <vector>
+#include <tuple>
 #include <unordered_set>
 #include <unordered_map>
 #include <po6/io/fd.h>

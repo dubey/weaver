@@ -372,6 +372,7 @@ cdef extern from 'node_prog/discover_paths.h' namespace 'node_prog':
         discover_paths_params()
         node_handle_t dest
         uint32_t path_len
+        uint32_t branching_factor
         vector[prop_predicate] node_preds
         vector[prop_predicate] edge_preds
         unordered_map[string, vector[edge]] paths
@@ -970,7 +971,7 @@ cdef class Client:
         elif pred.rel == Relation.CONTAINS:
             pred_c.rel = CONTAINS
 
-    def discover_paths(self, start_node, end_node, path_len=None, node_preds=None, edge_preds=None):
+    def discover_paths(self, start_node, end_node, path_len=None, node_preds=None, edge_preds=None, branching_factor=None):
         cdef vector[pair[string, discover_paths_params]] c_args
         cdef pair[string, discover_paths_params] arg_pair
         arg_pair.first = start_node
@@ -979,6 +980,8 @@ cdef class Client:
         arg_pair.second.src = start_node
         if path_len is not None:
             arg_pair.second.path_len = path_len
+        if branching_factor is not None:
+            arg_pair.second.branching_factor = branching_factor
         cdef prop_predicate pred_c
         if node_preds is not None:
             arg_pair.second.node_preds.reserve(len(node_preds))

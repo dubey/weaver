@@ -10,6 +10,7 @@
  */
 
 #define weaver_debug_
+#include "common/utils.h"
 #include "common/stl_serialization.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/discover_paths.h"
@@ -24,6 +25,7 @@ using node_prog::Cache_Value_Base;
 // params
 discover_paths_params :: discover_paths_params()
     : path_len(UINT32_MAX)
+    , branching_factor(UINT32_MAX)
     , returning(false)
 { }
 
@@ -32,6 +34,7 @@ discover_paths_params :: size() const
 {
     return message::size(dest)
          + message::size(path_len)
+         + message::size(branching_factor)
          + message::size(node_preds)
          + message::size(edge_preds)
          + message::size(paths)
@@ -46,6 +49,7 @@ discover_paths_params :: pack(e::packer &packer) const
 {
     message::pack_buffer(packer, dest);
     message::pack_buffer(packer, path_len);
+    message::pack_buffer(packer, branching_factor);
     message::pack_buffer(packer, node_preds);
     message::pack_buffer(packer, edge_preds);
     message::pack_buffer(packer, paths);
@@ -60,6 +64,7 @@ discover_paths_params :: unpack(e::unpacker &unpacker)
 {
     message::unpack_buffer(unpacker, dest);
     message::unpack_buffer(unpacker, path_len);
+    message::unpack_buffer(unpacker, branching_factor);
     message::unpack_buffer(unpacker, node_preds);
     message::unpack_buffer(unpacker, edge_preds);
     message::unpack_buffer(unpacker, paths);
@@ -179,21 +184,41 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
                     params.path_len--;
                     params.prev_node = rn;
                     params.path_ancestors.emplace(n.get_handle());
+                    std::vector<db::remote_node> possible_next;
 
                     for (edge &e: n.get_edges()) {
                         const db::remote_node &nbr = e.get_neighbor();
                         if (params.path_ancestors.find(nbr.handle) == params.path_ancestors.end()
                         &&  e.has_all_predicates(params.edge_preds)) {
-                            next.emplace_back(std::make_pair(nbr, params));
-                            dp_state.outstanding_count++;
+                            possible_next.emplace_back(nbr);
                         }
                     }
 
-                    if (dp_state.outstanding_count == 0) {
+                    if (possible_next.empty()) {
                         params.returning = true;
                         params.path_len++;
                         next.emplace_back(std::make_pair(dp_state.prev_nodes[0], params));
                         dp_state.prev_nodes.clear();
+                    } else {
+                        std::unordered_set<uint32_t> choose_idx;
+                        if (params.branching_factor >= possible_next.size()) {
+                            for (uint32_t i = 0; i < possible_next.size(); i++) {
+                                choose_idx.emplace(i);
+                            }
+                        }
+                        while (choose_idx.size() < params.branching_factor
+                            && choose_idx.size() < possible_next.size()) {
+                            uint32_t idx = weaver_util::urandom_uint64() % possible_next.size();
+                            choose_idx.emplace(idx);
+                        }
+                        assert(choose_idx.size() == params.branching_factor
+                            || choose_idx.size() == possible_next.size());
+
+                        for (uint32_t idx: choose_idx) {
+                            next.emplace_back(std::make_pair(possible_next[idx], params));
+                            dp_state.outstanding_count++;
+                        }
+                        dp_state.outstanding_count = choose_idx.size();
                     }
                 } else {
                     params.returning = true;
