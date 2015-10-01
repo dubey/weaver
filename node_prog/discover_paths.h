@@ -32,6 +32,8 @@ namespace node_prog
         node_handle_t dest;
         uint32_t path_len;
         uint32_t branching_factor;
+        bool random_branching;
+        std::string branching_property;
         std::vector<predicate::prop_predicate> node_preds;
         std::vector<predicate::prop_predicate> edge_preds;
         std::unordered_map<node_handle_t, std::vector<cl::edge>> paths;

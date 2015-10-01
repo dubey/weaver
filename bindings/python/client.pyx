@@ -373,6 +373,8 @@ cdef extern from 'node_prog/discover_paths.h' namespace 'node_prog':
         node_handle_t dest
         uint32_t path_len
         uint32_t branching_factor
+        bint random_branching
+        string branching_property
         vector[prop_predicate] node_preds
         vector[prop_predicate] edge_preds
         unordered_map[string, vector[edge]] paths
@@ -971,7 +973,15 @@ cdef class Client:
         elif pred.rel == Relation.CONTAINS:
             pred_c.rel = CONTAINS
 
-    def discover_paths(self, start_node, end_node, path_len=None, node_preds=None, edge_preds=None, branching_factor=None):
+    def discover_paths(self,
+                       start_node,
+                       end_node,
+                       path_len=None,
+                       node_preds=None,
+                       edge_preds=None,
+                       branching_factor=None,
+                       random_branching=True,
+                       branching_property=None):
         cdef vector[pair[string, discover_paths_params]] c_args
         cdef pair[string, discover_paths_params] arg_pair
         arg_pair.first = start_node
@@ -982,6 +992,9 @@ cdef class Client:
             arg_pair.second.path_len = path_len
         if branching_factor is not None:
             arg_pair.second.branching_factor = branching_factor
+        if branching_property is not None and not random_branching:
+            arg_pair.second.random_branching   = random_branching
+            arg_pair.second.branching_property = branching_property
         cdef prop_predicate pred_c
         if node_preds is not None:
             arg_pair.second.node_preds.reserve(len(node_preds))

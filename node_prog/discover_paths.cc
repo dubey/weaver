@@ -26,6 +26,7 @@ using node_prog::Cache_Value_Base;
 discover_paths_params :: discover_paths_params()
     : path_len(UINT32_MAX)
     , branching_factor(UINT32_MAX)
+    , random_branching(true)
     , returning(false)
 { }
 
@@ -35,6 +36,8 @@ discover_paths_params :: size() const
     return message::size(dest)
          + message::size(path_len)
          + message::size(branching_factor)
+         + message::size(random_branching)
+         + message::size(branching_property)
          + message::size(node_preds)
          + message::size(edge_preds)
          + message::size(paths)
@@ -50,6 +53,8 @@ discover_paths_params :: pack(e::packer &packer) const
     message::pack_buffer(packer, dest);
     message::pack_buffer(packer, path_len);
     message::pack_buffer(packer, branching_factor);
+    message::pack_buffer(packer, random_branching);
+    message::pack_buffer(packer, branching_property);
     message::pack_buffer(packer, node_preds);
     message::pack_buffer(packer, edge_preds);
     message::pack_buffer(packer, paths);
@@ -65,6 +70,8 @@ discover_paths_params :: unpack(e::unpacker &unpacker)
     message::unpack_buffer(unpacker, dest);
     message::unpack_buffer(unpacker, path_len);
     message::unpack_buffer(unpacker, branching_factor);
+    message::unpack_buffer(unpacker, random_branching);
+    message::unpack_buffer(unpacker, branching_property);
     message::unpack_buffer(unpacker, node_preds);
     message::unpack_buffer(unpacker, edge_preds);
     message::unpack_buffer(unpacker, paths);
@@ -138,6 +145,13 @@ state_paths_to_params_paths(const std::unordered_map<node_handle_t, node_prog::e
     }
 }
 
+bool
+sort_possible_next_func(const std::pair<db::remote_node, uint32_t> &lhs,
+                        const std::pair<db::remote_node, uint32_t> &rhs)
+{
+    return rhs.second < lhs.second;
+}
+
 std::pair<search_type, std::vector<std::pair<db::remote_node, discover_paths_params>>>
 node_prog :: discover_paths_node_program(node_prog::node &n,
    db::remote_node &rn,
@@ -184,7 +198,7 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
                     params.path_len--;
                     params.prev_node = rn;
                     params.path_ancestors.emplace(n.get_handle());
-                    std::vector<db::remote_node> possible_next;
+                    std::vector<std::pair<db::remote_node, uint32_t>> possible_next;
                     std::unordered_set<uint32_t> choose_idx;
 
                     uint32_t edge_iter_idx = 0;
@@ -192,7 +206,23 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
                         const db::remote_node &nbr = e.get_neighbor();
                         if (params.path_ancestors.find(nbr.handle) == params.path_ancestors.end()
                         &&  e.has_all_predicates(params.edge_preds)) {
-                            possible_next.emplace_back(nbr);
+                            uint32_t v = 0;
+                            if (!params.branching_property.empty()) {
+                                for (auto p_vec: e.get_properties()) {
+                                    std::string key = p_vec[0]->get_key();
+                                    std::string val = p_vec[0]->get_value();
+                                    if (key == params.branching_property) {
+                                        try {
+                                            v = std::stoi(val);
+                                        } catch (int e) {
+                                            // no valid conversion
+                                            v = 0;
+                                        }
+                                        break;
+                                    }
+                                }
+                            }
+                            possible_next.emplace_back(std::make_pair(nbr, v));
                             if (nbr.handle == params.dest && choose_idx.empty()) {
                                 choose_idx.emplace(edge_iter_idx);
                             }
@@ -206,21 +236,29 @@ node_prog :: discover_paths_node_program(node_prog::node &n,
                         next.emplace_back(std::make_pair(dp_state.prev_nodes[0], params));
                         dp_state.prev_nodes.clear();
                     } else {
-                        if (params.branching_factor >= possible_next.size()) {
-                            for (uint32_t i = 0; i < possible_next.size(); i++) {
+                        if (params.random_branching) {
+                            if (params.branching_factor >= possible_next.size()) {
+                                for (uint32_t i = 0; i < possible_next.size(); i++) {
+                                    choose_idx.emplace(i);
+                                }
+                            }
+                            while (choose_idx.size() < params.branching_factor
+                                && choose_idx.size() < possible_next.size()) {
+                                uint32_t idx = weaver_util::urandom_uint64() % possible_next.size();
+                                choose_idx.emplace(idx);
+                            }
+                        } else {
+                            std::sort(possible_next.begin(), possible_next.end(), sort_possible_next_func);
+                            for (uint32_t i = 0; i < possible_next.size() && choose_idx.size() < params.branching_factor; i++) {
                                 choose_idx.emplace(i);
                             }
                         }
-                        while (choose_idx.size() < params.branching_factor
-                            && choose_idx.size() < possible_next.size()) {
-                            uint32_t idx = weaver_util::urandom_uint64() % possible_next.size();
-                            choose_idx.emplace(idx);
-                        }
+
                         assert(choose_idx.size() == params.branching_factor
                             || choose_idx.size() == possible_next.size());
 
                         for (uint32_t idx: choose_idx) {
-                            next.emplace_back(std::make_pair(possible_next[idx], params));
+                            next.emplace_back(std::make_pair(possible_next[idx].first, params));
                             dp_state.outstanding_count++;
                         }
                         dp_state.outstanding_count = choose_idx.size();
