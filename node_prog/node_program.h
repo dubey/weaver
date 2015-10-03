@@ -42,6 +42,8 @@
 #include "node_prog/two_neighborhood_program.h"
 #include "node_prog/traverse_with_props.h"
 #include "node_prog/discover_paths.h"
+#include "node_prog/cause_and_effect.h"
+#include "node_prog/n_gram_path.h"
 #include "node_prog/get_btc_block.h"
 #include "node_prog/get_btc_tx.h"
 #include "node_prog/get_btc_addr.h"
@@ -191,6 +193,10 @@ namespace node_prog
             new particular_node_program<traverse_props_params, traverse_props_state, Cache_Value_Base>(TRAVERSE_PROPS, node_prog::traverse_props_node_program) },
         { DISCOVER_PATHS,
             new particular_node_program<discover_paths_params, discover_paths_state, Cache_Value_Base>(DISCOVER_PATHS, node_prog::discover_paths_node_program) },
+        { CAUSE_AND_EFFECT,
+            new particular_node_program<cause_and_effect_params, cause_and_effect_state, Cache_Value_Base>(CAUSE_AND_EFFECT, node_prog::cause_and_effect_node_program) },
+        { N_GRAM_PATH,
+            new particular_node_program<n_gram_path_params, n_gram_path_state, Cache_Value_Base>(N_GRAM_PATH, node_prog::n_gram_path_node_program) },
         { GET_BTC_BLOCK,
             new particular_node_program<get_btc_block_params, get_btc_block_state, Cache_Value_Base>(GET_BTC_BLOCK, node_prog::get_btc_block_node_program) },
         { GET_BTC_TX,

@@ -74,6 +74,8 @@ noinst_HEADERS+=	node_prog/base_classes.h \
 					node_prog/traverse_with_props.h \
 					node_prog/discover_paths.h \
 					node_prog/parse_btc_tx.h \
+					node_prog/cause_and_effect.h \
+					node_prog/n_gram_path.h \
 					node_prog/get_btc_block.h \
 					node_prog/get_btc_tx.h \
 					node_prog/get_btc_addr.h \
@@ -149,6 +151,8 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    node_prog/traverse_with_props.cc \
 		                    node_prog/discover_paths.cc \
 		                    node_prog/parse_btc_tx.cc \
+							node_prog/cause_and_effect.cc \
+							node_prog/n_gram_path.cc \
 		                    node_prog/get_btc_block.cc \
 		                    node_prog/get_btc_tx.cc \
 		                    node_prog/get_btc_addr.cc \
@@ -226,6 +230,8 @@ weaver_shard_SOURCES=	common/ids.cc \
 		                node_prog/traverse_with_props.cc \
 		                node_prog/discover_paths.cc \
 						node_prog/parse_btc_tx.cc \
+						node_prog/cause_and_effect.cc \
+						node_prog/n_gram_path.cc \
 		                node_prog/get_btc_block.cc \
 		                node_prog/get_btc_tx.cc \
 		                node_prog/get_btc_addr.cc \
@@ -274,6 +280,8 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 		                    node_prog/traverse_with_props.cc \
 		                    node_prog/discover_paths.cc \
 		                    node_prog/parse_btc_tx.cc \
+							node_prog/cause_and_effect.cc \
+							node_prog/n_gram_path.cc \
 		                    node_prog/get_btc_block.cc \
 		                    node_prog/get_btc_tx.cc \
 		                    node_prog/get_btc_addr.cc \

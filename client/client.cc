@@ -527,6 +527,18 @@ client :: discover_paths_program(std::vector<std::pair<std::string, node_prog::d
 }
 
 weaver_client_returncode
+client :: cause_and_effect_program(std::vector<std::pair<std::string, node_prog::cause_and_effect_params>> &initial_args, node_prog::cause_and_effect_params &return_param)
+{
+    SPECIFIC_NODE_PROG(node_prog::CAUSE_AND_EFFECT);
+}
+
+weaver_client_returncode
+client :: n_gram_path_program(std::vector<std::pair<std::string, node_prog::n_gram_path_params>> &initial_args, node_prog::n_gram_path_params &return_param)
+{
+    SPECIFIC_NODE_PROG(node_prog::N_GRAM_PATH);
+}
+
+weaver_client_returncode
 client :: get_btc_block_program(std::vector<std::pair<std::string, node_prog::get_btc_block_params>> &initial_args, node_prog::get_btc_block_params &return_param)
 {
     SPECIFIC_NODE_PROG(node_prog::GET_BTC_BLOCK);

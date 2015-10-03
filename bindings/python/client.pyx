@@ -15,6 +15,7 @@
 
 from __future__ import print_function
 import sys
+from libcpp cimport bool
 
 # begin <stolen from Hyperdex/bindings/client.pyx>
 cdef extern from 'stdint.h':
@@ -378,8 +379,31 @@ cdef extern from 'node_prog/discover_paths.h' namespace 'node_prog':
         vector[prop_predicate] node_preds
         vector[prop_predicate] edge_preds
         unordered_map[string, vector[edge]] paths
+        vector[string] nodes_on_path
         remote_node prev_node
         node_handle_t src
+
+cdef extern from 'node_prog/cause_and_effect.h' namespace 'node_prog':
+    cdef cppclass cause_and_effect_params:
+        cause_and_effect_params()
+        node_handle_t dest
+        double cutoff_confid
+        double confidence
+        vector[prop_predicate] node_preds
+        vector[prop_predicate] edge_preds
+        unordered_map[string, vector[edge]] paths
+        uint32_t max_results
+        remote_node prev_node
+
+cdef extern from 'node_prog/n_gram_path.h' namespace 'node_prog':
+    cdef cppclass n_gram_path_params:
+        n_gram_path_params()
+        vector[prop_predicate] node_preds
+        vector[prop_predicate] edge_preds
+        unordered_map[uint32_t, uint32_t] progress
+        remote_node coord
+        vector[node_handle_t] remaining_path
+        bool unigram
 
 cdef extern from 'node_prog/get_btc_block.h' namespace 'node_prog':
     cdef cppclass get_btc_block_params:
@@ -441,6 +465,8 @@ cdef extern from 'client/client.h' namespace 'cl':
         weaver_client_returncode node_get_program(vector[pair[string, node_get_params]] &initial_args, node_get_params&) nogil
         weaver_client_returncode traverse_props_program(vector[pair[string, traverse_props_params]] &initial_args, traverse_props_params&) nogil
         weaver_client_returncode discover_paths_program(vector[pair[string, discover_paths_params]] &initial_args, discover_paths_params&) nogil
+        weaver_client_returncode cause_and_effect_program(vector[pair[string, cause_and_effect_params]] &initial_args, cause_and_effect_params&) nogil
+        weaver_client_returncode n_gram_path_program(vector[pair[string, n_gram_path_params]] &initial_args, n_gram_path_params&) nogil
         weaver_client_returncode get_btc_block_program(vector[pair[string, get_btc_block_params]] &initial_args, get_btc_block_params&) nogil
         weaver_client_returncode get_btc_tx_program(vector[pair[string, get_btc_tx_params]] &initial_args, get_btc_tx_params&) nogil
         weaver_client_returncode get_btc_addr_program(vector[pair[string, get_btc_addr_params]] &initial_args, get_btc_addr_params&) nogil
@@ -1028,7 +1054,96 @@ cdef class Client:
                 inc(edge_iter)
             ret_paths[cur_node] = cur_edges
             inc(path_iter)
+        path = []
+        cdef vector[string].iterator node_iter = c_rp.nodes_on_path.begin()
+        while node_iter != c_rp.nodes_on_path.end():
+            path.append(deref(node_iter))
+            inc(node_iter)
+        return (ret_paths, path)
+
+    def cause_and_effect(self, start_node, end_node, confidence=None, cutoff_confid=None, max_results=None, node_preds=None, edge_preds=None):
+        cdef vector[pair[string, cause_and_effect_params]] c_args
+        cdef pair[string, cause_and_effect_params] arg_pair
+        arg_pair.first = start_node
+        arg_pair.second.prev_node = coordinator
+        arg_pair.second.dest = end_node
+        if confidence is not None:
+            arg_pair.second.confidence = confidence
+        if cutoff_confid is not None:
+            arg_pair.second.cutoff_confid = cutoff_confid
+        if max_results is not None:
+            arg_pair.second.max_results = max_results
+        cdef prop_predicate pred_c
+        if node_preds is not None:
+            arg_pair.second.node_preds.reserve(len(node_preds))
+            for pred in node_preds:
+                self.__convert_pred_to_c_pred(pred, pred_c)
+                arg_pair.second.node_preds.push_back(pred_c)
+        if edge_preds is not None:
+            arg_pair.second.edge_preds.reserve(len(edge_preds))
+            for pred in edge_preds:
+                self.__convert_pred_to_c_pred(pred, pred_c)
+                arg_pair.second.edge_preds.push_back(pred_c)
+        c_args.push_back(arg_pair)
+
+        cdef cause_and_effect_params c_rp
+        with nogil:
+            code = self.thisptr.cause_and_effect_program(c_args, c_rp)
+
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
+        ret_paths = {}
+        cdef unordered_map[string, vector[edge]].iterator path_iter = c_rp.paths.begin()
+        cdef vector[edge].iterator edge_iter
+        while path_iter != c_rp.paths.end():
+            cur_node = str(deref(path_iter).first)
+            cur_edges = []
+            edge_iter = deref(path_iter).second.begin()
+            while edge_iter != deref(path_iter).second.end():
+                cur_edges.append(Edge())
+                self.__convert_edge_to_client_edge(deref(edge_iter), cur_edges[-1])
+                inc(edge_iter)
+            ret_paths[cur_node] = cur_edges
+            inc(path_iter)
         return ret_paths
+
+    def n_gram_path(self, path, node_preds=None, edge_preds=None):
+        cdef vector[pair[string, n_gram_path_params]] c_args
+        cdef pair[string, n_gram_path_params] arg_pair
+        if len(path) == 0:
+            raise WeaverError(WEAVER_CLIENT_ABORT, 'empty path')
+        arg_pair.first = path[0]
+        arg_pair.second.coord = coordinator
+        arg_pair.second.remaining_path = path[1:]
+        if len(arg_pair.second.remaining_path) == 0:
+            arg_pair.second.unigram = True
+        else:
+            arg_pair.second.unigram = False
+        cdef prop_predicate pred_c
+        if node_preds is not None:
+            arg_pair.second.node_preds.reserve(len(node_preds))
+            for pred in node_preds:
+                self.__convert_pred_to_c_pred(pred, pred_c)
+                arg_pair.second.node_preds.push_back(pred_c)
+        if edge_preds is not None:
+            arg_pair.second.edge_preds.reserve(len(edge_preds))
+            for pred in edge_preds:
+                self.__convert_pred_to_c_pred(pred, pred_c)
+                arg_pair.second.edge_preds.push_back(pred_c)
+        c_args.push_back(arg_pair)
+
+        cdef n_gram_path_params c_rp
+        with nogil:
+            code = self.thisptr.n_gram_path_program(c_args, c_rp)
+
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
+        ret_docs = []
+        cdef unordered_map[uint32_t, uint32_t].iterator doc_iter = c_rp.progress.begin()
+        while doc_iter != c_rp.progress.end():
+            ret_docs.append(deref(doc_iter).first)
+            inc(doc_iter)
+        return ret_docs
 
     def get_btc_block(self, block):
         cdef vector[pair[string, get_btc_block_params]] c_args
