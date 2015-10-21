@@ -112,12 +112,12 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
                     if (e.has_all_predicates(params.edge_preds)) {
                         uint32_t doc_id = -1;
                         for (auto iter: e.get_properties()) {
-                            if (iter[0]->key == "doc_id")
+                            if (iter[0]->key == "doc")
                                 doc_id = std::stoul(iter[0]->value);
                         }
                         if (doc_id == (uint32_t)-1)
                         {
-                            WDEBUG << "doc_id property not found for edge: " +
+                            WDEBUG << "doc property not found for edge: " +
                                 cur_handle + " -> " + nbr.handle + "\n";
                             continue;
                         }
@@ -140,14 +140,14 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
                     uint32_t doc_id = -1;
                     uint32_t doc_pos = -1;
                     for (auto iter: e.get_properties()) {
-                        if (iter[0]->key == "doc_id")
+                        if (iter[0]->key == "doc")
                             doc_id = std::stoul(iter[0]->value);
-                        else if (iter[0]->key == "doc_pos")
+                        else if (iter[0]->key == "pos")
                             doc_pos = std::stoul(iter[0]->value);
                     }
                     if (doc_id == (uint32_t)-1 || doc_pos == (uint32_t)-1)
                     {
-                        WDEBUG << "doc_id/doc_pos property not found for edge: " +
+                        WDEBUG << "doc/pos property not found for edge: " +
                             cur_handle + " -> " + nbr.handle + "\n";
                         continue;
                     }
