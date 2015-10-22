@@ -118,7 +118,6 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
     std::vector<std::pair<db::remote_node, n_gram_path_params>> next;
     node_handle_t cur_handle = n.get_handle();
 
-    fprintf(stderr, "Propagate to %s\n", cur_handle.c_str());
     // visit this node now
     if (!n.has_all_predicates(params.node_preds)) {
         params.doc_map.clear();
@@ -151,7 +150,7 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
                 }
                 next.emplace_back(std::make_pair(params.coord, params));
             } else {
-                WDEBUG << "Hit destination " << n.get_handle() << std::endl;
+                //WDEBUG << "Hit destination " << n.get_handle() << std::endl;
                 next.emplace_back(std::make_pair(params.coord, params));
             }
         } else {
@@ -204,15 +203,15 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
 
             if (next_node) {
                 params.doc_map = new_doc_map;
-                WDEBUG << "== progress at node " << cur_handle.c_str() << " ===\n";
-                for (const auto &ref: params.doc_map) {
-                    WDEBUG << ref.first << " " << ref.second.date << " ";
-                    for (uint32_t pos: ref.second.pos) {
-                        std::cerr << pos << " ";
-                    }
-                    std::cerr << std::endl;
-                }
-                WDEBUG << "==========================\n";
+                //WDEBUG << "== progress at node " << cur_handle.c_str() << " ===\n";
+                //for (const auto &ref: params.doc_map) {
+                //    WDEBUG << ref.first << " " << ref.second.date << " ";
+                //    for (uint32_t pos: ref.second.pos) {
+                //        std::cerr << pos << " ";
+                //    }
+                //    std::cerr << std::endl;
+                //}
+                //WDEBUG << "==========================\n";
                 next.emplace_back(std::make_pair(*next_node, params));
                 delete next_node;
             }
