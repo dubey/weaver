@@ -15,12 +15,33 @@
 #include "node_prog/n_gram_path.h"
 
 using node_prog::search_type;
+using node_prog::doc_info;
 using node_prog::n_gram_path_params;
 using node_prog::n_gram_path_state;
 using node_prog::cache_response;
 using node_prog::Cache_Value_Base;
 
 // params
+uint64_t
+doc_info :: size() const
+{
+    return message::size(date) + message::size(pos);
+}
+
+void
+doc_info :: pack(e::packer &packer) const
+{
+    message::pack_buffer(packer, date);
+    message::pack_buffer(packer, pos);
+}
+
+void
+doc_info :: unpack(e::unpacker &unpacker)
+{
+    message::unpack_buffer(unpacker, date);
+    message::unpack_buffer(unpacker, pos);
+}
+
 n_gram_path_params :: n_gram_path_params()
     : step(0)
 {
@@ -31,12 +52,11 @@ n_gram_path_params :: size() const
 {
     return message::size(node_preds)
          + message::size(edge_preds)
-         + message::size(progress)
+         + message::size(doc_map)
          + message::size(coord)
          + message::size(remaining_path)
          + message::size(step)
-         + message::size(unigram)
-         ;
+         + message::size(unigram);
 }
 
 void
@@ -44,7 +64,7 @@ n_gram_path_params :: pack(e::packer &packer) const
 {
     message::pack_buffer(packer, node_preds);
     message::pack_buffer(packer, edge_preds);
-    message::pack_buffer(packer, progress);
+    message::pack_buffer(packer, doc_map);
     message::pack_buffer(packer, coord);
     message::pack_buffer(packer, remaining_path);
     message::pack_buffer(packer, step);
@@ -56,7 +76,7 @@ n_gram_path_params :: unpack(e::unpacker &unpacker)
 {
     message::unpack_buffer(unpacker, node_preds);
     message::unpack_buffer(unpacker, edge_preds);
-    message::unpack_buffer(unpacker, progress);
+    message::unpack_buffer(unpacker, doc_map);
     message::unpack_buffer(unpacker, coord);
     message::unpack_buffer(unpacker, remaining_path);
     message::unpack_buffer(unpacker, step);
@@ -101,7 +121,7 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
     fprintf(stderr, "Propagate to %s\n", cur_handle.c_str());
     // visit this node now
     if (!n.has_all_predicates(params.node_preds)) {
-        params.progress.clear();
+        params.doc_map.clear();
         next.emplace_back(std::make_pair(params.coord, params));
     } else {
         /* already reaches the target */
@@ -111,69 +131,93 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
                     const db::remote_node &nbr = e.get_neighbor();
                     if (e.has_all_predicates(params.edge_preds)) {
                         uint32_t doc_id = -1;
+                        std::string date;
                         for (auto iter: e.get_properties()) {
-                            if (iter[0]->key == "doc")
+                            if (iter[0]->key == "doc") {
                                 doc_id = std::stoul(iter[0]->value);
+                            } else if (iter[0]->key == "date") {
+                                date = iter[0]->value;
+                            }
                         }
-                        if (doc_id == (uint32_t)-1)
-                        {
+                        if (doc_id == (uint32_t)-1 || date.empty()) {
                             WDEBUG << "doc property not found for edge: " +
                                 cur_handle + " -> " + nbr.handle + "\n";
                             continue;
                         }
-                        params.progress.emplace(doc_id, 0);
+                        doc_info new_doc;
+                        new_doc.date = date;
+                        params.doc_map.emplace(doc_id, new_doc);
                     }
                 }
                 next.emplace_back(std::make_pair(params.coord, params));
             } else {
-                WDEBUG << "Hit destination\n";
+                WDEBUG << "Hit destination " << n.get_handle() << std::endl;
                 next.emplace_back(std::make_pair(params.coord, params));
             }
         } else {
             db::remote_node *next_node = nullptr;
             params.step++;
-            std::unordered_map<uint32_t, uint32_t> new_progress;
+            std::unordered_map<uint32_t, doc_info> new_doc_map;
+            node_handle_t next_step = params.remaining_path[0];
+            params.remaining_path.pop_front();
+
             for (edge &e: n.get_edges()) {
                 const db::remote_node &nbr = e.get_neighbor();
-                if (nbr.handle == params.remaining_path[0] &&
+                if (nbr.handle == next_step &&
                     e.has_all_predicates(params.edge_preds)) {
                     uint32_t doc_id = -1;
                     uint32_t doc_pos = -1;
+                    std::string date;
                     for (auto iter: e.get_properties()) {
-                        if (iter[0]->key == "doc")
+                        if (iter[0]->key == "doc") {
                             doc_id = std::stoul(iter[0]->value);
-                        else if (iter[0]->key == "pos")
+                        } else if (iter[0]->key == "pos") {
                             doc_pos = std::stoul(iter[0]->value);
+                        } else if (iter[0]->key == "date") {
+                            date = iter[0]->value;
+                        }
                     }
-                    if (doc_id == (uint32_t)-1 || doc_pos == (uint32_t)-1)
-                    {
-                        WDEBUG << "doc/pos property not found for edge: " +
+
+                    if (doc_id == (uint32_t)-1 || doc_pos == (uint32_t)-1 || date.empty()) {
+                        WDEBUG << "doc/pos/date property not found for edge: " +
                             cur_handle + " -> " + nbr.handle + "\n";
                         continue;
                     }
-                    auto iter = params.progress.find(doc_id);
-                    if ((iter != params.progress.end() &&
-                        iter->second + 1 == doc_pos) ||
-                        (params.step == 1))
-                        new_progress[doc_id] = doc_pos;
-                    if (!next_node)
+
+                    if (params.step == 1) {
+                        new_doc_map[doc_id].date = date;
+                        new_doc_map[doc_id].pos.emplace(doc_pos);
+                    } else {
+                        auto iter = params.doc_map.find(doc_id);
+                        if (iter != params.doc_map.end()
+                         && iter->second.pos.find(doc_pos-1) != iter->second.pos.end()) {
+                            new_doc_map[doc_id].date = date;
+                            new_doc_map[doc_id].pos.emplace(doc_pos);
+                        }
+                    }
+
+                    if (!next_node) {
                         next_node = new db::remote_node(nbr);
+                    }
                 }
             }
+
             if (next_node) {
-                params.progress = new_progress;
-                params.remaining_path = std::vector<node_handle_t>(
-                                            params.remaining_path.begin() + 1,
-                                            params.remaining_path.end());
-                fprintf(stderr, "== progress at node %s ===\n", cur_handle.c_str());
-                for (const auto &ref: params.progress)
-                    fprintf(stderr, "%u: %u\n", ref.first, ref.second);
-                fprintf(stderr, "==========================\n");
+                params.doc_map = new_doc_map;
+                WDEBUG << "== progress at node " << cur_handle.c_str() << " ===\n";
+                for (const auto &ref: params.doc_map) {
+                    WDEBUG << ref.first << " " << ref.second.date << " ";
+                    for (uint32_t pos: ref.second.pos) {
+                        std::cerr << pos << " ";
+                    }
+                    std::cerr << std::endl;
+                }
+                WDEBUG << "==========================\n";
                 next.emplace_back(std::make_pair(*next_node, params));
                 delete next_node;
             }
             else {
-                params.progress.clear();
+                params.doc_map.clear();
                 next.emplace_back(std::make_pair(params.coord, params));
             }
         }

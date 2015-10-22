@@ -396,13 +396,16 @@ cdef extern from 'node_prog/cause_and_effect.h' namespace 'node_prog':
         remote_node prev_node
 
 cdef extern from 'node_prog/n_gram_path.h' namespace 'node_prog':
+    cdef cppclass doc_info:
+        string date
+        unordered_set[uint32_t] pos
     cdef cppclass n_gram_path_params:
         n_gram_path_params()
         vector[prop_predicate] node_preds
         vector[prop_predicate] edge_preds
-        unordered_map[uint32_t, uint32_t] progress
+        unordered_map[uint32_t, doc_info] doc_map
         remote_node coord
-        vector[node_handle_t] remaining_path
+        deque[node_handle_t] remaining_path
         bool unigram
 
 cdef extern from 'node_prog/get_btc_block.h' namespace 'node_prog':
@@ -1114,11 +1117,12 @@ cdef class Client:
             raise WeaverError(WEAVER_CLIENT_ABORT, 'empty path')
         arg_pair.first = path[0]
         arg_pair.second.coord = coordinator
-        arg_pair.second.remaining_path = path[1:]
-        if len(arg_pair.second.remaining_path) == 0:
+        if len(path) == 1:
             arg_pair.second.unigram = True
         else:
             arg_pair.second.unigram = False
+            for word in path[1:]:
+                arg_pair.second.remaining_path.push_back(word)
         cdef prop_predicate pred_c
         if node_preds is not None:
             arg_pair.second.node_preds.reserve(len(node_preds))
@@ -1139,9 +1143,11 @@ cdef class Client:
         if code != WEAVER_CLIENT_SUCCESS:
             raise WeaverError(code, 'node prog error')
         ret_docs = []
-        cdef unordered_map[uint32_t, uint32_t].iterator doc_iter = c_rp.progress.begin()
-        while doc_iter != c_rp.progress.end():
-            ret_docs.append(deref(doc_iter).first)
+        cdef unordered_map[uint32_t, doc_info].iterator doc_iter = c_rp.doc_map.begin()
+        while doc_iter != c_rp.doc_map.end():
+            doc_id   = deref(doc_iter).first
+            doc_date = deref(doc_iter).second.date
+            ret_docs.append((doc_id, doc_date))
             inc(doc_iter)
         return ret_docs
 

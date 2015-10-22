@@ -23,6 +23,22 @@
 
 namespace node_prog
 {
+    struct doc_info: public virtual Node_Parameters_Base
+    {
+        std::string date;
+        std::unordered_set<uint32_t> pos;
+
+        doc_info() { }
+        ~doc_info() { }
+        uint64_t size() const;
+        void pack(e::packer&) const;
+        void unpack(e::unpacker&);
+
+        // no caching
+        bool search_cache() { return false; }
+        cache_key_t cache_key() { return cache_key_t(); }
+    };
+
     /* parameter passing to a node */
     struct n_gram_path_params: public virtual Node_Parameters_Base
     {
@@ -30,11 +46,11 @@ namespace node_prog
         std::vector<predicate::prop_predicate> node_preds;
         std::vector<predicate::prop_predicate> edge_preds;
 
-        std::unordered_map<uint32_t, uint32_t> progress;
+        std::unordered_map<uint32_t, doc_info> doc_map;
 
         /* coordinator */
         db::remote_node coord;
-        std::vector<node_handle_t> remaining_path;
+        std::deque<node_handle_t> remaining_path;
         uint32_t step;
         bool unigram;
 
