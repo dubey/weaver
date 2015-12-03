@@ -160,38 +160,65 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
             node_handle_t next_step = params.remaining_path[0];
             params.remaining_path.pop_front();
 
-            for (edge &e: n.get_edges()) {
-                const db::remote_node &nbr = e.get_neighbor();
-                if (nbr.handle == next_step &&
-                    e.has_all_predicates(params.edge_preds)) {
-                    uint32_t doc_id = -1;
-                    uint32_t doc_pos = -1;
-                    std::string date;
+            std::unordered_set<std::string> edges_present;
+            bool last_edge = false;
+            for (uint16_t i = 0; i < 1000 || last_edge; i++) {
+                std::string try_handle = n.get_handle() + "," + next_step + "," + std::to_string(i);
+                if (n.edge_exists(try_handle)) {
+                    edges_present.emplace(try_handle);
+                    last_edge = true;
+                } else {
+                    last_edge = false;
+                }
+            }
+            for (std::string &eh: edges_present) {
+                edge &e = n.get_edge(eh);
+                if (e.has_all_predicates(params.edge_preds)) {
+                    const db::remote_node &nbr = e.get_neighbor();
                     for (auto iter: e.get_properties()) {
-                        if (iter[0]->key == "doc") {
-                            doc_id = std::stoul(iter[0]->value);
-                        } else if (iter[0]->key == "pos") {
-                            doc_pos = std::stoul(iter[0]->value);
-                        } else if (iter[0]->key == "date") {
-                            date = iter[0]->value;
-                        }
-                    }
+                        if (iter[0]->key == "locs") {
+                            std::string value = iter[0]->value;
+                            value.erase(remove_if(value.begin(), value.end(), isspace), value.end()); // remove whitespace
+                            std::stringstream ss(value);
+                            std::string item;
+                            while (std::getline(ss, item, ';')) {
+                                item = item.substr(1, item.size()-2);
 
-                    if (doc_id == (uint32_t)-1 || doc_pos == (uint32_t)-1 || date.empty()) {
-                        WDEBUG << "doc/pos/date property not found for edge: " +
-                            cur_handle + " -> " + nbr.handle + "\n";
-                        continue;
-                    }
+                                std::stringstream cur_ss(item);
+                                std::string part;
+                                std::vector<std::string> parts;
+                                while (std::getline(cur_ss, part, ',')) {
+                                    parts.emplace_back(part);
+                                }
 
-                    if (params.step == 1) {
-                        new_doc_map[doc_id].date = date;
-                        new_doc_map[doc_id].pos.emplace(doc_pos);
-                    } else {
-                        auto iter = params.doc_map.find(doc_id);
-                        if (iter != params.doc_map.end()
-                         && iter->second.pos.find(doc_pos-1) != iter->second.pos.end()) {
-                            new_doc_map[doc_id].date = date;
-                            new_doc_map[doc_id].pos.emplace(doc_pos);
+                                doc_id  = std::stoul(parts[0]);
+                                date    = parts[1];
+
+                                for (uint32_t i = 2; i < parts.size(); i++) {
+                                    if (parts[i].back() == ']') {
+                                        parts[i].pop_back();
+                                    }
+                                    if (parts[i].front() == '[') {
+                                        parts[i] = parts[i].substr(1, parts[i].size()-1);
+                                    }
+
+                                    doc_pos = std::stoul(parts[i]);
+
+                                    if (params.step == 1) {
+                                        doc_info &doc = new_doc_map[doc_id];
+                                        doc.date = date;
+                                        doc.pos.emplace(doc_pos);
+                                    } else {
+                                        auto iter = params.doc_map.find(doc_id);
+                                        if (iter != params.doc_map.end()
+                                         && iter->second.pos.find(doc_pos-1) != iter->second.pos.end()) {
+                                            doc_info &doc = new_doc_map[doc_id];
+                                            doc.date = date;
+                                            doc.pos.emplace(doc_pos);
+                                        }
+                                    }
+                                }
+                            }
                         }
                     }
 
