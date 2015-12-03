@@ -377,6 +377,7 @@ struct load_xml_elem_static_args
     { }
 };
 
+// ASSUME atmost 1800 shards
 #define MAX_EDGES_PER_NODE 100000000ULL // at most 100M edges per node
 #define MAX_NODES_PER_SHARD 100000000ULL // at most 100M nodes per shard
 
@@ -468,8 +469,18 @@ load_xml_node(pugi::xml_document &doc,
         }
         assert(!parse_bad);
     } else {
-        start_edge_idx = (shard_id-ShardIdIncr)*MAX_NODES_PER_SHARD*MAX_EDGES_PER_NODE
-                       + node_count*MAX_EDGES_PER_NODE;
+        //start_edge_idx = (shard_id-ShardIdIncr)*MAX_NODES_PER_SHARD*MAX_EDGES_PER_NODE
+        //               + node_count*MAX_EDGES_PER_NODE;
+        start_edge_idx = node_count*MAX_EDGES_PER_NODE;
+        //uint64_t start_shard_range = (shard_id-ShardIdIncr)*MAX_NODES_PER_SHARD*MAX_EDGES_PER_NODE;
+        //uint64_t end_shard_range   = (1+shard_id-ShardIdIncr)*MAX_NODES_PER_SHARD*MAX_EDGES_PER_NODE - 1;
+        //if (start_edge_idx < start_shard_range || start_edge_idx > end_shard_range) {
+        //    WDEBUG << "edge_idx=" << start_edge_idx
+        //           << ", start_range=" << start_shard_range
+        //           << ", end_range=" << end_shard_range
+        //           << std::endl;
+        //}
+        //assert(start_edge_idx >= start_shard_range && start_edge_idx <= end_shard_range);
     }
 
     bool already_exists = other_hstub.new_node(n->get_handle(), start_edge_idx);
@@ -531,8 +542,18 @@ check_node(const node_handle_t &node_handle,
     }
 
     uint64_t start_edge_idx;
-    start_edge_idx = (shard_id-ShardIdIncr)*MAX_NODES_PER_SHARD*MAX_EDGES_PER_NODE
-                   + node_count*MAX_EDGES_PER_NODE;
+    //start_edge_idx = (shard_id-ShardIdIncr)*MAX_NODES_PER_SHARD*MAX_EDGES_PER_NODE
+    //               + node_count*MAX_EDGES_PER_NODE;
+    start_edge_idx = node_count*MAX_EDGES_PER_NODE;
+    //uint64_t start_shard_range = (shard_id-ShardIdIncr)*MAX_NODES_PER_SHARD*MAX_EDGES_PER_NODE;
+    //uint64_t end_shard_range   = (1+shard_id-ShardIdIncr)*MAX_NODES_PER_SHARD*MAX_EDGES_PER_NODE - 1;
+    //if (start_edge_idx < start_shard_range || start_edge_idx > end_shard_range) {
+    //    WDEBUG << "edge_idx=" << start_edge_idx
+    //           << ", start_range=" << start_shard_range
+    //           << ", end_range=" << end_shard_range
+    //           << std::endl;
+    //}
+    //assert(start_edge_idx >= start_shard_range && start_edge_idx <= end_shard_range);
 
     bool already_exists = other_hstub.new_node(n->get_handle(), start_edge_idx);
     assert(!already_exists);
@@ -548,8 +569,8 @@ check_node(const node_handle_t &node_handle,
     }
 }
 
-#undef MAX_EDGES_PER_NODE
-#undef MAX_NODES_PER_SHARD
+//#undef MAX_EDGES_PER_NODE
+//#undef MAX_NODES_PER_SHARD
 
 void
 load_xml_edge(pugi::xml_document &doc,
@@ -1510,6 +1531,7 @@ propagate_node_progs(node_prog::node_prog_running_state<ParamsType, NodeStateTyp
     // 3
     //prog_batches.emplace_back(std::move(prop_progs));
     // 1
+    WDEBUG << "propagate node prog" << std::endl;
     while (!prop_progs.empty()) {
         std::deque<std::pair<node_handle_t, ParamsType>> progs;
         size_t num_progs;
@@ -1521,13 +1543,16 @@ propagate_node_progs(node_prog::node_prog_running_state<ParamsType, NodeStateTyp
         }
         assert(num_progs > 0);
 
+    WDEBUG << "propagate node prog" << std::endl;
         for (size_t i = 0; i < num_progs; i++) {
-            progs.emplace_back(prop_progs[i]);
+            progs.emplace_back(std::move(prop_progs[i]));
         }
         prog_batches.emplace_back(std::move(progs));
+    WDEBUG << "propagate node prog" << std::endl;
 
         prop_progs.erase(prop_progs.begin(), prop_progs.begin() + num_progs);
     }
+    WDEBUG << "propagate node prog" << std::endl;
 
     for (auto &progs: prog_batches) {
         message::message out_msg;
@@ -1537,10 +1562,11 @@ propagate_node_progs(node_prog::node_prog_running_state<ParamsType, NodeStateTyp
                                 *np.req_vclock,
                                 np.req_id,
                                 np.vt_prog_ptr,
-                                progs);
+                                std::move(progs));
         S->comm.send(prop_shard, out_msg.buf);
         //WDEBUG << "send node prog=" << np.req_id << " to shard " << prop_shard << std::endl;
     }
+    WDEBUG << "propagate node prog" << std::endl;
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
@@ -1682,10 +1708,12 @@ inline void node_prog_loop(uint64_t tid,
             assert(np.req_vclock != nullptr);
             assert(np.req_vclock->clock.size() == ClkSz);
             // call node program
+            WDEBUG << "calling node program at node=" << node_handle << std::endl;
             auto next_node_params = np.m_func(*node, this_node,
                     params, // actual parameters for this node program
                     node_state_getter, add_cache_func,
                     (node_prog::cache_response<CacheValueType>*) np.cache_value.get());
+            WDEBUG << "done node program at node=" << node_handle << std::endl;
             if (MaxCacheEntries) {
                 if (np.cache_value) {
                     auto state = get_state_if_exists(*node, np.req_id, np.m_type);
@@ -1695,9 +1723,11 @@ inline void node_prog_loop(uint64_t tid,
                 }
                 np.cache_value.reset(nullptr);
             }
+            WDEBUG << "here node program at node=" << node_handle << std::endl;
             node->base.view_time = nullptr; 
             node->base.time_oracle = nullptr;
             S->release_node(node);
+            WDEBUG << "here node program at node=" << node_handle << std::endl;
             np.start_node_params.pop_front(); // pop off this one before potentially add new front
 
             // batch the newly generated node programs for onward propagation
@@ -1730,36 +1760,44 @@ inline void node_prog_loop(uint64_t tid,
                 }
             }
 #ifdef WEAVER_CLDG
+            WDEBUG << "here node program at node=" << node_handle << std::endl;
             S->msg_count_mutex.lock();
+            WDEBUG << "here node program at node=" << node_handle << std::endl;
             for (auto &p: agg_msg_count) {
                 S->agg_msg_count[p.first] += p.second;
             }
             S->msg_count_mutex.unlock();
+            WDEBUG << "here node program at node=" << node_handle << std::endl;
 #endif
         }
 
         uint64_t num_shards = get_num_shards();
         assert(np.batched_node_progs.size() < num_shards);
 
+        WDEBUG << "here node program at node=" << node_handle << std::endl;
         for (auto &loc_progs_pair : np.batched_node_progs) {
             propagate_node_progs(np, loc_progs_pair.first, num_shards, loc_progs_pair.second);
         }
+        WDEBUG << "here node program at node=" << node_handle << std::endl;
 
         if (MaxCacheEntries) {
             assert(np.cache_value == false); // unique ptr is not assigned
         }
     }
 
+    WDEBUG << "here node program at node=" << node_handle << std::endl;
     uint64_t num_shards = get_num_shards();
     if (!done_request) {
         for (auto &loc_progs_pair : np.batched_node_progs) {
             propagate_node_progs(np, loc_progs_pair.first, num_shards, loc_progs_pair.second);
         }
     }
+    WDEBUG << "here node program at node=" << node_handle << std::endl;
 
     if (!np.nodes_that_created_state.empty()) {
         S->mark_nodes_using_state(np.req_id, *np.req_vclock, np.nodes_that_created_state);
     }
+    WDEBUG << "here node program at node=" << node_handle << std::endl;
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
@@ -2918,6 +2956,9 @@ main(int argc, const char *argv[])
                    << ", file=" << graph_file
                    << ", format=" << graph_format
                    << ", #shards=" << bulk_load_num_shards << std::endl;
+            WDEBUG << "edge id range, start=" << (shard_id-ShardIdIncr)*MAX_NODES_PER_SHARD*MAX_EDGES_PER_NODE
+                   << ", end=" << (1+shard_id-ShardIdIncr)*MAX_NODES_PER_SHARD*MAX_EDGES_PER_NODE - 1
+                   << std::endl;
             S->bulk_load_num_shards = (uint64_t)bulk_load_num_shards;
 
             db::graph_file_format format = db::SNAP;
