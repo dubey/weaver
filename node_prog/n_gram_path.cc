@@ -171,7 +171,7 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
                     last_edge = false;
                 }
             }
-            for (std::string &eh: edges_present) {
+            for (const std::string &eh: edges_present) {
                 edge &e = n.get_edge(eh);
                 if (e.has_all_predicates(params.edge_preds)) {
                     const db::remote_node &nbr = e.get_neighbor();
@@ -191,8 +191,8 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
                                     parts.emplace_back(part);
                                 }
 
-                                doc_id  = std::stoul(parts[0]);
-                                date    = parts[1];
+                                uint32_t doc_id  = std::stoul(parts[0]);
+                                std::string date = parts[1];
 
                                 for (uint32_t i = 2; i < parts.size(); i++) {
                                     if (parts[i].back() == ']') {
@@ -202,7 +202,7 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
                                         parts[i] = parts[i].substr(1, parts[i].size()-1);
                                     }
 
-                                    doc_pos = std::stoul(parts[i]);
+                                    uint32_t doc_pos = std::stoul(parts[i]);
 
                                     if (params.step == 1) {
                                         doc_info &doc = new_doc_map[doc_id];

@@ -106,7 +106,7 @@ aux_index: true
 
 # BulkLoadPropertyValueDelimiter is a character used to delimit property lists while bulk loading graphml graphs.
 # Default: '\0'
-bulk_load_property_value_delimiter: ","
+#bulk_load_property_value_delimiter: ","
 
 # BulkLoadNodeAliasKey is the key of node property that corresponds to the node aliases while bulk loading graphml graphs.
 # Default: ""
