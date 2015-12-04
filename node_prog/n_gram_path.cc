@@ -127,25 +127,31 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
         if (params.remaining_path.empty()) {
             if (params.unigram) {
                 for (edge &e: n.get_edges()) {
-                    const db::remote_node &nbr = e.get_neighbor();
                     if (e.has_all_predicates(params.edge_preds)) {
-                        uint32_t doc_id = -1;
-                        std::string date;
                         for (auto iter: e.get_properties()) {
-                            if (iter[0]->key == "doc") {
-                                doc_id = std::stoul(iter[0]->value);
-                            } else if (iter[0]->key == "date") {
-                                date = iter[0]->value;
+                            if (iter[0]->key == "locs") {
+                                std::string value = iter[0]->value;
+                                value.erase(remove_if(value.begin(), value.end(), isspace), value.end()); // remove whitespace
+                                std::stringstream ss(value);
+                                std::string item;
+                                while (std::getline(ss, item, ';')) {
+                                    item = item.substr(1, item.size()-2);
+
+                                    std::stringstream cur_ss(item);
+                                    std::string part;
+                                    std::vector<std::string> parts;
+                                    while (std::getline(cur_ss, part, ',')) {
+                                        parts.emplace_back(part);
+                                    }
+
+                                    uint32_t doc_id  = std::stoul(parts[0]);
+                                    std::string date = parts[1];
+                                    doc_info new_doc;
+                                    new_doc.date = date;
+                                    params.doc_map.emplace(doc_id, new_doc);
+                                }
                             }
                         }
-                        if (doc_id == (uint32_t)-1 || date.empty()) {
-                            WDEBUG << "doc property not found for edge: " +
-                                cur_handle + " -> " + nbr.handle + "\n";
-                            continue;
-                        }
-                        doc_info new_doc;
-                        new_doc.date = date;
-                        params.doc_map.emplace(doc_id, new_doc);
                     }
                 }
                 next.emplace_back(std::make_pair(params.coord, params));
