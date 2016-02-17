@@ -104,6 +104,103 @@ n_gram_path_state :: unpack(e::unpacker &unpacker)
     (void)unpacker;
 }
 
+// parse the string 'line' as a uint32_t starting at index 'idx' till the first non-digit or end of string
+// store result in 'n'
+// if overflow occurs or unexpected char encountered, store true in 'bad'
+inline void
+parse_single_uint32(const std::string &line, size_t &idx, uint32_t &n, bool &bad)
+{
+    uint32_t next_digit;
+    static uint32_t zero = '0';
+    static uint32_t max32_div10 = UINT32_MAX / 10;
+    n = 0;
+    while (idx < line.length()
+        && (line[idx] == '0'
+         || line[idx] == '1'
+         || line[idx] == '2'
+         || line[idx] == '3'
+         || line[idx] == '4'
+         || line[idx] == '5'
+         || line[idx] == '6'
+         || line[idx] == '7'
+         || line[idx] == '8'
+         || line[idx] == '9')) {
+        next_digit = line[idx] - zero;
+        if (next_digit > 9) { // unexpected char
+            bad = true;
+            WDEBUG << "Unexpected char with ascii " << (int)line[idx]
+                   << " in parsing int, num currently is " << n << std::endl;
+            break;
+        }
+        if (n > max32_div10) { // multiplication overflow
+            bad = true;
+            WDEBUG << "multiplication overflow" << std::endl;
+            break;
+        }
+        n *= 10;
+        if ((n + next_digit) < n) { // addition overflow
+            bad = true;
+            WDEBUG << "addition overflow" << std::endl;
+            break;
+        }
+        n += next_digit;
+        ++idx;
+    }
+}
+
+#define TEST_BAD \
+    if (bad) { \
+        docs.clear(); \
+        return; \
+    }
+void
+parse_locs(const std::string &prop,
+           std::unordered_map<uint32_t, doc_info> &docs)
+{
+    bool bad = false;
+    for (size_t i = 0; i < prop.size(); i++) {
+        if (prop[i] == '(') {
+            doc_info cur_doc;
+
+            // get doc id
+            i++;
+            uint32_t doc_id;
+            parse_single_uint32(prop, i, doc_id, bad);
+            TEST_BAD;
+            if (prop[i] != ',') {
+                docs.clear();
+                return;
+            }
+
+            // get date
+            i += 2;
+            cur_doc.date = prop.substr(i, 4);
+
+            // get locs
+            while (prop[i] != '[') {
+                i++;
+            }
+            i++;
+            while (true) {
+                uint32_t pos;
+                parse_single_uint32(prop, i, pos, bad);
+                TEST_BAD;
+                cur_doc.pos.emplace(pos);
+                if (prop[i] == ',') {
+                    i += 2;
+                } else if (prop[i] == ']') {
+                    break;
+                } else {
+                    docs.clear();
+                    return;
+                }
+            }
+
+            docs.emplace(doc_id, cur_doc);
+        }
+    }
+}
+
 std::pair<search_type, std::vector<std::pair<db::remote_node, n_gram_path_params>>>
 node_prog :: n_gram_path_node_program(node_prog::node &n,
    db::remote_node &rn,
@@ -130,26 +227,7 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
                     if (e.has_all_predicates(params.edge_preds)) {
                         for (auto iter: e.get_properties()) {
                             if (iter[0]->key == "locs") {
-                                std::string value = iter[0]->value;
-                                value.erase(remove_if(value.begin(), value.end(), isspace), value.end()); // remove whitespace
-                                std::stringstream ss(value);
-                                std::string item;
-                                while (std::getline(ss, item, ';')) {
-                                    item = item.substr(1, item.size()-2);
-
-                                    std::stringstream cur_ss(item);
-                                    std::string part;
-                                    std::vector<std::string> parts;
-                                    while (std::getline(cur_ss, part, ',')) {
-                                        parts.emplace_back(part);
-                                    }
-
-                                    uint32_t doc_id  = std::stoul(parts[0]);
-                                    std::string date = parts[1];
-                                    doc_info new_doc;
-                                    new_doc.date = date;
-                                    params.doc_map.emplace(doc_id, new_doc);
-                                }
+                                parse_locs(iter[0]->value, params.doc_map);
                             }
                         }
                     }
@@ -183,44 +261,21 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
                     const db::remote_node &nbr = e.get_neighbor();
                     for (auto iter: e.get_properties()) {
                         if (iter[0]->key == "locs") {
-                            std::string value = iter[0]->value;
-                            value.erase(remove_if(value.begin(), value.end(), isspace), value.end()); // remove whitespace
-                            std::stringstream ss(value);
-                            std::string item;
-                            while (std::getline(ss, item, ';')) {
-                                item = item.substr(1, item.size()-2);
+                            if (params.step == 1) {
+                                parse_locs(iter[0]->value, new_doc_map);
+                            } else {
+                                std::unordered_map<uint32_t, doc_info> docs;
+                                parse_locs(iter[0]->value, docs);
 
-                                std::stringstream cur_ss(item);
-                                std::string part;
-                                std::vector<std::string> parts;
-                                while (std::getline(cur_ss, part, ',')) {
-                                    parts.emplace_back(part);
-                                }
-
-                                uint32_t doc_id  = std::stoul(parts[0]);
-                                std::string date = parts[1];
-
-                                for (uint32_t i = 2; i < parts.size(); i++) {
-                                    if (parts[i].back() == ']') {
-                                        parts[i].pop_back();
-                                    }
-                                    if (parts[i].front() == '[') {
-                                        parts[i] = parts[i].substr(1, parts[i].size()-1);
-                                    }
-
-                                    uint32_t doc_pos = std::stoul(parts[i]);
-
-                                    if (params.step == 1) {
-                                        doc_info &doc = new_doc_map[doc_id];
-                                        doc.date = date;
-                                        doc.pos.emplace(doc_pos);
-                                    } else {
-                                        auto iter = params.doc_map.find(doc_id);
-                                        if (iter != params.doc_map.end()
-                                         && iter->second.pos.find(doc_pos-1) != iter->second.pos.end()) {
-                                            doc_info &doc = new_doc_map[doc_id];
-                                            doc.date = date;
-                                            doc.pos.emplace(doc_pos);
+                                for (const auto &p: docs) {
+                                    auto iter = params.doc_map.find(p.first);
+                                    if (iter != params.doc_map.end()) {
+                                        for (uint32_t pos: p.second.pos) {
+                                            if (iter->second.pos.find(pos-1) != iter->second.pos.end()) {
+                                                doc_info &doc = new_doc_map[p.first];
+                                                doc.date = p.second.date;
+                                                doc.pos.emplace(pos);
+                                            }
                                         }
                                     }
                                 }
