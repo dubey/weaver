@@ -21,7 +21,7 @@ AM_CFLAGS=-Wall -Wextra
 AM_CXXFLAGS=-std=c++0x -Wall -Wextra
 AM_CPPFLAGS=-I$(top_srcdir)/client
 CYTHON_FLAGS=--cplus
-LIBS=-lpo6 -le -lbusybee -pthread -lrt -lhyperdex-client -lreplicant -lyaml -lpopt -lglog -lpugixml
+LIBS=-lpo6 -le -lbusybee -pthread -lrt -lhyperdex-client -lreplicant -lyaml -lpopt -lglog -lpugixml -ldl
 
 if DEBUG
     AM_CFLAGS += -g3 -gdwarf-2 -O0
@@ -242,6 +242,7 @@ weaver_shard_SOURCES=	common/ids.cc \
 		                db/edge.cc \
 		                db/node.cc \
 						db/shard.cc
+weaver_shard_LDFLAGS=	-Wl,-export-dynamic
 
 # c++ client
 noinst_HEADERS+=			client/client_constants.h \
@@ -376,6 +377,15 @@ libweaverchronosd_la_SOURCES=	common/config_constants.cc \
 		        				chronos/replicant-shim.c
 libweaverchronosd_la_CFLAGS= 	$(AM_CFLAGS)
 libweaverchronosd_la_CXXFLAGS=	$(AM_CXXFLAGS)
+
+lib_LTLIBRARIES+=		libtestprog.la
+libtestprog_la_SOURCES=	node_prog/edge_list.cc \
+		                node_prog/prop_list.cc \
+						common/event_order.cc \
+						common/config_constants.cc \
+		                node_prog/traverse_with_props.cc
+libtestprog_la_CFLAGS= 	$(AM_CFLAGS)
+libtestprog_la_CXXFLAGS=	$(AM_CXXFLAGS)
 
 bin_PROGRAMS+=				weaver-test-bench
 noinst_HEADERS+=			tests/cpp/read_only_vertex_bench.h

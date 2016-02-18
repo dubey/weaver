@@ -120,6 +120,8 @@ check_aliases(const node_prog::node &n, const std::vector<std::string> &aliases)
     return true;
 }
 
+extern "C" {
+
 std::pair<search_type, std::vector<std::pair<db::remote_node, traverse_props_params>>>
 node_prog :: traverse_props_node_program(node &n,
    db::remote_node &rn,
@@ -128,6 +130,9 @@ node_prog :: traverse_props_node_program(node &n,
    std::function<void(std::shared_ptr<Cache_Value_Base>, std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)>&,
    cache_response<Cache_Value_Base>*)
 {
+    std::cout << (void*)traverse_props_node_program << std::endl;
+    void *my_ptr = malloc(100);
+    std::cout << my_ptr << std::endl;
     traverse_props_state &state = state_getter();
     std::vector<std::pair<db::remote_node, traverse_props_params>> next;
 
@@ -208,3 +213,4 @@ node_prog :: traverse_props_node_program(node &n,
     return std::make_pair(search_type::BREADTH_FIRST, next);
 }
 
+}

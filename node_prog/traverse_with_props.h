@@ -66,13 +66,15 @@ namespace node_prog
         void unpack(e::unpacker& unpacker);
     };
 
-   std::pair<search_type, std::vector<std::pair<db::remote_node, traverse_props_params>>>
-   traverse_props_node_program(node &n,
-       db::remote_node &rn,
-       traverse_props_params &params,
-       std::function<traverse_props_state&()> state_getter,
-       std::function<void(std::shared_ptr<Cache_Value_Base>, std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)>&,
-       cache_response<Cache_Value_Base>*);
+    extern "C" {
+    std::pair<search_type, std::vector<std::pair<db::remote_node, traverse_props_params>>>
+    traverse_props_node_program(node &n,
+        db::remote_node &rn,
+        traverse_props_params &params,
+        std::function<traverse_props_state&()> state_getter,
+        std::function<void(std::shared_ptr<Cache_Value_Base>, std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)>&,
+        cache_response<Cache_Value_Base>*);
+    }
 }
 
 #endif

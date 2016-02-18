@@ -23,6 +23,7 @@
 #include <pthread.h>
 #include <sys/types.h>
 #include <poll.h>
+#include <dlfcn.h>
 
 #define weaver_debug_
 #include "common/weaver_constants.h"
@@ -1707,12 +1708,42 @@ inline void node_prog_loop(uint64_t tid,
             node->base.time_oracle = time_oracle;
             assert(np.req_vclock != nullptr);
             assert(np.req_vclock->clock.size() == ClkSz);
+
+            // try dynamic load
+            typedef std::pair<node_prog::search_type, std::vector<std::pair<db::remote_node, node_prog::traverse_props_params>>> (*trav_prog_ptr_t)(node_prog::node &n,
+                    db::remote_node &rn,
+                    node_prog::traverse_props_params &params,
+                    std::function<node_prog::traverse_props_state&()> state_getter,
+                    std::function<void(std::shared_ptr<node_prog::Cache_Value_Base>, std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)>&,
+                    node_prog::cache_response<node_prog::Cache_Value_Base>*);
+            void *handle = dlopen(".libs/libtestprog.so", RTLD_NOW);
+            if (handle == NULL) {
+                WDEBUG << "dlopen error: " << dlerror() << std::endl;
+                assert(false);
+            }
+            trav_prog_ptr_t prog_ptr = (trav_prog_ptr_t)dlsym(handle, "traverse_props_node_program");
+            std::cout << "here " << (void*)prog_ptr << std::endl;
+            void *my_ptr = malloc(100);
+            std::cout << "here " << my_ptr << std::endl;
+
+
             // call node program
             WDEBUG << "calling node program at node=" << node_handle << std::endl;
-            auto next_node_params = np.m_func(*node, this_node,
-                    params, // actual parameters for this node program
-                    node_state_getter, add_cache_func,
-                    (node_prog::cache_response<CacheValueType>*) np.cache_value.get());
+            auto check_ret = prog_ptr(*node, this_node, params, node_state_getter, add_cache_func,
+                        (node_prog::cache_response<CacheValueType>*) np.cache_value.get());
+
+            std::pair<node_prog::search_type, std::vector<std::pair<db::remote_node, ParamsType>>> next_node_params;
+            //if (np.m_type == node_prog::TRAVERSE_PROPS) {
+            //    next_node_params = prog_ptr(*node, this_node,
+            //            params, // actual parameters for this node program
+            //            node_state_getter, add_cache_func,
+            //            (node_prog::cache_response<CacheValueType>*) np.cache_value.get());
+            //} else {
+                //next_node_params = np.m_func(*node, this_node,
+                //        params, // actual parameters for this node program
+                //        node_state_getter, add_cache_func,
+                //        (node_prog::cache_response<CacheValueType>*) np.cache_value.get());
+            //}
             WDEBUG << "done node program at node=" << node_handle << std::endl;
             if (MaxCacheEntries) {
                 if (np.cache_value) {
