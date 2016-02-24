@@ -39,7 +39,7 @@ exec_reads(std::default_random_engine &generator,
         std::string n = "BLOCKID_" + std::to_string(distribution(generator));
 
         std::vector<std::pair<std::string, node_prog::read_node_props_params>> args(1, std::make_pair(n, rp));
-        cl.read_node_props_program(args, return_params);
+        //cl.read_node_props_program(args, return_params);
 
         t = timer.get_time_elapsed();
         timestamps.emplace_back(t);

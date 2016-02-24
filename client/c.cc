@@ -10,6 +10,7 @@
  */
 
 #define weaver_debug_
+#include "common/weaver_constants.h"
 #include "client/weaver/weaver_client.h"
 #include "client/client.h"
 
@@ -314,6 +315,7 @@ convert_c_node(const cl::node &n, struct node *c_n)
     }
 }
 
+/*
 weaver_client_returncode
 weaver_client_get_node(struct weaver_client *_cl,
                        const char *node_handle,
@@ -361,6 +363,7 @@ weaver_client_get_edge(struct weaver_client *_cl,
 
     return returncode;
 }
+*/
 
 enum weaver_client_returncode
 weaver_client_destroy_handles(char *handles,

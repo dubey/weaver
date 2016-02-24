@@ -25,23 +25,8 @@
 #include "client/weaver/weaver_returncode.h"
 #include "client/comm_wrapper.h"
 #include "client/datastructures.h"
+#include "node_prog/base_classes.h"
 #include "node_prog/node_prog_type.h"
-#include "node_prog/reach_program.h"
-#include "node_prog/pathless_reach_program.h"
-#include "node_prog/clustering_program.h"
-#include "node_prog/two_neighborhood_program.h"
-#include "node_prog/read_node_props_program.h"
-#include "node_prog/read_n_edges_program.h"
-#include "node_prog/edge_count_program.h"
-#include "node_prog/edge_get_program.h"
-#include "node_prog/node_get_program.h"
-#include "node_prog/traverse_with_props.h"
-#include "node_prog/discover_paths.h"
-#include "node_prog/cause_and_effect.h"
-#include "node_prog/n_gram_path.h"
-#include "node_prog/get_btc_block.h"
-#include "node_prog/get_btc_tx.h"
-#include "node_prog/get_btc_addr.h"
 
 namespace cl
 {
@@ -90,24 +75,14 @@ namespace cl
             weaver_client_returncode end_tx();
             weaver_client_returncode abort_tx();
 
-            template <typename ParamsType>
-            weaver_client_returncode run_node_program(node_prog::prog_type prog_to_run, std::vector<std::pair<std::string, ParamsType>> &initial_args, ParamsType &return_param);
-            weaver_client_returncode run_reach_program(std::vector<std::pair<std::string, node_prog::reach_params>> &initial_args, node_prog::reach_params&);
-            weaver_client_returncode run_pathless_reach_program(std::vector<std::pair<std::string, node_prog::pathless_reach_params>> &initial_args, node_prog::pathless_reach_params&);
-            weaver_client_returncode run_clustering_program(std::vector<std::pair<std::string, node_prog::clustering_params>> &initial_args, node_prog::clustering_params&);
-            weaver_client_returncode run_two_neighborhood_program(std::vector<std::pair<std::string, node_prog::two_neighborhood_params>> &initial_args, node_prog::two_neighborhood_params&);
-            weaver_client_returncode read_node_props_program(std::vector<std::pair<std::string, node_prog::read_node_props_params>> &initial_args, node_prog::read_node_props_params&);
-            weaver_client_returncode read_n_edges_program(std::vector<std::pair<std::string, node_prog::read_n_edges_params>> &initial_args, node_prog::read_n_edges_params&);
-            weaver_client_returncode edge_count_program(std::vector<std::pair<std::string, node_prog::edge_count_params>> &initial_args, node_prog::edge_count_params&);
-            weaver_client_returncode edge_get_program(std::vector<std::pair<std::string, node_prog::edge_get_params>> &initial_args, node_prog::edge_get_params&);
-            weaver_client_returncode node_get_program(std::vector<std::pair<std::string, node_prog::node_get_params>> &initial_args, node_prog::node_get_params&);
-            weaver_client_returncode traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args, node_prog::traverse_props_params&);
-            weaver_client_returncode discover_paths_program(std::vector<std::pair<std::string, node_prog::discover_paths_params>> &initial_args, node_prog::discover_paths_params&);
-            weaver_client_returncode cause_and_effect_program(std::vector<std::pair<std::string, node_prog::cause_and_effect_params>> &initial_args, node_prog::cause_and_effect_params&);
-            weaver_client_returncode n_gram_path_program(std::vector<std::pair<std::string, node_prog::n_gram_path_params>> &initial_args, node_prog::n_gram_path_params&);
-            weaver_client_returncode get_btc_block_program(std::vector<std::pair<std::string, node_prog::get_btc_block_params>> &initial_args, node_prog::get_btc_block_params&);
-            weaver_client_returncode get_btc_tx_program(std::vector<std::pair<std::string, node_prog::get_btc_tx_params>> &initial_args, node_prog::get_btc_tx_params&);
-            weaver_client_returncode get_btc_addr_program(std::vector<std::pair<std::string, node_prog::get_btc_addr_params>> &initial_args, node_prog::get_btc_addr_params&);
+            weaver_client_returncode run_node_prog(uint64_t prog_type,
+                                                   std::vector<std::pair<std::string, std::shared_ptr<node_prog::Node_Parameters_Base>>> &args,
+                                                   std::shared_ptr<node_prog::Node_Parameters_Base> &return_param);
+            //template <typename ParamsType>
+            //weaver_client_returncode run_node_program(node_prog::prog_type prog_to_run,
+            //                                          std::vector<std::pair<std::string, std::shared_ptr<ParamsType>>> &initial_args, ParamsType &return_param);
+            //weaver_client_returncode traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args,
+            //                                                node_prog::traverse_props_params&);
 
             weaver_client_returncode start_migration();
             weaver_client_returncode single_stream_migration();

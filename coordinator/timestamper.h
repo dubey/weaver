@@ -95,6 +95,10 @@ namespace coordinator
             std::unordered_map<uint64_t, std::shared_ptr<transaction::pending_tx>> outstanding_tx;
             req_reply_t done_txs; // tx state cleanup
 
+            // dynamically linked node programs
+            po6::threads::mutex m_dyn_prog_mtx;
+            std::unordered_map<uint64_t, void*> m_dyn_prog_map;
+
             // prog cleanup and permanent deletion
             std::unordered_set<uint64_t> outstanding_progs; // for multiple returns and ft
             std::vector<current_prog*> pend_progs, done_progs;
@@ -238,7 +242,7 @@ namespace coordinator
 
             for (uint64_t i = 0; i < tx->shard_write.size(); i++) {
                 if (tx->shard_write[i]) {
-                    msg.prepare_message(message::TX_INIT, vt_id, factored_tx[i]->timestamp, factored_tx[i]->qts, *factored_tx[i]);
+                    msg.prepare_message(message::TX_INIT, nullptr, vt_id, factored_tx[i]->timestamp, factored_tx[i]->qts, *factored_tx[i]);
                     comm.send(i+ShardIdIncr, msg.buf);
                 }
             }
@@ -405,7 +409,7 @@ namespace coordinator
                 }
 
                 message::message msg;
-                msg.prepare_message(message::NODE_PROG_RETRY, cp->req_id);
+                msg.prepare_message(message::NODE_PROG_RETRY, nullptr, cp->req_id);
                 comm.send_to_client(cp->client, msg.buf);
                 delete cp;
             }
@@ -614,7 +618,7 @@ namespace coordinator
             message::message msg;
             for (uint64_t i = 0; i < num_shards; i++) {
                 if (tx->shard_write[i]) {
-                    msg.prepare_message(message::TX_INIT, vt_id, factored_tx[i]->timestamp, factored_tx[i]->qts, *factored_tx[i]);
+                    msg.prepare_message(message::TX_INIT, nullptr, vt_id, factored_tx[i]->timestamp, factored_tx[i]->qts, *factored_tx[i]);
                     comm.send(i+ShardIdIncr, msg.buf);
                 }
             }

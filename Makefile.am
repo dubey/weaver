@@ -51,34 +51,11 @@ weaverheaderdir = $(includedir)/weaver
 pkgconfigdir = $(libdir)/pkgconfig
 
 noinst_HEADERS+=	node_prog/base_classes.h \
-					node_prog/edge_count_program.h \
-					node_prog/n_hop_reach_program.h \
-					node_prog/pathless_reach_program.h \
-					node_prog/triangle_program.h \
-					node_prog/cache_response.h \
-					node_prog/edge_get_program.h \
-					node_prog/node_get_program.h \
 					node_prog/node.h \
 					node_prog/property.h \
-					node_prog/read_n_edges_program.h \
-					node_prog/two_neighborhood_program.h \
-					node_prog/clustering_program.h \
 					node_prog/edge.h \
 					node_prog/node_program.h \
 					node_prog/prop_list.h \
-					node_prog/read_node_props_program.h \
-					node_prog/dijkstra_program.h \
-					node_prog/edge_list.h \
-					node_prog/node_prog_type.h \
-					node_prog/reach_program.h \
-					node_prog/traverse_with_props.h \
-					node_prog/discover_paths.h \
-					node_prog/parse_btc_tx.h \
-					node_prog/cause_and_effect.h \
-					node_prog/n_gram_path.h \
-					node_prog/get_btc_block.h \
-					node_prog/get_btc_tx.h \
-					node_prog/get_btc_addr.h \
 					common/cache_constants.h \
 					common/config_constants.h \
 					common/hyper_stub_base.h \
@@ -139,23 +116,7 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 							chronos/chronos_cmp_encode.cc \
 		                    node_prog/edge_list.cc \
 		                    node_prog/prop_list.cc \
-		                    node_prog/reach_program.cc \
-		                    node_prog/clustering_program.cc \
-		                    node_prog/pathless_reach_program.cc \
-		                    node_prog/two_neighborhood_program.cc \
-		                    node_prog/edge_count_program.cc \
-		                    node_prog/edge_get_program.cc \
-		                    node_prog/node_get_program.cc \
-		                    node_prog/read_n_edges_program.cc \
-		                    node_prog/read_node_props_program.cc \
 		                    node_prog/traverse_with_props.cc \
-		                    node_prog/discover_paths.cc \
-		                    node_prog/parse_btc_tx.cc \
-							node_prog/cause_and_effect.cc \
-							node_prog/n_gram_path.cc \
-		                    node_prog/get_btc_block.cc \
-		                    node_prog/get_btc_tx.cc \
-		                    node_prog/get_btc_addr.cc \
 		                    db/element.cc \
 		                    db/property.cc \
 		                    db/edge.cc \
@@ -216,25 +177,7 @@ weaver_shard_SOURCES=	common/ids.cc \
 						chronos/chronos.cc \
 						chronos/chronos_c_wrappers.cc \
 						chronos/chronos_cmp_encode.cc \
-		                node_prog/edge_list.cc \
-		                node_prog/prop_list.cc \
-		                node_prog/reach_program.cc \
-		                node_prog/clustering_program.cc \
-		                node_prog/pathless_reach_program.cc \
-		                node_prog/two_neighborhood_program.cc \
-		                node_prog/edge_count_program.cc \
-		                node_prog/edge_get_program.cc \
-                        node_prog/node_get_program.cc \
-		                node_prog/read_n_edges_program.cc \
-		                node_prog/read_node_props_program.cc \
 		                node_prog/traverse_with_props.cc \
-		                node_prog/discover_paths.cc \
-						node_prog/parse_btc_tx.cc \
-						node_prog/cause_and_effect.cc \
-						node_prog/n_gram_path.cc \
-		                node_prog/get_btc_block.cc \
-		                node_prog/get_btc_tx.cc \
-		                node_prog/get_btc_addr.cc \
 		                db/hyper_stub.cc \
 		                db/queue_manager.cc \
 		                db/element.cc \
@@ -269,23 +212,6 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 							chronos/chronos_cmp_encode.cc \
 		                    node_prog/prop_list.cc \
 		                    node_prog/edge_list.cc \
-		                    node_prog/clustering_program.cc \
-		                    node_prog/edge_count_program.cc \
-		                    node_prog/edge_get_program.cc \
-		                    node_prog/node_get_program.cc \
-		                    node_prog/pathless_reach_program.cc \
-		                    node_prog/reach_program.cc \
-		                    node_prog/read_n_edges_program.cc \
-		                    node_prog/read_node_props_program.cc \
-		                    node_prog/two_neighborhood_program.cc \
-		                    node_prog/traverse_with_props.cc \
-		                    node_prog/discover_paths.cc \
-		                    node_prog/parse_btc_tx.cc \
-							node_prog/cause_and_effect.cc \
-							node_prog/n_gram_path.cc \
-		                    node_prog/get_btc_block.cc \
-		                    node_prog/get_btc_tx.cc \
-		                    node_prog/get_btc_addr.cc \
 		                    db/element.cc \
 		                    db/property.cc \
 		                    client/comm_wrapper.cc \

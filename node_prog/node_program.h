@@ -30,23 +30,23 @@
 #include "node_prog/edge.h"
 
 #include "node_prog/node_prog_type.h"
-#include "node_prog/reach_program.h"
-#include "node_prog/pathless_reach_program.h"
-#include "node_prog/clustering_program.h"
-#include "node_prog/read_node_props_program.h"
-#include "node_prog/read_n_edges_program.h"
-#include "node_prog/edge_count_program.h"
-#include "node_prog/edge_get_program.h"
-#include "node_prog/node_get_program.h"
-#include "node_prog/clustering_program.h"
-#include "node_prog/two_neighborhood_program.h"
-#include "node_prog/traverse_with_props.h"
-#include "node_prog/discover_paths.h"
-#include "node_prog/cause_and_effect.h"
-#include "node_prog/n_gram_path.h"
-#include "node_prog/get_btc_block.h"
-#include "node_prog/get_btc_tx.h"
-#include "node_prog/get_btc_addr.h"
+//#include "node_prog/reach_program.h"
+//#include "node_prog/pathless_reach_program.h"
+//#include "node_prog/clustering_program.h"
+//#include "node_prog/read_node_props_program.h"
+//#include "node_prog/read_n_edges_program.h"
+//#include "node_prog/edge_count_program.h"
+//#include "node_prog/edge_get_program.h"
+//#include "node_prog/node_get_program.h"
+//#include "node_prog/clustering_program.h"
+//#include "node_prog/two_neighborhood_program.h"
+//#include "node_prog/traverse_with_props.h"
+//#include "node_prog/discover_paths.h"
+//#include "node_prog/cause_and_effect.h"
+//#include "node_prog/n_gram_path.h"
+//#include "node_prog/get_btc_block.h"
+//#include "node_prog/get_btc_tx.h"
+//#include "node_prog/get_btc_addr.h"
 
 namespace coordinator
 {
@@ -66,7 +66,7 @@ namespace node_prog
                 node&, // this node
                 db::remote_node&, // this remote node
                 params_type&,
-                std::function<node_state_type&()>,
+                std::function<Node_State_Base&()>,
                 std::function<void(std::shared_ptr<cache_value_type>,
                     std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)> &add_cache_func,
                     cache_response<cache_value_type> *cache_response);
@@ -146,13 +146,11 @@ namespace node_prog
     {
         public:
             typedef typename node_function_type<ParamsType, NodeStateType, CacheValueType>::value_type func;
-            func m_func;
             prog_type m_type;
 
         public:
-            particular_node_program(prog_type type, func prog_func)
-                : m_func(prog_func)
-                , m_type(type)
+            particular_node_program(prog_type type)
+                : m_type(type)
             {
                 static_assert(std::is_base_of<Node_Parameters_Base, ParamsType>::value, "Params type must be derived from Node_Parameters_Base");
                 static_assert(std::is_base_of<Node_State_Base, NodeStateType>::value, "State type must be derived from Node_State_Base");
@@ -170,40 +168,44 @@ namespace node_prog
             particular_node_program& operator=(particular_node_program const&) = delete;
     };
     
-    std::map<prog_type, node_program*> programs = {
-        { REACHABILITY,
-            new particular_node_program<reach_params, reach_node_state, reach_cache_value>(REACHABILITY, node_prog::reach_node_program) },
-        { PATHLESS_REACHABILITY,
-            new particular_node_program<pathless_reach_params, pathless_reach_node_state, Cache_Value_Base>(PATHLESS_REACHABILITY, node_prog::pathless_reach_node_program) },
-        { CLUSTERING,
-            new particular_node_program<clustering_params, clustering_node_state, Cache_Value_Base>(CLUSTERING, node_prog::clustering_node_program) },
-        { TWO_NEIGHBORHOOD,
-            new particular_node_program<two_neighborhood_params, two_neighborhood_state, two_neighborhood_cache_value>(TWO_NEIGHBORHOOD, node_prog::two_neighborhood_node_program) },
-        { READ_NODE_PROPS,
-            new particular_node_program<read_node_props_params, read_node_props_state, Cache_Value_Base>(READ_NODE_PROPS, node_prog::read_node_props_node_program) },
-        { READ_N_EDGES,
-            new particular_node_program<read_n_edges_params, read_n_edges_state, Cache_Value_Base>(READ_N_EDGES, node_prog::read_n_edges_node_program) },
-        { EDGE_COUNT,
-            new particular_node_program<edge_count_params, edge_count_state, Cache_Value_Base>(EDGE_COUNT, node_prog::edge_count_node_program) },
-        { EDGE_GET,
-            new particular_node_program<edge_get_params, edge_get_state, Cache_Value_Base>(EDGE_GET, node_prog::edge_get_node_program) },
-        { NODE_GET,
-            new particular_node_program<node_get_params, node_get_state, Cache_Value_Base>(NODE_GET, node_prog::node_get_node_program) },
-        { TRAVERSE_PROPS,
-            new particular_node_program<traverse_props_params, traverse_props_state, Cache_Value_Base>(TRAVERSE_PROPS, node_prog::traverse_props_node_program) },
-        { DISCOVER_PATHS,
-            new particular_node_program<discover_paths_params, discover_paths_state, Cache_Value_Base>(DISCOVER_PATHS, node_prog::discover_paths_node_program) },
-        { CAUSE_AND_EFFECT,
-            new particular_node_program<cause_and_effect_params, cause_and_effect_state, Cache_Value_Base>(CAUSE_AND_EFFECT, node_prog::cause_and_effect_node_program) },
-        { N_GRAM_PATH,
-            new particular_node_program<n_gram_path_params, n_gram_path_state, Cache_Value_Base>(N_GRAM_PATH, node_prog::n_gram_path_node_program) },
-        { GET_BTC_BLOCK,
-            new particular_node_program<get_btc_block_params, get_btc_block_state, Cache_Value_Base>(GET_BTC_BLOCK, node_prog::get_btc_block_node_program) },
-        { GET_BTC_TX,
-            new particular_node_program<get_btc_tx_params, get_btc_tx_state, Cache_Value_Base>(GET_BTC_TX, node_prog::get_btc_tx_node_program) },
-        { GET_BTC_ADDR,
-            new particular_node_program<get_btc_addr_params, get_btc_addr_state, Cache_Value_Base>(GET_BTC_ADDR, node_prog::get_btc_addr_node_program) },
-    };
+    //std::map<prog_type, node_program*> programs = {
+    //    { TRAVERSE_PROPS,
+    //        new particular_node_program<traverse_props_params, traverse_props_state, Cache_Value_Base>(TRAVERSE_PROPS) },
+    //};
+    //std::map<prog_type, node_program*> programs = {
+    //    { REACHABILITY,
+    //        new particular_node_program<reach_params, reach_node_state, reach_cache_value>(REACHABILITY, node_prog::reach_node_program) },
+    //    { PATHLESS_REACHABILITY,
+    //        new particular_node_program<pathless_reach_params, pathless_reach_node_state, Cache_Value_Base>(PATHLESS_REACHABILITY, node_prog::pathless_reach_node_program) },
+    //    { CLUSTERING,
+    //        new particular_node_program<clustering_params, clustering_node_state, Cache_Value_Base>(CLUSTERING, node_prog::clustering_node_program) },
+    //    { TWO_NEIGHBORHOOD,
+    //        new particular_node_program<two_neighborhood_params, two_neighborhood_state, two_neighborhood_cache_value>(TWO_NEIGHBORHOOD, node_prog::two_neighborhood_node_program) },
+    //    { READ_NODE_PROPS,
+    //        new particular_node_program<read_node_props_params, read_node_props_state, Cache_Value_Base>(READ_NODE_PROPS, node_prog::read_node_props_node_program) },
+    //    { READ_N_EDGES,
+    //        new particular_node_program<read_n_edges_params, read_n_edges_state, Cache_Value_Base>(READ_N_EDGES, node_prog::read_n_edges_node_program) },
+    //    { EDGE_COUNT,
+    //        new particular_node_program<edge_count_params, edge_count_state, Cache_Value_Base>(EDGE_COUNT, node_prog::edge_count_node_program) },
+    //    { EDGE_GET,
+    //        new particular_node_program<edge_get_params, edge_get_state, Cache_Value_Base>(EDGE_GET, node_prog::edge_get_node_program) },
+    //    { NODE_GET,
+    //        new particular_node_program<node_get_params, node_get_state, Cache_Value_Base>(NODE_GET, node_prog::node_get_node_program) },
+    //    { TRAVERSE_PROPS,
+    //        new particular_node_program<traverse_props_params, traverse_props_state, Cache_Value_Base>(TRAVERSE_PROPS, node_prog::traverse_props_node_program) },
+    //    { DISCOVER_PATHS,
+    //        new particular_node_program<discover_paths_params, discover_paths_state, Cache_Value_Base>(DISCOVER_PATHS, node_prog::discover_paths_node_program) },
+    //    { CAUSE_AND_EFFECT,
+    //        new particular_node_program<cause_and_effect_params, cause_and_effect_state, Cache_Value_Base>(CAUSE_AND_EFFECT, node_prog::cause_and_effect_node_program) },
+    //    { N_GRAM_PATH,
+    //        new particular_node_program<n_gram_path_params, n_gram_path_state, Cache_Value_Base>(N_GRAM_PATH, node_prog::n_gram_path_node_program) },
+    //    { GET_BTC_BLOCK,
+    //        new particular_node_program<get_btc_block_params, get_btc_block_state, Cache_Value_Base>(GET_BTC_BLOCK, node_prog::get_btc_block_node_program) },
+    //    { GET_BTC_TX,
+    //        new particular_node_program<get_btc_tx_params, get_btc_tx_state, Cache_Value_Base>(GET_BTC_TX, node_prog::get_btc_tx_node_program) },
+    //    { GET_BTC_ADDR,
+    //        new particular_node_program<get_btc_addr_params, get_btc_addr_state, Cache_Value_Base>(GET_BTC_ADDR, node_prog::get_btc_addr_node_program) },
+    //};
 }
 
 #endif

@@ -18,6 +18,8 @@
 #include "client/client_constants.h"
 #include "client/client.h"
 
+using node_prog::Node_Parameters_Base;
+
 #define CLIENTLOG std::cerr << __FILE__ << ":" << __LINE__ << " "
 
 // ugly, declared only to get rid of undefined symbol error
@@ -313,7 +315,7 @@ client :: end_tx()
     // so it is responsibility of client to ensure that they do not reexec tx that was completed
     do {
         message::message msg;
-        msg.prepare_message(message::CLIENT_TX_INIT, cur_tx_id, cur_tx);
+        msg.prepare_message(message::CLIENT_TX_INIT, nullptr, cur_tx_id, cur_tx);
         busybee_returncode send_code = send_coord(msg.buf);
 
         if (send_code == BUSYBEE_DISRUPTED) {
@@ -377,11 +379,10 @@ client :: abort_tx()
 
 #undef CHECK_ACTIVE_TX
 
-template <typename ParamsType>
 weaver_client_returncode
-client :: run_node_program(node_prog::prog_type prog_to_run,
-                           std::vector<std::pair<std::string, ParamsType>> &initial_args,
-                           ParamsType &return_param)
+client :: run_node_prog(uint64_t prog_type,
+                        std::vector<std::pair<std::string, std::shared_ptr<Node_Parameters_Base>>> &initial_args,
+                        std::shared_ptr<Node_Parameters_Base> &return_param)
 {
     CHECK_INIT;
 
@@ -390,7 +391,8 @@ client :: run_node_program(node_prog::prog_type prog_to_run,
 
 #ifdef weaver_benchmark_
 
-    msg.prepare_message(message::CLIENT_NODE_PROG_REQ, prog_to_run, initial_args);
+    // XXX fix nullptr
+    msg.prepare_message(message::CLIENT_NODE_PROG_REQ, nullptr, prog_type, initial_args);
     send_code = send_coord(msg.buf);
 
     if (send_code != BUSYBEE_SUCCESS) {
@@ -407,7 +409,8 @@ client :: run_node_program(node_prog::prog_type prog_to_run,
 
     bool retry;
     do {
-        msg.prepare_message(message::CLIENT_NODE_PROG_REQ, prog_to_run, initial_args);
+        // XXX fix nullptr
+        msg.prepare_message(message::CLIENT_NODE_PROG_REQ, nullptr, prog_type, initial_args);
         send_code = send_coord(msg.buf);
 
         if (send_code == BUSYBEE_DISRUPTED) {
@@ -445,117 +448,111 @@ client :: run_node_program(node_prog::prog_type prog_to_run,
     node_prog::prog_type ignore_type;
     auto ret_status = msg.unpack_message_type();
     if (ret_status == message::NODE_PROG_RETURN) {
-        msg.unpack_message(message::NODE_PROG_RETURN, ignore_type, ignore_req_id, ignore_vt_ptr, return_param);
+        // XXX fix nullptr
+        msg.unpack_message(message::NODE_PROG_RETURN, nullptr, ignore_type, ignore_req_id, ignore_vt_ptr, return_param);
         return WEAVER_CLIENT_SUCCESS;
     } else {
         return WEAVER_CLIENT_NOTFOUND;
     }
 }
 
+//template <typename ParamsType>
+//weaver_client_returncode
+//client :: run_node_program(node_prog::prog_type prog_to_run,
+//                           std::vector<std::pair<std::string, std::shared_ptr<ParamsType>>> &initial_args,
+//                           ParamsType &return_param)
+//{
+//    CHECK_INIT;
+//
+//    message::message msg;
+//    busybee_returncode send_code, recv_code;
+//
+//#ifdef weaver_benchmark_
+//
+//    // XXX fix nullptr
+//    msg.prepare_message(message::CLIENT_NODE_PROG_REQ, nullptr, prog_to_run, initial_args);
+//    send_code = send_coord(msg.buf);
+//
+//    if (send_code != BUSYBEE_SUCCESS) {
+//        return WEAVER_CLIENT_INTERNALMSGERROR;
+//    }
+//
+//    recv_code = recv_coord(&msg.buf);
+//
+//    if (recv_code != BUSYBEE_SUCCESS) {
+//        return WEAVER_CLIENT_INTERNALMSGERROR;
+//    }
+//
+//#else
+//
+//    bool retry;
+//    do {
+//        // XXX fix nullptr
+//        msg.prepare_message(message::CLIENT_NODE_PROG_REQ, nullptr, prog_to_run, initial_args);
+//        send_code = send_coord(msg.buf);
+//
+//        if (send_code == BUSYBEE_DISRUPTED) {
+//            reconfigure();
+//            return WEAVER_CLIENT_DISRUPTED;
+//        } else if (send_code != BUSYBEE_SUCCESS) {
+//            return WEAVER_CLIENT_INTERNALMSGERROR;
+//        }
+//
+//        recv_code = recv_coord(&msg.buf);
+//
+//        switch (recv_code) {
+//            case BUSYBEE_TIMEOUT:
+//            case BUSYBEE_DISRUPTED:
+//                reconfigure();
+//                retry = true;
+//                break;
+//
+//            case BUSYBEE_SUCCESS:
+//                if (msg.unpack_message_type() == message::NODE_PROG_RETRY) {
+//                    retry = true;
+//                } else {
+//                    retry = false;
+//                }
+//                break;
+//
+//            default:
+//                return WEAVER_CLIENT_INTERNALMSGERROR;
+//        }
+//    } while (retry);
+//
+//#endif
+//
+//    uint64_t ignore_req_id, ignore_vt_ptr;
+//    node_prog::prog_type ignore_type;
+//    auto ret_status = msg.unpack_message_type();
+//    if (ret_status == message::NODE_PROG_RETURN) {
+//        // XXX fix nullptr
+//        std::shared_ptr<ParamsType> ret_ptr;
+//        msg.unpack_message(message::NODE_PROG_RETURN, nullptr, ignore_type, ignore_req_id, ignore_vt_ptr, ret_ptr);
+//        return_param = *ret_ptr;
+//        return WEAVER_CLIENT_SUCCESS;
+//    } else {
+//        return WEAVER_CLIENT_NOTFOUND;
+//    }
+//}
+//
 #define SPECIFIC_NODE_PROG(type) \
-    return run_node_program(type, initial_args, return_param);
-
-weaver_client_returncode
-client :: run_reach_program(std::vector<std::pair<std::string, node_prog::reach_params>> &initial_args, node_prog::reach_params &return_param)
-{
-    SPECIFIC_NODE_PROG(node_prog::REACHABILITY);
-}
-
-weaver_client_returncode
-client :: run_pathless_reach_program(std::vector<std::pair<std::string, node_prog::pathless_reach_params>> &initial_args, node_prog::pathless_reach_params &return_param)
-{
-    SPECIFIC_NODE_PROG(node_prog::PATHLESS_REACHABILITY);
-}
-
-weaver_client_returncode
-client :: run_clustering_program(std::vector<std::pair<std::string, node_prog::clustering_params>> &initial_args, node_prog::clustering_params &return_param)
-{
-    SPECIFIC_NODE_PROG(node_prog::CLUSTERING);
-}
-
-weaver_client_returncode
-client :: run_two_neighborhood_program(std::vector<std::pair<std::string, node_prog::two_neighborhood_params>> &initial_args, node_prog::two_neighborhood_params &return_param)
-{
-    SPECIFIC_NODE_PROG(node_prog::TWO_NEIGHBORHOOD);
-}
-
-weaver_client_returncode
-client :: read_node_props_program(std::vector<std::pair<std::string, node_prog::read_node_props_params>> &initial_args, node_prog::read_node_props_params &return_param)
-{
-    SPECIFIC_NODE_PROG(node_prog::READ_NODE_PROPS);
-}
-
-weaver_client_returncode
-client :: read_n_edges_program(std::vector<std::pair<std::string, node_prog::read_n_edges_params>> &initial_args, node_prog::read_n_edges_params &return_param)
-{
-    SPECIFIC_NODE_PROG(node_prog::READ_N_EDGES);
-}
-
-weaver_client_returncode
-client :: edge_count_program(std::vector<std::pair<std::string, node_prog::edge_count_params>> &initial_args, node_prog::edge_count_params &return_param)
-{
-    SPECIFIC_NODE_PROG(node_prog::EDGE_COUNT);
-}
-
-weaver_client_returncode
-client :: edge_get_program(std::vector<std::pair<std::string, node_prog::edge_get_params>> &initial_args, node_prog::edge_get_params &return_param)
-{
-    SPECIFIC_NODE_PROG(node_prog::EDGE_GET);
-}
-
-weaver_client_returncode
-client :: node_get_program(std::vector<std::pair<std::string, node_prog::node_get_params>> &initial_args, node_prog::node_get_params &return_param)
-{
-    SPECIFIC_NODE_PROG(node_prog::NODE_GET);
-}
-
-weaver_client_returncode
-client :: traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args, node_prog::traverse_props_params &return_param)
-{
-    for (auto &p: initial_args) {
-        if (p.second.node_props.size() != (p.second.edge_props.size()+1)) {
-            return WEAVER_CLIENT_LOGICALERROR;
-        }
-    }
-    SPECIFIC_NODE_PROG(node_prog::TRAVERSE_PROPS);
-}
-
-weaver_client_returncode
-client :: discover_paths_program(std::vector<std::pair<std::string, node_prog::discover_paths_params>> &initial_args, node_prog::discover_paths_params &return_param)
-{
-    SPECIFIC_NODE_PROG(node_prog::DISCOVER_PATHS);
-}
-
-weaver_client_returncode
-client :: cause_and_effect_program(std::vector<std::pair<std::string, node_prog::cause_and_effect_params>> &initial_args, node_prog::cause_and_effect_params &return_param)
-{
-    SPECIFIC_NODE_PROG(node_prog::CAUSE_AND_EFFECT);
-}
-
-weaver_client_returncode
-client :: n_gram_path_program(std::vector<std::pair<std::string, node_prog::n_gram_path_params>> &initial_args, node_prog::n_gram_path_params &return_param)
-{
-    SPECIFIC_NODE_PROG(node_prog::N_GRAM_PATH);
-}
-
-weaver_client_returncode
-client :: get_btc_block_program(std::vector<std::pair<std::string, node_prog::get_btc_block_params>> &initial_args, node_prog::get_btc_block_params &return_param)
-{
-    SPECIFIC_NODE_PROG(node_prog::GET_BTC_BLOCK);
-}
-
-weaver_client_returncode
-client :: get_btc_tx_program(std::vector<std::pair<std::string, node_prog::get_btc_tx_params>> &initial_args, node_prog::get_btc_tx_params &return_param)
-{
-    SPECIFIC_NODE_PROG(node_prog::GET_BTC_TX);
-}
-
-weaver_client_returncode
-client :: get_btc_addr_program(std::vector<std::pair<std::string, node_prog::get_btc_addr_params>> &initial_args, node_prog::get_btc_addr_params &return_param)
-{
-    SPECIFIC_NODE_PROG(node_prog::GET_BTC_ADDR);
-}
-
+    return run_node_program(type, ptr_args, return_param);
+//
+//weaver_client_returncode
+//client :: traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args, node_prog::traverse_props_params &return_param)
+//{
+//    std::vector<std::pair<std::string, std::shared_ptr<node_prog::traverse_props_params>>> ptr_args;
+//    for (auto &p: initial_args) {
+//        if (p.second.node_props.size() != (p.second.edge_props.size()+1)) {
+//            return WEAVER_CLIENT_LOGICALERROR;
+//        }
+//        auto param_ptr = std::make_shared<const node_prog::traverse_props_params>(p.second);
+//        ptr_args.emplace_back(std::make_pair(p.first, param_ptr));
+//    }
+//    SPECIFIC_NODE_PROG(node_prog::TRAVERSE_PROPS);
+//}
+//
 #undef SPECIFIC_NODE_PROG
 
 weaver_client_returncode
@@ -627,7 +624,7 @@ client :: get_node_count(std::vector<uint64_t> &node_count)
                 break;
 
             case BUSYBEE_SUCCESS:
-                msg.unpack_message(message::NODE_COUNT_REPLY, node_count);
+                msg.unpack_message(message::NODE_COUNT_REPLY, nullptr, node_count);
                 return WEAVER_CLIENT_SUCCESS;
 
             default:

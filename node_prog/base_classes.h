@@ -13,9 +13,9 @@ namespace node_prog
     class Packable 
     {
         public:
-            virtual uint64_t size() const  = 0;
-            virtual void pack(e::packer& packer) const = 0;
-            virtual void unpack(e::unpacker& unpacker) = 0;
+            virtual uint64_t size(void*) const  = 0;
+            virtual void pack(e::packer& packer, void*) const = 0;
+            virtual void unpack(e::unpacker& unpacker, void*) = 0;
     };
 
     class Deletable 

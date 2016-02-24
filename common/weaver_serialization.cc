@@ -9,6 +9,8 @@
  * ===============================================================
  */
 
+#include <dlfcn.h>
+
 #define weaver_debug_
 #include "common/weaver_constants.h"
 #include "common/weaver_serialization.h"
@@ -21,373 +23,389 @@
 #include "db/property.h"
 #include "client/datastructures.h"
 
+using node_prog::Node_Parameters_Base;
+using node_prog::Node_State_Base;
+using param_ptr_t = std::shared_ptr<Node_Parameters_Base>;
+using state_ptr_t = std::shared_ptr<Node_State_Base>;
+
+typedef param_ptr_t (*params_ctor_func_t)();
+typedef uint64_t (*params_size_func_t)(const Node_Parameters_Base&, void*);
+typedef void (*params_pack_func_t)(const Node_Parameters_Base&, e::packer&, void*);
+typedef void (*params_unpack_func_t)(Node_Parameters_Base&, e::unpacker&, void*);
+
 // size functions
 
 uint64_t
-message :: size(const node_prog::Node_Parameters_Base &t)
+message :: size(void *prog_handle, const param_ptr_t &t)
 {
-    return t.size();
+    assert(prog_handle != nullptr);
+    params_size_func_t size_f = (params_size_func_t)dlsym(prog_handle, "params_size");
+    return size_f(*t, prog_handle);
 }
 
 uint64_t
-message :: size(const node_prog::Node_State_Base &t)
+message :: size(void *prog_handle, const state_ptr_t &t)
 {
-    return t.size();
+    return 0;
 }
 
 uint64_t
-message :: size(const node_prog::Cache_Value_Base &t)
+message :: size(void *aux_args, const node_prog::Cache_Value_Base &t)
 {
-    return t.size();
+    return t.size(aux_args);
 }
 
 uint64_t
-message :: size(const vc::vclock &t)
+message :: size(void *aux_args, const vc::vclock &t)
 {
-    return size(t.vt_id)
-        + size(t.clock);
+    return size(aux_args, t.vt_id)
+        + size(aux_args, t.clock);
 }
 
 uint64_t
-message :: size(const node_prog::property &t)
+message :: size(void *aux_args, const node_prog::property &t)
 {
-    return size(t.key)
-        + size(t.value);
+    return size(aux_args, t.key)
+        + size(aux_args, t.value);
 }
 
 uint64_t
-message :: size(const db::property &t)
+message :: size(void *aux_args, const db::property &t)
 {
-    return size(t.key)
-        + size(t.value)
-        + size(t.get_creat_time())
-        + size(t.get_del_time());
+    return size(aux_args, t.key)
+        + size(aux_args, t.value)
+        + size(aux_args, t.get_creat_time())
+        + size(aux_args, t.get_del_time());
 }
 
 uint64_t
-message :: size(const db::remote_node &t)
+message :: size(void *aux_args, const db::remote_node &t)
 {
-    return size(t.loc) + size(t.handle);
+    return size(aux_args, t.loc) + size(aux_args, t.handle);
 }
 
 uint64_t
-message :: size(const std::shared_ptr<transaction::pending_update> &t)
+message :: size(void *aux_args, const std::shared_ptr<transaction::pending_update> &t)
 {
-    uint64_t sz = size(t->type)
-         + size(t->handle)
-         + size(t->handle1)
-         + size(t->handle2)
-         + size(t->alias1)
-         + size(t->alias2)
-         + size(t->loc1)
-         + size(t->loc2);
+    uint64_t sz = size(aux_args, t->type)
+         + size(aux_args, t->handle)
+         + size(aux_args, t->handle1)
+         + size(aux_args, t->handle2)
+         + size(aux_args, t->alias1)
+         + size(aux_args, t->alias2)
+         + size(aux_args, t->loc1)
+         + size(aux_args, t->loc2);
     if (t->type == transaction::NODE_SET_PROPERTY
      || t->type == transaction::EDGE_SET_PROPERTY) {
-        sz += size(*t->key)
-         + size(*t->value);
+        sz += size(aux_args, *t->key)
+         + size(aux_args, *t->value);
     }
     return sz;
 }
 
 uint64_t
-message :: size(const std::shared_ptr<transaction::nop_data> &t)
+message :: size(void *aux_args, const std::shared_ptr<transaction::nop_data> &t)
 {
-    return size(t->max_done_clk)
-         + size(t->outstanding_progs)
-         + size(t->shard_node_count)
-         + size(t->done_txs);
+    return size(aux_args, t->max_done_clk)
+         + size(aux_args, t->outstanding_progs)
+         + size(aux_args, t->shard_node_count)
+         + size(aux_args, t->done_txs);
 }
 
 uint64_t
-message :: size(const transaction::pending_tx &t)
+message :: size(void *aux_args, const transaction::pending_tx &t)
 {
-    uint64_t sz = size(t.type)
-        + size(t.id)
-        + size(t.timestamp)
-        + size(t.vt_seq)
-        + size(t.qts)
-        + size(t.shard_write);
+    uint64_t sz = size(aux_args, t.type)
+        + size(aux_args, t.id)
+        + size(aux_args, t.timestamp)
+        + size(aux_args, t.vt_seq)
+        + size(aux_args, t.qts)
+        + size(aux_args, t.shard_write);
     if (t.type == transaction::UPDATE) {
-        sz = sz + size(t.writes)
-            + size(t.sender);
+        sz = sz + size(aux_args, t.writes)
+            + size(aux_args, t.sender);
     } else {
-        sz = sz + size(t.nop);
+        sz = sz + size(aux_args, t.nop);
     }
     return sz;
 }
 
 uint64_t
-message :: size(const cl::node &t)
+message :: size(void *aux_args, const cl::node &t)
 {
-    return size(t.handle)
-         + size(t.properties)
-         + size(t.out_edges)
-         + size(t.aliases);
+    return size(aux_args, t.handle)
+         + size(aux_args, t.properties)
+         + size(aux_args, t.out_edges)
+         + size(aux_args, t.aliases);
 }
 
 uint64_t
-message :: size(const cl::edge &t)
+message :: size(void *aux_args, const cl::edge &t)
 {
-    return size(t.handle)
-         + size(t.start_node)
-         + size(t.end_node)
-         + size(t.properties);
+    return size(aux_args, t.handle)
+         + size(aux_args, t.start_node)
+         + size(aux_args, t.end_node)
+         + size(aux_args, t.properties);
 }
 
 uint64_t
-message::size(const predicate::prop_predicate &t)
+message::size(void *aux_args, const predicate::prop_predicate &t)
 {
-    return size(t.key)
-         + size(t.value)
-         + size(t.rel);
+    return size(aux_args, t.key)
+         + size(aux_args, t.value)
+         + size(aux_args, t.rel);
 }
 
 
 // packing functions
 
 void
-message :: pack_buffer(e::packer &packer, const node_prog::Node_Parameters_Base &t)
+message :: pack_buffer(e::packer &packer, void *prog_handle, const param_ptr_t &t)
 {
-    t.pack(packer);
+    assert(prog_handle != nullptr);
+    params_pack_func_t pack_f = (params_pack_func_t)dlsym(prog_handle, "params_pack");
+    pack_f(*t, packer, prog_handle);
 }
 
 void
-message :: pack_buffer(e::packer &packer, const node_prog::Node_State_Base &t)
+message :: pack_buffer(e::packer &packer, void *prog_handle, const state_ptr_t &t)
 {
-    t.pack(packer);
 }
 
 void
-message :: pack_buffer(e::packer &packer, const node_prog::Cache_Value_Base *&t)
+message :: pack_buffer(e::packer &packer, void *aux_args, const node_prog::Cache_Value_Base *&t)
 {
-    t->pack(packer);
+    t->pack(packer, aux_args);
 }
 
 void
-message :: pack_buffer(e::packer &packer, const vc::vclock &t)
+message :: pack_buffer(e::packer &packer, void *aux_args, const vc::vclock &t)
 {
-    pack_buffer(packer, t.vt_id);
-    pack_buffer(packer, t.clock);
+    pack_buffer(packer, aux_args, t.vt_id);
+    pack_buffer(packer, aux_args, t.clock);
 }
 
 void 
-message :: pack_buffer(e::packer &packer, const node_prog::property &t)
+message :: pack_buffer(e::packer &packer, void *aux_args, const node_prog::property &t)
 {
-    pack_buffer(packer, t.key);
-    pack_buffer(packer, t.value);
+    pack_buffer(packer, aux_args, t.key);
+    pack_buffer(packer, aux_args, t.value);
 }
 
 void 
-message :: pack_buffer(e::packer &packer, const db::property &t)
+message :: pack_buffer(e::packer &packer, void *aux_args, const db::property &t)
 {
-    pack_buffer(packer, t.key);
-    pack_buffer(packer, t.value);
-    pack_buffer(packer, t.get_creat_time());
-    pack_buffer(packer, t.get_del_time());
+    pack_buffer(packer, aux_args, t.key);
+    pack_buffer(packer, aux_args, t.value);
+    pack_buffer(packer, aux_args, t.get_creat_time());
+    pack_buffer(packer, aux_args, t.get_del_time());
 }
 
 void 
-message :: pack_buffer(e::packer &packer, const db::remote_node &t)
+message :: pack_buffer(e::packer &packer, void *aux_args, const db::remote_node &t)
 {
-    pack_buffer(packer, t.loc);
-    pack_buffer(packer, t.handle);
+    pack_buffer(packer, aux_args, t.loc);
+    pack_buffer(packer, aux_args, t.handle);
 }
 
 void
-message :: pack_buffer(e::packer &packer, const std::shared_ptr<transaction::pending_update> &t)
+message :: pack_buffer(e::packer &packer, void *aux_args, const std::shared_ptr<transaction::pending_update> &t)
 {
-    pack_buffer(packer, t->type);
-    pack_buffer(packer, t->handle);
-    pack_buffer(packer, t->handle1);
-    pack_buffer(packer, t->handle2);
-    pack_buffer(packer, t->alias1);
-    pack_buffer(packer, t->alias2);
-    pack_buffer(packer, t->loc1);
-    pack_buffer(packer, t->loc2);
+    pack_buffer(packer, aux_args, t->type);
+    pack_buffer(packer, aux_args, t->handle);
+    pack_buffer(packer, aux_args, t->handle1);
+    pack_buffer(packer, aux_args, t->handle2);
+    pack_buffer(packer, aux_args, t->alias1);
+    pack_buffer(packer, aux_args, t->alias2);
+    pack_buffer(packer, aux_args, t->loc1);
+    pack_buffer(packer, aux_args, t->loc2);
     if (t->type == transaction::NODE_SET_PROPERTY
      || t->type == transaction::EDGE_SET_PROPERTY) {
-        pack_buffer(packer, *t->key);
-        pack_buffer(packer, *t->value);
+        pack_buffer(packer, aux_args, *t->key);
+        pack_buffer(packer, aux_args, *t->value);
     }
 }
 
 void
-message :: pack_buffer(e::packer &packer, const std::shared_ptr<transaction::nop_data> &t)
+message :: pack_buffer(e::packer &packer, void *aux_args, const std::shared_ptr<transaction::nop_data> &t)
 {
-    pack_buffer(packer, t->max_done_clk);
-    pack_buffer(packer, t->outstanding_progs);
-    pack_buffer(packer, t->shard_node_count);
-    pack_buffer(packer, t->done_txs);
+    pack_buffer(packer, aux_args, t->max_done_clk);
+    pack_buffer(packer, aux_args, t->outstanding_progs);
+    pack_buffer(packer, aux_args, t->shard_node_count);
+    pack_buffer(packer, aux_args, t->done_txs);
 }
 
 void
-message :: pack_buffer(e::packer &packer, const transaction::pending_tx &t)
+message :: pack_buffer(e::packer &packer, void *aux_args, const transaction::pending_tx &t)
 {
-    pack_buffer(packer, t.type);
-    pack_buffer(packer, t.id);
-    pack_buffer(packer, t.timestamp);
-    pack_buffer(packer, t.vt_seq);
-    pack_buffer(packer, t.qts);
-    pack_buffer(packer, t.shard_write);
+    pack_buffer(packer, aux_args, t.type);
+    pack_buffer(packer, aux_args, t.id);
+    pack_buffer(packer, aux_args, t.timestamp);
+    pack_buffer(packer, aux_args, t.vt_seq);
+    pack_buffer(packer, aux_args, t.qts);
+    pack_buffer(packer, aux_args, t.shard_write);
     if (t.type == transaction::UPDATE) {
-        pack_buffer(packer, t.writes);
-        pack_buffer(packer, t.sender);
+        pack_buffer(packer, aux_args, t.writes);
+        pack_buffer(packer, aux_args, t.sender);
     } else {
-        pack_buffer(packer, t.nop);
+        pack_buffer(packer, aux_args, t.nop);
     }
 }
 
 void
-message :: pack_buffer(e::packer &packer, const cl::node &t)
+message :: pack_buffer(e::packer &packer, void *aux_args, const cl::node &t)
 {
-    pack_buffer(packer, t.handle);
-    pack_buffer(packer, t.properties);
-    pack_buffer(packer, t.out_edges);
-    pack_buffer(packer, t.aliases);
+    pack_buffer(packer, aux_args, t.handle);
+    pack_buffer(packer, aux_args, t.properties);
+    pack_buffer(packer, aux_args, t.out_edges);
+    pack_buffer(packer, aux_args, t.aliases);
 }
 
 void
-message :: pack_buffer(e::packer &packer, const cl::edge &t)
+message :: pack_buffer(e::packer &packer, void *aux_args, const cl::edge &t)
 {
-    pack_buffer(packer, t.handle);
-    pack_buffer(packer, t.start_node);
-    pack_buffer(packer, t.end_node);
-    pack_buffer(packer, t.properties);
+    pack_buffer(packer, aux_args, t.handle);
+    pack_buffer(packer, aux_args, t.start_node);
+    pack_buffer(packer, aux_args, t.end_node);
+    pack_buffer(packer, aux_args, t.properties);
 }
 
 void
-message :: pack_buffer(e::packer &packer, const predicate::prop_predicate &t)
+message :: pack_buffer(e::packer &packer, void *aux_args, const predicate::prop_predicate &t)
 {
-    pack_buffer(packer, t.key);
-    pack_buffer(packer, t.value);
-    pack_buffer(packer, t.rel);
+    pack_buffer(packer, aux_args, t.key);
+    pack_buffer(packer, aux_args, t.value);
+    pack_buffer(packer, aux_args, t.rel);
 }
 
 
 // unpacking functions
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, node_prog::Node_Parameters_Base &t)
+message :: unpack_buffer(e::unpacker &unpacker, void *prog_handle, param_ptr_t &t)
 {
-    t.unpack(unpacker);
+    assert(prog_handle != nullptr);
+    params_ctor_func_t ctor_f = (params_ctor_func_t)dlsym(prog_handle, "ctor_prog_param");
+    t = ctor_f();
+    params_unpack_func_t unpack_f = (params_unpack_func_t)dlsym(prog_handle, "params_unpack");
+    unpack_f(*t, unpacker, prog_handle);
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, node_prog::Node_State_Base &t)
+message :: unpack_buffer(e::unpacker &unpacker, void *prog_handle, state_ptr_t &t)
 {
-    t.unpack(unpacker);
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, node_prog::Cache_Value_Base &t)
+message :: unpack_buffer(e::unpacker &unpacker, void *aux_args, node_prog::Cache_Value_Base &t)
 {
-    t.unpack(unpacker);
+    t.unpack(unpacker, aux_args);
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, vc::vclock &t)
+message :: unpack_buffer(e::unpacker &unpacker, void *aux_args, vc::vclock &t)
 {
-    unpack_buffer(unpacker, t.vt_id);
-    unpack_buffer(unpacker, t.clock);
+    unpack_buffer(unpacker, aux_args, t.vt_id);
+    unpack_buffer(unpacker, aux_args, t.clock);
 }
 
 void 
-message :: unpack_buffer(e::unpacker &unpacker, node_prog::property &t)
+message :: unpack_buffer(e::unpacker &unpacker, void *aux_args, node_prog::property &t)
 {
-    unpack_buffer(unpacker, t.key);
-    unpack_buffer(unpacker, t.value);
+    unpack_buffer(unpacker, aux_args, t.key);
+    unpack_buffer(unpacker, aux_args, t.value);
 }
 void 
-message :: unpack_buffer(e::unpacker &unpacker, db::property &t)
+message :: unpack_buffer(e::unpacker &unpacker, void *aux_args, db::property &t)
 {
-    unpack_buffer(unpacker, t.key);
-    unpack_buffer(unpacker, t.value);
+    unpack_buffer(unpacker, aux_args, t.key);
+    unpack_buffer(unpacker, aux_args, t.value);
 
     vclock_ptr_t tcreat, tdel;
 
-    unpack_buffer(unpacker, tcreat);
-    unpack_buffer(unpacker, tdel);
+    unpack_buffer(unpacker, aux_args, tcreat);
+    unpack_buffer(unpacker, aux_args, tdel);
     t.update_creat_time(tcreat);
     t.update_del_time(tdel);
 }
 
 void 
-message :: unpack_buffer(e::unpacker &unpacker, db::remote_node& t)
+message :: unpack_buffer(e::unpacker &unpacker, void *aux_args, db::remote_node& t)
 {
-    unpack_buffer(unpacker, t.loc);
-    unpack_buffer(unpacker, t.handle);
+    unpack_buffer(unpacker, aux_args, t.loc);
+    unpack_buffer(unpacker, aux_args, t.handle);
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::pending_update> &t)
+message :: unpack_buffer(e::unpacker &unpacker, void *aux_args, std::shared_ptr<transaction::pending_update> &t)
 {
     t = std::make_shared<transaction::pending_update>();
-    unpack_buffer(unpacker, t->type);
-    unpack_buffer(unpacker, t->handle);
-    unpack_buffer(unpacker, t->handle1);
-    unpack_buffer(unpacker, t->handle2);
-    unpack_buffer(unpacker, t->alias1);
-    unpack_buffer(unpacker, t->alias2);
-    unpack_buffer(unpacker, t->loc1);
-    unpack_buffer(unpacker, t->loc2);
+    unpack_buffer(unpacker, aux_args, t->type);
+    unpack_buffer(unpacker, aux_args, t->handle);
+    unpack_buffer(unpacker, aux_args, t->handle1);
+    unpack_buffer(unpacker, aux_args, t->handle2);
+    unpack_buffer(unpacker, aux_args, t->alias1);
+    unpack_buffer(unpacker, aux_args, t->alias2);
+    unpack_buffer(unpacker, aux_args, t->loc1);
+    unpack_buffer(unpacker, aux_args, t->loc2);
     if (t->type == transaction::NODE_SET_PROPERTY
      || t->type == transaction::EDGE_SET_PROPERTY) {
         t->key.reset(new std::string());
         t->value.reset(new std::string());
-        unpack_buffer(unpacker, *t->key);
-        unpack_buffer(unpacker, *t->value);
+        unpack_buffer(unpacker, aux_args, *t->key);
+        unpack_buffer(unpacker, aux_args, *t->value);
     }
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, std::shared_ptr<transaction::nop_data> &t)
+message :: unpack_buffer(e::unpacker &unpacker, void *aux_args, std::shared_ptr<transaction::nop_data> &t)
 {
     t = std::make_shared<transaction::nop_data>();
-    unpack_buffer(unpacker, t->max_done_clk);
-    unpack_buffer(unpacker, t->outstanding_progs);
-    unpack_buffer(unpacker, t->shard_node_count);
-    unpack_buffer(unpacker, t->done_txs);
+    unpack_buffer(unpacker, aux_args, t->max_done_clk);
+    unpack_buffer(unpacker, aux_args, t->outstanding_progs);
+    unpack_buffer(unpacker, aux_args, t->shard_node_count);
+    unpack_buffer(unpacker, aux_args, t->done_txs);
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, transaction::pending_tx &t)
+message :: unpack_buffer(e::unpacker &unpacker, void *aux_args, transaction::pending_tx &t)
 {
-    unpack_buffer(unpacker, t.type);
-    unpack_buffer(unpacker, t.id);
-    unpack_buffer(unpacker, t.timestamp);
-    unpack_buffer(unpacker, t.vt_seq);
-    unpack_buffer(unpacker, t.qts);
-    unpack_buffer(unpacker, t.shard_write);
+    unpack_buffer(unpacker, aux_args, t.type);
+    unpack_buffer(unpacker, aux_args, t.id);
+    unpack_buffer(unpacker, aux_args, t.timestamp);
+    unpack_buffer(unpacker, aux_args, t.vt_seq);
+    unpack_buffer(unpacker, aux_args, t.qts);
+    unpack_buffer(unpacker, aux_args, t.shard_write);
     if (t.type == transaction::UPDATE) {
-        unpack_buffer(unpacker, t.writes);
-        unpack_buffer(unpacker, t.sender);
+        unpack_buffer(unpacker, aux_args, t.writes);
+        unpack_buffer(unpacker, aux_args, t.sender);
     } else {
-        unpack_buffer(unpacker, t.nop);
+        unpack_buffer(unpacker, aux_args, t.nop);
     }
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, cl::node &t)
+message :: unpack_buffer(e::unpacker &unpacker, void *aux_args, cl::node &t)
 {
-    unpack_buffer(unpacker, t.handle);
-    unpack_buffer(unpacker, t.properties);
-    unpack_buffer(unpacker, t.out_edges);
-    unpack_buffer(unpacker, t.aliases);
+    unpack_buffer(unpacker, aux_args, t.handle);
+    unpack_buffer(unpacker, aux_args, t.properties);
+    unpack_buffer(unpacker, aux_args, t.out_edges);
+    unpack_buffer(unpacker, aux_args, t.aliases);
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, cl::edge &t)
+message :: unpack_buffer(e::unpacker &unpacker, void *aux_args, cl::edge &t)
 {
-    unpack_buffer(unpacker, t.handle);
-    unpack_buffer(unpacker, t.start_node);
-    unpack_buffer(unpacker, t.end_node);
-    unpack_buffer(unpacker, t.properties);
+    unpack_buffer(unpacker, aux_args, t.handle);
+    unpack_buffer(unpacker, aux_args, t.start_node);
+    unpack_buffer(unpacker, aux_args, t.end_node);
+    unpack_buffer(unpacker, aux_args, t.properties);
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, predicate::prop_predicate &t)
+message :: unpack_buffer(e::unpacker &unpacker, void *aux_args, predicate::prop_predicate &t)
 {
-    unpack_buffer(unpacker, t.key);
-    unpack_buffer(unpacker, t.value);
-    unpack_buffer(unpacker, t.rel);
+    unpack_buffer(unpacker, aux_args, t.key);
+    unpack_buffer(unpacker, aux_args, t.value);
+    unpack_buffer(unpacker, aux_args, t.rel);
 }

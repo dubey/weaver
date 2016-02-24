@@ -12,31 +12,31 @@
 #include "common/enum_serialization.h"
 
 uint64_t
-message :: size(const enum node_prog::prog_type&)
+message :: size(void*, const enum node_prog::prog_type&)
 {
     return sizeof(uint8_t);
 }
 
 uint64_t
-message :: size(const enum transaction::update_type&)
+message :: size(void*, const enum transaction::update_type&)
 {
     return sizeof(uint8_t);
 }
 
 uint64_t
-message :: size(const enum transaction::tx_type&)
+message :: size(void*, const enum transaction::tx_type&)
 {
     return sizeof(uint8_t);
 }
 
 uint64_t
-message :: size(const enum predicate::relation&)
+message :: size(void*, const enum predicate::relation&)
 {
     return sizeof(uint8_t);
 }
 
 void
-message :: pack_buffer(e::packer &packer, const enum node_prog::prog_type &t)
+message :: pack_buffer(e::packer &packer, void*, const enum node_prog::prog_type &t)
 {
     assert(t <= UINT8_MAX);
     uint8_t temp = (uint8_t) t;
@@ -44,7 +44,7 @@ message :: pack_buffer(e::packer &packer, const enum node_prog::prog_type &t)
 }
 
 void
-message :: pack_buffer(e::packer &packer, const enum transaction::update_type &t)
+message :: pack_buffer(e::packer &packer, void*, const enum transaction::update_type &t)
 {
     assert(t <= UINT8_MAX);
     uint8_t temp = (uint8_t) t;
@@ -52,7 +52,7 @@ message :: pack_buffer(e::packer &packer, const enum transaction::update_type &t
 }
 
 void
-message :: pack_buffer(e::packer &packer, const enum transaction::tx_type &t)
+message :: pack_buffer(e::packer &packer, void*, const enum transaction::tx_type &t)
 {
     assert(t <= UINT8_MAX);
     uint8_t temp = (uint8_t) t;
@@ -60,7 +60,7 @@ message :: pack_buffer(e::packer &packer, const enum transaction::tx_type &t)
 }
 
 void
-message :: pack_buffer(e::packer &packer, const enum predicate::relation &t)
+message :: pack_buffer(e::packer &packer, void*, const enum predicate::relation &t)
 {
     assert(t <= UINT8_MAX);
     uint8_t temp = (uint8_t) t;
@@ -68,7 +68,7 @@ message :: pack_buffer(e::packer &packer, const enum predicate::relation &t)
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, enum node_prog::prog_type &t)
+message :: unpack_buffer(e::unpacker &unpacker, void*, enum node_prog::prog_type &t)
 {
     uint8_t _type;
     unpacker = unpacker >> _type;
@@ -76,7 +76,7 @@ message :: unpack_buffer(e::unpacker &unpacker, enum node_prog::prog_type &t)
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, enum transaction::update_type &t)
+message :: unpack_buffer(e::unpacker &unpacker, void*, enum transaction::update_type &t)
 {
     uint8_t _type;
     unpacker = unpacker >> _type;
@@ -84,7 +84,7 @@ message :: unpack_buffer(e::unpacker &unpacker, enum transaction::update_type &t
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, enum transaction::tx_type &t)
+message :: unpack_buffer(e::unpacker &unpacker, void*, enum transaction::tx_type &t)
 {
     uint8_t _type;
     unpacker = unpacker >> _type;
@@ -92,7 +92,7 @@ message :: unpack_buffer(e::unpacker &unpacker, enum transaction::tx_type &t)
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, enum predicate::relation &t)
+message :: unpack_buffer(e::unpacker &unpacker, void*, enum predicate::relation &t)
 {
     uint8_t _type;
     unpacker = unpacker >> _type;

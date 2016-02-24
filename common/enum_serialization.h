@@ -20,18 +20,18 @@
 
 namespace message
 {
-    uint64_t size(const enum transaction::update_type&);
-    uint64_t size(const enum transaction::tx_type&);
-    uint64_t size(const enum predicate::relation&);
-    uint64_t size(const enum node_prog::prog_type&);
-    void pack_buffer(e::packer &packer, const enum transaction::update_type &t);
-    void pack_buffer(e::packer &packer, const enum transaction::tx_type &t);
-    void pack_buffer(e::packer &packer, const enum predicate::relation &t);
-    void pack_buffer(e::packer &packer, const enum node_prog::prog_type &t);
-    void unpack_buffer(e::unpacker &unpacker, enum transaction::update_type &t);
-    void unpack_buffer(e::unpacker &unpacker, enum transaction::tx_type &t);
-    void unpack_buffer(e::unpacker &unpacker, enum predicate::relation &t);
-    void unpack_buffer(e::unpacker &unpacker, enum node_prog::prog_type &t);
+    uint64_t size(void*, const enum transaction::update_type&);
+    uint64_t size(void*, const enum transaction::tx_type&);
+    uint64_t size(void*, const enum predicate::relation&);
+    uint64_t size(void*, const enum node_prog::prog_type&);
+    void pack_buffer(e::packer &packer, void*, const enum transaction::update_type &t);
+    void pack_buffer(e::packer &packer, void*, const enum transaction::tx_type &t);
+    void pack_buffer(e::packer &packer, void*, const enum predicate::relation &t);
+    void pack_buffer(e::packer &packer, void*, const enum node_prog::prog_type &t);
+    void unpack_buffer(e::unpacker &unpacker, void*, enum transaction::update_type &t);
+    void unpack_buffer(e::unpacker &unpacker, void*, enum transaction::tx_type &t);
+    void unpack_buffer(e::unpacker &unpacker, void*, enum predicate::relation &t);
+    void unpack_buffer(e::unpacker &unpacker, void*, enum node_prog::prog_type &t);
 }
 
 #endif

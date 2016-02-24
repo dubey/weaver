@@ -77,20 +77,30 @@ namespace message
             enum msg_type type;
             std::auto_ptr<e::buffer> buf;
 
-            message() : type(ERROR), buf(nullptr) { }
-            message(enum msg_type t) : type(t), buf(nullptr) { }
-            message(message &copy) : type(copy.type) { buf.reset(copy.buf->copy()); }
+            message()
+                : type(ERROR)
+                , buf(nullptr)
+            { }
+            message(enum msg_type t)
+                : type(t)
+                , buf(nullptr)
+            { }
+            message(message &copy)
+                : type(copy.type)
+            {
+                buf.reset(copy.buf->copy());
+            }
 
             void change_type(enum msg_type t) { type = t; }
 
             void prepare_message(const enum msg_type given_type);
-            template <typename... Args> void prepare_message(const enum msg_type given_type, const Args&... args);
-            template <typename... Args> void unpack_message(const enum msg_type expected_type, Args&... args);
+            template <typename... Args> void prepare_message(const enum msg_type given_type, void *aux_args, const Args&... args);
             template <typename... Args> void unpack_partial_message(const enum msg_type expected_type, Args&... args);
+            template <typename... Args> void unpack_message(const enum msg_type expected_type, void *aux_args, Args&... args);
             enum msg_type unpack_message_type();
 
         private:
-            template <typename... Args> void unpack_message_internal(bool check_empty, const enum msg_type expected_type, Args&... args);
+            template <typename... Args> void unpack_message_internal(bool check_empty, const enum msg_type expected_type, void *aux_args, Args&... args);
     };
 
     uint64_t size(const enum msg_type &);
@@ -99,71 +109,74 @@ namespace message
 
     // base case for recursive size_wrapper()
     template <typename T>
-    inline uint64_t size_wrapper(const T &t)
+    inline uint64_t size_wrapper(void *aux_args, const T &t)
     {
-        return size(t);
+        return size(aux_args, t);
     }
 
     // recursive wrapper around variadic templated size()
     template <typename T, typename... Args>
-    inline uint64_t size_wrapper(const T &t, const Args&... args)
+    inline uint64_t size_wrapper(void *aux_args, const T &t, const Args&... args)
     {
-        return size_wrapper(t) + size_wrapper(args...);
+        return size_wrapper(aux_args, t) + size_wrapper(aux_args, args...);
     }
 
 
     // base case for recursive pack_buffer_wrapper()
     template <typename T>
     inline void 
-    pack_buffer_wrapper(e::packer &packer, const T &t)
+    pack_buffer_wrapper(e::packer &packer, void *aux_args, const T &t)
     {
-        pack_buffer(packer, t);
+        pack_buffer(packer, aux_args, t);
     }
 
     // recursive wrapper around variadic templated pack_buffer()
     // also performs buffer size sanity checks
     template <typename T, typename... Args>
     inline void 
-    pack_buffer_wrapper(e::packer &packer, const T &t, const Args&... args)
+    pack_buffer_wrapper(e::packer &packer, void *aux_args, const T &t, const Args&... args)
     {
-        pack_buffer_wrapper(packer, t);
-        pack_buffer_wrapper(packer, args...);
+        pack_buffer_wrapper(packer, aux_args, t);
+        pack_buffer_wrapper(packer, aux_args, args...);
     }
 
     template <typename... Args>
     inline void
-    message :: prepare_message(const enum msg_type given_type, const Args&... args)
+    message :: prepare_message(const enum msg_type given_type, void *aux_args, const Args&... args)
     {
-        uint64_t bytes_to_pack = size_wrapper(args...) + size(given_type);
+        uint64_t bytes_to_pack = size_wrapper(aux_args, args...) + size(given_type);
         type = given_type;
         buf.reset(e::buffer::create(BUSYBEE_HEADER_SIZE + bytes_to_pack));
         e::packer packer = buf->pack_at(BUSYBEE_HEADER_SIZE); 
 
         pack_buffer(packer, given_type);
-        pack_buffer_wrapper(packer, args...);
+        pack_buffer_wrapper(packer, aux_args, args...);
     }
 
 
     // base case for recursive unpack_buffer_wrapper()
     template <typename T>
     inline void
-    unpack_buffer_wrapper(e::unpacker &unpacker, T &t)
+    unpack_buffer_wrapper(e::unpacker &unpacker, void *aux_args, T &t)
     {
-        unpack_buffer(unpacker, t);
+        unpack_buffer(unpacker, aux_args, t);
     }
 
     // recursive weapper around variadic templated pack_buffer()
     template <typename T, typename... Args>
     inline void 
-    unpack_buffer_wrapper(e::unpacker &unpacker, T &t, Args&... args)
+    unpack_buffer_wrapper(e::unpacker &unpacker, void *aux_args, T &t, Args&... args)
     {
-        unpack_buffer_wrapper(unpacker, t);
-        unpack_buffer_wrapper(unpacker, args...);
+        unpack_buffer_wrapper(unpacker, aux_args, t);
+        unpack_buffer_wrapper(unpacker, aux_args, args...);
     }
 
     template <typename... Args>
     inline void
-    message :: unpack_message_internal(bool check_empty, const enum msg_type expected_type, Args&... args)
+    message :: unpack_message_internal(bool check_empty,
+                                       const enum msg_type expected_type,
+                                       void *aux_args,
+                                       Args&... args)
     {
         enum msg_type received_type;
         e::unpacker unpacker = buf->unpack_from(BUSYBEE_HEADER_SIZE);
@@ -178,7 +191,7 @@ namespace message
         assert(received_type == expected_type);
         UNUSED(expected_type);
 
-        unpack_buffer_wrapper(unpacker, args...);
+        unpack_buffer_wrapper(unpacker, aux_args, args...);
         assert(!unpacker.error());
         if (check_empty) {
             assert(unpacker.remain() == 0); // assert whole message was unpacked
@@ -187,16 +200,16 @@ namespace message
 
     template <typename... Args>
     inline void
-    message :: unpack_message(const enum msg_type expected_type, Args&... args)
+    message :: unpack_partial_message(const enum msg_type expected_type, Args&... args)
     {
-        unpack_message_internal(true, expected_type, args...);
+        unpack_message_internal(false, expected_type, nullptr, args...);
     }
 
     template <typename... Args>
     inline void
-    message :: unpack_partial_message(const enum msg_type expected_type, Args&... args)
+    message :: unpack_message(const enum msg_type expected_type, void *aux_args, Args&... args)
     {
-        unpack_message_internal(false, expected_type, args...);
+        unpack_message_internal(true, expected_type, aux_args, args...);
     }
 
 }

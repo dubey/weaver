@@ -301,6 +301,10 @@ namespace db
             uint64_t watch_set_nops;
             uint64_t watch_set_piggybacks;
 
+            // dynamically linked node programs
+            po6::threads::mutex m_dyn_prog_mtx;
+            std::unordered_map<uint64_t, void*> m_dyn_prog_map;
+
             // fault tolerance
         private:
             std::vector<hyper_stub*> hstub;

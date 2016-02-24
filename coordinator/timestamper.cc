@@ -20,6 +20,7 @@
 #include <sys/time.h>
 #include <e/popt.h>
 #include <pthread.h>
+#include <dlfcn.h>
 
 #define weaver_debug_
 #include "common/vclock.h"
@@ -36,6 +37,7 @@ DECLARE_CONFIG_CONSTANTS;
 using coordinator::current_prog;
 using coordinator::blocked_prog;
 using transaction::done_req_t;
+using node_prog::Node_Parameters_Base;
 static coordinator::timestamper *vts;
 static uint64_t vt_id;
 
@@ -301,7 +303,7 @@ clk_update_function(void*)
             if (i == vt_id || vts_state[i] != server::AVAILABLE) {
                 continue;
             }
-            msg.prepare_message(message::VT_CLOCK_UPDATE, vclk);
+            msg.prepare_message(message::VT_CLOCK_UPDATE, nullptr, vclk);
             vts->comm.send(i, msg.buf);
         }
 
@@ -310,9 +312,10 @@ clk_update_function(void*)
 }
 
 // unpack client message for a node program, prepare shard msges, and send out
-template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
-    unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, coordinator::hyper_stub *hstub)
+void
+unpack_and_start_coord(std::unique_ptr<message::message> msg,
+                       uint64_t clientID,
+                       coordinator::hyper_stub *hstub)
 {
     vts->restore_mtx.lock();
     if (vts->restore_status > 0) {
@@ -323,13 +326,16 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         vts->restore_mtx.unlock();
     }
 
-    node_prog::prog_type pType;
-    std::vector<std::pair<node_handle_t, ParamsType>> initial_args;
+    uint64_t prog_type;
+    std::vector<std::pair<node_handle_t, std::shared_ptr<Node_Parameters_Base>>> initial_args;
 
-    msg->unpack_message(message::CLIENT_NODE_PROG_REQ, pType, initial_args);
+    msg->unpack_message(message::CLIENT_NODE_PROG_REQ,
+                        nullptr,
+                        prog_type,
+                        initial_args);
     
     // map from locations to a list of start_node_params to send to that shard
-    std::unordered_map<uint64_t, std::deque<std::pair<node_handle_t, ParamsType>>> initial_batches; 
+    std::unordered_map<uint64_t, std::deque<std::pair<node_handle_t, std::shared_ptr<Node_Parameters_Base>>>> initial_batches; 
 
     // lookup mappings
     std::unordered_map<node_handle_t, uint64_t> loc_map;
@@ -414,7 +420,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     message::message msg_to_send;
     for (auto &batch_pair: initial_batches) {
-        msg_to_send.prepare_message(message::NODE_PROG, pType, vt_id, req_timestamp, req_id, cp_int, batch_pair.second);
+        msg_to_send.prepare_message(message::NODE_PROG, nullptr, prog_type, vt_id, req_timestamp, req_id, cp_int, batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
         WDEBUG << "send node prog=" << req_id << " to shard=" << batch_pair.first << std::endl;
     }
@@ -428,6 +434,126 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     vts->test_mtx.unlock();
 #endif
 }
+
+///// unpack client message for a node program, prepare shard msges, and send out
+///template <typename ParamsType, typename NodeStateType, typename CacheValueType>
+///void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
+///    unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, coordinator::hyper_stub *hstub)
+///{
+///    vts->restore_mtx.lock();
+///    if (vts->restore_status > 0) {
+///        vts->prog_queue->emplace_back(blocked_prog(clientID, std::move(msg)));
+///        vts->restore_mtx.unlock();
+///        return;
+///    } else {
+///        vts->restore_mtx.unlock();
+///    }
+///
+///    node_prog::prog_type pType;
+///    std::vector<std::pair<node_handle_t, ParamsType>> initial_args;
+///
+///    msg->unpack_message(message::CLIENT_NODE_PROG_REQ, pType, initial_args);
+///    
+///    // map from locations to a list of start_node_params to send to that shard
+///    std::unordered_map<uint64_t, std::deque<std::pair<node_handle_t, ParamsType>>> initial_batches; 
+///
+///    // lookup mappings
+///    std::unordered_map<node_handle_t, uint64_t> loc_map;
+///    std::unordered_set<node_handle_t> get_set;
+///
+///    for (const auto &initial_arg : initial_args) {
+///        get_set.emplace(initial_arg.first);
+///    }
+///
+///    if (!get_set.empty()) {
+///        loc_map = hstub->get_mappings(get_set);
+///
+///        bool success = true;
+///        if (loc_map.size() < get_set.size() && AuxIndex) {
+///            std::unordered_map<std::string, std::pair<node_handle_t, uint64_t>> alias_map;
+///            std::pair<node_handle_t, uint64_t> empty;
+///            for (const node_handle_t &h: get_set) {
+///                if (loc_map.find(h) == loc_map.end()) {
+///                    alias_map.emplace(h, empty);
+///                }
+///            }
+///
+///            assert((alias_map.size() + loc_map.size()) == get_set.size());
+///
+///            success = hstub->get_idx(alias_map);
+///
+///            if (success) {
+///                for (auto &arg: initial_args) {
+///                    auto iter = alias_map.find(arg.first);
+///                    if (iter != alias_map.end()) {
+///                        arg.first = iter->second.first;
+///                        loc_map.emplace(iter->second.first, iter->second.second);
+///                    } else {
+///                        assert(loc_map.find(arg.first) != loc_map.end());
+///                    }
+///                }
+///            }
+///        } else if (loc_map.size() < get_set.size()) {
+///            success = false;
+///        }
+///
+///        if (!success) {
+///            // some node handles bad, return immediately
+///            WDEBUG << "bad node handles in node prog request: ";
+///            for (auto &h: get_set) {
+///                std::cerr << h << " ";
+///            }
+///            std::cerr << std::endl;
+///            msg->prepare_message(message::NODE_PROG_NOTFOUND);
+///            vts->comm.send_to_client(clientID, msg->buf);
+///            return;
+///        }
+///    }
+///
+///    // process loc map
+///    // hack around bug: should be storing shard id in HyperDex, not server
+///    if (ShardIdIncr > 1) {
+///        uint64_t increment = ShardIdIncr - 1;
+///        for (auto &p: loc_map) {
+///            p.second += increment;
+///        }
+///    }
+///
+///    for (const auto &p: initial_args) {
+///        initial_batches[loc_map[p.first]].emplace_back(p);
+///    }
+///
+///    vts->clk_rw_mtx.wrlock();
+///    vts->vclk.increment_clock();
+///    vc::vclock req_timestamp = vts->vclk;
+///    assert(req_timestamp.clock.size() == ClkSz);
+///
+///    vts->tx_prog_mutex.lock();
+///    vts->clk_rw_mtx.unlock();
+///
+///    uint64_t req_id = vts->generate_req_id();
+///    current_prog *cp = new current_prog(req_id, clientID, req_timestamp);
+///    uint64_t cp_int = (uint64_t)cp;
+///    vts->pend_progs.emplace_back(cp);
+///    vts->outstanding_progs.emplace(req_id);
+///    vts->tx_prog_mutex.unlock();
+///
+///    message::message msg_to_send;
+///    for (auto &batch_pair: initial_batches) {
+///        msg_to_send.prepare_message(message::NODE_PROG, pType, vt_id, req_timestamp, req_id, cp_int, batch_pair.second);
+///        vts->comm.send(batch_pair.first, msg_to_send.buf);
+///        WDEBUG << "send node prog=" << req_id << " to shard=" << batch_pair.first << std::endl;
+///    }
+///
+///#ifdef weaver_benchmark_
+///    vts->test_mtx.lock();
+///    vts->outstanding_cnt++;
+///    if (vts->outstanding_cnt > vts->max_outstanding_cnt) {
+///        vts->max_outstanding_cnt = vts->outstanding_cnt;
+///    }
+///    vts->test_mtx.unlock();
+///#endif
+///}
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
 void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> ::
@@ -526,7 +652,7 @@ server_loop(void *args)
                 // client messages
                 case message::CLIENT_TX_INIT: {
                     tx = std::make_shared<transaction::pending_tx>(transaction::UPDATE);
-                    msg->unpack_message(message::CLIENT_TX_INIT, tx->id, tx->writes);
+                    msg->unpack_message(message::CLIENT_TX_INIT, nullptr, tx->id, tx->writes);
                     tx->sender = client_sender;
                     prepare_tx(tx, hstub, time_oracle);
                     break;
@@ -534,7 +660,7 @@ server_loop(void *args)
 
                 case message::VT_CLOCK_UPDATE: {
                     vc::vclock rec_clk;
-                    msg->unpack_message(message::VT_CLOCK_UPDATE, rec_clk);
+                    msg->unpack_message(message::VT_CLOCK_UPDATE, nullptr, rec_clk);
                     vts->clk_rw_mtx.wrlock();
                     vts->clk_updates++;
                     vts->vclk.update_clock(rec_clk);
@@ -552,7 +678,7 @@ server_loop(void *args)
                 case message::VT_NOP_ACK: {
                     uint64_t shard_node_count, nop_qts, sid, sender;
                     std::unordered_map<uint64_t, uint64_t> node_recovery_counts;
-                    msg->unpack_message(message::VT_NOP_ACK, sender, nop_qts, shard_node_count, node_recovery_counts);
+                    msg->unpack_message(message::VT_NOP_ACK, nullptr, sender, nop_qts, shard_node_count, node_recovery_counts);
                     sid = sender - ShardIdIncr;
                     vts->periodic_update_mutex.lock();
                     if (nop_qts > vts->nop_ack_qts[sid]) {
@@ -583,14 +709,14 @@ server_loop(void *args)
 
                 case message::CLIENT_NODE_COUNT: {
                     vts->periodic_update_mutex.lock();
-                    msg->prepare_message(message::NODE_COUNT_REPLY, vts->shard_node_count);
+                    msg->prepare_message(message::NODE_COUNT_REPLY, nullptr, vts->shard_node_count);
                     vts->periodic_update_mutex.unlock();
                     vts->comm.send_to_client(client_sender, msg->buf);
                     break;
                 }
 
                 case message::TX_DONE:
-                    msg->unpack_message(message::TX_DONE, tx_id, shard_id);
+                    msg->unpack_message(message::TX_DONE, nullptr, tx_id, shard_id);
                     end_tx(tx_id, shard_id, hstub);
                     break;
 
@@ -606,7 +732,7 @@ server_loop(void *args)
                     vts->migr_mutex.lock();
                     vts->migr_client = client_sender;
                     vts->migr_mutex.unlock();
-                    msg->prepare_message(message::MIGRATION_TOKEN, hops, hops, vt_id);
+                    msg->prepare_message(message::MIGRATION_TOKEN, nullptr, hops, hops, vt_id);
                     vts->comm.send(ShardIdIncr, msg->buf);
                     break;
                 }
@@ -627,7 +753,7 @@ server_loop(void *args)
 
                 case message::CLIENT_NODE_PROG_REQ:
                     msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
-                    node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), client_sender, hstub);
+                    unpack_and_start_coord(std::move(msg), client_sender, hstub);
                     //msg.reset(new message::message());
                     //msg->prepare_message(message::NODE_PROG_RETURN, 0);
                     //vts->comm.send_to_client(client_sender, msg->buf);
@@ -666,7 +792,7 @@ server_loop(void *args)
                     vts->tx_queue_loop();
                     for (blocked_prog &bp: *progs) {
                         bp.msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
-                        node_prog::programs.at(pType)->unpack_and_start_coord(std::move(bp.msg), bp.client, hstub);
+                        unpack_and_start_coord(std::move(bp.msg), bp.client, hstub);
                     }
                     break;
                 }
@@ -954,6 +1080,14 @@ main(int argc, const char *argv[])
     while (!vts->first_config) {
         vts->first_config_cond.wait();
     }
+
+    // init base progs
+    void *prog_handle = dlopen(".libs/libtestprog.so", RTLD_NOW);
+    if (prog_handle == NULL) {
+        WDEBUG << "dlopen error: " << dlerror() << std::endl;
+        assert(false);
+    }
+    vts->m_dyn_prog_map[0] = prog_handle;
 
     std::vector<std::shared_ptr<pthread_t>> worker_threads;
 
