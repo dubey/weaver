@@ -45,6 +45,9 @@ namespace node_prog
     class Cache_Value_Base : public virtual Packable, public virtual Deletable
     {
     };
+
+    typedef std::shared_ptr<Node_Parameters_Base> np_param_ptr_t;
+    typedef std::shared_ptr<Node_State_Base> np_state_ptr_t;
 }
 
 #endif

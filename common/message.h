@@ -44,6 +44,7 @@ namespace message
         NODE_PROG_RETURN,
         NODE_PROG_RETRY,
         NODE_PROG_NOTFOUND,
+        NODE_PROG_BADPROGTYPE,
         NODE_CONTEXT_FETCH,
         NODE_CONTEXT_REPLY,
         CACHE_UPDATE,

@@ -116,13 +116,13 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 							chronos/chronos_cmp_encode.cc \
 		                    node_prog/edge_list.cc \
 		                    node_prog/prop_list.cc \
-		                    node_prog/traverse_with_props.cc \
 		                    db/element.cc \
 		                    db/property.cc \
 		                    db/edge.cc \
 		                    db/node.cc \
                             coordinator/hyper_stub.cc \
 							coordinator/timestamper.cc
+weaver_timestamper_LDFLAGS=	-Wl,-export-dynamic
 
 # server manager
 lib_LTLIBRARIES+=					libweaverservermanager.la
@@ -177,7 +177,8 @@ weaver_shard_SOURCES=	common/ids.cc \
 						chronos/chronos.cc \
 						chronos/chronos_c_wrappers.cc \
 						chronos/chronos_cmp_encode.cc \
-		                node_prog/traverse_with_props.cc \
+		                node_prog/prop_list.cc \
+		                node_prog/edge_list.cc \
 		                db/hyper_stub.cc \
 		                db/queue_manager.cc \
 		                db/element.cc \
@@ -212,6 +213,7 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 							chronos/chronos_cmp_encode.cc \
 		                    node_prog/prop_list.cc \
 		                    node_prog/edge_list.cc \
+		                    node_prog/traverse_with_props.cc \
 		                    db/element.cc \
 		                    db/property.cc \
 		                    client/comm_wrapper.cc \
@@ -224,6 +226,7 @@ weaverinclude_HEADERS+=		client/client.h \
 							client/datastructures.h \
 							client/weaver/weaver_returncode.h \
 							client/weaver/weaver_client.h
+libweaverclient_la_LDFLAGS=	-Wl,-export-dynamic
 
 # python client
 EXTRA_DIST+=						bindings/python/__init__.py \
@@ -238,7 +241,7 @@ bindings/python/client.cpp:			bindings/python/client.pyx
 bindings_python_client_la_CFLAGS= 	-fno-strict-aliasing $(AM_CFLAGS)
 bindings_python_client_la_CXXFLAGS=	-fno-strict-aliasing $(AM_CXXFLAGS)
 bindings_python_client_la_CPPFLAGS=	-I/usr/include/python2.7 $(AM_CPPFLAGS)
-bindings_python_client_la_LDFLAGS=	-module
+bindings_python_client_la_LDFLAGS=	-module	-Wl,-export-dynamic
 bindings_python_client_la_LIBS=		-lpython2.7 $(LIBS)
 
 # configuration files
@@ -313,11 +316,16 @@ libtestprog_la_SOURCES=	node_prog/edge_list.cc \
 libtestprog_la_CFLAGS= 	$(AM_CFLAGS)
 libtestprog_la_CXXFLAGS=	$(AM_CXXFLAGS)
 
-bin_PROGRAMS+=				weaver-test-bench
-noinst_HEADERS+=			tests/cpp/read_only_vertex_bench.h
-weaver_test_bench_SOURCES=	tests/cpp/run.cc \
-							common/clock.cc
-weaver_test_bench_LDADD=	libweaverclient.la
+#bin_PROGRAMS+=				weaver-test-bench
+#noinst_HEADERS+=			tests/cpp/read_only_vertex_bench.h
+#weaver_test_bench_SOURCES=	tests/cpp/run.cc \
+#							common/clock.cc
+#weaver_test_bench_LDADD=	libweaverclient.la
+
+bin_PROGRAMS+=					weaver-test-dynamic
+weaver_test_dynamic_SOURCES=	tests/cpp/test_dynamic.cc
+weaver_test_dynamic_LDADD=		libweaverclient.la
+weaver_test_dynamic_LDFLAGS=	-Wl,-export-dynamic
 
 TESTS +=		tests/sh/empty_graph.sh \
 				tests/sh/simple_test.sh \

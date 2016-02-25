@@ -27,6 +27,7 @@
 #include "client/datastructures.h"
 #include "node_prog/base_classes.h"
 #include "node_prog/node_prog_type.h"
+#include "node_prog/traverse_with_props.h"
 
 namespace cl
 {
@@ -62,6 +63,7 @@ namespace cl
             bool init;
             bool logging;
             weaver_client_returncode fail_tx(weaver_client_returncode);
+            std::unordered_map<uint64_t, void*> m_dyn_prog_map;
 
         public:
             weaver_client_returncode begin_tx();
@@ -81,8 +83,8 @@ namespace cl
             //template <typename ParamsType>
             //weaver_client_returncode run_node_program(node_prog::prog_type prog_to_run,
             //                                          std::vector<std::pair<std::string, std::shared_ptr<ParamsType>>> &initial_args, ParamsType &return_param);
-            //weaver_client_returncode traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args,
-            //                                                node_prog::traverse_props_params&);
+            weaver_client_returncode traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args,
+                                                            node_prog::traverse_props_params&);
 
             weaver_client_returncode start_migration();
             weaver_client_returncode single_stream_migration();

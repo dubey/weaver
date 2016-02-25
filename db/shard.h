@@ -123,7 +123,7 @@ namespace db
                                         const node_handle_t &node_handle,
                                         const vc::vclock &vclk,
                                         order::oracle*,
-                                        node_prog::prog_type p_type,
+                                        uint64_t p_type,
                                         std::shared_ptr<void> prog_state,
                                         bool &recover);
             node* finish_acquire_node_nodeprog(db::data_map<std::shared_ptr<node_entry>>::iterator&,
@@ -782,7 +782,7 @@ namespace db
                                    const node_handle_t &node_handle,
                                    const vc::vclock &vclk,
                                    order::oracle *time_oracle,
-                                   node_prog::prog_type p_type,
+                                   uint64_t p_type,
                                    std::shared_ptr<void> prog_state,
                                    bool &recover)
     {

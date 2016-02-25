@@ -21,7 +21,7 @@ namespace db
 {
     struct async_nodeprog_state
     {
-        node_prog::prog_type type;
+        uint64_t type;
         vc::vclock clk;
         std::shared_ptr<void> state;
         db::node *n;

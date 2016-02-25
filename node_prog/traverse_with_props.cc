@@ -142,21 +142,21 @@ ctor_prog_state()
     type &tp = dynamic_cast<type&>(p);
 
 uint64_t
-params_size(const Node_Parameters_Base &p, void *aux_args)
+param_size(const Node_Parameters_Base &p, void *aux_args)
 {
     CAST_ARG_REF(const traverse_props_params, p);
     return tp.size(aux_args);
 }
 
 void
-params_pack(const Node_Parameters_Base &p, e::packer &packer, void *aux_args)
+param_pack(const Node_Parameters_Base &p, e::packer &packer, void *aux_args)
 {
     CAST_ARG_REF(const traverse_props_params, p);
     tp.pack(packer, aux_args);
 }
 
 void
-params_unpack(Node_Parameters_Base &p, e::unpacker &unpacker, void *aux_args)
+param_unpack(Node_Parameters_Base &p, e::unpacker &unpacker, void *aux_args)
 {
     CAST_ARG_REF(traverse_props_params, p);
     tp.unpack(unpacker, aux_args);

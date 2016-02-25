@@ -327,10 +327,25 @@ unpack_and_start_coord(std::unique_ptr<message::message> msg,
     }
 
     uint64_t prog_type;
-    std::vector<std::pair<node_handle_t, std::shared_ptr<Node_Parameters_Base>>> initial_args;
+    msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, prog_type);
 
+    void *prog_handle = nullptr;
+    vts->m_dyn_prog_mtx.lock();
+    auto prog_iter = vts->m_dyn_prog_map.find(prog_type);
+    if (prog_iter != vts->m_dyn_prog_map.end()) {
+        prog_handle = prog_iter->second;
+    }
+    vts->m_dyn_prog_mtx.unlock();
+
+    if (prog_handle == nullptr) {
+        msg->prepare_message(message::NODE_PROG_BADPROGTYPE);
+        vts->comm.send_to_client(clientID, msg->buf);
+        return;
+    }
+
+    std::vector<std::pair<node_handle_t, std::shared_ptr<Node_Parameters_Base>>> initial_args;
     msg->unpack_message(message::CLIENT_NODE_PROG_REQ,
-                        nullptr,
+                        prog_handle,
                         prog_type,
                         initial_args);
     
@@ -420,7 +435,14 @@ unpack_and_start_coord(std::unique_ptr<message::message> msg,
 
     message::message msg_to_send;
     for (auto &batch_pair: initial_batches) {
-        msg_to_send.prepare_message(message::NODE_PROG, nullptr, prog_type, vt_id, req_timestamp, req_id, cp_int, batch_pair.second);
+        msg_to_send.prepare_message(message::NODE_PROG,
+                                    prog_handle,
+                                    prog_type,
+                                    vt_id,
+                                    req_timestamp,
+                                    req_id,
+                                    cp_int,
+                                    batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
         WDEBUG << "send node prog=" << req_id << " to shard=" << batch_pair.first << std::endl;
     }
@@ -555,21 +577,6 @@ unpack_and_start_coord(std::unique_ptr<message::message> msg,
 ///#endif
 ///}
 
-template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> ::
-    unpack_and_run_db(uint64_t, std::unique_ptr<message::message>, order::oracle*)
-{ }
-
-template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> ::
-    unpack_context_reply_db(uint64_t, std::unique_ptr<message::message>, order::oracle*)
-{ }
-
-template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> ::
-    continue_execution(uint64_t, order::oracle*, db::async_nodeprog_state)
-{ }
-
 // remove a completed node program from pending_prog data structure
 // update 'max_done_clk' accordingly
 // return true if successfully process prog_done, false if already processed this prog
@@ -633,7 +640,7 @@ server_loop(void *args)
     enum message::msg_type mtype;
     std::unique_ptr<message::message> msg;
     uint64_t tx_id, client_sender, shard_id;
-    node_prog::prog_type pType;
+    uint64_t prog_type;
     coordinator::hyper_stub *hstub = vts->hstub[thread_id];
     order::oracle *time_oracle = vts->time_oracles[thread_id];
     std::shared_ptr<transaction::pending_tx> tx;
@@ -752,18 +759,13 @@ server_loop(void *args)
                 }
 
                 case message::CLIENT_NODE_PROG_REQ:
-                    msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
                     unpack_and_start_coord(std::move(msg), client_sender, hstub);
-                    //msg.reset(new message::message());
-                    //msg->prepare_message(message::NODE_PROG_RETURN, 0);
-                    //vts->comm.send_to_client(client_sender, msg->buf);
                     break;
 
                 // node program response from a shard
                 case message::NODE_PROG_RETURN: {
                     uint64_t req_id, cp_int, client;
-                    node_prog::prog_type type;
-                    msg->unpack_partial_message(message::NODE_PROG_RETURN, type, req_id, cp_int); // don't unpack rest
+                    msg->unpack_partial_message(message::NODE_PROG_RETURN, prog_type, req_id, cp_int); // don't unpack rest
                     current_prog *cp = (current_prog*)cp_int;
                     client = cp->client;
 
@@ -791,7 +793,6 @@ server_loop(void *args)
 
                     vts->tx_queue_loop();
                     for (blocked_prog &bp: *progs) {
-                        bp.msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
                         unpack_and_start_coord(std::move(bp.msg), bp.client, hstub);
                     }
                     break;

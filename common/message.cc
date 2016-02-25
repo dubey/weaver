@@ -48,6 +48,8 @@ message :: to_string(const msg_type &t)
             return "NODE_PROG_RETRY";
         case NODE_PROG_NOTFOUND:
             return "NODE_PROG_NOTFOUND";
+        case NODE_PROG_BADPROGTYPE:
+            return "NODE_PROG_BADPROGTYPE";
         case NODE_CONTEXT_FETCH:
             return "NODE_CONTEXT_FETCH";
         case NODE_CONTEXT_REPLY:

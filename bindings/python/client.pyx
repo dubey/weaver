@@ -922,53 +922,52 @@ cdef class Client:
 #        return self.get_node(node, get_props=False, get_edges=False).aliases
 
     def traverse_props(self, init_args):
-        pass
-        #cdef vector[pair[string, traverse_props_params]] c_args
-        #c_args.reserve(len(init_args))
-        #cdef pair[string, traverse_props_params] arg_pair
-        #cdef vector[pair[string, string]] props
-        #cdef vector[string] aliases
-        #for rp in init_args:
-        #    arg_pair.first = rp[0]
-        #    arg_pair.second.prev_node = coordinator
-        #    arg_pair.second.collect_nodes = rp[1].collect_nodes
-        #    arg_pair.second.collect_edges = rp[1].collect_edges
-        #    arg_pair.second.node_aliases.clear()
-        #    arg_pair.second.node_props.clear()
-        #    arg_pair.second.edge_props.clear()
-        #    for p_vec in rp[1].node_aliases:
-        #        aliases.clear()
-        #        aliases.reserve(len(p_vec))
-        #        for p in p_vec:
-        #            aliases.push_back(p)
-        #        arg_pair.second.node_aliases.push_back(aliases)
-        #    for p_vec in rp[1].node_props:
-        #        props.clear()
-        #        props.reserve(len(p_vec))
-        #        for p in p_vec:
-        #            props.push_back(p)
-        #        arg_pair.second.node_props.push_back(props)
-        #    for p_vec in rp[1].edge_props:
-        #        props.clear()
-        #        props.reserve(len(p_vec))
-        #        for p in p_vec:
-        #            props.push_back(p)
-        #        arg_pair.second.edge_props.push_back(props)
-        #    c_args.push_back(arg_pair)
+        cdef vector[pair[string, traverse_props_params]] c_args
+        c_args.reserve(len(init_args))
+        cdef pair[string, traverse_props_params] arg_pair
+        cdef vector[pair[string, string]] props
+        cdef vector[string] aliases
+        for rp in init_args:
+            arg_pair.first = rp[0]
+            arg_pair.second.prev_node = coordinator
+            arg_pair.second.collect_nodes = rp[1].collect_nodes
+            arg_pair.second.collect_edges = rp[1].collect_edges
+            arg_pair.second.node_aliases.clear()
+            arg_pair.second.node_props.clear()
+            arg_pair.second.edge_props.clear()
+            for p_vec in rp[1].node_aliases:
+                aliases.clear()
+                aliases.reserve(len(p_vec))
+                for p in p_vec:
+                    aliases.push_back(p)
+                arg_pair.second.node_aliases.push_back(aliases)
+            for p_vec in rp[1].node_props:
+                props.clear()
+                props.reserve(len(p_vec))
+                for p in p_vec:
+                    props.push_back(p)
+                arg_pair.second.node_props.push_back(props)
+            for p_vec in rp[1].edge_props:
+                props.clear()
+                props.reserve(len(p_vec))
+                for p in p_vec:
+                    props.push_back(p)
+                arg_pair.second.edge_props.push_back(props)
+            c_args.push_back(arg_pair)
 
-        #cdef traverse_props_params c_rp
-        #with nogil:
-        #    code = self.thisptr.traverse_props_program(c_args, c_rp)
+        cdef traverse_props_params c_rp
+        with nogil:
+            code = self.thisptr.traverse_props_program(c_args, c_rp)
 
-        #if code != WEAVER_CLIENT_SUCCESS:
-        #    raise WeaverError(code, 'node prog error')
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
 
-        #response = TraversePropsParams()
-        #for n in c_rp.return_nodes:
-        #    response.return_nodes.append(n)
-        #for e in c_rp.return_edges:
-        #    response.return_edges.append(e)
-        #return response
+        response = TraversePropsParams()
+        for n in c_rp.return_nodes:
+            response.return_nodes.append(n)
+        for e in c_rp.return_edges:
+            response.return_edges.append(e)
+        return response
 
     cdef __convert_pred_to_c_pred(self, pred, prop_predicate &pred_c):
         pred_c.key = pred.key

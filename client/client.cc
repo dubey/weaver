@@ -12,6 +12,7 @@
  */
 
 #include <random>
+#include <dlfcn.h>
 
 #include "common/message.h"
 #include "common/config_constants.h"
@@ -75,6 +76,14 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     }
 
     comm.reset(new cl::comm_wrapper(myid, *m_sm.config()));
+
+    // init base progs
+    void *prog_handle = dlopen("libtestprog.so", RTLD_NOW);
+    if (prog_handle == NULL) {
+        WDEBUG << "dlopen error: " << dlerror() << std::endl;
+        assert(false);
+    }
+    m_dyn_prog_map[0] = prog_handle;
 }
 
 // call once per application, even with multiple clients
@@ -391,8 +400,7 @@ client :: run_node_prog(uint64_t prog_type,
 
 #ifdef weaver_benchmark_
 
-    // XXX fix nullptr
-    msg.prepare_message(message::CLIENT_NODE_PROG_REQ, nullptr, prog_type, initial_args);
+    msg.prepare_message(message::CLIENT_NODE_PROG_REQ, m_dyn_prog_map[prog_type], prog_type, initial_args);
     send_code = send_coord(msg.buf);
 
     if (send_code != BUSYBEE_SUCCESS) {
@@ -409,8 +417,7 @@ client :: run_node_prog(uint64_t prog_type,
 
     bool retry;
     do {
-        // XXX fix nullptr
-        msg.prepare_message(message::CLIENT_NODE_PROG_REQ, nullptr, prog_type, initial_args);
+        msg.prepare_message(message::CLIENT_NODE_PROG_REQ, m_dyn_prog_map[prog_type], prog_type, initial_args);
         send_code = send_coord(msg.buf);
 
         if (send_code == BUSYBEE_DISRUPTED) {
@@ -444,12 +451,15 @@ client :: run_node_prog(uint64_t prog_type,
 
 #endif
 
-    uint64_t ignore_req_id, ignore_vt_ptr;
-    node_prog::prog_type ignore_type;
+    uint64_t ignore_prog_type, ignore_req_id, ignore_vt_ptr;
     auto ret_status = msg.unpack_message_type();
     if (ret_status == message::NODE_PROG_RETURN) {
-        // XXX fix nullptr
-        msg.unpack_message(message::NODE_PROG_RETURN, nullptr, ignore_type, ignore_req_id, ignore_vt_ptr, return_param);
+        msg.unpack_message(message::NODE_PROG_RETURN,
+                           m_dyn_prog_map[prog_type],
+                           ignore_prog_type,
+                           ignore_req_id,
+                           ignore_vt_ptr,
+                           return_param);
         return WEAVER_CLIENT_SUCCESS;
     } else {
         return WEAVER_CLIENT_NOTFOUND;
@@ -536,24 +546,29 @@ client :: run_node_prog(uint64_t prog_type,
 //    }
 //}
 //
-#define SPECIFIC_NODE_PROG(type) \
-    return run_node_program(type, ptr_args, return_param);
-//
-//weaver_client_returncode
-//client :: traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args, node_prog::traverse_props_params &return_param)
-//{
-//    std::vector<std::pair<std::string, std::shared_ptr<node_prog::traverse_props_params>>> ptr_args;
-//    for (auto &p: initial_args) {
-//        if (p.second.node_props.size() != (p.second.edge_props.size()+1)) {
-//            return WEAVER_CLIENT_LOGICALERROR;
-//        }
-//        auto param_ptr = std::make_shared<const node_prog::traverse_props_params>(p.second);
-//        ptr_args.emplace_back(std::make_pair(p.first, param_ptr));
-//    }
-//    SPECIFIC_NODE_PROG(node_prog::TRAVERSE_PROPS);
-//}
-//
-#undef SPECIFIC_NODE_PROG
+
+weaver_client_returncode
+client :: traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args,
+                                 node_prog::traverse_props_params &return_param)
+{
+    std::vector<std::pair<std::string, std::shared_ptr<Node_Parameters_Base>>> ptr_args;
+    for (auto &p: initial_args) {
+        if (p.second.node_props.size() != (p.second.edge_props.size()+1)) {
+            return WEAVER_CLIENT_LOGICALERROR;
+        }
+        auto param_ptr = std::make_shared<node_prog::traverse_props_params>(p.second);
+        auto base_ptr  = std::dynamic_pointer_cast<Node_Parameters_Base>(param_ptr);
+        ptr_args.emplace_back(std::make_pair(p.first, base_ptr));
+    }
+
+    std::shared_ptr<Node_Parameters_Base> return_base_ptr;
+    weaver_client_returncode retcode = run_node_prog(0, ptr_args, return_base_ptr);
+
+    auto return_param_ptr = std::dynamic_pointer_cast<node_prog::traverse_props_params>(return_base_ptr);
+    return_param = *return_param_ptr;
+
+    return retcode;
+}
 
 weaver_client_returncode
 client :: start_migration()

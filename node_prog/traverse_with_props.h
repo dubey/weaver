@@ -71,9 +71,9 @@ namespace node_prog
         std::shared_ptr<Node_Parameters_Base> ctor_prog_param();
         std::shared_ptr<Node_State_Base> ctor_prog_state();
         
-        uint64_t params_size(const Node_Parameters_Base&, void*);
-        void params_pack(const Node_Parameters_Base&, e::packer&, void*);
-        void params_unpack(Node_Parameters_Base&, e::unpacker&, void*);
+        uint64_t param_size(const Node_Parameters_Base&, void*);
+        void param_pack(const Node_Parameters_Base&, e::packer&, void*);
+        void param_unpack(Node_Parameters_Base&, e::unpacker&, void*);
 
         uint64_t state_size(const Node_State_Base&, void*);
         void state_pack(const Node_State_Base&, e::packer&, void*);
