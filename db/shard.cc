@@ -1930,15 +1930,11 @@ inline void node_prog_loop(uint64_t tid,
             assert(np.req_vclock != nullptr);
             assert(np.req_vclock->clock.size() == ClkSz);
 
-            typedef std::pair<node_prog::search_type, std::vector<std::pair<db::remote_node, np_param_ptr_t>>> (*trav_prog_ptr_t)(node_prog::node &n,
+            typedef std::pair<node_prog::search_type, std::vector<std::pair<db::remote_node, np_param_ptr_t>>> (*prog_ptr_t)(node_prog::node &n,
                     db::remote_node &rn,
                     np_param_ptr_t,
                     std::function<Node_State_Base&()> state_getter);
-            trav_prog_ptr_t prog_ptr = (trav_prog_ptr_t)dlsym(prog_handle, "traverse_props_node_program");
-            WDEBUG << "here " << (void*)prog_ptr << std::endl;
-            void *my_ptr = malloc(100);
-            WDEBUG << "here " << my_ptr << std::endl;
-
+            prog_ptr_t prog_ptr = (prog_ptr_t)dlsym(prog_handle, "node_program");
 
             // call node program
             WDEBUG << "calling node program at node=" << node_handle << std::endl;

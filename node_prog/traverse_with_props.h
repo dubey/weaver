@@ -80,7 +80,7 @@ namespace node_prog
         void state_unpack(Node_State_Base&, e::unpacker&, void*);
 
         std::pair<search_type, std::vector<std::pair<db::remote_node, std::shared_ptr<Node_Parameters_Base>>>>
-        traverse_props_node_program(node &n,
+        node_program(node &n,
             db::remote_node &rn,
             std::shared_ptr<Node_Parameters_Base> param_ptr,
             std::function<Node_State_Base&()> state_getter);

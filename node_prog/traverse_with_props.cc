@@ -186,15 +186,11 @@ state_unpack(Node_State_Base &p, e::unpacker &unpacker, void *aux_args)
 #undef CAST_ARG_REF
 
 std::pair<search_type, std::vector<std::pair<db::remote_node, std::shared_ptr<Node_Parameters_Base>>>>
-node_prog :: traverse_props_node_program(node &n,
+node_prog :: node_program(node &n,
    db::remote_node &rn,
    std::shared_ptr<Node_Parameters_Base> param_ptr,
    std::function<Node_State_Base&()> state_getter)
 {
-    WDEBUG << (void*)traverse_props_node_program << std::endl;
-    void *my_ptr = malloc(100);
-    WDEBUG << my_ptr << std::endl;
-
     Node_State_Base &state_base = state_getter();
     traverse_props_state& state = dynamic_cast<traverse_props_state&>(state_base);
 
