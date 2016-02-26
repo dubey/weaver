@@ -213,7 +213,6 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 							chronos/chronos_cmp_encode.cc \
 		                    node_prog/prop_list.cc \
 		                    node_prog/edge_list.cc \
-		                    node_prog/traverse_with_props.cc \
 		                    db/element.cc \
 		                    db/property.cc \
 		                    client/comm_wrapper.cc \
@@ -235,7 +234,8 @@ pkgpyexec_DATA+=					bindings/python/__init__.py
 pkgpyexec_LTLIBRARIES+=				bindings/python/client.la
 CLEANFILES+=						bindings/python/client.cpp
 bindings_python_client_la_SOURCES=	bindings/python/client.cpp
-bindings_python_client_la_LIBADD=	libweaverclient.la
+bindings_python_client_la_LIBADD=	libweaverclient.la \
+									libtestprog.la
 bindings/python/client.cpp:			bindings/python/client.pyx
 	$(CYTHON) $(CYTHON_FLAGS) $<
 bindings_python_client_la_CFLAGS= 	-fno-strict-aliasing $(AM_CFLAGS)
@@ -324,7 +324,8 @@ libtestprog_la_CXXFLAGS=	$(AM_CXXFLAGS)
 
 bin_PROGRAMS+=					weaver-test-dynamic
 weaver_test_dynamic_SOURCES=	tests/cpp/test_dynamic.cc
-weaver_test_dynamic_LDADD=		libweaverclient.la
+weaver_test_dynamic_LDADD=		libweaverclient.la \
+								libtestprog.la
 weaver_test_dynamic_LDFLAGS=	-Wl,-export-dynamic
 
 TESTS +=		tests/sh/empty_graph.sh \
