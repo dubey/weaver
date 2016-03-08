@@ -125,14 +125,14 @@ check_aliases(const node_prog::node &n, const std::vector<std::string> &aliases)
 extern "C" {
 
 std::shared_ptr<Node_Parameters_Base>
-ctor_prog_param()
+param_ctor()
 {
     auto new_params = std::make_shared<traverse_props_params>();
     return std::dynamic_pointer_cast<Node_Parameters_Base>(new_params);
 }
 
 std::shared_ptr<Node_State_Base>
-ctor_prog_state()
+state_ctor()
 {
     auto new_state = std::make_shared<traverse_props_state>();
     return std::dynamic_pointer_cast<Node_State_Base>(new_state);

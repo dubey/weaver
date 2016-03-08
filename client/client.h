@@ -86,6 +86,8 @@ namespace cl
             weaver_client_returncode traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args,
                                                             node_prog::traverse_props_params&);
 
+            weaver_client_returncode register_node_prog(const std::string &so_file,
+                                                        std::string &prog_handle);
             weaver_client_returncode start_migration();
             weaver_client_returncode single_stream_migration();
             weaver_client_returncode exit_weaver();

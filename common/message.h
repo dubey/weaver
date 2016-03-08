@@ -49,6 +49,7 @@ namespace message
         NODE_CONTEXT_REPLY,
         CACHE_UPDATE,
         CACHE_UPDATE_ACK,
+        REGISTER_NODE_PROG,
         // migration messages
         MIGRATE_SEND_NODE,
         MIGRATED_NBR_UPDATE,

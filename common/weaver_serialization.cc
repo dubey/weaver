@@ -17,6 +17,7 @@
 #include "common/stl_serialization.h"
 #include "common/enum_serialization.h"
 #include "common/vclock.h"
+#include "node_prog/dynamic_prog_table.h"
 #include "node_prog/base_classes.h"
 #include "node_prog/property.h"
 #include "db/remote_node.h"
@@ -27,33 +28,33 @@ using node_prog::Node_Parameters_Base;
 using node_prog::Node_State_Base;
 using node_prog::np_param_ptr_t;
 using node_prog::np_state_ptr_t;
+using node_prog::param_ctor_func_t;
+using node_prog::param_size_func_t;
+using node_prog::param_pack_func_t;
+using node_prog::param_unpack_func_t;
+using node_prog::state_ctor_func_t;
+using node_prog::state_size_func_t;
+using node_prog::state_pack_func_t;
+using node_prog::state_unpack_func_t;
 
-typedef np_param_ptr_t (*param_ctor_func_t)();
-typedef uint64_t (*param_size_func_t)(const Node_Parameters_Base&, void*);
-typedef void (*param_pack_func_t)(const Node_Parameters_Base&, e::packer&, void*);
-typedef void (*param_unpack_func_t)(Node_Parameters_Base&, e::unpacker&, void*);
-
-typedef np_state_ptr_t (*state_ctor_func_t)();
-typedef uint64_t (*state_size_func_t)(const Node_State_Base&, void*);
-typedef void (*state_pack_func_t)(const Node_State_Base&, e::packer&, void*);
-typedef void (*state_unpack_func_t)(Node_State_Base&, e::unpacker&, void*);
+#define CAST_PROG_HANDLE \
+    assert(prog_handle != nullptr); \
+    dynamic_prog_table *prog_table = (dynamic_prog_table*)prog_handle;
 
 // size functions
 
 uint64_t
 message :: size(void *prog_handle, const np_param_ptr_t &t)
 {
-    assert(prog_handle != nullptr);
-    param_size_func_t size_f = (param_size_func_t)dlsym(prog_handle, "param_size");
-    return size_f(*t, prog_handle);
+    CAST_PROG_HANDLE;
+    return prog_table->param_size(*t, prog_handle);
 }
 
 uint64_t
 message :: size(void *prog_handle, const np_state_ptr_t &t)
 {
-    assert(prog_handle != nullptr);
-    state_size_func_t size_f = (state_size_func_t)dlsym(prog_handle, "state_size");
-    return size_f(*t, prog_handle);
+    CAST_PROG_HANDLE;
+    return prog_table->state_size(*t, prog_handle);
 }
 
 uint64_t
@@ -169,17 +170,15 @@ message::size(void *aux_args, const predicate::prop_predicate &t)
 void
 message :: pack_buffer(e::packer &packer, void *prog_handle, const np_param_ptr_t &t)
 {
-    assert(prog_handle != nullptr);
-    param_pack_func_t pack_f = (param_pack_func_t)dlsym(prog_handle, "param_pack");
-    pack_f(*t, packer, prog_handle);
+    CAST_PROG_HANDLE;
+    prog_table->param_pack(*t, packer, prog_handle);
 }
 
 void
 message :: pack_buffer(e::packer &packer, void *prog_handle, const np_state_ptr_t &t)
 {
-    assert(prog_handle != nullptr);
-    state_pack_func_t pack_f = (state_pack_func_t)dlsym(prog_handle, "state_pack");
-    pack_f(*t, packer, prog_handle);
+    CAST_PROG_HANDLE;
+    prog_table->state_pack(*t, packer, prog_handle);
 }
 
 void
@@ -294,21 +293,17 @@ message :: pack_buffer(e::packer &packer, void *aux_args, const predicate::prop_
 void
 message :: unpack_buffer(e::unpacker &unpacker, void *prog_handle, np_param_ptr_t &t)
 {
-    assert(prog_handle != nullptr);
-    param_ctor_func_t ctor_f = (param_ctor_func_t)dlsym(prog_handle, "ctor_prog_param");
-    t = ctor_f();
-    param_unpack_func_t unpack_f = (param_unpack_func_t)dlsym(prog_handle, "param_unpack");
-    unpack_f(*t, unpacker, prog_handle);
+    CAST_PROG_HANDLE;
+    t = prog_table->param_ctor();
+    prog_table->param_unpack(*t, unpacker, prog_handle);
 }
 
 void
 message :: unpack_buffer(e::unpacker &unpacker, void *prog_handle, np_state_ptr_t &t)
 {
-    assert(prog_handle != nullptr);
-    state_ctor_func_t ctor_f = (state_ctor_func_t)dlsym(prog_handle, "ctor_prog_state");
-    t = ctor_f();
-    state_unpack_func_t unpack_f = (state_unpack_func_t)dlsym(prog_handle, "state_unpack");
-    unpack_f(*t, unpacker, prog_handle);
+    CAST_PROG_HANDLE;
+    t = prog_table->state_ctor();
+    prog_table->state_unpack(*t, unpacker, prog_handle);
 }
 
 void

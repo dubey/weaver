@@ -68,8 +68,8 @@ namespace node_prog
     };
 
     extern "C" {
-        std::shared_ptr<Node_Parameters_Base> ctor_prog_param();
-        std::shared_ptr<Node_State_Base> ctor_prog_state();
+        std::shared_ptr<Node_Parameters_Base> param_ctor();
+        std::shared_ptr<Node_State_Base> state_ctor();
         
         uint64_t param_size(const Node_Parameters_Base&, void*);
         void param_pack(const Node_Parameters_Base&, e::packer&, void*);

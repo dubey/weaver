@@ -28,6 +28,7 @@
 #include "common/event_order.h"
 #include "common/config_constants.h"
 #include "common/bool_vector.h"
+#include "node_prog/dynamic_prog_table.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
 #include "coordinator/timestamper.h"
@@ -783,6 +784,16 @@ server_loop(void *args)
                     break;
                 }
 
+                case message::REGISTER_NODE_PROG: {
+                    char *buf;
+                    std::string prog_handle;
+                    msg->unpack_message(message::REGISTER_NODE_PROG, nullptr, prog_handle, buf);
+                    std::string sha = weaver_util::sha256_chararr(buf, sizeof(buf)/sizeof(char));
+                    WDEBUG << "prog_handle = " << prog_handle
+                           << ", sha = " << sha
+                           << std::endl;
+                }
+
                 case message::RESTORE_DONE: {
                     vts->restore_mtx.lock();
                     assert(vts->restore_status > 0);
@@ -1088,7 +1099,8 @@ main(int argc, const char *argv[])
         WDEBUG << "dlopen error: " << dlerror() << std::endl;
         assert(false);
     }
-    vts->m_dyn_prog_map[0] = prog_handle;
+    dynamic_prog_table *trav_prog = new dynamic_prog_table(prog_handle);
+    vts->m_dyn_prog_map[0] = (void*)trav_prog;
 
     std::vector<std::shared_ptr<pthread_t>> worker_threads;
 

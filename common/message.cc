@@ -58,6 +58,8 @@ message :: to_string(const msg_type &t)
             return "CACHE_UPDATE";
         case CACHE_UPDATE_ACK:
             return "CACHE_UPDATE_ACK";
+        case REGISTER_NODE_PROG:
+            return "REGISTER_NODE_PROG";
         case MIGRATE_SEND_NODE:
             return "MIGRATE_SEND_NODE";
         case MIGRATED_NBR_UPDATE:

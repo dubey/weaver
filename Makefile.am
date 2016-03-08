@@ -56,6 +56,7 @@ noinst_HEADERS+=	node_prog/base_classes.h \
 					node_prog/edge.h \
 					node_prog/node_program.h \
 					node_prog/prop_list.h \
+					node_prog/dynamic_prog_table.h \
 					common/cache_constants.h \
 					common/config_constants.h \
 					common/hyper_stub_base.h \
@@ -116,6 +117,7 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 							chronos/chronos_cmp_encode.cc \
 		                    node_prog/edge_list.cc \
 		                    node_prog/prop_list.cc \
+							node_prog/dynamic_prog_table.cc \
 		                    db/element.cc \
 		                    db/property.cc \
 		                    db/edge.cc \
@@ -123,6 +125,7 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
                             coordinator/hyper_stub.cc \
 							coordinator/timestamper.cc
 weaver_timestamper_LDFLAGS=	-Wl,-export-dynamic
+weaver_timestamper_LDADD=	-lssl -lcrypto
 
 # server manager
 lib_LTLIBRARIES+=					libweaverservermanager.la
@@ -179,6 +182,7 @@ weaver_shard_SOURCES=	common/ids.cc \
 						chronos/chronos_cmp_encode.cc \
 		                node_prog/prop_list.cc \
 		                node_prog/edge_list.cc \
+						node_prog/dynamic_prog_table.cc \
 		                db/hyper_stub.cc \
 		                db/queue_manager.cc \
 		                db/element.cc \
@@ -213,6 +217,7 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 							chronos/chronos_cmp_encode.cc \
 		                    node_prog/prop_list.cc \
 		                    node_prog/edge_list.cc \
+							node_prog/dynamic_prog_table.cc \
 		                    db/element.cc \
 		                    db/property.cc \
 		                    client/comm_wrapper.cc \
@@ -221,11 +226,12 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 		                    client/c.cc
 libweaverclient_la_CFLAGS=	$(AM_CFLAGS)
 libweaverclient_la_CXXFLAGS=$(AM_CXXFLAGS)
+libweaverclient_la_LDFLAGS=	-Wl,-export-dynamic
+libweaverclient_la_LIBADD=	-lssl -lcrypto
 weaverinclude_HEADERS+=		client/client.h \
 							client/datastructures.h \
 							client/weaver/weaver_returncode.h \
 							client/weaver/weaver_client.h
-libweaverclient_la_LDFLAGS=	-Wl,-export-dynamic
 
 # python client
 EXTRA_DIST+=						bindings/python/__init__.py \
@@ -235,14 +241,14 @@ pkgpyexec_LTLIBRARIES+=				bindings/python/client.la
 CLEANFILES+=						bindings/python/client.cpp
 bindings_python_client_la_SOURCES=	bindings/python/client.cpp
 bindings_python_client_la_LIBADD=	libweaverclient.la \
-									libtestprog.la
+									libtestprog.la \
+									-lpython2.7
 bindings/python/client.cpp:			bindings/python/client.pyx
 	$(CYTHON) $(CYTHON_FLAGS) $<
 bindings_python_client_la_CFLAGS= 	-fno-strict-aliasing $(AM_CFLAGS)
 bindings_python_client_la_CXXFLAGS=	-fno-strict-aliasing $(AM_CXXFLAGS)
 bindings_python_client_la_CPPFLAGS=	-I/usr/include/python2.7 $(AM_CPPFLAGS)
 bindings_python_client_la_LDFLAGS=	-module	-Wl,-export-dynamic
-bindings_python_client_la_LIBS=		-lpython2.7 $(LIBS)
 
 # configuration files
 EXTRA_DIST+=	conf/weaver.yaml

@@ -21,12 +21,6 @@
 
 namespace node_prog
 {
-    enum search_type
-    {
-        BREADTH_FIRST,
-        DEPTH_FIRST
-    };
-
     enum prog_type
     {
         TRAVERSE_PROPS,

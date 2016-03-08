@@ -14,8 +14,10 @@
 #include <random>
 #include <dlfcn.h>
 
+#include "common/utils.h"
 #include "common/message.h"
 #include "common/config_constants.h"
+#include "node_prog/dynamic_prog_table.h"
 #include "client/client_constants.h"
 #include "client/client.h"
 
@@ -83,7 +85,8 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
         WDEBUG << "dlopen error: " << dlerror() << std::endl;
         assert(false);
     }
-    m_dyn_prog_map[0] = prog_handle;
+    dynamic_prog_table *prog_table = new dynamic_prog_table(prog_handle);
+    m_dyn_prog_map[0] = (void*)prog_table;
 }
 
 // call once per application, even with multiple clients
@@ -466,87 +469,6 @@ client :: run_node_prog(uint64_t prog_type,
     }
 }
 
-//template <typename ParamsType>
-//weaver_client_returncode
-//client :: run_node_program(node_prog::prog_type prog_to_run,
-//                           std::vector<std::pair<std::string, std::shared_ptr<ParamsType>>> &initial_args,
-//                           ParamsType &return_param)
-//{
-//    CHECK_INIT;
-//
-//    message::message msg;
-//    busybee_returncode send_code, recv_code;
-//
-//#ifdef weaver_benchmark_
-//
-//    // XXX fix nullptr
-//    msg.prepare_message(message::CLIENT_NODE_PROG_REQ, nullptr, prog_to_run, initial_args);
-//    send_code = send_coord(msg.buf);
-//
-//    if (send_code != BUSYBEE_SUCCESS) {
-//        return WEAVER_CLIENT_INTERNALMSGERROR;
-//    }
-//
-//    recv_code = recv_coord(&msg.buf);
-//
-//    if (recv_code != BUSYBEE_SUCCESS) {
-//        return WEAVER_CLIENT_INTERNALMSGERROR;
-//    }
-//
-//#else
-//
-//    bool retry;
-//    do {
-//        // XXX fix nullptr
-//        msg.prepare_message(message::CLIENT_NODE_PROG_REQ, nullptr, prog_to_run, initial_args);
-//        send_code = send_coord(msg.buf);
-//
-//        if (send_code == BUSYBEE_DISRUPTED) {
-//            reconfigure();
-//            return WEAVER_CLIENT_DISRUPTED;
-//        } else if (send_code != BUSYBEE_SUCCESS) {
-//            return WEAVER_CLIENT_INTERNALMSGERROR;
-//        }
-//
-//        recv_code = recv_coord(&msg.buf);
-//
-//        switch (recv_code) {
-//            case BUSYBEE_TIMEOUT:
-//            case BUSYBEE_DISRUPTED:
-//                reconfigure();
-//                retry = true;
-//                break;
-//
-//            case BUSYBEE_SUCCESS:
-//                if (msg.unpack_message_type() == message::NODE_PROG_RETRY) {
-//                    retry = true;
-//                } else {
-//                    retry = false;
-//                }
-//                break;
-//
-//            default:
-//                return WEAVER_CLIENT_INTERNALMSGERROR;
-//        }
-//    } while (retry);
-//
-//#endif
-//
-//    uint64_t ignore_req_id, ignore_vt_ptr;
-//    node_prog::prog_type ignore_type;
-//    auto ret_status = msg.unpack_message_type();
-//    if (ret_status == message::NODE_PROG_RETURN) {
-//        // XXX fix nullptr
-//        std::shared_ptr<ParamsType> ret_ptr;
-//        msg.unpack_message(message::NODE_PROG_RETURN, nullptr, ignore_type, ignore_req_id, ignore_vt_ptr, ret_ptr);
-//        return_param = *ret_ptr;
-//        return WEAVER_CLIENT_SUCCESS;
-//    } else {
-//        return WEAVER_CLIENT_NOTFOUND;
-//    }
-//}
-//
-
 weaver_client_returncode
 client :: traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args,
                                  node_prog::traverse_props_params &return_param)
@@ -568,6 +490,40 @@ client :: traverse_props_program(std::vector<std::pair<std::string, node_prog::t
     return_param = *return_param_ptr;
 
     return retcode;
+}
+
+weaver_client_returncode
+client :: register_node_prog(const std::string &so_file,
+                             std::string &prog_handle)
+{
+    std::ifstream read_f;
+    read_f.open(so_file, std::ifstream::in | std::ifstream::binary);
+    if (!read_f) {
+        return WEAVER_CLIENT_NOTFOUND;
+    }
+
+    read_f.seekg(0, read_f.end);
+    size_t file_sz = read_f.tellg();
+    read_f.seekg(0, read_f.beg);
+
+    char *buf = new char[file_sz];
+    read_f.read(buf, file_sz);
+
+    read_f.close();
+
+    prog_handle = weaver_util::sha256_chararr(buf, file_sz);
+
+    message::message msg;
+    WDEBUG << "file sz addr = " << &file_sz << std::endl;
+    msg.prepare_message(message::REGISTER_NODE_PROG,
+                        (void*)&file_sz,
+                        prog_handle,
+                        (const char*)buf);
+    send_coord(msg.buf);
+
+    delete[] buf;
+
+    return WEAVER_CLIENT_SUCCESS;
 }
 
 weaver_client_returncode

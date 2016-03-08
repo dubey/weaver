@@ -36,6 +36,7 @@
 #include "node_prog/node_prog_type.h"
 #include "node_prog/node_program.h"
 #include "node_prog/base_classes.h"
+#include "node_prog/dynamic_prog_table.h"
 
 #define XML_CHUNK_SZ 10000
 
@@ -47,6 +48,14 @@ using node_prog::Node_Parameters_Base;
 using node_prog::Node_State_Base;
 using node_prog::np_param_ptr_t;
 using node_prog::np_state_ptr_t;
+using node_prog::param_ctor_func_t;
+using node_prog::param_size_func_t;
+using node_prog::param_pack_func_t;
+using node_prog::param_unpack_func_t;
+using node_prog::state_ctor_func_t;
+using node_prog::state_size_func_t;
+using node_prog::state_pack_func_t;
+using node_prog::state_unpack_func_t;
 
 // global static variables
 static uint64_t shard_id;
@@ -1917,10 +1926,9 @@ inline void node_prog_loop(uint64_t tid,
                 break;
             }
 
-            typedef np_state_ptr_t (*create_state_ptr_t)();
-            create_state_ptr_t state_creator = (create_state_ptr_t)dlsym(prog_handle, "ctor_prog_state");
+            dynamic_prog_table *prog_table = (dynamic_prog_table*)prog_handle;
             node_state_getter = std::bind(get_state,
-                                          state_creator,
+                                          prog_table->state_ctor,
                                           np.req_id,
                                           node,
                                           &np.nodes_that_created_state);
@@ -1934,7 +1942,7 @@ inline void node_prog_loop(uint64_t tid,
                     db::remote_node &rn,
                     np_param_ptr_t,
                     std::function<Node_State_Base&()> state_getter);
-            prog_ptr_t prog_ptr = (prog_ptr_t)dlsym(prog_handle, "node_program");
+            prog_ptr_t prog_ptr = prog_table->node_program;
 
             // call node program
             WDEBUG << "calling node program at node=" << node_handle << std::endl;
@@ -3149,7 +3157,8 @@ main(int argc, const char *argv[])
         WDEBUG << "dlopen error: " << dlerror() << std::endl;
         assert(false);
     }
-    S->m_dyn_prog_map[0] = prog_handle;
+    dynamic_prog_table *trav_prog = new dynamic_prog_table(prog_handle);
+    S->m_dyn_prog_map[0] = (void*)trav_prog;
 
     std::vector<std::shared_ptr<pthread_t>> worker_threads;
 
