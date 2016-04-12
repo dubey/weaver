@@ -323,7 +323,7 @@ cdef extern from 'node_prog/edge_count_program.h' namespace 'node_prog':
 
 class EdgeCountParams:
     def __init__(self, edges_props=None, edge_count=0):
-        initialize_member_list(edges_props, self.edges_props)
+        self.edges_props = initialize_member_list(edges_props)
         self.edge_count = edge_count
 
 cdef extern from 'node_prog/edge_get_program.h' namespace 'node_prog':
