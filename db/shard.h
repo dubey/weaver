@@ -1146,6 +1146,7 @@ namespace db
                                            uint64_t block_index)
     {
         bool in_mem;
+        node_handle_t nh = n->get_handle();
 
         node_map_mutexes[map_idx].lock();
         if (nodes[map_idx].find(n->get_handle()) != nodes[map_idx].end()) {

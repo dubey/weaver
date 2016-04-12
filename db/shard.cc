@@ -577,15 +577,15 @@ load_xml_edge(pugi::xml_document &doc,
     uint64_t map_idx = get_map_idx(id0);
     assert((loc0 == shard_id) && ((int)map_idx % load_nthreads == owner_tid));
 
+    node_handle_t id1 = edge.attribute("target").value();
+    edge_handle_t edge_handle = edge.attribute("id").value();
+    uint64_t loc1 = (hash_node_handle(id1) % num_shards) + ShardIdIncr;
+
     check_node(id0,
                owner_tid, this_tid,
                hstub, other_hstub,
                static_args,
                elem_count);
-
-    node_handle_t id1 = edge.attribute("target").value();
-    edge_handle_t edge_handle = edge.attribute("id").value();
-    uint64_t loc1 = (hash_node_handle(id1) % num_shards) + ShardIdIncr;
 
     db::edge *e = S->create_edge_bulk_load(edge_handle, id1, loc1, zero_clk);
     bool in_mem = S->add_edge_to_node_bulk_load(e, id0, map_idx);
