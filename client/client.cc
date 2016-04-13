@@ -36,7 +36,7 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     , logging(false)
 {
     if (!init_config_constants(config_file)) {
-        std::cerr << "weaver_client: error in init_config_constants, config file=" << config_file << std::endl;
+        CLIENTLOG << "weaver_client: error in init_config_constants, config file=" << config_file << std::endl;
         init = false;
         std::string except_message = "could not initialize configuration constants from file ";
         except_message += config_file;
@@ -47,6 +47,7 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
     std::mt19937_64 generator(rd());
     std::uniform_int_distribution<uint64_t> distribution(0, NumVts-1);
     vtid = distribution(generator);
+    CLIENTLOG << "client vt = " << vtid << std::endl;
 
     if (!m_sm.get_unique_number(myid)) {
         init = false;

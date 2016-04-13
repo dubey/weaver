@@ -21,7 +21,7 @@ import weaver.client as client
 
 num_started = 0
 num_finished = 0
-num_clients = 40
+num_clients = 15
 cv = threading.Condition()
 all_latencies = []
 
@@ -32,7 +32,7 @@ class request_gen:
         #self.num_nodes = 81306 # snap twitter-combined
         #self.num_nodes = 4840000 # snap livejournal
 
-        self.p_read = 1
+        self.p_read = 0.75 # p_write = 1 - p_read
         self.p_assoc_get = 0.157
         self.p_assoc_range = 0.437
         self.p_assoc_count = 0.117
@@ -42,7 +42,6 @@ class request_gen:
         self.c_assoc_count = self.c_assoc_range + self.p_assoc_count
         self.c_obj_get = self.c_assoc_count + self.p_obj_get
 
-        self.p_write = 0.002
         self.p_assoc_add = 0.8
         self.p_assoc_del = 0.2
         self.p_assoc_update = 0.207
@@ -130,7 +129,6 @@ def exec_work(idx, cl, num_requests):
             cl.begin_tx()
             new_edge = cl.create_edge(req[1], req[2])
             cl.end_tx()
-            print 'done tx 4'
             edge_list.append(new_edge)
             edge_parent_list.append(req[1])
         elif req[0] == 5: # assoc del
@@ -140,7 +138,6 @@ def exec_work(idx, cl, num_requests):
                 del_edge_node = edge_parent_list.pop()
                 cl.delete_edge(del_edge, del_edge_node)
                 cl.end_tx()
-            print 'done tx 5'
         #elif req[0] == 6: # assoc update
         #    tx_id = cl.begin_tx()
         #    if len(edge_list) > 0:

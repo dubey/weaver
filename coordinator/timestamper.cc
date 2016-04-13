@@ -386,12 +386,12 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     // process loc map
     // hack around bug: should be storing shard id in HyperDex, not server
-    if (ShardIdIncr > 1) {
-        uint64_t increment = ShardIdIncr - 1;
-        for (auto &p: loc_map) {
-            p.second += increment;
-        }
-    }
+    //if (ShardIdIncr > 1) {
+    //    uint64_t increment = ShardIdIncr - 1;
+    //    for (auto &p: loc_map) {
+    //        p.second += increment;
+    //    }
+    //}
 
     for (const auto &p: initial_args) {
         initial_batches[loc_map[p.first]].emplace_back(p);
@@ -416,7 +416,7 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     for (auto &batch_pair: initial_batches) {
         msg_to_send.prepare_message(message::NODE_PROG, pType, vt_id, req_timestamp, req_id, cp_int, batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
-        WDEBUG << "send node prog=" << req_id << " to shard=" << batch_pair.first << std::endl;
+        //WDEBUG << "send node prog=" << req_id << " to shard=" << batch_pair.first << std::endl;
     }
 
 #ifdef weaver_benchmark_
@@ -645,7 +645,7 @@ server_loop(void *args)
 
                     if (to_process) {
                         vts->comm.send_to_client(client, msg->buf);
-                        WDEBUG << "done node prog=" << req_id << " and sent to client=" << client << std::endl;
+                        //WDEBUG << "done node prog=" << req_id << " and sent to client=" << client << std::endl;
 #ifdef weaver_benchmark_
                         vts->test_mtx.lock();
                         vts->outstanding_cnt--;
