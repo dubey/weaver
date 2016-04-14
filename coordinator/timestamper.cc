@@ -22,6 +22,7 @@
 #include <pthread.h>
 
 #define weaver_debug_
+#include "common/clock.h"
 #include "common/vclock.h"
 #include "common/transaction.h"
 #include "common/event_order.h"
@@ -146,18 +147,18 @@ nop_function()
     sleep_time.tv_sec  = RdNopPeriod / NANO;
     sleep_time.tv_nsec = RdNopPeriod % NANO;
 
-    double timeout_secs = RdNopPeriod / 1000000000.0;
-    double kronos_secs  = 1.0; // kronos cleanup every 1 s
-    double kronos_freq  = kronos_secs/timeout_secs;
-    double kronos_count = 0;
+    wclock::weaver_timer timer;
+    uint64_t kronos_period = NANO; // kronos cleanup every 1 s
+    uint64_t kronos_time   = timer.get_time_elapsed();
     bool kronos_call;
 
     while (true) {
         sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, nullptr);
         assert((sleep_ret == 0 || sleep_ret == EINTR) && "error in clock_nanosleep");
-
-        if (++kronos_count > kronos_freq) {
+        uint64_t cur_kronos_time = timer.get_time_elapsed();
+        if (cur_kronos_time - kronos_time > kronos_period) {
             kronos_call = true;
+            kronos_time = cur_kronos_time;
         } else {
             kronos_call = false;
         }
@@ -220,6 +221,7 @@ nop_function()
         }
 
         if (kronos_call) {
+            WDEBUG << "Kronos call" << std::endl;
             int64_t id;
             chronos_returncode call_code, wait_code;
 
@@ -233,22 +235,20 @@ nop_function()
             }
 
             // for debugging
-            //ssize_t ret;
-            //chronos_stats stats;
-            //id = kronos.get_stats(&call_code, &stats, &ret);
-            //id = kronos.wait(id, 100000, &wait_code);
+            ssize_t ret;
+            chronos_stats stats;
+            id = kronos.get_stats(&call_code, &stats, &ret);
+            id = kronos.wait(id, 100000, &wait_code);
 
-            //if (call_code == CHRONOS_SUCCESS && wait_code == CHRONOS_SUCCESS) {
-            //    WDEBUG << "Kronos stats:" << std::endl;
-            //    WDEBUG << "\tTime:\t" << stats.time << std::endl;
-            //    WDEBUG << "\tEvents:\t" << stats.events << std::endl;
-            //    WDEBUG << "\tCount Weaver order:\t" << stats.count_weaver_order << std::endl;
-            //    WDEBUG << "\tCount Weaver cleanup:\t" << stats.count_weaver_cleanup << std::endl;
-            //} else {
-            //    WDEBUG << "Kronos get_stats: call code " << call_code << ", wait code " << wait_code << std::endl;
-            //}
-
-            kronos_count = 0;
+            if (call_code == CHRONOS_SUCCESS && wait_code == CHRONOS_SUCCESS) {
+                WDEBUG << "Kronos stats:" << std::endl;
+                WDEBUG << "\tTime:\t" << stats.time << std::endl;
+                WDEBUG << "\tEvents:\t" << stats.events << std::endl;
+                WDEBUG << "\tCount Weaver order:\t" << stats.count_weaver_order << std::endl;
+                WDEBUG << "\tCount Weaver cleanup:\t" << stats.count_weaver_cleanup << std::endl;
+            } else {
+                WDEBUG << "Kronos get_stats: call code " << call_code << ", wait code " << wait_code << std::endl;
+            }
         }
     }
 }

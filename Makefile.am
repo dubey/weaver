@@ -124,6 +124,7 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
 		                    common/server_manager_link_wrapper.cc \
 		                    common/hyper_stub_base.cc \
 		                    common/event_order.cc \
+		                    common/clock.cc \
 		                    common/vclock.cc \
                             common/transaction.cc \
 		                    common/stl_serialization.cc \
