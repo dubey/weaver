@@ -133,6 +133,14 @@ namespace weaver_util
 
         return token;
     }
+
+    // random double in (0, 1)
+    inline double
+    urandom_double()
+    {
+        double rand_uint64 = urandom_uint64();
+        return rand_uint64 / UINT64_MAX;
+    }
 }
 
 

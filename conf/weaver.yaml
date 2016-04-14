@@ -3,7 +3,7 @@
 
 # Number of vector timestampers.
 # Default: 1
-num_vts     : 1
+num_vts     : 2
 
 # Number of cache entries per node for node programs.  0 means no caching.
 # Default: 0
@@ -63,3 +63,15 @@ nodes_per_map: 100000
 
 # max memory to be used as ratio of total system memory
 max_memory: 0.95
+
+# number of nanoseconds between successive read nops
+# default: 100000
+rd_nop_period: 10000
+
+# number of nanoseconds between successive write nops (in expectation)
+# default: 10000000
+wr_nop_period: 1000000
+
+# number of nanoseconds between vt gossip
+# default: 10000
+clk_gossip_period: 10000

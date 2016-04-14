@@ -21,14 +21,27 @@
 
 namespace db
 {
+    enum qreq_type
+    {
+        NOP,
+        TX,
+        NODE_PROG,
+        OTHER
+    };
+
     class queued_request
     {
         public:
-            queued_request(uint64_t prio, vc::vclock vclk, void (*f)(uint64_t, message_wrapper*), message_wrapper *a)
+            queued_request(uint64_t prio,
+                           vc::vclock vclk,
+                           void (*f)(uint64_t, message_wrapper*),
+                           message_wrapper *a,
+                           qreq_type t)
                 : priority(prio)
                 , vclock(vclk)
                 , func(f)
                 , arg(a)
+                , type(t)
             { }
 
         public:
@@ -36,6 +49,7 @@ namespace db
             vc::vclock vclock;
             void (*func)(uint64_t, message_wrapper*);
             message_wrapper *arg;
+            qreq_type type;
     };
 
     // for work queues

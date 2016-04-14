@@ -140,19 +140,23 @@ nop_function()
     int sleep_flags = 0;
     std::shared_ptr<transaction::pending_tx> tx = nullptr;
 
-    uint64_t loop_count = 0;
-    bool kronos_call;
     chronos_client kronos(KronosIpaddr.c_str(), KronosPort);
     vc::vclock_t kronos_cleanup_clk(ClkSz, 0);
 
-    sleep_time.tv_sec  = VT_TIMEOUT_NANO / NANO;
-    sleep_time.tv_nsec = VT_TIMEOUT_NANO % NANO;
+    sleep_time.tv_sec  = RdNopPeriod / NANO;
+    sleep_time.tv_nsec = RdNopPeriod % NANO;
+
+    double timeout_secs = RdNopPeriod / 1000000000.0;
+    double kronos_secs  = 1.0; // kronos cleanup every 1 s
+    double kronos_freq  = kronos_secs/timeout_secs;
+    double kronos_count = 0;
+    bool kronos_call;
 
     while (true) {
         sleep_ret = clock_nanosleep(CLOCK_REALTIME, sleep_flags, &sleep_time, nullptr);
         assert((sleep_ret == 0 || sleep_ret == EINTR) && "error in clock_nanosleep");
 
-        if (++loop_count > 100000000) {
+        if (++kronos_count > kronos_freq) {
             kronos_call = true;
         } else {
             kronos_call = false;
@@ -244,7 +248,7 @@ nop_function()
             //    WDEBUG << "Kronos get_stats: call code " << call_code << ", wait code " << wait_code << std::endl;
             //}
 
-            loop_count = 0;
+            kronos_count = 0;
         }
     }
 }
@@ -260,8 +264,8 @@ clk_update_function(void*)
     uint64_t config_version;
     std::vector<server::state_t> vts_state(NumVts, server::NOT_AVAILABLE);
 
-    sleep_time.tv_sec  = VT_CLK_TIMEOUT_NANO / NANO;
-    sleep_time.tv_nsec = VT_CLK_TIMEOUT_NANO % NANO;
+    sleep_time.tv_sec  = ClkGossipPeriod / NANO;
+    sleep_time.tv_nsec = ClkGossipPeriod % NANO;
 
     vts->periodic_update_mutex.lock();
     config_version = vts->periodic_update_config.version();

@@ -27,7 +27,8 @@ namespace db
     {
         PAST,
         PRESENT,
-        FUTURE
+        FUTURE,
+        UNDECIDED
     };
 
     // priority queue type definition
@@ -41,6 +42,7 @@ namespace db
             std::vector<pqueue_t> wr_queues;
             std::vector<vc::vclock_t> last_clocks; // records last transaction vclock pulled of queue for each vector timestamper
             std::vector<vc::vclock_t*> last_clocks_ptr; // vector of previous vector's entry's pointers
+            std::vector<vc::vclock_t*> wr_clocks_ptr; // vector of clock pointers to avoid allocation on every call
             vc::qtimestamp_t qts; // queue timestamps
             std::vector<uint64_t> min_epoch;
             po6::threads::mutex queue_mutex;
@@ -50,8 +52,12 @@ namespace db
             queued_request* get_rd_req();
             queued_request* get_wr_req();
             queued_request* get_rw_req();
-            bool check_rd_req_nonlocking(vc::vclock_t &clk);
+            bool check_last_clocks_nonlocking(vc::vclock_t &clk);
+            bool check_queues_empty();
+            bool check_all_nops(std::vector<uint64_t> &nops_idx);
+            enum queue_order check_wr_queue_single(uint64_t vt_id, uint64_t qt);
             enum queue_order check_wr_queues_timestamps(uint64_t vt_id, uint64_t qt);
+            enum queue_order check_wr_request_nonlocking(vc::vclock &vclk, uint64_t qt);
 
         public:
             queue_manager();
@@ -59,6 +65,8 @@ namespace db
             bool check_rd_request(vc::vclock_t &clk);
             void enqueue_write_request(uint64_t vt_id, queued_request*);
             enum queue_order check_wr_request(vc::vclock &vclk, uint64_t qt);
+            bool check_rd_nop(vc::vclock &vclk, uint64_t qt);
+            bool check_wr_nop(vc::vclock &vclk, uint64_t qt);
             bool exec_queued_request(uint64_t tid, order::oracle *time_oracle);
             void increment_qts(uint64_t vt_id, uint64_t incr);
             void record_completed_tx(vc::vclock &tx_clk);

@@ -2374,6 +2374,12 @@ server_loop_busybee(uint64_t thread_id)
     enum db::queue_order tx_order;
     order::oracle *time_oracle = S->time_oracles[thread_id];
 
+    double wr_nop_prob = (RdNopPeriod*1.0) / WrNopPeriod;
+    if (wr_nop_prob > 1) {
+        wr_nop_prob = 1;
+    }
+    WDEBUG << "write nop probability = " << wr_nop_prob << std::endl;
+
     while (true) {
         S->comm.quiesce_thread(thread_id);
         rec_msg.reset(new message::message());
@@ -2404,8 +2410,33 @@ server_loop_busybee(uint64_t thread_id)
 
                 if (txtype == transaction::NOP) {
                     mwrap = new db::message_wrapper(mtype, std::move(rec_msg));
-                    qreq = new db::queued_request(qts, vclk, nop, mwrap);
+                    //nop(thread_id, mwrap);
+                    qreq = new db::queued_request(qts, vclk, nop, mwrap, db::NOP);
                     S->qm.enqueue_write_request(vt_id, qreq);
+
+                    //double coin_toss = weaver_util::urandom_double();
+                    //bool to_enqueue = false;
+                    //if (coin_toss < wr_nop_prob) {
+                    //    // this is a write nop
+                    //    // first check if nop needed at all, i.e. if any of the other queues nonempty
+                    //    // then perform regular wr tx check
+                    //    if (!S->qm.check_wr_nop(vclk, qts)) {
+                    //        to_enqueue = true;
+                    //        WDEBUG << "enqueuing NOP from " << vclk.vt_id << " due to coin toss" << std::endl;
+                    //    }
+                    //} else if (!S->qm.check_rd_nop(vclk, qts)) {
+                    //    // this is a rd nop
+                    //    // needs to be enqueued because this is not the next tx from the vt
+                    //    to_enqueue = true;
+                    //    WDEBUG << "enqueuing NOP from " << vclk.vt_id << " due to check rd nop" << std::endl;
+                    //}
+
+                    //if (to_enqueue) {
+                    //    qreq = new db::queued_request(qts, vclk, nop, mwrap, db::NOP);
+                    //    S->qm.enqueue_write_request(vt_id, qreq);
+                    //} else {
+                    //    nop(thread_id, mwrap);
+                    //}
                 } else {
                     if (S->check_done_tx(tx_id)) {
                         // tx already executed, this must have been resent because of vt failure
@@ -2423,7 +2454,7 @@ server_loop_busybee(uint64_t thread_id)
                             unpack_tx_request(thread_id, mwrap);
                         } else {
                             // enqueue for future execution
-                            qreq = new db::queued_request(qts, vclk, unpack_tx_request, mwrap);
+                            qreq = new db::queued_request(qts, vclk, unpack_tx_request, mwrap, db::TX);
                             S->qm.enqueue_write_request(vt_id, qreq);
                         }
                     }
@@ -2441,7 +2472,7 @@ server_loop_busybee(uint64_t thread_id)
                     mwrap->time_oracle = time_oracle;
                     unpack_node_program(thread_id, mwrap);
                 } else {
-                    qreq = new db::queued_request(vclk.get_clock(), vclk, unpack_node_program, mwrap);
+                    qreq = new db::queued_request(vclk.get_clock(), vclk, unpack_node_program, mwrap, db::NODE_PROG);
                     S->qm.enqueue_read_request(vt_id, qreq);
                 }
                 break;
@@ -2462,7 +2493,7 @@ server_loop_busybee(uint64_t thread_id)
                     mwrap->time_oracle = time_oracle;
                     f(thread_id, mwrap);
                 } else {
-                    qreq = new db::queued_request(vclk.get_clock(), vclk, f, mwrap);
+                    qreq = new db::queued_request(vclk.get_clock(), vclk, f, mwrap, db::OTHER);
                     S->qm.enqueue_read_request(vt_id, qreq);
                 }
                 break;

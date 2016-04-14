@@ -163,6 +163,7 @@ oracle :: equal_or_happens_before_no_kronos(const vc::vclock_t &vclk1, const vc:
 int64_t
 oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
 {
+    //return ((int64_t)weaver_util::urandom_uint64() % clocks.size());
     //XXX static uint32_t rev_count = 0;
 
     std::vector<bool> large;

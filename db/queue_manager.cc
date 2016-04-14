@@ -50,7 +50,7 @@ queue_manager :: check_rd_request(vc::vclock_t &clk)
 {
     //return true;
     queue_mutex.lock();
-    bool check = check_rd_req_nonlocking(clk);
+    bool check = check_last_clocks_nonlocking(clk);
     queue_mutex.unlock();
     return check;
 }
@@ -67,43 +67,116 @@ queue_manager :: enqueue_write_request(uint64_t vt_id, queued_request *t)
     queue_mutex.unlock();
 }
 
+//// true if all queues empty
+//bool
+//queue_manager :: check_queues_empty()
+//{
+//    for (uint64_t i = 0; i < NumVts; i++) {
+//        pqueue_t &pq = wr_queues[i];
+//        if (!pq.empty()) {
+//            WDEBUG << "all queues not empty" << std::endl;
+//            return false;
+//        }
+//    }
+//
+//    return true;
+//}
+
 // check if write request received in thread loop can be executed without waiting
 // this does not call Kronos, so if vector clocks cannot be compared, the request will be pushed on write queue
 enum queue_order
-queue_manager :: check_wr_request(vc::vclock &vclk, uint64_t qt)
+queue_manager :: check_wr_request_nonlocking(vc::vclock &vclk, uint64_t qt)
 {
-    enum queue_order ret = FUTURE;
-    queue_mutex.lock();
-    enum queue_order cur_order = check_wr_queues_timestamps(vclk.vt_id, qt);
-    assert(cur_order != PAST);
+    enum queue_order ret = UNDECIDED;
 
-    if (cur_order == PRESENT) {
-        // all write queues (possibly except vt_id) good to go
-        if (NumVts == 1) {
+    // short circuit check
+    // this is the next tx from vt_id and vclk is less than all last_clocks
+    // no Kronos call
+    enum queue_order single_order = check_wr_queue_single(vclk.vt_id, qt);
+    if (NumVts == 1) {
+        ret = single_order;
+    } else if (single_order == PRESENT) {
+        if (check_last_clocks_nonlocking(vclk.clock)) {
             ret = PRESENT;
-        } else {
+        }
+    }
+
+    // if above check did not pan out, then actually compare against
+    // tx at the head of each wr queue
+    if (ret == UNDECIDED) {
+        assert(NumVts > 1);
+
+        enum queue_order cur_order = check_wr_queues_timestamps(vclk.vt_id, qt);
+        assert(cur_order != PAST);
+
+        if (cur_order == PRESENT) {
+            // all write queues (possibly except vt_id) good to go
             // compare vector clocks, NO Kronos call
-            std::vector<vc::vclock_t*> others;
-            others.reserve(NumVts-1);
-            for (uint64_t i = 0; i < NumVts; i++) {
+            wr_clocks_ptr.resize(NumVts-1, nullptr);
+            for (uint64_t i = 0, j = 0; i < NumVts; i++) {
                 if (i == vclk.vt_id) {
                     continue;
                 } else {
-                    others.emplace_back(&wr_queues[i].top()->vclock.clock);
+                    wr_clocks_ptr[j++] = &wr_queues[i].top()->vclock.clock;
                 }
             }
-            if (order::oracle::happens_before_no_kronos(vclk.clock, others)) {
+            if (order::oracle::happens_before_no_kronos(vclk.clock, wr_clocks_ptr)) {
                 ret = PRESENT;
             } else {
                 ret = FUTURE;
             }
+        } else {
+            ret = FUTURE;
         }
-    } else {
-        ret = FUTURE;
     }
-    queue_mutex.unlock();
+
+    assert(ret != UNDECIDED);
     return ret;
 }
+
+enum queue_order
+queue_manager :: check_wr_request(vc::vclock &vclk, uint64_t qt)
+{
+    queue_mutex.lock();
+    enum queue_order ret = check_wr_request_nonlocking(vclk, qt);
+    queue_mutex.unlock();
+
+    return ret;
+}
+
+//// check if this is the next expected wr tx from the timestamper
+//// if yes, then can execute nop
+//bool
+//queue_manager :: check_rd_nop(vc::vclock &vclk, uint64_t qt)
+//{
+//    enum queue_order ret = UNDECIDED;
+//
+//    queue_mutex.lock();
+//    if (check_queues_empty()) {
+//        ret = check_wr_queue_single(vclk.vt_id, qt);
+//    }
+//    queue_mutex.unlock();
+//
+//    return (ret == PRESENT);
+//}
+//
+//// check if any other queue nonempty
+//// then check_wr_req
+//bool
+//queue_manager :: check_wr_nop(vc::vclock &vclk, uint64_t qt)
+//{
+//    bool ret = false;
+//
+//    queue_mutex.lock();
+//    if (check_queues_empty()) {
+//        ret = true;
+//    } else {
+//        ret = (PRESENT == check_wr_request_nonlocking(vclk, qt));
+//    }
+//    queue_mutex.unlock();
+//
+//    return ret;
+//}
 
 // check all read and write queues
 // execute a single queued request which can be run now, and return true
@@ -148,8 +221,9 @@ queue_manager :: record_completed_tx(vc::vclock &tx_clk)
 }
 
 bool
-queue_manager :: check_rd_req_nonlocking(vc::vclock_t &clk)
+queue_manager :: check_last_clocks_nonlocking(vc::vclock_t &clk)
 {
+    //return true;
     // no kronos call
     return order::oracle::happens_before_no_kronos(clk, last_clocks_ptr);
 }
@@ -163,13 +237,49 @@ queue_manager :: get_rd_req()
         // execute read request after all write queues have processed write which happens after this read
         if (!pq.empty()) {
             req = pq.top();
-            if (check_rd_req_nonlocking(req->vclock.clock)) {
+            if (check_last_clocks_nonlocking(req->vclock.clock)) {
                 pq.pop();
                 return req;
             }
         }
     }
     return nullptr;
+}
+
+// check that "qt" is the next write expected from "vt_id"
+enum queue_order
+queue_manager :: check_wr_queue_single(uint64_t vt_id, uint64_t qt)
+{
+    assert(qt > qts[vt_id]);
+    if (qt > (qts[vt_id]+1)) {
+        return FUTURE;
+    } else {
+        return PRESENT;
+    }
+}
+
+// true if all queues either empty or have nop at head
+// return indices of nops
+bool
+queue_manager :: check_all_nops(std::vector<uint64_t> &nops_idx)
+{
+    uint64_t num_empty = 0;
+
+    for (uint64_t i = 0; i < NumVts; i++) {
+        pqueue_t &pq = wr_queues[i];
+        if (pq.empty()) {
+            num_empty++;
+        } else {
+            if (pq.top()->type == NOP
+             && (qts[i] + 1)   == pq.top()->priority) {
+                nops_idx.emplace_back(i);
+            } else {
+                return false;
+            }
+        }
+    }
+
+    return (num_empty != NumVts);
 }
 
 enum queue_order
@@ -200,26 +310,35 @@ queue_manager :: check_wr_queues_timestamps(uint64_t vt_id, uint64_t qt)
 queued_request*
 queue_manager :: get_wr_req()
 {
-    enum queue_order queue_status = check_wr_queues_timestamps(UINT64_MAX, UINT64_MAX);
-    assert(queue_status != PAST);
-    if (queue_status == FUTURE) {
-        return nullptr;
+    uint64_t exec_vt_id;
+
+    std::vector<uint64_t> nops_idx;
+    check_all_nops(nops_idx);
+    if (check_all_nops(nops_idx)) {
+        uint64_t choose_idx = weaver_util::urandom_uint64() % nops_idx.size();
+        exec_vt_id = nops_idx[choose_idx];
+    } else {
+        enum queue_order queue_status = check_wr_queues_timestamps(UINT64_MAX, UINT64_MAX);
+        assert(queue_status != PAST);
+        if (queue_status == FUTURE) {
+            return nullptr;
+        }
+
+        // all write queues are good to go
+        if (NumVts == 1) {
+            exec_vt_id = 0; // only one timestamper
+        } else {
+            // compare timestamps, may call Kronos
+            std::vector<vc::vclock> timestamps;
+            timestamps.reserve(NumVts);
+            for (uint64_t vt_id = 0; vt_id < NumVts; vt_id++) {
+                timestamps.emplace_back(wr_queues[vt_id].top()->vclock);
+                assert(timestamps.back().clock.size() == ClkSz);
+            }
+            exec_vt_id = time_oracle.compare_vts(timestamps);
+        }
     }
 
-    // all write queues are good to go
-    uint64_t exec_vt_id;
-    if (NumVts == 1) {
-        exec_vt_id = 0; // only one timestamper
-    } else {
-        // compare timestamps, may call Kronos
-        std::vector<vc::vclock> timestamps;
-        timestamps.reserve(NumVts);
-        for (uint64_t vt_id = 0; vt_id < NumVts; vt_id++) {
-            timestamps.emplace_back(wr_queues[vt_id].top()->vclock);
-            assert(timestamps.back().clock.size() == ClkSz);
-        }
-        exec_vt_id = time_oracle.compare_vts(timestamps);
-    }
     queued_request *req = wr_queues[exec_vt_id].top();
     wr_queues[exec_vt_id].pop();
     return req;

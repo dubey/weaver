@@ -38,6 +38,9 @@ init_config_constants(const char *config_file_name)
     BulkLoadEdgeHandlePrefix = "e";
     NodesPerMap = 2;
     MaxMemory = 0.5;
+    RdNopPeriod     = 100000;
+    WrNopPeriod     = 100*RdNopPeriod;
+    ClkGossipPeriod = 10000;
 
     FILE *config_file = nullptr;
     if (config_file_name != nullptr) {
@@ -233,6 +236,21 @@ init_config_constants(const char *config_file_name)
                     yaml_token_delete(&token);
                     PARSE_VALUE_SCALAR;
                     PARSE_FLOAT(MaxMemory);
+
+                } else if (strncmp((const char*)token.data.scalar.value, "rd_nop_period", TOKEN_STRCMP_LEN(13)) == 0) {
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
+                    PARSE_INT(RdNopPeriod);
+
+                } else if (strncmp((const char*)token.data.scalar.value, "wr_nop_period", TOKEN_STRCMP_LEN(13)) == 0) {
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
+                    PARSE_INT(WrNopPeriod);
+
+                } else if (strncmp((const char*)token.data.scalar.value, "clk_gossip_period", TOKEN_STRCMP_LEN(17)) == 0) {
+                    yaml_token_delete(&token);
+                    PARSE_VALUE_SCALAR;
+                    PARSE_INT(ClkGossipPeriod);
 
                 } else {
                     WDEBUG << "unexpected key " << token.data.scalar.value << std::endl;
