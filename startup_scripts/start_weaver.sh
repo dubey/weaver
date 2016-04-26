@@ -14,9 +14,9 @@ fi
 
 if [ -z "$WEAVER_BUILDDIR" ]
 then
-    if [ -e /home/dubey/installs/lib/libweaverservermanager.so ]
+    if [ -e /usr/local/lib/libweaverservermanager.so ]
     then
-        weaver_libdir=/home/dubey/installs/lib
+        weaver_libdir=/usr/local/lib
     else
         if [ -e /usr/lib/libweaverservermanager.so ]
         then

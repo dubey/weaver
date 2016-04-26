@@ -670,6 +670,12 @@ hyper_stub :: loop_async_and_flush(uint64_t num_ops_to_leave,
                     WDEBUG << "Unexpected hyperdex op code, here are some details." << std::endl;
                     WDEBUG << "type=" << async_call_type_to_string(ac_ptr->type)
                            << ", call_code=" << hyperdex_client_returncode_to_string(ac_ptr->status) << std::endl;
+                    if (ac_ptr->type == PUT_EDGE_ID) {
+                        apei_ptr_t apei = std::static_pointer_cast<async_put_edge_id>(ac_ptr);
+                        WDEBUG << "edge_id=" << apei->edge_id
+                               << ", edge_handle=" << apei->edge_handle
+                               << std::endl;
+                    }
                     abort_bulk_load();
             }
 

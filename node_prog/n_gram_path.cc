@@ -104,6 +104,103 @@ n_gram_path_state :: unpack(e::unpacker &unpacker)
     (void)unpacker;
 }
 
+// parse the string 'line' as a uint32_t starting at index 'idx' till the first non-digit or end of string
+// store result in 'n'
+// if overflow occurs or unexpected char encountered, store true in 'bad'
+inline void
+parse_single_uint32(const std::string &line, size_t &idx, uint32_t &n, bool &bad)
+{
+    uint32_t next_digit;
+    static uint32_t zero = '0';
+    static uint32_t max32_div10 = UINT32_MAX / 10;
+    n = 0;
+    while (idx < line.length()
+        && (line[idx] == '0'
+         || line[idx] == '1'
+         || line[idx] == '2'
+         || line[idx] == '3'
+         || line[idx] == '4'
+         || line[idx] == '5'
+         || line[idx] == '6'
+         || line[idx] == '7'
+         || line[idx] == '8'
+         || line[idx] == '9')) {
+        next_digit = line[idx] - zero;
+        if (next_digit > 9) { // unexpected char
+            bad = true;
+            WDEBUG << "Unexpected char with ascii " << (int)line[idx]
+                   << " in parsing int, num currently is " << n << std::endl;
+            break;
+        }
+        if (n > max32_div10) { // multiplication overflow
+            bad = true;
+            WDEBUG << "multiplication overflow" << std::endl;
+            break;
+        }
+        n *= 10;
+        if ((n + next_digit) < n) { // addition overflow
+            bad = true;
+            WDEBUG << "addition overflow" << std::endl;
+            break;
+        }
+        n += next_digit;
+        ++idx;
+    }
+}
+
+#define TEST_BAD \
+    if (bad) { \
+        docs.clear(); \
+        return; \
+    }
+void
+parse_locs(const std::string &prop,
+           std::unordered_map<uint32_t, doc_info> &docs)
+{
+    bool bad = false;
+    for (size_t i = 0; i < prop.size(); i++) {
+        if (prop[i] == '(') {
+            doc_info cur_doc;
+
+            // get doc id
+            i++;
+            uint32_t doc_id;
+            parse_single_uint32(prop, i, doc_id, bad);
+            TEST_BAD;
+            if (prop[i] != ',') {
+                docs.clear();
+                return;
+            }
+
+            // get date
+            i += 2;
+            cur_doc.date = prop.substr(i, 4);
+
+            // get locs
+            while (prop[i] != '[') {
+                i++;
+            }
+            i++;
+            while (true) {
+                uint32_t pos;
+                parse_single_uint32(prop, i, pos, bad);
+                TEST_BAD;
+                cur_doc.pos.emplace(pos);
+                if (prop[i] == ',') {
+                    i += 2;
+                } else if (prop[i] == ']') {
+                    break;
+                } else {
+                    docs.clear();
+                    return;
+                }
+            }
+
+            docs.emplace(doc_id, cur_doc);
+        }
+    }
+}
+
 std::pair<search_type, std::vector<std::pair<db::remote_node, n_gram_path_params>>>
 node_prog :: n_gram_path_node_program(node_prog::node &n,
    db::remote_node &rn,
@@ -129,25 +226,14 @@ node_prog :: n_gram_path_node_program(node_prog::node &n,
         if (params.remaining_path.empty()) {
             if (params.unigram) {
                 for (edge &e: n.get_edges()) {
-                    const db::remote_node &nbr = e.get_neighbor();
                     if (e.has_all_predicates(params.edge_preds)) {
                         doc_id = -1;
                         date   = "";
                         for (auto iter: e.get_properties()) {
-                            if (iter[0]->key == "doc") {
-                                doc_id = std::stoul(iter[0]->value);
-                            } else if (iter[0]->key == "date") {
-                                date = iter[0]->value;
+                            if (iter[0]->key == "locs") {
+                                parse_locs(iter[0]->value, params.doc_map);
                             }
                         }
-                        if (doc_id == (uint32_t)-1 || date.empty()) {
-                            WDEBUG << "doc property not found for edge: " +
-                                cur_handle + " -> " + nbr.handle + "\n";
-                            continue;
-                        }
-                        doc_info new_doc;
-                        new_doc.date = date;
-                        params.doc_map.emplace(doc_id, new_doc);
                     }
                 }
                 next.emplace_back(std::make_pair(params.coord, params));
