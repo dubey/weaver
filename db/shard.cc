@@ -788,6 +788,8 @@ load_graph(void *args)
             uint64_t chunk_count = 1;
             uint32_t elem_count;
             float prev_progress = 0;
+            wclock::weaver_timer timer;
+            uint64_t start_time = timer.get_real_time_millis();
 
             while (get_xml_element_chunk(file, elem_name_vec, elements, elem_count, load_nthreads, num_shards)) {
                 if (elem_count == 0) {
@@ -797,7 +799,10 @@ load_graph(void *args)
                 float file_cur_pos = file.tellg();
                 float progress     = ((float)file_cur_pos)/graph_file_sz * 100;
                 if (progress - prev_progress >= 0.1) {
-                    WDEBUG << "GRAPHML load progress=" << progress << std::endl;
+                    float time_elapsed = (timer.get_real_time_millis() - start_time) / 1000.0;
+                    WDEBUG << "GRAPHML load progress=" << progress
+                           << "\ttime=" << time_elapsed << " s."
+                           << std::endl;
                     prev_progress = progress;
                 }
 
@@ -1531,7 +1536,6 @@ propagate_node_progs(node_prog::node_prog_running_state<ParamsType, NodeStateTyp
     // 3
     //prog_batches.emplace_back(std::move(prop_progs));
     // 1
-    WDEBUG << "propagate node prog" << std::endl;
     while (!prop_progs.empty()) {
         std::deque<std::pair<node_handle_t, ParamsType>> progs;
         size_t num_progs;
@@ -1543,16 +1547,13 @@ propagate_node_progs(node_prog::node_prog_running_state<ParamsType, NodeStateTyp
         }
         assert(num_progs > 0);
 
-    WDEBUG << "propagate node prog" << std::endl;
         for (size_t i = 0; i < num_progs; i++) {
             progs.emplace_back(std::move(prop_progs[i]));
         }
         prog_batches.emplace_back(std::move(progs));
-    WDEBUG << "propagate node prog" << std::endl;
 
         prop_progs.erase(prop_progs.begin(), prop_progs.begin() + num_progs);
     }
-    WDEBUG << "propagate node prog" << std::endl;
 
     for (auto &progs: prog_batches) {
         message::message out_msg;
@@ -1566,7 +1567,6 @@ propagate_node_progs(node_prog::node_prog_running_state<ParamsType, NodeStateTyp
         S->comm.send(prop_shard, out_msg.buf);
         //WDEBUG << "send node prog=" << np.req_id << " to shard " << prop_shard << std::endl;
     }
-    WDEBUG << "propagate node prog" << std::endl;
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>
@@ -1708,12 +1708,10 @@ inline void node_prog_loop(uint64_t tid,
             assert(np.req_vclock != nullptr);
             assert(np.req_vclock->clock.size() == ClkSz);
             // call node program
-            WDEBUG << "calling node program at node=" << node_handle << std::endl;
             auto next_node_params = np.m_func(*node, this_node,
                     params, // actual parameters for this node program
                     node_state_getter, add_cache_func,
                     (node_prog::cache_response<CacheValueType>*) np.cache_value.get());
-            WDEBUG << "done node program at node=" << node_handle << std::endl;
             if (MaxCacheEntries) {
                 if (np.cache_value) {
                     auto state = get_state_if_exists(*node, np.req_id, np.m_type);
@@ -1723,11 +1721,9 @@ inline void node_prog_loop(uint64_t tid,
                 }
                 np.cache_value.reset(nullptr);
             }
-            WDEBUG << "here node program at node=" << node_handle << std::endl;
             node->base.view_time = nullptr; 
             node->base.time_oracle = nullptr;
             S->release_node(node);
-            WDEBUG << "here node program at node=" << node_handle << std::endl;
             np.start_node_params.pop_front(); // pop off this one before potentially add new front
 
             // batch the newly generated node programs for onward propagation
@@ -1745,7 +1741,6 @@ inline void node_prog_loop(uint64_t tid,
                     std::unique_ptr<message::message> m(new message::message());
                     m->prepare_message(message::NODE_PROG_RETURN, np.m_type, np.req_id, np.vt_prog_ptr, res.second);
                     S->comm.send(np.vt_id, m->buf);
-                    //WDEBUG << "done node prog=" << np.req_id << ", sending to server=" << np.vt_id << std::endl;
                     break; // can only send one message back
                 } else {
                     std::deque<std::pair<node_handle_t, ParamsType>> &next_deque = (rn.loc == S->shard_id) ? np.start_node_params : np.batched_node_progs[rn.loc];
@@ -1760,44 +1755,36 @@ inline void node_prog_loop(uint64_t tid,
                 }
             }
 #ifdef WEAVER_CLDG
-            WDEBUG << "here node program at node=" << node_handle << std::endl;
             S->msg_count_mutex.lock();
-            WDEBUG << "here node program at node=" << node_handle << std::endl;
             for (auto &p: agg_msg_count) {
                 S->agg_msg_count[p.first] += p.second;
             }
             S->msg_count_mutex.unlock();
-            WDEBUG << "here node program at node=" << node_handle << std::endl;
 #endif
         }
 
         uint64_t num_shards = get_num_shards();
         assert(np.batched_node_progs.size() < num_shards);
 
-        WDEBUG << "here node program at node=" << node_handle << std::endl;
         for (auto &loc_progs_pair : np.batched_node_progs) {
             propagate_node_progs(np, loc_progs_pair.first, num_shards, loc_progs_pair.second);
         }
-        WDEBUG << "here node program at node=" << node_handle << std::endl;
 
         if (MaxCacheEntries) {
             assert(np.cache_value == false); // unique ptr is not assigned
         }
     }
 
-    WDEBUG << "here node program at node=" << node_handle << std::endl;
     uint64_t num_shards = get_num_shards();
     if (!done_request) {
         for (auto &loc_progs_pair : np.batched_node_progs) {
             propagate_node_progs(np, loc_progs_pair.first, num_shards, loc_progs_pair.second);
         }
     }
-    WDEBUG << "here node program at node=" << node_handle << std::endl;
 
     if (!np.nodes_that_created_state.empty()) {
         S->mark_nodes_using_state(np.req_id, *np.req_vclock, np.nodes_that_created_state);
     }
-    WDEBUG << "here node program at node=" << node_handle << std::endl;
 }
 
 template <typename ParamsType, typename NodeStateType, typename CacheValueType>

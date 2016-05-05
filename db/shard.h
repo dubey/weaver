@@ -600,7 +600,12 @@ namespace db
                 // fetch node from HyperDex
                 vclock_ptr_t dummy_clk;
                 node *n = new node(node_handle, UINT64_MAX, dummy_clk, node_map_mutexes+map_idx);
+                WDEBUG << "recovering node " << node_handle << std::endl;
+                wclock::weaver_timer timer;
+                uint64_t start = timer.get_real_time_millis();
                 bool recovery_success = hstub[tid]->recover_node(*n);
+                uint64_t end   = timer.get_real_time_millis();
+                WDEBUG << "node recovery time = " << end-start << std::endl;
                 post_node_recovery(recovery_success,
                                    n,
                                    map_idx,
@@ -855,6 +860,7 @@ namespace db
             // error in loop call
            return false;
         }
+        WDEBUG << "node recovered from hyperdex " << n->get_handle() << std::endl;
 
         uint64_t map_idx = get_map_idx(n->get_handle());
         node_map_mutexes[map_idx].lock();

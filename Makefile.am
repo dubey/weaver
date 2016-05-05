@@ -384,6 +384,50 @@ weaver_test_bench_SOURCES=	tests/cpp/run.cc \
 							common/clock.cc
 weaver_test_bench_LDADD=	libweaverclient.la
 
+bin_PROGRAMS+=				weaver-test-hs
+weaver_test_hs_SOURCES=	tests/cpp/hyper_stub_perf.cc \
+						common/hyper_stub_base.cc \
+                        common/event_order.cc \
+						common/clock.cc \
+						common/vclock.cc \
+						common/transaction.cc \
+						common/stl_serialization.cc \
+						common/weaver_serialization.cc \
+						common/enum_serialization.cc \
+						common/message.cc \
+						common/message_graph_elem.cc \
+						common/message_cache_context.cc \
+						common/config_constants.cc \
+						common/MurmurHash3.cpp \
+						common/property_predicate.cc \
+                        chronos/chronos.cc \
+                        chronos/chronos_c_wrappers.cc \
+                        chronos/chronos_cmp_encode.cc \
+						node_prog/edge_list.cc \
+						node_prog/prop_list.cc \
+		                node_prog/reach_program.cc \
+		                node_prog/clustering_program.cc \
+		                node_prog/pathless_reach_program.cc \
+		                node_prog/two_neighborhood_program.cc \
+		                node_prog/edge_count_program.cc \
+		                node_prog/edge_get_program.cc \
+                        node_prog/node_get_program.cc \
+		                node_prog/read_n_edges_program.cc \
+		                node_prog/read_node_props_program.cc \
+		                node_prog/traverse_with_props.cc \
+		                node_prog/discover_paths.cc \
+						node_prog/parse_btc_tx.cc \
+						node_prog/cause_and_effect.cc \
+						node_prog/n_gram_path.cc \
+		                node_prog/get_btc_block.cc \
+		                node_prog/get_btc_tx.cc \
+		                node_prog/get_btc_addr.cc \
+						db/hyper_stub.cc \
+						db/element.cc \
+						db/property.cc \
+						db/edge.cc \
+						db/node.cc
+
 TESTS +=		tests/sh/empty_graph.sh \
 				tests/sh/simple_test.sh \
 				tests/sh/simple_test_aux_index.sh \

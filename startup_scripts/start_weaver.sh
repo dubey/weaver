@@ -14,15 +14,15 @@ fi
 
 if [ -z "$WEAVER_BUILDDIR" ]
 then
-    if [ -e /usr/local/lib/libweaverservermanager.so ]
+    if [ -e /home/dubey/installs/lib/libweaverservermanager.so ]
     then
-        weaver_libdir=/usr/local/lib
+        weaver_libdir=/home/dubey/installs/lib
     else
         if [ -e /usr/lib/libweaverservermanager.so ]
         then
             weaver_libdir=/usr/lib
         else
-            echo 'Did not find libweaverservermanager.so at /usr/lib and /usr/local/lib.  Also, WEAVER_BUILDDIR not set.  Exiting now.'
+            echo 'Did not find libweaverservermanager.so at /usr/lib and /home/dubey/installs/lib.  Also, WEAVER_BUILDDIR not set.  Exiting now.'
             exit 1
         fi
     fi
