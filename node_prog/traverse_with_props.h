@@ -21,10 +21,7 @@
 #include <vector>
 #include <deque>
 
-#include "db/remote_node.h"
-#include "node_prog/node_prog_type.h"
-#include "node_prog/node.h"
-#include "node_prog/base_classes.h"
+#include "node_prog/boilerplate.h"
 #include "node_prog/cache_response.h"
 
 namespace node_prog
@@ -68,22 +65,7 @@ namespace node_prog
     };
 
     extern "C" {
-        std::shared_ptr<Node_Parameters_Base> param_ctor();
-        std::shared_ptr<Node_State_Base> state_ctor();
-        
-        uint64_t param_size(const Node_Parameters_Base&, void*);
-        void param_pack(const Node_Parameters_Base&, e::packer&, void*);
-        void param_unpack(Node_Parameters_Base&, e::unpacker&, void*);
-
-        uint64_t state_size(const Node_State_Base&, void*);
-        void state_pack(const Node_State_Base&, e::packer&, void*);
-        void state_unpack(Node_State_Base&, e::unpacker&, void*);
-
-        std::pair<search_type, std::vector<std::pair<db::remote_node, std::shared_ptr<Node_Parameters_Base>>>>
-        node_program(node &n,
-            db::remote_node &rn,
-            std::shared_ptr<Node_Parameters_Base> param_ptr,
-            std::function<Node_State_Base&()> state_getter);
+        PROG_FUNC_DECLARE;
     }
 }
 

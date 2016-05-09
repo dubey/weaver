@@ -38,7 +38,6 @@ DECLARE_CONFIG_CONSTANTS;
 
 using coordinator::current_prog;
 using coordinator::blocked_prog;
-using transaction::done_req_t;
 using node_prog::Node_Parameters_Base;
 static coordinator::timestamper *vts;
 static uint64_t vt_id;
@@ -224,7 +223,6 @@ nop_function()
         }
 
         if (kronos_call) {
-            WDEBUG << "Kronos call" << std::endl;
             int64_t id;
             chronos_returncode call_code, wait_code;
 
@@ -237,6 +235,7 @@ nop_function()
                        << ", wait code " << chronos_returncode_to_string(wait_code) << std::endl;
             }
 
+            /*
             // for debugging
             ssize_t ret;
             chronos_stats stats;
@@ -252,6 +251,7 @@ nop_function()
             } else {
                 WDEBUG << "Kronos get_stats: call code " << call_code << ", wait code " << wait_code << std::endl;
             }
+            */
         }
     }
 }
@@ -322,7 +322,6 @@ unpack_and_forward_node_prog(std::unique_ptr<message::message> msg,
                              uint64_t clientID,
                              coordinator::hyper_stub *hstub)
 {
-    WDEBUG << "got node prog" << std::endl;
     vts->restore_mtx.lock();
     if (vts->restore_status > 0) {
         vts->prog_queue->emplace_back(blocked_prog(clientID, std::move(msg)));
@@ -334,7 +333,6 @@ unpack_and_forward_node_prog(std::unique_ptr<message::message> msg,
 
     std::string prog_type;
     msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, prog_type);
-    WDEBUG << "node prog type=" << prog_type << std::endl;
 
     void *prog_handle = nullptr;
     vts->m_dyn_prog_mtx.lock();
@@ -734,10 +732,6 @@ server_loop(void *args)
                 case message::NODE_PROG_RETURN: {
                     uint64_t req_id, cp_int, client;
                     msg->unpack_partial_message(message::NODE_PROG_RETURN, prog_type, req_id, cp_int); // don't unpack rest
-                    WDEBUG << "prog_type=" << prog_type
-                           << " req_id=" << req_id
-                           << " cp_int=" << cp_int
-                           << std::endl;
                     current_prog *cp = (current_prog*)cp_int;
                     client = cp->client;
 

@@ -19,7 +19,6 @@
 #include <unordered_set>
 
 #include "common/vclock.h"
-#include "node_prog/node_prog_type.h"
 
 namespace transaction
 {
@@ -42,8 +41,6 @@ namespace transaction
         uint64_t loc1, loc2, sender;
         std::unique_ptr<std::string> key, value;
     };
-
-    using done_req_t = std::vector<std::pair<uint64_t, node_prog::prog_type>>;
 
     struct nop_data
     {

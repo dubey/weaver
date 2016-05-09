@@ -37,7 +37,6 @@
 #include "db/remote_node.h"
 #include "db/node_prog_running_state.h"
 #include "node_prog/node.h"
-#include "node_prog/node_prog_type.h"
 #include "node_prog/base_classes.h"
 
 #define XML_CHUNK_SZ 10000
@@ -1949,7 +1948,6 @@ inline void node_prog_loop(uint64_t tid,
             // call node program
             std::pair<node_prog::search_type, std::vector<std::pair<db::remote_node, np_param_ptr_t>>> next_node_params;
             next_node_params = prog_ptr(*node, this_node, params, node_state_getter);
-            WDEBUG << "done node program at node=" << node_handle << std::endl;
 
             node->base.view_time = nullptr; 
             node->base.time_oracle = nullptr;
@@ -1970,11 +1968,6 @@ inline void node_prog_loop(uint64_t tid,
                     done_request = true;
                     // signal to send back to vector timestamper that issued request
                     std::unique_ptr<message::message> m(new message::message());
-                    WDEBUG << "prog_handle=" << prog_handle
-                           << " np.m_type=" << np.m_type
-                           << " np.req_id=" << np.req_id
-                           << " np.vt_prog_ptr=" << np.vt_prog_ptr
-                           << std::endl;
                     m->prepare_message(message::NODE_PROG_RETURN, prog_handle, np.m_type, np.req_id, np.vt_prog_ptr, res.second);
                     S->comm.send(np.vt_id, m->buf);
                     break; // can only send one message back

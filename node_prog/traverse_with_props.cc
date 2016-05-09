@@ -78,7 +78,7 @@ traverse_props_params :: unpack(e::unpacker &unpacker, void *aux_args)
 traverse_props_state :: traverse_props_state()
     : visited(false)
     , out_count(0)
-{ WDEBUG << "traverse props state ctor" << std::endl; }
+{ }
 
 uint64_t
 traverse_props_state :: size(void *aux_args) const
@@ -124,66 +124,7 @@ check_aliases(const node_prog::node &n, const std::vector<std::string> &aliases)
 
 extern "C" {
 
-std::shared_ptr<Node_Parameters_Base>
-param_ctor()
-{
-    auto new_params = std::make_shared<traverse_props_params>();
-    return std::dynamic_pointer_cast<Node_Parameters_Base>(new_params);
-}
-
-std::shared_ptr<Node_State_Base>
-state_ctor()
-{
-    auto new_state = std::make_shared<traverse_props_state>();
-    return std::dynamic_pointer_cast<Node_State_Base>(new_state);
-}
-
-#define CAST_ARG_REF(type, arg) \
-    type &tp = dynamic_cast<type&>(p);
-
-uint64_t
-param_size(const Node_Parameters_Base &p, void *aux_args)
-{
-    CAST_ARG_REF(const traverse_props_params, p);
-    return tp.size(aux_args);
-}
-
-void
-param_pack(const Node_Parameters_Base &p, e::packer &packer, void *aux_args)
-{
-    CAST_ARG_REF(const traverse_props_params, p);
-    tp.pack(packer, aux_args);
-}
-
-void
-param_unpack(Node_Parameters_Base &p, e::unpacker &unpacker, void *aux_args)
-{
-    CAST_ARG_REF(traverse_props_params, p);
-    tp.unpack(unpacker, aux_args);
-}
-
-uint64_t
-state_size(const Node_State_Base &p, void *aux_args)
-{
-    CAST_ARG_REF(const traverse_props_state, p);
-    return tp.size(aux_args);
-}
-
-void
-state_pack(const Node_State_Base &p, e::packer &packer, void *aux_args)
-{
-    CAST_ARG_REF(const Node_State_Base, p);
-    tp.pack(packer, aux_args);
-}
-
-void
-state_unpack(Node_State_Base &p, e::unpacker &unpacker, void *aux_args)
-{
-    CAST_ARG_REF(Node_State_Base, p);
-    tp.unpack(unpacker, aux_args);
-}
-
-#undef CAST_ARG_REF
+PROG_FUNC_DEFINE(traverse_props);
 
 std::pair<search_type, std::vector<std::pair<db::remote_node, std::shared_ptr<Node_Parameters_Base>>>>
 node_prog :: node_program(node &n,
@@ -251,7 +192,6 @@ node_prog :: node_program(node &n,
                 // return now
                 params.returning = true;
                 next.emplace_back(std::make_pair(state.prev_node, std::make_shared<traverse_props_params>(params)));
-                WDEBUG << "prev node=" << params.prev_node.handle << " @ " << params.prev_node.loc << std::endl;
             }
         }
 
@@ -271,7 +211,6 @@ node_prog :: node_program(node &n,
             params.return_nodes = std::move(state.return_nodes);
             params.return_edges = std::move(state.return_edges);
             next.emplace_back(std::make_pair(state.prev_node, std::make_shared<traverse_props_params>(params)));
-            WDEBUG << "prev node=" << params.prev_node.handle << " @ " << params.prev_node.loc << std::endl;
         }
     }
 

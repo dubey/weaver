@@ -13,7 +13,6 @@
 #ifndef weaver_db_async_nodeprog_state_h_
 #define weaver_db_async_nodeprog_state_h_
 
-#include "node_prog/node_prog_type.h"
 #include "common/vclock.h"
 #include "db/node.h"
 
