@@ -22,6 +22,7 @@
 #include <deque>
 
 #include "db/remote_node.h"
+#include "node_prog/node_prog_type.h"
 #include "node_prog/node.h"
 #include "node_prog/base_classes.h"
 #include "node_prog/cache_response.h"
@@ -42,9 +43,9 @@ namespace node_prog
 
         traverse_props_params();
         ~traverse_props_params() { }
-        uint64_t size() const;
-        void pack(e::packer &packer) const;
-        void unpack(e::unpacker &unpacker);
+        uint64_t size(void*) const;
+        void pack(e::packer &packer, void*) const;
+        void unpack(e::unpacker &unpacker, void*);
 
         // no caching
         bool search_cache() { return false; }
@@ -61,18 +62,29 @@ namespace node_prog
 
         traverse_props_state();
         ~traverse_props_state() { }
-        uint64_t size() const; 
-        void pack(e::packer& packer) const ;
-        void unpack(e::unpacker& unpacker);
+        uint64_t size(void*) const; 
+        void pack(e::packer& packer, void*) const ;
+        void unpack(e::unpacker& unpacker, void*);
     };
 
-   std::pair<search_type, std::vector<std::pair<db::remote_node, traverse_props_params>>>
-   traverse_props_node_program(node &n,
-       db::remote_node &rn,
-       traverse_props_params &params,
-       std::function<traverse_props_state&()> state_getter,
-       std::function<void(std::shared_ptr<Cache_Value_Base>, std::shared_ptr<std::vector<db::remote_node>>, cache_key_t)>&,
-       cache_response<Cache_Value_Base>*);
+    extern "C" {
+        std::shared_ptr<Node_Parameters_Base> param_ctor();
+        std::shared_ptr<Node_State_Base> state_ctor();
+        
+        uint64_t param_size(const Node_Parameters_Base&, void*);
+        void param_pack(const Node_Parameters_Base&, e::packer&, void*);
+        void param_unpack(Node_Parameters_Base&, e::unpacker&, void*);
+
+        uint64_t state_size(const Node_State_Base&, void*);
+        void state_pack(const Node_State_Base&, e::packer&, void*);
+        void state_unpack(Node_State_Base&, e::unpacker&, void*);
+
+        std::pair<search_type, std::vector<std::pair<db::remote_node, std::shared_ptr<Node_Parameters_Base>>>>
+        node_program(node &n,
+            db::remote_node &rn,
+            std::shared_ptr<Node_Parameters_Base> param_ptr,
+            std::function<Node_State_Base&()> state_getter);
+    }
 }
 
 #endif

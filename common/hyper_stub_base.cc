@@ -2100,7 +2100,7 @@ hyper_stub_base :: prepare_buffer(const std::vector<std::shared_ptr<db::property
     uint32_t buf_sz = 0;
 
     for (const std::shared_ptr<db::property> p: props) {
-        sz.emplace_back(message::size(p));
+        sz.emplace_back(message::size(nullptr, p));
         buf_sz += sizeof(uint32_t)
                 + sz.back();
     }
@@ -2110,7 +2110,7 @@ hyper_stub_base :: prepare_buffer(const std::vector<std::shared_ptr<db::property
 
     for (uint64_t i = 0; i < props.size(); i++) {
         pack_uint32(packer, sz[i]);
-        message::pack_buffer(packer, props[i]);
+        message::pack_buffer(packer, nullptr, props[i]);
     }
 }
 
@@ -2125,7 +2125,7 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::vector<s
     while (unpacker.remain() > 0) {
         unpack_uint32(unpacker, sz);
         std::shared_ptr<db::property> p;
-        message::unpack_buffer(unpacker, p);
+        message::unpack_buffer(unpacker, nullptr, p);
 
         props.emplace_back(std::move(p));
     }

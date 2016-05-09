@@ -637,10 +637,10 @@ hyper_stub :: do_tx(std::shared_ptr<transaction::pending_tx> tx,
     attr[0].value_sz = sizeof(int64_t);
     attr[0].datatype = tx_dtypes[0];
 
-    uint64_t buf_sz = message::size(*tx);
+    uint64_t buf_sz = message::size(nullptr, *tx);
     std::unique_ptr<e::buffer> buf(e::buffer::create(buf_sz));
     e::packer packer = buf->pack_at(0);
-    message::pack_buffer(packer, *tx);
+    message::pack_buffer(packer, nullptr, *tx);
 
     attr[1].attr = tx_attrs[1];
     attr[1].value = (const char*)buf->data();
@@ -721,7 +721,7 @@ hyper_stub :: recreate_tx(const hyperdex_client_attribute *cl_attr,
     std::unique_ptr<e::buffer> buf(e::buffer::create(cl_attr[tx_data_idx].value,
                                                      cl_attr[tx_data_idx].value_sz));
     e::unpacker unpacker = buf->unpack_from(0);
-    message::unpack_buffer(unpacker, tx);
+    message::unpack_buffer(unpacker, nullptr, tx);
 }
 
 void

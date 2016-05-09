@@ -9,65 +9,67 @@
  * ===============================================================
  */
 
+#define weaver_debug_
+
 #include "common/weaver_constants.h"
 #include "common/stl_serialization.h"
 
 uint64_t
-message :: size(const bool&)
+message :: size(void*, const bool&)
 {
     return sizeof(uint8_t);
 }
 
 uint64_t
-message :: size(const char&)
+message :: size(void*, const uint8_t&)
 {
     return sizeof(uint8_t);
 }
 
 uint64_t
-message :: size(const uint16_t&)
+message :: size(void*, const uint16_t&)
 {
     return sizeof(uint16_t);
 }
 
 uint64_t
-message :: size(const uint32_t&)
+message :: size(void*, const uint32_t&)
 {
     return sizeof(uint32_t);
 }
 
 uint64_t
-message :: size(const uint64_t&)
+message :: size(void*, const uint64_t&)
 {
     return sizeof(uint64_t);
 }
 
 uint64_t
-message :: size(const int64_t&)
+message :: size(void*, const int64_t&)
 {
     return sizeof(int64_t);
 }
 
 uint64_t
-message :: size(const int&)
+message :: size(void*, const int&)
 {
     return sizeof(int);
 }
 
 uint64_t
-message :: size(const double&)
+message :: size(void*, const double&)
 {
     return sizeof(uint64_t);
 }
 
 uint64_t
-message :: size(const std::string &t)
+message :: size(void*, const std::string &t)
 {
     return t.size() + sizeof(uint32_t);
 }
 
 uint64_t
-message :: size(const std::vector<bool> &t)
+message :: size(void*, const std::vector<bool> &t)
 {
     return sizeof(uint32_t) + t.size()*sizeof(uint8_t);
 }
@@ -76,7 +78,7 @@ message :: size(const std::vector<bool> &t)
 // pack
 
 void
-message :: pack_buffer(e::packer &packer, const bool &t)
+message :: pack_buffer(e::packer &packer, void*, const bool &t)
 {
     uint8_t to_pack = 0;
     if (t) {
@@ -86,43 +88,43 @@ message :: pack_buffer(e::packer &packer, const bool &t)
 }
 
 void 
-message :: pack_buffer(e::packer &packer, const uint8_t &t)
+message :: pack_buffer(e::packer &packer, void*, const uint8_t &t)
 {
     packer = packer << t;
 }
 
 void 
-message :: pack_buffer(e::packer &packer, const uint16_t &t)
+message :: pack_buffer(e::packer &packer, void*, const uint16_t &t)
 {
     packer = packer << t;
 }
 
 void 
-message :: pack_buffer(e::packer &packer, const uint32_t &t)
+message :: pack_buffer(e::packer &packer, void*, const uint32_t &t)
 {
     packer = packer << t;
 }
 
 void 
-message :: pack_buffer(e::packer &packer, const uint64_t &t)
+message :: pack_buffer(e::packer &packer, void*, const uint64_t &t)
 {
     packer = packer << t;
 }
 
 void
-message :: pack_buffer(e::packer &packer, const int64_t &t)
+message :: pack_buffer(e::packer &packer, void*, const int64_t &t)
 {
     packer = packer << t;
 }
 
 void 
-message :: pack_buffer(e::packer &packer, const int &t)
+message :: pack_buffer(e::packer &packer, void*, const int &t)
 {
     packer = packer << t;
 }
 
 void 
-message :: pack_buffer(e::packer &packer, const double &t)
+message :: pack_buffer(e::packer &packer, void*, const double &t)
 {
     uint64_t dbl;
     memcpy(&dbl, &t, sizeof(double)); //to avoid casting issues, probably could avoid copy
@@ -139,16 +141,16 @@ message :: pack_string(e::packer &packer, const std::string &t, const uint32_t s
     const uint64_t *rawwords = (const uint64_t*) rawchars;
 
     for (uint32_t i = 0; i < words; i++) {
-        pack_buffer(packer, rawwords[i]);
+        pack_buffer(packer, nullptr, rawwords[i]);
     }
 
     for (uint32_t i = 0; i < leftover_chars; i++) {
-        pack_buffer(packer, (uint8_t) rawchars[words*8+i]);
+        pack_buffer(packer, nullptr, (uint8_t) rawchars[words*8+i]);
     }
 }
 
 void 
-message :: pack_buffer(e::packer &packer, const std::string &t)
+message :: pack_buffer(e::packer &packer, void*, const std::string &t)
 {
     assert(t.size() <= UINT32_MAX);
     uint32_t strlen = t.size();
@@ -158,12 +160,12 @@ message :: pack_buffer(e::packer &packer, const std::string &t)
 }
 
 void
-message :: pack_buffer(e::packer &packer, const std::vector<bool> &t)
+message :: pack_buffer(e::packer &packer, void*, const std::vector<bool> &t)
 {
     uint32_t sz = t.size();
-    pack_buffer(packer, sz);
+    pack_buffer(packer, nullptr, sz);
     for (bool b: t) {
-        pack_buffer(packer, b);
+        pack_buffer(packer, nullptr, b);
     }
 }
 
@@ -171,7 +173,7 @@ message :: pack_buffer(e::packer &packer, const std::vector<bool> &t)
 // unpack
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, bool &t)
+message :: unpack_buffer(e::unpacker &unpacker, void*, bool &t)
 {
     uint8_t temp;
     unpacker = unpacker >> temp;
@@ -179,43 +181,43 @@ message :: unpack_buffer(e::unpacker &unpacker, bool &t)
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, uint8_t &t)
+message :: unpack_buffer(e::unpacker &unpacker, void*, uint8_t &t)
 {
     unpacker = unpacker >> t;
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, uint16_t &t)
+message :: unpack_buffer(e::unpacker &unpacker, void*, uint16_t &t)
 {
     unpacker = unpacker >> t;
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, uint32_t &t)
+message :: unpack_buffer(e::unpacker &unpacker, void*, uint32_t &t)
 {
     unpacker = unpacker >> t;
 }
 
 void 
-message :: unpack_buffer(e::unpacker &unpacker, uint64_t &t)
+message :: unpack_buffer(e::unpacker &unpacker, void*, uint64_t &t)
 {
     unpacker = unpacker >> t;
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, int64_t &t)
+message :: unpack_buffer(e::unpacker &unpacker, void*, int64_t &t)
 {
     unpacker = unpacker >> t;
 }
 
 void 
-message :: unpack_buffer(e::unpacker &unpacker, int &t)
+message :: unpack_buffer(e::unpacker &unpacker, void*, int &t)
 {
     unpacker = unpacker >> t;
 }
 
 void 
-message :: unpack_buffer(e::unpacker &unpacker, double &t)
+message :: unpack_buffer(e::unpacker &unpacker, void*, double &t)
 {
     uint64_t dbl;
     unpacker = unpacker >> dbl;
@@ -235,34 +237,32 @@ message :: unpack_string(e::unpacker &unpacker, std::string &t, const uint32_t s
     uint64_t* rawwords = (uint64_t*) rawchars;
 
     for (uint32_t i = 0; i < words; i++) {
-        unpack_buffer(unpacker, rawwords[i]);
+        unpack_buffer(unpacker, nullptr, rawwords[i]);
     }
 
     for (uint32_t i = 0; i < leftover_chars; i++) {
-        unpack_buffer(unpacker, rawuint8s[words*8+i]);
+        unpack_buffer(unpacker, nullptr, rawuint8s[words*8+i]);
     }
 }
 
 void 
-message :: unpack_buffer(e::unpacker &unpacker, std::string &t)
+message :: unpack_buffer(e::unpacker &unpacker, void*, std::string &t)
 {
     uint32_t strlen;
-    unpack_buffer(unpacker, strlen);
+    unpack_buffer(unpacker, nullptr, strlen);
 
     unpack_string(unpacker, t, strlen);
 }
 
 void
-message :: unpack_buffer(e::unpacker &unpacker, std::vector<bool> &t)
+message :: unpack_buffer(e::unpacker &unpacker, void*, std::vector<bool> &t)
 {
     uint32_t sz;
-    unpack_buffer(unpacker, sz);
+    unpack_buffer(unpacker, nullptr, sz);
     t.reserve(sz);
     bool b;
     for (uint32_t i = 0; i < sz; i++) {
-        unpack_buffer(unpacker, b);
+        unpack_buffer(unpacker, nullptr, b);
         t.push_back(b);
     }
 }
-
-

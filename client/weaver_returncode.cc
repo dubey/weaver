@@ -36,6 +36,10 @@ weaver_client_returncode_to_string(enum weaver_client_returncode code)
             return "WEAVER_CLIENT_NOAUXINDEX";
         case WEAVER_CLIENT_NOTFOUND:
             return "WEAVER_CLIENT_NOTFOUND";
+        case WEAVER_CLIENT_BADPROGTYPE:
+            return "WEAVER_CLIENT_BADPROGTYPE";
+        case WEAVER_CLIENT_DLOPENERROR:
+            return "WEAVER_CLIENT_DLOPENERROR";
         case WEAVER_CLIENT_DISRUPTED:
             return "WEAVER_CLIENT_DISRUPTED";
         case WEAVER_CLIENT_INTERNALMSGERROR:

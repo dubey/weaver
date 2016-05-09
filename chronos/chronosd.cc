@@ -763,10 +763,10 @@ chronosd :: recreate(rsm_context *ctx,
             >> c->m_count_assign_order
             >> c->m_count_weaver_order
             >> c->m_count_weaver_cleanup;
-    message::unpack_buffer(up, c->m_vcmap);
-    message::unpack_buffer(up, c->m_rev_vcmap);
-    message::unpack_buffer(up, c->m_vtlist);
-    message::unpack_buffer(up, c->m_cleanup_clk);
+    message::unpack_buffer(up, nullptr, c->m_vcmap);
+    message::unpack_buffer(up, nullptr, c->m_rev_vcmap);
+    message::unpack_buffer(up, nullptr, c->m_vtlist);
+    message::unpack_buffer(up, nullptr, c->m_cleanup_clk);
 
     if (up.error())
     {
@@ -789,10 +789,10 @@ chronosd ::snapshot(rsm_context* /* CANNOT USE ctx IN snaphot */,
               + e::pack_size(m_count_assign_order)
               + e::pack_size(m_count_weaver_order)
               + e::pack_size(m_count_weaver_cleanup)
-              + message::size(m_vcmap)
-              + message::size(m_rev_vcmap)
-              + message::size(m_vtlist)
-              + message::size(m_cleanup_clk);
+              + message::size(nullptr, m_vcmap)
+              + message::size(nullptr, m_rev_vcmap)
+              + message::size(nullptr, m_vtlist)
+              + message::size(nullptr, m_cleanup_clk);
 
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wdeprecated-declarations"
@@ -807,10 +807,10 @@ chronosd ::snapshot(rsm_context* /* CANNOT USE ctx IN snaphot */,
             << m_count_assign_order
             << m_count_weaver_order
             << m_count_weaver_cleanup;
-    message::pack_buffer(pa, m_vcmap);
-    message::pack_buffer(pa, m_rev_vcmap);
-    message::pack_buffer(pa, m_vtlist);
-    message::pack_buffer(pa, m_cleanup_clk);
+    message::pack_buffer(pa, nullptr, m_vcmap);
+    message::pack_buffer(pa, nullptr, m_rev_vcmap);
+    message::pack_buffer(pa, nullptr, m_vtlist);
+    message::pack_buffer(pa, nullptr, m_cleanup_clk);
 
     char* ptr = static_cast<char*>(malloc(buf->size()));
     *data = ptr;

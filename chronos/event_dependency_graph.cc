@@ -555,7 +555,7 @@ operator << (e::packer lhs, const event_dependency_graph &rhs)
               << rhs.m_free_inner_id_end
               << cache_slice
               << base_slice;
-    message::pack_buffer(lhs, rhs.m_event_to_inner);
+    message::pack_buffer(lhs, nullptr, rhs.m_event_to_inner);
 
     return lhs;
 }
@@ -571,7 +571,7 @@ operator >> (e::unpacker lhs, event_dependency_graph &rhs)
               >> rhs.m_free_inner_id_end
               >> cache_slice
               >> base_slice;
-    message::unpack_buffer(lhs, rhs.m_event_to_inner);
+    message::unpack_buffer(lhs, nullptr, rhs.m_event_to_inner);
 
     assert(rhs.base_size(rhs.m_vertices_allocated) == base_slice.size());
 
@@ -599,5 +599,5 @@ pack_size(const event_dependency_graph &g)
          + e::pack_size(g.m_free_inner_id_end)
          + e::pack_size(cache_slice)
          + e::pack_size(base_slice)
-         + message::size(g.m_event_to_inner);
+         + message::size(nullptr, g.m_event_to_inner);
 }

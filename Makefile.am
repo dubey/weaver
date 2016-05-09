@@ -21,7 +21,7 @@ AM_CFLAGS=-Wall -Wextra
 AM_CXXFLAGS=-std=c++0x -Wall -Wextra
 AM_CPPFLAGS=-I$(top_srcdir)/client
 CYTHON_FLAGS=--cplus
-LIBS=-lpo6 -le -lbusybee -pthread -lrt -lhyperdex-client -lreplicant -lyaml -lpopt -lglog -lpugixml
+LIBS=-lpo6 -le -lbusybee -pthread -lrt -lhyperdex-client -lreplicant -lyaml -lpopt -lglog -lpugixml -ldl
 
 if DEBUG
     AM_CFLAGS += -g3 -gdwarf-2 -O0
@@ -51,34 +51,11 @@ weaverheaderdir = $(includedir)/weaver
 pkgconfigdir = $(libdir)/pkgconfig
 
 noinst_HEADERS+=	node_prog/base_classes.h \
-					node_prog/edge_count_program.h \
-					node_prog/n_hop_reach_program.h \
-					node_prog/pathless_reach_program.h \
-					node_prog/triangle_program.h \
-					node_prog/cache_response.h \
-					node_prog/edge_get_program.h \
-					node_prog/node_get_program.h \
 					node_prog/node.h \
 					node_prog/property.h \
-					node_prog/read_n_edges_program.h \
-					node_prog/two_neighborhood_program.h \
-					node_prog/clustering_program.h \
 					node_prog/edge.h \
-					node_prog/node_program.h \
 					node_prog/prop_list.h \
-					node_prog/read_node_props_program.h \
-					node_prog/dijkstra_program.h \
-					node_prog/edge_list.h \
-					node_prog/node_prog_type.h \
-					node_prog/reach_program.h \
-					node_prog/traverse_with_props.h \
-					node_prog/discover_paths.h \
-					node_prog/parse_btc_tx.h \
-					node_prog/cause_and_effect.h \
-					node_prog/n_gram_path.h \
-					node_prog/get_btc_block.h \
-					node_prog/get_btc_tx.h \
-					node_prog/get_btc_addr.h \
+					node_prog/dynamic_prog_table.h \
 					common/cache_constants.h \
 					common/config_constants.h \
 					common/hyper_stub_base.h \
@@ -102,6 +79,7 @@ noinst_HEADERS+=	node_prog/base_classes.h \
                     common/bool_vector.h \
                     common/types.h \
                     common/utils.h \
+                    common/prog_write_and_dlopen.h \
                     common/MurmurHash3.h \
                     common/property_predicate.h
 
@@ -112,6 +90,7 @@ noinst_HEADERS+=			coordinator/current_prog.h \
 							coordinator/server_barrier.h  \
 							coordinator/server_manager.h  \
 							coordinator/timestamper.h  \
+							coordinator/register_node_prog_state.h  \
 							coordinator/transitions.h  \
 							coordinator/util.h \
 							coordinator/vt_constants.h
@@ -135,34 +114,21 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
                             common/config_constants.cc \
                             common/MurmurHash3.cpp \
                             common/property_predicate.cc \
+							common/prog_write_and_dlopen.cc \
 							chronos/chronos.cc \
 							chronos/chronos_c_wrappers.cc \
 							chronos/chronos_cmp_encode.cc \
 		                    node_prog/edge_list.cc \
 		                    node_prog/prop_list.cc \
-		                    node_prog/reach_program.cc \
-		                    node_prog/clustering_program.cc \
-		                    node_prog/pathless_reach_program.cc \
-		                    node_prog/two_neighborhood_program.cc \
-		                    node_prog/edge_count_program.cc \
-		                    node_prog/edge_get_program.cc \
-		                    node_prog/node_get_program.cc \
-		                    node_prog/read_n_edges_program.cc \
-		                    node_prog/read_node_props_program.cc \
-		                    node_prog/traverse_with_props.cc \
-		                    node_prog/discover_paths.cc \
-		                    node_prog/parse_btc_tx.cc \
-							node_prog/cause_and_effect.cc \
-							node_prog/n_gram_path.cc \
-		                    node_prog/get_btc_block.cc \
-		                    node_prog/get_btc_tx.cc \
-		                    node_prog/get_btc_addr.cc \
+							node_prog/dynamic_prog_table.cc \
 		                    db/element.cc \
 		                    db/property.cc \
 		                    db/edge.cc \
 		                    db/node.cc \
                             coordinator/hyper_stub.cc \
 							coordinator/timestamper.cc
+weaver_timestamper_LDFLAGS=	-Wl,-export-dynamic
+weaver_timestamper_LDADD=	-lssl -lcrypto
 
 # server manager
 lib_LTLIBRARIES+=					libweaverservermanager.la
@@ -192,6 +158,7 @@ noinst_HEADERS+=		db/cache_entry.h \
 						db/shard_constants.h \
 						db/utils.h \
 						db/types.h \
+						db/node_prog_running_state.h \
 						db/node_entry.h
 bin_PROGRAMS+=			weaver-shard
 weaver_shard_SOURCES=	common/ids.cc \
@@ -214,28 +181,13 @@ weaver_shard_SOURCES=	common/ids.cc \
                         common/config_constants.cc \
                         common/MurmurHash3.cpp \
                         common/property_predicate.cc \
+                        common/prog_write_and_dlopen.cc \
 						chronos/chronos.cc \
 						chronos/chronos_c_wrappers.cc \
 						chronos/chronos_cmp_encode.cc \
-		                node_prog/edge_list.cc \
 		                node_prog/prop_list.cc \
-		                node_prog/reach_program.cc \
-		                node_prog/clustering_program.cc \
-		                node_prog/pathless_reach_program.cc \
-		                node_prog/two_neighborhood_program.cc \
-		                node_prog/edge_count_program.cc \
-		                node_prog/edge_get_program.cc \
-                        node_prog/node_get_program.cc \
-		                node_prog/read_n_edges_program.cc \
-		                node_prog/read_node_props_program.cc \
-		                node_prog/traverse_with_props.cc \
-		                node_prog/discover_paths.cc \
-						node_prog/parse_btc_tx.cc \
-						node_prog/cause_and_effect.cc \
-						node_prog/n_gram_path.cc \
-		                node_prog/get_btc_block.cc \
-		                node_prog/get_btc_tx.cc \
-		                node_prog/get_btc_addr.cc \
+		                node_prog/edge_list.cc \
+						node_prog/dynamic_prog_table.cc \
 		                db/hyper_stub.cc \
 		                db/queue_manager.cc \
 		                db/element.cc \
@@ -243,6 +195,8 @@ weaver_shard_SOURCES=	common/ids.cc \
 		                db/edge.cc \
 		                db/node.cc \
 						db/shard.cc
+weaver_shard_LDFLAGS=	-Wl,-export-dynamic
+weaver_shard_LDADD=		-lssl -lcrypto
 
 # c++ client
 noinst_HEADERS+=			client/client_constants.h \
@@ -269,23 +223,7 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 							chronos/chronos_cmp_encode.cc \
 		                    node_prog/prop_list.cc \
 		                    node_prog/edge_list.cc \
-		                    node_prog/clustering_program.cc \
-		                    node_prog/edge_count_program.cc \
-		                    node_prog/edge_get_program.cc \
-		                    node_prog/node_get_program.cc \
-		                    node_prog/pathless_reach_program.cc \
-		                    node_prog/reach_program.cc \
-		                    node_prog/read_n_edges_program.cc \
-		                    node_prog/read_node_props_program.cc \
-		                    node_prog/two_neighborhood_program.cc \
-		                    node_prog/traverse_with_props.cc \
-		                    node_prog/discover_paths.cc \
-		                    node_prog/parse_btc_tx.cc \
-							node_prog/cause_and_effect.cc \
-							node_prog/n_gram_path.cc \
-		                    node_prog/get_btc_block.cc \
-		                    node_prog/get_btc_tx.cc \
-		                    node_prog/get_btc_addr.cc \
+							node_prog/dynamic_prog_table.cc \
 		                    db/element.cc \
 		                    db/property.cc \
 		                    client/comm_wrapper.cc \
@@ -294,6 +232,8 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 		                    client/c.cc
 libweaverclient_la_CFLAGS=	$(AM_CFLAGS)
 libweaverclient_la_CXXFLAGS=$(AM_CXXFLAGS)
+libweaverclient_la_LDFLAGS=	-Wl,-export-dynamic
+libweaverclient_la_LIBADD=	-lssl -lcrypto
 weaverinclude_HEADERS+=		client/client.h \
 							client/datastructures.h \
 							client/weaver/weaver_returncode.h \
@@ -306,14 +246,15 @@ pkgpyexec_DATA+=					bindings/python/__init__.py
 pkgpyexec_LTLIBRARIES+=				bindings/python/client.la
 CLEANFILES+=						bindings/python/client.cpp
 bindings_python_client_la_SOURCES=	bindings/python/client.cpp
-bindings_python_client_la_LIBADD=	libweaverclient.la
+bindings_python_client_la_LIBADD=	libweaverclient.la \
+									libweavertraversepropsprog.la \
+									-lpython2.7
 bindings/python/client.cpp:			bindings/python/client.pyx
 	$(CYTHON) $(CYTHON_FLAGS) $<
 bindings_python_client_la_CFLAGS= 	-fno-strict-aliasing $(AM_CFLAGS)
 bindings_python_client_la_CXXFLAGS=	-fno-strict-aliasing $(AM_CXXFLAGS)
 bindings_python_client_la_CPPFLAGS=	-I/usr/include/python2.7 $(AM_CPPFLAGS)
-bindings_python_client_la_LDFLAGS=	-module
-bindings_python_client_la_LIBS=		-lpython2.7 $(LIBS)
+bindings_python_client_la_LDFLAGS=	-module	-Wl,-export-dynamic
 
 # configuration files
 EXTRA_DIST+=	conf/weaver.yaml
@@ -378,11 +319,26 @@ libweaverchronosd_la_SOURCES=	common/config_constants.cc \
 libweaverchronosd_la_CFLAGS= 	$(AM_CFLAGS)
 libweaverchronosd_la_CXXFLAGS=	$(AM_CXXFLAGS)
 
-bin_PROGRAMS+=				weaver-test-bench
-noinst_HEADERS+=			tests/cpp/read_only_vertex_bench.h
-weaver_test_bench_SOURCES=	tests/cpp/run.cc \
-							common/clock.cc
-weaver_test_bench_LDADD=	libweaverclient.la
+lib_LTLIBRARIES+=		libweavertraversepropsprog.la
+libweavertraversepropsprog_la_SOURCES=	node_prog/edge_list.cc \
+						                node_prog/prop_list.cc \
+										common/event_order.cc \
+										common/config_constants.cc \
+						                node_prog/traverse_with_props.cc
+libweavertraversepropsprog_la_CFLAGS= 	$(AM_CFLAGS)
+libweavertraversepropsprog_la_CXXFLAGS=	$(AM_CXXFLAGS)
+
+#bin_PROGRAMS+=				weaver-test-bench
+#noinst_HEADERS+=			tests/cpp/read_only_vertex_bench.h
+#weaver_test_bench_SOURCES=	tests/cpp/run.cc \
+#							common/clock.cc
+#weaver_test_bench_LDADD=	libweaverclient.la
+
+bin_PROGRAMS+=					weaver-test-dynamic
+weaver_test_dynamic_SOURCES=	tests/cpp/test_dynamic.cc
+weaver_test_dynamic_LDADD=		libweaverclient.la \
+								libweavertraversepropsprog.la
+weaver_test_dynamic_LDFLAGS=	-Wl,-export-dynamic
 
 bin_PROGRAMS+=				weaver-test-hs
 weaver_test_hs_SOURCES=	tests/cpp/hyper_stub_perf.cc \
@@ -403,25 +359,8 @@ weaver_test_hs_SOURCES=	tests/cpp/hyper_stub_perf.cc \
                         chronos/chronos.cc \
                         chronos/chronos_c_wrappers.cc \
                         chronos/chronos_cmp_encode.cc \
-						node_prog/edge_list.cc \
-						node_prog/prop_list.cc \
-		                node_prog/reach_program.cc \
-		                node_prog/clustering_program.cc \
-		                node_prog/pathless_reach_program.cc \
-		                node_prog/two_neighborhood_program.cc \
-		                node_prog/edge_count_program.cc \
-		                node_prog/edge_get_program.cc \
-                        node_prog/node_get_program.cc \
-		                node_prog/read_n_edges_program.cc \
-		                node_prog/read_node_props_program.cc \
-		                node_prog/traverse_with_props.cc \
-		                node_prog/discover_paths.cc \
-						node_prog/parse_btc_tx.cc \
-						node_prog/cause_and_effect.cc \
-						node_prog/n_gram_path.cc \
-		                node_prog/get_btc_block.cc \
-		                node_prog/get_btc_tx.cc \
-		                node_prog/get_btc_addr.cc \
+                        node_prog/prop_list.cc \
+                        node_prog/edge_list.cc \
 						db/hyper_stub.cc \
 						db/element.cc \
 						db/property.cc \

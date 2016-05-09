@@ -20,6 +20,7 @@
 #include <sys/time.h>
 #include <e/popt.h>
 #include <pthread.h>
+#include <dlfcn.h>
 
 #define weaver_debug_
 #include "common/clock.h"
@@ -28,8 +29,9 @@
 #include "common/event_order.h"
 #include "common/config_constants.h"
 #include "common/bool_vector.h"
+#include "common/prog_write_and_dlopen.h"
+#include "node_prog/dynamic_prog_table.h"
 #include "node_prog/node_prog_type.h"
-#include "node_prog/node_program.h"
 #include "coordinator/timestamper.h"
 
 DECLARE_CONFIG_CONSTANTS;
@@ -37,6 +39,7 @@ DECLARE_CONFIG_CONSTANTS;
 using coordinator::current_prog;
 using coordinator::blocked_prog;
 using transaction::done_req_t;
+using node_prog::Node_Parameters_Base;
 static coordinator::timestamper *vts;
 static uint64_t vt_id;
 
@@ -305,7 +308,7 @@ clk_update_function(void*)
             if (i == vt_id || vts_state[i] != server::AVAILABLE) {
                 continue;
             }
-            msg.prepare_message(message::VT_CLOCK_UPDATE, vclk);
+            msg.prepare_message(message::VT_CLOCK_UPDATE, nullptr, vclk);
             vts->comm.send(i, msg.buf);
         }
 
@@ -314,10 +317,12 @@ clk_update_function(void*)
 }
 
 // unpack client message for a node program, prepare shard msges, and send out
-template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> :: 
-    unpack_and_start_coord(std::unique_ptr<message::message> msg, uint64_t clientID, coordinator::hyper_stub *hstub)
+void
+unpack_and_forward_node_prog(std::unique_ptr<message::message> msg,
+                             uint64_t clientID,
+                             coordinator::hyper_stub *hstub)
 {
+    WDEBUG << "got node prog" << std::endl;
     vts->restore_mtx.lock();
     if (vts->restore_status > 0) {
         vts->prog_queue->emplace_back(blocked_prog(clientID, std::move(msg)));
@@ -327,13 +332,32 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
         vts->restore_mtx.unlock();
     }
 
-    node_prog::prog_type pType;
-    std::vector<std::pair<node_handle_t, ParamsType>> initial_args;
+    std::string prog_type;
+    msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, prog_type);
+    WDEBUG << "node prog type=" << prog_type << std::endl;
 
-    msg->unpack_message(message::CLIENT_NODE_PROG_REQ, pType, initial_args);
+    void *prog_handle = nullptr;
+    vts->m_dyn_prog_mtx.lock();
+    auto prog_iter = vts->m_dyn_prog_map.find(prog_type);
+    if (prog_iter != vts->m_dyn_prog_map.end()) {
+        prog_handle = (void*)prog_iter->second.get();
+    }
+    vts->m_dyn_prog_mtx.unlock();
+
+    if (prog_handle == nullptr) {
+        msg->prepare_message(message::NODE_PROG_BADPROGTYPE);
+        vts->comm.send_to_client(clientID, msg->buf);
+        return;
+    }
+
+    std::vector<std::pair<node_handle_t, std::shared_ptr<Node_Parameters_Base>>> initial_args;
+    msg->unpack_message(message::CLIENT_NODE_PROG_REQ,
+                        prog_handle,
+                        prog_type,
+                        initial_args);
     
     // map from locations to a list of start_node_params to send to that shard
-    std::unordered_map<uint64_t, std::deque<std::pair<node_handle_t, ParamsType>>> initial_batches; 
+    std::unordered_map<uint64_t, std::deque<std::pair<node_handle_t, std::shared_ptr<Node_Parameters_Base>>>> initial_batches; 
 
     // lookup mappings
     std::unordered_map<node_handle_t, uint64_t> loc_map;
@@ -418,7 +442,14 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
 
     message::message msg_to_send;
     for (auto &batch_pair: initial_batches) {
-        msg_to_send.prepare_message(message::NODE_PROG, pType, vt_id, req_timestamp, req_id, cp_int, batch_pair.second);
+        msg_to_send.prepare_message(message::NODE_PROG,
+                                    prog_handle,
+                                    prog_type,
+                                    vt_id,
+                                    req_timestamp,
+                                    req_id,
+                                    cp_int,
+                                    batch_pair.second);
         vts->comm.send(batch_pair.first, msg_to_send.buf);
         //WDEBUG << "send node prog=" << req_id << " to shard=" << batch_pair.first << std::endl;
     }
@@ -432,21 +463,6 @@ void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueT
     vts->test_mtx.unlock();
 #endif
 }
-
-template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> ::
-    unpack_and_run_db(uint64_t, std::unique_ptr<message::message>, order::oracle*)
-{ }
-
-template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> ::
-    unpack_context_reply_db(uint64_t, std::unique_ptr<message::message>, order::oracle*)
-{ }
-
-template <typename ParamsType, typename NodeStateType, typename CacheValueType>
-void node_prog :: particular_node_program<ParamsType, NodeStateType, CacheValueType> ::
-    continue_execution(uint64_t, order::oracle*, db::async_nodeprog_state)
-{ }
 
 // remove a completed node program from pending_prog data structure
 // update 'max_done_clk' accordingly
@@ -480,6 +496,62 @@ node_prog_done(uint64_t req_id, current_prog *cp)
     return true;
 }
 
+bool
+register_node_prog(std::unique_ptr<message::message> msg, uint64_t client)
+{
+    std::vector<uint8_t> buf;
+    std::string prog_handle;
+    msg->unpack_message(message::REGISTER_NODE_PROG, nullptr, prog_handle, buf);
+
+    if (prog_handle != weaver_util::sha256_chararr(buf, buf.size())) {
+        WDEBUG << "register_node_prog error: "
+               << "sha256 does not match, "
+               << "prog_handle=" << prog_handle
+               << ", sha256=" << weaver_util::sha256_chararr(buf, buf.size())
+               << std::endl;
+        return false;
+    }
+
+    std::shared_ptr<dynamic_prog_table> prog_table = write_and_dlopen(buf);
+    if (prog_table == nullptr) {
+        return false;
+    }
+
+    std::unordered_set<uint64_t> shards;
+
+    vts->periodic_update_mutex.lock();
+    for (const server &srv: vts->periodic_update_config.get_servers()) {
+        if (srv.type == server::SHARD && srv.state == server::AVAILABLE) {
+            shards.emplace(srv.virtual_id+NumVts);
+        }
+    }
+    vts->periodic_update_mutex.unlock();
+
+    WDEBUG << "registering node prog " << prog_handle << " at #" << shards.size() << " shards" << std::endl;
+
+    for (uint64_t s: shards) {
+        message::message m;
+        m.prepare_message(message::REGISTER_NODE_PROG,
+                          nullptr,
+                          prog_handle,
+                          vt_id,
+                          buf);
+        vts->comm.send(s, m.buf);
+        WDEBUG << "register node prog at shard " << s << std::endl;
+    }
+
+    coordinator::register_node_prog_state reg_state;
+    reg_state.client = client;
+    reg_state.shards = shards;
+
+    vts->m_dyn_prog_mtx.lock();
+    vts->m_dyn_prog_map[prog_handle] = prog_table;
+    vts->m_register_prog_status[prog_handle] = reg_state;
+    vts->m_dyn_prog_mtx.unlock();
+
+    return true;
+}
+
 static bool
 block_signals()
 {
@@ -498,6 +570,31 @@ block_signals()
     return true;
 }
 
+void
+shard_register_node_prog(const std::string &prog_handle,
+                         uint64_t shard,
+                         bool success)
+{
+    vts->m_dyn_prog_mtx.lock();
+    coordinator::register_node_prog_state &state = vts->m_register_prog_status[prog_handle];
+    state.shards.erase(shard);
+    bool overall_success = success && state.success;
+    state.success = overall_success;
+    bool done = state.shards.empty();
+    uint64_t client = state.client;
+    if (done) {
+        vts->m_register_prog_status.erase(prog_handle);
+    }
+    vts->m_dyn_prog_mtx.unlock();
+
+    if (done) {
+        message::msg_type send_type = overall_success? message::REGISTER_NODE_PROG_SUCCESSFUL : message::REGISTER_NODE_PROG_FAILED;
+        message::message m;
+        m.prepare_message(send_type);
+        vts->comm.send_to_client(client, m.buf);
+    }
+}
+
 void*
 server_loop(void *args)
 {
@@ -511,7 +608,7 @@ server_loop(void *args)
     enum message::msg_type mtype;
     std::unique_ptr<message::message> msg;
     uint64_t tx_id, client_sender, shard_id;
-    node_prog::prog_type pType;
+    std::string prog_type;
     coordinator::hyper_stub *hstub = vts->hstub[thread_id];
     order::oracle *time_oracle = vts->time_oracles[thread_id];
     std::shared_ptr<transaction::pending_tx> tx;
@@ -530,7 +627,7 @@ server_loop(void *args)
                 // client messages
                 case message::CLIENT_TX_INIT: {
                     tx = std::make_shared<transaction::pending_tx>(transaction::UPDATE);
-                    msg->unpack_message(message::CLIENT_TX_INIT, tx->id, tx->writes);
+                    msg->unpack_message(message::CLIENT_TX_INIT, nullptr, tx->id, tx->writes);
                     tx->sender = client_sender;
                     prepare_tx(tx, hstub, time_oracle);
                     break;
@@ -538,7 +635,7 @@ server_loop(void *args)
 
                 case message::VT_CLOCK_UPDATE: {
                     vc::vclock rec_clk;
-                    msg->unpack_message(message::VT_CLOCK_UPDATE, rec_clk);
+                    msg->unpack_message(message::VT_CLOCK_UPDATE, nullptr, rec_clk);
                     vts->clk_rw_mtx.wrlock();
                     vts->clk_updates++;
                     vts->vclk.update_clock(rec_clk);
@@ -556,7 +653,7 @@ server_loop(void *args)
                 case message::VT_NOP_ACK: {
                     uint64_t shard_node_count, nop_qts, sid, sender;
                     std::unordered_map<uint64_t, uint64_t> node_recovery_counts;
-                    msg->unpack_message(message::VT_NOP_ACK, sender, nop_qts, shard_node_count, node_recovery_counts);
+                    msg->unpack_message(message::VT_NOP_ACK, nullptr, sender, nop_qts, shard_node_count, node_recovery_counts);
                     sid = sender - ShardIdIncr;
                     vts->periodic_update_mutex.lock();
                     if (nop_qts > vts->nop_ack_qts[sid]) {
@@ -587,14 +684,14 @@ server_loop(void *args)
 
                 case message::CLIENT_NODE_COUNT: {
                     vts->periodic_update_mutex.lock();
-                    msg->prepare_message(message::NODE_COUNT_REPLY, vts->shard_node_count);
+                    msg->prepare_message(message::NODE_COUNT_REPLY, nullptr, vts->shard_node_count);
                     vts->periodic_update_mutex.unlock();
                     vts->comm.send_to_client(client_sender, msg->buf);
                     break;
                 }
 
                 case message::TX_DONE:
-                    msg->unpack_message(message::TX_DONE, tx_id, shard_id);
+                    msg->unpack_message(message::TX_DONE, nullptr, tx_id, shard_id);
                     end_tx(tx_id, shard_id, hstub);
                     break;
 
@@ -610,7 +707,7 @@ server_loop(void *args)
                     vts->migr_mutex.lock();
                     vts->migr_client = client_sender;
                     vts->migr_mutex.unlock();
-                    msg->prepare_message(message::MIGRATION_TOKEN, hops, hops, vt_id);
+                    msg->prepare_message(message::MIGRATION_TOKEN, nullptr, hops, hops, vt_id);
                     vts->comm.send(ShardIdIncr, msg->buf);
                     break;
                 }
@@ -630,18 +727,17 @@ server_loop(void *args)
                 }
 
                 case message::CLIENT_NODE_PROG_REQ:
-                    msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
-                    node_prog::programs.at(pType)->unpack_and_start_coord(std::move(msg), client_sender, hstub);
-                    //msg.reset(new message::message());
-                    //msg->prepare_message(message::NODE_PROG_RETURN, 0);
-                    //vts->comm.send_to_client(client_sender, msg->buf);
+                    unpack_and_forward_node_prog(std::move(msg), client_sender, hstub);
                     break;
 
                 // node program response from a shard
                 case message::NODE_PROG_RETURN: {
                     uint64_t req_id, cp_int, client;
-                    node_prog::prog_type type;
-                    msg->unpack_partial_message(message::NODE_PROG_RETURN, type, req_id, cp_int); // don't unpack rest
+                    msg->unpack_partial_message(message::NODE_PROG_RETURN, prog_type, req_id, cp_int); // don't unpack rest
+                    WDEBUG << "prog_type=" << prog_type
+                           << " req_id=" << req_id
+                           << " cp_int=" << cp_int
+                           << std::endl;
                     current_prog *cp = (current_prog*)cp_int;
                     client = cp->client;
 
@@ -659,6 +755,47 @@ server_loop(void *args)
                     break;
                 }
 
+                case message::REGISTER_NODE_PROG:
+                    WDEBUG << "got REGISTER_NODE_PROG msg" << std::endl;
+                    if (!register_node_prog(std::move(msg), client_sender)) {
+                        WDEBUG << "failed register node prog" << std::endl;
+                        msg->prepare_message(message::REGISTER_NODE_PROG_FAILED);
+                        vts->comm.send_to_client(client_sender, msg->buf);
+                    }
+                    break;
+
+                case message::REGISTER_NODE_PROG_SUCCESSFUL: {
+                    std::string prog_handle;
+                    uint64_t shard;
+                    msg->unpack_message(mtype,
+                                        nullptr,
+                                        prog_handle,
+                                        shard);
+                    WDEBUG << "got REGISTER_NODE_PROG_SUCCESS "
+                           << "prog=" << prog_handle
+                           << ", shard=" << shard
+                           << std::endl;
+
+                    shard_register_node_prog(prog_handle, shard, true);
+                    break;
+                }
+
+                case message::REGISTER_NODE_PROG_FAILED: {
+                    std::string prog_handle;
+                    uint64_t shard;
+                    msg->unpack_message(mtype,
+                                        nullptr,
+                                        prog_handle,
+                                        shard);
+                    WDEBUG << "got REGISTER_NODE_PROG_FAILED "
+                           << "prog=" << prog_handle
+                           << ", shard=" << shard
+                           << std::endl;
+
+                    shard_register_node_prog(prog_handle, shard, false);
+                    break;
+                }
+
                 case message::RESTORE_DONE: {
                     vts->restore_mtx.lock();
                     assert(vts->restore_status > 0);
@@ -669,8 +806,7 @@ server_loop(void *args)
 
                     vts->tx_queue_loop();
                     for (blocked_prog &bp: *progs) {
-                        bp.msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, pType);
-                        node_prog::programs.at(pType)->unpack_and_start_coord(std::move(bp.msg), bp.client, hstub);
+                        unpack_and_forward_node_prog(std::move(bp.msg), bp.client, hstub);
                     }
                     break;
                 }

@@ -469,10 +469,10 @@ template <typename T>
 inline void
 hyper_stub_base :: prepare_buffer(const T &t, std::unique_ptr<e::buffer> &buf)
 {
-    uint64_t buf_sz = message::size(t);
+    uint64_t buf_sz = message::size(nullptr, t);
     buf.reset(e::buffer::create(buf_sz));
     e::packer packer = buf->pack_at(0);
-    message::pack_buffer(packer, t);
+    message::pack_buffer(packer, nullptr, t);
 }
 
 // unpack the HYPERDATATYPE_STRING in to the given object
@@ -482,7 +482,7 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, T &t)
 {
     std::unique_ptr<e::buffer> ebuf(e::buffer::create(buf, buf_sz));
     e::unpacker unpacker = ebuf->unpack_from(0);
-    message::unpack_buffer(unpacker, t);
+    message::unpack_buffer(unpacker, nullptr, t);
 }
 
 // store the given unordered_map as a HYPERDATATYPE_MAP_STRING_STRING
@@ -502,7 +502,7 @@ hyper_stub_base :: prepare_buffer(const std::unordered_map<std::string, T> &map,
     std::vector<uint32_t> val_sz(map.size(), UINT32_MAX);
     // now iterate in sorted order
     for (uint64_t i = 0; i < sorted.size(); i++) {
-        val_sz[i] = message::size(map.at(sorted[i]));
+        val_sz[i] = message::size(nullptr, map.at(sorted[i]));
         buf_sz += sizeof(uint32_t) // map key encoding sz
                 + sorted[i].size()
                 + sizeof(uint32_t) // map val encoding sz
@@ -517,7 +517,7 @@ hyper_stub_base :: prepare_buffer(const std::unordered_map<std::string, T> &map,
         pack_string(packer, sorted[i]);
 
         pack_uint32(packer, val_sz[i]);
-        message::pack_buffer(packer, map.at(sorted[i]));
+        message::pack_buffer(packer, nullptr, map.at(sorted[i]));
     }
 }
 
@@ -538,7 +538,7 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, std::unordere
         unpack_string(unpacker, key, sz);
 
         unpack_uint32(unpacker, sz);
-        message::unpack_buffer(unpacker, map[key]);
+        message::unpack_buffer(unpacker, nullptr, map[key]);
     }
 }
 
@@ -559,7 +559,7 @@ hyper_stub_base :: prepare_buffer(const db::data_map<T> &map, std::unique_ptr<e:
     std::vector<uint32_t> val_sz(map.size(), UINT32_MAX);
     // now iterate in sorted order
     for (uint64_t i = 0; i < sorted.size(); i++) {
-        val_sz[i] = message::size(map.find(sorted[i])->second);
+        val_sz[i] = message::size(nullptr, map.find(sorted[i])->second);
         buf_sz += sizeof(uint32_t) // map key encoding sz
                 + sorted[i].size()
                 + sizeof(uint32_t) // map val encoding sz
@@ -574,7 +574,7 @@ hyper_stub_base :: prepare_buffer(const db::data_map<T> &map, std::unique_ptr<e:
         pack_string(packer, sorted[i]);
 
         pack_uint32(packer, val_sz[i]);
-        message::pack_buffer(packer, map.find(sorted[i])->second);
+        message::pack_buffer(packer, nullptr, map.find(sorted[i])->second);
     }
 }
 
@@ -595,7 +595,7 @@ hyper_stub_base :: unpack_buffer(const char *buf, uint64_t buf_sz, db::data_map<
         unpack_string(unpacker, key, sz);
 
         unpack_uint32(unpacker, sz);
-        message::unpack_buffer(unpacker, map[key]);
+        message::unpack_buffer(unpacker, nullptr, map[key]);
     }
 }
 

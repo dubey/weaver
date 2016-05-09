@@ -21,36 +21,35 @@
 
 namespace node_prog
 {
-    enum search_type
-    {
-        BREADTH_FIRST,
-        DEPTH_FIRST
-    };
-
     enum prog_type
     {
-        REACHABILITY,
-        PATHLESS_REACHABILITY,
-        N_HOP_REACHABILITY,
-        TRIANGLE_COUNT,
-        DIJKSTRA,
-        CLUSTERING,
-        TWO_NEIGHBORHOOD,
-        READ_NODE_PROPS,
-        READ_EDGES_PROPS,
-        READ_N_EDGES,
-        EDGE_COUNT,
-        EDGE_GET,
-        NODE_GET,
         TRAVERSE_PROPS,
-        DISCOVER_PATHS,
-        CAUSE_AND_EFFECT,
-        N_GRAM_PATH,
-        GET_BTC_BLOCK,
-        GET_BTC_TX,
-        GET_BTC_ADDR,
         END
     };
+    //enum prog_type
+    //{
+    //    REACHABILITY,
+    //    PATHLESS_REACHABILITY,
+    //    N_HOP_REACHABILITY,
+    //    TRIANGLE_COUNT,
+    //    DIJKSTRA,
+    //    CLUSTERING,
+    //    TWO_NEIGHBORHOOD,
+    //    READ_NODE_PROPS,
+    //    READ_EDGES_PROPS,
+    //    READ_N_EDGES,
+    //    EDGE_COUNT,
+    //    EDGE_GET,
+    //    NODE_GET,
+    //    TRAVERSE_PROPS,
+    //    DISCOVER_PATHS,
+    //    CAUSE_AND_EFFECT,
+    //    N_GRAM_PATH,
+    //    GET_BTC_BLOCK,
+    //    GET_BTC_TX,
+    //    GET_BTC_ADDR,
+    //    END
+    //};
 
 }
 

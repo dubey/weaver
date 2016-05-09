@@ -15,6 +15,7 @@
 #ifndef weaver_common_config_constants_h_
 #define weaver_common_config_constants_h_
 
+#include <string>
 #include <stdint.h>
 #include <vector>
 #include <po6/threads/rwlock.h>

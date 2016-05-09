@@ -103,6 +103,7 @@ namespace db
             typedef std::pair<node_prog::prog_type, id_to_state_t> ptype_and_map_t;
             typedef std::vector<ptype_and_map_t> prog_state_t;
             prog_state_t prog_states;
+            std::unordered_map<uint64_t, std::shared_ptr<node_prog::Node_State_Base>> node_prog_states;
 
             // node eviction
             bool empty_evicted_node_state();

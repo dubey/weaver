@@ -58,8 +58,12 @@ class server
 
     public:
         state_t state;
-        server_id id;
+        server_id id; // random int
+        // increasing counter signifying order in which this server was registered
         uint64_t weaver_id;
+        // if virtual id of a server is v, it is the v^{th} vt or shard that was registered
+        // to send a message to a vt with virtual id v, you send(v, ...)
+        // to send a message to a shard with virtual id v, you send to (v+NumVts, ...)
         uint64_t virtual_id;
         type_t type;
         po6::net::location bind_to;

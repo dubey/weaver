@@ -48,6 +48,8 @@ message :: to_string(const msg_type &t)
             return "NODE_PROG_RETRY";
         case NODE_PROG_NOTFOUND:
             return "NODE_PROG_NOTFOUND";
+        case NODE_PROG_BADPROGTYPE:
+            return "NODE_PROG_BADPROGTYPE";
         case NODE_CONTEXT_FETCH:
             return "NODE_CONTEXT_FETCH";
         case NODE_CONTEXT_REPLY:
@@ -56,6 +58,12 @@ message :: to_string(const msg_type &t)
             return "CACHE_UPDATE";
         case CACHE_UPDATE_ACK:
             return "CACHE_UPDATE_ACK";
+        case REGISTER_NODE_PROG:
+            return "REGISTER_NODE_PROG";
+        case REGISTER_NODE_PROG_SUCCESSFUL:
+            return "REGISTER_NODE_PROG_SUCCESSFUL";
+        case REGISTER_NODE_PROG_FAILED:
+            return "REGISTER_NODE_PROG_FAILED";
         case MIGRATE_SEND_NODE:
             return "MIGRATE_SEND_NODE";
         case MIGRATED_NBR_UPDATE:

@@ -51,6 +51,7 @@
 #include "db/node_entry.h"
 #include "db/hyper_stub.h"
 #include "db/async_nodeprog_state.h"
+#include "node_prog/dynamic_prog_table.h"
 
 bool
 available_memory()
@@ -123,7 +124,7 @@ namespace db
                                         const node_handle_t &node_handle,
                                         const vc::vclock &vclk,
                                         order::oracle*,
-                                        node_prog::prog_type p_type,
+                                        const std::string &p_type,
                                         std::shared_ptr<void> prog_state,
                                         bool &recover);
             node* finish_acquire_node_nodeprog(db::data_map<std::shared_ptr<node_entry>>::iterator&,
@@ -300,6 +301,11 @@ namespace db
             uint64_t watch_set_lookups;
             uint64_t watch_set_nops;
             uint64_t watch_set_piggybacks;
+
+            // dynamically linked node programs
+            po6::threads::mutex m_dyn_prog_mtx;
+            // key = sha256 hash of node prog library so, value = dynamically linked prog handle
+            std::unordered_map<std::string, std::shared_ptr<dynamic_prog_table>> m_dyn_prog_map;
 
             // fault tolerance
         private:
@@ -783,7 +789,7 @@ namespace db
                                    const node_handle_t &node_handle,
                                    const vc::vclock &vclk,
                                    order::oracle *time_oracle,
-                                   node_prog::prog_type p_type,
+                                   const std::string &p_type,
                                    std::shared_ptr<void> prog_state,
                                    bool &recover)
     {
@@ -1149,7 +1155,7 @@ namespace db
     inline bool
     shard :: add_node_to_nodemap_bulk_load(node *n,
                                            uint64_t map_idx,
-                                           uint64_t block_index)
+                                           uint64_t /* block_index */)
     {
         bool in_mem;
         node_handle_t nh = n->get_handle();
