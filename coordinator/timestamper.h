@@ -34,6 +34,7 @@
 #include "coordinator/current_prog.h"
 #include "coordinator/blocked_prog.h"
 #include "coordinator/hyper_stub.h"
+#include "coordinator/register_node_prog_state.h"
 
 namespace coordinator
 {
@@ -97,7 +98,8 @@ namespace coordinator
 
             // dynamically linked node programs
             po6::threads::mutex m_dyn_prog_mtx;
-            std::unordered_map<uint64_t, void*> m_dyn_prog_map;
+            std::unordered_map<std::string, std::shared_ptr<dynamic_prog_table>> m_dyn_prog_map;
+            std::unordered_map<std::string, coordinator::register_node_prog_state> m_register_prog_status;
 
             // prog cleanup and permanent deletion
             std::unordered_set<uint64_t> outstanding_progs; // for multiple returns and ft

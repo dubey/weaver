@@ -251,6 +251,7 @@ node_prog :: node_program(node &n,
                 // return now
                 params.returning = true;
                 next.emplace_back(std::make_pair(state.prev_node, std::make_shared<traverse_props_params>(params)));
+                WDEBUG << "prev node=" << params.prev_node.handle << " @ " << params.prev_node.loc << std::endl;
             }
         }
 
@@ -270,6 +271,7 @@ node_prog :: node_program(node &n,
             params.return_nodes = std::move(state.return_nodes);
             params.return_edges = std::move(state.return_edges);
             next.emplace_back(std::make_pair(state.prev_node, std::make_shared<traverse_props_params>(params)));
+            WDEBUG << "prev node=" << params.prev_node.handle << " @ " << params.prev_node.loc << std::endl;
         }
     }
 

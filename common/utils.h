@@ -161,6 +161,13 @@ namespace weaver_util
     }
 
     inline std::string
+    sha256_chararr(std::vector<uint8_t> &data, size_t data_sz)
+    {
+        const char *chararr = (const char*)&data[0];
+        return sha256_chararr(chararr, data_sz);
+    }
+
+    inline std::string
     sha256_file(const std::string &file)
     {
         std::ifstream read_f;

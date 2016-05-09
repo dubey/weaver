@@ -25,6 +25,7 @@
 #include "client/weaver/weaver_returncode.h"
 #include "client/comm_wrapper.h"
 #include "client/datastructures.h"
+#include "node_prog/dynamic_prog_table.h"
 #include "node_prog/base_classes.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/traverse_with_props.h"
@@ -63,7 +64,8 @@ namespace cl
             bool init;
             bool logging;
             weaver_client_returncode fail_tx(weaver_client_returncode);
-            std::unordered_map<uint64_t, void*> m_dyn_prog_map;
+            std::unordered_map<std::string, std::shared_ptr<dynamic_prog_table>> m_dyn_prog_map;
+            std::unordered_map<std::string, std::string> m_built_in_progs;
 
         public:
             weaver_client_returncode begin_tx();
@@ -77,12 +79,9 @@ namespace cl
             weaver_client_returncode end_tx();
             weaver_client_returncode abort_tx();
 
-            weaver_client_returncode run_node_prog(uint64_t prog_type,
+            weaver_client_returncode run_node_prog(const std::string &prog_type,
                                                    std::vector<std::pair<std::string, std::shared_ptr<node_prog::Node_Parameters_Base>>> &args,
                                                    std::shared_ptr<node_prog::Node_Parameters_Base> &return_param);
-            //template <typename ParamsType>
-            //weaver_client_returncode run_node_program(node_prog::prog_type prog_to_run,
-            //                                          std::vector<std::pair<std::string, std::shared_ptr<ParamsType>>> &initial_args, ParamsType &return_param);
             weaver_client_returncode traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args,
                                                             node_prog::traverse_props_params&);
 

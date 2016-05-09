@@ -41,7 +41,10 @@ struct dynamic_prog_table
 
     prog_ptr_t node_program;
 
+    void *m_prog_handle;
+
     dynamic_prog_table(void *prog_handle);
+    ~dynamic_prog_table();
 };
 
 #endif

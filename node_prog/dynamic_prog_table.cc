@@ -24,4 +24,11 @@ dynamic_prog_table :: dynamic_prog_table(void *prog_handle)
     state_pack = (state_pack_func_t)dlsym(prog_handle, "state_pack");
     state_unpack = (state_unpack_func_t)dlsym(prog_handle, "state_unpack");
     node_program = (prog_ptr_t)dlsym(prog_handle, "node_program");
+
+    m_prog_handle = prog_handle;
+}
+
+dynamic_prog_table :: ~dynamic_prog_table()
+{
+    dlclose(m_prog_handle);
 }

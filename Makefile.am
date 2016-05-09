@@ -54,7 +54,6 @@ noinst_HEADERS+=	node_prog/base_classes.h \
 					node_prog/node.h \
 					node_prog/property.h \
 					node_prog/edge.h \
-					node_prog/node_program.h \
 					node_prog/prop_list.h \
 					node_prog/dynamic_prog_table.h \
 					common/cache_constants.h \
@@ -80,6 +79,7 @@ noinst_HEADERS+=	node_prog/base_classes.h \
                     common/bool_vector.h \
                     common/types.h \
                     common/utils.h \
+                    common/prog_write_and_dlopen.h \
                     common/MurmurHash3.h \
                     common/property_predicate.h
 
@@ -90,6 +90,7 @@ noinst_HEADERS+=			coordinator/current_prog.h \
 							coordinator/server_barrier.h  \
 							coordinator/server_manager.h  \
 							coordinator/timestamper.h  \
+							coordinator/register_node_prog_state.h  \
 							coordinator/transitions.h  \
 							coordinator/util.h \
 							coordinator/vt_constants.h
@@ -112,6 +113,7 @@ weaver_timestamper_SOURCES=	common/comm_wrapper.cc \
                             common/config_constants.cc \
                             common/MurmurHash3.cpp \
                             common/property_predicate.cc \
+							common/prog_write_and_dlopen.cc \
 							chronos/chronos.cc \
 							chronos/chronos_c_wrappers.cc \
 							chronos/chronos_cmp_encode.cc \
@@ -155,6 +157,7 @@ noinst_HEADERS+=		db/cache_entry.h \
 						db/shard_constants.h \
 						db/utils.h \
 						db/types.h \
+						db/node_prog_running_state.h \
 						db/node_entry.h
 bin_PROGRAMS+=			weaver-shard
 weaver_shard_SOURCES=	common/ids.cc \
@@ -177,6 +180,7 @@ weaver_shard_SOURCES=	common/ids.cc \
                         common/config_constants.cc \
                         common/MurmurHash3.cpp \
                         common/property_predicate.cc \
+                        common/prog_write_and_dlopen.cc \
 						chronos/chronos.cc \
 						chronos/chronos_c_wrappers.cc \
 						chronos/chronos_cmp_encode.cc \
@@ -191,6 +195,7 @@ weaver_shard_SOURCES=	common/ids.cc \
 		                db/node.cc \
 						db/shard.cc
 weaver_shard_LDFLAGS=	-Wl,-export-dynamic
+weaver_shard_LDADD=		-lssl -lcrypto
 
 # c++ client
 noinst_HEADERS+=			client/client_constants.h \
@@ -241,7 +246,7 @@ pkgpyexec_LTLIBRARIES+=				bindings/python/client.la
 CLEANFILES+=						bindings/python/client.cpp
 bindings_python_client_la_SOURCES=	bindings/python/client.cpp
 bindings_python_client_la_LIBADD=	libweaverclient.la \
-									libtestprog.la \
+									libweavertraversepropsprog.la \
 									-lpython2.7
 bindings/python/client.cpp:			bindings/python/client.pyx
 	$(CYTHON) $(CYTHON_FLAGS) $<
@@ -313,14 +318,14 @@ libweaverchronosd_la_SOURCES=	common/config_constants.cc \
 libweaverchronosd_la_CFLAGS= 	$(AM_CFLAGS)
 libweaverchronosd_la_CXXFLAGS=	$(AM_CXXFLAGS)
 
-lib_LTLIBRARIES+=		libtestprog.la
-libtestprog_la_SOURCES=	node_prog/edge_list.cc \
-		                node_prog/prop_list.cc \
-						common/event_order.cc \
-						common/config_constants.cc \
-		                node_prog/traverse_with_props.cc
-libtestprog_la_CFLAGS= 	$(AM_CFLAGS)
-libtestprog_la_CXXFLAGS=	$(AM_CXXFLAGS)
+lib_LTLIBRARIES+=		libweavertraversepropsprog.la
+libweavertraversepropsprog_la_SOURCES=	node_prog/edge_list.cc \
+						                node_prog/prop_list.cc \
+										common/event_order.cc \
+										common/config_constants.cc \
+						                node_prog/traverse_with_props.cc
+libweavertraversepropsprog_la_CFLAGS= 	$(AM_CFLAGS)
+libweavertraversepropsprog_la_CXXFLAGS=	$(AM_CXXFLAGS)
 
 #bin_PROGRAMS+=				weaver-test-bench
 #noinst_HEADERS+=			tests/cpp/read_only_vertex_bench.h
@@ -331,7 +336,7 @@ libtestprog_la_CXXFLAGS=	$(AM_CXXFLAGS)
 bin_PROGRAMS+=					weaver-test-dynamic
 weaver_test_dynamic_SOURCES=	tests/cpp/test_dynamic.cc
 weaver_test_dynamic_LDADD=		libweaverclient.la \
-								libtestprog.la
+								libweavertraversepropsprog.la
 weaver_test_dynamic_LDFLAGS=	-Wl,-export-dynamic
 
 TESTS +=		tests/sh/empty_graph.sh \

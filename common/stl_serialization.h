@@ -40,7 +40,6 @@ namespace message
     uint64_t size(void*, const double&);
     uint64_t size(void*, const std::string &t);
     uint64_t size(void*, const std::vector<bool> &t);
-    uint64_t size(void*, const char*&);
     template <typename T1, typename T2, typename T3> inline uint64_t size(void*, const std::set<T1, T2, T3>& t);
     template <typename T1, typename T2, typename T3> inline uint64_t size(void*, const std::unordered_set<T1, T2, T3>& t);
     template <typename T1, typename T2, typename T3> inline uint64_t size(void*, const google::sparse_hash_set<T1, T2, T3>& t);
@@ -66,7 +65,6 @@ namespace message
     void pack_string(e::packer &packer, const std::string &t, const uint32_t sz);
     void pack_buffer(e::packer &packer, void*, const std::string &t);
     void pack_buffer(e::packer &packer, void*, const std::vector<bool> &t);
-    void pack_buffer(e::packer &packer, void*, const char* &t);
     template <typename T1, typename T2, typename T3> inline void pack_buffer(e::packer& packer, void*, const std::set<T1, T2, T3>& t);
     template <typename T1, typename T2, typename T3> inline void pack_buffer(e::packer& packer, void*, const std::unordered_set<T1, T2, T3>& t);
     template <typename T1, typename T2, typename T3> inline void pack_buffer(e::packer&, void*, const google::sparse_hash_set<T1, T2, T3>& t);
@@ -92,7 +90,6 @@ namespace message
     void unpack_string(e::unpacker &unpacker, std::string &t, const uint32_t sz);
     void unpack_buffer(e::unpacker &unpacker, void*, std::string &t);
     void unpack_buffer(e::unpacker &unpacker, void*, std::vector<bool> &t);
-    void unpack_buffer(e::unpacker &unpacker, void*, char* &t);
     template <typename T1, typename T2, typename T3> void unpack_buffer(e::unpacker &unpacker, void*, std::set<T1, T2, T3>& t);
     template <typename T1, typename T2, typename T3> void unpack_buffer(e::unpacker &unpacker, void*, std::unordered_set<T1, T2, T3>& t);
     template <typename T1, typename T2, typename T3> void unpack_buffer(e::unpacker &unpacker, void*, google::sparse_hash_set<T1, T2, T3>& t);

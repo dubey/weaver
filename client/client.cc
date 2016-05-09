@@ -79,14 +79,10 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
 
     comm.reset(new cl::comm_wrapper(myid, *m_sm.config()));
 
-    // init base progs
-    void *prog_handle = dlopen("libtestprog.so", RTLD_NOW);
-    if (prog_handle == NULL) {
-        WDEBUG << "dlopen error: " << dlerror() << std::endl;
-        assert(false);
-    }
-    dynamic_prog_table *prog_table = new dynamic_prog_table(prog_handle);
-    m_dyn_prog_map[0] = (void*)prog_table;
+    std::string traverse_prog_handle;
+    register_node_prog("/usr/local/lib/libweavertraversepropsprog.so", traverse_prog_handle);
+    WDEBUG << "registered traverse props prog with handle=" << traverse_prog_handle << std::endl;
+    m_built_in_progs["traverse_props_prog"] = traverse_prog_handle;
 }
 
 // call once per application, even with multiple clients
@@ -392,7 +388,7 @@ client :: abort_tx()
 #undef CHECK_ACTIVE_TX
 
 weaver_client_returncode
-client :: run_node_prog(uint64_t prog_type,
+client :: run_node_prog(const std::string &prog_type,
                         std::vector<std::pair<std::string, std::shared_ptr<Node_Parameters_Base>>> &initial_args,
                         std::shared_ptr<Node_Parameters_Base> &return_param)
 {
@@ -401,9 +397,19 @@ client :: run_node_prog(uint64_t prog_type,
     message::message msg;
     busybee_returncode send_code, recv_code;
 
+    WDEBUG << "running node prog type=" << prog_type << std::endl;
+
+    auto prog_iter = m_dyn_prog_map.find(prog_type);
+    if (prog_iter == m_dyn_prog_map.end()) {
+        WDEBUG << "did not find node prog " << prog_type << std::endl;
+        return WEAVER_CLIENT_BADPROGTYPE;
+    }
+
+    void *prog_handle = (void*)prog_iter->second.get();
+
 #ifdef weaver_benchmark_
 
-    msg.prepare_message(message::CLIENT_NODE_PROG_REQ, m_dyn_prog_map[prog_type], prog_type, initial_args);
+    msg.prepare_message(message::CLIENT_NODE_PROG_REQ, prog_handle, prog_type, initial_args);
     send_code = send_coord(msg.buf);
 
     if (send_code != BUSYBEE_SUCCESS) {
@@ -420,7 +426,7 @@ client :: run_node_prog(uint64_t prog_type,
 
     bool retry;
     do {
-        msg.prepare_message(message::CLIENT_NODE_PROG_REQ, m_dyn_prog_map[prog_type], prog_type, initial_args);
+        msg.prepare_message(message::CLIENT_NODE_PROG_REQ, prog_handle, prog_type, initial_args);
         send_code = send_coord(msg.buf);
 
         if (send_code == BUSYBEE_DISRUPTED) {
@@ -454,15 +460,17 @@ client :: run_node_prog(uint64_t prog_type,
 
 #endif
 
-    uint64_t ignore_prog_type, ignore_req_id, ignore_vt_ptr;
+    std::string return_prog_type;
+    uint64_t ignore_req_id, ignore_vt_ptr;
     auto ret_status = msg.unpack_message_type();
     if (ret_status == message::NODE_PROG_RETURN) {
         msg.unpack_message(message::NODE_PROG_RETURN,
-                           m_dyn_prog_map[prog_type],
-                           ignore_prog_type,
+                           prog_handle,
+                           return_prog_type,
                            ignore_req_id,
                            ignore_vt_ptr,
                            return_param);
+        assert(return_prog_type == prog_type);
         return WEAVER_CLIENT_SUCCESS;
     } else {
         return WEAVER_CLIENT_NOTFOUND;
@@ -484,7 +492,7 @@ client :: traverse_props_program(std::vector<std::pair<std::string, node_prog::t
     }
 
     std::shared_ptr<Node_Parameters_Base> return_base_ptr;
-    weaver_client_returncode retcode = run_node_prog(0, ptr_args, return_base_ptr);
+    weaver_client_returncode retcode = run_node_prog(m_built_in_progs["traverse_props_prog"], ptr_args, return_base_ptr);
 
     auto return_param_ptr = std::dynamic_pointer_cast<node_prog::traverse_props_params>(return_base_ptr);
     return_param = *return_param_ptr;
@@ -506,24 +514,43 @@ client :: register_node_prog(const std::string &so_file,
     size_t file_sz = read_f.tellg();
     read_f.seekg(0, read_f.beg);
 
-    char *buf = new char[file_sz];
-    read_f.read(buf, file_sz);
+    std::vector<uint8_t> buf(file_sz);
+    read_f.read((char*)&buf[0], file_sz);
 
     read_f.close();
 
+    // dlsym in to client for (un)packing functions
+    void *prog_ptr = dlopen(so_file.c_str(), RTLD_NOW);
+    if (prog_ptr == NULL) {
+        WDEBUG << "dlopen error: " << dlerror() << std::endl;
+        return WEAVER_CLIENT_DLOPENERROR;
+    }
+
+    // calc prog handle as sha256(so file)
     prog_handle = weaver_util::sha256_chararr(buf, file_sz);
 
+    // dlsym all functions and store in a client ds
+    auto prog_table = std::make_shared<dynamic_prog_table>(prog_ptr);
+    m_dyn_prog_map[prog_handle] = prog_table;
+
+    // send register node prog request to gatekeeper
     message::message msg;
-    WDEBUG << "file sz addr = " << &file_sz << std::endl;
-    msg.prepare_message(message::REGISTER_NODE_PROG,
-                        (void*)&file_sz,
-                        prog_handle,
-                        (const char*)buf);
+    msg.prepare_message(message::REGISTER_NODE_PROG, nullptr, prog_handle, buf);
     send_coord(msg.buf);
 
-    delete[] buf;
+    busybee_returncode recv_code = recv_coord(&msg.buf);
 
-    return WEAVER_CLIENT_SUCCESS;
+    if (recv_code != BUSYBEE_SUCCESS) {
+        return WEAVER_CLIENT_INTERNALMSGERROR;
+    }
+
+    auto ret_status = msg.unpack_message_type();
+    if (ret_status == message::REGISTER_NODE_PROG_SUCCESSFUL) {
+        return WEAVER_CLIENT_SUCCESS;
+    } else {
+        assert(ret_status == message::REGISTER_NODE_PROG_FAILED);
+        return WEAVER_CLIENT_DLOPENERROR;
+    }
 }
 
 weaver_client_returncode

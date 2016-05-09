@@ -50,6 +50,8 @@ namespace message
         CACHE_UPDATE,
         CACHE_UPDATE_ACK,
         REGISTER_NODE_PROG,
+        REGISTER_NODE_PROG_SUCCESSFUL,
+        REGISTER_NODE_PROG_FAILED,
         // migration messages
         MIGRATE_SEND_NODE,
         MIGRATED_NBR_UPDATE,

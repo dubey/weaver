@@ -22,21 +22,23 @@
 #include <pugixml.hpp>
 #include <pthread.h>
 #include <sys/types.h>
+#include <sys/stat.h>
 #include <poll.h>
 #include <dlfcn.h>
+#include <wordexp.h>
 
 #define weaver_debug_
 #include "common/weaver_constants.h"
 #include "common/event_order.h"
 #include "common/clock.h"
+#include "common/prog_write_and_dlopen.h"
 #include "db/shard.h"
 #include "db/message_wrapper.h"
 #include "db/remote_node.h"
+#include "db/node_prog_running_state.h"
 #include "node_prog/node.h"
 #include "node_prog/node_prog_type.h"
-#include "node_prog/node_program.h"
 #include "node_prog/base_classes.h"
-#include "node_prog/dynamic_prog_table.h"
 
 #define XML_CHUNK_SZ 10000
 
@@ -1510,7 +1512,7 @@ node_prog::Node_State_Base& get_state(std::shared_ptr<node_prog::Node_State_Base
 
 
 inline void
-propagate_node_progs(node_prog::node_prog_running_state &np,
+propagate_node_progs(db::node_prog_running_state &np,
                      uint64_t prop_shard,
                      uint64_t num_shards,
                      std::deque<std::pair<node_handle_t, np_param_ptr_t>> &prop_progs)
@@ -1816,7 +1818,7 @@ propagate_node_progs(node_prog::node_prog_running_state &np,
 //}
 
 inline void node_prog_loop(uint64_t tid,
-                           std::shared_ptr<node_prog::node_prog_running_state> np_ptr,
+                           std::shared_ptr<db::node_prog_running_state> np_ptr,
                            order::oracle *time_oracle,
                            db::node *first_node)
 {
@@ -1971,6 +1973,11 @@ inline void node_prog_loop(uint64_t tid,
                     done_request = true;
                     // signal to send back to vector timestamper that issued request
                     std::unique_ptr<message::message> m(new message::message());
+                    WDEBUG << "prog_handle=" << prog_handle
+                           << " np.m_type=" << np.m_type
+                           << " np.req_id=" << np.req_id
+                           << " np.vt_prog_ptr=" << np.vt_prog_ptr
+                           << std::endl;
                     m->prepare_message(message::NODE_PROG_RETURN, prog_handle, np.m_type, np.req_id, np.vt_prog_ptr, res.second);
                     S->comm.send(np.vt_id, m->buf);
                     //WDEBUG << "done node prog=" << np.req_id << ", sending to server=" << np.vt_id << std::endl;
@@ -2033,7 +2040,7 @@ continue_execution(uint64_t tid,
                    order::oracle *time_oracle,
                    db::async_nodeprog_state delayed_prog)
 {
-    auto np_ptr = std::static_pointer_cast<node_prog::node_prog_running_state>(delayed_prog.state);
+    auto np_ptr = std::static_pointer_cast<db::node_prog_running_state>(delayed_prog.state);
     db::node *first_node = delayed_prog.n;
 
     node_prog_loop(tid, np_ptr, time_oracle, first_node);
@@ -2042,7 +2049,7 @@ continue_execution(uint64_t tid,
 void
 unpack_and_run_db(uint64_t tid, std::unique_ptr<message::message> msg, order::oracle *time_oracle)
 {
-    auto np = std::make_shared<node_prog::node_prog_running_state>();
+    auto np = std::make_shared<db::node_prog_running_state>();
 
     msg->unpack_partial_message(message::NODE_PROG, np->m_type);
 
@@ -2050,7 +2057,7 @@ unpack_and_run_db(uint64_t tid, std::unique_ptr<message::message> msg, order::or
     S->m_dyn_prog_mtx.lock();
     auto prog_iter = S->m_dyn_prog_map.find(np->m_type);
     if (prog_iter != S->m_dyn_prog_map.end()) {
-        np->m_handle = prog_iter->second;
+        np->m_handle = (void*)prog_iter->second.get();
     }
     S->m_dyn_prog_mtx.unlock();
 
@@ -2604,6 +2611,43 @@ migration_end()
     S->comm.send(next_shard, msg.buf);
 }
 
+void
+register_node_prog(std::unique_ptr<message::message> msg)
+{
+    std::vector<uint8_t> buf;
+    std::string prog_handle;
+    uint64_t vt_id;
+    msg->unpack_message(message::REGISTER_NODE_PROG, nullptr, prog_handle, vt_id, buf);
+    bool success = true;
+    WDEBUG << "register node prog " << prog_handle << std::endl;
+
+    if (prog_handle != weaver_util::sha256_chararr(buf, buf.size())) {
+        WDEBUG << "register_node_prog error: "
+               << "sha256 does not match, "
+               << "prog_handle=" << prog_handle
+               << ", sha256=" << weaver_util::sha256_chararr(buf, buf.size())
+               << std::endl;
+        success = false;
+    }
+
+    std::shared_ptr<dynamic_prog_table> prog_table = write_and_dlopen(buf);
+    if (prog_table == nullptr) {
+        success = false;
+    }
+
+    if (success) {
+        S->m_dyn_prog_mtx.lock();
+        S->m_dyn_prog_map[prog_handle] = prog_table;
+        S->m_dyn_prog_mtx.unlock();
+
+        msg->prepare_message(message::REGISTER_NODE_PROG_SUCCESSFUL, nullptr, prog_handle, shard_id);
+        S->comm.send(vt_id, msg->buf);
+    } else {
+        msg->prepare_message(message::REGISTER_NODE_PROG_FAILED, nullptr, prog_handle, shard_id);
+        S->comm.send(vt_id, msg->buf);
+    }
+}
+
 static bool
 block_signals()
 {
@@ -2631,7 +2675,7 @@ server_loop_busybee(uint64_t thread_id)
     std::unique_ptr<message::message> rec_msg;
     db::queued_request *qreq;
     db::message_wrapper *mwrap;
-    uint64_t prog_type;
+    std::string prog_type;
     vc::vclock vclk;
     uint64_t qts;
     transaction::tx_type txtype;
@@ -2695,6 +2739,11 @@ server_loop_busybee(uint64_t thread_id)
                     }
                 }
 
+                break;
+            }
+
+            case message::REGISTER_NODE_PROG: {
+                register_node_prog(std::move(rec_msg));
                 break;
             }
 
@@ -3150,15 +3199,6 @@ main(int argc, const char *argv[])
     while (!S->first_config) {
         S->first_config_cond.wait();
     }
-
-    // init base progs
-    void *prog_handle = dlopen(".libs/libtestprog.so", RTLD_NOW);
-    if (prog_handle == NULL) {
-        WDEBUG << "dlopen error: " << dlerror() << std::endl;
-        assert(false);
-    }
-    dynamic_prog_table *trav_prog = new dynamic_prog_table(prog_handle);
-    S->m_dyn_prog_map[0] = (void*)trav_prog;
 
     std::vector<std::shared_ptr<pthread_t>> worker_threads;
 

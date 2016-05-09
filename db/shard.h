@@ -51,6 +51,7 @@
 #include "db/node_entry.h"
 #include "db/hyper_stub.h"
 #include "db/async_nodeprog_state.h"
+#include "node_prog/dynamic_prog_table.h"
 
 bool
 available_memory()
@@ -123,7 +124,7 @@ namespace db
                                         const node_handle_t &node_handle,
                                         const vc::vclock &vclk,
                                         order::oracle*,
-                                        uint64_t p_type,
+                                        const std::string &p_type,
                                         std::shared_ptr<void> prog_state,
                                         bool &recover);
             node* finish_acquire_node_nodeprog(db::data_map<std::shared_ptr<node_entry>>::iterator&,
@@ -303,7 +304,8 @@ namespace db
 
             // dynamically linked node programs
             po6::threads::mutex m_dyn_prog_mtx;
-            std::unordered_map<uint64_t, void*> m_dyn_prog_map;
+            // key = sha256 hash of node prog library so, value = dynamically linked prog handle
+            std::unordered_map<std::string, std::shared_ptr<dynamic_prog_table>> m_dyn_prog_map;
 
             // fault tolerance
         private:
@@ -782,7 +784,7 @@ namespace db
                                    const node_handle_t &node_handle,
                                    const vc::vclock &vclk,
                                    order::oracle *time_oracle,
-                                   uint64_t p_type,
+                                   const std::string &p_type,
                                    std::shared_ptr<void> prog_state,
                                    bool &recover)
     {
@@ -1147,7 +1149,7 @@ namespace db
     inline bool
     shard :: add_node_to_nodemap_bulk_load(node *n,
                                            uint64_t map_idx,
-                                           uint64_t block_index)
+                                           uint64_t /* block_index */)
     {
         bool in_mem;
 

@@ -73,4 +73,5 @@ Makefile.deb.weaver
 weaver-0.1.tar.gz
 compile
 test-driver
+weaver-test-dynamic
 weaver

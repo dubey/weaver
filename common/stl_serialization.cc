@@ -74,13 +74,6 @@ message :: size(void*, const std::vector<bool> &t)
     return sizeof(uint32_t) + t.size()*sizeof(uint8_t);
 }
 
-uint64_t
-message :: size(void *aux_args, const char* &t)
-{
-    size_t *buf_sz_ptr = (size_t*)aux_args;
-    return sizeof(uint32_t) + *buf_sz_ptr * sizeof(uint8_t);
-}
-
 
 // pack
 
@@ -159,7 +152,6 @@ message :: pack_string(e::packer &packer, const std::string &t, const uint32_t s
 void 
 message :: pack_buffer(e::packer &packer, void*, const std::string &t)
 {
-    WDEBUG << "packing string = " << t << std::endl;
     assert(t.size() <= UINT32_MAX);
     uint32_t strlen = t.size();
     packer = packer << strlen;
@@ -174,21 +166,6 @@ message :: pack_buffer(e::packer &packer, void*, const std::vector<bool> &t)
     pack_buffer(packer, nullptr, sz);
     for (bool b: t) {
         pack_buffer(packer, nullptr, b);
-    }
-}
-
-void
-message :: pack_buffer(e::packer &packer, void *aux_args, const char* &t)
-{
-    std::cout << "packing chararr" << std::endl;
-    size_t *buf_sz_ptr = (size_t*)aux_args;
-    std::cout << "buf_sz_ptr=" << buf_sz_ptr << std::endl;
-    uint32_t len = *buf_sz_ptr;
-    std::cout << "packing buffer, sz=" << len << std::endl;
-    pack_buffer(packer, nullptr, len);
-    for (uint32_t i = 0; i < len; i++) {
-        uint8_t next_char = t[i];
-        pack_buffer(packer, nullptr, next_char);
     }
 }
 
@@ -287,20 +264,5 @@ message :: unpack_buffer(e::unpacker &unpacker, void*, std::vector<bool> &t)
     for (uint32_t i = 0; i < sz; i++) {
         unpack_buffer(unpacker, nullptr, b);
         t.push_back(b);
-    }
-}
-
-void
-message :: unpack_buffer(e::unpacker &unpacker, void *aux_args, char* &t)
-{
-    uint32_t len = 0;
-    unpack_buffer(unpacker, aux_args, len);
-    std::cout << "unpacking buffer, sz=" << len << std::endl;
-
-    t = new char[len];
-    for (uint32_t i = 0; i < len; i++) {
-        uint8_t next_char;
-        unpack_buffer(unpacker, aux_args, next_char);
-        t[i] = next_char;
     }
 }
