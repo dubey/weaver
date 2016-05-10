@@ -410,8 +410,6 @@ client :: run_node_prog(const std::string &prog_type,
     message::message msg;
     busybee_returncode send_code, recv_code;
 
-    WDEBUG << "running node prog type=" << prog_type << std::endl;
-
     auto prog_iter = m_dyn_prog_map.find(prog_type);
     if (prog_iter == m_dyn_prog_map.end()) {
         WDEBUG << "did not find node prog " << prog_type << std::endl;
