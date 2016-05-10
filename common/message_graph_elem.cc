@@ -18,17 +18,6 @@
 #include "db/property.h"
 #include "node_prog/property.h"
 #include "node_prog/node_prog_type.h"
-#include "node_prog/reach_program.h"
-#include "node_prog/pathless_reach_program.h"
-#include "node_prog/clustering_program.h"
-#include "node_prog/read_node_props_program.h"
-#include "node_prog/read_n_edges_program.h"
-#include "node_prog/edge_count_program.h"
-#include "node_prog/edge_get_program.h"
-#include "node_prog/node_get_program.h"
-#include "node_prog/clustering_program.h"
-#include "node_prog/two_neighborhood_program.h"
-#include "node_prog/traverse_with_props.h"
 
 // size methods
 uint64_t

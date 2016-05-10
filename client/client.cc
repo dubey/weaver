@@ -80,10 +80,22 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
 
     comm.reset(new cl::comm_wrapper(myid, *m_sm.config()));
 
-    std::string traverse_prog_handle;
-    register_node_prog("/usr/local/lib/libweavertraversepropsprog.so", traverse_prog_handle);
-    WDEBUG << "registered traverse props prog with handle=" << traverse_prog_handle << std::endl;
-    m_built_in_progs["traverse_props_prog"] = traverse_prog_handle;
+#define INIT_PROG(lib, name, prog_handle) \
+    reg_code = register_node_prog(lib, prog_handle); \
+    if (reg_code != WEAVER_CLIENT_SUCCESS) { \
+        WDEBUG << "unsuccessful node prog register, " \
+               << " name=" << name \
+               << " lib="  << lib \
+               << " returncode=" << weaver_client_returncode_to_string(reg_code) \
+               << std::endl; \
+    } \
+    WDEBUG << "registered prog name=" << name << " handle=" << prog_handle << std::endl; \
+    m_built_in_progs[name] = prog_handle;
+
+    std::string prog_handle;
+    weaver_client_returncode reg_code;
+    INIT_PROG("/usr/local/lib/libweavertraversepropsprog.so", "traverse_props_prog", prog_handle);
+    INIT_PROG("/usr/local/lib/libweavernninferprog.so", "nn_infer_prog", prog_handle);
 }
 
 // call once per application, even with multiple clients
@@ -497,6 +509,28 @@ client :: traverse_props_program(std::vector<std::pair<std::string, node_prog::t
 
     auto return_param_ptr = std::dynamic_pointer_cast<node_prog::traverse_props_params>(return_base_ptr);
     return_param = *return_param_ptr;
+
+    return retcode;
+}
+
+weaver_client_returncode
+client :: nn_infer(std::string &start_node,
+                   std::string &end_node,
+                   node_prog::nn_params &args,
+                   node_prog::nn_params &ret)
+{
+    args.network_description.first  = start_node;
+    args.network_description.second = end_node;
+
+    auto param_ptr = std::make_shared<node_prog::nn_params>(args);
+    auto base_ptr  = std::dynamic_pointer_cast<Node_Parameters_Base>(param_ptr);
+    std::vector<std::pair<std::string, std::shared_ptr<Node_Parameters_Base>>> ptr_args(1, std::make_pair(start_node, base_ptr));
+
+    std::shared_ptr<Node_Parameters_Base> return_base_ptr;
+    weaver_client_returncode retcode = run_node_prog(m_built_in_progs["nn_infer_prog"], ptr_args, return_base_ptr);
+
+    auto return_param_ptr = std::dynamic_pointer_cast<node_prog::nn_params>(return_base_ptr);
+    ret = *return_param_ptr;
 
     return retcode;
 }

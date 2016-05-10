@@ -199,6 +199,35 @@ element :: remove_property(const std::string &key)
 #endif
 }
 
+std::string
+element :: get_property(const std::string &key)
+{
+#ifdef weaver_large_property_maps_
+
+    auto iter = properties.find(key);
+    if (iter != properties.end()) {
+        for (const std::shared_ptr<property> p: iter->second) {
+            if (time_oracle->clock_creat_before_del_after(*view_time, p->get_creat_time(), p->get_del_time())) {
+                return p->value;
+            }
+        }
+    }
+
+    return "";
+
+#else
+
+    for (const std::shared_ptr<property> p: properties) {
+        if (p->key == key
+         && time_oracle->clock_creat_before_del_after(*view_time, p->get_creat_time(), p->get_del_time())) {
+            return p->value;
+        }
+    }
+    return "";
+
+#endif
+}
+
 bool
 element :: has_property(const std::string &key, const std::string &value)
 {

@@ -29,6 +29,7 @@
 #include "node_prog/base_classes.h"
 #include "node_prog/node_prog_type.h"
 #include "node_prog/traverse_with_props.h"
+#include "node_prog/neural_net_infer.h"
 
 namespace cl
 {
@@ -84,6 +85,10 @@ namespace cl
                                                    std::shared_ptr<node_prog::Node_Parameters_Base> &return_param);
             weaver_client_returncode traverse_props_program(std::vector<std::pair<std::string, node_prog::traverse_props_params>> &initial_args,
                                                             node_prog::traverse_props_params&);
+            weaver_client_returncode nn_infer(std::string &start_node,
+                                              std::string &end_node,
+                                              node_prog::nn_params &args,
+                                              node_prog::nn_params &ret);
 
             weaver_client_returncode register_node_prog(const std::string &so_file,
                                                         std::string &prog_handle);

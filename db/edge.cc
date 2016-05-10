@@ -81,6 +81,14 @@ edge :: get_properties()
     return node_prog::prop_list(base.properties, *base.view_time, base.time_oracle);
 }
 
+std::string
+edge :: get_property(const std::string &key)
+{
+    assert(base.view_time != nullptr);
+    assert(base.time_oracle != nullptr);
+    return base.get_property(key);
+}
+
 bool
 edge :: has_property(std::pair<std::string, std::string> &p)
 {

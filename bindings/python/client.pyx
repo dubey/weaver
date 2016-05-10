@@ -355,6 +355,21 @@ class TraversePropsParams:
         self.collect_nodes = collect_n
         self.collect_edges = collect_e
 
+cdef extern from 'node_prog/neural_net_infer.h' namespace 'node_prog':
+    cdef cppclass nn_params:
+        nn_params()
+        vector[double] input
+        string act_func
+        string layer_type
+        string layer_op
+
+class NNInferParams:
+    def __init__(self, input=None, act_func=None, layer_type=None, layer_op=None):
+        self.input = initialize_member_list(input)
+        self.act_func = act_func if act_func is not None else ""
+        self.layer_type = layer_type if layer_type is not None else ""
+        self.layer_op = layer_op if layer_op is not None else ""
+
 #cdef extern from 'node_prog/discover_paths.h' namespace 'node_prog':
 #    cdef cppclass discover_paths_params:
 #        discover_paths_params()
@@ -454,6 +469,7 @@ cdef extern from 'client/client.h' namespace 'cl':
         #weaver_client_returncode edge_get_program(vector[pair[string, edge_get_params]] &initial_args, edge_get_params&) nogil
         #weaver_client_returncode node_get_program(vector[pair[string, node_get_params]] &initial_args, node_get_params&) nogil
         weaver_client_returncode traverse_props_program(vector[pair[string, traverse_props_params]] &initial_args, traverse_props_params&) nogil
+        weaver_client_returncode nn_infer(string &start_node, string &end_node, nn_params &args, nn_params &ret) nogil
         #weaver_client_returncode discover_paths_program(vector[pair[string, discover_paths_params]] &initial_args, discover_paths_params&) nogil
         #weaver_client_returncode cause_and_effect_program(vector[pair[string, cause_and_effect_params]] &initial_args, cause_and_effect_params&) nogil
         #weaver_client_returncode n_gram_path_program(vector[pair[string, n_gram_path_params]] &initial_args, n_gram_path_params&) nogil
@@ -967,6 +983,32 @@ cdef class Client:
             response.return_nodes.append(n)
         for e in c_rp.return_edges:
             response.return_edges.append(e)
+        return response
+
+    def nn_infer(self, start_node, end_node, args):
+        cdef nn_params c_args
+        c_args.input.reserve(len(args.input))
+        for x in args.input:
+            c_args.input.push_back(x)
+        c_args.act_func = args.act_func
+        c_args.layer_type = args.layer_type
+        c_args.layer_op = args.layer_op
+
+        cdef string c_start_node
+        cdef string c_end_node
+        c_start_node = start_node
+        c_end_node   = end_node
+
+        cdef nn_params c_ret
+        with nogil:
+            code = self.thisptr.nn_infer(c_start_node, c_end_node, c_args, c_ret)
+
+        if code != WEAVER_CLIENT_SUCCESS:
+            raise WeaverError(code, 'node prog error')
+
+        response = NNInferParams([], args.act_func, args.layer_type, args.layer_op)
+        for x in c_ret.input:
+            response.input.append(x)
         return response
 
     cdef __convert_pred_to_c_pred(self, pred, prop_predicate &pred_c):

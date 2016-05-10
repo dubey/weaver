@@ -525,6 +525,24 @@ register_node_prog(std::unique_ptr<message::message> msg, uint64_t client)
     }
     vts->periodic_update_mutex.unlock();
 
+    coordinator::register_node_prog_state reg_state;
+    reg_state.client = client;
+    reg_state.shards = shards;
+
+    vts->m_dyn_prog_mtx.lock();
+    if (vts->m_dyn_prog_map.find(prog_handle) != vts->m_dyn_prog_map.end()) {
+        vts->m_dyn_prog_mtx.unlock();
+        WDEBUG << "already registered prog=" << prog_handle << std::endl;
+        // prog already exists
+        msg->prepare_message(message::REGISTER_NODE_PROG_SUCCESSFUL);
+        vts->comm.send_to_client(client, msg->buf);
+        return true;
+    } else {
+        vts->m_dyn_prog_map[prog_handle] = prog_table;
+        vts->m_register_prog_status[prog_handle] = reg_state;
+        vts->m_dyn_prog_mtx.unlock();
+    }
+
     WDEBUG << "registering node prog " << prog_handle << " at #" << shards.size() << " shards" << std::endl;
 
     for (uint64_t s: shards) {
@@ -537,15 +555,6 @@ register_node_prog(std::unique_ptr<message::message> msg, uint64_t client)
         vts->comm.send(s, m.buf);
         WDEBUG << "register node prog at shard " << s << std::endl;
     }
-
-    coordinator::register_node_prog_state reg_state;
-    reg_state.client = client;
-    reg_state.shards = shards;
-
-    vts->m_dyn_prog_mtx.lock();
-    vts->m_dyn_prog_map[prog_handle] = prog_table;
-    vts->m_register_prog_status[prog_handle] = reg_state;
-    vts->m_dyn_prog_mtx.unlock();
 
     return true;
 }

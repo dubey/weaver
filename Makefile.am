@@ -248,6 +248,7 @@ CLEANFILES+=						bindings/python/client.cpp
 bindings_python_client_la_SOURCES=	bindings/python/client.cpp
 bindings_python_client_la_LIBADD=	libweaverclient.la \
 									libweavertraversepropsprog.la \
+									libweavernninferprog.la \
 									-lpython2.7
 bindings/python/client.cpp:			bindings/python/client.pyx
 	$(CYTHON) $(CYTHON_FLAGS) $<
@@ -319,7 +320,8 @@ libweaverchronosd_la_SOURCES=	common/config_constants.cc \
 libweaverchronosd_la_CFLAGS= 	$(AM_CFLAGS)
 libweaverchronosd_la_CXXFLAGS=	$(AM_CXXFLAGS)
 
-lib_LTLIBRARIES+=		libweavertraversepropsprog.la
+lib_LTLIBRARIES+=	libweavertraversepropsprog.la
+noinst_HEADERS+=	node_prog/traverse_with_props.h
 libweavertraversepropsprog_la_SOURCES=	node_prog/edge_list.cc \
 						                node_prog/prop_list.cc \
 										common/event_order.cc \
@@ -327,6 +329,16 @@ libweavertraversepropsprog_la_SOURCES=	node_prog/edge_list.cc \
 						                node_prog/traverse_with_props.cc
 libweavertraversepropsprog_la_CFLAGS= 	$(AM_CFLAGS)
 libweavertraversepropsprog_la_CXXFLAGS=	$(AM_CXXFLAGS)
+
+lib_LTLIBRARIES+=	libweavernninferprog.la
+noinst_HEADERS+=	node_prog/neural_net_infer.h
+libweavernninferprog_la_SOURCES=	node_prog/edge_list.cc \
+						            node_prog/prop_list.cc \
+									common/event_order.cc \
+									common/config_constants.cc \
+						            node_prog/neural_net_infer.cc
+libweavernninferprog_la_CFLAGS= 	$(AM_CFLAGS)
+libweavernninferprog_la_CXXFLAGS=	$(AM_CXXFLAGS)
 
 #bin_PROGRAMS+=				weaver-test-bench
 #noinst_HEADERS+=			tests/cpp/read_only_vertex_bench.h
@@ -337,7 +349,8 @@ libweavertraversepropsprog_la_CXXFLAGS=	$(AM_CXXFLAGS)
 bin_PROGRAMS+=					weaver-test-dynamic
 weaver_test_dynamic_SOURCES=	tests/cpp/test_dynamic.cc
 weaver_test_dynamic_LDADD=		libweaverclient.la \
-								libweavertraversepropsprog.la
+								libweavertraversepropsprog.la \
+								libweavernninferprog.la
 weaver_test_dynamic_LDFLAGS=	-Wl,-export-dynamic
 
 bin_PROGRAMS+=				weaver-test-hs

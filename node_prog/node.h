@@ -30,6 +30,7 @@ namespace node_prog
             virtual edge& get_edge(const edge_handle_t&) = 0;
             virtual edge_list get_edges() = 0;
             virtual prop_list get_properties() = 0;
+            virtual std::string get_property(const std::string &key) = 0;
             virtual bool has_property(std::pair<std::string, std::string> &p) = 0;
             virtual bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props) = 0;
             virtual bool has_all_predicates(std::vector<predicate::prop_predicate> &preds) = 0;

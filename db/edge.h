@@ -48,6 +48,7 @@ namespace db
 
             const remote_node& get_neighbor() { return nbr; }
             node_prog::prop_list get_properties();
+            std::string get_property(const std::string &key);
             bool has_property(std::pair<std::string, std::string> &p);
             bool has_all_properties(std::vector<std::pair<std::string, std::string>> &props);
             bool has_all_predicates(std::vector<predicate::prop_predicate> &preds);

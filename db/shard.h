@@ -20,7 +20,6 @@
 #include <vector>
 #include <unordered_map>
 #include <sys/types.h>
-#include <sys/sysinfo.h>
 #include <po6/threads/mutex.h>
 #include <po6/net/location.h>
 #include <hyperdex/client.hpp>
@@ -56,14 +55,57 @@
 bool
 available_memory()
 {
-    struct sysinfo mem_info;
-    sysinfo(&mem_info);
+    std::ifstream meminfo_file;
+    meminfo_file.open("/proc/meminfo", std::ifstream::in);
+    if (!meminfo_file) {
+        // can't open /proc/meminfo for some reason
+        return true;
+    }
 
-    float total = mem_info.totalram;
-    float avail = mem_info.freeram;
-    float used  = total - avail;
+    double totalram, freeram, bufferram, cacheram;
+    bool got_total  = false;
+    bool got_free   = false;
+    bool got_buffer = false;
+    bool got_cache  = false;
+    std::string token;
 
-    return (used/total < MaxMemory);
+    while (meminfo_file >> token) {
+        if (token == "MemTotal:") {
+            meminfo_file >> totalram;
+            got_total = true;
+        } else if (token == "MemFree:") {
+            meminfo_file >> freeram;
+            got_free = true;
+        } else if (token == "Buffers:") {
+            meminfo_file >> bufferram;
+            got_buffer = true;
+        } else if (token == "Cached:") {
+            meminfo_file >> cacheram;
+            got_cache = true;
+        }
+
+        if (got_total && got_free && got_buffer && got_cache) {
+            break;
+        }
+    }
+
+    meminfo_file.close();
+
+    double usedram = totalram - (freeram + bufferram + cacheram);
+
+    if (usedram/totalram > MaxMemory) {
+        WDEBUG << "mem usage:\t"
+               << " used=" << usedram
+               << " total=" << totalram
+               << " buffer=" << bufferram
+               << " cacheram=" << cacheram
+               << " ratio=" << usedram/totalram
+               << " max=" << MaxMemory
+               << std::endl;
+        return false;
+    } else {
+        return true;
+    }
 }
 
 namespace db
@@ -958,7 +1000,7 @@ namespace db
     shard :: node_evict(node *n, uint64_t map_idx)
     {
         const node_handle_t &node_handle = n->get_handle();
-        //WDEBUG << "evicting node " << node_handle << std::endl;
+        WDEBUG << "evicting node " << node_handle << std::endl;
         auto map_iter = nodes[map_idx].find(node_handle);
         assert(map_iter != nodes[map_idx].end());
 
