@@ -510,7 +510,7 @@ register_node_prog(std::unique_ptr<message::message> msg, uint64_t client)
         return false;
     }
 
-    std::shared_ptr<dynamic_prog_table> prog_table = write_and_dlopen(buf);
+    std::shared_ptr<dynamic_prog_table> prog_table = write_and_dlopen(buf, prog_handle);
     if (prog_table == nullptr) {
         return false;
     }

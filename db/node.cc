@@ -59,13 +59,7 @@ node :: ~node()
 bool
 node :: empty_evicted_node_state()
 {
-    for (const auto &p: prog_states) {
-        if (!p.second.empty()) {
-            return false;
-        }
-    }
-
-    if (!tx_queue.empty() || last_perm_deletion) {
+    if (!node_prog_states.empty() || !tx_queue.empty() || last_perm_deletion) {
         return false;
     }
 

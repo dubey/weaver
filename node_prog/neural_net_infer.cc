@@ -27,6 +27,8 @@ using node_prog::edge;
 
 // params
 nn_params :: nn_params()
+    : order(-1)
+    , act_func("sigmoid")
 { }
 
 uint64_t
@@ -64,6 +66,8 @@ nn_params :: unpack(e::unpacker &unpacker, void *aux_args)
 
 // state
 nn_state :: nn_state()
+    : visited(false)
+    , in_count(0)
 { }
 
 uint64_t
@@ -206,7 +210,7 @@ node_prog :: node_program(node &n,
    std::shared_ptr<Node_Parameters_Base> param_ptr,
    std::function<Node_State_Base&()> state_getter)
 {
-    WDEBUG << "neural net prog execing at node=" << n.get_handle() << std::endl;
+    //WDEBUG << "neural net prog execing at node=" << n.get_handle() << std::endl;
 
     Node_State_Base &state_base = state_getter();
     nn_state& state = dynamic_cast<nn_state&>(state_base);
@@ -221,7 +225,7 @@ node_prog :: node_program(node &n,
         state.visited = true;
         auto input = params.input;
         params.input.clear();
-        params.input.emplace_back(0);
+        params.input.emplace_back(0.0);
 
         for (edge &e: n.get_edges()) {
             if (e.has_property(fwd_prop)) {
@@ -260,26 +264,27 @@ node_prog :: node_program(node &n,
         if (!state.visited) {
             state.visited = true;
             state.in_count = calculate_in_count(n);
-            WDEBUG << "in count=" << state.in_count << std::endl;
+            //WDEBUG << "in count=" << state.in_count << std::endl;
 
-            double bias;
-            if (!to_double(n.get_property("bias"), bias)) {
-                WDEBUG << "bias fail" << std::endl;
-                state.value.emplace_back(bias);
-            } else {
-                state.value.emplace_back(0);
-            }
-            WDEBUG << "value=" << state.value[0] << std::endl;
+            //double bias;
+            //if (!to_double(n.get_property("bias"), bias)) {
+            //    WDEBUG << "bias fail" << std::endl;
+            //    state.value.emplace_back(bias);
+            //} else {
+            //    state.value.emplace_back(0.0);
+            //}
+            //WDEBUG << "value=" << state.value[0] << std::endl;
+            state.value.emplace_back(0.0);
         }
 
         state.value[0] += params.input[0];
 
         if (--state.in_count == 0) {
-            WDEBUG << "in count zero" << std::endl;
+            //WDEBUG << "in count zero" << std::endl;
             state.value[0] = apply_activation_function(state.value[0], params.act_func);
-            WDEBUG << "val=" << state.value[0]
-                   << "val sz=" << state.value.size()
-                   << std::endl;
+            //WDEBUG << "val=" << state.value[0]
+            //       << " val sz=" << state.value.size()
+            //       << std::endl;
 
             for (edge &e: n.get_edges()) {
                 if (e.has_property(fwd_prop)) {
@@ -298,7 +303,7 @@ node_prog :: node_program(node &n,
                     //}
 
                     params.input[0] = weight*state.value[0];
-                    WDEBUG << "params.input=" << params.input[0] << std::endl;
+                    //WDEBUG << "params.input=" << params.input[0] << std::endl;
 
                     next.emplace_back(std::make_pair(e.get_neighbor(),
                                                      std::make_shared<nn_params>(params)));

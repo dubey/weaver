@@ -63,7 +63,7 @@ message :: size(void *aux_args, const db::node &t)
 #ifdef WEAVER_NEW_CLDG
     sz += size(aux_args, t.msg_count);
 #endif
-    sz += size(aux_args, t.prog_states);
+    sz += size(aux_args, t.node_prog_states);
     return sz;
 }
 
@@ -106,7 +106,7 @@ message :: pack_buffer(e::packer &packer, void *aux_args, const db::node &t)
 #ifdef WEAVER_NEW_CLDG
     pack_buffer(packer, aux_args, t.msg_count);
 #endif
-    pack_buffer(packer, aux_args, t.prog_states);
+    pack_buffer(packer, aux_args, t.node_prog_states);
 }
 
 // unpacking methods
@@ -172,79 +172,81 @@ message :: unpack_buffer(e::unpacker &unpacker, void *aux_args, db::node &t)
     unpack_buffer(unpacker, aux_args, t.msg_count);
 #endif
 
-    // unpack node prog state
-    // need to unroll because we have to first unpack into particular state type, and then upcast and save as base type
-    uint32_t num_prog_types = node_prog::END;
-    assert(t.prog_states.size() == num_prog_types);
+    unpack_buffer(unpacker, aux_args, t.node_prog_states);
 
-    uint32_t num_maps;
-    unpack_buffer(unpacker, aux_args, num_maps);
+    //// unpack node prog state
+    //// need to unroll because we have to first unpack into particular state type, and then upcast and save as base type
+    //uint32_t num_prog_types = node_prog::END;
+    //assert(t.prog_states.size() == num_prog_types);
 
-    node_prog::prog_type ptype;
-    uint64_t key;
-    std::shared_ptr<node_prog::Node_State_Base> val;
-    while (num_maps > 0) {
-        unpack_buffer(unpacker, aux_args, ptype);
+    //uint32_t num_maps;
+    //unpack_buffer(unpacker, aux_args, num_maps);
 
-        uint32_t elements_left;
-        unpack_buffer(unpacker, aux_args, elements_left);
-        if (elements_left == 0) {
-            continue;
-        }
+    //node_prog::prog_type ptype;
+    //uint64_t key;
+    //std::shared_ptr<node_prog::Node_State_Base> val;
+    //while (num_maps > 0) {
+    //    unpack_buffer(unpacker, aux_args, ptype);
 
-        t.prog_states.push_back(std::make_pair(ptype, db::node::id_to_state_t()));
-        db::node::id_to_state_t &state_map = t.prog_states.back().second;
-        state_map.reserve(elements_left);
+    //    uint32_t elements_left;
+    //    unpack_buffer(unpacker, aux_args, elements_left);
+    //    if (elements_left == 0) {
+    //        continue;
+    //    }
 
-        while (elements_left-- > 0) {
-            unpack_buffer(unpacker, aux_args, key);
+    //    t.prog_states.push_back(std::make_pair(ptype, db::node::id_to_state_t()));
+    //    db::node::id_to_state_t &state_map = t.prog_states.back().second;
+    //    state_map.reserve(elements_left);
 
-            switch (ptype) {
-                //case node_prog::REACHABILITY:
-                //    val = unpack_single_node_state<node_prog::reach_node_state>(unpacker);
-                //    break;
+    //    while (elements_left-- > 0) {
+    //        unpack_buffer(unpacker, aux_args, key);
 
-                //case node_prog::PATHLESS_REACHABILITY:
-                //    val = unpack_single_node_state<node_prog::pathless_reach_node_state>(unpacker);
-                //    break;
+    //        switch (ptype) {
+    //            //case node_prog::REACHABILITY:
+    //            //    val = unpack_single_node_state<node_prog::reach_node_state>(unpacker);
+    //            //    break;
 
-                //case node_prog::CLUSTERING:
-                //    val = unpack_single_node_state<node_prog::clustering_node_state>(unpacker);
-                //    break;
+    //            //case node_prog::PATHLESS_REACHABILITY:
+    //            //    val = unpack_single_node_state<node_prog::pathless_reach_node_state>(unpacker);
+    //            //    break;
 
-                //case node_prog::TWO_NEIGHBORHOOD:
-                //    val = unpack_single_node_state<node_prog::two_neighborhood_state>(unpacker);
-                //    break;
+    //            //case node_prog::CLUSTERING:
+    //            //    val = unpack_single_node_state<node_prog::clustering_node_state>(unpacker);
+    //            //    break;
 
-                //case node_prog::READ_NODE_PROPS:
-                //    val = unpack_single_node_state<node_prog::read_node_props_state>(unpacker);
-                //    break;
+    //            //case node_prog::TWO_NEIGHBORHOOD:
+    //            //    val = unpack_single_node_state<node_prog::two_neighborhood_state>(unpacker);
+    //            //    break;
 
-                //case node_prog::READ_N_EDGES:
-                //    val = unpack_single_node_state<node_prog::read_n_edges_state>(unpacker);
-                //    break;
+    //            //case node_prog::READ_NODE_PROPS:
+    //            //    val = unpack_single_node_state<node_prog::read_node_props_state>(unpacker);
+    //            //    break;
 
-                //case node_prog::EDGE_COUNT:
-                //    val = unpack_single_node_state<node_prog::edge_count_state>(unpacker);
-                //    break;
+    //            //case node_prog::READ_N_EDGES:
+    //            //    val = unpack_single_node_state<node_prog::read_n_edges_state>(unpacker);
+    //            //    break;
 
-                //case node_prog::EDGE_GET:
-                //    val = unpack_single_node_state<node_prog::edge_get_state>(unpacker);
-                //    break;
+    //            //case node_prog::EDGE_COUNT:
+    //            //    val = unpack_single_node_state<node_prog::edge_count_state>(unpacker);
+    //            //    break;
 
-                //case node_prog::NODE_GET:
-                //    val = unpack_single_node_state<node_prog::node_get_state>(unpacker);
-                //    break;
+    //            //case node_prog::EDGE_GET:
+    //            //    val = unpack_single_node_state<node_prog::edge_get_state>(unpacker);
+    //            //    break;
 
-                //case node_prog::TRAVERSE_PROPS:
-                //    val = unpack_single_node_state<node_prog::traverse_props_state>(unpacker);
-                //    break;
+    //            //case node_prog::NODE_GET:
+    //            //    val = unpack_single_node_state<node_prog::node_get_state>(unpacker);
+    //            //    break;
 
-                default:
-                    WDEBUG << "bad node prog type" << std::endl;
-            }
+    //            //case node_prog::TRAVERSE_PROPS:
+    //            //    val = unpack_single_node_state<node_prog::traverse_props_state>(unpacker);
+    //            //    break;
 
-            state_map.emplace(key, val);
-        }
-    }
+    //            default:
+    //                WDEBUG << "bad node prog type" << std::endl;
+    //        }
+
+    //        state_map.emplace(key, val);
+    //    }
+    //}
 }

@@ -99,11 +99,8 @@ namespace db
                 cache_key_t key);
 
             // node program state
-            typedef std::unordered_map<uint64_t, std::shared_ptr<node_prog::Node_State_Base>> id_to_state_t;
-            typedef std::pair<node_prog::prog_type, id_to_state_t> ptype_and_map_t;
-            typedef std::vector<ptype_and_map_t> prog_state_t;
-            prog_state_t prog_states;
-            std::unordered_map<uint64_t, std::shared_ptr<node_prog::Node_State_Base>> node_prog_states;
+            typedef std::unordered_map<uint64_t, std::shared_ptr<node_prog::Node_State_Base>> prog_state_t;
+            prog_state_t node_prog_states;
 
             // node eviction
             bool empty_evicted_node_state();

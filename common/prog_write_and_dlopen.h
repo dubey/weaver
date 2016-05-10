@@ -13,4 +13,4 @@
 #include "node_prog/dynamic_prog_table.h"
 
 std::shared_ptr<dynamic_prog_table>
-write_and_dlopen(std::vector<uint8_t> &buf);
+write_and_dlopen(std::vector<uint8_t> &buf, const std::string &prog_handle);

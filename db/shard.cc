@@ -2332,12 +2332,12 @@ migrate_node_step2_resp(uint64_t tid, std::unique_ptr<message::message> msg, ord
     }
     n->state = db::node::mode::STABLE;
 
-    std::vector<uint64_t> prog_state_reqs;
-    for (auto &state_pair: n->prog_states) {
-        for (auto &state: state_pair.second) {
-            prog_state_reqs.emplace_back(state.first);
-        }
-    }
+    //std::vector<uint64_t> prog_state_reqs;
+    //for (auto &state_pair: n->prog_states) {
+    //    for (auto &state: state_pair.second) {
+    //        prog_state_reqs.emplace_back(state.first);
+    //    }
+    //}
 
     // release node for new reads and writes
     std::vector<node_version_t> this_node_vec(1, std::make_pair(node_handle, n->base.get_creat_time()));
@@ -2611,7 +2611,7 @@ register_node_prog(std::unique_ptr<message::message> msg)
         success = false;
     }
 
-    std::shared_ptr<dynamic_prog_table> prog_table = write_and_dlopen(buf);
+    std::shared_ptr<dynamic_prog_table> prog_table = write_and_dlopen(buf, prog_handle);
     if (prog_table == nullptr) {
         success = false;
     }
@@ -3113,10 +3113,20 @@ static void
 dummy(int)
 { }
 
+static void
+exit_on_signal(int sig)
+{
+    WDEBUG << "got signal " << strsignal(sig) << ", exiting now" << std::endl;
+    exit(EXIT_SUCCESS);
+}
+
 int
 main(int argc, const char *argv[])
 {
     install_signal_handler(SIGUSR1, dummy);
+    install_signal_handler(SIGHUP, exit_on_signal);
+    install_signal_handler(SIGINT, exit_on_signal);
+    install_signal_handler(SIGTERM, exit_on_signal);
 
     // command line params
     const char* listen_host = "127.0.0.1";

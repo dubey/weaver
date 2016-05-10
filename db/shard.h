@@ -59,6 +59,7 @@ available_memory()
     meminfo_file.open("/proc/meminfo", std::ifstream::in);
     if (!meminfo_file) {
         // can't open /proc/meminfo for some reason
+        WDEBUG << "error opening /proc/meminfo" << std::endl;
         return true;
     }
 
@@ -619,7 +620,7 @@ namespace db
                 if (s.last_perm_deletion.vt_id != UINT64_MAX) {
                     n->last_perm_deletion.reset(new vc::vclock((s.last_perm_deletion)));
                 }
-                n->prog_states = std::move(s.prog_states);
+                n->node_prog_states = std::move(s.prog_states);
                 node_state_map.erase(n->get_handle());
             }
 
@@ -973,7 +974,7 @@ namespace db
             if (n->last_perm_deletion) {
                 s.last_perm_deletion = *n->last_perm_deletion;
             }
-            s.prog_states = std::move(n->prog_states);
+            s.prog_states = std::move(n->node_prog_states);
         }
     }
 
@@ -1741,7 +1742,7 @@ namespace db
 
                 if (!found) {
                     node *n = acquire_node_specific(tid, nv.first, nv.second, nullptr);
-                    n->prog_states.clear();
+                    n->node_prog_states.clear();
                     release_node(n);
                     clk_vec.emplace_back(nv.second);
                 }
@@ -1757,18 +1758,7 @@ namespace db
 
             // check that node not migrated or permanently deleted
             if (n != nullptr) {
-                bool found = false;
-                for (auto &state_pair: n->prog_states) {
-                    auto &state_map = state_pair.second;
-                    auto state_iter = state_map.find(req_id);
-                    if (state_iter != state_map.end()) {
-                        assert(state_map.erase(req_id) > 0);
-                    }
-                    found = true;
-                    break;
-                }
-                assert(found);
-
+                assert(n->node_prog_states.erase(req_id) > 0);
                 release_node(n);
             }
         }
