@@ -76,3 +76,4 @@ compile
 test-driver
 weaver-test-dynamic
 weaver
+*.swp

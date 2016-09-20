@@ -340,11 +340,11 @@ libweavernninferprog_la_SOURCES=	node_prog/edge_list.cc \
 libweavernninferprog_la_CFLAGS= 	$(AM_CFLAGS)
 libweavernninferprog_la_CXXFLAGS=	$(AM_CXXFLAGS)
 
-#bin_PROGRAMS+=				weaver-test-bench
-#noinst_HEADERS+=			tests/cpp/read_only_vertex_bench.h
-#weaver_test_bench_SOURCES=	tests/cpp/run.cc \
-#							common/clock.cc
-#weaver_test_bench_LDADD=	libweaverclient.la
+bin_PROGRAMS+=				weaver-test-bench
+noinst_HEADERS+=			tests/cpp/read_only_vertex_bench.h
+weaver_test_bench_SOURCES=	tests/cpp/run.cc \
+							common/clock.cc
+weaver_test_bench_LDADD=	libweaverclient.la
 
 bin_PROGRAMS+=					weaver-test-dynamic
 weaver_test_dynamic_SOURCES=	tests/cpp/test_dynamic.cc
