@@ -341,10 +341,16 @@ libweavernninferprog_la_CFLAGS= 	$(AM_CFLAGS)
 libweavernninferprog_la_CXXFLAGS=	$(AM_CXXFLAGS)
 
 bin_PROGRAMS+=				weaver-test-bench
-noinst_HEADERS+=			tests/cpp/read_only_vertex_bench.h
+noinst_HEADERS+=			tests/cpp/oracle_stress.h
 weaver_test_bench_SOURCES=	tests/cpp/run.cc \
-							common/clock.cc
-weaver_test_bench_LDADD=	libweaverclient.la
+							common/clock.cc \
+                            common/vclock.cc \
+                            common/event_order.cc \
+							chronos/chronos.cc \
+							chronos/chronos_c_wrappers.cc \
+							chronos/chronos_cmp_encode.cc \
+                            common/config_constants.cc
+#weaver_test_bench_LDADD=	libweaverclient.la
 
 bin_PROGRAMS+=					weaver-test-dynamic
 weaver_test_dynamic_SOURCES=	tests/cpp/test_dynamic.cc
