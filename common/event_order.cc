@@ -230,8 +230,12 @@ oracle :: compare_vts(const std::vector<vc::vclock> &clocks)
         chronos_returncode status;
         ssize_t cret;
 
+        //double start_time = m_timer.get_real_time_millis();
         int64_t ret = kronos_cl->weaver_order(wpair, num_pairs, &status, &cret);
         ret = kronos_cl->wait(ret, 100000, &status);
+        //double end_time   = m_timer.get_real_time_millis();
+        //double elapsed    = end_time - start_time;
+        //WDEBUG << "weaver_order time=" << elapsed << "ms" << std::endl;
 
         wp = wpair;
         std::vector<bool> large_upd = large;

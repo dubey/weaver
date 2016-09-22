@@ -21,6 +21,7 @@
 
 #include "common/weaver_constants.h"
 #include "common/vclock.h"
+#include "common/clock.h"
 #include "chronos/chronos.h"
 
 using vc::vclock_ptr_t;
@@ -102,6 +103,7 @@ namespace order
             std::unique_ptr<chronos_client> kronos_cl;
             uint64_t cache_hits;
             kronos_cache kcache;
+            wclock::weaver_timer m_timer;
 
         public:
             oracle();

@@ -207,6 +207,7 @@ libweaverclient_la_SOURCES=	common/ids.cc \
 		                    common/configuration.cc \
 		                    common/comm_wrapper.cc \
 		                    common/vclock.cc \
+		                    common/clock.cc \
                             common/transaction.cc \
 		                    common/stl_serialization.cc \
 		                    common/weaver_serialization.cc \
