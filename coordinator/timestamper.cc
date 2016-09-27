@@ -115,7 +115,7 @@ prepare_tx(std::shared_ptr<transaction::pending_tx> tx, coordinator::hyper_stub 
 void
 end_tx(uint64_t tx_id, uint64_t shard_id, coordinator::hyper_stub *hstub)
 {
-    vts->tx_prog_mutex.lock();
+    vts->tx_prog_mtx.lock();
     auto find_iter = vts->outstanding_tx.find(tx_id);
     assert(find_iter != vts->outstanding_tx.end());
 
@@ -131,7 +131,7 @@ end_tx(uint64_t tx_id, uint64_t shard_id, coordinator::hyper_stub *hstub)
         vts->outstanding_tx.erase(tx_id);
         vts->done_txs.emplace(tx_id, tx->shard_write);
     }
-    vts->tx_prog_mutex.unlock();
+    vts->tx_prog_mtx.unlock();
 }
 
 // single dedicated thread which wakes up after given timeout, sends updates, and sleeps
@@ -181,7 +181,7 @@ nop_function()
             tx->shard_write = vts->to_nop;
             vts->clk_rw_mtx.unlock();
 
-            vts->tx_prog_mutex.lock();
+            vts->tx_prog_mtx.lock();
             tx->nop->max_done_clk = vts->m_max_done_clk;
             if (kronos_call) {
                 if (vts->outstanding_progs.empty()) {
@@ -207,7 +207,7 @@ nop_function()
                 vts->done_txs.erase(r);
             }
 
-            vts->tx_prog_mutex.unlock();
+            vts->tx_prog_mtx.unlock();
 
             weaver_util::reset_all(vts->to_nop);
         } else {
@@ -447,7 +447,7 @@ unpack_and_forward_node_prog(std::unique_ptr<message::message> msg,
     vc::vclock req_timestamp = vts->vclk;
     assert(req_timestamp.clock.size() == ClkSz);
 
-    vts->tx_prog_mutex.lock();
+    vts->tx_prog_mtx.lock();
     vts->clk_rw_mtx.unlock();
 
     uint64_t req_id = vts->generate_req_id();
@@ -455,7 +455,7 @@ unpack_and_forward_node_prog(std::unique_ptr<message::message> msg,
     uint64_t cp_int = (uint64_t)cp;
     vts->pend_progs.emplace_back(cp);
     vts->outstanding_progs.emplace(req_id);
-    vts->tx_prog_mutex.unlock();
+    vts->tx_prog_mtx.unlock();
 
     message::message msg_to_send;
     for (auto &batch_pair: initial_batches) {
@@ -487,7 +487,7 @@ unpack_and_forward_node_prog(std::unique_ptr<message::message> msg,
 bool
 node_prog_done(uint64_t req_id, current_prog *cp)
 {
-    vts->tx_prog_mutex.lock();
+    vts->tx_prog_mtx.lock();
 
     auto &done_progs = vts->done_progs;
     auto &outstanding_progs = vts->outstanding_progs;
@@ -508,7 +508,7 @@ node_prog_done(uint64_t req_id, current_prog *cp)
 
     vts->process_pend_progs();
 
-    vts->tx_prog_mutex.unlock();
+    vts->tx_prog_mtx.unlock();
 
     return true;
 }
