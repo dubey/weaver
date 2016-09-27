@@ -94,8 +94,8 @@ client :: client(const char *coordinator="127.0.0.1", uint16_t port=5200, const 
 
     std::string prog_handle;
     weaver_client_returncode reg_code;
-    INIT_PROG("/usr/local/lib/libweavertraversepropsprog.so", "traverse_props_prog", prog_handle);
-    INIT_PROG("/usr/local/lib/libweavernninferprog.so", "nn_infer_prog", prog_handle);
+    INIT_PROG("/home/dubey/installs/lib/libweavertraversepropsprog.so", "traverse_props_prog", prog_handle);
+    INIT_PROG("/home/dubey/installs/lib/libweavernninferprog.so", "nn_infer_prog", prog_handle);
 }
 
 // call once per application, even with multiple clients
@@ -483,6 +483,8 @@ client :: run_node_prog(const std::string &prog_type,
                            return_param);
         assert(return_prog_type == prog_type);
         return WEAVER_CLIENT_SUCCESS;
+    } else if (ret_status == message::NODE_PROG_BENCHMARK) {
+        return WEAVER_CLIENT_BENCHMARK;
     } else {
         return WEAVER_CLIENT_NOTFOUND;
     }
@@ -505,8 +507,10 @@ client :: traverse_props_program(std::vector<std::pair<std::string, node_prog::t
     std::shared_ptr<Node_Parameters_Base> return_base_ptr;
     weaver_client_returncode retcode = run_node_prog(m_built_in_progs["traverse_props_prog"], ptr_args, return_base_ptr);
 
-    auto return_param_ptr = std::dynamic_pointer_cast<node_prog::traverse_props_params>(return_base_ptr);
-    return_param = *return_param_ptr;
+    if (retcode == WEAVER_CLIENT_SUCCESS) {
+        auto return_param_ptr = std::dynamic_pointer_cast<node_prog::traverse_props_params>(return_base_ptr);
+        return_param = *return_param_ptr;
+    }
 
     return retcode;
 }

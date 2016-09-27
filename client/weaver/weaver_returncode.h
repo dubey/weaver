@@ -35,7 +35,9 @@ enum weaver_client_returncode
     WEAVER_CLIENT_DLOPENERROR,
     // msg
     WEAVER_CLIENT_DISRUPTED,
-    WEAVER_CLIENT_INTERNALMSGERROR
+    WEAVER_CLIENT_INTERNALMSGERROR,
+    // benchmarks
+    WEAVER_CLIENT_BENCHMARK
 };
 
 const char*

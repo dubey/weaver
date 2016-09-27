@@ -442,6 +442,7 @@ cdef extern from 'client/weaver/weaver_returncode.h':
         WEAVER_CLIENT_LOGICALERROR
         WEAVER_CLIENT_DISRUPTED
         WEAVER_CLIENT_INTERNALMSGERROR
+        WEAVER_CLIENT_BENCHMARK
     const char* weaver_client_returncode_to_string(weaver_client_returncode code)
 
 cdef extern from 'client/client.h' namespace 'cl':
@@ -974,6 +975,9 @@ cdef class Client:
         cdef traverse_props_params c_rp
         with nogil:
             code = self.thisptr.traverse_props_program(c_args, c_rp)
+
+        if code == WEAVER_CLIENT_BENCHMARK:
+            return TraversePropsParams()
 
         if code != WEAVER_CLIENT_SUCCESS:
             raise WeaverError(code, 'node prog error')

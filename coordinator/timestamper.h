@@ -97,7 +97,7 @@ namespace coordinator
             req_reply_t done_txs; // tx state cleanup
 
             // dynamically linked node programs
-            po6::threads::mutex m_dyn_prog_mtx;
+            po6::threads::rwlock m_dyn_prog_mtx;
             std::unordered_map<std::string, std::shared_ptr<dynamic_prog_table>> m_dyn_prog_map;
             std::unordered_map<std::string, coordinator::register_node_prog_state> m_register_prog_status;
 
@@ -133,7 +133,7 @@ namespace coordinator
             uint64_t out_queue_counter;
             tx_queue_t tx_out_queue;
             prog_queue_t prog_queue;
-            po6::threads::mutex restore_mtx;
+            po6::threads::rwlock restore_mtx;
             uint16_t restore_status;
 
             // exit
@@ -385,7 +385,7 @@ namespace coordinator
         }
 
         if (restore) {
-            restore_mtx.lock();
+            restore_mtx.wrlock();
             restore_status++;
             restore_mtx.unlock();
         }
@@ -586,7 +586,7 @@ namespace coordinator
     void
     timestamper :: tx_queue_loop()
     {
-        restore_mtx.lock();
+        restore_mtx.rdlock();
         if (restore_status > 0) {
             restore_mtx.unlock();
             return;

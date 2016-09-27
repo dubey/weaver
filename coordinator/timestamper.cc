@@ -322,20 +322,38 @@ unpack_and_forward_node_prog(std::unique_ptr<message::message> msg,
                              uint64_t clientID,
                              coordinator::hyper_stub *hstub)
 {
-    vts->restore_mtx.lock();
-    if (vts->restore_status > 0) {
-        vts->prog_queue->emplace_back(blocked_prog(clientID, std::move(msg)));
-        vts->restore_mtx.unlock();
+    // XXX
+    {
+        // benchmarking gatekeeper performance
+        // return to client after "assigning timestamp"
+        msg->prepare_message(message::NODE_PROG_BENCHMARK);
+        vts->comm.send_to_client(clientID, msg->buf);
         return;
-    } else {
-        vts->restore_mtx.unlock();
     }
+
+    vts->restore_mtx.rdlock();
+    if (vts->restore_status > 0) {
+        // we first grabbed only the read lock to speed up the common case
+        // now that we know that we are restoring, need to upgrade to write lock
+        // pthread_rwlock_t does not provide a direct mechanism to upgrade
+        // so we release read lock and then grab write lock
+        // after acquiring lock, check the condition again
+        // slightly ugly but results in good perf for the common case and is still correct
+        vts->restore_mtx.unlock();
+        vts->restore_mtx.wrlock();
+        if (vts->restore_status > 0) {
+            vts->prog_queue->emplace_back(blocked_prog(clientID, std::move(msg)));
+            vts->restore_mtx.unlock();
+            return;
+        }
+    }
+    vts->restore_mtx.unlock();
 
     std::string prog_type;
     msg->unpack_partial_message(message::CLIENT_NODE_PROG_REQ, prog_type);
 
     void *prog_handle = nullptr;
-    vts->m_dyn_prog_mtx.lock();
+    vts->m_dyn_prog_mtx.rdlock();
     auto prog_iter = vts->m_dyn_prog_map.find(prog_type);
     if (prog_iter != vts->m_dyn_prog_map.end()) {
         prog_handle = (void*)prog_iter->second.get();
@@ -361,9 +379,10 @@ unpack_and_forward_node_prog(std::unique_ptr<message::message> msg,
     std::unordered_map<node_handle_t, uint64_t> loc_map;
     std::unordered_set<node_handle_t> get_set;
 
-    for (const auto &initial_arg : initial_args) {
-        get_set.emplace(initial_arg.first);
-    }
+    // XXX
+    //for (const auto &initial_arg : initial_args) {
+    //    get_set.emplace(initial_arg.first);
+    //}
 
     if (!get_set.empty()) {
         loc_map = hstub->get_mappings(get_set);
@@ -529,7 +548,7 @@ register_node_prog(std::unique_ptr<message::message> msg, uint64_t client)
     reg_state.client = client;
     reg_state.shards = shards;
 
-    vts->m_dyn_prog_mtx.lock();
+    vts->m_dyn_prog_mtx.wrlock();
     if (vts->m_dyn_prog_map.find(prog_handle) != vts->m_dyn_prog_map.end()) {
         vts->m_dyn_prog_mtx.unlock();
         WDEBUG << "already registered prog=" << prog_handle << std::endl;
@@ -578,11 +597,11 @@ block_signals()
 }
 
 void
-shard_register_node_prog(const std::string &prog_handle,
+shard_registered_node_prog(const std::string &prog_handle,
                          uint64_t shard,
                          bool success)
 {
-    vts->m_dyn_prog_mtx.lock();
+    vts->m_dyn_prog_mtx.wrlock();
     coordinator::register_node_prog_state &state = vts->m_register_prog_status[prog_handle];
     state.shards.erase(shard);
     bool overall_success = success && state.success;
@@ -779,7 +798,7 @@ server_loop(void *args)
                            << ", shard=" << shard
                            << std::endl;
 
-                    shard_register_node_prog(prog_handle, shard, true);
+                    shard_registered_node_prog(prog_handle, shard, true);
                     break;
                 }
 
@@ -795,12 +814,12 @@ server_loop(void *args)
                            << ", shard=" << shard
                            << std::endl;
 
-                    shard_register_node_prog(prog_handle, shard, false);
+                    shard_registered_node_prog(prog_handle, shard, false);
                     break;
                 }
 
                 case message::RESTORE_DONE: {
-                    vts->restore_mtx.lock();
+                    vts->restore_mtx.wrlock();
                     assert(vts->restore_status > 0);
                     vts->restore_status--;
                     coordinator::prog_queue_t progs = std::move(vts->prog_queue);
@@ -1137,7 +1156,7 @@ main(int argc, const char *argv[])
     }
 
     // periodic nops to shard
-    nop_function();
+    //nop_function();
 
     for (std::shared_ptr<pthread_t> t: worker_threads) {
         pthread_join(*t, nullptr);
