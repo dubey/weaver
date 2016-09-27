@@ -110,8 +110,7 @@ namespace coordinator
 
             // mutexes
         public:
-            po6::threads::mutex clk_mutex // vclock and queue timestamp
-                    , tx_prog_mutex // state for outstanding and completed node progs, transactions
+            po6::threads::mutex tx_prog_mtx // state for outstanding and completed node progs, transactions
                     , periodic_update_mutex // make sure to not send out clock update before getting ack from other VTs
                     , migr_mutex
                     , graph_load_mutex
@@ -391,7 +390,7 @@ namespace coordinator
         }
 
         if (kill_progs) {
-            tx_prog_mutex.lock();
+            tx_prog_mtx.lock();
 
             process_pend_progs();
 
@@ -437,7 +436,7 @@ namespace coordinator
                 }
             }
 
-            tx_prog_mutex.unlock();
+            tx_prog_mtx.unlock();
         }
 
         clk_rw_mtx.unlock();
@@ -611,9 +610,9 @@ namespace coordinator
             bool nop = (tx->type == transaction::NOP);
 
             if (!nop) {
-                tx_prog_mutex.lock();
+                tx_prog_mtx.lock();
                 outstanding_tx.emplace(tx->id, tx);
-                tx_prog_mutex.unlock();
+                tx_prog_mtx.unlock();
             }
 
             // send tx batches
