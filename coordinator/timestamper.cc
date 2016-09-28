@@ -322,15 +322,6 @@ unpack_and_forward_node_prog(std::unique_ptr<message::message> msg,
                              uint64_t clientID,
                              coordinator::hyper_stub *hstub)
 {
-    // XXX
-    {
-        // benchmarking gatekeeper performance
-        // return to client after "assigning timestamp"
-        msg->prepare_message(message::NODE_PROG_BENCHMARK);
-        vts->comm.send_to_client(clientID, msg->buf);
-        return;
-    }
-
     vts->restore_mtx.rdlock();
     if (vts->restore_status > 0) {
         // we first grabbed only the read lock to speed up the common case
@@ -379,10 +370,11 @@ unpack_and_forward_node_prog(std::unique_ptr<message::message> msg,
     std::unordered_map<node_handle_t, uint64_t> loc_map;
     std::unordered_set<node_handle_t> get_set;
 
-    // XXX
-    //for (const auto &initial_arg : initial_args) {
-    //    get_set.emplace(initial_arg.first);
-    //}
+#ifndef weaver_gatekeeper_benchmark_
+    for (const auto &initial_arg : initial_args) {
+        get_set.emplace(initial_arg.first);
+    }
+#endif
 
     if (!get_set.empty()) {
         loc_map = hstub->get_mappings(get_set);
@@ -456,6 +448,16 @@ unpack_and_forward_node_prog(std::unique_ptr<message::message> msg,
     vts->pend_progs.emplace_back(cp);
     vts->outstanding_progs.emplace(req_id);
     vts->tx_prog_mtx.unlock();
+
+#ifdef weaver_gatekeeper_benchmark_
+    {
+        // benchmarking gatekeeper performance
+        // return to client after "assigning timestamp"
+        msg->prepare_message(message::NODE_PROG_BENCHMARK);
+        vts->comm.send_to_client(clientID, msg->buf);
+        return;
+    }
+#endif
 
     message::message msg_to_send;
     for (auto &batch_pair: initial_batches) {
@@ -1147,6 +1149,7 @@ main(int argc, const char *argv[])
     std::cout << "Vector timestamper " << vt_id << std::endl;
     std::cout << "THIS IS AN ALPHA RELEASE WHICH SHOULD NOT BE USED IN PRODUCTION" << std::endl;
 
+#ifndef weaver_gatekeeper_benchmark_
     std::shared_ptr<pthread_t> clk_update_thr;
     if (NumVts > 1) {
         // periodic vector clock update to other timestampers
@@ -1156,15 +1159,19 @@ main(int argc, const char *argv[])
     }
 
     // periodic nops to shard
-    //nop_function();
+    nop_function();
+#endif
 
     for (std::shared_ptr<pthread_t> t: worker_threads) {
         pthread_join(*t, nullptr);
     }
+
+#ifndef weaver_gatekeeper_benchmark_
     pthread_join(*sm_thr, nullptr);
     if (clk_update_thr != nullptr) {
         pthread_join(*clk_update_thr, nullptr);
     }
+#endif
 
     return EXIT_SUCCESS;
 }

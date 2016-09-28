@@ -30,6 +30,9 @@
 // if benchmarking
 //#define weaver_benchmark_
 
+// gatekeeper benchmarking
+#define weaver_gatekeeper_benchmark_
+
 // unused expression for no warnings
 #define UNUSED(exp) do { (void)(exp); } while (0)
 
